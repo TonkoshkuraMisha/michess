@@ -6,6 +6,7 @@ import uvicorn
 
 from src.core.config import settings
 from src.api.auth import router as auth_router
+from src.api.websockets import router as ws_router
 
 # Configure structured logging
 logging.basicConfig(
@@ -52,6 +53,7 @@ def create_app() -> FastAPI:
 
     # Include API routers
     app.include_router(auth_router, prefix=settings.API_V1_STR)
+    app.include_router(ws_router, prefix=settings.API_V1_STR)
 
     return app
 

@@ -10,12 +10,17 @@ class Settings(BaseSettings):
     VERSION: str = "0.1.0"
     API_V1_STR: str = "/api/v1"
 
-    # PostgreSQL settings matching docker-compose.yml
-    POSTGRES_USER: str = "michess_user"
-    POSTGRES_PASSWORD: str = "michess_password"
-    POSTGRES_SERVER: str = "127.0.0.1"
-    POSTGRES_PORT: int = 5432
-    POSTGRES_DB: str = "michess_db"
+    # PostgreSQL settings - no defaults, must be provided by .env
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
+    POSTGRES_SERVER: str
+    POSTGRES_PORT: int
+    POSTGRES_DB: str
+
+    # Security (JWT) - no default for the secret key
+    SECRET_KEY: str
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     @property
     def async_database_url(self) -> str:
