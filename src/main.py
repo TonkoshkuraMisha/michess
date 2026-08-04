@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
 from src.core.config import settings
+from src.api.auth import router as auth_router
 
 # Configure structured logging
 logging.basicConfig(
@@ -48,6 +49,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Include API routers
+    app.include_router(auth_router, prefix=settings.API_V1_STR)
 
     return app
 
