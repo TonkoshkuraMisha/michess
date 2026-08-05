@@ -2,8 +2,8 @@ import asyncio
 import websockets
 import json
 
-# Вставьте сюда ваш токен для Player 3
-TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwbGF5ZXIzIiwiZXhwIjoxNzg1OTIxOTk1fQ.dlrTD_zVbRf_PZ4-9MPyFDg4Kde3e8EYKJB0By9ABCU"
+# Токен для Player 3
+TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwbGF5ZXIzIiwiZXhwIjoxNzg1OTI0MTU3fQ.BuiwOMYF9at20XnfYyc4_5QPsNid8EOPPMl_QQM6rcM"
 URL = f"ws://127.0.0.1:8000/api/v1/ws/matchmaking?token={TOKEN}"
 
 
@@ -15,7 +15,7 @@ async def test_websocket():
             welcome_msg = await ws.recv()
             print(f"Received: {welcome_msg}")
 
-            # 1. Запрашиваем список всех вызовов в лобби
+            # Запрашиваем список вызовов в лобби
             print("Requesting seeks list...")
             await ws.send(json.dumps({"action": "get_seeks"}))
 
@@ -26,7 +26,6 @@ async def test_websocket():
                 print(f"Server says: {msg}")
                 data = json.loads(msg)
 
-                # 2. Получили список вызовов -> принимаем первый доступный
                 if data.get("event") == "seeks_list":
                     seeks = data.get("seeks", [])
                     if seeks:
@@ -39,20 +38,17 @@ async def test_websocket():
                             "increment_ms": opponent["increment_ms"]
                         }))
                     else:
-                        print("No seeks found in lobby. Retrying in 2 seconds...")
+                        print("No seeks found. Retrying...")
                         await asyncio.sleep(2)
                         await ws.send(json.dumps({"action": "get_seeks"}))
 
-                # 3. Сохраняем ID игры при старте
                 elif data.get("event") == "match_found":
                     game_id = data["game_id"]
 
-                # 4. Если белые походили -> отвечаем e7e5
                 elif data.get("event") == "move_made":
-                    # Проверяем, что ход сделал соперник, а не мы сами
-                    if data.get("player_id") != 3:  # ID текущего пользователя (Player 3)
+                    if data.get("player_id") != 3:
                         print("Opponent moved. Sending move e7e5...")
-                        await asyncio.sleep(1)  # Имитация времени на раздумье
+                        await asyncio.sleep(1)
                         await ws.send(json.dumps({
                             "action": "make_move",
                             "game_id": game_id,
@@ -60,6 +56,10 @@ async def test_websocket():
                             "time_taken_ms": 1000,
                             "window_blurred": False
                         }))
+
+                elif data.get("event") == "game_over":
+                    print(f"Game over received: {data}")
+                    break
 
     except websockets.exceptions.ConnectionClosed:
         print("Connection closed.")

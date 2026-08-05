@@ -100,6 +100,140 @@ async def matchmaking_endpoint(
                     current_user.id
                 )
 
+            elif action == "resign":
+                game_id = data.get("game_id")
+                if not game_id:
+                    continue
+
+                game_state = await state_manager.get_game_state(game_id)
+                if not game_state or game_state["status"] != "in_progress":
+                    continue
+
+                white_id = int(game_state["white_id"])
+                black_id = int(game_state["black_id"])
+
+                if current_user.id not in (white_id, black_id):
+                    continue
+
+                game_result = "0-1" if current_user.id == white_id else "1-0"
+
+                db_game = await db.get(Game, game_id)
+                if db_game:
+                    db_game.status = GameStatus.COMPLETED
+                    db_game.finished_at = func.now()
+
+                    moves_telemetry = await state_manager.extract_all_moves(game_id)
+                    db_moves = [Move(game_id=game_id, **m) for m in moves_telemetry]
+                    db.add_all(db_moves)
+                    await db.commit()
+
+                await state_manager.clear_game_state(game_id)
+
+                game_over_payload = {
+                    "event": "game_over",
+                    "game_id": game_id,
+                    "reason": "resignation",
+                    "winner_id": black_id if current_user.id == white_id else white_id,
+                    "result": game_result
+                }
+
+                await manager.send_personal_message(game_over_payload, white_id)
+                await manager.send_personal_message(game_over_payload, black_id)
+
+            elif action == "offer_draw":
+                game_id = data.get("game_id")
+                if not game_id:
+                    continue
+
+                game_state = await state_manager.get_game_state(game_id)
+                if not game_state or game_state["status"] != "in_progress":
+                    continue
+
+                white_id = int(game_state["white_id"])
+                black_id = int(game_state["black_id"])
+
+                if current_user.id not in (white_id, black_id):
+                    continue
+
+                opponent_id = black_id if current_user.id == white_id else white_id
+                await state_manager.update_game_state(game_id, {"draw_offer": str(current_user.id)})
+
+                await manager.send_personal_message({
+                    "event": "draw_offered",
+                    "game_id": game_id,
+                    "player_id": current_user.id
+                }, opponent_id)
+
+            elif action == "accept_draw":
+                game_id = data.get("game_id")
+                if not game_id:
+                    continue
+
+                game_state = await state_manager.get_game_state(game_id)
+                if not game_state or game_state["status"] != "in_progress":
+                    continue
+
+                white_id = int(game_state["white_id"])
+                black_id = int(game_state["black_id"])
+
+                if current_user.id not in (white_id, black_id):
+                    continue
+
+                draw_offer = game_state.get("draw_offer")
+
+                if not draw_offer or int(draw_offer) == current_user.id:
+                    await manager.send_personal_message({"event": "error", "message": "No active draw offer to accept"},
+                                                        current_user.id)
+                    continue
+
+                game_result = "1/2-1/2"
+
+                db_game = await db.get(Game, game_id)
+                if db_game:
+                    db_game.status = GameStatus.COMPLETED
+                    db_game.finished_at = func.now()
+
+                    moves_telemetry = await state_manager.extract_all_moves(game_id)
+                    db_moves = [Move(game_id=game_id, **m) for m in moves_telemetry]
+                    db.add_all(db_moves)
+                    await db.commit()
+
+                await state_manager.clear_game_state(game_id)
+
+                game_over_payload = {
+                    "event": "game_over",
+                    "game_id": game_id,
+                    "reason": "draw_agreement",
+                    "result": game_result
+                }
+
+                await manager.send_personal_message(game_over_payload, white_id)
+                await manager.send_personal_message(game_over_payload, black_id)
+
+            elif action == "decline_draw":
+                game_id = data.get("game_id")
+                if not game_id:
+                    continue
+
+                game_state = await state_manager.get_game_state(game_id)
+                if not game_state or game_state["status"] != "in_progress":
+                    continue
+
+                white_id = int(game_state["white_id"])
+                black_id = int(game_state["black_id"])
+
+                if current_user.id not in (white_id, black_id):
+                    continue
+
+                opponent_id = black_id if current_user.id == white_id else white_id
+                await state_manager.update_game_state(game_id, {"draw_offer": ""})
+
+                await manager.send_personal_message({
+                    "event": "draw_declined",
+                    "game_id": game_id,
+                    "player_id": current_user.id
+                }, opponent_id)
+
             elif action == "make_move":
                 game_id = data.get("game_id")
                 move_str = data.get("move")

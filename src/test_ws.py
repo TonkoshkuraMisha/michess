@@ -2,8 +2,8 @@ import asyncio
 import websockets
 import json
 
-# Вставьте сюда ваш токен для Player 1
-TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwbGF5ZXIxIiwiZXhwIjoxNzg1OTIxOTU3fQ.J_uTcuCmATJCR6aNqSnoCyAZom5jVOjZoFwIkIpRbCs"
+# Токен для Player 1
+TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwbGF5ZXIxIiwiZXhwIjoxNzg1OTI0MTM2fQ.QCagYisNwkCV-g2XuB0fXc8dGnkvaNN7j5G4QkmywYI"
 URL = f"ws://127.0.0.1:8000/api/v1/ws/matchmaking?token={TOKEN}"
 
 
@@ -15,8 +15,7 @@ async def test_websocket():
             welcome_msg = await ws.recv()
             print(f"Received: {welcome_msg}")
 
-            # 1. Создаем открытый вызов (3 минуты, 0 секунд добавка)
-            print("Creating seek for 3+0 (180000ms)...")
+            print("Creating seek for 3+0...")
             await ws.send(json.dumps({
                 "action": "create_seek",
                 "base_time_ms": 180000,
@@ -28,10 +27,9 @@ async def test_websocket():
                 print(f"Server says: {msg}")
                 data = json.loads(msg)
 
-                # 2. Если вызов принят и матч начался, ходим e2e4
                 if data.get("event") == "match_found" and data.get("color") == "white":
                     print("Match started! Sending move e2e4...")
-                    await asyncio.sleep(1)  # Имитация времени на раздумье
+                    await asyncio.sleep(1)
                     await ws.send(json.dumps({
                         "action": "make_move",
                         "game_id": data["game_id"],
@@ -39,6 +37,18 @@ async def test_websocket():
                         "time_taken_ms": 1000,
                         "window_blurred": False
                     }))
+
+                    # Ждем пару секунд и тестируем сдачу
+                    await asyncio.sleep(2)
+                    print("Sending resignation...")
+                    await ws.send(json.dumps({
+                        "action": "resign",
+                        "game_id": data["game_id"]
+                    }))
+
+                elif data.get("event") == "game_over":
+                    print(f"Game over received: {data}")
+                    break
 
     except websockets.exceptions.ConnectionClosed:
         print("Connection closed.")
