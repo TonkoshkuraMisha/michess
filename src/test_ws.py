@@ -3,7 +3,7 @@ import websockets
 import json
 
 # Токен для Player 1
-TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwbGF5ZXIxIiwiZXhwIjoxNzg1OTI0MTM2fQ.QCagYisNwkCV-g2XuB0fXc8dGnkvaNN7j5G4QkmywYI"
+TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwbGF5ZXIxIiwiZXhwIjoxNzg1OTY5MjQwfQ.NHjXmbJAmHcd_WhRE2ni0EhVYefuPb2HX925cRQMgX8"
 URL = f"ws://127.0.0.1:8000/api/v1/ws/matchmaking?token={TOKEN}"
 
 
@@ -15,9 +15,9 @@ async def test_websocket():
             welcome_msg = await ws.recv()
             print(f"Received: {welcome_msg}")
 
-            print("Creating seek for 3+0...")
+            print("Joining matchmaking queue for 3+0...")
             await ws.send(json.dumps({
-                "action": "create_seek",
+                "action": "join_queue",
                 "base_time_ms": 180000,
                 "increment_ms": 0
             }))

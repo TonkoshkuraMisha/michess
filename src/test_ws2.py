@@ -3,7 +3,7 @@ import websockets
 import json
 
 # Токен для Player 3
-TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwbGF5ZXIzIiwiZXhwIjoxNzg1OTI0MTU3fQ.BuiwOMYF9at20XnfYyc4_5QPsNid8EOPPMl_QQM6rcM"
+TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwbGF5ZXIzIiwiZXhwIjoxNzg1OTY5Mjc1fQ.6IfXR1E-sWr5uGZ-p1ht2e4Y4BoBzsYoiqLkYAew1xQ"
 URL = f"ws://127.0.0.1:8000/api/v1/ws/matchmaking?token={TOKEN}"
 
 
@@ -15,8 +15,12 @@ async def test_websocket():
             welcome_msg = await ws.recv()
             print(f"Received: {welcome_msg}")
 
-            print("Requesting seeks list...")
-            await ws.send(json.dumps({"action": "get_seeks"}))
+            print("Joining matchmaking queue for 3+0...")
+            await ws.send(json.dumps({
+                "action": "join_queue",
+                "base_time_ms": 180000,
+                "increment_ms": 0
+            }))
 
             game_id = None
 
@@ -25,22 +29,7 @@ async def test_websocket():
                 print(f"Server says: {msg}")
                 data = json.loads(msg)
 
-                if data.get("event") == "seeks_list":
-                    seeks = data.get("seeks", [])
-                    if seeks:
-                        opponent = seeks[0]
-                        print(f"Found seek from {opponent['username']}. Accepting...")
-                        await ws.send(json.dumps({
-                            "action": "accept_seek",
-                            "opponent_id": opponent["user_id"],
-                            "base_time_ms": opponent["base_time_ms"],
-                            "increment_ms": opponent["increment_ms"]
-                        }))
-                    else:
-                        await asyncio.sleep(2)
-                        await ws.send(json.dumps({"action": "get_seeks"}))
-
-                elif data.get("event") == "match_found":
+                if data.get("event") == "match_found":
                     game_id = data["game_id"]
 
                 elif data.get("event") == "move_made":

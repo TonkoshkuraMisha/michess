@@ -39,7 +39,10 @@ class ConnectionManager:
             del self.active_connections[user_id]
 
         await self.pubsub.unsubscribe(f"user:{user_id}")
-        await self.remove_seek(user_id)
+
+        # Снимаем игрока с поиска, если он там был
+        from src.services.matchmaker import matchmaker
+        await matchmaker.leave_queue(user_id)
 
         # Уведомляем менеджер состояния об обрыве связи (запуск Grace Period)
         from src.services.game_state import state_manager
@@ -66,30 +69,6 @@ class ConnectionManager:
     async def send_personal_message(self, message: dict, user_id: int):
         """Отправляет сообщение пользователю через Redis."""
         await self.redis.publish(f"user:{user_id}", json.dumps(message))
-
-    # --- LOBBY (SEEKS) MANAGEMENT ---
-
-    async def create_seek(self, user_id: int, username: str, rating: int, base_time_ms: int, increment_ms: int):
-        """Создает новый вызов на доске объявлений (Redis Hash)."""
-        seek_data = {
-            "user_id": user_id,
-            "username": username,
-            "rating": rating,
-            "base_time_ms": base_time_ms,
-            "increment_ms": increment_ms
-        }
-        await self.redis.hset("lobby:seeks", str(user_id), json.dumps(seek_data))
-        logger.info("Seek created for user %s: %s+%s", user_id, base_time_ms, increment_ms)
-
-    async def remove_seek(self, user_id: int):
-        """Удаляет вызов с доски."""
-        await self.redis.hdel("lobby:seeks", str(user_id))
-        logger.info("Seek removed for user %s", user_id)
-
-    async def get_all_seeks(self) -> list[dict]:
-        """Возвращает все текущие вызовы."""
-        seeks_raw = await self.redis.hgetall("lobby:seeks")
-        return [json.loads(seek) for seek in seeks_raw.values()]
 
 
 manager = ConnectionManager()

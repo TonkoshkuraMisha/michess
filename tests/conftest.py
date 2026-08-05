@@ -53,6 +53,7 @@ class MockAsyncRedis:
         self.sets = {}
         self.lists = {}
         self.kv = {}
+        self.zsets = {}
 
     def pubsub(self):
         return MockPubSub()
@@ -72,7 +73,7 @@ class MockAsyncRedis:
     async def delete(self, *names):
         count = 0
         for name in names:
-            for container in (self.store, self.sets, self.lists, self.kv):
+            for container in (self.store, self.sets, self.lists, self.kv, self.zsets):
                 if name in container:
                     del container[name]
                     count += 1
@@ -121,6 +122,36 @@ class MockAsyncRedis:
             return lst[start:]
         return lst[start:end + 1]
 
+    # --- Поддержка Sorted Sets для очередей матчмейкинга ---
+    async def zadd(self, name, mapping):
+        if name not in self.zsets:
+            self.zsets[name] = {}
+        added = 0
+        for k, v in mapping.items():
+            if k not in self.zsets[name] or self.zsets[name][k] != float(v):
+                added += 1
+            self.zsets[name][k] = float(v)
+        return added
+
+    async def zrange(self, name, start, end):
+        if name not in self.zsets:
+            return []
+        sorted_items = sorted(self.zsets[name].items(), key=lambda x: x[1])
+        keys = [k for k, v in sorted_items]
+        if end == -1:
+            return keys[start:]
+        return keys[start:end + 1]
+
+    async def zrem(self, name, *values):
+        if name not in self.zsets:
+            return 0
+        removed = 0
+        for v in values:
+            if v in self.zsets[name]:
+                del self.zsets[name][v]
+                removed += 1
+        return removed
+
 
 @pytest.fixture(autouse=True)
 def override_redis(monkeypatch):
@@ -131,13 +162,17 @@ def override_redis(monkeypatch):
     monkeypatch.setattr("src.services.connection_manager.redis_client", mock_redis)
     monkeypatch.setattr("src.db.redis.redis_client", mock_redis)
 
-    # 2. ФИКС: Подменяем ссылки внутри уже созданных синглтонов!
+    # 2. Подменяем ссылки внутри уже созданных синглтонов
     from src.services.game_state import state_manager
     from src.services.connection_manager import manager
+    # Для Matchmaker
+    from src.services.matchmaker import matchmaker
 
     monkeypatch.setattr(state_manager, "redis", mock_redis)
     monkeypatch.setattr(manager, "redis", mock_redis)
     monkeypatch.setattr(manager, "pubsub", mock_redis.pubsub())
+    # Если Matchmaker использует redis как свойство:
+    # monkeypatch.setattr(matchmaker, "redis", mock_redis) - не обязательно, если он достает его из db.redis
 
 
 async def override_get_db():
