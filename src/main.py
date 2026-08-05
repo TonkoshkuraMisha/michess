@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -8,6 +9,8 @@ from src.core.config import settings
 from src.api.auth import router as auth_router
 from src.api.websockets import router as ws_router
 from src.db.redis import redis_client
+from src.services.game_state import state_manager
+from src.services.connection_manager import manager
 
 # Configure structured logging
 logging.basicConfig(
@@ -21,13 +24,23 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """
     Lifespan context manager for handling startup and shutdown events gracefully.
-    This is the recommended place to initialize DB connection pools and Redis instances.
+    This is the recommended place to initialize DB connection pools, Redis instances, and background tasks.
     """
     logger.info("Starting up %s...", settings.PROJECT_NAME)
-    # Подключение к Redis устанавливается автоматически под капотом при первом запросе
+
+    # Запускаем фоновый мониторинг таймаутов партий
+    timeout_task = asyncio.create_task(state_manager.check_timeouts_loop(manager))
+
     yield
+
+    # Корректно завершаем фоновый таск и пул соединений Redis
+    timeout_task.cancel()
+    try:
+        await timeout_task
+    except asyncio.CancelledError:
+        pass
+
     logger.info("Shutting down %s...", settings.PROJECT_NAME)
-    # Корректно закрываем асинхронный пул соединений Redis
     await redis_client.aclose()
 
 

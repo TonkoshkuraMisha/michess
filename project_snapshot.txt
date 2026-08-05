@@ -8,8 +8,17 @@ michess/
     alembic.ini
     docker-compose.yml
     project_snapshot.txt
+    pytest.ini
     requirements.txt
     snapshot.py
+    .pytest_cache/
+        .gitignore
+        CACHEDIR.TAG
+        README.md
+        v/
+            cache/
+                lastfailed
+                nodeids
     migrations/
         env.py
         README
@@ -43,6 +52,11 @@ michess/
             connection_manager.py
             game_engine.py
             game_state.py
+    tests/
+        conftest.py
+        test_game_engine.py
+        test_game_state.py
+        test_websockets_flow.py
 
 
 ========================================
@@ -279,6 +293,13 @@ volumes:
   postgres_data:
   redis_data:
 
+--- FILE: pytest.ini ---
+
+[pytest]
+pythonpath = .
+asyncio_mode = auto
+testpaths = tests
+
 --- FILE: requirements.txt ---
 
 alembic==1.19.0
@@ -315,6 +336,51 @@ uvicorn==0.52.1
 watchfiles==1.2.0
 websockets==17.0.1
 
+
+--- FILE: .pytest_cache\.gitignore ---
+
+# Created by pytest automatically.
+*
+
+
+--- FILE: .pytest_cache\CACHEDIR.TAG ---
+
+Signature: 8a477f597d28d172789f06886806bc55
+# This file is a cache directory tag created by pytest.
+# For information about cache directory tags, see:
+#	https://bford.info/cachedir/spec.html
+
+
+--- FILE: .pytest_cache\README.md ---
+
+# pytest cache directory #
+
+This directory contains data from the pytest's cache plugin,
+which provides the `--lf` and `--ff` options, as well as the `cache` fixture.
+
+**Do not** commit this to version control.
+
+See [the docs](https://docs.pytest.org/en/stable/how-to/cache.html) for more information.
+
+
+--- FILE: .pytest_cache\v\cache\lastfailed ---
+
+{
+  "tests/test_game_state.py::test_disconnect_and_reconnect_time_deduction": true
+}
+
+--- FILE: .pytest_cache\v\cache\nodeids ---
+
+[
+  "src/test_ws.py::test_websocket",
+  "src/test_ws2.py::test_websocket",
+  "tests/test_game_engine.py::test_process_illegal_move",
+  "tests/test_game_engine.py::test_process_valid_move",
+  "tests/test_game_engine.py::test_turn_sequence_and_notation",
+  "tests/test_game_state.py::test_disconnect_and_reconnect_time_deduction",
+  "tests/test_game_state.py::test_game_state_initialization",
+  "tests/test_websockets_flow.py::test_websocket_unauthorized_access"
+]
 
 --- FILE: migrations\env.py ---
 
@@ -546,6 +612,7 @@ def downgrade() -> None:
 --- FILE: src\main.py ---
 
 import logging
+import asyncio
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -555,6 +622,8 @@ from src.core.config import settings
 from src.api.auth import router as auth_router
 from src.api.websockets import router as ws_router
 from src.db.redis import redis_client
+from src.services.game_state import state_manager
+from src.services.connection_manager import manager
 
 # Configure structured logging
 logging.basicConfig(
@@ -568,13 +637,23 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """
     Lifespan context manager for handling startup and shutdown events gracefully.
-    This is the recommended place to initialize DB connection pools and Redis instances.
+    This is the recommended place to initialize DB connection pools, Redis instances, and background tasks.
     """
     logger.info("Starting up %s...", settings.PROJECT_NAME)
-    # Подключение к Redis устанавливается автоматически под капотом при первом запросе
+
+    # Запускаем фоновый мониторинг таймаутов партий
+    timeout_task = asyncio.create_task(state_manager.check_timeouts_loop(manager))
+
     yield
+
+    # Корректно завершаем фоновый таск и пул соединений Redis
+    timeout_task.cancel()
+    try:
+        await timeout_task
+    except asyncio.CancelledError:
+        pass
+
     logger.info("Shutting down %s...", settings.PROJECT_NAME)
-    # Корректно закрываем асинхронный пул соединений Redis
     await redis_client.aclose()
 
 
@@ -650,8 +729,8 @@ import asyncio
 import websockets
 import json
 
-# Вставьте сюда ваш токен, который вы получили при логине в Swagger
-TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwbGF5ZXIxIiwiZXhwIjoxNzg1OTEzMzM1fQ.Huhf2sIa66K-jsIv-YU1_7teKznYKaqF_nKSe95jckY"
+# Токен для Player 1
+TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwbGF5ZXIxIiwiZXhwIjoxNzg1OTI0MTM2fQ.QCagYisNwkCV-g2XuB0fXc8dGnkvaNN7j5G4QkmywYI"
 URL = f"ws://127.0.0.1:8000/api/v1/ws/matchmaking?token={TOKEN}"
 
 
@@ -660,30 +739,46 @@ async def test_websocket():
         async with websockets.connect(URL) as ws:
             print("Connected to server!")
 
-            # Ждем приветственное сообщение
             welcome_msg = await ws.recv()
             print(f"Received: {welcome_msg}")
 
-            # Отправляем команду поиска игры
-            print("Sending 'find_game' action...")
-            await ws.send(json.dumps({"action": "find_game"}))
+            print("Creating seek for 3+0...")
+            await ws.send(json.dumps({
+                "action": "create_seek",
+                "base_time_ms": 180000,
+                "increment_ms": 0
+            }))
 
-            # Бесконечно слушаем всё, что присылает сервер
             while True:
                 msg = await ws.recv()
                 print(f"Server says: {msg}")
                 data = json.loads(msg)
 
-                # Если найден матч и мы белые — ходим e2e4
                 if data.get("event") == "match_found" and data.get("color") == "white":
-                    print("Sending move e2e4...")
+                    print("Match started! Sending move e2e4...")
+                    await asyncio.sleep(1)
                     await ws.send(json.dumps({
                         "action": "make_move",
                         "game_id": data["game_id"],
                         "move": "e2e4",
-                        "time_taken_ms": 1500,
+                        "time_taken_ms": 1000,
                         "window_blurred": False
                     }))
+
+                    # Предлагаем ничью после хода
+                    await asyncio.sleep(1)
+                    print("Offering draw...")
+                    await ws.send(json.dumps({
+                        "action": "offer_draw",
+                        "game_id": data["game_id"]
+                    }))
+
+                elif data.get("event") == "draw_declined":
+                    print("Draw was declined by opponent.")
+
+                elif data.get("event") == "game_over":
+                    print(f"Game over received: {data}")
+                    break
 
     except websockets.exceptions.ConnectionClosed:
         print("Connection closed.")
@@ -700,8 +795,8 @@ import asyncio
 import websockets
 import json
 
-# Вставьте сюда ваш токен, который вы получили при логине в Swagger
-TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwbGF5ZXIzIiwiZXhwIjoxNzg1OTE0NDEzfQ.K-fgHImRO15coamv-0PNKex-JCTNFDIE3IFi-mVE7_g"
+# Токен для Player 3
+TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwbGF5ZXIzIiwiZXhwIjoxNzg1OTI0MTU3fQ.BuiwOMYF9at20XnfYyc4_5QPsNid8EOPPMl_QQM6rcM"
 URL = f"ws://127.0.0.1:8000/api/v1/ws/matchmaking?token={TOKEN}"
 
 
@@ -710,30 +805,60 @@ async def test_websocket():
         async with websockets.connect(URL) as ws:
             print("Connected to server!")
 
-            # Ждем приветственное сообщение
             welcome_msg = await ws.recv()
             print(f"Received: {welcome_msg}")
 
-            # Отправляем команду поиска игры
-            print("Sending 'find_game' action...")
-            await ws.send(json.dumps({"action": "find_game"}))
+            print("Requesting seeks list...")
+            await ws.send(json.dumps({"action": "get_seeks"}))
 
-            # Бесконечно слушаем всё, что присылает сервер
+            game_id = None
+
             while True:
                 msg = await ws.recv()
                 print(f"Server says: {msg}")
                 data = json.loads(msg)
 
-                # Если белые сходили — отвечаем e7e5
-                if data.get("event") == "move_made" and data.get("player_id") != 2:
-                    print("Sending move e7e5...")
+                if data.get("event") == "seeks_list":
+                    seeks = data.get("seeks", [])
+                    if seeks:
+                        opponent = seeks[0]
+                        print(f"Found seek from {opponent['username']}. Accepting...")
+                        await ws.send(json.dumps({
+                            "action": "accept_seek",
+                            "opponent_id": opponent["user_id"],
+                            "base_time_ms": opponent["base_time_ms"],
+                            "increment_ms": opponent["increment_ms"]
+                        }))
+                    else:
+                        await asyncio.sleep(2)
+                        await ws.send(json.dumps({"action": "get_seeks"}))
+
+                elif data.get("event") == "match_found":
+                    game_id = data["game_id"]
+
+                elif data.get("event") == "move_made":
+                    if data.get("player_id") != 3:
+                        print("Opponent moved. Sending move e7e5...")
+                        await asyncio.sleep(1)
+                        await ws.send(json.dumps({
+                            "action": "make_move",
+                            "game_id": game_id,
+                            "move": "e7e5",
+                            "time_taken_ms": 1000,
+                            "window_blurred": False
+                        }))
+
+                elif data.get("event") == "draw_offered":
+                    print("Draw offered by opponent. Accepting draw...")
+                    await asyncio.sleep(1)
                     await ws.send(json.dumps({
-                        "action": "make_move",
-                        "game_id": data["game_id"],
-                        "move": "e7e5",
-                        "time_taken_ms": 2100,
-                        "window_blurred": True
+                        "action": "accept_draw",
+                        "game_id": game_id
                     }))
+
+                elif data.get("event") == "game_over":
+                    print(f"Game over received: {data}")
+                    break
 
     except websockets.exceptions.ConnectionClosed:
         print("Connection closed.")
@@ -953,6 +1078,140 @@ async def matchmaking_endpoint(
                     {"event": "match_found", "game_id": new_game.id, "color": "black", "opponent_id": opponent_id},
                     current_user.id
                 )
+
+            elif action == "resign":
+                game_id = data.get("game_id")
+                if not game_id:
+                    continue
+
+                game_state = await state_manager.get_game_state(game_id)
+                if not game_state or game_state["status"] != "in_progress":
+                    continue
+
+                white_id = int(game_state["white_id"])
+                black_id = int(game_state["black_id"])
+
+                if current_user.id not in (white_id, black_id):
+                    continue
+
+                game_result = "0-1" if current_user.id == white_id else "1-0"
+
+                db_game = await db.get(Game, game_id)
+                if db_game:
+                    db_game.status = GameStatus.COMPLETED
+                    db_game.finished_at = func.now()
+
+                    moves_telemetry = await state_manager.extract_all_moves(game_id)
+                    db_moves = [Move(game_id=game_id, **m) for m in moves_telemetry]
+                    db.add_all(db_moves)
+                    await db.commit()
+
+                await state_manager.clear_game_state(game_id)
+
+                game_over_payload = {
+                    "event": "game_over",
+                    "game_id": game_id,
+                    "reason": "resignation",
+                    "winner_id": black_id if current_user.id == white_id else white_id,
+                    "result": game_result
+                }
+
+                await manager.send_personal_message(game_over_payload, white_id)
+                await manager.send_personal_message(game_over_payload, black_id)
+
+            elif action == "offer_draw":
+                game_id = data.get("game_id")
+                if not game_id:
+                    continue
+
+                game_state = await state_manager.get_game_state(game_id)
+                if not game_state or game_state["status"] != "in_progress":
+                    continue
+
+                white_id = int(game_state["white_id"])
+                black_id = int(game_state["black_id"])
+
+                if current_user.id not in (white_id, black_id):
+                    continue
+
+                opponent_id = black_id if current_user.id == white_id else white_id
+                await state_manager.update_game_state(game_id, {"draw_offer": str(current_user.id)})
+
+                await manager.send_personal_message({
+                    "event": "draw_offered",
+                    "game_id": game_id,
+                    "player_id": current_user.id
+                }, opponent_id)
+
+            elif action == "accept_draw":
+                game_id = data.get("game_id")
+                if not game_id:
+                    continue
+
+                game_state = await state_manager.get_game_state(game_id)
+                if not game_state or game_state["status"] != "in_progress":
+                    continue
+
+                white_id = int(game_state["white_id"])
+                black_id = int(game_state["black_id"])
+
+                if current_user.id not in (white_id, black_id):
+                    continue
+
+                draw_offer = game_state.get("draw_offer")
+
+                if not draw_offer or int(draw_offer) == current_user.id:
+                    await manager.send_personal_message({"event": "error", "message": "No active draw offer to accept"},
+                                                        current_user.id)
+                    continue
+
+                game_result = "1/2-1/2"
+
+                db_game = await db.get(Game, game_id)
+                if db_game:
+                    db_game.status = GameStatus.COMPLETED
+                    db_game.finished_at = func.now()
+
+                    moves_telemetry = await state_manager.extract_all_moves(game_id)
+                    db_moves = [Move(game_id=game_id, **m) for m in moves_telemetry]
+                    db.add_all(db_moves)
+                    await db.commit()
+
+                await state_manager.clear_game_state(game_id)
+
+                game_over_payload = {
+                    "event": "game_over",
+                    "game_id": game_id,
+                    "reason": "draw_agreement",
+                    "result": game_result
+                }
+
+                await manager.send_personal_message(game_over_payload, white_id)
+                await manager.send_personal_message(game_over_payload, black_id)
+
+            elif action == "decline_draw":
+                game_id = data.get("game_id")
+                if not game_id:
+                    continue
+
+                game_state = await state_manager.get_game_state(game_id)
+                if not game_state or game_state["status"] != "in_progress":
+                    continue
+
+                white_id = int(game_state["white_id"])
+                black_id = int(game_state["black_id"])
+
+                if current_user.id not in (white_id, black_id):
+                    continue
+
+                opponent_id = black_id if current_user.id == white_id else white_id
+                await state_manager.update_game_state(game_id, {"draw_offer": ""})
+
+                await manager.send_personal_message({
+                    "event": "draw_declined",
+                    "game_id": game_id,
+                    "player_id": current_user.id
+                }, opponent_id)
 
             elif action == "make_move":
                 game_id = data.get("game_id")
@@ -1342,12 +1601,14 @@ class ConnectionManager:
         await websocket.accept()
         self.active_connections[user_id] = websocket
 
-        # Подписываем воркер на персональный канал пользователя
         await self.pubsub.subscribe(f"user:{user_id}")
 
-        # Запускаем фоновое прослушивание Pub/Sub
         if self._listener_task is None:
             self._listener_task = asyncio.create_task(self._listen_pubsub())
+
+        # Уведомляем менеджер состояния о переподключении игрока
+        from src.services.game_state import state_manager
+        await state_manager.handle_player_reconnect(user_id, self)
 
         logger.info("User %s connected. Active on this worker: %s", user_id, len(self.active_connections))
 
@@ -1355,9 +1616,12 @@ class ConnectionManager:
         if user_id in self.active_connections:
             del self.active_connections[user_id]
 
-        # Отписываемся от канала и удаляем вызов из лобби, если игрок отключился
         await self.pubsub.unsubscribe(f"user:{user_id}")
         await self.remove_seek(user_id)
+
+        # Уведомляем менеджер состояния об обрыве связи (запуск Grace Period)
+        from src.services.game_state import state_manager
+        await state_manager.handle_player_disconnect(user_id, self)
 
         logger.info("User %s disconnected.", user_id)
 
@@ -1475,7 +1739,15 @@ engine = GameEngine()
 
 import time
 import json
+import asyncio
+import logging
 from src.db.redis import redis_client
+from src.db.session import AsyncSessionLocal
+from src.models.game import Game, GameStatus
+from src.models.move import Move
+from sqlalchemy.sql import func
+
+logger = logging.getLogger(__name__)
 
 
 class GameStateManager:
@@ -1501,16 +1773,25 @@ class GameStateManager:
             "increment_ms": str(increment_ms),
             "last_move_at": str(now_ms),
             "turn": "white",
-            "status": "in_progress"
+            "status": "in_progress",
+            "white_disconnected": "false",
+            "black_disconnected": "false",
+            "white_disconnect_started_at": "0",
+            "black_disconnect_started_at": "0"
         }
         await self.redis.hset(self._get_key(game_id), mapping=state)
+        await self.redis.sadd("active_games", str(game_id))
+
+        await self.redis.set(f"user:{white_id}:current_game", str(game_id))
+        await self.redis.set(f"user:{black_id}:current_game", str(game_id))
 
     async def get_game_state(self, game_id: int) -> dict | None:
         state = await self.redis.hgetall(self._get_key(game_id))
         if not state:
             return None
 
-        for key in ["white_id", "black_id", "white_time_ms", "black_time_ms", "increment_ms", "last_move_at"]:
+        for key in ["white_id", "black_id", "white_time_ms", "black_time_ms", "increment_ms", "last_move_at",
+                    "white_disconnect_started_at", "black_disconnect_started_at"]:
             if key in state:
                 state[key] = int(state[key])
 
@@ -1521,7 +1802,13 @@ class GameStateManager:
         await self.redis.hset(self._get_key(game_id), mapping=str_updates)
 
     async def clear_game_state(self, game_id: int):
+        state = await self.get_game_state(game_id)
+        if state:
+            await self.redis.delete(f"user:{state['white_id']}:current_game")
+            await self.redis.delete(f"user:{state['black_id']}:current_game")
+
         await self.redis.delete(self._get_key(game_id))
+        await self.redis.srem("active_games", str(game_id))
 
     async def save_move_telemetry(self, game_id: int, move_data: dict):
         key = f"game:{game_id}:moves"
@@ -1533,5 +1820,417 @@ class GameStateManager:
         await self.redis.delete(key)
         return [json.loads(m) for m in moves_raw]
 
+    async def handle_player_disconnect(self, user_id: int, manager):
+        """Фиксирует обрыв связи и запускает отсчет оффлайн-времени."""
+        game_id_str = await self.redis.get(f"user:{user_id}:current_game")
+        if not game_id_str:
+            return
+        game_id = int(game_id_str)
+        state = await self.get_game_state(game_id)
+        if not state or state["status"] != "in_progress":
+            return
+
+        white_id = int(state["white_id"])
+        black_id = int(state["black_id"])
+        color = "white" if user_id == white_id else "black"
+        opponent_id = black_id if color == "white" else white_id
+
+        now_ms = int(time.time() * 1000)
+        updates = {
+            f"{color}_disconnected": "true",
+            f"{color}_disconnect_started_at": str(now_ms)
+        }
+        await self.update_game_state(game_id, updates)
+
+        remaining_time = state["white_time_ms"] if color == "white" else state["black_time_ms"]
+        max_wait_ms = min(remaining_time, 3 * 60 * 1000)
+
+        logger.info("Player %s disconnected in game %s. Tracking offline time (max wait: %sms)", user_id, game_id,
+                    max_wait_ms)
+
+        await manager.send_personal_message({
+            "event": "opponent_disconnected",
+            "game_id": game_id,
+            "max_wait_ms": max_wait_ms
+        }, opponent_id)
+
+    async def handle_player_reconnect(self, user_id: int, manager):
+        """Обрабатывает переподключение: списывает оффлайн-время с часов игрока."""
+        game_id_str = await self.redis.get(f"user:{user_id}:current_game")
+        if not game_id_str:
+            return
+        game_id = int(game_id_str)
+        state = await self.get_game_state(game_id)
+        if not state or state["status"] != "in_progress":
+            return
+
+        white_id = int(state["white_id"])
+        black_id = int(state["black_id"])
+        color = "white" if user_id == white_id else "black"
+        opponent_id = black_id if color == "white" else white_id
+
+        if state.get(f"{color}_disconnected") == "true":
+            now_ms = int(time.time() * 1000)
+            disconnect_started = state.get(f"{color}_disconnect_started_at", now_ms)
+            offline_duration = now_ms - disconnect_started
+
+            updates = {
+                f"{color}_disconnected": "false",
+                f"{color}_disconnect_started_at": "0"
+            }
+
+            # Если был ход этого игрока, списываем время отсутствия с его часов
+            turn = state["turn"]
+            if turn == color:
+                time_key = f"{color}_time_ms"
+                new_time = max(0, state[time_key] - offline_duration)
+                updates[time_key] = str(new_time)
+
+            # Корректируем last_move_at, чтобы прошедшее оффлайн-время не учлось дважды
+            updates["last_move_at"] = str(state["last_move_at"] + offline_duration)
+
+            await self.update_game_state(game_id, updates)
+            logger.info("Player %s reconnected in game %s. Offline duration %sms processed.", user_id, game_id,
+                        offline_duration)
+
+            await manager.send_personal_message({
+                "event": "opponent_reconnected",
+                "game_id": game_id
+            }, opponent_id)
+
+    async def check_timeouts_loop(self, manager):
+        """Фоновый цикл проверки истечения времени на часах и лимитов дисконекта."""
+        while True:
+            try:
+                active_game_ids = await self.redis.smembers("active_games")
+                now_ms = int(time.time() * 1000)
+
+                for game_id_str in active_game_ids:
+                    game_id = int(game_id_str)
+                    state = await self.get_game_state(game_id)
+                    if not state or state["status"] != "in_progress":
+                        await self.redis.srem("active_games", game_id_str)
+                        continue
+
+                    white_id = int(state["white_id"])
+                    black_id = int(state["black_id"])
+                    turn = state["turn"]
+
+                    game_result = None
+                    winner_id = None
+                    reason = "timeout"
+
+                    # 1. Проверка дисконектов и их влияния на часы
+                    for color in ["white", "black"]:
+                        if state.get(f"{color}_disconnected") == "true":
+                            disconnect_started = state.get(f"{color}_disconnect_started_at", now_ms)
+                            offline_duration = now_ms - disconnect_started
+
+                            remaining_time = state["white_time_ms"] if color == "white" else state["black_time_ms"]
+                            current_player_time = remaining_time - offline_duration if turn == color else remaining_time
+                            max_grace_ms = min(remaining_time, 3 * 60 * 1000)
+
+                            if current_player_time <= 0 or offline_duration >= max_grace_ms:
+                                game_result = "black_won_on_time" if color == "white" else "white_won_on_time"
+                                winner_id = black_id if color == "white" else white_id
+                                reason = "disconnect_timeout"
+                                break
+
+                    # 2. Обычная проверка шахматных часов для активных игроков
+                    if not game_result:
+                        elapsed = now_ms - state["last_move_at"]
+                        if turn == "white" and state.get("white_disconnected") != "true":
+                            if state["white_time_ms"] - elapsed <= 0:
+                                game_result = "black_won_on_time"
+                                winner_id = black_id
+                        elif turn == "black" and state.get("black_disconnected") != "true":
+                            if state["black_time_ms"] - elapsed <= 0:
+                                game_result = "white_won_on_time"
+                                winner_id = white_id
+
+                    if game_result:
+                        logger.info("Game %s ended. Result: %s, Reason: %s", game_id, game_result, reason)
+                        async with AsyncSessionLocal() as db:
+                            db_game = await db.get(Game, game_id)
+                            if db_game and db_game.status == GameStatus.IN_PROGRESS:
+                                db_game.status = GameStatus.COMPLETED
+                                db_game.finished_at = func.now()
+
+                                moves_telemetry = await self.extract_all_moves(game_id)
+                                db_moves = [Move(game_id=game_id, **m) for m in moves_telemetry]
+                                db.add_all(db_moves)
+                                await db.commit()
+
+                        await self.clear_game_state(game_id)
+
+                        game_over_payload = {
+                            "event": "game_over",
+                            "game_id": game_id,
+                            "reason": reason,
+                            "winner_id": winner_id,
+                            "result": game_result
+                        }
+                        await manager.send_personal_message(game_over_payload, white_id)
+                        await manager.send_personal_message(game_over_payload, black_id)
+
+            except Exception as e:
+                logger.error("Error in check_timeouts_loop: %s", e)
+
+            await asyncio.sleep(0.5)
+
 
 state_manager = GameStateManager()
+
+--- FILE: tests\conftest.py ---
+
+import asyncio
+import pytest
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from fastapi.testclient import TestClient
+
+from src.main import app
+from src.db.session import get_db
+from src.models.base import Base
+from src.models.user import User
+from src.core.security import create_access_token
+
+TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+
+test_engine = create_async_engine(TEST_DATABASE_URL, echo=False, future=True)
+TestSessionLocal = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+
+
+@pytest.fixture(scope="session")
+def event_loop():
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
+
+
+@pytest.fixture(autouse=True)
+async def setup_database():
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+
+
+class MockAsyncRedis:
+    """Высокопроизводительный асинхронный мок Redis в оперативной памяти для тестов."""
+    def __init__(self):
+        self.store = {}
+        self.sets = {}
+        self.lists = {}
+        self.kv = {}
+
+    async def hset(self, name, mapping=None, **kwargs):
+        if name not in self.store:
+            self.store[name] = {}
+        if mapping:
+            self.store[name].update({str(k): str(v) for k, v in mapping.items()})
+        if kwargs:
+            self.store[name].update({str(k): str(v) for k, v in kwargs.items()})
+        return len(mapping or {}) + len(kwargs)
+
+    async def hgetall(self, name):
+        return self.store.get(name, {})
+
+    async def delete(self, *names):
+        count = 0
+        for name in names:
+            for container in (self.store, self.sets, self.lists, self.kv):
+                if name in container:
+                    del container[name]
+                    count += 1
+        return count
+
+    async def sadd(self, name, *values):
+        if name not in self.sets:
+            self.sets[name] = set()
+        added = 0
+        for v in values:
+            if str(v) not in self.sets[name]:
+                self.sets[name].add(str(v))
+                added += 1
+        return added
+
+    async def srem(self, name, *values):
+        if name not in self.sets:
+            return 0
+        removed = 0
+        for v in values:
+            if str(v) in self.sets[name]:
+                self.sets[name].remove(str(v))
+                removed += 1
+        return removed
+
+    async def smembers(self, name):
+        return self.sets.get(name, set())
+
+    async def set(self, name, value):
+        self.kv[name] = str(value)
+        return True
+
+    async def get(self, name):
+        return self.kv.get(name)
+
+    async def rpush(self, name, *values):
+        if name not in self.lists:
+            self.lists[name] = []
+        for v in values:
+            self.lists[name].append(v)
+        return len(self.lists[name])
+
+    async def lrange(self, name, start, end):
+        lst = self.lists.get(name, [])
+        if end == -1:
+            return lst[start:]
+        return lst[start:end+1]
+
+
+@pytest.fixture(autouse=True)
+def override_redis(monkeypatch):
+    mock_redis = MockAsyncRedis()
+    monkeypatch.setattr("src.services.game_state.redis_client", mock_redis)
+    monkeypatch.setattr("src.services.connection_manager.redis_client", mock_redis)
+    monkeypatch.setattr("src.db.redis.redis_client", mock_redis)
+
+
+async def override_get_db():
+    async with TestSessionLocal() as session:
+        yield session
+
+
+app.dependency_overrides[get_db] = override_get_db
+
+
+@pytest.fixture
+async def db_session():
+    async with TestSessionLocal() as session:
+        yield session
+
+
+@pytest.fixture
+def client():
+    return TestClient(app)
+
+
+@pytest.fixture
+async def test_user_1(db_session):
+    user = User(username="player1", email="player1@example.com", hashed_password="fakehash", rating=1200)
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest.fixture
+async def test_user_2(db_session):
+    user = User(username="player2", email="player2@example.com", hashed_password="fakehash", rating=1200)
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest.fixture
+def token_user_1(test_user_1):
+    return create_access_token({"sub": test_user_1.username})
+
+
+@pytest.fixture
+def token_user_2(test_user_2):
+    return create_access_token({"sub": test_user_2.username})
+
+--- FILE: tests\test_game_engine.py ---
+
+from src.services.game_engine import engine
+
+
+def test_process_valid_move():
+    pgn = ""
+    is_valid, new_pgn, result = engine.process_move(pgn, "e2e4")
+    assert is_valid is True
+    assert "1. e4" in new_pgn
+    assert result is None
+
+
+def test_process_illegal_move():
+    pgn = ""
+    is_valid, new_pgn, result = engine.process_move(pgn, "e2e5")
+    assert is_valid is False
+    assert new_pgn == ""
+    assert result is None
+
+
+def test_turn_sequence_and_notation():
+    pgn = ""
+    # White move
+    is_valid_1, pgn_1, _ = engine.process_move(pgn, "e2e4")
+    assert is_valid_1 is True
+
+    # Black move
+    is_valid_2, pgn_2, _ = engine.process_move(pgn_1, "e7e5")
+    assert is_valid_2 is True
+    assert "1. e4 e5" in pgn_2
+
+--- FILE: tests\test_game_state.py ---
+
+import pytest
+import time
+from src.services.game_state import state_manager
+
+
+@pytest.mark.asyncio
+async def test_game_state_initialization():
+    await state_manager.initialize_game(
+        game_id=1, white_id=10, black_id=20, base_time_ms=180000, increment_ms=0
+    )
+    state = await state_manager.get_game_state(1)
+
+    assert state is not None
+    assert state["white_id"] == 10
+    assert state["black_id"] == 20
+    assert state["white_time_ms"] == 180000
+    assert state["status"] == "in_progress"
+
+
+@pytest.mark.asyncio
+async def test_disconnect_and_reconnect_time_deduction():
+    await state_manager.initialize_game(
+        game_id=2, white_id=10, black_id=20, base_time_ms=180000, increment_ms=0
+    )
+
+    # Эмулируем дисконект белых (ход белых)
+    await state_manager.handle_player_disconnect(10, None)
+
+    state_after_dc = await state_manager.get_game_state(2)
+    assert state_after_dc["white_disconnected"] == "true"
+
+    # Искусственно состарим время начала дисконекта на 5 секунд (5000 мс)
+    old_dc_time = int(state_after_dc["white_disconnect_started_at"]) - 5000
+    await state_manager.update_game_state(2, {"white_disconnect_started_at": old_dc_time})
+
+    # Эмулируем переподключение
+    await state_manager.handle_player_reconnect(10, None)
+
+    state_after_reconnect = await state_manager.get_game_state(2)
+    assert state_after_reconnect["white_disconnected"] == "false"
+    # Время должно уменьшиться примерно на 5 секунд (180000 - 5000 = 175000)
+    assert state_after_reconnect["white_time_ms"] <= 175000
+
+--- FILE: tests\test_websockets_flow.py ---
+
+from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
+from src.main import app
+
+
+def test_websocket_unauthorized_access(client: TestClient):
+    try:
+        with client.websocket_connect("/api/v1/ws/matchmaking?token=invalid_token") as websocket:
+            pass
+    except WebSocketDisconnect as e:
+        # 1008 Policy Violation / закрытие из-за неверного токена — ожидаемое поведение
+        assert e.code == 1008
