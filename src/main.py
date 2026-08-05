@@ -7,6 +7,7 @@ import uvicorn
 from src.core.config import settings
 from src.api.auth import router as auth_router
 from src.api.websockets import router as ws_router
+from src.db.redis import redis_client
 
 # Configure structured logging
 logging.basicConfig(
@@ -23,10 +24,11 @@ async def lifespan(app: FastAPI):
     This is the recommended place to initialize DB connection pools and Redis instances.
     """
     logger.info("Starting up %s...", settings.PROJECT_NAME)
-    # TODO: Initialize PostgreSQL engine and Redis connection pool here
+    # Подключение к Redis устанавливается автоматически под капотом при первом запросе
     yield
     logger.info("Shutting down %s...", settings.PROJECT_NAME)
-    # TODO: Gracefully close DB and Redis connections here
+    # Корректно закрываем асинхронный пул соединений Redis
+    await redis_client.aclose()
 
 
 def create_app() -> FastAPI:

@@ -1,4 +1,4 @@
-from sqlalchemy import String, Integer, DateTime, ForeignKey, Enum
+from sqlalchemy import String, Integer, DateTime, ForeignKey, Enum, Boolean
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 from datetime import datetime
@@ -16,7 +16,7 @@ class GameStatus(str, enum.Enum):
 
 class Game(Base):
     """
-    Represents a single chess match between two players.
+    Represents a single chess match between two players with time controls.
     """
     __tablename__ = "games"
 
@@ -25,6 +25,13 @@ class Game(Base):
     # Foreign keys to the User table
     white_player_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     black_player_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+
+    # Time controls (в миллисекундах)
+    base_time_ms: Mapped[int] = mapped_column(Integer, default=180000)  # По умолчанию 3 минуты (180000 мс)
+    increment_ms: Mapped[int] = mapped_column(Integer, default=0)       # По умолчанию без добавки
+
+    # Рейтинговая ли игра
+    is_rated: Mapped[bool] = mapped_column(Boolean, default=True)
 
     # Standard chess notation of the whole game (PGN)
     pgn: Mapped[str | None] = mapped_column(String, nullable=True)
