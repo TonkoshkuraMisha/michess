@@ -23,12 +23,14 @@ class ConnectionManager:
         await websocket.accept()
         self.active_connections[user_id] = websocket
 
-        # Подписываем воркер на персональный канал пользователя
         await self.pubsub.subscribe(f"user:{user_id}")
 
-        # Запускаем фоновое прослушивание Pub/Sub
         if self._listener_task is None:
             self._listener_task = asyncio.create_task(self._listen_pubsub())
+
+        # Уведомляем менеджер состояния о переподключении игрока
+        from src.services.game_state import state_manager
+        await state_manager.handle_player_reconnect(user_id, self)
 
         logger.info("User %s connected. Active on this worker: %s", user_id, len(self.active_connections))
 
@@ -36,9 +38,12 @@ class ConnectionManager:
         if user_id in self.active_connections:
             del self.active_connections[user_id]
 
-        # Отписываемся от канала и удаляем вызов из лобби, если игрок отключился
         await self.pubsub.unsubscribe(f"user:{user_id}")
         await self.remove_seek(user_id)
+
+        # Уведомляем менеджер состояния об обрыве связи (запуск Grace Period)
+        from src.services.game_state import state_manager
+        await state_manager.handle_player_disconnect(user_id, self)
 
         logger.info("User %s disconnected.", user_id)
 
