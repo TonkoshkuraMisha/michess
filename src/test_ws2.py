@@ -15,7 +15,6 @@ async def test_websocket():
             welcome_msg = await ws.recv()
             print(f"Received: {welcome_msg}")
 
-            # Запрашиваем список вызовов в лобби
             print("Requesting seeks list...")
             await ws.send(json.dumps({"action": "get_seeks"}))
 
@@ -38,7 +37,6 @@ async def test_websocket():
                             "increment_ms": opponent["increment_ms"]
                         }))
                     else:
-                        print("No seeks found. Retrying...")
                         await asyncio.sleep(2)
                         await ws.send(json.dumps({"action": "get_seeks"}))
 
@@ -56,6 +54,14 @@ async def test_websocket():
                             "time_taken_ms": 1000,
                             "window_blurred": False
                         }))
+
+                elif data.get("event") == "draw_offered":
+                    print("Draw offered by opponent. Accepting draw...")
+                    await asyncio.sleep(1)
+                    await ws.send(json.dumps({
+                        "action": "accept_draw",
+                        "game_id": game_id
+                    }))
 
                 elif data.get("event") == "game_over":
                     print(f"Game over received: {data}")

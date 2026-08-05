@@ -38,13 +38,16 @@ async def test_websocket():
                         "window_blurred": False
                     }))
 
-                    # Ждем пару секунд и тестируем сдачу
-                    await asyncio.sleep(2)
-                    print("Sending resignation...")
+                    # Предлагаем ничью после хода
+                    await asyncio.sleep(1)
+                    print("Offering draw...")
                     await ws.send(json.dumps({
-                        "action": "resign",
+                        "action": "offer_draw",
                         "game_id": data["game_id"]
                     }))
+
+                elif data.get("event") == "draw_declined":
+                    print("Draw was declined by opponent.")
 
                 elif data.get("event") == "game_over":
                     print(f"Game over received: {data}")
