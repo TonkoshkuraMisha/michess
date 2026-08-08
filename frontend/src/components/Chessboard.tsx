@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Chess } from 'chess.js';
 import {
-  RotateCcw,
   ChevronFirst,
   ChevronLeft,
   ChevronRight,
@@ -17,10 +16,6 @@ import { gameSocket } from '../services/gameSocket';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
-
-const PIECE_VALUES: { [key: string]: number } = {
-  p: 1, n: 3, b: 3, r: 5, q: 9, k: 0
-};
 
 export default function Chessboard() {
   const [game, setGame] = useState(new Chess());
@@ -234,11 +229,12 @@ export default function Chessboard() {
 
       if (move) {
         const timeTaken = Date.now() - moveStartTime.current;
+        const uciMove = (move as any).uci || `${move.from}${move.to}${move.promotion || ''}`;
 
         if (gameId) {
           gameSocket.send('make_move', {
             game_id: gameId,
-            move: move.uci,
+            move: uciMove,
             time_taken_ms: timeTaken,
             window_blurred: document.hidden,
             is_premove: false

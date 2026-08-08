@@ -1,4 +1,3 @@
-import React from 'react';
 import Chessboard from './components/Chessboard';
 import { Search, Bell, Swords, BookOpen, Eye, Cpu, Wrench } from 'lucide-react';
 
@@ -43,7 +42,7 @@ export default function App() {
             <div className="w-8 h-8 rounded-full bg-boxwood text-acacia-dark font-bold flex items-center justify-center text-sm shadow">
               M
             </div>
-            <span className="font-serif font-semibold text-sm text-amber-200 hidden sm:inline">Mykhailo_T</span>
+            <span className="font-serif font-semibold text-sm text-amber-200 hidden sm:inline">Mykhaylo_T</span>
           </div>
         </div>
 
