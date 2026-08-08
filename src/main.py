@@ -12,6 +12,7 @@ from src.api.profile import router as profile_router  # <-- Импорт роу�
 from src.db.redis import redis_client
 from src.services.game_state import state_manager
 from src.services.connection_manager import manager
+from src.api.analysis import router as analysis_router
 
 # Configure structured logging
 logging.basicConfig(
@@ -74,7 +75,8 @@ def create_app() -> FastAPI:
     # Include API routers
     app.include_router(auth_router, prefix=settings.API_V1_STR)
     app.include_router(ws_router, prefix=settings.API_V1_STR)
-    app.include_router(profile_router, prefix=settings.API_V1_STR)  # <-- Регистрация роутера профиля
+    app.include_router(profile_router, prefix=settings.API_V1_STR)
+    app.include_router(analysis_router, prefix=settings.API_V1_STR)
 
     return app
 
