@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Chess } from 'chess.js';
 import {
   RotateCcw,
@@ -10,8 +10,10 @@ import {
   Sword,
   Sliders,
   Flag,
-  Handshake
+  Handshake,
+  Loader2
 } from 'lucide-react';
+import { gameSocket } from '../services/gameSocket';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
@@ -23,8 +25,16 @@ const PIECE_VALUES: { [key: string]: number } = {
 export default function Chessboard() {
   const [game, setGame] = useState(new Chess());
   const [history, setHistory] = useState<any[]>([]);
-  const [viewIndex, setViewIndex] = useState<number>(-1); // -1 — актуальная позиция
+  const [viewIndex, setViewIndex] = useState<number>(-1);
   const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
+
+  // Мультиплеерные состояния
+  const [gameId, setGameId] = useState<number | null>(null);
+  const [myColor, setMyColor] = useState<'white' | 'black'>('white');
+  const [isSearching, setIsSearching] = useState(false);
+  const [, setOpponentConnected] = useState(false);
+
+  const moveStartTime = useRef<number>(Date.now());
 
   // Состояние для кастомного перетаскивания мышкой (Drag & Drop)
   const [dragState, setDragState] = useState<{
@@ -34,7 +44,6 @@ export default function Chessboard() {
     y: number;
   } | null>(null);
 
-  // Динамический максимальный размер доски под экран по умолчанию
   const [boardSize, setBoardSize] = useState<number>(() => {
     if (typeof window !== 'undefined') {
       const calculated = window.innerHeight - 260;
@@ -43,34 +52,92 @@ export default function Chessboard() {
     return 540;
   });
 
-  // Таймеры игроков (5 минут = 300 секунд)
-  const [whiteTime, setWhiteTime] = useState(300);
-  const [blackTime, setBlackTime] = useState(300);
-  const [isTimerActive, setIsTimerActive] = useState(false);
+  // Таймеры игроков в миллисекундах
+  const [whiteTimeMs, setWhiteTimeMs] = useState(180000);
+  const [blackTimeMs, setBlackTimeMs] = useState(180000);
 
-  // Статистика матчей (H2H) и результаты
-  const [h2h, setH2h] = useState({ whiteWins: 12, blackWins: 5, draws: 4 });
+  const [h2h] = useState({ whiteWins: 12, blackWins: 5, draws: 4 });
   const [gameOverResult, setGameOverResult] = useState<string | null>(null);
-
-  // Уведомления о ничьей
   const [drawOfferStatus, setDrawOfferStatus] = useState<string | null>(null);
 
-  // Управление таймером
-  useEffect(() => {
-    let interval: any = null;
-    const activeGame = getGameAtViewIndex(viewIndex);
+  // Данные игроков для шапки (Белые всегда первыми)
+  const whitePlayerInfo = {
+    username: myColor === 'white' ? 'Mykhailo_T' : 'Grandmaster_A',
+    rating: myColor === 'white' ? '1996' : '2144'
+  };
+  const blackPlayerInfo = {
+    username: myColor === 'white' ? 'Grandmaster_A' : 'Mykhailo_T',
+    rating: myColor === 'white' ? '2144' : '1996'
+  };
 
-    if (isTimerActive && !activeGame.isGameOver() && !gameOverResult) {
-      interval = setInterval(() => {
-        if (activeGame.turn() === 'w') {
-          setWhiteTime((t) => (t > 0 ? t - 1 : 0));
-        } else {
-          setBlackTime((t) => (t > 0 ? t - 1 : 0));
-        }
-      }, 1000);
-    }
-    return () => clearInterval(interval);
-  }, [isTimerActive, game, viewIndex, gameOverResult]);
+  // Подключение к WebSocket при монтировании компонента
+  useEffect(() => {
+    const token = localStorage.getItem('token') || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwbGF5ZXIxIiwiZXhwIjoxNzg1OTY5MjQwfQ.NHjXmbJAmHcd_WhRE2ni0EhVYefuPb2HX925cRQMgX8";
+    gameSocket.connect(token);
+
+    const handleMatchFound = (data: any) => {
+      setIsSearching(false);
+      setGameId(data.game_id);
+      setMyColor(data.color);
+      setOpponentConnected(true);
+      setGame(new Chess());
+      setHistory([]);
+      setGameOverResult(null);
+      setDrawOfferStatus('Партия началась!');
+      playAudio('start');
+      setTimeout(() => setDrawOfferStatus(null), 3000);
+    };
+
+    const handleMoveMade = (data: any) => {
+      const newGame = new Chess();
+      if (data.pgn) {
+        newGame.loadPgn(data.pgn);
+      }
+      setGame(newGame);
+      setHistory(newGame.history({ verbose: true }));
+      setWhiteTimeMs(data.white_time_ms);
+      setBlackTimeMs(data.black_time_ms);
+      moveStartTime.current = Date.now();
+
+      const isCapture = data.move && (data.move.includes('x') || data.pgn?.includes('x'));
+      playAudio(isCapture ? 'capture' : 'move');
+
+      if (data.game_over) {
+        setGameOverResult(data.result);
+      }
+    };
+
+    const handleGameOver = (data: any) => {
+      setGameOverResult(data.result);
+      if (data.white_new_rating) {
+        setDrawOfferStatus(`Партия окончена. Результат: ${data.result}`);
+      }
+    };
+
+    const handleDrawOffered = () => {
+      setDrawOfferStatus('Соперник предлагает ничью.');
+    };
+
+    const handleDrawDeclined = () => {
+      setDrawOfferStatus('Предложение ничьей отклонено.');
+      setTimeout(() => setDrawOfferStatus(null), 3000);
+    };
+
+    gameSocket.on('match_found', handleMatchFound);
+    gameSocket.on('move_made', handleMoveMade);
+    gameSocket.on('game_over', handleGameOver);
+    gameSocket.on('draw_offered', handleDrawOffered);
+    gameSocket.on('draw_declined', handleDrawDeclined);
+
+    return () => {
+      gameSocket.off('match_found', handleMatchFound);
+      gameSocket.off('move_made', handleMoveMade);
+      gameSocket.off('game_over', handleGameOver);
+      gameSocket.off('draw_offered', handleDrawOffered);
+      gameSocket.off('draw_declined', handleDrawDeclined);
+      gameSocket.disconnect();
+    };
+  }, []);
 
   // Глобальные слушатели мыши для перетаскивания фигуры за курсором
   useEffect(() => {
@@ -88,7 +155,7 @@ export default function Chessboard() {
       if (squareElement) {
         const targetSquare = squareElement.getAttribute('data-square');
         if (targetSquare && targetSquare !== dragState.from) {
-          handleMove(dragState.from, targetSquare);
+          executeMove(dragState.from, targetSquare);
         }
       }
 
@@ -104,11 +171,12 @@ export default function Chessboard() {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [dragState, game, history, viewIndex]);
+  }, [dragState, game, gameId]);
 
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
+  const formatTime = (ms: number) => {
+    const totalSecs = Math.max(0, Math.floor(ms / 1000));
+    const mins = Math.floor(totalSecs / 60);
+    const secs = totalSecs % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
@@ -119,131 +187,67 @@ export default function Chessboard() {
     audio.play().catch(() => {});
   };
 
-  const startNewGame = () => {
-    const newGame = new Chess();
-    setGame(newGame);
-    setHistory([]);
-    setViewIndex(-1);
-    setSelectedSquare(null);
-    setDragState(null);
-    setWhiteTime(300);
-    setBlackTime(300);
-    setIsTimerActive(false);
-    setGameOverResult(null);
-    setDrawOfferStatus(null);
-    playAudio('start');
+  const startMatchmaking = () => {
+    setIsSearching(true);
+    setDrawOfferStatus('Поиск достойного соперника в очереди...');
+    gameSocket.send('join_queue', { base_time_ms: 180000, increment_ms: 0 });
   };
 
-  // Логика сдачи партии
   const handleResign = () => {
-    if (gameOverResult) return;
-    const resigningPlayer = currentGame.turn() === 'w' ? 'Белые (Mykhailo_T)' : 'Чёрные (Grandmaster_A)';
-    if (window.confirm(`${resigningPlayer}, вы действительно хотите сдаться?`)) {
-      const winner = currentGame.turn() === 'w' ? 'black' : 'white';
-      setGameOverResult(winner);
-      setIsTimerActive(false);
-      if (winner === 'white') setH2h(h => ({ ...h, whiteWins: h.whiteWins + 1 }));
-      else setH2h(h => ({ ...h, blackWins: h.blackWins + 1 }));
-      setDrawOfferStatus('Партия завершена сдачей.');
+    if (!gameId || gameOverResult) return;
+    if (window.confirm('Вы действительно хотите сдаться?')) {
+      gameSocket.send('resign', { game_id: gameId });
     }
   };
 
-  // Логика предложения ничьей
   const handleOfferDraw = () => {
+    if (!gameId || gameOverResult) return;
+    gameSocket.send('offer_draw', { game_id: gameId });
+    setDrawOfferStatus('Вы предложили ничью. Ожидание ответа...');
+  };
+
+  const acceptDraw = () => {
+    if (!gameId) return;
+    gameSocket.send('accept_draw', { game_id: gameId });
+    setDrawOfferStatus(null);
+  };
+
+  const declineDraw = () => {
+    if (!gameId) return;
+    gameSocket.send('decline_draw', { game_id: gameId });
+    setDrawOfferStatus(null);
+  };
+
+  const executeMove = (from: string, to: string) => {
     if (gameOverResult || viewIndex !== -1) return;
-    const offeringColor = currentGame.turn() === 'w' ? 'Белые' : 'Чёрные';
-    setDrawOfferStatus(`${offeringColor} предложили ничью. Ожидание ответа...`);
 
-    setTimeout(() => {
-      if (Math.random() > 0.5) {
-        setDrawOfferStatus('Соперник согласился на ничью. Ничья!');
-        setGameOverResult('draw');
-        setIsTimerActive(false);
-        setH2h(h => ({ ...h, draws: h.draws + 1 }));
-      } else {
-        setDrawOfferStatus('Соперник отклонил предложение ничьей.');
-        setTimeout(() => setDrawOfferStatus(null), 3000);
-      }
-    }, 3000);
-  };
-
-  const getGameAtViewIndex = (index: number) => {
-    const tempGame = new Chess();
-    if (index === -2) return tempGame;
-    const limit = index === -1 ? history.length - 1 : index;
-    for (let i = 0; i <= limit; i++) {
-      if (history[i]) tempGame.move(history[i]);
+    const piece = game.get(from as any);
+    const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
+    if (!piece || piece.color !== game.turn() || currentTurnColor !== myColor) {
+      setSelectedSquare(null);
+      return;
     }
-    return tempGame;
-  };
-
-  const currentGame = getGameAtViewIndex(viewIndex);
-  const boardState = currentGame.board();
-
-  const getMaterialDifference = () => {
-    let whiteScore = 0;
-    let blackScore = 0;
-
-    boardState.forEach((row) => {
-      row.forEach((piece) => {
-        if (piece) {
-          const val = PIECE_VALUES[piece.type] || 0;
-          if (piece.color === 'w') whiteScore += val;
-          else blackScore += val;
-        }
-      });
-    });
-
-    const diff = whiteScore - blackScore;
-    if (diff > 0) return { white: `+${diff}`, black: '' };
-    if (diff < 0) return { white: '', black: `+${Math.abs(diff)}` };
-    return { white: '', black: '' };
-  };
-
-  const materialDiff = getMaterialDifference();
-
-  const handleMove = (from: string, to: string) => {
-    if (viewIndex !== -1 || gameOverResult) return;
 
     try {
-      const gameCopy = new Chess(game.fen());
-      const move = gameCopy.move({ from, to, promotion: 'q' });
+      const tempGame = new Chess(game.fen());
+      const move = tempGame.move({ from, to, promotion: 'q' });
 
       if (move) {
-        setGame(gameCopy);
-        const newHistory = [...history, move];
-        setHistory(newHistory);
-        setViewIndex(-1);
-        setSelectedSquare(null);
-        setDragState(null);
-        setIsTimerActive(true);
+        const timeTaken = Date.now() - moveStartTime.current;
 
-        if (move.flags.includes('c') || move.flags.includes('e')) {
-          playAudio('capture');
-        } else {
-          playAudio('move');
+        if (gameId) {
+          gameSocket.send('make_move', {
+            game_id: gameId,
+            move: move.uci,
+            time_taken_ms: timeTaken,
+            window_blurred: document.hidden,
+            is_premove: false
+          });
         }
-
-        if (gameCopy.isGameOver()) {
-          setIsTimerActive(false);
-          if (gameCopy.isCheckmate()) {
-            const winner = gameCopy.turn() === 'w' ? 'black' : 'white';
-            setGameOverResult(winner);
-            if (winner === 'white') setH2h(h => ({ ...h, whiteWins: h.whiteWins + 1 }));
-            else setH2h(h => ({ ...h, blackWins: h.blackWins + 1 }));
-          } else {
-            setGameOverResult('draw');
-            setH2h(h => ({ ...h, draws: h.draws + 1 }));
-          }
-        }
-      }
-    } catch (e) {
-      const targetPiece = currentGame.get(to as any);
-      if (targetPiece && targetPiece.color === currentGame.turn()) {
-        setSelectedSquare(to);
-      } else {
         setSelectedSquare(null);
       }
+    } catch {
+      setSelectedSquare(null);
     }
     setDragState(null);
   };
@@ -254,15 +258,29 @@ export default function Chessboard() {
       if (selectedSquare === squareId) {
         setSelectedSquare(null);
       } else {
-        handleMove(selectedSquare, squareId);
+        executeMove(selectedSquare, squareId);
       }
     } else {
-      const piece = currentGame.get(squareId as any);
-      if (piece && piece.color === currentGame.turn()) {
+      const piece = game.get(squareId as any);
+      const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
+      if (piece && piece.color === game.turn() && currentTurnColor === myColor) {
         setSelectedSquare(squareId);
       }
     }
   };
+
+  const currentGame = viewIndex === -1 ? game : (() => {
+    const tg = new Chess();
+    const limit = viewIndex === -2 ? -1 : viewIndex;
+    for (let i = 0; i <= limit; i++) {
+      if (history[i]) tg.move(history[i]);
+    }
+    return tg;
+  })();
+  const boardState = currentGame.board();
+
+  const displayedRanks = myColor === 'black' ? [...RANKS].reverse() : RANKS;
+  const displayedFiles = myColor === 'black' ? [...FILES].reverse() : FILES;
 
   const renderPieceSvg = (piece: { type: string; color: string }) => (
     <div className="relative w-full h-full pointer-events-none">
@@ -297,7 +315,6 @@ export default function Chessboard() {
   return (
     <div className="flex flex-col xl:flex-row items-center xl:items-start justify-center gap-6 w-full max-w-7xl mx-auto font-serif relative">
 
-      {/* ПЛАВАЮЩАЯ ФИГУРА ПОД КУРСОРОМ */}
       {dragState && (
         <div
           className="fixed pointer-events-none z-50 drop-shadow-[0_15px_15px_rgba(0,0,0,0.6)]"
@@ -316,7 +333,7 @@ export default function Chessboard() {
       {/* ЛЕВАЯ / ЦЕНТРАЛЬНАЯ ЧАСТЬ: Игроки и доска */}
       <div className="flex flex-col items-center gap-3">
 
-        {/* Игрок 1 (Чёрные сверху) */}
+        {/* Игрок сверху (Черные, если вы белые, или наоборот) */}
         <div style={{ width: `${boardSize}px` }} className="bg-acacia-dark p-3 rounded shadow-heavy border-2 border-amber-900/40 flex justify-between items-center text-boxwood-light transition-all">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded bg-acacia flex items-center justify-center border border-amber-600/30 font-bold text-amber-200">
@@ -324,20 +341,15 @@ export default function Chessboard() {
             </div>
             <div>
               <div className="font-bold flex items-center gap-2">
-                <span>Grandmaster_A</span>
+                <span>{blackPlayerInfo.username}</span>
                 <span className="text-xs px-1.5 py-0.5 rounded bg-black/40 text-amber-400 border border-amber-600/20">
-                  2144 {gameOverResult && <span className="text-emerald-400">{gameOverResult === 'black' ? '+8' : '-8'}</span>}
+                  {blackPlayerInfo.rating}
                 </span>
               </div>
-              {materialDiff.black && (
-                <div className="text-xs text-boxwood/75">
-                  Преимущество: <span className="text-amber-200 font-bold">{materialDiff.black}</span>
-                </div>
-              )}
             </div>
           </div>
           <div className="bg-[#1A120B] px-4 py-1.5 rounded border-2 border-amber-700/50 shadow-inner font-mono text-xl tracking-wider text-amber-500">
-            {formatTime(blackTime)}
+            {formatTime(myColor === 'white' ? blackTimeMs : whiteTimeMs)}
           </div>
         </div>
 
@@ -352,8 +364,8 @@ export default function Chessboard() {
           />
 
           <div className="grid grid-cols-8 grid-rows-8 w-full h-full border-2 border-room-dark relative z-10 shadow-inner-board">
-            {RANKS.map((rank, rankIndex) =>
-              FILES.map((file, fileIndex) => {
+            {displayedRanks.map((rank, rankIndex) =>
+              displayedFiles.map((file, fileIndex) => {
                 const isDark = (rankIndex + fileIndex) % 2 !== 0;
                 const squareId = `${file}${rank}`;
                 const piece = boardState[rankIndex][fileIndex];
@@ -390,6 +402,7 @@ export default function Chessboard() {
                           if (viewIndex !== -1 || gameOverResult) return;
                           if (piece.color !== currentGame.turn()) return;
                           e.stopPropagation();
+                          moveStartTime.current = Date.now();
                           setSelectedSquare(squareId);
                           setDragState({
                             from: squareId,
@@ -421,7 +434,7 @@ export default function Chessboard() {
           </div>
         </div>
 
-        {/* Игрок 2 (Белые снизу) */}
+        {/* Игрок снизу (Белые, если вы белые, или наоборот) */}
         <div style={{ width: `${boardSize}px` }} className="bg-acacia-dark p-3 rounded shadow-heavy border-2 border-amber-900/40 flex justify-between items-center text-boxwood-light transition-all">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded bg-boxwood flex items-center justify-center border border-amber-600/30 font-bold text-acacia-dark">
@@ -429,32 +442,26 @@ export default function Chessboard() {
             </div>
             <div>
               <div className="font-bold flex items-center gap-2">
-                <span>Mykhailo_T</span>
+                <span>{whitePlayerInfo.username}</span>
                 <span className="text-xs px-1.5 py-0.5 rounded bg-black/40 text-amber-400 border border-amber-600/20">
-                  1996 {gameOverResult && <span className="text-emerald-400">{gameOverResult === 'white' ? '+8' : '-8'}</span>}
+                  {whitePlayerInfo.rating}
                 </span>
               </div>
-              {materialDiff.white && (
-                <div className="text-xs text-boxwood/75">
-                  Преимущество: <span className="text-amber-200 font-bold">{materialDiff.white}</span>
-                </div>
-              )}
             </div>
           </div>
           <div className="bg-[#1A120B] px-4 py-1.5 rounded border-2 border-amber-700/50 shadow-inner font-mono text-xl tracking-wider text-amber-500">
-            {formatTime(whiteTime)}
+            {formatTime(myColor === 'white' ? whiteTimeMs : blackTimeMs)}
           </div>
         </div>
 
       </div>
 
-      {/* ПРАВАЯ ПАНЕЛЬ: Журнал ходов, навигация, управление */}
+      {/* ПРАВАЯ ПАНЕЛЬ: Журнал ходов (Белые — Черные), навигация, управление */}
       <div className="w-full xl:w-96 bg-acacia p-5 rounded shadow-heavy border-4 border-acacia-dark flex flex-col gap-4 text-boxwood-light">
 
-        {/* Шапка матча и H2H счет (+12 -5 =4) */}
         <div className="border-b border-acacia-light pb-3 flex justify-between items-center">
           <div>
-            <div className="text-xs tracking-widest uppercase text-boxwood/70">Классическая партия</div>
+            <div className="text-xs tracking-widest uppercase text-boxwood/70">Рейтинговая партия</div>
             <div className="text-sm font-bold flex items-center gap-2 mt-1 font-mono">
               <span className="text-xs text-boxwood/70 uppercase font-serif">Счёт:</span>
               <span className="text-emerald-400">+{h2h.whiteWins}</span>
@@ -467,17 +474,22 @@ export default function Chessboard() {
           </div>
         </div>
 
-        {/* Уведомление о ничьей / статусе партии */}
         {drawOfferStatus && (
-          <div className="bg-amber-950/80 p-2.5 rounded border border-amber-600/50 text-xs text-amber-200 text-center animate-pulse">
-            {drawOfferStatus}
+          <div className="bg-amber-950/90 p-2.5 rounded border border-amber-600/50 text-xs text-amber-200 text-center flex flex-col gap-2">
+            <span>{drawOfferStatus}</span>
+            {drawOfferStatus.includes('предлагает ничью') && (
+              <div className="flex justify-center gap-2">
+                <button onClick={acceptDraw} className="px-3 py-1 bg-emerald-800 text-white rounded text-xs font-bold">Принять</button>
+                <button onClick={declineDraw} className="px-3 py-1 bg-red-800 text-white rounded text-xs font-bold">Отклонить</button>
+              </div>
+            )}
           </div>
         )}
 
-        {/* Журнал ходов с никнеймами в шапке */}
-        <div className="flex flex-col h-64 bg-[#F5DEB3]/10 rounded border border-amber-900/40 overflow-hidden shadow-inner">
+        {/* Журнал ходов с правильным порядком: Белые — Черные */}
+        <div className="flex flex-col h-56 bg-[#F5DEB3]/10 rounded border border-amber-900/40 overflow-hidden shadow-inner">
           <div className="bg-acacia-dark px-3 py-2 text-xs font-bold text-amber-200 border-b border-amber-900/40 flex justify-between truncate">
-            <span className="truncate">Grandmaster_A (2144) - Mykhailo_T (1996)</span>
+            <span className="truncate">{whitePlayerInfo.username} ({whitePlayerInfo.rating}) - {blackPlayerInfo.username} ({blackPlayerInfo.rating})</span>
           </div>
 
           <div className="flex-1 overflow-y-auto p-2 font-mono text-sm space-y-1">
@@ -498,11 +510,10 @@ export default function Chessboard() {
           </div>
         </div>
 
-        {/* Кнопки управления игрой: Сдаться и Предложить ничью */}
         <div className="grid grid-cols-2 gap-2">
           <button
             onClick={handleResign}
-            disabled={!!gameOverResult}
+            disabled={!gameId || !!gameOverResult}
             className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/80 text-red-200 text-xs font-bold rounded hover:bg-red-900 transition shadow border border-red-800/50 disabled:opacity-50"
           >
             <Flag size={14} />
@@ -510,7 +521,7 @@ export default function Chessboard() {
           </button>
           <button
             onClick={handleOfferDraw}
-            disabled={!!gameOverResult}
+            disabled={!gameId || !!gameOverResult}
             className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs font-bold rounded hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-50"
           >
             <Handshake size={14} />
@@ -518,56 +529,29 @@ export default function Chessboard() {
           </button>
         </div>
 
-        {/* Навигационные стрелки для полного просмотра партии */}
         <div className="flex justify-between items-center bg-acacia-dark p-2 rounded border border-amber-900/40">
           <span className="text-xs text-boxwood/70">Просмотр:</span>
           <div className="flex gap-1">
-            <button
-              onClick={() => setViewIndex(-2)}
-              title="В самое начало партии (стартовая позиция)"
-              className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition"
-            >
-              <ChevronFirst size={16} />
-            </button>
-            <button
-              onClick={() => {
-                if (history.length > 0) {
-                  const current = viewIndex === -1 ? history.length - 1 : viewIndex;
-                  const target = current === 0 ? -2 : Math.max(-2, current - 1);
-                  setViewIndex(target);
-                }
-              }}
-              title="На один ход назад"
-              className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition"
-            >
-              <ChevronLeft size={16} />
-            </button>
-            <button
-              onClick={() => {
-                if (viewIndex !== -1 && viewIndex < history.length - 1) {
-                  setViewIndex(viewIndex + 1);
-                } else if (viewIndex === -2 && history.length > 0) {
-                  setViewIndex(0);
-                } else {
-                  setViewIndex(-1);
-                }
-              }}
-              title="На один ход вперёд"
-              className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition"
-            >
-              <ChevronRight size={16} />
-            </button>
-            <button
-              onClick={() => setViewIndex(-1)}
-              title="В самый конец (актуальная позиция)"
-              className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition"
-            >
-              <ChevronLast size={16} />
-            </button>
+            <button onClick={() => setViewIndex(-2)} className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition"><ChevronFirst size={16} /></button>
+            <button onClick={() => {
+              if (history.length > 0) {
+                const current = viewIndex === -1 ? history.length - 1 : viewIndex;
+                setViewIndex(current === 0 ? -2 : Math.max(-2, current - 1));
+              }
+            }} className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition"><ChevronLeft size={16} /></button>
+            <button onClick={() => {
+              if (viewIndex !== -1 && viewIndex < history.length - 1) {
+                setViewIndex(viewIndex + 1);
+              } else if (viewIndex === -2 && history.length > 0) {
+                setViewIndex(0);
+              } else {
+                setViewIndex(-1);
+              }
+            }} className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition"><ChevronRight size={16} /></button>
+            <button onClick={() => setViewIndex(-1)} className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition"><ChevronLast size={16} /></button>
           </div>
         </div>
 
-        {/* Регулятор размера доски (справа внизу) */}
         <div className="bg-acacia-dark p-3 rounded border border-amber-900/40 flex flex-col gap-2">
           <div className="flex justify-between items-center text-xs text-boxwood/80">
             <span className="flex items-center gap-1"><Sliders size={14} /> Размер доски</span>
@@ -584,23 +568,14 @@ export default function Chessboard() {
           />
         </div>
 
-        {/* Кнопки управления */}
-        <div className="grid grid-cols-2 gap-2 pt-2">
-          <button
-            onClick={startNewGame}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-boxwood text-acacia-dark font-bold rounded hover:bg-boxwood-light transition shadow border border-amber-700/50"
-          >
-            <RotateCcw size={16} />
-            Новая игра
-          </button>
-          <button
-            onClick={() => alert('Поиск нового соперника...')}
-            className="flex items-center justify-center gap-2 px-4 py-2.5 bg-acacia-dark text-boxwood-light font-bold rounded hover:bg-black/50 transition shadow border border-amber-700/30"
-          >
-            <Users size={16} />
-            Соперник
-          </button>
-        </div>
+        <button
+          onClick={startMatchmaking}
+          disabled={isSearching || (!!gameId && !gameOverResult)}
+          className="flex items-center justify-center gap-2 px-4 py-3 bg-boxwood text-acacia-dark font-bold rounded hover:bg-boxwood-light transition shadow border border-amber-700/50 disabled:opacity-50"
+        >
+          {isSearching ? <Loader2 className="animate-spin" size={18} /> : <Users size={18} />}
+          {isSearching ? 'Поиск соперника...' : 'Найти соперника'}
+        </button>
 
       </div>
 
