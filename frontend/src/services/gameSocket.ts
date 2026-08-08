@@ -11,13 +11,15 @@ class GameWebSocketService {
     this.ws = new WebSocket(wsUrl);
 
     this.ws.onopen = () => {
-      console.log('🔗 WebSocket соединение с сервером установлено');
+      console.log('🔗 WebSocket соединение установлено');
     };
 
     this.ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
+        console.log('📥 WS получено сообщение:', data);
         const eventType = data.event;
+
         if (this.listeners[eventType]) {
           this.listeners[eventType].forEach(cb => cb(data));
         }

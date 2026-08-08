@@ -10,12 +10,22 @@ import {
   Sliders,
   Flag,
   Handshake,
-  Loader2
+  Loader2,
+  Play,
+  RotateCcw
 } from 'lucide-react';
 import { gameSocket } from '../services/gameSocket';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
+
+interface QueuePlayer {
+  user_id: number;
+  username: string;
+  rating: number;
+  base_time_ms: number;
+  increment_ms: number;
+}
 
 export default function Chessboard() {
   const [game, setGame] = useState(new Chess());
@@ -27,11 +37,16 @@ export default function Chessboard() {
   const [gameId, setGameId] = useState<number | null>(null);
   const [myColor, setMyColor] = useState<'white' | 'black'>('white');
   const [isSearching, setIsSearching] = useState(false);
-  const [, setOpponentConnected] = useState(false);
+  const [queuePlayers, setQueuePlayers] = useState<QueuePlayer[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+
+  // Данные игроков и изменения рейтинга
+  const [whitePlayer, setWhitePlayer] = useState({ username: 'Белые', rating: '1200' });
+  const [blackPlayer, setBlackPlayer] = useState({ username: 'Черные', rating: '1200' });
+  const [ratingInfo, setRatingInfo] = useState<{ white_delta?: number; black_delta?: number; white_new_rating?: number; black_new_rating?: number } | null>(null);
 
   const moveStartTime = useRef<number>(Date.now());
 
-  // Состояние для кастомного перетаскивания мышкой (Drag & Drop)
   const [dragState, setDragState] = useState<{
     from: string;
     piece: { type: string; color: string };
@@ -47,34 +62,54 @@ export default function Chessboard() {
     return 540;
   });
 
-  // Таймеры игроков в миллисекундах
   const [whiteTimeMs, setWhiteTimeMs] = useState(180000);
   const [blackTimeMs, setBlackTimeMs] = useState(180000);
 
-  const [h2h] = useState({ whiteWins: 12, blackWins: 5, draws: 4 });
+  const [sessionStats, setSessionStats] = useState({ wins: 0, losses: 0, draws: 0 });
   const [gameOverResult, setGameOverResult] = useState<string | null>(null);
   const [drawOfferStatus, setDrawOfferStatus] = useState<string | null>(null);
 
-  // Данные игроков для шапки (Белые всегда первыми)
-  const whitePlayerInfo = {
-    username: myColor === 'white' ? 'Mykhailo_T' : 'Grandmaster_A',
-    rating: myColor === 'white' ? '1996' : '2144'
-  };
-  const blackPlayerInfo = {
-    username: myColor === 'white' ? 'Grandmaster_A' : 'Mykhailo_T',
-    rating: myColor === 'white' ? '2144' : '1996'
-  };
+  const topPlayerInfo = myColor === 'white' ? blackPlayer : whitePlayer;
+  const bottomPlayerInfo = myColor === 'white' ? whitePlayer : blackPlayer;
+  const topPlayerTime = myColor === 'white' ? blackTimeMs : whiteTimeMs;
+  const bottomPlayerTime = myColor === 'white' ? whiteTimeMs : blackTimeMs;
+
+  // Получаем ID текущего пользователя
+  useEffect(() => {
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
+    fetch('http://127.0.0.1:8000/api/v1/profile/me', {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (data) setCurrentUserId(data.id);
+      })
+      .catch(() => {});
+  }, []);
 
   // Подключение к WebSocket при монтировании компонента
   useEffect(() => {
-    const token = localStorage.getItem('token') || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwbGF5ZXIxIiwiZXhwIjoxNzg1OTY5MjQwfQ.NHjXmbJAmHcd_WhRE2ni0EhVYefuPb2HX925cRQMgX8";
+    const token = localStorage.getItem('token');
+    if (!token) return;
+
     gameSocket.connect(token);
 
     const handleMatchFound = (data: any) => {
+      console.log("ПОЛУЧЕНО СОБЫТИЕ MATCH_FOUND:", data);
       setIsSearching(false);
       setGameId(data.game_id);
       setMyColor(data.color);
-      setOpponentConnected(true);
+      setRatingInfo(null);
+
+      if (data.white_username) {
+        setWhitePlayer({ username: data.white_username, rating: String(data.white_rating || '1200') });
+      }
+      if (data.black_username) {
+        setBlackPlayer({ username: data.black_username, rating: String(data.black_rating || '1200') });
+      }
+
       setGame(new Chess());
       setHistory([]);
       setGameOverResult(null);
@@ -99,12 +134,18 @@ export default function Chessboard() {
 
       if (data.game_over) {
         setGameOverResult(data.result);
+        setRatingInfo(data);
+        playAudio('start');
+        updateSessionStats(data.result);
       }
     };
 
     const handleGameOver = (data: any) => {
       setGameOverResult(data.result);
-      if (data.white_new_rating) {
+      setRatingInfo(data);
+      playAudio('start');
+      updateSessionStats(data.result);
+      if (data.result) {
         setDrawOfferStatus(`Партия окончена. Результат: ${data.result}`);
       }
     };
@@ -130,11 +171,48 @@ export default function Chessboard() {
       gameSocket.off('game_over', handleGameOver);
       gameSocket.off('draw_offered', handleDrawOffered);
       gameSocket.off('draw_declined', handleDrawDeclined);
-      gameSocket.disconnect();
     };
   }, []);
 
-  // Глобальные слушатели мыши для перетаскивания фигуры за курсором
+  const updateSessionStats = (result: string) => {
+    if (!result) return;
+    setSessionStats(prev => {
+      if (result === '1/2-1/2' || result.includes('draw')) {
+        return { ...prev, draws: prev.draws + 1 };
+      }
+      const whiteWon = result === '1-0' || result === 'white_won_on_time';
+      const userIsWhite = myColor === 'white';
+      if ((whiteWon && userIsWhite) || (!whiteWon && !userIsWhite)) {
+        return { ...prev, wins: prev.wins + 1 };
+      } else {
+        return { ...prev, losses: prev.losses + 1 };
+      }
+    });
+  };
+
+  // Опрос очереди для отображения лобби всем пользователям вне игры
+  useEffect(() => {
+    let interval: any;
+    if (!gameId) {
+      const fetchQueue = async () => {
+        try {
+          const res = await fetch('http://127.0.0.1:8000/api/v1/profile/matchmaking/queue');
+          if (res.ok) {
+            const data = await res.json();
+            setQueuePlayers(data);
+          }
+        } catch (e) {
+          console.error("Failed to fetch queue", e);
+        }
+      };
+      fetchQueue();
+      interval = setInterval(fetchQueue, 1500);
+    } else {
+      setQueuePlayers([]);
+    }
+    return () => clearInterval(interval);
+  }, [gameId]);
+
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!dragState) return;
@@ -183,9 +261,22 @@ export default function Chessboard() {
   };
 
   const startMatchmaking = () => {
+    setGameId(null);
+    setGameOverResult(null);
+    setRatingInfo(null);
     setIsSearching(true);
-    setDrawOfferStatus('Поиск достойного соперника в очереди...');
+    setDrawOfferStatus('Вы опубликовали вызов в лобби...');
     gameSocket.send('join_queue', { base_time_ms: 180000, increment_ms: 0 });
+  };
+
+  const cancelMatchmaking = () => {
+    setIsSearching(false);
+    setDrawOfferStatus(null);
+    gameSocket.send('leave_queue', {});
+  };
+
+  const acceptChallenge = (targetUserId: number) => {
+    gameSocket.send('accept_challenge', { target_user_id: targetUserId });
   };
 
   const handleResign = () => {
@@ -198,7 +289,7 @@ export default function Chessboard() {
   const handleOfferDraw = () => {
     if (!gameId || gameOverResult) return;
     gameSocket.send('offer_draw', { game_id: gameId });
-    setDrawOfferStatus('Вы предложили ничью. Ожидание ответа...');
+    setDrawOfferStatus('Вы предложили ничью...');
   };
 
   const acceptDraw = () => {
@@ -218,7 +309,8 @@ export default function Chessboard() {
 
     const piece = game.get(from as any);
     const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
-    if (!piece || piece.color !== game.turn() || currentTurnColor !== myColor) {
+
+    if (!piece || piece.color !== (game.turn() === 'w' ? 'w' : 'b') || currentTurnColor !== myColor) {
       setSelectedSquare(null);
       return;
     }
@@ -259,7 +351,7 @@ export default function Chessboard() {
     } else {
       const piece = game.get(squareId as any);
       const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
-      if (piece && piece.color === game.turn() && currentTurnColor === myColor) {
+      if (piece && piece.color === (game.turn() === 'w' ? 'w' : 'b') && currentTurnColor === myColor) {
         setSelectedSquare(squareId);
       }
     }
@@ -275,7 +367,7 @@ export default function Chessboard() {
   })();
   const boardState = currentGame.board();
 
-  const displayedRanks = myColor === 'black' ? [...RANKS].reverse() : RANKS;
+  const displayedRanks = myColor === 'black' ? ['1', '2', '3', '4', '5', '6', '7', '8'] : ['8', '7', '6', '5', '4', '3', '2', '1'];
   const displayedFiles = myColor === 'black' ? [...FILES].reverse() : FILES;
 
   const renderPieceSvg = (piece: { type: string; color: string }) => (
@@ -308,6 +400,17 @@ export default function Chessboard() {
     </div>
   );
 
+  if (!localStorage.getItem('token')) {
+    return (
+      <div className="flex flex-col items-center justify-center p-8 bg-acacia rounded shadow-heavy border-4 border-acacia-dark text-boxwood-light text-center font-serif">
+        <div className="text-xl font-bold mb-2">Требуется авторизация</div>
+        <p className="text-sm text-boxwood/80 mb-4">Пожалуйста, войдите в систему в правом верхнем углу, чтобы играть.</p>
+      </div>
+    );
+  }
+
+  const filteredQueue = queuePlayers.filter(p => p.user_id !== currentUserId);
+
   return (
     <div className="flex flex-col xl:flex-row items-center xl:items-start justify-center gap-6 w-full max-w-7xl mx-auto font-serif relative">
 
@@ -326,10 +429,10 @@ export default function Chessboard() {
         </div>
       )}
 
-      {/* ЛЕВАЯ / ЦЕНТРАЛЬНАЯ ЧАСТЬ: Игроки и доска */}
+      {/* Игроки и доска */}
       <div className="flex flex-col items-center gap-3">
 
-        {/* Игрок сверху (Черные, если вы белые, или наоборот) */}
+        {/* Верхний игрок */}
         <div style={{ width: `${boardSize}px` }} className="bg-acacia-dark p-3 rounded shadow-heavy border-2 border-amber-900/40 flex justify-between items-center text-boxwood-light transition-all">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded bg-acacia flex items-center justify-center border border-amber-600/30 font-bold text-amber-200">
@@ -337,15 +440,22 @@ export default function Chessboard() {
             </div>
             <div>
               <div className="font-bold flex items-center gap-2">
-                <span>{blackPlayerInfo.username}</span>
-                <span className="text-xs px-1.5 py-0.5 rounded bg-black/40 text-amber-400 border border-amber-600/20">
-                  {blackPlayerInfo.rating}
-                </span>
+                <span>{gameId ? topPlayerInfo.username : 'Ожидание...'}</span>
+                {gameId && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-black/40 text-amber-400 border border-amber-600/20 flex items-center gap-1">
+                    {topPlayerInfo.rating}
+                    {ratingInfo && (
+                      <span className={myColor === 'white' ? (Number(ratingInfo.black_delta) >= 0 ? 'text-emerald-400' : 'text-red-400') : (Number(ratingInfo.white_delta) >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+                        ({myColor === 'white' ? (Number(ratingInfo.black_delta) >= 0 ? `+${ratingInfo.black_delta}` : ratingInfo.black_delta) : (Number(ratingInfo.white_delta) >= 0 ? `+${ratingInfo.white_delta}` : ratingInfo.white_delta)})
+                      </span>
+                    )}
+                  </span>
+                )}
               </div>
             </div>
           </div>
           <div className="bg-[#1A120B] px-4 py-1.5 rounded border-2 border-amber-700/50 shadow-inner font-mono text-xl tracking-wider text-amber-500">
-            {formatTime(myColor === 'white' ? blackTimeMs : whiteTimeMs)}
+            {gameId ? formatTime(topPlayerTime) : '03:00'}
           </div>
         </div>
 
@@ -360,11 +470,15 @@ export default function Chessboard() {
           />
 
           <div className="grid grid-cols-8 grid-rows-8 w-full h-full border-2 border-room-dark relative z-10 shadow-inner-board">
-            {displayedRanks.map((rank, rankIndex) =>
-              displayedFiles.map((file, fileIndex) => {
-                const isDark = (rankIndex + fileIndex) % 2 !== 0;
+            {displayedRanks.map((rank) =>
+              displayedFiles.map((file) => {
+                const rIdx = RANKS.indexOf(rank);
+                const fIdx = FILES.indexOf(file);
+                const isDark = (rIdx + fIdx) % 2 !== 0;
                 const squareId = `${file}${rank}`;
-                const piece = boardState[rankIndex][fileIndex];
+
+                const piece = boardState[rIdx][fIdx];
+
                 const isSelected = selectedSquare === squareId;
                 const isBeingDragged = dragState?.from === squareId;
 
@@ -396,7 +510,7 @@ export default function Chessboard() {
                       <div
                         onMouseDown={(e) => {
                           if (viewIndex !== -1 || gameOverResult) return;
-                          if (piece.color !== currentGame.turn()) return;
+                          if (piece.color !== (currentGame.turn() === 'w' ? 'w' : 'b')) return;
                           e.stopPropagation();
                           moveStartTime.current = Date.now();
                           setSelectedSquare(squareId);
@@ -407,18 +521,18 @@ export default function Chessboard() {
                             y: e.clientY
                           });
                         }}
-                        className={`relative w-full h-full p-[2%] z-20 drop-shadow-[0_0_1px_rgba(255,255,255,0.4)] drop-shadow-[0_6px_6px_rgba(0,0,0,0.7)] ${piece.color === currentGame.turn() && viewIndex === -1 && !gameOverResult ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                        className={`relative w-full h-full p-[2%] z-20 drop-shadow-[0_0_1px_rgba(255,255,255,0.4)] drop-shadow-[0_6px_6px_rgba(0,0,0,0.7)] ${piece.color === (currentGame.turn() === 'w' ? 'w' : 'b') && viewIndex === -1 && !gameOverResult ? 'cursor-grab active:cursor-grabbing' : ''}`}
                       >
                         {renderPieceSvg(piece)}
                       </div>
                     )}
 
-                    {fileIndex === 0 && (
+                    {file === displayedFiles[0] && (
                       <span className={`absolute top-1 left-1 text-[10px] sm:text-xs font-bold opacity-70 z-20 pointer-events-none ${isDark ? 'text-boxwood' : 'text-acacia-dark'}`}>
                         {rank}
                       </span>
                     )}
-                    {rankIndex === 7 && (
+                    {rank === displayedRanks[7] && (
                       <span className={`absolute bottom-0 right-1 text-[10px] sm:text-xs font-bold opacity-70 z-20 pointer-events-none ${isDark ? 'text-boxwood' : 'text-acacia-dark'}`}>
                         {file}
                       </span>
@@ -430,7 +544,7 @@ export default function Chessboard() {
           </div>
         </div>
 
-        {/* Игрок снизу (Белые, если вы белые, или наоборот) */}
+        {/* Нижний игрок */}
         <div style={{ width: `${boardSize}px` }} className="bg-acacia-dark p-3 rounded shadow-heavy border-2 border-amber-900/40 flex justify-between items-center text-boxwood-light transition-all">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded bg-boxwood flex items-center justify-center border border-amber-600/30 font-bold text-acacia-dark">
@@ -438,31 +552,38 @@ export default function Chessboard() {
             </div>
             <div>
               <div className="font-bold flex items-center gap-2">
-                <span>{whitePlayerInfo.username}</span>
-                <span className="text-xs px-1.5 py-0.5 rounded bg-black/40 text-amber-400 border border-amber-600/20">
-                  {whitePlayerInfo.rating}
-                </span>
+                <span>{gameId ? bottomPlayerInfo.username : 'Вы'}</span>
+                {gameId && (
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-black/40 text-amber-400 border border-amber-600/20 flex items-center gap-1">
+                    {bottomPlayerInfo.rating}
+                    {ratingInfo && (
+                      <span className={myColor === 'white' ? (Number(ratingInfo.white_delta) >= 0 ? 'text-emerald-400' : 'text-red-400') : (Number(ratingInfo.black_delta) >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+                        ({myColor === 'white' ? (Number(ratingInfo.white_delta) >= 0 ? `+${ratingInfo.white_delta}` : ratingInfo.white_delta) : (Number(ratingInfo.black_delta) >= 0 ? `+${ratingInfo.black_delta}` : ratingInfo.black_delta)})
+                      </span>
+                    )}
+                  </span>
+                )}
               </div>
             </div>
           </div>
           <div className="bg-[#1A120B] px-4 py-1.5 rounded border-2 border-amber-700/50 shadow-inner font-mono text-xl tracking-wider text-amber-500">
-            {formatTime(myColor === 'white' ? whiteTimeMs : blackTimeMs)}
+            {gameId ? formatTime(bottomPlayerTime) : '03:00'}
           </div>
         </div>
 
       </div>
 
-      {/* ПРАВАЯ ПАНЕЛЬ: Журнал ходов (Белые — Черные), навигация, управление */}
+      {/* Правая панель управления / Лобби вызовов */}
       <div className="w-full xl:w-96 bg-acacia p-5 rounded shadow-heavy border-4 border-acacia-dark flex flex-col gap-4 text-boxwood-light">
 
         <div className="border-b border-acacia-light pb-3 flex justify-between items-center">
           <div>
             <div className="text-xs tracking-widest uppercase text-boxwood/70">Рейтинговая партия</div>
             <div className="text-sm font-bold flex items-center gap-2 mt-1 font-mono">
-              <span className="text-xs text-boxwood/70 uppercase font-serif">Счёт:</span>
-              <span className="text-emerald-400">+{h2h.whiteWins}</span>
-              <span className="text-red-400">-{h2h.blackWins}</span>
-              <span className="text-gray-300">={h2h.draws}</span>
+              <span className="text-xs text-boxwood/70 uppercase font-serif">Сессия:</span>
+              <span className="text-emerald-400">+{sessionStats.wins}</span>
+              <span className="text-red-400">-{sessionStats.losses}</span>
+              <span className="text-gray-300">={sessionStats.draws}</span>
             </div>
           </div>
           <div className="p-2 bg-acacia-dark rounded border border-amber-600/30 text-amber-400">
@@ -482,29 +603,67 @@ export default function Chessboard() {
           </div>
         )}
 
-        {/* Журнал ходов с правильным порядком: Белые — Черные */}
-        <div className="flex flex-col h-56 bg-[#F5DEB3]/10 rounded border border-amber-900/40 overflow-hidden shadow-inner">
-          <div className="bg-acacia-dark px-3 py-2 text-xs font-bold text-amber-200 border-b border-amber-900/40 flex justify-between truncate">
-            <span className="truncate">{whitePlayerInfo.username} ({whitePlayerInfo.rating}) - {blackPlayerInfo.username} ({blackPlayerInfo.rating})</span>
+        {!gameId ? (
+          <div className="flex flex-col h-56 bg-acacia-dark rounded border border-amber-900/40 p-3 shadow-inner">
+            <div className="text-xs font-bold text-amber-200 mb-2 flex items-center justify-between">
+              <span>Открытые вызовы в лобби</span>
+              {isSearching && <Loader2 className="animate-spin text-amber-400" size={14} />}
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-2 text-xs font-mono">
+              {filteredQueue.length === 0 ? (
+                <div className="p-3 text-boxwood/60 text-center flex flex-col items-center gap-1">
+                  <span>{isSearching ? 'Вы в очереди. Ожидание соперников...' : 'Лобби пусто. Создайте вызов кнопкой ниже.'}</span>
+                </div>
+              ) : (
+                filteredQueue.map((p) => (
+                  <div key={p.user_id} className="p-2 bg-black/40 rounded border border-amber-600/30 flex justify-between items-center">
+                    <div>
+                      <span className="text-amber-300 font-bold">{p.username}</span>
+                      <div className="text-[10px] text-boxwood/70">Рейтинг: {p.rating} | 3 мин</div>
+                    </div>
+                    <button
+                      onClick={() => acceptChallenge(p.user_id)}
+                      className="px-2.5 py-1 bg-emerald-800 hover:bg-emerald-700 text-emerald-100 rounded text-xs font-bold transition flex items-center gap-1 shadow"
+                    >
+                      <Play size={12} /> Играть
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+            {isSearching && (
+              <button
+                onClick={cancelMatchmaking}
+                className="mt-2 py-1.5 bg-red-950/80 hover:bg-red-900 text-red-200 rounded text-xs font-bold border border-red-800/50 transition"
+              >
+                Отменить поиск
+              </button>
+            )}
           </div>
+        ) : (
+          <div className="flex flex-col h-56 bg-[#F5DEB3]/10 rounded border border-amber-900/40 overflow-hidden shadow-inner">
+            <div className="bg-acacia-dark px-3 py-2 text-xs font-bold text-amber-200 border-b border-amber-900/40 flex justify-between truncate">
+              <span className="truncate">{whitePlayer.username} ({whitePlayer.rating}) - {blackPlayer.username} ({blackPlayer.rating})</span>
+            </div>
 
-          <div className="flex-1 overflow-y-auto p-2 font-mono text-sm space-y-1">
-            {history.reduce((acc: any[], move: any, index: number) => {
-              if (index % 2 === 0) {
-                acc.push({ white: move.san, black: '' });
-              } else {
-                acc[acc.length - 1].black = move.san;
-              }
-              return acc;
-            }, []).map((pair: any, idx: number) => (
-              <div key={idx} className="flex px-2 py-1 hover:bg-black/20 rounded text-amber-100/90">
-                <span className="w-10 text-amber-500/70 font-bold">{idx + 1}.</span>
-                <span className="w-28">{pair.white}</span>
-                <span className="w-28">{pair.black}</span>
-              </div>
-            ))}
+            <div className="flex-1 overflow-y-auto p-2 font-mono text-sm space-y-1">
+              {history.reduce((acc: any[], move: any, index: number) => {
+                if (index % 2 === 0) {
+                  acc.push({ white: move.san, black: '' });
+                } else {
+                  acc[acc.length - 1].black = move.san;
+                }
+                return acc;
+              }, []).map((pair: any, idx: number) => (
+                <div key={idx} className="flex px-2 py-1 hover:bg-black/20 rounded text-amber-100/90">
+                  <span className="w-10 text-amber-500/70 font-bold">{idx + 1}.</span>
+                  <span className="w-28">{pair.white}</span>
+                  <span className="w-28">{pair.black}</span>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="grid grid-cols-2 gap-2">
           <button
@@ -564,14 +723,34 @@ export default function Chessboard() {
           />
         </div>
 
-        <button
-          onClick={startMatchmaking}
-          disabled={isSearching || (!!gameId && !gameOverResult)}
-          className="flex items-center justify-center gap-2 px-4 py-3 bg-boxwood text-acacia-dark font-bold rounded hover:bg-boxwood-light transition shadow border border-amber-700/50 disabled:opacity-50"
-        >
-          {isSearching ? <Loader2 className="animate-spin" size={18} /> : <Users size={18} />}
-          {isSearching ? 'Поиск соперника...' : 'Найти соперника'}
-        </button>
+        {gameOverResult ? (
+          <button
+            onClick={() => {
+              setGameId(null);
+              setGameOverResult(null);
+              setRatingInfo(null);
+              setGame(new Chess());
+              setHistory([]);
+            }}
+            className="flex items-center justify-center gap-2 px-4 py-3 font-bold rounded transition shadow bg-boxwood text-acacia-dark border border-amber-700/50 hover:bg-boxwood-light"
+          >
+            <RotateCcw size={18} /> Новая игра / В лобби
+          </button>
+        ) : (
+          !gameId && (
+            <button
+              onClick={isSearching ? cancelMatchmaking : startMatchmaking}
+              className={`flex items-center justify-center gap-2 px-4 py-3 font-bold rounded transition shadow border ${
+                isSearching 
+                  ? 'bg-red-900/80 text-red-100 border-red-700 hover:bg-red-900' 
+                  : 'bg-boxwood text-acacia-dark border-amber-700/50 hover:bg-boxwood-light'
+              }`}
+            >
+              {isSearching ? <Loader2 className="animate-spin" size={18} /> : <Users size={18} />}
+              {isSearching ? 'Отменить вызов' : 'Найти соперника'}
+            </button>
+          )
+        )}
 
       </div>
 

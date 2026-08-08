@@ -30,19 +30,15 @@ async def lifespan(app: FastAPI):
     """
     logger.info("Starting up %s...", settings.PROJECT_NAME)
 
-    # Запускаем фоновый мониторинг таймаутов партий и движок матчмейкинга
+    # Запускаем фоновый мониторинг таймаутов партий
     timeout_task = asyncio.create_task(state_manager.check_timeouts_loop(manager))
-
-    from src.services.matchmaker import matchmaker
-    matchmaking_task = asyncio.create_task(matchmaker.matchmaking_loop(manager, state_manager))
 
     yield
 
     # Корректно завершаем фоновые таски и пул соединений Redis
     timeout_task.cancel()
-    matchmaking_task.cancel()
     try:
-        await asyncio.gather(timeout_task, matchmaking_task, return_exceptions=True)
+        await asyncio.gather(timeout_task, return_exceptions=True)
     except asyncio.CancelledError:
         pass
 
