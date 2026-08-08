@@ -24,6 +24,29 @@ async def get_my_profile(current_user: User = Depends(get_current_user)):
     }
 
 
+@router.get("/leaderboard")
+async def get_leaderboard(
+        limit: int = Query(50, ge=1, le=100, description="Количество игроков в топе"),
+        db: AsyncSession = Depends(get_db)
+):
+    """Получить топ игроков по рейтингу (без читеров)."""
+    query = select(User).where(
+        User.is_cheater == False
+    ).order_by(desc(User.rating)).limit(limit)
+
+    result = await db.execute(query)
+    top_users = result.scalars().all()
+
+    return [
+        {
+            "rank": index + 1,
+            "username": user.username,
+            "rating": user.rating
+        }
+        for index, user in enumerate(top_users)
+    ]
+
+
 @router.get("/{username}")
 async def get_user_profile(username: str, db: AsyncSession = Depends(get_db)):
     """Получить публичный профиль любого игрока по юзернейму."""
