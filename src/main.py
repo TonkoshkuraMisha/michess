@@ -8,6 +8,7 @@ import uvicorn
 from src.core.config import settings
 from src.api.auth import router as auth_router
 from src.api.websockets import router as ws_router
+from src.api.profile import router as profile_router  # <-- Импорт роутера профиля
 from src.db.redis import redis_client
 from src.services.game_state import state_manager
 from src.services.connection_manager import manager
@@ -73,6 +74,7 @@ def create_app() -> FastAPI:
     # Include API routers
     app.include_router(auth_router, prefix=settings.API_V1_STR)
     app.include_router(ws_router, prefix=settings.API_V1_STR)
+    app.include_router(profile_router, prefix=settings.API_V1_STR)  # <-- Регистрация роутера профиля
 
     return app
 

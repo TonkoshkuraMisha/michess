@@ -33,6 +33,7 @@ michess/
         api/
             auth.py
             deps.py
+            profile.py
             websockets.py
         core/
             config.py
@@ -52,6 +53,8 @@ michess/
             connection_manager.py
             game_engine.py
             game_state.py
+            matchmaker.py
+            rating.py
     tests/
         conftest.py
         test_game_engine.py
@@ -299,6 +302,10 @@ volumes:
 pythonpath = .
 asyncio_mode = auto
 testpaths = tests
+filterwarnings =
+    ignore::DeprecationWarning
+    ignore::PendingDeprecationWarning
+    ignore:.*httpx.*:UserWarning
 
 --- FILE: requirements.txt ---
 
@@ -365,9 +372,7 @@ See [the docs](https://docs.pytest.org/en/stable/how-to/cache.html) for more inf
 
 --- FILE: .pytest_cache\v\cache\lastfailed ---
 
-{
-  "tests/test_game_state.py::test_disconnect_and_reconnect_time_deduction": true
-}
+{}
 
 --- FILE: .pytest_cache\v\cache\nodeids ---
 
@@ -621,6 +626,7 @@ import uvicorn
 from src.core.config import settings
 from src.api.auth import router as auth_router
 from src.api.websockets import router as ws_router
+from src.api.profile import router as profile_router  # <-- Импорт роутера профиля
 from src.db.redis import redis_client
 from src.services.game_state import state_manager
 from src.services.connection_manager import manager
@@ -641,15 +647,19 @@ async def lifespan(app: FastAPI):
     """
     logger.info("Starting up %s...", settings.PROJECT_NAME)
 
-    # Запускаем фоновый мониторинг таймаутов партий
+    # Запускаем фоновый мониторинг таймаутов партий и движок матчмейкинга
     timeout_task = asyncio.create_task(state_manager.check_timeouts_loop(manager))
+
+    from src.services.matchmaker import matchmaker
+    matchmaking_task = asyncio.create_task(matchmaker.matchmaking_loop(manager, state_manager))
 
     yield
 
-    # Корректно завершаем фоновый таск и пул соединений Redis
+    # Корректно завершаем фоновые таски и пул соединений Redis
     timeout_task.cancel()
+    matchmaking_task.cancel()
     try:
-        await timeout_task
+        await asyncio.gather(timeout_task, matchmaking_task, return_exceptions=True)
     except asyncio.CancelledError:
         pass
 
@@ -682,6 +692,7 @@ def create_app() -> FastAPI:
     # Include API routers
     app.include_router(auth_router, prefix=settings.API_V1_STR)
     app.include_router(ws_router, prefix=settings.API_V1_STR)
+    app.include_router(profile_router, prefix=settings.API_V1_STR)  # <-- Регистрация роутера профиля
 
     return app
 
@@ -730,7 +741,7 @@ import websockets
 import json
 
 # Токен для Player 1
-TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwbGF5ZXIxIiwiZXhwIjoxNzg1OTI0MTM2fQ.QCagYisNwkCV-g2XuB0fXc8dGnkvaNN7j5G4QkmywYI"
+TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwbGF5ZXIxIiwiZXhwIjoxNzg1OTY5MjQwfQ.NHjXmbJAmHcd_WhRE2ni0EhVYefuPb2HX925cRQMgX8"
 URL = f"ws://127.0.0.1:8000/api/v1/ws/matchmaking?token={TOKEN}"
 
 
@@ -742,9 +753,9 @@ async def test_websocket():
             welcome_msg = await ws.recv()
             print(f"Received: {welcome_msg}")
 
-            print("Creating seek for 3+0...")
+            print("Joining matchmaking queue for 3+0...")
             await ws.send(json.dumps({
-                "action": "create_seek",
+                "action": "join_queue",
                 "base_time_ms": 180000,
                 "increment_ms": 0
             }))
@@ -796,7 +807,7 @@ import websockets
 import json
 
 # Токен для Player 3
-TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwbGF5ZXIzIiwiZXhwIjoxNzg1OTI0MTU3fQ.BuiwOMYF9at20XnfYyc4_5QPsNid8EOPPMl_QQM6rcM"
+TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJwbGF5ZXIzIiwiZXhwIjoxNzg1OTY5Mjc1fQ.6IfXR1E-sWr5uGZ-p1ht2e4Y4BoBzsYoiqLkYAew1xQ"
 URL = f"ws://127.0.0.1:8000/api/v1/ws/matchmaking?token={TOKEN}"
 
 
@@ -808,8 +819,12 @@ async def test_websocket():
             welcome_msg = await ws.recv()
             print(f"Received: {welcome_msg}")
 
-            print("Requesting seeks list...")
-            await ws.send(json.dumps({"action": "get_seeks"}))
+            print("Joining matchmaking queue for 3+0...")
+            await ws.send(json.dumps({
+                "action": "join_queue",
+                "base_time_ms": 180000,
+                "increment_ms": 0
+            }))
 
             game_id = None
 
@@ -818,22 +833,7 @@ async def test_websocket():
                 print(f"Server says: {msg}")
                 data = json.loads(msg)
 
-                if data.get("event") == "seeks_list":
-                    seeks = data.get("seeks", [])
-                    if seeks:
-                        opponent = seeks[0]
-                        print(f"Found seek from {opponent['username']}. Accepting...")
-                        await ws.send(json.dumps({
-                            "action": "accept_seek",
-                            "opponent_id": opponent["user_id"],
-                            "base_time_ms": opponent["base_time_ms"],
-                            "increment_ms": opponent["increment_ms"]
-                        }))
-                    else:
-                        await asyncio.sleep(2)
-                        await ws.send(json.dumps({"action": "get_seeks"}))
-
-                elif data.get("event") == "match_found":
+                if data.get("event") == "match_found":
                     game_id = data["game_id"]
 
                 elif data.get("event") == "move_made":
@@ -942,7 +942,8 @@ async def login(
 
 --- FILE: src\api\deps.py ---
 
-from fastapi import Depends, Query, WebSocketException, status
+from fastapi import Depends, Query, WebSocketException, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import jwt
@@ -950,6 +951,38 @@ import jwt
 from src.core.config import settings
 from src.db.session import get_db
 from src.models.user import User
+
+# Схема для извлечения токена из заголовка Authorization: Bearer
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
+
+
+async def get_current_user(
+        token: str = Depends(oauth2_scheme),
+        db: AsyncSession = Depends(get_db)
+) -> User:
+    """
+    Dependency for HTTP endpoints to authenticate users via Bearer token in headers.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        username: str | None = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except jwt.InvalidTokenError:
+        raise credentials_exception
+
+    result = await db.execute(select(User).where(User.username == username))
+    user = result.scalars().first()
+
+    if user is None:
+        raise credentials_exception
+
+    return user
 
 
 async def get_current_user_ws(
@@ -975,6 +1008,101 @@ async def get_current_user_ws(
 
     return user
 
+--- FILE: src\api\profile.py ---
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import PlainTextResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, or_, desc
+
+from src.db.session import get_db
+from src.api.deps import get_current_user
+from src.models.user import User
+from src.models.game import Game, GameStatus
+
+router = APIRouter(prefix="/profile", tags=["Profile & Games"])
+
+
+@router.get("/me")
+async def get_my_profile(current_user: User = Depends(get_current_user)):
+    """Получить данные своего профиля."""
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "rating": current_user.rating,
+        "is_cheater": current_user.is_cheater,
+        "trust_factor": current_user.trust_factor,
+        "created_at": current_user.created_at
+    }
+
+
+@router.get("/{username}")
+async def get_user_profile(username: str, db: AsyncSession = Depends(get_db)):
+    """Получить публичный профиль любого игрока по юзернейму."""
+    result = await db.execute(select(User).where(User.username == username))
+    user = result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {
+        "id": user.id,
+        "username": user.username,
+        "rating": user.rating,
+        "created_at": user.created_at
+    }
+
+
+@router.get("/{username}/games")
+async def get_user_games(
+        username: str,
+        limit: int = Query(20, ge=1, le=100, description="Количество игр на страницу"),
+        offset: int = Query(0, ge=0, description="Смещение для пагинации"),
+        db: AsyncSession = Depends(get_db)
+):
+    """Получить историю завершенных партий пользователя."""
+    user_result = await db.execute(select(User).where(User.username == username))
+    user = user_result.scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Ищем все завершенные игры, где пользователь был за белых или за черных
+    games_query = select(Game).where(
+        or_(Game.white_player_id == user.id, Game.black_player_id == user.id),
+        Game.status == GameStatus.COMPLETED
+    ).order_by(desc(Game.finished_at)).limit(limit).offset(offset)
+
+    games_result = await db.execute(games_query)
+    games = games_result.scalars().all()
+
+    return [
+        {
+            "game_id": g.id,
+            "white_id": g.white_player_id,
+            "black_id": g.black_player_id,
+            "status": g.status.value,
+            "is_rated": g.is_rated,
+            "finished_at": g.finished_at
+        }
+        for g in games
+    ]
+
+
+@router.get("/games/{game_id}/pgn")
+async def download_pgn(game_id: int, db: AsyncSession = Depends(get_db)):
+    """Выгрузить PGN конкретной партии в виде файла."""
+    game = await db.get(Game, game_id)
+
+    if not game or not game.pgn:
+        raise HTTPException(status_code=404, detail="Game or PGN not found")
+
+    # Отдаем PGN как текстовый файл (браузер предложит его скачать)
+    headers = {
+        "Content-Disposition": f"attachment; filename=michess_game_{game_id}.pgn"
+    }
+    return PlainTextResponse(content=game.pgn, media_type="application/x-chess-pgn", headers=headers)
+
 --- FILE: src\api\websockets.py ---
 
 import time
@@ -982,8 +1110,6 @@ import logging
 import json
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from sqlalchemy.sql import func
 import chess
 import chess.pgn
 import io
@@ -994,8 +1120,6 @@ from src.services.game_engine import engine
 from src.services.game_state import state_manager
 from src.api.deps import get_current_user_ws
 from src.models.user import User
-from src.models.game import Game, GameStatus
-from src.models.move import Move
 
 logger = logging.getLogger(__name__)
 
@@ -1019,94 +1143,38 @@ async def matchmaking_endpoint(
             data = await websocket.receive_json()
             action = data.get("action")
 
-            if action == "get_seeks":
-                seeks = await manager.get_all_seeks()
-                await manager.send_personal_message({"event": "seeks_list", "seeks": seeks}, current_user.id)
-
-            elif action == "create_seek":
-                base_time = data.get("base_time_ms", 180000)
-                inc_time = data.get("increment_ms", 0)
-                await manager.create_seek(
-                    user_id=current_user.id,
-                    username=current_user.username,
-                    rating=current_user.rating,
-                    base_time_ms=base_time,
-                    increment_ms=inc_time
-                )
-                await manager.send_personal_message({"event": "seek_created"}, current_user.id)
-
-            elif action == "cancel_seek":
-                await manager.remove_seek(current_user.id)
-                await manager.send_personal_message({"event": "seek_canceled"}, current_user.id)
-
-            elif action == "accept_seek":
-                opponent_id = data.get("opponent_id")
+            if action == "join_queue":
                 base_time = data.get("base_time_ms", 180000)
                 inc_time = data.get("increment_ms", 0)
 
-                if not opponent_id or opponent_id == current_user.id:
-                    await manager.send_personal_message({"event": "error", "message": "Invalid opponent"},
-                                                        current_user.id)
-                    continue
+                default_min = max(0, current_user.rating - 150)
+                default_max = current_user.rating + 150
 
-                await manager.remove_seek(opponent_id)
+                min_rating = data.get("min_rating", default_min)
+                max_rating = data.get("max_rating", default_max)
 
-                new_game = Game(
-                    white_player_id=opponent_id,
-                    black_player_id=current_user.id,
-                    base_time_ms=base_time,
-                    increment_ms=inc_time,
-                    status=GameStatus.IN_PROGRESS
-                )
-                db.add(new_game)
-                await db.commit()
-                await db.refresh(new_game)
+                from src.services.matchmaker import matchmaker
+                await matchmaker.join_queue(current_user.id, current_user.rating, base_time, inc_time, min_rating,
+                                            max_rating)
+                await manager.send_personal_message({"event": "queue_joined"}, current_user.id)
 
-                await state_manager.initialize_game(
-                    game_id=new_game.id,
-                    white_id=opponent_id,
-                    black_id=current_user.id,
-                    base_time_ms=base_time,
-                    increment_ms=inc_time
-                )
-
-                await manager.send_personal_message(
-                    {"event": "match_found", "game_id": new_game.id, "color": "white", "opponent_id": current_user.id},
-                    opponent_id
-                )
-                await manager.send_personal_message(
-                    {"event": "match_found", "game_id": new_game.id, "color": "black", "opponent_id": opponent_id},
-                    current_user.id
-                )
+            elif action == "leave_queue":
+                from src.services.matchmaker import matchmaker
+                await matchmaker.leave_queue(current_user.id)
+                await manager.send_personal_message({"event": "queue_left"}, current_user.id)
 
             elif action == "resign":
                 game_id = data.get("game_id")
-                if not game_id:
-                    continue
+                if not game_id: continue
 
                 game_state = await state_manager.get_game_state(game_id)
-                if not game_state or game_state["status"] != "in_progress":
-                    continue
+                if not game_state or game_state["status"] != "in_progress": continue
 
-                white_id = int(game_state["white_id"])
-                black_id = int(game_state["black_id"])
-
-                if current_user.id not in (white_id, black_id):
-                    continue
+                white_id, black_id = int(game_state["white_id"]), int(game_state["black_id"])
+                if current_user.id not in (white_id, black_id): continue
 
                 game_result = "0-1" if current_user.id == white_id else "1-0"
-
-                db_game = await db.get(Game, game_id)
-                if db_game:
-                    db_game.status = GameStatus.COMPLETED
-                    db_game.finished_at = func.now()
-
-                    moves_telemetry = await state_manager.extract_all_moves(game_id)
-                    db_moves = [Move(game_id=game_id, **m) for m in moves_telemetry]
-                    db.add_all(db_moves)
-                    await db.commit()
-
-                await state_manager.clear_game_state(game_id)
+                rating_updates = await state_manager.finish_game(db, game_id, game_result)
 
                 game_over_payload = {
                     "event": "game_over",
@@ -1115,69 +1183,43 @@ async def matchmaking_endpoint(
                     "winner_id": black_id if current_user.id == white_id else white_id,
                     "result": game_result
                 }
+                game_over_payload.update(rating_updates)
 
                 await manager.send_personal_message(game_over_payload, white_id)
                 await manager.send_personal_message(game_over_payload, black_id)
 
             elif action == "offer_draw":
                 game_id = data.get("game_id")
-                if not game_id:
-                    continue
-
+                if not game_id: continue
                 game_state = await state_manager.get_game_state(game_id)
-                if not game_state or game_state["status"] != "in_progress":
-                    continue
+                if not game_state or game_state["status"] != "in_progress": continue
 
-                white_id = int(game_state["white_id"])
-                black_id = int(game_state["black_id"])
-
-                if current_user.id not in (white_id, black_id):
-                    continue
+                white_id, black_id = int(game_state["white_id"]), int(game_state["black_id"])
+                if current_user.id not in (white_id, black_id): continue
 
                 opponent_id = black_id if current_user.id == white_id else white_id
                 await state_manager.update_game_state(game_id, {"draw_offer": str(current_user.id)})
-
-                await manager.send_personal_message({
-                    "event": "draw_offered",
-                    "game_id": game_id,
-                    "player_id": current_user.id
-                }, opponent_id)
+                await manager.send_personal_message(
+                    {"event": "draw_offered", "game_id": game_id, "player_id": current_user.id}, opponent_id)
 
             elif action == "accept_draw":
                 game_id = data.get("game_id")
-                if not game_id:
-                    continue
+                if not game_id: continue
 
                 game_state = await state_manager.get_game_state(game_id)
-                if not game_state or game_state["status"] != "in_progress":
-                    continue
+                if not game_state or game_state["status"] != "in_progress": continue
 
-                white_id = int(game_state["white_id"])
-                black_id = int(game_state["black_id"])
-
-                if current_user.id not in (white_id, black_id):
-                    continue
+                white_id, black_id = int(game_state["white_id"]), int(game_state["black_id"])
+                if current_user.id not in (white_id, black_id): continue
 
                 draw_offer = game_state.get("draw_offer")
-
                 if not draw_offer or int(draw_offer) == current_user.id:
                     await manager.send_personal_message({"event": "error", "message": "No active draw offer to accept"},
                                                         current_user.id)
                     continue
 
                 game_result = "1/2-1/2"
-
-                db_game = await db.get(Game, game_id)
-                if db_game:
-                    db_game.status = GameStatus.COMPLETED
-                    db_game.finished_at = func.now()
-
-                    moves_telemetry = await state_manager.extract_all_moves(game_id)
-                    db_moves = [Move(game_id=game_id, **m) for m in moves_telemetry]
-                    db.add_all(db_moves)
-                    await db.commit()
-
-                await state_manager.clear_game_state(game_id)
+                rating_updates = await state_manager.finish_game(db, game_id, game_result)
 
                 game_over_payload = {
                     "event": "game_over",
@@ -1185,43 +1227,31 @@ async def matchmaking_endpoint(
                     "reason": "draw_agreement",
                     "result": game_result
                 }
+                game_over_payload.update(rating_updates)
 
                 await manager.send_personal_message(game_over_payload, white_id)
                 await manager.send_personal_message(game_over_payload, black_id)
 
             elif action == "decline_draw":
                 game_id = data.get("game_id")
-                if not game_id:
-                    continue
+                if not game_id: continue
 
                 game_state = await state_manager.get_game_state(game_id)
-                if not game_state or game_state["status"] != "in_progress":
-                    continue
+                if not game_state or game_state["status"] != "in_progress": continue
 
-                white_id = int(game_state["white_id"])
-                black_id = int(game_state["black_id"])
-
-                if current_user.id not in (white_id, black_id):
-                    continue
+                white_id, black_id = int(game_state["white_id"]), int(game_state["black_id"])
+                if current_user.id not in (white_id, black_id): continue
 
                 opponent_id = black_id if current_user.id == white_id else white_id
                 await state_manager.update_game_state(game_id, {"draw_offer": ""})
-
-                await manager.send_personal_message({
-                    "event": "draw_declined",
-                    "game_id": game_id,
-                    "player_id": current_user.id
-                }, opponent_id)
+                await manager.send_personal_message(
+                    {"event": "draw_declined", "game_id": game_id, "player_id": current_user.id}, opponent_id)
 
             elif action == "make_move":
-                game_id = data.get("game_id")
-                move_str = data.get("move")
-
-                if not game_id or not move_str:
-                    continue
+                game_id, move_str = data.get("game_id"), data.get("move")
+                if not game_id or not move_str: continue
 
                 game_state = await state_manager.get_game_state(game_id)
-
                 if not game_state or game_state["status"] != "in_progress":
                     await manager.send_personal_message({"event": "error", "message": "Game inactive or not found"},
                                                         current_user.id)
@@ -1236,7 +1266,6 @@ async def matchmaking_endpoint(
                     continue
 
                 is_valid, new_pgn, game_result = engine.process_move(game_state["pgn"], move_str)
-
                 if not is_valid:
                     await manager.send_personal_message({"event": "error", "message": f"Illegal move: {move_str}"},
                                                         current_user.id)
@@ -1244,48 +1273,31 @@ async def matchmaking_endpoint(
 
                 c_game = chess.pgn.read_game(io.StringIO(new_pgn))
                 board = c_game.end().board()
-                move_number = board.fullmove_number
 
                 now_ms = int(time.time() * 1000)
                 elapsed = now_ms - game_state["last_move_at"]
                 increment = game_state["increment_ms"]
+                new_white_time = game_state["white_time_ms"] - elapsed + increment if is_white_turn else game_state[
+                    "white_time_ms"]
+                new_black_time = game_state["black_time_ms"] - elapsed + increment if not is_white_turn else game_state[
+                    "black_time_ms"]
 
-                new_white_time = game_state["white_time_ms"]
-                new_black_time = game_state["black_time_ms"]
+                if is_white_turn and new_white_time <= 0:
+                    game_result = "black_won_on_time"
+                elif not is_white_turn and new_black_time <= 0:
+                    game_result = "white_won_on_time"
 
-                if is_white_turn:
-                    new_white_time = new_white_time - elapsed + increment
-                    if new_white_time <= 0:
-                        game_result = "black_won_on_time"
-                else:
-                    new_black_time = new_black_time - elapsed + increment
-                    if new_black_time <= 0:
-                        game_result = "white_won_on_time"
-
-                time_taken_ms = data.get("time_taken_ms", 0)
                 await state_manager.save_move_telemetry(game_id, {
                     "player_id": current_user.id,
-                    "move_number": move_number,
+                    "move_number": board.fullmove_number,
                     "notation": move_str,
-                    "time_taken_ms": time_taken_ms,
+                    "time_taken_ms": data.get("time_taken_ms", 0),
                     "window_blurred_before_move": data.get("window_blurred", False),
                     "is_premove": data.get("is_premove", False)
                 })
 
                 if game_result:
-                    db_game = await db.get(Game, game_id)
-                    if db_game:
-                        db_game.pgn = new_pgn
-                        db_game.status = GameStatus.COMPLETED
-                        db_game.finished_at = func.now()
-
-                        moves_telemetry = await state_manager.extract_all_moves(game_id)
-                        db_moves = [Move(game_id=game_id, **m) for m in moves_telemetry]
-                        db.add_all(db_moves)
-
-                        await db.commit()
-
-                    await state_manager.clear_game_state(game_id)
+                    rating_updates = await state_manager.finish_game(db, game_id, game_result, final_pgn=new_pgn)
                 else:
                     await state_manager.update_game_state(game_id, {
                         "pgn": new_pgn,
@@ -1306,6 +1318,9 @@ async def matchmaking_endpoint(
                     "game_over": game_result is not None,
                     "result": game_result
                 }
+
+                if game_result:
+                    move_payload.update(rating_updates)
 
                 await manager.send_personal_message(move_payload, game_state["white_id"])
                 await manager.send_personal_message(move_payload, game_state["black_id"])
@@ -1617,7 +1632,10 @@ class ConnectionManager:
             del self.active_connections[user_id]
 
         await self.pubsub.unsubscribe(f"user:{user_id}")
-        await self.remove_seek(user_id)
+
+        # Снимаем игрока с поиска, если он там был
+        from src.services.matchmaker import matchmaker
+        await matchmaker.leave_queue(user_id)
 
         # Уведомляем менеджер состояния об обрыве связи (запуск Grace Period)
         from src.services.game_state import state_manager
@@ -1644,30 +1662,6 @@ class ConnectionManager:
     async def send_personal_message(self, message: dict, user_id: int):
         """Отправляет сообщение пользователю через Redis."""
         await self.redis.publish(f"user:{user_id}", json.dumps(message))
-
-    # --- LOBBY (SEEKS) MANAGEMENT ---
-
-    async def create_seek(self, user_id: int, username: str, rating: int, base_time_ms: int, increment_ms: int):
-        """Создает новый вызов на доске объявлений (Redis Hash)."""
-        seek_data = {
-            "user_id": user_id,
-            "username": username,
-            "rating": rating,
-            "base_time_ms": base_time_ms,
-            "increment_ms": increment_ms
-        }
-        await self.redis.hset("lobby:seeks", str(user_id), json.dumps(seek_data))
-        logger.info("Seek created for user %s: %s+%s", user_id, base_time_ms, increment_ms)
-
-    async def remove_seek(self, user_id: int):
-        """Удаляет вызов с доски."""
-        await self.redis.hdel("lobby:seeks", str(user_id))
-        logger.info("Seek removed for user %s", user_id)
-
-    async def get_all_seeks(self) -> list[dict]:
-        """Возвращает все текущие вызовы."""
-        seeks_raw = await self.redis.hgetall("lobby:seeks")
-        return [json.loads(seek) for seek in seeks_raw.values()]
 
 
 manager = ConnectionManager()
@@ -1741,21 +1735,18 @@ import time
 import json
 import asyncio
 import logging
+from sqlalchemy.sql import func
 from src.db.redis import redis_client
 from src.db.session import AsyncSessionLocal
 from src.models.game import Game, GameStatus
 from src.models.move import Move
-from sqlalchemy.sql import func
+from src.models.user import User
+from src.services.rating import elo_calculator
 
 logger = logging.getLogger(__name__)
 
 
 class GameStateManager:
-    """
-    Управляет состоянием активных шахматных партий и часами игроков в Redis.
-    Обеспечивает микросекундный доступ к состоянию игры без нагрузки на PostgreSQL.
-    """
-
     def __init__(self):
         self.redis = redis_client
 
@@ -1781,7 +1772,6 @@ class GameStateManager:
         }
         await self.redis.hset(self._get_key(game_id), mapping=state)
         await self.redis.sadd("active_games", str(game_id))
-
         await self.redis.set(f"user:{white_id}:current_game", str(game_id))
         await self.redis.set(f"user:{black_id}:current_game", str(game_id))
 
@@ -1789,12 +1779,10 @@ class GameStateManager:
         state = await self.redis.hgetall(self._get_key(game_id))
         if not state:
             return None
-
         for key in ["white_id", "black_id", "white_time_ms", "black_time_ms", "increment_ms", "last_move_at",
                     "white_disconnect_started_at", "black_disconnect_started_at"]:
             if key in state:
                 state[key] = int(state[key])
-
         return state
 
     async def update_game_state(self, game_id: int, updates: dict):
@@ -1806,7 +1794,6 @@ class GameStateManager:
         if state:
             await self.redis.delete(f"user:{state['white_id']}:current_game")
             await self.redis.delete(f"user:{state['black_id']}:current_game")
-
         await self.redis.delete(self._get_key(game_id))
         await self.redis.srem("active_games", str(game_id))
 
@@ -1820,86 +1807,96 @@ class GameStateManager:
         await self.redis.delete(key)
         return [json.loads(m) for m in moves_raw]
 
+    async def finish_game(self, db, game_id: int, result: str, final_pgn: str = None) -> dict:
+        """
+        Единая точка завершения партии: сохраняет статусы, пересчитывает Эло и фиксирует мувы.
+        """
+        db_game = await db.get(Game, game_id)
+        if not db_game:
+            return {}
+
+        white_user = await db.get(User, db_game.white_player_id)
+        black_user = await db.get(User, db_game.black_player_id)
+
+        delta_w = delta_b = 0
+        new_w = white_user.rating
+        new_b = black_user.rating
+
+        if db_game.is_rated:
+            new_w, delta_w, new_b, delta_b = elo_calculator.calculate_new_ratings(
+                white_user.rating, black_user.rating, result
+            )
+            white_user.rating = new_w
+            black_user.rating = new_b
+
+        if final_pgn:
+            db_game.pgn = final_pgn
+
+        db_game.status = GameStatus.COMPLETED
+        db_game.finished_at = func.now()
+
+        moves_telemetry = await self.extract_all_moves(game_id)
+        if moves_telemetry:
+            db_moves = [Move(game_id=game_id, **m) for m in moves_telemetry]
+            db.add_all(db_moves)
+
+        await db.commit()
+        await self.clear_game_state(game_id)
+
+        return {
+            "white_delta": delta_w,
+            "black_delta": delta_b,
+            "white_new_rating": new_w,
+            "black_new_rating": new_b
+        }
+
     async def handle_player_disconnect(self, user_id: int, manager):
-        """Фиксирует обрыв связи и запускает отсчет оффлайн-времени."""
         game_id_str = await self.redis.get(f"user:{user_id}:current_game")
-        if not game_id_str:
-            return
+        if not game_id_str: return
         game_id = int(game_id_str)
         state = await self.get_game_state(game_id)
-        if not state or state["status"] != "in_progress":
-            return
+        if not state or state["status"] != "in_progress": return
 
-        white_id = int(state["white_id"])
-        black_id = int(state["black_id"])
+        white_id, black_id = int(state["white_id"]), int(state["black_id"])
         color = "white" if user_id == white_id else "black"
         opponent_id = black_id if color == "white" else white_id
 
         now_ms = int(time.time() * 1000)
-        updates = {
+        await self.update_game_state(game_id, {
             f"{color}_disconnected": "true",
             f"{color}_disconnect_started_at": str(now_ms)
-        }
-        await self.update_game_state(game_id, updates)
+        })
 
         remaining_time = state["white_time_ms"] if color == "white" else state["black_time_ms"]
         max_wait_ms = min(remaining_time, 3 * 60 * 1000)
-
-        logger.info("Player %s disconnected in game %s. Tracking offline time (max wait: %sms)", user_id, game_id,
-                    max_wait_ms)
-
-        await manager.send_personal_message({
-            "event": "opponent_disconnected",
-            "game_id": game_id,
-            "max_wait_ms": max_wait_ms
-        }, opponent_id)
+        await manager.send_personal_message(
+            {"event": "opponent_disconnected", "game_id": game_id, "max_wait_ms": max_wait_ms}, opponent_id)
 
     async def handle_player_reconnect(self, user_id: int, manager):
-        """Обрабатывает переподключение: списывает оффлайн-время с часов игрока."""
         game_id_str = await self.redis.get(f"user:{user_id}:current_game")
-        if not game_id_str:
-            return
+        if not game_id_str: return
         game_id = int(game_id_str)
         state = await self.get_game_state(game_id)
-        if not state or state["status"] != "in_progress":
-            return
+        if not state or state["status"] != "in_progress": return
 
-        white_id = int(state["white_id"])
-        black_id = int(state["black_id"])
+        white_id, black_id = int(state["white_id"]), int(state["black_id"])
         color = "white" if user_id == white_id else "black"
         opponent_id = black_id if color == "white" else white_id
 
         if state.get(f"{color}_disconnected") == "true":
             now_ms = int(time.time() * 1000)
-            disconnect_started = state.get(f"{color}_disconnect_started_at", now_ms)
-            offline_duration = now_ms - disconnect_started
+            offline_duration = now_ms - state.get(f"{color}_disconnect_started_at", now_ms)
+            updates = {f"{color}_disconnected": "false", f"{color}_disconnect_started_at": "0"}
 
-            updates = {
-                f"{color}_disconnected": "false",
-                f"{color}_disconnect_started_at": "0"
-            }
-
-            # Если был ход этого игрока, списываем время отсутствия с его часов
-            turn = state["turn"]
-            if turn == color:
+            if state["turn"] == color:
                 time_key = f"{color}_time_ms"
-                new_time = max(0, state[time_key] - offline_duration)
-                updates[time_key] = str(new_time)
-
-            # Корректируем last_move_at, чтобы прошедшее оффлайн-время не учлось дважды
+                updates[time_key] = str(max(0, state[time_key] - offline_duration))
             updates["last_move_at"] = str(state["last_move_at"] + offline_duration)
 
             await self.update_game_state(game_id, updates)
-            logger.info("Player %s reconnected in game %s. Offline duration %sms processed.", user_id, game_id,
-                        offline_duration)
-
-            await manager.send_personal_message({
-                "event": "opponent_reconnected",
-                "game_id": game_id
-            }, opponent_id)
+            await manager.send_personal_message({"event": "opponent_reconnected", "game_id": game_id}, opponent_id)
 
     async def check_timeouts_loop(self, manager):
-        """Фоновый цикл проверки истечения времени на часах и лимитов дисконекта."""
         while True:
             try:
                 active_game_ids = await self.redis.smembers("active_games")
@@ -1912,56 +1909,35 @@ class GameStateManager:
                         await self.redis.srem("active_games", game_id_str)
                         continue
 
-                    white_id = int(state["white_id"])
-                    black_id = int(state["black_id"])
-                    turn = state["turn"]
+                    white_id, black_id, turn = int(state["white_id"]), int(state["black_id"]), state["turn"]
+                    game_result, winner_id, reason = None, None, "timeout"
 
-                    game_result = None
-                    winner_id = None
-                    reason = "timeout"
-
-                    # 1. Проверка дисконектов и их влияния на часы
                     for color in ["white", "black"]:
                         if state.get(f"{color}_disconnected") == "true":
-                            disconnect_started = state.get(f"{color}_disconnect_started_at", now_ms)
-                            offline_duration = now_ms - disconnect_started
-
+                            offline_duration = now_ms - state.get(f"{color}_disconnect_started_at", now_ms)
                             remaining_time = state["white_time_ms"] if color == "white" else state["black_time_ms"]
                             current_player_time = remaining_time - offline_duration if turn == color else remaining_time
-                            max_grace_ms = min(remaining_time, 3 * 60 * 1000)
 
-                            if current_player_time <= 0 or offline_duration >= max_grace_ms:
+                            if current_player_time <= 0 or offline_duration >= min(remaining_time, 3 * 60 * 1000):
                                 game_result = "black_won_on_time" if color == "white" else "white_won_on_time"
                                 winner_id = black_id if color == "white" else white_id
                                 reason = "disconnect_timeout"
                                 break
 
-                    # 2. Обычная проверка шахматных часов для активных игроков
                     if not game_result:
                         elapsed = now_ms - state["last_move_at"]
-                        if turn == "white" and state.get("white_disconnected") != "true":
-                            if state["white_time_ms"] - elapsed <= 0:
-                                game_result = "black_won_on_time"
-                                winner_id = black_id
-                        elif turn == "black" and state.get("black_disconnected") != "true":
-                            if state["black_time_ms"] - elapsed <= 0:
-                                game_result = "white_won_on_time"
-                                winner_id = white_id
+                        if turn == "white" and state.get("white_disconnected") != "true" and (
+                                state["white_time_ms"] - elapsed <= 0):
+                            game_result, winner_id = "black_won_on_time", black_id
+                        elif turn == "black" and state.get("black_disconnected") != "true" and (
+                                state["black_time_ms"] - elapsed <= 0):
+                            game_result, winner_id = "white_won_on_time", white_id
 
                     if game_result:
                         logger.info("Game %s ended. Result: %s, Reason: %s", game_id, game_result, reason)
+
                         async with AsyncSessionLocal() as db:
-                            db_game = await db.get(Game, game_id)
-                            if db_game and db_game.status == GameStatus.IN_PROGRESS:
-                                db_game.status = GameStatus.COMPLETED
-                                db_game.finished_at = func.now()
-
-                                moves_telemetry = await self.extract_all_moves(game_id)
-                                db_moves = [Move(game_id=game_id, **m) for m in moves_telemetry]
-                                db.add_all(db_moves)
-                                await db.commit()
-
-                        await self.clear_game_state(game_id)
+                            rating_updates = await self.finish_game(db, game_id, game_result)
 
                         game_over_payload = {
                             "event": "game_over",
@@ -1970,6 +1946,8 @@ class GameStateManager:
                             "winner_id": winner_id,
                             "result": game_result
                         }
+                        game_over_payload.update(rating_updates)
+
                         await manager.send_personal_message(game_over_payload, white_id)
                         await manager.send_personal_message(game_over_payload, black_id)
 
@@ -1980,6 +1958,227 @@ class GameStateManager:
 
 
 state_manager = GameStateManager()
+
+--- FILE: src\services\matchmaker.py ---
+
+import asyncio
+import logging
+import random
+from src.db.redis import redis_client
+from src.db.session import AsyncSessionLocal
+from src.models.game import Game, GameStatus
+
+logger = logging.getLogger(__name__)
+
+
+class Matchmaker:
+    """
+    Движок автоматического подбора игроков.
+    Хранит очереди в Redis Sorted Sets для быстрого поиска по рейтингу.
+    """
+
+    def __init__(self):
+        pass
+
+    @property
+    def redis(self):
+        from src.db.redis import redis_client
+        return redis_client
+
+    async def join_queue(self, user_id: int, rating: int, base_time_ms: int, increment_ms: int, min_rating: int,
+                         max_rating: int):
+        queue_name = f"queue:{base_time_ms}:{increment_ms}"
+
+        # Регистрируем активную очередь
+        await self.redis.sadd("active_queues", queue_name)
+
+        # Добавляем игрока в очередь (ZSET с весом = рейтинг)
+        await self.redis.zadd(queue_name, {str(user_id): rating})
+
+        # Сохраняем его настройки поиска
+        prefs = {
+            "rating": rating,
+            "min_rating": min_rating,
+            "max_rating": max_rating,
+            "base_time_ms": base_time_ms,
+            "increment_ms": increment_ms
+        }
+        await self.redis.hset(f"queue:prefs:{user_id}", mapping=prefs)
+        logger.info("User %s joined %s (rating %s, target: %s-%s)", user_id, queue_name, rating, min_rating, max_rating)
+
+    async def leave_queue(self, user_id: int):
+        prefs = await self.redis.hgetall(f"queue:prefs:{user_id}")
+        if prefs:
+            queue_name = f"queue:{prefs['base_time_ms']}:{prefs['increment_ms']}"
+            await self.redis.zrem(queue_name, str(user_id))
+            await self.redis.delete(f"queue:prefs:{user_id}")
+            logger.info("User %s left queue", user_id)
+
+    async def matchmaking_loop(self, connection_manager, state_manager):
+        """Фоновый процесс поиска оппонентов."""
+        while True:
+            try:
+                active_queues = await self.redis.smembers("active_queues")
+                for queue_name in active_queues:
+                    # Достаем всех игроков в очереди, уже отсортированных по рейтингу
+                    players = await self.redis.zrange(queue_name, 0, -1)
+                    if len(players) < 2:
+                        continue
+
+                    matched = set()
+                    for i in range(len(players)):
+                        p1_id = players[i]
+                        if p1_id in matched:
+                            continue
+
+                        p1_prefs = await self.redis.hgetall(f"queue:prefs:{p1_id}")
+                        if not p1_prefs:
+                            continue
+
+                        p1_rating = int(p1_prefs["rating"])
+                        p1_min = int(p1_prefs["min_rating"])
+                        p1_max = int(p1_prefs["max_rating"])
+
+                        # Собираем всех, с кем вилки рейтинга пересекаются взаимно
+                        candidates = []
+                        for j in range(i + 1, len(players)):
+                            p2_id = players[j]
+                            if p2_id in matched:
+                                continue
+
+                            p2_prefs = await self.redis.hgetall(f"queue:prefs:{p2_id}")
+                            if not p2_prefs:
+                                continue
+
+                            p2_rating = int(p2_prefs["rating"])
+                            p2_min = int(p2_prefs["min_rating"])
+                            p2_max = int(p2_prefs["max_rating"])
+
+                            # Проверяем, что P1 устраивает P2, а P2 устраивает P1
+                            if (p2_min <= p1_rating <= p2_max) and (p1_min <= p2_rating <= p1_max):
+                                candidates.append(p2_id)
+
+                        if candidates:
+                            # Выбираем случайного из подходящих
+                            p2_id = random.choice(candidates)
+                            matched.add(p1_id)
+                            matched.add(p2_id)
+
+                            await self._create_match(p1_id, p2_id, p1_prefs, connection_manager, state_manager,
+                                                     queue_name)
+
+            except Exception as e:
+                logger.error("Matchmaking loop error: %s", e)
+
+            # Такт поиска — 1 секунда
+            await asyncio.sleep(1)
+
+    async def _create_match(self, p1_id: str, p2_id: str, prefs: dict, connection_manager, state_manager,
+                            queue_name: str):
+        base_time = int(prefs["base_time_ms"])
+        inc_time = int(prefs["increment_ms"])
+        u1, u2 = int(p1_id), int(p2_id)
+
+        # Случайное распределение цветов
+        white_id, black_id = (u1, u2) if random.random() > 0.5 else (u2, u1)
+
+        # Чистим очередь
+        await self.redis.zrem(queue_name, p1_id, p2_id)
+        await self.redis.delete(f"queue:prefs:{p1_id}", f"queue:prefs:{p2_id}")
+
+        # Создаем запись в БД
+        async with AsyncSessionLocal() as db:
+            new_game = Game(
+                white_player_id=white_id,
+                black_player_id=black_id,
+                base_time_ms=base_time,
+                increment_ms=inc_time,
+                status=GameStatus.IN_PROGRESS
+            )
+            db.add(new_game)
+            await db.commit()
+            await db.refresh(new_game)
+            game_id = new_game.id
+
+        # Инициализируем стейт игры
+        await state_manager.initialize_game(
+            game_id=game_id,
+            white_id=white_id,
+            black_id=black_id,
+            base_time_ms=base_time,
+            increment_ms=inc_time
+        )
+
+        # Оповещаем клиентов
+        await connection_manager.send_personal_message(
+            {"event": "match_found", "game_id": game_id, "color": "white", "opponent_id": black_id}, white_id
+        )
+        await connection_manager.send_personal_message(
+            {"event": "match_found", "game_id": game_id, "color": "black", "opponent_id": white_id}, black_id
+        )
+        logger.info("Match created: %s vs %s in game %s", white_id, black_id, game_id)
+
+
+matchmaker = Matchmaker()
+
+--- FILE: src\services\rating.py ---
+
+class FideEloSystem:
+    """
+    Система подсчета рейтинга по стандартам ФИДЕ.
+    Включает динамический K-фактор в зависимости от текущего рейтинга и опыта.
+    """
+
+    @staticmethod
+    def get_k_factor(rating: int, games_played: int = 30) -> int:
+        if games_played < 30:
+            return 40
+        if rating >= 2400:
+            return 10
+        return 20
+
+    @staticmethod
+    def expected_score(rating_a: int, rating_b: int) -> float:
+        return 1 / (1 + 10 ** ((rating_b - rating_a) / 400))
+
+    @classmethod
+    def calculate_new_ratings(
+        cls,
+        white_rating: int,
+        black_rating: int,
+        result: str,
+        white_games: int = 30,
+        black_games: int = 30
+    ) -> tuple[int, int, int, int]:
+        """
+        Возвращает: (новый_рейтинг_белых, дельта_белых, новый_рейтинг_черных, дельта_черных)
+        """
+        if result in ("1-0", "white_won_on_time"):
+            score_white, score_black = 1.0, 0.0
+        elif result in ("0-1", "black_won_on_time"):
+            score_white, score_black = 0.0, 1.0
+        elif result in ("1/2-1/2", "draw_agreement"):
+            score_white, score_black = 0.5, 0.5
+        else:
+            raise ValueError(f"Unknown game result: {result}")
+
+        expected_white = cls.expected_score(white_rating, black_rating)
+        expected_black = cls.expected_score(black_rating, white_rating)
+
+        k_white = cls.get_k_factor(white_rating, white_games)
+        k_black = cls.get_k_factor(black_rating, black_games)
+
+        delta_white = round(k_white * (score_white - expected_white))
+        delta_black = round(k_black * (score_black - expected_black))
+
+        # Защита от падения рейтинга ниже 100
+        new_white = max(100, white_rating + delta_white)
+        new_black = max(100, black_rating + delta_black)
+
+        return new_white, delta_white, new_black, delta_black
+
+
+elo_calculator = FideEloSystem()
 
 --- FILE: tests\conftest.py ---
 
@@ -2016,13 +2215,32 @@ async def setup_database():
         await conn.run_sync(Base.metadata.drop_all)
 
 
+class MockPubSub:
+    """Заглушка для Redis Pub/Sub, чтобы фоновый таск не падал."""
+
+    async def subscribe(self, *args, **kwargs):
+        pass
+
+    async def unsubscribe(self, *args, **kwargs):
+        pass
+
+    async def listen(self):
+        while True:
+            await asyncio.sleep(3600)
+
+
 class MockAsyncRedis:
     """Высокопроизводительный асинхронный мок Redis в оперативной памяти для тестов."""
+
     def __init__(self):
         self.store = {}
         self.sets = {}
         self.lists = {}
         self.kv = {}
+        self.zsets = {}
+
+    def pubsub(self):
+        return MockPubSub()
 
     async def hset(self, name, mapping=None, **kwargs):
         if name not in self.store:
@@ -2039,7 +2257,7 @@ class MockAsyncRedis:
     async def delete(self, *names):
         count = 0
         for name in names:
-            for container in (self.store, self.sets, self.lists, self.kv):
+            for container in (self.store, self.sets, self.lists, self.kv, self.zsets):
                 if name in container:
                     del container[name]
                     count += 1
@@ -2086,15 +2304,59 @@ class MockAsyncRedis:
         lst = self.lists.get(name, [])
         if end == -1:
             return lst[start:]
-        return lst[start:end+1]
+        return lst[start:end + 1]
+
+    # --- Поддержка Sorted Sets для очередей матчмейкинга ---
+    async def zadd(self, name, mapping):
+        if name not in self.zsets:
+            self.zsets[name] = {}
+        added = 0
+        for k, v in mapping.items():
+            if k not in self.zsets[name] or self.zsets[name][k] != float(v):
+                added += 1
+            self.zsets[name][k] = float(v)
+        return added
+
+    async def zrange(self, name, start, end):
+        if name not in self.zsets:
+            return []
+        sorted_items = sorted(self.zsets[name].items(), key=lambda x: x[1])
+        keys = [k for k, v in sorted_items]
+        if end == -1:
+            return keys[start:]
+        return keys[start:end + 1]
+
+    async def zrem(self, name, *values):
+        if name not in self.zsets:
+            return 0
+        removed = 0
+        for v in values:
+            if v in self.zsets[name]:
+                del self.zsets[name][v]
+                removed += 1
+        return removed
 
 
 @pytest.fixture(autouse=True)
 def override_redis(monkeypatch):
     mock_redis = MockAsyncRedis()
+
+    # 1. Подменяем глобальные переменные в модулях
     monkeypatch.setattr("src.services.game_state.redis_client", mock_redis)
     monkeypatch.setattr("src.services.connection_manager.redis_client", mock_redis)
     monkeypatch.setattr("src.db.redis.redis_client", mock_redis)
+
+    # 2. Подменяем ссылки внутри уже созданных синглтонов
+    from src.services.game_state import state_manager
+    from src.services.connection_manager import manager
+    # Для Matchmaker
+    from src.services.matchmaker import matchmaker
+
+    monkeypatch.setattr(state_manager, "redis", mock_redis)
+    monkeypatch.setattr(manager, "redis", mock_redis)
+    monkeypatch.setattr(manager, "pubsub", mock_redis.pubsub())
+    # Если Matchmaker использует redis как свойство:
+    # monkeypatch.setattr(matchmaker, "redis", mock_redis) - не обязательно, если он достает его из db.redis
 
 
 async def override_get_db():
@@ -2182,6 +2444,12 @@ import time
 from src.services.game_state import state_manager
 
 
+class DummyManager:
+    """Заглушка WebSocket-менеджера для изоляции тестов логики состояний."""
+    async def send_personal_message(self, message: dict, user_id: int):
+        pass
+
+
 @pytest.mark.asyncio
 async def test_game_state_initialization():
     await state_manager.initialize_game(
@@ -2202,8 +2470,10 @@ async def test_disconnect_and_reconnect_time_deduction():
         game_id=2, white_id=10, black_id=20, base_time_ms=180000, increment_ms=0
     )
 
+    dummy_manager = DummyManager()
+
     # Эмулируем дисконект белых (ход белых)
-    await state_manager.handle_player_disconnect(10, None)
+    await state_manager.handle_player_disconnect(10, dummy_manager)
 
     state_after_dc = await state_manager.get_game_state(2)
     assert state_after_dc["white_disconnected"] == "true"
@@ -2213,7 +2483,7 @@ async def test_disconnect_and_reconnect_time_deduction():
     await state_manager.update_game_state(2, {"white_disconnect_started_at": old_dc_time})
 
     # Эмулируем переподключение
-    await state_manager.handle_player_reconnect(10, None)
+    await state_manager.handle_player_reconnect(10, dummy_manager)
 
     state_after_reconnect = await state_manager.get_game_state(2)
     assert state_after_reconnect["white_disconnected"] == "false"
