@@ -12,26 +12,38 @@ from src.models.game import Game, GameStatus
 
 class AnalysisService:
     @staticmethod
+    def _parse_move(board: chess.Board, move_str: str) -> chess.Move | None:
+        """Вспомогательный метод для парсинга хода в формате UCI или SAN."""
+        if len(move_str) in [4, 5]:
+            try:
+                uci_move = chess.Move.from_uci(move_str)
+                if uci_move in board.legal_moves:
+                    return uci_move
+            except ValueError:
+                pass
+
+        try:
+            san_move = board.parse_san(move_str)
+            if san_move in board.legal_moves:
+                return san_move
+        except ValueError:
+            pass
+
+        return None
+
+    @staticmethod
     async def analyze_position(db: AsyncSession, moves: list[str]) -> dict:
         board = chess.Board()
 
-        # 1. Воспроизводим ходы на доске
-        for move_uci in moves:
-            try:
-                move = chess.Move.from_uci(move_uci)
-                if move in board.legal_moves:
-                    board.push(move)
-                else:
-                    break
-            except ValueError:
+        for move_str in moves:
+            move = AnalysisService._parse_move(board, move_str)
+            if move:
+                board.push(move)
+            else:
                 break
 
         current_fen = board.fen()
-
-        # 2. Получаем оценку от Stockfish
         sf_evaluation = AnalysisService._get_stockfish_evaluation(current_fen)
-
-        # 3. Получаем статистику продолжений (с проверкой Redis-кэша)
         continuation_stats = await AnalysisService._get_continuations_with_cache(db, moves)
 
         return {
@@ -53,17 +65,22 @@ class AnalysisService:
     async def _get_continuations_with_cache(db: AsyncSession, moves: list[str]) -> list[dict]:
         cache_key = f"opening:cache:{','.join(moves)}"
 
-        # Шаг 1. Пытаемся достать данные из Redis
         cached_data = await redis_client.get(cache_key)
         if cached_data:
             return json.loads(cached_data)
 
-        # Шаг 2. Если в кэше нет, идем в PostgreSQL
         matching_game_ids = await AnalysisService._find_matching_games(db, moves)
         if not matching_game_ids:
             return []
 
-        next_move_number = (len(moves) // 2) + 1
+        # Воссоздаем точное состояние доски для проверки очереди хода
+        board = chess.Board()
+        for move_str in moves:
+            move = AnalysisService._parse_move(board, move_str)
+            if move:
+                board.push(move)
+
+        next_move_number = len(moves) + 1
 
         query = select(
             Move.notation,
@@ -73,12 +90,22 @@ class AnalysisService:
                 Move.game_id.in_(matching_game_ids),
                 Move.move_number == next_move_number
             )
-        ).group_by(Move.notation).order_by(func.count(Move.id).desc()).limit(5)
+        ).group_by(Move.notation).order_by(func.count(Move.id).desc())
 
         res = await db.execute(query)
         rows = res.all()
 
-        total = sum(row.count for row in rows) if rows else 1
+        # Строго фильтруем: оставляем ТОЛЬКО ходы, легальные для текущей стороны на доске
+        valid_rows = []
+        for row in rows:
+            try:
+                uci_move = chess.Move.from_uci(row.notation)
+                if uci_move in board.legal_moves:
+                    valid_rows.append(row)
+            except ValueError:
+                continue
+
+        total = sum(row.count for row in valid_rows) if valid_rows else 1
 
         result = [
             {
@@ -86,10 +113,9 @@ class AnalysisService:
                 "count": row.count,
                 "frequency": round((row.count / total) * 100, 1)
             }
-            for row in rows
+            for row in valid_rows
         ]
 
-        # Шаг 3. Сохраняем результат в Redis на 24 часа для ускорения будущих запросов
         if result:
             await redis_client.set(cache_key, json.dumps(result), ex=86400)
 
@@ -98,14 +124,27 @@ class AnalysisService:
     @staticmethod
     async def _find_matching_games(db: AsyncSession, moves: list[str]) -> list[int]:
         if not moves:
-            res = await db.execute(select(Game.id).where(Game.status == GameStatus.COMPLETED).limit(500))
+            res = await db.execute(select(Game.id.distinct()).where(Game.status == GameStatus.COMPLETED).limit(500))
             return [row[0] for row in res.all()]
 
+        board = chess.Board()
+        uci_moves = []
+        for move_str in moves:
+            move = AnalysisService._parse_move(board, move_str)
+            if move:
+                uci_moves.append(move.uci())
+                board.push(move)
+            else:
+                break
+
+        if not uci_moves:
+            return []
+
         subqueries = []
-        for idx, move_notation in enumerate(moves, start=1):
+        for idx, move_notation in enumerate(uci_moves, start=1):
             subq = select(Move.game_id).where(
                 and_(
-                    Move.move_number == (idx + 1) // 2,
+                    Move.move_number == idx,
                     Move.notation == move_notation
                 )
             ).subquery()
