@@ -31,3 +31,5 @@ src/db/data/pgns/
 # Engine binaries
 bin/
 *.exe
+
+node_modules/
