@@ -9,6 +9,7 @@ from src.models.game import Game, GameStatus
 from src.models.move import Move
 from src.models.user import User
 from src.services.rating import elo_calculator
+from src.worker.tasks import analyze_game_task
 
 logger = logging.getLogger(__name__)
 
@@ -109,6 +110,9 @@ class GameStateManager:
 
         await db.commit()
         await self.clear_game_state(game_id)
+
+        # Отправляем тяжелый анализ в очередь брокера
+        analyze_game_task.delay(game_id)
 
         return {
             "white_delta": delta_w,

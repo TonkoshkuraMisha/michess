@@ -27,3 +27,7 @@ Thumbs.db
 # Seed data
 src/db/data/pgns/
 *.pgn
+
+# Engine binaries
+bin/
+*.exe
