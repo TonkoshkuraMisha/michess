@@ -23,3 +23,7 @@ env/
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Seed data
+src/db/data/pgns/
+*.pgn
