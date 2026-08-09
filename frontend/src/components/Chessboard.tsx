@@ -1,3 +1,5 @@
+// --- FILE: frontend/src/components/Chessboard.tsx ---
+
 import { useState, useEffect, useRef } from 'react';
 import { Chess } from 'chess.js';
 import {
@@ -12,7 +14,10 @@ import {
   Handshake,
   Loader2,
   Play,
-  RotateCcw
+  RotateCcw,
+  Clock,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
 import { gameSocket } from '../services/gameSocket';
 
@@ -27,6 +32,35 @@ interface QueuePlayer {
   increment_ms: number;
 }
 
+const TIME_CONTROLS = [
+  {
+    group: 'Пуля (Bullet)',
+    options: [
+      { base: 1, inc: 0, label: '1 мин' },
+      { base: 1, inc: 1, label: '1 мин + 1 сек' },
+      { base: 2, inc: 0, label: '2 мин' },
+      { base: 2, inc: 1, label: '2 мин + 1 сек' }
+    ]
+  },
+  {
+    group: 'Блиц (Blitz)',
+    options: [
+      { base: 3, inc: 0, label: '3 мин' },
+      { base: 3, inc: 2, label: '3 мин + 2 сек' },
+      { base: 5, inc: 0, label: '5 мин' },
+      { base: 5, inc: 3, label: '5 мин + 3 сек' }
+    ]
+  },
+  {
+    group: 'Рапид (Rapid)',
+    options: [
+      { base: 10, inc: 0, label: '10 мин' },
+      { base: 10, inc: 10, label: '10 мин + 10 сек' },
+      { base: 15, inc: 10, label: '15 мин + 10 сек' }
+    ]
+  }
+];
+
 export default function Chessboard() {
   const [game, setGame] = useState(new Chess());
   const [history, setHistory] = useState<any[]>([]);
@@ -39,6 +73,11 @@ export default function Chessboard() {
   const [isSearching, setIsSearching] = useState(false);
   const [queuePlayers, setQueuePlayers] = useState<QueuePlayer[]>([]);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+
+  // Выбранный контроль времени и состояние кастомного селектора
+  const [selectedTimeControl, setSelectedTimeControl] = useState({ base: 3, inc: 0 });
+  const [isTimeDropdownOpen, setIsTimeDropdownOpen] = useState(false);
+  const timeDropdownRef = useRef<HTMLDivElement>(null);
 
   // Данные игроков и изменения рейтинга
   const [whitePlayer, setWhitePlayer] = useState({ username: 'Белые', rating: '1200' });
@@ -74,6 +113,20 @@ export default function Chessboard() {
   const topPlayerTime = myColor === 'white' ? blackTimeMs : whiteTimeMs;
   const bottomPlayerTime = myColor === 'white' ? whiteTimeMs : blackTimeMs;
 
+  // Закрытие дропдауна по клику вне его области
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (timeDropdownRef.current && !timeDropdownRef.current.contains(event.target as Node)) {
+        setIsTimeDropdownOpen(false);
+      }
+    };
+
+    if (isTimeDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isTimeDropdownOpen]);
+
   // Получаем ID текущего пользователя
   useEffect(() => {
     const token = localStorage.getItem('token');
@@ -102,6 +155,11 @@ export default function Chessboard() {
       setGameId(data.game_id);
       setMyColor(data.color);
       setRatingInfo(null);
+
+      // Устанавливаем время на часах согласно контролю, с которым создана партия
+      const initialTime = data.base_time_ms || 180000;
+      setWhiteTimeMs(initialTime);
+      setBlackTimeMs(initialTime);
 
       if (data.white_username) {
         setWhitePlayer({ username: data.white_username, rating: String(data.white_rating || '1200') });
@@ -213,6 +271,28 @@ export default function Chessboard() {
     return () => clearInterval(interval);
   }, [gameId]);
 
+  // Локальный таймер реального времени (тикает во время партии)
+  useEffect(() => {
+    if (!gameId || gameOverResult) return;
+
+    let lastTick = Date.now();
+    const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
+
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const delta = now - lastTick;
+      lastTick = now;
+
+      if (currentTurnColor === 'white') {
+        setWhiteTimeMs(prev => Math.max(0, prev - delta));
+      } else {
+        setBlackTimeMs(prev => Math.max(0, prev - delta));
+      }
+    }, 50);
+
+    return () => clearInterval(interval);
+  }, [gameId, gameOverResult, game.turn()]);
+
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!dragState) return;
@@ -247,9 +327,16 @@ export default function Chessboard() {
   }, [dragState, game, gameId]);
 
   const formatTime = (ms: number) => {
-    const totalSecs = Math.max(0, Math.floor(ms / 1000));
+    const totalMs = Math.max(0, ms);
+    const totalSecs = Math.floor(totalMs / 1000);
     const mins = Math.floor(totalSecs / 60);
     const secs = totalSecs % 60;
+
+    if (totalMs < 30000 && totalMs > 0) {
+      const tenths = Math.floor((totalMs % 1000) / 100);
+      return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${tenths}`;
+    }
+
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
@@ -265,8 +352,13 @@ export default function Chessboard() {
     setGameOverResult(null);
     setRatingInfo(null);
     setIsSearching(true);
+    setIsTimeDropdownOpen(false);
     setDrawOfferStatus('Вы опубликовали вызов в лобби...');
-    gameSocket.send('join_queue', { base_time_ms: 180000, increment_ms: 0 });
+
+    gameSocket.send('join_queue', {
+      base_time_ms: selectedTimeControl.base * 60 * 1000,
+      increment_ms: selectedTimeControl.inc * 1000
+    });
   };
 
   const cancelMatchmaking = () => {
@@ -454,8 +546,8 @@ export default function Chessboard() {
               </div>
             </div>
           </div>
-          <div className="bg-[#1A120B] px-4 py-1.5 rounded border-2 border-amber-700/50 shadow-inner font-mono text-xl tracking-wider text-amber-500">
-            {gameId ? formatTime(topPlayerTime) : '03:00'}
+          <div className="bg-[#1A120B] px-5 py-2 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-3xl font-bold tracking-wider text-amber-500 min-w-[150px] text-center">
+            {gameId ? formatTime(topPlayerTime) : `${selectedTimeControl.base.toString().padStart(2, '0')}:00`}
           </div>
         </div>
 
@@ -566,8 +658,8 @@ export default function Chessboard() {
               </div>
             </div>
           </div>
-          <div className="bg-[#1A120B] px-4 py-1.5 rounded border-2 border-amber-700/50 shadow-inner font-mono text-xl tracking-wider text-amber-500">
-            {gameId ? formatTime(bottomPlayerTime) : '03:00'}
+          <div className="bg-[#1A120B] px-5 py-2 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-3xl font-bold tracking-wider text-amber-500 min-w-[150px] text-center">
+            {gameId ? formatTime(bottomPlayerTime) : `${selectedTimeControl.base.toString().padStart(2, '0')}:00`}
           </div>
         </div>
 
@@ -604,12 +696,13 @@ export default function Chessboard() {
         )}
 
         {!gameId ? (
-          <div className="flex flex-col h-56 bg-acacia-dark rounded border border-amber-900/40 p-3 shadow-inner">
-            <div className="text-xs font-bold text-amber-200 mb-2 flex items-center justify-between">
+          <div className="flex flex-col min-h-[16rem] bg-acacia-dark rounded border border-amber-900/40 p-3 shadow-inner relative">
+            <div className="text-xs font-bold text-amber-200 mb-2 flex items-center justify-between z-10">
               <span>Открытые вызовы в лобби</span>
               {isSearching && <Loader2 className="animate-spin text-amber-400" size={14} />}
             </div>
-            <div className="flex-1 overflow-y-auto space-y-2 text-xs font-mono">
+
+            <div className="flex-1 overflow-y-auto space-y-2 text-xs font-mono mb-2 z-10 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
               {filteredQueue.length === 0 ? (
                 <div className="p-3 text-boxwood/60 text-center flex flex-col items-center gap-1">
                   <span>{isSearching ? 'Вы в очереди. Ожидание соперников...' : 'Лобби пусто. Создайте вызов кнопкой ниже.'}</span>
@@ -619,7 +712,7 @@ export default function Chessboard() {
                   <div key={p.user_id} className="p-2 bg-black/40 rounded border border-amber-600/30 flex justify-between items-center">
                     <div>
                       <span className="text-amber-300 font-bold">{p.username}</span>
-                      <div className="text-[10px] text-boxwood/70">Рейтинг: {p.rating} | 3 мин</div>
+                      <div className="text-[10px] text-boxwood/70">Рейтинг: {p.rating} | {p.base_time_ms / 60000} мин {p.increment_ms > 0 ? `+ ${p.increment_ms / 1000} сек` : ''}</div>
                     </div>
                     <button
                       onClick={() => acceptChallenge(p.user_id)}
@@ -631,10 +724,67 @@ export default function Chessboard() {
                 ))
               )}
             </div>
+
+            {/* Кастомный выбор контроля времени перед поиском */}
+            {!isSearching && (
+              <div className="flex flex-col gap-1.5 mt-auto pt-2 border-t border-amber-900/40 relative z-20">
+                <label className="text-[10px] uppercase tracking-widest text-boxwood/60 flex items-center gap-1">
+                  <Clock size={12} /> Контроль времени
+                </label>
+
+                <div className="relative w-full" ref={timeDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setIsTimeDropdownOpen(!isTimeDropdownOpen)}
+                    className="w-full bg-black/40 border border-amber-700/50 hover:bg-black/60 transition text-amber-200 rounded p-2 text-xs font-bold outline-none cursor-pointer flex justify-between items-center shadow-inner"
+                  >
+                    <span>
+                      {selectedTimeControl.base} мин {selectedTimeControl.inc > 0 ? `+ ${selectedTimeControl.inc} сек` : ''}
+                    </span>
+                    {isTimeDropdownOpen ? <ChevronUp size={14} className="text-amber-500/70" /> : <ChevronDown size={14} className="text-amber-500/70" />}
+                  </button>
+
+                  {/* Выпадающее меню вверх */}
+                  {isTimeDropdownOpen && (
+                    <div className="absolute z-50 w-full bottom-full mb-1 bg-[#1A120B] border border-amber-700/50 rounded shadow-2xl max-h-56 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-amber-900/50 overflow-x-hidden">
+                      {TIME_CONTROLS.map((group, gIdx) => (
+                        <div key={gIdx}>
+                          <div className="px-3 py-1.5 text-[10px] uppercase tracking-widest text-amber-500/60 bg-black/60 font-bold sticky top-0 z-10 border-b border-t border-amber-900/30 first:border-t-0 backdrop-blur-sm">
+                            {group.group}
+                          </div>
+                          {group.options.map((opt, oIdx) => {
+                            const isSelected = selectedTimeControl.base === opt.base && selectedTimeControl.inc === opt.inc;
+                            return (
+                              <button
+                                key={oIdx}
+                                type="button"
+                                className={`w-full text-left px-4 py-2 text-xs font-bold transition flex justify-between items-center ${
+                                  isSelected
+                                    ? 'bg-amber-900/40 text-amber-400'
+                                    : 'text-amber-100/80 hover:bg-amber-900/20 hover:text-amber-200'
+                                }`}
+                                onClick={() => {
+                                  setSelectedTimeControl({ base: opt.base, inc: opt.inc });
+                                  setIsTimeDropdownOpen(false);
+                                }}
+                              >
+                                <span>{opt.label}</span>
+                                {isSelected && <div className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]" />}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {isSearching && (
               <button
                 onClick={cancelMatchmaking}
-                className="mt-2 py-1.5 bg-red-950/80 hover:bg-red-900 text-red-200 rounded text-xs font-bold border border-red-800/50 transition"
+                className="mt-2 py-1.5 bg-red-950/80 hover:bg-red-900 text-red-200 rounded text-xs font-bold border border-red-800/50 transition z-10 relative"
               >
                 Отменить поиск
               </button>

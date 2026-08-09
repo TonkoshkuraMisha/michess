@@ -1,3 +1,5 @@
+# --- FILE: src/services/matchmaker.py ---
+
 import asyncio
 import logging
 import random
@@ -125,7 +127,9 @@ class Matchmaker:
             "white_username": white_user.username,
             "white_rating": white_user.rating,
             "black_username": black_user.username,
-            "black_rating": black_user.rating
+            "black_rating": black_user.rating,
+            "base_time_ms": base_time,  # Добавлено для фронтенда
+            "increment_ms": inc_time  # Добавлено для фронтенда
         }
 
         w_payload = {**match_payload, "color": "white", "opponent_id": black_user.id}
