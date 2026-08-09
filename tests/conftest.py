@@ -168,11 +168,12 @@ def override_redis(monkeypatch):
     # Для Matchmaker
     from src.services.matchmaker import matchmaker
 
+    # noinspection PyUnresolvedReferences
     monkeypatch.setattr(state_manager, "redis", mock_redis)
+    # noinspection PyUnresolvedReferences
     monkeypatch.setattr(manager, "redis", mock_redis)
+    # noinspection PyUnresolvedReferences
     monkeypatch.setattr(manager, "pubsub", mock_redis.pubsub())
-    # Если Matchmaker использует redis как свойство:
-    # monkeypatch.setattr(matchmaker, "redis", mock_redis) - не обязательно, если он достает его из db.redis
 
 
 async def override_get_db():

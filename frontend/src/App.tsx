@@ -1,6 +1,10 @@
+// --- FILE: frontend/src/App.tsx ---
+
 import { useState, useRef, useEffect } from 'react';
+import { Routes, Route, useNavigate, Link } from 'react-router-dom';
 import Chessboard from './components/Chessboard';
 import AuthModal from './components/AuthModal';
+import Profile from './components/Profile'; // Импортируем новый компонент
 import {
   Search,
   Bell,
@@ -30,6 +34,7 @@ export default function App() {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!token) {
@@ -60,6 +65,7 @@ export default function App() {
     setToken(null);
     setUserProfile(null);
     setIsProfileOpen(false);
+    navigate('/');
   };
 
   useEffect(() => {
@@ -82,17 +88,17 @@ export default function App() {
       <header className="bg-acacia-dark border-b-2 border-amber-900/60 px-6 py-3 flex items-center justify-between shadow-heavy relative z-30">
 
         <div className="flex items-center gap-8">
-          <div className="flex items-center gap-2.5 cursor-pointer group">
+          <Link to="/" className="flex items-center gap-2.5 cursor-pointer group outline-none">
             <div className="w-9 h-9 rounded bg-boxwood flex items-center justify-center shadow-inner border border-amber-600/40 text-acacia-dark font-bold text-lg">
               ♞
             </div>
             <span className="text-2xl font-serif font-bold tracking-wider text-boxwood-light group-hover:text-white transition">
               michess
             </span>
-          </div>
+          </Link>
 
           <nav className="hidden md:flex items-center gap-6 font-serif text-sm tracking-wide text-boxwood/80">
-            <button className="flex items-center gap-1.5 hover:text-amber-300 transition"><Swords size={16} /> Игра</button>
+            <Link to="/" className="flex items-center gap-1.5 hover:text-amber-300 transition"><Swords size={16} /> Игра</Link>
             <button className="flex items-center gap-1.5 hover:text-amber-300 transition"><BookOpen size={16} /> Задачи</button>
             <button className="flex items-center gap-1.5 hover:text-amber-300 transition"><Cpu size={16} /> Обучение</button>
             <button className="flex items-center gap-1.5 hover:text-amber-300 transition"><Eye size={16} /> Просмотр</button>
@@ -140,7 +146,10 @@ export default function App() {
                   </div>
 
                   <div className="py-1 border-b border-amber-900/40 text-sm">
-                    <button onClick={() => setIsProfileOpen(false)} className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300">
+                    <button
+                      onClick={() => { setIsProfileOpen(false); navigate(`/profile/${username}`); }}
+                      className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300"
+                    >
                       <User size={16} className="text-amber-500" /> Профиль
                     </button>
                     <button onClick={() => setIsProfileOpen(false)} className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300">
@@ -174,9 +183,12 @@ export default function App() {
 
       </header>
 
-      {/* Основное рабочее пространство */}
+      {/* Основное рабочее пространство с роутингом */}
       <main className="flex-1 flex items-center justify-center p-6">
-        <Chessboard key={token ? token : 'guest'} />
+        <Routes>
+          <Route path="/" element={<Chessboard key={token ? token : 'guest'} />} />
+          <Route path="/profile/:targetUsername" element={<Profile />} />
+        </Routes>
       </main>
 
       {/* Модальное окно авторизации */}

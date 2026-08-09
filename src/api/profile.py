@@ -1,7 +1,11 @@
+# --- FILE: src/api/profile.py ---
+
+import re
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, desc
+from sqlalchemy.orm import aliased
 
 from src.db.session import get_db
 from src.api.deps import get_current_user
@@ -71,33 +75,55 @@ async def get_user_games(
         offset: int = Query(0, ge=0, description="Смещение для пагинации"),
         db: AsyncSession = Depends(get_db)
 ):
-    """Получить историю завершенных партий пользователя."""
+    """Получить историю завершенных партий пользователя с данными оппонентов."""
     user_result = await db.execute(select(User).where(User.username == username))
     user = user_result.scalar_one_or_none()
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Ищем все завершенные игры, где пользователь был за белых или за черных
-    games_query = select(Game).where(
-        or_(Game.white_player_id == user.id, Game.black_player_id == user.id),
-        Game.status == GameStatus.COMPLETED
-    ).order_by(desc(Game.finished_at)).limit(limit).offset(offset)
+    WhiteUser = aliased(User)
+    BlackUser = aliased(User)
+
+    # Используем JOIN для получения никнеймов и рейтингов обоих игроков
+    games_query = (
+        select(Game, WhiteUser.username, WhiteUser.rating, BlackUser.username, BlackUser.rating)
+        .join(WhiteUser, Game.white_player_id == WhiteUser.id)
+        .join(BlackUser, Game.black_player_id == BlackUser.id)
+        .where(
+            or_(Game.white_player_id == user.id, Game.black_player_id == user.id),
+            Game.status == GameStatus.COMPLETED
+        )
+        .order_by(desc(Game.finished_at))
+        .limit(limit)
+        .offset(offset)
+    )
 
     games_result = await db.execute(games_query)
-    games = games_result.scalars().all()
+    rows = games_result.all()
 
-    return [
-        {
-            "game_id": g.id,
-            "white_id": g.white_player_id,
-            "black_id": g.black_player_id,
-            "status": g.status.value,
-            "is_rated": g.is_rated,
-            "finished_at": g.finished_at
-        }
-        for g in games
-    ]
+    results = []
+    for game, w_name, w_rating, b_name, b_rating in rows:
+        result_str = "*"
+        if game.pgn:
+            # Извлекаем результат напрямую из заголовков PGN
+            match = re.search(r'\[Result\s+"(.*?)"\]', game.pgn)
+            if match:
+                result_str = match.group(1)
+
+        results.append({
+            "game_id": game.id,
+            "white_username": w_name,
+            "white_rating": w_rating,
+            "black_username": b_name,
+            "black_rating": b_rating,
+            "status": game.status.value,
+            "is_rated": game.is_rated,
+            "result": result_str,
+            "finished_at": game.finished_at
+        })
+
+    return results
 
 
 @router.get("/games/{game_id}/pgn")
@@ -108,11 +134,11 @@ async def download_pgn(game_id: int, db: AsyncSession = Depends(get_db)):
     if not game or not game.pgn:
         raise HTTPException(status_code=404, detail="Game or PGN not found")
 
-    # Отдаем PGN как текстовый файл (браузер предложит его скачать)
     headers = {
         "Content-Disposition": f"attachment; filename=michess_game_{game_id}.pgn"
     }
     return PlainTextResponse(content=game.pgn, media_type="application/x-chess-pgn", headers=headers)
+
 
 @router.get("/matchmaking/queue")
 async def get_matchmaking_queue():
