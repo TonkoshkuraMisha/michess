@@ -12,6 +12,7 @@ from src.api.profile import router as profile_router  # <-- Импорт роу�
 from src.db.redis import redis_client
 from src.services.game_state import state_manager
 from src.services.connection_manager import manager
+from src.api.analysis import router as analysis_router
 
 # Configure structured logging
 logging.basicConfig(
@@ -29,19 +30,15 @@ async def lifespan(app: FastAPI):
     """
     logger.info("Starting up %s...", settings.PROJECT_NAME)
 
-    # Запускаем фоновый мониторинг таймаутов партий и движок матчмейкинга
+    # Запускаем фоновый мониторинг таймаутов партий
     timeout_task = asyncio.create_task(state_manager.check_timeouts_loop(manager))
-
-    from src.services.matchmaker import matchmaker
-    matchmaking_task = asyncio.create_task(matchmaker.matchmaking_loop(manager, state_manager))
 
     yield
 
     # Корректно завершаем фоновые таски и пул соединений Redis
     timeout_task.cancel()
-    matchmaking_task.cancel()
     try:
-        await asyncio.gather(timeout_task, matchmaking_task, return_exceptions=True)
+        await asyncio.gather(timeout_task, return_exceptions=True)
     except asyncio.CancelledError:
         pass
 
@@ -74,7 +71,8 @@ def create_app() -> FastAPI:
     # Include API routers
     app.include_router(auth_router, prefix=settings.API_V1_STR)
     app.include_router(ws_router, prefix=settings.API_V1_STR)
-    app.include_router(profile_router, prefix=settings.API_V1_STR)  # <-- Регистрация роутера профиля
+    app.include_router(profile_router, prefix=settings.API_V1_STR)
+    app.include_router(analysis_router, prefix=settings.API_V1_STR)
 
     return app
 

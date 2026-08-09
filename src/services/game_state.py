@@ -111,8 +111,12 @@ class GameStateManager:
         await db.commit()
         await self.clear_game_state(game_id)
 
-        # Отправляем тяжелый анализ в очередь брокера
-        analyze_game_task.delay(game_id)
+        # Безопасный вызов фоновой задачи Celery: если воркер недоступен,
+        # ошибка отлавливается, а партия всё равно штатно завершается для игроков.
+        try:
+            analyze_game_task.delay(game_id)
+        except Exception as e:
+            logger.error("Could not schedule Celery analysis task for game %s: %s", game_id, e)
 
         return {
             "white_delta": delta_w,

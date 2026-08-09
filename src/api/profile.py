@@ -113,3 +113,10 @@ async def download_pgn(game_id: int, db: AsyncSession = Depends(get_db)):
         "Content-Disposition": f"attachment; filename=michess_game_{game_id}.pgn"
     }
     return PlainTextResponse(content=game.pgn, media_type="application/x-chess-pgn", headers=headers)
+
+@router.get("/matchmaking/queue")
+async def get_matchmaking_queue():
+    """Получить список игроков, находящихся в очереди поиска."""
+    from src.services.matchmaker import matchmaker
+    players = await matchmaker.get_queue_players()
+    return players

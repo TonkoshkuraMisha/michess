@@ -47,14 +47,22 @@ async def matchmaking_endpoint(
                 max_rating = data.get("max_rating", default_max)
 
                 from src.services.matchmaker import matchmaker
-                await matchmaker.join_queue(current_user.id, current_user.rating, base_time, inc_time, min_rating,
-                                            max_rating)
+                await matchmaker.join_queue(
+                    current_user.id, current_user.username, current_user.rating,
+                    base_time, inc_time, min_rating, max_rating
+                )
                 await manager.send_personal_message({"event": "queue_joined"}, current_user.id)
 
             elif action == "leave_queue":
                 from src.services.matchmaker import matchmaker
                 await matchmaker.leave_queue(current_user.id)
                 await manager.send_personal_message({"event": "queue_left"}, current_user.id)
+
+            elif action == "accept_challenge":
+                target_user_id = data.get("target_user_id")
+                if target_user_id and target_user_id != current_user.id:
+                    from src.services.matchmaker import matchmaker
+                    await matchmaker.accept_challenge(target_user_id, current_user.id, manager, state_manager)
 
             elif action == "resign":
                 game_id = data.get("game_id")
@@ -219,4 +227,7 @@ async def matchmaking_endpoint(
                 await manager.send_personal_message(move_payload, game_state["black_id"])
 
     except WebSocketDisconnect:
+        await manager.disconnect(current_user.id)
+    except Exception as e:
+        logger.error("WebSocket unexpected error for user %s: %s", current_user.id, e)
         await manager.disconnect(current_user.id)
