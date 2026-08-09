@@ -19,8 +19,11 @@ def create_snapshot():
     output_file = os.path.join(project_root, "project_snapshot.txt")
 
     # Directories and extensions to ignore to keep the dump clean and small
-    ignore_dirs = {'.git', '.idea', 'michess_env', '__pycache__', 'venv', 'alembic'}
-    ignore_exts = {'.pyc', '.pyo', '.pyd', '.exe', '.dll', '.so', '.whl'}
+    # Directories and extensions to ignore to keep the dump clean and small
+    ignore_dirs = {'.git', '.idea', 'michess_env', '__pycache__', 'venv', 'alembic', 'node_modules', 'dist', '.vite',
+                   'bin', 'pgns', '.pytest_cache'}
+    ignore_exts = {'.pyc', '.pyo', '.pyd', '.exe', '.dll', '.so', '.whl', '.pgn', '.svg', '.png', '.jpg', '.jpeg',
+                   '.mp3', '.wav', '.ico', '.sqlite3', '.log'}
 
     with open(output_file, 'w', encoding='utf-8') as out:
         out.write("========================================\n")

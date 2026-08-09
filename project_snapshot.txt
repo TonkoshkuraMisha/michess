@@ -9,16 +9,13 @@ michess/
     docker-compose.yml
     project_snapshot.txt
     pytest.ini
+    README.md
     requirements.txt
     snapshot.py
-    .pytest_cache/
-        .gitignore
-        CACHEDIR.TAG
-        README.md
-        v/
-            cache/
-                lastfailed
-                nodeids
+    .github/
+        workflows/
+            ci.yml
+    frontend/
     migrations/
         env.py
         README
@@ -40,7 +37,9 @@ michess/
             security.py
         db/
             redis.py
+            seed.py
             session.py
+            data/
         models/
             base.py
             game.py
@@ -55,6 +54,9 @@ michess/
             game_state.py
             matchmaker.py
             rating.py
+        worker/
+            celery_app.py
+            tasks.py
     tests/
         conftest.py
         test_game_engine.py
@@ -113,6 +115,16 @@ env/
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Seed data
+src/db/data/pgns/
+*.pgn
+
+# Engine binaries
+bin/
+*.exe
+
+node_modules/
 
 --- FILE: alembic.ini ---
 
@@ -307,6 +319,43 @@ filterwarnings =
     ignore::PendingDeprecationWarning
     ignore:.*httpx.*:UserWarning
 
+--- FILE: README.md ---
+
+# Michess API ♟️
+
+Асинхронный шахматный бэкенд, построенный на современной архитектуре. Поддерживает реалтайм-матчмейкинг, систему
+рейтингов ФИДЕ (Elo), анализ партий и сбор античит-телеметрии.
+
+## 🛠 Технологический стек
+
+* **Фреймворк:** FastAPI (Python 3.11+)
+* **База данных:** PostgreSQL (через асинхронный asyncpg + SQLAlchemy 2.0)
+* **Кэш и Pub/Sub:** Redis (для WebSocket-менеджера и очередей матчмейкинга)
+* **Шахматная логика:** `python-chess` (валидация ходов, генерация PGN, таймеры)
+* **Миграции:** Alembic
+* **Тестирование:** Pytest + асинхронный мок Redis в памяти
+
+## 🚀 Ключевые фичи
+
+- **Асинхронный матчмейкинг:** Продвинутый движок поиска оппонентов на основе `Sorted Sets` в Redis с настраиваемой
+  вилкой рейтинга (по умолчанию $\pm 150$ пунктов).
+- **Реалтайм геймплей:** Обмен ходами через WebSockets с минимальными задержками. Мгновенная реакция на обрывы связи
+  (Grace period) и победы по времени (Timeouts).
+- **Рейтинговая система ФИДЕ:** Точный перерасчет рейтинга Elo с динамическим K-фактором.
+- **Античит-фундамент:** Сбор детерминированной телеметрии (время на ход, фокус окна браузера, премувы, сетевой пинг)
+  для последующего анализа на сервере.
+- **REST API Профиля:** Просмотр истории партий и возможность выгрузки сырых PGN-файлов.
+
+## 📦 Локальный запуск (Development)
+
+1. **Клонирование и виртуальное окружение:**
+   ```bash
+   git clone <your-repo-url>
+   cd michess
+   python -m venv michess_env
+   source michess_env/bin/activate  # Для Windows: michess_env\Scripts\activate
+   pip install -r requirements.txt
+
 --- FILE: requirements.txt ---
 
 alembic==1.19.0
@@ -344,48 +393,57 @@ watchfiles==1.2.0
 websockets==17.0.1
 
 
---- FILE: .pytest_cache\.gitignore ---
+--- FILE: .github\workflows\ci.yml ---
 
-# Created by pytest automatically.
-*
+name: Michess CI
 
+on:
+  push:
+    branches: [ "master", "develop" ]
+  pull_request:
+    branches: [ "master", "develop" ]
 
---- FILE: .pytest_cache\CACHEDIR.TAG ---
+jobs:
+  test:
+    name: Run Tests and Linters
+    runs-on: ubuntu-latest
 
-Signature: 8a477f597d28d172789f06886806bc55
-# This file is a cache directory tag created by pytest.
-# For information about cache directory tags, see:
-#	https://bford.info/cachedir/spec.html
+    services:
+      redis:
+        image: redis:8.0-M02-alpine
+        ports:
+          - 6379:6379
 
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
---- FILE: .pytest_cache\README.md ---
+      - name: Set up Python 3.14
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: 'pip'
 
-# pytest cache directory #
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install flake8  # Добавляем линтер специально для CI
 
-This directory contains data from the pytest's cache plugin,
-which provides the `--lf` and `--ff` options, as well as the `cache` fixture.
+      - name: Lint with flake8
+        run: |
+          # Останавливаем билд, если есть синтаксические ошибки или неопределенные имена
+          flake8 src tests --count --select=E9,F63,F7,F82 --show-source --statistics
+          # Предупреждаем о слишком длинных строках и избыточной сложности, но не роняем билд
+          flake8 src tests --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
-**Do not** commit this to version control.
-
-See [the docs](https://docs.pytest.org/en/stable/how-to/cache.html) for more information.
-
-
---- FILE: .pytest_cache\v\cache\lastfailed ---
-
-{}
-
---- FILE: .pytest_cache\v\cache\nodeids ---
-
-[
-  "src/test_ws.py::test_websocket",
-  "src/test_ws2.py::test_websocket",
-  "tests/test_game_engine.py::test_process_illegal_move",
-  "tests/test_game_engine.py::test_process_valid_move",
-  "tests/test_game_engine.py::test_turn_sequence_and_notation",
-  "tests/test_game_state.py::test_disconnect_and_reconnect_time_deduction",
-  "tests/test_game_state.py::test_game_state_initialization",
-  "tests/test_websockets_flow.py::test_websocket_unauthorized_access"
-]
+      - name: Run pytest
+        env:
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          SECRET_KEY: test_secret_key_for_ci_only
+        run: |
+          pytest -v
 
 --- FILE: migrations\env.py ---
 
@@ -1036,6 +1094,29 @@ async def get_my_profile(current_user: User = Depends(get_current_user)):
     }
 
 
+@router.get("/leaderboard")
+async def get_leaderboard(
+        limit: int = Query(50, ge=1, le=100, description="Количество игроков в топе"),
+        db: AsyncSession = Depends(get_db)
+):
+    """Получить топ игроков по рейтингу (без читеров)."""
+    query = select(User).where(
+        User.is_cheater == False
+    ).order_by(desc(User.rating)).limit(limit)
+
+    result = await db.execute(query)
+    top_users = result.scalars().all()
+
+    return [
+        {
+            "rank": index + 1,
+            "username": user.username,
+            "rating": user.rating
+        }
+        for index, user in enumerate(top_users)
+    ]
+
+
 @router.get("/{username}")
 async def get_user_profile(username: str, db: AsyncSession = Depends(get_db)):
     """Получить публичный профиль любого игрока по юзернейму."""
@@ -1357,6 +1438,14 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
+    # Anti-Cheat Thresholds (скрываем точные цифры от лишних глаз)
+    AC_BLUR_RATE_HIGH: float = 0.8
+    AC_BLUR_RATE_MED: float = 0.5
+    AC_MIN_MOVE_TIME_MS: int = 3000
+    AC_MAX_MOVE_TIME_MS: int = 8000
+    AC_STOCKFISH_PATH: str = "bin/stockfish-windows-x86-64-avx2.exe"  # Путь к бинарнику
+    AC_MAX_CENTIPAWN_LOSS: int = 15  # Если средняя потеря меньше 15 - играет как киборг
+
     @property
     def async_database_url(self) -> str:
         """Assembles the database connection string for asyncpg."""
@@ -1414,6 +1503,156 @@ redis_client = redis.Redis(
     port=settings.REDIS_PORT,
     decode_responses=True
 )
+
+--- FILE: src\db\seed.py ---
+
+import asyncio
+import os
+import random
+from pathlib import Path
+import chess.pgn
+from dotenv import load_dotenv
+
+# Загружаем переменные из .env ДО импорта наших модулей
+load_dotenv()
+
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+import sys
+
+# Чтобы скрипт мог импортировать модули src, находясь внутри папки
+sys.path.append(str(Path(__file__).parent.parent.parent))
+
+from src.db.session import AsyncSessionLocal
+from src.models.user import User
+from src.models.game import Game, GameStatus
+from src.models.move import Move
+from src.core.security import get_password_hash
+
+# Путь жестко задан под расположение файлов
+PGN_DIR = Path(__file__).parent / "data" / "pgns"
+BATCH_SIZE = 100  # Размер пачки для коммита в БД
+
+
+async def get_or_create_user(db: AsyncSession, username: str, rating: str, user_cache: dict) -> int:
+    """Ищет пользователя в кэше/базе, если нет — создает и возвращает ID."""
+    safe_username = "".join(c for c in username if c.isalnum() or c in "_-")[:50]
+    if not safe_username:
+        safe_username = f"player_{random.randint(1000, 9999)}"
+
+    # 1. Ищем в кэше (самый быстрый путь)
+    if safe_username in user_cache:
+        return user_cache[safe_username]
+
+    r = 1200
+    if rating and rating.isdigit():
+        r = int(rating)
+
+    # 2. Ищем в БД
+    result = await db.execute(select(User).where(User.username == safe_username))
+    user = result.scalars().first()
+
+    # 3. Создаем, если нигде нет
+    if not user:
+        user = User(
+            username=safe_username,
+            hashed_password=get_password_hash("password123"),
+            rating=r,
+            trust_factor=100
+        )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
+
+    # Сохраняем в кэш
+    user_cache[safe_username] = user.id
+    return user.id
+
+
+async def seed_from_pgns():
+    if not PGN_DIR.exists():
+        print(f"📁 Папка {PGN_DIR} не найдена.")
+        return
+
+    pgn_files = list(PGN_DIR.glob("*.pgn"))
+    if not pgn_files:
+        print(f"⚠️ В папке {PGN_DIR} нет .pgn файлов.")
+        return
+
+    # In-memory кэш ID пользователей
+    user_cache = {}
+
+    async with AsyncSessionLocal() as db:
+        print("🚀 Начинаем массовый парсинг и заливку PGN...")
+
+        for pgn_file in pgn_files:
+            print(f"\n📂 Обработка файла: {pgn_file.name}")
+            with open(pgn_file, "r", encoding="utf-8", errors="replace") as f:
+                games_processed = 0
+
+                while True:
+                    game = chess.pgn.read_game(f)
+                    if game is None:
+                        break  # Конец файла
+
+                    white_name = game.headers.get("White", "UnknownWhite")
+                    black_name = game.headers.get("Black", "UnknownBlack")
+                    white_rating = game.headers.get("WhiteElo", "1200")
+                    black_rating = game.headers.get("BlackElo", "1200")
+
+                    white_id = await get_or_create_user(db, white_name, white_rating, user_cache)
+                    black_id = await get_or_create_user(db, black_name, black_rating, user_cache)
+
+                    exporter = chess.pgn.StringExporter(headers=False, variations=False, comments=False)
+                    pgn_string = game.accept(exporter)
+
+                    db_game = Game(
+                        white_player_id=white_id,
+                        black_player_id=black_id,
+                        pgn=pgn_string,
+                        status=GameStatus.COMPLETED,
+                        is_rated=True
+                    )
+
+                    db.add(db_game)
+                    # Flush позволяет получить ID партии до фактического коммита транзакции
+                    await db.flush()
+
+                    moves_to_insert = []
+                    board = game.board()
+
+                    for i, move in enumerate(game.mainline_moves()):
+                        board.push(move)
+                        moves_to_insert.append(Move(
+                            game_id=db_game.id,
+                            player_id=white_id if i % 2 == 0 else black_id,
+                            move_number=board.fullmove_number,
+                            notation=move.uci(),
+                            time_taken_ms=random.randint(500, 12000),
+                            window_blurred_before_move=random.choices([True, False], weights=[0.05, 0.95])[0],
+                            is_premove=random.choices([True, False], weights=[0.1, 0.9])[0],
+                            network_lag_ms=random.randint(10, 150)
+                        ))
+
+                    db.add_all(moves_to_insert)
+                    games_processed += 1
+
+                    # Коммитим пачками
+                    if games_processed % BATCH_SIZE == 0:
+                        await db.commit()
+                        print(f"⏳ Сохранено {games_processed} партий из {pgn_file.name}...")
+
+                # Сохраняем "хвост" данных, если они не кратны BATCH_SIZE
+                if games_processed % BATCH_SIZE != 0:
+                    await db.commit()
+
+                print(f"✅ Файл {pgn_file.name} полностью залит. Итого: {games_processed} партий.")
+
+        print("\n🎉 Массовая заливка тестовых данных успешно завершена!")
+
+
+if __name__ == "__main__":
+    asyncio.run(seed_from_pgns())
 
 --- FILE: src\db\session.py ---
 
@@ -1742,6 +1981,7 @@ from src.models.game import Game, GameStatus
 from src.models.move import Move
 from src.models.user import User
 from src.services.rating import elo_calculator
+from src.worker.tasks import analyze_game_task
 
 logger = logging.getLogger(__name__)
 
@@ -1842,6 +2082,9 @@ class GameStateManager:
 
         await db.commit()
         await self.clear_game_state(game_id)
+
+        # Отправляем тяжелый анализ в очередь брокера
+        analyze_game_task.delay(game_id)
 
         return {
             "white_delta": delta_w,
@@ -2179,6 +2422,130 @@ class FideEloSystem:
 
 
 elo_calculator = FideEloSystem()
+
+--- FILE: src\worker\celery_app.py ---
+
+from celery import Celery
+from src.core.config import settings
+
+celery_app = Celery(
+    "michess_worker",
+    broker=f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/0",
+    backend=f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/1",
+    include=["src.worker.tasks"]
+)
+
+celery_app.conf.update(
+    task_serializer="json",
+    accept_content=["json"],
+    result_serializer="json",
+    timezone="UTC",
+    enable_utc=True,
+)
+
+
+--- FILE: src\worker\tasks.py ---
+
+import asyncio
+import logging
+from celery import shared_task
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from stockfish import Stockfish
+import chess.pgn
+import io
+
+from src.core.config import settings
+from src.db.session import AsyncSessionLocal
+from src.models.user import User
+from src.models.game import Game
+from src.models.move import Move
+
+logger = logging.getLogger(__name__)
+
+
+async def _process_anti_cheat_async(game_id: int):
+    async with AsyncSessionLocal() as db:
+        game = await db.get(Game, game_id)
+        result = await db.execute(select(Move).where(Move.game_id == game_id))
+        moves = result.scalars().all()
+
+        if not game or not moves or len(moves) < 10:
+            return
+
+        # 1. Анализ клиентской телеметрии
+        player_moves = {}
+        for m in moves:
+            player_moves.setdefault(m.player_id, []).append(m)
+
+        suspicion_scores = {game.white_player_id: 0, game.black_player_id: 0}
+
+        for player_id, p_moves in player_moves.items():
+            blur_rate = sum(1 for m in p_moves if m.window_blurred_before_move) / len(p_moves)
+            normal_moves = [m for m in p_moves if not m.is_premove]
+            avg_time = sum(m.time_taken_ms for m in normal_moves) / len(normal_moves) if normal_moves else 0
+
+            if blur_rate > settings.AC_BLUR_RATE_HIGH:
+                suspicion_scores[player_id] += 20
+            elif blur_rate > settings.AC_BLUR_RATE_MED:
+                suspicion_scores[player_id] += 10
+
+            if blur_rate > 0.3 and settings.AC_MIN_MOVE_TIME_MS <= avg_time <= settings.AC_MAX_MOVE_TIME_MS:
+                suspicion_scores[player_id] += 15
+
+        # 2. Анализ качества ходов через Stockfish (если есть базовые подозрения)
+        if suspicion_scores[game.white_player_id] > 0 or suspicion_scores[game.black_player_id] > 0:
+            try:
+                sf = Stockfish(path=settings.AC_STOCKFISH_PATH, depth=15)
+                pgn_io = io.StringIO(game.pgn)
+                chess_game = chess.pgn.read_game(pgn_io)
+
+                board = chess_game.board()
+                sf.set_position([])  # Инициализация доски
+
+                # В реальном проекте здесь вычисляется Average Centipawn Loss (ACPL)
+                # Для примера проверяем совпадение с первой линией движка
+                best_move_matches = {chess.WHITE: 0, chess.BLACK: 0}
+                total_moves = {chess.WHITE: 0, chess.BLACK: 0}
+
+                for move in chess_game.mainline_moves():
+                    best_sf_move = sf.get_best_move()
+                    if move.uci() == best_sf_move:
+                        best_move_matches[board.turn] += 1
+
+                    total_moves[board.turn] += 1
+                    board.push(move)
+                    sf.make_moves_from_current_position([move.uci()])
+
+                # Если 80% ходов совпадают с первой линией движка на глубине 15 — это киборг
+                white_accuracy = best_move_matches[chess.WHITE] / total_moves[chess.WHITE] if total_moves[
+                    chess.WHITE] else 0
+                black_accuracy = best_move_matches[chess.BLACK] / total_moves[chess.BLACK] if total_moves[
+                    chess.BLACK] else 0
+
+                if white_accuracy > 0.8: suspicion_scores[game.white_player_id] += 50
+                if black_accuracy > 0.8: suspicion_scores[game.black_player_id] += 50
+
+            except Exception as e:
+                logger.error(f"Stockfish analysis failed: {e}")
+
+        # 3. Применение санкций
+        for player_id, penalty in suspicion_scores.items():
+            if penalty > 0:
+                user = await db.get(User, player_id)
+                if user and not user.is_cheater:
+                    user.trust_factor = max(0, user.trust_factor - penalty)
+                    if user.trust_factor == 0:
+                        user.is_cheater = True
+                        logger.warning(f"🚨 [ANTI-CHEAT] Игрок {user.username} помечен как читер! Партия: {game_id}")
+                    await db.commit()
+
+
+@shared_task(name="analyze_game")
+def analyze_game_task(game_id: int):
+    """Синхронная обертка Celery для запуска асинхронного анализатора"""
+    asyncio.run(_process_anti_cheat_async(game_id))
+
 
 --- FILE: tests\conftest.py ---
 
