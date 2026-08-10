@@ -7,6 +7,7 @@ michess/
     .gitignore
     alembic.ini
     docker-compose.yml
+    download_champions.py
     project_snapshot.txt
     pytest.ini
     README.md
@@ -30,6 +31,7 @@ michess/
         vite.config.ts
         public/
             assets/
+                champions/
                 pieces/
                 sounds/
                 textures/
@@ -40,7 +42,12 @@ michess/
             assets/
             components/
                 AuthModal.tsx
+                ChampionGames.tsx
                 Chessboard.tsx
+                GameViewer.tsx
+                Profile.tsx
+            config/
+                champions.ts
             services/
                 gameSocket.ts
                 __tests__/
@@ -340,6 +347,127 @@ volumes:
   postgres_data:
   redis_data:
 
+--- FILE: download_champions.py ---
+
+import os
+import time
+import requests
+import subprocess
+
+champions = {
+    'Steinitz': 'Стейниц, Вильгельм',
+    'Lasker': 'Ласкер, Эмануил',
+    'Rubinstein': 'Рубинштейн, Акиба Кивелевич',
+    'Capablanca': 'Капабланка, Хосе Рауль',
+    'Alekhine': 'Алехин, Александр Александрович',
+    'Euwe': 'Эйве, Макс',
+    'Keres': 'Керес, Пауль Петрович',
+    'Botvinnik': 'Ботвинник, Михаил Моисеевич',
+    'Geller': 'Геллер, Ефим Петрович',
+    'Korchnoi': 'Корчной, Виктор Львович',
+    'Smyslov': 'Смыслов, Василий Васильевич',
+    'Tal': 'Таль, Михаил Нехемьевич',
+    'Petrosian': 'Петросян, Тигран Вартанович',
+    'Spassky': 'Спасский, Борис Васильевич',
+    'Fischer': 'Фишер, Роберт Джеймс',
+    'Karpov': 'Карпов, Анатолий Евгеньевич',
+    'Kasparov': 'Каспаров, Гарри Кимович',
+    'Kramnik': 'Крамник, Владимир Борисович',
+    'Anand': 'Ананд, Вишванатан',
+    'Carlsen': 'Карлсен, Магнус',
+    'Ding': 'Дин Лижэнь'
+}
+
+save_dir = os.path.join("frontend", "public", "assets", "champions")
+os.makedirs(save_dir, exist_ok=True)
+
+API_URL = "https://ru.wikipedia.org/w/api.php"
+HEADERS = {"User-Agent": "MiChess/1.0 (chess application; python-requests)"}
+
+session = requests.Session()
+session.headers.update(HEADERS)
+
+print("Докачиваем оставшиеся фотографии (с защитой от лимитов)...\n")
+
+for champ_id, wiki_title in champions.items():
+    save_path = os.path.abspath(os.path.join(save_dir, f"{champ_id}.jpg"))
+
+    # ПРОПУСКАЕМ ТО, ЧТО УЖЕ СКАЧАЛОСЬ УСПЕШНО
+    if os.path.exists(save_path) and os.path.getsize(save_path) > 0:
+        print(f"[~] {champ_id}.jpg уже существует, пропускаем.")
+        continue
+
+    params = {
+        "action": "query",
+        "titles": wiki_title,
+        "prop": "pageimages",
+        "piprop": "thumbnail",
+        "pithumbsize": "500",
+        "format": "json",
+        "formatversion": "2",
+    }
+
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            response = session.get(API_URL, params=params, timeout=15)
+
+            # Если словили лимит от API
+            if response.status_code == 429:
+                print(f"[*] API просит подождать. Пауза 15 секунд... (попытка {attempt + 1})")
+                time.sleep(15)
+                continue
+
+            if response.status_code != 200:
+                print(f"[-] API error: {response.text[:100]}")
+                break
+
+            data = response.json()
+            pages = data.get("query", {}).get("pages", [])
+
+            if not pages:
+                print(f"[-] Страница не найдена: {wiki_title}")
+                break
+
+            thumbnail = pages[0].get("thumbnail")
+            if not thumbnail:
+                print(f"[-] Фото не найдено в статье: {wiki_title}")
+                break
+
+            img_url = thumbnail.get("source").split("?")[0]
+
+            cmd = [
+                "curl", "-sS", "-L",
+                "-A", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151.0.0.0 Safari/537.36",
+                "-e", "https://ru.wikipedia.org/",
+                "--fail", img_url, "-o", save_path
+            ]
+
+            result = subprocess.run(cmd, capture_output=True)
+
+            if result.returncode == 0 and os.path.exists(save_path) and os.path.getsize(save_path) > 0:
+                print(f"[+] {champ_id}.jpg успешно скачан!")
+                break
+            else:
+                error = result.stderr.decode("utf-8", errors="ignore")
+                # Если словили лимит от сервера картинок
+                if "429" in error:
+                    print(f"[*] Сервер картинок просит подождать. Пауза 15 секунд... (попытка {attempt + 1})")
+                    time.sleep(15)
+                    continue
+                else:
+                    print(f"[-] Ошибка curl для {champ_id}: {error}")
+                    break
+
+        except Exception as e:
+            print(f"[-] Ошибка для {champ_id}: {e}")
+            break
+
+    # Большая пауза после каждой попытки скачать (чтобы не злить сервера)
+    time.sleep(5)
+
+print("\nГотово! Все фото загружены.")
+
 --- FILE: pytest.ini ---
 
 [pytest]
@@ -525,14 +653,15 @@ dist-ssr
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>frontend</title>
+    <!-- Эта строка запрещает браузеру передавать Referer и обходит блокировку Википедии -->
+    <meta name="referrer" content="no-referrer" />
+    <title>michess</title>
   </head>
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-
 
 --- FILE: frontend\package-lock.json ---
 
@@ -548,10 +677,13 @@ dist-ssr
       "dependencies": {
         "chess.js": "^1.4.0",
         "clsx": "^2.1.1",
+        "date-fns": "^4.4.0",
         "framer-motion": "^13.0.0",
         "lucide-react": "^1.30.0",
         "react": "^19.2.8",
         "react-dom": "^19.2.8",
+        "react-router-dom": "^7.18.2",
+        "recharts": "^3.10.1",
         "tailwind-merge": "^3.6.0"
       },
       "devDependencies": {
@@ -1242,6 +1374,32 @@ dist-ssr
         "node": "^20.19.0 || >=22.12.0"
       }
     },
+    "node_modules/@reduxjs/toolkit": {
+      "version": "2.12.0",
+      "resolved": "https://registry.npmjs.org/@reduxjs/toolkit/-/toolkit-2.12.0.tgz",
+      "integrity": "sha512-KiT+RzZbp6mQET+Mg+h2c97+9j1sNflUxQkIHI7Yuzf6Peu+OYpmkn6nbHWmLLWj+1ZODUJFwGZ7gx3L9R9EOw==",
+      "license": "MIT",
+      "dependencies": {
+        "@standard-schema/spec": "^1.0.0",
+        "@standard-schema/utils": "^0.3.0",
+        "immer": "^11.0.0",
+        "redux": "^5.0.1",
+        "redux-thunk": "^3.1.0",
+        "reselect": "^5.1.0"
+      },
+      "peerDependencies": {
+        "react": "^16.9.0 || ^17.0.0 || ^18 || ^19",
+        "react-redux": "^7.2.1 || ^8.1.3 || ^9.0.0"
+      },
+      "peerDependenciesMeta": {
+        "react": {
+          "optional": true
+        },
+        "react-redux": {
+          "optional": true
+        }
+      }
+    },
     "node_modules/@rolldown/binding-android-arm64": {
       "version": "1.2.3",
       "resolved": "https://registry.npmjs.org/@rolldown/binding-android-arm64/-/binding-android-arm64-1.2.3.tgz",
@@ -1491,7 +1649,12 @@ dist-ssr
       "version": "1.1.0",
       "resolved": "https://registry.npmjs.org/@standard-schema/spec/-/spec-1.1.0.tgz",
       "integrity": "sha512-l2aFy5jALhniG5HgqrD6jXLi/rUWrKvqN/qJx6yoJsgKhblVd+iqqU4RCXavm/jPityDo5TCvKMnpjKnOriy0w==",
-      "dev": true,
+      "license": "MIT"
+    },
+    "node_modules/@standard-schema/utils": {
+      "version": "0.3.0",
+      "resolved": "https://registry.npmjs.org/@standard-schema/utils/-/utils-0.3.0.tgz",
+      "integrity": "sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g==",
       "license": "MIT"
     },
     "node_modules/@testing-library/dom": {
@@ -1592,6 +1755,69 @@ dist-ssr
         "assertion-error": "^2.0.1"
       }
     },
+    "node_modules/@types/d3-array": {
+      "version": "3.2.2",
+      "resolved": "https://registry.npmjs.org/@types/d3-array/-/d3-array-3.2.2.tgz",
+      "integrity": "sha512-hOLWVbm7uRza0BYXpIIW5pxfrKe0W+D5lrFiAEYR+pb6w3N2SwSMaJbXdUfSEv+dT4MfHBLtn5js0LAWaO6otw==",
+      "license": "MIT"
+    },
+    "node_modules/@types/d3-color": {
+      "version": "3.1.3",
+      "resolved": "https://registry.npmjs.org/@types/d3-color/-/d3-color-3.1.3.tgz",
+      "integrity": "sha512-iO90scth9WAbmgv7ogoq57O9YpKmFBbmoEoCHDB2xMBY0+/KVrqAaCDyCE16dUspeOvIxFFRI+0sEtqDqy2b4A==",
+      "license": "MIT"
+    },
+    "node_modules/@types/d3-ease": {
+      "version": "3.0.2",
+      "resolved": "https://registry.npmjs.org/@types/d3-ease/-/d3-ease-3.0.2.tgz",
+      "integrity": "sha512-NcV1JjO5oDzoK26oMzbILE6HW7uVXOHLQvHshBUW4UMdZGfiY6v5BeQwh9a9tCzv+CeefZQHJt5SRgK154RtiA==",
+      "license": "MIT"
+    },
+    "node_modules/@types/d3-interpolate": {
+      "version": "3.0.4",
+      "resolved": "https://registry.npmjs.org/@types/d3-interpolate/-/d3-interpolate-3.0.4.tgz",
+      "integrity": "sha512-mgLPETlrpVV1YRJIglr4Ez47g7Yxjl1lj7YKsiMCb27VJH9W8NVM6Bb9d8kkpG/uAQS5AmbA48q2IAolKKo1MA==",
+      "license": "MIT",
+      "dependencies": {
+        "@types/d3-color": "*"
+      }
+    },
+    "node_modules/@types/d3-path": {
+      "version": "3.1.1",
+      "resolved": "https://registry.npmjs.org/@types/d3-path/-/d3-path-3.1.1.tgz",
+      "integrity": "sha512-VMZBYyQvbGmWyWVea0EHs/BwLgxc+MKi1zLDCONksozI4YJMcTt8ZEuIR4Sb1MMTE8MMW49v0IwI5+b7RmfWlg==",
+      "license": "MIT"
+    },
+    "node_modules/@types/d3-scale": {
+      "version": "4.0.9",
+      "resolved": "https://registry.npmjs.org/@types/d3-scale/-/d3-scale-4.0.9.tgz",
+      "integrity": "sha512-dLmtwB8zkAeO/juAMfnV+sItKjlsw2lKdZVVy6LRr0cBmegxSABiLEpGVmSJJ8O08i4+sGR6qQtb6WtuwJdvVw==",
+      "license": "MIT",
+      "dependencies": {
+        "@types/d3-time": "*"
+      }
+    },
+    "node_modules/@types/d3-shape": {
+      "version": "3.1.8",
+      "resolved": "https://registry.npmjs.org/@types/d3-shape/-/d3-shape-3.1.8.tgz",
+      "integrity": "sha512-lae0iWfcDeR7qt7rA88BNiqdvPS5pFVPpo5OfjElwNaT2yyekbM0C9vK+yqBqEmHr6lDkRnYNoTBYlAgJa7a4w==",
+      "license": "MIT",
+      "dependencies": {
+        "@types/d3-path": "*"
+      }
+    },
+    "node_modules/@types/d3-time": {
+      "version": "3.0.4",
+      "resolved": "https://registry.npmjs.org/@types/d3-time/-/d3-time-3.0.4.tgz",
+      "integrity": "sha512-yuzZug1nkAAaBlBBikKZTgzCeA+k1uy4ZFwWANOfKw5z5LRhV0gNA7gNkKm7HoK+HRN0wX3EkxGk0fpbWhmB7g==",
+      "license": "MIT"
+    },
+    "node_modules/@types/d3-timer": {
+      "version": "3.0.2",
+      "resolved": "https://registry.npmjs.org/@types/d3-timer/-/d3-timer-3.0.2.tgz",
+      "integrity": "sha512-Ps3T8E8dZDam6fUyNiMkekK3XUsaUEik+idO9/YjPtfj2qruF8tFBXS7XhtE4iIXBLxhmLjP3SXpLhVf21I9Lw==",
+      "license": "MIT"
+    },
     "node_modules/@types/deep-eql": {
       "version": "4.0.2",
       "resolved": "https://registry.npmjs.org/@types/deep-eql/-/deep-eql-4.0.2.tgz",
@@ -1620,7 +1846,7 @@ dist-ssr
       "version": "19.2.18",
       "resolved": "https://registry.npmjs.org/@types/react/-/react-19.2.18.tgz",
       "integrity": "sha512-AnzbBERsrLKtk2XSfTbYRLjQPdy116Sty4q+T+Bp3IC4l6jNBvreVPAHmpq9qhXQM7CXZPjLVmGMw9sy+hxQ3w==",
-      "dev": true,
+      "devOptional": true,
       "license": "MIT",
       "dependencies": {
         "csstype": "^3.2.2"
@@ -1635,6 +1861,12 @@ dist-ssr
       "peerDependencies": {
         "@types/react": "^19.2.0"
       }
+    },
+    "node_modules/@types/use-sync-external-store": {
+      "version": "0.0.6",
+      "resolved": "https://registry.npmjs.org/@types/use-sync-external-store/-/use-sync-external-store-0.0.6.tgz",
+      "integrity": "sha512-zFDAD+tlpf2r4asuHEj0XH6pY6i0g5NeAHPn+15wk3BV6JA69eERFXC1gyGThDkVa1zCyKr5jox1+2LbV/AMLg==",
+      "license": "MIT"
     },
     "node_modules/@vitejs/plugin-react": {
       "version": "6.0.5",
@@ -2092,6 +2324,19 @@ dist-ssr
       "dev": true,
       "license": "MIT"
     },
+    "node_modules/cookie": {
+      "version": "1.1.1",
+      "resolved": "https://registry.npmjs.org/cookie/-/cookie-1.1.1.tgz",
+      "integrity": "sha512-ei8Aos7ja0weRpFzJnEA9UHJ/7XQmqglbRwnf2ATjcB9Wq874VKH9kfjjirM6UhU2/E5fFYadylyhFldcqSidQ==",
+      "license": "MIT",
+      "engines": {
+        "node": ">=18"
+      },
+      "funding": {
+        "type": "opencollective",
+        "url": "https://opencollective.com/express"
+      }
+    },
     "node_modules/css-tree": {
       "version": "3.2.1",
       "resolved": "https://registry.npmjs.org/css-tree/-/css-tree-3.2.1.tgz",
@@ -2130,8 +2375,129 @@ dist-ssr
       "version": "3.2.3",
       "resolved": "https://registry.npmjs.org/csstype/-/csstype-3.2.3.tgz",
       "integrity": "sha512-z1HGKcYy2xA8AGQfwrn0PAy+PB7X/GSj3UVJW9qKyn43xWa+gl5nXmU4qqLMRzWVLFC8KusUX8T/0kCiOYpAIQ==",
-      "dev": true,
+      "devOptional": true,
       "license": "MIT"
+    },
+    "node_modules/d3-array": {
+      "version": "3.2.4",
+      "resolved": "https://registry.npmjs.org/d3-array/-/d3-array-3.2.4.tgz",
+      "integrity": "sha512-tdQAmyA18i4J7wprpYq8ClcxZy3SC31QMeByyCFyRt7BVHdREQZ5lpzoe5mFEYZUWe+oq8HBvk9JjpibyEV4Jg==",
+      "license": "ISC",
+      "dependencies": {
+        "internmap": "1 - 2"
+      },
+      "engines": {
+        "node": ">=12"
+      }
+    },
+    "node_modules/d3-color": {
+      "version": "3.1.0",
+      "resolved": "https://registry.npmjs.org/d3-color/-/d3-color-3.1.0.tgz",
+      "integrity": "sha512-zg/chbXyeBtMQ1LbD/WSoW2DpC3I0mpmPdW+ynRTj/x2DAWYrIY7qeZIHidozwV24m4iavr15lNwIwLxRmOxhA==",
+      "license": "ISC",
+      "engines": {
+        "node": ">=12"
+      }
+    },
+    "node_modules/d3-ease": {
+      "version": "3.0.1",
+      "resolved": "https://registry.npmjs.org/d3-ease/-/d3-ease-3.0.1.tgz",
+      "integrity": "sha512-wR/XK3D3XcLIZwpbvQwQ5fK+8Ykds1ip7A2Txe0yxncXSdq1L9skcG7blcedkOX+ZcgxGAmLX1FrRGbADwzi0w==",
+      "license": "BSD-3-Clause",
+      "engines": {
+        "node": ">=12"
+      }
+    },
+    "node_modules/d3-format": {
+      "version": "3.1.2",
+      "resolved": "https://registry.npmjs.org/d3-format/-/d3-format-3.1.2.tgz",
+      "integrity": "sha512-AJDdYOdnyRDV5b6ArilzCPPwc1ejkHcoyFarqlPqT7zRYjhavcT3uSrqcMvsgh2CgoPbK3RCwyHaVyxYcP2Arg==",
+      "license": "ISC",
+      "engines": {
+        "node": ">=12"
+      }
+    },
+    "node_modules/d3-interpolate": {
+      "version": "3.0.1",
+      "resolved": "https://registry.npmjs.org/d3-interpolate/-/d3-interpolate-3.0.1.tgz",
+      "integrity": "sha512-3bYs1rOD33uo8aqJfKP3JWPAibgw8Zm2+L9vBKEHJ2Rg+viTR7o5Mmv5mZcieN+FRYaAOWX5SJATX6k1PWz72g==",
+      "license": "ISC",
+      "dependencies": {
+        "d3-color": "1 - 3"
+      },
+      "engines": {
+        "node": ">=12"
+      }
+    },
+    "node_modules/d3-path": {
+      "version": "3.1.0",
+      "resolved": "https://registry.npmjs.org/d3-path/-/d3-path-3.1.0.tgz",
+      "integrity": "sha512-p3KP5HCf/bvjBSSKuXid6Zqijx7wIfNW+J/maPs+iwR35at5JCbLUT0LzF1cnjbCHWhqzQTIN2Jpe8pRebIEFQ==",
+      "license": "ISC",
+      "engines": {
+        "node": ">=12"
+      }
+    },
+    "node_modules/d3-scale": {
+      "version": "4.0.2",
+      "resolved": "https://registry.npmjs.org/d3-scale/-/d3-scale-4.0.2.tgz",
+      "integrity": "sha512-GZW464g1SH7ag3Y7hXjf8RoUuAFIqklOAq3MRl4OaWabTFJY9PN/E1YklhXLh+OQ3fM9yS2nOkCoS+WLZ6kvxQ==",
+      "license": "ISC",
+      "dependencies": {
+        "d3-array": "2.10.0 - 3",
+        "d3-format": "1 - 3",
+        "d3-interpolate": "1.2.0 - 3",
+        "d3-time": "2.1.1 - 3",
+        "d3-time-format": "2 - 4"
+      },
+      "engines": {
+        "node": ">=12"
+      }
+    },
+    "node_modules/d3-shape": {
+      "version": "3.2.0",
+      "resolved": "https://registry.npmjs.org/d3-shape/-/d3-shape-3.2.0.tgz",
+      "integrity": "sha512-SaLBuwGm3MOViRq2ABk3eLoxwZELpH6zhl3FbAoJ7Vm1gofKx6El1Ib5z23NUEhF9AsGl7y+dzLe5Cw2AArGTA==",
+      "license": "ISC",
+      "dependencies": {
+        "d3-path": "^3.1.0"
+      },
+      "engines": {
+        "node": ">=12"
+      }
+    },
+    "node_modules/d3-time": {
+      "version": "3.1.0",
+      "resolved": "https://registry.npmjs.org/d3-time/-/d3-time-3.1.0.tgz",
+      "integrity": "sha512-VqKjzBLejbSMT4IgbmVgDjpkYrNWUYJnbCGo874u7MMKIWsILRX+OpX/gTk8MqjpT1A/c6HY2dCA77ZN0lkQ2Q==",
+      "license": "ISC",
+      "dependencies": {
+        "d3-array": "2 - 3"
+      },
+      "engines": {
+        "node": ">=12"
+      }
+    },
+    "node_modules/d3-time-format": {
+      "version": "4.1.0",
+      "resolved": "https://registry.npmjs.org/d3-time-format/-/d3-time-format-4.1.0.tgz",
+      "integrity": "sha512-dJxPBlzC7NugB2PDLwo9Q8JiTR3M3e4/XANkreKSUxF8vvXKqm1Yfq4Q5dl8budlunRVlUUaDUgFt7eA8D6NLg==",
+      "license": "ISC",
+      "dependencies": {
+        "d3-time": "1 - 3"
+      },
+      "engines": {
+        "node": ">=12"
+      }
+    },
+    "node_modules/d3-timer": {
+      "version": "3.0.1",
+      "resolved": "https://registry.npmjs.org/d3-timer/-/d3-timer-3.0.1.tgz",
+      "integrity": "sha512-ndfJ/JxxMd3nw31uyKoY2naivF+r29V+Lc0svZxe1JvvIRmi8hUsrMvdOwgS1o6uBHmiz91geQ0ylPP0aj1VUA==",
+      "license": "ISC",
+      "engines": {
+        "node": ">=12"
+      }
     },
     "node_modules/data-urls": {
       "version": "7.0.0",
@@ -2162,11 +2528,27 @@ dist-ssr
         "node": "^20.19.0 || ^22.12.0 || >=24.0.0"
       }
     },
+    "node_modules/date-fns": {
+      "version": "4.4.0",
+      "resolved": "https://registry.npmjs.org/date-fns/-/date-fns-4.4.0.tgz",
+      "integrity": "sha512-+1UMbeh68lH1SegH83CGWwpb6OHHbpSgr3+s5Eww5M4CAgswBpoWS0AjTOfEJ33HiYKz1hdj/KTFprzXHmq/6w==",
+      "license": "MIT",
+      "funding": {
+        "type": "github",
+        "url": "https://github.com/sponsors/kossnocorp"
+      }
+    },
     "node_modules/decimal.js": {
       "version": "10.6.0",
       "resolved": "https://registry.npmjs.org/decimal.js/-/decimal.js-10.6.0.tgz",
       "integrity": "sha512-YpgQiITW3JXGntzdUmyUR1V812Hn8T1YVXhCu+wO3OpS4eU9l4YdD3qjyiKdV6mvV29zapkMeD390UVEf2lkUg==",
       "dev": true,
+      "license": "MIT"
+    },
+    "node_modules/decimal.js-light": {
+      "version": "2.5.1",
+      "resolved": "https://registry.npmjs.org/decimal.js-light/-/decimal.js-light-2.5.1.tgz",
+      "integrity": "sha512-qIMFpTMZmny+MMIitAB6D7iVPEorVw6YQRWkvarTkT4tBeSLLiHzcwj6q0MmYSFCiVpiqPJTJEYIrpcPzVEIvg==",
       "license": "MIT"
     },
     "node_modules/dequal": {
@@ -2248,6 +2630,17 @@ dist-ssr
       "dev": true,
       "license": "MIT"
     },
+    "node_modules/es-toolkit": {
+      "version": "1.50.0",
+      "resolved": "https://registry.npmjs.org/es-toolkit/-/es-toolkit-1.50.0.tgz",
+      "integrity": "sha512-OyZKhUVvEep9ITEiwHn8GKnMRQIVqoSIX7WnRbkWgJkllCujilqP2rD0u979tkl8wqyc8ICwlc1UBVv/Sl1G6w==",
+      "license": "MIT",
+      "workspaces": [
+        "docs",
+        "benchmarks",
+        "tests/types"
+      ]
+    },
     "node_modules/escalade": {
       "version": "3.2.0",
       "resolved": "https://registry.npmjs.org/escalade/-/escalade-3.2.0.tgz",
@@ -2267,6 +2660,12 @@ dist-ssr
       "dependencies": {
         "@types/estree": "^1.0.0"
       }
+    },
+    "node_modules/eventemitter3": {
+      "version": "5.0.4",
+      "resolved": "https://registry.npmjs.org/eventemitter3/-/eventemitter3-5.0.4.tgz",
+      "integrity": "sha512-mlsTRyGaPBjPedk6Bvw+aqbsXDtoAyAzm5MO7JgU+yVRyMQ5O8bD4Kcci7BS85f93veegeCPkL8R4GLClnjLFw==",
+      "license": "MIT"
     },
     "node_modules/expect-type": {
       "version": "1.4.0",
@@ -2450,6 +2849,16 @@ dist-ssr
         "node": "^20.19.0 || ^22.12.0 || >=24.0.0"
       }
     },
+    "node_modules/immer": {
+      "version": "11.1.16",
+      "resolved": "https://registry.npmjs.org/immer/-/immer-11.1.16.tgz",
+      "integrity": "sha512-Xs7H9rBc+kti1J6RueUvbEBkmOz7jqj11XYgf+YMXAYzu8EeE7hwZ9poLXdVfVnGmJu7QAf41T7H2KuF6QoK6Q==",
+      "license": "MIT",
+      "funding": {
+        "type": "opencollective",
+        "url": "https://opencollective.com/immer"
+      }
+    },
     "node_modules/indent-string": {
       "version": "4.0.0",
       "resolved": "https://registry.npmjs.org/indent-string/-/indent-string-4.0.0.tgz",
@@ -2458,6 +2867,15 @@ dist-ssr
       "license": "MIT",
       "engines": {
         "node": ">=8"
+      }
+    },
+    "node_modules/internmap": {
+      "version": "2.0.3",
+      "resolved": "https://registry.npmjs.org/internmap/-/internmap-2.0.3.tgz",
+      "integrity": "sha512-5Hh7Y1wQbvY5ooGgPbDaL5iYLAPzMTUrjMulskHLH6wnv/A+1q5rgEaiuqEjB+oxGXIVZs1FF+R/KPN3ZSQYYg==",
+      "license": "ISC",
+      "engines": {
+        "node": ">=12"
       }
     },
     "node_modules/is-binary-path": {
@@ -3414,9 +3832,69 @@ dist-ssr
       "version": "17.0.2",
       "resolved": "https://registry.npmjs.org/react-is/-/react-is-17.0.2.tgz",
       "integrity": "sha512-w2GsyukL62IJnlaff/nRegPQR94C/XXamvMWmSHRJ4y7Ts/4ocGRmTHvOs8PSE6pB3dWOrD/nueuU5sduBsQ4w==",
-      "dev": true,
       "license": "MIT",
       "peer": true
+    },
+    "node_modules/react-redux": {
+      "version": "9.3.0",
+      "resolved": "https://registry.npmjs.org/react-redux/-/react-redux-9.3.0.tgz",
+      "integrity": "sha512-KQopgqFo/p/fgmAs5qz6p5RWaNAzq40WAu7fJIXnQpYxFPbJYtsJPWvGeF2rOBaY/kEuV77AVsX8TsQzKm+A/g==",
+      "license": "MIT",
+      "dependencies": {
+        "@types/use-sync-external-store": "^0.0.6",
+        "use-sync-external-store": "^1.4.0"
+      },
+      "peerDependencies": {
+        "@types/react": "^18.2.25 || ^19",
+        "react": "^18.0 || ^19",
+        "redux": "^5.0.0"
+      },
+      "peerDependenciesMeta": {
+        "@types/react": {
+          "optional": true
+        },
+        "redux": {
+          "optional": true
+        }
+      }
+    },
+    "node_modules/react-router": {
+      "version": "7.18.2",
+      "resolved": "https://registry.npmjs.org/react-router/-/react-router-7.18.2.tgz",
+      "integrity": "sha512-aUVMjFm3GAPTTZL7oYr5E7ETiqfQCHRLH+B+5afnICvf0r7kkK4eR6SMuwbSTJw/7t+12khT/Kahij49fqOCIg==",
+      "license": "MIT",
+      "dependencies": {
+        "cookie": "^1.0.1",
+        "set-cookie-parser": "^2.6.0"
+      },
+      "engines": {
+        "node": ">=20.0.0"
+      },
+      "peerDependencies": {
+        "react": ">=18",
+        "react-dom": ">=18"
+      },
+      "peerDependenciesMeta": {
+        "react-dom": {
+          "optional": true
+        }
+      }
+    },
+    "node_modules/react-router-dom": {
+      "version": "7.18.2",
+      "resolved": "https://registry.npmjs.org/react-router-dom/-/react-router-dom-7.18.2.tgz",
+      "integrity": "sha512-AIKJ/jgGlFb3EbfCXk5Gzshiwt+l3mqbCrNjmEWMMjqQxNJ3svBa6bgzFyCC2Sw3RA0VWF1kg3uQf2OFhxb8hw==",
+      "license": "MIT",
+      "dependencies": {
+        "react-router": "7.18.2"
+      },
+      "engines": {
+        "node": ">=20.0.0"
+      },
+      "peerDependencies": {
+        "react": ">=18",
+        "react-dom": ">=18"
+      }
     },
     "node_modules/read-cache": {
       "version": "1.0.0",
@@ -3454,6 +3932,36 @@ dist-ssr
         "url": "https://github.com/sponsors/jonschlinkert"
       }
     },
+    "node_modules/recharts": {
+      "version": "3.10.1",
+      "resolved": "https://registry.npmjs.org/recharts/-/recharts-3.10.1.tgz",
+      "integrity": "sha512-QXFrvt6IVcw7eeZCoyXTwkIJAX3Dv1nyVhMicXJ47GsGDDpcN8z6o644DibE9XjpBTThtsomLKnTV6lc+cVFUA==",
+      "license": "MIT",
+      "workspaces": [
+        "www"
+      ],
+      "dependencies": {
+        "@reduxjs/toolkit": "^1.9.0 || 2.x.x",
+        "clsx": "^2.1.1",
+        "decimal.js-light": "^2.5.1",
+        "es-toolkit": "^1.39.3",
+        "eventemitter3": "^5.0.1",
+        "immer": "^11.1.8",
+        "react-redux": "8.x.x || 9.x.x",
+        "reselect": "5.2.0",
+        "tiny-invariant": "^1.3.3",
+        "use-sync-external-store": "^1.2.2",
+        "victory-vendor": "^37.0.2"
+      },
+      "engines": {
+        "node": ">=18"
+      },
+      "peerDependencies": {
+        "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0",
+        "react-dom": "^16.0.0 || ^17.0.0 || ^18.0.0 || ^19.0.0",
+        "react-is": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0"
+      }
+    },
     "node_modules/redent": {
       "version": "3.0.0",
       "resolved": "https://registry.npmjs.org/redent/-/redent-3.0.0.tgz",
@@ -3468,6 +3976,21 @@ dist-ssr
         "node": ">=8"
       }
     },
+    "node_modules/redux": {
+      "version": "5.0.1",
+      "resolved": "https://registry.npmjs.org/redux/-/redux-5.0.1.tgz",
+      "integrity": "sha512-M9/ELqF6fy8FwmkpnF0S3YKOqMyoWJ4+CS5Efg2ct3oY9daQvd/Pc71FpGZsVsbl3Cpb+IIcjBDUnnyBdQbq4w==",
+      "license": "MIT"
+    },
+    "node_modules/redux-thunk": {
+      "version": "3.1.0",
+      "resolved": "https://registry.npmjs.org/redux-thunk/-/redux-thunk-3.1.0.tgz",
+      "integrity": "sha512-NW2r5T6ksUKXCabzhL9z+h206HQw/NJkcLm1GPImRQ8IzfXwRGqjVhKJGauHirT0DAuyy6hjdnMZaRoAcy0Klw==",
+      "license": "MIT",
+      "peerDependencies": {
+        "redux": "^5.0.0"
+      }
+    },
     "node_modules/require-from-string": {
       "version": "2.0.2",
       "resolved": "https://registry.npmjs.org/require-from-string/-/require-from-string-2.0.2.tgz",
@@ -3477,6 +4000,12 @@ dist-ssr
       "engines": {
         "node": ">=0.10.0"
       }
+    },
+    "node_modules/reselect": {
+      "version": "5.2.0",
+      "resolved": "https://registry.npmjs.org/reselect/-/reselect-5.2.0.tgz",
+      "integrity": "sha512-AgZ3UOZm3YndfrJ4OYjgrT7bmCm/1iqkjvEfH/oYjzh6PD2qw4QuT3jjnXIrpdt4MTpMXclMT3lXbmRY+XRakw==",
+      "license": "MIT"
     },
     "node_modules/resolve": {
       "version": "1.22.12",
@@ -3585,6 +4114,12 @@ dist-ssr
       "version": "0.27.0",
       "resolved": "https://registry.npmjs.org/scheduler/-/scheduler-0.27.0.tgz",
       "integrity": "sha512-eNv+WrVbKu1f3vbYJT/xtiF5syA5HPIMtf9IgY/nKg0sWqzAUEvqY/xm7OcZc/qafLx/iO9FgOmeSAp4v5ti/Q==",
+      "license": "MIT"
+    },
+    "node_modules/set-cookie-parser": {
+      "version": "2.7.2",
+      "resolved": "https://registry.npmjs.org/set-cookie-parser/-/set-cookie-parser-2.7.2.tgz",
+      "integrity": "sha512-oeM1lpU/UvhTxw+g3cIfxXHyJRc/uidd3yK1P242gzHds0udQBYzs3y8j4gCCW+ZJ7ad0yctld8RYO+bdurlvw==",
       "license": "MIT"
     },
     "node_modules/siginfo": {
@@ -3744,6 +4279,12 @@ dist-ssr
       "engines": {
         "node": ">=0.8"
       }
+    },
+    "node_modules/tiny-invariant": {
+      "version": "1.3.3",
+      "resolved": "https://registry.npmjs.org/tiny-invariant/-/tiny-invariant-1.3.3.tgz",
+      "integrity": "sha512-+FbBPE1o9QAYvviau/qC5SE3caw21q3xkvWKBtja5vgqOWIHHJ3ioaq1VPfn/Szqctz2bU/oYeKd9/z5BL+PVg==",
+      "license": "MIT"
     },
     "node_modules/tinybench": {
       "version": "2.9.0",
@@ -3923,12 +4464,43 @@ dist-ssr
         "browserslist": ">= 4.21.0"
       }
     },
+    "node_modules/use-sync-external-store": {
+      "version": "1.6.0",
+      "resolved": "https://registry.npmjs.org/use-sync-external-store/-/use-sync-external-store-1.6.0.tgz",
+      "integrity": "sha512-Pp6GSwGP/NrPIrxVFAIkOQeyw8lFenOHijQWkUTrDvrF4ALqylP2C/KCkeS9dpUM3KvYRQhna5vt7IL95+ZQ9w==",
+      "license": "MIT",
+      "peerDependencies": {
+        "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0"
+      }
+    },
     "node_modules/util-deprecate": {
       "version": "1.0.2",
       "resolved": "https://registry.npmjs.org/util-deprecate/-/util-deprecate-1.0.2.tgz",
       "integrity": "sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==",
       "dev": true,
       "license": "MIT"
+    },
+    "node_modules/victory-vendor": {
+      "version": "37.3.6",
+      "resolved": "https://registry.npmjs.org/victory-vendor/-/victory-vendor-37.3.6.tgz",
+      "integrity": "sha512-SbPDPdDBYp+5MJHhBCAyI7wKM3d5ivekigc2Dk2s7pgbZ9wIgIBYGVw4zGHBml/qTFbexrofXW6Gu4noGxrOwQ==",
+      "license": "MIT AND ISC",
+      "dependencies": {
+        "@types/d3-array": "^3.0.3",
+        "@types/d3-ease": "^3.0.0",
+        "@types/d3-interpolate": "^3.0.1",
+        "@types/d3-scale": "^4.0.2",
+        "@types/d3-shape": "^3.1.0",
+        "@types/d3-time": "^3.0.0",
+        "@types/d3-timer": "^3.0.0",
+        "d3-array": "^3.1.6",
+        "d3-ease": "^3.0.1",
+        "d3-interpolate": "^3.0.1",
+        "d3-scale": "^4.0.2",
+        "d3-shape": "^3.1.0",
+        "d3-time": "^3.0.0",
+        "d3-timer": "^3.0.1"
+      }
     },
     "node_modules/vite": {
       "version": "8.2.1",
@@ -4201,10 +4773,13 @@ dist-ssr
   "dependencies": {
     "chess.js": "^1.4.0",
     "clsx": "^2.1.1",
+    "date-fns": "^4.4.0",
     "framer-motion": "^13.0.0",
     "lucide-react": "^1.30.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-router-dom": "^7.18.2",
+    "recharts": "^3.10.1",
     "tailwind-merge": "^3.6.0"
   },
   "devDependencies": {
@@ -4400,9 +4975,17 @@ export default defineConfig({
 
 --- FILE: frontend\src\App.tsx ---
 
+// --- FILE: frontend/src/App.tsx ---
+
 import { useState, useRef, useEffect } from 'react';
+import { Routes, Route, useNavigate, Link } from 'react-router-dom';
 import Chessboard from './components/Chessboard';
 import AuthModal from './components/AuthModal';
+import Profile from './components/Profile';
+import GameViewer from './components/GameViewer';
+import ChampionGames from './components/ChampionGames';
+import { CHAMPIONS_LIST } from './config/champions';
+
 import {
   Search,
   Bell,
@@ -4415,7 +4998,9 @@ import {
   User,
   Mail,
   Settings,
-  LogIn
+  LogIn,
+  Crown,
+  ChevronDown
 } from 'lucide-react';
 
 interface UserProfile {
@@ -4429,9 +5014,16 @@ interface UserProfile {
 export default function App() {
   const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isChampionsMenuOpen, setIsChampionsMenuOpen] = useState(false);
+
   const [showAuthModal, setShowAuthModal] = useState(false);
+  const [serverPing, setServerPing] = useState<number | null>(null);
+
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const championsMenuRef = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (!token) {
@@ -4457,17 +5049,37 @@ export default function App() {
       });
   }, [token]);
 
+  useEffect(() => {
+    if (!isProfileOpen) return;
+    const measurePing = async () => {
+      const start = Date.now();
+      try {
+        await fetch('http://127.0.0.1:8000/health');
+        setServerPing(Date.now() - start);
+      } catch (e) {
+        setServerPing(-1);
+      }
+    };
+    measurePing();
+    const interval = setInterval(measurePing, 3000);
+    return () => clearInterval(interval);
+  }, [isProfileOpen]);
+
   const handleLogout = () => {
     localStorage.removeItem('token');
     setToken(null);
     setUserProfile(null);
     setIsProfileOpen(false);
+    navigate('/');
   };
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsProfileOpen(false);
+      }
+      if (championsMenuRef.current && !championsMenuRef.current.contains(event.target as Node)) {
+        setIsChampionsMenuOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -4480,21 +5092,54 @@ export default function App() {
   return (
     <div className="min-h-screen flex flex-col bg-room text-paper font-sans select-none">
 
-      {/* Верхняя панель навигации и брендинга */}
       <header className="bg-acacia-dark border-b-2 border-amber-900/60 px-6 py-3 flex items-center justify-between shadow-heavy relative z-30">
-
         <div className="flex items-center gap-8">
-          <div className="flex items-center gap-2.5 cursor-pointer group">
+          <Link to="/" className="flex items-center gap-2.5 cursor-pointer group outline-none">
             <div className="w-9 h-9 rounded bg-boxwood flex items-center justify-center shadow-inner border border-amber-600/40 text-acacia-dark font-bold text-lg">
               ♞
             </div>
             <span className="text-2xl font-serif font-bold tracking-wider text-boxwood-light group-hover:text-white transition">
               michess
             </span>
-          </div>
+          </Link>
 
-          <nav className="hidden md:flex items-center gap-6 font-serif text-sm tracking-wide text-boxwood/80">
-            <button className="flex items-center gap-1.5 hover:text-amber-300 transition"><Swords size={16} /> Игра</button>
+          <nav className="hidden md:flex items-center gap-5 font-serif text-sm tracking-wide text-boxwood/80">
+            <Link to="/" className="flex items-center gap-1.5 hover:text-amber-300 transition"><Swords size={16} /> Игра</Link>
+
+            {/* Выпадающее меню легенд */}
+            <div className="relative" ref={championsMenuRef}>
+              <button
+                onClick={() => setIsChampionsMenuOpen(!isChampionsMenuOpen)}
+                className={`flex items-center gap-1.5 transition outline-none ${isChampionsMenuOpen ? 'text-amber-300' : 'hover:text-amber-300'}`}
+              >
+                <Crown size={16} /> Легенды шахмат <ChevronDown size={14} className={`transition-transform ${isChampionsMenuOpen ? 'rotate-180' : ''}`} />
+              </button>
+
+              {isChampionsMenuOpen && (
+                <div className="absolute top-full left-0 mt-4 w-72 bg-[#261C14] border-2 border-amber-900/80 rounded shadow-2xl z-50 max-h-[32rem] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
+                  {CHAMPIONS_LIST.map(champ => (
+                    <Link
+                      key={champ.id}
+                      to={`/champions/${encodeURIComponent(champ.id)}`}
+                      onClick={() => setIsChampionsMenuOpen(false)}
+                      className="flex items-center gap-3 px-4 py-2.5 hover:bg-black/40 transition border-b border-amber-900/30 last:border-b-0 group outline-none"
+                    >
+                      <img
+                        src={champ.img}
+                        alt={champ.name}
+                        referrerPolicy="no-referrer"
+                        className="w-10 h-10 object-cover rounded shadow border border-amber-900/50 group-hover:border-amber-500/50 transition"
+                      />
+                      <div className="flex flex-col">
+                        <span className="font-bold text-amber-200 text-sm group-hover:text-white transition">{champ.name}</span>
+                        <span className="text-[10px] text-boxwood/60 font-mono group-hover:text-amber-400/80 transition">{champ.years}</span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <button className="flex items-center gap-1.5 hover:text-amber-300 transition"><BookOpen size={16} /> Задачи</button>
             <button className="flex items-center gap-1.5 hover:text-amber-300 transition"><Cpu size={16} /> Обучение</button>
             <button className="flex items-center gap-1.5 hover:text-amber-300 transition"><Eye size={16} /> Просмотр</button>
@@ -4516,9 +5161,11 @@ export default function App() {
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
                 className="flex items-center gap-2 pl-3 border-l border-amber-900/50 cursor-pointer hover:opacity-80 transition select-none py-1 px-2 rounded hover:bg-black/20"
               >
-                <div className="w-8 h-8 rounded-full bg-boxwood text-acacia-dark font-bold flex items-center justify-center text-sm shadow">
-                  {username.charAt(0).toUpperCase()}
-                </div>
+                <img
+                  src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${username}&backgroundColor=D0A972`}
+                  alt="Avatar"
+                  className="w-8 h-8 rounded bg-black/40 border border-amber-900/50 shadow"
+                />
                 <div className="flex flex-col items-start hidden sm:flex">
                   <span className="font-serif font-semibold text-sm text-amber-200 leading-tight">{username}</span>
                   <span className="text-[10px] text-amber-400 font-mono">({userRating})</span>
@@ -4529,9 +5176,11 @@ export default function App() {
               {isProfileOpen && (
                 <div className="absolute right-0 top-12 w-64 bg-[#261C14] border-2 border-amber-900/80 rounded shadow-2xl py-2 z-50 text-boxwood-light font-serif">
                   <div className="px-4 py-2.5 border-b border-amber-900/40 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-boxwood text-acacia-dark font-bold flex items-center justify-center text-base shadow">
-                      {username.charAt(0).toUpperCase()}
-                    </div>
+                    <img
+                      src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${username}&backgroundColor=D0A972`}
+                      alt="Avatar"
+                      className="w-10 h-10 rounded bg-black/40 border border-amber-900/50 shadow"
+                    />
                     <div>
                       <div className="font-bold text-amber-200">{username}</div>
                       <div className="text-xs text-amber-400 font-mono">Рейтинг: {userRating}</div>
@@ -4542,7 +5191,10 @@ export default function App() {
                   </div>
 
                   <div className="py-1 border-b border-amber-900/40 text-sm">
-                    <button onClick={() => setIsProfileOpen(false)} className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300">
+                    <button
+                      onClick={() => { setIsProfileOpen(false); navigate(`/profile/${username}`); }}
+                      className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300"
+                    >
                       <User size={16} className="text-amber-500" /> Профиль
                     </button>
                     <button onClick={() => setIsProfileOpen(false)} className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300">
@@ -4557,7 +5209,7 @@ export default function App() {
                   </div>
 
                   <div className="px-4 py-2 text-[11px] font-mono text-boxwood/60 flex justify-between items-center bg-black/20">
-                    <span>ПИНГ 14 ms</span>
+                    <span>ПИНГ {serverPing !== null ? (serverPing === -1 ? 'ОШИБКА' : `${serverPing} ms`) : '...'}</span>
                     <span className="text-emerald-400 font-bold">● СЕРВЕР</span>
                   </div>
                 </div>
@@ -4571,17 +5223,18 @@ export default function App() {
               <LogIn size={16} /> Войти
             </button>
           )}
-
         </div>
-
       </header>
 
-      {/* Основное рабочее пространство */}
       <main className="flex-1 flex items-center justify-center p-6">
-        <Chessboard key={token ? token : 'guest'} />
+        <Routes>
+          <Route path="/" element={<Chessboard key={token ? token : 'guest'} />} />
+          <Route path="/profile/:targetUsername" element={<Profile />} />
+          <Route path="/game/:gameId" element={<GameViewer />} />
+          <Route path="/champions/:championId" element={<ChampionGames />} />
+        </Routes>
       </main>
 
-      {/* Модальное окно авторизации */}
       {showAuthModal && (
         <AuthModal
           onSuccess={(newToken) => {
@@ -4590,7 +5243,6 @@ export default function App() {
           }}
         />
       )}
-
     </div>
   );
 }
@@ -4612,17 +5264,21 @@ export default function App() {
 
 --- FILE: frontend\src\main.tsx ---
 
+// --- FILE: frontend/src/main.tsx ---
+
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
 import './index.css'
 import App from './App.tsx'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
   </StrictMode>,
 )
-
 
 --- FILE: frontend\src\components\AuthModal.tsx ---
 
@@ -4756,6 +5412,335 @@ export default function AuthModal({ onSuccess }: AuthModalProps) {
           </button>
         </div>
 
+      </div>
+    </div>
+  );
+}
+
+--- FILE: frontend\src\components\ChampionGames.tsx ---
+
+// --- FILE: frontend/src/components/ChampionGames.tsx ---
+
+import { useState, useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { format, parseISO } from 'date-fns';
+import { ru } from 'date-fns/locale';
+import {
+  Swords, Download, ArrowLeft, Crown,
+  ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
+} from 'lucide-react';
+import { CHAMPIONS_LIST } from '../config/champions';
+
+interface GameData {
+  game_id: number;
+  white_username: string;
+  white_rating: number;
+  black_username: string;
+  black_rating: number;
+  status: string;
+  is_rated: boolean;
+  result: string;
+  pgn_date: string | null;
+  site: string | null;
+  eco: string | null;
+  finished_at: string | null;
+}
+
+const displayDate = (game: GameData) => {
+  if (game.pgn_date && !game.pgn_date.includes('????')) {
+    // Очищаем дату от неизвестных месяцев/дней: "1860.??.??" -> "1860"
+    return game.pgn_date.replace(/\??/g, '').replace(/\.$/, '');
+  }
+  if (game.finished_at) {
+    return format(parseISO(game.finished_at), 'd MMM yyyy', { locale: ru });
+  }
+  return '—';
+};
+
+export default function ChampionGames() {
+  const { championId } = useParams<{ championId: string }>();
+  const navigate = useNavigate();
+
+  const [games, setGames] = useState<GameData[]>([]);
+  const [totalGames, setTotalGames] = useState<number>(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(25);
+
+  const champion = CHAMPIONS_LIST.find(c => c.id === championId);
+
+  useEffect(() => {
+    const fetchGames = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const offset = (page - 1) * limit;
+        const res = await fetch(`http://127.0.0.1:8000/api/v1/profile/${championId}/games?limit=${limit}&offset=${offset}&sort=asc`);
+
+        if (!res.ok) {
+          const errData = await res.json();
+          throw new Error(errData.detail || 'Не удалось загрузить партии из базы данных');
+        }
+
+        const data = await res.json();
+        setTotalGames(data.total || 0);
+        setGames(data.items || []);
+
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (championId) fetchGames();
+  }, [championId, page, limit]);
+
+  if (!champion) {
+    return (
+      <div className="bg-red-950/80 border border-red-800 p-6 rounded text-red-200 text-center font-serif">
+        <h2 className="text-xl font-bold mb-2">Ошибка</h2>
+        <p>Игрок с идентификатором {championId} не найден в конфигурации.</p>
+        <Link to="/" className="mt-4 inline-block text-amber-400 hover:underline">На главную</Link>
+      </div>
+    );
+  }
+
+  const totalPages = Math.max(1, Math.ceil(totalGames / limit));
+
+  const getVisiblePages = () => {
+    const pages = [];
+    let start = Math.max(1, page - 2);
+    let end = Math.min(totalPages, page + 2);
+
+    if (page <= 3) end = Math.min(5, totalPages);
+    if (page >= totalPages - 2) start = Math.max(1, totalPages - 4);
+
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
+
+  return (
+    <div className="w-full max-w-6xl flex flex-col gap-6 font-serif">
+
+      <div className="bg-acacia-dark border border-amber-900/40 p-6 rounded shadow-heavy flex items-center gap-6 relative overflow-hidden">
+        <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+          <Crown size={180} />
+        </div>
+
+        <img
+          src={champion.img}
+          alt={champion.name}
+          referrerPolicy="no-referrer"
+          className="w-32 h-32 object-cover rounded-lg bg-black/40 shadow-inner border-2 border-amber-600/40 z-10"
+        />
+
+        <div className="flex flex-col z-10">
+          <div className="text-amber-600 text-sm font-bold uppercase tracking-widest mb-1 flex items-center gap-2">
+            <Crown size={16} /> Исторический архив
+          </div>
+          <h1 className="text-4xl font-bold text-amber-200 mb-2">{champion.name}</h1>
+          <div className="text-boxwood-light/80">
+            Эпоха: <span className="font-mono text-amber-400 font-bold ml-1">{champion.years}</span>
+          </div>
+          <div className="text-boxwood-light/80 mt-1">
+            Партий в базе: <span className="font-mono text-amber-400 font-bold ml-1">{totalGames}</span>
+          </div>
+        </div>
+      </div>
+
+      {error && (
+        <div className="bg-red-950/80 border border-red-800 p-6 rounded text-red-200 text-center shadow-heavy">
+          <h2 className="text-xl font-bold mb-2">Ошибка загрузки</h2>
+          <p>{error}</p>
+        </div>
+      )}
+
+      <div className="bg-acacia-dark border border-amber-900/40 rounded shadow-heavy flex flex-col min-h-[500px]">
+        <div className="p-5 border-b border-amber-900/40 bg-black/20 flex items-center gap-4">
+          <button
+            onClick={() => window.history.back()}
+            className="p-1.5 bg-black/20 hover:bg-black/40 rounded transition border border-amber-900/50"
+            title="Назад"
+          >
+            <ArrowLeft size={16} className="text-amber-500" />
+          </button>
+          <h2 className="text-sm uppercase tracking-widest text-amber-500/80 font-bold">
+            Хронология игр (От самых ранних к поздним)
+          </h2>
+        </div>
+
+        <div className="flex-1 overflow-x-auto relative">
+          {loading && (
+            <div className="absolute inset-0 z-20 bg-acacia-dark/80 backdrop-blur-sm flex flex-col items-center justify-center text-amber-500">
+              <Swords size={40} className="animate-spin mb-4" />
+              <span className="font-bold">Загрузка архивов...</span>
+            </div>
+          )}
+
+          <table className="w-full text-left text-sm font-sans whitespace-nowrap">
+            <thead className="bg-[#1A120B] text-boxwood/60 uppercase text-xs tracking-wider sticky top-0 z-10 border-b border-amber-900/50 shadow">
+              <tr>
+                <th className="px-4 py-4 font-medium">№</th>
+                <th className="px-4 py-4 font-medium">Белые</th>
+                <th className="px-4 py-4 font-medium">Черные</th>
+                <th className="px-4 py-4 font-medium text-center">Результат</th>
+                <th className="px-4 py-4 font-medium text-center">Дебют</th>
+                <th className="px-4 py-4 font-medium text-center">Место</th>
+                <th className="px-4 py-4 font-medium text-center">Дата</th>
+                <th className="px-4 py-4 font-medium text-right">PGN</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-amber-900/20 text-boxwood-light">
+              {games.length === 0 && !loading ? (
+                <tr>
+                  <td colSpan={8} className="px-6 py-12 text-center text-boxwood/50 font-serif text-lg">
+                    В архиве нет записей для этой страницы.
+                  </td>
+                </tr>
+              ) : (
+                games.map((game, index) => {
+                  const isWhite = game.white_username.includes(champion.id);
+                  let resultColor = 'text-gray-400';
+                  let resultText = 'Ничья';
+
+                  if (game.result === '1-0') {
+                    resultColor = isWhite ? 'text-emerald-400' : 'text-red-400';
+                    resultText = isWhite ? 'Победа' : 'Поражение';
+                  } else if (game.result === '0-1') {
+                    resultColor = isWhite ? 'text-red-400' : 'text-emerald-400';
+                    resultText = isWhite ? 'Поражение' : 'Победа';
+                  }
+
+                  const absoluteIndex = (page - 1) * limit + index + 1;
+
+                  return (
+                    <tr
+                      key={game.game_id}
+                      onClick={() => navigate(`/game/${game.game_id}`, { state: { game } })}
+                      className="hover:bg-black/30 transition group cursor-pointer"
+                    >
+                      <td className="px-4 py-4 font-mono text-boxwood/40">
+                        {absoluteIndex}
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-sm border border-gray-400 bg-white inline-block"></span>
+                          <span className={`font-bold ${isWhite ? 'text-amber-300' : ''}`}>
+                            {game.white_username}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-sm border border-gray-600 bg-black inline-block"></span>
+                          <span className={`font-bold ${!isWhite ? 'text-amber-300' : ''}`}>
+                            {game.black_username}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <div className={`font-bold font-serif ${resultColor}`}>
+                          {resultText} <span className="text-xs opacity-70 ml-1">({game.result})</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-center font-mono text-amber-500/80">
+                        {game.eco || '—'}
+                      </td>
+                      <td className="px-4 py-4 text-center text-boxwood/70">
+                        {game.site || '—'}
+                      </td>
+                      <td className="px-4 py-4 text-center text-boxwood/70 font-mono">
+                        {displayDate(game)}
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <a
+                          href={`http://127.0.0.1:8000/api/v1/profile/games/${game.game_id}/pgn`}
+                          download
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black/30 hover:bg-amber-900/60 text-amber-400 rounded transition border border-amber-900/40 text-xs font-bold"
+                          title="Скачать PGN"
+                        >
+                          <Download size={14} />
+                        </a>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Панель пагинации */}
+        {totalGames > 0 && (
+          <div className="bg-[#1A120B] p-4 border-t border-amber-900/50 flex flex-col sm:flex-row justify-between items-center gap-4">
+            <div className="flex items-center gap-3 text-boxwood/60 text-sm">
+              <span className="hidden sm:inline">Показывать по:</span>
+              <select
+                value={limit}
+                onChange={(e) => { setLimit(Number(e.target.value)); setPage(1); }}
+                className="bg-black/40 border border-amber-900/50 rounded px-2 py-1 text-amber-200 outline-none cursor-pointer focus:border-amber-600"
+              >
+                <option value="25">25</option>
+                <option value="50">50</option>
+              </select>
+              <span className="font-mono bg-black/30 px-2 py-1 rounded">Всего: {totalGames}</span>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => setPage(1)}
+                disabled={page === 1}
+                className="p-1.5 rounded bg-black/40 hover:bg-amber-900/60 disabled:opacity-30 disabled:cursor-not-allowed text-amber-500 transition border border-transparent hover:border-amber-900/50"
+              >
+                <ChevronsLeft size={18} />
+              </button>
+              <button
+                onClick={() => setPage(p => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="p-1.5 rounded bg-black/40 hover:bg-amber-900/60 disabled:opacity-30 disabled:cursor-not-allowed text-amber-500 transition border border-transparent hover:border-amber-900/50"
+              >
+                <ChevronLeft size={18} />
+              </button>
+
+              <div className="flex items-center gap-1 mx-2">
+                {getVisiblePages().map(p => (
+                  <button
+                    key={p}
+                    onClick={() => setPage(p)}
+                    className={`w-8 h-8 rounded text-sm font-bold font-mono transition flex items-center justify-center ${
+                      page === p 
+                        ? 'bg-amber-600 text-white shadow shadow-amber-600/20' 
+                        : 'bg-black/40 text-amber-500 hover:bg-amber-900/60 border border-transparent hover:border-amber-900/50'
+                    }`}
+                  >
+                    {p}
+                  </button>
+                ))}
+              </div>
+
+              <button
+                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                disabled={page === totalPages}
+                className="p-1.5 rounded bg-black/40 hover:bg-amber-900/60 disabled:opacity-30 disabled:cursor-not-allowed text-amber-500 transition border border-transparent hover:border-amber-900/50"
+              >
+                <ChevronRight size={18} />
+              </button>
+              <button
+                onClick={() => setPage(totalPages)}
+                disabled={page === totalPages}
+                className="p-1.5 rounded bg-black/40 hover:bg-amber-900/60 disabled:opacity-30 disabled:cursor-not-allowed text-amber-500 transition border border-transparent hover:border-amber-900/50"
+              >
+                <ChevronsRight size={18} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -5673,6 +6658,770 @@ export default function Chessboard() {
   );
 }
 
+--- FILE: frontend\src\components\GameViewer.tsx ---
+
+// --- FILE: frontend/src/components/GameViewer.tsx ---
+
+import { useState, useEffect, useRef } from 'react';
+import { useParams, useLocation, Link } from 'react-router-dom';
+import { Chess } from 'chess.js';
+import {
+  ChevronFirst,
+  ChevronLeft,
+  ChevronRight,
+  ChevronLast,
+  ArrowLeft,
+  Download,
+  Loader2,
+  Sword,
+  RefreshCw // <-- Иконка переворота доски
+} from 'lucide-react';
+import { format, parseISO } from 'date-fns';
+import { ru } from 'date-fns/locale';
+
+const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
+
+export default function GameViewer() {
+  const { gameId } = useParams<{ gameId: string }>();
+  const location = useLocation();
+  const gameDataFromState = location.state?.game;
+
+  //const [game, setGame] = useState(new Chess());
+  const [history, setHistory] = useState<any[]>([]);
+
+  // -1 = Самое начало партии (0 ходов).
+  // history.length - 1 = Конец партии.
+  const [viewIndex, setViewIndex] = useState<number>(-1);
+  const [isFlipped, setIsFlipped] = useState(false); // Состояние переворота доски
+
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const boardSize = 540;
+  const notationScrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const loadGame = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await fetch(`http://127.0.0.1:8000/api/v1/profile/games/${gameId}/pgn`);
+        if (!res.ok) throw new Error('Не удалось загрузить данные партии');
+
+        const pgnText = await res.text();
+        const newGame = new Chess();
+        newGame.loadPgn(pgnText);
+
+        //setGame(newGame);
+        setHistory(newGame.history({ verbose: true }));
+        setViewIndex(-1); // При загрузке строго в начало партии!
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (gameId) loadGame();
+  }, [gameId]);
+
+  // Управление с клавиатуры
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        setViewIndex(p => Math.max(-1, p - 1));
+      } else if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        setViewIndex(p => Math.min(history.length - 1, p + 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setViewIndex(-1); // В начало
+      } else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setViewIndex(history.length - 1); // В конец
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [history]);
+
+  // Автоскролл нотации к активному ходу
+  useEffect(() => {
+    if (notationScrollRef.current) {
+      const activeElement = notationScrollRef.current.querySelector('.active-move');
+      if (activeElement) {
+        activeElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }
+  }, [viewIndex]);
+
+  // Вычисляем положение фигур на доске до выбранного хода
+  const currentGame = new Chess();
+  for (let i = 0; i <= viewIndex; i++) {
+    if (history[i]) currentGame.move(history[i]);
+  }
+  const boardState = currentGame.board();
+
+  // Отрисовка фигур
+  const renderPieceSvg = (piece: { type: string; color: string }) => (
+    <div className="relative w-full h-full pointer-events-none">
+      <img
+        src={`/assets/pieces/${piece.color}${piece.type.toUpperCase()}.svg`}
+        className="absolute inset-0 w-full h-full z-10 object-contain"
+        draggable={false}
+        alt={`${piece.color} ${piece.type}`}
+      />
+      <div
+        className={`absolute inset-0 z-20 mix-blend-color ${piece.color === 'w' ? 'bg-boxwood' : 'bg-acacia'}`}
+        style={{
+          WebkitMaskImage: `url(/assets/pieces/${piece.color}${piece.type.toUpperCase()}.svg)`,
+          WebkitMaskSize: 'contain',
+          WebkitMaskRepeat: 'no-repeat',
+          WebkitMaskPosition: 'center',
+        }}
+      />
+      <div
+        className="absolute inset-0 z-30 mix-blend-multiply opacity-50"
+        style={{
+          backgroundImage: "url('/assets/textures/wood-grain.png')",
+          WebkitMaskImage: `url(/assets/pieces/${piece.color}${piece.type.toUpperCase()}.svg)`,
+          WebkitMaskSize: 'contain',
+          WebkitMaskRepeat: 'no-repeat',
+          WebkitMaskPosition: 'center',
+        }}
+      />
+    </div>
+  );
+
+  // Данные игроков из State роутера
+  const whiteName = gameDataFromState?.white_username || 'Белые';
+  const whiteRating = gameDataFromState?.white_rating || '?';
+  const blackName = gameDataFromState?.black_username || 'Черные';
+  const blackRating = gameDataFromState?.black_rating || '?';
+  const resultStr = gameDataFromState?.result || '*';
+
+  // Логика переворота
+  const displayedRanks = isFlipped ? [...RANKS].reverse() : RANKS;
+  const displayedFiles = isFlipped ? [...FILES].reverse() : FILES;
+
+  const topName = isFlipped ? whiteName : blackName;
+  const topRating = isFlipped ? whiteRating : blackRating;
+  const bottomName = isFlipped ? blackName : whiteName;
+  const bottomRating = isFlipped ? blackRating : whiteRating;
+
+  const TopIcon = isFlipped ? '♙' : '♟';
+  const BottomIcon = isFlipped ? '♟' : '♙';
+
+  const topIconBg = isFlipped ? 'bg-boxwood text-acacia-dark' : 'bg-acacia text-amber-200';
+  const bottomIconBg = isFlipped ? 'bg-acacia text-amber-200' : 'bg-boxwood text-acacia-dark';
+
+  let displayDate = 'Неизвестная дата';
+  if (gameDataFromState?.pgn_date && !gameDataFromState.pgn_date.includes('????')) {
+    displayDate = gameDataFromState.pgn_date.replace(/\??/g, '').replace(/\.$/, '');
+  } else if (gameDataFromState?.finished_at) {
+    displayDate = format(parseISO(gameDataFromState.finished_at), 'd MMM yyyy', { locale: ru });
+  }
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center w-full h-full text-boxwood-light font-serif">
+        <Loader2 className="animate-spin text-amber-500 mb-4" size={40} />
+        <div>Загрузка доски...</div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="bg-red-950/80 border border-red-800 p-6 rounded text-red-200 text-center font-serif">
+        <h2 className="text-xl font-bold mb-2">Ошибка</h2>
+        <p>{error}</p>
+        <button onClick={() => window.history.back()} className="mt-4 inline-block px-4 py-2 bg-black/40 rounded hover:bg-black/60 transition text-amber-400 border border-amber-900/50">Вернуться</button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col xl:flex-row items-center xl:items-start justify-center gap-6 w-full max-w-7xl mx-auto font-serif relative">
+
+      {/* Левая часть: Игроки и доска */}
+      <div className="flex flex-col items-center gap-3">
+
+        {/* Верхний игрок */}
+        <div style={{ width: `${boardSize}px` }} className="bg-acacia-dark p-3 rounded shadow-heavy border-2 border-amber-900/40 flex justify-between items-center text-boxwood-light">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded flex items-center justify-center border border-amber-600/30 font-bold text-lg ${topIconBg}`}>
+              {TopIcon}
+            </div>
+            <div>
+              <div className="font-bold flex items-center gap-2">
+                <Link to={`/profile/${topName}`} className="hover:underline text-amber-200">{topName}</Link>
+                <span className="text-xs px-1.5 py-0.5 rounded bg-black/40 text-amber-400 border border-amber-600/20">
+                  {topRating}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* ДОСКА */}
+        <div
+          style={{ width: `${boardSize}px`, height: `${boardSize}px` }}
+          className="p-4 bg-acacia-dark rounded-sm shadow-heavy border-4 border-black/80 relative transition-all"
+        >
+          <div
+            className="absolute inset-0 opacity-40 mix-blend-multiply pointer-events-none"
+            style={{ backgroundImage: "url('/assets/textures/wood-grain.png')" }}
+          />
+
+          <div className="grid grid-cols-8 grid-rows-8 w-full h-full border-2 border-room-dark relative z-10 shadow-inner-board">
+            {displayedRanks.map((rank) =>
+              displayedFiles.map((file) => {
+                const rIdx = RANKS.indexOf(rank);
+                const fIdx = FILES.indexOf(file);
+                const isDark = (rIdx + fIdx) % 2 !== 0;
+                const squareId = `${file}${rank}`;
+
+                const piece = boardState[rIdx][fIdx];
+
+                // Подсветка хода
+                const lastMove = viewIndex >= 0 ? history[viewIndex] : null;
+                const isLastMoveSquare = lastMove && (lastMove.from === squareId || lastMove.to === squareId);
+
+                return (
+                  <div
+                    key={squareId}
+                    className={`w-full h-full flex items-center justify-center relative ${isDark ? 'bg-acacia' : 'bg-boxwood'}`}
+                  >
+                    {isDark ? (
+                      <div className="absolute inset-0 bg-black/10 pointer-events-none" />
+                    ) : (
+                      <div className="absolute inset-0 bg-white/20 pointer-events-none" />
+                    )}
+
+                    {isLastMoveSquare && (
+                      <div className="absolute inset-0 bg-amber-400/30 z-10 pointer-events-none" />
+                    )}
+
+                    <div
+                      className="absolute inset-0 opacity-40 mix-blend-multiply pointer-events-none"
+                      style={{ backgroundImage: "url('/assets/textures/wood-grain.png')" }}
+                    />
+                    <div className="absolute inset-0 shadow-[inset_0_0_12px_rgba(0,0,0,0.3)] pointer-events-none" />
+
+                    {piece && (
+                      <div className="relative w-full h-full p-[2%] z-20 drop-shadow-[0_0_1px_rgba(255,255,255,0.4)] drop-shadow-[0_6px_6px_rgba(0,0,0,0.7)]">
+                        {renderPieceSvg(piece)}
+                      </div>
+                    )}
+
+                    {/* Координаты */}
+                    {file === displayedFiles[0] && (
+                      <span className={`absolute top-1 left-1 text-[10px] sm:text-xs font-bold opacity-70 z-20 pointer-events-none ${isDark ? 'text-boxwood' : 'text-acacia-dark'}`}>
+                        {rank}
+                      </span>
+                    )}
+                    {rank === displayedRanks[7] && (
+                      <span className={`absolute bottom-0 right-1 text-[10px] sm:text-xs font-bold opacity-70 z-20 pointer-events-none ${isDark ? 'text-boxwood' : 'text-acacia-dark'}`}>
+                        {file}
+                      </span>
+                    )}
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </div>
+
+        {/* Нижний игрок */}
+        <div style={{ width: `${boardSize}px` }} className="bg-acacia-dark p-3 rounded shadow-heavy border-2 border-amber-900/40 flex justify-between items-center text-boxwood-light">
+          <div className="flex items-center gap-3">
+            <div className={`w-10 h-10 rounded flex items-center justify-center border border-amber-600/30 font-bold text-lg ${bottomIconBg}`}>
+              {BottomIcon}
+            </div>
+            <div>
+              <div className="font-bold flex items-center gap-2">
+                <Link to={`/profile/${bottomName}`} className="hover:underline text-amber-200">{bottomName}</Link>
+                <span className="text-xs px-1.5 py-0.5 rounded bg-black/40 text-amber-400 border border-amber-600/20">
+                  {bottomRating}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Правая часть: Нотация и Управление */}
+      <div className="w-full xl:w-96 bg-acacia p-5 rounded shadow-heavy border-4 border-acacia-dark flex flex-col gap-4 text-boxwood-light h-[650px]">
+
+        <div className="flex items-center gap-3 border-b border-acacia-light pb-3">
+          <button
+            onClick={() => window.history.back()}
+            className="p-1.5 bg-black/20 hover:bg-black/40 rounded transition border border-amber-900/50"
+            title="Назад"
+          >
+            <ArrowLeft size={16} className="text-amber-500" />
+          </button>
+          <div>
+            <div className="text-xs tracking-widest uppercase text-boxwood/70 flex items-center gap-1.5">
+              <Sword size={12} /> Просмотр партии
+            </div>
+            {gameDataFromState && (
+              <div className="text-[10px] text-amber-500 mt-1 font-mono leading-tight">
+                {gameDataFromState.site && gameDataFromState.site !== '?' && `${gameDataFromState.site}, `}
+                {displayDate}
+                {gameDataFromState.eco && ` • ECO: ${gameDataFromState.eco}`}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-col flex-1 bg-[#F5DEB3]/10 rounded border border-amber-900/40 overflow-hidden shadow-inner">
+          <div className="bg-acacia-dark px-3 py-2 text-xs font-bold text-amber-200 border-b border-amber-900/40 flex justify-between items-center">
+            <span>Нотация ходов</span>
+            <span className="bg-black/40 px-2 py-0.5 rounded border border-amber-700/50 text-amber-400">
+              {resultStr}
+            </span>
+          </div>
+
+          <div ref={notationScrollRef} className="flex-1 overflow-y-auto p-2 font-mono text-sm space-y-1 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
+            {history.reduce((acc: any[], move: any, index: number) => {
+              if (index % 2 === 0) {
+                acc.push({ white: move.san, black: '', whiteIndex: index, blackIndex: -1 });
+              } else {
+                acc[acc.length - 1].black = move.san;
+                acc[acc.length - 1].blackIndex = index;
+              }
+              return acc;
+            }, []).map((pair: any, idx: number) => {
+              const isActiveWhite = viewIndex === pair.whiteIndex;
+              const isActiveBlack = viewIndex === pair.blackIndex;
+
+              return (
+                <div key={idx} className="flex px-2 py-1 hover:bg-black/20 rounded text-amber-100/90">
+                  <span className="w-10 text-amber-500/70 font-bold">{idx + 1}.</span>
+                  <button
+                    onClick={() => setViewIndex(pair.whiteIndex)}
+                    className={`w-24 text-left hover:text-white ${isActiveWhite ? 'active-move bg-amber-600/30 text-white font-bold rounded px-1' : 'px-1'}`}
+                  >
+                    {pair.white}
+                  </button>
+                  {pair.black && (
+                    <button
+                      onClick={() => setViewIndex(pair.blackIndex)}
+                      className={`w-24 text-left hover:text-white ${isActiveBlack ? 'active-move bg-amber-600/30 text-white font-bold rounded px-1' : 'px-1'}`}
+                    >
+                      {pair.black}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-3">
+
+          {/* Панель Управления */}
+          <div className="flex justify-between items-center bg-acacia-dark p-2 rounded border border-amber-900/40">
+            <span className="text-xs text-boxwood/70 pl-1">Управление:</span>
+            <div className="flex gap-1 items-center">
+              <button
+                onClick={() => setViewIndex(-1)}
+                className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition"
+                title="Начало партии"
+              >
+                <ChevronFirst size={16} />
+              </button>
+
+              <button
+                onClick={() => setViewIndex(p => Math.max(-1, p - 1))}
+                className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition"
+                title="Ход назад"
+              >
+                <ChevronLeft size={16} />
+              </button>
+
+              <button
+                onClick={() => setViewIndex(p => Math.min(history.length - 1, p + 1))}
+                className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition"
+                title="Ход вперед"
+              >
+                <ChevronRight size={16} />
+              </button>
+
+              <button
+                onClick={() => setViewIndex(history.length - 1)}
+                className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition"
+                title="Конец партии"
+              >
+                <ChevronLast size={16} />
+              </button>
+
+              <div className="w-px h-4 bg-amber-900/50 mx-1"></div>
+
+              <button
+                onClick={() => setIsFlipped(!isFlipped)}
+                className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition text-amber-500"
+                title="Перевернуть доску"
+              >
+                <RefreshCw size={14} />
+              </button>
+            </div>
+          </div>
+
+          <a
+            href={`http://127.0.0.1:8000/api/v1/profile/games/${gameId}/pgn`}
+            download
+            className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-[#1A120B] text-amber-500 font-bold text-sm rounded hover:bg-black transition shadow border border-amber-900/60"
+          >
+            <Download size={16} /> Скачать PGN файл
+          </a>
+        </div>
+
+      </div>
+    </div>
+  );
+}
+
+--- FILE: frontend\src\components\Profile.tsx ---
+
+// --- FILE: frontend/src/components/Profile.tsx ---
+
+import { useState, useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { format, parseISO } from 'date-fns';
+import { ru } from 'date-fns/locale';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+} from 'recharts';
+import { Trophy, Swords, Calendar, Download, Crosshair, Target } from 'lucide-react';
+
+interface UserProfile {
+  id: number;
+  username: string;
+  rating: number;
+  created_at: string;
+}
+
+interface GameData {
+  game_id: number;
+  white_username: string;
+  white_rating: number;
+  black_username: string;
+  black_rating: number;
+  status: string;
+  is_rated: boolean;
+  result: string;
+  pgn_date: string | null;
+  site: string | null;
+  eco: string | null;
+  finished_at: string | null;
+}
+
+const displayDate = (game: GameData) => {
+  if (game.pgn_date && !game.pgn_date.includes('????')) {
+    return game.pgn_date.replace(/\??/g, '').replace(/\.$/, '');
+  }
+  if (game.finished_at) {
+    return format(parseISO(game.finished_at), 'd MMM yyyy', { locale: ru });
+  }
+  return '—';
+};
+
+export default function Profile() {
+  const { targetUsername } = useParams<{ targetUsername: string }>();
+  const navigate = useNavigate();
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [games, setGames] = useState<GameData[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchProfileData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const profileRes = await fetch(`http://127.0.0.1:8000/api/v1/profile/${targetUsername}`);
+        if (!profileRes.ok) throw new Error('Пользователь не найден');
+        const profileData = await profileRes.json();
+        setProfile(profileData);
+
+        const gamesRes = await fetch(`http://127.0.0.1:8000/api/v1/profile/${targetUsername}/games?limit=30`);
+        if (gamesRes.ok) {
+          const gamesData = await gamesRes.json();
+          setGames(gamesData.items || []);
+        }
+      } catch (err: any) {
+        setError(err.message);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (targetUsername) {
+      fetchProfileData();
+    }
+  }, [targetUsername]);
+
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center w-full h-full text-boxwood-light font-serif">
+        <div className="animate-spin text-amber-500 mb-4"><Swords size={40} /></div>
+        <div>Загрузка профиля...</div>
+      </div>
+    );
+  }
+
+  if (error || !profile) {
+    return (
+      <div className="bg-red-950/80 border border-red-800 p-6 rounded text-red-200 text-center font-serif">
+        <h2 className="text-xl font-bold mb-2">Ошибка</h2>
+        <p>{error || 'Не удалось загрузить профиль'}</p>
+        <Link to="/" className="mt-4 inline-block text-amber-400 hover:underline">На главную</Link>
+      </div>
+    );
+  }
+
+  let wins = 0, losses = 0, draws = 0;
+  let tempRating = profile.rating;
+
+  const chartDataReversed = games.map((game) => {
+    const isWhite = game.white_username === profile.username;
+    let delta = 0;
+
+    if (game.result === '1-0') {
+      if (isWhite) { wins++; delta = 15; } else { losses++; delta = -15; }
+    } else if (game.result === '0-1') {
+      if (isWhite) { losses++; delta = -15; } else { wins++; delta = 15; }
+    } else if (game.result === '1/2-1/2') {
+      draws++;
+    }
+
+    const pointRating = tempRating;
+    tempRating -= delta;
+
+    // Короткая дата для графика
+    const chartDate = game.pgn_date ? game.pgn_date.split('.')[0] : (game.finished_at ? format(parseISO(game.finished_at), 'd MMM', { locale: ru }) : '');
+
+    return {
+      name: `Партия`,
+      rating: pointRating,
+      date: chartDate
+    };
+  });
+
+  const chartData = chartDataReversed.reverse();
+  const winRate = games.length > 0 ? Math.round((wins / games.length) * 100) : 0;
+
+  return (
+    <div className="w-full max-w-6xl flex flex-col gap-6 font-serif">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-acacia-dark border border-amber-900/40 p-6 rounded shadow-heavy flex flex-col items-center justify-center text-center relative overflow-hidden">
+          <img
+            src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${profile.username}&backgroundColor=D0A972`}
+            alt="Avatar Background"
+            className="absolute top-0 right-0 w-48 h-48 opacity-10 pointer-events-none translate-x-10 -translate-y-10"
+          />
+          <img
+            src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${profile.username}&backgroundColor=E6C998`}
+            alt="Avatar"
+            className="w-24 h-24 rounded-lg bg-black/40 shadow-inner border-2 border-amber-600/40 mb-4 z-10"
+          />
+          <h1 className="text-3xl font-bold text-amber-200 z-10">{profile.username}</h1>
+          <div className="flex items-center gap-2 mt-4 text-boxwood-light/80 text-sm z-10">
+            <Calendar size={16} className="text-amber-600" />
+            На сайте с {format(parseISO(profile.created_at), 'd MMMM yyyy', { locale: ru })}
+          </div>
+        </div>
+
+        <div className="md:col-span-2 grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
+            <div className="text-boxwood/60 text-xs uppercase tracking-widest mb-1 flex items-center gap-1.5"><Trophy size={14}/> Рейтинг</div>
+            <div className="text-4xl font-mono font-bold text-amber-400">{profile.rating}</div>
+          </div>
+          <div className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
+            <div className="text-boxwood/60 text-xs uppercase tracking-widest mb-1 flex items-center gap-1.5"><Swords size={14}/> Игр сыграно</div>
+            <div className="text-4xl font-mono font-bold text-blue-400">{games.length}</div>
+          </div>
+          <div className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
+            <div className="text-boxwood/60 text-xs uppercase tracking-widest mb-1 flex items-center gap-1.5"><Target size={14}/> Винрейт</div>
+            <div className="text-4xl font-mono font-bold text-emerald-400">{winRate}%</div>
+          </div>
+          <div className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
+            <div className="text-boxwood/60 text-[10px] xl:text-xs uppercase tracking-wider mb-1 flex items-center gap-1.5 whitespace-nowrap"><Crosshair size={14}/> WIN / DRAW / LOSE</div>
+            <div className="text-2xl font-mono font-bold flex gap-2">
+              <span className="text-emerald-400">{wins}</span>
+              <span className="text-boxwood/40">/</span>
+              <span className="text-gray-400">{draws}</span>
+              <span className="text-boxwood/40">/</span>
+              <span className="text-red-400">{losses}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-acacia-dark border border-amber-900/40 p-5 rounded shadow-heavy">
+        <h2 className="text-sm uppercase tracking-widest text-amber-500/80 mb-6 font-bold">Динамика рейтинга (последние партии)</h2>
+        <div className="h-64 w-full font-sans">
+          {chartData.length > 1 ? (
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#5C3A21" vertical={false} />
+                <XAxis dataKey="date" stroke="#8B5A2B" tick={{ fill: '#D0A972', fontSize: 12 }} dy={10} />
+                <YAxis domain={['dataMin - 30', 'dataMax + 30']} stroke="#8B5A2B" tick={{ fill: '#D0A972', fontSize: 12 }} dx={-10} />
+                <Tooltip contentStyle={{ backgroundColor: '#1A120B', borderColor: '#7A4B31', color: '#F5DEB3', borderRadius: '8px' }} itemStyle={{ color: '#fbbf24', fontWeight: 'bold' }} />
+                <Line type="monotone" dataKey="rating" stroke="#fbbf24" strokeWidth={3} dot={{ r: 4, fill: '#1A120B', stroke: '#fbbf24', strokeWidth: 2 }} activeDot={{ r: 6, fill: '#fbbf24' }} />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-full flex items-center justify-center text-boxwood/50">
+              Недостаточно данных для графика
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-acacia-dark border border-amber-900/40 rounded shadow-heavy overflow-hidden">
+        <div className="p-5 border-b border-amber-900/40 bg-black/20">
+          <h2 className="text-sm uppercase tracking-widest text-amber-500/80 font-bold">История партий</h2>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm font-sans whitespace-nowrap">
+            <thead className="bg-black/40 text-boxwood/60 uppercase text-xs tracking-wider">
+              <tr>
+                <th className="px-4 py-4 font-medium">Белые</th>
+                <th className="px-4 py-4 font-medium">Черные</th>
+                <th className="px-4 py-4 font-medium text-center">Результат</th>
+                <th className="px-4 py-4 font-medium text-center">Дебют</th>
+                <th className="px-4 py-4 font-medium text-center">Место</th>
+                <th className="px-4 py-4 font-medium text-center">Дата</th>
+                <th className="px-4 py-4 font-medium text-right">PGN</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-amber-900/20 text-boxwood-light">
+              {games.length === 0 ? (
+                <tr>
+                  <td colSpan={7} className="px-6 py-8 text-center text-boxwood/50 font-serif">
+                    Партий пока нет.
+                  </td>
+                </tr>
+              ) : (
+                games.map((game) => {
+                  const isWhite = game.white_username === profile.username;
+                  let resultColor = 'text-gray-400';
+                  let resultText = 'Ничья';
+
+                  if (game.result === '1-0') {
+                    resultColor = isWhite ? 'text-emerald-400' : 'text-red-400';
+                    resultText = isWhite ? 'Победа' : 'Поражение';
+                  } else if (game.result === '0-1') {
+                    resultColor = isWhite ? 'text-red-400' : 'text-emerald-400';
+                    resultText = isWhite ? 'Поражение' : 'Победа';
+                  }
+
+                  return (
+                    <tr
+                      key={game.game_id}
+                      onClick={() => navigate(`/game/${game.game_id}`, { state: { game } })}
+                      className="hover:bg-black/30 transition group cursor-pointer"
+                      title="Нажмите, чтобы просмотреть партию"
+                    >
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-sm border border-gray-400 bg-white inline-block"></span>
+                          <Link
+                            to={`/profile/${game.white_username}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className={`font-bold hover:underline ${isWhite ? 'text-amber-300' : ''}`}
+                          >
+                            {game.white_username}
+                          </Link>
+                          <span className="text-xs font-mono text-boxwood/50">({game.white_rating})</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4">
+                        <div className="flex items-center gap-2">
+                          <span className="w-3 h-3 rounded-sm border border-gray-600 bg-black inline-block"></span>
+                          <Link
+                            to={`/profile/${game.black_username}`}
+                            onClick={(e) => e.stopPropagation()}
+                            className={`font-bold hover:underline ${!isWhite ? 'text-amber-300' : ''}`}
+                          >
+                            {game.black_username}
+                          </Link>
+                          <span className="text-xs font-mono text-boxwood/50">({game.black_rating})</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <div className={`font-bold font-serif ${resultColor}`}>
+                          {resultText} <span className="text-xs opacity-70 ml-1">({game.result})</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-center font-mono text-amber-500/80">
+                        {game.eco || '—'}
+                      </td>
+                      <td className="px-4 py-4 text-center text-boxwood/70">
+                        {game.site || '—'}
+                      </td>
+                      <td className="px-4 py-4 text-center text-boxwood/70 font-mono">
+                        {displayDate(game)}
+                      </td>
+                      <td className="px-4 py-4 text-right">
+                        <a
+                          href={`http://127.0.0.1:8000/api/v1/profile/games/${game.game_id}/pgn`}
+                          download
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black/30 hover:bg-amber-900/60 text-amber-400 rounded transition border border-amber-900/40 text-xs font-bold"
+                          title="Скачать PGN"
+                        >
+                          <Download size={14} />
+                        </a>
+                      </td>
+                    </tr>
+                  )
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+--- FILE: frontend\src\config\champions.ts ---
+
+// --- FILE: frontend/src/config/champions.ts ---
+
+export const CHAMPIONS_LIST = [
+  { id: 'Steinitz', name: 'Вильгельм Стейниц', years: '1886–1894', img: '/assets/champions/Steinitz.jpg' },
+  { id: 'Lasker', name: 'Эмануил Ласкер', years: '1894–1921', img: '/assets/champions/Lasker.jpg' },
+  { id: 'Rubinstein', name: 'Акиба Рубинштейн', years: '1901–1932', img: '/assets/champions/Rubinstein.jpg' },
+  { id: 'Capablanca', name: 'Хосе Рауль Капабланка', years: '1921–1927', img: '/assets/champions/Capablanca.jpg' },
+  { id: 'Alekhine', name: 'Александр Алехин', years: '1927–1946', img: '/assets/champions/Alekhine.jpg' },
+  { id: 'Euwe', name: 'Макс Эйве', years: '1935–1937', img: '/assets/champions/Euwe.jpg' },
+  { id: 'Keres', name: 'Пауль Керес', years: '1935–1975', img: '/assets/champions/Keres.jpg' },
+  { id: 'Botvinnik', name: 'Михаил Ботвинник', years: '1948–1963', img: '/assets/champions/Botvinnik.jpg' },
+  { id: 'Geller', name: 'Ефим Геллер', years: '1949–1998', img: '/assets/champions/Geller.jpg' },
+  { id: 'Korchnoi', name: 'Виктор Корчной', years: '1952–2015', img: '/assets/champions/Korchnoi.jpg' },
+  { id: 'Smyslov', name: 'Василий Смыслов', years: '1957–1958', img: '/assets/champions/Smyslov.jpg' },
+  { id: 'Tal', name: 'Михаил Таль', years: '1960–1961', img: '/assets/champions/Tal.jpg' },
+  { id: 'Petrosian', name: 'Тигран Петросян', years: '1963–1969', img: '/assets/champions/Petrosian.jpg' },
+  { id: 'Spassky', name: 'Борис Спасский', years: '1969–1972', img: '/assets/champions/Spassky.jpg' },
+  { id: 'Fischer', name: 'Роберт Фишер', years: '1972–1975', img: '/assets/champions/Fischer.jpg' },
+  { id: 'Karpov', name: 'Анатолий Карпов', years: '1975–1985', img: '/assets/champions/Karpov.jpg' },
+  { id: 'Kasparov', name: 'Гарри Каспаров', years: '1985–2000', img: '/assets/champions/Kasparov.jpg' },
+  { id: 'Kramnik', name: 'Владимир Крамник', years: '2000–2007', img: '/assets/champions/Kramnik.jpg' },
+  { id: 'Anand', name: 'Вишванатан Ананд', years: '2007–2013', img: '/assets/champions/Anand.jpg' },
+  { id: 'Carlsen', name: 'Магнус Карлсен', years: '2013–2023', img: '/assets/champions/Carlsen.jpg' },
+  { id: 'Ding', name: 'Дин Лижэнь', years: '2023–н.в.', img: '/assets/champions/Ding.jpg' }
+];
+
 --- FILE: frontend\src\services\gameSocket.ts ---
 
 type EventCallback = (data: any) => void;
@@ -6402,10 +8151,17 @@ async def get_current_user_ws(
 
 --- FILE: src\api\profile.py ---
 
+# --- FILE: src/api/profile.py ---
+
+import re
+import io
+from datetime import datetime
+import chess.pgn
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, desc
+from sqlalchemy.orm import aliased
 
 from src.db.session import get_db
 from src.api.deps import get_current_user
@@ -6417,7 +8173,6 @@ router = APIRouter(prefix="/profile", tags=["Profile & Games"])
 
 @router.get("/me")
 async def get_my_profile(current_user: User = Depends(get_current_user)):
-    """Получить данные своего профиля."""
     return {
         "id": current_user.id,
         "username": current_user.username,
@@ -6433,29 +8188,24 @@ async def get_leaderboard(
         limit: int = Query(50, ge=1, le=100, description="Количество игроков в топе"),
         db: AsyncSession = Depends(get_db)
 ):
-    """Получить топ игроков по рейтингу (без читеров)."""
-    query = select(User).where(
-        User.is_cheater == False
-    ).order_by(desc(User.rating)).limit(limit)
-
+    query = select(User).where(User.is_cheater == False).order_by(desc(User.rating)).limit(limit)
     result = await db.execute(query)
     top_users = result.scalars().all()
 
     return [
-        {
-            "rank": index + 1,
-            "username": user.username,
-            "rating": user.rating
-        }
+        {"rank": index + 1, "username": user.username, "rating": user.rating}
         for index, user in enumerate(top_users)
     ]
 
 
 @router.get("/{username}")
 async def get_user_profile(username: str, db: AsyncSession = Depends(get_db)):
-    """Получить публичный профиль любого игрока по юзернейму."""
     result = await db.execute(select(User).where(User.username == username))
-    user = result.scalar_one_or_none()
+    user = result.scalars().first()
+
+    if not user:
+        result = await db.execute(select(User).where(User.username.ilike(f"%{username}%")))
+        user = result.scalars().first()
 
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -6471,59 +8221,151 @@ async def get_user_profile(username: str, db: AsyncSession = Depends(get_db)):
 @router.get("/{username}/games")
 async def get_user_games(
         username: str,
-        limit: int = Query(20, ge=1, le=100, description="Количество игр на страницу"),
-        offset: int = Query(0, ge=0, description="Смещение для пагинации"),
+        limit: int = Query(25, ge=1, le=2000),
+        offset: int = Query(0, ge=0),
+        sort: str = Query("desc"),
         db: AsyncSession = Depends(get_db)
 ):
-    """Получить историю завершенных партий пользователя."""
     user_result = await db.execute(select(User).where(User.username == username))
-    user = user_result.scalar_one_or_none()
+    user = user_result.scalars().first()
 
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        user_result = await db.execute(select(User).where(User.username.ilike(f"%{username}%")))
+        user = user_result.scalars().first()
 
-    # Ищем все завершенные игры, где пользователь был за белых или за черных
-    games_query = select(Game).where(
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User {username} not found")
+
+    WhiteUser = aliased(User)
+    BlackUser = aliased(User)
+
+    conditions = [
         or_(Game.white_player_id == user.id, Game.black_player_id == user.id),
-        Game.status == GameStatus.COMPLETED
-    ).order_by(desc(Game.finished_at)).limit(limit).offset(offset)
+        Game.status == GameStatus.COMPLETED,
+        Game.pgn.is_not(None),
+        Game.pgn != ""
+    ]
+
+    # Извлекаем ВСЕ партии игрока для корректной сортировки в памяти сервера
+    games_query = (
+        select(Game, WhiteUser.username, WhiteUser.rating, BlackUser.username, BlackUser.rating)
+        .join(WhiteUser, Game.white_player_id == WhiteUser.id)
+        .join(BlackUser, Game.black_player_id == BlackUser.id)
+        .where(*conditions)
+    )
 
     games_result = await db.execute(games_query)
-    games = games_result.scalars().all()
+    rows = games_result.all()
 
-    return [
-        {
-            "game_id": g.id,
-            "white_id": g.white_player_id,
-            "black_id": g.black_player_id,
-            "status": g.status.value,
-            "is_rated": g.is_rated,
-            "finished_at": g.finished_at
-        }
-        for g in games
-    ]
+    results = []
+    for game, w_name, w_rating, b_name, b_rating in rows:
+        result_str = "*"
+        pgn_date = None
+        site = None
+        eco = None
+
+        if game.pgn:
+            # Извлекаем результат
+            res_match = re.search(r'\[Result\s+"(.*?)"\]', game.pgn)
+            if res_match:
+                result_str = res_match.group(1)
+            else:
+                match = re.search(r'(1-0|0-1|1/2-1/2)\s*$', game.pgn.strip())
+                if match: result_str = match.group(1)
+
+            # Извлекаем дату (предпочтение Date, затем EventDate)
+            date_match = re.search(r'\[Date\s+"(.*?)"\]', game.pgn)
+            if date_match and date_match.group(1) and not date_match.group(1).startswith("?"):
+                pgn_date = date_match.group(1)
+            else:
+                edate_match = re.search(r'\[EventDate\s+"(.*?)"\]', game.pgn)
+                if edate_match and edate_match.group(1) and not edate_match.group(1).startswith("?"):
+                    pgn_date = edate_match.group(1)
+
+            # Извлекаем место проведения
+            site_match = re.search(r'\[Site\s+"(.*?)"\]', game.pgn)
+            if site_match and site_match.group(1) != "?":
+                site = site_match.group(1)
+
+            # Извлекаем дебютный код (ECO)
+            eco_match = re.search(r'\[ECO\s+"(.*?)"\]', game.pgn)
+            if eco_match and eco_match.group(1) != "?":
+                eco = eco_match.group(1)
+
+        results.append({
+            "game_id": game.id,
+            "white_username": w_name,
+            "white_rating": w_rating,
+            "black_username": b_name,
+            "black_rating": b_rating,
+            "status": game.status.value,
+            "is_rated": game.is_rated,
+            "result": result_str,
+            "pgn_date": pgn_date,
+            "site": site,
+            "eco": eco,
+            "finished_at": game.finished_at.isoformat() if game.finished_at else None
+        })
+
+    def get_date_tuple(item):
+        d_str = item["pgn_date"]
+        # Для онлайн-партий используем finished_at
+        if item["finished_at"] and not d_str:
+            dt = datetime.fromisoformat(item["finished_at"])
+            return (dt.year, dt.month, dt.day, item["game_id"])
+
+        # Если даты нет - возвращаем None
+        if not d_str or d_str.startswith("?"):
+            return None
+
+        parts = d_str.split('.')
+        try:
+            y = int(parts[0]) if parts[0] != '????' else None
+            m = int(parts[1]) if len(parts) > 1 and parts[1] != '??' else 0
+            d = int(parts[2]) if len(parts) > 2 and parts[2] != '??' else 0
+            if y is None: return None
+            return (y, m, d, item["game_id"])
+        except ValueError:
+            return None
+
+    def sort_key_asc(item):
+        t = get_date_tuple(item)
+        # Если даты нет, отправляем в самый конец (9999 год)
+        return t if t is not None else (9999, 99, 99, item["game_id"])
+
+    def sort_key_desc(item):
+        t = get_date_tuple(item)
+        # Если даты нет, отправляем в самый конец даже при реверсивной сортировке (-9999)
+        return t if t is not None else (-9999, -99, -99, -item["game_id"])
+
+    if sort == "asc":
+        results.sort(key=sort_key_asc)
+    else:
+        results.sort(key=sort_key_desc, reverse=True)
+
+    total_count = len(results)
+    paginated_results = results[offset: offset + limit]
+
+    return {
+        "total": total_count,
+        "items": paginated_results
+    }
 
 
 @router.get("/games/{game_id}/pgn")
 async def download_pgn(game_id: int, db: AsyncSession = Depends(get_db)):
-    """Выгрузить PGN конкретной партии в виде файла."""
     game = await db.get(Game, game_id)
-
     if not game or not game.pgn:
         raise HTTPException(status_code=404, detail="Game or PGN not found")
 
-    # Отдаем PGN как текстовый файл (браузер предложит его скачать)
-    headers = {
-        "Content-Disposition": f"attachment; filename=michess_game_{game_id}.pgn"
-    }
+    headers = {"Content-Disposition": f"attachment; filename=michess_game_{game_id}.pgn"}
     return PlainTextResponse(content=game.pgn, media_type="application/x-chess-pgn", headers=headers)
+
 
 @router.get("/matchmaking/queue")
 async def get_matchmaking_queue():
-    """Получить список игроков, находящихся в очереди поиска."""
     from src.services.matchmaker import matchmaker
-    players = await matchmaker.get_queue_players()
-    return players
+    return await matchmaker.get_queue_players()
 
 --- FILE: src\api\websockets.py ---
 

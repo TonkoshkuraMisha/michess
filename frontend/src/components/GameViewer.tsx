@@ -25,7 +25,7 @@ export default function GameViewer() {
   const location = useLocation();
   const gameDataFromState = location.state?.game;
 
-  const [game, setGame] = useState(new Chess());
+  //const [game, setGame] = useState(new Chess());
   const [history, setHistory] = useState<any[]>([]);
 
   // -1 = Самое начало партии (0 ходов).
@@ -51,7 +51,7 @@ export default function GameViewer() {
         const newGame = new Chess();
         newGame.loadPgn(pgnText);
 
-        setGame(newGame);
+        //setGame(newGame);
         setHistory(newGame.history({ verbose: true }));
         setViewIndex(-1); // При загрузке строго в начало партии!
       } catch (err: any) {

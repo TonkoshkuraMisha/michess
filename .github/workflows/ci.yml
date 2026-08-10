@@ -1,3 +1,5 @@
+# --- FILE: .github/workflows/ci.yml ---
+
 name: Michess CI
 
 on:
@@ -21,24 +23,22 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.14
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.14"
+          python-version: "3.11"  # Используем стабильную версию Python
           cache: 'pip'
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install flake8  # Добавляем линтер специально для CI
+          pip install flake8
 
       - name: Lint with flake8
         run: |
-          # Останавливаем билд, если есть синтаксические ошибки или неопределенные имена
-          flake8 src tests --count --select=E9,F63,F7,F82 --show-source --statistics
-          # Предупреждаем о слишком длинных строках и избыточной сложности, но не роняем билд
-          flake8 src tests --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+          python -m flake8 src tests --count --select=E9,F63,F7,F82 --show-source --statistics
+          python -m flake8 src tests --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
 
       - name: Run pytest
         env:
@@ -46,4 +46,4 @@ jobs:
           REDIS_PORT: 6379
           SECRET_KEY: test_secret_key_for_ci_only
         run: |
-          pytest -v
+          python -m pytest -v
