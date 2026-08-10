@@ -1,60 +1,74 @@
+# --- FILE: src/services/game_engine.py ---
+
 import chess
-import chess.pgn
-import io
 
 
 class GameEngine:
     @staticmethod
-    def process_move(pgn_text: str | None, move_str: str) -> tuple[bool, str, str | None]:
+    def process_move(fen: str, move_str: str) -> tuple[bool, dict | None]:
         """
-        Проверяет ход, применяет его к текущей партии и возвращает новый статус.
-        Поддерживает форматы UCI (e2e4) и SAN (Nf3).
+        Проверяет ход, применяет его к текущей позиции (FEN) и возвращает новые данные.
 
-        Возвращает: (is_valid, new_pgn, result)
-        result = "1-0", "0-1", "1/2-1/2" или None (если игра продолжается)
+        Возвращает: (is_valid, move_data)
+        Где move_data содержит:
+        - new_fen: str (Новое состояние доски)
+        - san: str (Красивая нотация, например "Nf3")
+        - uci: str (Универсальная нотация, например "g1f3")
+        - is_game_over: bool
+        - result: str | None ("1-0", "0-1", "1/2-1/2")
+        - termination: str | None ("checkmate", "stalemate", "repetition", etc.)
         """
-        # 1. Восстанавливаем состояние доски из PGN (или создаем новую)
-        if pgn_text:
-            game = chess.pgn.read_game(io.StringIO(pgn_text))
-            board = game.end().board()
-        else:
-            game = chess.pgn.Game()
-            board = game.board()
+        board = chess.Board(fen)
 
-        # 2. Пытаемся распарсить ход
+        # 1. Пытаемся распарсить ход
         try:
-            # Сначала пробуем парсить как UCI (например, e2e4)
             move = chess.Move.from_uci(move_str)
             if move not in board.legal_moves:
-                # Если не UCI, пробуем SAN (например, Nf3)
                 move = board.parse_san(move_str)
         except ValueError:
-            return False, pgn_text or "", None
+            return False, None
 
         if move not in board.legal_moves:
-            return False, pgn_text or "", None
+            return False, None
 
-        # 3. Делаем ход и добавляем его в дерево партии
-        if pgn_text:
-            game.end().add_main_variation(move)
-        else:
-            game.add_variation(move)
+        # 2. Извлекаем SAN до того, как сделаем ход (иначе контекст изменится)
+        san = board.san(move)
+        uci = move.uci()
 
+        # 3. Делаем ход
         board.push(move)
+        new_fen = board.fen()
 
-        # 4. Проверяем, не закончилась ли партия
+        # 4. Проверяем завершение партии
+        is_game_over = board.is_game_over(claim_draw=True)
         result = None
-        if board.is_checkmate():
-            # Если мат, выигрывает тот, кто только что ходил (ход уже передан оппоненту)
-            result = "1-0" if board.turn == chess.BLACK else "0-1"
-        elif board.is_game_over():
-            result = "1/2-1/2"
+        termination = None
 
-        # 5. Генерируем обновленную PGN-строку
-        exporter = chess.pgn.StringExporter(headers=False, variations=False, comments=False)
-        new_pgn = game.accept(exporter)
+        if is_game_over:
+            res = board.result(claim_draw=True)
+            result = res if res != "*" else None
 
-        return True, new_pgn, result
+            if board.is_checkmate():
+                termination = "checkmate"
+            elif board.is_stalemate():
+                termination = "stalemate"
+            elif board.is_insufficient_material():
+                termination = "insufficient_material"
+            elif board.is_fifty_moves():
+                termination = "50_move_rule"
+            elif board.is_repetition():
+                termination = "repetition"
+            else:
+                termination = "unknown"
+
+        return True, {
+            "new_fen": new_fen,
+            "san": san,
+            "uci": uci,
+            "is_game_over": is_game_over,
+            "result": result,
+            "termination": termination
+        }
 
 
 engine = GameEngine()
