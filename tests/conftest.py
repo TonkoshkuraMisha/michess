@@ -45,6 +45,50 @@ class MockPubSub:
             await asyncio.sleep(3600)
 
 
+class MockPipeline:
+    def __init__(self, redis):
+        self.redis = redis
+        self.commands = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        pass
+
+    async def watch(self, *names):
+        pass
+
+    async def unwatch(self):
+        pass
+
+    def multi(self):
+        self.commands = []
+
+    def hset(self, name, key=None, value=None, mapping=None):
+        self.commands.append(("hset", name, key, value, mapping))
+
+    def sadd(self, name, *values):
+        self.commands.append(("sadd", name, values))
+
+    def expire(self, name, time):
+        self.commands.append(("expire", name, time))
+
+    async def execute(self):
+        for cmd in self.commands:
+            if cmd[0] == "hset":
+                await self.redis.hset(cmd[1], cmd[2], cmd[3], mapping=cmd[4])
+            elif cmd[0] == "sadd":
+                await self.redis.sadd(cmd[1], *cmd[2])
+        self.commands = []
+
+    async def sismember(self, name, value):
+        return str(value) in self.redis.sets.get(name, set())
+
+    async def hgetall(self, name):
+        return await self.redis.hgetall(name)
+
+
 class MockAsyncRedis:
     """Высокопроизводительный асинхронный мок Redis в оперативной памяти для тестов."""
 
@@ -57,6 +101,9 @@ class MockAsyncRedis:
 
     def pubsub(self):
         return MockPubSub()
+
+    def pipeline(self, transaction=True):
+        return MockPipeline(self)
 
     async def hset(self, name, mapping=None, **kwargs):
         if name not in self.store:

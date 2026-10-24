@@ -58,6 +58,7 @@ michess/
         script.py.mako
         versions/
             3605cc4e4cfc_add_time_controls_to_game.py
+            4101ce4b6d90_authoritative_game_state_and_move_.py
             af5330e8cef6_init_tables.py
     src/
         main.py
@@ -5828,11 +5829,13 @@ export default function Chessboard() {
   const [isSearching, setIsSearching] = useState(false);
   const [queuePlayers, setQueuePlayers] = useState<QueuePlayer[]>([]);
   const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+  const [stateVersion, setStateVersion] = useState(0);
 
   // Выбранный контроль времени и состояние кастомного селектора
   const [selectedTimeControl, setSelectedTimeControl] = useState({ base: 3, inc: 0 });
   const [isTimeDropdownOpen, setIsTimeDropdownOpen] = useState(false);
   const timeDropdownRef = useRef<HTMLDivElement>(null);
+  const boardContainerRef = useRef<HTMLDivElement>(null); // Реф для математического расчета клеток
 
   // Данные игроков и изменения рейтинга
   const [whitePlayer, setWhitePlayer] = useState({ username: 'Белые', rating: '1200' });
@@ -5910,8 +5913,8 @@ export default function Chessboard() {
       setGameId(data.game_id);
       setMyColor(data.color);
       setRatingInfo(null);
+      setStateVersion(0);
 
-      // Устанавливаем время на часах согласно контролю, с которым создана партия
       const initialTime = data.base_time_ms || 180000;
       setWhiteTimeMs(initialTime);
       setBlackTimeMs(initialTime);
@@ -5932,17 +5935,23 @@ export default function Chessboard() {
     };
 
     const handleMoveMade = (data: any) => {
-      const newGame = new Chess();
-      if (data.pgn) {
-        newGame.loadPgn(data.pgn);
-      }
-      setGame(newGame);
-      setHistory(newGame.history({ verbose: true }));
+      setGame(prev => {
+        const newGame = new Chess(prev.fen());
+        try {
+          newGame.move(data.move);
+        } catch {
+          newGame.load(data.fen);
+        }
+        setHistory(newGame.history({ verbose: true }));
+        return newGame;
+      });
+
+      setStateVersion(data.state_version);
       setWhiteTimeMs(data.white_time_ms);
       setBlackTimeMs(data.black_time_ms);
       moveStartTime.current = Date.now();
 
-      const isCapture = data.move && (data.move.includes('x') || data.pgn?.includes('x'));
+      const isCapture = data.san && data.san.includes('x');
       playAudio(isCapture ? 'capture' : 'move');
 
       if (data.game_over) {
@@ -6048,6 +6057,7 @@ export default function Chessboard() {
     return () => clearInterval(interval);
   }, [gameId, gameOverResult, game.turn()]);
 
+  // Обработка движения и сброса мыши при перетаскивании с математическим определением клетки
   useEffect(() => {
     const handleMouseMove = (e: MouseEvent) => {
       if (!dragState) return;
@@ -6057,13 +6067,35 @@ export default function Chessboard() {
     const handleMouseUp = (e: MouseEvent) => {
       if (!dragState) return;
 
-      const elements = document.elementsFromPoint(e.clientX, e.clientY);
-      const squareElement = elements.find(el => el.hasAttribute('data-square'));
+      const boardEl = boardContainerRef.current;
+      if (boardEl) {
+        const rect = boardEl.getBoundingClientRect();
+        // Паддинг доски равен p-4 (16 пикселей с каждой стороны)
+        const padding = 16;
+        const innerLeft = rect.left + padding;
+        const innerTop = rect.top + padding;
+        const innerWidth = rect.width - (padding * 2);
+        const innerHeight = rect.height - (padding * 2);
 
-      if (squareElement) {
-        const targetSquare = squareElement.getAttribute('data-square');
-        if (targetSquare && targetSquare !== dragState.from) {
-          executeMove(dragState.from, targetSquare);
+        const x = e.clientX - innerLeft;
+        const y = e.clientY - innerTop;
+
+        if (x >= 0 && x <= innerWidth && y >= 0 && y <= innerHeight) {
+          const fileIdx = Math.floor((x / innerWidth) * 8);
+          const rankIdx = Math.floor((y / innerHeight) * 8);
+
+          const files = myColor === 'black' ? [...FILES].reverse() : FILES;
+          const ranks = myColor === 'black' ? ['1', '2', '3', '4', '5', '6', '7', '8'] : ['8', '7', '6', '5', '4', '3', '2', '1'];
+
+          const file = files[fileIdx];
+          const rank = ranks[rankIdx];
+
+          if (file && rank) {
+            const targetSquare = `${file}${rank}`;
+            if (targetSquare !== dragState.from) {
+              executeMove(dragState.from, targetSquare);
+            }
+          }
         }
       }
 
@@ -6079,7 +6111,7 @@ export default function Chessboard() {
       window.removeEventListener('mousemove', handleMouseMove);
       window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [dragState, game, gameId]);
+  }, [dragState, game, gameId, myColor]);
 
   const formatTime = (ms: number) => {
     const totalMs = Math.max(0, ms);
@@ -6171,9 +6203,15 @@ export default function Chessboard() {
         const uciMove = (move as any).uci || `${move.from}${move.to}${move.promotion || ''}`;
 
         if (gameId) {
+          const commandId = typeof crypto !== 'undefined' && crypto.randomUUID
+            ? crypto.randomUUID()
+            : Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+
           gameSocket.send('make_move', {
             game_id: gameId,
             move: uciMove,
+            command_id: commandId,
+            state_version: stateVersion,
             time_taken_ms: timeTaken,
             window_blurred: document.hidden,
             is_premove: false
@@ -6181,7 +6219,8 @@ export default function Chessboard() {
         }
         setSelectedSquare(null);
       }
-    } catch {
+    } catch (err) {
+      console.error("Ошибка при ходе:", err);
       setSelectedSquare(null);
     }
     setDragState(null);
@@ -6308,8 +6347,9 @@ export default function Chessboard() {
 
         {/* ШАХМАТНАЯ ДОСКА */}
         <div
+          ref={boardContainerRef}
           style={{ width: `${boardSize}px`, height: `${boardSize}px` }}
-          className="p-4 bg-acacia-dark rounded-sm shadow-heavy border-4 border-black/80 relative transition-all"
+          className="p-4 bg-acacia-dark rounded-sm shadow-heavy border-4 border-black/80 relative transition-all select-none"
         >
           <div
             className="absolute inset-0 opacity-40 mix-blend-multiply pointer-events-none"
@@ -6332,7 +6372,6 @@ export default function Chessboard() {
                 return (
                   <div
                     key={squareId}
-                    data-square={squareId}
                     onClick={() => handleSquareClick(squareId)}
                     className={`w-full h-full flex items-center justify-center relative cursor-pointer ${isDark ? 'bg-acacia' : 'bg-boxwood'}`}
                   >
@@ -6405,7 +6444,7 @@ export default function Chessboard() {
                     {bottomPlayerInfo.rating}
                     {ratingInfo && (
                       <span className={myColor === 'white' ? (Number(ratingInfo.white_delta) >= 0 ? 'text-emerald-400' : 'text-red-400') : (Number(ratingInfo.black_delta) >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-                        ({myColor === 'white' ? (Number(ratingInfo.white_delta) >= 0 ? `+${ratingInfo.white_delta}` : ratingInfo.white_delta) : (Number(ratingInfo.black_delta) >= 0 ? `+${ratingInfo.black_delta}` : ratingInfo.black_delta)})
+                        ({myColor === 'white' ? (Number(ratingInfo.white_delta) >= 0 ? `+${ratingInfo.white_delta}` : ratingInfo.white_delta) : (Number(ratingInfo.white_delta) >= 0 ? `+${ratingInfo.white_delta}` : ratingInfo.white_delta)})
                       </span>
                     )}
                   </span>
@@ -7655,6 +7694,72 @@ def downgrade() -> None:
     op.drop_column('games', 'base_time_ms')
     # ### end Alembic commands ###
 
+--- FILE: migrations\versions\4101ce4b6d90_authoritative_game_state_and_move_.py ---
+
+"""authoritative_game_state_and_move_journal
+
+Revision ID: 4101ce4b6d90
+Revises: 3605cc4e4cfc
+Create Date: 2026-08-10 11:15:01.498264
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision: str = '4101ce4b6d90'
+down_revision: Union[str, Sequence[str], None] = '3605cc4e4cfc'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    """Upgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.add_column('games', sa.Column('state_version', sa.Integer(), server_default='0', nullable=False))
+    op.add_column('games', sa.Column('turn', sa.String(length=1), server_default='w', nullable=False))
+    op.add_column('games', sa.Column('board_fen', sa.String(), server_default='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', nullable=False))
+    op.add_column('games', sa.Column('white_time_ms', sa.Integer(), nullable=True))
+    op.add_column('games', sa.Column('black_time_ms', sa.Integer(), nullable=True))
+    op.add_column('games', sa.Column('last_move_at', sa.BigInteger(), nullable=True))
+    op.add_column('games', sa.Column('result', sa.String(length=10), nullable=True))
+    op.add_column('games', sa.Column('termination', sa.String(length=50), nullable=True))
+    op.add_column('games', sa.Column('winner_id', sa.Integer(), nullable=True))
+    op.add_column('games', sa.Column('white_initial_rating', sa.Integer(), nullable=True))
+    op.add_column('games', sa.Column('black_initial_rating', sa.Integer(), nullable=True))
+    op.add_column('games', sa.Column('white_rating_delta', sa.Integer(), nullable=True))
+    op.add_column('games', sa.Column('black_rating_delta', sa.Integer(), nullable=True))
+    op.create_foreign_key(None, 'games', 'users', ['winner_id'], ['id'])
+    op.add_column('moves', sa.Column('san', sa.String(length=10), nullable=True))
+    op.add_column('moves', sa.Column('fen_after', sa.String(), nullable=True))
+    # ### end Alembic commands ###
+
+
+def downgrade() -> None:
+    """Downgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_column('moves', 'fen_after')
+    op.drop_column('moves', 'san')
+    op.drop_constraint(None, 'games', type_='foreignkey')
+    op.drop_column('games', 'black_rating_delta')
+    op.drop_column('games', 'white_rating_delta')
+    op.drop_column('games', 'black_initial_rating')
+    op.drop_column('games', 'white_initial_rating')
+    op.drop_column('games', 'winner_id')
+    op.drop_column('games', 'termination')
+    op.drop_column('games', 'result')
+    op.drop_column('games', 'last_move_at')
+    op.drop_column('games', 'black_time_ms')
+    op.drop_column('games', 'white_time_ms')
+    op.drop_column('games', 'board_fen')
+    op.drop_column('games', 'turn')
+    op.drop_column('games', 'state_version')
+    # ### end Alembic commands ###
+
+
 --- FILE: migrations\versions\af5330e8cef6_init_tables.py ---
 
 """init_tables
@@ -8377,6 +8482,7 @@ async def get_matchmaking_queue():
 import time
 import logging
 import json
+import uuid
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 import chess
@@ -8451,7 +8557,7 @@ async def matchmaking_endpoint(
                 if current_user.id not in (white_id, black_id): continue
 
                 game_result = "0-1" if current_user.id == white_id else "1-0"
-                rating_updates = await state_manager.finish_game(db, game_id, game_result)
+                rating_updates = await state_manager.finish_game(db, game_id, game_result, termination="resignation")
 
                 game_over_payload = {
                     "event": "game_over",
@@ -8496,7 +8602,7 @@ async def matchmaking_endpoint(
                     continue
 
                 game_result = "1/2-1/2"
-                rating_updates = await state_manager.finish_game(db, game_id, game_result)
+                rating_updates = await state_manager.finish_game(db, game_id, game_result, termination="agreement")
 
                 game_over_payload = {
                     "event": "game_over",
@@ -8526,81 +8632,94 @@ async def matchmaking_endpoint(
 
             elif action == "make_move":
                 game_id, move_str = data.get("game_id"), data.get("move")
+                command_id = data.get("command_id")
+                expected_version = data.get("state_version")
+
+                if not command_id:
+                    command_id = uuid.uuid4().hex
+
                 if not game_id or not move_str: continue
 
-                game_state = await state_manager.get_game_state(game_id)
-                if not game_state or game_state["status"] != "in_progress":
-                    await manager.send_personal_message({"event": "error", "message": "Game inactive or not found"},
-                                                        current_user.id)
+                res = await state_manager.process_atomic_move(
+                    game_id=game_id,
+                    user_id=current_user.id,
+                    command_id=command_id,
+                    move_str=move_str,
+                    expected_version=expected_version
+                )
+
+                if res["status"] == "ignored":
                     continue
 
-                is_white_turn = game_state["turn"] == "white"
-                expected_player_id = game_state["white_id"] if is_white_turn else game_state["black_id"]
-
-                if current_user.id != expected_player_id:
-                    await manager.send_personal_message({"event": "error", "message": "Not your turn!"},
-                                                        current_user.id)
+                if res["status"] == "error":
+                    await manager.send_personal_message({"event": "error", "message": res["reason"]}, current_user.id)
                     continue
 
-                is_valid, new_pgn, game_result = engine.process_move(game_state["pgn"], move_str)
-                if not is_valid:
-                    await manager.send_personal_message({"event": "error", "message": f"Illegal move: {move_str}"},
-                                                        current_user.id)
-                    continue
+                white_id, black_id = res["white_id"], res["black_id"]
 
-                c_game = chess.pgn.read_game(io.StringIO(new_pgn))
-                board = c_game.end().board()
-
-                now_ms = int(time.time() * 1000)
-                elapsed = now_ms - game_state["last_move_at"]
-                increment = game_state["increment_ms"]
-                new_white_time = game_state["white_time_ms"] - elapsed + increment if is_white_turn else game_state[
-                    "white_time_ms"]
-                new_black_time = game_state["black_time_ms"] - elapsed + increment if not is_white_turn else game_state[
-                    "black_time_ms"]
-
-                if is_white_turn and new_white_time <= 0:
-                    game_result = "black_won_on_time"
-                elif not is_white_turn and new_black_time <= 0:
-                    game_result = "white_won_on_time"
+                # Достаем SAN-нотацию через парсинг новой PGN
+                current_pgn = res.get("new_pgn", "")
+                san_move = move_str
+                fullmove_number = 1
+                try:
+                    c_game = chess.pgn.read_game(io.StringIO(current_pgn))
+                    board = c_game.end().board()
+                    if c_game.end().move:
+                        san_move = c_game.end().parent.board().san(c_game.end().move)
+                    fullmove_number = board.fullmove_number
+                except Exception:
+                    pass
 
                 await state_manager.save_move_telemetry(game_id, {
                     "player_id": current_user.id,
-                    "move_number": board.fullmove_number,
+                    "move_number": fullmove_number,
                     "notation": move_str,
+                    "san": san_move,
+                    "fen_after": board.fen() if 'board' in locals() else "",
                     "time_taken_ms": data.get("time_taken_ms", 0),
                     "window_blurred_before_move": data.get("window_blurred", False),
                     "is_premove": data.get("is_premove", False)
                 })
 
-                if game_result:
-                    rating_updates = await state_manager.finish_game(db, game_id, game_result, final_pgn=new_pgn)
-                else:
-                    await state_manager.update_game_state(game_id, {
-                        "pgn": new_pgn,
-                        "turn": "black" if is_white_turn else "white",
-                        "last_move_at": now_ms,
-                        "white_time_ms": new_white_time,
-                        "black_time_ms": new_black_time
-                    })
+                if res["status"] == "game_over":
+                    game_result = res["result"]
+                    termination = res["termination"]
+                    rating_updates = await state_manager.finish_game(db, game_id, game_result, termination=termination,
+                                                                     final_pgn=current_pgn)
 
-                move_payload = {
-                    "event": "move_made",
-                    "game_id": game_id,
-                    "player_id": current_user.id,
-                    "move": move_str,
-                    "pgn": new_pgn,
-                    "white_time_ms": new_white_time,
-                    "black_time_ms": new_black_time,
-                    "game_over": game_result is not None,
-                    "result": game_result
-                }
+                    game_over_payload = {
+                        "event": "game_over",
+                        "game_id": game_id,
+                        "reason": termination,
+                        "result": game_result,
+                        "move": move_str,
+                        "san": san_move,
+                        "pgn": current_pgn,
+                        "white_time_ms": res["white_time_ms"],
+                        "black_time_ms": res["black_time_ms"]
+                    }
+                    game_over_payload.update(rating_updates)
 
-                if game_result:
-                    move_payload.update(rating_updates)
+                    await manager.send_personal_message(game_over_payload, white_id)
+                    await manager.send_personal_message(game_over_payload, black_id)
 
-                await manager.send_personal_message(move_payload, game_state["white_id"])
-                await manager.send_personal_message(move_payload, game_state["black_id"])
+                elif res["status"] == "success":
+                    move_payload = {
+                        "event": "move_made",
+                        "game_id": game_id,
+                        "player_id": current_user.id,
+                        "command_id": command_id,
+                        "state_version": res["state_version"],
+                        "move": move_str,
+                        "san": san_move,
+                        "pgn": current_pgn,
+                        "white_time_ms": res["white_time_ms"],
+                        "black_time_ms": res["black_time_ms"],
+                        "game_over": False,
+                    }
+
+                    await manager.send_personal_message(move_payload, white_id)
+                    await manager.send_personal_message(move_payload, black_id)
 
     except WebSocketDisconnect:
         await manager.disconnect(current_user.id)
@@ -8893,7 +9012,9 @@ class Base(DeclarativeBase):
 
 --- FILE: src\models\game.py ---
 
-from sqlalchemy import String, Integer, DateTime, ForeignKey, Enum, Boolean
+# --- FILE: src/models/game.py ---
+
+from sqlalchemy import String, Integer, DateTime, ForeignKey, Enum, Boolean, BigInteger
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 from datetime import datetime
@@ -8911,32 +9032,59 @@ class GameStatus(str, enum.Enum):
 
 class Game(Base):
     """
-    Represents a single chess match between two players with time controls.
+    Authoritative Game Model.
     """
     __tablename__ = "games"
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
 
-    # Foreign keys to the User table
     white_player_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
     black_player_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
 
     # Time controls (в миллисекундах)
-    base_time_ms: Mapped[int] = mapped_column(Integer, default=180000)  # По умолчанию 3 минуты (180000 мс)
-    increment_ms: Mapped[int] = mapped_column(Integer, default=0)       # По умолчанию без добавки
-
-    # Рейтинговая ли игра
+    base_time_ms: Mapped[int] = mapped_column(Integer, default=180000)
+    increment_ms: Mapped[int] = mapped_column(Integer, default=0)
     is_rated: Mapped[bool] = mapped_column(Boolean, default=True)
 
-    # Standard chess notation of the whole game (PGN)
-    pgn: Mapped[str | None] = mapped_column(String, nullable=True)
+    # --- AUTHORITATIVE STATE (HOT DATA) ---
+    # Версия состояния для защиты от race conditions (TASK-006)
+    state_version: Mapped[int] = mapped_column(Integer, server_default="0", default=0)
+    # Очередь хода ('w' или 'b')
+    turn: Mapped[str] = mapped_column(String(1), server_default="'w'", default='w')
+    # Текущее состояние доски
+    board_fen: Mapped[str] = mapped_column(String,
+                                           server_default="'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1'",
+                                           default="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
+    # Оставшееся время (устанавливается при старте)
+    white_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    black_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # UNIX timestamp (ms) последнего хода для серверного расчета времени
+    last_move_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    # --------------------------------------
 
+    # --- MATCH COMPLETION DATA (TASK-002) ---
+    result: Mapped[str | None] = mapped_column(String(10), nullable=True)  # "1-0", "0-1", "1/2-1/2"
+    termination: Mapped[str | None] = mapped_column(String(50),
+                                                    nullable=True)  # checkmate, timeout, agreement, resignation, aborted
+    winner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    # Rating snapshots
+    white_initial_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    black_initial_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    white_rating_delta: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    black_rating_delta: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # ----------------------------------------
+
+    # Standard chess notation (Архивное поле)
+    pgn: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[GameStatus] = mapped_column(Enum(GameStatus), default=GameStatus.PENDING)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 --- FILE: src\models\move.py ---
+
+# --- FILE: src/models/move.py ---
 
 from sqlalchemy import String, Integer, Boolean, ForeignKey, DateTime
 from sqlalchemy.orm import Mapped, mapped_column
@@ -8948,7 +9096,7 @@ from src.models.base import Base
 
 class Move(Base):
     """
-    Stores individual moves along with rich anti-cheat telemetry.
+    Authoritative Move Journal & Anti-Cheat Telemetry.
     """
     __tablename__ = "moves"
 
@@ -8956,15 +9104,22 @@ class Move(Base):
     game_id: Mapped[int] = mapped_column(ForeignKey("games.id"), index=True)
     player_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
 
+    # Порядковый номер полухода (ply)
     move_number: Mapped[int] = mapped_column(Integer)
-    notation: Mapped[str] = mapped_column(String(10))  # e.g., "e2e4" or "Nf3"
 
-    # Anti-cheat deterministic traps
-    time_taken_ms: Mapped[int] = mapped_column(Integer)
+    # --- CHESS DATA ---
+    notation: Mapped[str] = mapped_column(String(10))  # Универсальный UCI (e.g., e2e4)
+    san: Mapped[str | None] = mapped_column(String(10), nullable=True)  # Для красивого отображения (e.g., Nf3)
+    fen_after: Mapped[str | None] = mapped_column(String, nullable=True)  # Состояние доски ПОСЛЕ хода
+    # ------------------
+
+    # --- TELEMETRY ---
+    time_taken_ms: Mapped[int] = mapped_column(Integer)  # Client-side estimation
     window_blurred_before_move: Mapped[bool] = mapped_column(Boolean, default=False)
     is_premove: Mapped[bool] = mapped_column(Boolean, default=False)
     network_lag_ms: Mapped[int] = mapped_column(Integer, default=0)
 
+    # Server-side timestamp
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 --- FILE: src\models\user.py ---
@@ -9278,74 +9433,95 @@ manager = ConnectionManager()
 
 --- FILE: src\services\game_engine.py ---
 
+# --- FILE: src/services/game_engine.py ---
+
 import chess
-import chess.pgn
-import io
 
 
 class GameEngine:
     @staticmethod
-    def process_move(pgn_text: str | None, move_str: str) -> tuple[bool, str, str | None]:
+    def process_move(fen: str, move_str: str) -> tuple[bool, dict | None]:
         """
-        Проверяет ход, применяет его к текущей партии и возвращает новый статус.
-        Поддерживает форматы UCI (e2e4) и SAN (Nf3).
+        Проверяет ход, применяет его к текущей позиции (FEN) и возвращает новые данные.
 
-        Возвращает: (is_valid, new_pgn, result)
-        result = "1-0", "0-1", "1/2-1/2" или None (если игра продолжается)
+        Возвращает: (is_valid, move_data)
+        Где move_data содержит:
+        - new_fen: str (Новое состояние доски)
+        - san: str (Красивая нотация, например "Nf3")
+        - uci: str (Универсальная нотация, например "g1f3")
+        - is_game_over: bool
+        - result: str | None ("1-0", "0-1", "1/2-1/2")
+        - termination: str | None ("checkmate", "stalemate", "repetition", etc.)
         """
-        # 1. Восстанавливаем состояние доски из PGN (или создаем новую)
-        if pgn_text:
-            game = chess.pgn.read_game(io.StringIO(pgn_text))
-            board = game.end().board()
-        else:
-            game = chess.pgn.Game()
-            board = game.board()
+        board = chess.Board(fen)
 
-        # 2. Пытаемся распарсить ход
+        # 1. Пытаемся распарсить ход
         try:
-            # Сначала пробуем парсить как UCI (например, e2e4)
             move = chess.Move.from_uci(move_str)
             if move not in board.legal_moves:
-                # Если не UCI, пробуем SAN (например, Nf3)
                 move = board.parse_san(move_str)
         except ValueError:
-            return False, pgn_text or "", None
+            return False, None
 
         if move not in board.legal_moves:
-            return False, pgn_text or "", None
+            return False, None
 
-        # 3. Делаем ход и добавляем его в дерево партии
-        if pgn_text:
-            game.end().add_main_variation(move)
-        else:
-            game.add_variation(move)
+        # 2. Извлекаем SAN до того, как сделаем ход (иначе контекст изменится)
+        san = board.san(move)
+        uci = move.uci()
 
+        # 3. Делаем ход
         board.push(move)
+        new_fen = board.fen()
 
-        # 4. Проверяем, не закончилась ли партия
+        # 4. Проверяем завершение партии
+        is_game_over = board.is_game_over(claim_draw=True)
         result = None
-        if board.is_checkmate():
-            # Если мат, выигрывает тот, кто только что ходил (ход уже передан оппоненту)
-            result = "1-0" if board.turn == chess.BLACK else "0-1"
-        elif board.is_game_over():
-            result = "1/2-1/2"
+        termination = None
 
-        # 5. Генерируем обновленную PGN-строку
-        exporter = chess.pgn.StringExporter(headers=False, variations=False, comments=False)
-        new_pgn = game.accept(exporter)
+        if is_game_over:
+            res = board.result(claim_draw=True)
+            result = res if res != "*" else None
 
-        return True, new_pgn, result
+            if board.is_checkmate():
+                termination = "checkmate"
+            elif board.is_stalemate():
+                termination = "stalemate"
+            elif board.is_insufficient_material():
+                termination = "insufficient_material"
+            elif board.is_fifty_moves():
+                termination = "50_move_rule"
+            elif board.is_repetition():
+                termination = "repetition"
+            else:
+                termination = "unknown"
+
+        return True, {
+            "new_fen": new_fen,
+            "san": san,
+            "uci": uci,
+            "is_game_over": is_game_over,
+            "result": result,
+            "termination": termination
+        }
 
 
 engine = GameEngine()
 
 --- FILE: src\services\game_state.py ---
 
+# --- FILE: src/services/game_state.py ---
+
 import time
 import json
 import asyncio
 import logging
+import datetime
+import chess.pgn
+import io
 from sqlalchemy.sql import func
+from redis.exceptions import WatchError
+
 from src.db.redis import redis_client
 from src.db.session import AsyncSessionLocal
 from src.models.game import Game, GameStatus
@@ -9353,6 +9529,7 @@ from src.models.move import Move
 from src.models.user import User
 from src.services.rating import elo_calculator
 from src.worker.tasks import analyze_game_task
+from src.services.game_engine import engine
 
 logger = logging.getLogger(__name__)
 
@@ -9370,6 +9547,7 @@ class GameStateManager:
             "white_id": str(white_id),
             "black_id": str(black_id),
             "pgn": "",
+            "state_version": "0",
             "white_time_ms": str(base_time_ms),
             "black_time_ms": str(base_time_ms),
             "increment_ms": str(increment_ms),
@@ -9391,7 +9569,7 @@ class GameStateManager:
         if not state:
             return None
         for key in ["white_id", "black_id", "white_time_ms", "black_time_ms", "increment_ms", "last_move_at",
-                    "white_disconnect_started_at", "black_disconnect_started_at"]:
+                    "white_disconnect_started_at", "black_disconnect_started_at", "state_version"]:
             if key in state:
                 state[key] = int(state[key])
         return state
@@ -9418,10 +9596,112 @@ class GameStateManager:
         await self.redis.delete(key)
         return [json.loads(m) for m in moves_raw]
 
-    async def finish_game(self, db, game_id: int, result: str, final_pgn: str = None) -> dict:
-        """
-        Единая точка завершения партии: сохраняет статусы, пересчитывает Эло и фиксирует мувы.
-        """
+    async def process_atomic_move(self, game_id: int, user_id: int, command_id: str, move_str: str, expected_version: int | None = None) -> dict:
+        game_key = self._get_key(game_id)
+        cmd_key = f"game:{game_id}:commands"
+
+        async with self.redis.pipeline(transaction=True) as pipe:
+            while True:
+                try:
+                    await pipe.watch(game_key, cmd_key)
+
+                    is_processed = await pipe.sismember(cmd_key, command_id)
+                    if is_processed:
+                        await pipe.unwatch()
+                        return {"status": "ignored", "reason": "already_processed"}
+
+                    state = await pipe.hgetall(game_key)
+                    if not state or state.get("status") != "in_progress":
+                        await pipe.unwatch()
+                        return {"status": "error", "reason": "game_inactive"}
+
+                    current_version = int(state.get("state_version", 0))
+                    if expected_version is not None and current_version != expected_version:
+                        await pipe.unwatch()
+                        return {"status": "error", "reason": "version_mismatch"}
+
+                    turn = state.get("turn", "white")
+                    white_id = int(state["white_id"])
+                    black_id = int(state["black_id"])
+
+                    is_white_turn = turn == "white"
+                    expected_player_id = white_id if is_white_turn else black_id
+
+                    if user_id != expected_player_id:
+                        await pipe.unwatch()
+                        return {"status": "error", "reason": "not_your_turn"}
+
+                    now_ms = int(time.time() * 1000)
+                    last_move_at = int(state["last_move_at"])
+                    elapsed = max(0, now_ms - last_move_at)
+
+                    increment = int(state["increment_ms"])
+                    white_time = int(state["white_time_ms"])
+                    black_time = int(state["black_time_ms"])
+
+                    if is_white_turn:
+                        new_white_time = white_time - elapsed
+                        if new_white_time <= 0:
+                            await pipe.unwatch()
+                            return {"status": "game_over", "result": "0-1", "termination": "timeout", "white_id": white_id, "black_id": black_id}
+                        new_white_time += increment
+                        new_black_time = black_time
+                    else:
+                        new_black_time = black_time - elapsed
+                        if new_black_time <= 0:
+                            await pipe.unwatch()
+                            return {"status": "game_over", "result": "1-0", "termination": "timeout", "white_id": white_id, "black_id": black_id}
+                        new_black_time += increment
+                        new_white_time = white_time
+
+                    current_pgn = state.get("pgn", "")
+                    is_valid, new_pgn, result = engine.process_move(current_pgn, move_str)
+
+                    if not is_valid:
+                        await pipe.unwatch()
+                        return {"status": "error", "reason": "illegal_move"}
+
+                    pipe.multi()
+
+                    if result:
+                        termination = "checkmate" if result in ("1-0", "0-1") else "agreement"
+                        pipe.hset(game_key, mapping={"status": "completed"})
+                        pipe.sadd(cmd_key, command_id)
+                        await pipe.execute()
+                        return {
+                            "status": "game_over", "result": result, "termination": termination,
+                            "new_pgn": new_pgn, "white_time_ms": new_white_time, "black_time_ms": new_black_time,
+                            "white_id": white_id, "black_id": black_id
+                        }
+
+                    new_version = current_version + 1
+                    new_turn = "black" if is_white_turn else "white"
+
+                    updates = {
+                        "state_version": str(new_version),
+                        "turn": new_turn,
+                        "pgn": new_pgn,
+                        "last_move_at": str(now_ms),
+                        "white_time_ms": str(new_white_time),
+                        "black_time_ms": str(new_black_time)
+                    }
+
+                    pipe.hset(game_key, mapping=updates)
+                    pipe.sadd(cmd_key, command_id)
+                    pipe.expire(cmd_key, 86400)
+
+                    await pipe.execute()
+
+                    return {
+                        "status": "success", "new_pgn": new_pgn, "state_version": new_version, "turn": new_turn,
+                        "white_time_ms": new_white_time, "black_time_ms": new_black_time,
+                        "white_id": white_id, "black_id": black_id
+                    }
+
+                except WatchError:
+                    continue
+
+    async def finish_game(self, db, game_id: int, result: str, termination: str = "unknown", final_pgn: str = None) -> dict:
         db_game = await db.get(Game, game_id)
         if not db_game:
             return {}
@@ -9440,8 +9720,24 @@ class GameStateManager:
             white_user.rating = new_w
             black_user.rating = new_b
 
-        if final_pgn:
-            db_game.pgn = final_pgn
+        db_game.result = result
+        db_game.termination = termination
+
+        if result == "1-0":
+            db_game.winner_id = white_user.id
+        elif result == "0-1":
+            db_game.winner_id = black_user.id
+
+        db_game.white_initial_rating = white_user.rating - delta_w
+        db_game.black_initial_rating = black_user.rating - delta_b
+        db_game.white_rating_delta = delta_w
+        db_game.black_rating_delta = delta_b
+
+        state = await self.get_game_state(game_id)
+        if state:
+            db_game.state_version = state.get("state_version", db_game.state_version)
+            if not final_pgn:
+                final_pgn = state.get("pgn")
 
         db_game.status = GameStatus.COMPLETED
         db_game.finished_at = func.now()
@@ -9451,11 +9747,32 @@ class GameStateManager:
             db_moves = [Move(game_id=game_id, **m) for m in moves_telemetry]
             db.add_all(db_moves)
 
+            pgn_game = chess.pgn.Game()
+            pgn_game.headers["Event"] = "MiChess Rated Game" if db_game.is_rated else "MiChess Casual Game"
+            pgn_game.headers["Site"] = "MiChess"
+            pgn_game.headers["Date"] = datetime.datetime.now(datetime.timezone.utc).strftime("%Y.%m.%d")
+            pgn_game.headers["White"] = white_user.username
+            pgn_game.headers["Black"] = black_user.username
+            pgn_game.headers["WhiteElo"] = str(db_game.white_initial_rating)
+            pgn_game.headers["BlackElo"] = str(db_game.black_initial_rating)
+            pgn_game.headers["Result"] = result
+            pgn_game.headers["TimeControl"] = f"{db_game.base_time_ms // 1000}+{db_game.increment_ms // 1000}"
+            pgn_game.headers["Termination"] = termination
+
+            node = pgn_game
+            for m in moves_telemetry:
+                try:
+                    move_obj = chess.Move.from_uci(m["notation"])
+                    node = node.add_variation(move_obj)
+                except ValueError:
+                    pass
+            db_game.pgn = str(pgn_game)
+        elif final_pgn:
+            db_game.pgn = final_pgn
+
         await db.commit()
         await self.clear_game_state(game_id)
 
-        # Безопасный вызов фоновой задачи Celery: если воркер недоступен,
-        # ошибка отлавливается, а партия всё равно штатно завершается для игроков.
         try:
             analyze_game_task.delay(game_id)
         except Exception as e:
@@ -9506,7 +9823,8 @@ class GameStateManager:
             offline_duration = now_ms - state.get(f"{color}_disconnect_started_at", now_ms)
             updates = {f"{color}_disconnected": "false", f"{color}_disconnect_started_at": "0"}
 
-            if state["turn"] == color:
+            turn = state.get("turn", "white")
+            if turn == color:
                 time_key = f"{color}_time_ms"
                 updates[time_key] = str(max(0, state[time_key] - offline_duration))
             updates["last_move_at"] = str(state["last_move_at"] + offline_duration)
@@ -9527,7 +9845,8 @@ class GameStateManager:
                         await self.redis.srem("active_games", game_id_str)
                         continue
 
-                    white_id, black_id, turn = int(state["white_id"]), int(state["black_id"]), state["turn"]
+                    white_id, black_id = int(state["white_id"]), int(state["black_id"])
+                    turn = state.get("turn", "white")
                     game_result, winner_id, reason = None, None, "timeout"
 
                     for color in ["white", "black"]:
@@ -9537,25 +9856,27 @@ class GameStateManager:
                             current_player_time = remaining_time - offline_duration if turn == color else remaining_time
 
                             if current_player_time <= 0 or offline_duration >= min(remaining_time, 3 * 60 * 1000):
-                                game_result = "black_won_on_time" if color == "white" else "white_won_on_time"
+                                game_result = "0-1" if color == "white" else "1-0"
                                 winner_id = black_id if color == "white" else white_id
-                                reason = "disconnect_timeout"
+                                reason = "abandoned"
                                 break
 
                     if not game_result:
                         elapsed = now_ms - state["last_move_at"]
                         if turn == "white" and state.get("white_disconnected") != "true" and (
                                 state["white_time_ms"] - elapsed <= 0):
-                            game_result, winner_id = "black_won_on_time", black_id
+                            game_result, winner_id = "0-1", black_id
+                            reason = "timeout"
                         elif turn == "black" and state.get("black_disconnected") != "true" and (
                                 state["black_time_ms"] - elapsed <= 0):
-                            game_result, winner_id = "white_won_on_time", white_id
+                            game_result, winner_id = "1-0", white_id
+                            reason = "timeout"
 
                     if game_result:
                         logger.info("Game %s ended. Result: %s, Reason: %s", game_id, game_result, reason)
 
                         async with AsyncSessionLocal() as db:
-                            rating_updates = await self.finish_game(db, game_id, game_result)
+                            rating_updates = await self.finish_game(db, game_id, game_result, termination=reason)
 
                         game_over_payload = {
                             "event": "game_over",
@@ -9958,6 +10279,50 @@ class MockPubSub:
             await asyncio.sleep(3600)
 
 
+class MockPipeline:
+    def __init__(self, redis):
+        self.redis = redis
+        self.commands = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        pass
+
+    async def watch(self, *names):
+        pass
+
+    async def unwatch(self):
+        pass
+
+    def multi(self):
+        self.commands = []
+
+    def hset(self, name, key=None, value=None, mapping=None):
+        self.commands.append(("hset", name, key, value, mapping))
+
+    def sadd(self, name, *values):
+        self.commands.append(("sadd", name, values))
+
+    def expire(self, name, time):
+        self.commands.append(("expire", name, time))
+
+    async def execute(self):
+        for cmd in self.commands:
+            if cmd[0] == "hset":
+                await self.redis.hset(cmd[1], cmd[2], cmd[3], mapping=cmd[4])
+            elif cmd[0] == "sadd":
+                await self.redis.sadd(cmd[1], *cmd[2])
+        self.commands = []
+
+    async def sismember(self, name, value):
+        return str(value) in self.redis.sets.get(name, set())
+
+    async def hgetall(self, name):
+        return await self.redis.hgetall(name)
+
+
 class MockAsyncRedis:
     """Высокопроизводительный асинхронный мок Redis в оперативной памяти для тестов."""
 
@@ -9970,6 +10335,9 @@ class MockAsyncRedis:
 
     def pubsub(self):
         return MockPubSub()
+
+    def pipeline(self, transaction=True):
+        return MockPipeline(self)
 
     async def hset(self, name, mapping=None, **kwargs):
         if name not in self.store:
@@ -10137,37 +10505,45 @@ def token_user_2(test_user_2):
 
 --- FILE: tests\test_game_engine.py ---
 
+# --- FILE: tests/test_game_engine.py ---
+
 from src.services.game_engine import engine
+
+STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
 
 def test_process_valid_move():
-    pgn = ""
-    is_valid, new_pgn, result = engine.process_move(pgn, "e2e4")
+    is_valid, data = engine.process_move(STARTING_FEN, "e2e4")
+
     assert is_valid is True
-    assert "1. e4" in new_pgn
-    assert result is None
+    assert data is not None
+    assert data["san"] == "e4"
+    assert data["uci"] == "e2e4"
+    assert "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR" in data["new_fen"]
+    assert data["result"] is None
+    assert data["is_game_over"] is False
 
 
 def test_process_illegal_move():
-    pgn = ""
-    is_valid, new_pgn, result = engine.process_move(pgn, "e2e5")
+    is_valid, data = engine.process_move(STARTING_FEN, "e2e5")
+
     assert is_valid is False
-    assert new_pgn == ""
-    assert result is None
+    assert data is None
 
 
-def test_turn_sequence_and_notation():
-    pgn = ""
-    # White move
-    is_valid_1, pgn_1, _ = engine.process_move(pgn, "e2e4")
-    assert is_valid_1 is True
+def test_checkmate_detection():
+    # Позиция за шаг до детского мата (ход белых: Qf7#)
+    fen = "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 4 3"
+    is_valid, data = engine.process_move(fen, "f3f7")
 
-    # Black move
-    is_valid_2, pgn_2, _ = engine.process_move(pgn_1, "e7e5")
-    assert is_valid_2 is True
-    assert "1. e4 e5" in pgn_2
+    assert is_valid is True
+    assert data["is_game_over"] is True
+    assert data["result"] == "1-0"
+    assert data["termination"] == "checkmate"
 
 --- FILE: tests\test_game_state.py ---
+
+# --- FILE: tests/test_game_state.py ---
 
 import pytest
 import time
@@ -10221,6 +10597,8 @@ async def test_disconnect_and_reconnect_time_deduction():
     assert state_after_reconnect["white_time_ms"] <= 175000
 
 --- FILE: tests\test_websockets_flow.py ---
+
+# --- FILE: tests/test_websockets_flow.py ---
 
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect

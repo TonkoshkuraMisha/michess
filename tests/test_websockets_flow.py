@@ -1,3 +1,5 @@
+# --- FILE: tests/test_websockets_flow.py ---
+
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 from src.main import app
