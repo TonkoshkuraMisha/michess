@@ -1,34 +1,37 @@
 # Michess API ♟️
 
-Асинхронный шахматный бэкенд, построенный на современной архитектуре. Поддерживает реалтайм-матчмейкинг, систему
-рейтингов ФИДЕ (Elo), анализ партий и сбор античит-телеметрии.
+An asynchronous chess backend built on a modern architecture. It supports real-time matchmaking, the FIDE Elo rating
+system, game analysis, and cheat telemetry collection.
 
-## 🛠 Технологический стек
+## 🛠 Tech Stack
 
-* **Фреймворк:** FastAPI (Python 3.11+)
-* **База данных:** PostgreSQL (через асинхронный asyncpg + SQLAlchemy 2.0)
-* **Кэш и Pub/Sub:** Redis (для WebSocket-менеджера и очередей матчмейкинга)
-* **Шахматная логика:** `python-chess` (валидация ходов, генерация PGN, таймеры)
-* **Миграции:** Alembic
-* **Тестирование:** Pytest + асинхронный мок Redis в памяти
+* **Framework:** FastAPI (Python 3.11+)
+* **Database:** PostgreSQL (via asynchronous `asyncpg` + SQLAlchemy 2.0)
+* **Cache & Pub/Sub:** Redis (for WebSocket manager and matchmaking queues)
+* **Chess Logic:** `python-chess` (move validation, PGN generation, timers)
+* **Migrations:** Alembic
+* **Testing:** Pytest + asynchronous in-memory Redis mock
 
-## 🚀 Ключевые фичи
+## 🚀 Key Features
 
-- **Асинхронный матчмейкинг:** Продвинутый движок поиска оппонентов на основе `Sorted Sets` в Redis с настраиваемой
-  вилкой рейтинга (по умолчанию $\pm 150$ пунктов).
-- **Реалтайм геймплей:** Обмен ходами через WebSockets с минимальными задержками. Мгновенная реакция на обрывы связи
-  (Grace period) и победы по времени (Timeouts).
-- **Рейтинговая система ФИДЕ:** Точный перерасчет рейтинга Elo с динамическим K-фактором.
-- **Античит-фундамент:** Сбор детерминированной телеметрии (время на ход, фокус окна браузера, премувы, сетевой пинг)
-  для последующего анализа на сервере.
-- **REST API Профиля:** Просмотр истории партий и возможность выгрузки сырых PGN-файлов.
+* **Asynchronous Matchmaking:** Advanced opponent search engine based on Redis `Sorted Sets` with a customizable rating
+  fork (default $\pm 150$ points).
+* **Real-Time Gameplay:** Move exchange via WebSockets with minimal latency. Instant reaction to connection drops (Grace
+  period) and time-outs.
+* **FIDE Rating System:** Precise recalculation of Elo ratings with a dynamic K-factor.
+* **Anti-Cheat Foundation:** Collection of deterministic telemetry (move time, browser window focus, pre-moves, network
+  ping) for subsequent server-side analysis.
+* **Profile REST API:** View game history and export raw PGN files.
 
-## 📦 Локальный запуск (Development)
+## 📦 Local Setup (Development)
 
-1. **Клонирование и виртуальное окружение:**
-   ```bash
-   git clone <your-repo-url>
-   cd michess
-   python -m venv michess_env
-   source michess_env/bin/activate  # Для Windows: michess_env\Scripts\activate
-   pip install -r requirements.txt
+1. **Clone and Virtual Environment:**
+
+```bash
+git clone <your-repo-url>
+cd michess
+python -m venv michess_env
+source michess_env/bin/activate  # For Windows: michess_env\Scripts\activate
+pip install -r requirements.txt
+
+```
