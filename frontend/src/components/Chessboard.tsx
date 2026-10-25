@@ -24,6 +24,8 @@ import {
 } from 'lucide-react';
 import {gameSocket} from '../services/gameSocket';
 
+const API_BASE_URL = 'http:' + '//127.0.0.1:8000';
+
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
 
@@ -392,7 +394,7 @@ export default function Chessboard() {
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        fetch('[http://127.0.0.1:8000/api/v1/profile/me](http://127.0.0.1:8000/api/v1/profile/me)', {
+        fetch(`${API_BASE_URL}/api/v1/profile/me`, {
             headers: {'Authorization': `Bearer ${token}`}
         })
             .then(res => res.ok ? res.json() : null)
@@ -594,7 +596,7 @@ export default function Chessboard() {
         if (!gameId) {
             const fetchQueue = async () => {
                 try {
-                    const res = await fetch('[http://127.0.0.1:8000/api/v1/profile/matchmaking/queue](http://127.0.0.1:8000/api/v1/profile/matchmaking/queue)');
+                    const res = await fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/queue`);
                     if (res.ok) {
                         const data = await res.json();
                         setQueuePlayers(data);
@@ -996,7 +998,7 @@ export default function Chessboard() {
                         </div>
                     </div>
                     <div className="p-2 bg-acacia-dark rounded border border-amber-600/30 text-amber-400">
-                        <Sword size="{18}"/>
+                        <Sword size={18}/>
                     </div>
                 </div>
 
@@ -1005,7 +1007,7 @@ export default function Chessboard() {
                     className="bg-acacia-dark p-3 rounded border border-amber-900/40 flex flex-col gap-2.5 shadow-inner">
                     <label
                         className="text-[10px] uppercase tracking-widest text-boxwood/70 flex items-center gap-1.5 font-bold">
-                        <Clock className="text-amber-500" size="{12}"/> Контроль времени
+                        <Clock className="text-amber-500" size={12}/> Контроль времени
                     </label>
 
                     <div className="relative w-full" ref={timeDropdownRef}>
@@ -1018,8 +1020,8 @@ export default function Chessboard() {
                             <span>
                                 {selectedTimeControl.base} мин {selectedTimeControl.inc > 0 ? `+ ${selectedTimeControl.inc} сек` : ''}
                             </span>
-                            {isTimeDropdownOpen ? <ChevronUp className="text-amber-500/70" size="{14}"/> :
-                                <ChevronDown className="text-amber-500/70" size="{14}"/>}
+                            {isTimeDropdownOpen ? <ChevronUp className="text-amber-500/70" size={14}/> :
+                                <ChevronDown className="text-amber-500/70" size={14}/>}
                         </button>
 
                         {isTimeDropdownOpen && (
@@ -1068,7 +1070,7 @@ export default function Chessboard() {
                                     : 'bg-boxwood text-acacia-dark border-amber-700/50 hover:bg-boxwood-light'
                             }`}
                         >
-                            {isSearching ? <Loader2 className="animate-spin" size="{16}"/> : <Users size="{16}"/>}
+                            {isSearching ? <Loader2 className="animate-spin" size={16}/> : <Users size={16}/>}
                             {isSearching ? 'Отменить поиск' : 'Найти соперника'}
                         </button>
                     ) : (
@@ -1118,7 +1120,7 @@ export default function Chessboard() {
                                         onClick={() => acceptChallenge(p.user_id)}
                                         className="px-2.5 py-1 bg-emerald-800 hover:bg-emerald-700 disabled:opacity-40 text-emerald-100 rounded text-xs font-bold transition flex items-center gap-1 shadow"
                                     >
-                                        <Play size="{12}"/> Играть
+                                        <Play size={12}/> Играть
                                     </button>
                                 </div>
                             ))
@@ -1130,7 +1132,7 @@ export default function Chessboard() {
                 <div className="bg-acacia-dark p-3 rounded border border-amber-900/40 flex flex-col gap-2.5 mt-auto">
                     <div className="flex justify-between items-center text-xs text-boxwood/80">
                         <span className="flex items-center gap-1.5 font-bold">
-                            <Palette className="text-amber-500" size="{14}"/> Стиль доски
+                            <Palette className="text-amber-500" size={14}/> Стиль доски
                         </span>
                         <span className="text-amber-400 font-bold">{activeTheme.name}</span>
                     </div>
@@ -1169,7 +1171,7 @@ export default function Chessboard() {
                             className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded bg-black/35 hover:bg-black/55 border border-amber-900/50 text-xs font-bold text-amber-200 transition"
                             title="Перевернуть доску"
                         >
-                            <RefreshCw className="text-amber-400" size="{13}"/> Перевернуть доску
+                            <RefreshCw className="text-amber-400" size={13}/> Перевернуть доску
                         </button>
                         <span className="text-[10px] font-mono text-boxwood/50 px-1.5">
                             {boardSize}px
@@ -1431,7 +1433,7 @@ export default function Chessboard() {
                     <div>
                         <div
                             className="text-[11px] tracking-widest uppercase text-boxwood/70 flex items-center gap-1.5">
-                            <ListOrdered className="text-amber-400" size="{14}"/> Журнал ходов
+                            <ListOrdered className="text-amber-400" size={14}/> Журнал ходов
                         </div>
                         <div className="text-xs font-bold text-amber-200 mt-0.5 truncate">
                             {gameId
@@ -1561,7 +1563,7 @@ export default function Chessboard() {
                             className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition"
                             title="В начало партии (Стрелка вверх)"
                         >
-                            <ChevronFirst size="{16}"/>
+                            <ChevronFirst size={16}/>
                         </button>
                         <button
                             type="button"
@@ -1575,7 +1577,7 @@ export default function Chessboard() {
                             className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition"
                             title="Ход назад (Стрелка влево)"
                         >
-                            <ChevronLeft size="{16}"/>
+                            <ChevronLeft size={16}/>
                         </button>
                         <button
                             type="button"
@@ -1592,7 +1594,7 @@ export default function Chessboard() {
                             className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition"
                             title="Ход вперед (Стрелка вправо)"
                         >
-                            <ChevronRight size="{16}"/>
+                            <ChevronRight size={16}/>
                         </button>
                         <button
                             type="button"
@@ -1601,7 +1603,7 @@ export default function Chessboard() {
                             className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition"
                             title="К последнему ходу (Стрелка вниз)"
                         >
-                            <ChevronLast size="{16}"/>
+                            <ChevronLast size={16}/>
                         </button>
                     </div>
                 </div>
@@ -1616,7 +1618,7 @@ export default function Chessboard() {
                                 disabled={!!gameOverResult}
                                 className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/80 text-red-200 text-xs font-bold rounded hover:bg-red-900 transition shadow border border-red-800/50 disabled:opacity-40"
                             >
-                                <Flag size="{14}"/> Сдаться
+                                <Flag size={14}/> Сдаться
                             </button>
                             <button
                                 type="button"
@@ -1624,7 +1626,7 @@ export default function Chessboard() {
                                 disabled={!!gameOverResult}
                                 className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs font-bold rounded hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40"
                             >
-                                <Handshake size="{14}"/> Ничья
+                                <Handshake size={14}/> Ничья
                             </button>
                         </div>
 
@@ -1634,7 +1636,7 @@ export default function Chessboard() {
                                 onClick={handleResetSandbox}
                                 className="flex items-center justify-center gap-2 px-4 py-2.5 font-bold text-sm rounded transition shadow bg-boxwood text-acacia-dark border border-amber-700/50 hover:bg-boxwood-light"
                             >
-                                <RotateCcw size="{16}"/> Новая игра / В лобби
+                                <RotateCcw size={16}/> Новая игра / В лобби
                             </button>
                         )}
                     </>
@@ -1646,7 +1648,7 @@ export default function Chessboard() {
                             onClick={handleUndoSandboxMove}
                             className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs font-bold rounded hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40"
                         >
-                            <Undo2 size="{14}"/> Отменить ход
+                            <Undo2 size={14}/> Отменить ход
                         </button>
                         <button
                             type="button"
@@ -1654,7 +1656,7 @@ export default function Chessboard() {
                             onClick={handleResetSandbox}
                             className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-amber-300 text-xs font-bold rounded hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40"
                         >
-                            <RotateCcw size="{14}"/> Сбросить доску
+                            <RotateCcw size={14}/> Сбросить доску
                         </button>
                     </div>
                 )}
