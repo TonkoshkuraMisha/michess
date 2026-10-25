@@ -17,7 +17,8 @@ import {
     RotateCcw,
     Clock,
     ChevronDown,
-    ChevronUp
+    ChevronUp,
+    Palette
 } from 'lucide-react';
 import {gameSocket} from '../services/gameSocket';
 
@@ -31,6 +32,60 @@ interface QueuePlayer {
     base_time_ms: number;
     increment_ms: number;
 }
+
+export interface BoardTheme {
+    id: string;
+    name: string;
+    light: string;
+    dark: string;
+    coordLight: string;
+    coordDark: string;
+    border: string;
+    useWoodGrain: boolean;
+}
+
+export const BOARD_THEMES: Record<string, BoardTheme> = {
+    walnut: {
+        id: 'walnut',
+        name: 'Орех',
+        light: '#DFC8A2',
+        dark: '#966C46',
+        coordLight: '#6E4B2A',
+        coordDark: '#F3E5AB',
+        border: '#2A1810',
+        useWoodGrain: true
+    },
+    maple: {
+        id: 'maple',
+        name: 'Клён',
+        light: '#F0D9B5',
+        dark: '#B58863',
+        coordLight: '#8C6239',
+        coordDark: '#F0D9B5',
+        border: '#3D2314',
+        useWoodGrain: false
+    },
+    tournament: {
+        id: 'tournament',
+        name: 'Турнирная',
+        light: '#EBECD0',
+        dark: '#739552',
+        coordLight: '#537133',
+        coordDark: '#EBECD0',
+        border: '#263318',
+        useWoodGrain: false
+    },
+    slate: {
+        id: 'slate',
+        name: 'Графит',
+        light: '#DEE3E6',
+        dark: '#788A94',
+        coordLight: '#4E5D66',
+        coordDark: '#DEE3E6',
+        border: '#1F292E',
+        useWoodGrain: false
+    }
+};
 
 const TIME_CONTROLS = [
     {
@@ -77,6 +132,12 @@ export default function Chessboard() {
     const [history, setHistory] = useState<any[]>([]);
     const [viewIndex, setViewIndex] = useState<number>(-1);
     const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
+
+    // Тема доски с сохранением в localStorage
+    const [boardThemeKey, setBoardThemeKey] = useState<string>(() => {
+        const saved = localStorage.getItem('michess_board_theme');
+        return saved && BOARD_THEMES[saved] ? saved : 'walnut';
+    });
 
     // Мультиплеерные состояния
     const [gameId, setGameId] = useState<number | null>(null);
@@ -125,6 +186,13 @@ export default function Chessboard() {
     const [sessionStats, setSessionStats] = useState({wins: 0, losses: 0, draws: 0});
     const [gameOverResult, setGameOverResult] = useState<string | null>(null);
     const [drawOfferStatus, setDrawOfferStatus] = useState<string | null>(null);
+
+    const activeTheme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
+
+    const handleThemeChange = (themeId: string) => {
+        setBoardThemeKey(themeId);
+        localStorage.setItem('michess_board_theme', themeId);
+    };
 
     const topPlayerInfo = myColor === 'white' ? blackPlayer : whitePlayer;
     const bottomPlayerInfo = myColor === 'white' ? whitePlayer : blackPlayer;
@@ -198,6 +266,7 @@ export default function Chessboard() {
             setGame(restoredGame);
             setHistory(restoredGame.history({verbose: true}));
             setViewIndex(-1);
+            setSelectedSquare(null);
             setGameOverResult(null);
             setDrawOfferStatus('Партия началась!');
             playAudio('start');
@@ -574,7 +643,14 @@ export default function Chessboard() {
             if (selectedSquare === squareId) {
                 setSelectedSquare(null);
             } else {
-                executeMove(selectedSquare, squareId);
+                const pieceOnTarget = game.get(squareId as any);
+                const currentTurnChar = game.turn();
+                const currentTurnColor = currentTurnChar === 'w' ? 'white' : 'black';
+                if (pieceOnTarget && pieceOnTarget.color === currentTurnChar && (!gameId || currentTurnColor === myColor)) {
+                    setSelectedSquare(squareId);
+                } else {
+                    executeMove(selectedSquare, squareId);
+                }
             }
         } else {
             const piece = game.get(squareId as any);
@@ -595,38 +671,43 @@ export default function Chessboard() {
     })();
     const boardState = currentGame.board();
 
+    // Подсветка последнего сделанного хода
+    const activeMoveIndex = viewIndex === -1 ? history.length - 1 : viewIndex;
+    const lastMove = activeMoveIndex >= 0 ? history[activeMoveIndex] : null;
+
+    // Доступные ходы для выбранной фигуры
+    const legalTargetSquares = new Set<string>();
+    if (selectedSquare && viewIndex === -1 && !gameOverResult) {
+        try {
+            const movesForSquare = currentGame.moves({square: selectedSquare as any, verbose: true});
+            movesForSquare.forEach((m: any) => legalTargetSquares.add(m.to));
+        } catch {
+            // Игнорируем некорректный квадрат
+        }
+    }
+
     const displayedRanks = myColor === 'black' ? ['1', '2', '3', '4', '5', '6', '7', '8'] : ['8', '7', '6', '5', '4', '3', '2', '1'];
     const displayedFiles = myColor === 'black' ? [...FILES].reverse() : FILES;
 
-    const renderPieceSvg = (piece: { type: string; color: string }) => (
-        <div className="relative w-full h-full pointer-events-none">
-            <img
-                src={`/assets/pieces/${piece.color}${piece.type.toUpperCase()}.svg`}
-                className="absolute inset-0 w-full h-full z-10 object-contain"
-                draggable={false}
-                alt=""
-            />
-            <div
-                className={`absolute inset-0 z-20 mix-blend-color ${piece.color === 'w' ? 'bg-boxwood' : 'bg-acacia'}`}
-                style={{
-                    WebkitMaskImage: `url(/assets/pieces/${piece.color}${piece.type.toUpperCase()}.svg)`,
-                    WebkitMaskSize: 'contain',
-                    WebkitMaskRepeat: 'no-repeat',
-                    WebkitMaskPosition: 'center',
-                }}
-            />
-            <div
-                className="absolute inset-0 z-30 mix-blend-multiply opacity-50"
-                style={{
-                    backgroundImage: "url('/assets/textures/wood-grain.png')",
-                    WebkitMaskImage: `url(/assets/pieces/${piece.color}${piece.type.toUpperCase()}.svg)`,
-                    WebkitMaskSize: 'contain',
-                    WebkitMaskRepeat: 'no-repeat',
-                    WebkitMaskPosition: 'center',
-                }}
-            />
-        </div>
-    );
+    // Чистый высококонтрастный рендеринг SVG-фигур без сливания с цветом клеток доски
+    const renderPieceSvg = (piece: { type: string; color: string }) => {
+        const isWhite = piece.color === 'w';
+        const pieceFilter = isWhite
+            ? 'sepia(0.12) saturate(0.85) brightness(1.03) drop-shadow(0 2px 3px rgba(0, 0, 0, 0.65)) drop-shadow(0 0 1px rgba(0, 0, 0, 0.85))'
+            : 'brightness(0.95) contrast(1.08) drop-shadow(0 0 1.2px rgba(255, 248, 225, 0.55)) drop-shadow(0 3px 4px rgba(0, 0, 0, 0.65))';
+
+        return (
+            <div className="relative w-full h-full pointer-events-none flex items-center justify-center">
+                <img
+                    src={`/assets/pieces/${piece.color}${piece.type.toUpperCase()}.svg`}
+                    className="w-[90%] h-[90%] object-contain select-none"
+                    style={{filter: pieceFilter}}
+                    draggable={false}
+                    alt={`${piece.color}${piece.type}`}
+                />
+            </div>
+        );
+    };
 
     if (!localStorage.getItem('token')) {
         return (
@@ -647,7 +728,7 @@ export default function Chessboard() {
 
             {dragState && (
                 <div
-                    className="fixed pointer-events-none z-50 drop-shadow-[0_15px_15px_rgba(0,0,0,0.6)]"
+                    className="fixed pointer-events-none z-50 scale-110"
                     style={{
                         left: `${dragState.x}px`,
                         top: `${dragState.y}px`,
@@ -698,92 +779,123 @@ export default function Chessboard() {
                 {/* ШАХМАТНАЯ ДОСКА */}
                 <div
                     ref={boardContainerRef}
-                    style={{width: `${boardSize}px`, height: `${boardSize}px`}}
-                    className="p-4 bg-acacia-dark rounded-sm shadow-heavy border-4 border-black/80 relative transition-all select-none"
+                    style={{
+                        width: `${boardSize}px`,
+                        height: `${boardSize}px`,
+                        backgroundColor: activeTheme.border
+                    }}
+                    className="p-3.5 rounded-md shadow-heavy border-2 border-amber-950/80 relative transition-all select-none"
                 >
-                    <div
-                        className="absolute inset-0 opacity-40 mix-blend-multiply pointer-events-none"
-                        style={{backgroundImage: "url('/assets/textures/wood-grain.png')"}}
-                    />
+                    {activeTheme.useWoodGrain && (
+                        <div
+                            className="absolute inset-0 opacity-25 mix-blend-multiply pointer-events-none"
+                            style={{backgroundImage: "url('/assets/textures/wood-grain.png')"}}
+                        />
+                    )}
 
                     <div
-                        className="grid grid-cols-8 grid-rows-8 w-full h-full border-2 border-room-dark relative z-10 shadow-inner-board">
+                        className="grid grid-cols-8 grid-rows-8 w-full h-full border border-black/60 relative z-10 shadow-inner-board rounded-[2px] overflow-hidden">
                         {displayedRanks.map((rank) =>
-                                displayedFiles.map((file) => {
-                                    const rIdx = RANKS.indexOf(rank);
-                                    const fIdx = FILES.indexOf(file);
-                                    const isDark = (rIdx + fIdx) % 2 !== 0;
-                                    const squareId = `${file}${rank}`;
+                            displayedFiles.map((file) => {
+                                const rIdx = RANKS.indexOf(rank);
+                                const fIdx = FILES.indexOf(file);
+                                const isDark = (rIdx + fIdx) % 2 !== 0;
+                                const squareId = `${file}${rank}`;
 
-                                    const piece = boardState[rIdx][fIdx];
+                                const piece = boardState[rIdx][fIdx];
 
-                                    const isSelected = selectedSquare === squareId;
-                                    const isBeingDragged = dragState?.from === squareId;
+                                const isSelected = selectedSquare === squareId;
+                                const isLastMove = lastMove && (lastMove.from === squareId || lastMove.to === squareId);
+                                const isLegalTarget = legalTargetSquares.has(squareId);
+                                const isBeingDragged = dragState?.from === squareId;
 
-                                    return (
-                                        <div
-                                            key={squareId}
-                                            data-square={squareId}
-                                            onClick={() => handleSquareClick(squareId)}
-                                            className={`w-full h-full flex items-center justify-center relative cursor-pointer ${isDark ? 'bg-acacia' : 'bg-boxwood'}`}
-                                        >
-                                            {isDark ? (
-                                                <div className="absolute inset-0 bg-black/10 pointer-events-none"/>
-                                            ) : (
-                                                <div className="absolute inset-0 bg-white/20 pointer-events-none"/>
-                                            )}
-
-                                            {isSelected && (
-                                                <div
-                                                    className="absolute inset-0 bg-yellow-500/30 z-10 pointer-events-none"/>
-                                            )}
-
+                                return (
+                                    <div
+                                        key={squareId}
+                                        data-square={squareId}
+                                        onClick={() => handleSquareClick(squareId)}
+                                        style={{
+                                            backgroundColor: isDark ? activeTheme.dark : activeTheme.light
+                                        }}
+                                        className="w-full h-full flex items-center justify-center relative cursor-pointer transition-colors duration-75"
+                                    >
+                                        {/* Деликатная текстура дерева только для деревянной темы */}
+                                        {activeTheme.useWoodGrain && (
                                             <div
-                                                className="absolute inset-0 opacity-40 mix-blend-multiply pointer-events-none"
+                                                className="absolute inset-0 opacity-15 mix-blend-multiply pointer-events-none"
                                                 style={{backgroundImage: "url('/assets/textures/wood-grain.png')"}}
                                             />
+                                        )}
 
+                                        {/* Подсветка последнего хода */}
+                                        {isLastMove && !isSelected && (
                                             <div
-                                                className="absolute inset-0 shadow-[inset_0_0_12px_rgba(0,0,0,0.3)] pointer-events-none"/>
+                                                className="absolute inset-0 bg-amber-300/35 z-10 pointer-events-none"/>
+                                        )}
 
-                                            {piece && !isBeingDragged && (
+                                        {/* Подсветка выбранной клетки */}
+                                        {isSelected && (
+                                            <div
+                                                className="absolute inset-0 bg-amber-400/50 ring-2 ring-inset ring-amber-300/80 z-10 pointer-events-none"/>
+                                        )}
+
+                                        {/* Индикатор доступного хода */}
+                                        {isLegalTarget && (
+                                            piece ? (
                                                 <div
-                                                    onMouseDown={(e) => {
-                                                        if (viewIndex !== -1 || gameOverResult) return;
-                                                        const turnColor = currentGame.turn() === 'w' ? 'white' : 'black';
-                                                        if (piece.color !== (currentGame.turn() === 'w' ? 'w' : 'b')) return;
-                                                        if (gameId && turnColor !== myColor) return;
-                                                        e.stopPropagation();
-                                                        moveStartTime.current = Date.now();
-                                                        setSelectedSquare(squareId);
-                                                        setDragState({
-                                                            from: squareId,
-                                                            piece,
-                                                            x: e.clientX,
-                                                            y: e.clientY
-                                                        });
-                                                    }}
-                                                    className={`relative w-full h-full p-[2%] z-20 drop-shadow-[0_0_1px_rgba(255,255,255,0.4)] drop-shadow-[0_6px_6px_rgba(0,0,0,0.7)] ${piece.color === (currentGame.turn() === 'w' ? 'w' : 'b') && viewIndex === -1 && !gameOverResult ? 'cursor-grab active:cursor-grabbing' : ''}`}
-                                                >
-                                                    {renderPieceSvg(piece)}
-                                                </div>
-                                            )}
+                                                    className="absolute inset-0 rounded-full border-[5px] border-black/25 z-30 pointer-events-none m-1"/>
+                                            ) : (
+                                                <div
+                                                    className="w-3.5 h-3.5 rounded-full bg-black/25 z-30 pointer-events-none"/>
+                                            )
+                                        )}
 
-                                            {file === displayedFiles[0] && (
-                                                <span
-                                                    className={`absolute top-1 left-1 text-[10px] sm:text-xs font-bold opacity-70 z-20 pointer-events-none ${isDark ? 'text-boxwood' : 'text-acacia-dark'}`}>
-                        {rank}
-                      </span>
-                                            )}
-                                            {rank === displayedRanks[7] && (
-                                                <span
-                                                    className={`absolute bottom-0 right-1 text-[10px] sm:text-xs font-bold opacity-70 z-20 pointer-events-none ${isDark ? 'text-boxwood' : 'text-acacia-dark'}`}>
-                        {file}
-                      </span>
-                                            )}
-                                        </div>
-                                    );
-                                })
+                                        {piece && !isBeingDragged && (
+                                            <div
+                                                onMouseDown={(e) => {
+                                                    if (viewIndex !== -1 || gameOverResult) return;
+                                                    const turnColor = currentGame.turn() === 'w' ? 'white' : 'black';
+                                                    if (piece.color !== (currentGame.turn() === 'w' ? 'w' : 'b')) return;
+                                                    if (gameId && turnColor !== myColor) return;
+                                                    e.stopPropagation();
+                                                    moveStartTime.current = Date.now();
+                                                    setSelectedSquare(squareId);
+                                                    setDragState({
+                                                        from: squareId,
+                                                        piece,
+                                                        x: e.clientX,
+                                                        y: e.clientY
+                                                    });
+                                                }}
+                                                className={`relative w-full h-full p-[3%] z-20 transition-transform duration-75 ${
+                                                    piece.color === (currentGame.turn() === 'w' ? 'w' : 'b') && viewIndex === -1 && !gameOverResult
+                                                        ? 'cursor-grab active:cursor-grabbing hover:scale-[1.03]'
+                                                        : ''
+                                                }`}
+                                            >
+                                                {renderPieceSvg(piece)}
+                                            </div>
+                                        )}
+
+                                        {file === displayedFiles[0] && (
+                                            <span
+                                                style={{color: isDark ? activeTheme.coordDark : activeTheme.coordLight}}
+                                                className="absolute top-0.5 left-1 text-[10px] sm:text-[11px] font-sans font-bold opacity-85 z-20 pointer-events-none leading-none"
+                                            >
+                                                {rank}
+                                            </span>
+                                        )}
+                                        {rank === displayedRanks[7] && (
+                                            <span
+                                                style={{color: isDark ? activeTheme.coordDark : activeTheme.coordLight}}
+                                                className="absolute bottom-0.5 right-1 text-[10px] sm:text-[11px] font-sans font-bold opacity-85 z-20 pointer-events-none leading-none"
+                                            >
+                                                {file}
+                                            </span>
+                                        )}
+                                    </div>
+                                );
+                            })
                         )}
                     </div>
                 </div>
@@ -1041,6 +1153,40 @@ export default function Chessboard() {
                     </div>
                 </div>
 
+                {/* Выбор цветовой палитры доски */}
+                <div className="bg-acacia-dark p-3 rounded border border-amber-900/40 flex flex-col gap-2">
+                    <div className="flex justify-between items-center text-xs text-boxwood/80">
+                        <span className="flex items-center gap-1.5"><Palette size={14}/> Стиль доски</span>
+                        <span className="text-amber-400 font-bold">{activeTheme.name}</span>
+                    </div>
+                    <div className="grid grid-cols-4 gap-1.5">
+                        {Object.values(BOARD_THEMES).map((theme) => {
+                            const isCurrent = theme.id === activeTheme.id;
+                            return (
+                                <button
+                                    key={theme.id}
+                                    type="button"
+                                    onClick={() => handleThemeChange(theme.id)}
+                                    className={`flex flex-col items-center gap-1 p-1.5 rounded border text-[10px] font-bold transition ${
+                                        isCurrent
+                                            ? 'bg-amber-900/40 border-amber-400 text-amber-200 shadow'
+                                            : 'bg-black/30 border-amber-900/40 text-boxwood/70 hover:text-amber-200 hover:border-amber-700/60'
+                                    }`}
+                                >
+                                    <div
+                                        className="w-6 h-6 rounded-sm overflow-hidden grid grid-cols-2 grid-rows-2 border border-black/50 shadow-sm">
+                                        <div style={{backgroundColor: theme.light}}/>
+                                        <div style={{backgroundColor: theme.dark}}/>
+                                        <div style={{backgroundColor: theme.dark}}/>
+                                        <div style={{backgroundColor: theme.light}}/>
+                                    </div>
+                                    <span className="truncate w-full text-center">{theme.name}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
                 <div className="bg-acacia-dark p-3 rounded border border-amber-900/40 flex flex-col gap-2">
                     <div className="flex justify-between items-center text-xs text-boxwood/80">
                         <span className="flex items-center gap-1"><Sliders size={14}/> Размер доски</span>
@@ -1063,6 +1209,7 @@ export default function Chessboard() {
                             setGameId(null);
                             setGameOverResult(null);
                             setRatingInfo(null);
+                            setSelectedSquare(null);
                             setGame(new Chess());
                             setHistory([]);
                         }}
