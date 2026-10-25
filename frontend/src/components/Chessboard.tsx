@@ -9,7 +9,6 @@ import {
     ChevronLast,
     Users,
     Sword,
-    Sliders,
     Flag,
     Handshake,
     Loader2,
@@ -18,12 +17,26 @@ import {
     Clock,
     ChevronDown,
     ChevronUp,
-    Palette
+    Palette,
+    RefreshCw,
+    ListOrdered,
+    Undo2
 } from 'lucide-react';
 import {gameSocket} from '../services/gameSocket';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
+
+export const MIN_BOARD_SIZE = 380;
+export const MAX_BOARD_SIZE = 860;
+
+export function getDefaultBoardSize(): number {
+    if (typeof window !== 'undefined') {
+        const calculated = window.innerHeight - 230;
+        return Math.min(Math.max(calculated, 440), 720);
+    }
+    return 580;
+}
 
 interface QueuePlayer {
     user_id: number;
@@ -116,6 +129,58 @@ const TIME_CONTROLS = [
     }
 ];
 
+const PIECE_VALUES: Record<string, number> = {
+    p: 1,
+    n: 3,
+    b: 3,
+    r: 5,
+    q: 9,
+    k: 0
+};
+
+function calculateMaterialBalance(boardState: any[][]) {
+    const startCounts: Record<string, number> = {p: 8, n: 2, b: 2, r: 2, q: 1};
+    const currentWhite: Record<string, number> = {p: 0, n: 0, b: 0, r: 0, q: 0};
+    const currentBlack: Record<string, number> = {p: 0, n: 0, b: 0, r: 0, q: 0};
+
+    let whiteScore = 0;
+    let blackScore = 0;
+
+    for (const row of boardState) {
+        for (const cell of row) {
+            if (!cell) continue;
+            const val = PIECE_VALUES[cell.type] || 0;
+            if (cell.color === 'w') {
+                whiteScore += val;
+                if (currentWhite[cell.type] !== undefined) currentWhite[cell.type]++;
+            } else {
+                blackScore += val;
+                if (currentBlack[cell.type] !== undefined) currentBlack[cell.type]++;
+            }
+        }
+    }
+
+    const whiteCapturedSymbols: string[] = [];
+    const blackCapturedSymbols: string[] = [];
+    const order = ['q', 'r', 'b', 'n', 'p'];
+    const glyphs: Record<string, string> = {q: '♛', r: '♜', b: '♝', n: '♞', p: '♟'};
+
+    for (const t of order) {
+        const missingBlack = Math.max(0, startCounts[t] - currentBlack[t]);
+        for (let i = 0; i < missingBlack; i++) whiteCapturedSymbols.push(glyphs[t]);
+
+        const missingWhite = Math.max(0, startCounts[t] - currentWhite[t]);
+        for (let i = 0; i < missingWhite; i++) blackCapturedSymbols.push(glyphs[t]);
+    }
+
+    return {
+        whiteAdvantage: Math.max(0, whiteScore - blackScore),
+        blackAdvantage: Math.max(0, blackScore - whiteScore),
+        whiteCapturedSymbols,
+        blackCapturedSymbols
+    };
+}
+
 function cloneChessInstance(source: Chess): Chess {
     const copy = new Chess();
     const currentPgn = source.pgn();
@@ -130,8 +195,10 @@ function cloneChessInstance(source: Chess): Chess {
 export default function Chessboard() {
     const [game, setGame] = useState(new Chess());
     const [history, setHistory] = useState<any[]>([]);
+    // -1 = актуальная (живая) позиция; -2 = самое начало партии (до 1-го хода); 0..N = индекс полухода в history
     const [viewIndex, setViewIndex] = useState<number>(-1);
     const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
+    const [isManualFlip, setIsManualFlip] = useState<boolean>(false);
 
     // Тема доски с сохранением в localStorage
     const [boardThemeKey, setBoardThemeKey] = useState<string>(() => {
@@ -152,6 +219,7 @@ export default function Chessboard() {
     const [isTimeDropdownOpen, setIsTimeDropdownOpen] = useState(false);
     const timeDropdownRef = useRef<HTMLDivElement>(null);
     const boardContainerRef = useRef<HTMLDivElement>(null);
+    const notationScrollRef = useRef<HTMLDivElement>(null);
 
     // Данные игроков и изменения рейтинга
     const [whitePlayer, setWhitePlayer] = useState({username: 'Белые', rating: '1200'});
@@ -172,13 +240,19 @@ export default function Chessboard() {
         y: number;
     } | null>(null);
 
+    // Размер доски и состояние перетаскивания правого нижнего угла
     const [boardSize, setBoardSize] = useState<number>(() => {
-        if (typeof window !== 'undefined') {
-            const calculated = window.innerHeight - 260;
-            return Math.min(Math.max(calculated, 400), 720);
+        const savedSize = localStorage.getItem('michess_board_size');
+        if (savedSize) {
+            const parsed = Number(savedSize);
+            if (!Number.isNaN(parsed) && parsed >= MIN_BOARD_SIZE && parsed <= MAX_BOARD_SIZE) {
+                return parsed;
+            }
         }
-        return 540;
+        return getDefaultBoardSize();
     });
+    const [isResizing, setIsResizing] = useState(false);
+    const resizeStartRef = useRef<{ startX: number; startY: number; startSize: number } | null>(null);
 
     const [whiteTimeMs, setWhiteTimeMs] = useState(180000);
     const [blackTimeMs, setBlackTimeMs] = useState(180000);
@@ -189,15 +263,117 @@ export default function Chessboard() {
 
     const activeTheme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
 
+    // Определяем ориентацию доски (с учетом цвета игрока и ручного переворота)
+    const isBoardFlipped = (myColor === 'black') !== isManualFlip;
+
     const handleThemeChange = (themeId: string) => {
         setBoardThemeKey(themeId);
         localStorage.setItem('michess_board_theme', themeId);
     };
 
-    const topPlayerInfo = myColor === 'white' ? blackPlayer : whitePlayer;
-    const bottomPlayerInfo = myColor === 'white' ? whitePlayer : blackPlayer;
-    const topPlayerTime = myColor === 'white' ? blackTimeMs : whiteTimeMs;
-    const bottomPlayerTime = myColor === 'white' ? whiteTimeMs : blackTimeMs;
+    // Обработчик изменения размера доски за правый нижний угол
+    useEffect(() => {
+        if (!isResizing) return;
+
+        const prevCursor = document.body.style.cursor;
+        const prevUserSelect = document.body.style.userSelect;
+        document.body.style.cursor = 'nwse-resize';
+        document.body.style.userSelect = 'none';
+
+        const handleResizeMove = (e: MouseEvent) => {
+            if (!resizeStartRef.current) return;
+            const {startX, startY, startSize} = resizeStartRef.current;
+            const deltaX = e.clientX - startX;
+            const deltaY = e.clientY - startY;
+            const delta = Math.round((deltaX + deltaY) / 2);
+
+            const dynamicMax = typeof window !== 'undefined'
+                ? Math.min(MAX_BOARD_SIZE, Math.max(MIN_BOARD_SIZE, window.innerWidth - 48))
+                : MAX_BOARD_SIZE;
+
+            const nextSize = Math.min(Math.max(startSize + delta, MIN_BOARD_SIZE), dynamicMax);
+            setBoardSize(nextSize);
+            localStorage.setItem('michess_board_size', String(nextSize));
+        };
+
+        const handleResizeEnd = () => {
+            setIsResizing(false);
+            resizeStartRef.current = null;
+        };
+
+        window.addEventListener('mousemove', handleResizeMove);
+        window.addEventListener('mouseup', handleResizeEnd);
+
+        return () => {
+            document.body.style.cursor = prevCursor;
+            document.body.style.userSelect = prevUserSelect;
+            window.removeEventListener('mousemove', handleResizeMove);
+            window.removeEventListener('mouseup', handleResizeEnd);
+        };
+    }, [isResizing]);
+
+    const handleResizeMouseDown = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        resizeStartRef.current = {
+            startX: e.clientX,
+            startY: e.clientY,
+            startSize: boardSize
+        };
+        setIsResizing(true);
+    };
+
+    const handleResizeDoubleClick = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const defaultSize = getDefaultBoardSize();
+        setBoardSize(defaultSize);
+        localStorage.setItem('michess_board_size', String(defaultSize));
+    };
+
+    // Навигация по истории ходов стрелками клавиатуры
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (history.length === 0) return;
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+            if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                setViewIndex(prev => {
+                    const current = prev === -1 ? history.length - 1 : prev;
+                    return current <= 0 ? -2 : current - 1;
+                });
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                setViewIndex(prev => {
+                    if (prev === -1) return -1;
+                    if (prev === -2) return history.length > 1 ? 0 : -1;
+                    return prev + 1 >= history.length - 1 ? -1 : prev + 1;
+                });
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setViewIndex(-2);
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setViewIndex(-1);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [history.length]);
+
+    // Автоскролл списка нотации к активному ходу
+    useEffect(() => {
+        if (notationScrollRef.current) {
+            const activeEl = notationScrollRef.current.querySelector('.active-move-btn');
+            if (activeEl) {
+                activeEl.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+            } else if (viewIndex === -1) {
+                notationScrollRef.current.scrollTop = notationScrollRef.current.scrollHeight;
+            }
+        }
+    }, [history.length, viewIndex]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
@@ -216,7 +392,7 @@ export default function Chessboard() {
         const token = localStorage.getItem('token');
         if (!token) return;
 
-        fetch('http://127.0.0.1:8000/api/v1/profile/me', {
+        fetch('[http://127.0.0.1:8000/api/v1/profile/me](http://127.0.0.1:8000/api/v1/profile/me)', {
             headers: {'Authorization': `Bearer ${token}`}
         })
             .then(res => res.ok ? res.json() : null)
@@ -237,6 +413,7 @@ export default function Chessboard() {
             setIsSearching(false);
             setGameId(data.game_id);
             setMyColor(data.color);
+            setIsManualFlip(false);
             setRatingInfo(null);
             setStateVersion(data.state_version || 0);
 
@@ -275,7 +452,6 @@ export default function Chessboard() {
 
         const handleMoveMade = (data: any) => {
             setGame(prev => {
-                // Если ход уже применен локально (Optimistic UI), не перерисовываем доску повторно
                 if (data.fen && prev.fen() === data.fen) {
                     return prev;
                 }
@@ -318,6 +494,7 @@ export default function Chessboard() {
                 return nextGame;
             });
 
+            setViewIndex(-1);
             if (data.state_version !== undefined) {
                 setStateVersion(data.state_version);
             }
@@ -417,7 +594,7 @@ export default function Chessboard() {
         if (!gameId) {
             const fetchQueue = async () => {
                 try {
-                    const res = await fetch('http://127.0.0.1:8000/api/v1/profile/matchmaking/queue');
+                    const res = await fetch('[http://127.0.0.1:8000/api/v1/profile/matchmaking/queue](http://127.0.0.1:8000/api/v1/profile/matchmaking/queue)');
                     if (res.ok) {
                         const data = await res.json();
                         setQueuePlayers(data);
@@ -466,17 +643,15 @@ export default function Chessboard() {
 
             let targetSquare: string | null = null;
 
-            // Способ 1: Прямой поиск атрибута data-square под курсором
             const elements = document.elementsFromPoint(e.clientX, e.clientY);
             const squareEl = Array.from(elements || []).find(el => el.hasAttribute('data-square'));
             if (squareEl) {
                 targetSquare = squareEl.getAttribute('data-square');
             }
 
-            // Способ 2: Геометрический фоллбэк по координатам доски
             if (!targetSquare && boardContainerRef.current) {
                 const rect = boardContainerRef.current.getBoundingClientRect();
-                const padding = 16;
+                const padding = 14;
                 const innerLeft = rect.left + padding;
                 const innerTop = rect.top + padding;
                 const innerWidth = rect.width - padding * 2;
@@ -489,8 +664,8 @@ export default function Chessboard() {
                     const fileIdx = Math.floor((x / innerWidth) * 8);
                     const rankIdx = Math.floor((y / innerHeight) * 8);
 
-                    const files = myColor === 'black' ? [...FILES].reverse() : FILES;
-                    const ranks = myColor === 'black'
+                    const files = isBoardFlipped ? [...FILES].reverse() : FILES;
+                    const ranks = isBoardFlipped
                         ? ['1', '2', '3', '4', '5', '6', '7', '8']
                         : ['8', '7', '6', '5', '4', '3', '2', '1'];
 
@@ -516,7 +691,7 @@ export default function Chessboard() {
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [dragState, game, gameId, myColor, stateVersion, viewIndex, gameOverResult]);
+    }, [dragState, game, gameId, myColor, isBoardFlipped, stateVersion, viewIndex, gameOverResult]);
 
     const formatTime = (ms: number) => {
         const totalMs = Math.max(0, ms);
@@ -589,6 +764,27 @@ export default function Chessboard() {
         setDrawOfferStatus(null);
     };
 
+    const handleResetSandbox = () => {
+        if (gameId && !gameOverResult) return;
+        setGameId(null);
+        setGameOverResult(null);
+        setRatingInfo(null);
+        setSelectedSquare(null);
+        setViewIndex(-1);
+        setGame(new Chess());
+        setHistory([]);
+    };
+
+    const handleUndoSandboxMove = () => {
+        if (gameId || history.length === 0) return;
+        const nextGame = cloneChessInstance(game);
+        nextGame.undo();
+        setGame(nextGame);
+        setHistory(nextGame.history({verbose: true}));
+        setViewIndex(-1);
+        setSelectedSquare(null);
+    };
+
     const executeMove = (from: string, to: string) => {
         if (gameOverResult || viewIndex !== -1) return;
 
@@ -608,9 +804,9 @@ export default function Chessboard() {
                 const timeTaken = Date.now() - moveStartTime.current;
                 const uciMove = (move as any).uci || `${move.from}${move.to}${move.promotion || ''}`;
 
-                // Мгновенно обновляем доску и историю (Optimistic UI)
                 setGame(nextGame);
                 setHistory(nextGame.history({verbose: true}));
+                setViewIndex(-1);
                 playAudio(move.san.includes('x') ? 'capture' : 'move');
                 moveStartTime.current = Date.now();
 
@@ -670,8 +866,9 @@ export default function Chessboard() {
         return tg;
     })();
     const boardState = currentGame.board();
+    const material = calculateMaterialBalance(boardState);
 
-    // Подсветка последнего сделанного хода
+    // Индекс текущего отображаемого полухода для подсветки в таблице нотации и на доске
     const activeMoveIndex = viewIndex === -1 ? history.length - 1 : viewIndex;
     const lastMove = activeMoveIndex >= 0 ? history[activeMoveIndex] : null;
 
@@ -686,10 +883,50 @@ export default function Chessboard() {
         }
     }
 
-    const displayedRanks = myColor === 'black' ? ['1', '2', '3', '4', '5', '6', '7', '8'] : ['8', '7', '6', '5', '4', '3', '2', '1'];
-    const displayedFiles = myColor === 'black' ? [...FILES].reverse() : FILES;
+    const displayedRanks = isBoardFlipped ? ['1', '2', '3', '4', '5', '6', '7', '8'] : ['8', '7', '6', '5', '4', '3', '2', '1'];
+    const displayedFiles = isBoardFlipped ? [...FILES].reverse() : FILES;
 
-    // Чистый высококонтрастный рендеринг SVG-фигур без сливания с цветом клеток доски
+    const topIsWhite = isBoardFlipped;
+    const topPlayerInfo = topIsWhite ? whitePlayer : blackPlayer;
+    const bottomPlayerInfo = topIsWhite ? blackPlayer : whitePlayer;
+    const topPlayerTime = topIsWhite ? whiteTimeMs : blackTimeMs;
+    const bottomPlayerTime = topIsWhite ? blackTimeMs : whiteTimeMs;
+    const topCaptured = topIsWhite ? material.whiteCapturedSymbols : material.blackCapturedSymbols;
+    const bottomCaptured = topIsWhite ? material.blackCapturedSymbols : material.whiteCapturedSymbols;
+    const topAdvantage = topIsWhite ? material.whiteAdvantage : material.blackAdvantage;
+    const bottomAdvantage = topIsWhite ? material.blackAdvantage : material.whiteAdvantage;
+
+    // Формируем пары ходов (Номер хода | Белые | Черные) с точными индексами для клика
+    const movePairs = history.reduce((acc: Array<{
+        moveNumber: number;
+        whiteSan: string;
+        whiteIdx: number;
+        blackSan?: string;
+        blackIdx?: number;
+    }>, move: any, idx: number) => {
+        if (idx % 2 === 0) {
+            acc.push({
+                moveNumber: Math.floor(idx / 2) + 1,
+                whiteSan: move.san,
+                whiteIdx: idx
+            });
+        } else {
+            acc[acc.length - 1].blackSan = move.san;
+            acc[acc.length - 1].blackIdx = idx;
+        }
+        return acc;
+    }, []);
+
+    const handleSelectMoveFromList = (targetIdx: number) => {
+        setSelectedSquare(null);
+        if (targetIdx >= history.length - 1) {
+            setViewIndex(-1);
+        } else {
+            setViewIndex(targetIdx);
+        }
+    };
+
+    // Чистый высококонтрастный рендеринг SVG-фигур
     const renderPieceSvg = (piece: { type: string; color: string }) => {
         const isWhite = piece.color === 'w';
         const pieceFilter = isWhite
@@ -714,17 +951,19 @@ export default function Chessboard() {
             <div
                 className="flex flex-col items-center justify-center p-8 bg-acacia rounded shadow-heavy border-4 border-acacia-dark text-boxwood-light text-center font-serif">
                 <div className="text-xl font-bold mb-2">Требуется авторизация</div>
-                <p className="text-sm text-boxwood/80 mb-4">Пожалуйста, войдите в систему в правом верхнем углу, чтобы
-                    играть.</p>
+                <p className="text-sm text-boxwood/80 mb-4">
+                    Пожалуйста, войдите в систему в правом верхнем углу, чтобы играть.
+                </p>
             </div>
         );
     }
 
     const filteredQueue = queuePlayers.filter(p => p.user_id !== currentUserId);
+    const sidePanelHeight = boardSize + 148;
 
     return (
         <div
-            className="flex flex-col xl:flex-row items-center xl:items-start justify-center gap-6 w-full max-w-7xl mx-auto font-serif relative">
+            className="flex flex-col xl:flex-row items-center xl:items-start justify-center gap-6 w-full max-w-[1600px] mx-auto font-serif relative px-2">
 
             {dragState && (
                 <div
@@ -741,37 +980,247 @@ export default function Chessboard() {
                 </div>
             )}
 
-            {/* Игроки и доска */}
-            <div className="flex flex-col items-center gap-3">
+            {/* ЛЕВАЯ КОЛОНКА: ЛОББИ, КОНТРОЛЬ ВРЕМЕНИ И ОФОРМЛЕНИЕ ДОСКИ */}
+            <div
+                style={{minHeight: `${Math.min(sidePanelHeight, 740)}px`}}
+                className="w-full xl:w-80 2xl:w-[340px] bg-acacia p-4 rounded shadow-heavy border-4 border-acacia-dark flex flex-col gap-3.5 text-boxwood-light order-2 xl:order-1 shrink-0"
+            >
+                <div className="border-b border-acacia-light pb-3 flex justify-between items-center">
+                    <div>
+                        <div className="text-[11px] tracking-widest uppercase text-boxwood/70">Рейтинговый зал</div>
+                        <div className="text-sm font-bold flex items-center gap-2 mt-1 font-mono">
+                            <span className="text-xs text-boxwood/70 uppercase font-serif">Сессия:</span>
+                            <span className="text-emerald-400">+{sessionStats.wins}</span>
+                            <span className="text-red-400">-{sessionStats.losses}</span>
+                            <span className="text-gray-300">={sessionStats.draws}</span>
+                        </div>
+                    </div>
+                    <div className="p-2 bg-acacia-dark rounded border border-amber-600/30 text-amber-400">
+                        <Sword size="{18}"/>
+                    </div>
+                </div>
+
+                {/* Выбор контроля времени и кнопка поиска */}
+                <div
+                    className="bg-acacia-dark p-3 rounded border border-amber-900/40 flex flex-col gap-2.5 shadow-inner">
+                    <label
+                        className="text-[10px] uppercase tracking-widest text-boxwood/70 flex items-center gap-1.5 font-bold">
+                        <Clock className="text-amber-500" size="{12}"/> Контроль времени
+                    </label>
+
+                    <div className="relative w-full" ref={timeDropdownRef}>
+                        <button
+                            type="button"
+                            disabled={isSearching || !!gameId}
+                            onClick={() => setIsTimeDropdownOpen(!isTimeDropdownOpen)}
+                            className="w-full bg-black/40 border border-amber-700/50 hover:bg-black/60 disabled:opacity-50 transition text-amber-200 rounded p-2 text-xs font-bold outline-none cursor-pointer flex justify-between items-center shadow-inner"
+                        >
+                            <span>
+                                {selectedTimeControl.base} мин {selectedTimeControl.inc > 0 ? `+ ${selectedTimeControl.inc} сек` : ''}
+                            </span>
+                            {isTimeDropdownOpen ? <ChevronUp className="text-amber-500/70" size="{14}"/> :
+                                <ChevronDown className="text-amber-500/70" size="{14}"/>}
+                        </button>
+
+                        {isTimeDropdownOpen && (
+                            <div
+                                className="absolute z-50 w-full top-full mt-1 bg-[#1A120B] border border-amber-700/50 rounded shadow-2xl max-h-60 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
+                                {TIME_CONTROLS.map((group, gIdx) => (
+                                    <div key={gIdx}>
+                                        <div
+                                            className="px-3 py-1.5 text-[10px] uppercase tracking-widest text-amber-500/60 bg-black/60 font-bold sticky top-0 z-10 border-b border-t border-amber-900/30 first:border-t-0 backdrop-blur-sm">
+                                            {group.group}
+                                        </div>
+                                        {group.options.map((opt, oIdx) => {
+                                            const isSelected = selectedTimeControl.base === opt.base && selectedTimeControl.inc === opt.inc;
+                                            return (
+                                                <button
+                                                    key={oIdx}
+                                                    type="button"
+                                                    className={`w-full text-left px-4 py-2 text-xs font-bold transition flex justify-between items-center ${
+                                                        isSelected
+                                                            ? 'bg-amber-900/40 text-amber-400'
+                                                            : 'text-amber-100/80 hover:bg-amber-900/20 hover:text-amber-200'
+                                                    }`}
+                                                    onClick={() => {
+                                                        setSelectedTimeControl({base: opt.base, inc: opt.inc});
+                                                        setIsTimeDropdownOpen(false);
+                                                    }}
+                                                >
+                                                    <span>{opt.label}</span>
+                                                    {isSelected && <div
+                                                        className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]"/>}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {!gameId ? (
+                        <button
+                            onClick={isSearching ? cancelMatchmaking : startMatchmaking}
+                            className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 font-bold text-sm rounded transition shadow border ${
+                                isSearching
+                                    ? 'bg-red-900/80 text-red-100 border-red-700 hover:bg-red-900'
+                                    : 'bg-boxwood text-acacia-dark border-amber-700/50 hover:bg-boxwood-light'
+                            }`}
+                        >
+                            {isSearching ? <Loader2 className="animate-spin" size="{16}"/> : <Users size="{16}"/>}
+                            {isSearching ? 'Отменить поиск' : 'Найти соперника'}
+                        </button>
+                    ) : (
+                        <div
+                            className="text-center py-1.5 px-2 rounded bg-emerald-950/50 border border-emerald-700/40 text-emerald-300 text-xs font-bold">
+                            {gameOverResult ? `Партия завершена (${gameOverResult})` : 'Идет рейтинговая партия'}
+                        </div>
+                    )}
+                </div>
+
+                {/* Открытые вызовы в лобби */}
+                <div
+                    className="flex flex-col flex-1 min-h-[12rem] bg-acacia-dark rounded border border-amber-900/40 p-3 shadow-inner">
+                    <div
+                        className="text-xs font-bold text-amber-200 mb-2 flex items-center justify-between border-b border-amber-900/30 pb-1.5">
+                        <span>Открытые вызовы в лобби</span>
+                        <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-black/40 text-amber-400">
+                            {filteredQueue.length}
+                        </span>
+                    </div>
+
+                    <div
+                        className="flex-1 overflow-y-auto space-y-2 text-xs font-mono [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
+                        {filteredQueue.length === 0 ? (
+                            <div
+                                className="h-full flex flex-col items-center justify-center p-3 text-boxwood/50 text-center font-serif text-xs">
+                                <span>
+                                    {isSearching
+                                        ? 'Вы в очереди. Ожидание соперников...'
+                                        : 'В лобби пока нет вызовов. Нажмите «Найти соперника» выше.'}
+                                </span>
+                            </div>
+                        ) : (
+                            filteredQueue.map((p) => (
+                                <div
+                                    key={p.user_id}
+                                    className="p-2 bg-black/40 rounded border border-amber-600/30 flex justify-between items-center hover:border-amber-500/60 transition"
+                                >
+                                    <div>
+                                        <span className="text-amber-300 font-bold">{p.username}</span>
+                                        <div className="text-[10px] text-boxwood/70">
+                                            Рейтинг: {p.rating} | {p.base_time_ms / 60000}+{(p.increment_ms || 0) / 1000}
+                                        </div>
+                                    </div>
+                                    <button
+                                        disabled={!!gameId && !gameOverResult}
+                                        onClick={() => acceptChallenge(p.user_id)}
+                                        className="px-2.5 py-1 bg-emerald-800 hover:bg-emerald-700 disabled:opacity-40 text-emerald-100 rounded text-xs font-bold transition flex items-center gap-1 shadow"
+                                    >
+                                        <Play size="{12}"/> Играть
+                                    </button>
+                                </div>
+                            ))
+                        )}
+                    </div>
+                </div>
+
+                {/* Стиль доски и ориентация */}
+                <div className="bg-acacia-dark p-3 rounded border border-amber-900/40 flex flex-col gap-2.5 mt-auto">
+                    <div className="flex justify-between items-center text-xs text-boxwood/80">
+                        <span className="flex items-center gap-1.5 font-bold">
+                            <Palette className="text-amber-500" size="{14}"/> Стиль доски
+                        </span>
+                        <span className="text-amber-400 font-bold">{activeTheme.name}</span>
+                    </div>
+
+                    <div className="grid grid-cols-4 gap-1.5">
+                        {Object.values(BOARD_THEMES).map((theme) => {
+                            const isCurrent = theme.id === activeTheme.id;
+                            return (
+                                <button
+                                    key={theme.id}
+                                    type="button"
+                                    onClick={() => handleThemeChange(theme.id)}
+                                    className={`flex flex-col items-center gap-1 p-1.5 rounded border text-[10px] font-bold transition ${
+                                        isCurrent
+                                            ? 'bg-amber-900/40 border-amber-400 text-amber-200 shadow'
+                                            : 'bg-black/30 border-amber-900/40 text-boxwood/70 hover:text-amber-200 hover:border-amber-700/60'
+                                    }`}
+                                >
+                                    <div
+                                        className="w-6 h-6 rounded-sm overflow-hidden grid grid-cols-2 grid-rows-2 border border-black/50 shadow-sm">
+                                        <div style={{backgroundColor: theme.light}}/>
+                                        <div style={{backgroundColor: theme.dark}}/>
+                                        <div style={{backgroundColor: theme.dark}}/>
+                                        <div style={{backgroundColor: theme.light}}/>
+                                    </div>
+                                    <span className="truncate w-full text-center">{theme.name}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-amber-900/30 gap-2">
+                        <button
+                            type="button"
+                            onClick={() => setIsManualFlip(prev => !prev)}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded bg-black/35 hover:bg-black/55 border border-amber-900/50 text-xs font-bold text-amber-200 transition"
+                            title="Перевернуть доску"
+                        >
+                            <RefreshCw className="text-amber-400" size="{13}"/> Перевернуть доску
+                        </button>
+                        <span className="text-[10px] font-mono text-boxwood/50 px-1.5">
+                            {boardSize}px
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            {/* ЦЕНТРАЛЬНАЯ КОЛОНКА: ИГРОКИ И ШАХМАТНАЯ ДОСКА */}
+            <div className="flex flex-col items-center gap-3 order-1 xl:order-2 shrink-0">
 
                 {/* Верхний игрок */}
-                <div style={{width: `${boardSize}px`}}
-                     className="bg-acacia-dark p-3 rounded shadow-heavy border-2 border-amber-900/40 flex justify-between items-center text-boxwood-light transition-all">
-                    <div className="flex items-center gap-3">
+                <div
+                    style={{width: `${boardSize}px`}}
+                    className={`bg-acacia-dark p-3 rounded shadow-heavy border-2 border-amber-900/40 flex justify-between items-center text-boxwood-light ${isResizing ? 'transition-none' : 'transition-colors'}`}
+                >
+                    <div className="flex items-center gap-3 min-w-0">
                         <div
-                            className="w-10 h-10 rounded bg-acacia flex items-center justify-center border border-amber-600/30 font-bold text-amber-200">
-                            ♟
+                            className={`w-10 h-10 rounded flex items-center justify-center border border-amber-600/30 font-bold shrink-0 ${topIsWhite ? 'bg-boxwood text-acacia-dark' : 'bg-acacia text-amber-200'}`}>
+                            {topIsWhite ? '♙' : '♟'}
                         </div>
-                        <div>
+                        <div className="min-w-0">
                             <div className="font-bold flex items-center gap-2">
-                                <span>{gameId ? topPlayerInfo.username : 'Ожидание...'}</span>
+                                <span
+                                    className="truncate">{gameId ? topPlayerInfo.username : (topIsWhite ? 'Белые (Анализ)' : 'Черные (Анализ)')}</span>
                                 {gameId && (
                                     <span
-                                        className="text-xs px-1.5 py-0.5 rounded bg-black/40 text-amber-400 border border-amber-600/20 flex items-center gap-1">
-                    {topPlayerInfo.rating}
+                                        className="text-xs px-1.5 py-0.5 rounded bg-black/40 text-amber-400 border border-amber-600/20 flex items-center gap-1 font-mono">
+                                        {topPlayerInfo.rating}
                                         {ratingInfo && (
                                             <span
-                                                className={myColor === 'white' ? (Number(ratingInfo.black_delta) >= 0 ? 'text-emerald-400' : 'text-red-400') : (Number(ratingInfo.white_delta) >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-                        ({myColor === 'white' ? (Number(ratingInfo.black_delta) >= 0 ? `+${ratingInfo.black_delta}` : ratingInfo.black_delta) : (Number(ratingInfo.white_delta) >= 0 ? `+${ratingInfo.white_delta}` : ratingInfo.white_delta)})
-                      </span>
+                                                className={topIsWhite ? (Number(ratingInfo.white_delta) >= 0 ? 'text-emerald-400' : 'text-red-400') : (Number(ratingInfo.black_delta) >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+                                                ({topIsWhite ? (Number(ratingInfo.white_delta) >= 0 ? `+${ratingInfo.white_delta}` : ratingInfo.white_delta) : (Number(ratingInfo.black_delta) >= 0 ? `+${ratingInfo.black_delta}` : ratingInfo.black_delta)})
+                                            </span>
                                         )}
-                  </span>
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-1.5 text-xs text-amber-200/80 min-h-[18px]">
+                                <span className="tracking-tighter truncate">{topCaptured.join('')}</span>
+                                {topAdvantage > 0 && (
+                                    <span
+                                        className="text-[10px] font-mono font-bold px-1 rounded bg-amber-900/50 text-amber-300">
+                                        +{topAdvantage}
+                                    </span>
                                 )}
                             </div>
                         </div>
                     </div>
                     <div
-                        className="bg-[#1A120B] px-5 py-2 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-3xl font-bold tracking-wider text-amber-500 min-w-[150px] text-center">
+                        className="bg-[#1A120B] px-5 py-2 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-3xl font-bold tracking-wider text-amber-500 min-w-[145px] text-center">
                         {gameId ? formatTime(topPlayerTime) : `${selectedTimeControl.base.toString().padStart(2, '0')}:00`}
                     </div>
                 </div>
@@ -784,7 +1233,7 @@ export default function Chessboard() {
                         height: `${boardSize}px`,
                         backgroundColor: activeTheme.border
                     }}
-                    className="p-3.5 rounded-md shadow-heavy border-2 border-amber-950/80 relative transition-all select-none"
+                    className={`p-3.5 rounded-md shadow-heavy border-2 border-amber-950/80 relative select-none group/board ${isResizing ? 'transition-none ring-2 ring-amber-500/60' : 'transition-colors'}`}
                 >
                     {activeTheme.useWoodGrain && (
                         <div
@@ -819,7 +1268,6 @@ export default function Chessboard() {
                                         }}
                                         className="w-full h-full flex items-center justify-center relative cursor-pointer transition-colors duration-75"
                                     >
-                                        {/* Деликатная текстура дерева только для деревянной темы */}
                                         {activeTheme.useWoodGrain && (
                                             <div
                                                 className="absolute inset-0 opacity-15 mix-blend-multiply pointer-events-none"
@@ -827,19 +1275,15 @@ export default function Chessboard() {
                                             />
                                         )}
 
-                                        {/* Подсветка последнего хода */}
                                         {isLastMove && !isSelected && (
-                                            <div
-                                                className="absolute inset-0 bg-amber-300/35 z-10 pointer-events-none"/>
+                                            <div className="absolute inset-0 bg-amber-300/35 z-10 pointer-events-none"/>
                                         )}
 
-                                        {/* Подсветка выбранной клетки */}
                                         {isSelected && (
                                             <div
                                                 className="absolute inset-0 bg-amber-400/50 ring-2 ring-inset ring-amber-300/80 z-10 pointer-events-none"/>
                                         )}
 
-                                        {/* Индикатор доступного хода */}
                                         {isLegalTarget && (
                                             piece ? (
                                                 <div
@@ -898,59 +1342,107 @@ export default function Chessboard() {
                             })
                         )}
                     </div>
+
+                    {isResizing && (
+                        <div
+                            className="absolute bottom-5 right-5 z-40 px-2.5 py-1 rounded bg-black/85 border border-amber-500/60 text-amber-300 font-mono text-xs font-bold shadow-lg pointer-events-none">
+                            {boardSize} × {boardSize} px
+                        </div>
+                    )}
+
+                    {/* Уголок изменения размера доски в стиле Lichess / Chess.com */}
+                    <div
+                        onMouseDown={handleResizeMouseDown}
+                        onDoubleClick={handleResizeDoubleClick}
+                        title="Потяните, чтобы изменить размер доски (двойной клик — сбросить)"
+                        className={`absolute bottom-0 right-0 w-6 h-6 z-40 cursor-nwse-resize flex items-end justify-end p-0.5 rounded-tl transition-opacity ${
+                            isResizing
+                                ? 'opacity-100 text-amber-400'
+                                : 'opacity-50 group-hover/board:opacity-90 hover:!opacity-100 text-amber-200/80 hover:text-amber-300'
+                        }`}
+                    >
+                        <svg
+                            viewBox="0 0 16 16"
+                            className="w-3.5 h-3.5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                        >
+                            <line x1="14" y1="4" x2="4" y2="14"/>
+                            <line x1="14" y1="9" x2="9" y2="14"/>
+                            <line x1="14" y1="14" x2="14" y2="14"/>
+                        </svg>
+                    </div>
                 </div>
 
                 {/* Нижний игрок */}
-                <div style={{width: `${boardSize}px`}}
-                     className="bg-acacia-dark p-3 rounded shadow-heavy border-2 border-amber-900/40 flex justify-between items-center text-boxwood-light transition-all">
-                    <div className="flex items-center gap-3">
+                <div
+                    style={{width: `${boardSize}px`}}
+                    className={`bg-acacia-dark p-3 rounded shadow-heavy border-2 border-amber-900/40 flex justify-between items-center text-boxwood-light ${isResizing ? 'transition-none' : 'transition-colors'}`}
+                >
+                    <div className="flex items-center gap-3 min-w-0">
                         <div
-                            className="w-10 h-10 rounded bg-boxwood flex items-center justify-center border border-amber-600/30 font-bold text-acacia-dark">
-                            ♙
+                            className={`w-10 h-10 rounded flex items-center justify-center border border-amber-600/30 font-bold shrink-0 ${!topIsWhite ? 'bg-boxwood text-acacia-dark' : 'bg-acacia text-amber-200'}`}>
+                            {!topIsWhite ? '♙' : '♟'}
                         </div>
-                        <div>
+                        <div className="min-w-0">
                             <div className="font-bold flex items-center gap-2">
-                                <span>{gameId ? bottomPlayerInfo.username : 'Вы'}</span>
+                                <span
+                                    className="truncate">{gameId ? bottomPlayerInfo.username : (!topIsWhite ? 'Вы (Белые)' : 'Вы (Черные)')}</span>
                                 {gameId && (
                                     <span
-                                        className="text-xs px-1.5 py-0.5 rounded bg-black/40 text-amber-400 border border-amber-600/20 flex items-center gap-1">
-                    {bottomPlayerInfo.rating}
+                                        className="text-xs px-1.5 py-0.5 rounded bg-black/40 text-amber-400 border border-amber-600/20 flex items-center gap-1 font-mono">
+                                        {bottomPlayerInfo.rating}
                                         {ratingInfo && (
                                             <span
-                                                className={myColor === 'white' ? (Number(ratingInfo.white_delta) >= 0 ? 'text-emerald-400' : 'text-red-400') : (Number(ratingInfo.black_delta) >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-                        ({myColor === 'white' ? (Number(ratingInfo.white_delta) >= 0 ? `+${ratingInfo.white_delta}` : ratingInfo.white_delta) : (Number(ratingInfo.black_delta) >= 0 ? `+${ratingInfo.black_delta}` : ratingInfo.black_delta)})
-                      </span>
+                                                className={!topIsWhite ? (Number(ratingInfo.white_delta) >= 0 ? 'text-emerald-400' : 'text-red-400') : (Number(ratingInfo.black_delta) >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+                                                ({!topIsWhite ? (Number(ratingInfo.white_delta) >= 0 ? `+${ratingInfo.white_delta}` : ratingInfo.white_delta) : (Number(ratingInfo.black_delta) >= 0 ? `+${ratingInfo.black_delta}` : ratingInfo.black_delta)})
+                                            </span>
                                         )}
-                  </span>
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-1.5 text-xs text-amber-200/80 min-h-[18px]">
+                                <span className="tracking-tighter truncate">{bottomCaptured.join('')}</span>
+                                {bottomAdvantage > 0 && (
+                                    <span
+                                        className="text-[10px] font-mono font-bold px-1 rounded bg-amber-900/50 text-amber-300">
+                                        +{bottomAdvantage}
+                                    </span>
                                 )}
                             </div>
                         </div>
                     </div>
                     <div
-                        className="bg-[#1A120B] px-5 py-2 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-3xl font-bold tracking-wider text-amber-500 min-w-[150px] text-center">
+                        className="bg-[#1A120B] px-5 py-2 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-3xl font-bold tracking-wider text-amber-500 min-w-[145px] text-center">
                         {gameId ? formatTime(bottomPlayerTime) : `${selectedTimeControl.base.toString().padStart(2, '0')}:00`}
                     </div>
                 </div>
 
             </div>
 
-            {/* Правая панель управления / Лобби вызовов */}
+            {/* ПРАВАЯ КОЛОНКА: ЖУРНАЛ ХОДОВ (НОТАЦИЯ), НАВИГАЦИЯ И ИГРОВЫЕ ДЕЙСТВИЯ */}
             <div
-                className="w-full xl:w-96 bg-acacia p-5 rounded shadow-heavy border-4 border-acacia-dark flex flex-col gap-4 text-boxwood-light">
-
+                style={{height: `${Math.max(sidePanelHeight, 560)}px`}}
+                className="w-full xl:w-80 2xl:w-[340px] bg-acacia p-4 rounded shadow-heavy border-4 border-acacia-dark flex flex-col gap-3 text-boxwood-light order-3 shrink-0"
+            >
                 <div className="border-b border-acacia-light pb-3 flex justify-between items-center">
                     <div>
-                        <div className="text-xs tracking-widest uppercase text-boxwood/70">Рейтинговая партия</div>
-                        <div className="text-sm font-bold flex items-center gap-2 mt-1 font-mono">
-                            <span className="text-xs text-boxwood/70 uppercase font-serif">Сессия:</span>
-                            <span className="text-emerald-400">+{sessionStats.wins}</span>
-                            <span className="text-red-400">-{sessionStats.losses}</span>
-                            <span className="text-gray-300">={sessionStats.draws}</span>
+                        <div
+                            className="text-[11px] tracking-widest uppercase text-boxwood/70 flex items-center gap-1.5">
+                            <ListOrdered className="text-amber-400" size="{14}"/> Журнал ходов
+                        </div>
+                        <div className="text-xs font-bold text-amber-200 mt-0.5 truncate">
+                            {gameId
+                                ? `${whitePlayer.username} vs ${blackPlayer.username}`
+                                : 'Свободная доска / Разбор'}
                         </div>
                     </div>
-                    <div className="p-2 bg-acacia-dark rounded border border-amber-600/30 text-amber-400">
-                        <Sword size={18}/>
-                    </div>
+                    <span
+                        className="px-2 py-0.5 rounded bg-acacia-dark border border-amber-700/40 font-mono text-xs text-amber-400 font-bold">
+                        {gameOverResult || (history.length > 0 ? `${Math.ceil(history.length / 2)} х.` : 'Старт')}
+                    </span>
                 </div>
 
                 {drawOfferStatus && (
@@ -960,277 +1452,211 @@ export default function Chessboard() {
                         {drawOfferStatus.includes('предлагает ничью') && (
                             <div className="flex justify-center gap-2">
                                 <button onClick={acceptDraw}
-                                        className="px-3 py-1 bg-emerald-800 text-white rounded text-xs font-bold">Принять
+                                        className="px-3 py-1 bg-emerald-800 hover:bg-emerald-700 text-white rounded text-xs font-bold">
+                                    Принять
                                 </button>
                                 <button onClick={declineDraw}
-                                        className="px-3 py-1 bg-red-800 text-white rounded text-xs font-bold">Отклонить
+                                        className="px-3 py-1 bg-red-800 hover:bg-red-700 text-white rounded text-xs font-bold">
+                                    Отклонить
                                 </button>
                             </div>
                         )}
                     </div>
                 )}
 
-                {!gameId ? (
+                {/* Интерактивный список сделанных ходов (Всегда виден!) */}
+                <div
+                    className="flex-1 flex flex-col bg-[#1A120B]/90 rounded border border-amber-900/50 overflow-hidden shadow-inner">
                     <div
-                        className="flex flex-col min-h-[16rem] bg-acacia-dark rounded border border-amber-900/40 p-3 shadow-inner relative">
-                        <div className="text-xs font-bold text-amber-200 mb-2 flex items-center justify-between z-10">
-                            <span>Открытые вызовы в лобби</span>
-                            {isSearching && <Loader2 className="animate-spin text-amber-400" size={14}/>}
-                        </div>
+                        className="grid grid-cols-[44px_1fr_1fr] px-3 py-1.5 bg-black/50 border-b border-amber-900/40 text-[10px] uppercase tracking-wider text-boxwood/50 font-sans font-bold">
+                        <span>№</span>
+                        <span>Белые</span>
+                        <span>Черные</span>
+                    </div>
 
-                        <div
-                            className="flex-1 overflow-y-auto space-y-2 text-xs font-mono mb-2 z-10 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
-                            {filteredQueue.length === 0 ? (
-                                <div className="p-3 text-boxwood/60 text-center flex flex-col items-center gap-1">
-                                    <span>{isSearching ? 'Вы в очереди. Ожидание соперников...' : 'Лобби пусто. Создайте вызов кнопкой ниже.'}</span>
-                                </div>
-                            ) : (
-                                filteredQueue.map((p) => (
-                                    <div key={p.user_id}
-                                         className="p-2 bg-black/40 rounded border border-amber-600/30 flex justify-between items-center">
-                                        <div>
-                                            <span className="text-amber-300 font-bold">{p.username}</span>
-                                            <div
-                                                className="text-[10px] text-boxwood/70">Рейтинг: {p.rating} | {p.base_time_ms / 60000} мин {p.increment_ms > 0 ? `+ ${p.increment_ms / 1000} сек` : ''}</div>
-                                        </div>
-                                        <button
-                                            onClick={() => acceptChallenge(p.user_id)}
-                                            className="px-2.5 py-1 bg-emerald-800 hover:bg-emerald-700 text-emerald-100 rounded text-xs font-bold transition flex items-center gap-1 shadow"
-                                        >
-                                            <Play size={12}/> Играть
-                                        </button>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-
-                        {!isSearching && (
+                    <div
+                        ref={notationScrollRef}
+                        className="flex-1 overflow-y-auto divide-y divide-amber-900/15 font-mono text-sm [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-amber-900/50"
+                    >
+                        {movePairs.length === 0 ? (
                             <div
-                                className="flex flex-col gap-1.5 mt-auto pt-2 border-t border-amber-900/40 relative z-20">
-                                <label
-                                    className="text-[10px] uppercase tracking-widest text-boxwood/60 flex items-center gap-1">
-                                    <Clock size={12}/> Контроль времени
-                                </label>
-
-                                <div className="relative w-full" ref={timeDropdownRef}>
-                                    <button
-                                        type="button"
-                                        onClick={() => setIsTimeDropdownOpen(!isTimeDropdownOpen)}
-                                        className="w-full bg-black/40 border border-amber-700/50 hover:bg-black/60 transition text-amber-200 rounded p-2 text-xs font-bold outline-none cursor-pointer flex justify-between items-center shadow-inner"
-                                    >
-                    <span>
-                      {selectedTimeControl.base} мин {selectedTimeControl.inc > 0 ? `+ ${selectedTimeControl.inc} сек` : ''}
-                    </span>
-                                        {isTimeDropdownOpen ? <ChevronUp size={14} className="text-amber-500/70"/> :
-                                            <ChevronDown size={14} className="text-amber-500/70"/>}
-                                    </button>
-
-                                    {isTimeDropdownOpen && (
-                                        <div
-                                            className="absolute z-50 w-full bottom-full mb-1 bg-[#1A120B] border border-amber-700/50 rounded shadow-2xl max-h-56 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-amber-900/50 overflow-x-hidden">
-                                            {TIME_CONTROLS.map((group, gIdx) => (
-                                                <div key={gIdx}>
-                                                    <div
-                                                        className="px-3 py-1.5 text-[10px] uppercase tracking-widest text-amber-500/60 bg-black/60 font-bold sticky top-0 z-10 border-b border-t border-amber-900/30 first:border-t-0 backdrop-blur-sm">
-                                                        {group.group}
-                                                    </div>
-                                                    {group.options.map((opt, oIdx) => {
-                                                        const isSelected = selectedTimeControl.base === opt.base && selectedTimeControl.inc === opt.inc;
-                                                        return (
-                                                            <button
-                                                                key={oIdx}
-                                                                type="button"
-                                                                className={`w-full text-left px-4 py-2 text-xs font-bold transition flex justify-between items-center ${
-                                                                    isSelected
-                                                                        ? 'bg-amber-900/40 text-amber-400'
-                                                                        : 'text-amber-100/80 hover:bg-amber-900/20 hover:text-amber-200'
-                                                                }`}
-                                                                onClick={() => {
-                                                                    setSelectedTimeControl({
-                                                                        base: opt.base,
-                                                                        inc: opt.inc
-                                                                    });
-                                                                    setIsTimeDropdownOpen(false);
-                                                                }}
-                                                            >
-                                                                <span>{opt.label}</span>
-                                                                {isSelected && <div
-                                                                    className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]"/>}
-                                                            </button>
-                                                        );
-                                                    })}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
+                                className="h-full flex flex-col items-center justify-center p-6 text-center text-boxwood/40 font-serif text-xs gap-1.5">
+                                <span>Ходов пока нет.</span>
+                                <span className="text-[11px] text-boxwood/30">
+                                    {gameId
+                                        ? 'Сделайте первый ход на доске.'
+                                        : 'Двигайте фигуры на доске для анализа или начните поиск соперника слева.'}
+                                </span>
                             </div>
-                        )}
+                        ) : (
+                            movePairs.map((pair) => {
+                                const isWhiteActive = activeMoveIndex === pair.whiteIdx;
+                                const isBlackActive = pair.blackIdx !== undefined && activeMoveIndex === pair.blackIdx;
 
-                        {isSearching && (
+                                return (
+                                    <div
+                                        key={pair.moveNumber}
+                                        className="grid grid-cols-[44px_1fr_1fr] items-center px-2 py-1 hover:bg-white/5 transition-colors"
+                                    >
+                                        <span className="text-xs text-amber-500/60 font-bold pl-1 select-none">
+                                            {pair.moveNumber}.
+                                        </span>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSelectMoveFromList(pair.whiteIdx)}
+                                            className={`text-left px-2 py-1 rounded text-xs font-bold transition truncate ${
+                                                isWhiteActive
+                                                    ? 'active-move-btn bg-amber-600/35 text-amber-200 border border-amber-500/50 shadow-sm'
+                                                    : 'text-boxwood-light hover:bg-amber-900/30 hover:text-white'
+                                            }`}
+                                        >
+                                            {pair.whiteSan}
+                                        </button>
+
+                                        {pair.blackSan !== undefined && pair.blackIdx !== undefined ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleSelectMoveFromList(pair.blackIdx!)}
+                                                className={`text-left px-2 py-1 rounded text-xs font-bold transition truncate ${
+                                                    isBlackActive
+                                                        ? 'active-move-btn bg-amber-600/35 text-amber-200 border border-amber-500/50 shadow-sm'
+                                                        : 'text-boxwood-light hover:bg-amber-900/30 hover:text-white'
+                                                }`}
+                                            >
+                                                {pair.blackSan}
+                                            </button>
+                                        ) : (
+                                            <span/>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+
+                    {/* Плашка предупреждения, если игрок смотрит прошлые ходы */}
+                    {viewIndex !== -1 && history.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={() => setViewIndex(-1)}
+                            className="w-full py-1.5 px-3 bg-amber-700/30 hover:bg-amber-700/50 border-t border-amber-500/40 text-amber-200 text-[11px] font-bold text-center transition"
+                        >
+                            Просмотр истории
+                            ({viewIndex === -2 ? 'Начало' : `полуход ${viewIndex + 1} из ${history.length}`}) —
+                            Вернуться к игре
+                        </button>
+                    )}
+                </div>
+
+                {/* Кнопки пошаговой навигации по истории */}
+                <div
+                    className="bg-acacia-dark p-2 rounded border border-amber-900/40 flex items-center justify-between">
+                    <span className="text-[11px] text-boxwood/70 pl-1">Навигация:</span>
+                    <div className="flex gap-1">
+                        <button
+                            type="button"
+                            disabled={history.length === 0 || viewIndex === -2}
+                            onClick={() => setViewIndex(-2)}
+                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition"
+                            title="В начало партии (Стрелка вверх)"
+                        >
+                            <ChevronFirst size="{16}"/>
+                        </button>
+                        <button
+                            type="button"
+                            disabled={history.length === 0 || viewIndex === -2}
+                            onClick={() => {
+                                if (history.length > 0) {
+                                    const current = viewIndex === -1 ? history.length - 1 : viewIndex;
+                                    setViewIndex(current <= 0 ? -2 : current - 1);
+                                }
+                            }}
+                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition"
+                            title="Ход назад (Стрелка влево)"
+                        >
+                            <ChevronLeft size="{16}"/>
+                        </button>
+                        <button
+                            type="button"
+                            disabled={history.length === 0 || viewIndex === -1}
+                            onClick={() => {
+                                if (viewIndex === -2 && history.length > 0) {
+                                    setViewIndex(history.length === 1 ? -1 : 0);
+                                } else if (viewIndex !== -1 && viewIndex < history.length - 2) {
+                                    setViewIndex(viewIndex + 1);
+                                } else {
+                                    setViewIndex(-1);
+                                }
+                            }}
+                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition"
+                            title="Ход вперед (Стрелка вправо)"
+                        >
+                            <ChevronRight size="{16}"/>
+                        </button>
+                        <button
+                            type="button"
+                            disabled={history.length === 0 || viewIndex === -1}
+                            onClick={() => setViewIndex(-1)}
+                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition"
+                            title="К последнему ходу (Стрелка вниз)"
+                        >
+                            <ChevronLast size="{16}"/>
+                        </button>
+                    </div>
+                </div>
+
+                {/* Кнопки управления партией (Онлайн или Свободный анализ) */}
+                {gameId ? (
+                    <>
+                        <div className="grid grid-cols-2 gap-2">
                             <button
-                                onClick={cancelMatchmaking}
-                                className="mt-2 py-1.5 bg-red-950/80 hover:bg-red-900 text-red-200 rounded text-xs font-bold border border-red-800/50 transition z-10 relative"
+                                type="button"
+                                onClick={handleResign}
+                                disabled={!!gameOverResult}
+                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/80 text-red-200 text-xs font-bold rounded hover:bg-red-900 transition shadow border border-red-800/50 disabled:opacity-40"
                             >
-                                Отменить поиск
+                                <Flag size="{14}"/> Сдаться
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleOfferDraw}
+                                disabled={!!gameOverResult}
+                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs font-bold rounded hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40"
+                            >
+                                <Handshake size="{14}"/> Ничья
+                            </button>
+                        </div>
+
+                        {gameOverResult && (
+                            <button
+                                type="button"
+                                onClick={handleResetSandbox}
+                                className="flex items-center justify-center gap-2 px-4 py-2.5 font-bold text-sm rounded transition shadow bg-boxwood text-acacia-dark border border-amber-700/50 hover:bg-boxwood-light"
+                            >
+                                <RotateCcw size="{16}"/> Новая игра / В лобби
                             </button>
                         )}
-                    </div>
+                    </>
                 ) : (
-                    <div
-                        className="flex flex-col h-56 bg-[#F5DEB3]/10 rounded border border-amber-900/40 overflow-hidden shadow-inner">
-                        <div
-                            className="bg-acacia-dark px-3 py-2 text-xs font-bold text-amber-200 border-b border-amber-900/40 flex justify-between truncate">
-                            <span
-                                className="truncate">{whitePlayer.username} ({whitePlayer.rating}) - {blackPlayer.username} ({blackPlayer.rating})</span>
-                        </div>
-
-                        <div className="flex-1 overflow-y-auto p-2 font-mono text-sm space-y-1">
-                            {history.reduce((acc: any[], move: any, index: number) => {
-                                if (index % 2 === 0) {
-                                    acc.push({white: move.san, black: ''});
-                                } else {
-                                    acc[acc.length - 1].black = move.san;
-                                }
-                                return acc;
-                            }, []).map((pair: any, idx: number) => (
-                                <div key={idx} className="flex px-2 py-1 hover:bg-black/20 rounded text-amber-100/90">
-                                    <span className="w-10 text-amber-500/70 font-bold">{idx + 1}.</span>
-                                    <span className="w-28">{pair.white}</span>
-                                    <span className="w-28">{pair.black}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                <div className="grid grid-cols-2 gap-2">
-                    <button
-                        onClick={handleResign}
-                        disabled={!gameId || !!gameOverResult}
-                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/80 text-red-200 text-xs font-bold rounded hover:bg-red-900 transition shadow border border-red-800/50 disabled:opacity-50"
-                    >
-                        <Flag size={14}/>
-                        Сдаться
-                    </button>
-                    <button
-                        onClick={handleOfferDraw}
-                        disabled={!gameId || !!gameOverResult}
-                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs font-bold rounded hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-50"
-                    >
-                        <Handshake size={14}/>
-                        Ничья
-                    </button>
-                </div>
-
-                <div
-                    className="flex justify-between items-center bg-acacia-dark p-2 rounded border border-amber-900/40">
-                    <span className="text-xs text-boxwood/70">Просмотр:</span>
-                    <div className="flex gap-1">
-                        <button onClick={() => setViewIndex(-2)}
-                                className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition">
-                            <ChevronFirst size={16}/></button>
-                        <button onClick={() => {
-                            if (history.length > 0) {
-                                const current = viewIndex === -1 ? history.length - 1 : viewIndex;
-                                setViewIndex(current === 0 ? -2 : Math.max(-2, current - 1));
-                            }
-                        }} className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition">
-                            <ChevronLeft size={16}/></button>
-                        <button onClick={() => {
-                            if (viewIndex !== -1 && viewIndex < history.length - 1) {
-                                setViewIndex(viewIndex + 1);
-                            } else if (viewIndex === -2 && history.length > 0) {
-                                setViewIndex(0);
-                            } else {
-                                setViewIndex(-1);
-                            }
-                        }} className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition">
-                            <ChevronRight size={16}/></button>
-                        <button onClick={() => setViewIndex(-1)}
-                                className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition">
-                            <ChevronLast size={16}/></button>
-                    </div>
-                </div>
-
-                {/* Выбор цветовой палитры доски */}
-                <div className="bg-acacia-dark p-3 rounded border border-amber-900/40 flex flex-col gap-2">
-                    <div className="flex justify-between items-center text-xs text-boxwood/80">
-                        <span className="flex items-center gap-1.5"><Palette size={14}/> Стиль доски</span>
-                        <span className="text-amber-400 font-bold">{activeTheme.name}</span>
-                    </div>
-                    <div className="grid grid-cols-4 gap-1.5">
-                        {Object.values(BOARD_THEMES).map((theme) => {
-                            const isCurrent = theme.id === activeTheme.id;
-                            return (
-                                <button
-                                    key={theme.id}
-                                    type="button"
-                                    onClick={() => handleThemeChange(theme.id)}
-                                    className={`flex flex-col items-center gap-1 p-1.5 rounded border text-[10px] font-bold transition ${
-                                        isCurrent
-                                            ? 'bg-amber-900/40 border-amber-400 text-amber-200 shadow'
-                                            : 'bg-black/30 border-amber-900/40 text-boxwood/70 hover:text-amber-200 hover:border-amber-700/60'
-                                    }`}
-                                >
-                                    <div
-                                        className="w-6 h-6 rounded-sm overflow-hidden grid grid-cols-2 grid-rows-2 border border-black/50 shadow-sm">
-                                        <div style={{backgroundColor: theme.light}}/>
-                                        <div style={{backgroundColor: theme.dark}}/>
-                                        <div style={{backgroundColor: theme.dark}}/>
-                                        <div style={{backgroundColor: theme.light}}/>
-                                    </div>
-                                    <span className="truncate w-full text-center">{theme.name}</span>
-                                </button>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                <div className="bg-acacia-dark p-3 rounded border border-amber-900/40 flex flex-col gap-2">
-                    <div className="flex justify-between items-center text-xs text-boxwood/80">
-                        <span className="flex items-center gap-1"><Sliders size={14}/> Размер доски</span>
-                        <span>{boardSize}px</span>
-                    </div>
-                    <input
-                        type="range"
-                        min="400"
-                        max="720"
-                        step="20"
-                        value={boardSize}
-                        onChange={(e) => setBoardSize(Number(e.target.value))}
-                        className="w-full accent-amber-600 cursor-pointer"
-                    />
-                </div>
-
-                {gameOverResult ? (
-                    <button
-                        onClick={() => {
-                            setGameId(null);
-                            setGameOverResult(null);
-                            setRatingInfo(null);
-                            setSelectedSquare(null);
-                            setGame(new Chess());
-                            setHistory([]);
-                        }}
-                        className="flex items-center justify-center gap-2 px-4 py-3 font-bold rounded transition shadow bg-boxwood text-acacia-dark border border-amber-700/50 hover:bg-boxwood-light"
-                    >
-                        <RotateCcw size={18}/> Новая игра / В лобби
-                    </button>
-                ) : (
-                    !gameId && (
+                    <div className="grid grid-cols-2 gap-2">
                         <button
-                            onClick={isSearching ? cancelMatchmaking : startMatchmaking}
-                            className={`flex items-center justify-center gap-2 px-4 py-3 font-bold rounded transition shadow border ${
-                                isSearching
-                                    ? 'bg-red-900/80 text-red-100 border-red-700 hover:bg-red-900'
-                                    : 'bg-boxwood text-acacia-dark border-amber-700/50 hover:bg-boxwood-light'
-                            }`}
+                            type="button"
+                            disabled={history.length === 0}
+                            onClick={handleUndoSandboxMove}
+                            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs font-bold rounded hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40"
                         >
-                            {isSearching ? <Loader2 className="animate-spin" size={18}/> : <Users size={18}/>}
-                            {isSearching ? 'Отменить вызов' : 'Найти соперника'}
+                            <Undo2 size="{14}"/> Отменить ход
                         </button>
-                    )
+                        <button
+                            type="button"
+                            disabled={history.length === 0}
+                            onClick={handleResetSandbox}
+                            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-amber-300 text-xs font-bold rounded hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40"
+                        >
+                            <RotateCcw size="{14}"/> Сбросить доску
+                        </button>
+                    </div>
                 )}
 
             </div>

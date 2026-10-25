@@ -1,8 +1,7 @@
 // --- FILE: frontend/src/components/GameViewer.tsx ---
 
 import {useState, useEffect, useRef} from 'react';
-import {useParams, useLocation} from 'react-router-dom';
-import {Link} from 'react-router-dom';
+import {useParams, useLocation, Link} from 'react-router-dom';
 import {Chess} from 'chess.js';
 import {
     ChevronFirst,
@@ -18,7 +17,12 @@ import {
 } from 'lucide-react';
 import {format, parseISO} from 'date-fns';
 import {ru} from 'date-fns/locale';
-import {BOARD_THEMES} from './Chessboard';
+import {
+    BOARD_THEMES,
+    MIN_BOARD_SIZE,
+    MAX_BOARD_SIZE,
+    getDefaultBoardSize
+} from './Chessboard';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
@@ -40,10 +44,22 @@ export default function GameViewer() {
         return saved && BOARD_THEMES[saved] ? saved : 'walnut';
     });
 
+    const [boardSize, setBoardSize] = useState<number>(() => {
+        const savedSize = localStorage.getItem('michess_board_size');
+        if (savedSize) {
+            const parsed = Number(savedSize);
+            if (!Number.isNaN(parsed) && parsed >= MIN_BOARD_SIZE && parsed <= MAX_BOARD_SIZE) {
+                return parsed;
+            }
+        }
+        return getDefaultBoardSize();
+    });
+    const [isResizing, setIsResizing] = useState(false);
+    const resizeStartRef = useRef<{ startX: number; startY: number; startSize: number } | null>(null);
+
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
-    const boardSize = 540;
     const notationScrollRef = useRef<HTMLDivElement>(null);
 
     const activeTheme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
@@ -51,6 +67,65 @@ export default function GameViewer() {
     const handleThemeChange = (themeId: string) => {
         setBoardThemeKey(themeId);
         localStorage.setItem('michess_board_theme', themeId);
+    };
+
+    useEffect(() => {
+        if (!isResizing) return;
+
+        const prevCursor = document.body.style.cursor;
+        const prevUserSelect = document.body.style.userSelect;
+        document.body.style.cursor = 'nwse-resize';
+        document.body.style.userSelect = 'none';
+
+        const handleResizeMove = (e: MouseEvent) => {
+            if (!resizeStartRef.current) return;
+            const {startX, startY, startSize} = resizeStartRef.current;
+            const deltaX = e.clientX - startX;
+            const deltaY = e.clientY - startY;
+            const delta = Math.round((deltaX + deltaY) / 2);
+
+            const dynamicMax = typeof window !== 'undefined'
+                ? Math.min(MAX_BOARD_SIZE, Math.max(MIN_BOARD_SIZE, window.innerWidth - 48))
+                : MAX_BOARD_SIZE;
+
+            const nextSize = Math.min(Math.max(startSize + delta, MIN_BOARD_SIZE), dynamicMax);
+            setBoardSize(nextSize);
+            localStorage.setItem('michess_board_size', String(nextSize));
+        };
+
+        const handleResizeEnd = () => {
+            setIsResizing(false);
+            resizeStartRef.current = null;
+        };
+
+        window.addEventListener('mousemove', handleResizeMove);
+        window.addEventListener('mouseup', handleResizeEnd);
+
+        return () => {
+            document.body.style.cursor = prevCursor;
+            document.body.style.userSelect = prevUserSelect;
+            window.removeEventListener('mousemove', handleResizeMove);
+            window.removeEventListener('mouseup', handleResizeEnd);
+        };
+    }, [isResizing]);
+
+    const handleResizeMouseDown = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        resizeStartRef.current = {
+            startX: e.clientX,
+            startY: e.clientY,
+            startSize: boardSize
+        };
+        setIsResizing(true);
+    };
+
+    const handleResizeDoubleClick = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const defaultSize = getDefaultBoardSize();
+        setBoardSize(defaultSize);
+        localStorage.setItem('michess_board_size', String(defaultSize));
     };
 
     useEffect(() => {
@@ -193,8 +268,10 @@ export default function GameViewer() {
             <div className="flex flex-col items-center gap-3">
 
                 {/* Верхний игрок */}
-                <div style={{width: `${boardSize}px`}}
-                     className="bg-acacia-dark p-3 rounded shadow-heavy border-2 border-amber-900/40 flex justify-between items-center text-boxwood-light">
+                <div
+                    style={{width: `${boardSize}px`}}
+                    className={`bg-acacia-dark p-3 rounded shadow-heavy border-2 border-amber-900/40 flex justify-between items-center text-boxwood-light ${isResizing ? 'transition-none' : 'transition-colors'}`}
+                >
                     <div className="flex items-center gap-3">
                         <div
                             className={`w-10 h-10 rounded flex items-center justify-center border border-amber-600/30 font-bold text-lg ${topIconBg}`}>
@@ -220,7 +297,7 @@ export default function GameViewer() {
                         height: `${boardSize}px`,
                         backgroundColor: activeTheme.border
                     }}
-                    className="p-3.5 rounded-md shadow-heavy border-2 border-amber-950/80 relative transition-all select-none"
+                    className={`p-3.5 rounded-md shadow-heavy border-2 border-amber-950/80 relative select-none group/board ${isResizing ? 'transition-none ring-2 ring-amber-500/60' : 'transition-colors'}`}
                 >
                     {activeTheme.useWoodGrain && (
                         <div
@@ -291,11 +368,46 @@ export default function GameViewer() {
                                 })
                         )}
                     </div>
+
+                    {/* Всплывающий индикатор размера во время перетаскивания */}
+                    {isResizing && (
+                        <div
+                            className="absolute bottom-5 right-5 z-40 px-2.5 py-1 rounded bg-black/85 border border-amber-500/60 text-amber-300 font-mono text-xs font-bold shadow-lg pointer-events-none">
+                            {boardSize} × {boardSize} px
+                        </div>
+                    )}
+
+                    {/* Уголок изменения размера доски в стиле Lichess / Chess.com */}
+                    <div
+                        onMouseDown={handleResizeMouseDown}
+                        onDoubleClick={handleResizeDoubleClick}
+                        title="Потяните, чтобы изменить размер доски (двойной клик — сбросить)"
+                        className={`absolute bottom-0 right-0 w-6 h-6 z-40 cursor-nwse-resize flex items-end justify-end p-0.5 rounded-tl transition-opacity ${
+                            isResizing
+                                ? 'opacity-100 text-amber-400'
+                                : 'opacity-50 group-hover/board:opacity-90 hover:!opacity-100 text-amber-200/80 hover:text-amber-300'
+                        }`}
+                    >
+                        <svg
+                            viewBox="0 0 16 16"
+                            className="w-3.5 h-3.5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                        >
+                            <line x1="14" y1="4" x2="4" y2="14"/>
+                            <line x1="14" y1="9" x2="9" y2="14"/>
+                            <line x1="14" y1="14" x2="14" y2="14"/>
+                        </svg>
+                    </div>
                 </div>
 
                 {/* Нижний игрок */}
-                <div style={{width: `${boardSize}px`}}
-                     className="bg-acacia-dark p-3 rounded shadow-heavy border-2 border-amber-900/40 flex justify-between items-center text-boxwood-light">
+                <div
+                    style={{width: `${boardSize}px`}}
+                    className={`bg-acacia-dark p-3 rounded shadow-heavy border-2 border-amber-900/40 flex justify-between items-center text-boxwood-light ${isResizing ? 'transition-none' : 'transition-colors'}`}
+                >
                     <div className="flex items-center gap-3">
                         <div
                             className={`w-10 h-10 rounded flex items-center justify-center border border-amber-600/30 font-bold text-lg ${bottomIconBg}`}>
