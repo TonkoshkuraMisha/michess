@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 
 def sanitize_env(content: str) -> str:
@@ -15,15 +16,20 @@ def sanitize_env(content: str) -> str:
 
 
 def create_snapshot():
-    project_root = r"C:\Users\tonko\PycharmProjects\michess"
+    # Автоматически определяем корень проекта по расположению этого файла (snapshot.py)
+    project_root_path = Path(__file__).resolve().parent
+    project_root = str(project_root_path)
     output_file = os.path.join(project_root, "project_snapshot.txt")
 
     # Directories and extensions to ignore to keep the dump clean and small
-    # Directories and extensions to ignore to keep the dump clean and small
-    ignore_dirs = {'.git', '.idea', 'michess_env', '__pycache__', 'venv', 'alembic', 'node_modules', 'dist', '.vite',
-                   'bin', 'pgns', '.pytest_cache'}
-    ignore_exts = {'.pyc', '.pyo', '.pyd', '.exe', '.dll', '.so', '.whl', '.pgn', '.svg', '.png', '.jpg', '.jpeg',
-                   '.mp3', '.wav', '.ico', '.sqlite3', '.log'}
+    ignore_dirs = {
+        '.git', '.idea', 'michess_env', '.venv', '__pycache__', 'venv',
+        'alembic', 'node_modules', 'dist', '.vite', 'bin', 'pgns', '.pytest_cache'
+    }
+    ignore_exts = {
+        '.pyc', '.pyo', '.pyd', '.exe', '.dll', '.so', '.whl', '.pgn',
+        '.svg', '.png', '.jpg', '.jpeg', '.mp3', '.wav', '.ico', '.sqlite3', '.log'
+    }
 
     with open(output_file, 'w', encoding='utf-8') as out:
         out.write("========================================\n")
@@ -34,11 +40,11 @@ def create_snapshot():
         for root, dirs, files in os.walk(project_root):
             dirs[:] = [d for d in dirs if d not in ignore_dirs]
             level = root.replace(project_root, '').count(os.sep)
-            indent = ' ' * 4 * level
+            indent = '    ' * level
             out.write(f"{indent}{os.path.basename(root)}/\n")
-            subindent = ' ' * 4 * (level + 1)
+            subindent = '    ' * (level + 1)
             for f in files:
-                if not any(f.endswith(ext) for ext in ignore_exts):
+                if f != "project_snapshot.txt" and not any(f.endswith(ext) for ext in ignore_exts):
                     out.write(f"{subindent}{f}\n")
 
         out.write("\n\n========================================\n")
@@ -54,12 +60,11 @@ def create_snapshot():
                     continue
 
                 file_path = os.path.join(root, f_name)
-                # Correctly using os.path.relpath as required
                 rel_path = os.path.relpath(file_path, project_root)
 
                 out.write(f"\n\n--- FILE: {rel_path} ---\n\n")
                 try:
-                    with open(file_path, 'r', encoding='utf-8') as f_in:
+                    with open(file_path, 'r', encoding='utf-8', errors='ignore') as f_in:
                         content = f_in.read()
                         if f_name == '.env':
                             content = sanitize_env(content)
