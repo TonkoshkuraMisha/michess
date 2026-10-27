@@ -60,6 +60,7 @@ docker compose up -d db redis
 
 ```powershell
 .\michess_env\Scripts\Activate.ps1
+alembic upgrade head
 python -m uvicorn src.main:app --host 127.0.0.1 --port 8000 --reload
 ```
 
@@ -70,7 +71,7 @@ cd frontend
 npm run dev
 ```
 
-* **Фронтенд:** http://localhost:5173
+* **Фронтенд:** http://127.0.0.1:3000
 * **Swagger API:** http://127.0.0.1:8000/docs
 
 ---

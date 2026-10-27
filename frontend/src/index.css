@@ -1,12 +1,45 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+/* --- FILE: frontend/src/index.css --- */
 
-@layer base {
-  body {
-    @apply bg-room text-paper font-sans antialiased;
+@import "tailwindcss";
+
+@theme {
+    /* Светлые элементы интерфейса (Самшит индийский) */
+    --color-boxwood-light: #F5DEB3;
+    --color-boxwood: #E6C998;
+    --color-boxwood-dark: #D0A972;
+
+    /* Темные элементы интерфейса (Акация) */
+    --color-acacia-light: #7A4B31;
+    --color-acacia: #5C3A21;
+    --color-acacia-dark: #3D2314;
+
+    /* Клетки шахматной доски */
+    --color-board-light: #DFC8A2;
+    --color-board-dark: #966C46;
+
+    /* Фон и элементы интерфейса (Стол/Комната) */
+    --color-room-light: #4A3B32;
+    --color-room: #2C221C;
+    --color-room-dark: #1A120B;
+
+    --color-paper: #FDFBF7;
+
+    /* Шрифты */
+    --font-serif: "Playfair Display", "Merriweather", Georgia, serif;
+    --font-sans: "Inter", system-ui, sans-serif;
+
+    /* Тени */
+    --shadow-heavy: 0 15px 35px -5px rgba(0, 0, 0, 0.6), 0 10px 15px -5px rgba(0, 0, 0, 0.4);
+    --shadow-piece: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+    --shadow-inner-board: inset 0 2px 6px 0 rgba(0, 0, 0, 0.35);
+
+    /* Текстуры */
+    --background-image-wood-texture: url('/assets/textures/wood-grain.png');
+}
+
+body {
     margin: 0;
-    padding: 0;
-    min-height: 100vh;
-  }
+    background-color: var(--color-room);
+    color: var(--color-paper);
+    font-family: var(--font-sans);
 }
