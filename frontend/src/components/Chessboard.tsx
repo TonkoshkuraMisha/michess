@@ -26,7 +26,7 @@ import {
 } from 'lucide-react';
 import {gameSocket} from '../services/gameSocket';
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || ('http:' + '//127.0.0.1:8000');
+import {API_BASE_URL} from '../config/api';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
