@@ -106,11 +106,52 @@ def _evaluate_pawn_structure(board: chess.Board, us: chess.Color) -> float:
     return score
 
 
+# def evaluate_philidor_style_bonus(board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
+#     """
+#     Доктрина Филидора: «Пешки — душа шахмат».
+#     Оценивает ход с точки зрения контроля центра и гармонии пешечной структуры.
+#     """
+#     us = board_before.turn
+#     piece = board_before.piece_at(move.from_square)
+#     if not piece:
+#         return 0.0, None
+#
+#     bonus = 0.0
+#     note = None
+#
+#     # 1. Приоритет ходов пешками
+#     if piece.piece_type == chess.PAWN:
+#         bonus += 12.0
+#         if move.to_square in CENTER_SQUARES:
+#             bonus += 35.0
+#             note = "Пешки — душа шахмат! Мощный удар в центр доски."
+#         elif move.to_square in EXTENDED_CENTER:
+#             bonus += 20.0
+#             note = "Занимаем пространство пешечной фалангой."
+#
+#     # 2. Исторический запрет блокировать пешки 'c' и 'f' конями на ранней стадии
+#     if piece.piece_type == chess.KNIGHT and board_before.fullmove_number <= 10:
+#         if us == chess.WHITE:
+#             if move.to_square == chess.C3 and board_before.piece_at(chess.C2) == chess.Piece(chess.PAWN, chess.WHITE):
+#                 bonus -= 50.0  # Сурово штрафуем за нарушение принципа Филидора
+#             if move.to_square == chess.F3 and board_before.piece_at(chess.F2) == chess.Piece(chess.PAWN, chess.WHITE):
+#                 bonus -= 40.0
+#         else:
+#             if move.to_square == chess.C6 and board_before.piece_at(chess.C7) == chess.Piece(chess.PAWN, chess.BLACK):
+#                 bonus -= 50.0
+#             if move.to_square == chess.F6 and board_before.piece_at(chess.F7) == chess.Piece(chess.PAWN, chess.BLACK):
+#                 bonus -= 40.0
+#
+#     # 3. Дельта пешечной структуры после хода
+#     structure_before = _evaluate_pawn_structure(board_before, us)
+#     board_after = board_before.copy()
+#     board_after.push(move)
+#     structure_after = _evaluate_pawn_structure(board_after, us)
+#
+#     bonus += (structure_after - structure_before)
+#
+#     return bonus, note
 def evaluate_philidor_style_bonus(board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-    """
-    Доктрина Филидора: «Пешки — душа шахмат».
-    Оценивает ход с точки зрения контроля центра и гармонии пешечной структуры.
-    """
     us = board_before.turn
     piece = board_before.piece_at(move.from_square)
     if not piece:
@@ -119,7 +160,6 @@ def evaluate_philidor_style_bonus(board_before: chess.Board, move: chess.Move) -
     bonus = 0.0
     note = None
 
-    # 1. Приоритет ходов пешками
     if piece.piece_type == chess.PAWN:
         bonus += 12.0
         if move.to_square in CENTER_SQUARES:
@@ -128,12 +168,14 @@ def evaluate_philidor_style_bonus(board_before: chess.Board, move: chess.Move) -
         elif move.to_square in EXTENDED_CENTER:
             bonus += 20.0
             note = "Занимаем пространство пешечной фалангой."
+        elif move.to_square in {chess.C3, chess.C6, chess.D3, chess.D6}:
+            bonus += 15.0  # Гарантируем уверенный плюс за подготовку центра по методу Филидора
+            note = "Подготавливаем продвижение центральной пешки по методу Филидора."
 
-    # 2. Исторический запрет блокировать пешки 'c' и 'f' конями на ранней стадии
     if piece.piece_type == chess.KNIGHT and board_before.fullmove_number <= 10:
         if us == chess.WHITE:
             if move.to_square == chess.C3 and board_before.piece_at(chess.C2) == chess.Piece(chess.PAWN, chess.WHITE):
-                bonus -= 50.0  # Сурово штрафуем за нарушение принципа Филидора
+                bonus -= 50.0
             if move.to_square == chess.F3 and board_before.piece_at(chess.F2) == chess.Piece(chess.PAWN, chess.WHITE):
                 bonus -= 40.0
         else:
@@ -142,12 +184,10 @@ def evaluate_philidor_style_bonus(board_before: chess.Board, move: chess.Move) -
             if move.to_square == chess.F6 and board_before.piece_at(chess.F7) == chess.Piece(chess.PAWN, chess.BLACK):
                 bonus -= 40.0
 
-    # 3. Дельта пешечной структуры после хода
     structure_before = _evaluate_pawn_structure(board_before, us)
     board_after = board_before.copy()
     board_after.push(move)
     structure_after = _evaluate_pawn_structure(board_after, us)
-
     bonus += (structure_after - structure_before)
 
     return bonus, note
