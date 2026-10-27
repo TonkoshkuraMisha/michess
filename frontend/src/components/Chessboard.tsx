@@ -1,6 +1,6 @@
 // --- FILE: frontend/src/components/Chessboard.tsx ---
 
-import {useState, useEffect, useRef} from 'react';
+import {useState, useEffect, useRef, useCallback} from 'react';
 import {Chess} from 'chess.js';
 import {
     ChevronFirst,
@@ -20,11 +20,13 @@ import {
     Palette,
     RefreshCw,
     ListOrdered,
-    Undo2
+    Undo2,
+    Bot,
+    MessageSquareQuote
 } from 'lucide-react';
 import {gameSocket} from '../services/gameSocket';
 
-const API_BASE_URL = 'http:' + '//127.0.0.1:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || ('http:' + '//127.0.0.1:8000');
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
@@ -216,6 +218,11 @@ export default function Chessboard() {
     const [currentUserId, setCurrentUserId] = useState<number | null>(null);
     const [stateVersion, setStateVersion] = useState(0);
 
+    // Состояния исторического бота (Филидор)
+    const [activeBot, setActiveBot] = useState<'philidor' | null>(null);
+    const [botComment, setBotComment] = useState<string | null>(null);
+    const [isBotThinking, setIsBotThinking] = useState<boolean>(false);
+
     // Выбранный контроль времени и состояние кастомного селектора
     const [selectedTimeControl, setSelectedTimeControl] = useState({base: 3, inc: 0});
     const [isTimeDropdownOpen, setIsTimeDropdownOpen] = useState(false);
@@ -268,10 +275,143 @@ export default function Chessboard() {
     // Определяем ориентацию доски (с учетом цвета игрока и ручного переворота)
     const isBoardFlipped = (myColor === 'black') !== isManualFlip;
 
+    const playAudio = useCallback((type: 'move' | 'capture' | 'start') => {
+        const file = type === 'capture' ? 'Capture.mp3' : type === 'start' ? 'GenericNotify.mp3' : 'Move.mp3';
+        const audio = new Audio(`/assets/sounds/${file}`);
+        audio.currentTime = 0;
+        audio.play().catch(() => {
+        });
+    }, []);
+
+    const updateSessionStats = useCallback((result: string) => {
+        if (!result) return;
+        setSessionStats(prev => {
+            if (result === '1/2-1/2' || result.includes('draw')) {
+                return {...prev, draws: prev.draws + 1};
+            }
+            const whiteWon = result === '1-0' || result === 'white_won_on_time';
+            const userIsWhite = myColor === 'white';
+            if ((whiteWon && userIsWhite) || (!whiteWon && !userIsWhite)) {
+                return {...prev, wins: prev.wins + 1};
+            } else {
+                return {...prev, losses: prev.losses + 1};
+            }
+        });
+    }, [myColor]);
+
     const handleThemeChange = (themeId: string) => {
         setBoardThemeKey(themeId);
         localStorage.setItem('michess_board_theme', themeId);
     };
+
+    // Старт партии против Франсуа-Андре Филидора
+    const startPhilidorGame = (colorPref: 'white' | 'black' | 'random' = 'random') => {
+        if (isSearching) {
+            setIsSearching(false);
+            gameSocket.send('leave_queue', {});
+        }
+
+        const chosenColor: 'white' | 'black' =
+            colorPref === 'random'
+                ? (Math.random() < 0.5 ? 'white' : 'black')
+                : colorPref;
+
+        const baseMs = selectedTimeControl.base * 60 * 1000;
+        const freshGame = new Chess();
+
+        setGameId(null);
+        setActiveBot('philidor');
+        setMyColor(chosenColor);
+        setIsManualFlip(false);
+        setGame(freshGame);
+        setHistory([]);
+        setViewIndex(-1);
+        setSelectedSquare(null);
+        setGameOverResult(null);
+        setRatingInfo(null);
+        setDrawOfferStatus(null);
+        setWhiteTimeMs(baseMs);
+        setBlackTimeMs(baseMs);
+        moveStartTime.current = Date.now();
+
+        if (chosenColor === 'white') {
+            setWhitePlayer({username: 'Вы', rating: '1500'});
+            setBlackPlayer({username: 'Ф.-А. Филидор (1749)', rating: '1850'});
+        } else {
+            setWhitePlayer({username: 'Ф.-А. Филидор (1749)', rating: '1850'});
+            setBlackPlayer({username: 'Вы', rating: '1500'});
+        }
+
+        setBotComment('«Пешки — душа шахмат: именно они определяют атаку и защиту!»');
+        playAudio('start');
+    };
+
+    // Реактивный ход бота Филидора, когда наступает его очередь
+    useEffect(() => {
+        if (!activeBot || gameOverResult || game.isGameOver()) return;
+
+        const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
+        if (currentTurnColor === myColor) return;
+
+        let isCancelled = false;
+        setIsBotThinking(true);
+
+        const timer = setTimeout(async () => {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/v1/bots/move`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        bot_id: activeBot,
+                        fen: game.fen()
+                    })
+                });
+
+                if (!response.ok || isCancelled) return;
+                const data = await response.json();
+                if (isCancelled) return;
+
+                const from = data.uci.slice(0, 2);
+                const to = data.uci.slice(2, 4);
+                const promotion = data.uci.length > 4 ? data.uci.slice(4, 5) : 'q';
+
+                const nextGame = cloneChessInstance(game);
+                const moveObj = nextGame.move({from, to, promotion});
+
+                if (moveObj) {
+                    setGame(nextGame);
+                    setHistory(nextGame.history({verbose: true}));
+                    setViewIndex(-1);
+                    setBotComment(data.comment);
+                    moveStartTime.current = Date.now();
+
+                    playAudio(moveObj.san.includes('x') ? 'capture' : 'move');
+
+                    if (nextGame.isGameOver()) {
+                        let result = '1/2-1/2';
+                        if (nextGame.isCheckmate()) {
+                            result = nextGame.turn() === 'w' ? '0-1' : '1-0';
+                        }
+                        setGameOverResult(result);
+                        setDrawOfferStatus(`Партия с Филидором окончена. Результат: ${result}`);
+                        updateSessionStats(result);
+                        playAudio('start');
+                    }
+                }
+            } catch (err) {
+                console.error('Ошибка получения хода бота:', err);
+            } finally {
+                if (!isCancelled) {
+                    setIsBotThinking(false);
+                }
+            }
+        }, 450);
+
+        return () => {
+            isCancelled = true;
+            clearTimeout(timer);
+        };
+    }, [activeBot, game, myColor, gameOverResult, playAudio, updateSessionStats]);
 
     // Обработчик изменения размера доски за правый нижний угол
     useEffect(() => {
@@ -413,6 +553,8 @@ export default function Chessboard() {
 
         const handleMatchFound = (data: any) => {
             setIsSearching(false);
+            setActiveBot(null);
+            setBotComment(null);
             setGameId(data.game_id);
             setMyColor(data.color);
             setIsManualFlip(false);
@@ -573,23 +715,7 @@ export default function Chessboard() {
             gameSocket.off('draw_declined', handleDrawDeclined);
             gameSocket.off('error', handleServerError);
         };
-    }, [myColor]);
-
-    const updateSessionStats = (result: string) => {
-        if (!result) return;
-        setSessionStats(prev => {
-            if (result === '1/2-1/2' || result.includes('draw')) {
-                return {...prev, draws: prev.draws + 1};
-            }
-            const whiteWon = result === '1-0' || result === 'white_won_on_time';
-            const userIsWhite = myColor === 'white';
-            if ((whiteWon && userIsWhite) || (!whiteWon && !userIsWhite)) {
-                return {...prev, wins: prev.wins + 1};
-            } else {
-                return {...prev, losses: prev.losses + 1};
-            }
-        });
-    };
+    }, [myColor, playAudio, updateSessionStats]);
 
     useEffect(() => {
         let interval: any;
@@ -613,11 +739,13 @@ export default function Chessboard() {
         return () => clearInterval(interval);
     }, [gameId]);
 
+    const currentTurnChar = game.turn();
+
     useEffect(() => {
-        if (!gameId || gameOverResult) return;
+        if ((!gameId && !activeBot) || gameOverResult) return;
 
         let lastTick = Date.now();
-        const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
+        const currentTurnColor = currentTurnChar === 'w' ? 'white' : 'black';
 
         const interval = setInterval(() => {
             const now = Date.now();
@@ -632,7 +760,64 @@ export default function Chessboard() {
         }, 50);
 
         return () => clearInterval(interval);
-    }, [gameId, gameOverResult, game.turn()]);
+    }, [gameId, activeBot, gameOverResult, currentTurnChar]);
+
+    const executeMove = useCallback((from: string, to: string) => {
+        if (gameOverResult || viewIndex !== -1) return;
+
+        const piece = game.get(from as any);
+        const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
+
+        if (!piece || piece.color !== (game.turn() === 'w' ? 'w' : 'b') || ((gameId || activeBot) && currentTurnColor !== myColor)) {
+            setSelectedSquare(null);
+            return;
+        }
+
+        try {
+            const nextGame = cloneChessInstance(game);
+            const move = nextGame.move({from, to, promotion: 'q'});
+
+            if (move) {
+                const timeTaken = Date.now() - moveStartTime.current;
+                const uciMove = (move as any).uci || `${move.from}${move.to}${move.promotion || ''}`;
+
+                setGame(nextGame);
+                setHistory(nextGame.history({verbose: true}));
+                setViewIndex(-1);
+                playAudio(move.san.includes('x') ? 'capture' : 'move');
+                moveStartTime.current = Date.now();
+
+                if (gameId) {
+                    const commandId = typeof crypto !== 'undefined' && crypto.randomUUID
+                        ? crypto.randomUUID()
+                        : Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+
+                    gameSocket.send('make_move', {
+                        game_id: gameId,
+                        move: uciMove,
+                        command_id: commandId,
+                        state_version: stateVersion,
+                        time_taken_ms: timeTaken,
+                        window_blurred: document.hidden,
+                        is_premove: false
+                    });
+                } else if (activeBot && nextGame.isGameOver()) {
+                    let result = '1/2-1/2';
+                    if (nextGame.isCheckmate()) {
+                        result = nextGame.turn() === 'w' ? '0-1' : '1-0';
+                    }
+                    setGameOverResult(result);
+                    setDrawOfferStatus(`Партия с Филидором окончена. Результат: ${result}`);
+                    updateSessionStats(result);
+                    playAudio('start');
+                }
+                setSelectedSquare(null);
+            }
+        } catch {
+            setSelectedSquare(null);
+        }
+        setDragState(null);
+    }, [game, gameId, activeBot, myColor, stateVersion, viewIndex, gameOverResult, playAudio, updateSessionStats]);
 
     useEffect(() => {
         const handleMouseMove = (e: MouseEvent) => {
@@ -693,7 +878,7 @@ export default function Chessboard() {
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [dragState, game, gameId, myColor, isBoardFlipped, stateVersion, viewIndex, gameOverResult]);
+    }, [dragState, isBoardFlipped, executeMove]);
 
     const formatTime = (ms: number) => {
         const totalMs = Math.max(0, ms);
@@ -709,16 +894,10 @@ export default function Chessboard() {
         return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    const playAudio = (type: 'move' | 'capture' | 'start') => {
-        const file = type === 'capture' ? 'Capture.mp3' : type === 'start' ? 'GenericNotify.mp3' : 'Move.mp3';
-        const audio = new Audio(`/assets/sounds/${file}`);
-        audio.currentTime = 0;
-        audio.play().catch(() => {
-        });
-    };
-
     const startMatchmaking = () => {
         setGameId(null);
+        setActiveBot(null);
+        setBotComment(null);
         setGameOverResult(null);
         setRatingInfo(null);
         setIsSearching(true);
@@ -738,13 +917,23 @@ export default function Chessboard() {
     };
 
     const acceptChallenge = (targetUserId: number) => {
+        setActiveBot(null);
+        setBotComment(null);
         gameSocket.send('accept_challenge', {target_user_id: targetUserId});
     };
 
     const handleResign = () => {
-        if (!gameId || gameOverResult) return;
+        if ((!gameId && !activeBot) || gameOverResult) return;
         if (window.confirm('Вы действительно хотите сдаться?')) {
-            gameSocket.send('resign', {game_id: gameId});
+            if (gameId) {
+                gameSocket.send('resign', {game_id: gameId});
+            } else if (activeBot) {
+                const res = myColor === 'white' ? '0-1' : '1-0';
+                setGameOverResult(res);
+                setDrawOfferStatus(`Вы сдались. Победа Филидора (${res}).`);
+                updateSessionStats(res);
+                playAudio('start');
+            }
         }
     };
 
@@ -769,8 +958,12 @@ export default function Chessboard() {
     const handleResetSandbox = () => {
         if (gameId && !gameOverResult) return;
         setGameId(null);
+        setActiveBot(null);
+        setBotComment(null);
+        setIsBotThinking(false);
         setGameOverResult(null);
         setRatingInfo(null);
+        setDrawOfferStatus(null);
         setSelectedSquare(null);
         setViewIndex(-1);
         setGame(new Chess());
@@ -778,61 +971,22 @@ export default function Chessboard() {
     };
 
     const handleUndoSandboxMove = () => {
-        if (gameId || history.length === 0) return;
+        if (gameId || history.length === 0 || isBotThinking) return;
         const nextGame = cloneChessInstance(game);
         nextGame.undo();
+        // Если играем с ботом и сейчас наш ход, откатываем и ход бота, и свой ход
+        if (activeBot && nextGame.history().length > 0) {
+            const turnAfterFirstUndo = nextGame.turn() === 'w' ? 'white' : 'black';
+            if (turnAfterFirstUndo !== myColor) {
+                nextGame.undo();
+            }
+        }
         setGame(nextGame);
         setHistory(nextGame.history({verbose: true}));
+        setGameOverResult(null);
+        setDrawOfferStatus(null);
         setViewIndex(-1);
         setSelectedSquare(null);
-    };
-
-    const executeMove = (from: string, to: string) => {
-        if (gameOverResult || viewIndex !== -1) return;
-
-        const piece = game.get(from as any);
-        const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
-
-        if (!piece || piece.color !== (game.turn() === 'w' ? 'w' : 'b') || (gameId && currentTurnColor !== myColor)) {
-            setSelectedSquare(null);
-            return;
-        }
-
-        try {
-            const nextGame = cloneChessInstance(game);
-            const move = nextGame.move({from, to, promotion: 'q'});
-
-            if (move) {
-                const timeTaken = Date.now() - moveStartTime.current;
-                const uciMove = (move as any).uci || `${move.from}${move.to}${move.promotion || ''}`;
-
-                setGame(nextGame);
-                setHistory(nextGame.history({verbose: true}));
-                setViewIndex(-1);
-                playAudio(move.san.includes('x') ? 'capture' : 'move');
-                moveStartTime.current = Date.now();
-
-                if (gameId) {
-                    const commandId = typeof crypto !== 'undefined' && crypto.randomUUID
-                        ? crypto.randomUUID()
-                        : Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
-
-                    gameSocket.send('make_move', {
-                        game_id: gameId,
-                        move: uciMove,
-                        command_id: commandId,
-                        state_version: stateVersion,
-                        time_taken_ms: timeTaken,
-                        window_blurred: document.hidden,
-                        is_premove: false
-                    });
-                }
-                setSelectedSquare(null);
-            }
-        } catch {
-            setSelectedSquare(null);
-        }
-        setDragState(null);
     };
 
     const handleSquareClick = (squareId: string) => {
@@ -842,9 +996,9 @@ export default function Chessboard() {
                 setSelectedSquare(null);
             } else {
                 const pieceOnTarget = game.get(squareId as any);
-                const currentTurnChar = game.turn();
-                const currentTurnColor = currentTurnChar === 'w' ? 'white' : 'black';
-                if (pieceOnTarget && pieceOnTarget.color === currentTurnChar && (!gameId || currentTurnColor === myColor)) {
+                const turnChar = game.turn();
+                const currentTurnColor = turnChar === 'w' ? 'white' : 'black';
+                if (pieceOnTarget && pieceOnTarget.color === turnChar && ((!gameId && !activeBot) || currentTurnColor === myColor)) {
                     setSelectedSquare(squareId);
                 } else {
                     executeMove(selectedSquare, squareId);
@@ -853,7 +1007,7 @@ export default function Chessboard() {
         } else {
             const piece = game.get(squareId as any);
             const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
-            if (piece && piece.color === (game.turn() === 'w' ? 'w' : 'b') && (!gameId || currentTurnColor === myColor)) {
+            if (piece && piece.color === (game.turn() === 'w' ? 'w' : 'b') && ((!gameId && !activeBot) || currentTurnColor === myColor)) {
                 setSelectedSquare(squareId);
             }
         }
@@ -982,7 +1136,7 @@ export default function Chessboard() {
                 </div>
             )}
 
-            {/* ЛЕВАЯ КОЛОНКА: ЛОББИ, КОНТРОЛЬ ВРЕМЕНИ И ОФОРМЛЕНИЕ ДОСКИ */}
+            {/* ЛЕВАЯ КОЛОНКА: ЛОББИ, ИГРА С ЛЕГЕНДОЙ И ОФОРМЛЕНИЕ ДОСКИ */}
             <div
                 style={{minHeight: `${Math.min(sidePanelHeight, 740)}px`}}
                 className="w-full xl:w-80 2xl:w-[340px] bg-acacia p-4 rounded shadow-heavy border-4 border-acacia-dark flex flex-col gap-3.5 text-boxwood-light order-2 xl:order-1 shrink-0"
@@ -1081,9 +1235,90 @@ export default function Chessboard() {
                     )}
                 </div>
 
+                {/* КАРТОЧКА ИГРЫ ПРОТИВ ИСТОРИЧЕСКОЙ ЛЕГЕНДЫ: ФИЛИДОР */}
+                <div
+                    className="bg-acacia-dark p-3 rounded border border-amber-700/40 flex flex-col gap-2.5 shadow-inner">
+                    <div className="flex items-center justify-between border-b border-amber-900/30 pb-2">
+                        <div className="flex items-center gap-2.5">
+                            <img
+                                src="/champions/philidor.jpg"
+                                alt="Филидор"
+                                className="w-10 h-10 rounded-full object-cover border-2 border-amber-500/60 shrink-0"
+                                onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = 'none';
+                                }}
+                            />
+                            <div>
+                                <div className="text-xs font-bold text-amber-200 flex items-center gap-1.5">
+                                    <Bot size={13} className="text-amber-400"/> Ф.-А. Филидор
+                                </div>
+                                <div className="text-[10px] text-amber-400/80 font-mono">
+                                    Эпоха 1749–1795 • Рейтинг ~1850
+                                </div>
+                            </div>
+                        </div>
+                        {activeBot === 'philidor' && !gameOverResult && (
+                            <span
+                                className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-700/50">
+                                В игре
+                            </span>
+                        )}
+                    </div>
+
+                    <p className="text-[11px] italic text-boxwood/80 leading-snug">
+                        «Пешки — душа шахмат: именно они определяют атаку и защиту».
+                    </p>
+
+                    <div className="grid grid-cols-3 gap-1.5">
+                        <button
+                            type="button"
+                            disabled={!!gameId && !gameOverResult}
+                            onClick={() => startPhilidorGame('white')}
+                            className="px-2 py-1.5 text-[11px] font-bold rounded bg-boxwood text-acacia-dark hover:bg-boxwood-light disabled:opacity-40 transition cursor-pointer shadow"
+                        >
+                            ♔ Белыми
+                        </button>
+                        <button
+                            type="button"
+                            disabled={!!gameId && !gameOverResult}
+                            onClick={() => startPhilidorGame('random')}
+                            className="px-2 py-1.5 text-[11px] font-bold rounded bg-amber-700/80 text-amber-100 border border-amber-500/40 hover:bg-amber-600 disabled:opacity-40 transition cursor-pointer shadow"
+                        >
+                            🎲 Случайно
+                        </button>
+                        <button
+                            type="button"
+                            disabled={!!gameId && !gameOverResult}
+                            onClick={() => startPhilidorGame('black')}
+                            className="px-2 py-1.5 text-[11px] font-bold rounded bg-black/60 text-amber-200 border border-amber-700/50 hover:bg-black/80 disabled:opacity-40 transition cursor-pointer shadow"
+                        >
+                            ♚ Черными
+                        </button>
+                    </div>
+
+                    {activeBot === 'philidor' && (
+                        <div className="p-2.5 rounded bg-black/50 border border-amber-600/30 text-xs text-amber-100">
+                            <div
+                                className="font-bold text-amber-400 mb-1 flex items-center justify-between text-[11px]">
+                                <span className="flex items-center gap-1">
+                                    <MessageSquareQuote size={13}/> Мысль Филидора:
+                                </span>
+                                {isBotThinking && (
+                                    <span className="animate-pulse text-amber-300 font-mono text-[10px]">
+                                        обдумывает ход...
+                                    </span>
+                                )}
+                            </div>
+                            <div className="text-[11px] text-boxwood-light leading-relaxed">
+                                {botComment || 'Посмотрим, как вы распорядитесь пешечным центром.'}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
                 {/* Открытые вызовы в лобби */}
                 <div
-                    className="flex flex-col flex-1 min-h-[12rem] bg-acacia-dark rounded border border-amber-900/40 p-3 shadow-inner">
+                    className="flex flex-col flex-1 min-h-[9rem] bg-acacia-dark rounded border border-amber-900/40 p-3 shadow-inner">
                     <div
                         className="text-xs font-bold text-amber-200 mb-2 flex items-center justify-between border-b border-amber-900/30 pb-1.5">
                         <span>Открытые вызовы в лобби</span>
@@ -1196,8 +1431,8 @@ export default function Chessboard() {
                         <div className="min-w-0">
                             <div className="font-bold flex items-center gap-2">
                                 <span
-                                    className="truncate">{gameId ? topPlayerInfo.username : (topIsWhite ? 'Белые (Анализ)' : 'Черные (Анализ)')}</span>
-                                {gameId && (
+                                    className="truncate">{(gameId || activeBot) ? topPlayerInfo.username : (topIsWhite ? 'Белые (Анализ)' : 'Черные (Анализ)')}</span>
+                                {(gameId || activeBot) && (
                                     <span
                                         className="text-xs px-1.5 py-0.5 rounded bg-black/40 text-amber-400 border border-amber-600/20 flex items-center gap-1 font-mono">
                                         {topPlayerInfo.rating}
@@ -1223,7 +1458,7 @@ export default function Chessboard() {
                     </div>
                     <div
                         className="bg-[#1A120B] px-5 py-2 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-3xl font-bold tracking-wider text-amber-500 min-w-[145px] text-center">
-                        {gameId ? formatTime(topPlayerTime) : `${selectedTimeControl.base.toString().padStart(2, '0')}:00`}
+                        {(gameId || activeBot) ? formatTime(topPlayerTime) : `${selectedTimeControl.base.toString().padStart(2, '0')}:00`}
                     </div>
                 </div>
 
@@ -1302,7 +1537,7 @@ export default function Chessboard() {
                                                     if (viewIndex !== -1 || gameOverResult) return;
                                                     const turnColor = currentGame.turn() === 'w' ? 'white' : 'black';
                                                     if (piece.color !== (currentGame.turn() === 'w' ? 'w' : 'b')) return;
-                                                    if (gameId && turnColor !== myColor) return;
+                                                    if ((gameId || activeBot) && turnColor !== myColor) return;
                                                     e.stopPropagation();
                                                     moveStartTime.current = Date.now();
                                                     setSelectedSquare(squareId);
@@ -1391,8 +1626,8 @@ export default function Chessboard() {
                         <div className="min-w-0">
                             <div className="font-bold flex items-center gap-2">
                                 <span
-                                    className="truncate">{gameId ? bottomPlayerInfo.username : (!topIsWhite ? 'Вы (Белые)' : 'Вы (Черные)')}</span>
-                                {gameId && (
+                                    className="truncate">{(gameId || activeBot) ? bottomPlayerInfo.username : (!topIsWhite ? 'Вы (Белые)' : 'Вы (Черные)')}</span>
+                                {(gameId || activeBot) && (
                                     <span
                                         className="text-xs px-1.5 py-0.5 rounded bg-black/40 text-amber-400 border border-amber-600/20 flex items-center gap-1 font-mono">
                                         {bottomPlayerInfo.rating}
@@ -1418,7 +1653,7 @@ export default function Chessboard() {
                     </div>
                     <div
                         className="bg-[#1A120B] px-5 py-2 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-3xl font-bold tracking-wider text-amber-500 min-w-[145px] text-center">
-                        {gameId ? formatTime(bottomPlayerTime) : `${selectedTimeControl.base.toString().padStart(2, '0')}:00`}
+                        {(gameId || activeBot) ? formatTime(bottomPlayerTime) : `${selectedTimeControl.base.toString().padStart(2, '0')}:00`}
                     </div>
                 </div>
 
@@ -1436,7 +1671,7 @@ export default function Chessboard() {
                             <ListOrdered className="text-amber-400" size={14}/> Журнал ходов
                         </div>
                         <div className="text-xs font-bold text-amber-200 mt-0.5 truncate">
-                            {gameId
+                            {(gameId || activeBot)
                                 ? `${whitePlayer.username} vs ${blackPlayer.username}`
                                 : 'Свободная доска / Разбор'}
                         </div>
@@ -1485,9 +1720,9 @@ export default function Chessboard() {
                                 className="h-full flex flex-col items-center justify-center p-6 text-center text-boxwood/40 font-serif text-xs gap-1.5">
                                 <span>Ходов пока нет.</span>
                                 <span className="text-[11px] text-boxwood/30">
-                                    {gameId
+                                    {(gameId || activeBot)
                                         ? 'Сделайте первый ход на доске.'
-                                        : 'Двигайте фигуры на доске для анализа или начните поиск соперника слева.'}
+                                        : 'Двигайте фигуры на доске для анализа или начните игру слева.'}
                                 </span>
                             </div>
                         ) : (
@@ -1608,7 +1843,7 @@ export default function Chessboard() {
                     </div>
                 </div>
 
-                {/* Кнопки управления партией (Онлайн или Свободный анализ) */}
+                {/* Кнопки управления партией (Онлайн, Бот или Свободный анализ) */}
                 {gameId ? (
                     <>
                         <div className="grid grid-cols-2 gap-2">
@@ -1640,6 +1875,34 @@ export default function Chessboard() {
                             </button>
                         )}
                     </>
+                ) : activeBot ? (
+                    <div className="grid grid-cols-2 gap-2">
+                        <button
+                            type="button"
+                            disabled={history.length === 0 || isBotThinking}
+                            onClick={handleUndoSandboxMove}
+                            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs font-bold rounded hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40"
+                        >
+                            <Undo2 size={14}/> Вернуть ход
+                        </button>
+                        {!gameOverResult ? (
+                            <button
+                                type="button"
+                                onClick={handleResign}
+                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/80 text-red-200 text-xs font-bold rounded hover:bg-red-900 transition shadow border border-red-800/50"
+                            >
+                                <Flag size={14}/> Сдаться
+                            </button>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={handleResetSandbox}
+                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-boxwood text-acacia-dark text-xs font-bold rounded hover:bg-boxwood-light transition shadow border border-amber-700/50"
+                            >
+                                <RotateCcw size={14}/> В режим разбора
+                            </button>
+                        )}
+                    </div>
                 ) : (
                     <div className="grid grid-cols-2 gap-2">
                         <button
