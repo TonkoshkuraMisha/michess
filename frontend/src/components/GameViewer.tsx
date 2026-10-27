@@ -23,6 +23,7 @@ import {
     MAX_BOARD_SIZE,
     getDefaultBoardSize
 } from './Chessboard';
+import {API_BASE_URL} from '../config/api';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
@@ -133,7 +134,7 @@ export default function GameViewer() {
             setLoading(true);
             setError(null);
             try {
-                const res = await fetch(`http://127.0.0.1:8000/api/v1/profile/games/${gameId}/pgn`);
+                const res = await fetch(`${API_BASE_URL}/api/v1/profile/games/${gameId}/pgn`);
                 if (!res.ok) throw new Error('Не удалось загрузить данные партии');
 
                 const pgnText = await res.text();
@@ -584,7 +585,7 @@ export default function GameViewer() {
                     </div>
 
                     <a
-                        href={`http://127.0.0.1:8000/api/v1/profile/games/${gameId}/pgn`}
+                        href={`${API_BASE_URL}/api/v1/profile/games/${gameId}/pgn`}
                         download
                         className="flex items-center justify-center gap-2 w-full px-4 py-2.5 bg-[#1A120B] text-amber-500 font-bold text-sm rounded hover:bg-black transition shadow border border-amber-900/60"
                     >
