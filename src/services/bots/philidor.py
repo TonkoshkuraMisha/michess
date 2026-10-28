@@ -4,6 +4,7 @@ import logging
 import os
 import random
 import shutil
+import time
 import chess
 import chess.engine
 
@@ -182,9 +183,7 @@ PIECE_VALUES = {
     chess.KING: 20000,
 }
 
-# Допустимый коридор позиционной уступки Филидора ради пешечной структуры (1.2 пешки)
 PHILIDOR_BLUNDER_GUARD_CP = 120.0
-# Совместимость для внешних импортов
 BLUNDER_GUARD_MARGIN_CP = PHILIDOR_BLUNDER_GUARD_CP
 
 
@@ -207,8 +206,77 @@ def resolve_stockfish_path(custom_path: str | None = None) -> str | None:
     return shutil.which("stockfish")
 
 
+def _simulate_human_thinking_time(
+        board: chess.Board,
+        is_book_move: bool,
+        bot_time_left_ms: int = 180000,
+        base_time_ms: int = 180000,
+) -> None:
+    """
+    Человеческий тайминг шахматиста с учётом стадии партии, теории,
+    сложности эндшпиля/миттельшпиля и цейтнотного давления на часах.
+    """
+    # 1. Определение стадия партии
+    piece_count = len(board.piece_map())
+    move_number = board.fullmove_number
+
+    is_opening = move_number <= 10 and piece_count >= 28
+    is_endgame = piece_count <= 12  # Мало фигур — эндшпиль
+
+    # 2. Базовое время в зависимости от стадии и дебютной памяти
+    if is_opening:
+        if is_book_move:
+            # Знакомая дебютная теория — рука сама ставит фигуру (очень быстро)
+            base_delay = random.uniform(0.8, 1.8)
+        else:
+            # Незнакомый дебют / отклонение от книги — человек думает над планом
+            base_delay = random.uniform(3.5, 8.0)
+    elif is_endgame:
+        # Проверяем, теоретический ли это эндшпиль (например, только короли и пешки или простое ферзевое/ладейное)
+        # В простых эндшпилях не думают, в сложных ладейных — зависают надолго
+        is_simple_endgame = piece_count <= 6
+        if is_simple_endgame:
+            base_delay = random.uniform(0.8, 2.0)
+        else:
+            base_delay = random.uniform(4.0, 12.0)
+    else:
+        # Миттельшпиль — сердце борьбы, критические моменты
+        legal_moves_count = board.legal_moves.count()
+        # Если позиция острая (много вариантов), коэффициент сложности выше
+        complexity_mult = 0.7 + (min(legal_moves_count, 45) / 45.0) * 0.8
+        base_delay = random.uniform(4.0, 14.0) * complexity_mult
+
+        # Иногда в миттельшпиле шахматист находит ключевой момент и думает «вечность» (15-30+ сек)
+        if random.random() < 0.08 and base_time_ms > 60000:
+            base_delay = random.uniform(18.0, 35.0)
+
+    # 3. Коэффициент пропорциональности общему контролю партии
+    # (Если контроль долгий — классика 90+30, думаем солиднее; если пуля — сжимаемся)
+    control_scale_factor = max(0.3, min(3.0,
+                                        base_time_ms / 300000.0))  # 5 минут = 1.0, 90 минут = ~18.0, но ограничено сверху
+    if base_time_ms > 600000:  # для классики масштабируем мягче
+        control_scale_factor = 1.5 + (base_time_ms / 1800000.0) * 1.5
+
+    adjusted_delay = base_delay * control_scale_factor
+
+    # 4. Фактор оставшегося времени на часах (Clock Pressure / Цейтнот)
+    # Если на часах у бота осталось мало времени, он физически не может долго думать
+    if bot_time_left_ms < 30000:  # Меньше 30 секунд
+        time_ratio = bot_time_left_ms / 30000.0
+        adjusted_delay = max(0.5, adjusted_delay * time_ratio)
+
+    # 5. Случайное блуждание (шум)
+    noise = random.gauss(0, 0.3) * adjusted_delay
+    final_thinking_time = max(0.6, adjusted_delay + noise)
+
+    # Защита от превышения реального остатка времени на часах бота
+    max_allowed = max(0.5, (bot_time_left_ms - 2000) / 1000.0)
+    final_thinking_time = min(final_thinking_time, max_allowed)
+
+    time.sleep(final_thinking_time)
+
+
 def _evaluate_pawn_structure(board: chess.Board, us: chess.Color) -> float:
-    """Оценка пешечной структуры по Филидору: фаланги, цепи и избежание сдвоенных пешек."""
     our_pawns = board.pieces(chess.PAWN, us)
     start_rank = 1 if us == chess.WHITE else 6
     pawn_files = [chess.square_file(sq) for sq in our_pawns]
@@ -238,10 +306,6 @@ def _evaluate_pawn_structure(board: chess.Board, us: chess.Color) -> float:
 
 
 def evaluate_philidor_style_bonus(board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-    """
-    Доктрина Филидора: «Пешки — душа шахмат».
-    Оценивает ход с точки зрения контроля центра и гармонии пешечной структуры.
-    """
     us = board_before.turn
     piece = board_before.piece_at(move.from_square)
     if not piece:
@@ -317,10 +381,6 @@ def analyse_with_stockfish(
         time_limit: float = 0.25,
         multipv: int = 6,
 ) -> dict[chess.Move, float]:
-    """
-    Запускает анализ позиции движком Stockfish с исторической калибровкой силы
-    (UCI_LimitStrength + UCI_Elo) и ограниченной человеческой глубиной расчёта.
-    """
     if not engine_path or not os.path.exists(engine_path):
         return {}
 
@@ -359,11 +419,7 @@ def analyse_with_stockfish(
 
 
 class PhilidorBot:
-    """
-    Исторический бот Франсуа-Андре Филидора (~1850 Эло).
-    Считает тактику на человеческую глубину 3 полных ходов (depth=6, UCI_Elo=1850, skill=7),
-    отдавая приоритет пешечным фалангам и цепям (коридор уступки 120 cp).
-    """
+    """Филидор (~1850 Эло, depth=6, skill=7, с человеческим таймингом)."""
 
     def __init__(
             self,
@@ -408,6 +464,7 @@ class PhilidorBot:
                     valid_book_moves.append((move, weight, comment))
 
             if valid_book_moves:
+                _simulate_human_thinking_time(board, is_book_move=True)
                 moves, weights, comments = zip(*valid_book_moves)
                 idx = random.choices(range(len(moves)), weights=weights, k=1)[0]
                 chosen_move = moves[idx]
@@ -421,7 +478,10 @@ class PhilidorBot:
                     "comment": comments[idx],
                 }
 
-        # 2. Получаем тактическую оценку ходов от Stockfish (калибровка 1850 Эло, depth=6)
+        # Имитируем раздумья человека
+        _simulate_human_thinking_time(board, is_book_move=False)
+
+        # 2. Тактический расчёт Stockfish
         engine_path = self._get_active_engine_path() if self.stockfish_path is not None else None
         base_scores = analyse_with_stockfish(
             board=board,
@@ -433,7 +493,6 @@ class PhilidorBot:
             multipv=6,
         )
 
-        # Fallback: тактический расчёт (если тестируем без бинарника в CI)
         if not base_scores:
             us = board.turn
             for mv in board.legal_moves:
@@ -451,7 +510,7 @@ class PhilidorBot:
                         worst_reply_score = s
                 base_scores[mv] = worst_reply_score if b1.legal_moves.count() > 0 else 0.0
 
-        # 3. Коридор позиционной уступки Филидора (120 cp) + человеческий разброс
+        # 3. Коридор уступки (120 cp) + разброс
         max_tactical_cp = max(base_scores.values())
         candidate_scores = {
                                mv: cp for mv, cp in base_scores.items()

@@ -10,10 +10,11 @@ from src.services.bots.philidor import (
     normalize_fen_key,
     resolve_stockfish_path,
     static_board_eval_cp,
+    _simulate_human_thinking_time,
 )
 
-# Допустимый коридор романтического риска Лабурдонне ради атаки и темпа (1.4 пешки)
-LABOURDONNAIS_BLUNDER_GUARD_CP = 140.0
+# Допустимый коридор романтического риска Лабурдонне ради атаки и темпа (2.0 пешки)
+LABOURDONNAIS_BLUNDER_GUARD_CP = 200.0
 
 # Полная дебютная книга Луи-Шарля Маэ де Лабурдонне (на основе расширенной базы из 100+ исторических партий)
 LABOURDONNAIS_OPENING_BOOK: dict[str, list[tuple[str, int, str]]] = {
@@ -221,30 +222,30 @@ LABOURDONNAIS_OPENING_BOOK: dict[str, list[tuple[str, int, str]]] = {
     "rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq -": [
         ("b8c6", 100, "Любимый ход Лабурдонне в атаке (встречалось в партиях: 5 раз(а))."),
     ],
-    "r1bqkbnr/pp1ppppp/2n5/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq -": [
+    "r1bqkbnr/pp1ppppp/2n5/2p5/4P3/5N2/PPPP1PPP/RNBQK1BR w KQkq -": [
         ("d2d4", 80, "Вскрываем сицилианский центр: 3. d4! (встречалось в партиях: 4 раз(а))."),
         ("f1c4", 20, "Любимый ход Лабурдонне в атаке (встречалось в партиях: 1 раз(а))."),
     ],
-    "r1bqkbnr/pp1ppppp/2n5/2p5/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq -": [
+    "r1bqkbnr/pp1ppppp/2n5/2p5/3PP3/5N2/PPP2PPP/RNBQK1BR b KQkq -": [
         ("c5d4", 100, "Любимый ход Лабурдонне в атаке (встречалось в партиях: 4 раз(а))."),
     ],
-    "r1bqkbnr/pp1ppppp/2n5/8/3pP3/5N2/PPP2PPP/RNBQKB1R w KQkq -": [
+    "r1bqkbnr/pp1ppppp/2n5/8/3pP3/5N2/PPP2PPP/RNBQK1BR w KQkq -": [
         ("f3d4", 100, "Любимый ход Лабурдонне в атаке (встречалось в партиях: 4 раз(а))."),
     ],
-    "r1bqkbnr/pp1ppppp/2n5/8/3NP3/8/PPP2PPP/RNBQKB1R b KQkq -": [
+    "r1bqkbnr/pp1ppppp/2n5/8/3NP3/8/PPP2PPP/RNBQK1BR b KQkq -": [
         ("e7e5", 75, "Фирменный удар Лабурдонне в сицилианской защите: 4... e5! (встречалось в партиях: 3 раз(а))."),
         ("c6d4", 25, "Любимый ход Лабурдонне в атаке (встречалось в партиях: 1 раз(а))."),
     ],
-    "r1bqkbnr/pp1p1ppp/2n5/4p3/3NP3/8/PPP2PPP/RNBQKB1R w KQkq -": [
+    "r1bqkbnr/pp1p1ppp/2n5/4p3/3NP3/8/PPP2PPP/RNBQK1BR w KQkq -": [
         ("d4c6", 100, "Любимый ход Лабурдонне в атаке (встречалось в партиях: 3 раз(а))."),
     ],
-    "r1bqkbnr/pp1p1ppp/2N5/4p3/4P3/8/PPP2PPP/RNBQKB1R b KQkq -": [
+    "r1bqkbnr/pp1p1ppp/2N5/4p3/4P3/8/PPP2PPP/RNBQK1BR b KQkq -": [
         ("b7c6", 100, "Любимый ход Лабурдонне в атаке (встречалось в партиях: 3 раз(а))."),
     ],
-    "r1bqkbnr/pp1ppppp/8/8/3nP3/8/PPP2PPP/RNBQKB1R w KQkq -": [
+    "r1bqkbnr/pp1ppppp/8/8/3nP3/8/PPP2PPP/RNBQK1BR w KQkq -": [
         ("d1d4", 100, "Любимый ход Лабурдонне в атаке (встречалось в партиях: 1 раз(а))."),
     ],
-    "r1bqkbnr/pp1ppppp/8/8/3QP3/8/PPP2PPP/RNB1KB1R b KQkq -": [
+    "r1bqkbnr/pp1ppppp/8/8/3QP3/8/PPP2PPP/RNB1KBR b KQkq -": [
         ("e7e6", 100, "Любимый ход Лабурдонне в атаке (встречалось в партиях: 1 раз(а))."),
     ],
     "r1bqkbnr/pp1ppppp/2n5/2p5/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq -": [
@@ -828,10 +829,6 @@ LABOURDONNAIS_OPENING_BOOK: dict[str, list[tuple[str, int, str]]] = {
 
 
 def evaluate_labourdonnais_style_bonus(board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-    """
-    Доктрина Лабурдонне: «Инициатива, темп и прямая атака на короля!».
-    Поощряет быстрый вывод лёгких фигур, рокировку, шахи и вскрытие центра.
-    """
     piece = board_before.piece_at(move.from_square)
     if not piece:
         return 0.0, None
@@ -867,18 +864,14 @@ def evaluate_labourdonnais_style_bonus(board_before: chess.Board, move: chess.Mo
 
 
 class LabourdonnaisBot:
-    """
-    Исторический бот Луи-Шарля Маэ де Лабурдонне (~2050 Эло).
-    Считает комбинации на глубину 4 полных ходов (depth=8, UCI_Elo=2050, skill=10),
-    готов идти на агрессивные жертвы и тактический риск (коридор 140 cp).
-    """
+    """Лабурдонне (~1650 Эло, depth=5, skill=5, с человеческим таймингом)."""
 
     def __init__(
             self,
             stockfish_path: str | None = None,
-            skill_level: int = 10,
-            uci_elo: int = 2050,
-            search_depth: int = 8,
+            skill_level: int = 5,
+            uci_elo: int = 1650,
+            search_depth: int = 5,
     ):
         self._explicit_stockfish_path = stockfish_path
         self.stockfish_path = resolve_stockfish_path(stockfish_path)
@@ -916,6 +909,7 @@ class LabourdonnaisBot:
                     valid_book_moves.append((move, weight, comment))
 
             if valid_book_moves:
+                _simulate_human_thinking_time(board, is_book_move=True)
                 moves, weights, comments = zip(*valid_book_moves)
                 idx = random.choices(range(len(moves)), weights=weights, k=1)[0]
                 chosen_move = moves[idx]
@@ -929,7 +923,10 @@ class LabourdonnaisBot:
                     "comment": comments[idx],
                 }
 
-        # 2. Тактический расчёт Stockfish (калибровка 2050 Эло, depth=8)
+        # Имитируем раздумья человека
+        _simulate_human_thinking_time(board, is_book_move=False)
+
+        # 2. Тактический расчёт Stockfish
         engine_path = self._get_active_engine_path() if self.stockfish_path is not None else None
         base_scores = analyse_with_stockfish(
             board=board,
@@ -937,11 +934,10 @@ class LabourdonnaisBot:
             skill_level=self.skill_level,
             uci_elo=self.uci_elo,
             depth=self.search_depth,
-            time_limit=0.35,
-            multipv=6,
+            time_limit=0.2,
+            multipv=8,
         )
 
-        # Fallback: двухходовый минимакс при отсутствии бинарника Stockfish
         if not base_scores:
             us = board.turn
             for mv in board.legal_moves:
@@ -959,7 +955,7 @@ class LabourdonnaisBot:
                         worst_reply_score = s
                 base_scores[mv] = worst_reply_score if b1.legal_moves.count() > 0 else 0.0
 
-        # 3. Коридор романтического риска (140 cp) + атакующий стиль Лабурдонне
+        # 3. Коридор романтического риска (200 cp) + атакующий стиль
         max_tactical_cp = max(base_scores.values())
         candidate_scores = {
                                mv: cp for mv, cp in base_scores.items()
@@ -972,7 +968,7 @@ class LabourdonnaisBot:
 
         for mv, tactical_cp in candidate_scores.items():
             style_bonus, note = evaluate_labourdonnais_style_bonus(board, mv)
-            jitter = random.uniform(-6.0, 6.0)
+            jitter = random.uniform(-12.0, 12.0)
             total_score = tactical_cp + style_bonus + jitter
 
             if total_score > best_total_score:
