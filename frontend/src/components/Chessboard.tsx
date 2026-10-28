@@ -1,6 +1,7 @@
 // --- FILE: frontend/src/components/Chessboard.tsx ---
 
 import {useState, useEffect, useRef, useCallback} from 'react';
+import {useNavigate} from 'react-router-dom';
 import {Chess} from 'chess.js';
 import {
     ChevronFirst,
@@ -22,7 +23,9 @@ import {
     ListOrdered,
     Undo2,
     Bot,
-    MessageSquareQuote
+    MessageSquareQuote,
+    Download,
+    Eye
 } from 'lucide-react';
 import {gameSocket} from '../services/gameSocket';
 
@@ -79,7 +82,7 @@ const HISTORICAL_BOTS: Record<HistoricalBotId, HistoricalBotProfile> = {
         id: 'philidor',
         name: 'Ф.-А. Филидор',
         shortName: 'Филидор',
-        playerLabel: 'Ф.-А. Филидор (1749)',
+        playerLabel: 'Ф.-А. Филидор',
         era: 'Эпоха 1749–1795',
         rating: 1850,
         motto: 'Пешки — душа шахмат: именно они определяют атаку и защиту.',
@@ -89,7 +92,7 @@ const HISTORICAL_BOTS: Record<HistoricalBotId, HistoricalBotProfile> = {
         id: 'labourdonnais',
         name: 'Л.-Ш. Лабурдонне',
         shortName: 'Лабурдонне',
-        playerLabel: 'Л.-Ш. Лабурдонне (1834)',
+        playerLabel: 'Л.-Ш. Лабурдонне',
         era: 'Эпоха 1795–1840',
         rating: 1950,
         motto: 'Инициатива, гамбит и стремительная атака на короля!',
@@ -233,6 +236,8 @@ function cloneChessInstance(source: Chess): Chess {
 }
 
 export default function Chessboard() {
+    const navigate = useNavigate();
+
     const [game, setGame] = useState(new Chess());
     const [history, setHistory] = useState<any[]>([]);
     // -1 = актуальная (живая) позиция; -2 = самое начало партии (до 1-го хода); 0..N = индекс полухода в history
@@ -252,6 +257,8 @@ export default function Chessboard() {
     const [isSearching, setIsSearching] = useState(false);
     const [queuePlayers, setQueuePlayers] = useState<QueuePlayer[]>([]);
     const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+    const [currentUsername, setCurrentUsername] = useState<string>('Вы');
+    const [currentUserRating, setCurrentUserRating] = useState<number>(1200);
     const [stateVersion, setStateVersion] = useState(0);
 
     // Состояния исторических ботов (Филидор и Лабурдонне)
@@ -259,6 +266,7 @@ export default function Chessboard() {
     const [activeBot, setActiveBot] = useState<HistoricalBotId | null>(null);
     const [botComment, setBotComment] = useState<string | null>(null);
     const [isBotThinking, setIsBotThinking] = useState<boolean>(false);
+    const [savedBotGameId, setSavedBotGameId] = useState<number | null>(null);
 
     // Выбранный контроль времени и состояние кастомного селектора
     const [selectedTimeControl, setSelectedTimeControl] = useState({base: 3, inc: 0});
@@ -278,6 +286,7 @@ export default function Chessboard() {
     } | null>(null);
 
     const moveStartTime = useRef<number>(Date.now());
+    const botGameSavedRef = useRef<boolean>(false);
 
     const [dragState, setDragState] = useState<{
         from: string;
@@ -338,6 +347,51 @@ export default function Chessboard() {
         });
     }, [myColor]);
 
+    // Сохранение завершённой партии с ботом в БД PostgreSQL
+    const saveBotGameToDatabase = useCallback(async (
+        botId: HistoricalBotId,
+        playerColor: 'white' | 'black',
+        result: string,
+        completedGame: Chess
+    ) => {
+        if (botGameSavedRef.current) return;
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const verboseMoves = completedGame.history({verbose: true});
+        if (verboseMoves.length === 0) return;
+
+        botGameSavedRef.current = true;
+        const movesUci = verboseMoves.map((m: any) => `${m.from}${m.to}${m.promotion || ''}`);
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/bots/save-game`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    bot_id: botId,
+                    player_color: playerColor,
+                    result,
+                    moves_uci: movesUci,
+                    base_time_ms: selectedTimeControl.base * 60 * 1000,
+                    increment_ms: selectedTimeControl.inc * 1000
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.game_id) {
+                    setSavedBotGameId(data.game_id);
+                }
+            }
+        } catch (err) {
+            console.error('Ошибка сохранения партии с ботом в БД:', err);
+        }
+    }, [selectedTimeControl.base, selectedTimeControl.inc]);
+
     const handleThemeChange = (themeId: string) => {
         setBoardThemeKey(themeId);
         localStorage.setItem('michess_board_theme', themeId);
@@ -359,6 +413,8 @@ export default function Chessboard() {
         const freshGame = new Chess();
         const botInfo = HISTORICAL_BOTS[botId];
 
+        botGameSavedRef.current = false;
+        setSavedBotGameId(null);
         setGameId(null);
         setSelectedBotId(botId);
         setActiveBot(botId);
@@ -376,11 +432,11 @@ export default function Chessboard() {
         moveStartTime.current = Date.now();
 
         if (chosenColor === 'white') {
-            setWhitePlayer({username: 'Вы', rating: '1500'});
+            setWhitePlayer({username: currentUsername, rating: String(currentUserRating)});
             setBlackPlayer({username: botInfo.playerLabel, rating: String(botInfo.rating)});
         } else {
             setWhitePlayer({username: botInfo.playerLabel, rating: String(botInfo.rating)});
-            setBlackPlayer({username: 'Вы', rating: '1500'});
+            setBlackPlayer({username: currentUsername, rating: String(currentUserRating)});
         }
 
         setBotComment(`«${botInfo.motto}»`);
@@ -435,9 +491,10 @@ export default function Chessboard() {
                             result = nextGame.turn() === 'w' ? '0-1' : '1-0';
                         }
                         setGameOverResult(result);
-                        setDrawOfferStatus(`Партия против ${botName} окончена. Результат: ${result}`);
+                        setDrawOfferStatus(`Партия против ${botName} окончена и сохранена в архив (${result}).`);
                         updateSessionStats(result);
                         playAudio('start');
+                        saveBotGameToDatabase(activeBot, myColor, result, nextGame);
                     }
                 }
             } catch (err) {
@@ -453,7 +510,7 @@ export default function Chessboard() {
             isCancelled = true;
             clearTimeout(timer);
         };
-    }, [activeBot, game, myColor, gameOverResult, playAudio, updateSessionStats]);
+    }, [activeBot, game, myColor, gameOverResult, playAudio, updateSessionStats, saveBotGameToDatabase]);
 
     // Обработчик изменения размера доски за правый нижний угол
     useEffect(() => {
@@ -581,7 +638,11 @@ export default function Chessboard() {
         })
             .then(res => res.ok ? res.json() : null)
             .then(data => {
-                if (data) setCurrentUserId(data.id);
+                if (data) {
+                    setCurrentUserId(data.id);
+                    if (data.username) setCurrentUsername(data.username);
+                    if (data.rating) setCurrentUserRating(data.rating);
+                }
             })
             .catch(() => {
             });
@@ -597,6 +658,8 @@ export default function Chessboard() {
             setIsSearching(false);
             setActiveBot(null);
             setBotComment(null);
+            setSavedBotGameId(null);
+            botGameSavedRef.current = false;
             setGameId(data.game_id);
             setMyColor(data.color);
             setIsManualFlip(false);
@@ -850,9 +913,10 @@ export default function Chessboard() {
                     }
                     const botName = HISTORICAL_BOTS[activeBot].shortName;
                     setGameOverResult(result);
-                    setDrawOfferStatus(`Партия против ${botName} окончена. Результат: ${result}`);
+                    setDrawOfferStatus(`Партия против ${botName} окончена и сохранена в архив (${result}).`);
                     updateSessionStats(result);
                     playAudio('start');
+                    saveBotGameToDatabase(activeBot, myColor, result, nextGame);
                 }
                 setSelectedSquare(null);
             }
@@ -860,7 +924,7 @@ export default function Chessboard() {
             setSelectedSquare(null);
         }
         setDragState(null);
-    }, [game, gameId, activeBot, myColor, stateVersion, viewIndex, gameOverResult, playAudio, updateSessionStats]);
+    }, [game, gameId, activeBot, myColor, stateVersion, viewIndex, gameOverResult, playAudio, updateSessionStats, saveBotGameToDatabase]);
 
     useEffect(() => {
         const handleMouseMove = (e: MouseEvent) => {
@@ -941,6 +1005,8 @@ export default function Chessboard() {
         setGameId(null);
         setActiveBot(null);
         setBotComment(null);
+        setSavedBotGameId(null);
+        botGameSavedRef.current = false;
         setGameOverResult(null);
         setRatingInfo(null);
         setIsSearching(true);
@@ -962,6 +1028,8 @@ export default function Chessboard() {
     const acceptChallenge = (targetUserId: number) => {
         setActiveBot(null);
         setBotComment(null);
+        setSavedBotGameId(null);
+        botGameSavedRef.current = false;
         gameSocket.send('accept_challenge', {target_user_id: targetUserId});
     };
 
@@ -977,6 +1045,7 @@ export default function Chessboard() {
                 setDrawOfferStatus(`Вы сдались. Победа ${botName} (${res}).`);
                 updateSessionStats(res);
                 playAudio('start');
+                saveBotGameToDatabase(activeBot, myColor, res, game);
             }
         }
     };
@@ -1004,6 +1073,8 @@ export default function Chessboard() {
         setGameId(null);
         setActiveBot(null);
         setBotComment(null);
+        setSavedBotGameId(null);
+        botGameSavedRef.current = false;
         setIsBotThinking(false);
         setGameOverResult(null);
         setRatingInfo(null);
@@ -1015,7 +1086,7 @@ export default function Chessboard() {
     };
 
     const handleUndoSandboxMove = () => {
-        if (gameId || history.length === 0 || isBotThinking) return;
+        if (gameId || history.length === 0 || isBotThinking || !!gameOverResult) return;
         const nextGame = cloneChessInstance(game);
         nextGame.undo();
         // Если играем с ботом и сейчас наш ход, откатываем и ход бота, и свой ход
@@ -1871,7 +1942,7 @@ export default function Chessboard() {
                             disabled={history.length === 0 || viewIndex === -2}
                             onClick={() => {
                                 if (history.length > 0) {
-                                    const current = viewIndex === -1 ? history.length - 1 : viewIndex;
+                                    const current = viewIndex === -1 ? history.length - 1 : prevIndexHelper(viewIndex, history.length);
                                     setViewIndex(current <= 0 ? -2 : current - 1);
                                 }
                             }}
@@ -1942,31 +2013,65 @@ export default function Chessboard() {
                         )}
                     </>
                 ) : activeBot ? (
-                    <div className="grid grid-cols-2 gap-2">
-                        <button
-                            type="button"
-                            disabled={history.length === 0 || isBotThinking}
-                            onClick={handleUndoSandboxMove}
-                            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs font-bold rounded hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40"
-                        >
-                            <Undo2 size={14}/> Вернуть ход
-                        </button>
-                        {!gameOverResult ? (
+                    <div className="flex flex-col gap-2">
+                        <div className="grid grid-cols-2 gap-2">
                             <button
                                 type="button"
-                                onClick={handleResign}
-                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/80 text-red-200 text-xs font-bold rounded hover:bg-red-900 transition shadow border border-red-800/50"
+                                disabled={history.length === 0 || isBotThinking || !!gameOverResult}
+                                onClick={handleUndoSandboxMove}
+                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs font-bold rounded hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40"
                             >
-                                <Flag size={14}/> Сдаться
+                                <Undo2 size={14}/> Вернуть ход
                             </button>
-                        ) : (
-                            <button
-                                type="button"
-                                onClick={handleResetSandbox}
-                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-boxwood text-acacia-dark text-xs font-bold rounded hover:bg-boxwood-light transition shadow border border-amber-700/50"
-                            >
-                                <RotateCcw size={14}/> В режим разбора
-                            </button>
+                            {!gameOverResult ? (
+                                <button
+                                    type="button"
+                                    onClick={handleResign}
+                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/80 text-red-200 text-xs font-bold rounded hover:bg-red-900 transition shadow border border-red-800/50"
+                                >
+                                    <Flag size={14}/> Сдаться
+                                </button>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={handleResetSandbox}
+                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-boxwood text-acacia-dark text-xs font-bold rounded hover:bg-boxwood-light transition shadow border border-amber-700/50"
+                                >
+                                    <RotateCcw size={14}/> Свободная доска
+                                </button>
+                            )}
+                        </div>
+
+                        {savedBotGameId && (
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => navigate(`/game/${savedBotGameId}`, {
+                                        state: {
+                                            game: {
+                                                game_id: savedBotGameId,
+                                                white_username: whitePlayer.username,
+                                                white_rating: Number(whitePlayer.rating) || 1200,
+                                                black_username: blackPlayer.username,
+                                                black_rating: Number(blackPlayer.rating) || 1850,
+                                                result: gameOverResult || '*',
+                                                site: 'Michess Bot Arena',
+                                                finished_at: new Date().toISOString()
+                                            }
+                                        }
+                                    })}
+                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 text-xs font-bold rounded transition shadow border border-emerald-600/50"
+                                >
+                                    <Eye size={14}/> Разбор партии
+                                </button>
+                                <a
+                                    href={`${API_BASE_URL}/api/v1/profile/games/${savedBotGameId}/pgn`}
+                                    download
+                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-[#1A120B] hover:bg-black text-amber-400 text-xs font-bold rounded transition shadow border border-amber-800/60"
+                                >
+                                    <Download size={14}/> Скачать PGN
+                                </a>
+                            </div>
                         )}
                     </div>
                 ) : (
@@ -1994,4 +2099,8 @@ export default function Chessboard() {
 
         </div>
     );
+}
+
+function prevIndexHelper(viewIndex: number, historyLength: number): number {
+    return viewIndex === -1 ? historyLength - 1 : viewIndex;
 }
