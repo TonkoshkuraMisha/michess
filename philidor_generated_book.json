@@ -1,241 +1,1341 @@
 {
-    "rnbqkbnr/ppppp1pp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": {
-        "e2e4": 24,
-        "d2d4": 1
-    },
-    "rnbqkbnr/ppppp1pp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -": {
-        "e7e6": 3,
-        "g8h6": 5,
-        "0000": 13,
-        "c7c5": 3
-    },
-    "rnbqkbnr/pppp2pp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": {
-        "d2d4": 2,
-        "f1c4": 1
-    },
-    "rnbqkbnr/pppp2pp/4p3/8/3PP3/8/PPP2PPP/RNBQKBNR b KQkq -": {
-        "d7d5": 2
-    },
-    "rnbqkbnr/ppp3pp/4p3/3p4/3PP3/8/PPP2PPP/RNBQKBNR w KQkq -": {
-        "e4d5": 1,
-        "e4e5": 1
-    },
-    "rnbqkbnr/ppp3pp/4p3/3P4/3P4/8/PPP2PPP/RNBQKBNR b KQkq -": {
-        "e6d5": 1
-    },
-    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": {
-        "e2e4": 11,
-        "d2d4": 1
-    },
-    "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -": {
-        "e7e5": 8,
-        "c7c5": 3
-    },
-    "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": {
-        "f1c4": 5,
-        "f2f4": 3
-    },
-    "rnbqkbnr/pppp1ppp/8/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq -": {
-        "c7c6": 4,
-        "g8f6": 1
-    },
-    "rnbqkbnr/pp1p1ppp/2p5/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq -": {
-        "d1e2": 2,
-        "b1c3": 1,
-        "g1f3": 1
-    },
-    "rnbqkbnr/pp1p1ppp/2p5/4p3/2B1P3/8/PPPPQPPP/RNB1K1NR b KQkq -": {
-        "d7d6": 1,
-        "g8f6": 1
-    },
-    "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": {
-        "f1c4": 1,
-        "f2f4": 2
-    },
-    "rnbqkbnr/pp1ppppp/8/2p5/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq -": {
-        "e7e6": 1
-    },
-    "rnbqkbnr/pp1p1ppp/4p3/2p5/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq -": {
-        "d1e2": 1
-    },
-    "rnbqkbnr/pp1p1ppp/4p3/2p5/2B1P3/8/PPPPQPPP/RNB1K1NR b KQkq -": {
-        "b8c6": 1
-    },
-    "rnbqkb1r/ppppp1pp/7n/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": {
-        "d2d4": 3,
-        "f1c4": 2
-    },
-    "rnbqkb1r/ppppp1pp/7n/8/3PP3/8/PPP2PPP/RNBQKBNR b KQkq -": {
-        "h6f7": 3
-    },
-    "rnbqkb1r/pppppnpp/8/8/3PP3/8/PPP2PPP/RNBQKBNR w KQkq -": {
-        "f1d3": 2,
-        "f1c4": 1
-    },
-    "rnbqkb1r/pppppnpp/8/8/3PP3/3B4/PPP2PPP/RNBQK1NR b KQkq -": {
-        "e7e6": 1,
-        "d7d6": 1
-    },
-    "rnbqkbnr/ppppp1pp/8/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": {
-        "f2f4": 5,
-        "d2d4": 8
-    },
-    "rnbqkbnr/ppppp1pp/8/8/4PP2/8/PPPP2PP/RNBQKBNR b KQkq -": {
-        "e7e6": 5
-    },
-    "rnbqkbnr/pppp2pp/4p3/8/4PP2/8/PPPP2PP/RNBQKBNR w KQkq -": {
-        "g1f3": 1,
-        "d2d4": 4
-    },
-    "rnbqkbnr/pppp2pp/4p3/8/4PP2/5N2/PPPP2PP/RNBQKB1R b KQkq -": {
-        "d7d5": 1
-    },
-    "rnbqkbnr/pppp2pp/4p3/8/3PPP2/8/PPP3PP/RNBQKBNR b KQkq -": {
-        "d7d5": 11
-    },
-    "rnbqkbnr/pppp1ppp/8/4p3/4PP2/8/PPPP2PP/RNBQKBNR b KQkq -": {
-        "e5f4": 3
-    },
-    "rnbqkbnr/pppp1ppp/8/8/4Pp2/8/PPPP2PP/RNBQKBNR w KQkq -": {
-        "g1f3": 3
-    },
-    "rnbqkbnr/pppp1ppp/8/8/4Pp2/5N2/PPPP2PP/RNBQKB1R b KQkq -": {
-        "g7g5": 3
-    },
-    "rnbqkbnr/ppppp1pp/8/8/3PP3/8/PPP2PPP/RNBQKBNR b KQkq -": {
-        "e7e6": 8
-    },
-    "rnbqkbnr/pppp2pp/4p3/8/3PP3/8/PPP2PPP/RNBQKBNR w KQkq -": {
-        "c2c4": 1,
-        "f2f4": 7
-    },
-    "rnbqkbnr/pppp2pp/4p3/8/2PPP3/8/PP3PPP/RNBQKBNR b KQkq -": {
-        "g7g6": 2
-    },
-    "r1bqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": {
-        "e2e4": 2
-    },
-    "r1bqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -": {
-        "e7e6": 1,
-        "e7e5": 1
-    },
-    "r1bqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": {
-        "f1c4": 1
-    },
-    "r1bqkbnr/pppp1ppp/4p3/8/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq -": {
-        "g7g6": 1
-    },
-    "r1bqkbnr/pppp1p1p/4p1p1/8/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq -": {
-        "c2c3": 1
-    },
-    "r1bqkbnr/pppp1p1p/4p1p1/8/2B1P3/2P5/PP1P1PPP/RNBQK1NR b KQkq -": {
-        "b7b6": 1
-    },
-    "rnbqkbnr/ppppp1pp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq -": {
-        "0000": 1
-    },
-    "rnbqkbnr/ppppp1pp/8/8/3P4/8/PPP1PPPP/RNBQKBNR w KQkq -": {
-        "c2c4": 1
-    },
-    "rnbqkbnr/ppppp1pp/8/8/2PP4/8/PP2PPPP/RNBQKBNR b KQkq -": {
-        "e7e6": 1
-    },
-    "rnbqkbnr/pppp2pp/4p3/8/2PP4/8/PP2PPPP/RNBQKBNR w KQkq -": {
-        "e2e4": 1
-    },
-    "r1bqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": {
-        "f1c4": 1
-    },
-    "r1bqkbnr/pppp1ppp/8/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq -": {
-        "f7f5": 1
-    },
-    "r1bqkbnr/pppp2pp/8/4pp2/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq -": {
-        "c4g8": 1
-    },
-    "r1bqkbBr/pppp2pp/8/4pp2/4P3/8/PPPP1PPP/RNBQK1NR b KQkq -": {
-        "h8g8": 1
-    },
-    "rnbqkbnr/pp1pp1pp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": {
-        "d1h5": 3
-    },
-    "rnbqkbnr/pp1pp1pp/8/2p4Q/4P3/8/PPPP1PPP/RNB1KBNR b KQkq -": {
-        "g7g6": 3
-    },
-    "rnbqkbnr/pp1pp2p/6p1/2p4Q/4P3/8/PPPP1PPP/RNB1KBNR w KQkq -": {
-        "h5c5": 3
-    },
-    "rnbqkbnr/pp1pp2p/6p1/2Q5/4P3/8/PPPP1PPP/RNB1KBNR b KQkq -": {
-        "b8c6": 3
-    },
-    "rnbqkb1r/ppppp1pp/7n/8/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq -": {
-        "e7e6": 2
-    },
-    "rnbqkb1r/pppp2pp/4p2n/8/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq -": {
-        "d2d3": 1,
-        "b1c3": 1
-    },
-    "rnbqkb1r/pppp2pp/4p2n/8/2B1P3/3P4/PPP2PPP/RNBQK1NR b KQkq -": {
-        "h6f7": 1
-    },
-    "rnbqkb1r/pppp2pp/4p2n/8/2B1P3/2N5/PPPP1PPP/R1BQK1NR b KQkq -": {
-        "h6f7": 1
-    },
-    "rnbqkbnr/pppp2pp/4p3/8/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq -": {
-        "g7g6": 1
-    },
-    "rnbqkbnr/pppp3p/4p1p1/8/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq -": {
-        "d1e2": 1
-    },
-    "rnbqkbnr/pppp3p/4p1p1/8/2B1P3/8/PPPPQPPP/RNB1K1NR b KQkq -": {
-        "c7c5": 1
-    },
-    "rnbqkb1r/pppp1ppp/5n2/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq -": {
-        "b1c3": 1
-    },
-    "rnbqkb1r/pppp1ppp/5n2/4p3/2B1P3/2N5/PPPP1PPP/R1BQK1NR b KQkq -": {
-        "f8c5": 1
-    },
-    "rnbqkb1r/pppppnpp/8/8/2BPP3/8/PPP2PPP/RNBQK1NR b KQkq -": {
-        "e7e6": 1
-    },
-    "rnbqkbnr/ppp3pp/4p3/3pP3/3P4/8/PPP2PPP/RNBQKBNR b KQkq -": {
-        "c7c5": 1
-    },
-    "rnbqkbnr/pp1p1ppp/2p5/4p3/2B1P3/2N5/PPPP1PPP/R1BQK1NR b KQkq -": {
-        "f8d6": 1
-    },
-    "rnbqkbnr/pp1p1ppp/2p5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq -": {
-        "d7d5": 1
-    },
-    "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq -": {
-        "d7d5": 1
-    },
-    "rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq -": {
-        "c2c4": 1
-    },
-    "rnbqkbnr/ppp1pppp/8/3p4/2PP4/8/PP2PPPP/RNBQKBNR b KQkq -": {
-        "d5c4": 1
-    },
-    "rnbqkbnr/ppp1pppp/8/8/2pP4/8/PP2PPPP/RNBQKBNR w KQkq -": {
-        "e2e3": 1
-    },
-    "rnbqkbnr/ppp1pppp/8/8/2pP4/4P3/PP3PPP/RNBQKBNR b KQkq -": {
-        "e7e5": 1
-    },
-    "rnbqkbnr/pp1ppppp/8/2p5/4PP2/8/PPPP2PP/RNBQKBNR b KQkq -": {
-        "b8c6": 1,
-        "e7e6": 1
-    },
-    "r1bqkbnr/pp1ppppp/2n5/2p5/4PP2/8/PPPP2PP/RNBQKBNR w KQkq -": {
-        "g1f3": 1
-    },
-    "r1bqkbnr/pp1ppppp/2n5/2p5/4PP2/5N2/PPPP2PP/RNBQKB1R b KQkq -": {
-        "e7e6": 1
-    },
-    "rnbqkbnr/pp1p1ppp/4p3/2p5/4PP2/8/PPPP2PP/RNBQKBNR w KQkq -": {
-        "g1f3": 1
-    },
-    "rnbqkbnr/pp1p1ppp/4p3/2p5/4PP2/5N2/PPPP2PP/RNBQKB1R b KQkq -": {
-        "b8c6": 1
-    }
+    "rnbqkbnr/ppppp1pp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
+        [
+            "e2e4",
+            96,
+            "Исторический выбор Филидора (встречалось в партиях: 24 раз(а))."
+        ],
+        [
+            "d2d4",
+            4,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppppp1pp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -": [
+        [
+            "0000",
+            54,
+            "Исторический выбор Филидора (встречалось в партиях: 13 раз(а))."
+        ],
+        [
+            "g8h6",
+            20,
+            "Исторический выбор Филидора (встречалось в партиях: 5 раз(а))."
+        ],
+        [
+            "e7e6",
+            12,
+            "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."
+        ],
+        [
+            "c7c5",
+            12,
+            "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppp2pp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": [
+        [
+            "d2d4",
+            66,
+            "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."
+        ],
+        [
+            "f1c4",
+            33,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppp2pp/4p3/8/3PP3/8/PPP2PPP/RNBQKBNR b KQkq -": [
+        [
+            "d7d5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppp3pp/4p3/3p4/3PP3/8/PPP2PPP/RNBQKBNR w KQkq -": [
+        [
+            "e4d5",
+            50,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ],
+        [
+            "e4e5",
+            50,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppp3pp/4p3/3P4/3P4/8/PPP2PPP/RNBQKBNR b KQkq -": [
+        [
+            "e6d5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppp3pp/8/3p4/3P4/8/PPP2PPP/RNBQKBNR w KQkq -": [
+        [
+            "d1h5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppp3pp/8/3p3Q/3P4/8/PPP2PPP/RNB1KBNR b KQkq -": [
+        [
+            "g7g6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppp4p/6p1/3p3Q/3P4/8/PPP2PPP/RNB1KBNR w KQkq -": [
+        [
+            "h5e5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppp4p/6p1/3pQ3/3P4/8/PPP2PPP/RNB1KBNR b KQkq -": [
+        [
+            "d8e7",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
+        [
+            "e2e4",
+            91,
+            "Исторический выбор Филидора (встречалось в партиях: 11 раз(а))."
+        ],
+        [
+            "d2d4",
+            8,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -": [
+        [
+            "e7e5",
+            72,
+            "Исторический выбор Филидора (встречалось в партиях: 8 раз(а))."
+        ],
+        [
+            "c7c5",
+            27,
+            "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": [
+        [
+            "f1c4",
+            62,
+            "Исторический выбор Филидора (встречалось в партиях: 5 раз(а))."
+        ],
+        [
+            "f2f4",
+            37,
+            "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppp1ppp/8/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq -": [
+        [
+            "c7c6",
+            80,
+            "Исторический выбор Филидора (встречалось в партиях: 4 раз(а))."
+        ],
+        [
+            "g8f6",
+            20,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp1p1ppp/2p5/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq -": [
+        [
+            "d1e2",
+            50,
+            "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."
+        ],
+        [
+            "b1c3",
+            25,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ],
+        [
+            "g1f3",
+            25,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp1p1ppp/2p5/4p3/2B1P3/8/PPPPQPPP/RNB1K1NR b KQkq -": [
+        [
+            "d7d6",
+            50,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ],
+        [
+            "g8f6",
+            50,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp3ppp/2pp4/4p3/2B1P3/8/PPPPQPPP/RNB1K1NR w KQkq -": [
+        [
+            "c2c3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp3ppp/2pp4/4p3/2B1P3/2P5/PP1PQPPP/RNB1K1NR b KQkq -": [
+        [
+            "f7f5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp4pp/2pp4/4pp2/2B1P3/2P5/PP1PQPPP/RNB1K1NR w KQkq -": [
+        [
+            "d2d3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp4pp/2pp4/4pp2/2B1P3/2PP4/PP2QPPP/RNB1K1NR b KQkq -": [
+        [
+            "g8f6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": [
+        [
+            "f2f4",
+            66,
+            "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."
+        ],
+        [
+            "f1c4",
+            33,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp1ppppp/8/2p5/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq -": [
+        [
+            "e7e6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp1p1ppp/4p3/2p5/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq -": [
+        [
+            "d1e2",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp1p1ppp/4p3/2p5/2B1P3/8/PPPPQPPP/RNB1K1NR b KQkq -": [
+        [
+            "b8c6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pp1p1ppp/2n1p3/2p5/2B1P3/8/PPPPQPPP/RNB1K1NR w KQkq -": [
+        [
+            "c2c3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pp1p1ppp/2n1p3/2p5/2B1P3/2P5/PP1PQPPP/RNB1K1NR b KQkq -": [
+        [
+            "a7a6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/1p1p1ppp/p1n1p3/2p5/2B1P3/2P5/PP1PQPPP/RNB1K1NR w KQkq -": [
+        [
+            "a2a4",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/1p1p1ppp/p1n1p3/2p5/P1B1P3/2P5/1P1PQPPP/RNB1K1NR b KQkq -": [
+        [
+            "b7b6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/ppppp1pp/7n/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": [
+        [
+            "d2d4",
+            60,
+            "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."
+        ],
+        [
+            "f1c4",
+            40,
+            "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/ppppp1pp/7n/8/3PP3/8/PPP2PPP/RNBQKBNR b KQkq -": [
+        [
+            "h6f7",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/pppppnpp/8/8/3PP3/8/PPP2PPP/RNBQKBNR w KQkq -": [
+        [
+            "f1d3",
+            66,
+            "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."
+        ],
+        [
+            "f1c4",
+            33,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/pppppnpp/8/8/3PP3/3B4/PPP2PPP/RNBQK1NR b KQkq -": [
+        [
+            "e7e6",
+            50,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ],
+        [
+            "d7d6",
+            50,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/pppp1npp/4p3/8/3PP3/3B4/PPP2PPP/RNBQK1NR w KQkq -": [
+        [
+            "g1f3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/pppp1npp/4p3/8/3PP3/3B1N2/PPP2PPP/RNBQK2R b KQkq -": [
+        [
+            "d7d5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/ppp2npp/4p3/3p4/3PP3/3B1N2/PPP2PPP/RNBQK2R w KQkq -": [
+        [
+            "e4e5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/ppp2npp/4p3/3pP3/3P4/3B1N2/PPP2PPP/RNBQK2R b KQkq -": [
+        [
+            "c7c5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/pp1p1ppp/2p2n2/4p3/2B1P3/8/PPPPQPPP/RNB1K1NR w KQkq -": [
+        [
+            "d2d3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/pp1p1ppp/2p2n2/4p3/2B1P3/3P4/PPP1QPPP/RNB1K1NR b KQkq -": [
+        [
+            "f8c5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqk2r/pp1p1ppp/2p2n2/2b1p3/2B1P3/3P4/PPP1QPPP/RNB1K1NR w KQkq -": [
+        [
+            "c1e3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqk2r/pp1p1ppp/2p2n2/2b1p3/2B1P3/3PB3/PPP1QPPP/RN2K1NR b KQkq -": [
+        [
+            "c5e3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppppp1pp/8/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": [
+        [
+            "d2d4",
+            61,
+            "Исторический выбор Филидора (встречалось в партиях: 8 раз(а))."
+        ],
+        [
+            "f2f4",
+            38,
+            "Исторический выбор Филидора (встречалось в партиях: 5 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppppp1pp/8/8/4PP2/8/PPPP2PP/RNBQKBNR b KQkq -": [
+        [
+            "e7e6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 5 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppp2pp/4p3/8/4PP2/8/PPPP2PP/RNBQKBNR w KQkq -": [
+        [
+            "d2d4",
+            80,
+            "Исторический выбор Филидора (встречалось в партиях: 4 раз(а))."
+        ],
+        [
+            "g1f3",
+            20,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppp2pp/4p3/8/4PP2/5N2/PPPP2PP/RNBQKB1R b KQkq -": [
+        [
+            "d7d5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppp3pp/4p3/3p4/4PP2/5N2/PPPP2PP/RNBQKB1R w KQkq -": [
+        [
+            "e4e5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppp3pp/4p3/3pP3/5P2/5N2/PPPP2PP/RNBQKB1R b KQkq -": [
+        [
+            "c7c5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp4pp/4p3/2ppP3/5P2/5N2/PPPP2PP/RNBQKB1R w KQkq -": [
+        [
+            "d2d4",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp4pp/4p3/2ppP3/3P1P2/5N2/PPP3PP/RNBQKB1R b KQkq -": [
+        [
+            "b8c6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppp2pp/4p3/8/3PPP2/8/PPP3PP/RNBQKBNR b KQkq -": [
+        [
+            "d7d5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 11 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppp3pp/4p3/3p4/3PPP2/8/PPP3PP/RNBQKBNR w KQkq -": [
+        [
+            "e4e5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 11 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppp3pp/4p3/3pP3/3P1P2/8/PPP3PP/RNBQKBNR b KQkq -": [
+        [
+            "c7c5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 11 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp4pp/4p3/2ppP3/3P1P2/8/PPP3PP/RNBQKBNR w KQkq -": [
+        [
+            "c2c3",
+            90,
+            "Исторический выбор Филидора (встречалось в партиях: 10 раз(а))."
+        ],
+        [
+            "g1f3",
+            9,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp4pp/4p3/2ppP3/3P1P2/2P5/PP4PP/RNBQKBNR b KQkq -": [
+        [
+            "b8c6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 10 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppp1ppp/8/4p3/4PP2/8/PPPP2PP/RNBQKBNR b KQkq -": [
+        [
+            "e5f4",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppp1ppp/8/8/4Pp2/8/PPPP2PP/RNBQKBNR w KQkq -": [
+        [
+            "g1f3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppp1ppp/8/8/4Pp2/5N2/PPPP2PP/RNBQKB1R b KQkq -": [
+        [
+            "g7g5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppp1p1p/8/6p1/4Pp2/5N2/PPPP2PP/RNBQKB1R w KQkq -": [
+        [
+            "f1c4",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppp1p1p/8/6p1/2B1Pp2/5N2/PPPP2PP/RNBQK2R b KQkq -": [
+        [
+            "g5g4",
+            66,
+            "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."
+        ],
+        [
+            "f8g7",
+            33,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqk1nr/pppp1pbp/8/6p1/2B1Pp2/5N2/PPPP2PP/RNBQK2R w KQkq -": [
+        [
+            "h2h4",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqk1nr/pppp1pbp/8/6p1/2B1Pp1P/5N2/PPPP2P1/RNBQK2R b KQkq -": [
+        [
+            "h7h6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppppp1pp/8/8/3PP3/8/PPP2PPP/RNBQKBNR b KQkq -": [
+        [
+            "e7e6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 8 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppp2pp/4p3/8/3PP3/8/PPP2PPP/RNBQKBNR w KQkq -": [
+        [
+            "f2f4",
+            87,
+            "Исторический выбор Филидора (встречалось в партиях: 7 раз(а))."
+        ],
+        [
+            "c2c4",
+            12,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppp2pp/4p3/8/2PPP3/8/PP3PPP/RNBQKBNR b KQkq -": [
+        [
+            "g7g6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppp3p/4p1p1/8/2PPP3/8/PP3PPP/RNBQKBNR w KQkq -": [
+        [
+            "f2f4",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppp3p/4p1p1/8/2PPPP2/8/PP4PP/RNBQKBNR b KQkq -": [
+        [
+            "d7d5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppp4p/4p1p1/3p4/2PPPP2/8/PP4PP/RNBQKBNR w KQkq -": [
+        [
+            "c4d5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppp4p/4p1p1/3P4/3PPP2/8/PP4PP/RNBQKBNR b KQkq -": [
+        [
+            "e6d5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
+        [
+            "e2e4",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -": [
+        [
+            "e7e6",
+            50,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ],
+        [
+            "e7e5",
+            50,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pppp1ppp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": [
+        [
+            "f1c4",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pppp1ppp/4p3/8/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq -": [
+        [
+            "g7g6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pppp1p1p/4p1p1/8/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq -": [
+        [
+            "c2c3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pppp1p1p/4p1p1/8/2B1P3/2P5/PP1P1PPP/RNBQK1NR b KQkq -": [
+        [
+            "b7b6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/p1pp1p1p/1p2p1p1/8/2B1P3/2P5/PP1P1PPP/RNBQK1NR w KQkq -": [
+        [
+            "a2a3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/p1pp1p1p/1p2p1p1/8/2B1P3/P1P5/1P1P1PPP/RNBQK1NR b KQkq -": [
+        [
+            "c8b7",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r2qkbnr/pbpp1p1p/1p2p1p1/8/2B1P3/P1P5/1P1P1PPP/RNBQK1NR w KQkq -": [
+        [
+            "d2d3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r2qkbnr/pbpp1p1p/1p2p1p1/8/2B1P3/P1PP4/1P3PPP/RNBQK1NR b KQkq -": [
+        [
+            "f8g7",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppppp1pp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq -": [
+        [
+            "0000",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppppp1pp/8/8/3P4/8/PPP1PPPP/RNBQKBNR w KQkq -": [
+        [
+            "c2c4",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppppp1pp/8/8/2PP4/8/PP2PPPP/RNBQKBNR b KQkq -": [
+        [
+            "e7e6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppp2pp/4p3/8/2PP4/8/PP2PPPP/RNBQKBNR w KQkq -": [
+        [
+            "e2e4",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": [
+        [
+            "f1c4",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pppp1ppp/8/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq -": [
+        [
+            "f7f5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pppp2pp/8/4pp2/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq -": [
+        [
+            "c4g8",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbBr/pppp2pp/8/4pp2/4P3/8/PPPP1PPP/RNBQK1NR b KQkq -": [
+        [
+            "h8g8",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbr1/pppp2pp/8/4pp2/4P3/8/PPPP1PPP/RNBQK1NR w KQq -": [
+        [
+            "e4f5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbr1/pppp2pp/8/4pP2/8/8/PPPP1PPP/RNBQK1NR b KQq -": [
+        [
+            "d7d5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbr1/ppp3pp/8/3ppP2/8/8/PPPP1PPP/RNBQK1NR w KQq -": [
+        [
+            "d1h5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbr1/ppp3pp/8/3ppP1Q/8/8/PPPP1PPP/RNB1K1NR b KQq -": [
+        [
+            "g7g6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp1pp1pp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": [
+        [
+            "d1h5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp1pp1pp/8/2p4Q/4P3/8/PPPP1PPP/RNB1KBNR b KQkq -": [
+        [
+            "g7g6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp1pp2p/6p1/2p4Q/4P3/8/PPPP1PPP/RNB1KBNR w KQkq -": [
+        [
+            "h5c5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp1pp2p/6p1/2Q5/4P3/8/PPPP1PPP/RNB1KBNR b KQkq -": [
+        [
+            "b8c6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pp1pp2p/2n3p1/2Q5/4P3/8/PPPP1PPP/RNB1KBNR w KQkq -": [
+        [
+            "c2c3",
+            33,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ],
+        [
+            "c5c3",
+            33,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ],
+        [
+            "c5e3",
+            33,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pp1pp2p/2n3p1/2Q5/4P3/2P5/PP1P1PPP/RNB1KBNR b KQkq -": [
+        [
+            "e7e5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pp1p3p/2n3p1/2Q1p3/4P3/2P5/PP1P1PPP/RNB1KBNR w KQkq -": [
+        [
+            "c5e3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pp1p3p/2n3p1/4p3/4P3/2P1Q3/PP1P1PPP/RNB1KBNR b KQkq -": [
+        [
+            "g8f6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/ppppp1pp/7n/8/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq -": [
+        [
+            "e7e6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/pppp2pp/4p2n/8/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq -": [
+        [
+            "d2d3",
+            50,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ],
+        [
+            "b1c3",
+            50,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/pppp2pp/4p2n/8/2B1P3/3P4/PPP2PPP/RNBQK1NR b KQkq -": [
+        [
+            "h6f7",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/pppp1npp/4p3/8/2B1P3/3P4/PPP2PPP/RNBQK1NR w KQkq -": [
+        [
+            "f2f4",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/pppp1npp/4p3/8/2B1PP2/3P4/PPP3PP/RNBQK1NR b KQkq -": [
+        [
+            "d7d5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/ppp2npp/4p3/3p4/2B1PP2/3P4/PPP3PP/RNBQK1NR w KQkq -": [
+        [
+            "c4b3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/ppp2npp/4p3/3p4/4PP2/1B1P4/PPP3PP/RNBQK1NR b KQkq -": [
+        [
+            "f8c5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/pppp2pp/4p2n/8/2B1P3/2N5/PPPP1PPP/R1BQK1NR b KQkq -": [
+        [
+            "h6f7",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/pppp1npp/4p3/8/2B1P3/2N5/PPPP1PPP/R1BQK1NR w KQkq -": [
+        [
+            "f2f4",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/pppp1npp/4p3/8/2B1PP2/2N5/PPPP2PP/R1BQK1NR b KQkq -": [
+        [
+            "c7c6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/pp1p1npp/2p1p3/8/2B1PP2/2N5/PPPP2PP/R1BQK1NR w KQkq -": [
+        [
+            "d1e2",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/pp1p1npp/2p1p3/8/2B1PP2/2N5/PPPPQ1PP/R1B1K1NR b KQkq -": [
+        [
+            "f8c5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppp2pp/4p3/8/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq -": [
+        [
+            "g7g6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppp3p/4p1p1/8/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq -": [
+        [
+            "d1e2",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppp3p/4p1p1/8/2B1P3/8/PPPPQPPP/RNB1K1NR b KQkq -": [
+        [
+            "c7c5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp1p3p/4p1p1/2p5/2B1P3/8/PPPPQPPP/RNB1K1NR w KQkq -": [
+        [
+            "d2d3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp1p3p/4p1p1/2p5/2B1P3/3P4/PPP1QPPP/RNB1K1NR b KQkq -": [
+        [
+            "b8c6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pp1p3p/2n1p1p1/2p5/2B1P3/3P4/PPP1QPPP/RNB1K1NR w KQkq -": [
+        [
+            "c1e3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pp1p3p/2n1p1p1/2p5/2B1P3/3PB3/PPP1QPPP/RN2K1NR b KQkq -": [
+        [
+            "g8f6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/pppp1ppp/5n2/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq -": [
+        [
+            "b1c3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/pppp1ppp/5n2/4p3/2B1P3/2N5/PPPP1PPP/R1BQK1NR b KQkq -": [
+        [
+            "f8c5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqk2r/pppp1ppp/5n2/2b1p3/2B1P3/2N5/PPPP1PPP/R1BQK1NR w KQkq -": [
+        [
+            "g1f3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqk2r/pppp1ppp/5n2/2b1p3/2B1P3/2N2N2/PPPP1PPP/R1BQK2R b KQkq -": [
+        [
+            "d7d6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqk2r/ppp2ppp/3p1n2/2b1p3/2B1P3/2N2N2/PPPP1PPP/R1BQK2R w KQkq -": [
+        [
+            "h2h3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqk2r/ppp2ppp/3p1n2/2b1p3/2B1P3/2N2N1P/PPPP1PP1/R1BQK2R b KQkq -": [
+        [
+            "c7c6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pp1pp2p/2n3p1/8/4P3/2Q5/PPPP1PPP/RNB1KBNR b KQkq -": [
+        [
+            "e7e5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pp1p3p/2n3p1/4p3/4P3/2Q5/PPPP1PPP/RNB1KBNR w KQkq -": [
+        [
+            "a2a3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pp1p3p/2n3p1/4p3/4P3/P1Q5/1PPP1PPP/RNB1KBNR b KQkq -": [
+        [
+            "g8f6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pp1pp2p/2n3p1/8/4P3/4Q3/PPPP1PPP/RNB1KBNR b KQkq -": [
+        [
+            "e7e5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pp1p3p/2n3p1/4p3/4P3/4Q3/PPPP1PPP/RNB1KBNR w KQkq -": [
+        [
+            "f1c4",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pp1p3p/2n3p1/4p3/2B1P3/4Q3/PPPP1PPP/RNB1K1NR b KQkq -": [
+        [
+            "g8f6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/ppp1pnpp/3p4/8/3PP3/3B4/PPP2PPP/RNBQK1NR w KQkq -": [
+        [
+            "g1f3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/ppp1pnpp/3p4/8/3PP3/3B1N2/PPP2PPP/RNBQK2R b KQkq -": [
+        [
+            "e7e5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/ppp2npp/3p4/4p3/3PP3/3B1N2/PPP2PPP/RNBQK2R w KQkq -": [
+        [
+            "d4d5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/ppp2npp/3p4/3Pp3/4P3/3B1N2/PPP2PPP/RNBQK2R b KQkq -": [
+        [
+            "c7c5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/pppppnpp/8/8/2BPP3/8/PPP2PPP/RNBQK1NR b KQkq -": [
+        [
+            "e7e6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/pppp1npp/4p3/8/2BPP3/8/PPP2PPP/RNBQK1NR w KQkq -": [
+        [
+            "c4b3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/pppp1npp/4p3/8/3PP3/1B6/PPP2PPP/RNBQK1NR b KQkq -": [
+        [
+            "d7d5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/ppp2npp/4p3/3p4/3PP3/1B6/PPP2PPP/RNBQK1NR w KQkq -": [
+        [
+            "e4e5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkb1r/ppp2npp/4p3/3pP3/3P4/1B6/PPP2PPP/RNBQK1NR b KQkq -": [
+        [
+            "c7c5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppp3pp/4p3/3pP3/3P4/8/PPP2PPP/RNBQKBNR b KQkq -": [
+        [
+            "c7c5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp4pp/4p3/2ppP3/3P4/8/PPP2PPP/RNBQKBNR w KQkq -": [
+        [
+            "f1b5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp4pp/4p3/1BppP3/3P4/8/PPP2PPP/RNBQK1NR b KQkq -": [
+        [
+            "b8c6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pp4pp/2n1p3/1BppP3/3P4/8/PPP2PPP/RNBQK1NR w KQkq -": [
+        [
+            "g1e2",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pp4pp/2n1p3/1BppP3/3P4/8/PPP1NPPP/RNBQK2R b KQkq -": [
+        [
+            "c5d4",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp1p1ppp/2p5/4p3/2B1P3/2N5/PPPP1PPP/R1BQK1NR b KQkq -": [
+        [
+            "f8d6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqk1nr/pp1p1ppp/2pb4/4p3/2B1P3/2N5/PPPP1PPP/R1BQK1NR w KQkq -": [
+        [
+            "d2d3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqk1nr/pp1p1ppp/2pb4/4p3/2B1P3/2NP4/PPP2PPP/R1BQK1NR b KQkq -": [
+        [
+            "d6c7",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqk1nr/ppbp1ppp/2p5/4p3/2B1P3/2NP4/PPP2PPP/R1BQK1NR w KQkq -": [
+        [
+            "d1f3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqk1nr/ppbp1ppp/2p5/4p3/2B1P3/2NP1Q2/PPP2PPP/R1B1K1NR b KQkq -": [
+        [
+            "d8e7",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp1p1ppp/2p5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq -": [
+        [
+            "d7d5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp3ppp/2p5/3pp3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq -": [
+        [
+            "e4d5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp3ppp/2p5/3Pp3/2B5/5N2/PPPP1PPP/RNBQK2R b KQkq -": [
+        [
+            "c6d5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp3ppp/8/3pp3/2B5/5N2/PPPP1PPP/RNBQK2R w KQkq -": [
+        [
+            "c4b3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp3ppp/8/3pp3/8/1B3N2/PPPP1PPP/RNBQK2R b KQkq -": [
+        [
+            "b8c6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq -": [
+        [
+            "d7d5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq -": [
+        [
+            "c2c4",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppp1pppp/8/3p4/2PP4/8/PP2PPPP/RNBQKBNR b KQkq -": [
+        [
+            "d5c4",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppp1pppp/8/8/2pP4/8/PP2PPPP/RNBQKBNR w KQkq -": [
+        [
+            "e2e3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppp1pppp/8/8/2pP4/4P3/PP3PPP/RNBQKBNR b KQkq -": [
+        [
+            "e7e5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppp2ppp/8/4p3/2pP4/4P3/PP3PPP/RNBQKBNR w KQkq -": [
+        [
+            "d4d5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/ppp2ppp/8/3Pp3/2p5/4P3/PP3PPP/RNBQKBNR b KQkq -": [
+        [
+            "c7c6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp3ppp/2p5/3Pp3/2p5/4P3/PP3PPP/RNBQKBNR w KQkq -": [
+        [
+            "f1c4",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp3ppp/2p5/3Pp3/2B5/4P3/PP3PPP/RNBQK1NR b KQkq -": [
+        [
+            "b7b5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp1ppppp/8/2p5/4PP2/8/PPPP2PP/RNBQKBNR b KQkq -": [
+        [
+            "b8c6",
+            50,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ],
+        [
+            "e7e6",
+            50,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pp1ppppp/2n5/2p5/4PP2/8/PPPP2PP/RNBQKBNR w KQkq -": [
+        [
+            "g1f3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pp1ppppp/2n5/2p5/4PP2/5N2/PPPP2PP/RNBQKB1R b KQkq -": [
+        [
+            "e7e6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pp1p1ppp/2n1p3/2p5/4PP2/5N2/PPPP2PP/RNBQKB1R w KQkq -": [
+        [
+            "c2c3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pp1p1ppp/2n1p3/2p5/4PP2/2P2N2/PP1P2PP/RNBQKB1R b KQkq -": [
+        [
+            "d7d5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pp3ppp/2n1p3/2pp4/4PP2/2P2N2/PP1P2PP/RNBQKB1R w KQkq -": [
+        [
+            "e4e5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."
+        ]
+    ],
+    "r1bqkbnr/pp3ppp/2n1p3/2ppP3/5P2/2P2N2/PP1P2PP/RNBQKB1R b KQkq -": [
+        [
+            "f7f5",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp1p1ppp/4p3/2p5/4PP2/8/PPPP2PP/RNBQKBNR w KQkq -": [
+        [
+            "g1f3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pp1p1ppp/4p3/2p5/4PP2/5N2/PPPP2PP/RNBQKB1R b KQkq -": [
+        [
+            "b8c6",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppp1p1p/8/8/2B1Ppp1/5N2/PPPP2PP/RNBQK2R w KQkq -": [
+        [
+            "d2d4",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."
+        ]
+    ],
+    "rnbqkbnr/pppp1p1p/8/8/2BPPpp1/5N2/PPP3PP/RNBQK2R b KQkq -": [
+        [
+            "g4f3",
+            100,
+            "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."
+        ]
+    ]
 }

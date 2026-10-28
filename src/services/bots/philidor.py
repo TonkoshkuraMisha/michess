@@ -5,53 +5,114 @@ import shutil
 import chess
 import chess.engine
 
-# Дебютная книга Франсуа-Андре Филидора (на основе "Analyse du jeu des Échecs" 1749 г. и партий в Лондоне 1783-1795 гг.)
+# Дебютная книга Франсуа-Андре Филидора (на основе анализа партий из исторической базы)
 PHILIDOR_OPENING_BOOK: dict[str, list[tuple[str, int, str]]] = {
-    # === ЗА БЕЛЫХ ===
-    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
-        ("e2e4", 100, "Пешка короля открывает путь слону и занимает центр."),
+    "rnbqkbnr/ppppp1pp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
+        ("e2e4", 96, "Исторический выбор Филидора (встречалось в партиях: 24 раз(а))."),
+        ("d2d4", 4, "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."),
+    ],
+    "rnbqkbnr/ppppp1pp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -": [
+        ("0000", 54, "Исторический выбор Филидора (встречалось в партиях: 13 раз(а))."),
+        ("g8h6", 20, "Исторический выбор Филидора (встречалось в партиях: 5 раз(а))."),
+        ("e7e6", 12, "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."),
+        ("c7c5", 12, "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."),
+    ],
+    "rnbqkbnr/pppp2pp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": [
+        ("d2d4", 66, "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."),
+        ("f1c4", 33, "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."),
+    ],
+    "rnbqkbnr/pppp2pp/4p3/8/3PP3/8/PPP2PPP/RNBQKBNR b KQkq -": [
+        ("d7d5", 100, "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."),
+    ],
+    "rnbqkbnr/ppp3pp/4p3/3p4/3PP3/8/PPP2PPP/RNBQKBNR w KQkq -": [
+        ("e4d5", 50, "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."),
+        ("e4e5", 50, "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."),
+    ],
+    "rnbqkbnr/ppp3pp/4p3/3P4/3P4/8/PPP2PPP/RNBQKBNR b KQkq -": [
+        ("e6d5", 100, "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."),
+    ],
+    "rnbqkbnr/ppp3pp/8/3p4/3P4/8/PPP2PPP/RNBQKBNR w KQkq -": [
+        ("d1h5", 100, "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."),
+    ],
+    "rnbqkbnr/ppp3pp/8/3p3Q/3P4/8/PPP2PPP/RNB1KBNR b KQkq -": [
+        ("g7g6", 100, "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."),
+    ],
+    "rnbqkbnr/ppp4p/6p1/3p3Q/3P4/8/PPP2PPP/RNB1KBNR w KQkq -": [
+        ("h5e5", 100, "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."),
+    ],
+    "rnbqkbnr/ppp4p/6p1/3pQ3/3P4/8/PPP2PPP/RNB1KBNR b KQkq -": [
+        ("d8e7", 100, "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."),
     ],
     "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": [
-        ("f1c4", 65, "Дебют слона! Слон атакует пункт f7, не мешая пешке f2 идти вперёд."),
-        ("f2f4", 35, "Королевский гамбит — подорвём центр соперника с фланга!"),
-    ],
-    "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq -": [
-        ("c2c3", 100, "Сначала c2-c3! Конь никогда не должен становиться впереди пешки c."),
-    ],
-    "rnbqk1nr/pppp1ppp/8/2b1p3/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq -": [
-        ("c2c3", 100, "Первая партия из моего трактата 1749 года: c2-c3 готовит мощный пешечный центр d2-d4!"),
-    ],
-    "rnbqkb1r/pppp1ppp/5n2/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq -": [
-        ("d2d3", 60, "Укрепим пешку e4, чтобы затем подготовить c2-c3 и f2-f4."),
-        ("d2d4", 40, "Немедленный удар по центру!"),
-    ],
-    "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": [
-        ("f2f4", 80, "Против сицилианского построения сразу надвигаем пешку f4!"),
-        ("f1c4", 20, "Выведем слона на активную диагональ."),
-    ],
-
-    # === ЗА ЧЁРНЫХ ===
-    "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -": [
-        ("e7e5", 85, "Встретим пешку соперника в центре: e7-e5."),
-        ("e7e6", 15, "Сыграем сдержанно e7-e6, готовя d7-d5."),
-    ],
-    "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq -": [
-        ("d7d6", 100, "Моя фирменная защита (d7-d6)! Белые напрасно вывели коня на f3, заперев свою пешку f2."),
-    ],
-    "rnbqkbnr/ppp2ppp/3p4/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq -": [
-        ("f7f5", 65, "Контрудар f7-f5! Как я писал в «Анализе шахматной игры», перехватим инициативу пешками."),
-        ("e5d4", 35, "Разменяем центральную пешку, удерживая прочный редут на d6."),
-    ],
-    "rnbqkbnr/ppp2ppp/3p4/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq -": [
-        ("f7f5", 60, "Смело двигаем пешку f7-f5, вскрывая линию для ладьи после рокировки!"),
-        ("c7c6", 40, "Подготовим d6-d5 с помощью пешки c6 (партия против графа Брюля, 1783 г.)."),
+        ("f1c4", 62, "Исторический выбор Филидора (встречалось в партиях: 5 раз(а))."),
+        ("f2f4", 37, "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."),
     ],
     "rnbqkbnr/pppp1ppp/8/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq -": [
-        ("c7c6", 70, "Сыграем c7-c6, чтобы следующим ходом захватить центр пешкой d7-d5!"),
-        ("g8f6", 30, "Атакуем пешку e4."),
+        ("c7c6", 80, "Исторический выбор Филидора (встречалось в партиях: 4 раз(а))."),
+        ("g8f6", 20, "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."),
     ],
-    "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq -": [
-        ("d7d5", 100, "Удержим равновесие в центре."),
+    "rnbqkbnr/pp1p1ppp/2p5/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq -": [
+        ("d1e2", 50, "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."),
+        ("b1c3", 25, "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."),
+        ("g1f3", 25, "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."),
+    ],
+    "rnbqkbnr/pp1p1ppp/2p5/4p3/2B1P3/8/PPPPQPPP/RNB1K1NR b KQkq -": [
+        ("d7d6", 50, "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."),
+        ("g8f6", 50, "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."),
+    ],
+    "rnbqkbnr/pp1ppppp/8/2p5/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": [
+        ("f2f4", 66, "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."),
+        ("f1c4", 33, "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."),
+    ],
+    "rnbqkbnr/pp1ppppp/8/2p5/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq -": [
+        ("e7e6", 100, "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."),
+    ],
+    "rnbqkbnr/pp1p1ppp/4p3/2p5/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq -": [
+        ("d1e2", 100, "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."),
+    ],
+    "rnbqkbnr/pp1p1ppp/4p3/2p5/2B1P3/8/PPPPQPPP/RNB1K1NR b KQkq -": [
+        ("b8c6", 100, "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."),
+    ],
+    "rnbqkb1r/ppppp1pp/7n/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": [
+        ("d2d4", 60, "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."),
+        ("f1c4", 40, "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."),
+    ],
+    "rnbqkb1r/ppppp1pp/7n/8/3PP3/8/PPP2PPP/RNBQKBNR b KQkq -": [
+        ("h6f7", 100, "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."),
+    ],
+    "rnbqkb1r/pppppnpp/8/8/3PP3/8/PPP2PPP/RNBQKBNR w KQkq -": [
+        ("f1d3", 66, "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."),
+        ("f1c4", 33, "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."),
+    ],
+    "rnbqkbnr/ppppp1pp/8/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": [
+        ("d2d4", 61, "Исторический выбор Филидора (встречалось в партиях: 8 раз(а))."),
+        ("f2f4", 38, "Исторический выбор Филидора (встречалось в партиях: 5 раз(а))."),
+    ],
+    "rnbqkbnr/ppppp1pp/8/8/4PP2/8/PPPP2PP/RNBQKBNR b KQkq -": [
+        ("e7e6", 100, "Исторический выбор Филидора (встречалось в партиях: 5 раз(а))."),
+    ],
+    "rnbqkbnr/pppp2pp/4p3/8/4PP2/8/PPPP2PP/RNBQKBNR w KQkq -": [
+        ("d2d4", 80, "Исторический выбор Филидора (встречалось в партиях: 4 раз(а))."),
+        ("g1f3", 20, "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."),
+    ],
+    "rnbqkbnr/pppp2pp/4p3/8/3PPP2/8/PPP3PP/RNBQKBNR b KQkq -": [
+        ("d7d5", 100, "Исторический выбор Филидора (встречалось в партиях: 11 раз(а))."),
+    ],
+    "rnbqkbnr/pppp1ppp/8/4p3/4PP2/8/PPPP2PP/RNBQKBNR b KQkq -": [
+        ("e5f4", 100, "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."),
+    ],
+    "rnbqkbnr/pppp1ppp/8/8/4Pp2/8/PPPP2PP/RNBQKBNR w KQkq -": [
+        ("g1f3", 100, "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."),
+    ],
+    "rnbqkbnr/pppp1ppp/8/8/4Pp2/5N2/PPPP2PP/RNBQKB1R b KQkq -": [
+        ("g7g5", 100, "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."),
+    ],
+    "rnbqkbnr/ppppp1pp/8/8/3PP3/8/PPP2PPP/RNBQKBNR b KQkq -": [
+        ("e7e6", 100, "Исторический выбор Филидора (встречалось в партиях: 8 раз(а))."),
+    ],
+    "rnbqkbnr/pppp2pp/4p3/8/3PP3/8/PPP2PPP/RNBQKBNR w KQkq -": [
+        ("f2f4", 87, "Исторический выбор Филидора (встречалось в партиях: 7 раз(а))."),
+        ("c2c4", 12, "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."),
     ],
 }
 
@@ -93,7 +154,7 @@ def _evaluate_pawn_structure(board: chess.Board, us: chess.Color) -> float:
             score += 15.0
 
         # Пешечные цепи (поддержка сзади)
-        support_rank = r - 1 if us == chess.WHITE else r + 1
+        support_rank = (r - 1) if us == chess.WHITE else (r + 1)
         if 0 <= support_rank <= 7:
             if (f > 0 and chess.square(f - 1, support_rank) in our_pawns) or \
                     (f < 7 and chess.square(f + 1, support_rank) in our_pawns):
@@ -106,52 +167,11 @@ def _evaluate_pawn_structure(board: chess.Board, us: chess.Color) -> float:
     return score
 
 
-# def evaluate_philidor_style_bonus(board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-#     """
-#     Доктрина Филидора: «Пешки — душа шахмат».
-#     Оценивает ход с точки зрения контроля центра и гармонии пешечной структуры.
-#     """
-#     us = board_before.turn
-#     piece = board_before.piece_at(move.from_square)
-#     if not piece:
-#         return 0.0, None
-#
-#     bonus = 0.0
-#     note = None
-#
-#     # 1. Приоритет ходов пешками
-#     if piece.piece_type == chess.PAWN:
-#         bonus += 12.0
-#         if move.to_square in CENTER_SQUARES:
-#             bonus += 35.0
-#             note = "Пешки — душа шахмат! Мощный удар в центр доски."
-#         elif move.to_square in EXTENDED_CENTER:
-#             bonus += 20.0
-#             note = "Занимаем пространство пешечной фалангой."
-#
-#     # 2. Исторический запрет блокировать пешки 'c' и 'f' конями на ранней стадии
-#     if piece.piece_type == chess.KNIGHT and board_before.fullmove_number <= 10:
-#         if us == chess.WHITE:
-#             if move.to_square == chess.C3 and board_before.piece_at(chess.C2) == chess.Piece(chess.PAWN, chess.WHITE):
-#                 bonus -= 50.0  # Сурово штрафуем за нарушение принципа Филидора
-#             if move.to_square == chess.F3 and board_before.piece_at(chess.F2) == chess.Piece(chess.PAWN, chess.WHITE):
-#                 bonus -= 40.0
-#         else:
-#             if move.to_square == chess.C6 and board_before.piece_at(chess.C7) == chess.Piece(chess.PAWN, chess.BLACK):
-#                 bonus -= 50.0
-#             if move.to_square == chess.F6 and board_before.piece_at(chess.F7) == chess.Piece(chess.PAWN, chess.BLACK):
-#                 bonus -= 40.0
-#
-#     # 3. Дельта пешечной структуры после хода
-#     structure_before = _evaluate_pawn_structure(board_before, us)
-#     board_after = board_before.copy()
-#     board_after.push(move)
-#     structure_after = _evaluate_pawn_structure(board_after, us)
-#
-#     bonus += (structure_after - structure_before)
-#
-#     return bonus, note
 def evaluate_philidor_style_bonus(board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
+    """
+    Доктрина Филидора: «Пешки — душа шахмат».
+    Оценивает ход с точки зрения контроля центра и гармонии пешечной структуры.
+    """
     us = board_before.turn
     piece = board_before.piece_at(move.from_square)
     if not piece:
@@ -160,6 +180,7 @@ def evaluate_philidor_style_bonus(board_before: chess.Board, move: chess.Move) -
     bonus = 0.0
     note = None
 
+    # 1. Приоритет ходов пешками
     if piece.piece_type == chess.PAWN:
         bonus += 12.0
         if move.to_square in CENTER_SQUARES:
@@ -169,9 +190,10 @@ def evaluate_philidor_style_bonus(board_before: chess.Board, move: chess.Move) -
             bonus += 20.0
             note = "Занимаем пространство пешечной фалангой."
         elif move.to_square in {chess.C3, chess.C6, chess.D3, chess.D6}:
-            bonus += 15.0  # Гарантируем уверенный плюс за подготовку центра по методу Филидора
+            bonus += 15.0
             note = "Подготавливаем продвижение центральной пешки по методу Филидора."
 
+    # 2. Исторический запрет блокировать пешки 'c' и 'f' конями на ранней стадии
     if piece.piece_type == chess.KNIGHT and board_before.fullmove_number <= 10:
         if us == chess.WHITE:
             if move.to_square == chess.C3 and board_before.piece_at(chess.C2) == chess.Piece(chess.PAWN, chess.WHITE):
@@ -184,10 +206,12 @@ def evaluate_philidor_style_bonus(board_before: chess.Board, move: chess.Move) -
             if move.to_square == chess.F6 and board_before.piece_at(chess.F7) == chess.Piece(chess.PAWN, chess.BLACK):
                 bonus -= 40.0
 
+    # 3. Дельта пешечной структуры после хода
     structure_before = _evaluate_pawn_structure(board_before, us)
     board_after = board_before.copy()
     board_after.push(move)
     structure_after = _evaluate_pawn_structure(board_after, us)
+
     bonus += (structure_after - structure_before)
 
     return bonus, note
@@ -225,7 +249,7 @@ class PhilidorBot:
 
     def __init__(self, stockfish_path: str | None = None, skill_level: int = 12):
         self.stockfish_path = stockfish_path or shutil.which("stockfish")
-        self.skill_level = skill_level  # Уровень силы (от 0 до 20)
+        self.skill_level = skill_level
 
     def choose_move(self, fen: str) -> dict:
         board = chess.Board(fen)
@@ -237,7 +261,8 @@ class PhilidorBot:
         if fen_key in PHILIDOR_OPENING_BOOK:
             candidates = PHILIDOR_OPENING_BOOK[fen_key]
             valid_book_moves = []
-            for uci_str, weight, comment in candidates:
+            for item in candidates:
+                uci_str, weight, comment = item[0], item[1], item[2]
                 move = chess.Move.from_uci(uci_str)
                 if move in board.legal_moves:
                     valid_book_moves.append((move, weight, comment))
@@ -256,15 +281,12 @@ class PhilidorBot:
                     "comment": comments[idx],
                 }
 
-        # 2. Получаем тактическую оценку ходов от Stockfish с увеличенной глубиной
+        # 2. Получаем тактическую оценку ходов от Stockfish
         base_scores: dict[chess.Move, float] = {}
         if self.stockfish_path:
             try:
                 with chess.engine.SimpleEngine.popen_uci(self.stockfish_path) as engine:
-                    # Настраиваем силу бота (Skill Level) для вариативности и устранения примитивных ошибок
                     engine.configure({"Skill Level": self.skill_level})
-
-                    # Увеличиваем глубину до 12, чтобы бот видел тактику
                     infos = engine.analyse(
                         board,
                         chess.engine.Limit(depth=12, time=0.3),
@@ -304,7 +326,6 @@ class PhilidorBot:
 
         for mv, tactical_cp in base_scores.items():
             style_bonus, note = evaluate_philidor_style_bonus(board, mv)
-            # Небольшой элемент человеческого фактора (jitter), чтобы ходы не были одинаковыми
             jitter = random.uniform(-3.0, 3.0)
             total_score = tactical_cp + style_bonus + jitter
 
