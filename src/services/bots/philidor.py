@@ -1,5 +1,6 @@
 # --- FILE: src/services/bots/philidor.py ---
 
+import os
 import random
 import shutil
 import chess
@@ -184,6 +185,20 @@ def normalize_fen_key(board: chess.Board) -> str:
     return f"{parts[0]} {parts[1]} {parts[2]} -"
 
 
+def resolve_stockfish_path(custom_path: str | None = None) -> str | None:
+    """Ищет бинарник Stockfish: сначала в локальной папке bin/, затем в системном PATH."""
+    if custom_path and os.path.exists(custom_path):
+        return custom_path
+
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
+    for binary_name in ("stockfish.exe", "stockfish"):
+        candidate = os.path.join(project_root, "bin", binary_name)
+        if os.path.exists(candidate) and os.path.isfile(candidate):
+            return candidate
+
+    return shutil.which("stockfish")
+
+
 def _evaluate_pawn_structure(board: chess.Board, us: chess.Color) -> float:
     """Улучшенная оценка пешечной структуры: фаланги, цепи и избежание сдвоенных пешек."""
     our_pawns = board.pieces(chess.PAWN, us)
@@ -299,7 +314,7 @@ class PhilidorBot:
     """
 
     def __init__(self, stockfish_path: str | None = None, skill_level: int = 12):
-        self.stockfish_path = stockfish_path or shutil.which("stockfish")
+        self.stockfish_path = resolve_stockfish_path(stockfish_path)
         self.skill_level = skill_level
 
     def choose_move(self, fen: str) -> dict:
@@ -339,7 +354,7 @@ class PhilidorBot:
 
         # 2. Получаем тактическую оценку ходов от Stockfish
         base_scores: dict[chess.Move, float] = {}
-        if self.stockfish_path:
+        if self.stockfish_path and os.path.exists(self.stockfish_path):
             try:
                 with chess.engine.SimpleEngine.popen_uci(self.stockfish_path) as engine:
                     engine.configure({"Skill Level": self.skill_level})

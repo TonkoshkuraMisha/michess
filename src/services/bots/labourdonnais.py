@@ -1,13 +1,14 @@
 # --- FILE: src/services/bots/labourdonnais.py ---
 
+import os
 import random
-import shutil
 import chess
 import chess.engine
 from src.services.bots.philidor import (
     CENTER_SQUARES,
     EXTENDED_CENTER,
     normalize_fen_key,
+    resolve_stockfish_path,
     static_board_eval_cp,
 )
 
@@ -873,7 +874,7 @@ class LabourdonnaisBot:
     """
 
     def __init__(self, stockfish_path: str | None = None, skill_level: int = 14):
-        self.stockfish_path = stockfish_path or shutil.which("stockfish")
+        self.stockfish_path = resolve_stockfish_path(stockfish_path)
         self.skill_level = skill_level
 
     def choose_move(self, fen: str) -> dict:
@@ -913,7 +914,7 @@ class LabourdonnaisBot:
 
         # 2. Тактический расчёт Stockfish
         base_scores: dict[chess.Move, float] = {}
-        if self.stockfish_path:
+        if self.stockfish_path and os.path.exists(self.stockfish_path):
             try:
                 with chess.engine.SimpleEngine.popen_uci(self.stockfish_path) as engine:
                     engine.configure({"Skill Level": self.skill_level})
