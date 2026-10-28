@@ -4,6 +4,7 @@ import chess
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+from src.services.bots.labourdonnais import labourdonnais_bot
 from src.services.bots.philidor import philidor_bot
 
 router = APIRouter()
@@ -17,8 +18,22 @@ AVAILABLE_BOTS = [
         "rating": 1850,
         "motto": "Пешки — душа шахмат: именно они определяют атаку и защиту.",
         "avatar": "/champions/philidor.jpg",
-    }
+    },
+    {
+        "id": "labourdonnais",
+        "name": "Луи-Шарль Лабурдонне",
+        "era": "1795–1840",
+        "title": "Король Комбинаций",
+        "rating": 1950,
+        "motto": "Инициатива, гамбит и стремительная атака на короля!",
+        "avatar": "/champions/labourdonnais.jpg",
+    },
 ]
+
+BOT_INSTANCES = {
+    "philidor": philidor_bot,
+    "labourdonnais": labourdonnais_bot,
+}
 
 
 class BotMoveRequest(BaseModel):
@@ -44,7 +59,8 @@ async def get_available_bots():
 @router.post("/move", response_model=BotMoveResponse)
 async def get_bot_move(payload: BotMoveRequest):
     """Принимает FEN позиции и возвращает ответный ход выбранного исторического бота."""
-    if payload.bot_id != "philidor":
+    bot = BOT_INSTANCES.get(payload.bot_id)
+    if bot is None:
         raise HTTPException(status_code=404, detail=f"Бот '{payload.bot_id}' не найден")
 
     try:
@@ -55,7 +71,7 @@ async def get_bot_move(payload: BotMoveRequest):
     if board.is_game_over():
         raise HTTPException(status_code=400, detail="Партия уже завершена")
 
-    result = philidor_bot.choose_move(payload.fen)
+    result = bot.choose_move(payload.fen)
     return BotMoveResponse(
         bot_id=payload.bot_id,
         uci=result["uci"],

@@ -61,6 +61,42 @@ export interface BoardTheme {
     useWoodGrain: boolean;
 }
 
+export type HistoricalBotId = 'philidor' | 'labourdonnais';
+
+interface HistoricalBotProfile {
+    id: HistoricalBotId;
+    name: string;
+    shortName: string;
+    playerLabel: string;
+    era: string;
+    rating: number;
+    motto: string;
+    avatar: string;
+}
+
+const HISTORICAL_BOTS: Record<HistoricalBotId, HistoricalBotProfile> = {
+    philidor: {
+        id: 'philidor',
+        name: 'Ф.-А. Филидор',
+        shortName: 'Филидор',
+        playerLabel: 'Ф.-А. Филидор (1749)',
+        era: 'Эпоха 1749–1795',
+        rating: 1850,
+        motto: 'Пешки — душа шахмат: именно они определяют атаку и защиту.',
+        avatar: '/champions/philidor.jpg'
+    },
+    labourdonnais: {
+        id: 'labourdonnais',
+        name: 'Л.-Ш. Лабурдонне',
+        shortName: 'Лабурдонне',
+        playerLabel: 'Л.-Ш. Лабурдонне (1834)',
+        era: 'Эпоха 1795–1840',
+        rating: 1950,
+        motto: 'Инициатива, гамбит и стремительная атака на короля!',
+        avatar: '/champions/labourdonnais.jpg'
+    }
+};
+
 export const BOARD_THEMES: Record<string, BoardTheme> = {
     walnut: {
         id: 'walnut',
@@ -218,8 +254,9 @@ export default function Chessboard() {
     const [currentUserId, setCurrentUserId] = useState<number | null>(null);
     const [stateVersion, setStateVersion] = useState(0);
 
-    // Состояния исторического бота (Филидор)
-    const [activeBot, setActiveBot] = useState<'philidor' | null>(null);
+    // Состояния исторических ботов (Филидор и Лабурдонне)
+    const [selectedBotId, setSelectedBotId] = useState<HistoricalBotId>('philidor');
+    const [activeBot, setActiveBot] = useState<HistoricalBotId | null>(null);
     const [botComment, setBotComment] = useState<string | null>(null);
     const [isBotThinking, setIsBotThinking] = useState<boolean>(false);
 
@@ -271,6 +308,8 @@ export default function Chessboard() {
     const [drawOfferStatus, setDrawOfferStatus] = useState<string | null>(null);
 
     const activeTheme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
+    const selectedBotProfile = HISTORICAL_BOTS[selectedBotId];
+    const activeBotProfile = activeBot ? HISTORICAL_BOTS[activeBot] : null;
 
     // Определяем ориентацию доски (с учетом цвета игрока и ручного переворота)
     const isBoardFlipped = (myColor === 'black') !== isManualFlip;
@@ -304,8 +343,8 @@ export default function Chessboard() {
         localStorage.setItem('michess_board_theme', themeId);
     };
 
-    // Старт партии против Франсуа-Андре Филидора
-    const startPhilidorGame = (colorPref: 'white' | 'black' | 'random' = 'random') => {
+    // Старт партии против выбранного исторического бота (Филидор или Лабурдонне)
+    const startHistoricalBotGame = (botId: HistoricalBotId, colorPref: 'white' | 'black' | 'random' = 'random') => {
         if (isSearching) {
             setIsSearching(false);
             gameSocket.send('leave_queue', {});
@@ -318,9 +357,11 @@ export default function Chessboard() {
 
         const baseMs = selectedTimeControl.base * 60 * 1000;
         const freshGame = new Chess();
+        const botInfo = HISTORICAL_BOTS[botId];
 
         setGameId(null);
-        setActiveBot('philidor');
+        setSelectedBotId(botId);
+        setActiveBot(botId);
         setMyColor(chosenColor);
         setIsManualFlip(false);
         setGame(freshGame);
@@ -336,17 +377,17 @@ export default function Chessboard() {
 
         if (chosenColor === 'white') {
             setWhitePlayer({username: 'Вы', rating: '1500'});
-            setBlackPlayer({username: 'Ф.-А. Филидор (1749)', rating: '1850'});
+            setBlackPlayer({username: botInfo.playerLabel, rating: String(botInfo.rating)});
         } else {
-            setWhitePlayer({username: 'Ф.-А. Филидор (1749)', rating: '1850'});
+            setWhitePlayer({username: botInfo.playerLabel, rating: String(botInfo.rating)});
             setBlackPlayer({username: 'Вы', rating: '1500'});
         }
 
-        setBotComment('«Пешки — душа шахмат: именно они определяют атаку и защиту!»');
+        setBotComment(`«${botInfo.motto}»`);
         playAudio('start');
     };
 
-    // Реактивный ход бота Филидора, когда наступает его очередь
+    // Реактивный ход исторического бота, когда наступает его очередь
     useEffect(() => {
         if (!activeBot || gameOverResult || game.isGameOver()) return;
 
@@ -355,6 +396,7 @@ export default function Chessboard() {
 
         let isCancelled = false;
         setIsBotThinking(true);
+        const botName = HISTORICAL_BOTS[activeBot].shortName;
 
         const timer = setTimeout(async () => {
             try {
@@ -393,7 +435,7 @@ export default function Chessboard() {
                             result = nextGame.turn() === 'w' ? '0-1' : '1-0';
                         }
                         setGameOverResult(result);
-                        setDrawOfferStatus(`Партия с Филидором окончена. Результат: ${result}`);
+                        setDrawOfferStatus(`Партия против ${botName} окончена. Результат: ${result}`);
                         updateSessionStats(result);
                         playAudio('start');
                     }
@@ -806,8 +848,9 @@ export default function Chessboard() {
                     if (nextGame.isCheckmate()) {
                         result = nextGame.turn() === 'w' ? '0-1' : '1-0';
                     }
+                    const botName = HISTORICAL_BOTS[activeBot].shortName;
                     setGameOverResult(result);
-                    setDrawOfferStatus(`Партия с Филидором окончена. Результат: ${result}`);
+                    setDrawOfferStatus(`Партия против ${botName} окончена. Результат: ${result}`);
                     updateSessionStats(result);
                     playAudio('start');
                 }
@@ -929,8 +972,9 @@ export default function Chessboard() {
                 gameSocket.send('resign', {game_id: gameId});
             } else if (activeBot) {
                 const res = myColor === 'white' ? '0-1' : '1-0';
+                const botName = HISTORICAL_BOTS[activeBot].shortName;
                 setGameOverResult(res);
-                setDrawOfferStatus(`Вы сдались. Победа Филидора (${res}).`);
+                setDrawOfferStatus(`Вы сдались. Победа ${botName} (${res}).`);
                 updateSessionStats(res);
                 playAudio('start');
             }
@@ -1235,14 +1279,36 @@ export default function Chessboard() {
                     )}
                 </div>
 
-                {/* КАРТОЧКА ИГРЫ ПРОТИВ ИСТОРИЧЕСКОЙ ЛЕГЕНДЫ: ФИЛИДОР */}
+                {/* КАРТОЧКА ИГРЫ ПРОТИВ ИСТОРИЧЕСКИХ ЛЕГЕНД: ФИЛИДОР И ЛАБУРДОННЕ */}
                 <div
                     className="bg-acacia-dark p-3 rounded border border-amber-700/40 flex flex-col gap-2.5 shadow-inner">
+                    {/* Переключатель исторических ботов */}
+                    <div className="grid grid-cols-2 gap-1.5 p-1 bg-black/40 rounded border border-amber-900/40">
+                        {(Object.values(HISTORICAL_BOTS)).map((botItem) => {
+                            const isSelected = selectedBotId === botItem.id;
+                            return (
+                                <button
+                                    key={botItem.id}
+                                    type="button"
+                                    onClick={() => setSelectedBotId(botItem.id)}
+                                    className={`py-1.5 px-2 rounded text-[11px] font-bold transition cursor-pointer flex items-center justify-center gap-1 ${
+                                        isSelected
+                                            ? 'bg-amber-700 text-amber-100 shadow border border-amber-500/50'
+                                            : 'text-boxwood/70 hover:text-amber-200 hover:bg-white/5'
+                                    }`}
+                                >
+                                    <span>{botItem.shortName}</span>
+                                    <span className="text-[10px] font-mono opacity-80">({botItem.rating})</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+
                     <div className="flex items-center justify-between border-b border-amber-900/30 pb-2">
                         <div className="flex items-center gap-2.5">
                             <img
-                                src="/champions/philidor.jpg"
-                                alt="Филидор"
+                                src={selectedBotProfile.avatar}
+                                alt={selectedBotProfile.name}
                                 className="w-10 h-10 rounded-full object-cover border-2 border-amber-500/60 shrink-0"
                                 onError={(e) => {
                                     (e.target as HTMLImageElement).style.display = 'none';
@@ -1250,14 +1316,14 @@ export default function Chessboard() {
                             />
                             <div>
                                 <div className="text-xs font-bold text-amber-200 flex items-center gap-1.5">
-                                    <Bot size={13} className="text-amber-400"/> Ф.-А. Филидор
+                                    <Bot size={13} className="text-amber-400"/> {selectedBotProfile.name}
                                 </div>
                                 <div className="text-[10px] text-amber-400/80 font-mono">
-                                    Эпоха 1749–1795 • Рейтинг ~1850
+                                    {selectedBotProfile.era} • Рейтинг ~{selectedBotProfile.rating}
                                 </div>
                             </div>
                         </div>
-                        {activeBot === 'philidor' && !gameOverResult && (
+                        {activeBot === selectedBotProfile.id && !gameOverResult && (
                             <span
                                 className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-700/50">
                                 В игре
@@ -1266,14 +1332,14 @@ export default function Chessboard() {
                     </div>
 
                     <p className="text-[11px] italic text-boxwood/80 leading-snug">
-                        «Пешки — душа шахмат: именно они определяют атаку и защиту».
+                        «{selectedBotProfile.motto}»
                     </p>
 
                     <div className="grid grid-cols-3 gap-1.5">
                         <button
                             type="button"
                             disabled={!!gameId && !gameOverResult}
-                            onClick={() => startPhilidorGame('white')}
+                            onClick={() => startHistoricalBotGame(selectedBotId, 'white')}
                             className="px-2 py-1.5 text-[11px] font-bold rounded bg-boxwood text-acacia-dark hover:bg-boxwood-light disabled:opacity-40 transition cursor-pointer shadow"
                         >
                             ♔ Белыми
@@ -1281,7 +1347,7 @@ export default function Chessboard() {
                         <button
                             type="button"
                             disabled={!!gameId && !gameOverResult}
-                            onClick={() => startPhilidorGame('random')}
+                            onClick={() => startHistoricalBotGame(selectedBotId, 'random')}
                             className="px-2 py-1.5 text-[11px] font-bold rounded bg-amber-700/80 text-amber-100 border border-amber-500/40 hover:bg-amber-600 disabled:opacity-40 transition cursor-pointer shadow"
                         >
                             🎲 Случайно
@@ -1289,19 +1355,19 @@ export default function Chessboard() {
                         <button
                             type="button"
                             disabled={!!gameId && !gameOverResult}
-                            onClick={() => startPhilidorGame('black')}
+                            onClick={() => startHistoricalBotGame(selectedBotId, 'black')}
                             className="px-2 py-1.5 text-[11px] font-bold rounded bg-black/60 text-amber-200 border border-amber-700/50 hover:bg-black/80 disabled:opacity-40 transition cursor-pointer shadow"
                         >
                             ♚ Черными
                         </button>
                     </div>
 
-                    {activeBot === 'philidor' && (
+                    {activeBotProfile && (
                         <div className="p-2.5 rounded bg-black/50 border border-amber-600/30 text-xs text-amber-100">
                             <div
                                 className="font-bold text-amber-400 mb-1 flex items-center justify-between text-[11px]">
                                 <span className="flex items-center gap-1">
-                                    <MessageSquareQuote size={13}/> Мысль Филидора:
+                                    <MessageSquareQuote size={13}/> Мысль ({activeBotProfile.shortName}):
                                 </span>
                                 {isBotThinking && (
                                     <span className="animate-pulse text-amber-300 font-mono text-[10px]">
@@ -1310,7 +1376,7 @@ export default function Chessboard() {
                                 )}
                             </div>
                             <div className="text-[11px] text-boxwood-light leading-relaxed">
-                                {botComment || 'Посмотрим, как вы распорядитесь пешечным центром.'}
+                                {botComment || 'Посмотрим, как развернётся борьба за центр.'}
                             </div>
                         </div>
                     )}
