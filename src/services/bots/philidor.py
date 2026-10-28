@@ -1,10 +1,13 @@
 # --- FILE: src/services/bots/philidor.py ---
 
+import logging
 import os
 import random
 import shutil
 import chess
 import chess.engine
+
+logger = logging.getLogger(__name__)
 
 # Дебютная книга Франсуа-Андре Филидора:
 # Объединяет "Analyse du jeu des Échecs" (1749 г.) и реальные партии 1783-1795 гг.
@@ -179,6 +182,11 @@ PIECE_VALUES = {
     chess.KING: 20000,
 }
 
+# Допустимый коридор позиционной уступки Филидора ради пешечной структуры (1.2 пешки)
+PHILIDOR_BLUNDER_GUARD_CP = 120.0
+# Совместимость для внешних импортов
+BLUNDER_GUARD_MARGIN_CP = PHILIDOR_BLUNDER_GUARD_CP
+
 
 def normalize_fen_key(board: chess.Board) -> str:
     parts = board.fen().split(" ")
@@ -200,7 +208,7 @@ def resolve_stockfish_path(custom_path: str | None = None) -> str | None:
 
 
 def _evaluate_pawn_structure(board: chess.Board, us: chess.Color) -> float:
-    """Улучшенная оценка пешечной структуры: фаланги, цепи и избежание сдвоенных пешек."""
+    """Оценка пешечной структуры по Филидору: фаланги, цепи и избежание сдвоенных пешек."""
     our_pawns = board.pieces(chess.PAWN, us)
     start_rank = 1 if us == chess.WHITE else 6
     pawn_files = [chess.square_file(sq) for sq in our_pawns]
@@ -210,15 +218,12 @@ def _evaluate_pawn_structure(board: chess.Board, us: chess.Color) -> float:
         f = chess.square_file(sq)
         r = chess.square_rank(sq)
 
-        # Бонус за продвижение пешек к центру и дальше
         if r != start_rank:
             score += float(r if us == chess.WHITE else (7 - r)) * 3.0
 
-        # Пешечные фаланги (соседние пешки на одной горизонтали)
         if f < 7 and chess.square(f + 1, r) in our_pawns:
             score += 15.0
 
-        # Пешечные цепи (поддержка сзади)
         support_rank = (r - 1) if us == chess.WHITE else (r + 1)
         if 0 <= support_rank <= 7:
             if (f > 0 and chess.square(f - 1, support_rank) in our_pawns) or (
@@ -226,7 +231,6 @@ def _evaluate_pawn_structure(board: chess.Board, us: chess.Color) -> float:
             ):
                 score += 10.0
 
-    # Штраф за сдвоенные пешки
     doubled_pawns = len(pawn_files) - len(set(pawn_files))
     score -= float(doubled_pawns) * 20.0
 
@@ -246,33 +250,30 @@ def evaluate_philidor_style_bonus(board_before: chess.Board, move: chess.Move) -
     bonus = 0.0
     note = None
 
-    # 1. Приоритет ходов пешками
     if piece.piece_type == chess.PAWN:
-        bonus += 12.0
+        bonus += 14.0
         if move.to_square in CENTER_SQUARES:
             bonus += 35.0
             note = "Пешки — душа шахмат! Мощный удар в центр доски."
         elif move.to_square in EXTENDED_CENTER:
-            bonus += 20.0
+            bonus += 22.0
             note = "Занимаем пространство пешечной фалангой."
         elif move.to_square in {chess.C3, chess.C6, chess.D3, chess.D6}:
-            bonus += 15.0
+            bonus += 16.0
             note = "Подготавливаем продвижение центральной пешки по методу Филидора."
 
-    # 2. Исторический запрет блокировать пешки 'c' и 'f' конями на ранней стадии
     if piece.piece_type == chess.KNIGHT and board_before.fullmove_number <= 10:
         if us == chess.WHITE:
             if move.to_square == chess.C3 and board_before.piece_at(chess.C2) == chess.Piece(chess.PAWN, chess.WHITE):
-                bonus -= 50.0
+                bonus -= 55.0
             if move.to_square == chess.F3 and board_before.piece_at(chess.F2) == chess.Piece(chess.PAWN, chess.WHITE):
-                bonus -= 40.0
+                bonus -= 45.0
         else:
             if move.to_square == chess.C6 and board_before.piece_at(chess.C7) == chess.Piece(chess.PAWN, chess.BLACK):
-                bonus -= 50.0
+                bonus -= 55.0
             if move.to_square == chess.F6 and board_before.piece_at(chess.F7) == chess.Piece(chess.PAWN, chess.BLACK):
-                bonus -= 40.0
+                bonus -= 45.0
 
-    # 3. Дельта пешечной структуры после хода
     structure_before = _evaluate_pawn_structure(board_before, us)
     board_after = board_before.copy()
     board_after.push(move)
@@ -307,15 +308,83 @@ def static_board_eval_cp(board: chess.Board, perspective: chess.Color) -> float:
     return score
 
 
+def analyse_with_stockfish(
+        board: chess.Board,
+        engine_path: str | None,
+        skill_level: int = 7,
+        uci_elo: int | None = 1850,
+        depth: int = 6,
+        time_limit: float = 0.25,
+        multipv: int = 6,
+) -> dict[chess.Move, float]:
+    """
+    Запускает анализ позиции движком Stockfish с исторической калибровкой силы
+    (UCI_LimitStrength + UCI_Elo) и ограниченной человеческой глубиной расчёта.
+    """
+    if not engine_path or not os.path.exists(engine_path):
+        return {}
+
+    scores: dict[chess.Move, float] = {}
+    try:
+        with chess.engine.SimpleEngine.popen_uci(engine_path) as engine:
+            options: dict[str, int | bool] = {"Skill Level": skill_level}
+            if uci_elo is not None:
+                if "UCI_LimitStrength" in engine.options:
+                    options["UCI_LimitStrength"] = True
+                if "UCI_Elo" in engine.options:
+                    min_elo = getattr(engine.options["UCI_Elo"], "min", 1320) or 1320
+                    max_elo = getattr(engine.options["UCI_Elo"], "max", 3190) or 3190
+                    options["UCI_Elo"] = max(min_elo, min(max_elo, uci_elo))
+            engine.configure(options)
+
+            infos = engine.analyse(
+                board,
+                chess.engine.Limit(depth=depth, time=time_limit),
+                multipv=min(multipv, board.legal_moves.count()),
+            )
+            if isinstance(infos, dict):
+                infos = [infos]
+            for info in infos:
+                pv = info.get("pv")
+                if pv:
+                    mv = pv[0]
+                    cp = info["score"].pov(board.turn).score(mate_score=100000)
+                    if cp is not None:
+                        scores[mv] = float(cp)
+    except Exception as exc:
+        logger.warning("Ошибка запуска Stockfish (%s): %s", engine_path, exc)
+        return {}
+
+    return scores
+
+
 class PhilidorBot:
     """
-    Усиленный исторический бот Франсуа-Андре Филидора.
-    Использует глубокий поиск Stockfish (depth=12, skill=12) с наложением позиционных принципов Филидора.
+    Исторический бот Франсуа-Андре Филидора (~1850 Эло).
+    Считает тактику на человеческую глубину 3 полных ходов (depth=6, UCI_Elo=1850, skill=7),
+    отдавая приоритет пешечным фалангам и цепям (коридор уступки 120 cp).
     """
 
-    def __init__(self, stockfish_path: str | None = None, skill_level: int = 12):
+    def __init__(
+            self,
+            stockfish_path: str | None = None,
+            skill_level: int = 7,
+            uci_elo: int = 1850,
+            search_depth: int = 6,
+    ):
+        self._explicit_stockfish_path = stockfish_path
         self.stockfish_path = resolve_stockfish_path(stockfish_path)
         self.skill_level = skill_level
+        self.uci_elo = uci_elo
+        self.search_depth = search_depth
+
+    def _get_active_engine_path(self) -> str | None:
+        if self._explicit_stockfish_path is not None:
+            return self._explicit_stockfish_path if os.path.exists(self._explicit_stockfish_path) else None
+        if self.stockfish_path and os.path.exists(self.stockfish_path):
+            return self.stockfish_path
+        self.stockfish_path = resolve_stockfish_path()
+        return self.stockfish_path
 
     def choose_move(self, fen: str) -> dict:
         board = chess.Board(fen)
@@ -352,27 +421,19 @@ class PhilidorBot:
                     "comment": comments[idx],
                 }
 
-        # 2. Получаем тактическую оценку ходов от Stockfish
-        base_scores: dict[chess.Move, float] = {}
-        if self.stockfish_path and os.path.exists(self.stockfish_path):
-            try:
-                with chess.engine.SimpleEngine.popen_uci(self.stockfish_path) as engine:
-                    engine.configure({"Skill Level": self.skill_level})
-                    infos = engine.analyse(
-                        board,
-                        chess.engine.Limit(depth=12, time=0.3),
-                        multipv=min(8, board.legal_moves.count()),
-                    )
-                    for info in infos:
-                        pv = info.get("pv")
-                        if pv:
-                            mv = pv[0]
-                            cp = info["score"].pov(board.turn).score(mate_score=100000) or 0
-                            base_scores[mv] = float(cp)
-            except Exception:
-                base_scores = {}
+        # 2. Получаем тактическую оценку ходов от Stockfish (калибровка 1850 Эло, depth=6)
+        engine_path = self._get_active_engine_path() if self.stockfish_path is not None else None
+        base_scores = analyse_with_stockfish(
+            board=board,
+            engine_path=engine_path,
+            skill_level=self.skill_level,
+            uci_elo=self.uci_elo,
+            depth=self.search_depth,
+            time_limit=0.25,
+            multipv=6,
+        )
 
-        # Fallback: Углубленный тактический расчёт (если нет движка)
+        # Fallback: тактический расчёт (если тестируем без бинарника в CI)
         if not base_scores:
             us = board.turn
             for mv in board.legal_moves:
@@ -390,14 +451,20 @@ class PhilidorBot:
                         worst_reply_score = s
                 base_scores[mv] = worst_reply_score if b1.legal_moves.count() > 0 else 0.0
 
-        # 3. Применяем стилевую оценку Филидора поверх расчётов движка
+        # 3. Коридор позиционной уступки Филидора (120 cp) + человеческий разброс
+        max_tactical_cp = max(base_scores.values())
+        candidate_scores = {
+                               mv: cp for mv, cp in base_scores.items()
+                               if cp >= max_tactical_cp - PHILIDOR_BLUNDER_GUARD_CP
+                           } or base_scores
+
         best_move = None
         best_total_score = -float("inf")
         best_comment = None
 
-        for mv, tactical_cp in base_scores.items():
+        for mv, tactical_cp in candidate_scores.items():
             style_bonus, note = evaluate_philidor_style_bonus(board, mv)
-            jitter = random.uniform(-3.0, 3.0)
+            jitter = random.uniform(-8.0, 8.0)
             total_score = tactical_cp + style_bonus + jitter
 
             if total_score > best_total_score:

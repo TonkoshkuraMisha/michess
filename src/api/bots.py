@@ -1,5 +1,6 @@
 # --- FILE: src/api/bots.py ---
 
+import asyncio
 from datetime import datetime, timezone
 import chess
 import chess.pgn
@@ -13,7 +14,7 @@ from src.db import session as db_session
 from src.models.game import Game
 from src.models.user import User
 from src.services.bots.labourdonnais import labourdonnais_bot
-from src.services.bots.philidor import philidor_bot
+from src.services.bots.philidor import philidor_bot, resolve_stockfish_path
 
 router = APIRouter()
 
@@ -218,8 +219,13 @@ def _prepare_game_kwargs(
 
 @router.get("/list")
 async def get_available_bots():
-    """Возвращает список доступных исторических ботов."""
-    return {"bots": AVAILABLE_BOTS}
+    """Возвращает список доступных исторических ботов и статус движка Stockfish."""
+    sf_path = resolve_stockfish_path()
+    return {
+        "bots": AVAILABLE_BOTS,
+        "stockfish_active": bool(sf_path),
+        "stockfish_path": sf_path,
+    }
 
 
 @router.post("/move", response_model=BotMoveResponse)
@@ -237,7 +243,8 @@ async def get_bot_move(payload: BotMoveRequest):
     if board.is_game_over():
         raise HTTPException(status_code=400, detail="Партия уже завершена")
 
-    result = bot.choose_move(payload.fen)
+    # Запускаем синхронный расчёт движка в отдельном потоке, чтобы избежать конфликта с asyncio loop на Windows
+    result = await asyncio.to_thread(bot.choose_move, payload.fen)
     return BotMoveResponse(
         bot_id=payload.bot_id,
         uci=result["uci"],

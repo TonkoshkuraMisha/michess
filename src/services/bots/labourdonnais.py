@@ -3,14 +3,17 @@
 import os
 import random
 import chess
-import chess.engine
 from src.services.bots.philidor import (
     CENTER_SQUARES,
     EXTENDED_CENTER,
+    analyse_with_stockfish,
     normalize_fen_key,
     resolve_stockfish_path,
     static_board_eval_cp,
 )
+
+# Допустимый коридор романтического риска Лабурдонне ради атаки и темпа (1.4 пешки)
+LABOURDONNAIS_BLUNDER_GUARD_CP = 140.0
 
 # Полная дебютная книга Луи-Шарля Маэ де Лабурдонне (на основе расширенной базы из 100+ исторических партий)
 LABOURDONNAIS_OPENING_BOOK: dict[str, list[tuple[str, int, str]]] = {
@@ -836,46 +839,60 @@ def evaluate_labourdonnais_style_bonus(board_before: chess.Board, move: chess.Mo
     bonus = 0.0
     note = None
 
-    # 1. Быстрая рокировка и ввод ладьи в бой
     if board_before.is_castling(move):
-        bonus += 35.0
+        bonus += 38.0
         note = "Рокировка! Вводим ладью в бой и готовим решительный штурм."
 
-    # 2. Энергичное развитие лёгких фигур в дебюте
     if piece.piece_type in {chess.KNIGHT, chess.BISHOP} and board_before.fullmove_number <= 12:
         back_rank = 0 if board_before.turn == chess.WHITE else 7
         if chess.square_rank(move.from_square) == back_rank:
-            bonus += 22.0
+            bonus += 25.0
             note = "Быстро выводим фигуры в бой — каждый темп на счету!"
         if move.to_square in EXTENDED_CENTER:
-            bonus += 15.0
+            bonus += 18.0
             note = "Фигуры устремляются в центр для комбинационной атаки!"
 
-    # 3. Захват центра и тактические удары
     if move.to_square in CENTER_SQUARES:
-        bonus += 20.0
+        bonus += 22.0
         if not note:
             note = "Захватываем инициативу в центре в духе французской романтической школы!"
 
-    # 4. Поощрение шахов и прямой атаки
     if board_before.gives_check(move):
-        bonus += 18.0
+        bonus += 24.0
         note = "Шах! Не даём сопернику передышки!"
     elif board_before.is_capture(move):
-        bonus += 10.0
+        bonus += 14.0
 
     return bonus, note
 
 
 class LabourdonnaisBot:
     """
-    Исторический бот Луи-Шарля Маэ де Лабурдонне (1795–1840).
-    Комбинационный атакующий стиль с полным дебютным репертуаром матчей 1834 года.
+    Исторический бот Луи-Шарля Маэ де Лабурдонне (~2050 Эло).
+    Считает комбинации на глубину 4 полных ходов (depth=8, UCI_Elo=2050, skill=10),
+    готов идти на агрессивные жертвы и тактический риск (коридор 140 cp).
     """
 
-    def __init__(self, stockfish_path: str | None = None, skill_level: int = 14):
+    def __init__(
+            self,
+            stockfish_path: str | None = None,
+            skill_level: int = 10,
+            uci_elo: int = 2050,
+            search_depth: int = 8,
+    ):
+        self._explicit_stockfish_path = stockfish_path
         self.stockfish_path = resolve_stockfish_path(stockfish_path)
         self.skill_level = skill_level
+        self.uci_elo = uci_elo
+        self.search_depth = search_depth
+
+    def _get_active_engine_path(self) -> str | None:
+        if self._explicit_stockfish_path is not None:
+            return self._explicit_stockfish_path if os.path.exists(self._explicit_stockfish_path) else None
+        if self.stockfish_path and os.path.exists(self.stockfish_path):
+            return self.stockfish_path
+        self.stockfish_path = resolve_stockfish_path()
+        return self.stockfish_path
 
     def choose_move(self, fen: str) -> dict:
         board = chess.Board(fen)
@@ -912,25 +929,17 @@ class LabourdonnaisBot:
                     "comment": comments[idx],
                 }
 
-        # 2. Тактический расчёт Stockfish
-        base_scores: dict[chess.Move, float] = {}
-        if self.stockfish_path and os.path.exists(self.stockfish_path):
-            try:
-                with chess.engine.SimpleEngine.popen_uci(self.stockfish_path) as engine:
-                    engine.configure({"Skill Level": self.skill_level})
-                    infos = engine.analyse(
-                        board,
-                        chess.engine.Limit(depth=12, time=0.3),
-                        multipv=min(8, board.legal_moves.count()),
-                    )
-                    for info in infos:
-                        pv = info.get("pv")
-                        if pv:
-                            mv = pv[0]
-                            cp = info["score"].pov(board.turn).score(mate_score=100000) or 0
-                            base_scores[mv] = float(cp)
-            except Exception:
-                base_scores = {}
+        # 2. Тактический расчёт Stockfish (калибровка 2050 Эло, depth=8)
+        engine_path = self._get_active_engine_path() if self.stockfish_path is not None else None
+        base_scores = analyse_with_stockfish(
+            board=board,
+            engine_path=engine_path,
+            skill_level=self.skill_level,
+            uci_elo=self.uci_elo,
+            depth=self.search_depth,
+            time_limit=0.35,
+            multipv=6,
+        )
 
         # Fallback: двухходовый минимакс при отсутствии бинарника Stockfish
         if not base_scores:
@@ -950,14 +959,20 @@ class LabourdonnaisBot:
                         worst_reply_score = s
                 base_scores[mv] = worst_reply_score if b1.legal_moves.count() > 0 else 0.0
 
-        # 3. Применяем атакующий стиль Лабурдонне
+        # 3. Коридор романтического риска (140 cp) + атакующий стиль Лабурдонне
+        max_tactical_cp = max(base_scores.values())
+        candidate_scores = {
+                               mv: cp for mv, cp in base_scores.items()
+                               if cp >= max_tactical_cp - LABOURDONNAIS_BLUNDER_GUARD_CP
+                           } or base_scores
+
         best_move = None
         best_total_score = -float("inf")
         best_comment = None
 
-        for mv, tactical_cp in base_scores.items():
+        for mv, tactical_cp in candidate_scores.items():
             style_bonus, note = evaluate_labourdonnais_style_bonus(board, mv)
-            jitter = random.uniform(-2.5, 2.5)
+            jitter = random.uniform(-6.0, 6.0)
             total_score = tactical_cp + style_bonus + jitter
 
             if total_score > best_total_score:
