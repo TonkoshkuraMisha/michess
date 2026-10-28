@@ -25,7 +25,8 @@ import {
     Bot,
     MessageSquareQuote,
     Download,
-    Eye
+    Eye,
+    Sliders
 } from 'lucide-react';
 import {gameSocket} from '../services/gameSocket';
 
@@ -75,6 +76,36 @@ interface HistoricalBotProfile {
     rating: number;
     motto: string;
     avatar: string;
+}
+
+export type DgtTimingMode =
+    | 'time'
+    | 'fischer'
+    | 'delay'
+    | 'us_delay'
+    | 'byo_yomi'
+    | 'canadian_byo'
+    | 'scrabble'
+    | 'hourglass'
+    | 'gong'
+    | 'move_timer';
+
+export interface Dgt2500Option {
+    optionNumber: string;
+    mode: DgtTimingMode;
+    base: number;            // базовое время белых (в минутах, может быть дробным, например 10/60 для 10 сек)
+    blackBase?: number;      // базовое время черных для Armageddon (в минутах)
+    inc: number;             // бонус / задержка на ход (в секундах)
+    label: string;
+    details: string;
+    isManual?: boolean;
+    periods?: Array<{ moves?: number; extraMinutes: number; extraIncSeconds?: number }>;
+    incrementFromMove?: number;
+}
+
+export interface Dgt2500Group {
+    group: string;
+    options: Dgt2500Option[];
 }
 
 const HISTORICAL_BOTS: Record<HistoricalBotId, HistoricalBotProfile> = {
@@ -143,34 +174,348 @@ export const BOARD_THEMES: Record<string, BoardTheme> = {
     }
 };
 
-const TIME_CONTROLS = [
+// Все 36 официальных программ шахматных часов FIDE DGT2500 (согласно инструкции DGT2500 Manual V1.8)
+export const TIME_CONTROLS: Dgt2500Group[] = [
     {
-        group: 'Пуля (Bullet)',
+        group: '01–08 • Time (Контроль времени и Гильотина)',
         options: [
-            {base: 1, inc: 0, label: '1 мин'},
-            {base: 1, inc: 1, label: '1 мин + 1 сек'},
-            {base: 2, inc: 0, label: '2 мин'},
-            {base: 2, inc: 1, label: '2 мин + 1 сек'}
+            {
+                optionNumber: '01',
+                mode: 'time',
+                base: 5,
+                inc: 0,
+                label: '5 мин',
+                details: 'Блиц 5 минут до конца партии'
+            },
+            {
+                optionNumber: '02',
+                mode: 'time',
+                base: 25,
+                inc: 0,
+                label: '25 мин',
+                details: 'Рапид 25 минут до конца партии'
+            },
+            {
+                optionNumber: '03',
+                mode: 'time',
+                base: 60,
+                inc: 0,
+                label: '60 мин (1 час)',
+                details: 'Классика 60 минут до конца партии'
+            },
+            {
+                optionNumber: '04',
+                mode: 'time',
+                base: 120,
+                inc: 0,
+                label: '120 мин/40 + 30 мин',
+                details: '2 часа на 40 ходов + 30 мин до конца',
+                periods: [{moves: 40, extraMinutes: 30}]
+            },
+            {
+                optionNumber: '05',
+                mode: 'time',
+                base: 120,
+                inc: 0,
+                label: '120 мин/40 + 60 мин',
+                details: '2 часа на 40 ходов + 60 мин до конца',
+                periods: [{moves: 40, extraMinutes: 60}]
+            },
+            {
+                optionNumber: '06',
+                mode: 'time',
+                base: 120,
+                inc: 0,
+                label: '120м/40 + 60м/20 + 30м',
+                details: '2ч/40 ходов + 1ч/20 ходов + 30 мин до конца',
+                periods: [{moves: 40, extraMinutes: 60}, {moves: 60, extraMinutes: 30}]
+            },
+            {
+                optionNumber: '07',
+                mode: 'time',
+                base: 5,
+                blackBase: 4,
+                inc: 0,
+                label: '5 мин vs 4 мин (Armageddon)',
+                details: 'Армагеддон без добавления: 5 мин Белые / 4 мин Черные'
+            },
+            {
+                optionNumber: '08',
+                mode: 'time',
+                base: 10,
+                inc: 0,
+                isManual: true,
+                label: 'Ручная настройка (Time)',
+                details: 'Произвольное стартовое время без добавления'
+            }
         ]
     },
     {
-        group: 'Блиц (Blitz)',
+        group: '09–21 • Fischer Bonus (Фишер с добавлением)',
         options: [
-            {base: 3, inc: 0, label: '3 мин'},
-            {base: 3, inc: 2, label: '3 мин + 2 сек'},
-            {base: 5, inc: 0, label: '5 мин'},
-            {base: 5, inc: 3, label: '5 мин + 3 сек'}
+            {
+                optionNumber: '09',
+                mode: 'fischer',
+                base: 3,
+                inc: 2,
+                label: '3 мин + 2 сек/ход',
+                details: 'Стандартный блиц FIDE (3+2)'
+            },
+            {
+                optionNumber: '10',
+                mode: 'fischer',
+                base: 5,
+                inc: 3,
+                label: '5 мин + 3 сек/ход',
+                details: 'Блиц с добавлением Фишера (5+3)'
+            },
+            {
+                optionNumber: '11',
+                mode: 'fischer',
+                base: 10,
+                inc: 10,
+                label: '10 мин + 10 сек/ход',
+                details: 'Быстрые шахматы (10+10)'
+            },
+            {
+                optionNumber: '12',
+                mode: 'fischer',
+                base: 15,
+                inc: 5,
+                label: '15 мин + 5 сек/ход',
+                details: 'Рапид с добавлением (15+5)'
+            },
+            {
+                optionNumber: '13',
+                mode: 'fischer',
+                base: 15,
+                inc: 10,
+                label: '15 мин + 10 сек/ход',
+                details: 'Стандартный рапид FIDE (15+10)'
+            },
+            {
+                optionNumber: '14',
+                mode: 'fischer',
+                base: 25,
+                inc: 10,
+                label: '25 мин + 10 сек/ход',
+                details: 'Удлинённый рапид (25+10)'
+            },
+            {
+                optionNumber: '15',
+                mode: 'fischer',
+                base: 90,
+                inc: 30,
+                label: '90 мин + 30 сек/ход',
+                details: 'Стандартная классика (90+30 с 1-го хода)'
+            },
+            {
+                optionNumber: '16',
+                mode: 'fischer',
+                base: 90,
+                inc: 30,
+                label: '90м/40 + 30м + 30с/ход',
+                details: 'Турнирный FIDE: 90 мин/40 ходов + 30 мин до конца (+30с с 1-го хода)',
+                periods: [{moves: 40, extraMinutes: 30}]
+            },
+            {
+                optionNumber: '17',
+                mode: 'fischer',
+                base: 100,
+                inc: 30,
+                label: '100м/40 + 50м + 30с/ход',
+                details: '100 мин/40 ходов + 50 мин до конца (+30с с 1-го хода)',
+                periods: [{moves: 40, extraMinutes: 50}]
+            },
+            {
+                optionNumber: '18',
+                mode: 'fischer',
+                base: 100,
+                inc: 30,
+                label: '100м/40 + 50м/20 + 15м + 30с',
+                details: '100м/40 + 50м/20 + 15м до конца (+30с с 1-го хода)',
+                periods: [{moves: 40, extraMinutes: 50}, {moves: 60, extraMinutes: 15}]
+            },
+            {
+                optionNumber: '19',
+                mode: 'fischer',
+                base: 120,
+                inc: 0,
+                label: '120м/40 + 60м/20 + 15м (+30с с 61 х.)',
+                details: 'Классика с добавлением 30 сек/ход начиная с 61-го хода (#)',
+                periods: [{moves: 40, extraMinutes: 60}, {moves: 60, extraMinutes: 15, extraIncSeconds: 30}],
+                incrementFromMove: 61
+            },
+            {
+                optionNumber: '20',
+                mode: 'fischer',
+                base: 5,
+                blackBase: 4,
+                inc: 0,
+                label: '5м vs 4м (+2с с 61 х., Armageddon)',
+                details: 'Армагеддон FIDE: 5 мин vs 4 мин + 2 сек/ход с 61-го хода (#)',
+                periods: [{moves: 60, extraMinutes: 0, extraIncSeconds: 2}],
+                incrementFromMove: 61
+            },
+            {
+                optionNumber: '21',
+                mode: 'fischer',
+                base: 3,
+                inc: 2,
+                isManual: true,
+                label: 'Ручная настройка (Fischer)',
+                details: 'Произвольное время и бонус Фишера за каждый ход'
+            }
         ]
     },
     {
-        group: 'Рапид (Rapid)',
+        group: '22–25 • Delay (Задержка Бронштейна и US Delay)',
         options: [
-            {base: 10, inc: 0, label: '10 мин'},
-            {base: 10, inc: 10, label: '10 мин + 10 сек'},
-            {base: 15, inc: 10, label: '15 мин + 10 сек'}
+            {
+                optionNumber: '22',
+                mode: 'delay',
+                base: 90,
+                inc: 5,
+                label: '90 мин + 5 сек Delay (Bronstein)',
+                details: 'Задержка Бронштейна 5 сек на каждый ход'
+            },
+            {
+                optionNumber: '23',
+                mode: 'delay',
+                base: 5,
+                inc: 3,
+                isManual: true,
+                label: 'Ручная настройка (Bronstein Delay)',
+                details: 'Произвольное время с задержкой Бронштейна'
+            },
+            {
+                optionNumber: '24',
+                mode: 'us_delay',
+                base: 25,
+                inc: 5,
+                label: '25 мин + 5 сек US Delay',
+                details: 'Американская задержка (US Delay) 5 сек перед отсчётом'
+            },
+            {
+                optionNumber: '25',
+                mode: 'us_delay',
+                base: 5,
+                inc: 5,
+                isManual: true,
+                label: 'Ручная настройка (US Delay)',
+                details: 'Произвольное время с американской задержкой'
+            }
+        ]
+    },
+    {
+        group: '26–29 • Byo-Yomi (Японское и Канадское Бё-ёми)',
+        options: [
+            {
+                optionNumber: '26',
+                mode: 'byo_yomi',
+                base: 60,
+                inc: 20,
+                label: '60 мин + 3×20 сек Byo-Yomi',
+                details: 'Японское Бё-ёми: 60 мин + 3 периода по 20 сек'
+            },
+            {
+                optionNumber: '27',
+                mode: 'byo_yomi',
+                base: 30,
+                inc: 20,
+                isManual: true,
+                label: 'Ручная настройка (Byo-Yomi)',
+                details: 'Произвольная настройка японского Бё-ёми'
+            },
+            {
+                optionNumber: '28',
+                mode: 'canadian_byo',
+                base: 60,
+                inc: 0,
+                label: '60 мин + 5 мин Canadian Byo-Yomi',
+                details: 'Канадское Бё-ёми: 60 мин + 5 мин на серию ходов',
+                periods: [{extraMinutes: 5}]
+            },
+            {
+                optionNumber: '29',
+                mode: 'canadian_byo',
+                base: 30,
+                inc: 0,
+                isManual: true,
+                label: 'Ручная настройка (Canadian Byo-Yomi)',
+                details: 'Произвольная настройка канадского Бё-ёми'
+            }
+        ]
+    },
+    {
+        group: '30–36 • Специальные режимы (Scrabble, Hourglass, Gong, Move Timer)',
+        options: [
+            {
+                optionNumber: '30',
+                mode: 'scrabble',
+                base: 25,
+                inc: 0,
+                label: '25 мин + Upcount (Scrabble™)',
+                details: 'После достижения 0:00 таймер считает штрафное время вверх'
+            },
+            {
+                optionNumber: '31',
+                mode: 'scrabble',
+                base: 15,
+                inc: 0,
+                isManual: true,
+                label: 'Ручная настройка (Scrabble™)',
+                details: 'Произвольное время с отсчётом вверх после 0:00'
+            },
+            {
+                optionNumber: '32',
+                mode: 'hourglass',
+                base: 1,
+                inc: 0,
+                label: '1 мин (Hourglass / Песочные часы)',
+                details: 'Пока у одного игрока время убывает, у соперника оно прибавляется'
+            },
+            {
+                optionNumber: '33',
+                mode: 'hourglass',
+                base: 2,
+                inc: 0,
+                isManual: true,
+                label: 'Ручная настройка (Hourglass)',
+                details: 'Песочные часы с произвольным стартовым временем'
+            },
+            {
+                optionNumber: '34',
+                mode: 'gong',
+                base: 10 / 60,
+                inc: 0,
+                label: '10 сек на ход (Gong)',
+                details: 'Фиксированные 10 секунд на каждый ход со сбросом таймера'
+            },
+            {
+                optionNumber: '35',
+                mode: 'gong',
+                base: 15 / 60,
+                inc: 0,
+                isManual: true,
+                label: 'Ручная настройка (Gong)',
+                details: 'Произвольное фиксированное время на каждый ход (Гонг)'
+            },
+            {
+                optionNumber: '36',
+                mode: 'move_timer',
+                base: 30 / 60,
+                inc: 0,
+                isManual: true,
+                label: 'Ручная настройка (Move Timer)',
+                details: 'Таймер на ход со сбросом после каждого сделанного хода'
+            }
         ]
     }
 ];
+
+const ALL_DGT_OPTIONS: Dgt2500Option[] = TIME_CONTROLS.flatMap(g => g.options);
+const DEFAULT_DGT_OPTION: Dgt2500Option = ALL_DGT_OPTIONS.find(o => o.optionNumber === '09') || ALL_DGT_OPTIONS[0];
 
 const PIECE_VALUES: Record<string, number> = {
     p: 1,
@@ -268,8 +613,10 @@ export default function Chessboard() {
     const [isBotThinking, setIsBotThinking] = useState<boolean>(false);
     const [savedBotGameId, setSavedBotGameId] = useState<number | null>(null);
 
-    // Выбранный контроль времени и состояние кастомного селектора
-    const [selectedTimeControl, setSelectedTimeControl] = useState({base: 3, inc: 0});
+    // Выбранная программа часов DGT2500 (01–36) и параметры ручной настройки (Manual setup)
+    const [selectedTimeControl, setSelectedTimeControl] = useState<Dgt2500Option>(DEFAULT_DGT_OPTION);
+    const [manualBaseMinutes, setManualBaseMinutes] = useState<number>(5);
+    const [manualIncSeconds, setManualIncSeconds] = useState<number>(3);
     const [isTimeDropdownOpen, setIsTimeDropdownOpen] = useState(false);
     const timeDropdownRef = useRef<HTMLDivElement>(null);
     const boardContainerRef = useRef<HTMLDivElement>(null);
@@ -287,6 +634,10 @@ export default function Chessboard() {
 
     const moveStartTime = useRef<number>(Date.now());
     const botGameSavedRef = useRef<boolean>(false);
+    const appliedPeriodsRef = useRef<{ white: Set<number>; black: Set<number> }>({
+        white: new Set(),
+        black: new Set()
+    });
 
     const [dragState, setDragState] = useState<{
         from: string;
@@ -319,6 +670,13 @@ export default function Chessboard() {
     const activeTheme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
     const selectedBotProfile = HISTORICAL_BOTS[selectedBotId];
     const activeBotProfile = activeBot ? HISTORICAL_BOTS[activeBot] : null;
+
+    // Эффективные значения времени с учётом ручного режима (Manual setting)
+    const effectiveWhiteBaseMinutes = selectedTimeControl.isManual ? manualBaseMinutes : selectedTimeControl.base;
+    const effectiveBlackBaseMinutes = selectedTimeControl.isManual
+        ? manualBaseMinutes
+        : (selectedTimeControl.blackBase ?? selectedTimeControl.base);
+    const effectiveIncSeconds = selectedTimeControl.isManual ? manualIncSeconds : selectedTimeControl.inc;
 
     // Определяем ориентацию доски (с учетом цвета игрока и ручного переворота)
     const isBoardFlipped = (myColor === 'black') !== isManualFlip;
@@ -376,8 +734,8 @@ export default function Chessboard() {
                     player_color: playerColor,
                     result,
                     moves_uci: movesUci,
-                    base_time_ms: selectedTimeControl.base * 60 * 1000,
-                    increment_ms: selectedTimeControl.inc * 1000
+                    base_time_ms: Math.round(effectiveWhiteBaseMinutes * 60 * 1000),
+                    increment_ms: Math.round(effectiveIncSeconds * 1000)
                 })
             });
 
@@ -390,7 +748,64 @@ export default function Chessboard() {
         } catch (err) {
             console.error('Ошибка сохранения партии с ботом в БД:', err);
         }
-    }, [selectedTimeControl.base, selectedTimeControl.inc]);
+    }, [effectiveWhiteBaseMinutes, effectiveIncSeconds]);
+
+    // Начисление бонуса / задержки / переходов периодов по правилам выбранной программы DGT2500
+    const applyDgtClockAfterMove = useCallback((
+        moverColor: 'white' | 'black',
+        elapsedMs: number,
+        totalHalfMovesAfter: number
+    ) => {
+        const mode = selectedTimeControl.mode;
+        const baseMs = Math.round(
+            (moverColor === 'white' ? effectiveWhiteBaseMinutes : effectiveBlackBaseMinutes) * 60 * 1000
+        );
+        const completedMovesForSide = Math.ceil(totalHalfMovesAfter / 2);
+
+        let incSeconds = effectiveIncSeconds;
+        if (selectedTimeControl.incrementFromMove) {
+            if (completedMovesForSide >= selectedTimeControl.incrementFromMove) {
+                const extraInc = selectedTimeControl.periods?.find(p => p.extraIncSeconds)?.extraIncSeconds;
+                incSeconds = extraInc ?? effectiveIncSeconds;
+            } else {
+                incSeconds = 0;
+            }
+        }
+        const incMs = Math.round(incSeconds * 1000);
+
+        let periodExtraMs = 0;
+        if (selectedTimeControl.periods) {
+            selectedTimeControl.periods.forEach((period, idx) => {
+                if (
+                    period.moves &&
+                    completedMovesForSide >= period.moves &&
+                    !appliedPeriodsRef.current[moverColor].has(idx)
+                ) {
+                    appliedPeriodsRef.current[moverColor].add(idx);
+                    periodExtraMs += Math.round(period.extraMinutes * 60 * 1000);
+                }
+            });
+        }
+
+        const updateTimer = (prevMs: number) => {
+            if (mode === 'gong' || mode === 'move_timer') {
+                return baseMs;
+            }
+            if (mode === 'delay' || mode === 'us_delay') {
+                return prevMs + Math.min(elapsedMs, incMs) + periodExtraMs;
+            }
+            if (mode === 'fischer' || mode === 'byo_yomi') {
+                return prevMs + incMs + periodExtraMs;
+            }
+            return prevMs + periodExtraMs;
+        };
+
+        if (moverColor === 'white') {
+            setWhiteTimeMs(updateTimer);
+        } else {
+            setBlackTimeMs(updateTimer);
+        }
+    }, [selectedTimeControl, effectiveWhiteBaseMinutes, effectiveBlackBaseMinutes, effectiveIncSeconds]);
 
     const handleThemeChange = (themeId: string) => {
         setBoardThemeKey(themeId);
@@ -409,11 +824,13 @@ export default function Chessboard() {
                 ? (Math.random() < 0.5 ? 'white' : 'black')
                 : colorPref;
 
-        const baseMs = selectedTimeControl.base * 60 * 1000;
+        const whiteStartMs = Math.round(effectiveWhiteBaseMinutes * 60 * 1000);
+        const blackStartMs = Math.round(effectiveBlackBaseMinutes * 60 * 1000);
         const freshGame = new Chess();
         const botInfo = HISTORICAL_BOTS[botId];
 
         botGameSavedRef.current = false;
+        appliedPeriodsRef.current = {white: new Set(), black: new Set()};
         setSavedBotGameId(null);
         setGameId(null);
         setSelectedBotId(botId);
@@ -427,8 +844,8 @@ export default function Chessboard() {
         setGameOverResult(null);
         setRatingInfo(null);
         setDrawOfferStatus(null);
-        setWhiteTimeMs(baseMs);
-        setBlackTimeMs(baseMs);
+        setWhiteTimeMs(whiteStartMs);
+        setBlackTimeMs(blackStartMs);
         moveStartTime.current = Date.now();
 
         if (chosenColor === 'white') {
@@ -477,8 +894,13 @@ export default function Chessboard() {
                 const moveObj = nextGame.move({from, to, promotion});
 
                 if (moveObj) {
+                    const elapsed = Date.now() - moveStartTime.current;
+                    const newHistory = nextGame.history({verbose: true});
+                    const botColor: 'white' | 'black' = myColor === 'white' ? 'black' : 'white';
+
+                    applyDgtClockAfterMove(botColor, elapsed, newHistory.length);
                     setGame(nextGame);
-                    setHistory(nextGame.history({verbose: true}));
+                    setHistory(newHistory);
                     setViewIndex(-1);
                     setBotComment(data.comment);
                     moveStartTime.current = Date.now();
@@ -510,7 +932,7 @@ export default function Chessboard() {
             isCancelled = true;
             clearTimeout(timer);
         };
-    }, [activeBot, game, myColor, gameOverResult, playAudio, updateSessionStats, saveBotGameToDatabase]);
+    }, [activeBot, game, myColor, gameOverResult, playAudio, updateSessionStats, saveBotGameToDatabase, applyDgtClockAfterMove]);
 
     // Обработчик изменения размера доски за правый нижний угол
     useEffect(() => {
@@ -660,6 +1082,7 @@ export default function Chessboard() {
             setBotComment(null);
             setSavedBotGameId(null);
             botGameSavedRef.current = false;
+            appliedPeriodsRef.current = {white: new Set(), black: new Set()};
             setGameId(data.game_id);
             setMyColor(data.color);
             setIsManualFlip(false);
@@ -846,11 +1269,14 @@ export default function Chessboard() {
 
     const currentTurnChar = game.turn();
 
+    // Таймер DGT2500 с поддержкой Hourglass (песочные часы), Scrabble (upcount) и Flag-fall (падение флажка)
     useEffect(() => {
         if ((!gameId && !activeBot) || gameOverResult) return;
 
         let lastTick = Date.now();
         const currentTurnColor = currentTurnChar === 'w' ? 'white' : 'black';
+        const isHourglass = !gameId && selectedTimeControl.mode === 'hourglass';
+        const isScrabble = !gameId && selectedTimeControl.mode === 'scrabble';
 
         const interval = setInterval(() => {
             const now = Date.now();
@@ -858,14 +1284,35 @@ export default function Chessboard() {
             lastTick = now;
 
             if (currentTurnColor === 'white') {
-                setWhiteTimeMs(prev => Math.max(0, prev - delta));
+                setWhiteTimeMs(prev => isScrabble ? prev - delta : Math.max(0, prev - delta));
+                if (isHourglass) {
+                    setBlackTimeMs(prev => prev + delta);
+                }
             } else {
-                setBlackTimeMs(prev => Math.max(0, prev - delta));
+                setBlackTimeMs(prev => isScrabble ? prev - delta : Math.max(0, prev - delta));
+                if (isHourglass) {
+                    setWhiteTimeMs(prev => prev + delta);
+                }
             }
         }, 50);
 
         return () => clearInterval(interval);
-    }, [gameId, activeBot, gameOverResult, currentTurnChar]);
+    }, [gameId, activeBot, gameOverResult, currentTurnChar, selectedTimeControl.mode]);
+
+    // Автоматическая фиксация падения флажка (Flag-fall) в игре с ботом (кроме режима Scrabble Upcount)
+    useEffect(() => {
+        if (!activeBot || gameOverResult || selectedTimeControl.mode === 'scrabble') return;
+
+        if (whiteTimeMs <= 0 || blackTimeMs <= 0) {
+            const flagWinner = whiteTimeMs <= 0 ? '0-1' : '1-0';
+            const botName = HISTORICAL_BOTS[activeBot].shortName;
+            setGameOverResult(flagWinner);
+            setDrawOfferStatus(`Флажок упал! Партия против ${botName} завершена по времени (${flagWinner}).`);
+            updateSessionStats(flagWinner);
+            playAudio('start');
+            saveBotGameToDatabase(activeBot, myColor, flagWinner, game);
+        }
+    }, [whiteTimeMs, blackTimeMs, activeBot, gameOverResult, selectedTimeControl.mode, myColor, game, playAudio, updateSessionStats, saveBotGameToDatabase]);
 
     const executeMove = useCallback((from: string, to: string) => {
         if (gameOverResult || viewIndex !== -1) return;
@@ -885,9 +1332,14 @@ export default function Chessboard() {
             if (move) {
                 const timeTaken = Date.now() - moveStartTime.current;
                 const uciMove = (move as any).uci || `${move.from}${move.to}${move.promotion || ''}`;
+                const newHistory = nextGame.history({verbose: true});
+
+                if (activeBot) {
+                    applyDgtClockAfterMove(myColor, timeTaken, newHistory.length);
+                }
 
                 setGame(nextGame);
-                setHistory(nextGame.history({verbose: true}));
+                setHistory(newHistory);
                 setViewIndex(-1);
                 playAudio(move.san.includes('x') ? 'capture' : 'move');
                 moveStartTime.current = Date.now();
@@ -924,7 +1376,7 @@ export default function Chessboard() {
             setSelectedSquare(null);
         }
         setDragState(null);
-    }, [game, gameId, activeBot, myColor, stateVersion, viewIndex, gameOverResult, playAudio, updateSessionStats, saveBotGameToDatabase]);
+    }, [game, gameId, activeBot, myColor, stateVersion, viewIndex, gameOverResult, playAudio, updateSessionStats, saveBotGameToDatabase, applyDgtClockAfterMove]);
 
     useEffect(() => {
         const handleMouseMove = (e: MouseEvent) => {
@@ -987,18 +1439,26 @@ export default function Chessboard() {
         };
     }, [dragState, isBoardFlipped, executeMove]);
 
+    // Форматирование времени в стиле дисплея DGT2500 (H:MM:SS для часов, MM:SS и десятые доли секунды в цейтноте)
     const formatTime = (ms: number) => {
-        const totalMs = Math.max(0, ms);
+        const isOvertimeUpcount = ms < 0 && selectedTimeControl.mode === 'scrabble';
+        const totalMs = isOvertimeUpcount ? Math.abs(ms) : Math.max(0, ms);
         const totalSecs = Math.floor(totalMs / 1000);
-        const mins = Math.floor(totalSecs / 60);
+        const hours = Math.floor(totalSecs / 3600);
+        const mins = Math.floor((totalSecs % 3600) / 60);
         const secs = totalSecs % 60;
+        const prefix = isOvertimeUpcount ? '+' : '';
 
-        if (totalMs < 30000 && totalMs > 0) {
+        if (hours > 0) {
+            return `${prefix}${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        if (!isOvertimeUpcount && totalMs < 30000 && totalMs > 0) {
             const tenths = Math.floor((totalMs % 1000) / 100);
             return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${tenths}`;
         }
 
-        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        return `${prefix}${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
     const startMatchmaking = () => {
@@ -1007,15 +1467,16 @@ export default function Chessboard() {
         setBotComment(null);
         setSavedBotGameId(null);
         botGameSavedRef.current = false;
+        appliedPeriodsRef.current = {white: new Set(), black: new Set()};
         setGameOverResult(null);
         setRatingInfo(null);
         setIsSearching(true);
         setIsTimeDropdownOpen(false);
-        setDrawOfferStatus('Вы опубликовали вызов в лобби...');
+        setDrawOfferStatus(`Вы опубликовали вызов в лобби (Опция DGT #${selectedTimeControl.optionNumber})...`);
 
         gameSocket.send('join_queue', {
-            base_time_ms: selectedTimeControl.base * 60 * 1000,
-            increment_ms: selectedTimeControl.inc * 1000
+            base_time_ms: Math.round(effectiveWhiteBaseMinutes * 60 * 1000),
+            increment_ms: Math.round(effectiveIncSeconds * 1000)
         });
     };
 
@@ -1075,6 +1536,7 @@ export default function Chessboard() {
         setBotComment(null);
         setSavedBotGameId(null);
         botGameSavedRef.current = false;
+        appliedPeriodsRef.current = {white: new Set(), black: new Set()};
         setIsBotThinking(false);
         setGameOverResult(null);
         setRatingInfo(null);
@@ -1089,7 +1551,6 @@ export default function Chessboard() {
         if (gameId || history.length === 0 || isBotThinking || !!gameOverResult) return;
         const nextGame = cloneChessInstance(game);
         nextGame.undo();
-        // Если играем с ботом и сейчас наш ход, откатываем и ход бота, и свой ход
         if (activeBot && nextGame.history().length > 0) {
             const turnAfterFirstUndo = nextGame.turn() === 'w' ? 'white' : 'black';
             if (turnAfterFirstUndo !== myColor) {
@@ -1139,11 +1600,9 @@ export default function Chessboard() {
     const boardState = currentGame.board();
     const material = calculateMaterialBalance(boardState);
 
-    // Индекс текущего отображаемого полухода для подсветки в таблице нотации и на доске
     const activeMoveIndex = viewIndex === -1 ? history.length - 1 : viewIndex;
     const lastMove = activeMoveIndex >= 0 ? history[activeMoveIndex] : null;
 
-    // Доступные ходы для выбранной фигуры
     const legalTargetSquares = new Set<string>();
     if (selectedSquare && viewIndex === -1 && !gameOverResult) {
         try {
@@ -1162,12 +1621,13 @@ export default function Chessboard() {
     const bottomPlayerInfo = topIsWhite ? blackPlayer : whitePlayer;
     const topPlayerTime = topIsWhite ? whiteTimeMs : blackTimeMs;
     const bottomPlayerTime = topIsWhite ? blackTimeMs : whiteTimeMs;
+    const topIdlePreviewMs = Math.round((topIsWhite ? effectiveWhiteBaseMinutes : effectiveBlackBaseMinutes) * 60 * 1000);
+    const bottomIdlePreviewMs = Math.round((!topIsWhite ? effectiveWhiteBaseMinutes : effectiveBlackBaseMinutes) * 60 * 1000);
     const topCaptured = topIsWhite ? material.whiteCapturedSymbols : material.blackCapturedSymbols;
     const bottomCaptured = topIsWhite ? material.blackCapturedSymbols : material.whiteCapturedSymbols;
     const topAdvantage = topIsWhite ? material.whiteAdvantage : material.blackAdvantage;
     const bottomAdvantage = topIsWhite ? material.blackAdvantage : material.whiteAdvantage;
 
-    // Формируем пары ходов (Номер хода | Белые | Черные) с точными индексами для клика
     const movePairs = history.reduce((acc: Array<{
         moveNumber: number;
         whiteSan: string;
@@ -1197,7 +1657,6 @@ export default function Chessboard() {
         }
     };
 
-    // Чистый высококонтрастный рендеринг SVG-фигур
     const renderPieceSvg = (piece: { type: string; color: string }) => {
         const isWhite = piece.color === 'w';
         const pieceFilter = isWhite
@@ -1251,7 +1710,7 @@ export default function Chessboard() {
                 </div>
             )}
 
-            {/* ЛЕВАЯ КОЛОНКА: ЛОББИ, ИГРА С ЛЕГЕНДОЙ И ОФОРМЛЕНИЕ ДОСКИ */}
+            {/* ЛЕВАЯ КОЛОНКА: ЛОББИ, ЧАСЫ DGT2500 (36 ПРОГРАММ), ИГРА С ЛЕГЕНДОЙ И СТИЛЬ ДОСКИ */}
             <div
                 style={{minHeight: `${Math.min(sidePanelHeight, 740)}px`}}
                 className="w-full xl:w-80 2xl:w-[340px] bg-acacia p-4 rounded shadow-heavy border-4 border-acacia-dark flex flex-col gap-3.5 text-boxwood-light order-2 xl:order-1 shrink-0"
@@ -1271,56 +1730,79 @@ export default function Chessboard() {
                     </div>
                 </div>
 
-                {/* Выбор контроля времени и кнопка поиска */}
+                {/* Селектор 36 программ официальных часов FIDE DGT2500 */}
                 <div
                     className="bg-acacia-dark p-3 rounded border border-amber-900/40 flex flex-col gap-2.5 shadow-inner">
-                    <label
-                        className="text-[10px] uppercase tracking-widest text-boxwood/70 flex items-center gap-1.5 font-bold">
-                        <Clock className="text-amber-500" size={12}/> Контроль времени
-                    </label>
+                    <div className="flex items-center justify-between">
+                        <label
+                            className="text-[10px] uppercase tracking-widest text-boxwood/70 flex items-center gap-1.5 font-bold">
+                            <Clock className="text-amber-500" size={12}/> Часы FIDE DGT2500 (36 прогр.)
+                        </label>
+                        <span
+                            className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-600/30">
+                            OPT #{selectedTimeControl.optionNumber}
+                        </span>
+                    </div>
 
                     <div className="relative w-full" ref={timeDropdownRef}>
                         <button
                             type="button"
                             disabled={isSearching || !!gameId}
                             onClick={() => setIsTimeDropdownOpen(!isTimeDropdownOpen)}
-                            className="w-full bg-black/40 border border-amber-700/50 hover:bg-black/60 disabled:opacity-50 transition text-amber-200 rounded p-2 text-xs font-bold outline-none cursor-pointer flex justify-between items-center shadow-inner"
+                            className="w-full bg-black/40 border border-amber-700/50 hover:bg-black/60 disabled:opacity-50 transition text-amber-200 rounded p-2 text-xs font-bold outline-none cursor-pointer flex justify-between items-center shadow-inner gap-2"
                         >
-                            <span>
-                                {selectedTimeControl.base} мин {selectedTimeControl.inc > 0 ? `+ ${selectedTimeControl.inc} сек` : ''}
+                            <span className="truncate">
+                                [{selectedTimeControl.optionNumber}] {selectedTimeControl.label}
+                                {selectedTimeControl.isManual ? ` (${manualBaseMinutes}м + ${manualIncSeconds}с)` : ''}
                             </span>
-                            {isTimeDropdownOpen ? <ChevronUp className="text-amber-500/70" size={14}/> :
-                                <ChevronDown className="text-amber-500/70" size={14}/>}
+                            {isTimeDropdownOpen ? <ChevronUp className="text-amber-500/70 shrink-0" size={14}/> :
+                                <ChevronDown className="text-amber-500/70 shrink-0" size={14}/>}
                         </button>
 
                         {isTimeDropdownOpen && (
                             <div
-                                className="absolute z-50 w-full top-full mt-1 bg-[#1A120B] border border-amber-700/50 rounded shadow-2xl max-h-60 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
+                                className="absolute z-50 w-full top-full mt-1 bg-[#1A120B] border border-amber-700/50 rounded shadow-2xl max-h-72 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
                                 {TIME_CONTROLS.map((group, gIdx) => (
                                     <div key={gIdx}>
                                         <div
-                                            className="px-3 py-1.5 text-[10px] uppercase tracking-widest text-amber-500/60 bg-black/60 font-bold sticky top-0 z-10 border-b border-t border-amber-900/30 first:border-t-0 backdrop-blur-sm">
+                                            className="px-3 py-1.5 text-[10px] uppercase tracking-widest text-amber-500/80 bg-black/80 font-bold sticky top-0 z-10 border-b border-t border-amber-900/40 first:border-t-0 backdrop-blur-sm">
                                             {group.group}
                                         </div>
-                                        {group.options.map((opt, oIdx) => {
-                                            const isSelected = selectedTimeControl.base === opt.base && selectedTimeControl.inc === opt.inc;
+                                        {group.options.map((opt) => {
+                                            const isSelected = selectedTimeControl.optionNumber === opt.optionNumber;
                                             return (
                                                 <button
-                                                    key={oIdx}
+                                                    key={opt.optionNumber}
                                                     type="button"
-                                                    className={`w-full text-left px-4 py-2 text-xs font-bold transition flex justify-between items-center ${
+                                                    className={`w-full text-left px-3 py-2 text-xs transition flex justify-between items-start gap-2 border-b border-amber-950/30 ${
                                                         isSelected
-                                                            ? 'bg-amber-900/40 text-amber-400'
-                                                            : 'text-amber-100/80 hover:bg-amber-900/20 hover:text-amber-200'
+                                                            ? 'bg-amber-900/45 text-amber-300 font-bold'
+                                                            : 'text-amber-100/85 hover:bg-amber-900/20 hover:text-amber-200'
                                                     }`}
                                                     onClick={() => {
-                                                        setSelectedTimeControl({base: opt.base, inc: opt.inc});
+                                                        setSelectedTimeControl(opt);
+                                                        if (opt.isManual) {
+                                                            setManualBaseMinutes(Math.max(1, Math.round(opt.base)));
+                                                            setManualIncSeconds(opt.inc);
+                                                        }
                                                         setIsTimeDropdownOpen(false);
                                                     }}
                                                 >
-                                                    <span>{opt.label}</span>
+                                                    <div className="min-w-0">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span
+                                                                className="font-mono text-[10px] px-1 py-0.2 rounded bg-black/50 text-amber-400 border border-amber-700/40 shrink-0">
+                                                                {opt.optionNumber}
+                                                            </span>
+                                                            <span className="truncate font-bold">{opt.label}</span>
+                                                        </div>
+                                                        <div
+                                                            className="text-[10px] text-boxwood/60 mt-0.5 leading-snug">
+                                                            {opt.details}
+                                                        </div>
+                                                    </div>
                                                     {isSelected && <div
-                                                        className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b]"/>}
+                                                        className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b] shrink-0 mt-1.5"/>}
                                                 </button>
                                             );
                                         })}
@@ -1329,6 +1811,45 @@ export default function Chessboard() {
                             </div>
                         )}
                     </div>
+
+                    <div className="text-[10px] text-boxwood/65 leading-tight px-0.5">
+                        {selectedTimeControl.details}
+                    </div>
+
+                    {/* Панель ручной настройки (DGT2500 Manual Setup — опции 08, 21, 23, 25, 27, 29, 31, 33, 35, 36) */}
+                    {selectedTimeControl.isManual && (
+                        <div
+                            className="p-2 rounded bg-black/40 border border-amber-700/40 flex flex-col gap-2 text-xs">
+                            <div
+                                className="text-[10px] uppercase tracking-wider text-amber-400 font-bold flex items-center gap-1">
+                                <Sliders size={11}/> Ручная настройка DGT2500 (Manual Setup)
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <label className="flex flex-col gap-1 text-[10px] text-boxwood/80">
+                                    <span>Время (мин):</span>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={240}
+                                        value={manualBaseMinutes}
+                                        onChange={(e) => setManualBaseMinutes(Math.max(1, Math.min(240, Number(e.target.value) || 1)))}
+                                        className="bg-black/60 border border-amber-700/50 rounded px-2 py-1 text-amber-200 font-mono text-xs outline-none"
+                                    />
+                                </label>
+                                <label className="flex flex-col gap-1 text-[10px] text-boxwood/80">
+                                    <span>Бонус / Delay (сек):</span>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        max={180}
+                                        value={manualIncSeconds}
+                                        onChange={(e) => setManualIncSeconds(Math.max(0, Math.min(180, Number(e.target.value) || 0)))}
+                                        className="bg-black/60 border border-amber-700/50 rounded px-2 py-1 text-amber-200 font-mono text-xs outline-none"
+                                    />
+                                </label>
+                            </div>
+                        </div>
+                    )}
 
                     {!gameId ? (
                         <button
@@ -1353,7 +1874,6 @@ export default function Chessboard() {
                 {/* КАРТОЧКА ИГРЫ ПРОТИВ ИСТОРИЧЕСКИХ ЛЕГЕНД: ФИЛИДОР И ЛАБУРДОННЕ */}
                 <div
                     className="bg-acacia-dark p-3 rounded border border-amber-700/40 flex flex-col gap-2.5 shadow-inner">
-                    {/* Переключатель исторических ботов */}
                     <div className="grid grid-cols-2 gap-1.5 p-1 bg-black/40 rounded border border-amber-900/40">
                         {(Object.values(HISTORICAL_BOTS)).map((botItem) => {
                             const isSelected = selectedBotId === botItem.id;
@@ -1484,7 +2004,7 @@ export default function Chessboard() {
                                     <div>
                                         <span className="text-amber-300 font-bold">{p.username}</span>
                                         <div className="text-[10px] text-boxwood/70">
-                                            Рейтинг: {p.rating} | {p.base_time_ms / 60000}+{(p.increment_ms || 0) / 1000}
+                                            Рейтинг: {p.rating} | {Math.round(p.base_time_ms / 60000)}+{(p.increment_ms || 0) / 1000}
                                         </div>
                                     </div>
                                     <button
@@ -1595,7 +2115,7 @@ export default function Chessboard() {
                     </div>
                     <div
                         className="bg-[#1A120B] px-5 py-2 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-3xl font-bold tracking-wider text-amber-500 min-w-[145px] text-center">
-                        {(gameId || activeBot) ? formatTime(topPlayerTime) : `${selectedTimeControl.base.toString().padStart(2, '0')}:00`}
+                        {(gameId || activeBot) ? formatTime(topPlayerTime) : formatTime(topIdlePreviewMs)}
                     </div>
                 </div>
 
@@ -1724,7 +2244,7 @@ export default function Chessboard() {
                         </div>
                     )}
 
-                    {/* Уголок изменения размера доски в стиле Lichess / Chess.com */}
+                    {/* Уголок изменения размера доски */}
                     <div
                         onMouseDown={handleResizeMouseDown}
                         onDoubleClick={handleResizeDoubleClick}
@@ -1790,7 +2310,7 @@ export default function Chessboard() {
                     </div>
                     <div
                         className="bg-[#1A120B] px-5 py-2 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-3xl font-bold tracking-wider text-amber-500 min-w-[145px] text-center">
-                        {(gameId || activeBot) ? formatTime(bottomPlayerTime) : `${selectedTimeControl.base.toString().padStart(2, '0')}:00`}
+                        {(gameId || activeBot) ? formatTime(bottomPlayerTime) : formatTime(bottomIdlePreviewMs)}
                     </div>
                 </div>
 
@@ -1838,7 +2358,7 @@ export default function Chessboard() {
                     </div>
                 )}
 
-                {/* Интерактивный список сделанных ходов (Всегда виден!) */}
+                {/* Интерактивный список сделанных ходов */}
                 <div
                     className="flex-1 flex flex-col bg-[#1A120B]/90 rounded border border-amber-900/50 overflow-hidden shadow-inner">
                     <div
@@ -1909,7 +2429,6 @@ export default function Chessboard() {
                         )}
                     </div>
 
-                    {/* Плашка предупреждения, если игрок смотрит прошлые ходы */}
                     {viewIndex !== -1 && history.length > 0 && (
                         <button
                             type="button"
@@ -1980,7 +2499,7 @@ export default function Chessboard() {
                     </div>
                 </div>
 
-                {/* Кнопки управления партией (Онлайн, Бот или Свободный анализ) */}
+                {/* Кнопки управления партией */}
                 {gameId ? (
                     <>
                         <div className="grid grid-cols-2 gap-2">
