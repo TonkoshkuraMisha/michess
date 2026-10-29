@@ -14,6 +14,7 @@ from src.db import session as db_session
 from src.models.game import Game
 from src.models.user import User
 from src.services.bots.labourdonnais import labourdonnais_bot
+from src.services.bots.morphy import morphy_bot
 from src.services.bots.philidor import philidor_bot, resolve_stockfish_path
 
 router = APIRouter()
@@ -42,11 +43,22 @@ AVAILABLE_BOTS = [
         "motto": "Инициатива, гамбит и стремительная атака на короля!",
         "avatar": "/champions/labourdonnais.jpg",
     },
+    {
+        "id": "morphy",
+        "name": "Пол Морфи",
+        "full_name": "Пол Чарльз Морфи",
+        "era": "1837–1884",
+        "title": "Гордость и печаль шахмат",
+        "rating": 2150,
+        "motto": "Развивайте все фигуры с темпом и вскрывайте линии для атаки!",
+        "avatar": "/champions/morphy.jpg",
+    },
 ]
 
 BOT_INSTANCES = {
     "philidor": philidor_bot,
     "labourdonnais": labourdonnais_bot,
+    "morphy": morphy_bot,
 }
 
 BOT_METADATA = {b["id"]: b for b in AVAILABLE_BOTS}
@@ -67,7 +79,7 @@ class BotMoveResponse(BaseModel):
 
 
 class BotGameSaveRequest(BaseModel):
-    bot_id: str = Field(..., description="ID исторического бота ('philidor' или 'labourdonnais')")
+    bot_id: str = Field(..., description="ID исторического бота ('philidor', 'labourdonnais' или 'morphy')")
     player_color: str = Field(..., description="Цвет игрока ('white' или 'black')")
     result: str = Field(..., description="Результат партии ('1-0', '0-1', '1/2-1/2')")
     moves_uci: list[str] = Field(default_factory=list, description="Список сделанных ходов в формате UCI")
@@ -92,6 +104,8 @@ def _detect_eco_code(moves_uci: list[str]) -> str:
         return "C23"
     if prefix.startswith("e2e4 e7e5 g1f3 b8c6 f1c4"):
         return "C50"
+    if prefix.startswith("e2e4 e7e5 g1f3 b8c6 f1b5"):
+        return "C60"
     if prefix.startswith("e2e4 c7c5"):
         return "B20"
     if prefix.startswith("e2e4 e7e6"):

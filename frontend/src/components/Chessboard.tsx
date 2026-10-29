@@ -65,7 +65,7 @@ export interface BoardTheme {
     useWoodGrain: boolean;
 }
 
-export type HistoricalBotId = 'philidor' | 'labourdonnais';
+export type HistoricalBotId = 'philidor' | 'labourdonnais' | 'morphy';
 
 interface HistoricalBotProfile {
     id: HistoricalBotId;
@@ -77,6 +77,39 @@ interface HistoricalBotProfile {
     motto: string;
     avatar: string;
 }
+
+const HISTORICAL_BOTS: Record<HistoricalBotId, HistoricalBotProfile> = {
+    philidor: {
+        id: 'philidor',
+        name: 'Ф.-А. Филидор',
+        shortName: 'Филидор',
+        playerLabel: 'Ф.-А. Филидор',
+        era: 'Эпоха 1749–1795',
+        rating: 1850,
+        motto: 'Пешки — душа шахмат: именно они определяют атаку и защиту.',
+        avatar: '/champions/philidor.jpg'
+    },
+    labourdonnais: {
+        id: 'labourdonnais',
+        name: 'Л.-Ш. Лабурдонне',
+        shortName: 'Лабурдонне',
+        playerLabel: 'Л.-Ш. Лабурдонне',
+        era: 'Эпоха 1795–1840',
+        rating: 1950,
+        motto: 'Инициатива, гамбит и стремительная атака на короля!',
+        avatar: '/champions/labourdonnais.jpg'
+    },
+    morphy: {
+        id: 'morphy',
+        name: 'Пол Морфи',
+        shortName: 'Морфи',
+        playerLabel: 'Пол Морфи',
+        era: 'Эпоха 1837–1884',
+        rating: 2150,
+        motto: 'Развивайте все фигуры с темпом и вскрывайте линии для атаки!',
+        avatar: '/champions/morphy.jpg'
+    }
+};
 
 export type DgtTimingMode =
     | 'time'
@@ -108,28 +141,6 @@ export interface Dgt2500Group {
     options: Dgt2500Option[];
 }
 
-const HISTORICAL_BOTS: Record<HistoricalBotId, HistoricalBotProfile> = {
-    philidor: {
-        id: 'philidor',
-        name: 'Ф.-А. Филидор',
-        shortName: 'Филидор',
-        playerLabel: 'Ф.-А. Филидор',
-        era: 'Эпоха 1749–1795',
-        rating: 1850,
-        motto: 'Пешки — душа шахмат: именно они определяют атаку и защиту.',
-        avatar: '/champions/philidor.jpg'
-    },
-    labourdonnais: {
-        id: 'labourdonnais',
-        name: 'Л.-Ш. Лабурдонне',
-        shortName: 'Лабурдонне',
-        playerLabel: 'Л.-Ш. Лабурдонне',
-        era: 'Эпоха 1795–1840',
-        rating: 1950,
-        motto: 'Инициатива, гамбит и стремительная атака на короля!',
-        avatar: '/champions/labourdonnais.jpg'
-    }
-};
 
 export const BOARD_THEMES: Record<string, BoardTheme> = {
     walnut: {
