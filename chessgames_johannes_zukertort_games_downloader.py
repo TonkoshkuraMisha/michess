@@ -6,7 +6,7 @@ from pathlib import Path
 import httpx
 
 PLAYER_ID = 10427  # Точный ID Иоганна Цукерторта на Chessgames.com
-TOTAL_PAGES = 30  # Запас страниц с учетом общего числа партий
+DEFAULT_TOTAL_PAGES = 25
 BASE_URL = "https://www.chessgames.com"
 
 OUTPUT_DIR = Path("zukertort_pgns")
@@ -27,30 +27,61 @@ TABLE_GAME_REGEX = re.compile(
     re.IGNORECASE,
 )
 
+# Определяет общее число страниц и партий: "page 1 of 25; games 1-25 of 605"
+PAGINATION_INFO_REGEX = re.compile(
+    r"page\s+\d+\s+of\s+(\d+)\s*;\s*games\s+\d+-\d+\s+of\s+(\d+)",
+    re.IGNORECASE,
+)
 
-async def fetch_gids_from_page(client: httpx.AsyncClient, page: int) -> list[str]:
-    """Забирает список gid со страницы пагинации через /perl/chess.pl."""
+
+async def fetch_gids_from_page(
+        client: httpx.AsyncClient, page: int
+) -> tuple[list[str], int | None, int | None]:
+    """Забирает список gid со страницы пагинации с защитой от пустых ответов (200 OK лимит)."""
     if page == 1:
         url = f"{BASE_URL}/perl/chessplayer?pid={PLAYER_ID}"
     else:
         url = f"{BASE_URL}/perl/chess.pl?page={page}&pid={PLAYER_ID}"
 
-    for attempt in range(1, 5):
+    for attempt in range(1, 7):
         try:
             response = await client.get(url)
-            if response.status_code == 429:
+            if response.status_code in (429, 403, 503):
                 wait_sec = 10 * attempt
-                print(f"[!] Лимит запросов (429) на странице {page}, ждем {wait_sec} сек...")
+                print(
+                    f"[!] Лимит запросов ({response.status_code}) на странице {page}, "
+                    f"ждем {wait_sec} сек..."
+                )
                 await asyncio.sleep(wait_sec)
                 continue
-            response.raise_for_status()
-            gids = TABLE_GAME_REGEX.findall(response.text)
-            return list(dict.fromkeys(gids))
-        except httpx.HTTPError as exc:
-            print(f"[!] Ошибка загрузки страницы {page} (попытка {attempt}): {exc}")
-            await asyncio.sleep(3 * attempt)
 
-    return []
+            response.raise_for_status()
+            gids = list(dict.fromkeys(TABLE_GAME_REGEX.findall(response.text)))
+
+            detected_pages = None
+            detected_total = None
+            info_match = PAGINATION_INFO_REGEX.search(response.text)
+            if info_match:
+                detected_pages = int(info_match.group(1))
+                detected_total = int(info_match.group(2))
+
+            if not gids:
+                wait_sec = 8 * attempt
+                print(
+                    f"[!] Страница {page} вернула 0 партий (попытка {attempt}/6, "
+                    f"возможен антибот-лимит). Ждем {wait_sec} сек..."
+                )
+                await asyncio.sleep(wait_sec)
+                continue
+
+            return gids, detected_pages, detected_total
+
+        except httpx.HTTPError as exc:
+            wait_sec = 4 * attempt
+            print(f"[!] Ошибка загрузки страницы {page} (попытка {attempt}): {exc}")
+            await asyncio.sleep(wait_sec)
+
+    return [], None, None
 
 
 async def download_pgn(
@@ -111,12 +142,16 @@ async def main():
     async with httpx.AsyncClient(headers=HEADERS, timeout=25.0, follow_redirects=True) as client:
         print("=== Шаг 1: Сбор ID всех партий Иоганна Цукерторта через /perl/chess.pl ===")
         all_gids: list[str] = []
+        total_pages = DEFAULT_TOTAL_PAGES
+        expected_games = None
 
-        for page in range(1, TOTAL_PAGES + 1):
-            page_gids = await fetch_gids_from_page(client, page)
-            if not page_gids:
-                # Если на странице больше нет партий, значит дошли до конца
-                break
+        page = 1
+        while page <= total_pages:
+            page_gids, detected_pages, detected_total = await fetch_gids_from_page(client, page)
+            if detected_pages:
+                total_pages = detected_pages
+            if detected_total:
+                expected_games = detected_total
 
             before_count = len(all_gids)
             for gid in page_gids:
@@ -124,19 +159,20 @@ async def main():
                     all_gids.append(gid)
             added = len(all_gids) - before_count
 
+            expected_str = f"/{expected_games}" if expected_games else ""
             print(
-                f"[Страница {page:02d}] "
-                f"На странице: {len(page_gids)} | Новых: +{added} | Всего собрано: {len(all_gids)}"
+                f"[Страница {page:02d}/{total_pages:02d}] "
+                f"На странице: {len(page_gids)} | Новых: +{added} | "
+                f"Всего собрано: {len(all_gids)}{expected_str}"
             )
-
-            # Если страница вернула меньше 25 элементов, это последняя страница
-            if len(page_gids) < 25:
-                break
-
-            await asyncio.sleep(0.3)
+            page += 1
+            await asyncio.sleep(0.4)
 
         total_games = len(all_gids)
-        print(f"\nИтого уникальных партий собрано: {total_games}\n")
+        print(
+            f"\nИтого уникальных партий собрано: {total_games}"
+            + (f" (ожидалось {expected_games})\n" if expected_games else "\n")
+        )
 
         if total_games == 0:
             print("Партии не найдены, прерываем выполнение.")

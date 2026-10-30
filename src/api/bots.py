@@ -13,9 +13,13 @@ from src.api import deps
 from src.db import session as db_session
 from src.models.game import Game
 from src.models.user import User
+from src.services.bots.anderssen import anderssen_bot
 from src.services.bots.labourdonnais import labourdonnais_bot
 from src.services.bots.morphy import morphy_bot
+from src.services.bots.paulsen import paulsen_bot
 from src.services.bots.philidor import philidor_bot, resolve_stockfish_path
+from src.services.bots.staunton import staunton_bot
+from src.services.bots.zukertort import zukertort_bot
 
 router = APIRouter()
 
@@ -44,6 +48,26 @@ AVAILABLE_BOTS = [
         "avatar": "/champions/labourdonnais.jpg",
     },
     {
+        "id": "staunton",
+        "name": "Г. Стаунтон",
+        "full_name": "Говард Стаунтон",
+        "era": "1810–1874",
+        "title": "Основатель Английской Школы",
+        "rating": 2000,
+        "motto": "Фланговый зажим центра, прочная структура и классический расчёт.",
+        "avatar": "/champions/staunton.jpg",
+    },
+    {
+        "id": "anderssen",
+        "name": "А. Андерсен",
+        "full_name": "Адольф Андерсен",
+        "era": "1818–1879",
+        "title": "Маэстро Бессмертных Партий",
+        "rating": 2100,
+        "motto": "Бриллиантовая жертва фигуры ради вскрытия линий и мата королю!",
+        "avatar": "/champions/anderssen.jpg",
+    },
+    {
         "id": "morphy",
         "name": "Пол Морфи",
         "full_name": "Пол Чарльз Морфи",
@@ -53,12 +77,36 @@ AVAILABLE_BOTS = [
         "motto": "Развивайте все фигуры с темпом и вскрывайте линии для атаки!",
         "avatar": "/champions/morphy.jpg",
     },
+    {
+        "id": "paulsen",
+        "name": "Л. Паульсен",
+        "full_name": "Луи Паульсен",
+        "era": "1833–1891",
+        "title": "Гений Защиты и Двух Слонов",
+        "rating": 2080,
+        "motto": "Гибкая оборона, сила двух слонов и глубокие дебютные новинки.",
+        "avatar": "/champions/paulsen.jpg",
+    },
+    {
+        "id": "zukertort",
+        "name": "И. Цукерторт",
+        "full_name": "Иоганн Герман Цукерторт",
+        "era": "1842–1888",
+        "title": "Триумфатор Лондона 1883",
+        "rating": 2120,
+        "motto": "Универсальная гармония развития и сокрушительные комбинационные бури!",
+        "avatar": "/champions/zukertort.jpg",
+    },
 ]
 
 BOT_INSTANCES = {
     "philidor": philidor_bot,
     "labourdonnais": labourdonnais_bot,
+    "staunton": staunton_bot,
+    "anderssen": anderssen_bot,
     "morphy": morphy_bot,
+    "paulsen": paulsen_bot,
+    "zukertort": zukertort_bot,
 }
 
 BOT_METADATA = {b["id"]: b for b in AVAILABLE_BOTS}
@@ -79,7 +127,7 @@ class BotMoveResponse(BaseModel):
 
 
 class BotGameSaveRequest(BaseModel):
-    bot_id: str = Field(..., description="ID исторического бота ('philidor', 'labourdonnais' или 'morphy')")
+    bot_id: str = Field(..., description="ID исторического бота")
     player_color: str = Field(..., description="Цвет игрока ('white' или 'black')")
     result: str = Field(..., description="Результат партии ('1-0', '0-1', '1/2-1/2')")
     moves_uci: list[str] = Field(default_factory=list, description="Список сделанных ходов в формате UCI")
@@ -102,6 +150,8 @@ def _detect_eco_code(moves_uci: list[str]) -> str:
         return "C30"
     if prefix.startswith("e2e4 e7e5 f1c4"):
         return "C23"
+    if prefix.startswith("e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 b2b4"):
+        return "C51"
     if prefix.startswith("e2e4 e7e5 g1f3 b8c6 f1c4"):
         return "C50"
     if prefix.startswith("e2e4 e7e5 g1f3 b8c6 f1b5"):
@@ -110,6 +160,10 @@ def _detect_eco_code(moves_uci: list[str]) -> str:
         return "B20"
     if prefix.startswith("e2e4 e7e6"):
         return "C00"
+    if prefix.startswith("c2c4"):
+        return "A10"
+    if prefix.startswith("g1f3"):
+        return "A04"
     if prefix.startswith("d2d4 d7d5 c2c4"):
         return "D06"
     if prefix.startswith("d2d4"):
@@ -257,7 +311,6 @@ async def get_bot_move(payload: BotMoveRequest):
     if board.is_game_over():
         raise HTTPException(status_code=400, detail="Партия уже завершена")
 
-    # Запускаем синхронный расчёт движка в отдельном потоке, чтобы избежать конфликта с asyncio loop на Windows
     result = await asyncio.to_thread(bot.choose_move, payload.fen)
     return BotMoveResponse(
         bot_id=payload.bot_id,

@@ -65,7 +65,14 @@ export interface BoardTheme {
     useWoodGrain: boolean;
 }
 
-export type HistoricalBotId = 'philidor' | 'labourdonnais' | 'morphy';
+export type HistoricalBotId =
+    | 'philidor'
+    | 'labourdonnais'
+    | 'staunton'
+    | 'anderssen'
+    | 'morphy'
+    | 'paulsen'
+    | 'zukertort';
 
 interface HistoricalBotProfile {
     id: HistoricalBotId;
@@ -99,6 +106,26 @@ const HISTORICAL_BOTS: Record<HistoricalBotId, HistoricalBotProfile> = {
         motto: 'Инициатива, гамбит и стремительная атака на короля!',
         avatar: '/champions/labourdonnais.jpg'
     },
+    staunton: {
+        id: 'staunton',
+        name: 'Г. Стаунтон',
+        shortName: 'Стаунтон',
+        playerLabel: 'Г. Стаунтон',
+        era: 'Эпоха 1810–1874',
+        rating: 2000,
+        motto: 'Фланговый зажим центра, прочная структура и классический расчёт.',
+        avatar: '/champions/staunton.jpg'
+    },
+    anderssen: {
+        id: 'anderssen',
+        name: 'А. Андерсен',
+        shortName: 'Андерсен',
+        playerLabel: 'А. Андерсен',
+        era: 'Эпоха 1818–1879',
+        rating: 2100,
+        motto: 'Бриллиантовая жертва фигуры ради вскрытия линий и мата королю!',
+        avatar: '/champions/anderssen.jpg'
+    },
     morphy: {
         id: 'morphy',
         name: 'Пол Морфи',
@@ -108,6 +135,26 @@ const HISTORICAL_BOTS: Record<HistoricalBotId, HistoricalBotProfile> = {
         rating: 2150,
         motto: 'Развивайте все фигуры с темпом и вскрывайте линии для атаки!',
         avatar: '/champions/morphy.jpg'
+    },
+    paulsen: {
+        id: 'paulsen',
+        name: 'Л. Паульсен',
+        shortName: 'Паульсен',
+        playerLabel: 'Л. Паульсен',
+        era: 'Эпоха 1833–1891',
+        rating: 2080,
+        motto: 'Гибкая оборона, сила двух слонов и глубокие дебютные новинки.',
+        avatar: '/champions/paulsen.jpg'
+    },
+    zukertort: {
+        id: 'zukertort',
+        name: 'И. Цукерторт',
+        shortName: 'Цукерторт',
+        playerLabel: 'И. Цукерторт',
+        era: 'Эпоха 1842–1888',
+        rating: 2120,
+        motto: 'Универсальная гармония развития и сокрушительные комбинационные бури!',
+        avatar: '/champions/zukertort.jpg'
     }
 };
 
