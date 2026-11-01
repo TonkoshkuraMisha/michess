@@ -249,19 +249,31 @@ def _prepare_game_kwargs(
 ) -> dict:
     """Формирует словарь полей модели Game в соответствии со схемой БД."""
     game_cols = {c.name: c for c in Game.__table__.columns}
-    kwargs: dict = {
-        "white_id": white_id,
-        "black_id": black_id,
-    }
+    kwargs: dict = {}
+
+    if "white_player_id" in game_cols:
+        kwargs["white_player_id"] = white_id
+    elif "white_id" in game_cols:
+        kwargs["white_id"] = white_id
+
+    if "black_player_id" in game_cols:
+        kwargs["black_player_id"] = black_id
+    elif "black_id" in game_cols:
+        kwargs["black_id"] = black_id
 
     if "pgn" in game_cols:
         kwargs["pgn"] = pgn_text
-    if "fen" in game_cols:
+    if "board_fen" in game_cols:
+        kwargs["board_fen"] = final_fen
+    elif "fen" in game_cols:
         kwargs["fen"] = final_fen
-    if "current_fen" in game_cols:
+    elif "current_fen" in game_cols:
         kwargs["current_fen"] = final_fen
+
     if "result" in game_cols:
         kwargs["result"] = payload.result
+    if "termination" in game_cols:
+        kwargs["termination"] = "normal"
     if "is_rated" in game_cols:
         kwargs["is_rated"] = False
     if "base_time_ms" in game_cols:
@@ -272,10 +284,12 @@ def _prepare_game_kwargs(
     if "status" in game_cols:
         col_type = game_cols["status"].type
         enums = getattr(col_type, "enums", None)
-        if enums and "FINISHED" in enums:
+        if enums and "COMPLETED" in enums:
+            kwargs["status"] = "COMPLETED"
+        elif enums and "FINISHED" in enums:
             kwargs["status"] = "FINISHED"
         else:
-            kwargs["status"] = "finished"
+            kwargs["status"] = "COMPLETED"
 
     if "finished_at" in game_cols:
         is_tz = getattr(game_cols["finished_at"].type, "timezone", False)

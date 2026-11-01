@@ -11,7 +11,8 @@ import requests
 import chess.engine
 
 GITHUB_RELEASE_API = "https://api.github.com/repos/official-stockfish/Stockfish/releases/latest"
-BIN_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bin")
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+BIN_DIR = os.path.join(PROJECT_ROOT, "bin")
 
 
 def get_target_asset_url(assets: list[dict]) -> tuple[str, str]:
