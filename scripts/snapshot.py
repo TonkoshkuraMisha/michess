@@ -1,9 +1,12 @@
-# --- FILE: snapshot.py ---
+# --- FILE: scripts/snapshot.py ---
 
+import json
 import os
 import re
+from pathlib import Path
 
-OUTPUT_FILE = "project_snapshot.txt"
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+OUTPUT_FILE = PROJECT_ROOT / "project_snapshot.txt"
 
 EXCLUDE_DIRS = {
     ".git",
@@ -17,6 +20,7 @@ EXCLUDE_DIRS = {
     "node_modules",
     "dist",
     "bin",
+    "data",
     "downloaded_pgns",
     "morphy_pgns",
     "staunton_pgns",
@@ -26,14 +30,13 @@ EXCLUDE_DIRS = {
 }
 
 EXCLUDE_FILES = {
-    OUTPUT_FILE,
+    "project_snapshot.txt",
+    "project_snapshot_2.txt",
     "package-lock.json",
     "michess_local.db",
 }
 
-# Исключаем сгенерированные гигантские JSON-книги из полного вывода содержимого,
-# чтобы слепок проекта оставался компактным и не обрывался до папки src/
-skip_content_suffixes = (
+SKIP_CONTENT_SUFFIXES = (
     "_generated_book.json",
     ".pgn",
     ".exe",
@@ -53,6 +56,10 @@ SECRET_KEY_PATTERN = re.compile(
 )
 
 
+def _indent(level: int) -> str:
+    return "".join(["    " for _ in range(level)])
+
+
 def mask_env_content(content: str) -> str:
     masked_lines = []
     for line in content.splitlines():
@@ -64,14 +71,19 @@ def mask_env_content(content: str) -> str:
     return "\n".join(masked_lines)
 
 
-def generate_snapshot(root_dir: str = ".") -> None:
+def is_opening_book_json(filepath: Path) -> bool:
+    parts = [p.lower() for p in filepath.parts]
+    return filepath.suffix.lower() == ".json" and "books" in parts and "bots" in parts
+
+
+def generate_snapshot(root_dir: Path = PROJECT_ROOT) -> None:
     tree_lines = [
         "========================================",
         "        PROJECT DIRECTORY TREE",
         "========================================\n",
         "michess/",
     ]
-    files_to_dump: list[str] = []
+    files_to_dump: list[Path] = []
 
     for dirpath, dirnames, filenames in os.walk(root_dir):
         dirnames[:] = sorted([d for d in dirnames if d not in EXCLUDE_DIRS])
@@ -79,16 +91,15 @@ def generate_snapshot(root_dir: str = ".") -> None:
         depth = 0 if rel_dir == "." else len(rel_dir.split(os.sep))
 
         if rel_dir != ".":
-            indent = "    " * depth
-            tree_lines.append(f"{indent}{os.path.basename(dirpath)}/")
+            tree_lines.append(f"{_indent(depth)}{os.path.basename(dirpath)}/")
 
-        file_indent = "    " * (depth + 1)
+        file_prefix = _indent(depth + 1)
         for filename in sorted(filenames):
             if filename.startswith("project_snapshot") and filename.endswith(".txt"):
                 continue
-            tree_lines.append(f"{file_indent}{filename}")
-            if filename not in EXCLUDE_FILES and not filename.endswith(skip_content_suffixes):
-                files_to_dump.append(os.path.join(dirpath, filename))
+            tree_lines.append(f"{file_prefix}{filename}")
+            if filename not in EXCLUDE_FILES and not filename.endswith(SKIP_CONTENT_SUFFIXES):
+                files_to_dump.append(Path(dirpath) / filename)
 
     with open(OUTPUT_FILE, "w", encoding="utf-8") as out:
         out.write("\n".join(tree_lines) + "\n\n\n")
@@ -100,9 +111,16 @@ def generate_snapshot(root_dir: str = ".") -> None:
             rel_path = os.path.relpath(filepath, root_dir)
             out.write(f"\n--- FILE: {rel_path} ---\n\n")
             try:
+                if is_opening_book_json(filepath):
+                    with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+                        book_data = json.load(f)
+                    count = len(book_data) if isinstance(book_data, dict) else 0
+                    out.write(f"// [Дебютная книга JSON: {count} уникальных позиций FEN]\n")
+                    continue
+
                 with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
                     text = f.read()
-                if os.path.basename(filepath) == ".env":
+                if filepath.name == ".env":
                     text = mask_env_content(text)
                 out.write(text + "\n")
             except Exception as exc:
