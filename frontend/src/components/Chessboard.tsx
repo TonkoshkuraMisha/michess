@@ -26,7 +26,9 @@ import {
     MessageSquareQuote,
     Download,
     Eye,
-    Sliders
+    Sliders,
+    Zap,
+    X
 } from 'lucide-react';
 import {gameSocket} from '../services/gameSocket';
 
@@ -37,6 +39,15 @@ const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
 
 export const MIN_BOARD_SIZE = 380;
 export const MAX_BOARD_SIZE = 860;
+
+export type PromotionPiece = 'q' | 'n' | 'r' | 'b';
+
+const PROMOTION_OPTIONS: Array<{ type: PromotionPiece; label: string }> = [
+    {type: 'q', label: 'Ферзь'},
+    {type: 'n', label: 'Конь'},
+    {type: 'r', label: 'Ладья'},
+    {type: 'b', label: 'Слон'}
+];
 
 export function getDefaultBoardSize(): number {
     if (typeof window !== 'undefined') {
@@ -173,9 +184,9 @@ export type DgtTimingMode =
 export interface Dgt2500Option {
     optionNumber: string;
     mode: DgtTimingMode;
-    base: number;            // базовое время белых (в минутах, может быть дробным, например 10/60 для 10 сек)
-    blackBase?: number;      // базовое время черных для Armageddon (в минутах)
-    inc: number;             // бонус / задержка на ход (в секундах)
+    base: number;
+    blackBase?: number;
+    inc: number;
     label: string;
     details: string;
     isManual?: boolean;
@@ -187,7 +198,6 @@ export interface Dgt2500Group {
     group: string;
     options: Dgt2500Option[];
 }
-
 
 export const BOARD_THEMES: Record<string, BoardTheme> = {
     walnut: {
@@ -232,7 +242,6 @@ export const BOARD_THEMES: Record<string, BoardTheme> = {
     }
 };
 
-// Все 36 официальных программ шахматных часов FIDE DGT2500 (согласно инструкции DGT2500 Manual V1.8)
 export const TIME_CONTROLS: Dgt2500Group[] = [
     {
         group: '01–08 • Time (Контроль времени и Гильотина)',
@@ -648,6 +657,21 @@ export default function Chessboard() {
     const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
     const [isManualFlip, setIsManualFlip] = useState<boolean>(false);
 
+    // Состояние диалога превращения пешки (Таск 2.1)
+    const [pendingPromotion, setPendingPromotion] = useState<{
+        from: string;
+        to: string;
+        color: 'w' | 'b';
+        isPremove?: boolean;
+    } | null>(null);
+
+    // Состояние предхода / Premove (Таск 2.2)
+    const [premove, setPremove] = useState<{
+        from: string;
+        to: string;
+        promotion?: PromotionPiece;
+    } | null>(null);
+
     // Тема доски с сохранением в localStorage
     const [boardThemeKey, setBoardThemeKey] = useState<string>(() => {
         const saved = localStorage.getItem('michess_board_theme');
@@ -664,14 +688,14 @@ export default function Chessboard() {
     const [currentUserRating, setCurrentUserRating] = useState<number>(1200);
     const [stateVersion, setStateVersion] = useState(0);
 
-    // Состояния исторических ботов (Филидор и Лабурдонне)
+    // Состояния исторических ботов
     const [selectedBotId, setSelectedBotId] = useState<HistoricalBotId>('philidor');
     const [activeBot, setActiveBot] = useState<HistoricalBotId | null>(null);
     const [botComment, setBotComment] = useState<string | null>(null);
     const [isBotThinking, setIsBotThinking] = useState<boolean>(false);
     const [savedBotGameId, setSavedBotGameId] = useState<number | null>(null);
 
-    // Выбранная программа часов DGT2500 (01–36) и параметры ручной настройки (Manual setup)
+    // Выбранная программа часов DGT2500 (01–36) и параметры ручной настройки
     const [selectedTimeControl, setSelectedTimeControl] = useState<Dgt2500Option>(DEFAULT_DGT_OPTION);
     const [manualBaseMinutes, setManualBaseMinutes] = useState<number>(5);
     const [manualIncSeconds, setManualIncSeconds] = useState<number>(3);
@@ -729,14 +753,12 @@ export default function Chessboard() {
     const selectedBotProfile = HISTORICAL_BOTS[selectedBotId];
     const activeBotProfile = activeBot ? HISTORICAL_BOTS[activeBot] : null;
 
-    // Эффективные значения времени с учётом ручного режима (Manual setting)
     const effectiveWhiteBaseMinutes = selectedTimeControl.isManual ? manualBaseMinutes : selectedTimeControl.base;
     const effectiveBlackBaseMinutes = selectedTimeControl.isManual
         ? manualBaseMinutes
         : (selectedTimeControl.blackBase ?? selectedTimeControl.base);
     const effectiveIncSeconds = selectedTimeControl.isManual ? manualIncSeconds : selectedTimeControl.inc;
 
-    // Определяем ориентацию доски (с учетом цвета игрока и ручного переворота)
     const isBoardFlipped = (myColor === 'black') !== isManualFlip;
 
     const playAudio = useCallback((type: 'move' | 'capture' | 'start') => {
@@ -763,7 +785,6 @@ export default function Chessboard() {
         });
     }, [myColor]);
 
-    // Сохранение завершённой партии с ботом в БД PostgreSQL
     const saveBotGameToDatabase = useCallback(async (
         botId: HistoricalBotId,
         playerColor: 'white' | 'black',
@@ -808,7 +829,6 @@ export default function Chessboard() {
         }
     }, [effectiveWhiteBaseMinutes, effectiveIncSeconds]);
 
-    // Начисление бонуса / задержки / переходов периодов по правилам выбранной программы DGT2500
     const applyDgtClockAfterMove = useCallback((
         moverColor: 'white' | 'black',
         elapsedMs: number,
@@ -870,7 +890,6 @@ export default function Chessboard() {
         localStorage.setItem('michess_board_theme', themeId);
     };
 
-    // Старт партии против выбранного исторического бота (Филидор или Лабурдонне)
     const startHistoricalBotGame = (botId: HistoricalBotId, colorPref: 'white' | 'black' | 'random' = 'random') => {
         if (isSearching) {
             setIsSearching(false);
@@ -899,6 +918,8 @@ export default function Chessboard() {
         setHistory([]);
         setViewIndex(-1);
         setSelectedSquare(null);
+        setPendingPromotion(null);
+        setPremove(null);
         setGameOverResult(null);
         setRatingInfo(null);
         setDrawOfferStatus(null);
@@ -918,7 +939,7 @@ export default function Chessboard() {
         playAudio('start');
     };
 
-    // Реактивный ход исторического бота, когда наступает его очередь
+    // Реактивный ход исторического бота с аутентичным таймингом размышления
     useEffect(() => {
         if (!activeBot || gameOverResult || game.isGameOver()) return;
 
@@ -926,10 +947,12 @@ export default function Chessboard() {
         if (currentTurnColor === myColor) return;
 
         let isCancelled = false;
+        let delayTimer: ReturnType<typeof setTimeout> | null = null;
         setIsBotThinking(true);
         const botName = HISTORICAL_BOTS[activeBot].shortName;
+        const requestStartedAt = Date.now();
 
-        const timer = setTimeout(async () => {
+        (async () => {
             try {
                 const response = await fetch(`${API_BASE_URL}/api/v1/bots/move`, {
                     method: 'POST',
@@ -940,59 +963,70 @@ export default function Chessboard() {
                     })
                 });
 
-                if (!response.ok || isCancelled) return;
+                if (!response.ok || isCancelled) {
+                    if (!isCancelled) setIsBotThinking(false);
+                    return;
+                }
                 const data = await response.json();
                 if (isCancelled) return;
 
-                const from = data.uci.slice(0, 2);
-                const to = data.uci.slice(2, 4);
-                const promotion = data.uci.length > 4 ? data.uci.slice(4, 5) : 'q';
+                const targetThinkMs = typeof data.thinking_time_ms === 'number' ? data.thinking_time_ms : 600;
+                const networkElapsed = Date.now() - requestStartedAt;
+                const remainingDelay = Math.max(80, targetThinkMs - networkElapsed);
 
-                const nextGame = cloneChessInstance(game);
-                const moveObj = nextGame.move({from, to, promotion});
+                delayTimer = setTimeout(() => {
+                    if (isCancelled) return;
 
-                if (moveObj) {
-                    const elapsed = Date.now() - moveStartTime.current;
-                    const newHistory = nextGame.history({verbose: true});
-                    const botColor: 'white' | 'black' = myColor === 'white' ? 'black' : 'white';
+                    const from = data.uci.slice(0, 2);
+                    const to = data.uci.slice(2, 4);
+                    const promotion = data.uci.length > 4 ? data.uci.slice(4, 5) : 'q';
 
-                    applyDgtClockAfterMove(botColor, elapsed, newHistory.length);
-                    setGame(nextGame);
-                    setHistory(newHistory);
-                    setViewIndex(-1);
-                    setBotComment(data.comment);
-                    moveStartTime.current = Date.now();
+                    const nextGame = cloneChessInstance(game);
+                    const moveObj = nextGame.move({from, to, promotion});
 
-                    playAudio(moveObj.san.includes('x') ? 'capture' : 'move');
+                    if (moveObj) {
+                        const elapsed = Date.now() - moveStartTime.current;
+                        const newHistory = nextGame.history({verbose: true});
+                        const botColor: 'white' | 'black' = myColor === 'white' ? 'black' : 'white';
 
-                    if (nextGame.isGameOver()) {
-                        let result = '1/2-1/2';
-                        if (nextGame.isCheckmate()) {
-                            result = nextGame.turn() === 'w' ? '0-1' : '1-0';
+                        applyDgtClockAfterMove(botColor, elapsed, newHistory.length);
+                        setGame(nextGame);
+                        setHistory(newHistory);
+                        setViewIndex(-1);
+                        setBotComment(data.comment);
+                        moveStartTime.current = Date.now();
+
+                        playAudio(moveObj.san.includes('x') ? 'capture' : 'move');
+
+                        if (nextGame.isGameOver()) {
+                            let result = '1/2-1/2';
+                            if (nextGame.isCheckmate()) {
+                                result = nextGame.turn() === 'w' ? '0-1' : '1-0';
+                            }
+                            setPremove(null);
+                            setGameOverResult(result);
+                            setDrawOfferStatus(`Партия против ${botName} окончена и сохранена в архив (${result}).`);
+                            updateSessionStats(result);
+                            playAudio('start');
+                            saveBotGameToDatabase(activeBot, myColor, result, nextGame);
                         }
-                        setGameOverResult(result);
-                        setDrawOfferStatus(`Партия против ${botName} окончена и сохранена в архив (${result}).`);
-                        updateSessionStats(result);
-                        playAudio('start');
-                        saveBotGameToDatabase(activeBot, myColor, result, nextGame);
                     }
-                }
+                    setIsBotThinking(false);
+                }, remainingDelay);
             } catch (err) {
                 console.error('Ошибка получения хода бота:', err);
-            } finally {
                 if (!isCancelled) {
                     setIsBotThinking(false);
                 }
             }
-        }, 450);
+        })();
 
         return () => {
             isCancelled = true;
-            clearTimeout(timer);
+            if (delayTimer) clearTimeout(delayTimer);
         };
     }, [activeBot, game, myColor, gameOverResult, playAudio, updateSessionStats, saveBotGameToDatabase, applyDgtClockAfterMove]);
 
-    // Обработчик изменения размера доски за правый нижний угол
     useEffect(() => {
         if (!isResizing) return;
 
@@ -1052,9 +1086,15 @@ export default function Chessboard() {
         localStorage.setItem('michess_board_size', String(defaultSize));
     };
 
-    // Навигация по истории ходов стрелками клавиатуры
+    // Навигация по истории ходов стрелками клавиатуры + Escape для отмены диалога превращения и предхода
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setPendingPromotion(null);
+                setPremove(null);
+                setSelectedSquare(null);
+                return;
+            }
             if (history.length === 0) return;
             if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
@@ -1084,7 +1124,6 @@ export default function Chessboard() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [history.length]);
 
-    // Автоскролл списка нотации к активному ходу
     useEffect(() => {
         if (notationScrollRef.current) {
             const activeEl = notationScrollRef.current.querySelector('.active-move-btn');
@@ -1174,6 +1213,8 @@ export default function Chessboard() {
             setHistory(restoredGame.history({verbose: true}));
             setViewIndex(-1);
             setSelectedSquare(null);
+            setPendingPromotion(null);
+            setPremove(null);
             setGameOverResult(null);
             setDrawOfferStatus('Партия началась!');
             playAudio('start');
@@ -1233,6 +1274,8 @@ export default function Chessboard() {
             moveStartTime.current = Date.now();
 
             if (data.game_over) {
+                setPremove(null);
+                setPendingPromotion(null);
                 setGameOverResult(data.result);
                 setRatingInfo(data);
                 playAudio('start');
@@ -1241,6 +1284,8 @@ export default function Chessboard() {
         };
 
         const handleGameOver = (data: any) => {
+            setPremove(null);
+            setPendingPromotion(null);
             setGameOverResult(prev => {
                 if (!prev) {
                     playAudio('start');
@@ -1267,6 +1312,7 @@ export default function Chessboard() {
 
         const handleServerError = (data: any) => {
             console.warn('Сервер отклонил действие:', data);
+            setPremove(null);
             if (data.pgn || data.fen) {
                 const syncedGame = new Chess();
                 if (data.pgn) {
@@ -1327,7 +1373,6 @@ export default function Chessboard() {
 
     const currentTurnChar = game.turn();
 
-    // Таймер DGT2500 с поддержкой Hourglass (песочные часы), Scrabble (upcount) и Flag-fall (падение флажка)
     useEffect(() => {
         if ((!gameId && !activeBot) || gameOverResult) return;
 
@@ -1357,13 +1402,14 @@ export default function Chessboard() {
         return () => clearInterval(interval);
     }, [gameId, activeBot, gameOverResult, currentTurnChar, selectedTimeControl.mode]);
 
-    // Автоматическая фиксация падения флажка (Flag-fall) в игре с ботом (кроме режима Scrabble Upcount)
     useEffect(() => {
         if (!activeBot || gameOverResult || selectedTimeControl.mode === 'scrabble') return;
 
         if (whiteTimeMs <= 0 || blackTimeMs <= 0) {
             const flagWinner = whiteTimeMs <= 0 ? '0-1' : '1-0';
             const botName = HISTORICAL_BOTS[activeBot].shortName;
+            setPremove(null);
+            setPendingPromotion(null);
             setGameOverResult(flagWinner);
             setDrawOfferStatus(`Флажок упал! Партия против ${botName} завершена по времени (${flagWinner}).`);
             updateSessionStats(flagWinner);
@@ -1372,23 +1418,63 @@ export default function Chessboard() {
         }
     }, [whiteTimeMs, blackTimeMs, activeBot, gameOverResult, selectedTimeControl.mode, myColor, game, playAudio, updateSessionStats, saveBotGameToDatabase]);
 
-    const executeMove = useCallback((from: string, to: string) => {
-        if (gameOverResult || viewIndex !== -1) return;
+    // Выполнение хода с поддержкой выбора фигуры превращения (Таск 2.1) и флага предхода (Таск 2.2)
+    const executeMove = useCallback((
+        from: string,
+        to: string,
+        explicitPromotion?: PromotionPiece,
+        isPremoveMove: boolean = false
+    ): boolean => {
+        if (gameOverResult || viewIndex !== -1) return false;
 
         const piece = game.get(from as any);
         const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
 
         if (!piece || piece.color !== (game.turn() === 'w' ? 'w' : 'b') || ((gameId || activeBot) && currentTurnColor !== myColor)) {
             setSelectedSquare(null);
-            return;
+            return false;
         }
+
+        const targetRank = to[1];
+        const isPawnPromotion =
+            piece.type === 'p' &&
+            ((piece.color === 'w' && targetRank === '8') || (piece.color === 'b' && targetRank === '1'));
+
+        // Если это превращение пешки и фигура ещё не выбрана — проверяем легальность и открываем селектор
+        if (isPawnPromotion && !explicitPromotion && !isPremoveMove) {
+            try {
+                const probeGame = cloneChessInstance(game);
+                const testMove = probeGame.move({from, to, promotion: 'q'});
+                if (testMove) {
+                    setPendingPromotion({
+                        from,
+                        to,
+                        color: piece.color as 'w' | 'b',
+                        isPremove: false
+                    });
+                    setSelectedSquare(null);
+                    setDragState(null);
+                    return true;
+                }
+            } catch {
+                setSelectedSquare(null);
+                setDragState(null);
+                return false;
+            }
+        }
+
+        const chosenPromotion: PromotionPiece = explicitPromotion || 'q';
 
         try {
             const nextGame = cloneChessInstance(game);
-            const move = nextGame.move({from, to, promotion: 'q'});
+            const move = nextGame.move({
+                from,
+                to,
+                ...(isPawnPromotion ? {promotion: chosenPromotion} : {})
+            });
 
             if (move) {
-                const timeTaken = Date.now() - moveStartTime.current;
+                const timeTaken = isPremoveMove ? 0 : Math.max(0, Date.now() - moveStartTime.current);
                 const uciMove = (move as any).uci || `${move.from}${move.to}${move.promotion || ''}`;
                 const newHistory = nextGame.history({verbose: true});
 
@@ -1396,6 +1482,7 @@ export default function Chessboard() {
                     applyDgtClockAfterMove(myColor, timeTaken, newHistory.length);
                 }
 
+                setPendingPromotion(null);
                 setGame(nextGame);
                 setHistory(newHistory);
                 setViewIndex(-1);
@@ -1414,7 +1501,7 @@ export default function Chessboard() {
                         state_version: stateVersion,
                         time_taken_ms: timeTaken,
                         window_blurred: document.hidden,
-                        is_premove: false
+                        is_premove: isPremoveMove
                     });
                 } else if (activeBot && nextGame.isGameOver()) {
                     let result = '1/2-1/2';
@@ -1429,12 +1516,65 @@ export default function Chessboard() {
                     saveBotGameToDatabase(activeBot, myColor, result, nextGame);
                 }
                 setSelectedSquare(null);
+                setDragState(null);
+                return true;
             }
         } catch {
             setSelectedSquare(null);
         }
         setDragState(null);
+        return false;
     }, [game, gameId, activeBot, myColor, stateVersion, viewIndex, gameOverResult, playAudio, updateSessionStats, saveBotGameToDatabase, applyDgtClockAfterMove]);
+
+    // Планирование предхода (Premove), когда сейчас ход соперника
+    const scheduleOrPromotePremove = useCallback((from: string, to: string, explicitPromotion?: PromotionPiece) => {
+        if (from === to) return;
+        const piece = game.get(from as any);
+        const myColorChar = myColor === 'white' ? 'w' : 'b';
+        if (!piece || piece.color !== myColorChar) {
+            setSelectedSquare(null);
+            return;
+        }
+
+        const targetRank = to[1];
+        const isPawnPromotion =
+            piece.type === 'p' &&
+            ((piece.color === 'w' && targetRank === '8') || (piece.color === 'b' && targetRank === '1'));
+
+        if (isPawnPromotion && !explicitPromotion) {
+            setPendingPromotion({
+                from,
+                to,
+                color: myColorChar,
+                isPremove: true
+            });
+            setSelectedSquare(null);
+            setDragState(null);
+            return;
+        }
+
+        setPremove({
+            from,
+            to,
+            promotion: isPawnPromotion ? (explicitPromotion || 'q') : undefined
+        });
+        setPendingPromotion(null);
+        setSelectedSquare(null);
+        setDragState(null);
+    }, [game, myColor]);
+
+    // Автоматическое выполнение предхода (Premove) при переходе очереди хода к игроку (Таск 2.2)
+    useEffect(() => {
+        if (!premove || gameOverResult || viewIndex !== -1) return;
+        if (!gameId && !activeBot) return;
+
+        const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
+        if (currentTurnColor !== myColor) return;
+
+        const currentPremove = premove;
+        setPremove(null);
+        executeMove(currentPremove.from, currentPremove.to, currentPremove.promotion || 'q', true);
+    }, [game, premove, gameId, activeBot, myColor, gameOverResult, viewIndex, executeMove]);
 
     useEffect(() => {
         const handleMouseMove = (e: MouseEvent) => {
@@ -1480,7 +1620,12 @@ export default function Chessboard() {
             }
 
             if (targetSquare && targetSquare !== dragState.from) {
-                executeMove(dragState.from, targetSquare);
+                const turnColor = game.turn() === 'w' ? 'white' : 'black';
+                if ((gameId || activeBot) && turnColor !== myColor) {
+                    scheduleOrPromotePremove(dragState.from, targetSquare);
+                } else {
+                    executeMove(dragState.from, targetSquare);
+                }
             }
 
             setDragState(null);
@@ -1495,9 +1640,8 @@ export default function Chessboard() {
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [dragState, isBoardFlipped, executeMove]);
+    }, [dragState, isBoardFlipped, game, gameId, activeBot, myColor, executeMove, scheduleOrPromotePremove]);
 
-    // Форматирование времени в стиле дисплея DGT2500 (H:MM:SS для часов, MM:SS и десятые доли секунды в цейтноте)
     const formatTime = (ms: number) => {
         const isOvertimeUpcount = ms < 0 && selectedTimeControl.mode === 'scrabble';
         const totalMs = isOvertimeUpcount ? Math.abs(ms) : Math.max(0, ms);
@@ -1526,6 +1670,8 @@ export default function Chessboard() {
         setSavedBotGameId(null);
         botGameSavedRef.current = false;
         appliedPeriodsRef.current = {white: new Set(), black: new Set()};
+        setPendingPromotion(null);
+        setPremove(null);
         setGameOverResult(null);
         setRatingInfo(null);
         setIsSearching(true);
@@ -1548,6 +1694,8 @@ export default function Chessboard() {
         setActiveBot(null);
         setBotComment(null);
         setSavedBotGameId(null);
+        setPendingPromotion(null);
+        setPremove(null);
         botGameSavedRef.current = false;
         gameSocket.send('accept_challenge', {target_user_id: targetUserId});
     };
@@ -1555,6 +1703,8 @@ export default function Chessboard() {
     const handleResign = () => {
         if ((!gameId && !activeBot) || gameOverResult) return;
         if (window.confirm('Вы действительно хотите сдаться?')) {
+            setPendingPromotion(null);
+            setPremove(null);
             if (gameId) {
                 gameSocket.send('resign', {game_id: gameId});
             } else if (activeBot) {
@@ -1600,6 +1750,8 @@ export default function Chessboard() {
         setRatingInfo(null);
         setDrawOfferStatus(null);
         setSelectedSquare(null);
+        setPendingPromotion(null);
+        setPremove(null);
         setViewIndex(-1);
         setGame(new Chess());
         setHistory([]);
@@ -1619,19 +1771,67 @@ export default function Chessboard() {
         setHistory(nextGame.history({verbose: true}));
         setGameOverResult(null);
         setDrawOfferStatus(null);
+        setPendingPromotion(null);
+        setPremove(null);
         setViewIndex(-1);
         setSelectedSquare(null);
     };
 
+    const handlePromotionSelect = (pieceType: PromotionPiece) => {
+        if (!pendingPromotion) return;
+        const {from, to, isPremove} = pendingPromotion;
+        setPendingPromotion(null);
+        if (isPremove) {
+            scheduleOrPromotePremove(from, to, pieceType);
+        } else {
+            executeMove(from, to, pieceType, false);
+        }
+    };
+
     const handleSquareClick = (squareId: string) => {
         if (viewIndex !== -1 || gameOverResult) return;
+
+        if (pendingPromotion) {
+            setPendingPromotion(null);
+            return;
+        }
+
+        const turnChar = game.turn();
+        const currentTurnColor = turnChar === 'w' ? 'white' : 'black';
+        const myColorChar = myColor === 'white' ? 'w' : 'b';
+        const isOpponentTurn = (gameId || activeBot) && currentTurnColor !== myColor;
+
+        // Режим предхода (Premove), когда сейчас очередь хода соперника
+        if (isOpponentTurn) {
+            if (selectedSquare) {
+                if (selectedSquare === squareId) {
+                    setSelectedSquare(null);
+                } else {
+                    const pieceOnTarget = game.get(squareId as any);
+                    if (pieceOnTarget && pieceOnTarget.color === myColorChar) {
+                        setSelectedSquare(squareId);
+                    } else {
+                        scheduleOrPromotePremove(selectedSquare, squareId);
+                    }
+                }
+            } else {
+                const piece = game.get(squareId as any);
+                if (piece && piece.color === myColorChar) {
+                    setSelectedSquare(squareId);
+                } else if (premove) {
+                    // Клик по пустой клетке сбрасывает активный предход
+                    setPremove(null);
+                }
+            }
+            return;
+        }
+
+        // Стандартный режим своего хода
         if (selectedSquare) {
             if (selectedSquare === squareId) {
                 setSelectedSquare(null);
             } else {
                 const pieceOnTarget = game.get(squareId as any);
-                const turnChar = game.turn();
-                const currentTurnColor = turnChar === 'w' ? 'white' : 'black';
                 if (pieceOnTarget && pieceOnTarget.color === turnChar && ((!gameId && !activeBot) || currentTurnColor === myColor)) {
                     setSelectedSquare(squareId);
                 } else {
@@ -1640,8 +1840,7 @@ export default function Chessboard() {
             }
         } else {
             const piece = game.get(squareId as any);
-            const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
-            if (piece && piece.color === (game.turn() === 'w' ? 'w' : 'b') && ((!gameId && !activeBot) || currentTurnColor === myColor)) {
+            if (piece && piece.color === turnChar && ((!gameId && !activeBot) || currentTurnColor === myColor)) {
                 setSelectedSquare(squareId);
             }
         }
@@ -1663,11 +1862,15 @@ export default function Chessboard() {
 
     const legalTargetSquares = new Set<string>();
     if (selectedSquare && viewIndex === -1 && !gameOverResult) {
-        try {
-            const movesForSquare = currentGame.moves({square: selectedSquare as any, verbose: true});
-            movesForSquare.forEach((m: any) => legalTargetSquares.add(m.to));
-        } catch {
-            // Игнорируем некорректный квадрат
+        const currentTurnColor = currentGame.turn() === 'w' ? 'white' : 'black';
+        const isMyTurnNow = (!gameId && !activeBot) || currentTurnColor === myColor;
+        if (isMyTurnNow) {
+            try {
+                const movesForSquare = currentGame.moves({square: selectedSquare as any, verbose: true});
+                movesForSquare.forEach((m: any) => legalTargetSquares.add(m.to));
+            } catch {
+                // Игнорируем некорректный квадрат
+            }
         }
     }
 
@@ -1874,7 +2077,6 @@ export default function Chessboard() {
                         {selectedTimeControl.details}
                     </div>
 
-                    {/* Панель ручной настройки (DGT2500 Manual Setup — опции 08, 21, 23, 25, 27, 29, 31, 33, 35, 36) */}
                     {selectedTimeControl.isManual && (
                         <div
                             className="p-2 rounded bg-black/40 border border-amber-700/40 flex flex-col gap-2 text-xs">
@@ -1929,7 +2131,7 @@ export default function Chessboard() {
                     )}
                 </div>
 
-                {/* КАРТОЧКА ИГРЫ ПРОТИВ ИСТОРИЧЕСКИХ ЛЕГЕНД: ФИЛИДОР И ЛАБУРДОННЕ */}
+                {/* КАРТОЧКА ИГРЫ ПРОТИВ ИСТОРИЧЕСКИХ ЛЕГЕНД */}
                 <div
                     className="bg-acacia-dark p-3 rounded border border-amber-700/40 flex flex-col gap-2.5 shadow-inner">
                     <div className="grid grid-cols-2 gap-1.5 p-1 bg-black/40 rounded border border-amber-900/40">
@@ -2180,6 +2382,14 @@ export default function Chessboard() {
                 {/* ШАХМАТНАЯ ДОСКА */}
                 <div
                     ref={boardContainerRef}
+                    onContextMenu={(e) => {
+                        e.preventDefault();
+                        if (premove || pendingPromotion || selectedSquare) {
+                            setPremove(null);
+                            setPendingPromotion(null);
+                            setSelectedSquare(null);
+                        }
+                    }}
                     style={{
                         width: `${boardSize}px`,
                         height: `${boardSize}px`,
@@ -2194,6 +2404,65 @@ export default function Chessboard() {
                         />
                     )}
 
+                    {/* ДИАЛОГ ВЫБОРА ФИГУРЫ ПРИ ПРЕВРАЩЕНИИ ПЕШКИ (Таск 2.1) */}
+                    {pendingPromotion && (() => {
+                        const fileIdx = displayedFiles.indexOf(pendingPromotion.to[0]);
+                        const rankIdx = displayedRanks.indexOf(pendingPromotion.to[1]);
+                        const openDownwards = rankIdx <= 3;
+                        const clampedLeftPercent = Math.min(Math.max((fileIdx + 0.5) * 12.5, 22), 78);
+
+                        return (
+                            <div
+                                className="absolute inset-0 z-50 bg-black/55 backdrop-blur-[1px] flex items-center justify-center rounded-[2px]"
+                                onClick={() => setPendingPromotion(null)}
+                            >
+                                <div
+                                    style={{
+                                        left: `${clampedLeftPercent}%`,
+                                        top: openDownwards ? '6%' : 'auto',
+                                        bottom: openDownwards ? 'auto' : '6%',
+                                        transform: 'translateX(-50%)'
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="absolute bg-[#1A120B] border-2 border-amber-500 rounded-lg p-2.5 shadow-2xl flex flex-col items-center gap-2"
+                                >
+                                    <div className="flex items-center justify-between w-full gap-3 px-1">
+                                        <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300">
+                                            Превращение пешки ({pendingPromotion.to})
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setPendingPromotion(null)}
+                                            className="text-boxwood/60 hover:text-amber-300 transition cursor-pointer"
+                                            title="Отмена (Esc)"
+                                        >
+                                            <X size={14}/>
+                                        </button>
+                                    </div>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {PROMOTION_OPTIONS.map((opt) => (
+                                            <button
+                                                key={opt.type}
+                                                type="button"
+                                                onClick={() => handlePromotionSelect(opt.type)}
+                                                className="w-16 h-16 rounded bg-acacia-dark hover:bg-amber-800/70 border border-amber-600/50 hover:border-amber-300 transition flex flex-col items-center justify-center p-1.5 shadow cursor-pointer group"
+                                                title={opt.label}
+                                            >
+                                                <div className="w-10 h-10">
+                                                    {renderPieceSvg({type: opt.type, color: pendingPromotion.color})}
+                                                </div>
+                                                <span
+                                                    className="text-[10px] font-bold text-amber-200 group-hover:text-white mt-0.5">
+                                                    {opt.label}
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
+
                     <div
                         className="grid grid-cols-8 grid-rows-8 w-full h-full border border-black/60 relative z-10 shadow-inner-board rounded-[2px] overflow-hidden">
                         {displayedRanks.map((rank) =>
@@ -2207,6 +2476,7 @@ export default function Chessboard() {
 
                                 const isSelected = selectedSquare === squareId;
                                 const isLastMove = lastMove && (lastMove.from === squareId || lastMove.to === squareId);
+                                const isPremoveSquare = premove && (premove.from === squareId || premove.to === squareId);
                                 const isLegalTarget = legalTargetSquares.has(squareId);
                                 const isBeingDragged = dragState?.from === squareId;
 
@@ -2227,8 +2497,14 @@ export default function Chessboard() {
                                             />
                                         )}
 
-                                        {isLastMove && !isSelected && (
+                                        {isLastMove && !isSelected && !isPremoveSquare && (
                                             <div className="absolute inset-0 bg-amber-300/35 z-10 pointer-events-none"/>
+                                        )}
+
+                                        {/* Подсветка предхода (Таск 2.2) */}
+                                        {isPremoveSquare && (
+                                            <div
+                                                className="absolute inset-0 bg-rose-500/45 ring-2 ring-inset ring-rose-300/80 z-10 pointer-events-none"/>
                                         )}
 
                                         {isSelected && (
@@ -2249,12 +2525,20 @@ export default function Chessboard() {
                                         {piece && !isBeingDragged && (
                                             <div
                                                 onMouseDown={(e) => {
-                                                    if (viewIndex !== -1 || gameOverResult) return;
-                                                    const turnColor = currentGame.turn() === 'w' ? 'white' : 'black';
-                                                    if (piece.color !== (currentGame.turn() === 'w' ? 'w' : 'b')) return;
-                                                    if ((gameId || activeBot) && turnColor !== myColor) return;
+                                                    if (e.button !== 0 || viewIndex !== -1 || gameOverResult) return;
+                                                    const turnChar = currentGame.turn();
+                                                    const myColorChar = myColor === 'white' ? 'w' : 'b';
+
+                                                    if (gameId || activeBot) {
+                                                        if (piece.color !== myColorChar) return;
+                                                    } else {
+                                                        if (piece.color !== turnChar) return;
+                                                    }
+
                                                     e.stopPropagation();
-                                                    moveStartTime.current = Date.now();
+                                                    if ((currentGame.turn() === 'w' ? 'white' : 'black') === myColor) {
+                                                        moveStartTime.current = Date.now();
+                                                    }
                                                     setSelectedSquare(squareId);
                                                     setDragState({
                                                         from: squareId,
@@ -2264,7 +2548,11 @@ export default function Chessboard() {
                                                     });
                                                 }}
                                                 className={`relative w-full h-full p-[3%] z-20 transition-transform duration-75 ${
-                                                    piece.color === (currentGame.turn() === 'w' ? 'w' : 'b') && viewIndex === -1 && !gameOverResult
+                                                    viewIndex === -1 && !gameOverResult && (
+                                                        (gameId || activeBot)
+                                                            ? piece.color === (myColor === 'white' ? 'w' : 'b')
+                                                            : piece.color === currentGame.turn()
+                                                    )
                                                         ? 'cursor-grab active:cursor-grabbing hover:scale-[1.03]'
                                                         : ''
                                                 }`}
@@ -2374,7 +2662,7 @@ export default function Chessboard() {
 
             </div>
 
-            {/* ПРАВАЯ КОЛОНКА: ЖУРНАЛ ХОДОВ (НОТАЦИЯ), НАВИГАЦИЯ И ИГРОВЫЕ ДЕЙСТВИЯ */}
+            {/* ПРАВАЯ КОЛОНКА: ЖУРНАЛ ХОДОВ (НОТАЦИЯ), ПРЕДХОД, НАВИГАЦИЯ И ИГРОВЫЕ ДЕЙСТВИЯ */}
             <div
                 style={{height: `${Math.max(sidePanelHeight, 560)}px`}}
                 className="w-full xl:w-80 2xl:w-[340px] bg-acacia p-4 rounded shadow-heavy border-4 border-acacia-dark flex flex-col gap-3 text-boxwood-light order-3 shrink-0"
@@ -2396,6 +2684,25 @@ export default function Chessboard() {
                         {gameOverResult || (history.length > 0 ? `${Math.ceil(history.length / 2)} х.` : 'Старт')}
                     </span>
                 </div>
+
+                {/* Индикатор активного предхода (Premove) */}
+                {premove && (
+                    <div
+                        className="bg-rose-950/85 px-3 py-2 rounded border border-rose-500/60 text-xs text-rose-100 flex items-center justify-between shadow">
+                        <span className="flex items-center gap-1.5 font-bold font-mono">
+                            <Zap size={13} className="text-rose-400"/>
+                            Предход: {premove.from} → {premove.to}{premove.promotion ? `=${premove.promotion.toUpperCase()}` : ''}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => setPremove(null)}
+                            className="px-2 py-0.5 bg-black/40 hover:bg-black/70 rounded text-[10px] font-sans text-rose-200 transition cursor-pointer"
+                            title="Отменить предход (Правый клик или Esc)"
+                        >
+                            Отмена
+                        </button>
+                    </div>
+                )}
 
                 {drawOfferStatus && (
                     <div

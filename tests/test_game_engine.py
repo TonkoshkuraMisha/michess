@@ -33,3 +33,18 @@ def test_checkmate_detection():
     assert data["is_game_over"] is True
     assert data["result"] == "1-0"
     assert data["termination"] == "checkmate"
+
+
+def test_underpromotion_to_knight_and_rook():
+    """Проверка превращения пешки в коня (a7a8n) и ладью (a7a8r) с корректной записью SAN."""
+    promotion_fen = "4k3/P7/8/8/8/8/8/4K3 w - - 0 1"
+
+    is_valid_n, res_knight = engine.process_move(promotion_fen, "a7a8n")
+    assert is_valid_n is True
+    assert res_knight["uci"] == "a7a8n"
+    assert res_knight["san"].startswith("a8=N")
+
+    is_valid_r, res_rook = engine.process_move(promotion_fen, "a7a8r")
+    assert is_valid_r is True
+    assert res_rook["uci"] == "a7a8r"
+    assert res_rook["san"].startswith("a8=R")
