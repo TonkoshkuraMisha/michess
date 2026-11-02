@@ -748,6 +748,7 @@ export default function Chessboard() {
     const [sessionStats, setSessionStats] = useState({wins: 0, losses: 0, draws: 0});
     const [gameOverResult, setGameOverResult] = useState<string | null>(null);
     const [drawOfferStatus, setDrawOfferStatus] = useState<string | null>(null);
+    const [rematchStatus, setRematchStatus] = useState<"none" | "offered_by_me" | "offered_by_opponent" | "declined">("none");
 
     const activeTheme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
     const selectedBotProfile = HISTORICAL_BOTS[selectedBotId];
@@ -770,7 +771,7 @@ export default function Chessboard() {
     }, []);
 
     const updateSessionStats = useCallback((result: string) => {
-        if (!result) return;
+        if (!result || result === "*") return;
         setSessionStats(prev => {
             if (result === '1/2-1/2' || result.includes('draw')) {
                 return {...prev, draws: prev.draws + 1};
@@ -923,6 +924,7 @@ export default function Chessboard() {
         setGameOverResult(null);
         setRatingInfo(null);
         setDrawOfferStatus(null);
+        setRematchStatus("none");
         setWhiteTimeMs(whiteStartMs);
         setBlackTimeMs(blackStartMs);
         moveStartTime.current = Date.now();
@@ -1216,6 +1218,7 @@ export default function Chessboard() {
             setPendingPromotion(null);
             setPremove(null);
             setGameOverResult(null);
+            setRematchStatus("none");
             setDrawOfferStatus('Партия началась!');
             playAudio('start');
             setTimeout(() => setDrawOfferStatus(null), 3000);
@@ -1296,7 +1299,9 @@ export default function Chessboard() {
             setRatingInfo(data);
             if (data.white_time_ms !== undefined) setWhiteTimeMs(data.white_time_ms);
             if (data.black_time_ms !== undefined) setBlackTimeMs(data.black_time_ms);
-            if (data.result) {
+            if (data.reason === 'aborted' || data.result === '*') {
+                setDrawOfferStatus('Партия отменена на 1-м ходу (рейтинг не изменён).');
+            } else if (data.result) {
                 setDrawOfferStatus(`Партия окончена. Результат: ${data.result}`);
             }
         };
@@ -1308,6 +1313,14 @@ export default function Chessboard() {
         const handleDrawDeclined = () => {
             setDrawOfferStatus('Предложение ничьей отклонено.');
             setTimeout(() => setDrawOfferStatus(null), 3000);
+        };
+
+        const handleRematchOffered = () => {
+            setRematchStatus('offered_by_opponent');
+        };
+
+        const handleRematchDeclined = () => {
+            setRematchStatus('declined');
         };
 
         const handleServerError = (data: any) => {
@@ -1337,6 +1350,8 @@ export default function Chessboard() {
         gameSocket.on('game_over', handleGameOver);
         gameSocket.on('draw_offered', handleDrawOffered);
         gameSocket.on('draw_declined', handleDrawDeclined);
+        gameSocket.on('rematch_offered', handleRematchOffered);
+        gameSocket.on('rematch_declined', handleRematchDeclined);
         gameSocket.on('error', handleServerError);
 
         return () => {
@@ -1345,6 +1360,8 @@ export default function Chessboard() {
             gameSocket.off('game_over', handleGameOver);
             gameSocket.off('draw_offered', handleDrawOffered);
             gameSocket.off('draw_declined', handleDrawDeclined);
+            gameSocket.off('rematch_offered', handleRematchOffered);
+            gameSocket.off('rematch_declined', handleRematchDeclined);
             gameSocket.off('error', handleServerError);
         };
     }, [myColor, playAudio, updateSessionStats]);
@@ -1698,6 +1715,39 @@ export default function Chessboard() {
         setPremove(null);
         botGameSavedRef.current = false;
         gameSocket.send('accept_challenge', {target_user_id: targetUserId});
+    };
+
+    const handleAbortGame = () => {
+        if ((!gameId && !activeBot) || gameOverResult || history.length >= 2) return;
+        setPendingPromotion(null);
+        setPremove(null);
+        if (gameId) {
+            gameSocket.send('abort_game', {game_id: gameId});
+        } else if (activeBot) {
+            setGameOverResult('*');
+            setDrawOfferStatus('Партия отменена без изменения счёта.');
+        }
+    };
+
+    const handleOfferRematch = () => {
+        if (gameId && gameOverResult) {
+            gameSocket.send('offer_rematch', {game_id: gameId});
+            setRematchStatus('offered_by_me');
+        } else if (activeBot && gameOverResult) {
+            const nextColor = myColor === 'white' ? 'black' : 'white';
+            startHistoricalBotGame(activeBot, nextColor);
+        }
+    };
+
+    const handleAcceptRematch = () => {
+        if (!gameId) return;
+        gameSocket.send('accept_rematch', {game_id: gameId});
+    };
+
+    const handleDeclineRematch = () => {
+        if (!gameId) return;
+        gameSocket.send('decline_rematch', {game_id: gameId});
+        setRematchStatus('none');
     };
 
     const handleResign = () => {
@@ -2868,18 +2918,29 @@ export default function Chessboard() {
                 {gameId ? (
                     <>
                         <div className="grid grid-cols-2 gap-2">
-                            <button
-                                type="button"
-                                onClick={handleResign}
-                                disabled={!!gameOverResult}
-                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/80 text-red-200 text-xs font-bold rounded hover:bg-red-900 transition shadow border border-red-800/50 disabled:opacity-40"
-                            >
-                                <Flag size={14}/> Сдаться
-                            </button>
+                            {history.length < 2 ? (
+                                <button
+                                    type="button"
+                                    onClick={handleAbortGame}
+                                    disabled={!!gameOverResult}
+                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-amber-950/90 text-amber-200 text-xs font-bold rounded hover:bg-amber-900 transition shadow border border-amber-700/60 disabled:opacity-40"
+                                >
+                                    <X size={14}/> Отменить игру
+                                </button>
+                            ) : (
+                                <button
+                                    type="button"
+                                    onClick={handleResign}
+                                    disabled={!!gameOverResult}
+                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/80 text-red-200 text-xs font-bold rounded hover:bg-red-900 transition shadow border border-red-800/50 disabled:opacity-40"
+                                >
+                                    <Flag size={14}/> Сдаться
+                                </button>
+                            )}
                             <button
                                 type="button"
                                 onClick={handleOfferDraw}
-                                disabled={!!gameOverResult}
+                                disabled={!!gameOverResult || history.length < 2}
                                 className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs font-bold rounded hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40"
                             >
                                 <Handshake size={14}/> Ничья
@@ -2887,13 +2948,52 @@ export default function Chessboard() {
                         </div>
 
                         {gameOverResult && (
-                            <button
-                                type="button"
-                                onClick={handleResetSandbox}
-                                className="flex items-center justify-center gap-2 px-4 py-2.5 font-bold text-sm rounded transition shadow bg-boxwood text-acacia-dark border border-amber-700/50 hover:bg-boxwood-light"
-                            >
-                                <RotateCcw size={16}/> Новая игра / В лобби
-                            </button>
+                            <div className="flex flex-col gap-2">
+                                {rematchStatus === 'offered_by_opponent' ? (
+                                    <div className="p-2.5 rounded bg-emerald-950/90 border border-emerald-500/60 flex flex-col gap-2 text-xs text-emerald-100 text-center shadow">
+                                        <span className="font-bold">Соперник предлагает реванш (со сменой цвета)!</span>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={handleAcceptRematch}
+                                                className="py-1.5 px-3 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded transition shadow"
+                                            >
+                                                Принять реванш
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleDeclineRematch}
+                                                className="py-1.5 px-3 bg-red-900/80 hover:bg-red-800 text-red-100 font-bold rounded transition"
+                                            >
+                                                Отклонить
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                            type="button"
+                                            disabled={rematchStatus === 'offered_by_me' || rematchStatus === 'declined'}
+                                            onClick={handleOfferRematch}
+                                            className="flex items-center justify-center gap-1.5 px-3 py-2.5 font-bold text-xs rounded transition shadow bg-emerald-800 hover:bg-emerald-700 text-emerald-100 border border-emerald-500/50 disabled:opacity-50"
+                                        >
+                                            <RefreshCw size={14} className={rematchStatus === 'offered_by_me' ? 'animate-spin' : ''}/>
+                                            {rematchStatus === 'offered_by_me'
+                                                ? 'Ждём ответа...'
+                                                : rematchStatus === 'declined'
+                                                    ? 'Реванш отклонён'
+                                                    : 'Реванш'}
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={handleResetSandbox}
+                                            className="flex items-center justify-center gap-1.5 px-3 py-2.5 font-bold text-xs rounded transition shadow bg-boxwood text-acacia-dark border border-amber-700/50 hover:bg-boxwood-light"
+                                        >
+                                            <RotateCcw size={14}/> В лобби
+                                        </button>
+                                    </div>
+                                )}
+                            </div>
                         )}
                     </>
                 ) : activeBot ? (
@@ -2918,10 +3018,10 @@ export default function Chessboard() {
                             ) : (
                                 <button
                                     type="button"
-                                    onClick={handleResetSandbox}
-                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-boxwood text-acacia-dark text-xs font-bold rounded hover:bg-boxwood-light transition shadow border border-amber-700/50"
+                                    onClick={handleOfferRematch}
+                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-800 text-emerald-100 text-xs font-bold rounded hover:bg-emerald-700 transition shadow border border-emerald-500/50"
                                 >
-                                    <RotateCcw size={14}/> Свободная доска
+                                    <RefreshCw size={14}/> Реванш (смена цвета)
                                 </button>
                             )}
                         </div>

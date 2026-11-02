@@ -49,3 +49,35 @@ async def test_premove_telemetry_saved_and_bot_thinking_time():
     morphy_book_ms = calculate_authentic_thinking_time_ms("morphy", board, "e2e4", "book")
     paulsen_engine_ms = calculate_authentic_thinking_time_ms("paulsen", board, "e2e4", "engine")
     assert 200 <= morphy_book_ms < paulsen_engine_ms <= 3000
+
+
+@pytest.mark.asyncio
+async def test_rematch_swaps_colors(db_session):
+    """Проверяет, что при принятии реванша создаётся новая партия со сменой цветов (white_id <-> black_id)."""
+    from src.models.user import User
+    from src.api.websockets import create_rematch_game
+    from src.services.game_state import state_manager
+
+    p1 = User(username="rematch_p1", hashed_password="pw", rating=1600)
+    p2 = User(username="rematch_p2", hashed_password="pw", rating=1650)
+    db_session.add_all([p1, p2])
+    await db_session.commit()
+    await db_session.refresh(p1)
+    await db_session.refresh(p2)
+
+    prev_state = {
+        "white_id": str(p1.id),
+        "black_id": str(p2.id),
+        "base_time_ms": "300000",
+        "increment_ms": "3000",
+    }
+
+    rematch_info = await create_rematch_game(db_session, prev_state)
+    assert rematch_info["white_id"] == p2.id
+    assert rematch_info["black_id"] == p1.id
+    assert rematch_info["base_time_ms"] == 300000
+    assert rematch_info["increment_ms"] == 3000
+
+    new_state = await state_manager.get_game_state(rematch_info["game_id"])
+    assert int(new_state["white_id"]) == p2.id
+    assert int(new_state["black_id"]) == p1.id
