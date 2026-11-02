@@ -98,3 +98,36 @@ async def test_abort_game_without_rating_change(db_session):
     assert u1.rating == 1500
     assert u2.rating == 1500
     assert game.status == GameStatus.ABORTED
+
+
+@pytest.mark.asyncio
+async def test_private_invite_create_and_redeem():
+    """Проверяет создание приватного вызова по ссылке в Redis и его одноразовое погашение."""
+    from src.services.matchmaker import matchmaker
+
+    invite = await matchmaker.create_private_invite(
+        user_id=101,
+        username="teacher_misha",
+        rating=2050,
+        base_time_ms=600000,
+        increment_ms=5000,
+        color_pref="white",
+    )
+    code = invite["code"]
+    assert len(code) >= 6
+
+    # Создатель не может принять собственный вызов
+    self_accept = await matchmaker.accept_private_invite(code, acceptor_id=101)
+    assert self_accept is None
+
+    # Второй игрок успешно принимает вызов
+    redeemed = await matchmaker.accept_private_invite(code, acceptor_id=202)
+    assert redeemed is not None
+    assert redeemed["white_id"] == 101
+    assert redeemed["black_id"] == 202
+    assert redeemed["base_time_ms"] == 600000
+    assert redeemed["increment_ms"] == 5000
+
+    # Повторное погашение того же кода невозможно
+    second_try = await matchmaker.accept_private_invite(code, acceptor_id=303)
+    assert second_try is None

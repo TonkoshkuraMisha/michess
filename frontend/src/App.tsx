@@ -283,6 +283,7 @@ export default function App() {
             <main className="flex-1 flex items-center justify-center p-6">
                 <Routes>
                     <Route path="/" element={<Chessboard key={token ? token : 'guest'}/>}/>
+                    <Route path="/challenge/:inviteCode" element={<Chessboard key={token ? token : 'guest'}/>}/>
                     <Route path="/profile/:targetUsername" element={<Profile/>}/>
                     <Route path="/game/:gameId" element={<GameViewer/>}/>
                     <Route path="/champions/:championId" element={<ChampionGames/>}/>

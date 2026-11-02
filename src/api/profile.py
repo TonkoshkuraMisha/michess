@@ -64,6 +64,51 @@ async def get_leaderboard(
     ]
 
 
+
+
+@router.get("/games/live")
+async def get_live_games(db: AsyncSession = Depends(get_db)):
+    """Возвращает список активных партий, идущих прямо сейчас (для вкладки Live и режима зрителя)."""
+    from src.services.game_state import state_manager
+    from src.services.connection_manager import manager
+
+    game_ids = await state_manager.redis.smembers("active_games")
+    live_list = []
+
+    for gid_raw in game_ids:
+        try:
+            gid = int(gid_raw)
+        except ValueError:
+            continue
+        state = await state_manager.get_game_state(gid)
+        if not state or state.get("status") != "in_progress":
+            continue
+
+        white_id = int(state["white_id"])
+        black_id = int(state["black_id"])
+        white_user = await db.get(User, white_id)
+        black_user = await db.get(User, black_id)
+
+        spectators_set = getattr(manager, "game_spectators", {}).get(gid, set())
+
+        live_list.append({
+            "game_id": gid,
+            "white_id": white_id,
+            "black_id": black_id,
+            "white_username": white_user.username if white_user else "Белые",
+            "white_rating": white_user.rating if white_user else 1200,
+            "black_username": black_user.username if black_user else "Черные",
+            "black_rating": black_user.rating if black_user else 1200,
+            "base_time_ms": int(state.get("base_time_ms", 180000)),
+            "increment_ms": int(state.get("increment_ms", 0)),
+            "state_version": int(state.get("state_version", 0)),
+            "spectators_count": len(spectators_set),
+        })
+
+    live_list.sort(key=lambda x: x["game_id"], reverse=True)
+    return live_list
+
+
 @router.get("/{username}")
 async def get_user_profile(username: str, db: AsyncSession = Depends(get_db)):
     user = await _resolve_user(db, username)

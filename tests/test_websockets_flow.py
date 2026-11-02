@@ -81,3 +81,38 @@ async def test_rematch_swaps_colors(db_session):
     new_state = await state_manager.get_game_state(rematch_info["game_id"])
     assert int(new_state["white_id"]) == p2.id
     assert int(new_state["black_id"]) == p1.id
+
+
+@pytest.mark.asyncio
+async def test_spectator_receives_live_moves_and_chat():
+    """Проверяет подписку зрителей на партию и рассылку ходов и сообщений чата."""
+    from src.services.connection_manager import manager
+    from src.api.websockets import broadcast_to_game_participants_and_spectators
+
+    received: dict[int, list[dict]] = {}
+
+    async def fake_send(message: dict, user_id: int):
+        received.setdefault(user_id, []).append(message)
+
+    orig_send = manager.send_personal_message
+    manager.send_personal_message = fake_send
+    try:
+        game_id = 777001
+        white_id, black_id, spectator_id = 11, 22, 33
+        manager.add_spectator(game_id, spectator_id)
+
+        move_event = {"event": "move_made", "game_id": game_id, "san": "e4"}
+        await broadcast_to_game_participants_and_spectators(game_id, white_id, black_id, move_event)
+
+        assert received[white_id][0]["san"] == "e4"
+        assert received[black_id][0]["san"] == "e4"
+        assert received[spectator_id][0]["san"] == "e4"
+
+        chat_event = {"event": "chat_message", "game_id": game_id, "sender": "Spectator", "text": "👏 Красивый ход!"}
+        await broadcast_to_game_participants_and_spectators(game_id, white_id, black_id, chat_event)
+        assert received[spectator_id][1]["event"] == "chat_message"
+        assert received[white_id][1]["text"] == "👏 Красивый ход!"
+
+        manager.remove_spectator(game_id, spectator_id)
+    finally:
+        manager.send_personal_message = orig_send

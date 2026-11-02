@@ -19,6 +19,18 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/ws", tags=["WebSockets"])
 
 
+def _compute_live_clocks(state: dict) -> tuple[int, int]:
+    now_ms = int(time.time() * 1000)
+    elapsed = max(0, now_ms - int(state.get("last_move_at", now_ms)))
+    turn = state.get("turn", "white")
+    w_ms = int(state.get("white_time_ms", 180000))
+    b_ms = int(state.get("black_time_ms", 180000))
+
+    white_time = max(0, w_ms - elapsed) if turn in ("white", "w") else w_ms
+    black_time = max(0, b_ms - elapsed) if turn in ("black", "b") else b_ms
+    return white_time, black_time
+
+
 async def _send_active_game_snapshot_if_exists(db: AsyncSession, user: User):
     """Если игрок переподключился во время идущей партии, восстанавливаем ему доску и часы."""
     game_id_str = await state_manager.redis.get(f"user:{user.id}:current_game")
@@ -34,15 +46,7 @@ async def _send_active_game_snapshot_if_exists(db: AsyncSession, user: User):
     black_id = int(state["black_id"])
     white_user = await db.get(User, white_id)
     black_user = await db.get(User, black_id)
-
-    now_ms = int(time.time() * 1000)
-    elapsed = max(0, now_ms - int(state["last_move_at"]))
-    turn = state.get("turn", "white")
-
-    white_time = max(0, int(state["white_time_ms"]) - elapsed) if turn in ("white", "w") else int(
-        state["white_time_ms"])
-    black_time = max(0, int(state["black_time_ms"]) - elapsed) if turn in ("black", "b") else int(
-        state["black_time_ms"])
+    white_time, black_time = _compute_live_clocks(state)
 
     payload = {
         "event": "match_found",
@@ -59,23 +63,21 @@ async def _send_active_game_snapshot_if_exists(db: AsyncSession, user: User):
         "black_time_ms": black_time,
         "fen": state.get("board_fen"),
         "pgn": state.get("pgn", ""),
-        "state_version": int(state.get("state_version", 0))
+        "state_version": int(state.get("state_version", 0)),
     }
     await manager.send_personal_message(payload, user.id)
 
 
-async def create_rematch_game(db: AsyncSession, prev_state: dict) -> dict:
-    """
-    Создаёт новую партию-реванш в БД и Redis с переменой цвета фигур (white_id <-> black_id)
-    и тем же контролем времени.
-    """
-    new_white_id = int(prev_state["black_id"])
-    new_black_id = int(prev_state["white_id"])
-    base_time_ms = int(prev_state.get("base_time_ms", 180000))
-    increment_ms = int(prev_state.get("increment_ms", 0))
-
-    white_user = await db.get(User, new_white_id)
-    black_user = await db.get(User, new_black_id)
+async def _init_new_pvp_game_in_db_and_redis(
+        db: AsyncSession,
+        white_id: int,
+        black_id: int,
+        base_time_ms: int,
+        increment_ms: int,
+) -> dict:
+    """Создаёт новую рейтинговую PvP-партию в PostgreSQL и инициализирует её стейт в Redis."""
+    white_user = await db.get(User, white_id)
+    black_user = await db.get(User, black_id)
 
     white_rating = white_user.rating if white_user else 1200
     black_rating = black_user.rating if black_user else 1200
@@ -86,8 +88,8 @@ async def create_rematch_game(db: AsyncSession, prev_state: dict) -> dict:
     initial_fen = chess.STARTING_FEN
 
     new_game = Game(
-        white_player_id=new_white_id,
-        black_player_id=new_black_id,
+        white_player_id=white_id,
+        black_player_id=black_id,
         status=GameStatus.IN_PROGRESS,
         base_time_ms=base_time_ms,
         increment_ms=increment_ms,
@@ -110,15 +112,15 @@ async def create_rematch_game(db: AsyncSession, prev_state: dict) -> dict:
     if hasattr(state_manager, "init_game"):
         await state_manager.init_game(
             game_id=new_game_id,
-            white_id=new_white_id,
-            black_id=new_black_id,
+            white_id=white_id,
+            black_id=black_id,
             base_time_ms=base_time_ms,
             increment_ms=increment_ms,
         )
     else:
         await state_manager.redis.hset(f"game:{new_game_id}:state", mapping={
-            "white_id": str(new_white_id),
-            "black_id": str(new_black_id),
+            "white_id": str(white_id),
+            "black_id": str(black_id),
             "board_fen": initial_fen,
             "pgn": "",
             "turn": "white",
@@ -133,13 +135,13 @@ async def create_rematch_game(db: AsyncSession, prev_state: dict) -> dict:
             "rematch_offer": "",
         })
         await state_manager.redis.sadd("active_games", str(new_game_id))
-        await state_manager.redis.set(f"user:{new_white_id}:current_game", str(new_game_id))
-        await state_manager.redis.set(f"user:{new_black_id}:current_game", str(new_game_id))
+        await state_manager.redis.set(f"user:{white_id}:current_game", str(new_game_id))
+        await state_manager.redis.set(f"user:{black_id}:current_game", str(new_game_id))
 
     return {
         "game_id": new_game_id,
-        "white_id": new_white_id,
-        "black_id": new_black_id,
+        "white_id": white_id,
+        "black_id": black_id,
         "white_username": white_username,
         "white_rating": white_rating,
         "black_username": black_username,
@@ -148,6 +150,33 @@ async def create_rematch_game(db: AsyncSession, prev_state: dict) -> dict:
         "increment_ms": increment_ms,
         "fen": initial_fen,
     }
+
+
+async def create_rematch_game(db: AsyncSession, prev_state: dict) -> dict:
+    """
+    Создаёт новую партию-реванш в БД и Redis с переменой цвета фигур (white_id <-> black_id)
+    и тем же контролем времени.
+    """
+    return await _init_new_pvp_game_in_db_and_redis(
+        db=db,
+        white_id=int(prev_state["black_id"]),
+        black_id=int(prev_state["white_id"]),
+        base_time_ms=int(prev_state.get("base_time_ms", 180000)),
+        increment_ms=int(prev_state.get("increment_ms", 0)),
+    )
+
+
+async def broadcast_to_game_participants_and_spectators(
+        game_id: int,
+        white_id: int,
+        black_id: int,
+        payload: dict,
+) -> None:
+    """Отправляет событие обоим игрокам и всем зрителям, наблюдающим за партией."""
+    await manager.send_personal_message(payload, white_id)
+    await manager.send_personal_message(payload, black_id)
+    if hasattr(manager, "broadcast_to_spectators"):
+        await manager.broadcast_to_spectators(game_id, payload)
 
 
 @router.websocket("/matchmaking")
@@ -163,7 +192,6 @@ async def matchmaking_endpoint(
             current_user.id
         )
 
-        # Восстанавливаем партию, если игрок обновил страницу
         await _send_active_game_snapshot_if_exists(db, current_user)
 
         while True:
@@ -199,12 +227,153 @@ async def matchmaking_endpoint(
                         from src.services.matchmaker import matchmaker
                         await matchmaker.accept_challenge(target_user_id, current_user.id, manager, state_manager)
 
+                elif action == "create_invite":
+                    base_time = int(data.get("base_time_ms", 180000))
+                    inc_time = int(data.get("increment_ms", 2000))
+                    color_pref = str(data.get("color_pref", "random"))
+
+                    from src.services.matchmaker import matchmaker
+                    invite_data = await matchmaker.create_private_invite(
+                        user_id=current_user.id,
+                        username=current_user.username,
+                        rating=current_user.rating,
+                        base_time_ms=base_time,
+                        increment_ms=inc_time,
+                        color_pref=color_pref,
+                    )
+                    await manager.send_personal_message(
+                        {"event": "invite_created", **invite_data},
+                        current_user.id,
+                    )
+
+                elif action == "accept_invite":
+                    code = str(data.get("code", "")).strip()
+                    if not code:
+                        continue
+
+                    from src.services.matchmaker import matchmaker
+                    accepted = await matchmaker.accept_private_invite(code, current_user.id)
+                    if not accepted:
+                        await manager.send_personal_message(
+                            {"event": "error", "message": "Приглашение недействительно или истекло"},
+                            current_user.id,
+                        )
+                        continue
+
+                    game_info = await _init_new_pvp_game_in_db_and_redis(
+                        db=db,
+                        white_id=accepted["white_id"],
+                        black_id=accepted["black_id"],
+                        base_time_ms=accepted["base_time_ms"],
+                        increment_ms=accepted["increment_ms"],
+                    )
+
+                    common_payload = {
+                        "event": "match_found",
+                        "game_id": game_info["game_id"],
+                        "white_username": game_info["white_username"],
+                        "white_rating": game_info["white_rating"],
+                        "black_username": game_info["black_username"],
+                        "black_rating": game_info["black_rating"],
+                        "base_time_ms": game_info["base_time_ms"],
+                        "increment_ms": game_info["increment_ms"],
+                        "white_time_ms": game_info["base_time_ms"],
+                        "black_time_ms": game_info["base_time_ms"],
+                        "fen": game_info["fen"],
+                        "pgn": "",
+                        "state_version": 0,
+                    }
+
+                    await manager.send_personal_message(
+                        {**common_payload, "color": "white", "opponent_id": game_info["black_id"]},
+                        game_info["white_id"],
+                    )
+                    await manager.send_personal_message(
+                        {**common_payload, "color": "black", "opponent_id": game_info["white_id"]},
+                        game_info["black_id"],
+                    )
+
+                elif action == "spectate_game":
+                    game_id = data.get("game_id")
+                    if not game_id:
+                        continue
+
+                    gid = int(game_id)
+                    state = await state_manager.get_game_state(gid)
+                    if not state or state.get("status") != "in_progress":
+                        await manager.send_personal_message(
+                            {"event": "error", "message": "Партия уже завершена или не найдена"},
+                            current_user.id,
+                        )
+                        continue
+
+                    if hasattr(manager, "remove_user_from_all_spectating"):
+                        manager.remove_user_from_all_spectating(current_user.id)
+                    if hasattr(manager, "add_spectator"):
+                        manager.add_spectator(gid, current_user.id)
+
+                    white_id = int(state["white_id"])
+                    black_id = int(state["black_id"])
+                    white_user = await db.get(User, white_id)
+                    black_user = await db.get(User, black_id)
+                    white_time, black_time = _compute_live_clocks(state)
+
+                    await manager.send_personal_message({
+                        "event": "spectate_started",
+                        "game_id": gid,
+                        "white_username": white_user.username if white_user else "Белые",
+                        "white_rating": white_user.rating if white_user else 1200,
+                        "black_username": black_user.username if black_user else "Черные",
+                        "black_rating": black_user.rating if black_user else 1200,
+                        "base_time_ms": int(state.get("base_time_ms", 180000)),
+                        "increment_ms": int(state.get("increment_ms", 0)),
+                        "white_time_ms": white_time,
+                        "black_time_ms": black_time,
+                        "fen": state.get("board_fen"),
+                        "pgn": state.get("pgn", ""),
+                        "state_version": int(state.get("state_version", 0)),
+                    }, current_user.id)
+
+                elif action == "leave_spectate":
+                    game_id = data.get("game_id")
+                    if game_id and hasattr(manager, "remove_spectator"):
+                        manager.remove_spectator(int(game_id), current_user.id)
+                    elif hasattr(manager, "remove_user_from_all_spectating"):
+                        manager.remove_user_from_all_spectating(current_user.id)
+                    await manager.send_personal_message({"event": "spectate_left"}, current_user.id)
+
+                elif action == "chat_message":
+                    game_id = data.get("game_id")
+                    raw_text = str(data.get("text", "")).strip()
+                    if not game_id or not raw_text:
+                        continue
+
+                    clean_text = raw_text[:140]
+                    gid = int(game_id)
+                    game_state = await state_manager.get_game_state(gid)
+                    if not game_state:
+                        continue
+
+                    white_id = int(game_state["white_id"])
+                    black_id = int(game_state["black_id"])
+
+                    chat_payload = {
+                        "event": "chat_message",
+                        "game_id": gid,
+                        "sender_id": current_user.id,
+                        "sender": current_user.username,
+                        "text": clean_text,
+                        "timestamp": int(time.time() * 1000),
+                    }
+                    await broadcast_to_game_participants_and_spectators(gid, white_id, black_id, chat_payload)
+
                 elif action == "abort_game":
                     game_id = data.get("game_id")
                     if not game_id:
                         continue
 
-                    game_state = await state_manager.get_game_state(game_id)
+                    gid = int(game_id)
+                    game_state = await state_manager.get_game_state(gid)
                     if not game_state or game_state.get("status") != "in_progress":
                         continue
 
@@ -212,7 +381,7 @@ async def matchmaking_endpoint(
                     if current_user.id not in (white_id, black_id):
                         continue
 
-                    abort_res = await state_manager.abort_game(db, int(game_id))
+                    abort_res = await state_manager.abort_game(db, gid)
                     if abort_res.get("status") == "error":
                         await manager.send_personal_message(
                             {"event": "error", "message": abort_res.get("reason", "Cannot abort game")},
@@ -222,7 +391,7 @@ async def matchmaking_endpoint(
 
                     game_over_payload = {
                         "event": "game_over",
-                        "game_id": game_id,
+                        "game_id": gid,
                         "reason": "aborted",
                         "result": "*",
                         "white_delta": 0,
@@ -230,15 +399,15 @@ async def matchmaking_endpoint(
                         "white_new_rating": abort_res["white_new_rating"],
                         "black_new_rating": abort_res["black_new_rating"],
                     }
-                    await manager.send_personal_message(game_over_payload, white_id)
-                    await manager.send_personal_message(game_over_payload, black_id)
+                    await broadcast_to_game_participants_and_spectators(gid, white_id, black_id, game_over_payload)
 
                 elif action == "resign":
                     game_id = data.get("game_id")
                     if not game_id:
                         continue
 
-                    game_state = await state_manager.get_game_state(game_id)
+                    gid = int(game_id)
+                    game_state = await state_manager.get_game_state(gid)
                     if not game_state or game_state["status"] != "in_progress":
                         continue
 
@@ -248,20 +417,19 @@ async def matchmaking_endpoint(
 
                     game_result = "0-1" if current_user.id == white_id else "1-0"
                     rating_updates = await state_manager.finish_game(
-                        db, game_id, game_result, termination="resignation"
+                        db, gid, game_result, termination="resignation"
                     )
 
                     game_over_payload = {
                         "event": "game_over",
-                        "game_id": game_id,
+                        "game_id": gid,
                         "reason": "resignation",
                         "winner_id": black_id if current_user.id == white_id else white_id,
                         "result": game_result
                     }
                     game_over_payload.update(rating_updates)
 
-                    await manager.send_personal_message(game_over_payload, white_id)
-                    await manager.send_personal_message(game_over_payload, black_id)
+                    await broadcast_to_game_participants_and_spectators(gid, white_id, black_id, game_over_payload)
 
                 elif action == "offer_draw":
                     game_id = data.get("game_id")
@@ -287,7 +455,8 @@ async def matchmaking_endpoint(
                     if not game_id:
                         continue
 
-                    game_state = await state_manager.get_game_state(game_id)
+                    gid = int(game_id)
+                    game_state = await state_manager.get_game_state(gid)
                     if not game_state or game_state["status"] != "in_progress":
                         continue
 
@@ -305,19 +474,18 @@ async def matchmaking_endpoint(
 
                     game_result = "1/2-1/2"
                     rating_updates = await state_manager.finish_game(
-                        db, game_id, game_result, termination="agreement"
+                        db, gid, game_result, termination="agreement"
                     )
 
                     game_over_payload = {
                         "event": "game_over",
-                        "game_id": game_id,
+                        "game_id": gid,
                         "reason": "draw_agreement",
                         "result": game_result
                     }
                     game_over_payload.update(rating_updates)
 
-                    await manager.send_personal_message(game_over_payload, white_id)
-                    await manager.send_personal_message(game_over_payload, black_id)
+                    await broadcast_to_game_participants_and_spectators(gid, white_id, black_id, game_over_payload)
 
                 elif action == "decline_draw":
                     game_id = data.get("game_id")
@@ -437,8 +605,9 @@ async def matchmaking_endpoint(
                     if not game_id or not move_str:
                         continue
 
+                    gid = int(game_id)
                     res = await state_manager.process_atomic_move(
-                        game_id=game_id,
+                        game_id=gid,
                         user_id=current_user.id,
                         command_id=command_id,
                         move_str=move_str,
@@ -469,7 +638,7 @@ async def matchmaking_endpoint(
                         client_time_ms = data.get("time_taken_ms", server_elapsed_ms)
                         network_lag_ms = max(0, server_elapsed_ms - int(client_time_ms))
 
-                        await state_manager.save_move_telemetry(game_id, {
+                        await state_manager.save_move_telemetry(gid, {
                             "player_id": current_user.id,
                             "move_number": move_data.get("fullmove_number", 1),
                             "notation": move_data.get("uci", move_str),
@@ -481,7 +650,7 @@ async def matchmaking_endpoint(
                             "network_lag_ms": network_lag_ms
                         })
 
-                        await state_manager.sync_authoritative_state_to_db(db, game_id, res)
+                        await state_manager.sync_authoritative_state_to_db(db, gid, res)
 
                     if res["status"] == "game_over":
                         game_result = res["result"]
@@ -489,13 +658,13 @@ async def matchmaking_endpoint(
                         final_pgn = move_data["new_pgn"] if move_data else None
 
                         rating_updates = await state_manager.finish_game(
-                            db, game_id, game_result, termination=termination, final_pgn=final_pgn
+                            db, gid, game_result, termination=termination, final_pgn=final_pgn
                         )
 
                         if move_data:
                             move_payload = {
                                 "event": "move_made",
-                                "game_id": game_id,
+                                "game_id": gid,
                                 "player_id": current_user.id,
                                 "command_id": command_id,
                                 "state_version": res.get("state_version", 0),
@@ -509,12 +678,11 @@ async def matchmaking_endpoint(
                                 "result": game_result
                             }
                             move_payload.update(rating_updates)
-                            await manager.send_personal_message(move_payload, white_id)
-                            await manager.send_personal_message(move_payload, black_id)
+                            await broadcast_to_game_participants_and_spectators(gid, white_id, black_id, move_payload)
 
                         game_over_payload = {
                             "event": "game_over",
-                            "game_id": game_id,
+                            "game_id": gid,
                             "reason": termination,
                             "result": game_result,
                             "white_time_ms": res["white_time_ms"],
@@ -522,13 +690,12 @@ async def matchmaking_endpoint(
                         }
                         game_over_payload.update(rating_updates)
 
-                        await manager.send_personal_message(game_over_payload, white_id)
-                        await manager.send_personal_message(game_over_payload, black_id)
+                        await broadcast_to_game_participants_and_spectators(gid, white_id, black_id, game_over_payload)
 
                     elif res["status"] == "success":
                         move_payload = {
                             "event": "move_made",
-                            "game_id": game_id,
+                            "game_id": gid,
                             "player_id": current_user.id,
                             "command_id": command_id,
                             "state_version": res["state_version"],
@@ -541,8 +708,7 @@ async def matchmaking_endpoint(
                             "game_over": False
                         }
 
-                        await manager.send_personal_message(move_payload, white_id)
-                        await manager.send_personal_message(move_payload, black_id)
+                        await broadcast_to_game_participants_and_spectators(gid, white_id, black_id, move_payload)
 
             except Exception as action_err:
                 logger.error("Error processing WS action '%s' for user %s: %s", action, current_user.id, action_err)
@@ -552,7 +718,11 @@ async def matchmaking_endpoint(
                 )
 
     except WebSocketDisconnect:
+        if hasattr(manager, "remove_user_from_all_spectating"):
+            manager.remove_user_from_all_spectating(current_user.id)
         await manager.disconnect(current_user.id)
     except Exception as e:
         logger.error("WebSocket unexpected error for user %s: %s", current_user.id, e)
+        if hasattr(manager, "remove_user_from_all_spectating"):
+            manager.remove_user_from_all_spectating(current_user.id)
         await manager.disconnect(current_user.id)
