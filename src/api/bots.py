@@ -2,6 +2,7 @@
 
 import asyncio
 from datetime import datetime, timezone
+import random
 import chess
 import chess.pgn
 from fastapi import APIRouter, Depends, HTTPException
@@ -111,6 +112,17 @@ BOT_INSTANCES = {
 
 BOT_METADATA = {b["id"]: b for b in AVAILABLE_BOTS}
 
+# Коэффициент темпа игры исторических мастеров (Морфи и Лабурдонне играли молниеносно, Стаунтон и Паульсен — долго)
+BOT_TEMPO_MULTIPLIER = {
+    "morphy": 0.72,
+    "labourdonnais": 0.78,
+    "anderssen": 0.90,
+    "philidor": 0.95,
+    "zukertort": 1.00,
+    "paulsen": 1.22,
+    "staunton": 1.28,
+}
+
 
 class BotMoveRequest(BaseModel):
     bot_id: str = Field(default="philidor", description="ID исторического бота")
@@ -124,6 +136,7 @@ class BotMoveResponse(BaseModel):
     fen_after: str
     source: str
     comment: str
+    thinking_time_ms: int = Field(default=650, description="Рекомендуемое время размышления бота в мс")
 
 
 class BotGameSaveRequest(BaseModel):
@@ -139,6 +152,51 @@ class BotGameSaveResponse(BaseModel):
     game_id: int
     status: str
     result: str
+
+
+def calculate_authentic_thinking_time_ms(
+        bot_id: str,
+        board: chess.Board,
+        uci_move: str,
+        source: str,
+) -> int:
+    """
+    Вычисляет реалистичное человеческое время на ход (в мс) для исторического мастера
+    с учётом его темпа, дебютной книги, единственного ответа или тактической сложности позиции.
+    """
+    legal_moves = list(board.legal_moves)
+    num_legal = len(legal_moves)
+    tempo = BOT_TEMPO_MULTIPLIER.get(bot_id, 1.0)
+
+    # Единственный легальный ход (например, выход из шаха) — почти мгновенно
+    if num_legal <= 1:
+        return int(random.randint(240, 380) * tempo)
+
+    # Ход из дебютной книги — быстрое воспроизведение по памяти
+    if source == "book":
+        base_ms = random.randint(360, 680) + board.fullmove_number * 22
+        return int(base_ms * tempo)
+
+    move_obj = chess.Move.from_uci(uci_move)
+    is_capture = board.is_capture(move_obj)
+    gives_check = board.gives_check(move_obj)
+
+    # Оцениваем напряжённость позиции (количество возможных взятий и разветвлений)
+    captures_available = sum(1 for m in legal_moves if board.is_capture(m))
+    complexity_ms = min(num_legal * 26, 950) + min(captures_available * 95, 550)
+
+    if board.is_check():
+        complexity_ms += 250
+    if is_capture or gives_check:
+        complexity_ms += 280
+
+    # В глубоком эндшпиле (мало фигур) техническая реализация идёт быстрее
+    piece_count = len(board.piece_map())
+    if piece_count <= 10:
+        complexity_ms = int(complexity_ms * 0.65)
+
+    raw_ms = (520 + complexity_ms + random.randint(-110, 180)) * tempo
+    return max(320, min(int(raw_ms), 2900))
 
 
 def _detect_eco_code(moves_uci: list[str]) -> str:
@@ -326,6 +384,13 @@ async def get_bot_move(payload: BotMoveRequest):
         raise HTTPException(status_code=400, detail="Партия уже завершена")
 
     result = await asyncio.to_thread(bot.choose_move, payload.fen)
+    thinking_time_ms = calculate_authentic_thinking_time_ms(
+        bot_id=payload.bot_id,
+        board=board,
+        uci_move=result["uci"],
+        source=result["source"],
+    )
+
     return BotMoveResponse(
         bot_id=payload.bot_id,
         uci=result["uci"],
@@ -333,6 +398,7 @@ async def get_bot_move(payload: BotMoveRequest):
         fen_after=result["fen_after"],
         source=result["source"],
         comment=result["comment"],
+        thinking_time_ms=thinking_time_ms,
     )
 
 
