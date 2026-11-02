@@ -1,7 +1,7 @@
 // --- FILE: frontend/src/components/Chessboard.tsx ---
 
 import {useState, useEffect, useRef, useCallback} from 'react';
-import {useNavigate} from 'react-router-dom';
+import {useNavigate, useParams} from 'react-router-dom';
 import {Chess} from 'chess.js';
 import {
     ChevronFirst,
@@ -28,7 +28,13 @@ import {
     Eye,
     Sliders,
     Zap,
-    X
+    X,
+    Link2,
+    Copy,
+    Check,
+    Send,
+    MessageSquare,
+    Radio
 } from 'lucide-react';
 import {gameSocket} from '../services/gameSocket';
 
@@ -56,6 +62,30 @@ export function getDefaultBoardSize(): number {
     }
     return 580;
 }
+
+interface LiveGameItem {
+    game_id: number;
+    white_username: string;
+    white_rating: number;
+    black_username: string;
+    black_rating: number;
+    base_time_ms: number;
+    increment_ms: number;
+    spectators_count: number;
+}
+
+interface ChatMessageItem {
+    sender: string;
+    text: string;
+    timestamp: number;
+}
+
+const QUICK_CHAT_PRESETS = [
+    '👋 Удачи!',
+    '🤝 Спасибо за игру!',
+    '👏 Красивый ход!',
+    '⏱ Цейтнот!'
+];
 
 interface QueuePlayer {
     user_id: number;
@@ -649,6 +679,17 @@ function cloneChessInstance(source: Chess): Chess {
 
 export default function Chessboard() {
     const navigate = useNavigate();
+    const {inviteCode} = useParams<{ inviteCode?: string }>();
+
+    // Состояния Спринта 3: Приватные вызовы, Режим зрителя (Live) и Чат
+    const [lobbyTab, setLobbyTab] = useState<'lobby' | 'live'>('lobby');
+    const [liveGames, setLiveGames] = useState<LiveGameItem[]>([]);
+    const [spectatingGameId, setSpectatingGameId] = useState<number | null>(null);
+    const [inviteColorPref, setInviteColorPref] = useState<'white' | 'black' | 'random'>('random');
+    const [createdInviteCode, setCreatedInviteCode] = useState<string | null>(null);
+    const [inviteCopied, setInviteCopied] = useState(false);
+    const [chatMessages, setChatMessages] = useState<ChatMessageItem[]>([]);
+    const [chatInput, setChatInput] = useState('');
 
     const [game, setGame] = useState(new Chess());
     const [history, setHistory] = useState<any[]>([]);
@@ -1177,6 +1218,9 @@ export default function Chessboard() {
 
         const handleMatchFound = (data: any) => {
             setIsSearching(false);
+            setSpectatingGameId(null);
+            setCreatedInviteCode(null);
+            setChatMessages([]);
             setActiveBot(null);
             setBotComment(null);
             setSavedBotGameId(null);
@@ -1323,6 +1367,56 @@ export default function Chessboard() {
             setRematchStatus('declined');
         };
 
+        const handleInviteCreated = (data: any) => {
+            if (data.code) {
+                setCreatedInviteCode(data.code);
+                const url = `${window.location.origin}/challenge/${data.code}`;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(url).catch(() => {});
+                }
+                setInviteCopied(true);
+                setTimeout(() => setInviteCopied(false), 3000);
+            }
+        };
+
+        const handleSpectateStarted = (data: any) => {
+            setIsSearching(false);
+            setActiveBot(null);
+            setGameId(null);
+            setSpectatingGameId(data.game_id);
+            setWhitePlayer({username: data.white_username || 'Белые', rating: String(data.white_rating || 1200)});
+            setBlackPlayer({username: data.black_username || 'Черные', rating: String(data.black_rating || 1200)});
+            setWhiteTimeMs(data.white_time_ms ?? data.base_time_ms ?? 180000);
+            setBlackTimeMs(data.black_time_ms ?? data.base_time_ms ?? 180000);
+
+            const restored = new Chess();
+            if (data.pgn) {
+                try {
+                    restored.loadPgn(data.pgn);
+                } catch {
+                    if (data.fen) restored.load(data.fen);
+                }
+            } else if (data.fen) {
+                restored.load(data.fen);
+            }
+            setGame(restored);
+            setHistory(restored.history({verbose: true}));
+            setViewIndex(-1);
+            setGameOverResult(null);
+            setChatMessages([]);
+            setDrawOfferStatus(`Режим зрителя: ${data.white_username} vs ${data.black_username}`);
+        };
+
+        const handleChatMessage = (data: any) => {
+            if (data.text && data.sender) {
+                setChatMessages(prev => [...prev.slice(-49), {
+                    sender: data.sender,
+                    text: data.text,
+                    timestamp: data.timestamp || Date.now()
+                }]);
+            }
+        };
+
         const handleServerError = (data: any) => {
             console.warn('Сервер отклонил действие:', data);
             setPremove(null);
@@ -1352,6 +1446,9 @@ export default function Chessboard() {
         gameSocket.on('draw_declined', handleDrawDeclined);
         gameSocket.on('rematch_offered', handleRematchOffered);
         gameSocket.on('rematch_declined', handleRematchDeclined);
+        gameSocket.on('invite_created', handleInviteCreated);
+        gameSocket.on('spectate_started', handleSpectateStarted);
+        gameSocket.on('chat_message', handleChatMessage);
         gameSocket.on('error', handleServerError);
 
         return () => {
@@ -1362,26 +1459,43 @@ export default function Chessboard() {
             gameSocket.off('draw_declined', handleDrawDeclined);
             gameSocket.off('rematch_offered', handleRematchOffered);
             gameSocket.off('rematch_declined', handleRematchDeclined);
+            gameSocket.off('invite_created', handleInviteCreated);
+            gameSocket.off('spectate_started', handleSpectateStarted);
+            gameSocket.off('chat_message', handleChatMessage);
             gameSocket.off('error', handleServerError);
         };
     }, [myColor, playAudio, updateSessionStats]);
 
     useEffect(() => {
+        if (!inviteCode || !localStorage.getItem('token')) return;
+        const timer = setTimeout(() => {
+            gameSocket.send('accept_invite', {code: inviteCode});
+            navigate('/', {replace: true});
+        }, 450);
+        return () => clearTimeout(timer);
+    }, [inviteCode, navigate]);
+
+    useEffect(() => {
         let interval: any;
         if (!gameId) {
-            const fetchQueue = async () => {
+            const fetchLobbyAndLive = async () => {
                 try {
-                    const res = await fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/queue`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        setQueuePlayers(data);
+                    const [qRes, liveRes] = await Promise.all([
+                        fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/queue`),
+                        fetch(`${API_BASE_URL}/api/v1/profile/games/live`)
+                    ]);
+                    if (qRes.ok) {
+                        setQueuePlayers(await qRes.json());
+                    }
+                    if (liveRes.ok) {
+                        setLiveGames(await liveRes.json());
                     }
                 } catch (e) {
-                    console.error('Failed to fetch queue', e);
+                    console.error('Failed to fetch lobby/live data', e);
                 }
             };
-            fetchQueue();
-            interval = setInterval(fetchQueue, 1500);
+            fetchLobbyAndLive();
+            interval = setInterval(fetchLobbyAndLive, 2000);
         } else {
             setQueuePlayers([]);
         }
@@ -1391,7 +1505,7 @@ export default function Chessboard() {
     const currentTurnChar = game.turn();
 
     useEffect(() => {
-        if ((!gameId && !activeBot) || gameOverResult) return;
+        if ((!gameId && !activeBot && !spectatingGameId) || gameOverResult) return;
 
         let lastTick = Date.now();
         const currentTurnColor = currentTurnChar === 'w' ? 'white' : 'black';
@@ -1442,12 +1556,12 @@ export default function Chessboard() {
         explicitPromotion?: PromotionPiece,
         isPremoveMove: boolean = false
     ): boolean => {
-        if (gameOverResult || viewIndex !== -1) return false;
+        if (gameOverResult || viewIndex !== -1 || spectatingGameId) return false;
 
         const piece = game.get(from as any);
         const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
 
-        if (!piece || piece.color !== (game.turn() === 'w' ? 'w' : 'b') || ((gameId || activeBot) && currentTurnColor !== myColor)) {
+        if (!piece || piece.color !== (game.turn() === 'w' ? 'w' : 'b') || ((gameId || activeBot || spectatingGameId) && currentTurnColor !== myColor)) {
             setSelectedSquare(null);
             return false;
         }
@@ -1638,7 +1752,7 @@ export default function Chessboard() {
 
             if (targetSquare && targetSquare !== dragState.from) {
                 const turnColor = game.turn() === 'w' ? 'white' : 'black';
-                if ((gameId || activeBot) && turnColor !== myColor) {
+                if ((gameId || activeBot || spectatingGameId) && turnColor !== myColor) {
                     scheduleOrPromotePremove(dragState.from, targetSquare);
                 } else {
                     executeMove(dragState.from, targetSquare);
@@ -1715,6 +1829,47 @@ export default function Chessboard() {
         setPremove(null);
         botGameSavedRef.current = false;
         gameSocket.send('accept_challenge', {target_user_id: targetUserId});
+    };
+
+    const handleCreatePrivateInvite = () => {
+        gameSocket.send('create_invite', {
+            base_time_ms: Math.round(effectiveWhiteBaseMinutes * 60 * 1000),
+            increment_ms: Math.round(effectiveIncSeconds * 1000),
+            color_pref: inviteColorPref
+        });
+    };
+
+    const handleCopyInviteLink = () => {
+        if (!createdInviteCode) return;
+        const url = `${window.location.origin}/challenge/${createdInviteCode}`;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).catch(() => {});
+        }
+        setInviteCopied(true);
+        setTimeout(() => setInviteCopied(false), 2500);
+    };
+
+    const handleSpectateGame = (targetGameId: number) => {
+        gameSocket.send('spectate_game', {game_id: targetGameId});
+    };
+
+    const handleLeaveSpectate = () => {
+        if (spectatingGameId) {
+            gameSocket.send('leave_spectate', {game_id: spectatingGameId});
+        }
+        setSpectatingGameId(null);
+        handleResetSandbox();
+    };
+
+    const handleSendChatMessage = (textToSend?: string) => {
+        const activeGid = gameId || spectatingGameId;
+        const finalMsg = (textToSend ?? chatInput).trim();
+        if (!activeGid || !finalMsg) return;
+        gameSocket.send('chat_message', {
+            game_id: activeGid,
+            text: finalMsg.slice(0, 140)
+        });
+        if (!textToSend) setChatInput('');
     };
 
     const handleAbortGame = () => {
@@ -1839,7 +1994,7 @@ export default function Chessboard() {
     };
 
     const handleSquareClick = (squareId: string) => {
-        if (viewIndex !== -1 || gameOverResult) return;
+        if (viewIndex !== -1 || gameOverResult || spectatingGameId) return;
 
         if (pendingPromotion) {
             setPendingPromotion(null);
@@ -1849,7 +2004,7 @@ export default function Chessboard() {
         const turnChar = game.turn();
         const currentTurnColor = turnChar === 'w' ? 'white' : 'black';
         const myColorChar = myColor === 'white' ? 'w' : 'b';
-        const isOpponentTurn = (gameId || activeBot) && currentTurnColor !== myColor;
+        const isOpponentTurn = (gameId || activeBot || spectatingGameId) && currentTurnColor !== myColor;
 
         // Режим предхода (Premove), когда сейчас очередь хода соперника
         if (isOpponentTurn) {
@@ -2283,49 +2438,156 @@ export default function Chessboard() {
                     )}
                 </div>
 
-                {/* Открытые вызовы в лобби */}
+                {/* Приватный вызов по прямой ссылке (Таск 3.2) */}
+                {!gameId && (
+                    <div className="bg-acacia-dark p-2.5 rounded border border-amber-800/40 flex flex-col gap-2 shadow-inner">
+                        <div className="flex items-center justify-between text-[11px] font-bold text-amber-200">
+                            <span className="flex items-center gap-1.5">
+                                <Link2 size={13} className="text-amber-400"/> Играть с другом (по ссылке)
+                            </span>
+                            <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded border border-amber-900/40 text-[10px]">
+                                {(['white', 'random', 'black'] as const).map(c => (
+                                    <button
+                                        key={c}
+                                        type="button"
+                                        onClick={() => setInviteColorPref(c)}
+                                        className={`px-1.5 py-0.5 rounded transition cursor-pointer ${
+                                            inviteColorPref === c ? 'bg-amber-700 text-white' : 'text-boxwood/60 hover:text-amber-200'
+                                        }`}
+                                        title={c === 'white' ? 'Играть белыми' : c === 'black' ? 'Играть чёрными' : 'Случайный цвет'}
+                                    >
+                                        {c === 'white' ? '♔' : c === 'black' ? '♚' : '🎲'}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {!createdInviteCode ? (
+                            <button
+                                type="button"
+                                onClick={handleCreatePrivateInvite}
+                                className="w-full py-1.5 px-3 rounded bg-amber-900/50 hover:bg-amber-800/60 border border-amber-600/40 text-amber-200 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow"
+                            >
+                                <Link2 size={13}/> Создать ссылку на вызов
+                            </button>
+                        ) : (
+                            <div className="flex items-center gap-1.5">
+                                <input
+                                    type="text"
+                                    readOnly
+                                    value={`${window.location.origin}/challenge/${createdInviteCode}`}
+                                    className="flex-1 bg-black/50 border border-amber-700/50 rounded px-2 py-1 text-[11px] font-mono text-amber-200 outline-none"
+                                />
+                                <button
+                                    type="button"
+                                    onClick={handleCopyInviteLink}
+                                    className="px-2.5 py-1 rounded bg-emerald-800 hover:bg-emerald-700 text-emerald-100 text-xs font-bold flex items-center gap-1 shrink-0 cursor-pointer"
+                                    title="Скопировать ссылку"
+                                >
+                                    {inviteCopied ? <Check size={13}/> : <Copy size={13}/>}
+                                    {inviteCopied ? 'Скопировано' : 'Копия'}
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* Вкладки: Вызовы (Лобби) | Идут сейчас (Live) (Таск 3.3) */}
                 <div
                     className="flex flex-col flex-1 min-h-[9rem] bg-acacia-dark rounded border border-amber-900/40 p-3 shadow-inner">
-                    <div
-                        className="text-xs font-bold text-amber-200 mb-2 flex items-center justify-between border-b border-amber-900/30 pb-1.5">
-                        <span>Открытые вызовы в лобби</span>
-                        <span className="text-[11px] font-mono px-1.5 py-0.5 rounded bg-black/40 text-amber-400">
-                            {filteredQueue.length}
-                        </span>
+                    <div className="grid grid-cols-2 gap-1 p-1 bg-black/40 rounded border border-amber-900/40 mb-2">
+                        <button
+                            type="button"
+                            onClick={() => setLobbyTab('lobby')}
+                            className={`py-1 px-2 rounded text-[11px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                                lobbyTab === 'lobby'
+                                    ? 'bg-amber-700 text-amber-100 shadow'
+                                    : 'text-boxwood/65 hover:text-amber-200'
+                            }`}
+                        >
+                            <span>Вызовы (Лобби)</span>
+                            <span className="text-[10px] font-mono px-1 rounded bg-black/40">{filteredQueue.length}</span>
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setLobbyTab('live')}
+                            className={`py-1 px-2 rounded text-[11px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                                lobbyTab === 'live'
+                                    ? 'bg-amber-700 text-amber-100 shadow'
+                                    : 'text-boxwood/65 hover:text-amber-200'
+                            }`}
+                        >
+                            <Radio size={11} className={liveGames.length > 0 ? 'text-emerald-400 animate-pulse' : ''}/>
+                            <span>Live</span>
+                            <span className="text-[10px] font-mono px-1 rounded bg-black/40">{liveGames.length}</span>
+                        </button>
                     </div>
 
                     <div
                         className="flex-1 overflow-y-auto space-y-2 text-xs font-mono [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
-                        {filteredQueue.length === 0 ? (
-                            <div
-                                className="h-full flex flex-col items-center justify-center p-3 text-boxwood/50 text-center font-serif text-xs">
-                                <span>
-                                    {isSearching
-                                        ? 'Вы в очереди. Ожидание соперников...'
-                                        : 'В лобби пока нет вызовов. Нажмите «Найти соперника» выше.'}
-                                </span>
-                            </div>
-                        ) : (
-                            filteredQueue.map((p) => (
+                        {lobbyTab === 'lobby' ? (
+                            filteredQueue.length === 0 ? (
                                 <div
-                                    key={p.user_id}
-                                    className="p-2 bg-black/40 rounded border border-amber-600/30 flex justify-between items-center hover:border-amber-500/60 transition"
-                                >
-                                    <div>
-                                        <span className="text-amber-300 font-bold">{p.username}</span>
-                                        <div className="text-[10px] text-boxwood/70">
-                                            Рейтинг: {p.rating} | {Math.round(p.base_time_ms / 60000)}+{(p.increment_ms || 0) / 1000}
-                                        </div>
-                                    </div>
-                                    <button
-                                        disabled={!!gameId && !gameOverResult}
-                                        onClick={() => acceptChallenge(p.user_id)}
-                                        className="px-2.5 py-1 bg-emerald-800 hover:bg-emerald-700 disabled:opacity-40 text-emerald-100 rounded text-xs font-bold transition flex items-center gap-1 shadow"
-                                    >
-                                        <Play size={12}/> Играть
-                                    </button>
+                                    className="h-full flex flex-col items-center justify-center p-3 text-boxwood/50 text-center font-serif text-xs">
+                                    <span>
+                                        {isSearching
+                                            ? 'Вы в очереди. Ожидание соперников...'
+                                            : 'В лобби пока нет вызовов. Нажмите «Найти соперника» выше.'}
+                                    </span>
                                 </div>
-                            ))
+                            ) : (
+                                filteredQueue.map((p) => (
+                                    <div
+                                        key={p.user_id}
+                                        className="p-2 bg-black/40 rounded border border-amber-600/30 flex justify-between items-center hover:border-amber-500/60 transition"
+                                    >
+                                        <div>
+                                            <span className="text-amber-300 font-bold">{p.username}</span>
+                                            <div className="text-[10px] text-boxwood/70">
+                                                Рейтинг: {p.rating} | {Math.round(p.base_time_ms / 60000)}+{(p.increment_ms || 0) / 1000}
+                                            </div>
+                                        </div>
+                                        <button
+                                            disabled={!!gameId && !gameOverResult}
+                                            onClick={() => acceptChallenge(p.user_id)}
+                                            className="px-2.5 py-1 bg-emerald-800 hover:bg-emerald-700 disabled:opacity-40 text-emerald-100 rounded text-xs font-bold transition flex items-center gap-1 shadow"
+                                        >
+                                            <Play size={12}/> Играть
+                                        </button>
+                                    </div>
+                                ))
+                            )
+                        ) : (
+                            liveGames.length === 0 ? (
+                                <div
+                                    className="h-full flex flex-col items-center justify-center p-3 text-boxwood/50 text-center font-serif text-xs">
+                                    <span>Сейчас нет активных PvP-партий.</span>
+                                </div>
+                            ) : (
+                                liveGames.map((lg) => (
+                                    <div
+                                        key={lg.game_id}
+                                        className="p-2 bg-black/40 rounded border border-amber-600/30 flex justify-between items-center hover:border-amber-500/60 transition gap-2"
+                                    >
+                                        <div className="min-w-0">
+                                            <div className="text-amber-200 font-bold truncate text-[11px]">
+                                                {lg.white_username} <span className="text-boxwood/50">vs</span> {lg.black_username}
+                                            </div>
+                                            <div className="text-[10px] text-boxwood/70">
+                                                {Math.round(lg.base_time_ms / 60000)}+{(lg.increment_ms || 0) / 1000} • 👁 {lg.spectators_count}
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            disabled={!!gameId && !gameOverResult}
+                                            onClick={() => handleSpectateGame(lg.game_id)}
+                                            className="px-2 py-1 bg-amber-800/80 hover:bg-amber-700 disabled:opacity-40 text-amber-100 rounded text-[11px] font-bold transition flex items-center gap-1 shrink-0 shadow cursor-pointer"
+                                        >
+                                            <Eye size={12}/> Смотреть
+                                        </button>
+                                    </div>
+                                ))
+                            )
                         )}
                     </div>
                 </div>
@@ -2398,8 +2660,8 @@ export default function Chessboard() {
                         <div className="min-w-0">
                             <div className="font-bold flex items-center gap-2">
                                 <span
-                                    className="truncate">{(gameId || activeBot) ? topPlayerInfo.username : (topIsWhite ? 'Белые (Анализ)' : 'Черные (Анализ)')}</span>
-                                {(gameId || activeBot) && (
+                                    className="truncate">{(gameId || activeBot || spectatingGameId) ? topPlayerInfo.username : (topIsWhite ? 'Белые (Анализ)' : 'Черные (Анализ)')}</span>
+                                {(gameId || activeBot || spectatingGameId) && (
                                     <span
                                         className="text-xs px-1.5 py-0.5 rounded bg-black/40 text-amber-400 border border-amber-600/20 flex items-center gap-1 font-mono">
                                         {topPlayerInfo.rating}
@@ -2425,7 +2687,7 @@ export default function Chessboard() {
                     </div>
                     <div
                         className="bg-[#1A120B] px-5 py-2 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-3xl font-bold tracking-wider text-amber-500 min-w-[145px] text-center">
-                        {(gameId || activeBot) ? formatTime(topPlayerTime) : formatTime(topIdlePreviewMs)}
+                        {(gameId || activeBot || spectatingGameId) ? formatTime(topPlayerTime) : formatTime(topIdlePreviewMs)}
                     </div>
                 </div>
 
@@ -2579,7 +2841,7 @@ export default function Chessboard() {
                                                     const turnChar = currentGame.turn();
                                                     const myColorChar = myColor === 'white' ? 'w' : 'b';
 
-                                                    if (gameId || activeBot) {
+                                                    if (gameId || activeBot || spectatingGameId) {
                                                         if (piece.color !== myColorChar) return;
                                                     } else {
                                                         if (piece.color !== turnChar) return;
@@ -2599,7 +2861,7 @@ export default function Chessboard() {
                                                 }}
                                                 className={`relative w-full h-full p-[3%] z-20 transition-transform duration-75 ${
                                                     viewIndex === -1 && !gameOverResult && (
-                                                        (gameId || activeBot)
+                                                        (gameId || activeBot || spectatingGameId)
                                                             ? piece.color === (myColor === 'white' ? 'w' : 'b')
                                                             : piece.color === currentGame.turn()
                                                     )
@@ -2679,8 +2941,8 @@ export default function Chessboard() {
                         <div className="min-w-0">
                             <div className="font-bold flex items-center gap-2">
                                 <span
-                                    className="truncate">{(gameId || activeBot) ? bottomPlayerInfo.username : (!topIsWhite ? 'Вы (Белые)' : 'Вы (Черные)')}</span>
-                                {(gameId || activeBot) && (
+                                    className="truncate">{(gameId || activeBot || spectatingGameId) ? bottomPlayerInfo.username : (!topIsWhite ? 'Вы (Белые)' : 'Вы (Черные)')}</span>
+                                {(gameId || activeBot || spectatingGameId) && (
                                     <span
                                         className="text-xs px-1.5 py-0.5 rounded bg-black/40 text-amber-400 border border-amber-600/20 flex items-center gap-1 font-mono">
                                         {bottomPlayerInfo.rating}
@@ -2706,7 +2968,7 @@ export default function Chessboard() {
                     </div>
                     <div
                         className="bg-[#1A120B] px-5 py-2 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-3xl font-bold tracking-wider text-amber-500 min-w-[145px] text-center">
-                        {(gameId || activeBot) ? formatTime(bottomPlayerTime) : formatTime(bottomIdlePreviewMs)}
+                        {(gameId || activeBot || spectatingGameId) ? formatTime(bottomPlayerTime) : formatTime(bottomIdlePreviewMs)}
                     </div>
                 </div>
 
@@ -2724,7 +2986,7 @@ export default function Chessboard() {
                             <ListOrdered className="text-amber-400" size={14}/> Журнал ходов
                         </div>
                         <div className="text-xs font-bold text-amber-200 mt-0.5 truncate">
-                            {(gameId || activeBot)
+                            {(gameId || activeBot || spectatingGameId)
                                 ? `${whitePlayer.username} vs ${blackPlayer.username}`
                                 : 'Свободная доска / Разбор'}
                         </div>
@@ -2792,7 +3054,7 @@ export default function Chessboard() {
                                 className="h-full flex flex-col items-center justify-center p-6 text-center text-boxwood/40 font-serif text-xs gap-1.5">
                                 <span>Ходов пока нет.</span>
                                 <span className="text-[11px] text-boxwood/30">
-                                    {(gameId || activeBot)
+                                    {(gameId || activeBot || spectatingGameId)
                                         ? 'Сделайте первый ход на доске.'
                                         : 'Двигайте фигуры на доске для анализа или начните игру слева.'}
                                 </span>
@@ -2913,6 +3175,78 @@ export default function Chessboard() {
                         </button>
                     </div>
                 </div>
+
+                {/* Компактный игровой чат и быстрые реплики (Таск 3.4) */}
+                {(gameId || spectatingGameId) && (
+                    <div className="bg-acacia-dark p-2.5 rounded border border-amber-900/50 flex flex-col gap-2">
+                        <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-amber-400/90 font-bold">
+                            <span className="flex items-center gap-1">
+                                <MessageSquare size={12}/> Игровой чат
+                            </span>
+                            {spectatingGameId && (
+                                <button
+                                    type="button"
+                                    onClick={handleLeaveSpectate}
+                                    className="text-rose-300 hover:text-rose-200 underline text-[10px] font-sans cursor-pointer"
+                                >
+                                    Выйти из просмотра
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="h-20 overflow-y-auto bg-black/40 rounded p-2 text-xs space-y-1 font-sans border border-amber-950/50 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
+                            {chatMessages.length === 0 ? (
+                                <div className="h-full flex items-center justify-center text-[11px] text-boxwood/40 italic">
+                                    Сообщений пока нет. Поприветствуйте соперника!
+                                </div>
+                            ) : (
+                                chatMessages.map((msg, i) => (
+                                    <div key={i} className="leading-snug break-words">
+                                        <span className="font-bold text-amber-300 mr-1.5">{msg.sender}:</span>
+                                        <span className="text-boxwood-light">{msg.text}</span>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        <div className="flex flex-wrap gap-1">
+                            {QUICK_CHAT_PRESETS.map((preset) => (
+                                <button
+                                    key={preset}
+                                    type="button"
+                                    onClick={() => handleSendChatMessage(preset)}
+                                    className="px-1.5 py-0.5 rounded bg-black/35 hover:bg-amber-900/50 border border-amber-800/40 text-[10px] text-amber-200 transition cursor-pointer"
+                                >
+                                    {preset}
+                                </button>
+                            ))}
+                        </div>
+
+                        <form
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                handleSendChatMessage();
+                            }}
+                            className="flex gap-1.5"
+                        >
+                            <input
+                                type="text"
+                                maxLength={140}
+                                value={chatInput}
+                                onChange={(e) => setChatInput(e.target.value)}
+                                placeholder="Написать сообщение..."
+                                className="flex-1 bg-black/50 border border-amber-800/50 rounded px-2 py-1 text-xs text-amber-100 outline-none focus:border-amber-500 font-sans"
+                            />
+                            <button
+                                type="submit"
+                                className="px-2.5 py-1 bg-amber-700 hover:bg-amber-600 text-amber-100 rounded text-xs font-bold flex items-center justify-center transition cursor-pointer"
+                                title="Отправить"
+                            >
+                                <Send size={12}/>
+                            </button>
+                        </form>
+                    </div>
+                )}
 
                 {/* Кнопки управления партией */}
                 {gameId ? (

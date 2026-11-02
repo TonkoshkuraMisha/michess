@@ -14,6 +14,7 @@ class ConnectionManager:
     """
 
     def __init__(self):
+        self.game_spectators: dict[int, set[int]] = {}
         self.active_connections: dict[int, WebSocket] = {}
         self.redis = redis_client
         self.pubsub = self.redis.pubsub()
@@ -69,6 +70,41 @@ class ConnectionManager:
     async def send_personal_message(self, message: dict, user_id: int):
         """Отправляет сообщение пользователю через Redis."""
         await self.redis.publish(f"user:{user_id}", json.dumps(message))
+
+
+
+    def add_spectator(self, game_id: int, user_id: int) -> None:
+        if not hasattr(self, "game_spectators"):
+            self.game_spectators: dict[int, set[int]] = {}
+        self.game_spectators.setdefault(int(game_id), set()).add(int(user_id))
+
+    def remove_spectator(self, game_id: int, user_id: int) -> None:
+        if not hasattr(self, "game_spectators"):
+            return
+        gid = int(game_id)
+        if gid in self.game_spectators:
+            self.game_spectators[gid].discard(int(user_id))
+            if not self.game_spectators[gid]:
+                del self.game_spectators[gid]
+
+    def remove_user_from_all_spectating(self, user_id: int) -> None:
+        if not hasattr(self, "game_spectators"):
+            return
+        uid = int(user_id)
+        empty_games = []
+        for gid, watchers in self.game_spectators.items():
+            watchers.discard(uid)
+            if not watchers:
+                empty_games.append(gid)
+        for gid in empty_games:
+            del self.game_spectators[gid]
+
+    async def broadcast_to_spectators(self, game_id: int, message: dict) -> None:
+        if not hasattr(self, "game_spectators"):
+            return
+        watchers = list(self.game_spectators.get(int(game_id), set()))
+        for uid in watchers:
+            await self.send_personal_message(message, uid)
 
 
 manager = ConnectionManager()
