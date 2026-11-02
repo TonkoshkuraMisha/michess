@@ -50,3 +50,51 @@ async def test_disconnect_and_reconnect_time_deduction():
     assert state_after_reconnect["white_disconnected"] == "false"
     # Время должно уменьшиться примерно на 5 секунд (180000 - 5000 = 175000)
     assert state_after_reconnect["white_time_ms"] <= 175000
+
+
+@pytest.mark.asyncio
+async def test_abort_game_without_rating_change(db_session):
+    """Проверяет, что отмена партии на 1-м ходу (до 2 полуходов) не меняет рейтинг и ставит статус ABORTED."""
+    from src.models.user import User
+    from src.models.game import Game, GameStatus
+    from src.services.game_state import state_manager
+
+    u1 = User(username="abort_white_player", hashed_password="pw", rating=1500)
+    u2 = User(username="abort_black_player", hashed_password="pw", rating=1500)
+    db_session.add_all([u1, u2])
+    await db_session.commit()
+    await db_session.refresh(u1)
+    await db_session.refresh(u2)
+
+    game = Game(
+        white_player_id=u1.id,
+        black_player_id=u2.id,
+        status=GameStatus.IN_PROGRESS,
+        base_time_ms=180000,
+        increment_ms=2000,
+        is_rated=True,
+    )
+    db_session.add(game)
+    await db_session.commit()
+    await db_session.refresh(game)
+
+    await state_manager.redis.hset(f"game:{game.id}:state", mapping={
+        "white_id": str(u1.id),
+        "black_id": str(u2.id),
+        "status": "in_progress",
+        "state_version": "1",
+        "last_move_at": "1000",
+    })
+
+    res = await state_manager.abort_game(db_session, game.id)
+    assert res["status"] == "aborted"
+    assert res["result"] == "*"
+    assert res["white_delta"] == 0
+    assert res["black_delta"] == 0
+
+    await db_session.refresh(u1)
+    await db_session.refresh(u2)
+    await db_session.refresh(game)
+    assert u1.rating == 1500
+    assert u2.rating == 1500
+    assert game.status == GameStatus.ABORTED

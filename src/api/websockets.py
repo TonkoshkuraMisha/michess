@@ -3,6 +3,7 @@
 import time
 import logging
 import uuid
+import chess
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,6 +12,7 @@ from src.services.connection_manager import manager
 from src.services.game_state import state_manager
 from src.api.deps import get_current_user_ws
 from src.models.user import User
+from src.models.game import Game, GameStatus
 
 logger = logging.getLogger(__name__)
 
@@ -62,6 +64,92 @@ async def _send_active_game_snapshot_if_exists(db: AsyncSession, user: User):
     await manager.send_personal_message(payload, user.id)
 
 
+async def create_rematch_game(db: AsyncSession, prev_state: dict) -> dict:
+    """
+    Создаёт новую партию-реванш в БД и Redis с переменой цвета фигур (white_id <-> black_id)
+    и тем же контролем времени.
+    """
+    new_white_id = int(prev_state["black_id"])
+    new_black_id = int(prev_state["white_id"])
+    base_time_ms = int(prev_state.get("base_time_ms", 180000))
+    increment_ms = int(prev_state.get("increment_ms", 0))
+
+    white_user = await db.get(User, new_white_id)
+    black_user = await db.get(User, new_black_id)
+
+    white_rating = white_user.rating if white_user else 1200
+    black_rating = black_user.rating if black_user else 1200
+    white_username = white_user.username if white_user else "Белые"
+    black_username = black_user.username if black_user else "Черные"
+
+    now_ms = int(time.time() * 1000)
+    initial_fen = chess.STARTING_FEN
+
+    new_game = Game(
+        white_player_id=new_white_id,
+        black_player_id=new_black_id,
+        status=GameStatus.IN_PROGRESS,
+        base_time_ms=base_time_ms,
+        increment_ms=increment_ms,
+        is_rated=True,
+        state_version=0,
+        turn="w",
+        board_fen=initial_fen,
+        white_time_ms=base_time_ms,
+        black_time_ms=base_time_ms,
+        last_move_at=now_ms,
+        white_initial_rating=white_rating,
+        black_initial_rating=black_rating,
+    )
+    db.add(new_game)
+    await db.commit()
+    await db.refresh(new_game)
+
+    new_game_id = new_game.id
+
+    if hasattr(state_manager, "init_game"):
+        await state_manager.init_game(
+            game_id=new_game_id,
+            white_id=new_white_id,
+            black_id=new_black_id,
+            base_time_ms=base_time_ms,
+            increment_ms=increment_ms,
+        )
+    else:
+        await state_manager.redis.hset(f"game:{new_game_id}:state", mapping={
+            "white_id": str(new_white_id),
+            "black_id": str(new_black_id),
+            "board_fen": initial_fen,
+            "pgn": "",
+            "turn": "white",
+            "status": "in_progress",
+            "state_version": "0",
+            "base_time_ms": str(base_time_ms),
+            "increment_ms": str(increment_ms),
+            "white_time_ms": str(base_time_ms),
+            "black_time_ms": str(base_time_ms),
+            "last_move_at": str(now_ms),
+            "draw_offer": "",
+            "rematch_offer": "",
+        })
+        await state_manager.redis.sadd("active_games", str(new_game_id))
+        await state_manager.redis.set(f"user:{new_white_id}:current_game", str(new_game_id))
+        await state_manager.redis.set(f"user:{new_black_id}:current_game", str(new_game_id))
+
+    return {
+        "game_id": new_game_id,
+        "white_id": new_white_id,
+        "black_id": new_black_id,
+        "white_username": white_username,
+        "white_rating": white_rating,
+        "black_username": black_username,
+        "black_rating": black_rating,
+        "base_time_ms": base_time_ms,
+        "increment_ms": increment_ms,
+        "fen": initial_fen,
+    }
+
+
 @router.websocket("/matchmaking")
 async def matchmaking_endpoint(
         websocket: WebSocket,
@@ -110,6 +198,40 @@ async def matchmaking_endpoint(
                     if target_user_id and target_user_id != current_user.id:
                         from src.services.matchmaker import matchmaker
                         await matchmaker.accept_challenge(target_user_id, current_user.id, manager, state_manager)
+
+                elif action == "abort_game":
+                    game_id = data.get("game_id")
+                    if not game_id:
+                        continue
+
+                    game_state = await state_manager.get_game_state(game_id)
+                    if not game_state or game_state.get("status") != "in_progress":
+                        continue
+
+                    white_id, black_id = int(game_state["white_id"]), int(game_state["black_id"])
+                    if current_user.id not in (white_id, black_id):
+                        continue
+
+                    abort_res = await state_manager.abort_game(db, int(game_id))
+                    if abort_res.get("status") == "error":
+                        await manager.send_personal_message(
+                            {"event": "error", "message": abort_res.get("reason", "Cannot abort game")},
+                            current_user.id
+                        )
+                        continue
+
+                    game_over_payload = {
+                        "event": "game_over",
+                        "game_id": game_id,
+                        "reason": "aborted",
+                        "result": "*",
+                        "white_delta": 0,
+                        "black_delta": 0,
+                        "white_new_rating": abort_res["white_new_rating"],
+                        "black_new_rating": abort_res["black_new_rating"],
+                    }
+                    await manager.send_personal_message(game_over_payload, white_id)
+                    await manager.send_personal_message(game_over_payload, black_id)
 
                 elif action == "resign":
                     game_id = data.get("game_id")
@@ -217,6 +339,95 @@ async def matchmaking_endpoint(
                         opponent_id
                     )
 
+                elif action == "offer_rematch":
+                    game_id = data.get("game_id")
+                    if not game_id:
+                        continue
+
+                    game_state = await state_manager.get_game_state(game_id)
+                    if not game_state or game_state.get("status") == "in_progress":
+                        continue
+
+                    white_id, black_id = int(game_state["white_id"]), int(game_state["black_id"])
+                    if current_user.id not in (white_id, black_id):
+                        continue
+
+                    opponent_id = black_id if current_user.id == white_id else white_id
+                    await state_manager.update_game_state(game_id, {"rematch_offer": str(current_user.id)})
+                    await manager.send_personal_message(
+                        {"event": "rematch_offered", "game_id": game_id, "player_id": current_user.id},
+                        opponent_id
+                    )
+
+                elif action == "accept_rematch":
+                    game_id = data.get("game_id")
+                    if not game_id:
+                        continue
+
+                    game_state = await state_manager.get_game_state(game_id)
+                    if not game_state or game_state.get("status") == "in_progress":
+                        continue
+
+                    white_id, black_id = int(game_state["white_id"]), int(game_state["black_id"])
+                    if current_user.id not in (white_id, black_id):
+                        continue
+
+                    rematch_offer = game_state.get("rematch_offer")
+                    if not rematch_offer or int(rematch_offer) == current_user.id:
+                        await manager.send_personal_message(
+                            {"event": "error", "message": "No active rematch offer to accept"},
+                            current_user.id
+                        )
+                        continue
+
+                    await state_manager.update_game_state(game_id, {"rematch_offer": ""})
+                    rematch_info = await create_rematch_game(db, game_state)
+
+                    common_payload = {
+                        "event": "match_found",
+                        "game_id": rematch_info["game_id"],
+                        "white_username": rematch_info["white_username"],
+                        "white_rating": rematch_info["white_rating"],
+                        "black_username": rematch_info["black_username"],
+                        "black_rating": rematch_info["black_rating"],
+                        "base_time_ms": rematch_info["base_time_ms"],
+                        "increment_ms": rematch_info["increment_ms"],
+                        "white_time_ms": rematch_info["base_time_ms"],
+                        "black_time_ms": rematch_info["base_time_ms"],
+                        "fen": rematch_info["fen"],
+                        "pgn": "",
+                        "state_version": 0,
+                    }
+
+                    await manager.send_personal_message(
+                        {**common_payload, "color": "white", "opponent_id": rematch_info["black_id"]},
+                        rematch_info["white_id"],
+                    )
+                    await manager.send_personal_message(
+                        {**common_payload, "color": "black", "opponent_id": rematch_info["white_id"]},
+                        rematch_info["black_id"],
+                    )
+
+                elif action == "decline_rematch":
+                    game_id = data.get("game_id")
+                    if not game_id:
+                        continue
+
+                    game_state = await state_manager.get_game_state(game_id)
+                    if not game_state:
+                        continue
+
+                    white_id, black_id = int(game_state["white_id"]), int(game_state["black_id"])
+                    if current_user.id not in (white_id, black_id):
+                        continue
+
+                    opponent_id = black_id if current_user.id == white_id else white_id
+                    await state_manager.update_game_state(game_id, {"rematch_offer": ""})
+                    await manager.send_personal_message(
+                        {"event": "rematch_declined", "game_id": game_id, "player_id": current_user.id},
+                        opponent_id
+                    )
+
                 elif action == "make_move":
                     game_id = data.get("game_id")
                     move_str = data.get("move")
@@ -254,7 +465,6 @@ async def matchmaking_endpoint(
                     move_data = res.get("move_data")
 
                     if move_data:
-                        # Для античита фиксируем серверное время elapsed_ms и сетевой лаг
                         server_elapsed_ms = res.get("elapsed_ms", 0)
                         client_time_ms = data.get("time_taken_ms", server_elapsed_ms)
                         network_lag_ms = max(0, server_elapsed_ms - int(client_time_ms))

@@ -544,4 +544,95 @@ class GameStateManager:
             await asyncio.sleep(0.5)
 
 
+
+    async def abort_game(self, db, game_id: int) -> dict:
+        """Отменяет партию на 1-м ходу (до 2 полуходов) без изменения рейтинга."""
+        state = await self.get_game_state(game_id)
+        if not state or state.get("status") != "in_progress":
+            return {"status": "error", "reason": "Game is not in progress"}
+
+        state_version = int(state.get("state_version", 0))
+        if state_version >= 2:
+            return {"status": "error", "reason": "Cannot abort game after move 1"}
+
+        white_id = int(state["white_id"])
+        black_id = int(state["black_id"])
+
+        await self.redis.hset(f"game:{game_id}:state", mapping={
+            "status": "aborted",
+            "result": "*",
+            "termination": "aborted",
+        })
+        await self.redis.srem("active_games", str(game_id))
+        await self.redis.delete(f"user:{white_id}:current_game")
+        await self.redis.delete(f"user:{black_id}:current_game")
+
+        from src.models.game import Game, GameStatus
+        from src.models.user import User
+        from datetime import datetime, timezone
+
+        db_game = await db.get(Game, game_id)
+        white_user = await db.get(User, white_id)
+        black_user = await db.get(User, black_id)
+
+        w_rating = white_user.rating if white_user else 1200
+        b_rating = black_user.rating if black_user else 1200
+
+        if db_game:
+            db_game.status = GameStatus.ABORTED
+            db_game.result = "*"
+            db_game.termination = "aborted"
+            db_game.white_rating_delta = 0
+            db_game.black_rating_delta = 0
+            is_tz = getattr(Game.__table__.c.finished_at.type, "timezone", False)
+            now_utc = datetime.now(timezone.utc)
+            db_game.finished_at = now_utc if is_tz else now_utc.replace(tzinfo=None)
+            await db.commit()
+
+        return {
+            "status": "aborted",
+            "result": "*",
+            "termination": "aborted",
+            "white_id": white_id,
+            "black_id": black_id,
+            "white_delta": 0,
+            "black_delta": 0,
+            "white_new_rating": w_rating,
+            "black_new_rating": b_rating,
+        }
+
+
+
+    async def check_first_move_abort_timeout(self, db, game_id: int, manager=None, timeout_ms: int = 30000) -> bool:
+        """Проверяет, не истекли ли 30 секунд на первые 2 полухода партии. Если истекли — отменяет игру."""
+        import time
+        state = await self.get_game_state(game_id)
+        if not state or state.get("status") != "in_progress":
+            return False
+
+        if int(state.get("state_version", 0)) >= 2:
+            return False
+
+        now_ms = int(time.time() * 1000)
+        last_move_at = int(state.get("last_move_at", now_ms))
+        if now_ms - last_move_at < timeout_ms:
+            return False
+
+        res = await self.abort_game(db, game_id)
+        if res.get("status") == "aborted" and manager is not None:
+            payload = {
+                "event": "game_over",
+                "game_id": game_id,
+                "reason": "aborted",
+                "result": "*",
+                "white_delta": 0,
+                "black_delta": 0,
+                "white_new_rating": res["white_new_rating"],
+                "black_new_rating": res["black_new_rating"],
+            }
+            await manager.send_personal_message(payload, res["white_id"])
+            await manager.send_personal_message(payload, res["black_id"])
+        return res.get("status") == "aborted"
+
+
 state_manager = GameStateManager()
