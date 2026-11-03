@@ -39,6 +39,15 @@ import {
 import {gameSocket} from '../services/gameSocket';
 
 import {API_BASE_URL} from '../config/api';
+import {
+    BOARD_THEMES,
+    PIECE_SETS,
+    getSavedBoardThemeKey,
+    getSavedPieceSetKey,
+    getPieceSvgUrl,
+    getHarmoniousPieceStyle
+} from '../config/boardAppearance';
+import type {BoardTheme} from '../config/boardAppearance';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
@@ -95,16 +104,8 @@ interface QueuePlayer {
     increment_ms: number;
 }
 
-export interface BoardTheme {
-    id: string;
-    name: string;
-    light: string;
-    dark: string;
-    coordLight: string;
-    coordDark: string;
-    border: string;
-    useWoodGrain: boolean;
-}
+export {BOARD_THEMES};
+export type {BoardTheme};
 
 export type HistoricalBotId =
     | 'philidor'
@@ -228,49 +229,6 @@ export interface Dgt2500Group {
     group: string;
     options: Dgt2500Option[];
 }
-
-export const BOARD_THEMES: Record<string, BoardTheme> = {
-    walnut: {
-        id: 'walnut',
-        name: 'Орех',
-        light: '#DFC8A2',
-        dark: '#966C46',
-        coordLight: '#6E4B2A',
-        coordDark: '#F3E5AB',
-        border: '#2A1810',
-        useWoodGrain: true
-    },
-    maple: {
-        id: 'maple',
-        name: 'Клён',
-        light: '#F0D9B5',
-        dark: '#B58863',
-        coordLight: '#8C6239',
-        coordDark: '#F0D9B5',
-        border: '#3D2314',
-        useWoodGrain: false
-    },
-    tournament: {
-        id: 'tournament',
-        name: 'Турнирная',
-        light: '#EBECD0',
-        dark: '#739552',
-        coordLight: '#537133',
-        coordDark: '#EBECD0',
-        border: '#263318',
-        useWoodGrain: false
-    },
-    slate: {
-        id: 'slate',
-        name: 'Графит',
-        light: '#DEE3E6',
-        dark: '#788A94',
-        coordLight: '#4E5D66',
-        coordDark: '#DEE3E6',
-        border: '#1F292E',
-        useWoodGrain: false
-    }
-};
 
 export const TIME_CONTROLS: Dgt2500Group[] = [
     {
@@ -713,11 +671,9 @@ export default function Chessboard() {
         promotion?: PromotionPiece;
     } | null>(null);
 
-    // Тема доски с сохранением в localStorage
-    const [boardThemeKey, setBoardThemeKey] = useState<string>(() => {
-        const saved = localStorage.getItem('michess_board_theme');
-        return saved && BOARD_THEMES[saved] ? saved : 'walnut';
-    });
+    // Тема доски и комплект фигур с сохранением в localStorage
+    const [boardThemeKey, setBoardThemeKey] = useState<string>(() => getSavedBoardThemeKey());
+    const [pieceSetKey, setPieceSetKey] = useState<string>(() => getSavedPieceSetKey());
 
     // Мультиплеерные состояния
     const [gameId, setGameId] = useState<number | null>(null);
@@ -792,6 +748,7 @@ export default function Chessboard() {
     const [rematchStatus, setRematchStatus] = useState<"none" | "offered_by_me" | "offered_by_opponent" | "declined">("none");
 
     const activeTheme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
+    const activePieceSet = PIECE_SETS[pieceSetKey] || PIECE_SETS.merida;
     const selectedBotProfile = HISTORICAL_BOTS[selectedBotId];
     const activeBotProfile = activeBot ? HISTORICAL_BOTS[activeBot] : null;
 
@@ -930,6 +887,11 @@ export default function Chessboard() {
     const handleThemeChange = (themeId: string) => {
         setBoardThemeKey(themeId);
         localStorage.setItem('michess_board_theme', themeId);
+    };
+
+    const handlePieceSetChange = (setId: string) => {
+        setPieceSetKey(setId);
+        localStorage.setItem('michess_piece_set', setId);
     };
 
     const startHistoricalBotGame = (botId: HistoricalBotId, colorPref: 'white' | 'black' | 'random' = 'random') => {
@@ -2124,17 +2086,13 @@ export default function Chessboard() {
     };
 
     const renderPieceSvg = (piece: { type: string; color: string }) => {
-        const isWhite = piece.color === 'w';
-        const pieceFilter = isWhite
-            ? 'sepia(0.12) saturate(0.85) brightness(1.03) drop-shadow(0 2px 3px rgba(0, 0, 0, 0.65)) drop-shadow(0 0 1px rgba(0, 0, 0, 0.85))'
-            : 'brightness(0.95) contrast(1.08) drop-shadow(0 0 1.2px rgba(255, 248, 225, 0.55)) drop-shadow(0 3px 4px rgba(0, 0, 0, 0.65))';
-
+        const styleProps = getHarmoniousPieceStyle(pieceSetKey, boardThemeKey, piece.color);
         return (
             <div className="relative w-full h-full pointer-events-none flex items-center justify-center">
                 <img
-                    src={`/assets/pieces/${piece.color}${piece.type.toUpperCase()}.svg`}
-                    className="w-[90%] h-[90%] object-contain select-none"
-                    style={{filter: pieceFilter}}
+                    src={getPieceSvgUrl(pieceSetKey, piece.color, piece.type)}
+                    className="object-contain select-none transition-transform duration-75"
+                    style={styleProps}
                     draggable={false}
                     alt={`${piece.color}${piece.type}`}
                 />
@@ -2592,16 +2550,54 @@ export default function Chessboard() {
                     </div>
                 </div>
 
-                {/* Стиль доски и ориентация */}
+                {/* Комплект фигур (5 стилей) и Стиль доски (5 расцветок) */}
                 <div className="bg-acacia-dark p-3 rounded border border-amber-900/40 flex flex-col gap-2.5 mt-auto">
                     <div className="flex justify-between items-center text-xs text-boxwood/80">
                         <span className="flex items-center gap-1.5 font-bold">
-                            <Palette className="text-amber-500" size={14}/> Стиль доски
+                            ♟ Комплект фигур
                         </span>
-                        <span className="text-amber-400 font-bold">{activeTheme.name}</span>
+                        <span className="text-amber-400 font-bold text-[11px]">{activePieceSet.name}</span>
                     </div>
 
-                    <div className="grid grid-cols-4 gap-1.5">
+                    <div className="grid grid-cols-5 gap-1">
+                        {Object.values(PIECE_SETS).map((pset) => {
+                            const isCurrent = pset.id === activePieceSet.id;
+                            return (
+                                <button
+                                    key={pset.id}
+                                    type="button"
+                                    onClick={() => handlePieceSetChange(pset.id)}
+                                    title={pset.description}
+                                    className={`flex flex-col items-center gap-1 p-1 rounded border text-[9px] font-bold transition cursor-pointer ${
+                                        isCurrent
+                                            ? 'bg-amber-900/45 border-amber-400 text-amber-200 shadow'
+                                            : 'bg-black/30 border-amber-900/40 text-boxwood/70 hover:text-amber-200 hover:border-amber-700/60'
+                                    }`}
+                                >
+                                    <div
+                                        className="w-7 h-7 rounded-sm flex items-center justify-center border border-black/40 shadow-inner"
+                                        style={{backgroundColor: activeTheme.dark}}
+                                    >
+                                        <img
+                                            src={getPieceSvgUrl(pset.id, 'w', 'N')}
+                                            alt={pset.shortName}
+                                            className="w-6 h-6 object-contain"
+                                        />
+                                    </div>
+                                    <span className="truncate w-full text-center">{pset.shortName}</span>
+                                </button>
+                            );
+                        })}
+                    </div>
+
+                    <div className="flex justify-between items-center text-xs text-boxwood/80 pt-1 border-t border-amber-900/30">
+                        <span className="flex items-center gap-1.5 font-bold">
+                            <Palette className="text-amber-500" size={14}/> Доска
+                        </span>
+                        <span className="text-amber-400 font-bold text-[11px]">{activeTheme.name}</span>
+                    </div>
+
+                    <div className="grid grid-cols-5 gap-1">
                         {Object.values(BOARD_THEMES).map((theme) => {
                             const isCurrent = theme.id === activeTheme.id;
                             return (
@@ -2609,9 +2605,9 @@ export default function Chessboard() {
                                     key={theme.id}
                                     type="button"
                                     onClick={() => handleThemeChange(theme.id)}
-                                    className={`flex flex-col items-center gap-1 p-1.5 rounded border text-[10px] font-bold transition ${
+                                    className={`flex flex-col items-center gap-1 p-1 rounded border text-[9px] font-bold transition cursor-pointer ${
                                         isCurrent
-                                            ? 'bg-amber-900/40 border-amber-400 text-amber-200 shadow'
+                                            ? 'bg-amber-900/45 border-amber-400 text-amber-200 shadow'
                                             : 'bg-black/30 border-amber-900/40 text-boxwood/70 hover:text-amber-200 hover:border-amber-700/60'
                                     }`}
                                 >
@@ -2859,7 +2855,7 @@ export default function Chessboard() {
                                                         y: e.clientY
                                                     });
                                                 }}
-                                                className={`relative w-full h-full p-[3%] z-20 transition-transform duration-75 ${
+                                                className={`relative w-full h-full p-[1.5%] z-20 transition-transform duration-75 ${
                                                     viewIndex === -1 && !gameOverResult && (
                                                         (gameId || activeBot || spectatingGameId)
                                                             ? piece.color === (myColor === 'white' ? 'w' : 'b')
