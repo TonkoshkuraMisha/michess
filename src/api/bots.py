@@ -36,7 +36,7 @@ AVAILABLE_BOTS = [
         "title": "Мастер Просвещения",
         "rating": 1850,
         "motto": "Пешки — душа шахмат: именно они определяют атаку и защиту.",
-        "avatar": "/champions/philidor.jpg",
+        "avatar": "/assets/champions/philidor.jpg",
     },
     {
         "id": "labourdonnais",
@@ -46,7 +46,7 @@ AVAILABLE_BOTS = [
         "title": "Король Комбинаций",
         "rating": 1950,
         "motto": "Инициатива, гамбит и стремительная атака на короля!",
-        "avatar": "/champions/labourdonnais.jpg",
+        "avatar": "/assets/champions/philidor.jpg",
     },
     {
         "id": "staunton",
@@ -56,7 +56,7 @@ AVAILABLE_BOTS = [
         "title": "Основатель Английской Школы",
         "rating": 2000,
         "motto": "Фланговый зажим центра, прочная структура и классический расчёт.",
-        "avatar": "/champions/staunton.jpg",
+        "avatar": "/assets/champions/philidor.jpg",
     },
     {
         "id": "anderssen",
@@ -66,7 +66,7 @@ AVAILABLE_BOTS = [
         "title": "Маэстро Бессмертных Партий",
         "rating": 2100,
         "motto": "Бриллиантовая жертва фигуры ради вскрытия линий и мата королю!",
-        "avatar": "/champions/anderssen.jpg",
+        "avatar": "/assets/champions/philidor.jpg",
     },
     {
         "id": "morphy",
@@ -76,7 +76,7 @@ AVAILABLE_BOTS = [
         "title": "Гордость и печаль шахмат",
         "rating": 2150,
         "motto": "Развивайте все фигуры с темпом и вскрывайте линии для атаки!",
-        "avatar": "/champions/morphy.jpg",
+        "avatar": "/assets/champions/philidor.jpg",
     },
     {
         "id": "paulsen",
@@ -86,7 +86,7 @@ AVAILABLE_BOTS = [
         "title": "Гений Защиты и Двух Слонов",
         "rating": 2080,
         "motto": "Гибкая оборона, сила двух слонов и глубокие дебютные новинки.",
-        "avatar": "/champions/paulsen.jpg",
+        "avatar": "/assets/champions/philidor.jpg",
     },
     {
         "id": "zukertort",
@@ -96,7 +96,7 @@ AVAILABLE_BOTS = [
         "title": "Триумфатор Лондона 1883",
         "rating": 2120,
         "motto": "Универсальная гармония развития и сокрушительные комбинационные бури!",
-        "avatar": "/champions/zukertort.jpg",
+        "avatar": "/assets/champions/philidor.jpg",
     },
 ]
 

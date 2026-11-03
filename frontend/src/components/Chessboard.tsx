@@ -37,7 +37,6 @@ import {
     Radio
 } from 'lucide-react';
 import {gameSocket} from '../services/gameSocket';
-
 import {API_BASE_URL} from '../config/api';
 import {
     BOARD_THEMES,
@@ -48,11 +47,13 @@ import {
     getHarmoniousPieceStyle
 } from '../config/boardAppearance';
 import type {BoardTheme} from '../config/boardAppearance';
+import {HISTORICAL_BOTS, HISTORICAL_BOTS_LIST} from '../config/champions';
+import type {HistoricalBotId, HistoricalBotProfile} from '../config/champions';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
 
-export const MIN_BOARD_SIZE = 380;
+export const MIN_BOARD_SIZE = 360;
 export const MAX_BOARD_SIZE = 860;
 
 export type PromotionPiece = 'q' | 'n' | 'r' | 'b';
@@ -64,10 +65,20 @@ const PROMOTION_OPTIONS: Array<{ type: PromotionPiece; label: string }> = [
     {type: 'b', label: 'Слон'}
 ];
 
+export function getMaxViewportBoardSize(): number {
+    if (typeof window === 'undefined') return 640;
+    const availableHeight = window.innerHeight - 190;
+    const availableWidth = window.innerWidth >= 1280
+        ? window.innerWidth - 820
+        : window.innerWidth - 32;
+    const limit = Math.min(availableHeight, availableWidth, MAX_BOARD_SIZE);
+    return Math.max(MIN_BOARD_SIZE, limit);
+}
+
 export function getDefaultBoardSize(): number {
     if (typeof window !== 'undefined') {
-        const calculated = window.innerHeight - 230;
-        return Math.min(Math.max(calculated, 440), 720);
+        const maxFit = getMaxViewportBoardSize();
+        return Math.min(Math.max(window.innerHeight - 196, 420), maxFit);
     }
     return 580;
 }
@@ -104,101 +115,8 @@ interface QueuePlayer {
     increment_ms: number;
 }
 
-export {BOARD_THEMES};
-export type {BoardTheme};
-
-export type HistoricalBotId =
-    | 'philidor'
-    | 'labourdonnais'
-    | 'staunton'
-    | 'anderssen'
-    | 'morphy'
-    | 'paulsen'
-    | 'zukertort';
-
-interface HistoricalBotProfile {
-    id: HistoricalBotId;
-    name: string;
-    shortName: string;
-    playerLabel: string;
-    era: string;
-    rating: number;
-    motto: string;
-    avatar: string;
-}
-
-const HISTORICAL_BOTS: Record<HistoricalBotId, HistoricalBotProfile> = {
-    philidor: {
-        id: 'philidor',
-        name: 'Ф.-А. Филидор',
-        shortName: 'Филидор',
-        playerLabel: 'Ф.-А. Филидор',
-        era: 'Эпоха 1749–1795',
-        rating: 1850,
-        motto: 'Пешки — душа шахмат: именно они определяют атаку и защиту.',
-        avatar: '/champions/philidor.jpg'
-    },
-    labourdonnais: {
-        id: 'labourdonnais',
-        name: 'Л.-Ш. Лабурдонне',
-        shortName: 'Лабурдонне',
-        playerLabel: 'Л.-Ш. Лабурдонне',
-        era: 'Эпоха 1795–1840',
-        rating: 1950,
-        motto: 'Инициатива, гамбит и стремительная атака на короля!',
-        avatar: '/champions/labourdonnais.jpg'
-    },
-    staunton: {
-        id: 'staunton',
-        name: 'Г. Стаунтон',
-        shortName: 'Стаунтон',
-        playerLabel: 'Г. Стаунтон',
-        era: 'Эпоха 1810–1874',
-        rating: 2000,
-        motto: 'Фланговый зажим центра, прочная структура и классический расчёт.',
-        avatar: '/champions/staunton.jpg'
-    },
-    anderssen: {
-        id: 'anderssen',
-        name: 'А. Андерсен',
-        shortName: 'Андерсен',
-        playerLabel: 'А. Андерсен',
-        era: 'Эпоха 1818–1879',
-        rating: 2100,
-        motto: 'Бриллиантовая жертва фигуры ради вскрытия линий и мата королю!',
-        avatar: '/champions/anderssen.jpg'
-    },
-    morphy: {
-        id: 'morphy',
-        name: 'Пол Морфи',
-        shortName: 'Морфи',
-        playerLabel: 'Пол Морфи',
-        era: 'Эпоха 1837–1884',
-        rating: 2150,
-        motto: 'Развивайте все фигуры с темпом и вскрывайте линии для атаки!',
-        avatar: '/champions/morphy.jpg'
-    },
-    paulsen: {
-        id: 'paulsen',
-        name: 'Л. Паульсен',
-        shortName: 'Паульсен',
-        playerLabel: 'Л. Паульсен',
-        era: 'Эпоха 1833–1891',
-        rating: 2080,
-        motto: 'Гибкая оборона, сила двух слонов и глубокие дебютные новинки.',
-        avatar: '/champions/paulsen.jpg'
-    },
-    zukertort: {
-        id: 'zukertort',
-        name: 'И. Цукерторт',
-        shortName: 'Цукерторт',
-        playerLabel: 'И. Цукерторт',
-        era: 'Эпоха 1842–1888',
-        rating: 2120,
-        motto: 'Универсальная гармония развития и сокрушительные комбинационные бури!',
-        avatar: '/champions/zukertort.jpg'
-    }
-};
+export {BOARD_THEMES, HISTORICAL_BOTS};
+export type {BoardTheme, HistoricalBotId, HistoricalBotProfile};
 
 export type DgtTimingMode =
     | 'time'
@@ -639,8 +557,12 @@ export default function Chessboard() {
     const navigate = useNavigate();
     const {inviteCode} = useParams<{ inviteCode?: string }>();
 
-    // Состояния Спринта 3: Приватные вызовы, Режим зрителя (Live) и Чат
+    // Режимы левой панели и выдвижные панели
+    const [leftSectionTab, setLeftSectionTab] = useState<'bots' | 'lobby'>('bots');
     const [lobbyTab, setLobbyTab] = useState<'lobby' | 'live'>('lobby');
+    const [showInvitePanel, setShowInvitePanel] = useState(false);
+    const [showAppearancePanel, setShowAppearancePanel] = useState(false);
+
     const [liveGames, setLiveGames] = useState<LiveGameItem[]>([]);
     const [spectatingGameId, setSpectatingGameId] = useState<number | null>(null);
     const [inviteColorPref, setInviteColorPref] = useState<'white' | 'black' | 'random'>('random');
@@ -651,12 +573,10 @@ export default function Chessboard() {
 
     const [game, setGame] = useState(new Chess());
     const [history, setHistory] = useState<any[]>([]);
-    // -1 = актуальная (живая) позиция; -2 = самое начало партии (до 1-го хода); 0..N = индекс полухода в history
     const [viewIndex, setViewIndex] = useState<number>(-1);
     const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
     const [isManualFlip, setIsManualFlip] = useState<boolean>(false);
 
-    // Состояние диалога превращения пешки (Таск 2.1)
     const [pendingPromotion, setPendingPromotion] = useState<{
         from: string;
         to: string;
@@ -664,18 +584,15 @@ export default function Chessboard() {
         isPremove?: boolean;
     } | null>(null);
 
-    // Состояние предхода / Premove (Таск 2.2)
     const [premove, setPremove] = useState<{
         from: string;
         to: string;
         promotion?: PromotionPiece;
     } | null>(null);
 
-    // Тема доски и комплект фигур с сохранением в localStorage
     const [boardThemeKey, setBoardThemeKey] = useState<string>(() => getSavedBoardThemeKey());
     const [pieceSetKey, setPieceSetKey] = useState<string>(() => getSavedPieceSetKey());
 
-    // Мультиплеерные состояния
     const [gameId, setGameId] = useState<number | null>(null);
     const [myColor, setMyColor] = useState<'white' | 'black'>('white');
     const [isSearching, setIsSearching] = useState(false);
@@ -685,14 +602,12 @@ export default function Chessboard() {
     const [currentUserRating, setCurrentUserRating] = useState<number>(1200);
     const [stateVersion, setStateVersion] = useState(0);
 
-    // Состояния исторических ботов
     const [selectedBotId, setSelectedBotId] = useState<HistoricalBotId>('philidor');
     const [activeBot, setActiveBot] = useState<HistoricalBotId | null>(null);
     const [botComment, setBotComment] = useState<string | null>(null);
     const [isBotThinking, setIsBotThinking] = useState<boolean>(false);
     const [savedBotGameId, setSavedBotGameId] = useState<number | null>(null);
 
-    // Выбранная программа часов DGT2500 (01–36) и параметры ручной настройки
     const [selectedTimeControl, setSelectedTimeControl] = useState<Dgt2500Option>(DEFAULT_DGT_OPTION);
     const [manualBaseMinutes, setManualBaseMinutes] = useState<number>(5);
     const [manualIncSeconds, setManualIncSeconds] = useState<number>(3);
@@ -701,7 +616,6 @@ export default function Chessboard() {
     const boardContainerRef = useRef<HTMLDivElement>(null);
     const notationScrollRef = useRef<HTMLDivElement>(null);
 
-    // Данные игроков и изменения рейтинга
     const [whitePlayer, setWhitePlayer] = useState({username: 'Белые', rating: '1200'});
     const [blackPlayer, setBlackPlayer] = useState({username: 'Черные', rating: '1200'});
     const [ratingInfo, setRatingInfo] = useState<{
@@ -725,13 +639,14 @@ export default function Chessboard() {
         y: number;
     } | null>(null);
 
-    // Размер доски и состояние перетаскивания правого нижнего угла
+    // Адаптивный размер доски, который гарантированно помещается в один экран по высоте
     const [boardSize, setBoardSize] = useState<number>(() => {
+        const maxFit = getMaxViewportBoardSize();
         const savedSize = localStorage.getItem('michess_board_size');
         if (savedSize) {
             const parsed = Number(savedSize);
-            if (!Number.isNaN(parsed) && parsed >= MIN_BOARD_SIZE && parsed <= MAX_BOARD_SIZE) {
-                return parsed;
+            if (!Number.isNaN(parsed) && parsed >= MIN_BOARD_SIZE) {
+                return Math.min(parsed, maxFit);
             }
         }
         return getDefaultBoardSize();
@@ -739,13 +654,23 @@ export default function Chessboard() {
     const [isResizing, setIsResizing] = useState(false);
     const resizeStartRef = useRef<{ startX: number; startY: number; startSize: number } | null>(null);
 
+    // Автоматическая подстройка доски при изменении размеров окна (чтобы не появлялся вертикальный скролл)
+    useEffect(() => {
+        const handleWindowResize = () => {
+            const maxFit = getMaxViewportBoardSize();
+            setBoardSize(prev => Math.min(prev, maxFit));
+        };
+        window.addEventListener('resize', handleWindowResize);
+        return () => window.removeEventListener('resize', handleWindowResize);
+    }, []);
+
     const [whiteTimeMs, setWhiteTimeMs] = useState(180000);
     const [blackTimeMs, setBlackTimeMs] = useState(180000);
 
     const [sessionStats, setSessionStats] = useState({wins: 0, losses: 0, draws: 0});
     const [gameOverResult, setGameOverResult] = useState<string | null>(null);
     const [drawOfferStatus, setDrawOfferStatus] = useState<string | null>(null);
-    const [rematchStatus, setRematchStatus] = useState<"none" | "offered_by_me" | "offered_by_opponent" | "declined">("none");
+    const [rematchStatus, setRematchStatus] = useState<'none' | 'offered_by_me' | 'offered_by_opponent' | 'declined'>('none');
 
     const activeTheme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
     const activePieceSet = PIECE_SETS[pieceSetKey] || PIECE_SETS.merida;
@@ -769,7 +694,7 @@ export default function Chessboard() {
     }, []);
 
     const updateSessionStats = useCallback((result: string) => {
-        if (!result || result === "*") return;
+        if (!result || result === '*') return;
         setSessionStats(prev => {
             if (result === '1/2-1/2' || result.includes('draw')) {
                 return {...prev, draws: prev.draws + 1};
@@ -916,6 +841,7 @@ export default function Chessboard() {
         setGameId(null);
         setSelectedBotId(botId);
         setActiveBot(botId);
+        setLeftSectionTab('bots');
         setMyColor(chosenColor);
         setIsManualFlip(false);
         setGame(freshGame);
@@ -927,7 +853,7 @@ export default function Chessboard() {
         setGameOverResult(null);
         setRatingInfo(null);
         setDrawOfferStatus(null);
-        setRematchStatus("none");
+        setRematchStatus('none');
         setWhiteTimeMs(whiteStartMs);
         setBlackTimeMs(blackStartMs);
         moveStartTime.current = Date.now();
@@ -944,7 +870,6 @@ export default function Chessboard() {
         playAudio('start');
     };
 
-    // Реактивный ход исторического бота с аутентичным таймингом размышления
     useEffect(() => {
         if (!activeBot || gameOverResult || game.isGameOver()) return;
 
@@ -1047,10 +972,7 @@ export default function Chessboard() {
             const deltaY = e.clientY - startY;
             const delta = Math.round((deltaX + deltaY) / 2);
 
-            const dynamicMax = typeof window !== 'undefined'
-                ? Math.min(MAX_BOARD_SIZE, Math.max(MIN_BOARD_SIZE, window.innerWidth - 48))
-                : MAX_BOARD_SIZE;
-
+            const dynamicMax = getMaxViewportBoardSize();
             const nextSize = Math.min(Math.max(startSize + delta, MIN_BOARD_SIZE), dynamicMax);
             setBoardSize(nextSize);
             localStorage.setItem('michess_board_size', String(nextSize));
@@ -1091,13 +1013,13 @@ export default function Chessboard() {
         localStorage.setItem('michess_board_size', String(defaultSize));
     };
 
-    // Навигация по истории ходов стрелками клавиатуры + Escape для отмены диалога превращения и предхода
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
                 setPendingPromotion(null);
                 setPremove(null);
                 setSelectedSquare(null);
+                setShowAppearancePanel(false);
                 return;
             }
             if (history.length === 0) return;
@@ -1182,6 +1104,7 @@ export default function Chessboard() {
             setIsSearching(false);
             setSpectatingGameId(null);
             setCreatedInviteCode(null);
+            setShowInvitePanel(false);
             setChatMessages([]);
             setActiveBot(null);
             setBotComment(null);
@@ -1224,7 +1147,7 @@ export default function Chessboard() {
             setPendingPromotion(null);
             setPremove(null);
             setGameOverResult(null);
-            setRematchStatus("none");
+            setRematchStatus('none');
             setDrawOfferStatus('Партия началась!');
             playAudio('start');
             setTimeout(() => setDrawOfferStatus(null), 3000);
@@ -1334,7 +1257,8 @@ export default function Chessboard() {
                 setCreatedInviteCode(data.code);
                 const url = `${window.location.origin}/challenge/${data.code}`;
                 if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(url).catch(() => {});
+                    navigator.clipboard.writeText(url).catch(() => {
+                    });
                 }
                 setInviteCopied(true);
                 setTimeout(() => setInviteCopied(false), 3000);
@@ -1493,7 +1417,7 @@ export default function Chessboard() {
         }, 50);
 
         return () => clearInterval(interval);
-    }, [gameId, activeBot, gameOverResult, currentTurnChar, selectedTimeControl.mode]);
+    }, [gameId, activeBot, spectatingGameId, gameOverResult, currentTurnChar, selectedTimeControl.mode]);
 
     useEffect(() => {
         if (!activeBot || gameOverResult || selectedTimeControl.mode === 'scrabble') return;
@@ -1511,7 +1435,6 @@ export default function Chessboard() {
         }
     }, [whiteTimeMs, blackTimeMs, activeBot, gameOverResult, selectedTimeControl.mode, myColor, game, playAudio, updateSessionStats, saveBotGameToDatabase]);
 
-    // Выполнение хода с поддержкой выбора фигуры превращения (Таск 2.1) и флага предхода (Таск 2.2)
     const executeMove = useCallback((
         from: string,
         to: string,
@@ -1533,7 +1456,6 @@ export default function Chessboard() {
             piece.type === 'p' &&
             ((piece.color === 'w' && targetRank === '8') || (piece.color === 'b' && targetRank === '1'));
 
-        // Если это превращение пешки и фигура ещё не выбрана — проверяем легальность и открываем селектор
         if (isPawnPromotion && !explicitPromotion && !isPremoveMove) {
             try {
                 const probeGame = cloneChessInstance(game);
@@ -1617,9 +1539,8 @@ export default function Chessboard() {
         }
         setDragState(null);
         return false;
-    }, [game, gameId, activeBot, myColor, stateVersion, viewIndex, gameOverResult, playAudio, updateSessionStats, saveBotGameToDatabase, applyDgtClockAfterMove]);
+    }, [game, gameId, activeBot, spectatingGameId, myColor, stateVersion, viewIndex, gameOverResult, playAudio, updateSessionStats, saveBotGameToDatabase, applyDgtClockAfterMove]);
 
-    // Планирование предхода (Premove), когда сейчас ход соперника
     const scheduleOrPromotePremove = useCallback((from: string, to: string, explicitPromotion?: PromotionPiece) => {
         if (from === to) return;
         const piece = game.get(from as any);
@@ -1656,7 +1577,6 @@ export default function Chessboard() {
         setDragState(null);
     }, [game, myColor]);
 
-    // Автоматическое выполнение предхода (Premove) при переходе очереди хода к игроку (Таск 2.2)
     useEffect(() => {
         if (!premove || gameOverResult || viewIndex !== -1) return;
         if (!gameId && !activeBot) return;
@@ -1733,7 +1653,7 @@ export default function Chessboard() {
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [dragState, isBoardFlipped, game, gameId, activeBot, myColor, executeMove, scheduleOrPromotePremove]);
+    }, [dragState, isBoardFlipped, game, gameId, activeBot, spectatingGameId, myColor, executeMove, scheduleOrPromotePremove]);
 
     const formatTime = (ms: number) => {
         const isOvertimeUpcount = ms < 0 && selectedTimeControl.mode === 'scrabble';
@@ -1768,6 +1688,8 @@ export default function Chessboard() {
         setGameOverResult(null);
         setRatingInfo(null);
         setIsSearching(true);
+        setLeftSectionTab('lobby');
+        setLobbyTab('lobby');
         setIsTimeDropdownOpen(false);
         setDrawOfferStatus(`Вы опубликовали вызов в лобби (Опция DGT #${selectedTimeControl.optionNumber})...`);
 
@@ -1805,7 +1727,8 @@ export default function Chessboard() {
         if (!createdInviteCode) return;
         const url = `${window.location.origin}/challenge/${createdInviteCode}`;
         if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(url).catch(() => {});
+            navigator.clipboard.writeText(url).catch(() => {
+            });
         }
         setInviteCopied(true);
         setTimeout(() => setInviteCopied(false), 2500);
@@ -1968,7 +1891,6 @@ export default function Chessboard() {
         const myColorChar = myColor === 'white' ? 'w' : 'b';
         const isOpponentTurn = (gameId || activeBot || spectatingGameId) && currentTurnColor !== myColor;
 
-        // Режим предхода (Premove), когда сейчас очередь хода соперника
         if (isOpponentTurn) {
             if (selectedSquare) {
                 if (selectedSquare === squareId) {
@@ -1986,14 +1908,12 @@ export default function Chessboard() {
                 if (piece && piece.color === myColorChar) {
                     setSelectedSquare(squareId);
                 } else if (premove) {
-                    // Клик по пустой клетке сбрасывает активный предход
                     setPremove(null);
                 }
             }
             return;
         }
 
-        // Стандартный режим своего хода
         if (selectedSquare) {
             if (selectedSquare === squareId) {
                 setSelectedSquare(null);
@@ -2056,6 +1976,9 @@ export default function Chessboard() {
     const topAdvantage = topIsWhite ? material.whiteAdvantage : material.blackAdvantage;
     const bottomAdvantage = topIsWhite ? material.blackAdvantage : material.whiteAdvantage;
 
+    const isBotOnTop = !!activeBotProfile && ((topIsWhite && myColor === 'black') || (!topIsWhite && myColor === 'white'));
+    const isBotOnBottom = !!activeBotProfile && !isBotOnTop;
+
     const movePairs = history.reduce((acc: Array<{
         moveNumber: number;
         whiteSan: string;
@@ -2103,21 +2026,20 @@ export default function Chessboard() {
     if (!localStorage.getItem('token')) {
         return (
             <div
-                className="flex flex-col items-center justify-center p-8 bg-acacia rounded shadow-heavy border-4 border-acacia-dark text-boxwood-light text-center font-serif">
-                <div className="text-xl font-bold mb-2">Требуется авторизация</div>
-                <p className="text-sm text-boxwood/80 mb-4">
-                    Пожалуйста, войдите в систему в правом верхнем углу, чтобы играть.
+                className="my-auto flex flex-col items-center justify-center p-8 bg-acacia rounded-lg shadow-heavy border-4 border-acacia-dark text-boxwood-light text-center">
+                <div className="text-2xl font-bold mb-2">Требуется авторизация</div>
+                <p className="text-base text-boxwood/85 mb-2">
+                    Пожалуйста, войдите в систему в правом верхнем углу, чтобы начать игру.
                 </p>
             </div>
         );
     }
 
     const filteredQueue = queuePlayers.filter(p => p.user_id !== currentUserId);
-    const sidePanelHeight = boardSize + 148;
 
     return (
         <div
-            className="flex flex-col xl:flex-row items-center xl:items-start justify-center gap-6 w-full max-w-[1600px] mx-auto font-serif relative px-2">
+            className="w-full max-w-[1920px] h-full flex flex-col xl:flex-row items-center xl:items-stretch justify-between gap-4 px-1 xl:overflow-hidden relative">
 
             {dragState && (
                 <div
@@ -2134,36 +2056,48 @@ export default function Chessboard() {
                 </div>
             )}
 
-            {/* ЛЕВАЯ КОЛОНКА: ЛОББИ, ЧАСЫ DGT2500 (36 ПРОГРАММ), ИГРА С ЛЕГЕНДОЙ И СТИЛЬ ДОСКИ */}
+            {/* ЛЕВАЯ КОЛОНКА: ИГРОВОЙ ЦЕНТР (КОНТРОЛЬ ВРЕМЕНИ, ИСТОРИЧЕСКИЕ БОТЫ С ФОТО, ЛОББИ И LIVE) */}
             <div
-                style={{minHeight: `${Math.min(sidePanelHeight, 740)}px`}}
-                className="w-full xl:w-80 2xl:w-[340px] bg-acacia p-4 rounded shadow-heavy border-4 border-acacia-dark flex flex-col gap-3.5 text-boxwood-light order-2 xl:order-1 shrink-0"
-            >
-                <div className="border-b border-acacia-light pb-3 flex justify-between items-center">
-                    <div>
-                        <div className="text-[11px] tracking-widest uppercase text-boxwood/70">Рейтинговый зал</div>
-                        <div className="text-sm font-bold flex items-center gap-2 mt-1 font-mono">
-                            <span className="text-xs text-boxwood/70 uppercase font-serif">Сессия:</span>
-                            <span className="text-emerald-400">+{sessionStats.wins}</span>
-                            <span className="text-red-400">-{sessionStats.losses}</span>
-                            <span className="text-gray-300">={sessionStats.draws}</span>
+                className="w-full xl:w-[410px] 2xl:w-[460px] xl:h-full bg-acacia p-3.5 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-3 text-boxwood-light order-2 xl:order-1 shrink-0 xl:overflow-hidden">
+
+                {/* Шапка левой панели: Статистика сессии */}
+                <div className="border-b border-acacia-light pb-2.5 flex justify-between items-center shrink-0">
+                    <div className="flex items-center gap-2.5">
+                        <div className="p-2 bg-acacia-dark rounded-md border border-amber-600/30 text-amber-400">
+                            <Sword size={18}/>
+                        </div>
+                        <div>
+                            <div className="text-xs tracking-wider uppercase text-boxwood/75 font-bold">Игровой зал
+                            </div>
+                            <div className="text-sm font-bold flex items-center gap-2 font-mono">
+                                <span className="text-xs text-boxwood/80 font-sans">Счёт сессии:</span>
+                                <span className="text-emerald-400">+{sessionStats.wins}</span>
+                                <span className="text-red-400">-{sessionStats.losses}</span>
+                                <span className="text-gray-300">={sessionStats.draws}</span>
+                            </div>
                         </div>
                     </div>
-                    <div className="p-2 bg-acacia-dark rounded border border-amber-600/30 text-amber-400">
-                        <Sword size={18}/>
-                    </div>
+
+                    <button
+                        type="button"
+                        onClick={() => setIsManualFlip(prev => !prev)}
+                        className="px-3 py-1.5 rounded-md bg-acacia-dark hover:bg-black/50 border border-amber-800/50 text-xs font-bold text-amber-200 flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+                        title="Перевернуть доску"
+                    >
+                        <RefreshCw size={14} className="text-amber-400"/> Перевернуть
+                    </button>
                 </div>
 
-                {/* Селектор 36 программ официальных часов FIDE DGT2500 */}
+                {/* Блок часов FIDE DGT2500 и быстрого вызова */}
                 <div
-                    className="bg-acacia-dark p-3 rounded border border-amber-900/40 flex flex-col gap-2.5 shadow-inner">
+                    className="bg-acacia-dark p-3 rounded-md border border-amber-900/50 flex flex-col gap-2.5 shadow-inner shrink-0">
                     <div className="flex items-center justify-between">
                         <label
-                            className="text-[10px] uppercase tracking-widest text-boxwood/70 flex items-center gap-1.5 font-bold">
-                            <Clock className="text-amber-500" size={12}/> Часы FIDE DGT2500 (36 прогр.)
+                            className="text-xs uppercase tracking-wider text-boxwood/85 flex items-center gap-1.5 font-bold">
+                            <Clock className="text-amber-500" size={14}/> Часы FIDE DGT2500 (36 прогр.)
                         </label>
                         <span
-                            className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-900/40 text-amber-300 border border-amber-600/30">
+                            className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-amber-900/45 text-amber-300 border border-amber-600/30">
                             OPT #{selectedTimeControl.optionNumber}
                         </span>
                     </div>
@@ -2173,23 +2107,23 @@ export default function Chessboard() {
                             type="button"
                             disabled={isSearching || !!gameId}
                             onClick={() => setIsTimeDropdownOpen(!isTimeDropdownOpen)}
-                            className="w-full bg-black/40 border border-amber-700/50 hover:bg-black/60 disabled:opacity-50 transition text-amber-200 rounded p-2 text-xs font-bold outline-none cursor-pointer flex justify-between items-center shadow-inner gap-2"
+                            className="w-full bg-black/45 border border-amber-700/50 hover:bg-black/65 disabled:opacity-50 transition text-amber-200 rounded-md px-3 py-2 text-sm font-bold outline-none cursor-pointer flex justify-between items-center shadow-inner gap-2"
                         >
                             <span className="truncate">
                                 [{selectedTimeControl.optionNumber}] {selectedTimeControl.label}
                                 {selectedTimeControl.isManual ? ` (${manualBaseMinutes}м + ${manualIncSeconds}с)` : ''}
                             </span>
-                            {isTimeDropdownOpen ? <ChevronUp className="text-amber-500/70 shrink-0" size={14}/> :
-                                <ChevronDown className="text-amber-500/70 shrink-0" size={14}/>}
+                            {isTimeDropdownOpen ? <ChevronUp className="text-amber-400 shrink-0" size={16}/> :
+                                <ChevronDown className="text-amber-400 shrink-0" size={16}/>}
                         </button>
 
                         {isTimeDropdownOpen && (
                             <div
-                                className="absolute z-50 w-full top-full mt-1 bg-[#1A120B] border border-amber-700/50 rounded shadow-2xl max-h-72 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
+                                className="absolute z-50 w-full top-full mt-1 bg-[#1A120B] border-2 border-amber-700/60 rounded-md shadow-2xl max-h-72 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
                                 {TIME_CONTROLS.map((group, gIdx) => (
                                     <div key={gIdx}>
                                         <div
-                                            className="px-3 py-1.5 text-[10px] uppercase tracking-widest text-amber-500/80 bg-black/80 font-bold sticky top-0 z-10 border-b border-t border-amber-900/40 first:border-t-0 backdrop-blur-sm">
+                                            className="px-3 py-1.5 text-xs uppercase tracking-wider text-amber-400 bg-black/90 font-bold sticky top-0 z-10 border-b border-t border-amber-900/40 first:border-t-0">
                                             {group.group}
                                         </div>
                                         {group.options.map((opt) => {
@@ -2198,10 +2132,10 @@ export default function Chessboard() {
                                                 <button
                                                     key={opt.optionNumber}
                                                     type="button"
-                                                    className={`w-full text-left px-3 py-2 text-xs transition flex justify-between items-start gap-2 border-b border-amber-950/30 ${
+                                                    className={`w-full text-left px-3 py-2 text-sm transition flex justify-between items-start gap-2 border-b border-amber-950/30 cursor-pointer ${
                                                         isSelected
                                                             ? 'bg-amber-900/45 text-amber-300 font-bold'
-                                                            : 'text-amber-100/85 hover:bg-amber-900/20 hover:text-amber-200'
+                                                            : 'text-amber-100/90 hover:bg-amber-900/25 hover:text-amber-200'
                                                     }`}
                                                     onClick={() => {
                                                         setSelectedTimeControl(opt);
@@ -2213,20 +2147,19 @@ export default function Chessboard() {
                                                     }}
                                                 >
                                                     <div className="min-w-0">
-                                                        <div className="flex items-center gap-1.5">
+                                                        <div className="flex items-center gap-2">
                                                             <span
-                                                                className="font-mono text-[10px] px-1 py-0.2 rounded bg-black/50 text-amber-400 border border-amber-700/40 shrink-0">
+                                                                className="font-mono text-xs px-1.5 py-0.5 rounded bg-black/50 text-amber-400 border border-amber-700/40 shrink-0">
                                                                 {opt.optionNumber}
                                                             </span>
                                                             <span className="truncate font-bold">{opt.label}</span>
                                                         </div>
-                                                        <div
-                                                            className="text-[10px] text-boxwood/60 mt-0.5 leading-snug">
+                                                        <div className="text-xs text-boxwood/70 mt-0.5 leading-snug">
                                                             {opt.details}
                                                         </div>
                                                     </div>
                                                     {isSelected && <div
-                                                        className="w-1.5 h-1.5 rounded-full bg-amber-500 shadow-[0_0_8px_#f59e0b] shrink-0 mt-1.5"/>}
+                                                        className="w-2 h-2 rounded-full bg-amber-500 shrink-0 mt-1.5"/>}
                                                 </button>
                                             );
                                         })}
@@ -2236,19 +2169,15 @@ export default function Chessboard() {
                         )}
                     </div>
 
-                    <div className="text-[10px] text-boxwood/65 leading-tight px-0.5">
-                        {selectedTimeControl.details}
-                    </div>
-
                     {selectedTimeControl.isManual && (
                         <div
-                            className="p-2 rounded bg-black/40 border border-amber-700/40 flex flex-col gap-2 text-xs">
+                            className="p-2.5 rounded bg-black/40 border border-amber-700/40 flex flex-col gap-2 text-xs">
                             <div
-                                className="text-[10px] uppercase tracking-wider text-amber-400 font-bold flex items-center gap-1">
-                                <Sliders size={11}/> Ручная настройка DGT2500 (Manual Setup)
+                                className="text-xs uppercase tracking-wider text-amber-400 font-bold flex items-center gap-1.5">
+                                <Sliders size={13}/> Ручная настройка DGT2500
                             </div>
                             <div className="grid grid-cols-2 gap-2">
-                                <label className="flex flex-col gap-1 text-[10px] text-boxwood/80">
+                                <label className="flex flex-col gap-1 text-xs text-boxwood/85">
                                     <span>Время (мин):</span>
                                     <input
                                         type="number"
@@ -2256,10 +2185,10 @@ export default function Chessboard() {
                                         max={240}
                                         value={manualBaseMinutes}
                                         onChange={(e) => setManualBaseMinutes(Math.max(1, Math.min(240, Number(e.target.value) || 1)))}
-                                        className="bg-black/60 border border-amber-700/50 rounded px-2 py-1 text-amber-200 font-mono text-xs outline-none"
+                                        className="bg-black/60 border border-amber-700/50 rounded px-2.5 py-1 text-amber-200 font-mono text-sm outline-none"
                                     />
                                 </label>
-                                <label className="flex flex-col gap-1 text-[10px] text-boxwood/80">
+                                <label className="flex flex-col gap-1 text-xs text-boxwood/85">
                                     <span>Бонус / Delay (сек):</span>
                                     <input
                                         type="number"
@@ -2267,7 +2196,7 @@ export default function Chessboard() {
                                         max={180}
                                         value={manualIncSeconds}
                                         onChange={(e) => setManualIncSeconds(Math.max(0, Math.min(180, Number(e.target.value) || 0)))}
-                                        className="bg-black/60 border border-amber-700/50 rounded px-2 py-1 text-amber-200 font-mono text-xs outline-none"
+                                        className="bg-black/60 border border-amber-700/50 rounded px-2.5 py-1 text-amber-200 font-mono text-sm outline-none"
                                     />
                                 </label>
                             </div>
@@ -2275,391 +2204,402 @@ export default function Chessboard() {
                     )}
 
                     {!gameId ? (
-                        <button
-                            onClick={isSearching ? cancelMatchmaking : startMatchmaking}
-                            className={`w-full flex items-center justify-center gap-2 px-4 py-2.5 font-bold text-sm rounded transition shadow border ${
-                                isSearching
-                                    ? 'bg-red-900/80 text-red-100 border-red-700 hover:bg-red-900'
-                                    : 'bg-boxwood text-acacia-dark border-amber-700/50 hover:bg-boxwood-light'
-                            }`}
-                        >
-                            {isSearching ? <Loader2 className="animate-spin" size={16}/> : <Users size={16}/>}
-                            {isSearching ? 'Отменить поиск' : 'Найти соперника'}
-                        </button>
+                        <div className="grid grid-cols-[1fr_auto] gap-2">
+                            <button
+                                onClick={isSearching ? cancelMatchmaking : startMatchmaking}
+                                className={`flex items-center justify-center gap-2 px-4 py-2 font-bold text-sm rounded-md transition shadow border cursor-pointer ${
+                                    isSearching
+                                        ? 'bg-red-900/85 text-red-100 border-red-700 hover:bg-red-900'
+                                        : 'bg-boxwood text-acacia-dark border-amber-700/50 hover:bg-boxwood-light'
+                                }`}
+                            >
+                                {isSearching ? <Loader2 className="animate-spin" size={16}/> : <Users size={16}/>}
+                                {isSearching ? 'Отменить поиск' : 'Найти соперника'}
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setShowInvitePanel(prev => !prev)}
+                                className={`px-3 py-2 rounded-md border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow ${
+                                    showInvitePanel
+                                        ? 'bg-amber-700 text-white border-amber-400'
+                                        : 'bg-black/45 hover:bg-black/65 text-amber-200 border-amber-700/50'
+                                }`}
+                                title="Создать ссылку для игры с другом"
+                            >
+                                <Link2 size={15}/> С другом
+                            </button>
+                        </div>
                     ) : (
                         <div
-                            className="text-center py-1.5 px-2 rounded bg-emerald-950/50 border border-emerald-700/40 text-emerald-300 text-xs font-bold">
+                            className="text-center py-2 px-3 rounded bg-emerald-950/60 border border-emerald-700/50 text-emerald-300 text-sm font-bold">
                             {gameOverResult ? `Партия завершена (${gameOverResult})` : 'Идет рейтинговая партия'}
                         </div>
                     )}
-                </div>
 
-                {/* КАРТОЧКА ИГРЫ ПРОТИВ ИСТОРИЧЕСКИХ ЛЕГЕНД */}
-                <div
-                    className="bg-acacia-dark p-3 rounded border border-amber-700/40 flex flex-col gap-2.5 shadow-inner">
-                    <div className="grid grid-cols-2 gap-1.5 p-1 bg-black/40 rounded border border-amber-900/40">
-                        {(Object.values(HISTORICAL_BOTS)).map((botItem) => {
-                            const isSelected = selectedBotId === botItem.id;
-                            return (
+                    {/* Выдвижная плашка вызова друга по ссылке */}
+                    {showInvitePanel && !gameId && (
+                        <div className="p-2.5 rounded bg-black/45 border border-amber-700/40 flex flex-col gap-2">
+                            <div className="flex items-center justify-between text-xs font-bold text-amber-200">
+                                <span>Цвет в партии с другом:</span>
+                                <div
+                                    className="flex items-center gap-1 bg-black/50 p-0.5 rounded border border-amber-900/50">
+                                    {(['white', 'random', 'black'] as const).map(c => (
+                                        <button
+                                            key={c}
+                                            type="button"
+                                            onClick={() => setInviteColorPref(c)}
+                                            className={`px-2 py-0.5 rounded text-xs font-bold transition cursor-pointer ${
+                                                inviteColorPref === c ? 'bg-amber-700 text-white' : 'text-boxwood/70 hover:text-amber-200'
+                                            }`}
+                                        >
+                                            {c === 'white' ? '♔ Белые' : c === 'black' ? '♚ Чёрные' : '🎲 Случайно'}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {!createdInviteCode ? (
                                 <button
-                                    key={botItem.id}
                                     type="button"
-                                    onClick={() => setSelectedBotId(botItem.id)}
-                                    className={`py-1.5 px-2 rounded text-[11px] font-bold transition cursor-pointer flex items-center justify-center gap-1 ${
-                                        isSelected
-                                            ? 'bg-amber-700 text-amber-100 shadow border border-amber-500/50'
-                                            : 'text-boxwood/70 hover:text-amber-200 hover:bg-white/5'
-                                    }`}
+                                    onClick={handleCreatePrivateInvite}
+                                    className="w-full py-1.5 px-3 rounded bg-amber-800/70 hover:bg-amber-700 text-amber-100 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow"
                                 >
-                                    <span>{botItem.shortName}</span>
-                                    <span className="text-[10px] font-mono opacity-80">({botItem.rating})</span>
+                                    <Link2 size={14}/> Сгенерировать и скопировать ссылку
                                 </button>
-                            );
-                        })}
-                    </div>
-
-                    <div className="flex items-center justify-between border-b border-amber-900/30 pb-2">
-                        <div className="flex items-center gap-2.5">
-                            <img
-                                src={selectedBotProfile.avatar}
-                                alt={selectedBotProfile.name}
-                                className="w-10 h-10 rounded-full object-cover border-2 border-amber-500/60 shrink-0"
-                                onError={(e) => {
-                                    (e.target as HTMLImageElement).style.display = 'none';
-                                }}
-                            />
-                            <div>
-                                <div className="text-xs font-bold text-amber-200 flex items-center gap-1.5">
-                                    <Bot size={13} className="text-amber-400"/> {selectedBotProfile.name}
+                            ) : (
+                                <div className="flex items-center gap-1.5">
+                                    <input
+                                        type="text"
+                                        readOnly
+                                        value={`${window.location.origin}/challenge/${createdInviteCode}`}
+                                        className="flex-1 bg-black/60 border border-amber-700/50 rounded px-2.5 py-1 text-xs font-mono text-amber-200 outline-none"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleCopyInviteLink}
+                                        className="px-3 py-1 rounded bg-emerald-800 hover:bg-emerald-700 text-emerald-100 text-xs font-bold flex items-center gap-1 shrink-0 cursor-pointer"
+                                    >
+                                        {inviteCopied ? <Check size={14}/> : <Copy size={14}/>}
+                                        {inviteCopied ? 'Скопировано' : 'Копия'}
+                                    </button>
                                 </div>
-                                <div className="text-[10px] text-amber-400/80 font-mono">
-                                    {selectedBotProfile.era} • Рейтинг ~{selectedBotProfile.rating}
-                                </div>
-                            </div>
-                        </div>
-                        {activeBot === selectedBotProfile.id && !gameOverResult && (
-                            <span
-                                className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-950/80 text-emerald-300 border border-emerald-700/50">
-                                В игре
-                            </span>
-                        )}
-                    </div>
-
-                    <p className="text-[11px] italic text-boxwood/80 leading-snug">
-                        «{selectedBotProfile.motto}»
-                    </p>
-
-                    <div className="grid grid-cols-3 gap-1.5">
-                        <button
-                            type="button"
-                            disabled={!!gameId && !gameOverResult}
-                            onClick={() => startHistoricalBotGame(selectedBotId, 'white')}
-                            className="px-2 py-1.5 text-[11px] font-bold rounded bg-boxwood text-acacia-dark hover:bg-boxwood-light disabled:opacity-40 transition cursor-pointer shadow"
-                        >
-                            ♔ Белыми
-                        </button>
-                        <button
-                            type="button"
-                            disabled={!!gameId && !gameOverResult}
-                            onClick={() => startHistoricalBotGame(selectedBotId, 'random')}
-                            className="px-2 py-1.5 text-[11px] font-bold rounded bg-amber-700/80 text-amber-100 border border-amber-500/40 hover:bg-amber-600 disabled:opacity-40 transition cursor-pointer shadow"
-                        >
-                            🎲 Случайно
-                        </button>
-                        <button
-                            type="button"
-                            disabled={!!gameId && !gameOverResult}
-                            onClick={() => startHistoricalBotGame(selectedBotId, 'black')}
-                            className="px-2 py-1.5 text-[11px] font-bold rounded bg-black/60 text-amber-200 border border-amber-700/50 hover:bg-black/80 disabled:opacity-40 transition cursor-pointer shadow"
-                        >
-                            ♚ Черными
-                        </button>
-                    </div>
-
-                    {activeBotProfile && (
-                        <div className="p-2.5 rounded bg-black/50 border border-amber-600/30 text-xs text-amber-100">
-                            <div
-                                className="font-bold text-amber-400 mb-1 flex items-center justify-between text-[11px]">
-                                <span className="flex items-center gap-1">
-                                    <MessageSquareQuote size={13}/> Мысль ({activeBotProfile.shortName}):
-                                </span>
-                                {isBotThinking && (
-                                    <span className="animate-pulse text-amber-300 font-mono text-[10px]">
-                                        обдумывает ход...
-                                    </span>
-                                )}
-                            </div>
-                            <div className="text-[11px] text-boxwood-light leading-relaxed">
-                                {botComment || 'Посмотрим, как развернётся борьба за центр.'}
-                            </div>
+                            )}
                         </div>
                     )}
                 </div>
 
-                {/* Приватный вызов по прямой ссылке (Таск 3.2) */}
-                {!gameId && (
-                    <div className="bg-acacia-dark p-2.5 rounded border border-amber-800/40 flex flex-col gap-2 shadow-inner">
-                        <div className="flex items-center justify-between text-[11px] font-bold text-amber-200">
-                            <span className="flex items-center gap-1.5">
-                                <Link2 size={13} className="text-amber-400"/> Играть с другом (по ссылке)
-                            </span>
-                            <div className="flex items-center gap-1 bg-black/40 p-0.5 rounded border border-amber-900/40 text-[10px]">
-                                {(['white', 'random', 'black'] as const).map(c => (
+                {/* Переключатель секций: Исторические персоны (Боты) | Лобби & Live */}
+                <div
+                    className="grid grid-cols-2 gap-1.5 p-1 bg-acacia-dark rounded-md border border-amber-900/50 shrink-0">
+                    <button
+                        type="button"
+                        onClick={() => setLeftSectionTab('bots')}
+                        className={`py-2 px-3 rounded text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
+                            leftSectionTab === 'bots'
+                                ? 'bg-amber-700 text-white shadow border border-amber-500/50'
+                                : 'text-boxwood/75 hover:text-amber-200 hover:bg-white/5'
+                        }`}
+                    >
+                        <Bot size={16}/> Исторические боты
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setLeftSectionTab('lobby')}
+                        className={`py-2 px-3 rounded text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
+                            leftSectionTab === 'lobby'
+                                ? 'bg-amber-700 text-white shadow border border-amber-500/50'
+                                : 'text-boxwood/75 hover:text-amber-200 hover:bg-white/5'
+                        }`}
+                    >
+                        <Radio size={15}
+                               className={filteredQueue.length + liveGames.length > 0 ? 'text-emerald-400 animate-pulse' : ''}/>
+                        <span>Лобби / Live</span>
+                        <span className="text-xs font-mono px-1.5 py-0.2 rounded bg-black/40 text-amber-300">
+                            {filteredQueue.length + liveGames.length}
+                        </span>
+                    </button>
+                </div>
+
+                {/* СОДЕРЖИМОЕ ВЫБРАННОЙ ВКЛАДКИ ЛЕВОЙ ПАНЕЛИ (flex-1 min-h-0) */}
+                {leftSectionTab === 'bots' ? (
+                    <div
+                        className="flex-1 min-h-0 bg-acacia-dark p-3 rounded-md border border-amber-700/40 flex flex-col justify-between gap-2.5 shadow-inner overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
+                        {/* Сетка портретов всех 7 исторических мастеров */}
+                        <div className="grid grid-cols-2 gap-1.5">
+                            {HISTORICAL_BOTS_LIST.map((botItem) => {
+                                const isSelected = selectedBotId === botItem.id;
+                                return (
                                     <button
-                                        key={c}
+                                        key={botItem.id}
                                         type="button"
-                                        onClick={() => setInviteColorPref(c)}
-                                        className={`px-1.5 py-0.5 rounded transition cursor-pointer ${
-                                            inviteColorPref === c ? 'bg-amber-700 text-white' : 'text-boxwood/60 hover:text-amber-200'
+                                        onClick={() => setSelectedBotId(botItem.id)}
+                                        className={`p-1.5 rounded-md text-left transition cursor-pointer flex items-center gap-2.5 border ${
+                                            isSelected
+                                                ? 'bg-amber-800/80 text-white border-amber-400 shadow'
+                                                : 'bg-black/35 text-boxwood/85 border-amber-900/40 hover:border-amber-600/50 hover:bg-black/55'
                                         }`}
-                                        title={c === 'white' ? 'Играть белыми' : c === 'black' ? 'Играть чёрными' : 'Случайный цвет'}
                                     >
-                                        {c === 'white' ? '♔' : c === 'black' ? '♚' : '🎲'}
+                                        <img
+                                            src={botItem.avatar}
+                                            alt={botItem.shortName}
+                                            onError={(e) => {
+                                                const img = e.target as HTMLImageElement;
+                                                if (!img.src.endsWith(botItem.fallbackAvatar)) {
+                                                    img.src = botItem.fallbackAvatar;
+                                                }
+                                            }}
+                                            className={`w-9 h-9 rounded-full object-cover shrink-0 border ${
+                                                isSelected ? 'border-amber-300' : 'border-amber-700/60'
+                                            }`}
+                                        />
+                                        <div className="min-w-0 flex-1">
+                                            <div className="text-xs sm:text-sm font-bold truncate leading-tight">
+                                                {botItem.shortName}
+                                            </div>
+                                            <div className="text-[11px] font-mono text-amber-300/90">
+                                                Эло {botItem.rating}
+                                            </div>
+                                        </div>
                                     </button>
-                                ))}
+                                );
+                            })}
+                        </div>
+
+                        {/* Детальная карточка выбранной исторической личности */}
+                        <div className="p-3 rounded-md bg-black/40 border border-amber-800/50 flex flex-col gap-2.5">
+                            <div className="flex items-center gap-3">
+                                <img
+                                    src={selectedBotProfile.avatar}
+                                    alt={selectedBotProfile.name}
+                                    onError={(e) => {
+                                        const img = e.target as HTMLImageElement;
+                                        if (!img.src.endsWith(selectedBotProfile.fallbackAvatar)) {
+                                            img.src = selectedBotProfile.fallbackAvatar;
+                                        }
+                                    }}
+                                    className="w-14 h-14 rounded-lg object-cover border-2 border-amber-500/80 shadow-md shrink-0"
+                                />
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center justify-between gap-1">
+                                        <span className="text-sm sm:text-base font-bold text-amber-200 truncate">
+                                            {selectedBotProfile.name}
+                                        </span>
+                                        {activeBot === selectedBotProfile.id && !gameOverResult && (
+                                            <span
+                                                className="text-xs font-bold px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-600/50 shrink-0">
+                                                В игре
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="text-xs text-amber-400 font-semibold">
+                                        {selectedBotProfile.title}
+                                    </div>
+                                    <div className="text-xs text-boxwood/75 font-mono mt-0.5">
+                                        Годы: {selectedBotProfile.era} • Рейтинг ~{selectedBotProfile.rating}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <p className="text-xs sm:text-[13px] italic text-boxwood/90 leading-snug bg-black/30 p-2 rounded border border-amber-900/30">
+                                «{selectedBotProfile.motto}»
+                            </p>
+
+                            <div className="grid grid-cols-3 gap-2">
+                                <button
+                                    type="button"
+                                    disabled={!!gameId && !gameOverResult}
+                                    onClick={() => startHistoricalBotGame(selectedBotId, 'white')}
+                                    className="py-2 px-2 text-xs sm:text-sm font-bold rounded-md bg-boxwood text-acacia-dark hover:bg-boxwood-light disabled:opacity-40 transition cursor-pointer shadow"
+                                >
+                                    ♔ Белыми
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={!!gameId && !gameOverResult}
+                                    onClick={() => startHistoricalBotGame(selectedBotId, 'random')}
+                                    className="py-2 px-2 text-xs sm:text-sm font-bold rounded-md bg-amber-700 text-white border border-amber-500/50 hover:bg-amber-600 disabled:opacity-40 transition cursor-pointer shadow"
+                                >
+                                    🎲 Случайно
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={!!gameId && !gameOverResult}
+                                    onClick={() => startHistoricalBotGame(selectedBotId, 'black')}
+                                    className="py-2 px-2 text-xs sm:text-sm font-bold rounded-md bg-black/70 text-amber-200 border border-amber-700/60 hover:bg-black disabled:opacity-40 transition cursor-pointer shadow"
+                                >
+                                    ♚ Чёрными
+                                </button>
                             </div>
                         </div>
 
-                        {!createdInviteCode ? (
-                            <button
-                                type="button"
-                                onClick={handleCreatePrivateInvite}
-                                className="w-full py-1.5 px-3 rounded bg-amber-900/50 hover:bg-amber-800/60 border border-amber-600/40 text-amber-200 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow"
-                            >
-                                <Link2 size={13}/> Создать ссылку на вызов
-                            </button>
-                        ) : (
-                            <div className="flex items-center gap-1.5">
-                                <input
-                                    type="text"
-                                    readOnly
-                                    value={`${window.location.origin}/challenge/${createdInviteCode}`}
-                                    className="flex-1 bg-black/50 border border-amber-700/50 rounded px-2 py-1 text-[11px] font-mono text-amber-200 outline-none"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={handleCopyInviteLink}
-                                    className="px-2.5 py-1 rounded bg-emerald-800 hover:bg-emerald-700 text-emerald-100 text-xs font-bold flex items-center gap-1 shrink-0 cursor-pointer"
-                                    title="Скопировать ссылку"
-                                >
-                                    {inviteCopied ? <Check size={13}/> : <Copy size={13}/>}
-                                    {inviteCopied ? 'Скопировано' : 'Копия'}
-                                </button>
+                        {/* Комментарий исторического бота по ходу партии */}
+                        {activeBotProfile && (
+                            <div
+                                className="p-2.5 rounded-md bg-black/55 border border-amber-600/40 text-xs text-amber-100">
+                                <div
+                                    className="font-bold text-amber-400 mb-1 flex items-center justify-between text-xs">
+                                    <span className="flex items-center gap-1.5">
+                                        <MessageSquareQuote size={14}/> Мысль ({activeBotProfile.shortName}):
+                                    </span>
+                                    {isBotThinking && (
+                                        <span className="animate-pulse text-amber-300 font-mono text-xs">
+                                            обдумывает ход...
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="text-xs sm:text-[13px] text-boxwood-light leading-snug">
+                                    {botComment || 'Посмотрим, как развернётся борьба за центр.'}
+                                </div>
                             </div>
                         )}
                     </div>
-                )}
-
-                {/* Вкладки: Вызовы (Лобби) | Идут сейчас (Live) (Таск 3.3) */}
-                <div
-                    className="flex flex-col flex-1 min-h-[9rem] bg-acacia-dark rounded border border-amber-900/40 p-3 shadow-inner">
-                    <div className="grid grid-cols-2 gap-1 p-1 bg-black/40 rounded border border-amber-900/40 mb-2">
-                        <button
-                            type="button"
-                            onClick={() => setLobbyTab('lobby')}
-                            className={`py-1 px-2 rounded text-[11px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                                lobbyTab === 'lobby'
-                                    ? 'bg-amber-700 text-amber-100 shadow'
-                                    : 'text-boxwood/65 hover:text-amber-200'
-                            }`}
-                        >
-                            <span>Вызовы (Лобби)</span>
-                            <span className="text-[10px] font-mono px-1 rounded bg-black/40">{filteredQueue.length}</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setLobbyTab('live')}
-                            className={`py-1 px-2 rounded text-[11px] font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                                lobbyTab === 'live'
-                                    ? 'bg-amber-700 text-amber-100 shadow'
-                                    : 'text-boxwood/65 hover:text-amber-200'
-                            }`}
-                        >
-                            <Radio size={11} className={liveGames.length > 0 ? 'text-emerald-400 animate-pulse' : ''}/>
-                            <span>Live</span>
-                            <span className="text-[10px] font-mono px-1 rounded bg-black/40">{liveGames.length}</span>
-                        </button>
-                    </div>
-
+                ) : (
+                    /* Вкладка Вызовы в лобби и Live-партии */
                     <div
-                        className="flex-1 overflow-y-auto space-y-2 text-xs font-mono [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
-                        {lobbyTab === 'lobby' ? (
-                            filteredQueue.length === 0 ? (
-                                <div
-                                    className="h-full flex flex-col items-center justify-center p-3 text-boxwood/50 text-center font-serif text-xs">
-                                    <span>
-                                        {isSearching
-                                            ? 'Вы в очереди. Ожидание соперников...'
-                                            : 'В лобби пока нет вызовов. Нажмите «Найти соперника» выше.'}
-                                    </span>
-                                </div>
-                            ) : (
-                                filteredQueue.map((p) => (
+                        className="flex-1 min-h-0 bg-acacia-dark rounded-md border border-amber-900/50 p-3 flex flex-col shadow-inner">
+                        <div
+                            className="grid grid-cols-2 gap-1.5 p-1 bg-black/40 rounded border border-amber-900/40 mb-2.5 shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setLobbyTab('lobby')}
+                                className={`py-1.5 px-2 rounded text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                                    lobbyTab === 'lobby'
+                                        ? 'bg-amber-700 text-amber-100 shadow'
+                                        : 'text-boxwood/70 hover:text-amber-200'
+                                }`}
+                            >
+                                <span>Вызовы в лобби</span>
+                                <span
+                                    className="text-xs font-mono px-1.5 rounded bg-black/40">{filteredQueue.length}</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setLobbyTab('live')}
+                                className={`py-1.5 px-2 rounded text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                                    lobbyTab === 'live'
+                                        ? 'bg-amber-700 text-amber-100 shadow'
+                                        : 'text-boxwood/70 hover:text-amber-200'
+                                }`}
+                            >
+                                <Radio size={13}
+                                       className={liveGames.length > 0 ? 'text-emerald-400 animate-pulse' : ''}/>
+                                <span>Идут сейчас (Live)</span>
+                                <span className="text-xs font-mono px-1.5 rounded bg-black/40">{liveGames.length}</span>
+                            </button>
+                        </div>
+
+                        <div
+                            className="flex-1 min-h-0 overflow-y-auto space-y-2 text-sm [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
+                            {lobbyTab === 'lobby' ? (
+                                filteredQueue.length === 0 ? (
                                     <div
-                                        key={p.user_id}
-                                        className="p-2 bg-black/40 rounded border border-amber-600/30 flex justify-between items-center hover:border-amber-500/60 transition"
-                                    >
-                                        <div>
-                                            <span className="text-amber-300 font-bold">{p.username}</span>
-                                            <div className="text-[10px] text-boxwood/70">
-                                                Рейтинг: {p.rating} | {Math.round(p.base_time_ms / 60000)}+{(p.increment_ms || 0) / 1000}
-                                            </div>
-                                        </div>
-                                        <button
-                                            disabled={!!gameId && !gameOverResult}
-                                            onClick={() => acceptChallenge(p.user_id)}
-                                            className="px-2.5 py-1 bg-emerald-800 hover:bg-emerald-700 disabled:opacity-40 text-emerald-100 rounded text-xs font-bold transition flex items-center gap-1 shadow"
+                                        className="h-full flex flex-col items-center justify-center p-4 text-boxwood/60 text-center text-sm">
+                                        <span>
+                                            {isSearching
+                                                ? 'Вы в очереди. Ожидание соперников...'
+                                                : 'В лобби пока нет открытых вызовов. Нажмите «Найти соперника» выше.'}
+                                        </span>
+                                    </div>
+                                ) : (
+                                    filteredQueue.map((p) => (
+                                        <div
+                                            key={p.user_id}
+                                            className="p-2.5 bg-black/45 rounded-md border border-amber-600/30 flex justify-between items-center hover:border-amber-500/60 transition"
                                         >
-                                            <Play size={12}/> Играть
-                                        </button>
-                                    </div>
-                                ))
-                            )
-                        ) : (
-                            liveGames.length === 0 ? (
-                                <div
-                                    className="h-full flex flex-col items-center justify-center p-3 text-boxwood/50 text-center font-serif text-xs">
-                                    <span>Сейчас нет активных PvP-партий.</span>
-                                </div>
-                            ) : (
-                                liveGames.map((lg) => (
-                                    <div
-                                        key={lg.game_id}
-                                        className="p-2 bg-black/40 rounded border border-amber-600/30 flex justify-between items-center hover:border-amber-500/60 transition gap-2"
-                                    >
-                                        <div className="min-w-0">
-                                            <div className="text-amber-200 font-bold truncate text-[11px]">
-                                                {lg.white_username} <span className="text-boxwood/50">vs</span> {lg.black_username}
+                                            <div>
+                                                <span className="text-amber-300 font-bold text-sm">{p.username}</span>
+                                                <div className="text-xs text-boxwood/75 font-mono">
+                                                    Рейтинг: {p.rating} • {Math.round(p.base_time_ms / 60000)}+{(p.increment_ms || 0) / 1000}
+                                                </div>
                                             </div>
-                                            <div className="text-[10px] text-boxwood/70">
-                                                {Math.round(lg.base_time_ms / 60000)}+{(lg.increment_ms || 0) / 1000} • 👁 {lg.spectators_count}
-                                            </div>
+                                            <button
+                                                disabled={!!gameId && !gameOverResult}
+                                                onClick={() => acceptChallenge(p.user_id)}
+                                                className="px-3 py-1.5 bg-emerald-800 hover:bg-emerald-700 disabled:opacity-40 text-emerald-100 rounded text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer"
+                                            >
+                                                <Play size={13}/> Принять
+                                            </button>
                                         </div>
-                                        <button
-                                            type="button"
-                                            disabled={!!gameId && !gameOverResult}
-                                            onClick={() => handleSpectateGame(lg.game_id)}
-                                            className="px-2 py-1 bg-amber-800/80 hover:bg-amber-700 disabled:opacity-40 text-amber-100 rounded text-[11px] font-bold transition flex items-center gap-1 shrink-0 shadow cursor-pointer"
+                                    ))
+                                )
+                            ) : (
+                                liveGames.length === 0 ? (
+                                    <div
+                                        className="h-full flex flex-col items-center justify-center p-4 text-boxwood/60 text-center text-sm">
+                                        <span>Сейчас нет активных PvP-партий.</span>
+                                    </div>
+                                ) : (
+                                    liveGames.map((lg) => (
+                                        <div
+                                            key={lg.game_id}
+                                            className="p-2.5 bg-black/45 rounded-md border border-amber-600/30 flex justify-between items-center hover:border-amber-500/60 transition gap-2"
                                         >
-                                            <Eye size={12}/> Смотреть
-                                        </button>
-                                    </div>
-                                ))
-                            )
-                        )}
+                                            <div className="min-w-0">
+                                                <div className="text-amber-200 font-bold truncate text-sm">
+                                                    {lg.white_username} <span
+                                                    className="text-boxwood/50">vs</span> {lg.black_username}
+                                                </div>
+                                                <div className="text-xs text-boxwood/75 font-mono">
+                                                    {Math.round(lg.base_time_ms / 60000)}+{(lg.increment_ms || 0) / 1000} •
+                                                    👁 {lg.spectators_count}
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                disabled={!!gameId && !gameOverResult}
+                                                onClick={() => handleSpectateGame(lg.game_id)}
+                                                className="px-3 py-1.5 bg-amber-800 hover:bg-amber-700 disabled:opacity-40 text-amber-100 rounded text-xs font-bold transition flex items-center gap-1.5 shrink-0 shadow cursor-pointer"
+                                            >
+                                                <Eye size={13}/> Смотреть
+                                            </button>
+                                        </div>
+                                    ))
+                                )
+                            )}
+                        </div>
                     </div>
-                </div>
-
-                {/* Комплект фигур (5 стилей) и Стиль доски (5 расцветок) */}
-                <div className="bg-acacia-dark p-3 rounded border border-amber-900/40 flex flex-col gap-2.5 mt-auto">
-                    <div className="flex justify-between items-center text-xs text-boxwood/80">
-                        <span className="flex items-center gap-1.5 font-bold">
-                            ♟ Комплект фигур
-                        </span>
-                        <span className="text-amber-400 font-bold text-[11px]">{activePieceSet.name}</span>
-                    </div>
-
-                    <div className="grid grid-cols-5 gap-1">
-                        {Object.values(PIECE_SETS).map((pset) => {
-                            const isCurrent = pset.id === activePieceSet.id;
-                            return (
-                                <button
-                                    key={pset.id}
-                                    type="button"
-                                    onClick={() => handlePieceSetChange(pset.id)}
-                                    title={pset.description}
-                                    className={`flex flex-col items-center gap-1 p-1 rounded border text-[9px] font-bold transition cursor-pointer ${
-                                        isCurrent
-                                            ? 'bg-amber-900/45 border-amber-400 text-amber-200 shadow'
-                                            : 'bg-black/30 border-amber-900/40 text-boxwood/70 hover:text-amber-200 hover:border-amber-700/60'
-                                    }`}
-                                >
-                                    <div
-                                        className="w-7 h-7 rounded-sm flex items-center justify-center border border-black/40 shadow-inner"
-                                        style={{backgroundColor: activeTheme.dark}}
-                                    >
-                                        <img
-                                            src={getPieceSvgUrl(pset.id, 'w', 'N')}
-                                            alt={pset.shortName}
-                                            className="w-6 h-6 object-contain"
-                                        />
-                                    </div>
-                                    <span className="truncate w-full text-center">{pset.shortName}</span>
-                                </button>
-                            );
-                        })}
-                    </div>
-
-                    <div className="flex justify-between items-center text-xs text-boxwood/80 pt-1 border-t border-amber-900/30">
-                        <span className="flex items-center gap-1.5 font-bold">
-                            <Palette className="text-amber-500" size={14}/> Доска
-                        </span>
-                        <span className="text-amber-400 font-bold text-[11px]">{activeTheme.name}</span>
-                    </div>
-
-                    <div className="grid grid-cols-5 gap-1">
-                        {Object.values(BOARD_THEMES).map((theme) => {
-                            const isCurrent = theme.id === activeTheme.id;
-                            return (
-                                <button
-                                    key={theme.id}
-                                    type="button"
-                                    onClick={() => handleThemeChange(theme.id)}
-                                    className={`flex flex-col items-center gap-1 p-1 rounded border text-[9px] font-bold transition cursor-pointer ${
-                                        isCurrent
-                                            ? 'bg-amber-900/45 border-amber-400 text-amber-200 shadow'
-                                            : 'bg-black/30 border-amber-900/40 text-boxwood/70 hover:text-amber-200 hover:border-amber-700/60'
-                                    }`}
-                                >
-                                    <div
-                                        className="w-6 h-6 rounded-sm overflow-hidden grid grid-cols-2 grid-rows-2 border border-black/50 shadow-sm">
-                                        <div style={{backgroundColor: theme.light}}/>
-                                        <div style={{backgroundColor: theme.dark}}/>
-                                        <div style={{backgroundColor: theme.dark}}/>
-                                        <div style={{backgroundColor: theme.light}}/>
-                                    </div>
-                                    <span className="truncate w-full text-center">{theme.name}</span>
-                                </button>
-                            );
-                        })}
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2 border-t border-amber-900/30 gap-2">
-                        <button
-                            type="button"
-                            onClick={() => setIsManualFlip(prev => !prev)}
-                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded bg-black/35 hover:bg-black/55 border border-amber-900/50 text-xs font-bold text-amber-200 transition"
-                            title="Перевернуть доску"
-                        >
-                            <RefreshCw className="text-amber-400" size={13}/> Перевернуть доску
-                        </button>
-                        <span className="text-[10px] font-mono text-boxwood/50 px-1.5">
-                            {boardSize}px
-                        </span>
-                    </div>
-                </div>
+                )}
             </div>
 
             {/* ЦЕНТРАЛЬНАЯ КОЛОНКА: ИГРОКИ И ШАХМАТНАЯ ДОСКА */}
-            <div className="flex flex-col items-center gap-3 order-1 xl:order-2 shrink-0">
+            <div className="flex flex-col items-center justify-center gap-2.5 order-1 xl:order-2 shrink-0 my-auto">
 
                 {/* Верхний игрок */}
                 <div
                     style={{width: `${boardSize}px`}}
-                    className={`bg-acacia-dark p-3 rounded shadow-heavy border-2 border-amber-900/40 flex justify-between items-center text-boxwood-light ${isResizing ? 'transition-none' : 'transition-colors'}`}
+                    className={`bg-acacia-dark px-3.5 py-2 rounded-lg shadow-heavy border-2 border-amber-900/50 flex justify-between items-center text-boxwood-light ${isResizing ? 'transition-none' : 'transition-colors'}`}
                 >
                     <div className="flex items-center gap-3 min-w-0">
-                        <div
-                            className={`w-10 h-10 rounded flex items-center justify-center border border-amber-600/30 font-bold shrink-0 ${topIsWhite ? 'bg-boxwood text-acacia-dark' : 'bg-acacia text-amber-200'}`}>
-                            {topIsWhite ? '♙' : '♟'}
-                        </div>
+                        {isBotOnTop && activeBotProfile ? (
+                            <img
+                                src={activeBotProfile.avatar}
+                                alt={activeBotProfile.name}
+                                onError={(e) => {
+                                    const img = e.target as HTMLImageElement;
+                                    if (!img.src.endsWith(activeBotProfile.fallbackAvatar)) {
+                                        img.src = activeBotProfile.fallbackAvatar;
+                                    }
+                                }}
+                                className="w-10 h-10 rounded-md object-cover border-2 border-amber-500/70 shrink-0 shadow"
+                            />
+                        ) : (
+                            <div
+                                className={`w-10 h-10 rounded-md flex items-center justify-center border border-amber-600/30 font-bold text-xl shrink-0 ${
+                                    topIsWhite ? 'bg-boxwood text-acacia-dark' : 'bg-acacia text-amber-200'
+                                }`}
+                            >
+                                {topIsWhite ? '♙' : '♟'}
+                            </div>
+                        )}
                         <div className="min-w-0">
-                            <div className="font-bold flex items-center gap-2">
-                                <span
-                                    className="truncate">{(gameId || activeBot || spectatingGameId) ? topPlayerInfo.username : (topIsWhite ? 'Белые (Анализ)' : 'Черные (Анализ)')}</span>
+                            <div className="font-bold text-base flex items-center gap-2">
+                                <span className="truncate">
+                                    {(gameId || activeBot || spectatingGameId) ? topPlayerInfo.username : (topIsWhite ? 'Белые (Разбор)' : 'Чёрные (Разбор)')}
+                                </span>
                                 {(gameId || activeBot || spectatingGameId) && (
                                     <span
-                                        className="text-xs px-1.5 py-0.5 rounded bg-black/40 text-amber-400 border border-amber-600/20 flex items-center gap-1 font-mono">
+                                        className="text-xs px-2 py-0.5 rounded bg-black/45 text-amber-400 border border-amber-600/25 flex items-center gap-1 font-mono">
                                         {topPlayerInfo.rating}
                                         {ratingInfo && (
                                             <span
@@ -2670,11 +2610,11 @@ export default function Chessboard() {
                                     </span>
                                 )}
                             </div>
-                            <div className="flex items-center gap-1.5 text-xs text-amber-200/80 min-h-[18px]">
-                                <span className="tracking-tighter truncate">{topCaptured.join('')}</span>
+                            <div className="flex items-center gap-1.5 text-sm text-amber-200/90 min-h-[18px]">
+                                <span className="tracking-tight truncate">{topCaptured.join('')}</span>
                                 {topAdvantage > 0 && (
                                     <span
-                                        className="text-[10px] font-mono font-bold px-1 rounded bg-amber-900/50 text-amber-300">
+                                        className="text-xs font-mono font-bold px-1.5 rounded bg-amber-900/60 text-amber-300">
                                         +{topAdvantage}
                                     </span>
                                 )}
@@ -2682,7 +2622,7 @@ export default function Chessboard() {
                         </div>
                     </div>
                     <div
-                        className="bg-[#1A120B] px-5 py-2 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-3xl font-bold tracking-wider text-amber-500 min-w-[145px] text-center">
+                        className="bg-[#1A120B] px-4 py-1.5 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-2xl sm:text-3xl font-bold tracking-wider text-amber-400 min-w-[136px] text-center">
                         {(gameId || activeBot || spectatingGameId) ? formatTime(topPlayerTime) : formatTime(topIdlePreviewMs)}
                     </div>
                 </div>
@@ -2703,7 +2643,7 @@ export default function Chessboard() {
                         height: `${boardSize}px`,
                         backgroundColor: activeTheme.border
                     }}
-                    className={`p-3.5 rounded-md shadow-heavy border-2 border-amber-950/80 relative select-none group/board ${isResizing ? 'transition-none ring-2 ring-amber-500/60' : 'transition-colors'}`}
+                    className={`p-3 rounded-lg shadow-heavy border-2 border-amber-950/80 relative select-none group/board ${isResizing ? 'transition-none ring-2 ring-amber-500/60' : 'transition-colors'}`}
                 >
                     {activeTheme.useWoodGrain && (
                         <div
@@ -2712,7 +2652,7 @@ export default function Chessboard() {
                         />
                     )}
 
-                    {/* ДИАЛОГ ВЫБОРА ФИГУРЫ ПРИ ПРЕВРАЩЕНИИ ПЕШКИ (Таск 2.1) */}
+                    {/* Диалог превращения пешки */}
                     {pendingPromotion && (() => {
                         const fileIdx = displayedFiles.indexOf(pendingPromotion.to[0]);
                         const rankIdx = displayedRanks.indexOf(pendingPromotion.to[1]);
@@ -2732,10 +2672,10 @@ export default function Chessboard() {
                                         transform: 'translateX(-50%)'
                                     }}
                                     onClick={(e) => e.stopPropagation()}
-                                    className="absolute bg-[#1A120B] border-2 border-amber-500 rounded-lg p-2.5 shadow-2xl flex flex-col items-center gap-2"
+                                    className="absolute bg-[#1A120B] border-2 border-amber-500 rounded-lg p-3 shadow-2xl flex flex-col items-center gap-2.5"
                                 >
                                     <div className="flex items-center justify-between w-full gap-3 px-1">
-                                        <span className="text-[11px] font-bold uppercase tracking-wider text-amber-300">
+                                        <span className="text-xs font-bold uppercase tracking-wider text-amber-300">
                                             Превращение пешки ({pendingPromotion.to})
                                         </span>
                                         <button
@@ -2744,7 +2684,7 @@ export default function Chessboard() {
                                             className="text-boxwood/60 hover:text-amber-300 transition cursor-pointer"
                                             title="Отмена (Esc)"
                                         >
-                                            <X size={14}/>
+                                            <X size={15}/>
                                         </button>
                                     </div>
                                     <div className="grid grid-cols-4 gap-2">
@@ -2753,14 +2693,14 @@ export default function Chessboard() {
                                                 key={opt.type}
                                                 type="button"
                                                 onClick={() => handlePromotionSelect(opt.type)}
-                                                className="w-16 h-16 rounded bg-acacia-dark hover:bg-amber-800/70 border border-amber-600/50 hover:border-amber-300 transition flex flex-col items-center justify-center p-1.5 shadow cursor-pointer group"
+                                                className="w-16 h-16 rounded-md bg-acacia-dark hover:bg-amber-800/70 border border-amber-600/50 hover:border-amber-300 transition flex flex-col items-center justify-center p-1.5 shadow cursor-pointer group"
                                                 title={opt.label}
                                             >
                                                 <div className="w-10 h-10">
                                                     {renderPieceSvg({type: opt.type, color: pendingPromotion.color})}
                                                 </div>
                                                 <span
-                                                    className="text-[10px] font-bold text-amber-200 group-hover:text-white mt-0.5">
+                                                    className="text-xs font-bold text-amber-200 group-hover:text-white mt-0.5">
                                                     {opt.label}
                                                 </span>
                                             </button>
@@ -2809,7 +2749,6 @@ export default function Chessboard() {
                                             <div className="absolute inset-0 bg-amber-300/35 z-10 pointer-events-none"/>
                                         )}
 
-                                        {/* Подсветка предхода (Таск 2.2) */}
                                         {isPremoveSquare && (
                                             <div
                                                 className="absolute inset-0 bg-rose-500/45 ring-2 ring-inset ring-rose-300/80 z-10 pointer-events-none"/>
@@ -2872,7 +2811,7 @@ export default function Chessboard() {
                                         {file === displayedFiles[0] && (
                                             <span
                                                 style={{color: isDark ? activeTheme.coordDark : activeTheme.coordLight}}
-                                                className="absolute top-0.5 left-1 text-[10px] sm:text-[11px] font-sans font-bold opacity-85 z-20 pointer-events-none leading-none"
+                                                className="absolute top-0.5 left-1 text-xs font-sans font-bold opacity-90 z-20 pointer-events-none leading-none"
                                             >
                                                 {rank}
                                             </span>
@@ -2880,7 +2819,7 @@ export default function Chessboard() {
                                         {rank === displayedRanks[7] && (
                                             <span
                                                 style={{color: isDark ? activeTheme.coordDark : activeTheme.coordLight}}
-                                                className="absolute bottom-0.5 right-1 text-[10px] sm:text-[11px] font-sans font-bold opacity-85 z-20 pointer-events-none leading-none"
+                                                className="absolute bottom-0.5 right-1 text-xs font-sans font-bold opacity-90 z-20 pointer-events-none leading-none"
                                             >
                                                 {file}
                                             </span>
@@ -2902,7 +2841,7 @@ export default function Chessboard() {
                     <div
                         onMouseDown={handleResizeMouseDown}
                         onDoubleClick={handleResizeDoubleClick}
-                        title="Потяните, чтобы изменить размер доски (двойной клик — сбросить)"
+                        title="Потяните, чтобы изменить размер доски (двойной клик — авторазмер под экран)"
                         className={`absolute bottom-0 right-0 w-6 h-6 z-40 cursor-nwse-resize flex items-end justify-end p-0.5 rounded-tl transition-opacity ${
                             isResizing
                                 ? 'opacity-100 text-amber-400'
@@ -2927,20 +2866,38 @@ export default function Chessboard() {
                 {/* Нижний игрок */}
                 <div
                     style={{width: `${boardSize}px`}}
-                    className={`bg-acacia-dark p-3 rounded shadow-heavy border-2 border-amber-900/40 flex justify-between items-center text-boxwood-light ${isResizing ? 'transition-none' : 'transition-colors'}`}
+                    className={`bg-acacia-dark px-3.5 py-2 rounded-lg shadow-heavy border-2 border-amber-900/50 flex justify-between items-center text-boxwood-light ${isResizing ? 'transition-none' : 'transition-colors'}`}
                 >
                     <div className="flex items-center gap-3 min-w-0">
-                        <div
-                            className={`w-10 h-10 rounded flex items-center justify-center border border-amber-600/30 font-bold shrink-0 ${!topIsWhite ? 'bg-boxwood text-acacia-dark' : 'bg-acacia text-amber-200'}`}>
-                            {!topIsWhite ? '♙' : '♟'}
-                        </div>
+                        {isBotOnBottom && activeBotProfile ? (
+                            <img
+                                src={activeBotProfile.avatar}
+                                alt={activeBotProfile.name}
+                                onError={(e) => {
+                                    const img = e.target as HTMLImageElement;
+                                    if (!img.src.endsWith(activeBotProfile.fallbackAvatar)) {
+                                        img.src = activeBotProfile.fallbackAvatar;
+                                    }
+                                }}
+                                className="w-10 h-10 rounded-md object-cover border-2 border-amber-500/70 shrink-0 shadow"
+                            />
+                        ) : (
+                            <div
+                                className={`w-10 h-10 rounded-md flex items-center justify-center border border-amber-600/30 font-bold text-xl shrink-0 ${
+                                    !topIsWhite ? 'bg-boxwood text-acacia-dark' : 'bg-acacia text-amber-200'
+                                }`}
+                            >
+                                {!topIsWhite ? '♙' : '♟'}
+                            </div>
+                        )}
                         <div className="min-w-0">
-                            <div className="font-bold flex items-center gap-2">
-                                <span
-                                    className="truncate">{(gameId || activeBot || spectatingGameId) ? bottomPlayerInfo.username : (!topIsWhite ? 'Вы (Белые)' : 'Вы (Черные)')}</span>
+                            <div className="font-bold text-base flex items-center gap-2">
+                                <span className="truncate">
+                                    {(gameId || activeBot || spectatingGameId) ? bottomPlayerInfo.username : (!topIsWhite ? 'Вы (Белые)' : 'Вы (Чёрные)')}
+                                </span>
                                 {(gameId || activeBot || spectatingGameId) && (
                                     <span
-                                        className="text-xs px-1.5 py-0.5 rounded bg-black/40 text-amber-400 border border-amber-600/20 flex items-center gap-1 font-mono">
+                                        className="text-xs px-2 py-0.5 rounded bg-black/45 text-amber-400 border border-amber-600/25 flex items-center gap-1 font-mono">
                                         {bottomPlayerInfo.rating}
                                         {ratingInfo && (
                                             <span
@@ -2951,11 +2908,11 @@ export default function Chessboard() {
                                     </span>
                                 )}
                             </div>
-                            <div className="flex items-center gap-1.5 text-xs text-amber-200/80 min-h-[18px]">
-                                <span className="tracking-tighter truncate">{bottomCaptured.join('')}</span>
+                            <div className="flex items-center gap-1.5 text-sm text-amber-200/90 min-h-[18px]">
+                                <span className="tracking-tight truncate">{bottomCaptured.join('')}</span>
                                 {bottomAdvantage > 0 && (
                                     <span
-                                        className="text-[10px] font-mono font-bold px-1 rounded bg-amber-900/50 text-amber-300">
+                                        className="text-xs font-mono font-bold px-1.5 rounded bg-amber-900/60 text-amber-300">
                                         +{bottomAdvantage}
                                     </span>
                                 )}
@@ -2963,49 +2920,144 @@ export default function Chessboard() {
                         </div>
                     </div>
                     <div
-                        className="bg-[#1A120B] px-5 py-2 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-3xl font-bold tracking-wider text-amber-500 min-w-[145px] text-center">
+                        className="bg-[#1A120B] px-4 py-1.5 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-2xl sm:text-3xl font-bold tracking-wider text-amber-400 min-w-[136px] text-center">
                         {(gameId || activeBot || spectatingGameId) ? formatTime(bottomPlayerTime) : formatTime(bottomIdlePreviewMs)}
                     </div>
                 </div>
 
             </div>
 
-            {/* ПРАВАЯ КОЛОНКА: ЖУРНАЛ ХОДОВ (НОТАЦИЯ), ПРЕДХОД, НАВИГАЦИЯ И ИГРОВЫЕ ДЕЙСТВИЯ */}
+            {/* ПРАВАЯ КОЛОНКА: ЖУРНАЛ ХОДОВ, ОФОРМЛЕНИЕ ДОСКИ, ЧАТ И УПРАВЛЕНИЕ ПАРТИЕЙ */}
             <div
-                style={{height: `${Math.max(sidePanelHeight, 560)}px`}}
-                className="w-full xl:w-80 2xl:w-[340px] bg-acacia p-4 rounded shadow-heavy border-4 border-acacia-dark flex flex-col gap-3 text-boxwood-light order-3 shrink-0"
-            >
-                <div className="border-b border-acacia-light pb-3 flex justify-between items-center">
-                    <div>
+                className="w-full xl:w-[390px] 2xl:w-[440px] xl:h-full bg-acacia p-3.5 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-2.5 text-boxwood-light order-3 shrink-0 xl:overflow-hidden">
+
+                {/* Шапка правой панели + кнопка выдвижной панели оформления */}
+                <div className="border-b border-acacia-light pb-2.5 flex justify-between items-center gap-2 shrink-0">
+                    <div className="min-w-0">
                         <div
-                            className="text-[11px] tracking-widest uppercase text-boxwood/70 flex items-center gap-1.5">
-                            <ListOrdered className="text-amber-400" size={14}/> Журнал ходов
+                            className="text-xs tracking-wider uppercase text-boxwood/75 font-bold flex items-center gap-1.5">
+                            <ListOrdered className="text-amber-400" size={15}/> Журнал ходов
                         </div>
-                        <div className="text-xs font-bold text-amber-200 mt-0.5 truncate">
+                        <div className="text-sm font-bold text-amber-200 mt-0.5 truncate">
                             {(gameId || activeBot || spectatingGameId)
                                 ? `${whitePlayer.username} vs ${blackPlayer.username}`
-                                : 'Свободная доска / Разбор'}
+                                : 'Свободная доска / Анализ'}
                         </div>
                     </div>
-                    <span
-                        className="px-2 py-0.5 rounded bg-acacia-dark border border-amber-700/40 font-mono text-xs text-amber-400 font-bold">
-                        {gameOverResult || (history.length > 0 ? `${Math.ceil(history.length / 2)} х.` : 'Старт')}
-                    </span>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                            type="button"
+                            onClick={() => setShowAppearancePanel(prev => !prev)}
+                            className={`px-2.5 py-1.5 rounded-md border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm ${
+                                showAppearancePanel
+                                    ? 'bg-amber-700 text-white border-amber-400'
+                                    : 'bg-acacia-dark hover:bg-black/45 text-amber-200 border-amber-800/50'
+                            }`}
+                            title="Выбрать комплект фигур и тему доски"
+                        >
+                            <Palette size={14} className="text-amber-400"/> Вид
+                        </button>
+                        <span
+                            className="px-2.5 py-1 rounded-md bg-acacia-dark border border-amber-700/40 font-mono text-xs text-amber-400 font-bold">
+                            {gameOverResult || (history.length > 0 ? `${Math.ceil(history.length / 2)} х.` : 'Старт')}
+                        </span>
+                    </div>
                 </div>
+
+                {/* Выдвижная панель выбора 5 комплектов фигур и 5 тем доски */}
+                {showAppearancePanel && (
+                    <div
+                        className="bg-acacia-dark p-3 rounded-md border border-amber-700/50 flex flex-col gap-2.5 shadow-lg shrink-0">
+                        <div className="flex justify-between items-center text-xs text-boxwood/90">
+                            <span className="font-bold">♟ Комплект фигур: <span
+                                className="text-amber-400">{activePieceSet.name}</span></span>
+                            <button
+                                type="button"
+                                onClick={() => setShowAppearancePanel(false)}
+                                className="text-boxwood/60 hover:text-white cursor-pointer"
+                            >
+                                <X size={14}/>
+                            </button>
+                        </div>
+
+                        <div className="grid grid-cols-5 gap-1.5">
+                            {Object.values(PIECE_SETS).map((pset) => {
+                                const isCurrent = pset.id === activePieceSet.id;
+                                return (
+                                    <button
+                                        key={pset.id}
+                                        type="button"
+                                        onClick={() => handlePieceSetChange(pset.id)}
+                                        title={pset.description}
+                                        className={`flex flex-col items-center gap-1 p-1.5 rounded border text-xs font-bold transition cursor-pointer ${
+                                            isCurrent
+                                                ? 'bg-amber-900/50 border-amber-400 text-amber-200 shadow'
+                                                : 'bg-black/35 border-amber-900/40 text-boxwood/75 hover:text-amber-200'
+                                        }`}
+                                    >
+                                        <div
+                                            className="w-8 h-8 rounded flex items-center justify-center border border-black/40 shadow-inner"
+                                            style={{backgroundColor: activeTheme.dark}}
+                                        >
+                                            <img
+                                                src={getPieceSvgUrl(pset.id, 'w', 'N')}
+                                                alt={pset.shortName}
+                                                className="w-6 h-6 object-contain"
+                                            />
+                                        </div>
+                                        <span
+                                            className="truncate w-full text-center text-[11px]">{pset.shortName}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        <div className="text-xs text-boxwood/90 font-bold pt-1 border-t border-amber-900/30">
+                            🎨 Стиль доски: <span className="text-amber-400">{activeTheme.name}</span>
+                        </div>
+
+                        <div className="grid grid-cols-5 gap-1.5">
+                            {Object.values(BOARD_THEMES).map((theme) => {
+                                const isCurrent = theme.id === activeTheme.id;
+                                return (
+                                    <button
+                                        key={theme.id}
+                                        type="button"
+                                        onClick={() => handleThemeChange(theme.id)}
+                                        className={`flex flex-col items-center gap-1 p-1.5 rounded border text-xs font-bold transition cursor-pointer ${
+                                            isCurrent
+                                                ? 'bg-amber-900/50 border-amber-400 text-amber-200 shadow'
+                                                : 'bg-black/35 border-amber-900/40 text-boxwood/75 hover:text-amber-200'
+                                        }`}
+                                    >
+                                        <div
+                                            className="w-6 h-6 rounded-sm overflow-hidden grid grid-cols-2 grid-rows-2 border border-black/50 shadow-sm">
+                                            <div style={{backgroundColor: theme.light}}/>
+                                            <div style={{backgroundColor: theme.dark}}/>
+                                            <div style={{backgroundColor: theme.dark}}/>
+                                            <div style={{backgroundColor: theme.light}}/>
+                                        </div>
+                                        <span className="truncate w-full text-center text-[11px]">{theme.name}</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    </div>
+                )}
 
                 {/* Индикатор активного предхода (Premove) */}
                 {premove && (
                     <div
-                        className="bg-rose-950/85 px-3 py-2 rounded border border-rose-500/60 text-xs text-rose-100 flex items-center justify-between shadow">
+                        className="bg-rose-950/90 px-3 py-2 rounded-md border border-rose-500/60 text-xs text-rose-100 flex items-center justify-between shadow shrink-0">
                         <span className="flex items-center gap-1.5 font-bold font-mono">
-                            <Zap size={13} className="text-rose-400"/>
+                            <Zap size={14} className="text-rose-400"/>
                             Предход: {premove.from} → {premove.to}{premove.promotion ? `=${premove.promotion.toUpperCase()}` : ''}
                         </span>
                         <button
                             type="button"
                             onClick={() => setPremove(null)}
-                            className="px-2 py-0.5 bg-black/40 hover:bg-black/70 rounded text-[10px] font-sans text-rose-200 transition cursor-pointer"
-                            title="Отменить предход (Правый клик или Esc)"
+                            className="px-2 py-0.5 bg-black/40 hover:bg-black/70 rounded text-xs font-sans text-rose-200 transition cursor-pointer"
                         >
                             Отмена
                         </button>
@@ -3014,16 +3066,20 @@ export default function Chessboard() {
 
                 {drawOfferStatus && (
                     <div
-                        className="bg-amber-950/90 p-2.5 rounded border border-amber-600/50 text-xs text-amber-200 text-center flex flex-col gap-2">
+                        className="bg-amber-950/90 p-2.5 rounded-md border border-amber-600/50 text-xs sm:text-sm text-amber-200 text-center flex flex-col gap-2 shrink-0">
                         <span>{drawOfferStatus}</span>
                         {drawOfferStatus.includes('предлагает ничью') && (
                             <div className="flex justify-center gap-2">
-                                <button onClick={acceptDraw}
-                                        className="px-3 py-1 bg-emerald-800 hover:bg-emerald-700 text-white rounded text-xs font-bold">
+                                <button
+                                    onClick={acceptDraw}
+                                    className="px-3 py-1 bg-emerald-800 hover:bg-emerald-700 text-white rounded text-xs font-bold cursor-pointer"
+                                >
                                     Принять
                                 </button>
-                                <button onClick={declineDraw}
-                                        className="px-3 py-1 bg-red-800 hover:bg-red-700 text-white rounded text-xs font-bold">
+                                <button
+                                    onClick={declineDraw}
+                                    className="px-3 py-1 bg-red-800 hover:bg-red-700 text-white rounded text-xs font-bold cursor-pointer"
+                                >
                                     Отклонить
                                 </button>
                             </div>
@@ -3031,28 +3087,28 @@ export default function Chessboard() {
                     </div>
                 )}
 
-                {/* Интерактивный список сделанных ходов */}
+                {/* Интерактивный список сделанных ходов (flex-1 min-h-0) */}
                 <div
-                    className="flex-1 flex flex-col bg-[#1A120B]/90 rounded border border-amber-900/50 overflow-hidden shadow-inner">
+                    className="flex-1 min-h-0 flex flex-col bg-[#1A120B]/90 rounded-md border border-amber-900/50 overflow-hidden shadow-inner">
                     <div
-                        className="grid grid-cols-[44px_1fr_1fr] px-3 py-1.5 bg-black/50 border-b border-amber-900/40 text-[10px] uppercase tracking-wider text-boxwood/50 font-sans font-bold">
+                        className="grid grid-cols-[48px_1fr_1fr] px-3 py-2 bg-black/55 border-b border-amber-900/40 text-xs uppercase tracking-wider text-boxwood/65 font-bold shrink-0">
                         <span>№</span>
                         <span>Белые</span>
-                        <span>Черные</span>
+                        <span>Чёрные</span>
                     </div>
 
                     <div
                         ref={notationScrollRef}
-                        className="flex-1 overflow-y-auto divide-y divide-amber-900/15 font-mono text-sm [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-amber-900/50"
+                        className="flex-1 min-h-0 overflow-y-auto divide-y divide-amber-900/15 font-mono text-sm [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-amber-900/50"
                     >
                         {movePairs.length === 0 ? (
                             <div
-                                className="h-full flex flex-col items-center justify-center p-6 text-center text-boxwood/40 font-serif text-xs gap-1.5">
-                                <span>Ходов пока нет.</span>
-                                <span className="text-[11px] text-boxwood/30">
+                                className="h-full flex flex-col items-center justify-center p-6 text-center text-boxwood/50 font-sans text-sm gap-1.5">
+                                <span className="font-semibold">Ходов пока нет</span>
+                                <span className="text-xs text-boxwood/40">
                                     {(gameId || activeBot || spectatingGameId)
                                         ? 'Сделайте первый ход на доске.'
-                                        : 'Двигайте фигуры на доске для анализа или начните игру слева.'}
+                                        : 'Двигайте фигуры для анализа или выберите соперника слева.'}
                                 </span>
                             </div>
                         ) : (
@@ -3063,18 +3119,18 @@ export default function Chessboard() {
                                 return (
                                     <div
                                         key={pair.moveNumber}
-                                        className="grid grid-cols-[44px_1fr_1fr] items-center px-2 py-1 hover:bg-white/5 transition-colors"
+                                        className="grid grid-cols-[48px_1fr_1fr] items-center px-2.5 py-1 hover:bg-white/5 transition-colors"
                                     >
-                                        <span className="text-xs text-amber-500/60 font-bold pl-1 select-none">
+                                        <span className="text-xs text-amber-500/70 font-bold pl-1 select-none">
                                             {pair.moveNumber}.
                                         </span>
 
                                         <button
                                             type="button"
                                             onClick={() => handleSelectMoveFromList(pair.whiteIdx)}
-                                            className={`text-left px-2 py-1 rounded text-xs font-bold transition truncate ${
+                                            className={`text-left px-2 py-1 rounded text-sm font-bold transition truncate cursor-pointer ${
                                                 isWhiteActive
-                                                    ? 'active-move-btn bg-amber-600/35 text-amber-200 border border-amber-500/50 shadow-sm'
+                                                    ? 'active-move-btn bg-amber-600/40 text-amber-200 border border-amber-500/50 shadow-sm'
                                                     : 'text-boxwood-light hover:bg-amber-900/30 hover:text-white'
                                             }`}
                                         >
@@ -3085,9 +3141,9 @@ export default function Chessboard() {
                                             <button
                                                 type="button"
                                                 onClick={() => handleSelectMoveFromList(pair.blackIdx!)}
-                                                className={`text-left px-2 py-1 rounded text-xs font-bold transition truncate ${
+                                                className={`text-left px-2 py-1 rounded text-sm font-bold transition truncate cursor-pointer ${
                                                     isBlackActive
-                                                        ? 'active-move-btn bg-amber-600/35 text-amber-200 border border-amber-500/50 shadow-sm'
+                                                        ? 'active-move-btn bg-amber-600/40 text-amber-200 border border-amber-500/50 shadow-sm'
                                                         : 'text-boxwood-light hover:bg-amber-900/30 hover:text-white'
                                                 }`}
                                             >
@@ -3106,7 +3162,7 @@ export default function Chessboard() {
                         <button
                             type="button"
                             onClick={() => setViewIndex(-1)}
-                            className="w-full py-1.5 px-3 bg-amber-700/30 hover:bg-amber-700/50 border-t border-amber-500/40 text-amber-200 text-[11px] font-bold text-center transition"
+                            className="w-full py-1.5 px-3 bg-amber-700/40 hover:bg-amber-700/60 border-t border-amber-500/40 text-amber-200 text-xs font-bold text-center transition shrink-0 cursor-pointer"
                         >
                             Просмотр истории
                             ({viewIndex === -2 ? 'Начало' : `полуход ${viewIndex + 1} из ${history.length}`}) —
@@ -3115,19 +3171,19 @@ export default function Chessboard() {
                     )}
                 </div>
 
-                {/* Кнопки пошаговой навигации по истории */}
+                {/* Кнопки пошаговой навигации */}
                 <div
-                    className="bg-acacia-dark p-2 rounded border border-amber-900/40 flex items-center justify-between">
-                    <span className="text-[11px] text-boxwood/70 pl-1">Навигация:</span>
-                    <div className="flex gap-1">
+                    className="bg-acacia-dark p-2 rounded-md border border-amber-900/40 flex items-center justify-between shrink-0">
+                    <span className="text-xs font-semibold text-boxwood/80 pl-1">Навигация:</span>
+                    <div className="flex gap-1.5">
                         <button
                             type="button"
                             disabled={history.length === 0 || viewIndex === -2}
                             onClick={() => setViewIndex(-2)}
-                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition"
+                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
                             title="В начало партии (Стрелка вверх)"
                         >
-                            <ChevronFirst size={16}/>
+                            <ChevronFirst size={17}/>
                         </button>
                         <button
                             type="button"
@@ -3138,10 +3194,10 @@ export default function Chessboard() {
                                     setViewIndex(current <= 0 ? -2 : current - 1);
                                 }
                             }}
-                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition"
+                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
                             title="Ход назад (Стрелка влево)"
                         >
-                            <ChevronLeft size={16}/>
+                            <ChevronLeft size={17}/>
                         </button>
                         <button
                             type="button"
@@ -3155,44 +3211,47 @@ export default function Chessboard() {
                                     setViewIndex(-1);
                                 }
                             }}
-                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition"
+                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
                             title="Ход вперед (Стрелка вправо)"
                         >
-                            <ChevronRight size={16}/>
+                            <ChevronRight size={17}/>
                         </button>
                         <button
                             type="button"
                             disabled={history.length === 0 || viewIndex === -1}
                             onClick={() => setViewIndex(-1)}
-                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition"
+                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
                             title="К последнему ходу (Стрелка вниз)"
                         >
-                            <ChevronLast size={16}/>
+                            <ChevronLast size={17}/>
                         </button>
                     </div>
                 </div>
 
-                {/* Компактный игровой чат и быстрые реплики (Таск 3.4) */}
+                {/* Компактный игровой чат и быстрые реплики */}
                 {(gameId || spectatingGameId) && (
-                    <div className="bg-acacia-dark p-2.5 rounded border border-amber-900/50 flex flex-col gap-2">
-                        <div className="flex items-center justify-between text-[10px] uppercase tracking-wider text-amber-400/90 font-bold">
-                            <span className="flex items-center gap-1">
-                                <MessageSquare size={12}/> Игровой чат
+                    <div
+                        className="bg-acacia-dark p-2.5 rounded-md border border-amber-900/50 flex flex-col gap-2 shrink-0">
+                        <div
+                            className="flex items-center justify-between text-xs uppercase tracking-wider text-amber-400 font-bold">
+                            <span className="flex items-center gap-1.5">
+                                <MessageSquare size={13}/> Игровой чат
                             </span>
                             {spectatingGameId && (
                                 <button
                                     type="button"
                                     onClick={handleLeaveSpectate}
-                                    className="text-rose-300 hover:text-rose-200 underline text-[10px] font-sans cursor-pointer"
+                                    className="text-rose-300 hover:text-rose-200 underline text-xs font-sans cursor-pointer"
                                 >
                                     Выйти из просмотра
                                 </button>
                             )}
                         </div>
 
-                        <div className="h-20 overflow-y-auto bg-black/40 rounded p-2 text-xs space-y-1 font-sans border border-amber-950/50 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
+                        <div
+                            className="h-20 overflow-y-auto bg-black/40 rounded p-2 text-xs space-y-1 font-sans border border-amber-950/50 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
                             {chatMessages.length === 0 ? (
-                                <div className="h-full flex items-center justify-center text-[11px] text-boxwood/40 italic">
+                                <div className="h-full flex items-center justify-center text-xs text-boxwood/45 italic">
                                     Сообщений пока нет. Поприветствуйте соперника!
                                 </div>
                             ) : (
@@ -3211,7 +3270,7 @@ export default function Chessboard() {
                                     key={preset}
                                     type="button"
                                     onClick={() => handleSendChatMessage(preset)}
-                                    className="px-1.5 py-0.5 rounded bg-black/35 hover:bg-amber-900/50 border border-amber-800/40 text-[10px] text-amber-200 transition cursor-pointer"
+                                    className="px-2 py-0.5 rounded bg-black/40 hover:bg-amber-900/50 border border-amber-800/40 text-xs text-amber-200 transition cursor-pointer"
                                 >
                                     {preset}
                                 </button>
@@ -3231,183 +3290,188 @@ export default function Chessboard() {
                                 value={chatInput}
                                 onChange={(e) => setChatInput(e.target.value)}
                                 placeholder="Написать сообщение..."
-                                className="flex-1 bg-black/50 border border-amber-800/50 rounded px-2 py-1 text-xs text-amber-100 outline-none focus:border-amber-500 font-sans"
+                                className="flex-1 bg-black/50 border border-amber-800/50 rounded px-2.5 py-1 text-xs text-amber-100 outline-none focus:border-amber-500 font-sans"
                             />
                             <button
                                 type="submit"
-                                className="px-2.5 py-1 bg-amber-700 hover:bg-amber-600 text-amber-100 rounded text-xs font-bold flex items-center justify-center transition cursor-pointer"
+                                className="px-3 py-1 bg-amber-700 hover:bg-amber-600 text-amber-100 rounded text-xs font-bold flex items-center justify-center transition cursor-pointer"
                                 title="Отправить"
                             >
-                                <Send size={12}/>
+                                <Send size={13}/>
                             </button>
                         </form>
                     </div>
                 )}
 
                 {/* Кнопки управления партией */}
-                {gameId ? (
-                    <>
-                        <div className="grid grid-cols-2 gap-2">
-                            {history.length < 2 ? (
+                <div className="shrink-0 flex flex-col gap-2">
+                    {gameId ? (
+                        <>
+                            <div className="grid grid-cols-2 gap-2">
+                                {history.length < 2 ? (
+                                    <button
+                                        type="button"
+                                        onClick={handleAbortGame}
+                                        disabled={!!gameOverResult}
+                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-amber-950/90 text-amber-200 text-sm font-bold rounded-md hover:bg-amber-900 transition shadow border border-amber-700/60 disabled:opacity-40 cursor-pointer"
+                                    >
+                                        <X size={15}/> Отменить игру
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={handleResign}
+                                        disabled={!!gameOverResult}
+                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/85 text-red-200 text-sm font-bold rounded-md hover:bg-red-900 transition shadow border border-red-800/50 disabled:opacity-40 cursor-pointer"
+                                    >
+                                        <Flag size={15}/> Сдаться
+                                    </button>
+                                )}
                                 <button
                                     type="button"
-                                    onClick={handleAbortGame}
-                                    disabled={!!gameOverResult}
-                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-amber-950/90 text-amber-200 text-xs font-bold rounded hover:bg-amber-900 transition shadow border border-amber-700/60 disabled:opacity-40"
+                                    onClick={handleOfferDraw}
+                                    disabled={!!gameOverResult || history.length < 2}
+                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
                                 >
-                                    <X size={14}/> Отменить игру
+                                    <Handshake size={15}/> Ничья
                                 </button>
-                            ) : (
-                                <button
-                                    type="button"
-                                    onClick={handleResign}
-                                    disabled={!!gameOverResult}
-                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/80 text-red-200 text-xs font-bold rounded hover:bg-red-900 transition shadow border border-red-800/50 disabled:opacity-40"
-                                >
-                                    <Flag size={14}/> Сдаться
-                                </button>
-                            )}
-                            <button
-                                type="button"
-                                onClick={handleOfferDraw}
-                                disabled={!!gameOverResult || history.length < 2}
-                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs font-bold rounded hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40"
-                            >
-                                <Handshake size={14}/> Ничья
-                            </button>
-                        </div>
+                            </div>
 
-                        {gameOverResult && (
-                            <div className="flex flex-col gap-2">
-                                {rematchStatus === 'offered_by_opponent' ? (
-                                    <div className="p-2.5 rounded bg-emerald-950/90 border border-emerald-500/60 flex flex-col gap-2 text-xs text-emerald-100 text-center shadow">
-                                        <span className="font-bold">Соперник предлагает реванш (со сменой цвета)!</span>
+                            {gameOverResult && (
+                                <div className="flex flex-col gap-2">
+                                    {rematchStatus === 'offered_by_opponent' ? (
+                                        <div
+                                            className="p-2.5 rounded-md bg-emerald-950/90 border border-emerald-500/60 flex flex-col gap-2 text-xs text-emerald-100 text-center shadow">
+                                            <span
+                                                className="font-bold">Соперник предлагает реванш (со сменой цвета)!</span>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={handleAcceptRematch}
+                                                    className="py-1.5 px-3 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded transition shadow cursor-pointer"
+                                                >
+                                                    Принять реванш
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleDeclineRematch}
+                                                    className="py-1.5 px-3 bg-red-900/80 hover:bg-red-800 text-red-100 font-bold rounded transition cursor-pointer"
+                                                >
+                                                    Отклонить
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
                                         <div className="grid grid-cols-2 gap-2">
                                             <button
                                                 type="button"
-                                                onClick={handleAcceptRematch}
-                                                className="py-1.5 px-3 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded transition shadow"
+                                                disabled={rematchStatus === 'offered_by_me' || rematchStatus === 'declined'}
+                                                onClick={handleOfferRematch}
+                                                className="flex items-center justify-center gap-1.5 px-3 py-2 font-bold text-sm rounded-md transition shadow bg-emerald-800 hover:bg-emerald-700 text-emerald-100 border border-emerald-500/50 disabled:opacity-50 cursor-pointer"
                                             >
-                                                Принять реванш
+                                                <RefreshCw size={15}
+                                                           className={rematchStatus === 'offered_by_me' ? 'animate-spin' : ''}/>
+                                                {rematchStatus === 'offered_by_me'
+                                                    ? 'Ждём ответа...'
+                                                    : rematchStatus === 'declined'
+                                                        ? 'Реванш отклонён'
+                                                        : 'Реванш'}
                                             </button>
                                             <button
                                                 type="button"
-                                                onClick={handleDeclineRematch}
-                                                className="py-1.5 px-3 bg-red-900/80 hover:bg-red-800 text-red-100 font-bold rounded transition"
+                                                onClick={handleResetSandbox}
+                                                className="flex items-center justify-center gap-1.5 px-3 py-2 font-bold text-sm rounded-md transition shadow bg-boxwood text-acacia-dark border border-amber-700/50 hover:bg-boxwood-light cursor-pointer"
                                             >
-                                                Отклонить
+                                                <RotateCcw size={15}/> В лобби
                                             </button>
                                         </div>
-                                    </div>
-                                ) : (
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <button
-                                            type="button"
-                                            disabled={rematchStatus === 'offered_by_me' || rematchStatus === 'declined'}
-                                            onClick={handleOfferRematch}
-                                            className="flex items-center justify-center gap-1.5 px-3 py-2.5 font-bold text-xs rounded transition shadow bg-emerald-800 hover:bg-emerald-700 text-emerald-100 border border-emerald-500/50 disabled:opacity-50"
-                                        >
-                                            <RefreshCw size={14} className={rematchStatus === 'offered_by_me' ? 'animate-spin' : ''}/>
-                                            {rematchStatus === 'offered_by_me'
-                                                ? 'Ждём ответа...'
-                                                : rematchStatus === 'declined'
-                                                    ? 'Реванш отклонён'
-                                                    : 'Реванш'}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={handleResetSandbox}
-                                            className="flex items-center justify-center gap-1.5 px-3 py-2.5 font-bold text-xs rounded transition shadow bg-boxwood text-acacia-dark border border-amber-700/50 hover:bg-boxwood-light"
-                                        >
-                                            <RotateCcw size={14}/> В лобби
-                                        </button>
-                                    </div>
-                                )}
-                            </div>
-                        )}
-                    </>
-                ) : activeBot ? (
-                    <div className="flex flex-col gap-2">
-                        <div className="grid grid-cols-2 gap-2">
-                            <button
-                                type="button"
-                                disabled={history.length === 0 || isBotThinking || !!gameOverResult}
-                                onClick={handleUndoSandboxMove}
-                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs font-bold rounded hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40"
-                            >
-                                <Undo2 size={14}/> Вернуть ход
-                            </button>
-                            {!gameOverResult ? (
-                                <button
-                                    type="button"
-                                    onClick={handleResign}
-                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/80 text-red-200 text-xs font-bold rounded hover:bg-red-900 transition shadow border border-red-800/50"
-                                >
-                                    <Flag size={14}/> Сдаться
-                                </button>
-                            ) : (
-                                <button
-                                    type="button"
-                                    onClick={handleOfferRematch}
-                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-800 text-emerald-100 text-xs font-bold rounded hover:bg-emerald-700 transition shadow border border-emerald-500/50"
-                                >
-                                    <RefreshCw size={14}/> Реванш (смена цвета)
-                                </button>
+                                    )}
+                                </div>
                             )}
-                        </div>
-
-                        {savedBotGameId && (
+                        </>
+                    ) : activeBot ? (
+                        <div className="flex flex-col gap-2">
                             <div className="grid grid-cols-2 gap-2">
                                 <button
                                     type="button"
-                                    onClick={() => navigate(`/game/${savedBotGameId}`, {
-                                        state: {
-                                            game: {
-                                                game_id: savedBotGameId,
-                                                white_username: whitePlayer.username,
-                                                white_rating: Number(whitePlayer.rating) || 1200,
-                                                black_username: blackPlayer.username,
-                                                black_rating: Number(blackPlayer.rating) || 1850,
-                                                result: gameOverResult || '*',
-                                                site: 'Michess Bot Arena',
-                                                finished_at: new Date().toISOString()
-                                            }
-                                        }
-                                    })}
-                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 text-xs font-bold rounded transition shadow border border-emerald-600/50"
+                                    disabled={history.length === 0 || isBotThinking || !!gameOverResult}
+                                    onClick={handleUndoSandboxMove}
+                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
                                 >
-                                    <Eye size={14}/> Разбор партии
+                                    <Undo2 size={15}/> Вернуть ход
                                 </button>
-                                <a
-                                    href={`${API_BASE_URL}/api/v1/profile/games/${savedBotGameId}/pgn`}
-                                    download
-                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-[#1A120B] hover:bg-black text-amber-400 text-xs font-bold rounded transition shadow border border-amber-800/60"
-                                >
-                                    <Download size={14}/> Скачать PGN
-                                </a>
+                                {!gameOverResult ? (
+                                    <button
+                                        type="button"
+                                        onClick={handleResign}
+                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/85 text-red-200 text-sm font-bold rounded-md hover:bg-red-900 transition shadow border border-red-800/50 cursor-pointer"
+                                    >
+                                        <Flag size={15}/> Сдаться
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={handleOfferRematch}
+                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-800 text-emerald-100 text-sm font-bold rounded-md hover:bg-emerald-700 transition shadow border border-emerald-500/50 cursor-pointer"
+                                    >
+                                        <RefreshCw size={15}/> Реванш
+                                    </button>
+                                )}
                             </div>
-                        )}
-                    </div>
-                ) : (
-                    <div className="grid grid-cols-2 gap-2">
-                        <button
-                            type="button"
-                            disabled={history.length === 0}
-                            onClick={handleUndoSandboxMove}
-                            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs font-bold rounded hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40"
-                        >
-                            <Undo2 size={14}/> Отменить ход
-                        </button>
-                        <button
-                            type="button"
-                            disabled={history.length === 0}
-                            onClick={handleResetSandbox}
-                            className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-amber-300 text-xs font-bold rounded hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40"
-                        >
-                            <RotateCcw size={14}/> Сбросить доску
-                        </button>
-                    </div>
-                )}
+
+                            {savedBotGameId && (
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate(`/game/${savedBotGameId}`, {
+                                            state: {
+                                                game: {
+                                                    game_id: savedBotGameId,
+                                                    white_username: whitePlayer.username,
+                                                    white_rating: Number(whitePlayer.rating) || 1200,
+                                                    black_username: blackPlayer.username,
+                                                    black_rating: Number(blackPlayer.rating) || 1850,
+                                                    result: gameOverResult || '*',
+                                                    site: 'Michess Bot Arena',
+                                                    finished_at: new Date().toISOString()
+                                                }
+                                            }
+                                        })}
+                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 text-xs sm:text-sm font-bold rounded-md transition shadow border border-emerald-600/50 cursor-pointer"
+                                    >
+                                        <Eye size={15}/> Разбор партии
+                                    </button>
+                                    <a
+                                        href={`${API_BASE_URL}/api/v1/profile/games/${savedBotGameId}/pgn`}
+                                        download
+                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-[#1A120B] hover:bg-black text-amber-400 text-xs sm:text-sm font-bold rounded-md transition shadow border border-amber-800/60"
+                                    >
+                                        <Download size={15}/> Скачать PGN
+                                    </a>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                type="button"
+                                disabled={history.length === 0}
+                                onClick={handleUndoSandboxMove}
+                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
+                            >
+                                <Undo2 size={15}/> Отменить ход
+                            </button>
+                            <button
+                                type="button"
+                                disabled={history.length === 0}
+                                onClick={handleResetSandbox}
+                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-amber-300 text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
+                            >
+                                <RotateCcw size={15}/> Сбросить доску
+                            </button>
+                        </div>
+                    )}
+                </div>
 
             </div>
 
