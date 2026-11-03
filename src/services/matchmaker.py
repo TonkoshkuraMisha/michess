@@ -173,7 +173,10 @@ class Matchmaker:
             "color_pref": color_pref,
         }
         try:
+            try:
             await redis_conn.set(f"invite:{code}", json.dumps(payload), ex=900)
+        except TypeError:
+            await redis_conn.set(f"invite:{code}", json.dumps(payload))
         except TypeError:
             await redis_conn.set(f"invite:{code}", json.dumps(payload))
             if hasattr(redis_conn, "expire"):
