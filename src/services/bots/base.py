@@ -40,7 +40,7 @@ def normalize_fen_key(board: chess.Board) -> str:
 
 
 def resolve_stockfish_path(custom_path: str | None = None) -> str | None:
-    """Ищет бинарник Stockfish в локальной папке bin/ проекта или в системном PATH."""
+    """Ищет бинарник Stockfish в локальной папке bin/ проекта, системном PATH или стандартных путях Linux."""
     if custom_path and os.path.exists(custom_path):
         return custom_path
 
@@ -49,7 +49,15 @@ def resolve_stockfish_path(custom_path: str | None = None) -> str | None:
         if candidate.exists() and candidate.is_file():
             return str(candidate)
 
-    return shutil.which("stockfish")
+    which_path = shutil.which("stockfish")
+    if which_path:
+        return which_path
+
+    for linux_path in ("/usr/games/stockfish", "/usr/bin/stockfish", "/usr/local/bin/stockfish"):
+        if os.path.exists(linux_path) and os.path.isfile(linux_path):
+            return linux_path
+
+    return None
 
 
 def load_bot_opening_book(
