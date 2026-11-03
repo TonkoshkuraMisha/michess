@@ -24,6 +24,13 @@ import {
     getDefaultBoardSize
 } from './Chessboard';
 import {API_BASE_URL} from '../config/api';
+import {
+    PIECE_SETS,
+    getSavedBoardThemeKey,
+    getSavedPieceSetKey,
+    getPieceSvgUrl,
+    getHarmoniousPieceStyle
+} from '../config/boardAppearance';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
@@ -40,10 +47,8 @@ export default function GameViewer() {
     const [viewIndex, setViewIndex] = useState<number>(-1);
     const [isFlipped, setIsFlipped] = useState(false);
 
-    const [boardThemeKey, setBoardThemeKey] = useState<string>(() => {
-        const saved = localStorage.getItem('michess_board_theme');
-        return saved && BOARD_THEMES[saved] ? saved : 'walnut';
-    });
+    const [boardThemeKey, setBoardThemeKey] = useState<string>(() => getSavedBoardThemeKey());
+    const [pieceSetKey, setPieceSetKey] = useState<string>(() => getSavedPieceSetKey());
 
     const [boardSize, setBoardSize] = useState<number>(() => {
         const savedSize = localStorage.getItem('michess_board_size');
@@ -64,10 +69,16 @@ export default function GameViewer() {
     const notationScrollRef = useRef<HTMLDivElement>(null);
 
     const activeTheme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
+    const activePieceSet = PIECE_SETS[pieceSetKey] || PIECE_SETS.merida;
 
     const handleThemeChange = (themeId: string) => {
         setBoardThemeKey(themeId);
         localStorage.setItem('michess_board_theme', themeId);
+    };
+
+    const handlePieceSetChange = (setId: string) => {
+        setPieceSetKey(setId);
+        localStorage.setItem('michess_piece_set', setId);
     };
 
     useEffect(() => {
@@ -191,19 +202,14 @@ export default function GameViewer() {
     }
     const boardState = currentGame.board();
 
-    // Чистая высококонтрастная отрисовка фигур
     const renderPieceSvg = (piece: { type: string; color: string }) => {
-        const isWhite = piece.color === 'w';
-        const pieceFilter = isWhite
-            ? 'sepia(0.12) saturate(0.85) brightness(1.03) drop-shadow(0 2px 3px rgba(0, 0, 0, 0.65)) drop-shadow(0 0 1px rgba(0, 0, 0, 0.85))'
-            : 'brightness(0.95) contrast(1.08) drop-shadow(0 0 1.2px rgba(255, 248, 225, 0.55)) drop-shadow(0 3px 4px rgba(0, 0, 0, 0.65))';
-
+        const styleProps = getHarmoniousPieceStyle(pieceSetKey, boardThemeKey, piece.color);
         return (
             <div className="relative w-full h-full pointer-events-none flex items-center justify-center">
                 <img
-                    src={`/assets/pieces/${piece.color}${piece.type.toUpperCase()}.svg`}
-                    className="w-[90%] h-[90%] object-contain select-none"
-                    style={{filter: pieceFilter}}
+                    src={getPieceSvgUrl(pieceSetKey, piece.color, piece.type)}
+                    className="object-contain select-none"
+                    style={styleProps}
                     draggable={false}
                     alt={`${piece.color} ${piece.type}`}
                 />
@@ -342,7 +348,7 @@ export default function GameViewer() {
                                             )}
 
                                             {piece && (
-                                                <div className="relative w-full h-full p-[3%] z-20">
+                                                <div className="relative w-full h-full p-[1.5%] z-20">
                                                     {renderPieceSvg(piece)}
                                                 </div>
                                             )}
@@ -504,13 +510,36 @@ export default function GameViewer() {
 
                 <div className="flex flex-col gap-3">
 
-                    {/* Выбор цветовой палитры доски */}
-                    <div className="bg-acacia-dark p-2.5 rounded border border-amber-900/40 flex flex-col gap-1.5">
+                    {/* Выбор комплекта фигур и цветовой палитры доски */}
+                    <div className="bg-acacia-dark p-2.5 rounded border border-amber-900/40 flex flex-col gap-2">
                         <div className="flex justify-between items-center text-xs text-boxwood/80">
-                            <span className="flex items-center gap-1.5"><Palette size={13}/> Стиль доски</span>
-                            <span className="text-amber-400 font-bold">{activeTheme.name}</span>
+                            <span className="font-bold">♟ Фигуры</span>
+                            <span className="text-amber-400 font-bold text-[11px]">{activePieceSet.name}</span>
                         </div>
-                        <div className="grid grid-cols-4 gap-1.5">
+                        <div className="grid grid-cols-5 gap-1">
+                            {Object.values(PIECE_SETS).map((pset) => {
+                                const isCurrent = pset.id === activePieceSet.id;
+                                return (
+                                    <button
+                                        key={pset.id}
+                                        type="button"
+                                        onClick={() => handlePieceSetChange(pset.id)}
+                                        className={`py-1 px-1 rounded border text-[9px] font-bold transition cursor-pointer truncate ${
+                                            isCurrent
+                                                ? 'bg-amber-900/45 border-amber-400 text-amber-200 shadow'
+                                                : 'bg-black/30 border-amber-900/40 text-boxwood/70 hover:text-amber-200'
+                                        }`}
+                                    >
+                                        {pset.shortName}
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <div className="flex justify-between items-center text-xs text-boxwood/80 pt-1 border-t border-amber-900/30">
+                            <span className="flex items-center gap-1.5"><Palette size={13}/> Стиль доски</span>
+                            <span className="text-amber-400 font-bold text-[11px]">{activeTheme.name}</span>
+                        </div>
+                        <div className="grid grid-cols-5 gap-1">
                             {Object.values(BOARD_THEMES).map((theme) => {
                                 const isCurrent = theme.id === activeTheme.id;
                                 return (
