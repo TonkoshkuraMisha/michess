@@ -53,7 +53,7 @@ import type {HistoricalBotId, HistoricalBotProfile} from '../config/champions';
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
 
-export const MIN_BOARD_SIZE = 360;
+export const MIN_BOARD_SIZE = 340;
 export const MAX_BOARD_SIZE = 860;
 
 export type PromotionPiece = 'q' | 'n' | 'r' | 'b';
@@ -66,21 +66,21 @@ const PROMOTION_OPTIONS: Array<{ type: PromotionPiece; label: string }> = [
 ];
 
 export function getMaxViewportBoardSize(): number {
-    if (typeof window === 'undefined') return 640;
-    const availableHeight = window.innerHeight - 190;
+    if (typeof window === 'undefined') return 560;
+    // 220px резервируется под шапку сайта (56px), отступы main (20px) и две плашки игроков с таймерами (144px)
+    const availableHeight = window.innerHeight - 220;
     const availableWidth = window.innerWidth >= 1280
-        ? window.innerWidth - 820
-        : window.innerWidth - 32;
+        ? window.innerWidth - 850
+        : window.innerWidth - 28;
     const limit = Math.min(availableHeight, availableWidth, MAX_BOARD_SIZE);
     return Math.max(MIN_BOARD_SIZE, limit);
 }
 
 export function getDefaultBoardSize(): number {
     if (typeof window !== 'undefined') {
-        const maxFit = getMaxViewportBoardSize();
-        return Math.min(Math.max(window.innerHeight - 196, 420), maxFit);
+        return getMaxViewportBoardSize();
     }
-    return 580;
+    return 540;
 }
 
 interface LiveGameItem {
@@ -557,11 +557,12 @@ export default function Chessboard() {
     const navigate = useNavigate();
     const {inviteCode} = useParams<{ inviteCode?: string }>();
 
-    // Режимы левой панели и выдвижные панели
+    // Режимы левой панели и выпадающие меню
     const [leftSectionTab, setLeftSectionTab] = useState<'bots' | 'lobby'>('bots');
     const [lobbyTab, setLobbyTab] = useState<'lobby' | 'live'>('lobby');
     const [showInvitePanel, setShowInvitePanel] = useState(false);
-    const [showAppearancePanel, setShowAppearancePanel] = useState(false);
+    const [showAppearanceDropdown, setShowAppearanceDropdown] = useState(false);
+    const appearanceDropdownRef = useRef<HTMLDivElement>(null);
 
     const [liveGames, setLiveGames] = useState<LiveGameItem[]>([]);
     const [spectatingGameId, setSpectatingGameId] = useState<number | null>(null);
@@ -639,7 +640,7 @@ export default function Chessboard() {
         y: number;
     } | null>(null);
 
-    // Адаптивный размер доски, который гарантированно помещается в один экран по высоте
+    // Размер доски строго ограничивается доступной высотой экрана, чтобы нижний таймер всегда был виден
     const [boardSize, setBoardSize] = useState<number>(() => {
         const maxFit = getMaxViewportBoardSize();
         const savedSize = localStorage.getItem('michess_board_size');
@@ -649,12 +650,11 @@ export default function Chessboard() {
                 return Math.min(parsed, maxFit);
             }
         }
-        return getDefaultBoardSize();
+        return maxFit;
     });
     const [isResizing, setIsResizing] = useState(false);
     const resizeStartRef = useRef<{ startX: number; startY: number; startSize: number } | null>(null);
 
-    // Автоматическая подстройка доски при изменении размеров окна (чтобы не появлялся вертикальный скролл)
     useEffect(() => {
         const handleWindowResize = () => {
             const maxFit = getMaxViewportBoardSize();
@@ -1019,7 +1019,7 @@ export default function Chessboard() {
                 setPendingPromotion(null);
                 setPremove(null);
                 setSelectedSquare(null);
-                setShowAppearancePanel(false);
+                setShowAppearanceDropdown(false);
                 return;
             }
             if (history.length === 0) return;
@@ -1067,13 +1067,16 @@ export default function Chessboard() {
             if (timeDropdownRef.current && !timeDropdownRef.current.contains(event.target as Node)) {
                 setIsTimeDropdownOpen(false);
             }
+            if (appearanceDropdownRef.current && !appearanceDropdownRef.current.contains(event.target as Node)) {
+                setShowAppearanceDropdown(false);
+            }
         };
 
-        if (isTimeDropdownOpen) {
+        if (isTimeDropdownOpen || showAppearanceDropdown) {
             document.addEventListener('mousedown', handleClickOutside);
         }
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [isTimeDropdownOpen]);
+    }, [isTimeDropdownOpen, showAppearanceDropdown]);
 
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -1608,7 +1611,7 @@ export default function Chessboard() {
 
             if (!targetSquare && boardContainerRef.current) {
                 const rect = boardContainerRef.current.getBoundingClientRect();
-                const padding = 14;
+                const padding = 12;
                 const innerLeft = rect.left + padding;
                 const innerTop = rect.top + padding;
                 const innerWidth = rect.width - padding * 2;
@@ -2039,7 +2042,7 @@ export default function Chessboard() {
 
     return (
         <div
-            className="w-full max-w-[1920px] h-full flex flex-col xl:flex-row items-center xl:items-stretch justify-between gap-4 px-1 xl:overflow-hidden relative">
+            className="w-full max-w-[1920px] h-full flex flex-col xl:flex-row items-center xl:items-stretch justify-between gap-3 px-1 xl:overflow-hidden relative">
 
             {dragState && (
                 <div
@@ -2056,21 +2059,22 @@ export default function Chessboard() {
                 </div>
             )}
 
-            {/* ЛЕВАЯ КОЛОНКА: ИГРОВОЙ ЦЕНТР (КОНТРОЛЬ ВРЕМЕНИ, ИСТОРИЧЕСКИЕ БОТЫ С ФОТО, ЛОББИ И LIVE) */}
+            {/* ЛЕВАЯ КОЛОНКА: ИГРОВОЙ ЦЕНТР (ЧАСЫ DGT2500, ИСТОРИЧЕСКИЕ БОТЫ С ФОТО, ЛОББИ И LIVE) */}
             <div
-                className="w-full xl:w-[410px] 2xl:w-[460px] xl:h-full bg-acacia p-3.5 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-3 text-boxwood-light order-2 xl:order-1 shrink-0 xl:overflow-hidden">
+                className="w-full xl:w-[400px] 2xl:w-[440px] xl:h-full bg-acacia p-3 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-2 text-boxwood-light order-2 xl:order-1 shrink-0 xl:overflow-hidden">
 
                 {/* Шапка левой панели: Статистика сессии */}
-                <div className="border-b border-acacia-light pb-2.5 flex justify-between items-center shrink-0">
-                    <div className="flex items-center gap-2.5">
-                        <div className="p-2 bg-acacia-dark rounded-md border border-amber-600/30 text-amber-400">
-                            <Sword size={18}/>
+                <div className="border-b border-acacia-light pb-2 flex justify-between items-center shrink-0">
+                    <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-acacia-dark rounded-md border border-amber-600/30 text-amber-400">
+                            <Sword size={16}/>
                         </div>
                         <div>
-                            <div className="text-xs tracking-wider uppercase text-boxwood/75 font-bold">Игровой зал
+                            <div className="text-[11px] tracking-wider uppercase text-boxwood/75 font-bold">
+                                Игровой зал
                             </div>
-                            <div className="text-sm font-bold flex items-center gap-2 font-mono">
-                                <span className="text-xs text-boxwood/80 font-sans">Счёт сессии:</span>
+                            <div className="text-xs font-bold flex items-center gap-1.5 font-mono">
+                                <span className="text-boxwood/80 font-sans">Счёт сессии:</span>
                                 <span className="text-emerald-400">+{sessionStats.wins}</span>
                                 <span className="text-red-400">-{sessionStats.losses}</span>
                                 <span className="text-gray-300">={sessionStats.draws}</span>
@@ -2081,23 +2085,23 @@ export default function Chessboard() {
                     <button
                         type="button"
                         onClick={() => setIsManualFlip(prev => !prev)}
-                        className="px-3 py-1.5 rounded-md bg-acacia-dark hover:bg-black/50 border border-amber-800/50 text-xs font-bold text-amber-200 flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+                        className="px-2.5 py-1 rounded-md bg-acacia-dark hover:bg-black/50 border border-amber-800/50 text-xs font-bold text-amber-200 flex items-center gap-1.5 transition cursor-pointer shadow-sm"
                         title="Перевернуть доску"
                     >
-                        <RefreshCw size={14} className="text-amber-400"/> Перевернуть
+                        <RefreshCw size={13} className="text-amber-400"/> Перевернуть
                     </button>
                 </div>
 
                 {/* Блок часов FIDE DGT2500 и быстрого вызова */}
                 <div
-                    className="bg-acacia-dark p-3 rounded-md border border-amber-900/50 flex flex-col gap-2.5 shadow-inner shrink-0">
+                    className="bg-acacia-dark p-2.5 rounded-md border border-amber-900/50 flex flex-col gap-2 shadow-inner shrink-0">
                     <div className="flex items-center justify-between">
                         <label
                             className="text-xs uppercase tracking-wider text-boxwood/85 flex items-center gap-1.5 font-bold">
-                            <Clock className="text-amber-500" size={14}/> Часы FIDE DGT2500 (36 прогр.)
+                            <Clock className="text-amber-500" size={13}/> Часы FIDE DGT2500 (36 прогр.)
                         </label>
                         <span
-                            className="text-xs font-mono font-bold px-2 py-0.5 rounded bg-amber-900/45 text-amber-300 border border-amber-600/30">
+                            className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-900/45 text-amber-300 border border-amber-600/30">
                             OPT #{selectedTimeControl.optionNumber}
                         </span>
                     </div>
@@ -2107,14 +2111,14 @@ export default function Chessboard() {
                             type="button"
                             disabled={isSearching || !!gameId}
                             onClick={() => setIsTimeDropdownOpen(!isTimeDropdownOpen)}
-                            className="w-full bg-black/45 border border-amber-700/50 hover:bg-black/65 disabled:opacity-50 transition text-amber-200 rounded-md px-3 py-2 text-sm font-bold outline-none cursor-pointer flex justify-between items-center shadow-inner gap-2"
+                            className="w-full bg-black/45 border border-amber-700/50 hover:bg-black/65 disabled:opacity-50 transition text-amber-200 rounded-md px-2.5 py-1.5 text-xs sm:text-sm font-bold outline-none cursor-pointer flex justify-between items-center shadow-inner gap-2"
                         >
                             <span className="truncate">
                                 [{selectedTimeControl.optionNumber}] {selectedTimeControl.label}
                                 {selectedTimeControl.isManual ? ` (${manualBaseMinutes}м + ${manualIncSeconds}с)` : ''}
                             </span>
-                            {isTimeDropdownOpen ? <ChevronUp className="text-amber-400 shrink-0" size={16}/> :
-                                <ChevronDown className="text-amber-400 shrink-0" size={16}/>}
+                            {isTimeDropdownOpen ? <ChevronUp className="text-amber-400 shrink-0" size={15}/> :
+                                <ChevronDown className="text-amber-400 shrink-0" size={15}/>}
                         </button>
 
                         {isTimeDropdownOpen && (
@@ -2132,7 +2136,7 @@ export default function Chessboard() {
                                                 <button
                                                     key={opt.optionNumber}
                                                     type="button"
-                                                    className={`w-full text-left px-3 py-2 text-sm transition flex justify-between items-start gap-2 border-b border-amber-950/30 cursor-pointer ${
+                                                    className={`w-full text-left px-3 py-2 text-xs sm:text-sm transition flex justify-between items-start gap-2 border-b border-amber-950/30 cursor-pointer ${
                                                         isSelected
                                                             ? 'bg-amber-900/45 text-amber-300 font-bold'
                                                             : 'text-amber-100/90 hover:bg-amber-900/25 hover:text-amber-200'
@@ -2171,13 +2175,13 @@ export default function Chessboard() {
 
                     {selectedTimeControl.isManual && (
                         <div
-                            className="p-2.5 rounded bg-black/40 border border-amber-700/40 flex flex-col gap-2 text-xs">
+                            className="p-2 rounded bg-black/40 border border-amber-700/40 flex flex-col gap-1.5 text-xs">
                             <div
-                                className="text-xs uppercase tracking-wider text-amber-400 font-bold flex items-center gap-1.5">
-                                <Sliders size={13}/> Ручная настройка DGT2500
+                                className="text-[11px] uppercase tracking-wider text-amber-400 font-bold flex items-center gap-1.5">
+                                <Sliders size={12}/> Ручная настройка DGT2500
                             </div>
                             <div className="grid grid-cols-2 gap-2">
-                                <label className="flex flex-col gap-1 text-xs text-boxwood/85">
+                                <label className="flex flex-col gap-0.5 text-xs text-boxwood/85">
                                     <span>Время (мин):</span>
                                     <input
                                         type="number"
@@ -2185,10 +2189,10 @@ export default function Chessboard() {
                                         max={240}
                                         value={manualBaseMinutes}
                                         onChange={(e) => setManualBaseMinutes(Math.max(1, Math.min(240, Number(e.target.value) || 1)))}
-                                        className="bg-black/60 border border-amber-700/50 rounded px-2.5 py-1 text-amber-200 font-mono text-sm outline-none"
+                                        className="bg-black/60 border border-amber-700/50 rounded px-2 py-1 text-amber-200 font-mono text-xs outline-none"
                                     />
                                 </label>
-                                <label className="flex flex-col gap-1 text-xs text-boxwood/85">
+                                <label className="flex flex-col gap-0.5 text-xs text-boxwood/85">
                                     <span>Бонус / Delay (сек):</span>
                                     <input
                                         type="number"
@@ -2196,7 +2200,7 @@ export default function Chessboard() {
                                         max={180}
                                         value={manualIncSeconds}
                                         onChange={(e) => setManualIncSeconds(Math.max(0, Math.min(180, Number(e.target.value) || 0)))}
-                                        className="bg-black/60 border border-amber-700/50 rounded px-2.5 py-1 text-amber-200 font-mono text-sm outline-none"
+                                        className="bg-black/60 border border-amber-700/50 rounded px-2 py-1 text-amber-200 font-mono text-xs outline-none"
                                     />
                                 </label>
                             </div>
@@ -2207,39 +2211,39 @@ export default function Chessboard() {
                         <div className="grid grid-cols-[1fr_auto] gap-2">
                             <button
                                 onClick={isSearching ? cancelMatchmaking : startMatchmaking}
-                                className={`flex items-center justify-center gap-2 px-4 py-2 font-bold text-sm rounded-md transition shadow border cursor-pointer ${
+                                className={`flex items-center justify-center gap-2 px-3 py-1.5 font-bold text-xs sm:text-sm rounded-md transition shadow border cursor-pointer ${
                                     isSearching
                                         ? 'bg-red-900/85 text-red-100 border-red-700 hover:bg-red-900'
                                         : 'bg-boxwood text-acacia-dark border-amber-700/50 hover:bg-boxwood-light'
                                 }`}
                             >
-                                {isSearching ? <Loader2 className="animate-spin" size={16}/> : <Users size={16}/>}
+                                {isSearching ? <Loader2 className="animate-spin" size={15}/> : <Users size={15}/>}
                                 {isSearching ? 'Отменить поиск' : 'Найти соперника'}
                             </button>
 
                             <button
                                 type="button"
                                 onClick={() => setShowInvitePanel(prev => !prev)}
-                                className={`px-3 py-2 rounded-md border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow ${
+                                className={`px-2.5 py-1.5 rounded-md border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow ${
                                     showInvitePanel
                                         ? 'bg-amber-700 text-white border-amber-400'
                                         : 'bg-black/45 hover:bg-black/65 text-amber-200 border-amber-700/50'
                                 }`}
                                 title="Создать ссылку для игры с другом"
                             >
-                                <Link2 size={15}/> С другом
+                                <Link2 size={14}/> С другом
                             </button>
                         </div>
                     ) : (
                         <div
-                            className="text-center py-2 px-3 rounded bg-emerald-950/60 border border-emerald-700/50 text-emerald-300 text-sm font-bold">
+                            className="text-center py-1.5 px-3 rounded bg-emerald-950/60 border border-emerald-700/50 text-emerald-300 text-xs sm:text-sm font-bold">
                             {gameOverResult ? `Партия завершена (${gameOverResult})` : 'Идет рейтинговая партия'}
                         </div>
                     )}
 
                     {/* Выдвижная плашка вызова друга по ссылке */}
                     {showInvitePanel && !gameId && (
-                        <div className="p-2.5 rounded bg-black/45 border border-amber-700/40 flex flex-col gap-2">
+                        <div className="p-2 rounded bg-black/45 border border-amber-700/40 flex flex-col gap-1.5">
                             <div className="flex items-center justify-between text-xs font-bold text-amber-200">
                                 <span>Цвет в партии с другом:</span>
                                 <div
@@ -2265,7 +2269,7 @@ export default function Chessboard() {
                                     onClick={handleCreatePrivateInvite}
                                     className="w-full py-1.5 px-3 rounded bg-amber-800/70 hover:bg-amber-700 text-amber-100 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow"
                                 >
-                                    <Link2 size={14}/> Сгенерировать и скопировать ссылку
+                                    <Link2 size={13}/> Сгенерировать и скопировать ссылку
                                 </button>
                             ) : (
                                 <div className="flex items-center gap-1.5">
@@ -2273,14 +2277,14 @@ export default function Chessboard() {
                                         type="text"
                                         readOnly
                                         value={`${window.location.origin}/challenge/${createdInviteCode}`}
-                                        className="flex-1 bg-black/60 border border-amber-700/50 rounded px-2.5 py-1 text-xs font-mono text-amber-200 outline-none"
+                                        className="flex-1 bg-black/60 border border-amber-700/50 rounded px-2 py-1 text-xs font-mono text-amber-200 outline-none"
                                     />
                                     <button
                                         type="button"
                                         onClick={handleCopyInviteLink}
-                                        className="px-3 py-1 rounded bg-emerald-800 hover:bg-emerald-700 text-emerald-100 text-xs font-bold flex items-center gap-1 shrink-0 cursor-pointer"
+                                        className="px-2.5 py-1 rounded bg-emerald-800 hover:bg-emerald-700 text-emerald-100 text-xs font-bold flex items-center gap-1 shrink-0 cursor-pointer"
                                     >
-                                        {inviteCopied ? <Check size={14}/> : <Copy size={14}/>}
+                                        {inviteCopied ? <Check size={13}/> : <Copy size={13}/>}
                                         {inviteCopied ? 'Скопировано' : 'Копия'}
                                     </button>
                                 </div>
@@ -2295,24 +2299,24 @@ export default function Chessboard() {
                     <button
                         type="button"
                         onClick={() => setLeftSectionTab('bots')}
-                        className={`py-2 px-3 rounded text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
+                        className={`py-1.5 px-2.5 rounded text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
                             leftSectionTab === 'bots'
                                 ? 'bg-amber-700 text-white shadow border border-amber-500/50'
                                 : 'text-boxwood/75 hover:text-amber-200 hover:bg-white/5'
                         }`}
                     >
-                        <Bot size={16}/> Исторические боты
+                        <Bot size={15}/> Исторические боты
                     </button>
                     <button
                         type="button"
                         onClick={() => setLeftSectionTab('lobby')}
-                        className={`py-2 px-3 rounded text-xs sm:text-sm font-bold flex items-center justify-center gap-2 transition cursor-pointer ${
+                        className={`py-1.5 px-2.5 rounded text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
                             leftSectionTab === 'lobby'
                                 ? 'bg-amber-700 text-white shadow border border-amber-500/50'
                                 : 'text-boxwood/75 hover:text-amber-200 hover:bg-white/5'
                         }`}
                     >
-                        <Radio size={15}
+                        <Radio size={14}
                                className={filteredQueue.length + liveGames.length > 0 ? 'text-emerald-400 animate-pulse' : ''}/>
                         <span>Лобби / Live</span>
                         <span className="text-xs font-mono px-1.5 py-0.2 rounded bg-black/40 text-amber-300">
@@ -2324,7 +2328,7 @@ export default function Chessboard() {
                 {/* СОДЕРЖИМОЕ ВЫБРАННОЙ ВКЛАДКИ ЛЕВОЙ ПАНЕЛИ (flex-1 min-h-0) */}
                 {leftSectionTab === 'bots' ? (
                     <div
-                        className="flex-1 min-h-0 bg-acacia-dark p-3 rounded-md border border-amber-700/40 flex flex-col justify-between gap-2.5 shadow-inner overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
+                        className="flex-1 min-h-0 bg-acacia-dark p-2.5 rounded-md border border-amber-700/40 flex flex-col justify-between gap-2 shadow-inner overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
                         {/* Сетка портретов всех 7 исторических мастеров */}
                         <div className="grid grid-cols-2 gap-1.5">
                             {HISTORICAL_BOTS_LIST.map((botItem) => {
@@ -2334,7 +2338,7 @@ export default function Chessboard() {
                                         key={botItem.id}
                                         type="button"
                                         onClick={() => setSelectedBotId(botItem.id)}
-                                        className={`p-1.5 rounded-md text-left transition cursor-pointer flex items-center gap-2.5 border ${
+                                        className={`p-1.5 rounded-md text-left transition cursor-pointer flex items-center gap-2 border ${
                                             isSelected
                                                 ? 'bg-amber-800/80 text-white border-amber-400 shadow'
                                                 : 'bg-black/35 text-boxwood/85 border-amber-900/40 hover:border-amber-600/50 hover:bg-black/55'
@@ -2349,12 +2353,12 @@ export default function Chessboard() {
                                                     img.src = botItem.fallbackAvatar;
                                                 }
                                             }}
-                                            className={`w-9 h-9 rounded-full object-cover shrink-0 border ${
+                                            className={`w-8 h-8 rounded-full object-cover shrink-0 border ${
                                                 isSelected ? 'border-amber-300' : 'border-amber-700/60'
                                             }`}
                                         />
                                         <div className="min-w-0 flex-1">
-                                            <div className="text-xs sm:text-sm font-bold truncate leading-tight">
+                                            <div className="text-xs font-bold truncate leading-tight">
                                                 {botItem.shortName}
                                             </div>
                                             <div className="text-[11px] font-mono text-amber-300/90">
@@ -2367,8 +2371,8 @@ export default function Chessboard() {
                         </div>
 
                         {/* Детальная карточка выбранной исторической личности */}
-                        <div className="p-3 rounded-md bg-black/40 border border-amber-800/50 flex flex-col gap-2.5">
-                            <div className="flex items-center gap-3">
+                        <div className="p-2.5 rounded-md bg-black/40 border border-amber-800/50 flex flex-col gap-2">
+                            <div className="flex items-center gap-2.5">
                                 <img
                                     src={selectedBotProfile.avatar}
                                     alt={selectedBotProfile.name}
@@ -2378,16 +2382,16 @@ export default function Chessboard() {
                                             img.src = selectedBotProfile.fallbackAvatar;
                                         }
                                     }}
-                                    className="w-14 h-14 rounded-lg object-cover border-2 border-amber-500/80 shadow-md shrink-0"
+                                    className="w-12 h-12 rounded-lg object-cover border-2 border-amber-500/80 shadow-md shrink-0"
                                 />
                                 <div className="min-w-0 flex-1">
                                     <div className="flex items-center justify-between gap-1">
-                                        <span className="text-sm sm:text-base font-bold text-amber-200 truncate">
+                                        <span className="text-sm font-bold text-amber-200 truncate">
                                             {selectedBotProfile.name}
                                         </span>
                                         {activeBot === selectedBotProfile.id && !gameOverResult && (
                                             <span
-                                                className="text-xs font-bold px-2 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-600/50 shrink-0">
+                                                className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-600/50 shrink-0">
                                                 В игре
                                             </span>
                                         )}
@@ -2395,22 +2399,22 @@ export default function Chessboard() {
                                     <div className="text-xs text-amber-400 font-semibold">
                                         {selectedBotProfile.title}
                                     </div>
-                                    <div className="text-xs text-boxwood/75 font-mono mt-0.5">
+                                    <div className="text-[11px] text-boxwood/75 font-mono">
                                         Годы: {selectedBotProfile.era} • Рейтинг ~{selectedBotProfile.rating}
                                     </div>
                                 </div>
                             </div>
 
-                            <p className="text-xs sm:text-[13px] italic text-boxwood/90 leading-snug bg-black/30 p-2 rounded border border-amber-900/30">
+                            <p className="text-xs italic text-boxwood/90 leading-snug bg-black/30 p-2 rounded border border-amber-900/30">
                                 «{selectedBotProfile.motto}»
                             </p>
 
-                            <div className="grid grid-cols-3 gap-2">
+                            <div className="grid grid-cols-3 gap-1.5">
                                 <button
                                     type="button"
                                     disabled={!!gameId && !gameOverResult}
                                     onClick={() => startHistoricalBotGame(selectedBotId, 'white')}
-                                    className="py-2 px-2 text-xs sm:text-sm font-bold rounded-md bg-boxwood text-acacia-dark hover:bg-boxwood-light disabled:opacity-40 transition cursor-pointer shadow"
+                                    className="py-1.5 px-2 text-xs font-bold rounded-md bg-boxwood text-acacia-dark hover:bg-boxwood-light disabled:opacity-40 transition cursor-pointer shadow"
                                 >
                                     ♔ Белыми
                                 </button>
@@ -2418,7 +2422,7 @@ export default function Chessboard() {
                                     type="button"
                                     disabled={!!gameId && !gameOverResult}
                                     onClick={() => startHistoricalBotGame(selectedBotId, 'random')}
-                                    className="py-2 px-2 text-xs sm:text-sm font-bold rounded-md bg-amber-700 text-white border border-amber-500/50 hover:bg-amber-600 disabled:opacity-40 transition cursor-pointer shadow"
+                                    className="py-1.5 px-2 text-xs font-bold rounded-md bg-amber-700 text-white border border-amber-500/50 hover:bg-amber-600 disabled:opacity-40 transition cursor-pointer shadow"
                                 >
                                     🎲 Случайно
                                 </button>
@@ -2426,7 +2430,7 @@ export default function Chessboard() {
                                     type="button"
                                     disabled={!!gameId && !gameOverResult}
                                     onClick={() => startHistoricalBotGame(selectedBotId, 'black')}
-                                    className="py-2 px-2 text-xs sm:text-sm font-bold rounded-md bg-black/70 text-amber-200 border border-amber-700/60 hover:bg-black disabled:opacity-40 transition cursor-pointer shadow"
+                                    className="py-1.5 px-2 text-xs font-bold rounded-md bg-black/70 text-amber-200 border border-amber-700/60 hover:bg-black disabled:opacity-40 transition cursor-pointer shadow"
                                 >
                                     ♚ Чёрными
                                 </button>
@@ -2436,19 +2440,19 @@ export default function Chessboard() {
                         {/* Комментарий исторического бота по ходу партии */}
                         {activeBotProfile && (
                             <div
-                                className="p-2.5 rounded-md bg-black/55 border border-amber-600/40 text-xs text-amber-100">
+                                className="p-2 rounded-md bg-black/55 border border-amber-600/40 text-xs text-amber-100">
                                 <div
-                                    className="font-bold text-amber-400 mb-1 flex items-center justify-between text-xs">
+                                    className="font-bold text-amber-400 mb-0.5 flex items-center justify-between text-xs">
                                     <span className="flex items-center gap-1.5">
-                                        <MessageSquareQuote size={14}/> Мысль ({activeBotProfile.shortName}):
+                                        <MessageSquareQuote size={13}/> Мысль ({activeBotProfile.shortName}):
                                     </span>
                                     {isBotThinking && (
-                                        <span className="animate-pulse text-amber-300 font-mono text-xs">
+                                        <span className="animate-pulse text-amber-300 font-mono text-[11px]">
                                             обдумывает ход...
                                         </span>
                                     )}
                                 </div>
-                                <div className="text-xs sm:text-[13px] text-boxwood-light leading-snug">
+                                <div className="text-xs text-boxwood-light leading-snug">
                                     {botComment || 'Посмотрим, как развернётся борьба за центр.'}
                                 </div>
                             </div>
@@ -2457,9 +2461,9 @@ export default function Chessboard() {
                 ) : (
                     /* Вкладка Вызовы в лобби и Live-партии */
                     <div
-                        className="flex-1 min-h-0 bg-acacia-dark rounded-md border border-amber-900/50 p-3 flex flex-col shadow-inner">
+                        className="flex-1 min-h-0 bg-acacia-dark rounded-md border border-amber-900/50 p-2.5 flex flex-col shadow-inner">
                         <div
-                            className="grid grid-cols-2 gap-1.5 p-1 bg-black/40 rounded border border-amber-900/40 mb-2.5 shrink-0">
+                            className="grid grid-cols-2 gap-1.5 p-1 bg-black/40 rounded border border-amber-900/40 mb-2 shrink-0">
                             <button
                                 type="button"
                                 onClick={() => setLobbyTab('lobby')}
@@ -2494,7 +2498,7 @@ export default function Chessboard() {
                             {lobbyTab === 'lobby' ? (
                                 filteredQueue.length === 0 ? (
                                     <div
-                                        className="h-full flex flex-col items-center justify-center p-4 text-boxwood/60 text-center text-sm">
+                                        className="h-full flex flex-col items-center justify-center p-4 text-boxwood/60 text-center text-xs sm:text-sm">
                                         <span>
                                             {isSearching
                                                 ? 'Вы в очереди. Ожидание соперников...'
@@ -2526,7 +2530,7 @@ export default function Chessboard() {
                             ) : (
                                 liveGames.length === 0 ? (
                                     <div
-                                        className="h-full flex flex-col items-center justify-center p-4 text-boxwood/60 text-center text-sm">
+                                        className="h-full flex flex-col items-center justify-center p-4 text-boxwood/60 text-center text-xs sm:text-sm">
                                         <span>Сейчас нет активных PvP-партий.</span>
                                     </div>
                                 ) : (
@@ -2563,14 +2567,14 @@ export default function Chessboard() {
             </div>
 
             {/* ЦЕНТРАЛЬНАЯ КОЛОНКА: ИГРОКИ И ШАХМАТНАЯ ДОСКА */}
-            <div className="flex flex-col items-center justify-center gap-2.5 order-1 xl:order-2 shrink-0 my-auto">
+            <div className="xl:h-full flex flex-col items-center justify-center gap-2 order-1 xl:order-2 shrink-0">
 
                 {/* Верхний игрок */}
                 <div
                     style={{width: `${boardSize}px`}}
-                    className={`bg-acacia-dark px-3.5 py-2 rounded-lg shadow-heavy border-2 border-amber-900/50 flex justify-between items-center text-boxwood-light ${isResizing ? 'transition-none' : 'transition-colors'}`}
+                    className={`bg-acacia-dark px-3 py-1.5 rounded-lg shadow-heavy border-2 border-amber-900/50 flex justify-between items-center text-boxwood-light shrink-0 ${isResizing ? 'transition-none' : 'transition-colors'}`}
                 >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-2.5 min-w-0">
                         {isBotOnTop && activeBotProfile ? (
                             <img
                                 src={activeBotProfile.avatar}
@@ -2581,11 +2585,11 @@ export default function Chessboard() {
                                         img.src = activeBotProfile.fallbackAvatar;
                                     }
                                 }}
-                                className="w-10 h-10 rounded-md object-cover border-2 border-amber-500/70 shrink-0 shadow"
+                                className="w-9 h-9 rounded-md object-cover border-2 border-amber-500/70 shrink-0 shadow"
                             />
                         ) : (
                             <div
-                                className={`w-10 h-10 rounded-md flex items-center justify-center border border-amber-600/30 font-bold text-xl shrink-0 ${
+                                className={`w-9 h-9 rounded-md flex items-center justify-center border border-amber-600/30 font-bold text-lg shrink-0 ${
                                     topIsWhite ? 'bg-boxwood text-acacia-dark' : 'bg-acacia text-amber-200'
                                 }`}
                             >
@@ -2593,13 +2597,13 @@ export default function Chessboard() {
                             </div>
                         )}
                         <div className="min-w-0">
-                            <div className="font-bold text-base flex items-center gap-2">
+                            <div className="font-bold text-sm sm:text-base flex items-center gap-2 leading-tight">
                                 <span className="truncate">
                                     {(gameId || activeBot || spectatingGameId) ? topPlayerInfo.username : (topIsWhite ? 'Белые (Разбор)' : 'Чёрные (Разбор)')}
                                 </span>
                                 {(gameId || activeBot || spectatingGameId) && (
                                     <span
-                                        className="text-xs px-2 py-0.5 rounded bg-black/45 text-amber-400 border border-amber-600/25 flex items-center gap-1 font-mono">
+                                        className="text-xs px-1.5 py-0.5 rounded bg-black/45 text-amber-400 border border-amber-600/25 flex items-center gap-1 font-mono">
                                         {topPlayerInfo.rating}
                                         {ratingInfo && (
                                             <span
@@ -2610,11 +2614,11 @@ export default function Chessboard() {
                                     </span>
                                 )}
                             </div>
-                            <div className="flex items-center gap-1.5 text-sm text-amber-200/90 min-h-[18px]">
+                            <div className="flex items-center gap-1.5 text-xs text-amber-200/90 min-h-[16px]">
                                 <span className="tracking-tight truncate">{topCaptured.join('')}</span>
                                 {topAdvantage > 0 && (
                                     <span
-                                        className="text-xs font-mono font-bold px-1.5 rounded bg-amber-900/60 text-amber-300">
+                                        className="text-[11px] font-mono font-bold px-1.5 rounded bg-amber-900/60 text-amber-300">
                                         +{topAdvantage}
                                     </span>
                                 )}
@@ -2622,7 +2626,7 @@ export default function Chessboard() {
                         </div>
                     </div>
                     <div
-                        className="bg-[#1A120B] px-4 py-1.5 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-2xl sm:text-3xl font-bold tracking-wider text-amber-400 min-w-[136px] text-center">
+                        className="bg-[#1A120B] px-3.5 py-1 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-xl sm:text-2xl font-bold tracking-wider text-amber-400 min-w-[124px] text-center">
                         {(gameId || activeBot || spectatingGameId) ? formatTime(topPlayerTime) : formatTime(topIdlePreviewMs)}
                     </div>
                 </div>
@@ -2643,7 +2647,7 @@ export default function Chessboard() {
                         height: `${boardSize}px`,
                         backgroundColor: activeTheme.border
                     }}
-                    className={`p-3 rounded-lg shadow-heavy border-2 border-amber-950/80 relative select-none group/board ${isResizing ? 'transition-none ring-2 ring-amber-500/60' : 'transition-colors'}`}
+                    className={`p-2.5 rounded-lg shadow-heavy border-2 border-amber-950/80 relative select-none group/board shrink-0 ${isResizing ? 'transition-none ring-2 ring-amber-500/60' : 'transition-colors'}`}
                 >
                     {activeTheme.useWoodGrain && (
                         <div
@@ -2693,14 +2697,15 @@ export default function Chessboard() {
                                                 key={opt.type}
                                                 type="button"
                                                 onClick={() => handlePromotionSelect(opt.type)}
-                                                className="w-16 h-16 rounded-md bg-acacia-dark hover:bg-amber-800/70 border border-amber-600/50 hover:border-amber-300 transition flex flex-col items-center justify-center p-1.5 shadow cursor-pointer group"
+                                                className="w-16 h-18 rounded-md bg-acacia-dark hover:bg-amber-800/70 border border-amber-600/50 hover:border-amber-300 transition flex flex-col items-center justify-between py-2 px-1 shadow cursor-pointer group"
                                                 title={opt.label}
                                             >
-                                                <div className="w-10 h-10">
+                                                <div
+                                                    className="w-10 h-10 flex items-center justify-center overflow-hidden shrink-0">
                                                     {renderPieceSvg({type: opt.type, color: pendingPromotion.color})}
                                                 </div>
                                                 <span
-                                                    className="text-xs font-bold text-amber-200 group-hover:text-white mt-0.5">
+                                                    className="text-xs font-bold text-amber-200 group-hover:text-white leading-none">
                                                     {opt.label}
                                                 </span>
                                             </button>
@@ -2845,7 +2850,7 @@ export default function Chessboard() {
                         className={`absolute bottom-0 right-0 w-6 h-6 z-40 cursor-nwse-resize flex items-end justify-end p-0.5 rounded-tl transition-opacity ${
                             isResizing
                                 ? 'opacity-100 text-amber-400'
-                                : 'opacity-50 group-hover/board:opacity-90 hover:!opacity-100 text-amber-200/80 hover:text-amber-300'
+                                : 'opacity-50 group-hover/board:opacity-90 hover:opacity-100! text-amber-200/80 hover:text-amber-300'
                         }`}
                     >
                         <svg
@@ -2866,9 +2871,9 @@ export default function Chessboard() {
                 {/* Нижний игрок */}
                 <div
                     style={{width: `${boardSize}px`}}
-                    className={`bg-acacia-dark px-3.5 py-2 rounded-lg shadow-heavy border-2 border-amber-900/50 flex justify-between items-center text-boxwood-light ${isResizing ? 'transition-none' : 'transition-colors'}`}
+                    className={`bg-acacia-dark px-3 py-1.5 rounded-lg shadow-heavy border-2 border-amber-900/50 flex justify-between items-center text-boxwood-light shrink-0 ${isResizing ? 'transition-none' : 'transition-colors'}`}
                 >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-2.5 min-w-0">
                         {isBotOnBottom && activeBotProfile ? (
                             <img
                                 src={activeBotProfile.avatar}
@@ -2879,11 +2884,11 @@ export default function Chessboard() {
                                         img.src = activeBotProfile.fallbackAvatar;
                                     }
                                 }}
-                                className="w-10 h-10 rounded-md object-cover border-2 border-amber-500/70 shrink-0 shadow"
+                                className="w-9 h-9 rounded-md object-cover border-2 border-amber-500/70 shrink-0 shadow"
                             />
                         ) : (
                             <div
-                                className={`w-10 h-10 rounded-md flex items-center justify-center border border-amber-600/30 font-bold text-xl shrink-0 ${
+                                className={`w-9 h-9 rounded-md flex items-center justify-center border border-amber-600/30 font-bold text-lg shrink-0 ${
                                     !topIsWhite ? 'bg-boxwood text-acacia-dark' : 'bg-acacia text-amber-200'
                                 }`}
                             >
@@ -2891,13 +2896,13 @@ export default function Chessboard() {
                             </div>
                         )}
                         <div className="min-w-0">
-                            <div className="font-bold text-base flex items-center gap-2">
+                            <div className="font-bold text-sm sm:text-base flex items-center gap-2 leading-tight">
                                 <span className="truncate">
                                     {(gameId || activeBot || spectatingGameId) ? bottomPlayerInfo.username : (!topIsWhite ? 'Вы (Белые)' : 'Вы (Чёрные)')}
                                 </span>
                                 {(gameId || activeBot || spectatingGameId) && (
                                     <span
-                                        className="text-xs px-2 py-0.5 rounded bg-black/45 text-amber-400 border border-amber-600/25 flex items-center gap-1 font-mono">
+                                        className="text-xs px-1.5 py-0.5 rounded bg-black/45 text-amber-400 border border-amber-600/25 flex items-center gap-1 font-mono">
                                         {bottomPlayerInfo.rating}
                                         {ratingInfo && (
                                             <span
@@ -2908,11 +2913,11 @@ export default function Chessboard() {
                                     </span>
                                 )}
                             </div>
-                            <div className="flex items-center gap-1.5 text-sm text-amber-200/90 min-h-[18px]">
+                            <div className="flex items-center gap-1.5 text-xs text-amber-200/90 min-h-[16px]">
                                 <span className="tracking-tight truncate">{bottomCaptured.join('')}</span>
                                 {bottomAdvantage > 0 && (
                                     <span
-                                        className="text-xs font-mono font-bold px-1.5 rounded bg-amber-900/60 text-amber-300">
+                                        className="text-[11px] font-mono font-bold px-1.5 rounded bg-amber-900/60 text-amber-300">
                                         +{bottomAdvantage}
                                     </span>
                                 )}
@@ -2920,25 +2925,28 @@ export default function Chessboard() {
                         </div>
                     </div>
                     <div
-                        className="bg-[#1A120B] px-4 py-1.5 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-2xl sm:text-3xl font-bold tracking-wider text-amber-400 min-w-[136px] text-center">
+                        className="bg-[#1A120B] px-3.5 py-1 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-xl sm:text-2xl font-bold tracking-wider text-amber-400 min-w-[124px] text-center">
                         {(gameId || activeBot || spectatingGameId) ? formatTime(bottomPlayerTime) : formatTime(bottomIdlePreviewMs)}
                     </div>
                 </div>
 
             </div>
 
-            {/* ПРАВАЯ КОЛОНКА: ЖУРНАЛ ХОДОВ, ОФОРМЛЕНИЕ ДОСКИ, ЧАТ И УПРАВЛЕНИЕ ПАРТИЕЙ */}
+            {/* ПРАВАЯ КОЛОНКА: ЖУРНАЛ ХОДОВ, ВЫПАДАЮЩЕЕ МЕНЮ ВИДА С ПРЕВЬЮ, ЧАТ И УПРАВЛЕНИЕ ПАРТИЕЙ */}
             <div
-                className="w-full xl:w-[390px] 2xl:w-[440px] xl:h-full bg-acacia p-3.5 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-2.5 text-boxwood-light order-3 shrink-0 xl:overflow-hidden">
+                className="w-full xl:w-[390px] 2xl:w-[430px] xl:h-full bg-acacia p-3 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-2 text-boxwood-light order-3 shrink-0 xl:overflow-hidden relative">
 
-                {/* Шапка правой панели + кнопка выдвижной панели оформления */}
-                <div className="border-b border-acacia-light pb-2.5 flex justify-between items-center gap-2 shrink-0">
+                {/* Шапка правой панели + кнопка выпадающего меню с превью досок и фигур */}
+                <div
+                    className="border-b border-acacia-light pb-2 flex justify-between items-center gap-2 shrink-0 relative"
+                    ref={appearanceDropdownRef}
+                >
                     <div className="min-w-0">
                         <div
                             className="text-xs tracking-wider uppercase text-boxwood/75 font-bold flex items-center gap-1.5">
                             <ListOrdered className="text-amber-400" size={15}/> Журнал ходов
                         </div>
-                        <div className="text-sm font-bold text-amber-200 mt-0.5 truncate">
+                        <div className="text-xs sm:text-sm font-bold text-amber-200 mt-0.5 truncate">
                             {(gameId || activeBot || spectatingGameId)
                                 ? `${whitePlayer.username} vs ${blackPlayer.username}`
                                 : 'Свободная доска / Анализ'}
@@ -2946,110 +2954,180 @@ export default function Chessboard() {
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                            type="button"
-                            onClick={() => setShowAppearancePanel(prev => !prev)}
-                            className={`px-2.5 py-1.5 rounded-md border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm ${
-                                showAppearancePanel
-                                    ? 'bg-amber-700 text-white border-amber-400'
-                                    : 'bg-acacia-dark hover:bg-black/45 text-amber-200 border-amber-800/50'
-                            }`}
-                            title="Выбрать комплект фигур и тему доски"
-                        >
-                            <Palette size={14} className="text-amber-400"/> Вид
-                        </button>
+                        {/* Кнопка выпадающего меню с живым мини-превью текущей фигуры и доски */}
+                        <div className="relative">
+                            <button
+                                type="button"
+                                onClick={() => setShowAppearanceDropdown(prev => !prev)}
+                                className={`px-2.5 py-1 rounded-md border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm ${
+                                    showAppearanceDropdown
+                                        ? 'bg-amber-700 text-white border-amber-400'
+                                        : 'bg-acacia-dark hover:bg-black/45 text-amber-200 border-amber-800/50'
+                                }`}
+                                title="Выбрать комплект фигур, тему и размер доски"
+                            >
+                                <span
+                                    className="w-5 h-5 rounded-xs flex items-center justify-center border border-black/50 shrink-0"
+                                    style={{backgroundColor: activeTheme.dark}}
+                                >
+                                    <img
+                                        src={getPieceSvgUrl(pieceSetKey, 'w', 'N')}
+                                        alt=""
+                                        className="w-4 h-4 object-contain"
+                                    />
+                                </span>
+                                <span
+                                    className="hidden sm:inline">{activePieceSet.shortName} • {activeTheme.name}</span>
+                                <span className="sm:hidden">Вид</span>
+                                {showAppearanceDropdown ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
+                            </button>
+
+                            {/* Выпадающее меню (Popover) с превью всех 5 комплектов фигур и 5 тем доски */}
+                            {showAppearanceDropdown && (
+                                <div
+                                    className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-[#261C14] border-2 border-amber-600/80 rounded-lg shadow-2xl z-50 p-3.5 flex flex-col gap-3 text-boxwood-light">
+                                    <div
+                                        className="flex justify-between items-center border-b border-amber-900/50 pb-2">
+                                        <span className="font-bold text-amber-200 text-sm flex items-center gap-1.5">
+                                            <Palette size={15} className="text-amber-400"/> Оформление фигур и доски
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowAppearanceDropdown(false)}
+                                            className="text-boxwood/60 hover:text-white cursor-pointer"
+                                        >
+                                            <X size={15}/>
+                                        </button>
+                                    </div>
+
+                                    {/* 5 комплектов фигур с парным превью (Белый конь + Чёрный ферзь) */}
+                                    <div className="flex flex-col gap-1.5">
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="font-bold text-boxwood/90">♟ Комплект фигур:</span>
+                                            <span className="text-amber-400 font-bold">{activePieceSet.name}</span>
+                                        </div>
+                                        <div className="grid grid-cols-5 gap-1.5">
+                                            {Object.values(PIECE_SETS).map((pset) => {
+                                                const isCurrent = pset.id === activePieceSet.id;
+                                                return (
+                                                    <button
+                                                        key={pset.id}
+                                                        type="button"
+                                                        onClick={() => handlePieceSetChange(pset.id)}
+                                                        title={pset.description}
+                                                        className={`flex flex-col items-center gap-1 p-1.5 rounded-md border text-xs font-bold transition cursor-pointer ${
+                                                            isCurrent
+                                                                ? 'bg-amber-900/60 border-amber-400 text-amber-200 shadow'
+                                                                : 'bg-black/35 border-amber-900/40 text-boxwood/75 hover:bg-black/55 hover:text-amber-200'
+                                                        }`}
+                                                    >
+                                                        <div
+                                                            className="w-10 h-9 rounded flex items-center justify-center border border-black/50 shadow-inner"
+                                                            style={{
+                                                                background: `linear-gradient(90deg, ${activeTheme.dark} 50%, ${activeTheme.light} 50%)`
+                                                            }}
+                                                        >
+                                                            <img
+                                                                src={getPieceSvgUrl(pset.id, 'w', 'N')}
+                                                                alt={pset.shortName}
+                                                                className="w-5 h-5 object-contain"
+                                                            />
+                                                            <img
+                                                                src={getPieceSvgUrl(pset.id, 'b', 'Q')}
+                                                                alt=""
+                                                                className="w-5 h-5 object-contain"
+                                                            />
+                                                        </div>
+                                                        <span className="truncate w-full text-center text-[11px]">
+                                                            {pset.shortName}
+                                                        </span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* 5 тем доски с мини-превью клеток 2x2 */}
+                                    <div className="flex flex-col gap-1.5 pt-2 border-t border-amber-900/40">
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="font-bold text-boxwood/90">🎨 Поверхность доски:</span>
+                                            <span className="text-amber-400 font-bold">{activeTheme.name}</span>
+                                        </div>
+                                        <div className="grid grid-cols-5 gap-1.5">
+                                            {Object.values(BOARD_THEMES).map((theme) => {
+                                                const isCurrent = theme.id === activeTheme.id;
+                                                return (
+                                                    <button
+                                                        key={theme.id}
+                                                        type="button"
+                                                        onClick={() => handleThemeChange(theme.id)}
+                                                        className={`flex flex-col items-center gap-1 p-1.5 rounded-md border text-xs font-bold transition cursor-pointer ${
+                                                            isCurrent
+                                                                ? 'bg-amber-900/60 border-amber-400 text-amber-200 shadow'
+                                                                : 'bg-black/35 border-amber-900/40 text-boxwood/75 hover:bg-black/55 hover:text-amber-200'
+                                                        }`}
+                                                    >
+                                                        <div
+                                                            className="w-8 h-8 rounded-xs overflow-hidden grid grid-cols-2 grid-rows-2 border-2 shadow-sm"
+                                                            style={{borderColor: theme.border}}
+                                                        >
+                                                            <div style={{backgroundColor: theme.light}}/>
+                                                            <div style={{backgroundColor: theme.dark}}/>
+                                                            <div style={{backgroundColor: theme.dark}}/>
+                                                            <div style={{backgroundColor: theme.light}}/>
+                                                        </div>
+                                                        <span className="truncate w-full text-center text-[11px]">
+                                                            {theme.name}
+                                                        </span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* Регулировка масштаба доски */}
+                                    <div
+                                        className="flex items-center justify-between gap-2 pt-2 border-t border-amber-900/40 text-xs">
+                                        <span className="text-boxwood/80 font-bold">Размер: {boardSize}px</span>
+                                        <input
+                                            type="range"
+                                            min={MIN_BOARD_SIZE}
+                                            max={getMaxViewportBoardSize()}
+                                            value={boardSize}
+                                            onChange={(e) => {
+                                                const val = Number(e.target.value);
+                                                setBoardSize(val);
+                                                localStorage.setItem('michess_board_size', String(val));
+                                            }}
+                                            className="flex-1 accent-amber-500 cursor-pointer"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const fit = getMaxViewportBoardSize();
+                                                setBoardSize(fit);
+                                                localStorage.setItem('michess_board_size', String(fit));
+                                            }}
+                                            className="px-2 py-1 rounded bg-black/45 hover:bg-amber-800/60 border border-amber-700/50 text-amber-200 font-bold cursor-pointer"
+                                        >
+                                            Авто
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
                         <span
-                            className="px-2.5 py-1 rounded-md bg-acacia-dark border border-amber-700/40 font-mono text-xs text-amber-400 font-bold">
+                            className="px-2 py-1 rounded-md bg-acacia-dark border border-amber-700/40 font-mono text-xs text-amber-400 font-bold">
                             {gameOverResult || (history.length > 0 ? `${Math.ceil(history.length / 2)} х.` : 'Старт')}
                         </span>
                     </div>
                 </div>
 
-                {/* Выдвижная панель выбора 5 комплектов фигур и 5 тем доски */}
-                {showAppearancePanel && (
-                    <div
-                        className="bg-acacia-dark p-3 rounded-md border border-amber-700/50 flex flex-col gap-2.5 shadow-lg shrink-0">
-                        <div className="flex justify-between items-center text-xs text-boxwood/90">
-                            <span className="font-bold">♟ Комплект фигур: <span
-                                className="text-amber-400">{activePieceSet.name}</span></span>
-                            <button
-                                type="button"
-                                onClick={() => setShowAppearancePanel(false)}
-                                className="text-boxwood/60 hover:text-white cursor-pointer"
-                            >
-                                <X size={14}/>
-                            </button>
-                        </div>
-
-                        <div className="grid grid-cols-5 gap-1.5">
-                            {Object.values(PIECE_SETS).map((pset) => {
-                                const isCurrent = pset.id === activePieceSet.id;
-                                return (
-                                    <button
-                                        key={pset.id}
-                                        type="button"
-                                        onClick={() => handlePieceSetChange(pset.id)}
-                                        title={pset.description}
-                                        className={`flex flex-col items-center gap-1 p-1.5 rounded border text-xs font-bold transition cursor-pointer ${
-                                            isCurrent
-                                                ? 'bg-amber-900/50 border-amber-400 text-amber-200 shadow'
-                                                : 'bg-black/35 border-amber-900/40 text-boxwood/75 hover:text-amber-200'
-                                        }`}
-                                    >
-                                        <div
-                                            className="w-8 h-8 rounded flex items-center justify-center border border-black/40 shadow-inner"
-                                            style={{backgroundColor: activeTheme.dark}}
-                                        >
-                                            <img
-                                                src={getPieceSvgUrl(pset.id, 'w', 'N')}
-                                                alt={pset.shortName}
-                                                className="w-6 h-6 object-contain"
-                                            />
-                                        </div>
-                                        <span
-                                            className="truncate w-full text-center text-[11px]">{pset.shortName}</span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-
-                        <div className="text-xs text-boxwood/90 font-bold pt-1 border-t border-amber-900/30">
-                            🎨 Стиль доски: <span className="text-amber-400">{activeTheme.name}</span>
-                        </div>
-
-                        <div className="grid grid-cols-5 gap-1.5">
-                            {Object.values(BOARD_THEMES).map((theme) => {
-                                const isCurrent = theme.id === activeTheme.id;
-                                return (
-                                    <button
-                                        key={theme.id}
-                                        type="button"
-                                        onClick={() => handleThemeChange(theme.id)}
-                                        className={`flex flex-col items-center gap-1 p-1.5 rounded border text-xs font-bold transition cursor-pointer ${
-                                            isCurrent
-                                                ? 'bg-amber-900/50 border-amber-400 text-amber-200 shadow'
-                                                : 'bg-black/35 border-amber-900/40 text-boxwood/75 hover:text-amber-200'
-                                        }`}
-                                    >
-                                        <div
-                                            className="w-6 h-6 rounded-sm overflow-hidden grid grid-cols-2 grid-rows-2 border border-black/50 shadow-sm">
-                                            <div style={{backgroundColor: theme.light}}/>
-                                            <div style={{backgroundColor: theme.dark}}/>
-                                            <div style={{backgroundColor: theme.dark}}/>
-                                            <div style={{backgroundColor: theme.light}}/>
-                                        </div>
-                                        <span className="truncate w-full text-center text-[11px]">{theme.name}</span>
-                                    </button>
-                                );
-                            })}
-                        </div>
-                    </div>
-                )}
-
                 {/* Индикатор активного предхода (Premove) */}
                 {premove && (
                     <div
-                        className="bg-rose-950/90 px-3 py-2 rounded-md border border-rose-500/60 text-xs text-rose-100 flex items-center justify-between shadow shrink-0">
+                        className="bg-rose-950/90 px-3 py-1.5 rounded-md border border-rose-500/60 text-xs text-rose-100 flex items-center justify-between shadow shrink-0">
                         <span className="flex items-center gap-1.5 font-bold font-mono">
                             <Zap size={14} className="text-rose-400"/>
                             Предход: {premove.from} → {premove.to}{premove.promotion ? `=${premove.promotion.toUpperCase()}` : ''}
@@ -3066,7 +3144,7 @@ export default function Chessboard() {
 
                 {drawOfferStatus && (
                     <div
-                        className="bg-amber-950/90 p-2.5 rounded-md border border-amber-600/50 text-xs sm:text-sm text-amber-200 text-center flex flex-col gap-2 shrink-0">
+                        className="bg-amber-950/90 p-2 rounded-md border border-amber-600/50 text-xs text-amber-200 text-center flex flex-col gap-1.5 shrink-0">
                         <span>{drawOfferStatus}</span>
                         {drawOfferStatus.includes('предлагает ничью') && (
                             <div className="flex justify-center gap-2">
@@ -3091,7 +3169,7 @@ export default function Chessboard() {
                 <div
                     className="flex-1 min-h-0 flex flex-col bg-[#1A120B]/90 rounded-md border border-amber-900/50 overflow-hidden shadow-inner">
                     <div
-                        className="grid grid-cols-[48px_1fr_1fr] px-3 py-2 bg-black/55 border-b border-amber-900/40 text-xs uppercase tracking-wider text-boxwood/65 font-bold shrink-0">
+                        className="grid grid-cols-[44px_1fr_1fr] px-3 py-1.5 bg-black/55 border-b border-amber-900/40 text-xs uppercase tracking-wider text-boxwood/65 font-bold shrink-0">
                         <span>№</span>
                         <span>Белые</span>
                         <span>Чёрные</span>
@@ -3099,7 +3177,7 @@ export default function Chessboard() {
 
                     <div
                         ref={notationScrollRef}
-                        className="flex-1 min-h-0 overflow-y-auto divide-y divide-amber-900/15 font-mono text-sm [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-amber-900/50"
+                        className="flex-1 min-h-0 overflow-y-auto divide-y divide-amber-900/15 font-mono text-sm [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-amber-900/50"
                     >
                         {movePairs.length === 0 ? (
                             <div
@@ -3119,7 +3197,7 @@ export default function Chessboard() {
                                 return (
                                     <div
                                         key={pair.moveNumber}
-                                        className="grid grid-cols-[48px_1fr_1fr] items-center px-2.5 py-1 hover:bg-white/5 transition-colors"
+                                        className="grid grid-cols-[44px_1fr_1fr] items-center px-2.5 py-1 hover:bg-white/5 transition-colors"
                                     >
                                         <span className="text-xs text-amber-500/70 font-bold pl-1 select-none">
                                             {pair.moveNumber}.
@@ -3128,7 +3206,7 @@ export default function Chessboard() {
                                         <button
                                             type="button"
                                             onClick={() => handleSelectMoveFromList(pair.whiteIdx)}
-                                            className={`text-left px-2 py-1 rounded text-sm font-bold transition truncate cursor-pointer ${
+                                            className={`text-left px-2 py-0.5 rounded text-sm font-bold transition truncate cursor-pointer ${
                                                 isWhiteActive
                                                     ? 'active-move-btn bg-amber-600/40 text-amber-200 border border-amber-500/50 shadow-sm'
                                                     : 'text-boxwood-light hover:bg-amber-900/30 hover:text-white'
@@ -3141,7 +3219,7 @@ export default function Chessboard() {
                                             <button
                                                 type="button"
                                                 onClick={() => handleSelectMoveFromList(pair.blackIdx!)}
-                                                className={`text-left px-2 py-1 rounded text-sm font-bold transition truncate cursor-pointer ${
+                                                className={`text-left px-2 py-0.5 rounded text-sm font-bold transition truncate cursor-pointer ${
                                                     isBlackActive
                                                         ? 'active-move-btn bg-amber-600/40 text-amber-200 border border-amber-500/50 shadow-sm'
                                                         : 'text-boxwood-light hover:bg-amber-900/30 hover:text-white'
@@ -3183,7 +3261,7 @@ export default function Chessboard() {
                             className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
                             title="В начало партии (Стрелка вверх)"
                         >
-                            <ChevronFirst size={17}/>
+                            <ChevronFirst size={16}/>
                         </button>
                         <button
                             type="button"
@@ -3197,7 +3275,7 @@ export default function Chessboard() {
                             className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
                             title="Ход назад (Стрелка влево)"
                         >
-                            <ChevronLeft size={17}/>
+                            <ChevronLeft size={16}/>
                         </button>
                         <button
                             type="button"
@@ -3214,7 +3292,7 @@ export default function Chessboard() {
                             className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
                             title="Ход вперед (Стрелка вправо)"
                         >
-                            <ChevronRight size={17}/>
+                            <ChevronRight size={16}/>
                         </button>
                         <button
                             type="button"
@@ -3223,7 +3301,7 @@ export default function Chessboard() {
                             className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
                             title="К последнему ходу (Стрелка вниз)"
                         >
-                            <ChevronLast size={17}/>
+                            <ChevronLast size={16}/>
                         </button>
                     </div>
                 </div>
@@ -3231,7 +3309,7 @@ export default function Chessboard() {
                 {/* Компактный игровой чат и быстрые реплики */}
                 {(gameId || spectatingGameId) && (
                     <div
-                        className="bg-acacia-dark p-2.5 rounded-md border border-amber-900/50 flex flex-col gap-2 shrink-0">
+                        className="bg-acacia-dark p-2 rounded-md border border-amber-900/50 flex flex-col gap-1.5 shrink-0">
                         <div
                             className="flex items-center justify-between text-xs uppercase tracking-wider text-amber-400 font-bold">
                             <span className="flex items-center gap-1.5">
@@ -3249,14 +3327,14 @@ export default function Chessboard() {
                         </div>
 
                         <div
-                            className="h-20 overflow-y-auto bg-black/40 rounded p-2 text-xs space-y-1 font-sans border border-amber-950/50 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
+                            className="h-16 overflow-y-auto bg-black/40 rounded p-2 text-xs space-y-1 font-sans border border-amber-950/50 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
                             {chatMessages.length === 0 ? (
                                 <div className="h-full flex items-center justify-center text-xs text-boxwood/45 italic">
                                     Сообщений пока нет. Поприветствуйте соперника!
                                 </div>
                             ) : (
                                 chatMessages.map((msg, i) => (
-                                    <div key={i} className="leading-snug break-words">
+                                    <div key={i} className="leading-snug wrap-break-word">
                                         <span className="font-bold text-amber-300 mr-1.5">{msg.sender}:</span>
                                         <span className="text-boxwood-light">{msg.text}</span>
                                     </div>
@@ -3304,7 +3382,7 @@ export default function Chessboard() {
                 )}
 
                 {/* Кнопки управления партией */}
-                <div className="shrink-0 flex flex-col gap-2">
+                <div className="shrink-0 flex flex-col gap-1.5">
                     {gameId ? (
                         <>
                             <div className="grid grid-cols-2 gap-2">
@@ -3313,7 +3391,7 @@ export default function Chessboard() {
                                         type="button"
                                         onClick={handleAbortGame}
                                         disabled={!!gameOverResult}
-                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-amber-950/90 text-amber-200 text-sm font-bold rounded-md hover:bg-amber-900 transition shadow border border-amber-700/60 disabled:opacity-40 cursor-pointer"
+                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-amber-950/90 text-amber-200 text-xs sm:text-sm font-bold rounded-md hover:bg-amber-900 transition shadow border border-amber-700/60 disabled:opacity-40 cursor-pointer"
                                     >
                                         <X size={15}/> Отменить игру
                                     </button>
@@ -3322,7 +3400,7 @@ export default function Chessboard() {
                                         type="button"
                                         onClick={handleResign}
                                         disabled={!!gameOverResult}
-                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/85 text-red-200 text-sm font-bold rounded-md hover:bg-red-900 transition shadow border border-red-800/50 disabled:opacity-40 cursor-pointer"
+                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/85 text-red-200 text-xs sm:text-sm font-bold rounded-md hover:bg-red-900 transition shadow border border-red-800/50 disabled:opacity-40 cursor-pointer"
                                     >
                                         <Flag size={15}/> Сдаться
                                     </button>
@@ -3331,17 +3409,17 @@ export default function Chessboard() {
                                     type="button"
                                     onClick={handleOfferDraw}
                                     disabled={!!gameOverResult || history.length < 2}
-                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
+                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
                                 >
                                     <Handshake size={15}/> Ничья
                                 </button>
                             </div>
 
                             {gameOverResult && (
-                                <div className="flex flex-col gap-2">
+                                <div className="flex flex-col gap-1.5">
                                     {rematchStatus === 'offered_by_opponent' ? (
                                         <div
-                                            className="p-2.5 rounded-md bg-emerald-950/90 border border-emerald-500/60 flex flex-col gap-2 text-xs text-emerald-100 text-center shadow">
+                                            className="p-2 rounded-md bg-emerald-950/90 border border-emerald-500/60 flex flex-col gap-1.5 text-xs text-emerald-100 text-center shadow">
                                             <span
                                                 className="font-bold">Соперник предлагает реванш (со сменой цвета)!</span>
                                             <div className="grid grid-cols-2 gap-2">
@@ -3367,7 +3445,7 @@ export default function Chessboard() {
                                                 type="button"
                                                 disabled={rematchStatus === 'offered_by_me' || rematchStatus === 'declined'}
                                                 onClick={handleOfferRematch}
-                                                className="flex items-center justify-center gap-1.5 px-3 py-2 font-bold text-sm rounded-md transition shadow bg-emerald-800 hover:bg-emerald-700 text-emerald-100 border border-emerald-500/50 disabled:opacity-50 cursor-pointer"
+                                                className="flex items-center justify-center gap-1.5 px-3 py-2 font-bold text-xs sm:text-sm rounded-md transition shadow bg-emerald-800 hover:bg-emerald-700 text-emerald-100 border border-emerald-500/50 disabled:opacity-50 cursor-pointer"
                                             >
                                                 <RefreshCw size={15}
                                                            className={rematchStatus === 'offered_by_me' ? 'animate-spin' : ''}/>
@@ -3380,7 +3458,7 @@ export default function Chessboard() {
                                             <button
                                                 type="button"
                                                 onClick={handleResetSandbox}
-                                                className="flex items-center justify-center gap-1.5 px-3 py-2 font-bold text-sm rounded-md transition shadow bg-boxwood text-acacia-dark border border-amber-700/50 hover:bg-boxwood-light cursor-pointer"
+                                                className="flex items-center justify-center gap-1.5 px-3 py-2 font-bold text-xs sm:text-sm rounded-md transition shadow bg-boxwood text-acacia-dark border border-amber-700/50 hover:bg-boxwood-light cursor-pointer"
                                             >
                                                 <RotateCcw size={15}/> В лобби
                                             </button>
@@ -3390,13 +3468,13 @@ export default function Chessboard() {
                             )}
                         </>
                     ) : activeBot ? (
-                        <div className="flex flex-col gap-2">
+                        <div className="flex flex-col gap-1.5">
                             <div className="grid grid-cols-2 gap-2">
                                 <button
                                     type="button"
                                     disabled={history.length === 0 || isBotThinking || !!gameOverResult}
                                     onClick={handleUndoSandboxMove}
-                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
+                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
                                 >
                                     <Undo2 size={15}/> Вернуть ход
                                 </button>
@@ -3404,7 +3482,7 @@ export default function Chessboard() {
                                     <button
                                         type="button"
                                         onClick={handleResign}
-                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/85 text-red-200 text-sm font-bold rounded-md hover:bg-red-900 transition shadow border border-red-800/50 cursor-pointer"
+                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/85 text-red-200 text-xs sm:text-sm font-bold rounded-md hover:bg-red-900 transition shadow border border-red-800/50 cursor-pointer"
                                     >
                                         <Flag size={15}/> Сдаться
                                     </button>
@@ -3412,7 +3490,7 @@ export default function Chessboard() {
                                     <button
                                         type="button"
                                         onClick={handleOfferRematch}
-                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-800 text-emerald-100 text-sm font-bold rounded-md hover:bg-emerald-700 transition shadow border border-emerald-500/50 cursor-pointer"
+                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-800 text-emerald-100 text-xs sm:text-sm font-bold rounded-md hover:bg-emerald-700 transition shadow border border-emerald-500/50 cursor-pointer"
                                     >
                                         <RefreshCw size={15}/> Реванш
                                     </button>
@@ -3437,16 +3515,16 @@ export default function Chessboard() {
                                                 }
                                             }
                                         })}
-                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 text-xs sm:text-sm font-bold rounded-md transition shadow border border-emerald-600/50 cursor-pointer"
+                                        className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 text-xs font-bold rounded-md transition shadow border border-emerald-600/50 cursor-pointer"
                                     >
-                                        <Eye size={15}/> Разбор партии
+                                        <Eye size={14}/> Разбор партии
                                     </button>
                                     <a
                                         href={`${API_BASE_URL}/api/v1/profile/games/${savedBotGameId}/pgn`}
                                         download
-                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-[#1A120B] hover:bg-black text-amber-400 text-xs sm:text-sm font-bold rounded-md transition shadow border border-amber-800/60"
+                                        className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#1A120B] hover:bg-black text-amber-400 text-xs font-bold rounded-md transition shadow border border-amber-800/60"
                                     >
-                                        <Download size={15}/> Скачать PGN
+                                        <Download size={14}/> Скачать PGN
                                     </a>
                                 </div>
                             )}
@@ -3457,7 +3535,7 @@ export default function Chessboard() {
                                 type="button"
                                 disabled={history.length === 0}
                                 onClick={handleUndoSandboxMove}
-                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
+                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
                             >
                                 <Undo2 size={15}/> Отменить ход
                             </button>
@@ -3465,7 +3543,7 @@ export default function Chessboard() {
                                 type="button"
                                 disabled={history.length === 0}
                                 onClick={handleResetSandbox}
-                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-amber-300 text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
+                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-amber-300 text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
                             >
                                 <RotateCcw size={15}/> Сбросить доску
                             </button>

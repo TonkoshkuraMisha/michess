@@ -313,6 +313,7 @@ class HistoricalBot:
             multipv=self.multipv,
         )
 
+        used_stockfish = bool(base_scores)
         # Fallback-расчёт при отсутствии бинарника Stockfish
         if not base_scores:
             us = board.turn
@@ -358,10 +359,13 @@ class HistoricalBot:
         san = board.san(best_move)
         board.push(best_move)
 
+        engine_backend = "stockfish" if used_stockfish else "fallback_minimax"
+        logger.info("Bot %s move %s via %s [%s] (engine=%s)", self.bot_id, san, self.engine_source_name, engine_backend, engine_path)
         return {
             "uci": best_move.uci(),
             "san": san,
             "fen_after": board.fen(),
             "source": self.engine_source_name,
+            "engine_backend": engine_backend,
             "comment": best_comment or self.default_comment,
         }
