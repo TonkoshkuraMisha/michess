@@ -1,38 +1,64 @@
-# Michess API ♟️
+<!-- --- FILE: README.md --- -->
 
-An asynchronous chess backend built on a modern architecture. It supports real-time matchmaking, the FIDE Elo rating
-system, game analysis, and cheat telemetry collection.
+# Michess ♟️ — Full-Stack Шахматная Платформа
 
-## 🛠 Tech Stack
+Веб-платформа для игры в шахматы в реальном времени (PvP), матчей против исторических шахматных мастеров (с аутентичными
+дебютными книгами и стилем игры на базе Stockfish 19), изучения архивов чемпионов мира и компьютерного разбора партий.
 
-* **Framework:** FastAPI (Python 3.11+)
-* **Database:** PostgreSQL (via asynchronous `asyncpg` + SQLAlchemy 2.0)
-* **Cache & Pub/Sub:** Redis (for WebSocket manager and matchmaking queues)
-* **Chess Logic:** `python-chess` (move validation, PGN generation, timers)
-* **Migrations:** Alembic
-* **Testing:** Pytest + asynchronous in-memory Redis mock
+---
 
-## 🚀 Key Features
+## 🛠 Технологический стек
 
-* **Asynchronous Matchmaking:** Advanced opponent search engine based on Redis `Sorted Sets` with a customizable rating
-  fork (default $\pm 150$ points).
-* **Real-Time Gameplay:** Move exchange via WebSockets with minimal latency. Instant reaction to connection drops (Grace
-  period) and time-outs.
-* **FIDE Rating System:** Precise recalculation of Elo ratings with a dynamic K-factor.
-* **Anti-Cheat Foundation:** Collection of deterministic telemetry (move time, browser window focus, pre-moves, network
-  ping) for subsequent server-side analysis.
-* **Profile REST API:** View game history and export raw PGN files.
+### Бэкенд (Python 3.11+)
 
-## 📦 Local Setup (Development)
+* **Framework:** FastAPI (REST API + WebSockets)
+* **База данных:** PostgreSQL 16 (асинхронный `asyncpg` + SQLAlchemy 2.0)
+* **Кэш, очереди и Pub/Sub:** Redis 8 (менеджер WebSocket-сессий, очереди матчмейкинга `Sorted Sets`, приватные вызовы)
+* **Шахматное ядро и движок:** `python-chess` + Stockfish 19 UCI
+* **Миграции:** Alembic
+* **Тестирование и линтеры:** Pytest (`pytest-asyncio` + `fakeredis` + `aiosqlite`), Flake8
 
-1. **Clone and Virtual Environment:**
+### Фронтенд (React 19 + TypeScript)
 
-```bash
-git clone https://github.com/TonkoshkuraMisha/michess.git
-cd michess
-python -m venv michess_env
-source michess_env/bin/activate  # For Windows: michess_env\Scripts\activate
-python.exe -m pip install --upgrade pip
-pip install -r requirements.txt
+* **Сборка и стили:** Vite 6 + Tailwind CSS v4
+* **Шахматная логика и графики:** `chess.js`, `recharts`, `lucide-react`
+* **Тестирование и линтеры:** Vitest, Oxlint
 
-```
+---
+
+## 🚀 Ключевые возможности
+
+* **Асинхронный PvP-матчмейкинг:** Поиск соперника через Redis `Sorted Sets`, 36 программ шахматных часов FIDE DGT2500,
+  предходы (`Premoves`), превращение пешки, авто-отмена на 1-м ходу, мгновенные реванши со сменой цвета, приватные
+  вызовы по ссылке (`/challenge/:code`), режим зрителя (`Live`) и игровой чат.
+* **Исторические боты (7 персон):** Филидор, Лабурдонне, Стаунтон, Андерсен, Морфи, Паульсен, Цукерторт. Единый базовый
+  класс `HistoricalBot`, JSON-книги дебютов из реальных PGN-партий, тактический расчёт через Stockfish 19 с
+  индивидуальными стилевыми бонусами и имитацией человеческого времени раздумий.
+* **Студия разбора партий (`GameViewer`):** Экспресс-анализ всей партии движком Stockfish по кнопке (`Accuracy %`, поиск
+  зевков `??`, ошибок `?`, неточностей `?!`), вертикальная шкала оценки (`EvalBar`), интерактивный график перевеса
+  `Recharts` и рисование тактических стрелок правой кнопкой мыши.
+* **Архив Чемпионов мира:** Хронологическая база партий 21 чемпиона мира и претендентов с просмотром на доске и
+  скачиванием PGN.
+* **Античит-телеметрия:** Сбор детерминированных метрик каждого хода (`time_taken_ms`, `window_blurred_before_move`,
+  `is_premove`, `network_lag_ms`).
+
+---
+
+## 📦 Быстрый старт (Разработка)
+
+Для запуска проекта на любом ПК с Windows и Docker Desktop выполните в корне проекта:
+
+    git clone [https://github.com/TonkoshkuraMisha/michess.git](https://github.com/TonkoshkuraMisha/michess.git) michess
+    cd michess
+    git checkout dev
+    .\start_dev.ps1
+
+Скрипт `start_dev.ps1` автоматически создаст `.env`, виртуальное окружение `michess_env`, скачает движок Stockfish 19 в
+папку `bin/`, установит пакеты фронтенда, поднимет контейнеры PostgreSQL и Redis, применит миграции Alembic и откроет
+приложение в браузере:
+
+* **Фронтенд:** [http://127.0.0.1:3000](http://127.0.0.1:3000)
+* **Swagger API:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+
+Подробная инструкция по ручному запуску и проверке тестов приведена в файле `QUICKSTART.md`, а регламент работы с
+Git-ветками — в `WORKFLOW.md`.
