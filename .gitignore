@@ -33,3 +33,6 @@ bin/
 *.exe
 
 node_modules/
+# Project snapshots
+project_snapshot*.txt
+data/pgns/

@@ -143,4 +143,90 @@ class Matchmaker:
         return game_id
 
 
+
+    async def create_private_invite(
+        self,
+        user_id: int,
+        username: str = "Игрок",
+        rating: int = 1200,
+        base_time_ms: int = 180000,
+        increment_ms: int = 2000,
+        color_pref: str = "random",
+    ) -> dict:
+        """Создаёт приватный инвайт в Redis по ключу invite:{code} с TTL 15 минут (900 сек)."""
+        import json
+        import secrets
+        from src.services.game_state import state_manager
+
+        redis_conn = getattr(self, "redis", None) or state_manager.redis
+        code = secrets.token_urlsafe(6).replace("-", "").replace("_", "")[:8]
+        if color_pref not in ("white", "black", "random"):
+            color_pref = "random"
+
+        payload = {
+            "code": code,
+            "creator_id": int(user_id),
+            "creator_username": username,
+            "creator_rating": int(rating),
+            "base_time_ms": int(base_time_ms),
+            "increment_ms": int(increment_ms),
+            "color_pref": color_pref,
+        }
+        try:
+            await redis_conn.set(f"invite:{code}", json.dumps(payload), ex=900)
+        except TypeError:
+            await redis_conn.set(f"invite:{code}", json.dumps(payload))
+        return payload
+
+    async def get_private_invite(self, code: str) -> dict | None:
+        import json
+        from src.services.game_state import state_manager
+
+        redis_conn = getattr(self, "redis", None) or state_manager.redis
+        raw = await redis_conn.get(f"invite:{code}")
+        if not raw:
+            return None
+        return json.loads(raw)
+
+    async def accept_private_invite(self, code: str, acceptor_id: int) -> dict | None:
+        """Погашает приватный инвайт (одноразово) и возвращает параметры создателя и определившиеся цвета."""
+        import json
+        import random
+        from src.services.game_state import state_manager
+
+        redis_conn = getattr(self, "redis", None) or state_manager.redis
+        key = f"invite:{code}"
+        raw = await redis_conn.get(key)
+        if not raw:
+            return None
+
+        invite = json.loads(raw)
+        creator_id = int(invite["creator_id"])
+        if creator_id == int(acceptor_id):
+            return None
+
+        await redis_conn.delete(key)
+
+        color_pref = invite.get("color_pref", "random")
+        if color_pref == "white":
+            white_id, black_id = creator_id, int(acceptor_id)
+        elif color_pref == "black":
+            white_id, black_id = int(acceptor_id), creator_id
+        else:
+            if random.random() < 0.5:
+                white_id, black_id = creator_id, int(acceptor_id)
+            else:
+                white_id, black_id = int(acceptor_id), creator_id
+
+        return {
+            "code": code,
+            "creator_id": creator_id,
+            "acceptor_id": int(acceptor_id),
+            "white_id": white_id,
+            "black_id": black_id,
+            "base_time_ms": int(invite.get("base_time_ms", 180000)),
+            "increment_ms": int(invite.get("increment_ms", 0)),
+        }
+
+
 matchmaker = Matchmaker()

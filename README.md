@@ -28,10 +28,11 @@ system, game analysis, and cheat telemetry collection.
 1. **Clone and Virtual Environment:**
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/TonkoshkuraMisha/michess.git
 cd michess
 python -m venv michess_env
 source michess_env/bin/activate  # For Windows: michess_env\Scripts\activate
+python.exe -m pip install --upgrade pip
 pip install -r requirements.txt
 
 ```
