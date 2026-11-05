@@ -7,13 +7,24 @@ import {ru} from 'date-fns/locale';
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
-import {Trophy, Swords, Calendar, Download, Crosshair, Target} from 'lucide-react';
+import {
+    Trophy,
+    Swords,
+    Calendar,
+    Download,
+    Crosshair,
+    Target,
+    ShieldCheck,
+    ShieldAlert
+} from 'lucide-react';
 import {API_BASE_URL} from '../config/api';
 
 interface UserProfile {
     id: number;
     username: string;
     rating: number;
+    is_cheater?: boolean;
+    trust_factor?: number;
     created_at: string;
 }
 
@@ -126,11 +137,10 @@ export default function Profile() {
         const pointRating = tempRating;
         tempRating -= delta;
 
-        // Короткая дата для графика
         const chartDate = game.pgn_date ? game.pgn_date.split('.')[0] : (game.finished_at ? format(parseISO(game.finished_at), 'd MMM', {locale: ru}) : '');
 
         return {
-            name: `Партия`,
+            name: 'Партия',
             rating: pointRating,
             date: chartDate
         };
@@ -138,6 +148,8 @@ export default function Profile() {
 
     const chartData = chartDataReversed.reverse();
     const winRate = games.length > 0 ? Math.round((wins / games.length) * 100) : 0;
+    const trustFactor = profile.trust_factor ?? 100;
+    const isUnderFairPlayWatch = Boolean(profile.is_cheater) || trustFactor < 60;
 
     return (
         <div className="w-full max-w-6xl flex flex-col gap-6 font-serif">
@@ -152,10 +164,34 @@ export default function Profile() {
                     <img
                         src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${profile.username}&backgroundColor=E6C998`}
                         alt="Avatar"
-                        className="w-24 h-24 rounded-lg bg-black/40 shadow-inner border-2 border-amber-600/40 mb-4 z-10"
+                        className="w-24 h-24 rounded-lg bg-black/40 shadow-inner border-2 border-amber-600/40 mb-3 z-10"
                     />
                     <h1 className="text-3xl font-bold text-amber-200 z-10">{profile.username}</h1>
-                    <div className="flex items-center gap-2 mt-4 text-boxwood-light/80 text-sm z-10">
+
+                    {/* Бейдж репутации Fair Play (Таск 5.1) */}
+                    <div className="mt-2.5 z-10">
+                        {isUnderFairPlayWatch ? (
+                            <span
+                                data-testid="reputation-badge"
+                                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-bold bg-rose-950/85 border border-rose-600/60 text-rose-200 shadow"
+                                title={`Фактор доверия: ${trustFactor}%`}
+                            >
+                                <ShieldAlert size={14} className="text-rose-400"/>
+                                Под наблюдением Fair Play
+                            </span>
+                        ) : (
+                            <span
+                                data-testid="reputation-badge"
+                                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-bold bg-emerald-950/85 border border-emerald-600/50 text-emerald-200 shadow"
+                                title={`Фактор доверия: ${trustFactor}%`}
+                            >
+                                <ShieldCheck size={14} className="text-emerald-400"/>
+                                Высокий фактор доверия
+                            </span>
+                        )}
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-3 text-boxwood-light/80 text-sm z-10">
                         <Calendar size={16} className="text-amber-600"/>
                         На сайте с {format(parseISO(profile.created_at), 'd MMMM yyyy', {locale: ru})}
                     </div>
@@ -336,7 +372,7 @@ export default function Profile() {
                                             </a>
                                         </td>
                                     </tr>
-                                )
+                                );
                             })
                         )}
                         </tbody>
