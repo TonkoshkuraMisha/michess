@@ -1,9 +1,11 @@
 # --- FILE: src/api/analysis.py ---
 
+import json
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.session import get_db
+from src.models.game import Game
 from src.schemas.analysis import FullGameAnalysisResponse, PositionAnalysisRequest
 from src.services.analysis_service import analysis_service
 
@@ -17,6 +19,25 @@ async def analyze_game_position(
 ):
     """Возвращает оценку позиции Stockfish для заданного массива ходов."""
     return await analysis_service.analyze_position(db, request.moves)
+
+
+@router.get("/game/{game_id}", response_model=FullGameAnalysisResponse | None)
+async def get_cached_game_analysis(
+        game_id: int,
+        db: AsyncSession = Depends(get_db),
+):
+    """Возвращает уже сохранённый компьютерный анализ партии из БД, если он есть."""
+    game = await db.get(Game, game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail=f"Партия {game_id} не найдена")
+    if not game.analysis_json:
+        return None
+    try:
+        data = json.loads(game.analysis_json)
+        data["game_id"] = game_id
+        return data
+    except Exception:
+        return None
 
 
 @router.post("/game/{game_id}", response_model=FullGameAnalysisResponse)

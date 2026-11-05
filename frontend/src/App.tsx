@@ -7,6 +7,7 @@ import AuthModal from './components/AuthModal';
 import Profile from './components/Profile';
 import GameViewer from './components/GameViewer';
 import ChampionGames from './components/ChampionGames';
+import Leaderboard from './components/Leaderboard';
 import {CHAMPIONS_LIST} from './config/champions';
 import {API_BASE_URL} from './config/api';
 
@@ -24,7 +25,8 @@ import {
     Settings,
     LogIn,
     Crown,
-    ChevronDown
+    ChevronDown,
+    Trophy
 } from 'lucide-react';
 
 interface UserProfile {
@@ -50,7 +52,6 @@ export default function App() {
     const navigate = useNavigate();
     const location = useLocation();
 
-    // На страницах доски и разбора фиксируем экран без вертикального скролла
     const isSingleScreenRoute =
         location.pathname === '/' ||
         location.pathname.startsWith('/challenge/') ||
@@ -150,6 +151,15 @@ export default function App() {
                             <Swords size={17}/> Игра
                         </Link>
 
+                        <Link
+                            to="/leaderboard"
+                            className={`flex items-center gap-2 transition ${
+                                location.pathname === '/leaderboard' ? 'text-amber-300' : 'hover:text-amber-300'
+                            }`}
+                        >
+                            <Trophy size={17}/> Лидеры
+                        </Link>
+
                         {/* Выпадающее меню легенд */}
                         <div className="relative" ref={championsMenuRef}>
                             <button
@@ -215,6 +225,13 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center gap-3 text-boxwood-light relative" ref={dropdownRef}>
+                    <Link
+                        to="/leaderboard"
+                        className="md:hidden p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300"
+                        title="Таблица лидеров"
+                    >
+                        <Trophy size={19}/>
+                    </Link>
                     <button
                         className="p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300 cursor-pointer"
                         title="Поиск партии"
@@ -279,6 +296,15 @@ export default function App() {
                                             <User size={16} className="text-amber-500"/> Профиль
                                         </button>
                                         <button
+                                            onClick={() => {
+                                                setIsProfileOpen(false);
+                                                navigate('/leaderboard');
+                                            }}
+                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
+                                        >
+                                            <Trophy size={16} className="text-amber-500"/> Таблица лидеров
+                                        </button>
+                                        <button
                                             onClick={() => setIsProfileOpen(false)}
                                             className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
                                         >
@@ -327,6 +353,7 @@ export default function App() {
                 <Routes>
                     <Route path="/" element={<Chessboard key={token ? token : 'guest'}/>}/>
                     <Route path="/challenge/:inviteCode" element={<Chessboard key={token ? token : 'guest'}/>}/>
+                    <Route path="/leaderboard" element={<Leaderboard/>}/>
                     <Route path="/profile/:targetUsername" element={<Profile/>}/>
                     <Route path="/game/:gameId" element={<GameViewer/>}/>
                     <Route path="/champions/:championId" element={<ChampionGames/>}/>

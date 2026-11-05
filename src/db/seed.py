@@ -19,7 +19,6 @@ PGNS_DIRS = [
     PROJECT_ROOT / "data" / "pgns",
 ]
 
-# Каноническое соответствие ID чемпионов из frontend/src/config/champions.ts
 CHAMPIONS_META: dict[str, dict] = {
     "steinitz": {"id": "Steinitz", "canonical": "Steinitz, Wilhelm", "rating": 2650, "exclude": ()},
     "lasker": {"id": "Lasker", "canonical": "Lasker, Emanuel", "rating": 2720,
@@ -49,9 +48,51 @@ CHAMPIONS_META: dict[str, dict] = {
 WHITE_TAG_RE = re.compile(r'\[White\s+"([^"]+)"\]')
 BLACK_TAG_RE = re.compile(r'\[Black\s+"([^"]+)"\]')
 RESULT_TAG_RE = re.compile(r'\[Result\s+"([^"]+)"\]')
+DATE_TAG_RE = re.compile(r'\[(?:Event)?Date\s+"([^"]+)"\]')
+SITE_TAG_RE = re.compile(r'\[Site\s+"([^"]+)"\]')
+ECO_TAG_RE = re.compile(r'\[ECO\s+"([^"]+)"\]')
 
-# Блокировка от параллельного засеивания одного и того же чемпиона при двойных запросах React StrictMode
 _SEED_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def extract_pgn_metadata(raw_pgn: str, fallback_result: str = "*") -> dict[str, str | None]:
+    """Извлекает result, pgn_date, site и eco из PGN-текста один раз перед сохранением в БД."""
+    result_str = fallback_result or "*"
+    pgn_date: str | None = None
+    site: str | None = None
+    eco: str | None = None
+
+    if not raw_pgn:
+        return {"result": result_str, "pgn_date": None, "site": None, "eco": None}
+
+    res_match = RESULT_TAG_RE.search(raw_pgn)
+    if res_match:
+        result_str = res_match.group(1).strip()[:10]
+    elif result_str == "*":
+        tail_match = re.search(r"(1-0|0-1|1/2-1/2)\s*$", raw_pgn.strip())
+        if tail_match:
+            result_str = tail_match.group(1)
+
+    for d_match in DATE_TAG_RE.finditer(raw_pgn):
+        val = d_match.group(1).strip()
+        if val and not val.startswith("?"):
+            pgn_date = val[:20]
+            break
+
+    s_match = SITE_TAG_RE.search(raw_pgn)
+    if s_match and s_match.group(1).strip() != "?":
+        site = s_match.group(1).strip()[:100]
+
+    e_match = ECO_TAG_RE.search(raw_pgn)
+    if e_match and e_match.group(1).strip() != "?":
+        eco = e_match.group(1).strip()[:10]
+
+    return {
+        "result": result_str,
+        "pgn_date": pgn_date,
+        "site": site,
+        "eco": eco,
+    }
 
 
 def get_champion_meta(username_or_id: str) -> dict | None:
@@ -91,10 +132,6 @@ def _split_pgn_games(content: str) -> list[str]:
 
 
 async def ensure_champion_seeded(db: AsyncSession, username_or_id: str) -> User | None:
-    """
-    Проверяет, есть ли чемпион и его партии в БД.
-    Если партий ещё нет, автоматически импортирует их из src/db/data/pgns/{Champion}.pgn.
-    """
     meta = get_champion_meta(username_or_id)
     if not meta:
         return None
@@ -120,7 +157,6 @@ async def ensure_champion_seeded(db: AsyncSession, username_or_id: str) -> User 
             if games_count > 0:
                 return champ_user
 
-        # Загружаем всех существующих пользователей в память для мгновенного маппинга соперников
         all_users_res = await db.execute(select(User))
         users_by_name: dict[str, User] = {u.username: u for u in all_users_res.scalars().all()}
 
@@ -147,9 +183,8 @@ async def ensure_champion_seeded(db: AsyncSession, username_or_id: str) -> User 
             await db.commit()
             return champ_user
 
-        # Сначала создаём недостающих пользователей-соперников одним пакетом
         new_opponents: dict[str, User] = {}
-        parsed_entries: list[tuple[str, str, str, str]] = []
+        parsed_entries: list[tuple[str, str, dict, str]] = []
 
         for raw_pgn in raw_games:
             w_match = WHITE_TAG_RE.search(raw_pgn)
@@ -159,13 +194,11 @@ async def ensure_champion_seeded(db: AsyncSession, username_or_id: str) -> User 
 
             w_raw = w_match.group(1).strip()[:50]
             b_raw = b_match.group(1).strip()[:50]
-            res_match = RESULT_TAG_RE.search(raw_pgn)
-            result_str = res_match.group(1).strip()[:10] if res_match else "*"
+            meta_fields = extract_pgn_metadata(raw_pgn)
 
             w_name = canonical_name if _is_target_champion_name(w_raw, champ_key, meta) else w_raw
             b_name = canonical_name if _is_target_champion_name(b_raw, champ_key, meta) else b_raw
 
-            # Пропускаем партии однофамильцев, не относящиеся к чемпиону
             if w_name != canonical_name and b_name != canonical_name:
                 continue
 
@@ -181,14 +214,13 @@ async def ensure_champion_seeded(db: AsyncSession, username_or_id: str) -> User 
                         trust_factor=100,
                     )
 
-            parsed_entries.append((w_name, b_name, result_str, raw_pgn))
+            parsed_entries.append((w_name, b_name, meta_fields, raw_pgn))
 
         if new_opponents:
             db.add_all(new_opponents.values())
             await db.flush()
             users_by_name.update(new_opponents)
 
-        # Проверяем уже существующие PGN у этого чемпиона, чтобы избежать дубликатов при пересечении матчей
         existing_pgns_res = await db.execute(
             select(Game.pgn).where(
                 or_(Game.white_player_id == champ_user.id, Game.black_player_id == champ_user.id)
@@ -197,7 +229,7 @@ async def ensure_champion_seeded(db: AsyncSession, username_or_id: str) -> User 
         existing_pgns = {row[0] for row in existing_pgns_res.all() if row[0]}
 
         games_to_insert: list[Game] = []
-        for w_name, b_name, result_str, raw_pgn in parsed_entries:
+        for w_name, b_name, meta_fields, raw_pgn in parsed_entries:
             if raw_pgn in existing_pgns:
                 continue
             existing_pgns.add(raw_pgn)
@@ -210,7 +242,10 @@ async def ensure_champion_seeded(db: AsyncSession, username_or_id: str) -> User 
                     black_player_id=b_user.id,
                     pgn=raw_pgn,
                     status=GameStatus.COMPLETED,
-                    result=result_str,
+                    result=meta_fields["result"],
+                    pgn_date=meta_fields["pgn_date"],
+                    site=meta_fields["site"],
+                    eco=meta_fields["eco"],
                     is_rated=True,
                 )
             )
@@ -229,10 +264,9 @@ async def ensure_champion_seeded(db: AsyncSession, username_or_id: str) -> User 
 
 
 async def seed_all_champions() -> None:
-    """Полный импорт всех архивов чемпионов мира в БД (для вызова через python -m src.db.seed)."""
     print(f"=== Импорт архивов чемпионов мира в БД (Корень: {PROJECT_ROOT}) ===")
     async with AsyncSessionLocal() as db:
-        for champ_key, meta in CHAMPIONS_META.items():
+        for _, meta in CHAMPIONS_META.items():
             user = await ensure_champion_seeded(db, meta["id"])
             if user:
                 count_q = select(func.count(Game.id)).where(

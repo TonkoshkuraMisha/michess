@@ -19,14 +19,15 @@ class Game(Base):
     __tablename__ = "games"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    white_player_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-    black_player_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    white_player_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    black_player_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
 
     pgn: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[GameStatus] = mapped_column(
         Enum(GameStatus, name="gamestatus"),
         default=GameStatus.PENDING,
         nullable=False,
+        index=True,
     )
 
     base_time_ms: Mapped[int] = mapped_column(Integer, default=180000, server_default="180000", nullable=False)
@@ -55,6 +56,10 @@ class Game(Base):
     white_rating_delta: Mapped[int | None] = mapped_column(Integer, nullable=True)
     black_rating_delta: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    pgn_date: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    site: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    eco: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
+
     analysis_json: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
@@ -62,7 +67,7 @@ class Game(Base):
         server_default=func.now(),
         nullable=False,
     )
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
 
     white_player = relationship("User", foreign_keys=[white_player_id])
     black_player = relationship("User", foreign_keys=[black_player_id])

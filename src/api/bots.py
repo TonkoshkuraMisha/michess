@@ -309,6 +309,13 @@ def _prepare_game_kwargs(
     game_cols = {c.name: c for c in Game.__table__.columns}
     kwargs: dict = {}
 
+    if "pgn_date" in game_cols:
+        kwargs["pgn_date"] = datetime.now(timezone.utc).strftime("%Y.%m.%d")
+    if "site" in game_cols:
+        kwargs["site"] = "Michess Bot Arena"
+    if "eco" in game_cols:
+        kwargs["eco"] = _detect_eco_code(payload.moves_uci)
+        
     if "white_player_id" in game_cols:
         kwargs["white_player_id"] = white_id
     elif "white_id" in game_cols:
