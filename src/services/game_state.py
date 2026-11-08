@@ -7,6 +7,7 @@ import logging
 import datetime
 import chess
 import chess.pgn
+from sqlalchemy import select, or_
 from sqlalchemy.sql import func
 from redis.exceptions import WatchError
 
@@ -87,6 +88,8 @@ class GameStateManager:
         await self.redis.sadd("active_games", str(game_id))
         await self.redis.set(f"user:{white_id}:current_game", str(game_id))
         await self.redis.set(f"user:{black_id}:current_game", str(game_id))
+
+    init_game = initialize_game
 
     async def get_game_state(self, game_id: int) -> dict | None:
         state = await self.redis.hgetall(self._get_key(game_id))
@@ -385,8 +388,25 @@ class GameStateManager:
         new_b = black_initial
 
         if db_game.is_rated:
+            w_games_q = select(func.count(Game.id)).where(
+                or_(Game.white_player_id == white_user.id, Game.black_player_id == white_user.id),
+                Game.status == GameStatus.COMPLETED,
+                Game.is_rated == True,  # noqa: E712
+            )
+            b_games_q = select(func.count(Game.id)).where(
+                or_(Game.white_player_id == black_user.id, Game.black_player_id == black_user.id),
+                Game.status == GameStatus.COMPLETED,
+                Game.is_rated == True,  # noqa: E712
+            )
+            white_games_count = (await db.execute(w_games_q)).scalar() or 0
+            black_games_count = (await db.execute(b_games_q)).scalar() or 0
+
             new_w, delta_w, new_b, delta_b = elo_calculator.calculate_new_ratings(
-                white_initial, black_initial, result
+                white_initial,
+                black_initial,
+                result,
+                white_games=white_games_count,
+                black_games=black_games_count,
             )
             white_user.rating = new_w
             black_user.rating = new_b
@@ -428,9 +448,8 @@ class GameStateManager:
             db_moves = [Move(game_id=game_id, **m) for m in moves_telemetry]
             db.add_all(db_moves)
 
-            from src.api.bots import _detect_eco_code
             uci_seq = [m.get("notation", "") for m in moves_telemetry if m.get("notation")]
-            eco_code = _detect_eco_code(uci_seq)
+            eco_code = _detect_eco_from_moves(uci_seq)
             db_game.eco = eco_code
 
             pgn_game = chess.pgn.Game()
@@ -447,12 +466,17 @@ class GameStateManager:
             pgn_game.headers["Termination"] = termination
 
             node = pgn_game
+            board_for_pgn = chess.Board()
             for m in moves_telemetry:
                 try:
                     move_obj = chess.Move.from_uci(m["notation"])
-                    node = node.add_variation(move_obj)
+                    if move_obj in board_for_pgn.legal_moves:
+                        board_for_pgn.push(move_obj)
+                        node = node.add_variation(move_obj)
+                    else:
+                        break
                 except ValueError:
-                    pass
+                    break
             db_game.pgn = str(pgn_game)
         elif final_pgn:
             db_game.pgn = final_pgn
@@ -469,7 +493,6 @@ class GameStateManager:
 
         if db_game.is_rated:
             try:
-                from src.services.anticheat import evaluate_game_telemetry
                 await evaluate_game_telemetry(db, game_id)
             except Exception as ac_err:
                 logger.error("Telemetry anti-cheat evaluation failed for game %s: %s", game_id, ac_err)
@@ -554,7 +577,6 @@ class GameStateManager:
                         await self.redis.srem("active_games", game_id_str)
                         continue
 
-                    # 1. Авто-отмена партии при неявке на 1-м ходу (30 секунд)
                     if int(state.get("state_version", 0)) < 2 and now_ms - int(
                             state.get("last_move_at", now_ms)) >= 30000:
                         async with AsyncSessionLocal() as db:

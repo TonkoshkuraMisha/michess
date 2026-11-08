@@ -1,0 +1,2031 @@
+PROJECT SNAPSHOT — PART 7/11
+Project: michess
+Files in this part (1): frontend/src/components/Chessboard.tsx (chunk 1)
+----------------------------------------------------------------------------------------
+
+========================================================================================
+FILE: frontend/src/components/Chessboard.tsx
+========================================================================================
+// --- FILE: frontend/src/components/Chessboard.tsx ---
+
+import {useState, useEffect, useRef, useCallback} from 'react';
+import {useNavigate, useParams} from 'react-router-dom';
+import {Chess} from 'chess.js';
+import {
+    ChevronFirst,
+    ChevronLeft,
+    ChevronRight,
+    ChevronLast,
+    Users,
+    Sword,
+    Flag,
+    Handshake,
+    Loader2,
+    Play,
+    RotateCcw,
+    Clock,
+    ChevronDown,
+    ChevronUp,
+    Palette,
+    RefreshCw,
+    ListOrdered,
+    Undo2,
+    Bot,
+    MessageSquareQuote,
+    Download,
+    Eye,
+    Sliders,
+    Zap,
+    X,
+    Link2,
+    Copy,
+    Check,
+    Send,
+    MessageSquare,
+    Radio
+} from 'lucide-react';
+import {gameSocket} from '../services/gameSocket';
+import {API_BASE_URL} from '../config/api';
+import {
+    BOARD_THEMES,
+    PIECE_SETS,
+    getSavedBoardThemeKey,
+    getSavedPieceSetKey,
+    getPieceSvgUrl,
+    getHarmoniousPieceStyle
+} from '../config/boardAppearance';
+import type {BoardTheme} from '../config/boardAppearance';
+import {HISTORICAL_BOTS, HISTORICAL_BOTS_LIST} from '../config/champions';
+import type {HistoricalBotId, HistoricalBotProfile} from '../config/champions';
+
+const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
+
+export const MIN_BOARD_SIZE = 340;
+export const MAX_BOARD_SIZE = 860;
+
+export type PromotionPiece = 'q' | 'n' | 'r' | 'b';
+
+const PROMOTION_OPTIONS: Array<{ type: PromotionPiece; label: string }> = [
+    {type: 'q', label: 'Ферзь'},
+    {type: 'n', label: 'Конь'},
+    {type: 'r', label: 'Ладья'},
+    {type: 'b', label: 'Слон'}
+];
+
+export function getMaxViewportBoardSize(): number {
+    if (typeof window === 'undefined') return 560;
+    // 220px резервируется под шапку сайта (56px), отступы main (20px) и две плашки игроков с таймерами (144px)
+    const availableHeight = window.innerHeight - 220;
+    const availableWidth = window.innerWidth >= 1280
+        ? window.innerWidth - 850
+        : window.innerWidth - 28;
+    const limit = Math.min(availableHeight, availableWidth, MAX_BOARD_SIZE);
+    return Math.max(MIN_BOARD_SIZE, limit);
+}
+
+export function getDefaultBoardSize(): number {
+    if (typeof window !== 'undefined') {
+        return getMaxViewportBoardSize();
+    }
+    return 540;
+}
+
+interface LiveGameItem {
+    game_id: number;
+    white_username: string;
+    white_rating: number;
+    black_username: string;
+    black_rating: number;
+    base_time_ms: number;
+    increment_ms: number;
+    spectators_count: number;
+}
+
+interface ChatMessageItem {
+    sender: string;
+    text: string;
+    timestamp: number;
+}
+
+const QUICK_CHAT_PRESETS = [
+    '👋 Удачи!',
+    '🤝 Спасибо за игру!',
+    '👏 Красивый ход!',
+    '⏱ Цейтнот!'
+];
+
+interface QueuePlayer {
+    user_id: number;
+    username: string;
+    rating: number;
+    base_time_ms: number;
+    increment_ms: number;
+}
+
+export {BOARD_THEMES, HISTORICAL_BOTS};
+export type {BoardTheme, HistoricalBotId, HistoricalBotProfile};
+
+export type DgtTimingMode =
+    | 'time'
+    | 'fischer'
+    | 'delay'
+    | 'us_delay'
+    | 'byo_yomi'
+    | 'canadian_byo'
+    | 'scrabble'
+    | 'hourglass'
+    | 'gong'
+    | 'move_timer';
+
+export interface Dgt2500Option {
+    optionNumber: string;
+    mode: DgtTimingMode;
+    base: number;
+    blackBase?: number;
+    inc: number;
+    label: string;
+    details: string;
+    isManual?: boolean;
+    periods?: Array<{ moves?: number; extraMinutes: number; extraIncSeconds?: number }>;
+    incrementFromMove?: number;
+}
+
+export interface Dgt2500Group {
+    group: string;
+    options: Dgt2500Option[];
+}
+
+export const TIME_CONTROLS: Dgt2500Group[] = [
+    {
+        group: '01–08 • Time (Контроль времени и Гильотина)',
+        options: [
+            {
+                optionNumber: '01',
+                mode: 'time',
+                base: 5,
+                inc: 0,
+                label: '5 мин',
+                details: 'Блиц 5 минут до конца партии'
+            },
+            {
+                optionNumber: '02',
+                mode: 'time',
+                base: 25,
+                inc: 0,
+                label: '25 мин',
+                details: 'Рапид 25 минут до конца партии'
+            },
+            {
+                optionNumber: '03',
+                mode: 'time',
+                base: 60,
+                inc: 0,
+                label: '60 мин (1 час)',
+                details: 'Классика 60 минут до конца партии'
+            },
+            {
+                optionNumber: '04',
+                mode: 'time',
+                base: 120,
+                inc: 0,
+                label: '120 мин/40 + 30 мин',
+                details: '2 часа на 40 ходов + 30 мин до конца',
+                periods: [{moves: 40, extraMinutes: 30}]
+            },
+            {
+                optionNumber: '05',
+                mode: 'time',
+                base: 120,
+                inc: 0,
+                label: '120 мин/40 + 60 мин',
+                details: '2 часа на 40 ходов + 60 мин до конца',
+                periods: [{moves: 40, extraMinutes: 60}]
+            },
+            {
+                optionNumber: '06',
+                mode: 'time',
+                base: 120,
+                inc: 0,
+                label: '120м/40 + 60м/20 + 30м',
+                details: '2ч/40 ходов + 1ч/20 ходов + 30 мин до конца',
+                periods: [{moves: 40, extraMinutes: 60}, {moves: 60, extraMinutes: 30}]
+            },
+            {
+                optionNumber: '07',
+                mode: 'time',
+                base: 5,
+                blackBase: 4,
+                inc: 0,
+                label: '5 мин vs 4 мин (Armageddon)',
+                details: 'Армагеддон без добавления: 5 мин Белые / 4 мин Черные'
+            },
+            {
+                optionNumber: '08',
+                mode: 'time',
+                base: 10,
+                inc: 0,
+                isManual: true,
+                label: 'Ручная настройка (Time)',
+                details: 'Произвольное стартовое время без добавления'
+            }
+        ]
+    },
+    {
+        group: '09–21 • Fischer Bonus (Фишер с добавлением)',
+        options: [
+            {
+                optionNumber: '09',
+                mode: 'fischer',
+                base: 3,
+                inc: 2,
+                label: '3 мин + 2 сек/ход',
+                details: 'Стандартный блиц FIDE (3+2)'
+            },
+            {
+                optionNumber: '10',
+                mode: 'fischer',
+                base: 5,
+                inc: 3,
+                label: '5 мин + 3 сек/ход',
+                details: 'Блиц с добавлением Фишера (5+3)'
+            },
+            {
+                optionNumber: '11',
+                mode: 'fischer',
+                base: 10,
+                inc: 10,
+                label: '10 мин + 10 сек/ход',
+                details: 'Быстрые шахматы (10+10)'
+            },
+            {
+                optionNumber: '12',
+                mode: 'fischer',
+                base: 15,
+                inc: 5,
+                label: '15 мин + 5 сек/ход',
+                details: 'Рапид с добавлением (15+5)'
+            },
+            {
+                optionNumber: '13',
+                mode: 'fischer',
+                base: 15,
+                inc: 10,
+                label: '15 мин + 10 сек/ход',
+                details: 'Стандартный рапид FIDE (15+10)'
+            },
+            {
+                optionNumber: '14',
+                mode: 'fischer',
+                base: 25,
+                inc: 10,
+                label: '25 мин + 10 сек/ход',
+                details: 'Удлинённый рапид (25+10)'
+            },
+            {
+                optionNumber: '15',
+                mode: 'fischer',
+                base: 90,
+                inc: 30,
+                label: '90 мин + 30 сек/ход',
+                details: 'Стандартная классика (90+30 с 1-го хода)'
+            },
+            {
+                optionNumber: '16',
+                mode: 'fischer',
+                base: 90,
+                inc: 30,
+                label: '90м/40 + 30м + 30с/ход',
+                details: 'Турнирный FIDE: 90 мин/40 ходов + 30 мин до конца (+30с с 1-го хода)',
+                periods: [{moves: 40, extraMinutes: 30}]
+            },
+            {
+                optionNumber: '17',
+                mode: 'fischer',
+                base: 100,
+                inc: 30,
+                label: '100м/40 + 50м + 30с/ход',
+                details: '100 мин/40 ходов + 50 мин до конца (+30с с 1-го хода)',
+                periods: [{moves: 40, extraMinutes: 50}]
+            },
+            {
+                optionNumber: '18',
+                mode: 'fischer',
+                base: 100,
+                inc: 30,
+                label: '100м/40 + 50м/20 + 15м + 30с',
+                details: '100м/40 + 50м/20 + 15м до конца (+30с с 1-го хода)',
+                periods: [{moves: 40, extraMinutes: 50}, {moves: 60, extraMinutes: 15}]
+            },
+            {
+                optionNumber: '19',
+                mode: 'fischer',
+                base: 120,
+                inc: 0,
+                label: '120м/40 + 60м/20 + 15м (+30с с 61 х.)',
+                details: 'Классика с добавлением 30 сек/ход начиная с 61-го хода (#)',
+                periods: [{moves: 40, extraMinutes: 60}, {moves: 60, extraMinutes: 15, extraIncSeconds: 30}],
+                incrementFromMove: 61
+            },
+            {
+                optionNumber: '20',
+                mode: 'fischer',
+                base: 5,
+                blackBase: 4,
+                inc: 0,
+                label: '5м vs 4м (+2с с 61 х., Armageddon)',
+                details: 'Армагеддон FIDE: 5 мин vs 4 мин + 2 сек/ход с 61-го хода (#)',
+                periods: [{moves: 60, extraMinutes: 0, extraIncSeconds: 2}],
+                incrementFromMove: 61
+            },
+            {
+                optionNumber: '21',
+                mode: 'fischer',
+                base: 3,
+                inc: 2,
+                isManual: true,
+                label: 'Ручная настройка (Fischer)',
+                details: 'Произвольное время и бонус Фишера за каждый ход'
+            }
+        ]
+    },
+    {
+        group: '22–25 • Delay (Задержка Бронштейна и US Delay)',
+        options: [
+            {
+                optionNumber: '22',
+                mode: 'delay',
+                base: 90,
+                inc: 5,
+                label: '90 мин + 5 сек Delay (Bronstein)',
+                details: 'Задержка Бронштейна 5 сек на каждый ход'
+            },
+            {
+                optionNumber: '23',
+                mode: 'delay',
+                base: 5,
+                inc: 3,
+                isManual: true,
+                label: 'Ручная настройка (Bronstein Delay)',
+                details: 'Произвольное время с задержкой Бронштейна'
+            },
+            {
+                optionNumber: '24',
+                mode: 'us_delay',
+                base: 25,
+                inc: 5,
+                label: '25 мин + 5 сек US Delay',
+                details: 'Американская задержка (US Delay) 5 сек перед отсчётом'
+            },
+            {
+                optionNumber: '25',
+                mode: 'us_delay',
+                base: 5,
+                inc: 5,
+                isManual: true,
+                label: 'Ручная настройка (US Delay)',
+                details: 'Произвольное время с американской задержкой'
+            }
+        ]
+    },
+    {
+        group: '26–29 • Byo-Yomi (Японское и Канадское Бё-ёми)',
+        options: [
+            {
+                optionNumber: '26',
+                mode: 'byo_yomi',
+                base: 60,
+                inc: 20,
+                label: '60 мин + 3×20 сек Byo-Yomi',
+                details: 'Японское Бё-ёми: 60 мин + 3 периода по 20 сек'
+            },
+            {
+                optionNumber: '27',
+                mode: 'byo_yomi',
+                base: 30,
+                inc: 20,
+                isManual: true,
+                label: 'Ручная настройка (Byo-Yomi)',
+                details: 'Произвольная настройка японского Бё-ёми'
+            },
+            {
+                optionNumber: '28',
+                mode: 'canadian_byo',
+                base: 60,
+                inc: 0,
+                label: '60 мин + 5 мин Canadian Byo-Yomi',
+                details: 'Канадское Бё-ёми: 60 мин + 5 мин на серию ходов',
+                periods: [{extraMinutes: 5}]
+            },
+            {
+                optionNumber: '29',
+                mode: 'canadian_byo',
+                base: 30,
+                inc: 0,
+                isManual: true,
+                label: 'Ручная настройка (Canadian Byo-Yomi)',
+                details: 'Произвольная настройка канадского Бё-ёми'
+            }
+        ]
+    },
+    {
+        group: '30–36 • Специальные режимы (Scrabble, Hourglass, Gong, Move Timer)',
+        options: [
+            {
+                optionNumber: '30',
+                mode: 'scrabble',
+                base: 25,
+                inc: 0,
+                label: '25 мин + Upcount (Scrabble™)',
+                details: 'После достижения 0:00 таймер считает штрафное время вверх'
+            },
+            {
+                optionNumber: '31',
+                mode: 'scrabble',
+                base: 15,
+                inc: 0,
+                isManual: true,
+                label: 'Ручная настройка (Scrabble™)',
+                details: 'Произвольное время с отсчётом вверх после 0:00'
+            },
+            {
+                optionNumber: '32',
+                mode: 'hourglass',
+                base: 1,
+                inc: 0,
+                label: '1 мин (Hourglass / Песочные часы)',
+                details: 'Пока у одного игрока время убывает, у соперника оно прибавляется'
+            },
+            {
+                optionNumber: '33',
+                mode: 'hourglass',
+                base: 2,
+                inc: 0,
+                isManual: true,
+                label: 'Ручная настройка (Hourglass)',
+                details: 'Песочные часы с произвольным стартовым временем'
+            },
+            {
+                optionNumber: '34',
+                mode: 'gong',
+                base: 10 / 60,
+                inc: 0,
+                label: '10 сек на ход (Gong)',
+                details: 'Фиксированные 10 секунд на каждый ход со сбросом таймера'
+            },
+            {
+                optionNumber: '35',
+                mode: 'gong',
+                base: 15 / 60,
+                inc: 0,
+                isManual: true,
+                label: 'Ручная настройка (Gong)',
+                details: 'Произвольное фиксированное время на каждый ход (Гонг)'
+            },
+            {
+                optionNumber: '36',
+                mode: 'move_timer',
+                base: 30 / 60,
+                inc: 0,
+                isManual: true,
+                label: 'Ручная настройка (Move Timer)',
+                details: 'Таймер на ход со сбросом после каждого сделанного хода'
+            }
+        ]
+    }
+];
+
+const ALL_DGT_OPTIONS: Dgt2500Option[] = TIME_CONTROLS.flatMap(g => g.options);
+const DEFAULT_DGT_OPTION: Dgt2500Option = ALL_DGT_OPTIONS.find(o => o.optionNumber === '09') || ALL_DGT_OPTIONS[0];
+
+const PIECE_VALUES: Record<string, number> = {
+    p: 1,
+    n: 3,
+    b: 3,
+    r: 5,
+    q: 9,
+    k: 0
+};
+
+function calculateMaterialBalance(boardState: any[][]) {
+    const startCounts: Record<string, number> = {p: 8, n: 2, b: 2, r: 2, q: 1};
+    const currentWhite: Record<string, number> = {p: 0, n: 0, b: 0, r: 0, q: 0};
+    const currentBlack: Record<string, number> = {p: 0, n: 0, b: 0, r: 0, q: 0};
+
+    let whiteScore = 0;
+    let blackScore = 0;
+
+    for (const row of boardState) {
+        for (const cell of row) {
+            if (!cell) continue;
+            const val = PIECE_VALUES[cell.type] || 0;
+            if (cell.color === 'w') {
+                whiteScore += val;
+                if (currentWhite[cell.type] !== undefined) currentWhite[cell.type]++;
+            } else {
+                blackScore += val;
+                if (currentBlack[cell.type] !== undefined) currentBlack[cell.type]++;
+            }
+        }
+    }
+
+    const whiteCapturedSymbols: string[] = [];
+    const blackCapturedSymbols: string[] = [];
+    const order = ['q', 'r', 'b', 'n', 'p'];
+    const glyphs: Record<string, string> = {q: '♛', r: '♜', b: '♝', n: '♞', p: '♟'};
+
+    for (const t of order) {
+        const missingBlack = Math.max(0, startCounts[t] - currentBlack[t]);
+        for (let i = 0; i < missingBlack; i++) whiteCapturedSymbols.push(glyphs[t]);
+
+        const missingWhite = Math.max(0, startCounts[t] - currentWhite[t]);
+        for (let i = 0; i < missingWhite; i++) blackCapturedSymbols.push(glyphs[t]);
+    }
+
+    return {
+        whiteAdvantage: Math.max(0, whiteScore - blackScore),
+        blackAdvantage: Math.max(0, blackScore - whiteScore),
+        whiteCapturedSymbols,
+        blackCapturedSymbols
+    };
+}
+
+function cloneChessInstance(source: Chess): Chess {
+    const copy = new Chess();
+    const currentPgn = source.pgn();
+    if (currentPgn) {
+        copy.loadPgn(currentPgn);
+    } else {
+        copy.load(source.fen());
+    }
+    return copy;
+}
+
+export default function Chessboard() {
+    const navigate = useNavigate();
+    const {inviteCode} = useParams<{ inviteCode?: string }>();
+
+    // Режимы левой панели и выпадающие меню
+    const [leftSectionTab, setLeftSectionTab] = useState<'bots' | 'lobby'>('bots');
+    const [lobbyTab, setLobbyTab] = useState<'lobby' | 'live'>('lobby');
+    const [showInvitePanel, setShowInvitePanel] = useState(false);
+    const [showAppearanceDropdown, setShowAppearanceDropdown] = useState(false);
+    const appearanceDropdownRef = useRef<HTMLDivElement>(null);
+
+    const [liveGames, setLiveGames] = useState<LiveGameItem[]>([]);
+    const [spectatingGameId, setSpectatingGameId] = useState<number | null>(null);
+    const [inviteColorPref, setInviteColorPref] = useState<'white' | 'black' | 'random'>('random');
+    const [createdInviteCode, setCreatedInviteCode] = useState<string | null>(null);
+    const [inviteCopied, setInviteCopied] = useState(false);
+    const [chatMessages, setChatMessages] = useState<ChatMessageItem[]>([]);
+    const [chatInput, setChatInput] = useState('');
+
+    const [game, setGame] = useState(new Chess());
+    const [history, setHistory] = useState<any[]>([]);
+    const [viewIndex, setViewIndex] = useState<number>(-1);
+    const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
+    const [isManualFlip, setIsManualFlip] = useState<boolean>(false);
+
+    const [pendingPromotion, setPendingPromotion] = useState<{
+        from: string;
+        to: string;
+        color: 'w' | 'b';
+        isPremove?: boolean;
+    } | null>(null);
+
+    const [premove, setPremove] = useState<{
+        from: string;
+        to: string;
+        promotion?: PromotionPiece;
+    } | null>(null);
+
+    const [boardThemeKey, setBoardThemeKey] = useState<string>(() => getSavedBoardThemeKey());
+    const [pieceSetKey, setPieceSetKey] = useState<string>(() => getSavedPieceSetKey());
+
+    const [gameId, setGameId] = useState<number | null>(null);
+    const [myColor, setMyColor] = useState<'white' | 'black'>('white');
+    const [isSearching, setIsSearching] = useState(false);
+    const [queuePlayers, setQueuePlayers] = useState<QueuePlayer[]>([]);
+    const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+    const [currentUsername, setCurrentUsername] = useState<string>('Вы');
+    const [currentUserRating, setCurrentUserRating] = useState<number>(1200);
+    const [stateVersion, setStateVersion] = useState(0);
+
+    const [selectedBotId, setSelectedBotId] = useState<HistoricalBotId>('philidor');
+    const [activeBot, setActiveBot] = useState<HistoricalBotId | null>(null);
+    const [botComment, setBotComment] = useState<string | null>(null);
+    const [isBotThinking, setIsBotThinking] = useState<boolean>(false);
+    const [savedBotGameId, setSavedBotGameId] = useState<number | null>(null);
+
+    const [selectedTimeControl, setSelectedTimeControl] = useState<Dgt2500Option>(DEFAULT_DGT_OPTION);
+    const [manualBaseMinutes, setManualBaseMinutes] = useState<number>(5);
+    const [manualIncSeconds, setManualIncSeconds] = useState<number>(3);
+    const [isTimeDropdownOpen, setIsTimeDropdownOpen] = useState(false);
+    const timeDropdownRef = useRef<HTMLDivElement>(null);
+    const boardContainerRef = useRef<HTMLDivElement>(null);
+    const notationScrollRef = useRef<HTMLDivElement>(null);
+
+    const [whitePlayer, setWhitePlayer] = useState({username: 'Белые', rating: '1200'});
+    const [blackPlayer, setBlackPlayer] = useState({username: 'Черные', rating: '1200'});
+    const [ratingInfo, setRatingInfo] = useState<{
+        white_delta?: number;
+        black_delta?: number;
+        white_new_rating?: number;
+        black_new_rating?: number;
+    } | null>(null);
+
+    const moveStartTime = useRef<number>(Date.now());
+    const botGameSavedRef = useRef<boolean>(false);
+    const appliedPeriodsRef = useRef<{ white: Set<number>; black: Set<number> }>({
+        white: new Set(),
+        black: new Set()
+    });
+
+    const [dragState, setDragState] = useState<{
+        from: string;
+        piece: { type: string; color: string };
+        x: number;
+        y: number;
+    } | null>(null);
+
+    // Размер доски строго ограничивается доступной высотой экрана, чтобы нижний таймер всегда был виден
+    const [boardSize, setBoardSize] = useState<number>(() => {
+        const maxFit = getMaxViewportBoardSize();
+        const savedSize = localStorage.getItem('michess_board_size');
+        if (savedSize) {
+            const parsed = Number(savedSize);
+            if (!Number.isNaN(parsed) && parsed >= MIN_BOARD_SIZE) {
+                return Math.min(parsed, maxFit);
+            }
+        }
+        return maxFit;
+    });
+    const [isResizing, setIsResizing] = useState(false);
+    const resizeStartRef = useRef<{ startX: number; startY: number; startSize: number } | null>(null);
+
+    useEffect(() => {
+        const handleWindowResize = () => {
+            const maxFit = getMaxViewportBoardSize();
+            setBoardSize(prev => Math.min(prev, maxFit));
+        };
+        window.addEventListener('resize', handleWindowResize);
+        return () => window.removeEventListener('resize', handleWindowResize);
+    }, []);
+
+    const [whiteTimeMs, setWhiteTimeMs] = useState(180000);
+    const [blackTimeMs, setBlackTimeMs] = useState(180000);
+
+    const [sessionStats, setSessionStats] = useState({wins: 0, losses: 0, draws: 0});
+    const [gameOverResult, setGameOverResult] = useState<string | null>(null);
+    const [drawOfferStatus, setDrawOfferStatus] = useState<string | null>(null);
+    const [rematchStatus, setRematchStatus] = useState<'none' | 'offered_by_me' | 'offered_by_opponent' | 'declined'>('none');
+
+    const activeTheme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
+    const activePieceSet = PIECE_SETS[pieceSetKey] || PIECE_SETS.merida;
+    const selectedBotProfile = HISTORICAL_BOTS[selectedBotId];
+    const activeBotProfile = activeBot ? HISTORICAL_BOTS[activeBot] : null;
+
+    const effectiveWhiteBaseMinutes = selectedTimeControl.isManual ? manualBaseMinutes : selectedTimeControl.base;
+    const effectiveBlackBaseMinutes = selectedTimeControl.isManual
+        ? manualBaseMinutes
+        : (selectedTimeControl.blackBase ?? selectedTimeControl.base);
+    const effectiveIncSeconds = selectedTimeControl.isManual ? manualIncSeconds : selectedTimeControl.inc;
+
+    const isBoardFlipped = (myColor === 'black') !== isManualFlip;
+
+    const playAudio = useCallback((type: 'move' | 'capture' | 'start') => {
+        const file = type === 'capture' ? 'Capture.mp3' : type === 'start' ? 'GenericNotify.mp3' : 'Move.mp3';
+        const audio = new Audio(`/assets/sounds/${file}`);
+        audio.currentTime = 0;
+        audio.play().catch(() => {
+        });
+    }, []);
+
+    const updateSessionStats = useCallback((result: string) => {
+        if (!result || result === '*') return;
+        setSessionStats(prev => {
+            if (result === '1/2-1/2' || result.includes('draw')) {
+                return {...prev, draws: prev.draws + 1};
+            }
+            const whiteWon = result === '1-0' || result === 'white_won_on_time';
+            const userIsWhite = myColor === 'white';
+            if ((whiteWon && userIsWhite) || (!whiteWon && !userIsWhite)) {
+                return {...prev, wins: prev.wins + 1};
+            } else {
+                return {...prev, losses: prev.losses + 1};
+            }
+        });
+    }, [myColor]);
+
+    const saveBotGameToDatabase = useCallback(async (
+        botId: HistoricalBotId,
+        playerColor: 'white' | 'black',
+        result: string,
+        completedGame: Chess
+    ) => {
+        if (botGameSavedRef.current) return;
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const verboseMoves = completedGame.history({verbose: true});
+        if (verboseMoves.length === 0) return;
+
+        botGameSavedRef.current = true;
+        const movesUci = verboseMoves.map((m: any) => `${m.from}${m.to}${m.promotion || ''}`);
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/bots/save-game`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    bot_id: botId,
+                    player_color: playerColor,
+                    result,
+                    moves_uci: movesUci,
+                    base_time_ms: Math.round(effectiveWhiteBaseMinutes * 60 * 1000),
+                    increment_ms: Math.round(effectiveIncSeconds * 1000)
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.game_id) {
+                    setSavedBotGameId(data.game_id);
+                }
+            }
+        } catch (err) {
+            console.error('Ошибка сохранения партии с ботом в БД:', err);
+        }
+    }, [effectiveWhiteBaseMinutes, effectiveIncSeconds]);
+
+    const applyDgtClockAfterMove = useCallback((
+        moverColor: 'white' | 'black',
+        elapsedMs: number,
+        totalHalfMovesAfter: number
+    ) => {
+        const mode = selectedTimeControl.mode;
+        const baseMs = Math.round(
+            (moverColor === 'white' ? effectiveWhiteBaseMinutes : effectiveBlackBaseMinutes) * 60 * 1000
+        );
+        const completedMovesForSide = Math.ceil(totalHalfMovesAfter / 2);
+
+        let incSeconds = effectiveIncSeconds;
+        if (selectedTimeControl.incrementFromMove) {
+            if (completedMovesForSide >= selectedTimeControl.incrementFromMove) {
+                const extraInc = selectedTimeControl.periods?.find(p => p.extraIncSeconds)?.extraIncSeconds;
+                incSeconds = extraInc ?? effectiveIncSeconds;
+            } else {
+                incSeconds = 0;
+            }
+        }
+        const incMs = Math.round(incSeconds * 1000);
+
+        let periodExtraMs = 0;
+        if (selectedTimeControl.periods) {
+            selectedTimeControl.periods.forEach((period, idx) => {
+                if (
+                    period.moves &&
+                    completedMovesForSide >= period.moves &&
+                    !appliedPeriodsRef.current[moverColor].has(idx)
+                ) {
+                    appliedPeriodsRef.current[moverColor].add(idx);
+                    periodExtraMs += Math.round(period.extraMinutes * 60 * 1000);
+                }
+            });
+        }
+
+        const updateTimer = (prevMs: number) => {
+            if (mode === 'gong' || mode === 'move_timer') {
+                return baseMs;
+            }
+            if (mode === 'delay' || mode === 'us_delay') {
+                return prevMs + Math.min(elapsedMs, incMs) + periodExtraMs;
+            }
+            if (mode === 'fischer' || mode === 'byo_yomi') {
+                return prevMs + incMs + periodExtraMs;
+            }
+            return prevMs + periodExtraMs;
+        };
+
+        if (moverColor === 'white') {
+            setWhiteTimeMs(updateTimer);
+        } else {
+            setBlackTimeMs(updateTimer);
+        }
+    }, [selectedTimeControl, effectiveWhiteBaseMinutes, effectiveBlackBaseMinutes, effectiveIncSeconds]);
+
+    const handleThemeChange = (themeId: string) => {
+        setBoardThemeKey(themeId);
+        localStorage.setItem('michess_board_theme', themeId);
+    };
+
+    const handlePieceSetChange = (setId: string) => {
+        setPieceSetKey(setId);
+        localStorage.setItem('michess_piece_set', setId);
+    };
+
+    const startHistoricalBotGame = (botId: HistoricalBotId, colorPref: 'white' | 'black' | 'random' = 'random') => {
+        if (isSearching) {
+            setIsSearching(false);
+            gameSocket.send('leave_queue', {});
+        }
+
+        const chosenColor: 'white' | 'black' =
+            colorPref === 'random'
+                ? (Math.random() < 0.5 ? 'white' : 'black')
+                : colorPref;
+
+        const whiteStartMs = Math.round(effectiveWhiteBaseMinutes * 60 * 1000);
+        const blackStartMs = Math.round(effectiveBlackBaseMinutes * 60 * 1000);
+        const freshGame = new Chess();
+        const botInfo = HISTORICAL_BOTS[botId];
+
+        botGameSavedRef.current = false;
+        appliedPeriodsRef.current = {white: new Set(), black: new Set()};
+        setSavedBotGameId(null);
+        setGameId(null);
+        setSelectedBotId(botId);
+        setActiveBot(botId);
+        setLeftSectionTab('bots');
+        setMyColor(chosenColor);
+        setIsManualFlip(false);
+        setGame(freshGame);
+        setHistory([]);
+        setViewIndex(-1);
+        setSelectedSquare(null);
+        setPendingPromotion(null);
+        setPremove(null);
+        setGameOverResult(null);
+        setRatingInfo(null);
+        setDrawOfferStatus(null);
+        setRematchStatus('none');
+        setWhiteTimeMs(whiteStartMs);
+        setBlackTimeMs(blackStartMs);
+        moveStartTime.current = Date.now();
+
+        if (chosenColor === 'white') {
+            setWhitePlayer({username: currentUsername, rating: String(currentUserRating)});
+            setBlackPlayer({username: botInfo.playerLabel, rating: String(botInfo.rating)});
+        } else {
+            setWhitePlayer({username: botInfo.playerLabel, rating: String(botInfo.rating)});
+            setBlackPlayer({username: currentUsername, rating: String(currentUserRating)});
+        }
+
+        setBotComment(`«${botInfo.motto}»`);
+        playAudio('start');
+    };
+
+    useEffect(() => {
+        if (!activeBot || gameOverResult || game.isGameOver()) return;
+
+        const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
+        if (currentTurnColor === myColor) return;
+
+        let isCancelled = false;
+        let delayTimer: ReturnType<typeof setTimeout> | null = null;
+        setIsBotThinking(true);
+        const botName = HISTORICAL_BOTS[activeBot].shortName;
+        const requestStartedAt = Date.now();
+
+        (async () => {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/v1/bots/move`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        bot_id: activeBot,
+                        fen: game.fen()
+                    })
+                });
+
+                if (!response.ok || isCancelled) {
+                    if (!isCancelled) setIsBotThinking(false);
+                    return;
+                }
+                const data = await response.json();
+                if (isCancelled) return;
+
+                const targetThinkMs = typeof data.thinking_time_ms === 'number' ? data.thinking_time_ms : 600;
+                const networkElapsed = Date.now() - requestStartedAt;
+                const remainingDelay = Math.max(80, targetThinkMs - networkElapsed);
+
+                delayTimer = setTimeout(() => {
+                    if (isCancelled) return;
+
+                    const from = data.uci.slice(0, 2);
+                    const to = data.uci.slice(2, 4);
+                    const promotion = data.uci.length > 4 ? data.uci.slice(4, 5) : 'q';
+
+                    const nextGame = cloneChessInstance(game);
+                    const moveObj = nextGame.move({from, to, promotion});
+
+                    if (moveObj) {
+                        const elapsed = Date.now() - moveStartTime.current;
+                        const newHistory = nextGame.history({verbose: true});
+                        const botColor: 'white' | 'black' = myColor === 'white' ? 'black' : 'white';
+
+                        applyDgtClockAfterMove(botColor, elapsed, newHistory.length);
+                        setGame(nextGame);
+                        setHistory(newHistory);
+                        setViewIndex(-1);
+                        setBotComment(data.comment);
+                        moveStartTime.current = Date.now();
+
+                        playAudio(moveObj.san.includes('x') ? 'capture' : 'move');
+
+                        if (nextGame.isGameOver()) {
+                            let result = '1/2-1/2';
+                            if (nextGame.isCheckmate()) {
+                                result = nextGame.turn() === 'w' ? '0-1' : '1-0';
+                            }
+                            setPremove(null);
+                            setGameOverResult(result);
+                            setDrawOfferStatus(`Партия против ${botName} окончена и сохранена в архив (${result}).`);
+                            updateSessionStats(result);
+                            playAudio('start');
+                            saveBotGameToDatabase(activeBot, myColor, result, nextGame);
+                        }
+                    }
+                    setIsBotThinking(false);
+                }, remainingDelay);
+            } catch (err) {
+                console.error('Ошибка получения хода бота:', err);
+                if (!isCancelled) {
+                    setIsBotThinking(false);
+                }
+            }
+        })();
+
+        return () => {
+            isCancelled = true;
+            if (delayTimer) clearTimeout(delayTimer);
+        };
+    }, [activeBot, game, myColor, gameOverResult, playAudio, updateSessionStats, saveBotGameToDatabase, applyDgtClockAfterMove]);
+
+    useEffect(() => {
+        if (!isResizing) return;
+
+        const prevCursor = document.body.style.cursor;
+        const prevUserSelect = document.body.style.userSelect;
+        document.body.style.cursor = 'nwse-resize';
+        document.body.style.userSelect = 'none';
+
+        const handleResizeMove = (e: MouseEvent) => {
+            if (!resizeStartRef.current) return;
+            const {startX, startY, startSize} = resizeStartRef.current;
+            const deltaX = e.clientX - startX;
+            const deltaY = e.clientY - startY;
+            const delta = Math.round((deltaX + deltaY) / 2);
+
+            const dynamicMax = getMaxViewportBoardSize();
+            const nextSize = Math.min(Math.max(startSize + delta, MIN_BOARD_SIZE), dynamicMax);
+            setBoardSize(nextSize);
+            localStorage.setItem('michess_board_size', String(nextSize));
+        };
+
+        const handleResizeEnd = () => {
+            setIsResizing(false);
+            resizeStartRef.current = null;
+        };
+
+        window.addEventListener('mousemove', handleResizeMove);
+        window.addEventListener('mouseup', handleResizeEnd);
+
+        return () => {
+            document.body.style.cursor = prevCursor;
+            document.body.style.userSelect = prevUserSelect;
+            window.removeEventListener('mousemove', handleResizeMove);
+            window.removeEventListener('mouseup', handleResizeEnd);
+        };
+    }, [isResizing]);
+
+    const handleResizeMouseDown = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        resizeStartRef.current = {
+            startX: e.clientX,
+            startY: e.clientY,
+            startSize: boardSize
+        };
+        setIsResizing(true);
+    };
+
+    const handleResizeDoubleClick = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const defaultSize = getDefaultBoardSize();
+        setBoardSize(defaultSize);
+        localStorage.setItem('michess_board_size', String(defaultSize));
+    };
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setPendingPromotion(null);
+                setPremove(null);
+                setSelectedSquare(null);
+                setShowAppearanceDropdown(false);
+                return;
+            }
+            if (history.length === 0) return;
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+            if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                setViewIndex(prev => {
+                    const current = prev === -1 ? history.length - 1 : prev;
+                    return current <= 0 ? -2 : current - 1;
+                });
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                setViewIndex(prev => {
+                    if (prev === -1) return -1;
+                    if (prev === -2) return history.length > 1 ? 0 : -1;
+                    return prev + 1 >= history.length - 1 ? -1 : prev + 1;
+                });
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setViewIndex(-2);
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setViewIndex(-1);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [history.length]);
+
+    useEffect(() => {
+        if (notationScrollRef.current) {
+            const activeEl = notationScrollRef.current.querySelector('.active-move-btn');
+            if (activeEl) {
+                activeEl.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+            } else if (viewIndex === -1) {
+                notationScrollRef.current.scrollTop = notationScrollRef.current.scrollHeight;
+            }
+        }
+    }, [history.length, viewIndex]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (timeDropdownRef.current && !timeDropdownRef.current.contains(event.target as Node)) {
+                setIsTimeDropdownOpen(false);
+            }
+            if (appearanceDropdownRef.current && !appearanceDropdownRef.current.contains(event.target as Node)) {
+                setShowAppearanceDropdown(false);
+            }
+        };
+
+        if (isTimeDropdownOpen || showAppearanceDropdown) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isTimeDropdownOpen, showAppearanceDropdown]);
+
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        fetch(`${API_BASE_URL}/api/v1/profile/me`, {
+            headers: {'Authorization': `Bearer ${token}`}
+        })
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (data) {
+                    setCurrentUserId(data.id);
+                    if (data.username) setCurrentUsername(data.username);
+                    if (data.rating) setCurrentUserRating(data.rating);
+                }
+            })
+            .catch(() => {
+            });
+    }, []);
+
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        gameSocket.connect(token);
+
+        const handleMatchFound = (data: any) => {
+            setIsSearching(false);
+            setSpectatingGameId(null);
+            setCreatedInviteCode(null);
+            setShowInvitePanel(false);
+            setChatMessages([]);
+            setActiveBot(null);
+            setBotComment(null);
+            setSavedBotGameId(null);
+            botGameSavedRef.current = false;
+            appliedPeriodsRef.current = {white: new Set(), black: new Set()};
+            setGameId(data.game_id);
+            setMyColor(data.color);
+            setIsManualFlip(false);
+            setRatingInfo(null);
+            setStateVersion(data.state_version || 0);
+
+            const initialWhiteTime = data.white_time_ms !== undefined ? data.white_time_ms : (data.base_time_ms || 180000);
+            const initialBlackTime = data.black_time_ms !== undefined ? data.black_time_ms : (data.base_time_ms || 180000);
+            setWhiteTimeMs(initialWhiteTime);
+            setBlackTimeMs(initialBlackTime);
+
+            if (data.white_username) {
+                setWhitePlayer({username: data.white_username, rating: String(data.white_rating || '1200')});
+            }
+            if (data.black_username) {
+                setBlackPlayer({username: data.black_username, rating: String(data.black_rating || '1200')});
+            }
+
+            const restoredGame = new Chess();
+            if (data.pgn) {
+                try {
+                    restoredGame.loadPgn(data.pgn);
+                } catch {
+                    if (data.fen) restoredGame.load(data.fen);
+                }
+            } else if (data.fen) {
+                restoredGame.load(data.fen);
+            }
+
+            setGame(restoredGame);
+            setHistory(restoredGame.history({verbose: true}));
+            setViewIndex(-1);
+            setSelectedSquare(null);
+            setPendingPromotion(null);
+            setPremove(null);
+            setGameOverResult(null);
+            setRematchStatus('none');
+            setDrawOfferStatus('Партия началась!');
+            playAudio('start');
+            setTimeout(() => setDrawOfferStatus(null), 3000);
+        };
+
+        const handleMoveMade = (data: any) => {
+            setGame(prev => {
+                if (data.fen && prev.fen() === data.fen) {
+                    return prev;
+                }
+
+                const nextGame = cloneChessInstance(prev);
+                let applied = false;
+
+                if (data.pgn) {
+                    try {
+                        const pgnGame = new Chess();
+                        pgnGame.loadPgn(data.pgn);
+                        setHistory(pgnGame.history({verbose: true}));
+                        applied = true;
+                        const isCapture = data.san && data.san.includes('x');
+                        playAudio(isCapture ? 'capture' : 'move');
+                        return pgnGame;
+                    } catch {
+                        applied = false;
+                    }
+                }
+
+                if (!applied) {
+                    try {
+                        if (data.san) {
+                            nextGame.move(data.san);
+                        } else if (data.move) {
+                            const from = data.move.slice(0, 2);
+                            const to = data.move.slice(2, 4);
+                            const promotion = data.move.length > 4 ? data.move.slice(4, 5) : 'q';
+                            nextGame.move({from, to, promotion});
+                        }
+                    } catch {
+                        if (data.fen) nextGame.load(data.fen);
+                    }
+                }
+
+                setHistory(nextGame.history({verbose: true}));
+                const isCapture = data.san && data.san.includes('x');
+                playAudio(isCapture ? 'capture' : 'move');
+                return nextGame;
+            });
+
+            setViewIndex(-1);
+            if (data.state_version !== undefined) {
+                setStateVersion(data.state_version);
+            }
+            if (data.white_time_ms !== undefined) setWhiteTimeMs(data.white_time_ms);
+            if (data.black_time_ms !== undefined) setBlackTimeMs(data.black_time_ms);
+            moveStartTime.current = Date.now();
+
+            if (data.game_over) {
+                setPremove(null);
+                setPendingPromotion(null);
+                setGameOverResult(data.result);
+                setRatingInfo(data);
+                playAudio('start');
+                updateSessionStats(data.result);
+            }
+        };
+
+        const handleGameOver = (data: any) => {
+            setPremove(null);
+            setPendingPromotion(null);
+            setGameOverResult(prev => {
+                if (!prev) {
+                    playAudio('start');
+                    updateSessionStats(data.result);
+                }
+                return data.result;
+            });
+            setRatingInfo(data);
+            if (data.white_time_ms !== undefined) setWhiteTimeMs(data.white_time_ms);
+            if (data.black_time_ms !== undefined) setBlackTimeMs(data.black_time_ms);
+            if (data.reason === 'aborted' || data.result === '*') {
+                setDrawOfferStatus('Партия отменена на 1-м ходу (рейтинг не изменён).');
+            } else if (data.result) {
+                setDrawOfferStatus(`Партия окончена. Результат: ${data.result}`);
+            }
+        };
+
+        const handleDrawOffered = () => {
+            setDrawOfferStatus('Соперник предлагает ничью.');
+        };
+
+        const handleDrawDeclined = () => {
+            setDrawOfferStatus('Предложение ничьей отклонено.');
+            setTimeout(() => setDrawOfferStatus(null), 3000);
+        };
+
+        const handleRematchOffered = () => {
+            setRematchStatus('offered_by_opponent');
+        };
+
+        const handleRematchDeclined = () => {
+            setRematchStatus('declined');
+        };
+
+        const handleInviteCreated = (data: any) => {
+            if (data.code) {
+                setCreatedInviteCode(data.code);
+                const url = `${window.location.origin}/challenge/${data.code}`;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(url).catch(() => {
+                    });
+                }
+                setInviteCopied(true);
+                setTimeout(() => setInviteCopied(false), 3000);
+            }
+        };
+
+        const handleSpectateStarted = (data: any) => {
+            setIsSearching(false);
+            setActiveBot(null);
+            setGameId(null);
+            setSpectatingGameId(data.game_id);
+            setWhitePlayer({username: data.white_username || 'Белые', rating: String(data.white_rating || 1200)});
+            setBlackPlayer({username: data.black_username || 'Черные', rating: String(data.black_rating || 1200)});
+            setWhiteTimeMs(data.white_time_ms ?? data.base_time_ms ?? 180000);
+            setBlackTimeMs(data.black_time_ms ?? data.base_time_ms ?? 180000);
+
+            const restored = new Chess();
+            if (data.pgn) {
+                try {
+                    restored.loadPgn(data.pgn);
+                } catch {
+                    if (data.fen) restored.load(data.fen);
+                }
+            } else if (data.fen) {
+                restored.load(data.fen);
+            }
+            setGame(restored);
+            setHistory(restored.history({verbose: true}));
+            setViewIndex(-1);
+            setGameOverResult(null);
+            setChatMessages([]);
+            setDrawOfferStatus(`Режим зрителя: ${data.white_username} vs ${data.black_username}`);
+        };
+
+        const handleChatMessage = (data: any) => {
+            if (data.text && data.sender) {
+                setChatMessages(prev => [...prev.slice(-49), {
+                    sender: data.sender,
+                    text: data.text,
+                    timestamp: data.timestamp || Date.now()
+                }]);
+            }
+        };
+
+        const handleServerError = (data: any) => {
+            console.warn('Сервер отклонил действие:', data);
+            setPremove(null);
+            if (data.pgn || data.fen) {
+                const syncedGame = new Chess();
+                if (data.pgn) {
+                    try {
+                        syncedGame.loadPgn(data.pgn);
+                    } catch {
+                        if (data.fen) syncedGame.load(data.fen);
+                    }
+                } else if (data.fen) {
+                    syncedGame.load(data.fen);
+                }
+                setGame(syncedGame);
+                setHistory(syncedGame.history({verbose: true}));
+            }
+            if (data.state_version !== undefined) {
+                setStateVersion(data.state_version);
+            }
+        };
+
+        gameSocket.on('match_found', handleMatchFound);
+        gameSocket.on('move_made', handleMoveMade);
+        gameSocket.on('game_over', handleGameOver);
+        gameSocket.on('draw_offered', handleDrawOffered);
+        gameSocket.on('draw_declined', handleDrawDeclined);
+        gameSocket.on('rematch_offered', handleRematchOffered);
+        gameSocket.on('rematch_declined', handleRematchDeclined);
+        gameSocket.on('invite_created', handleInviteCreated);
+        gameSocket.on('spectate_started', handleSpectateStarted);
+        gameSocket.on('chat_message', handleChatMessage);
+        gameSocket.on('error', handleServerError);
+
+        return () => {
+            gameSocket.off('match_found', handleMatchFound);
+            gameSocket.off('move_made', handleMoveMade);
+            gameSocket.off('game_over', handleGameOver);
+            gameSocket.off('draw_offered', handleDrawOffered);
+            gameSocket.off('draw_declined', handleDrawDeclined);
+            gameSocket.off('rematch_offered', handleRematchOffered);
+            gameSocket.off('rematch_declined', handleRematchDeclined);
+            gameSocket.off('invite_created', handleInviteCreated);
+            gameSocket.off('spectate_started', handleSpectateStarted);
+            gameSocket.off('chat_message', handleChatMessage);
+            gameSocket.off('error', handleServerError);
+        };
+    }, [myColor, playAudio, updateSessionStats]);
+
+    useEffect(() => {
+        if (!inviteCode || !localStorage.getItem('token')) return;
+        const timer = setTimeout(() => {
+            gameSocket.send('accept_invite', {code: inviteCode});
+            navigate('/', {replace: true});
+        }, 450);
+        return () => clearTimeout(timer);
+    }, [inviteCode, navigate]);
+
+    useEffect(() => {
+        let interval: any;
+        if (!gameId) {
+            const fetchLobbyAndLive = async () => {
+                try {
+                    const [qRes, liveRes] = await Promise.all([
+                        fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/queue`),
+                        fetch(`${API_BASE_URL}/api/v1/profile/games/live`)
+                    ]);
+                    if (qRes.ok) {
+                        setQueuePlayers(await qRes.json());
+                    }
+                    if (liveRes.ok) {
+                        setLiveGames(await liveRes.json());
+                    }
+                } catch (e) {
+                    console.error('Failed to fetch lobby/live data', e);
+                }
+            };
+            fetchLobbyAndLive();
+            interval = setInterval(fetchLobbyAndLive, 2000);
+        } else {
+            setQueuePlayers([]);
+        }
+        return () => clearInterval(interval);
+    }, [gameId]);
+
+    const currentTurnChar = game.turn();
+
+    useEffect(() => {
+        if ((!gameId && !activeBot && !spectatingGameId) || gameOverResult) return;
+
+        let lastTick = Date.now();
+        const currentTurnColor = currentTurnChar === 'w' ? 'white' : 'black';
+        const isHourglass = !gameId && selectedTimeControl.mode === 'hourglass';
+        const isScrabble = !gameId && selectedTimeControl.mode === 'scrabble';
+
+        const interval = setInterval(() => {
+            const now = Date.now();
+            const delta = now - lastTick;
+            lastTick = now;
+
+            if (currentTurnColor === 'white') {
+                setWhiteTimeMs(prev => isScrabble ? prev - delta : Math.max(0, prev - delta));
+                if (isHourglass) {
+                    setBlackTimeMs(prev => prev + delta);
+                }
+            } else {
+                setBlackTimeMs(prev => isScrabble ? prev - delta : Math.max(0, prev - delta));
+                if (isHourglass) {
+                    setWhiteTimeMs(prev => prev + delta);
+                }
+            }
+        }, 50);
+
+        return () => clearInterval(interval);
+    }, [gameId, activeBot, spectatingGameId, gameOverResult, currentTurnChar, selectedTimeControl.mode]);
+
+    useEffect(() => {
+        if (!activeBot || gameOverResult || selectedTimeControl.mode === 'scrabble') return;
+
+        if (whiteTimeMs <= 0 || blackTimeMs <= 0) {
+            const flagWinner = whiteTimeMs <= 0 ? '0-1' : '1-0';
+            const botName = HISTORICAL_BOTS[activeBot].shortName;
+            setPremove(null);
+            setPendingPromotion(null);
+            setGameOverResult(flagWinner);
+            setDrawOfferStatus(`Флажок упал! Партия против ${botName} завершена по времени (${flagWinner}).`);
+            updateSessionStats(flagWinner);
+            playAudio('start');
+            saveBotGameToDatabase(activeBot, myColor, flagWinner, game);
+        }
+    }, [whiteTimeMs, blackTimeMs, activeBot, gameOverResult, selectedTimeControl.mode, myColor, game, playAudio, updateSessionStats, saveBotGameToDatabase]);
+
+    const executeMove = useCallback((
+        from: string,
+        to: string,
+        explicitPromotion?: PromotionPiece,
+        isPremoveMove: boolean = false
+    ): boolean => {
+        if (gameOverResult || viewIndex !== -1 || spectatingGameId) return false;
+
+        const piece = game.get(from as any);
+        const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
+
+        if (!piece || piece.color !== (game.turn() === 'w' ? 'w' : 'b') || ((gameId || activeBot || spectatingGameId) && currentTurnColor !== myColor)) {
+            setSelectedSquare(null);
+            return false;
+        }
+
+        const targetRank = to[1];
+        const isPawnPromotion =
+            piece.type === 'p' &&
+            ((piece.color === 'w' && targetRank === '8') || (piece.color === 'b' && targetRank === '1'));
+
+        if (isPawnPromotion && !explicitPromotion && !isPremoveMove) {
+            try {
+                const probeGame = cloneChessInstance(game);
+                const testMove = probeGame.move({from, to, promotion: 'q'});
+                if (testMove) {
+                    setPendingPromotion({
+                        from,
+                        to,
+                        color: piece.color as 'w' | 'b',
+                        isPremove: false
+                    });
+                    setSelectedSquare(null);
+                    setDragState(null);
+                    return true;
+                }
+            } catch {
+                setSelectedSquare(null);
+                setDragState(null);
+                return false;
+            }
+        }
+
+        const chosenPromotion: PromotionPiece = explicitPromotion || 'q';
+
+        try {
+            const nextGame = cloneChessInstance(game);
+            const move = nextGame.move({
+                from,
+                to,
+                ...(isPawnPromotion ? {promotion: chosenPromotion} : {})
+            });
+
+            if (move) {
+                const timeTaken = isPremoveMove ? 0 : Math.max(0, Date.now() - moveStartTime.current);
+                const uciMove = (move as any).uci || `${move.from}${move.to}${move.promotion || ''}`;
+                const newHistory = nextGame.history({verbose: true});
+
+                if (activeBot) {
+                    applyDgtClockAfterMove(myColor, timeTaken, newHistory.length);
+                }
+
+                setPendingPromotion(null);
+                setGame(nextGame);
+                setHistory(newHistory);
+                setViewIndex(-1);
+                playAudio(move.san.includes('x') ? 'capture' : 'move');
+                moveStartTime.current = Date.now();
+
+                if (gameId) {
+                    const commandId = typeof crypto !== 'undefined' && crypto.randomUUID
+                        ? crypto.randomUUID()
+                        : Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+
+                    gameSocket.send('make_move', {
+                        game_id: gameId,
+                        move: uciMove,
+                        command_id: commandId,
+                        state_version: stateVersion,
+                        time_taken_ms: timeTaken,
+                        window_blurred: document.hidden,
+                        is_premove: isPremoveMove
+                    });
+                } else if (activeBot && nextGame.isGameOver()) {
+                    let result = '1/2-1/2';
+                    if (nextGame.isCheckmate()) {
+                        result = nextGame.turn() === 'w' ? '0-1' : '1-0';
+                    }
+                    const botName = HISTORICAL_BOTS[activeBot].shortName;
+                    setGameOverResult(result);
+                    setDrawOfferStatus(`Партия против ${botName} окончена и сохранена в архив (${result}).`);
+                    updateSessionStats(result);
+                    playAudio('start');
+                    saveBotGameToDatabase(activeBot, myColor, result, nextGame);
+                }
+                setSelectedSquare(null);
+                setDragState(null);
+                return true;
+            }
+        } catch {
+            setSelectedSquare(null);
+        }
+        setDragState(null);
+        return false;
+    }, [game, gameId, activeBot, spectatingGameId, myColor, stateVersion, viewIndex, gameOverResult, playAudio, updateSessionStats, saveBotGameToDatabase, applyDgtClockAfterMove]);
+
+    const scheduleOrPromotePremove = useCallback((from: string, to: string, explicitPromotion?: PromotionPiece) => {
+        if (from === to) return;
+        const piece = game.get(from as any);
+        const myColorChar = myColor === 'white' ? 'w' : 'b';
+        if (!piece || piece.color !== myColorChar) {
+            setSelectedSquare(null);
+            return;
+        }
+
+        const targetRank = to[1];
+        const isPawnPromotion =
+            piece.type === 'p' &&
+            ((piece.color === 'w' && targetRank === '8') || (piece.color === 'b' && targetRank === '1'));
+
+        if (isPawnPromotion && !explicitPromotion) {
+            setPendingPromotion({
+                from,
+                to,
+                color: myColorChar,
+                isPremove: true
+            });
+            setSelectedSquare(null);
+            setDragState(null);
+            return;
+        }
+
+        setPremove({
+            from,
+            to,
+            promotion: isPawnPromotion ? (explicitPromotion || 'q') : undefined
+        });
+        setPendingPromotion(null);
+        setSelectedSquare(null);
+        setDragState(null);
+    }, [game, myColor]);
+
+    useEffect(() => {
+        if (!premove || gameOverResult || viewIndex !== -1) return;
+        if (!gameId && !activeBot) return;
+
+        const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
+        if (currentTurnColor !== myColor) return;
+
+        const currentPremove = premove;
+        setPremove(null);
+        executeMove(currentPremove.from, currentPremove.to, currentPremove.promotion || 'q', true);
+    }, [game, premove, gameId, activeBot, myColor, gameOverResult, viewIndex, executeMove]);
+
+    useEffect(() => {
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!dragState) return;
+            setDragState(prev => prev ? {...prev, x: e.clientX, y: e.clientY} : null);
+        };
+
+        const handleMouseUp = (e: MouseEvent) => {
+            if (!dragState) return;
+
+            let targetSquare: string | null = null;
+
+            const elements = document.elementsFromPoint(e.clientX, e.clientY);
+            const squareEl = Array.from(elements || []).find(el => el.hasAttribute('data-square'));
+            if (squareEl) {
+                targetSquare = squareEl.getAttribute('data-square');
+            }
+
+            if (!targetSquare && boardContainerRef.current) {
+                const rect = boardContainerRef.current.getBoundingClientRect();
+                const padding = 12;
+                const innerLeft = rect.left + padding;
+                const innerTop = rect.top + padding;
+                const innerWidth = rect.width - padding * 2;
+                const innerHeight = rect.height - padding * 2;
+
+                const x = e.clientX - innerLeft;
+                const y = e.clientY - innerTop;
+
+                if (x >= 0 && x <= innerWidth && y >= 0 && y <= innerHeight) {
+                    const fileIdx = Math.floor((x / innerWidth) * 8);
+                    const rankIdx = Math.floor((y / innerHeight) * 8);
+
+                    const files = isBoardFlipped ? [...FILES].reverse() : FILES;
+                    const ranks = isBoardFlipped
+                        ? ['1', '2', '3', '4', '5', '6', '7', '8']
+                        : ['8', '7', '6', '5', '4', '3', '2', '1'];
+
+                    if (files[fileIdx] && ranks[rankIdx]) {
+                        targetSquare = `${files[fileIdx]}${ranks[rankIdx]}`;
+                    }
+                }
+            }
+
+            if (targetSquare && targetSquare !== dragState.from) {
+                const turnColor = game.turn() === 'w' ? 'white' : 'black';
+                if ((gameId || activeBot || spectatingGameId) && turnColor !== myColor) {
+                    scheduleOrPromotePremove(dragState.from, targetSquare);
+                } else {
+                    executeMove(dragState.from, targetSquare);
+                }
+            }
+
+            setDragState(null);
+        };
+
+        if (dragState) {
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+        }
+
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [dragState, isBoardFlipped, game, gameId, activeBot, spectatingGameId, myColor, executeMove, scheduleOrPromotePremove]);
+
+    const formatTime = (ms: number) => {
+        const isOvertimeUpcount = ms < 0 && selectedTimeControl.mode === 'scrabble';
+        const totalMs = isOvertimeUpcount ? Math.abs(ms) : Math.max(0, ms);
+        const totalSecs = Math.floor(totalMs / 1000);
+        const hours = Math.floor(totalSecs / 3600);
+        const mins = Math.floor((totalSecs % 3600) / 60);
+        const secs = totalSecs % 60;
+        const prefix = isOvertimeUpcount ? '+' : '';
+
+        if (hours > 0) {
+            return `${prefix}${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        if (!isOvertimeUpcount && totalMs < 30000 && totalMs > 0) {
+            const tenths = Math.floor((totalMs % 1000) / 100);
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${tenths}`;
+        }
+
+        return `${prefix}${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const startMatchmaking = () => {
+        setGameId(null);
+        setActiveBot(null);
+        setBotComment(null);
+        setSavedBotGameId(null);
+        botGameSavedRef.current = false;
+        appliedPeriodsRef.current = {white: new Set(), black: new Set()};
+        setPendingPromotion(null);
+        setPremove(null);
+        setGameOverResult(null);
+        setRatingInfo(null);
+        setIsSearching(true);
+        setLeftSectionTab('lobby');
+        setLobbyTab('lobby');
+        setIsTimeDropdownOpen(false);
+        setDrawOfferStatus(`Вы опубликовали вызов в лобби (Опция DGT #${selectedTimeControl.optionNumber})...`);
+
+        gameSocket.send('join_queue', {
+            base_time_ms: Math.round(effectiveWhiteBaseMinutes * 60 * 1000),
+            increment_ms: Math.round(effectiveIncSeconds * 1000)
+        });
+    };
+
+    const cancelMatchmaking = () => {
+        setIsSearching(false);
+        setDrawOfferStatus(null);
+        gameSocket.send('leave_queue', {});
+    };
+
+    const acceptChallenge = (targetUserId: number) => {
+        setActiveBot(null);
+        setBotComment(null);
+        setSavedBotGameId(null);
+        setPendingPromotion(null);
+        setPremove(null);
+        botGameSavedRef.current = false;
+        gameSocket.send('accept_challenge', {target_user_id: targetUserId});
+    };
+
+    const handleCreatePrivateInvite = () => {
+        gameSocket.send('create_invite', {
+            base_time_ms: Math.round(effectiveWhiteBaseMinutes * 60 * 1000),
+            increment_ms: Math.round(effectiveIncSeconds * 1000),
+            color_pref: inviteColorPref
+        });
+    };
+
+    const handleCopyInviteLink = () => {
+        if (!createdInviteCode) return;
+        const url = `${window.location.origin}/challenge/${createdInviteCode}`;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).catch(() => {
+            });
+        }
+        setInviteCopied(true);
+        setTimeout(() => setInviteCopied(false), 2500);
+    };
+
+    const handleSpectateGame = (targetGameId: number) => {
+        gameSocket.send('spectate_game', {game_id: targetGameId});
+    };
+
+    const handleLeaveSpectate = () => {
+        if (spectatingGameId) {
+            gameSocket.send('leave_spectate', {game_id: spectatingGameId});
+        }
+        setSpectatingGameId(null);
+        handleResetSandbox();
+    };
+
+    const handleSendChatMessage = (textToSend?: string) => {
+        const activeGid = gameId || spectatingGameId;
+        const finalMsg = (textToSend ?? chatInput).trim();
+        if (!activeGid || !finalMsg) return;
+        gameSocket.send('chat_message', {
+            game_id: activeGid,
+            text: finalMsg.slice(0, 140)
+        });
+        if (!textToSend) setChatInput('');
+    };
+
+    const handleAbortGame = () => {
+        if ((!gameId && !activeBot) || gameOverResult || history.length >= 2) return;
+        setPendingPromotion(null);
+        setPremove(null);
+        if (gameId) {
+            gameSocket.send('abort_game', {game_id: gameId});
+        } else if (activeBot) {
+            setGameOverResult('*');
+            setDrawOfferStatus('Партия отменена без изменения счёта.');
+        }
+    };
+
+    const handleOfferRematch = () => {
+        if (gameId && gameOverResult) {
+            gameSocket.send('offer_rematch', {game_id: gameId});
+            setRematchStatus('offered_by_me');
+        } else if (activeBot && gameOverResult) {
+            const nextColor = myColor === 'white' ? 'black' : 'white';
+            startHistoricalBotGame(activeBot, nextColor);
+        }
+    };
+
+    const handleAcceptRematch = () => {
+        if (!gameId) return;
+        gameSocket.send('accept_rematch', {game_id: gameId});
+    };
+
+    const handleDeclineRematch = () => {
+        if (!gameId) return;
+        gameSocket.send('decline_rematch', {game_id: gameId});
+        setRematchStatus('none');
+    };
+
+    const handleResign = () => {
+        if ((!gameId && !activeBot) || gameOverResult) return;
+        if (window.confirm('Вы действительно хотите сдаться?')) {
+            setPendingPromotion(null);
+            setPremove(null);
+            if (gameId) {
+                gameSocket.send('resign', {game_id: gameId});
+            } else if (activeBot) {
+                const res = myColor === 'white' ? '0-1' : '1-0';
+                const botName = HISTORICAL_BOTS[activeBot].shortName;
+                setGameOverResult(res);
+                setDrawOfferStatus(`Вы сдались. Победа ${botName} (${res}).`);
+                updateSessionStats(res);
+                playAudio('start');
+                saveBotGameToDatabase(activeBot, myColor, res, game);
+            }
+        }
+    };
+
+    const handleOfferDraw = () => {
+        if (!gameId || gameOverResult) return;
+        gameSocket.send('offer_draw', {game_id: gameId});
+        setDrawOfferStatus('Вы предложили ничью...');
+    };
+
+    const acceptDraw = () => {
+        if (!gameId) return;
+        gameSocket.send('accept_draw', {game_id: gameId});
+        setDrawOfferStatus(null);
+    };
+
+    const declineDraw = () => {
+        if (!gameId) return;
+        gameSocket.send('decline_draw', {game_id: gameId});
+        setDrawOfferStatus(null);
+    };
+
+    const handleResetSandbox = () => {
+        if (gameId && !gameOverResult) return;
+        setGameId(null);
+        setActiveBot(null);
+        setBotComment(null);
+        setSavedBotGameId(null);
+        botGameSavedRef.current = false;
+        appliedPeriodsRef.current = {white: new Set(), black: new Set()};
+        setIsBotThinking(false);
+        setGameOverResult(null);
+        setRatingInfo(null);
+        setDrawOfferStatus(null);
+        setSelectedSquare(null);
+        setPendingPromotion(null);
+        setPremove(null);
+        setViewIndex(-1);
+        setGame(new Chess());
+        setHistory([]);
+    };
+
+    const handleUndoSandboxMove = () => {
+        if (gameId || history.length === 0 || isBotThinking || !!gameOverResult) return;
+        const nextGame = cloneChessInstance(game);
+        nextGame.undo();
+        if (activeBot && nextGame.history().length > 0) {
+            const turnAfterFirstUndo = nextGame.turn() === 'w' ? 'white' : 'black';
+            if (turnAfterFirstUndo !== myColor) {
+                nextGame.undo();
+            }
+        }
+        setGame(nextGame);
+        setHistory(nextGame.history({verbose: true}));
+        setGameOverResult(null);
+        setDrawOfferStatus(null);
+        setPendingPromotion(null);
+        setPremove(null);
+        setViewIndex(-1);
+        setSelectedSquare(null);
+    };
+
+    const handlePromotionSelect = (pieceType: PromotionPiece) => {
+        if (!pendingPromotion) return;
+        const {from, to, isPremove} = pendingPromotion;
+        setPendingPromotion(null);
+        if (isPremove) {
+            scheduleOrPromotePremove(from, to, pieceType);
+        } else {
+            executeMove(from, to, pieceType, false);
+        }
+    };
+
+    const handleSquareClick = (squareId: string) => {
+        if (viewIndex !== -1 || gameOverResult || spectatingGameId) return;
+
+        if (pendingPromotion) {
+            setPendingPromotion(null);
+            return;
+        }
+
+        const turnChar = game.turn();
+        const currentTurnColor = turnChar === 'w' ? 'white' : 'black';
+        const myColorChar = myColor === 'white' ? 'w' : 'b';
+        const isOpponentTurn = (gameId || activeBot || spectatingGameId) && currentTurnColor !== myColor;
+
+        if (isOpponentTurn) {
+            if (selectedSquare) {
+                if (selectedSquare === squareId) {
+                    setSelectedSquare(null);
+                } else {
+                    const pieceOnTarget = game.get(squareId as any);
+                    if (pieceOnTarget && pieceOnTarget.color === myColorChar) {
+                        setSelectedSquare(squareId);
+                    } else {
+                        scheduleOrPromotePremove(selectedSquare, squareId);
+                    }
+                }
+            } else {
+                const piece = game.get(squareId as any);
+                if (piece && piece.color === myColorChar) {
+                    setSelectedSquare(squareId);
+                } else if (premove) {
+                    setPremove(null);
+                }
+            }
+            return;
+        }
+
+        if (selectedSquare) {
+            if (selectedSquare === squareId) {
+                setSelectedSquare(null);
+            } else {
+                const pieceOnTarget = game.get(squareId as any);
+                if (pieceOnTarget && pieceOnTarget.color === turnChar && ((!gameId && !activeBot) || currentTurnColor === myColor)) {
+                    setSelectedSquare(squareId);
+                } else {
+                    executeMove(selectedSquare, squareId);
+                }
+            }
+        } else {
+            const piece = game.get(squareId as any);
+            if (piece && piece.color === turnChar && ((!gameId && !activeBot) || currentTurnColor === myColor)) {
+                setSelectedSquare(squareId);
+            }
+        }
+    };
+
+    const currentGame = viewIndex === -1 ? game : (() => {
+        const tg = new Chess();
+        const limit = viewIndex === -2 ? -1 : viewIndex;
+        for (let i = 0; i <= limit; i++) {
+            if (history[i]) tg.move(history[i]);
+        }
+        return tg;
+    })();
+    const boardState = currentGame.board();
+    const material = calculateMaterialBalance(boardState);
+
+    const activeMoveIndex = viewIndex === -1 ? history.length - 1 : viewIndex;
+    const lastMove = activeMoveIndex >= 0 ? history[activeMoveIndex] : null;
+
+    const legalTargetSquares = new Set<string>();
+    if (selectedSquare && viewIndex === -1 && !gameOverResult) {
+        const currentTurnColor = currentGame.turn() === 'w' ? 'white' : 'black';
+        const isMyTurnNow = (!gameId && !activeBot) || currentTurnColor === myColor;
+        if (isMyTurnNow) {
+            try {
+                const movesForSquare = currentGame.moves({square: selectedSquare as any, verbose: true});
+                movesForSquare.forEach((m: any) => legalTargetSquares.add(m.to));
+            } catch {
+                // Игнорируем некорректный квадрат
+            }
+        }
+    }
+
+    const displayedRanks = isBoardFlipped ? ['1', '2', '3', '4', '5', '6', '7', '8'] : ['8', '7', '6', '5', '4', '3', '2', '1'];
+    const displayedFiles = isBoardFlipped ? [...FILES].reverse() : FILES;
+
+    const topIsWhite = isBoardFlipped;
+    const topPlayerInfo = topIsWhite ? whitePlayer : blackPlayer;
+    const bottomPlayerInfo = topIsWhite ? blackPlayer : whitePlayer;
+    const topPlayerTime = topIsWhite ? whiteTimeMs : blackTimeMs;
+    const bottomPlayerTime = topIsWhite ? blackTimeMs : whiteTimeMs;
+    const topIdlePreviewMs = Math.round((topIsWhite ? effectiveWhiteBaseMinutes : effectiveBlackBaseMinutes) * 60 * 1000);
+    const bottomIdlePreviewMs = Math.round((!topIsWhite ? effectiveWhiteBaseMinutes : effectiveBlackBaseMinutes) * 60 * 1000);
+    const topCaptured = topIsWhite ? material.whiteCapturedSymbols : material.blackCapturedSymbols;
+    const bottomCaptured = topIsWhite ? material.blackCapturedSymbols : material.whiteCapturedSymbols;
+    const topAdvantage = topIsWhite ? material.whiteAdvantage : material.blackAdvantage;
+    const bottomAdvantage = topIsWhite ? material.blackAdvantage : material.whiteAdvantage;
+
+    const isBotOnTop = !!activeBotProfile && ((topIsWhite && myColor === 'black') || (!topIsWhite && myColor === 'white'));
+    const isBotOnBottom = !!activeBotProfile && !isBotOnTop;
+
+    const movePairs = history.reduce((acc: Array<{
+        moveNumber: number;
+        whiteSan: string;
+        whiteIdx: number;
+        blackSan?: string;
+        blackIdx?: number;
+    }>, move: any, idx: number) => {
+        if (idx % 2 === 0) {
+            acc.push({
+                moveNumber: Math.floor(idx / 2) + 1,
+                whiteSan: move.san,
+                whiteIdx: idx
+            });
+        } else {
+            acc[acc.length - 1].blackSan = move.san;
+            acc[acc.length - 1].blackIdx = idx;
+        }
+        return acc;
+    }, []);
+
+    const handleSelectMoveFromList = (targetIdx: number) => {
+        setSelectedSquare(null);
+        if (targetIdx >= history.length - 1) {
+            setViewIndex(-1);
+        } else {
+            setViewIndex(targetIdx);
+        }
+    };
+
+    const renderPieceSvg = (piece: { type: string; color: string }) => {
+        const styleProps = getHarmoniousPieceStyle(pieceSetKey, boardThemeKey, piece.color);
+        return (
+            <div className="relative w-full h-full pointer-events-none flex items-center justify-center">
+                <img
+                    src={getPieceSvgUrl(pieceSetKey, piece.color, piece.type)}
+                    className="object-contain select-none transition-transform duration-75"
+
+----------------------------------------------------------------------------------------
+END OF PART 7/11

@@ -64,12 +64,19 @@ async def get_leaderboard(
 
 @router.get("/games/live")
 async def get_live_games(db: AsyncSession = Depends(get_db)):
-    """Возвращает список активных партий, идущих прямо сейчас (для вкладки Live и режима зрителя)."""
+    """
+    Возвращает список активных партий, идущих прямо сейчас (для вкладки Live и режима зрителя).
+    Оптимизировано: загружает всех игроков одним SQL-запросом вместо N+1.
+    """
     from src.services.game_state import state_manager
     from src.services.connection_manager import manager
 
     game_ids = await state_manager.redis.smembers("active_games")
-    live_list = []
+    if not game_ids:
+        return []
+
+    active_states: list[tuple[int, dict]] = []
+    user_ids: set[int] = set()
 
     for gid_raw in game_ids:
         try:
@@ -82,9 +89,22 @@ async def get_live_games(db: AsyncSession = Depends(get_db)):
 
         white_id = int(state["white_id"])
         black_id = int(state["black_id"])
-        white_user = await db.get(User, white_id)
-        black_user = await db.get(User, black_id)
+        user_ids.add(white_id)
+        user_ids.add(black_id)
+        active_states.append((gid, state))
 
+    if not active_states:
+        return []
+
+    users_res = await db.execute(select(User).where(User.id.in_(user_ids)))
+    users_map = {u.id: u for u in users_res.scalars().all()}
+
+    live_list = []
+    for gid, state in active_states:
+        white_id = int(state["white_id"])
+        black_id = int(state["black_id"])
+        white_user = users_map.get(white_id)
+        black_user = users_map.get(black_id)
         spectators_set = getattr(manager, "game_spectators", {}).get(gid, set())
 
         live_list.append({

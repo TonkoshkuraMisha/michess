@@ -1,0 +1,1771 @@
+PROJECT SNAPSHOT — PART 2/11
+Project: michess
+Files in this part (16): src/api/profile.py, src/api/websockets.py, src/core/config.py, src/core/security.py, src/db/redis.py, src/db/seed.py, src/db/session.py, src/main.py, src/models/__init__.py, src/models/base.py, src/models/game.py, src/models/move.py, src/models/user.py, src/schemas/analysis.py, src/schemas/user.py, src/services/__init__.py
+----------------------------------------------------------------------------------------
+
+========================================================================================
+FILE: src/api/profile.py
+========================================================================================
+# --- FILE: src/api/profile.py ---
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import PlainTextResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, or_, desc, asc, func, case
+from sqlalchemy.orm import aliased
+
+from src.db.session import get_db
+from src.db.seed import ensure_champion_seeded, get_champion_meta, extract_pgn_metadata
+from src.api.deps import get_current_user
+from src.models.user import User
+from src.models.game import Game, GameStatus
+
+router = APIRouter(prefix="/profile", tags=["Profile & Games"])
+
+
+async def _resolve_user(db: AsyncSession, username: str) -> User | None:
+    """
+    Находит пользователя по точному имени или ID чемпиона.
+    Если запрашивается чемпион из раздела «Легенды шахмат», автоматически засеивает его PGN-базу при первом обращении.
+    """
+    champ_meta = get_champion_meta(username)
+    if champ_meta is not None:
+        champ_user = await ensure_champion_seeded(db, champ_meta["id"])
+        if champ_user is not None:
+            return champ_user
+
+    result = await db.execute(select(User).where(User.username == username))
+    user = result.scalars().first()
+    if user:
+        return user
+
+    result = await db.execute(select(User).where(User.username.ilike(f"%{username}%")))
+    return result.scalars().first()
+
+
+@router.get("/me")
+async def get_my_profile(current_user: User = Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "rating": current_user.rating,
+        "is_cheater": current_user.is_cheater,
+        "trust_factor": current_user.trust_factor,
+        "created_at": current_user.created_at,
+    }
+
+
+@router.get("/leaderboard")
+async def get_leaderboard(
+        limit: int = Query(50, ge=1, le=100, description="Количество игроков в топе"),
+        db: AsyncSession = Depends(get_db),
+):
+    query = select(User).where(User.is_cheater == False).order_by(desc(User.rating)).limit(limit)  # noqa: E712
+    result = await db.execute(query)
+    top_users = result.scalars().all()
+
+    return [
+        {"rank": index + 1, "username": user.username, "rating": user.rating}
+        for index, user in enumerate(top_users)
+    ]
+
+
+@router.get("/games/live")
+async def get_live_games(db: AsyncSession = Depends(get_db)):
+    """Возвращает список активных партий, идущих прямо сейчас (для вкладки Live и режима зрителя)."""
+    from src.services.game_state import state_manager
+    from src.services.connection_manager import manager
+
+    game_ids = await state_manager.redis.smembers("active_games")
+    live_list = []
+
+    for gid_raw in game_ids:
+        try:
+            gid = int(gid_raw)
+        except ValueError:
+            continue
+        state = await state_manager.get_game_state(gid)
+        if not state or state.get("status") != "in_progress":
+            continue
+
+        white_id = int(state["white_id"])
+        black_id = int(state["black_id"])
+        white_user = await db.get(User, white_id)
+        black_user = await db.get(User, black_id)
+
+        spectators_set = getattr(manager, "game_spectators", {}).get(gid, set())
+
+        live_list.append({
+            "game_id": gid,
+            "white_id": white_id,
+            "black_id": black_id,
+            "white_username": white_user.username if white_user else "Белые",
+            "white_rating": white_user.rating if white_user else 1200,
+            "black_username": black_user.username if black_user else "Черные",
+            "black_rating": black_user.rating if black_user else 1200,
+            "base_time_ms": int(state.get("base_time_ms", 180000)),
+            "increment_ms": int(state.get("increment_ms", 0)),
+            "state_version": int(state.get("state_version", 0)),
+            "spectators_count": len(spectators_set),
+        })
+
+    live_list.sort(key=lambda x: x["game_id"], reverse=True)
+    return live_list
+
+
+@router.get("/{username}")
+async def get_user_profile(username: str, db: AsyncSession = Depends(get_db)):
+    user = await _resolve_user(db, username)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {
+        "id": user.id,
+        "username": user.username,
+        "rating": user.rating,
+        "is_cheater": user.is_cheater,
+        "trust_factor": user.trust_factor,
+        "created_at": user.created_at,
+    }
+
+
+@router.get("/{username}/games")
+async def get_user_games(
+        username: str,
+        limit: int = Query(25, ge=1, le=2000),
+        offset: int = Query(0, ge=0),
+        sort: str = Query("desc"),
+        db: AsyncSession = Depends(get_db),
+):
+    user = await _resolve_user(db, username)
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User {username} not found")
+
+    WhiteUser = aliased(User)
+    BlackUser = aliased(User)
+
+    conditions = [
+        or_(Game.white_player_id == user.id, Game.black_player_id == user.id),
+        Game.status == GameStatus.COMPLETED,
+        Game.pgn.is_not(None),
+        Game.pgn != "",
+    ]
+
+    count_query = select(func.count(Game.id)).where(*conditions)
+    total_count = (await db.execute(count_query)).scalar() or 0
+
+    null_date_flag = case(
+        (or_(Game.pgn_date.is_(None), Game.pgn_date == "", Game.pgn_date.like("?%")), 1),
+        else_=0,
+    )
+
+    if sort == "asc":
+        order_clauses = [
+            asc(null_date_flag),
+            asc(Game.pgn_date),
+            asc(Game.finished_at),
+            asc(Game.id),
+        ]
+    else:
+        order_clauses = [
+            asc(null_date_flag),
+            desc(Game.pgn_date),
+            desc(Game.finished_at),
+            desc(Game.id),
+        ]
+
+    games_query = (
+        select(
+            Game.id,
+            Game.status,
+            Game.is_rated,
+            Game.result,
+            Game.pgn_date,
+            Game.site,
+            Game.eco,
+            Game.finished_at,
+            Game.pgn,
+            WhiteUser.username,
+            WhiteUser.rating,
+            BlackUser.username,
+            BlackUser.rating,
+        )
+        .join(WhiteUser, Game.white_player_id == WhiteUser.id)
+        .join(BlackUser, Game.black_player_id == BlackUser.id)
+        .where(*conditions)
+        .order_by(*order_clauses)
+        .limit(limit)
+        .offset(offset)
+    )
+
+    rows = (await db.execute(games_query)).all()
+
+    items = []
+    for (
+            game_id,
+            status_val,
+            is_rated,
+            result_val,
+            pgn_date,
+            site,
+            eco,
+            finished_at,
+            pgn_text,
+            w_name,
+            w_rating,
+            b_name,
+            b_rating,
+    ) in rows:
+        if (not pgn_date or not site or not eco or not result_val or result_val == "*") and pgn_text:
+            fallback_meta = extract_pgn_metadata(pgn_text, fallback_result=result_val or "*")
+            result_val = result_val if (result_val and result_val != "*") else fallback_meta["result"]
+            pgn_date = pgn_date or fallback_meta["pgn_date"]
+            site = site or fallback_meta["site"]
+            eco = eco or fallback_meta["eco"]
+
+        items.append({
+            "game_id": game_id,
+            "white_username": w_name,
+            "white_rating": w_rating,
+            "black_username": b_name,
+            "black_rating": b_rating,
+            "status": status_val.value if hasattr(status_val, "value") else str(status_val),
+            "is_rated": is_rated,
+            "result": result_val or "*",
+            "pgn_date": pgn_date,
+            "site": site,
+            "eco": eco,
+            "finished_at": finished_at.isoformat() if finished_at else None,
+        })
+
+    return {
+        "total": total_count,
+        "items": items,
+    }
+
+
+@router.get("/games/{game_id}/pgn")
+async def download_pgn(game_id: int, db: AsyncSession = Depends(get_db)):
+    game = await db.get(Game, game_id)
+    if not game or not game.pgn:
+        raise HTTPException(status_code=404, detail="Game or PGN not found")
+
+    headers = {"Content-Disposition": f"attachment; filename=michess_game_{game_id}.pgn"}
+    return PlainTextResponse(content=game.pgn, media_type="application/x-chess-pgn", headers=headers)
+
+
+@router.get("/matchmaking/queue")
+async def get_matchmaking_queue():
+    from src.services.matchmaker import matchmaker
+    return await matchmaker.get_queue_players()
+
+========================================================================================
+FILE: src/api/websockets.py
+========================================================================================
+# --- FILE: src/api/websockets.py ---
+
+import time
+import logging
+import uuid
+import chess
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.db.session import get_db
+from src.services.connection_manager import manager
+from src.services.game_state import state_manager
+from src.api.deps import get_current_user_ws
+from src.models.user import User
+from src.models.game import Game, GameStatus
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/ws", tags=["WebSockets"])
+
+
+def _compute_live_clocks(state: dict) -> tuple[int, int]:
+    now_ms = int(time.time() * 1000)
+    elapsed = max(0, now_ms - int(state.get("last_move_at", now_ms)))
+    turn = state.get("turn", "white")
+    w_ms = int(state.get("white_time_ms", 180000))
+    b_ms = int(state.get("black_time_ms", 180000))
+
+    white_time = max(0, w_ms - elapsed) if turn in ("white", "w") else w_ms
+    black_time = max(0, b_ms - elapsed) if turn in ("black", "b") else b_ms
+    return white_time, black_time
+
+
+async def _send_active_game_snapshot_if_exists(db: AsyncSession, user: User):
+    """Если игрок переподключился во время идущей партии, восстанавливаем ему доску и часы."""
+    game_id_str = await state_manager.redis.get(f"user:{user.id}:current_game")
+    if not game_id_str:
+        return
+
+    game_id = int(game_id_str)
+    state = await state_manager.get_game_state(game_id)
+    if not state or state.get("status") != "in_progress":
+        return
+
+    white_id = int(state["white_id"])
+    black_id = int(state["black_id"])
+    white_user = await db.get(User, white_id)
+    black_user = await db.get(User, black_id)
+    white_time, black_time = _compute_live_clocks(state)
+
+    payload = {
+        "event": "match_found",
+        "game_id": game_id,
+        "color": "white" if user.id == white_id else "black",
+        "opponent_id": black_id if user.id == white_id else white_id,
+        "white_username": white_user.username if white_user else "Белые",
+        "white_rating": white_user.rating if white_user else 1200,
+        "black_username": black_user.username if black_user else "Черные",
+        "black_rating": black_user.rating if black_user else 1200,
+        "base_time_ms": int(state.get("base_time_ms", 180000)),
+        "increment_ms": int(state.get("increment_ms", 0)),
+        "white_time_ms": white_time,
+        "black_time_ms": black_time,
+        "fen": state.get("board_fen"),
+        "pgn": state.get("pgn", ""),
+        "state_version": int(state.get("state_version", 0)),
+    }
+    await manager.send_personal_message(payload, user.id)
+
+
+async def _init_new_pvp_game_in_db_and_redis(
+        db: AsyncSession,
+        white_id: int,
+        black_id: int,
+        base_time_ms: int,
+        increment_ms: int,
+) -> dict:
+    """Создаёт новую рейтинговую PvP-партию в PostgreSQL и инициализирует её стейт в Redis."""
+    white_user = await db.get(User, white_id)
+    black_user = await db.get(User, black_id)
+
+    white_rating = white_user.rating if white_user else 1200
+    black_rating = black_user.rating if black_user else 1200
+    white_username = white_user.username if white_user else "Белые"
+    black_username = black_user.username if black_user else "Черные"
+
+    now_ms = int(time.time() * 1000)
+    initial_fen = chess.STARTING_FEN
+
+    new_game = Game(
+        white_player_id=white_id,
+        black_player_id=black_id,
+        status=GameStatus.IN_PROGRESS,
+        base_time_ms=base_time_ms,
+        increment_ms=increment_ms,
+        is_rated=True,
+        state_version=0,
+        turn="w",
+        board_fen=initial_fen,
+        white_time_ms=base_time_ms,
+        black_time_ms=base_time_ms,
+        last_move_at=now_ms,
+        white_initial_rating=white_rating,
+        black_initial_rating=black_rating,
+    )
+    db.add(new_game)
+    await db.commit()
+    await db.refresh(new_game)
+
+    new_game_id = new_game.id
+
+    if hasattr(state_manager, "init_game"):
+        await state_manager.init_game(
+            game_id=new_game_id,
+            white_id=white_id,
+            black_id=black_id,
+            base_time_ms=base_time_ms,
+            increment_ms=increment_ms,
+        )
+    else:
+        await state_manager.redis.hset(f"game:{new_game_id}:state", mapping={
+            "white_id": str(white_id),
+            "black_id": str(black_id),
+            "board_fen": initial_fen,
+            "pgn": "",
+            "turn": "white",
+            "status": "in_progress",
+            "state_version": "0",
+            "base_time_ms": str(base_time_ms),
+            "increment_ms": str(increment_ms),
+            "white_time_ms": str(base_time_ms),
+            "black_time_ms": str(base_time_ms),
+            "last_move_at": str(now_ms),
+            "draw_offer": "",
+            "rematch_offer": "",
+        })
+        await state_manager.redis.sadd("active_games", str(new_game_id))
+        await state_manager.redis.set(f"user:{white_id}:current_game", str(new_game_id))
+        await state_manager.redis.set(f"user:{black_id}:current_game", str(new_game_id))
+
+    return {
+        "game_id": new_game_id,
+        "white_id": white_id,
+        "black_id": black_id,
+        "white_username": white_username,
+        "white_rating": white_rating,
+        "black_username": black_username,
+        "black_rating": black_rating,
+        "base_time_ms": base_time_ms,
+        "increment_ms": increment_ms,
+        "fen": initial_fen,
+    }
+
+
+async def create_rematch_game(db: AsyncSession, prev_state: dict) -> dict:
+    """
+    Создаёт новую партию-реванш в БД и Redis с переменой цвета фигур (white_id <-> black_id)
+    и тем же контролем времени.
+    """
+    return await _init_new_pvp_game_in_db_and_redis(
+        db=db,
+        white_id=int(prev_state["black_id"]),
+        black_id=int(prev_state["white_id"]),
+        base_time_ms=int(prev_state.get("base_time_ms", 180000)),
+        increment_ms=int(prev_state.get("increment_ms", 0)),
+    )
+
+
+async def broadcast_to_game_participants_and_spectators(
+        game_id: int,
+        white_id: int,
+        black_id: int,
+        payload: dict,
+) -> None:
+    """Отправляет событие обоим игрокам и всем зрителям, наблюдающим за партией."""
+    await manager.send_personal_message(payload, white_id)
+    await manager.send_personal_message(payload, black_id)
+    if hasattr(manager, "broadcast_to_spectators"):
+        await manager.broadcast_to_spectators(game_id, payload)
+
+
+@router.websocket("/matchmaking")
+async def matchmaking_endpoint(
+        websocket: WebSocket,
+        current_user: User = Depends(get_current_user_ws),
+        db: AsyncSession = Depends(get_db)
+):
+    await manager.connect(websocket, current_user.id)
+    try:
+        await manager.send_personal_message(
+            {"event": "connected", "message": f"Welcome, {current_user.username}!"},
+            current_user.id
+        )
+
+        await _send_active_game_snapshot_if_exists(db, current_user)
+
+        while True:
+            data = await websocket.receive_json()
+            action = data.get("action")
+
+            try:
+                if action == "join_queue":
+                    base_time = data.get("base_time_ms", 180000)
+                    inc_time = data.get("increment_ms", 0)
+
+                    default_min = max(0, current_user.rating - 150)
+                    default_max = current_user.rating + 150
+
+                    min_rating = data.get("min_rating", default_min)
+                    max_rating = data.get("max_rating", default_max)
+
+                    from src.services.matchmaker import matchmaker
+                    await matchmaker.join_queue(
+                        current_user.id, current_user.username, current_user.rating,
+                        base_time, inc_time, min_rating, max_rating
+                    )
+                    await manager.send_personal_message({"event": "queue_joined"}, current_user.id)
+
+                elif action == "leave_queue":
+                    from src.services.matchmaker import matchmaker
+                    await matchmaker.leave_queue(current_user.id)
+                    await manager.send_personal_message({"event": "queue_left"}, current_user.id)
+
+                elif action == "accept_challenge":
+                    target_user_id = data.get("target_user_id")
+                    if target_user_id and target_user_id != current_user.id:
+                        from src.services.matchmaker import matchmaker
+                        await matchmaker.accept_challenge(target_user_id, current_user.id, manager, state_manager)
+
+                elif action == "create_invite":
+                    base_time = int(data.get("base_time_ms", 180000))
+                    inc_time = int(data.get("increment_ms", 2000))
+                    color_pref = str(data.get("color_pref", "random"))
+
+                    from src.services.matchmaker import matchmaker
+                    invite_data = await matchmaker.create_private_invite(
+                        user_id=current_user.id,
+                        username=current_user.username,
+                        rating=current_user.rating,
+                        base_time_ms=base_time,
+                        increment_ms=inc_time,
+                        color_pref=color_pref,
+                    )
+                    await manager.send_personal_message(
+                        {"event": "invite_created", **invite_data},
+                        current_user.id,
+                    )
+
+                elif action == "accept_invite":
+                    code = str(data.get("code", "")).strip()
+                    if not code:
+                        continue
+
+                    from src.services.matchmaker import matchmaker
+                    accepted = await matchmaker.accept_private_invite(code, current_user.id)
+                    if not accepted:
+                        await manager.send_personal_message(
+                            {"event": "error", "message": "Приглашение недействительно или истекло"},
+                            current_user.id,
+                        )
+                        continue
+
+                    game_info = await _init_new_pvp_game_in_db_and_redis(
+                        db=db,
+                        white_id=accepted["white_id"],
+                        black_id=accepted["black_id"],
+                        base_time_ms=accepted["base_time_ms"],
+                        increment_ms=accepted["increment_ms"],
+                    )
+
+                    common_payload = {
+                        "event": "match_found",
+                        "game_id": game_info["game_id"],
+                        "white_username": game_info["white_username"],
+                        "white_rating": game_info["white_rating"],
+                        "black_username": game_info["black_username"],
+                        "black_rating": game_info["black_rating"],
+                        "base_time_ms": game_info["base_time_ms"],
+                        "increment_ms": game_info["increment_ms"],
+                        "white_time_ms": game_info["base_time_ms"],
+                        "black_time_ms": game_info["base_time_ms"],
+                        "fen": game_info["fen"],
+                        "pgn": "",
+                        "state_version": 0,
+                    }
+
+                    await manager.send_personal_message(
+                        {**common_payload, "color": "white", "opponent_id": game_info["black_id"]},
+                        game_info["white_id"],
+                    )
+                    await manager.send_personal_message(
+                        {**common_payload, "color": "black", "opponent_id": game_info["white_id"]},
+                        game_info["black_id"],
+                    )
+
+                elif action == "spectate_game":
+                    game_id = data.get("game_id")
+                    if not game_id:
+                        continue
+
+                    gid = int(game_id)
+                    state = await state_manager.get_game_state(gid)
+                    if not state or state.get("status") != "in_progress":
+                        await manager.send_personal_message(
+                            {"event": "error", "message": "Партия уже завершена или не найдена"},
+                            current_user.id,
+                        )
+                        continue
+
+                    if hasattr(manager, "remove_user_from_all_spectating"):
+                        manager.remove_user_from_all_spectating(current_user.id)
+                    if hasattr(manager, "add_spectator"):
+                        manager.add_spectator(gid, current_user.id)
+
+                    white_id = int(state["white_id"])
+                    black_id = int(state["black_id"])
+                    white_user = await db.get(User, white_id)
+                    black_user = await db.get(User, black_id)
+                    white_time, black_time = _compute_live_clocks(state)
+
+                    await manager.send_personal_message({
+                        "event": "spectate_started",
+                        "game_id": gid,
+                        "white_username": white_user.username if white_user else "Белые",
+                        "white_rating": white_user.rating if white_user else 1200,
+                        "black_username": black_user.username if black_user else "Черные",
+                        "black_rating": black_user.rating if black_user else 1200,
+                        "base_time_ms": int(state.get("base_time_ms", 180000)),
+                        "increment_ms": int(state.get("increment_ms", 0)),
+                        "white_time_ms": white_time,
+                        "black_time_ms": black_time,
+                        "fen": state.get("board_fen"),
+                        "pgn": state.get("pgn", ""),
+                        "state_version": int(state.get("state_version", 0)),
+                    }, current_user.id)
+
+                elif action == "leave_spectate":
+                    game_id = data.get("game_id")
+                    if game_id and hasattr(manager, "remove_spectator"):
+                        manager.remove_spectator(int(game_id), current_user.id)
+                    elif hasattr(manager, "remove_user_from_all_spectating"):
+                        manager.remove_user_from_all_spectating(current_user.id)
+                    await manager.send_personal_message({"event": "spectate_left"}, current_user.id)
+
+                elif action == "chat_message":
+                    game_id = data.get("game_id")
+                    raw_text = str(data.get("text", "")).strip()
+                    if not game_id or not raw_text:
+                        continue
+
+                    clean_text = raw_text[:140]
+                    gid = int(game_id)
+                    game_state = await state_manager.get_game_state(gid)
+                    if not game_state:
+                        continue
+
+                    white_id = int(game_state["white_id"])
+                    black_id = int(game_state["black_id"])
+
+                    chat_payload = {
+                        "event": "chat_message",
+                        "game_id": gid,
+                        "sender_id": current_user.id,
+                        "sender": current_user.username,
+                        "text": clean_text,
+                        "timestamp": int(time.time() * 1000),
+                    }
+                    await broadcast_to_game_participants_and_spectators(gid, white_id, black_id, chat_payload)
+
+                elif action == "abort_game":
+                    game_id = data.get("game_id")
+                    if not game_id:
+                        continue
+
+                    gid = int(game_id)
+                    game_state = await state_manager.get_game_state(gid)
+                    if not game_state or game_state.get("status") != "in_progress":
+                        continue
+
+                    white_id, black_id = int(game_state["white_id"]), int(game_state["black_id"])
+                    if current_user.id not in (white_id, black_id):
+                        continue
+
+                    abort_res = await state_manager.abort_game(db, gid)
+                    if abort_res.get("status") == "error":
+                        await manager.send_personal_message(
+                            {"event": "error", "message": abort_res.get("reason", "Cannot abort game")},
+                            current_user.id
+                        )
+                        continue
+
+                    game_over_payload = {
+                        "event": "game_over",
+                        "game_id": gid,
+                        "reason": "aborted",
+                        "result": "*",
+                        "white_delta": 0,
+                        "black_delta": 0,
+                        "white_new_rating": abort_res["white_new_rating"],
+                        "black_new_rating": abort_res["black_new_rating"],
+                    }
+                    await broadcast_to_game_participants_and_spectators(gid, white_id, black_id, game_over_payload)
+
+                elif action == "resign":
+                    game_id = data.get("game_id")
+                    if not game_id:
+                        continue
+
+                    gid = int(game_id)
+                    game_state = await state_manager.get_game_state(gid)
+                    if not game_state or game_state["status"] != "in_progress":
+                        continue
+
+                    white_id, black_id = int(game_state["white_id"]), int(game_state["black_id"])
+                    if current_user.id not in (white_id, black_id):
+                        continue
+
+                    game_result = "0-1" if current_user.id == white_id else "1-0"
+                    rating_updates = await state_manager.finish_game(
+                        db, gid, game_result, termination="resignation"
+                    )
+
+                    game_over_payload = {
+                        "event": "game_over",
+                        "game_id": gid,
+                        "reason": "resignation",
+                        "winner_id": black_id if current_user.id == white_id else white_id,
+                        "result": game_result
+                    }
+                    game_over_payload.update(rating_updates)
+
+                    await broadcast_to_game_participants_and_spectators(gid, white_id, black_id, game_over_payload)
+
+                elif action == "offer_draw":
+                    game_id = data.get("game_id")
+                    if not game_id:
+                        continue
+                    game_state = await state_manager.get_game_state(game_id)
+                    if not game_state or game_state["status"] != "in_progress":
+                        continue
+
+                    white_id, black_id = int(game_state["white_id"]), int(game_state["black_id"])
+                    if current_user.id not in (white_id, black_id):
+                        continue
+
+                    opponent_id = black_id if current_user.id == white_id else white_id
+                    await state_manager.update_game_state(game_id, {"draw_offer": str(current_user.id)})
+                    await manager.send_personal_message(
+                        {"event": "draw_offered", "game_id": game_id, "player_id": current_user.id},
+                        opponent_id
+                    )
+
+                elif action == "accept_draw":
+                    game_id = data.get("game_id")
+                    if not game_id:
+                        continue
+
+                    gid = int(game_id)
+                    game_state = await state_manager.get_game_state(gid)
+                    if not game_state or game_state["status"] != "in_progress":
+                        continue
+
+                    white_id, black_id = int(game_state["white_id"]), int(game_state["black_id"])
+                    if current_user.id not in (white_id, black_id):
+                        continue
+
+                    draw_offer = game_state.get("draw_offer")
+                    if not draw_offer or int(draw_offer) == current_user.id:
+                        await manager.send_personal_message(
+                            {"event": "error", "message": "No active draw offer to accept"},
+                            current_user.id
+                        )
+                        continue
+
+                    game_result = "1/2-1/2"
+                    rating_updates = await state_manager.finish_game(
+                        db, gid, game_result, termination="agreement"
+                    )
+
+                    game_over_payload = {
+                        "event": "game_over",
+                        "game_id": gid,
+                        "reason": "draw_agreement",
+                        "result": game_result
+                    }
+                    game_over_payload.update(rating_updates)
+
+                    await broadcast_to_game_participants_and_spectators(gid, white_id, black_id, game_over_payload)
+
+                elif action == "decline_draw":
+                    game_id = data.get("game_id")
+                    if not game_id:
+                        continue
+
+                    game_state = await state_manager.get_game_state(game_id)
+                    if not game_state or game_state["status"] != "in_progress":
+                        continue
+
+                    white_id, black_id = int(game_state["white_id"]), int(game_state["black_id"])
+                    if current_user.id not in (white_id, black_id):
+                        continue
+
+                    opponent_id = black_id if current_user.id == white_id else white_id
+                    await state_manager.update_game_state(game_id, {"draw_offer": ""})
+                    await manager.send_personal_message(
+                        {"event": "draw_declined", "game_id": game_id, "player_id": current_user.id},
+                        opponent_id
+                    )
+
+                elif action == "offer_rematch":
+                    game_id = data.get("game_id")
+                    if not game_id:
+                        continue
+
+                    game_state = await state_manager.get_game_state(game_id)
+                    if not game_state or game_state.get("status") == "in_progress":
+                        continue
+
+                    white_id, black_id = int(game_state["white_id"]), int(game_state["black_id"])
+                    if current_user.id not in (white_id, black_id):
+                        continue
+
+                    opponent_id = black_id if current_user.id == white_id else white_id
+                    await state_manager.update_game_state(game_id, {"rematch_offer": str(current_user.id)})
+                    await manager.send_personal_message(
+                        {"event": "rematch_offered", "game_id": game_id, "player_id": current_user.id},
+                        opponent_id
+                    )
+
+                elif action == "accept_rematch":
+                    game_id = data.get("game_id")
+                    if not game_id:
+                        continue
+
+                    game_state = await state_manager.get_game_state(game_id)
+                    if not game_state or game_state.get("status") == "in_progress":
+                        continue
+
+                    white_id, black_id = int(game_state["white_id"]), int(game_state["black_id"])
+                    if current_user.id not in (white_id, black_id):
+                        continue
+
+                    rematch_offer = game_state.get("rematch_offer")
+                    if not rematch_offer or int(rematch_offer) == current_user.id:
+                        await manager.send_personal_message(
+                            {"event": "error", "message": "No active rematch offer to accept"},
+                            current_user.id
+                        )
+                        continue
+
+                    await state_manager.update_game_state(game_id, {"rematch_offer": ""})
+                    rematch_info = await create_rematch_game(db, game_state)
+
+                    common_payload = {
+                        "event": "match_found",
+                        "game_id": rematch_info["game_id"],
+                        "white_username": rematch_info["white_username"],
+                        "white_rating": rematch_info["white_rating"],
+                        "black_username": rematch_info["black_username"],
+                        "black_rating": rematch_info["black_rating"],
+                        "base_time_ms": rematch_info["base_time_ms"],
+                        "increment_ms": rematch_info["increment_ms"],
+                        "white_time_ms": rematch_info["base_time_ms"],
+                        "black_time_ms": rematch_info["base_time_ms"],
+                        "fen": rematch_info["fen"],
+                        "pgn": "",
+                        "state_version": 0,
+                    }
+
+                    await manager.send_personal_message(
+                        {**common_payload, "color": "white", "opponent_id": rematch_info["black_id"]},
+                        rematch_info["white_id"],
+                    )
+                    await manager.send_personal_message(
+                        {**common_payload, "color": "black", "opponent_id": rematch_info["white_id"]},
+                        rematch_info["black_id"],
+                    )
+
+                elif action == "decline_rematch":
+                    game_id = data.get("game_id")
+                    if not game_id:
+                        continue
+
+                    game_state = await state_manager.get_game_state(game_id)
+                    if not game_state:
+                        continue
+
+                    white_id, black_id = int(game_state["white_id"]), int(game_state["black_id"])
+                    if current_user.id not in (white_id, black_id):
+                        continue
+
+                    opponent_id = black_id if current_user.id == white_id else white_id
+                    await state_manager.update_game_state(game_id, {"rematch_offer": ""})
+                    await manager.send_personal_message(
+                        {"event": "rematch_declined", "game_id": game_id, "player_id": current_user.id},
+                        opponent_id
+                    )
+
+                elif action == "make_move":
+                    game_id = data.get("game_id")
+                    move_str = data.get("move")
+                    command_id = data.get("command_id") or uuid.uuid4().hex
+                    expected_version = data.get("state_version")
+
+                    if not game_id or not move_str:
+                        continue
+
+                    gid = int(game_id)
+                    res = await state_manager.process_atomic_move(
+                        game_id=gid,
+                        user_id=current_user.id,
+                        command_id=command_id,
+                        move_str=move_str,
+                        expected_version=expected_version
+                    )
+
+                    if res["status"] == "ignored":
+                        continue
+
+                    if res["status"] == "error":
+                        await manager.send_personal_message(
+                            {
+                                "event": "error",
+                                "message": res["reason"],
+                                "fen": res.get("fen"),
+                                "pgn": res.get("pgn"),
+                                "state_version": res.get("state_version")
+                            },
+                            current_user.id
+                        )
+                        continue
+
+                    white_id, black_id = res["white_id"], res["black_id"]
+                    move_data = res.get("move_data")
+
+                    if move_data:
+                        server_elapsed_ms = res.get("elapsed_ms", 0)
+                        client_time_ms = data.get("time_taken_ms", server_elapsed_ms)
+                        network_lag_ms = max(0, server_elapsed_ms - int(client_time_ms))
+
+                        await state_manager.save_move_telemetry(gid, {
+                            "player_id": current_user.id,
+                            "move_number": move_data.get("fullmove_number", 1),
+                            "notation": move_data.get("uci", move_str),
+                            "san": move_data.get("san", move_str),
+                            "fen_after": move_data.get("new_fen", ""),
+                            "time_taken_ms": server_elapsed_ms,
+                            "window_blurred_before_move": bool(data.get("window_blurred", False)),
+                            "is_premove": bool(data.get("is_premove", False)),
+                            "network_lag_ms": network_lag_ms
+                        })
+
+                        await state_manager.sync_authoritative_state_to_db(db, gid, res)
+
+                    if res["status"] == "game_over":
+                        game_result = res["result"]
+                        termination = res["termination"]
+                        final_pgn = move_data["new_pgn"] if move_data else None
+
+                        rating_updates = await state_manager.finish_game(
+                            db, gid, game_result, termination=termination, final_pgn=final_pgn
+                        )
+
+                        if move_data:
+                            move_payload = {
+                                "event": "move_made",
+                                "game_id": gid,
+                                "player_id": current_user.id,
+                                "command_id": command_id,
+                                "state_version": res.get("state_version", 0),
+                                "move": move_data["uci"],
+                                "san": move_data["san"],
+                                "fen": move_data["new_fen"],
+                                "pgn": move_data["new_pgn"],
+                                "white_time_ms": res["white_time_ms"],
+                                "black_time_ms": res["black_time_ms"],
+                                "game_over": True,
+                                "result": game_result
+                            }
+                            move_payload.update(rating_updates)
+                            await broadcast_to_game_participants_and_spectators(gid, white_id, black_id, move_payload)
+
+                        game_over_payload = {
+                            "event": "game_over",
+                            "game_id": gid,
+                            "reason": termination,
+                            "result": game_result,
+                            "white_time_ms": res["white_time_ms"],
+                            "black_time_ms": res["black_time_ms"]
+                        }
+                        game_over_payload.update(rating_updates)
+
+                        await broadcast_to_game_participants_and_spectators(gid, white_id, black_id, game_over_payload)
+
+                    elif res["status"] == "success":
+                        move_payload = {
+                            "event": "move_made",
+                            "game_id": gid,
+                            "player_id": current_user.id,
+                            "command_id": command_id,
+                            "state_version": res["state_version"],
+                            "move": move_data["uci"],
+                            "san": move_data["san"],
+                            "fen": move_data["new_fen"],
+                            "pgn": move_data["new_pgn"],
+                            "white_time_ms": res["white_time_ms"],
+                            "black_time_ms": res["black_time_ms"],
+                            "game_over": False
+                        }
+
+                        await broadcast_to_game_participants_and_spectators(gid, white_id, black_id, move_payload)
+
+            except Exception as action_err:
+                logger.error("Error processing WS action '%s' for user %s: %s", action, current_user.id, action_err)
+                await manager.send_personal_message(
+                    {"event": "error", "message": "Internal server error processing action"},
+                    current_user.id
+                )
+
+    except WebSocketDisconnect:
+        if hasattr(manager, "remove_user_from_all_spectating"):
+            manager.remove_user_from_all_spectating(current_user.id)
+        await manager.disconnect(current_user.id)
+    except Exception as e:
+        logger.error("WebSocket unexpected error for user %s: %s", current_user.id, e)
+        if hasattr(manager, "remove_user_from_all_spectating"):
+            manager.remove_user_from_all_spectating(current_user.id)
+        await manager.disconnect(current_user.id)
+
+========================================================================================
+FILE: src/core/config.py
+========================================================================================
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+class Settings(BaseSettings):
+    """
+    Application core settings configuration.
+    Uses Pydantic for environment variable validation.
+    """
+    PROJECT_NAME: str = "Michess API"
+    VERSION: str = "0.1.0"
+    API_V1_STR: str = "/api/v1"
+
+    # PostgreSQL
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
+    POSTGRES_SERVER: str
+    POSTGRES_PORT: int
+    POSTGRES_DB: str
+
+    # Redis
+    REDIS_HOST: str = "127.0.0.1"
+    REDIS_PORT: int = 6379
+
+    # Security (JWT)
+    SECRET_KEY: str
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+
+    # Anti-Cheat Thresholds (скрываем точные цифры от лишних глаз)
+    AC_BLUR_RATE_HIGH: float = 0.8
+    AC_BLUR_RATE_MED: float = 0.5
+    AC_MIN_MOVE_TIME_MS: int = 3000
+    AC_MAX_MOVE_TIME_MS: int = 8000
+    AC_STOCKFISH_PATH: str = "bin/stockfish-windows-x86-64-avx2.exe"  # Путь к бинарнику
+    AC_MAX_CENTIPAWN_LOSS: int = 15  # Если средняя потеря меньше 15 - играет как киборг
+
+    @property
+    def async_database_url(self) -> str:
+        """Assembles the database connection string for asyncpg."""
+        return f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True
+    )
+
+settings = Settings()
+
+========================================================================================
+FILE: src/core/security.py
+========================================================================================
+from datetime import datetime, timedelta, timezone
+import jwt
+from passlib.context import CryptContext
+from src.core.config import settings
+
+# Password hashing context using bcrypt algorithm
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verifies a plain password against a hashed counterpart."""
+    return pwd_context.verify(plain_password, hashed_password)
+
+
+def get_password_hash(password: str) -> str:
+    """Generates a secure bcrypt hash for a plain password."""
+    return pwd_context.hash(password)
+
+
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
+    """Generates a JSON Web Token (JWT) for user authentication."""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return encoded_jwt
+
+========================================================================================
+FILE: src/db/redis.py
+========================================================================================
+import redis.asyncio as redis
+from src.core.config import settings
+
+# Глобальный асинхронный клиент Redis.
+redis_client = redis.Redis(
+    host=settings.REDIS_HOST,
+    port=settings.REDIS_PORT,
+    decode_responses=True
+)
+
+========================================================================================
+FILE: src/db/seed.py
+========================================================================================
+# --- FILE: src/db/seed.py ---
+
+import asyncio
+import logging
+import re
+from pathlib import Path
+from sqlalchemy import select, or_, func
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.db.session import AsyncSessionLocal
+from src.models.game import Game, GameStatus
+from src.models.user import User
+
+logger = logging.getLogger(__name__)
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+PGNS_DIRS = [
+    PROJECT_ROOT / "src" / "db" / "data" / "pgns",
+    PROJECT_ROOT / "data" / "pgns",
+]
+
+CHAMPIONS_META: dict[str, dict] = {
+    "steinitz": {"id": "Steinitz", "canonical": "Steinitz, Wilhelm", "rating": 2650, "exclude": ()},
+    "lasker": {"id": "Lasker", "canonical": "Lasker, Emanuel", "rating": 2720,
+               "exclude": ("edward", "berthold", "alfred")},
+    "rubinstein": {"id": "Rubinstein", "canonical": "Rubinstein, Akiba", "rating": 2690, "exclude": ("simon",)},
+    "capablanca": {"id": "Capablanca", "canonical": "Capablanca, Jose Raul", "rating": 2725, "exclude": ()},
+    "alekhine": {"id": "Alekhine", "canonical": "Alekhine, Alexander", "rating": 2690, "exclude": ("alexei",)},
+    "euwe": {"id": "Euwe", "canonical": "Euwe, Max", "rating": 2650, "exclude": ()},
+    "keres": {"id": "Keres", "canonical": "Keres, Paul", "rating": 2670, "exclude": ()},
+    "botvinnik": {"id": "Botvinnik", "canonical": "Botvinnik, Mikhail", "rating": 2720, "exclude": ()},
+    "geller": {"id": "Geller", "canonical": "Geller, Efim", "rating": 2665, "exclude": ("jakov",)},
+    "korchnoi": {"id": "Korchnoi", "canonical": "Korchnoi, Viktor", "rating": 2695, "exclude": ()},
+    "smyslov": {"id": "Smyslov", "canonical": "Smyslov, Vasily", "rating": 2690, "exclude": ()},
+    "tal": {"id": "Tal", "canonical": "Tal, Mikhail", "rating": 2705, "exclude": ()},
+    "petrosian": {"id": "Petrosian", "canonical": "Petrosian, Tigran", "rating": 2690,
+                  "exclude": ("tigran l", "arshak", "manuel")},
+    "spassky": {"id": "Spassky", "canonical": "Spassky, Boris", "rating": 2690, "exclude": ()},
+    "fischer": {"id": "Fischer", "canonical": "Fischer, Robert James", "rating": 2785, "exclude": ("julie",)},
+    "karpov": {"id": "Karpov", "canonical": "Karpov, Anatoly", "rating": 2780, "exclude": ()},
+    "kasparov": {"id": "Kasparov", "canonical": "Kasparov, Garry", "rating": 2851, "exclude": ("sergey",)},
+    "kramnik": {"id": "Kramnik", "canonical": "Kramnik, Vladimir", "rating": 2817, "exclude": ()},
+    "anand": {"id": "Anand", "canonical": "Anand, Viswanathan", "rating": 2817, "exclude": ()},
+    "carlsen": {"id": "Carlsen", "canonical": "Carlsen, Magnus", "rating": 2882, "exclude": ("henrik",)},
+    "ding": {"id": "Ding", "canonical": "Ding, Liren", "rating": 2816, "exclude": ("yilun",)},
+}
+
+WHITE_TAG_RE = re.compile(r'\[White\s+"([^"]+)"\]')
+BLACK_TAG_RE = re.compile(r'\[Black\s+"([^"]+)"\]')
+RESULT_TAG_RE = re.compile(r'\[Result\s+"([^"]+)"\]')
+DATE_TAG_RE = re.compile(r'\[(?:Event)?Date\s+"([^"]+)"\]')
+SITE_TAG_RE = re.compile(r'\[Site\s+"([^"]+)"\]')
+ECO_TAG_RE = re.compile(r'\[ECO\s+"([^"]+)"\]')
+
+_SEED_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def extract_pgn_metadata(raw_pgn: str, fallback_result: str = "*") -> dict[str, str | None]:
+    """Извлекает result, pgn_date, site и eco из PGN-текста один раз перед сохранением в БД."""
+    result_str = fallback_result or "*"
+    pgn_date: str | None = None
+    site: str | None = None
+    eco: str | None = None
+
+    if not raw_pgn:
+        return {"result": result_str, "pgn_date": None, "site": None, "eco": None}
+
+    res_match = RESULT_TAG_RE.search(raw_pgn)
+    if res_match:
+        result_str = res_match.group(1).strip()[:10]
+    elif result_str == "*":
+        tail_match = re.search(r"(1-0|0-1|1/2-1/2)\s*$", raw_pgn.strip())
+        if tail_match:
+            result_str = tail_match.group(1)
+
+    for d_match in DATE_TAG_RE.finditer(raw_pgn):
+        val = d_match.group(1).strip()
+        if val and not val.startswith("?"):
+            pgn_date = val[:20]
+            break
+
+    s_match = SITE_TAG_RE.search(raw_pgn)
+    if s_match and s_match.group(1).strip() != "?":
+        site = s_match.group(1).strip()[:100]
+
+    e_match = ECO_TAG_RE.search(raw_pgn)
+    if e_match and e_match.group(1).strip() != "?":
+        eco = e_match.group(1).strip()[:10]
+
+    return {
+        "result": result_str,
+        "pgn_date": pgn_date,
+        "site": site,
+        "eco": eco,
+    }
+
+
+def get_champion_meta(username_or_id: str) -> dict | None:
+    key = (username_or_id or "").strip().lower()
+    if key in CHAMPIONS_META:
+        return CHAMPIONS_META[key]
+    for meta in CHAMPIONS_META.values():
+        if meta["canonical"].lower() == key:
+            return meta
+    return None
+
+
+def find_champion_pgn_file(champ_id: str) -> Path | None:
+    target_lower = f"{champ_id.lower()}.pgn"
+    for folder in PGNS_DIRS:
+        if not folder.exists():
+            continue
+        for pgn_path in folder.glob("*.pgn"):
+            if pgn_path.name.lower() == target_lower:
+                return pgn_path
+    return None
+
+
+def _is_target_champion_name(raw_name: str, champ_key: str, meta: dict) -> bool:
+    low = raw_name.lower()
+    if any(ex in low for ex in meta.get("exclude", ())):
+        return False
+    return champ_key in low
+
+
+def _split_pgn_games(content: str) -> list[str]:
+    cleaned = content.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not cleaned:
+        return []
+    chunks = re.split(r'(?m)^(?=\[Event\s+")', cleaned)
+    return [c.strip() for c in chunks if c.strip() and "[White " in c]
+
+
+async def ensure_champion_seeded(db: AsyncSession, username_or_id: str) -> User | None:
+    meta = get_champion_meta(username_or_id)
+    if not meta:
+        return None
+
+    champ_key = meta["id"].lower()
+    lock = _SEED_LOCKS.setdefault(champ_key, asyncio.Lock())
+
+    async with lock:
+        canonical_name = meta["canonical"]
+        res = await db.execute(
+            select(User).where(
+                or_(User.username == canonical_name, User.username == meta["id"])
+            )
+        )
+        champ_user = res.scalars().first()
+
+        if champ_user is not None:
+            count_q = select(func.count(Game.id)).where(
+                or_(Game.white_player_id == champ_user.id, Game.black_player_id == champ_user.id),
+                Game.status == GameStatus.COMPLETED,
+            )
+            games_count = (await db.execute(count_q)).scalar() or 0
+            if games_count > 0:
+                return champ_user
+
+        all_users_res = await db.execute(select(User))
+        users_by_name: dict[str, User] = {u.username: u for u in all_users_res.scalars().all()}
+
+        if champ_user is None:
+            champ_user = User(
+                username=canonical_name,
+                hashed_password="!historical_archive_no_login!",
+                rating=meta["rating"],
+                is_cheater=False,
+                trust_factor=100,
+            )
+            db.add(champ_user)
+            await db.flush()
+            users_by_name[canonical_name] = champ_user
+
+        pgn_file = find_champion_pgn_file(meta["id"])
+        if not pgn_file or not pgn_file.exists():
+            await db.commit()
+            return champ_user
+
+        content = pgn_file.read_text(encoding="utf-8", errors="ignore")
+        raw_games = _split_pgn_games(content)
+        if not raw_games:
+            await db.commit()
+            return champ_user
+
+        new_opponents: dict[str, User] = {}
+        parsed_entries: list[tuple[str, str, dict, str]] = []
+
+        for raw_pgn in raw_games:
+            w_match = WHITE_TAG_RE.search(raw_pgn)
+            b_match = BLACK_TAG_RE.search(raw_pgn)
+            if not w_match or not b_match:
+                continue
+
+            w_raw = w_match.group(1).strip()[:50]
+            b_raw = b_match.group(1).strip()[:50]
+            meta_fields = extract_pgn_metadata(raw_pgn)
+
+            w_name = canonical_name if _is_target_champion_name(w_raw, champ_key, meta) else w_raw
+            b_name = canonical_name if _is_target_champion_name(b_raw, champ_key, meta) else b_raw
+
+            if w_name != canonical_name and b_name != canonical_name:
+                continue
+
+            for opp_name in (w_name, b_name):
+                if opp_name not in users_by_name and opp_name not in new_opponents:
+                    opp_meta = get_champion_meta(opp_name)
+                    opp_rating = opp_meta["rating"] if opp_meta else 2450
+                    new_opponents[opp_name] = User(
+                        username=opp_name,
+                        hashed_password="!historical_archive_no_login!",
+                        rating=opp_rating,
+                        is_cheater=False,
+                        trust_factor=100,
+                    )
+
+            parsed_entries.append((w_name, b_name, meta_fields, raw_pgn))
+
+        if new_opponents:
+            db.add_all(new_opponents.values())
+            await db.flush()
+            users_by_name.update(new_opponents)
+
+        existing_pgns_res = await db.execute(
+            select(Game.pgn).where(
+                or_(Game.white_player_id == champ_user.id, Game.black_player_id == champ_user.id)
+            )
+        )
+        existing_pgns = {row[0] for row in existing_pgns_res.all() if row[0]}
+
+        games_to_insert: list[Game] = []
+        for w_name, b_name, meta_fields, raw_pgn in parsed_entries:
+            if raw_pgn in existing_pgns:
+                continue
+            existing_pgns.add(raw_pgn)
+
+            w_user = users_by_name[w_name]
+            b_user = users_by_name[b_name]
+            games_to_insert.append(
+                Game(
+                    white_player_id=w_user.id,
+                    black_player_id=b_user.id,
+                    pgn=raw_pgn,
+                    status=GameStatus.COMPLETED,
+                    result=meta_fields["result"],
+                    pgn_date=meta_fields["pgn_date"],
+                    site=meta_fields["site"],
+                    eco=meta_fields["eco"],
+                    is_rated=True,
+                )
+            )
+
+        if games_to_insert:
+            db.add_all(games_to_insert)
+
+        await db.commit()
+        logger.info(
+            "Импортировано %d партий для чемпиона %s из %s",
+            len(games_to_insert),
+            canonical_name,
+            pgn_file.name,
+        )
+        return champ_user
+
+
+async def seed_all_champions() -> None:
+    print(f"=== Импорт архивов чемпионов мира в БД (Корень: {PROJECT_ROOT}) ===")
+    async with AsyncSessionLocal() as db:
+        for _, meta in CHAMPIONS_META.items():
+            user = await ensure_champion_seeded(db, meta["id"])
+            if user:
+                count_q = select(func.count(Game.id)).where(
+                    or_(Game.white_player_id == user.id, Game.black_player_id == user.id),
+                    Game.status == GameStatus.COMPLETED,
+                )
+                total = (await db.execute(count_q)).scalar() or 0
+                print(f"[+] {meta['id']:12s} ({meta['canonical']:24s}): в базе {total:4d} партий")
+    print("=== Импорт всех чемпионов успешно завершён! ===")
+
+
+if __name__ == "__main__":
+    asyncio.run(seed_all_champions())
+
+========================================================================================
+FILE: src/db/session.py
+========================================================================================
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
+from src.core.config import settings
+
+# Create asynchronous engine using configuration URL
+engine = create_async_engine(
+    settings.async_database_url,
+    echo=False,
+    future=True,
+)
+
+# Create asynchronous session factory
+AsyncSessionLocal = async_sessionmaker(
+    bind=engine,
+    autoflush=False,
+    autocommit=False,
+    expire_on_commit=False,
+)
+
+async def get_db():
+    """
+    Dependency generator that yields an asynchronous database session.
+    Ensures proper cleanup after request completion.
+    """
+    async with AsyncSessionLocal() as session:
+        yield session
+
+========================================================================================
+FILE: src/main.py
+========================================================================================
+import logging
+import asyncio
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
+
+from src.core.config import settings
+from src.api.auth import router as auth_router
+from src.api.websockets import router as ws_router
+from src.api import bots
+from src.api.profile import router as profile_router  # <-- Импорт роутера профиля
+from src.db.redis import redis_client
+from src.services.game_state import state_manager
+from src.services.connection_manager import manager
+from src.api.analysis import router as analysis_router
+
+# Configure structured logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Lifespan context manager for handling startup and shutdown events gracefully.
+    This is the recommended place to initialize DB connection pools, Redis instances, and background tasks.
+    """
+    logger.info("Starting up %s...", settings.PROJECT_NAME)
+
+    # Запускаем фоновый мониторинг таймаутов партий
+    timeout_task = asyncio.create_task(state_manager.check_timeouts_loop(manager))
+
+    yield
+
+    # Корректно завершаем фоновые таски и пул соединений Redis
+    timeout_task.cancel()
+    try:
+        await asyncio.gather(timeout_task, return_exceptions=True)
+    except asyncio.CancelledError:
+        pass
+
+    logger.info("Shutting down %s...", settings.PROJECT_NAME)
+    await redis_client.aclose()
+
+
+def create_app() -> FastAPI:
+    """
+    Application factory pattern.
+    Provides better isolation for testing and modularity.
+    """
+    app = FastAPI(
+        title=settings.PROJECT_NAME,
+        version=settings.VERSION,
+        lifespan=lifespan,
+        docs_url="/docs",
+        openapi_url=f"{settings.API_V1_STR}/openapi.json"
+    )
+
+    # Configure CORS middleware for frontend integration
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],  # Must be restricted to specific domains in production
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    # Include API routers
+    app.include_router(auth_router, prefix=settings.API_V1_STR)
+    app.include_router(ws_router, prefix=settings.API_V1_STR)
+    app.include_router(profile_router, prefix=settings.API_V1_STR)
+    app.include_router(analysis_router, prefix=settings.API_V1_STR)
+    app.include_router(bots.router, prefix="/api/v1/bots", tags=["bots"])
+
+    return app
+
+
+# Initialize the application
+app = create_app()
+
+
+@app.get("/health")
+async def health_check() -> dict:
+    """
+    Liveness probe endpoint.
+    Used by load balancers and orchestrators (e.g., Docker, Kubernetes) to verify server health.
+    """
+    return {"status": "healthy", "version": settings.VERSION}
+
+
+@app.websocket("/ws/ping")
+async def websocket_test_endpoint(websocket: WebSocket):
+    """
+    Test WebSocket endpoint for validating client connections.
+    """
+    await websocket.accept()
+    logger.info("WebSocket client connected.")
+    try:
+        await websocket.send_json({"event": "connected", "message": "Connection established"})
+
+        while True:
+            data = await websocket.receive_text()
+            await websocket.send_json({"event": "echo", "received": data})
+
+    except WebSocketDisconnect:
+        logger.info("WebSocket client disconnected normally.")
+    except Exception as e:
+        logger.error("WebSocket connection error: %s", e)
+
+
+if __name__ == "__main__":
+    # Run the server via Uvicorn for local development
+    uvicorn.run("src.main:app", host="127.0.0.1", port=8000, reload=True)
+
+========================================================================================
+FILE: src/models/__init__.py
+========================================================================================
+from src.models.base import Base
+from src.models.user import User
+from src.models.game import Game
+from src.models.move import Move
+
+# This ensures all models are loaded when Alembic imports this file.
+
+========================================================================================
+FILE: src/models/base.py
+========================================================================================
+from sqlalchemy.orm import DeclarativeBase
+
+class Base(DeclarativeBase):
+    """
+    Base class for all SQLAlchemy declarative models.
+    """
+    pass
+
+========================================================================================
+FILE: src/models/game.py
+========================================================================================
+# --- FILE: src/models/game.py ---
+
+import enum
+from datetime import datetime
+from sqlalchemy import String, Integer, BigInteger, Boolean, DateTime, ForeignKey, Enum, Text, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from src.models.base import Base
+
+
+class GameStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+    ABORTED = "ABORTED"
+
+
+class Game(Base):
+    __tablename__ = "games"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    white_player_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    black_player_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+
+    pgn: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[GameStatus] = mapped_column(
+        Enum(GameStatus, name="gamestatus"),
+        default=GameStatus.PENDING,
+        nullable=False,
+        index=True,
+    )
+
+    base_time_ms: Mapped[int] = mapped_column(Integer, default=180000, server_default="180000", nullable=False)
+    increment_ms: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    is_rated: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+
+    state_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    turn: Mapped[str] = mapped_column(String(1), default="w", server_default="w", nullable=False)
+    board_fen: Mapped[str] = mapped_column(
+        String,
+        default="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        server_default="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        nullable=False,
+    )
+
+    white_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    black_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_move_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+    result: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    termination: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    winner_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+
+    white_initial_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    black_initial_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    white_rating_delta: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    black_rating_delta: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    pgn_date: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    site: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    eco: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
+
+    analysis_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+
+    white_player = relationship("User", foreign_keys=[white_player_id])
+    black_player = relationship("User", foreign_keys=[black_player_id])
+    moves = relationship("Move", cascade="all, delete-orphan")
+
+========================================================================================
+FILE: src/models/move.py
+========================================================================================
+# --- FILE: src/models/move.py ---
+
+from sqlalchemy import String, Integer, Boolean, ForeignKey, DateTime
+from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql import func
+from datetime import datetime
+
+from src.models.base import Base
+
+
+class Move(Base):
+    """
+    Authoritative Move Journal & Anti-Cheat Telemetry.
+    """
+    __tablename__ = "moves"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    game_id: Mapped[int] = mapped_column(ForeignKey("games.id"), index=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+
+    # Порядковый номер полухода (ply)
+    move_number: Mapped[int] = mapped_column(Integer)
+
+    # --- CHESS DATA ---
+    notation: Mapped[str] = mapped_column(String(10))  # Универсальный UCI (e.g., e2e4)
+    san: Mapped[str | None] = mapped_column(String(10), nullable=True)  # Для красивого отображения (e.g., Nf3)
+    fen_after: Mapped[str | None] = mapped_column(String, nullable=True)  # Состояние доски ПОСЛЕ хода
+    # ------------------
+
+    # --- TELEMETRY ---
+    time_taken_ms: Mapped[int] = mapped_column(Integer)  # Client-side estimation
+    window_blurred_before_move: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_premove: Mapped[bool] = mapped_column(Boolean, default=False)
+    network_lag_ms: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Server-side timestamp
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+========================================================================================
+FILE: src/models/user.py
+========================================================================================
+from sqlalchemy import String, Boolean, Integer, DateTime
+from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql import func
+from datetime import datetime
+
+from src.models.base import Base
+
+
+class User(Base):
+    """
+    Core user model for authentication and matchmaking.
+    """
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    username: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String)
+
+    # ELO or Glicko-2 rating
+    rating: Mapped[int] = mapped_column(Integer, default=1200)
+
+    # Anti-cheat specific fields
+    is_cheater: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    trust_factor: Mapped[int] = mapped_column(Integer, default=100)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+========================================================================================
+FILE: src/schemas/analysis.py
+========================================================================================
+# --- FILE: src/schemas/analysis.py ---
+
+from pydantic import BaseModel, Field
+
+
+class PositionAnalysisRequest(BaseModel):
+    moves: list[str] = Field(default_factory=list, description="Список ходов в формате SAN или UCI")
+
+
+class MoveEvaluationItem(BaseModel):
+    ply: int
+    move_number: int
+    color: str
+    san: str
+    uci: str
+    eval_cp: int
+    eval_display: str
+    mate: int | None = None
+    best_move_uci: str | None = None
+    cp_loss: int
+    classification: str
+    symbol: str
+
+
+class SideSummaryStats(BaseModel):
+    accuracy: float
+    best: int
+    good: int
+    inaccuracies: int
+    mistakes: int
+    blunders: int
+    avg_cp_loss: float
+
+
+class FullGameAnalysisResponse(BaseModel):
+    game_id: int
+    engine: str
+    white: SideSummaryStats
+    black: SideSummaryStats
+    moves: list[MoveEvaluationItem]
+
+========================================================================================
+FILE: src/schemas/user.py
+========================================================================================
+from pydantic import BaseModel, Field, ConfigDict
+from datetime import datetime
+
+class UserCreate(BaseModel):
+    """Schema for incoming user registration data."""
+    username: str = Field(..., min_length=3, max_length=50, description="Unique username")
+    password: str = Field(..., min_length=8, description="Strong password")
+
+class UserResponse(BaseModel):
+    """Schema for outgoing user data (password excluded)."""
+    id: int
+    username: str
+    rating: int
+    is_cheater: bool
+    trust_factor: int
+    created_at: datetime
+
+    # This config allows Pydantic to read data directly from SQLAlchemy models
+    model_config = ConfigDict(from_attributes=True)
+
+========================================================================================
+FILE: src/services/__init__.py
+========================================================================================
+
+
+----------------------------------------------------------------------------------------
+END OF PART 2/11

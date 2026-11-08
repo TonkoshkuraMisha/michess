@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 MIN_MOVES_FOR_ANALYSIS = 5
 OPENING_MOVE_CUTOFF = 8
 CHEATER_TRUST_THRESHOLD = 30
+_EVALUATED_GAME_IDS: set[int] = set()
 
 
 def calculate_blur_ratio(moves: list[Move]) -> float:
@@ -94,10 +95,11 @@ def compute_telemetry_penalty(moves: list[Move]) -> dict:
     }
 
 
-async def evaluate_game_telemetry(db: AsyncSession, game_id: int) -> dict[int, dict]:
+async def evaluate_game_telemetry(db: AsyncSession, game_id: int, force: bool = False) -> dict[int, dict]:
     """
     Анализирует телеметрию завершённой партии для обоих игроков,
     снижает user.trust_factor при аномалиях и выставляет is_cheater = True при trust_factor < 30.
+    Идемпотентна по game_id (повторный вызов для той же партии не штрафует игрока дважды).
     """
     game = await db.get(Game, game_id)
     if not game:
@@ -110,6 +112,9 @@ async def evaluate_game_telemetry(db: AsyncSession, game_id: int) -> dict[int, d
     if not all_moves:
         return {}
 
+    already_evaluated = (game_id in _EVALUATED_GAME_IDS) and not force
+    _EVALUATED_GAME_IDS.add(game_id)
+
     moves_by_player: dict[int, list[Move]] = {
         game.white_player_id: [],
         game.black_player_id: [],
@@ -121,7 +126,7 @@ async def evaluate_game_telemetry(db: AsyncSession, game_id: int) -> dict[int, d
 
     for player_id, player_moves in moves_by_player.items():
         metrics = compute_telemetry_penalty(player_moves)
-        penalty = metrics["penalty"]
+        penalty = 0 if already_evaluated else metrics["penalty"]
 
         user = await db.get(User, player_id)
         if not user:

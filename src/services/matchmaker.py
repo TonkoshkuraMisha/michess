@@ -1,20 +1,24 @@
 # --- FILE: src/services/matchmaker.py ---
 
 import asyncio
+import json
 import logging
 import random
-from src.db.redis import redis_client
+import secrets
+import time
+import chess
+
 from src.db.session import AsyncSessionLocal
 from src.models.game import Game, GameStatus
 from src.models.user import User
 
 logger = logging.getLogger(__name__)
 
+_INVITE_REDEEM_LOCK = asyncio.Lock()
+
 
 class Matchmaker:
-    """
-    Менеджер открытых вызовов и очереди лобби.
-    """
+    """Менеджер открытых вызовов, приватных инвайтов и очереди лобби."""
 
     def __init__(self):
         pass
@@ -26,6 +30,7 @@ class Matchmaker:
 
     async def join_queue(self, user_id: int, username: str, rating: int, base_time_ms: int, increment_ms: int,
                          min_rating: int, max_rating: int):
+        await self.leave_queue(user_id)
         queue_name = f"queue:{base_time_ms}:{increment_ms}"
 
         await self.redis.sadd("active_queues", queue_name)
@@ -38,7 +43,7 @@ class Matchmaker:
             "min_rating": min_rating,
             "max_rating": max_rating,
             "base_time_ms": base_time_ms,
-            "increment_ms": increment_ms
+            "increment_ms": increment_ms,
         }
         await self.redis.hset(f"queue:prefs:{user_id}", mapping=prefs)
         logger.info("User %s (%s) published challenge in lobby", user_id, username)
@@ -52,20 +57,26 @@ class Matchmaker:
             logger.info("User %s left lobby queue", user_id)
 
     async def get_queue_players(self) -> list[dict]:
-        """Возвращает список всех активных вызовов в лобби."""
+        """Возвращает список всех активных вызовов в лобби без дубликатов."""
         players = []
+        seen_users: set[int] = set()
         active_queues = await self.redis.smembers("active_queues")
+
         for queue_name in active_queues:
             user_ids = await self.redis.zrange(queue_name, 0, -1)
             for u_id in user_ids:
+                uid_int = int(u_id)
+                if uid_int in seen_users:
+                    continue
                 prefs = await self.redis.hgetall(f"queue:prefs:{u_id}")
                 if prefs:
+                    seen_users.add(uid_int)
                     players.append({
                         "user_id": int(prefs.get("user_id", u_id)),
                         "username": prefs.get("username", "Игрок"),
                         "rating": int(prefs.get("rating", 1200)),
                         "base_time_ms": int(prefs.get("base_time_ms", 180000)),
-                        "increment_ms": int(prefs.get("increment_ms", 0))
+                        "increment_ms": int(prefs.get("increment_ms", 0)),
                     })
         return players
 
@@ -83,9 +94,10 @@ class Matchmaker:
         inc_time = int(p1_prefs["increment_ms"])
         queue_name = f"queue:{base_time}:{inc_time}"
 
-        # Убираем челенджера и акцептора из всех очередей
         await self.redis.zrem(queue_name, str(challenger_id), str(acceptor_id))
         await self.redis.delete(f"queue:prefs:{challenger_id}", f"queue:prefs:{acceptor_id}")
+
+        now_ms = int(time.time() * 1000)
 
         async with AsyncSessionLocal() as db:
             u1_user = await db.get(User, challenger_id)
@@ -109,7 +121,16 @@ class Matchmaker:
                 black_player_id=black_user.id,
                 base_time_ms=base_time,
                 increment_ms=inc_time,
-                status=GameStatus.IN_PROGRESS
+                status=GameStatus.IN_PROGRESS,
+                is_rated=True,
+                state_version=0,
+                turn="w",
+                board_fen=chess.STARTING_FEN,
+                white_time_ms=base_time,
+                black_time_ms=base_time,
+                last_move_at=now_ms,
+                white_initial_rating=white_user.rating,
+                black_initial_rating=black_user.rating,
             )
             db.add(new_game)
             await db.commit()
@@ -117,8 +138,11 @@ class Matchmaker:
             game_id = new_game.id
 
         await state_manager.initialize_game(
-            game_id=game_id, white_id=white_user.id, black_id=black_user.id, base_time_ms=base_time,
-            increment_ms=inc_time
+            game_id=game_id,
+            white_id=white_user.id,
+            black_id=black_user.id,
+            base_time_ms=base_time,
+            increment_ms=inc_time,
         )
 
         match_payload = {
@@ -128,8 +152,13 @@ class Matchmaker:
             "white_rating": white_user.rating,
             "black_username": black_user.username,
             "black_rating": black_user.rating,
-            "base_time_ms": base_time,  # Добавлено для фронтенда
-            "increment_ms": inc_time  # Добавлено для фронтенда
+            "base_time_ms": base_time,
+            "increment_ms": inc_time,
+            "white_time_ms": base_time,
+            "black_time_ms": base_time,
+            "fen": chess.STARTING_FEN,
+            "pgn": "",
+            "state_version": 0,
         }
 
         w_payload = {**match_payload, "color": "white", "opponent_id": black_user.id}
@@ -138,24 +167,24 @@ class Matchmaker:
         await connection_manager.send_personal_message(w_payload, white_user.id)
         await connection_manager.send_personal_message(b_payload, black_user.id)
 
-        logger.info("Challenge accepted! Match created: White(%s) vs Black(%s) in game %s", white_user.id,
-                    black_user.id, game_id)
+        logger.info(
+            "Challenge accepted! Match created: White(%s) vs Black(%s) in game %s",
+            white_user.id,
+            black_user.id,
+            game_id,
+        )
         return game_id
 
-
-
     async def create_private_invite(
-        self,
-        user_id: int,
-        username: str = "Игрок",
-        rating: int = 1200,
-        base_time_ms: int = 180000,
-        increment_ms: int = 2000,
-        color_pref: str = "random",
+            self,
+            user_id: int,
+            username: str = "Игрок",
+            rating: int = 1200,
+            base_time_ms: int = 180000,
+            increment_ms: int = 2000,
+            color_pref: str = "random",
     ) -> dict:
         """Создаёт приватный инвайт в Redis по ключу invite:{code} с TTL 15 минут (900 сек)."""
-        import json
-        import secrets
         from src.services.game_state import state_manager
 
         redis_conn = getattr(self, "redis", None) or state_manager.redis
@@ -179,7 +208,6 @@ class Matchmaker:
         return payload
 
     async def get_private_invite(self, code: str) -> dict | None:
-        import json
         from src.services.game_state import state_manager
 
         redis_conn = getattr(self, "redis", None) or state_manager.redis
@@ -189,23 +217,28 @@ class Matchmaker:
         return json.loads(raw)
 
     async def accept_private_invite(self, code: str, acceptor_id: int) -> dict | None:
-        """Погашает приватный инвайт (одноразово) и возвращает параметры создателя и определившиеся цвета."""
-        import json
-        import random
+        """
+        Атомарно погашает приватный инвайт (одноразово) и возвращает параметры создателя и определившиеся цвета.
+        Защищён от конкурентного двойного погашения.
+        """
         from src.services.game_state import state_manager
 
         redis_conn = getattr(self, "redis", None) or state_manager.redis
         key = f"invite:{code}"
-        raw = await redis_conn.get(key)
-        if not raw:
-            return None
 
-        invite = json.loads(raw)
-        creator_id = int(invite["creator_id"])
-        if creator_id == int(acceptor_id):
-            return None
+        async with _INVITE_REDEEM_LOCK:
+            raw = await redis_conn.get(key)
+            if not raw:
+                return None
 
-        await redis_conn.delete(key)
+            invite = json.loads(raw)
+            creator_id = int(invite["creator_id"])
+            if creator_id == int(acceptor_id):
+                return None
+
+            deleted = await redis_conn.delete(key)
+            if not deleted:
+                return None
 
         color_pref = invite.get("color_pref", "random")
         if color_pref == "white":

@@ -4,37 +4,10 @@ import {useState, useEffect, useRef, useCallback} from 'react';
 import {useNavigate, useParams} from 'react-router-dom';
 import {Chess} from 'chess.js';
 import {
-    ChevronFirst,
-    ChevronLeft,
-    ChevronRight,
-    ChevronLast,
-    Users,
-    Sword,
-    Flag,
-    Handshake,
-    Loader2,
-    Play,
-    RotateCcw,
-    Clock,
-    ChevronDown,
-    ChevronUp,
-    Palette,
-    RefreshCw,
-    ListOrdered,
-    Undo2,
-    Bot,
-    MessageSquareQuote,
-    Download,
-    Eye,
-    Sliders,
-    Zap,
-    X,
-    Link2,
-    Copy,
-    Check,
-    Send,
-    MessageSquare,
-    Radio
+    ChevronFirst, ChevronLeft, ChevronRight, ChevronLast, Users, Sword, Flag,
+    Handshake, Loader2, Play, RotateCcw, Clock, ChevronDown, ChevronUp, Palette,
+    RefreshCw, ListOrdered, Undo2, Bot, MessageSquareQuote, Download, Eye,
+    Sliders, Zap, X, Link2, Copy, Check, Send, MessageSquare, Radio
 } from 'lucide-react';
 import {gameSocket} from '../services/gameSocket';
 import {API_BASE_URL} from '../config/api';
@@ -53,7 +26,7 @@ import type {HistoricalBotId, HistoricalBotProfile} from '../config/champions';
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
 
-export const MIN_BOARD_SIZE = 340;
+export const MIN_BOARD_SIZE = 280;
 export const MAX_BOARD_SIZE = 860;
 
 export type PromotionPiece = 'q' | 'n' | 'r' | 'b';
@@ -67,13 +40,12 @@ const PROMOTION_OPTIONS: Array<{ type: PromotionPiece; label: string }> = [
 
 export function getMaxViewportBoardSize(): number {
     if (typeof window === 'undefined') return 560;
-    // 220px резервируется под шапку сайта (56px), отступы main (20px) и две плашки игроков с таймерами (144px)
     const availableHeight = window.innerHeight - 220;
     const availableWidth = window.innerWidth >= 1280
         ? window.innerWidth - 850
-        : window.innerWidth - 28;
+        : window.innerWidth - 24;
     const limit = Math.min(availableHeight, availableWidth, MAX_BOARD_SIZE);
-    return Math.max(MIN_BOARD_SIZE, limit);
+    return Math.max(MIN_BOARD_SIZE, Math.min(limit, window.innerWidth - 24));
 }
 
 export function getDefaultBoardSize(): number {
@@ -490,14 +462,7 @@ export const TIME_CONTROLS: Dgt2500Group[] = [
 const ALL_DGT_OPTIONS: Dgt2500Option[] = TIME_CONTROLS.flatMap(g => g.options);
 const DEFAULT_DGT_OPTION: Dgt2500Option = ALL_DGT_OPTIONS.find(o => o.optionNumber === '09') || ALL_DGT_OPTIONS[0];
 
-const PIECE_VALUES: Record<string, number> = {
-    p: 1,
-    n: 3,
-    b: 3,
-    r: 5,
-    q: 9,
-    k: 0
-};
+const PIECE_VALUES: Record<string, number> = {p: 1, n: 3, b: 3, r: 5, q: 9, k: 0};
 
 function calculateMaterialBalance(boardState: any[][]) {
     const startCounts: Record<string, number> = {p: 8, n: 2, b: 2, r: 2, q: 1};
@@ -557,7 +522,6 @@ export default function Chessboard() {
     const navigate = useNavigate();
     const {inviteCode} = useParams<{ inviteCode?: string }>();
 
-    // Режимы левой панели и выпадающие меню
     const [leftSectionTab, setLeftSectionTab] = useState<'bots' | 'lobby'>('bots');
     const [lobbyTab, setLobbyTab] = useState<'lobby' | 'live'>('lobby');
     const [showInvitePanel, setShowInvitePanel] = useState(false);
@@ -640,7 +604,6 @@ export default function Chessboard() {
         y: number;
     } | null>(null);
 
-    // Размер доски строго ограничивается доступной высотой экрана, чтобы нижний таймер всегда был виден
     const [boardSize, setBoardSize] = useState<number>(() => {
         const maxFit = getMaxViewportBoardSize();
         const savedSize = localStorage.getItem('michess_board_size');
@@ -965,7 +928,7 @@ export default function Chessboard() {
         document.body.style.cursor = 'nwse-resize';
         document.body.style.userSelect = 'none';
 
-        const handleResizeMove = (e: MouseEvent) => {
+        const handleResizeMove = (e: PointerEvent) => {
             if (!resizeStartRef.current) return;
             const {startX, startY, startSize} = resizeStartRef.current;
             const deltaX = e.clientX - startX;
@@ -983,18 +946,20 @@ export default function Chessboard() {
             resizeStartRef.current = null;
         };
 
-        window.addEventListener('mousemove', handleResizeMove);
-        window.addEventListener('mouseup', handleResizeEnd);
+        window.addEventListener('pointermove', handleResizeMove);
+        window.addEventListener('pointerup', handleResizeEnd);
+        window.addEventListener('pointercancel', handleResizeEnd);
 
         return () => {
             document.body.style.cursor = prevCursor;
             document.body.style.userSelect = prevUserSelect;
-            window.removeEventListener('mousemove', handleResizeMove);
-            window.removeEventListener('mouseup', handleResizeEnd);
+            window.removeEventListener('pointermove', handleResizeMove);
+            window.removeEventListener('pointerup', handleResizeEnd);
+            window.removeEventListener('pointercancel', handleResizeEnd);
         };
     }, [isResizing]);
 
-    const handleResizeMouseDown = (e: React.MouseEvent) => {
+    const handleResizePointerDown = (e: React.PointerEvent) => {
         e.preventDefault();
         e.stopPropagation();
         resizeStartRef.current = {
@@ -1593,12 +1558,12 @@ export default function Chessboard() {
     }, [game, premove, gameId, activeBot, myColor, gameOverResult, viewIndex, executeMove]);
 
     useEffect(() => {
-        const handleMouseMove = (e: MouseEvent) => {
+        const handlePointerMove = (e: PointerEvent) => {
             if (!dragState) return;
             setDragState(prev => prev ? {...prev, x: e.clientX, y: e.clientY} : null);
         };
 
-        const handleMouseUp = (e: MouseEvent) => {
+        const handlePointerUp = (e: PointerEvent) => {
             if (!dragState) return;
 
             let targetSquare: string | null = null;
@@ -1611,7 +1576,7 @@ export default function Chessboard() {
 
             if (!targetSquare && boardContainerRef.current) {
                 const rect = boardContainerRef.current.getBoundingClientRect();
-                const padding = 12;
+                const padding = 10;
                 const innerLeft = rect.left + padding;
                 const innerTop = rect.top + padding;
                 const innerWidth = rect.width - padding * 2;
@@ -1648,13 +1613,15 @@ export default function Chessboard() {
         };
 
         if (dragState) {
-            window.addEventListener('mousemove', handleMouseMove);
-            window.addEventListener('mouseup', handleMouseUp);
+            window.addEventListener('pointermove', handlePointerMove);
+            window.addEventListener('pointerup', handlePointerUp);
+            window.addEventListener('pointercancel', handlePointerUp);
         }
 
         return () => {
-            window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', handleMouseUp);
+            window.removeEventListener('pointermove', handlePointerMove);
+            window.removeEventListener('pointerup', handlePointerUp);
+            window.removeEventListener('pointercancel', handlePointerUp);
         };
     }, [dragState, isBoardFlipped, game, gameId, activeBot, spectatingGameId, myColor, executeMove, scheduleOrPromotePremove]);
 
@@ -2039,6 +2006,7 @@ export default function Chessboard() {
     }
 
     const filteredQueue = queuePlayers.filter(p => p.user_id !== currentUserId);
+    const responsiveBoardPx = typeof window !== 'undefined' ? Math.min(boardSize, window.innerWidth - 24) : boardSize;
 
     return (
         <div
@@ -2050,8 +2018,8 @@ export default function Chessboard() {
                     style={{
                         left: `${dragState.x}px`,
                         top: `${dragState.y}px`,
-                        width: `${boardSize / 8}px`,
-                        height: `${boardSize / 8}px`,
+                        width: `${responsiveBoardPx / 8}px`,
+                        height: `${responsiveBoardPx / 8}px`,
                         transform: 'translate(-50%, -50%)'
                     }}
                 >
@@ -2059,11 +2027,10 @@ export default function Chessboard() {
                 </div>
             )}
 
-            {/* ЛЕВАЯ КОЛОНКА: ИГРОВОЙ ЦЕНТР (ЧАСЫ DGT2500, ИСТОРИЧЕСКИЕ БОТЫ С ФОТО, ЛОББИ И LIVE) */}
+            {/* ЛЕВАЯ КОЛОНКА: ИГРОВОЙ ЦЕНТР (ЧАСЫ DGT2500, ИСТОРИЧЕСКИЕ БОТЫ, ЛОББИ И LIVE) */}
             <div
                 className="w-full xl:w-[400px] 2xl:w-[440px] xl:h-full bg-acacia p-3 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-2 text-boxwood-light order-2 xl:order-1 shrink-0 xl:overflow-hidden">
 
-                {/* Шапка левой панели: Статистика сессии */}
                 <div className="border-b border-acacia-light pb-2 flex justify-between items-center shrink-0">
                     <div className="flex items-center gap-2">
                         <div className="p-1.5 bg-acacia-dark rounded-md border border-amber-600/30 text-amber-400">
@@ -2092,7 +2059,6 @@ export default function Chessboard() {
                     </button>
                 </div>
 
-                {/* Блок часов FIDE DGT2500 и быстрого вызова */}
                 <div
                     className="bg-acacia-dark p-2.5 rounded-md border border-amber-900/50 flex flex-col gap-2 shadow-inner shrink-0">
                     <div className="flex items-center justify-between">
@@ -2241,7 +2207,6 @@ export default function Chessboard() {
                         </div>
                     )}
 
-                    {/* Выдвижная плашка вызова друга по ссылке */}
                     {showInvitePanel && !gameId && (
                         <div className="p-2 rounded bg-black/45 border border-amber-700/40 flex flex-col gap-1.5">
                             <div className="flex items-center justify-between text-xs font-bold text-amber-200">
@@ -2293,7 +2258,6 @@ export default function Chessboard() {
                     )}
                 </div>
 
-                {/* Переключатель секций: Исторические персоны (Боты) | Лобби & Live */}
                 <div
                     className="grid grid-cols-2 gap-1.5 p-1 bg-acacia-dark rounded-md border border-amber-900/50 shrink-0">
                     <button
@@ -2325,11 +2289,9 @@ export default function Chessboard() {
                     </button>
                 </div>
 
-                {/* СОДЕРЖИМОЕ ВЫБРАННОЙ ВКЛАДКИ ЛЕВОЙ ПАНЕЛИ (flex-1 min-h-0) */}
                 {leftSectionTab === 'bots' ? (
                     <div
                         className="flex-1 min-h-0 bg-acacia-dark p-2.5 rounded-md border border-amber-700/40 flex flex-col justify-between gap-2 shadow-inner overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
-                        {/* Сетка портретов всех 7 исторических мастеров */}
                         <div className="grid grid-cols-2 gap-1.5">
                             {HISTORICAL_BOTS_LIST.map((botItem) => {
                                 const isSelected = selectedBotId === botItem.id;
@@ -2370,7 +2332,6 @@ export default function Chessboard() {
                             })}
                         </div>
 
-                        {/* Детальная карточка выбранной исторической личности */}
                         <div className="p-2.5 rounded-md bg-black/40 border border-amber-800/50 flex flex-col gap-2">
                             <div className="flex items-center gap-2.5">
                                 <img
@@ -2437,7 +2398,6 @@ export default function Chessboard() {
                             </div>
                         </div>
 
-                        {/* Комментарий исторического бота по ходу партии */}
                         {activeBotProfile && (
                             <div
                                 className="p-2 rounded-md bg-black/55 border border-amber-600/40 text-xs text-amber-100">
@@ -2459,7 +2419,6 @@ export default function Chessboard() {
                         )}
                     </div>
                 ) : (
-                    /* Вкладка Вызовы в лобби и Live-партии */
                     <div
                         className="flex-1 min-h-0 bg-acacia-dark rounded-md border border-amber-900/50 p-2.5 flex flex-col shadow-inner">
                         <div
@@ -2569,9 +2528,8 @@ export default function Chessboard() {
             {/* ЦЕНТРАЛЬНАЯ КОЛОНКА: ИГРОКИ И ШАХМАТНАЯ ДОСКА */}
             <div className="xl:h-full flex flex-col items-center justify-center gap-2 order-1 xl:order-2 shrink-0">
 
-                {/* Верхний игрок */}
                 <div
-                    style={{width: `${boardSize}px`}}
+                    style={{width: `${responsiveBoardPx}px`}}
                     className={`bg-acacia-dark px-3 py-1.5 rounded-lg shadow-heavy border-2 border-amber-900/50 flex justify-between items-center text-boxwood-light shrink-0 ${isResizing ? 'transition-none' : 'transition-colors'}`}
                 >
                     <div className="flex items-center gap-2.5 min-w-0">
@@ -2626,12 +2584,12 @@ export default function Chessboard() {
                         </div>
                     </div>
                     <div
-                        className="bg-[#1A120B] px-3.5 py-1 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-xl sm:text-2xl font-bold tracking-wider text-amber-400 min-w-[124px] text-center">
+                        className="bg-[#1A120B] px-3.5 py-1 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-xl sm:text-2xl font-bold tracking-wider text-amber-400 min-w-[116px] sm:min-w-[124px] text-center">
                         {(gameId || activeBot || spectatingGameId) ? formatTime(topPlayerTime) : formatTime(topIdlePreviewMs)}
                     </div>
                 </div>
 
-                {/* ШАХМАТНАЯ ДОСКА */}
+                {/* ШАХМАТНАЯ ДОСКА С ПОДДЕРЖКОЙ TOUCH / POINTER EVENTS */}
                 <div
                     ref={boardContainerRef}
                     onContextMenu={(e) => {
@@ -2643,11 +2601,11 @@ export default function Chessboard() {
                         }
                     }}
                     style={{
-                        width: `${boardSize}px`,
-                        height: `${boardSize}px`,
+                        width: `${responsiveBoardPx}px`,
+                        height: `${responsiveBoardPx}px`,
                         backgroundColor: activeTheme.border
                     }}
-                    className={`p-2.5 rounded-lg shadow-heavy border-2 border-amber-950/80 relative select-none group/board shrink-0 ${isResizing ? 'transition-none ring-2 ring-amber-500/60' : 'transition-colors'}`}
+                    className={`p-2.5 rounded-lg shadow-heavy border-2 border-amber-950/80 relative select-none touch-none group/board shrink-0 ${isResizing ? 'transition-none ring-2 ring-amber-500/60' : 'transition-colors'}`}
                 >
                     {activeTheme.useWoodGrain && (
                         <div
@@ -2656,7 +2614,6 @@ export default function Chessboard() {
                         />
                     )}
 
-                    {/* Диалог превращения пешки */}
                     {pendingPromotion && (() => {
                         const fileIdx = displayedFiles.indexOf(pendingPromotion.to[0]);
                         const rankIdx = displayedRanks.indexOf(pendingPromotion.to[1]);
@@ -2776,8 +2733,8 @@ export default function Chessboard() {
 
                                         {piece && !isBeingDragged && (
                                             <div
-                                                onMouseDown={(e) => {
-                                                    if (e.button !== 0 || viewIndex !== -1 || gameOverResult) return;
+                                                onPointerDown={(e) => {
+                                                    if ((e.pointerType === 'mouse' && e.button !== 0) || viewIndex !== -1 || gameOverResult) return;
                                                     const turnChar = currentGame.turn();
                                                     const myColorChar = myColor === 'white' ? 'w' : 'b';
 
@@ -2838,13 +2795,12 @@ export default function Chessboard() {
                     {isResizing && (
                         <div
                             className="absolute bottom-5 right-5 z-40 px-2.5 py-1 rounded bg-black/85 border border-amber-500/60 text-amber-300 font-mono text-xs font-bold shadow-lg pointer-events-none">
-                            {boardSize} × {boardSize} px
+                            {responsiveBoardPx} × {responsiveBoardPx} px
                         </div>
                     )}
 
-                    {/* Уголок изменения размера доски */}
                     <div
-                        onMouseDown={handleResizeMouseDown}
+                        onPointerDown={handleResizePointerDown}
                         onDoubleClick={handleResizeDoubleClick}
                         title="Потяните, чтобы изменить размер доски (двойной клик — авторазмер под экран)"
                         className={`absolute bottom-0 right-0 w-6 h-6 z-40 cursor-nwse-resize flex items-end justify-end p-0.5 rounded-tl transition-opacity ${
@@ -2868,9 +2824,8 @@ export default function Chessboard() {
                     </div>
                 </div>
 
-                {/* Нижний игрок */}
                 <div
-                    style={{width: `${boardSize}px`}}
+                    style={{width: `${responsiveBoardPx}px`}}
                     className={`bg-acacia-dark px-3 py-1.5 rounded-lg shadow-heavy border-2 border-amber-900/50 flex justify-between items-center text-boxwood-light shrink-0 ${isResizing ? 'transition-none' : 'transition-colors'}`}
                 >
                     <div className="flex items-center gap-2.5 min-w-0">
@@ -2925,18 +2880,17 @@ export default function Chessboard() {
                         </div>
                     </div>
                     <div
-                        className="bg-[#1A120B] px-3.5 py-1 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-xl sm:text-2xl font-bold tracking-wider text-amber-400 min-w-[124px] text-center">
+                        className="bg-[#1A120B] px-3.5 py-1 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-xl sm:text-2xl font-bold tracking-wider text-amber-400 min-w-[116px] sm:min-w-[124px] text-center">
                         {(gameId || activeBot || spectatingGameId) ? formatTime(bottomPlayerTime) : formatTime(bottomIdlePreviewMs)}
                     </div>
                 </div>
 
             </div>
 
-            {/* ПРАВАЯ КОЛОНКА: ЖУРНАЛ ХОДОВ, ВЫПАДАЮЩЕЕ МЕНЮ ВИДА С ПРЕВЬЮ, ЧАТ И УПРАВЛЕНИЕ ПАРТИЕЙ */}
+            {/* ПРАВАЯ КОЛОНКА: ЖУРНАЛ ХОДОВ, ОФОРМЛЕНИЕ, ЧАТ И УПРАВЛЕНИЕ ПАРТИЕЙ */}
             <div
                 className="w-full xl:w-[390px] 2xl:w-[430px] xl:h-full bg-acacia p-3 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-2 text-boxwood-light order-3 shrink-0 xl:overflow-hidden relative">
 
-                {/* Шапка правой панели + кнопка выпадающего меню с превью досок и фигур */}
                 <div
                     className="border-b border-acacia-light pb-2 flex justify-between items-center gap-2 shrink-0 relative"
                     ref={appearanceDropdownRef}
@@ -2954,7 +2908,6 @@ export default function Chessboard() {
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                        {/* Кнопка выпадающего меню с живым мини-превью текущей фигуры и доски */}
                         <div className="relative">
                             <button
                                 type="button"
@@ -2982,7 +2935,6 @@ export default function Chessboard() {
                                 {showAppearanceDropdown ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
                             </button>
 
-                            {/* Выпадающее меню (Popover) с превью всех 5 комплектов фигур и 5 тем доски */}
                             {showAppearanceDropdown && (
                                 <div
                                     className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-[#261C14] border-2 border-amber-600/80 rounded-lg shadow-2xl z-50 p-3.5 flex flex-col gap-3 text-boxwood-light">
@@ -3000,7 +2952,6 @@ export default function Chessboard() {
                                         </button>
                                     </div>
 
-                                    {/* 5 комплектов фигур с парным превью (Белый конь + Чёрный ферзь) */}
                                     <div className="flex flex-col gap-1.5">
                                         <div className="flex justify-between items-center text-xs">
                                             <span className="font-bold text-boxwood/90">♟ Комплект фигур:</span>
@@ -3047,7 +2998,6 @@ export default function Chessboard() {
                                         </div>
                                     </div>
 
-                                    {/* 5 тем доски с мини-превью клеток 2x2 */}
                                     <div className="flex flex-col gap-1.5 pt-2 border-t border-amber-900/40">
                                         <div className="flex justify-between items-center text-xs">
                                             <span className="font-bold text-boxwood/90">🎨 Поверхность доски:</span>
@@ -3085,10 +3035,9 @@ export default function Chessboard() {
                                         </div>
                                     </div>
 
-                                    {/* Регулировка масштаба доски */}
                                     <div
                                         className="flex items-center justify-between gap-2 pt-2 border-t border-amber-900/40 text-xs">
-                                        <span className="text-boxwood/80 font-bold">Размер: {boardSize}px</span>
+                                        <span className="text-boxwood/80 font-bold">Размер: {responsiveBoardPx}px</span>
                                         <input
                                             type="range"
                                             min={MIN_BOARD_SIZE}
@@ -3124,7 +3073,6 @@ export default function Chessboard() {
                     </div>
                 </div>
 
-                {/* Индикатор активного предхода (Premove) */}
                 {premove && (
                     <div
                         className="bg-rose-950/90 px-3 py-1.5 rounded-md border border-rose-500/60 text-xs text-rose-100 flex items-center justify-between shadow shrink-0">
@@ -3165,7 +3113,6 @@ export default function Chessboard() {
                     </div>
                 )}
 
-                {/* Интерактивный список сделанных ходов (flex-1 min-h-0) */}
                 <div
                     className="flex-1 min-h-0 flex flex-col bg-[#1A120B]/90 rounded-md border border-amber-900/50 overflow-hidden shadow-inner">
                     <div
@@ -3249,7 +3196,6 @@ export default function Chessboard() {
                     )}
                 </div>
 
-                {/* Кнопки пошаговой навигации */}
                 <div
                     className="bg-acacia-dark p-2 rounded-md border border-amber-900/40 flex items-center justify-between shrink-0">
                     <span className="text-xs font-semibold text-boxwood/80 pl-1">Навигация:</span>
@@ -3306,7 +3252,6 @@ export default function Chessboard() {
                     </div>
                 </div>
 
-                {/* Компактный игровой чат и быстрые реплики */}
                 {(gameId || spectatingGameId) && (
                     <div
                         className="bg-acacia-dark p-2 rounded-md border border-amber-900/50 flex flex-col gap-1.5 shrink-0">
@@ -3381,7 +3326,6 @@ export default function Chessboard() {
                     </div>
                 )}
 
-                {/* Кнопки управления партией */}
                 <div className="shrink-0 flex flex-col gap-1.5">
                     {gameId ? (
                         <>

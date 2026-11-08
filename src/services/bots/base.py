@@ -5,8 +5,6 @@ import logging
 import os
 import random
 import shutil
-import sys
-import time
 from pathlib import Path
 import chess
 import chess.engine
@@ -111,14 +109,11 @@ def _simulate_human_thinking_time(
         is_book_move: bool,
         bot_time_left_ms: int = 180000,
         base_time_ms: int = 180000,
-) -> None:
+) -> float:
     """
-    Имитирует человеческое время раздумий шахматиста.
-    При запуске тестов (pytest) задержка автоматически отключается.
+    Вычисляет рекомендуемое человеческое время раздумий шахматиста (в секундах)
+    без блокировки рабочих потоков сервера через time.sleep().
     """
-    if "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST"):
-        return
-
     piece_count = len(board.piece_map())
     move_number = board.fullmove_number
 
@@ -126,30 +121,23 @@ def _simulate_human_thinking_time(
     is_endgame = piece_count <= 12
 
     if is_opening:
-        base_delay = random.uniform(0.8, 1.8) if is_book_move else random.uniform(3.5, 8.0)
+        base_delay = random.uniform(0.4, 0.9) if is_book_move else random.uniform(1.2, 2.8)
     elif is_endgame:
-        base_delay = random.uniform(0.8, 2.0) if piece_count <= 6 else random.uniform(4.0, 12.0)
+        base_delay = random.uniform(0.4, 1.0) if piece_count <= 6 else random.uniform(1.2, 2.6)
     else:
         legal_moves_count = board.legal_moves.count()
         complexity_mult = 0.7 + (min(legal_moves_count, 45) / 45.0) * 0.8
-        base_delay = random.uniform(4.0, 14.0) * complexity_mult
-        if random.random() < 0.08 and base_time_ms > 60000:
-            base_delay = random.uniform(18.0, 35.0)
+        base_delay = random.uniform(1.2, 3.0) * complexity_mult
 
-    control_scale_factor = max(0.3, min(3.0, base_time_ms / 300000.0))
-    if base_time_ms > 600000:
-        control_scale_factor = 1.5 + (base_time_ms / 1800000.0) * 1.5
-
+    control_scale_factor = max(0.3, min(1.5, base_time_ms / 300000.0))
     adjusted_delay = base_delay * control_scale_factor
 
     if bot_time_left_ms < 30000:
-        time_ratio = bot_time_left_ms / 30000.0
-        adjusted_delay = max(0.5, adjusted_delay * time_ratio)
+        time_ratio = max(0.15, bot_time_left_ms / 30000.0)
+        adjusted_delay = max(0.25, adjusted_delay * time_ratio)
 
-    noise = random.gauss(0, 0.3) * adjusted_delay
-    final_thinking_time = max(0.6, adjusted_delay + noise)
-    max_allowed = max(0.5, (bot_time_left_ms - 2000) / 1000.0)
-    time.sleep(min(final_thinking_time, max_allowed))
+    max_allowed = max(0.25, (bot_time_left_ms - 2000) / 1000.0)
+    return round(min(adjusted_delay, max_allowed), 3)
 
 
 def static_board_eval_cp(board: chess.Board, perspective: chess.Color) -> float:
@@ -360,7 +348,14 @@ class HistoricalBot:
         board.push(best_move)
 
         engine_backend = "stockfish" if used_stockfish else "fallback_minimax"
-        logger.info("Bot %s move %s via %s [%s] (engine=%s)", self.bot_id, san, self.engine_source_name, engine_backend, engine_path)
+        logger.info(
+            "Bot %s move %s via %s [%s] (engine=%s)",
+            self.bot_id,
+            san,
+            self.engine_source_name,
+            engine_backend,
+            engine_path,
+        )
         return {
             "uci": best_move.uci(),
             "san": san,

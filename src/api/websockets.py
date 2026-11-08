@@ -75,7 +75,7 @@ async def _init_new_pvp_game_in_db_and_redis(
         base_time_ms: int,
         increment_ms: int,
 ) -> dict:
-    """Создаёт новую рейтинговую PvP-партию в PostgreSQL и инициализирует её стейт в Redis."""
+    """Создаёт новую рейтинговую PvP-партию в PostgreSQL и инициализирует её полный стейт в Redis."""
     white_user = await db.get(User, white_id)
     black_user = await db.get(User, black_id)
 
@@ -108,35 +108,13 @@ async def _init_new_pvp_game_in_db_and_redis(
     await db.refresh(new_game)
 
     new_game_id = new_game.id
-
-    if hasattr(state_manager, "init_game"):
-        await state_manager.init_game(
-            game_id=new_game_id,
-            white_id=white_id,
-            black_id=black_id,
-            base_time_ms=base_time_ms,
-            increment_ms=increment_ms,
-        )
-    else:
-        await state_manager.redis.hset(f"game:{new_game_id}:state", mapping={
-            "white_id": str(white_id),
-            "black_id": str(black_id),
-            "board_fen": initial_fen,
-            "pgn": "",
-            "turn": "white",
-            "status": "in_progress",
-            "state_version": "0",
-            "base_time_ms": str(base_time_ms),
-            "increment_ms": str(increment_ms),
-            "white_time_ms": str(base_time_ms),
-            "black_time_ms": str(base_time_ms),
-            "last_move_at": str(now_ms),
-            "draw_offer": "",
-            "rematch_offer": "",
-        })
-        await state_manager.redis.sadd("active_games", str(new_game_id))
-        await state_manager.redis.set(f"user:{white_id}:current_game", str(new_game_id))
-        await state_manager.redis.set(f"user:{black_id}:current_game", str(new_game_id))
+    await state_manager.initialize_game(
+        game_id=new_game_id,
+        white_id=white_id,
+        black_id=black_id,
+        base_time_ms=base_time_ms,
+        increment_ms=increment_ms,
+    )
 
     return {
         "game_id": new_game_id,
@@ -200,14 +178,14 @@ async def matchmaking_endpoint(
 
             try:
                 if action == "join_queue":
-                    base_time = data.get("base_time_ms", 180000)
-                    inc_time = data.get("increment_ms", 0)
+                    base_time = int(data.get("base_time_ms", 180000))
+                    inc_time = int(data.get("increment_ms", 0))
 
                     default_min = max(0, current_user.rating - 150)
                     default_max = current_user.rating + 150
 
-                    min_rating = data.get("min_rating", default_min)
-                    max_rating = data.get("max_rating", default_max)
+                    min_rating = int(data.get("min_rating", default_min))
+                    max_rating = int(data.get("max_rating", default_max))
 
                     from src.services.matchmaker import matchmaker
                     await matchmaker.join_queue(
@@ -223,9 +201,9 @@ async def matchmaking_endpoint(
 
                 elif action == "accept_challenge":
                     target_user_id = data.get("target_user_id")
-                    if target_user_id and target_user_id != current_user.id:
+                    if target_user_id and int(target_user_id) != current_user.id:
                         from src.services.matchmaker import matchmaker
-                        await matchmaker.accept_challenge(target_user_id, current_user.id, manager, state_manager)
+                        await matchmaker.accept_challenge(int(target_user_id), current_user.id, manager, state_manager)
 
                 elif action == "create_invite":
                     base_time = int(data.get("base_time_ms", 180000))

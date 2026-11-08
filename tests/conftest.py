@@ -1,3 +1,5 @@
+# --- FILE: tests/conftest.py ---
+
 import asyncio
 import pytest
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
@@ -8,6 +10,7 @@ from src.db.session import get_db
 from src.models.base import Base
 from src.models.user import User
 from src.core.security import create_access_token
+from src.services.anticheat import _EVALUATED_GAME_IDS
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -24,6 +27,7 @@ def event_loop():
 
 @pytest.fixture(autouse=True)
 async def setup_database():
+    _EVALUATED_GAME_IDS.clear()
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
@@ -149,7 +153,7 @@ class MockAsyncRedis:
     async def smembers(self, name):
         return self.sets.get(name, set())
 
-    async def set(self, name, value):
+    async def set(self, name, value, ex=None):
         self.kv[name] = str(value)
         return True
 
@@ -169,7 +173,6 @@ class MockAsyncRedis:
             return lst[start:]
         return lst[start:end + 1]
 
-    # --- Поддержка Sorted Sets для очередей матчмейкинга ---
     async def zadd(self, name, mapping):
         if name not in self.zsets:
             self.zsets[name] = {}
@@ -204,22 +207,15 @@ class MockAsyncRedis:
 def override_redis(monkeypatch):
     mock_redis = MockAsyncRedis()
 
-    # 1. Подменяем глобальные переменные в модулях
     monkeypatch.setattr("src.services.game_state.redis_client", mock_redis)
     monkeypatch.setattr("src.services.connection_manager.redis_client", mock_redis)
     monkeypatch.setattr("src.db.redis.redis_client", mock_redis)
 
-    # 2. Подменяем ссылки внутри уже созданных синглтонов
     from src.services.game_state import state_manager
     from src.services.connection_manager import manager
-    # Для Matchmaker
-    from src.services.matchmaker import matchmaker
 
-    # noinspection PyUnresolvedReferences
     monkeypatch.setattr(state_manager, "redis", mock_redis)
-    # noinspection PyUnresolvedReferences
     monkeypatch.setattr(manager, "redis", mock_redis)
-    # noinspection PyUnresolvedReferences
     monkeypatch.setattr(manager, "pubsub", mock_redis.pubsub())
 
 
@@ -244,7 +240,7 @@ def client():
 
 @pytest.fixture
 async def test_user_1(db_session):
-    user = User(username="player1", email="player1@example.com", hashed_password="fakehash", rating=1200)
+    user = User(username="player1", hashed_password="fakehash", rating=1200)
     db_session.add(user)
     await db_session.commit()
     await db_session.refresh(user)
@@ -253,7 +249,7 @@ async def test_user_1(db_session):
 
 @pytest.fixture
 async def test_user_2(db_session):
-    user = User(username="player2", email="player2@example.com", hashed_password="fakehash", rating=1200)
+    user = User(username="player2", hashed_password="fakehash", rating=1200)
     db_session.add(user)
     await db_session.commit()
     await db_session.refresh(user)
