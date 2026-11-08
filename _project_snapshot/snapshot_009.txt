@@ -1,0 +1,400 @@
+PROJECT SNAPSHOT — PART 9/11
+Project: michess
+Files in this part (1): frontend/src/components/Chessboard.tsx (chunk 3)
+----------------------------------------------------------------------------------------
+                    className="flex-1 min-h-0 flex flex-col bg-[#1A120B]/90 rounded-md border border-amber-900/50 overflow-hidden shadow-inner">
+                    <div
+                        className="grid grid-cols-[44px_1fr_1fr] px-3 py-1.5 bg-black/55 border-b border-amber-900/40 text-xs uppercase tracking-wider text-boxwood/65 font-bold shrink-0">
+                        <span>№</span>
+                        <span>Белые</span>
+                        <span>Чёрные</span>
+                    </div>
+
+                    <div
+                        ref={notationScrollRef}
+                        className="flex-1 min-h-0 overflow-y-auto divide-y divide-amber-900/15 font-mono text-sm [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-amber-900/50"
+                    >
+                        {movePairs.length === 0 ? (
+                            <div
+                                className="h-full flex flex-col items-center justify-center p-6 text-center text-boxwood/50 font-sans text-sm gap-1.5">
+                                <span className="font-semibold">Ходов пока нет</span>
+                                <span className="text-xs text-boxwood/40">
+                                    {(gameId || activeBot || spectatingGameId)
+                                        ? 'Сделайте первый ход на доске.'
+                                        : 'Двигайте фигуры для анализа или выберите соперника слева.'}
+                                </span>
+                            </div>
+                        ) : (
+                            movePairs.map((pair) => {
+                                const isWhiteActive = activeMoveIndex === pair.whiteIdx;
+                                const isBlackActive = pair.blackIdx !== undefined && activeMoveIndex === pair.blackIdx;
+
+                                return (
+                                    <div
+                                        key={pair.moveNumber}
+                                        className="grid grid-cols-[44px_1fr_1fr] items-center px-2.5 py-1 hover:bg-white/5 transition-colors"
+                                    >
+                                        <span className="text-xs text-amber-500/70 font-bold pl-1 select-none">
+                                            {pair.moveNumber}.
+                                        </span>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSelectMoveFromList(pair.whiteIdx)}
+                                            className={`text-left px-2 py-0.5 rounded text-sm font-bold transition truncate cursor-pointer ${
+                                                isWhiteActive
+                                                    ? 'active-move-btn bg-amber-600/40 text-amber-200 border border-amber-500/50 shadow-sm'
+                                                    : 'text-boxwood-light hover:bg-amber-900/30 hover:text-white'
+                                            }`}
+                                        >
+                                            {pair.whiteSan}
+                                        </button>
+
+                                        {pair.blackSan !== undefined && pair.blackIdx !== undefined ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleSelectMoveFromList(pair.blackIdx!)}
+                                                className={`text-left px-2 py-0.5 rounded text-sm font-bold transition truncate cursor-pointer ${
+                                                    isBlackActive
+                                                        ? 'active-move-btn bg-amber-600/40 text-amber-200 border border-amber-500/50 shadow-sm'
+                                                        : 'text-boxwood-light hover:bg-amber-900/30 hover:text-white'
+                                                }`}
+                                            >
+                                                {pair.blackSan}
+                                            </button>
+                                        ) : (
+                                            <span/>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+
+                    {viewIndex !== -1 && history.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={() => setViewIndex(-1)}
+                            className="w-full py-1.5 px-3 bg-amber-700/40 hover:bg-amber-700/60 border-t border-amber-500/40 text-amber-200 text-xs font-bold text-center transition shrink-0 cursor-pointer"
+                        >
+                            Просмотр истории
+                            ({viewIndex === -2 ? 'Начало' : `полуход ${viewIndex + 1} из ${history.length}`}) —
+                            Вернуться к игре
+                        </button>
+                    )}
+                </div>
+
+                {/* Кнопки пошаговой навигации */}
+                <div
+                    className="bg-acacia-dark p-2 rounded-md border border-amber-900/40 flex items-center justify-between shrink-0">
+                    <span className="text-xs font-semibold text-boxwood/80 pl-1">Навигация:</span>
+                    <div className="flex gap-1.5">
+                        <button
+                            type="button"
+                            disabled={history.length === 0 || viewIndex === -2}
+                            onClick={() => setViewIndex(-2)}
+                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
+                            title="В начало партии (Стрелка вверх)"
+                        >
+                            <ChevronFirst size={16}/>
+                        </button>
+                        <button
+                            type="button"
+                            disabled={history.length === 0 || viewIndex === -2}
+                            onClick={() => {
+                                if (history.length > 0) {
+                                    const current = viewIndex === -1 ? history.length - 1 : prevIndexHelper(viewIndex, history.length);
+                                    setViewIndex(current <= 0 ? -2 : current - 1);
+                                }
+                            }}
+                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
+                            title="Ход назад (Стрелка влево)"
+                        >
+                            <ChevronLeft size={16}/>
+                        </button>
+                        <button
+                            type="button"
+                            disabled={history.length === 0 || viewIndex === -1}
+                            onClick={() => {
+                                if (viewIndex === -2 && history.length > 0) {
+                                    setViewIndex(history.length === 1 ? -1 : 0);
+                                } else if (viewIndex !== -1 && viewIndex < history.length - 2) {
+                                    setViewIndex(viewIndex + 1);
+                                } else {
+                                    setViewIndex(-1);
+                                }
+                            }}
+                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
+                            title="Ход вперед (Стрелка вправо)"
+                        >
+                            <ChevronRight size={16}/>
+                        </button>
+                        <button
+                            type="button"
+                            disabled={history.length === 0 || viewIndex === -1}
+                            onClick={() => setViewIndex(-1)}
+                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
+                            title="К последнему ходу (Стрелка вниз)"
+                        >
+                            <ChevronLast size={16}/>
+                        </button>
+                    </div>
+                </div>
+
+                {/* Компактный игровой чат и быстрые реплики */}
+                {(gameId || spectatingGameId) && (
+                    <div
+                        className="bg-acacia-dark p-2 rounded-md border border-amber-900/50 flex flex-col gap-1.5 shrink-0">
+                        <div
+                            className="flex items-center justify-between text-xs uppercase tracking-wider text-amber-400 font-bold">
+                            <span className="flex items-center gap-1.5">
+                                <MessageSquare size={13}/> Игровой чат
+                            </span>
+                            {spectatingGameId && (
+                                <button
+                                    type="button"
+                                    onClick={handleLeaveSpectate}
+                                    className="text-rose-300 hover:text-rose-200 underline text-xs font-sans cursor-pointer"
+                                >
+                                    Выйти из просмотра
+                                </button>
+                            )}
+                        </div>
+
+                        <div
+                            className="h-16 overflow-y-auto bg-black/40 rounded p-2 text-xs space-y-1 font-sans border border-amber-950/50 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
+                            {chatMessages.length === 0 ? (
+                                <div className="h-full flex items-center justify-center text-xs text-boxwood/45 italic">
+                                    Сообщений пока нет. Поприветствуйте соперника!
+                                </div>
+                            ) : (
+                                chatMessages.map((msg, i) => (
+                                    <div key={i} className="leading-snug wrap-break-word">
+                                        <span className="font-bold text-amber-300 mr-1.5">{msg.sender}:</span>
+                                        <span className="text-boxwood-light">{msg.text}</span>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        <div className="flex flex-wrap gap-1">
+                            {QUICK_CHAT_PRESETS.map((preset) => (
+                                <button
+                                    key={preset}
+                                    type="button"
+                                    onClick={() => handleSendChatMessage(preset)}
+                                    className="px-2 py-0.5 rounded bg-black/40 hover:bg-amber-900/50 border border-amber-800/40 text-xs text-amber-200 transition cursor-pointer"
+                                >
+                                    {preset}
+                                </button>
+                            ))}
+                        </div>
+
+                        <form
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                handleSendChatMessage();
+                            }}
+                            className="flex gap-1.5"
+                        >
+                            <input
+                                type="text"
+                                maxLength={140}
+                                value={chatInput}
+                                onChange={(e) => setChatInput(e.target.value)}
+                                placeholder="Написать сообщение..."
+                                className="flex-1 bg-black/50 border border-amber-800/50 rounded px-2.5 py-1 text-xs text-amber-100 outline-none focus:border-amber-500 font-sans"
+                            />
+                            <button
+                                type="submit"
+                                className="px-3 py-1 bg-amber-700 hover:bg-amber-600 text-amber-100 rounded text-xs font-bold flex items-center justify-center transition cursor-pointer"
+                                title="Отправить"
+                            >
+                                <Send size={13}/>
+                            </button>
+                        </form>
+                    </div>
+                )}
+
+                {/* Кнопки управления партией */}
+                <div className="shrink-0 flex flex-col gap-1.5">
+                    {gameId ? (
+                        <>
+                            <div className="grid grid-cols-2 gap-2">
+                                {history.length < 2 ? (
+                                    <button
+                                        type="button"
+                                        onClick={handleAbortGame}
+                                        disabled={!!gameOverResult}
+                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-amber-950/90 text-amber-200 text-xs sm:text-sm font-bold rounded-md hover:bg-amber-900 transition shadow border border-amber-700/60 disabled:opacity-40 cursor-pointer"
+                                    >
+                                        <X size={15}/> Отменить игру
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={handleResign}
+                                        disabled={!!gameOverResult}
+                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/85 text-red-200 text-xs sm:text-sm font-bold rounded-md hover:bg-red-900 transition shadow border border-red-800/50 disabled:opacity-40 cursor-pointer"
+                                    >
+                                        <Flag size={15}/> Сдаться
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={handleOfferDraw}
+                                    disabled={!!gameOverResult || history.length < 2}
+                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
+                                >
+                                    <Handshake size={15}/> Ничья
+                                </button>
+                            </div>
+
+                            {gameOverResult && (
+                                <div className="flex flex-col gap-1.5">
+                                    {rematchStatus === 'offered_by_opponent' ? (
+                                        <div
+                                            className="p-2 rounded-md bg-emerald-950/90 border border-emerald-500/60 flex flex-col gap-1.5 text-xs text-emerald-100 text-center shadow">
+                                            <span
+                                                className="font-bold">Соперник предлагает реванш (со сменой цвета)!</span>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={handleAcceptRematch}
+                                                    className="py-1.5 px-3 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded transition shadow cursor-pointer"
+                                                >
+                                                    Принять реванш
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleDeclineRematch}
+                                                    className="py-1.5 px-3 bg-red-900/80 hover:bg-red-800 text-red-100 font-bold rounded transition cursor-pointer"
+                                                >
+                                                    Отклонить
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button
+                                                type="button"
+                                                disabled={rematchStatus === 'offered_by_me' || rematchStatus === 'declined'}
+                                                onClick={handleOfferRematch}
+                                                className="flex items-center justify-center gap-1.5 px-3 py-2 font-bold text-xs sm:text-sm rounded-md transition shadow bg-emerald-800 hover:bg-emerald-700 text-emerald-100 border border-emerald-500/50 disabled:opacity-50 cursor-pointer"
+                                            >
+                                                <RefreshCw size={15}
+                                                           className={rematchStatus === 'offered_by_me' ? 'animate-spin' : ''}/>
+                                                {rematchStatus === 'offered_by_me'
+                                                    ? 'Ждём ответа...'
+                                                    : rematchStatus === 'declined'
+                                                        ? 'Реванш отклонён'
+                                                        : 'Реванш'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleResetSandbox}
+                                                className="flex items-center justify-center gap-1.5 px-3 py-2 font-bold text-xs sm:text-sm rounded-md transition shadow bg-boxwood text-acacia-dark border border-amber-700/50 hover:bg-boxwood-light cursor-pointer"
+                                            >
+                                                <RotateCcw size={15}/> В лобби
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </>
+                    ) : activeBot ? (
+                        <div className="flex flex-col gap-1.5">
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    disabled={history.length === 0 || isBotThinking || !!gameOverResult}
+                                    onClick={handleUndoSandboxMove}
+                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
+                                >
+                                    <Undo2 size={15}/> Вернуть ход
+                                </button>
+                                {!gameOverResult ? (
+                                    <button
+                                        type="button"
+                                        onClick={handleResign}
+                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/85 text-red-200 text-xs sm:text-sm font-bold rounded-md hover:bg-red-900 transition shadow border border-red-800/50 cursor-pointer"
+                                    >
+                                        <Flag size={15}/> Сдаться
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={handleOfferRematch}
+                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-800 text-emerald-100 text-xs sm:text-sm font-bold rounded-md hover:bg-emerald-700 transition shadow border border-emerald-500/50 cursor-pointer"
+                                    >
+                                        <RefreshCw size={15}/> Реванш
+                                    </button>
+                                )}
+                            </div>
+
+                            {savedBotGameId && (
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate(`/game/${savedBotGameId}`, {
+                                            state: {
+                                                game: {
+                                                    game_id: savedBotGameId,
+                                                    white_username: whitePlayer.username,
+                                                    white_rating: Number(whitePlayer.rating) || 1200,
+                                                    black_username: blackPlayer.username,
+                                                    black_rating: Number(blackPlayer.rating) || 1850,
+                                                    result: gameOverResult || '*',
+                                                    site: 'Michess Bot Arena',
+                                                    finished_at: new Date().toISOString()
+                                                }
+                                            }
+                                        })}
+                                        className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 text-xs font-bold rounded-md transition shadow border border-emerald-600/50 cursor-pointer"
+                                    >
+                                        <Eye size={14}/> Разбор партии
+                                    </button>
+                                    <a
+                                        href={`${API_BASE_URL}/api/v1/profile/games/${savedBotGameId}/pgn`}
+                                        download
+                                        className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#1A120B] hover:bg-black text-amber-400 text-xs font-bold rounded-md transition shadow border border-amber-800/60"
+                                    >
+                                        <Download size={14}/> Скачать PGN
+                                    </a>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                type="button"
+                                disabled={history.length === 0}
+                                onClick={handleUndoSandboxMove}
+                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
+                            >
+                                <Undo2 size={15}/> Отменить ход
+                            </button>
+                            <button
+                                type="button"
+                                disabled={history.length === 0}
+                                onClick={handleResetSandbox}
+                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-amber-300 text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
+                            >
+                                <RotateCcw size={15}/> Сбросить доску
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+            </div>
+
+        </div>
+    );
+}
+
+function prevIndexHelper(viewIndex: number, historyLength: number): number {
+    return viewIndex === -1 ? historyLength - 1 : viewIndex;
+}
+
+----------------------------------------------------------------------------------------
+END OF PART 9/11

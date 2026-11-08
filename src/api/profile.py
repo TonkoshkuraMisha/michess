@@ -1,15 +1,13 @@
 # --- FILE: src/api/profile.py ---
 
-import re
-from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_, desc
+from sqlalchemy import select, or_, desc, asc, func, case
 from sqlalchemy.orm import aliased
 
 from src.db.session import get_db
-from src.db.seed import ensure_champion_seeded, get_champion_meta
+from src.db.seed import ensure_champion_seeded, get_champion_meta, extract_pgn_metadata
 from src.api.deps import get_current_user
 from src.models.user import User
 from src.models.game import Game, GameStatus
@@ -64,16 +62,21 @@ async def get_leaderboard(
     ]
 
 
-
-
 @router.get("/games/live")
 async def get_live_games(db: AsyncSession = Depends(get_db)):
-    """Возвращает список активных партий, идущих прямо сейчас (для вкладки Live и режима зрителя)."""
+    """
+    Возвращает список активных партий, идущих прямо сейчас (для вкладки Live и режима зрителя).
+    Оптимизировано: загружает всех игроков одним SQL-запросом вместо N+1.
+    """
     from src.services.game_state import state_manager
     from src.services.connection_manager import manager
 
     game_ids = await state_manager.redis.smembers("active_games")
-    live_list = []
+    if not game_ids:
+        return []
+
+    active_states: list[tuple[int, dict]] = []
+    user_ids: set[int] = set()
 
     for gid_raw in game_ids:
         try:
@@ -86,9 +89,22 @@ async def get_live_games(db: AsyncSession = Depends(get_db)):
 
         white_id = int(state["white_id"])
         black_id = int(state["black_id"])
-        white_user = await db.get(User, white_id)
-        black_user = await db.get(User, black_id)
+        user_ids.add(white_id)
+        user_ids.add(black_id)
+        active_states.append((gid, state))
 
+    if not active_states:
+        return []
+
+    users_res = await db.execute(select(User).where(User.id.in_(user_ids)))
+    users_map = {u.id: u for u in users_res.scalars().all()}
+
+    live_list = []
+    for gid, state in active_states:
+        white_id = int(state["white_id"])
+        black_id = int(state["black_id"])
+        white_user = users_map.get(white_id)
+        black_user = users_map.get(black_id)
         spectators_set = getattr(manager, "game_spectators", {}).get(gid, set())
 
         live_list.append({
@@ -119,6 +135,8 @@ async def get_user_profile(username: str, db: AsyncSession = Depends(get_db)):
         "id": user.id,
         "username": user.username,
         "rating": user.rating,
+        "is_cheater": user.is_cheater,
+        "trust_factor": user.trust_factor,
         "created_at": user.created_at,
     }
 
@@ -145,102 +163,96 @@ async def get_user_games(
         Game.pgn != "",
     ]
 
+    count_query = select(func.count(Game.id)).where(*conditions)
+    total_count = (await db.execute(count_query)).scalar() or 0
+
+    null_date_flag = case(
+        (or_(Game.pgn_date.is_(None), Game.pgn_date == "", Game.pgn_date.like("?%")), 1),
+        else_=0,
+    )
+
+    if sort == "asc":
+        order_clauses = [
+            asc(null_date_flag),
+            asc(Game.pgn_date),
+            asc(Game.finished_at),
+            asc(Game.id),
+        ]
+    else:
+        order_clauses = [
+            asc(null_date_flag),
+            desc(Game.pgn_date),
+            desc(Game.finished_at),
+            desc(Game.id),
+        ]
+
     games_query = (
-        select(Game, WhiteUser.username, WhiteUser.rating, BlackUser.username, BlackUser.rating)
+        select(
+            Game.id,
+            Game.status,
+            Game.is_rated,
+            Game.result,
+            Game.pgn_date,
+            Game.site,
+            Game.eco,
+            Game.finished_at,
+            Game.pgn,
+            WhiteUser.username,
+            WhiteUser.rating,
+            BlackUser.username,
+            BlackUser.rating,
+        )
         .join(WhiteUser, Game.white_player_id == WhiteUser.id)
         .join(BlackUser, Game.black_player_id == BlackUser.id)
         .where(*conditions)
+        .order_by(*order_clauses)
+        .limit(limit)
+        .offset(offset)
     )
 
-    games_result = await db.execute(games_query)
-    rows = games_result.all()
+    rows = (await db.execute(games_query)).all()
 
-    results = []
-    for game, w_name, w_rating, b_name, b_rating in rows:
-        result_str = game.result or "*"
-        pgn_date = None
-        site = None
-        eco = None
+    items = []
+    for (
+            game_id,
+            status_val,
+            is_rated,
+            result_val,
+            pgn_date,
+            site,
+            eco,
+            finished_at,
+            pgn_text,
+            w_name,
+            w_rating,
+            b_name,
+            b_rating,
+    ) in rows:
+        if (not pgn_date or not site or not eco or not result_val or result_val == "*") and pgn_text:
+            fallback_meta = extract_pgn_metadata(pgn_text, fallback_result=result_val or "*")
+            result_val = result_val if (result_val and result_val != "*") else fallback_meta["result"]
+            pgn_date = pgn_date or fallback_meta["pgn_date"]
+            site = site or fallback_meta["site"]
+            eco = eco or fallback_meta["eco"]
 
-        if game.pgn:
-            res_match = re.search(r'\[Result\s+"(.*?)"\]', game.pgn)
-            if res_match:
-                result_str = res_match.group(1)
-            elif result_str == "*":
-                match = re.search(r'(1-0|0-1|1/2-1/2)\s*$', game.pgn.strip())
-                if match:
-                    result_str = match.group(1)
-
-            date_match = re.search(r'\[Date\s+"(.*?)"\]', game.pgn)
-            if date_match and date_match.group(1) and not date_match.group(1).startswith("?"):
-                pgn_date = date_match.group(1)
-            else:
-                edate_match = re.search(r'\[EventDate\s+"(.*?)"\]', game.pgn)
-                if edate_match and edate_match.group(1) and not edate_match.group(1).startswith("?"):
-                    pgn_date = edate_match.group(1)
-
-            site_match = re.search(r'\[Site\s+"(.*?)"\]', game.pgn)
-            if site_match and site_match.group(1) != "?":
-                site = site_match.group(1)
-
-            eco_match = re.search(r'\[ECO\s+"(.*?)"\]', game.pgn)
-            if eco_match and eco_match.group(1) != "?":
-                eco = eco_match.group(1)
-
-        results.append({
-            "game_id": game.id,
+        items.append({
+            "game_id": game_id,
             "white_username": w_name,
             "white_rating": w_rating,
             "black_username": b_name,
             "black_rating": b_rating,
-            "status": game.status.value if hasattr(game.status, "value") else str(game.status),
-            "is_rated": game.is_rated,
-            "result": result_str,
+            "status": status_val.value if hasattr(status_val, "value") else str(status_val),
+            "is_rated": is_rated,
+            "result": result_val or "*",
             "pgn_date": pgn_date,
             "site": site,
             "eco": eco,
-            "finished_at": game.finished_at.isoformat() if game.finished_at else None,
+            "finished_at": finished_at.isoformat() if finished_at else None,
         })
-
-    def get_date_tuple(item):
-        d_str = item["pgn_date"]
-        if item["finished_at"] and not d_str:
-            dt = datetime.fromisoformat(item["finished_at"])
-            return (dt.year, dt.month, dt.day, item["game_id"])
-
-        if not d_str or d_str.startswith("?"):
-            return None
-
-        parts = d_str.split(".")
-        try:
-            y = int(parts[0]) if parts[0] != "????" else None
-            m = int(parts[1]) if len(parts) > 1 and not parts[1].startswith("?") else 0
-            d = int(parts[2]) if len(parts) > 2 and not parts[2].startswith("?") else 0
-            if y is None:
-                return None
-            return (y, m, d, item["game_id"])
-        except ValueError:
-            return None
-
-    def sort_key_asc(item):
-        t = get_date_tuple(item)
-        return t if t is not None else (9999, 99, 99, item["game_id"])
-
-    def sort_key_desc(item):
-        t = get_date_tuple(item)
-        return t if t is not None else (-9999, -99, -99, -item["game_id"])
-
-    if sort == "asc":
-        results.sort(key=sort_key_asc)
-    else:
-        results.sort(key=sort_key_desc, reverse=True)
-
-    total_count = len(results)
-    paginated_results = results[offset: offset + limit]
 
     return {
         "total": total_count,
-        "items": paginated_results,
+        "items": items,
     }
 
 

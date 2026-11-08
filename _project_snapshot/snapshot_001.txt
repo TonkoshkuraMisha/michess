@@ -1,0 +1,1874 @@
+PROJECT SNAPSHOT — PART 1/11
+Project: michess
+Files in this part (22): ToDo.md, requirements.txt, pytest.ini, alembic.ini, docker-compose.yml, .github/workflows/ci.yml, frontend/package.json, frontend/vite.config.ts, frontend/tsconfig.json, migrations/env.py, migrations/README, migrations/script.py.mako, migrations/versions/3605cc4e4cfc_add_time_controls_to_game.py, migrations/versions/4101ce4b6d90_authoritative_game_state_and_move_.py, migrations/versions/af5330e8cef6_init_tables.py, migrations/versions/c8a91e2f4b10_add_analysis_json_to_game.py, migrations/versions/d9f4a1b2c3e4_add_metadata_columns_to_games.py, src/__init__.py, src/api/analysis.py, src/api/auth.py, src/api/bots.py, src/api/deps.py
+----------------------------------------------------------------------------------------
+
+========================================================================================
+FILE: ToDo.md
+========================================================================================
+<!-- --- FILE: ToDo.md --- -->
+
+# ♟️ Линейный план разработки Michess (PvP Self-Product Roadmap)
+
+## 🏆 Глобальные цели по историческим ботам
+
+* [x] Сделать рефакторинг ботов: один базовый класс `HistoricalBot`, от которого наследуются исторические персоны
+  (`philidor`, `labourdonnais`, `staunton`, `anderssen`, `morphy`, `paulsen`, `zukertort`).
+* [x] Реализовать реалистичные человеческие тайминги ходов в зависимости от фазы партии (дебют, миттельшпиль, эндшпиль),
+  сложности позиции и оставшегося времени на часах (`_simulate_human_thinking_time`).
+* [x] Реализовать максимальную аутентичность стиля игры: JSON-книги дебютов из реальных исторических PGN + тактический
+  расчёт через Stockfish 19 (`analyse_with_stockfish`) с индивидуальной системой стилевых бонусов
+  (`evaluate_style_bonus`).
+
+---
+
+## 🛠 Базовый шаблон команд для каждого таска (Золотой стандарт)
+
+Перед началом **любого** таска:
+
+    git checkout dev
+    git pull origin dev
+    git checkout -b <имя-ветки-из-таска>
+
+После написания кода и прохождения тестов — слияние в `dev`:
+
+    git status
+    git add .
+    git commit -m "<сообщение-коммита-из-таска>"
+    git checkout dev
+    git merge --no-ff <имя-ветки-из-таска> -m "Merge <имя-ветки-из-таска> into dev"
+    git push origin dev
+    git branch -d <имя-ветки-из-таска>
+
+---
+
+## СПРИНТ 1. Стабилизация фундамента, зависимостей и CI/CD (ВЫПОЛНЕНО ✅)
+
+### - [x] Таск 1.1. Синхронизация `requirements.txt` и починка пайплайна `.github/workflows/ci.yml`
+
+* **Техническая причина:** В `requirements.txt` отсутствовали пакеты `celery`, `stockfish`, `requests`, а также тестовые
+  библиотеки (`pytest`, `pytest-asyncio`, `httpx`, `aiosqlite`, `flake8`). В `.github/workflows/ci.yml` была указана
+  ветка `"develop"` вместо рабочей ветки `"dev"`, не устанавливался Stockfish и не запускались проверки фронтенда.
+* **Ветка Git:** `chore/fix-deps-and-ci`
+* **Что сделано:**
+    1. Добавлены все зависимости в `requirements.txt`.
+    2. В `.github/workflows/ci.yml` настроены джобы `backend-test` (с установкой Stockfish и Redis) и `frontend-test`
+       (Node.js 24, `npm ci`, `npm run lint`, `npm run test`, `npm run build`).
+    3. Очищен `docker-compose.yml`.
+* **Тестирование:**
+
+  python -m flake8 src tests scripts --count --select=E9,F63,F7,F82 --show-source --statistics
+  python -m pytest -v
+  cd frontend && npm run lint && npm run test && npm run build && cd ..
+
+* **Коммит:** `chore: sync requirements.txt and enable fullstack CI on dev branch`
+
+---
+
+### - [x] Таск 1.2. Вынос API/WS URL в переменные окружения фронтенда (`.env`)
+
+* **Техническая причина:** Во всех компонентах фронтенда были захардкожены адреса
+  `[http://127.0.0.1:8000](http://127.0.0.1:8000)` и `ws://127.0.0.1:8000`.
+* **Ветка Git:** `refactor/frontend-api-config`
+* **Что сделано:**
+    1. Создан файл `frontend/src/config/api.ts`, экспортирующий `API_BASE_URL` и `WS_BASE_URL`.
+    2. Все ссылки в `App.tsx`, `AuthModal.tsx`, `Profile.tsx`, `ChampionGames.tsx`, `GameViewer.tsx`, `Chessboard.tsx` и
+       `gameSocket.ts` переведены на импорт из `src/config/api.ts`.
+    3. Добавлены unit-тесты в `frontend/src/services/__tests__/gameSocket.test.ts`.
+* **Тестирование:**
+
+  cd frontend && npm run test && npm run build && cd ..
+
+* **Коммит:** `refactor: centralize API and WebSocket URLs in frontend config`
+
+---
+
+## СПРИНТ 2. Доведение ядра PvP-геймплея до профессионального стандарта (ВЫПОЛНЕНО ✅)
+
+### - [x] Таск 2.1. Диалог выбора фигуры при превращении пешки (Pawn Promotion UI)
+
+* **Техническая причина:** В `Chessboard.tsx` стояла заглушка автопревращения только в ферзя (`promotion: 'q'`).
+* **Ветка Git:** `feature/pawn-promotion-modal`
+* **Что сделано:**
+    1. В `frontend/src/components/Chessboard.tsx` добавлено модальное окно выбора фигуры (`Ферзь`, `Конь`, `Ладья`,
+       `Слон`) при ходе пешки на 8-ю или 1-ю горизонталь.
+    2. На бэкенде и в `tests/test_game_engine.py` протестировано превращение в коня и ладью
+       (`test_underpromotion_to_knight_and_rook`).
+* **Тестирование:**
+
+  python -m pytest tests/test_game_engine.py -v
+
+* **Коммит:** `feat: add interactive pawn promotion piece selector (Q, N, R, B)`
+
+---
+
+### - [x] Таск 2.2. Система предходов (Premoves) для Bullet и Blitz
+
+* **Техническая причина:** Для комфортной игры в Bullet и Blitz необходима возможность сделать предход на времени
+  соперника.
+* **Ветка Git:** `feature/premove-system`
+* **Что сделано:**
+    1. В `Chessboard.tsx` добавлен стейт `premove` с визуальной подсветкой полей (`bg-rose-500/45`) и сбросом по правому
+       клику или кнопке отмены.
+    2. Автоматическое выполнение предхода при получении хода соперника с передачей флага `is_premove: true` и
+       `time_taken_ms: 0`.
+    3. Добавлен тест `test_premove_telemetry_saved_and_bot_thinking_time` в `tests/test_websockets_flow.py`.
+* **Тестирование:**
+
+  python -m pytest tests/test_websockets_flow.py -v
+
+* **Коммит:** `feat: implement client-side premoves with visual highlighting`
+
+---
+
+### - [x] Таск 2.3. Авто-отмена партии при неявке на 1-м ходу (Abort Game) и защита от дисконнекта
+
+* **Техническая причина:** Защита игроков от ожидания полного таймера, если соперник не сделал первый ход.
+* **Ветка Git:** `feature/abort-and-reconnect-grace`
+* **Что сделано:**
+    1. В `src/services/game_state.py` реализована отмена партии без изменения рейтинга (`status = ABORTED`,
+       `result = "*"`, `termination = "aborted"`), если сделано менее 2 полуходов.
+    2. Добавлен WebSocket-экшен `abort_game` и кнопка «Отменить игру» в `Chessboard.tsx`.
+    3. Добавлен тест `test_abort_game_without_rating_change` в `tests/test_game_state.py`.
+* **Тестирование:**
+
+  python -m pytest tests/test_game_state.py -v
+
+* **Коммит:** `feat: add 30s first-move auto-abort and manual abort before move 2`
+
+---
+
+## СПРИНТ 3. Социальный PvP: Реванши, Приватные вызовы по ссылке, Зрители и Чат (ВЫПОЛНЕНО ✅)
+
+### - [x] Таск 3.1. Система мгновенного реванша («Реванш» / Rematch) с переменой цвета
+
+* **Ветка Git:** `feature/rematch-system`
+* **Что сделано:**
+    1. В `src/api/websockets.py` реализованы экшены `offer_rematch`, `accept_rematch`, `decline_rematch` и функция
+       `create_rematch_game` со сменой цвета игроков (`white_id <-> black_id`).
+    2. В `Chessboard.tsx` добавлены кнопки предложения и принятия реванша после завершения партии.
+    3. Добавлен тест `test_rematch_swaps_colors` в `tests/test_websockets_flow.py`.
+* **Тестирование:**
+
+  python -m pytest tests/test_websockets_flow.py -v
+
+* **Коммит:** `feat: implement instant post-game rematch with color swap`
+
+---
+
+### - [x] Таск 3.2. Приватные вызовы по прямой ссылке (Игра с другом / учеником)
+
+* **Ветка Git:** `feature/private-challenge-links`
+* **Что сделано:**
+    1. В `src/services/matchmaker.py` реализованы методы `create_private_invite` и `accept_private_invite` в Redis (ключ
+       `invite:{code}`).
+    2. В `App.tsx` и `Chessboard.tsx` добавлен роут `/challenge/:inviteCode` и панель генерации ссылки с выбором цвета
+       (`Белые`, `Чёрные`, `Случайно`).
+    3. Добавлен тест `test_private_invite_create_and_redeem` в `tests/test_game_state.py`.
+* **Тестирование:**
+
+  python -m pytest tests/test_game_state.py -v
+
+* **Коммит:** `feat: add shareable challenge links with custom time and color preference`
+
+---
+
+### - [x] Таск 3.3. Режим зрителя (Spectator Mode) и вкладка «Текущие партии (Live)»
+
+* **Ветка Git:** `feature/spectator-mode`
+* **Что сделано:**
+    1. В `src/services/connection_manager.py` добавлена подписка зрителей `game_spectators` и трансляция ходов/чата.
+    2. В `src/api/profile.py` добавлен эндпоинт `GET /api/v1/profile/games/live`.
+    3. В `Chessboard.tsx` добавлена вкладка «Идут сейчас (Live)» с кнопкой просмотра.
+    4. Добавлен тест `test_spectator_receives_live_moves_and_chat` в `tests/test_websockets_flow.py`.
+* **Тестирование:**
+
+  python -m pytest tests/test_websockets_flow.py -v
+
+* **Коммит:** `feat: add live games list and real-time WebSocket spectator mode`
+
+---
+
+### - [x] Таск 3.4. Компактный игровой чат и быстрые реплики сопернику
+
+* **Ветка Git:** `feature/in-game-chat`
+* **Что сделано:**
+    1. В `src/api/websockets.py` реализована пересылка `chat_message` с ограничением 140 символов.
+    2. В `Chessboard.tsx` добавлен блок чата и 4 быстрые реплики (`👋 Удачи!`, `🤝 Спасибо за игру!`, `👏 Красивый ход!`,
+       `⏱ Цейтнот!`).
+* **Тестирование:**
+
+  python -m pytest tests/test_websockets_flow.py -v
+
+* **Коммит:** `feat: add real-time in-game chat and quick etiquette presets`
+
+---
+
+## СПРИНТ 4. Умная интеграция Stockfish (Анализ по запросу и Доска анализа) (ВЫПОЛНЕНО ✅)
+
+### - [x] Таск 4.1. Разбор всей партии движком по кнопке (Accuracy, Blunders, Evaluation Graph)
+
+* **Ветка Git:** `feature/on-demand-game-analysis`
+* **Что сделано:**
+    1. В модель `Game` (`src/models/game.py`) добавлено поле `analysis_json` и применена миграция Alembic
+       `c8a91e2f4b10_add_analysis_json_to_game.py`.
+    2. В `src/services/analysis_service.py` реализован метод `analyze_full_game` с расчётом `cp_loss`, точности
+       (`calculate_accuracy`) и классификацией ходов (`Best`, `Good`, `Inaccuracy`, `Mistake`, `Blunder`).
+    3. Создан `tests/test_analysis_service.py`.
+* **Тестирование:**
+
+  python -m pytest tests/test_analysis_service.py -v
+
+* **Коммит:** `feat: implement on-demand full game analysis with accuracy and blunder classification`
+
+---
+
+### - [x] Таск 4.2. Шкала оценки (Evaluation Bar), график перевеса и стрелки на доске в `GameViewer.tsx`
+
+* **Ветка Git:** `feature/game-viewer-eval-bar-and-arrows`
+* **Что сделано:**
+    1. В `frontend/src/components/GameViewer.tsx` добавлена вертикальная шкала оценки `EvalBar`.
+    2. Добавлена кнопка «Компьютерный анализ», сводка точности/зевков и интерактивный график перевеса `AreaChart`
+       (`recharts`).
+    3. Добавлено рисование тактических стрелок и выделение полей правой кнопкой мыши (SVG-оверлей).
+* **Тестирование:**
+
+  cd frontend && npm run lint && npm run test && npm run build && cd ..
+
+* **Коммит:** `feat: add Evaluation Bar, Recharts advantage graph, and right-click arrows to GameViewer`
+
+---
+
+## СПРИНТ 5. Прагматичный Античит на базе уже собираемой телеметрии (ОЧЕРЕДЬ РАЗРАБОТКИ ⏳)
+
+В таблице `moves` уже сохраняются `time_taken_ms`, `window_blurred_before_move`, `is_premove`, `network_lag_ms`, а у
+пользователя есть `trust_factor` и `is_cheater`. Заставляем эти данные работать без нагрузки на CPU.
+
+### - [ ] Таск 5.1. Детектор аномалий поведения (Timing Variance + Tab-Switch)
+
+* **Техническая причина:** Читеры, использующие подсказки с соседней вкладки или второй программы, выдают себя двумя
+  детерминированными паттернами:
+    1. Регулярный уход из вкладки (`window_blurred_before_move == True`) перед сложными ходами в миттельшпиле.
+    2. «Роботизированный тайминг» — почти одинаковое время на каждый ход (низкое среднеквадратичное отклонение времени
+       хода, например, каждые 4–6 секунд вне зависимости от сложности позиции).
+* **Ветка Git:** `feature/telemetry-anticheat-service`
+* **Команда старта:**
+
+  git checkout dev && git pull origin dev && git checkout -b feature/telemetry-anticheat-service
+
+* **Что сделать:**
+    1. Создать сервис `src/services/anticheat.py` с функцией `evaluate_game_telemetry(db, game_id)`.
+    2. После завершения рейтинговой партии (в `state_manager.finish_game`) вызывать этот анализатор:
+        * Считать долю ходов с потерей фокуса окна (`blur_ratio`) после 8-го хода.
+        * Считать коэффициент вариации времени ходов (исключая `is_premove == True`).
+        * При подозрительных показателях снижать `user.trust_factor` (со 100 вниз). Если `trust_factor < 30`, выставлять
+          `is_cheater = True`.
+    3. В профиле игрока (`Profile.tsx`) отображать бейдж репутации («Высокий фактор доверия» / «Под наблюдением Fair
+       Play»).
+* **Тестирование:**
+    * Создать `tests/test_anticheat.py`: протестировать расчёт `trust_factor` на серии «человеческих» ходов (разное
+      время, без ухода из вкладки) и «читерских» ходов (постоянный `window_blurred_before_move=True` и монотонное время
+      4500 мс).
+
+      python -m pytest tests/test_anticheat.py -v
+
+* **Коммит:** `feat: implement deterministic anti-cheat telemetry analyzer and trust factor updates`
+
+---
+
+## СПРИНТ 6. Оптимизация Архива Чемпионов и финальная полировка (Production Ready ⏳)
+
+### - [ ] Таск 6.1. Оптимизация SQL-запросов истории партий и сидера Чемпионов (`src/api/profile.py` и `src/db/seed.py`)
+
+* **Техническая причина:** В `src/api/profile.py` функция `get_user_games` сейчас выгружает все партии игрока из БД в
+  память Python (`games_result.all()`) и на каждый HTTP-запрос регулярными выражениями парсит `game.pgn`, чтобы достать
+  `Result`, `Date`, `Site`, `ECO`.
+* **Ветка Git:** `perf/optimize-games-query-and-seeder`
+* **Команда старта:**
+
+  git checkout dev && git pull origin dev && git checkout -b perf/optimize-games-query-and-seeder
+
+* **Что сделать:**
+    1. Добавить в модель `Game` (`src/models/game.py`) индексированные колонки `pgn_date` (`String(20)`), `site`
+       (`String(100)`), `eco` (`String(10)`) и выполнить миграцию Alembic:
+
+  alembic revision --autogenerate -m "add_metadata_columns_to_games"
+  alembic upgrade head
+
+    2. Обновить `src/db/seed.py` и `state_manager.finish_game`, чтобы эти поля заполнялись один раз при сохранении
+       партии в БД.
+    3. В `src/api/profile.py` перевести пагинацию и сортировку `get_user_games` на чистый SQL (`ORDER BY`, `LIMIT`,
+       `OFFSET` на уровне PostgreSQL) без загрузки всех PGN в оперативную память.
+* **Тестирование:**
+
+  python -m pytest -v
+
+* **Коммит:** `perf: store game metadata in indexed DB columns and use SQL pagination`
+
+---
+
+### - [ ] Таск 6.2. Touch-адаптация доски для планшетов и смартфонов + таблица лидеров (`Leaderboard`)
+
+* **Техническая причина:**
+    1. На бэкенде в `src/api/profile.py` уже написан готовый эндпоинт `GET /api/v1/profile/leaderboard`, но на фронтенде
+       для него ещё нет страницы.
+    2. В `Chessboard.tsx` перетаскивание фигур завязано на `onMouseDown` / `mousemove` / `mouseup`. Добавление
+       `Pointer Events` (`onPointerDown`, `pointermove`, `pointerup`) позволит комфортно двигать фигуры пальцем на
+       телефоне или планшете.
+* **Ветка Git:** `feature/leaderboard-and-touch-support`
+* **Команда старта:**
+
+  git checkout dev && git pull origin dev && git checkout -b feature/leaderboard-and-touch-support
+
+* **Что сделать:**
+    1. Создать компонент `frontend/src/components/Leaderboard.tsx` (и роут `/leaderboard` в `App.tsx`), подключив его к
+       `GET /api/v1/profile/leaderboard`.
+    2. В `Chessboard.tsx` и `GameViewer.tsx` адаптировать `boardSize` под ширину мобильного экрана
+       (`Math.min(boardSize, window.innerWidth - 24)`) и заменить мышиные события перетаскивания на универсальные
+       `Pointer Events`.
+* **Тестирование:**
+
+  cd frontend && npm run lint && npm run test && npm run build && cd ..
+
+* **Коммит:** `feat: add Leaderboard page and responsive touch/pointer support for chessboard`
+
+---
+
+### - [ ] Таск 6.3. Финальный релиз в ветку `master`
+
+Когда все 6 спринтов пройдены, протестированы и влиты в `dev`, выпускаем чистый стабильный релиз:
+
+    python -m flake8 src tests scripts --count --select=E9,F63,F7,F82 --show-source --statistics
+    python -m pytest -v
+    cd frontend && npm run lint && npm run test && npm run build && cd ..
+
+    git checkout master
+    git pull origin master
+    git merge --no-ff dev -m "Release v1.0: Full PvP Chess Portal with Stockfish Analysis and Anti-Cheat"
+    git push origin master
+    git checkout dev
+
+========================================================================================
+FILE: requirements.txt
+========================================================================================
+aiosqlite==0.22.1
+alembic==1.19.0
+amqp==5.3.1
+annotated-doc==0.0.5
+annotated-types==0.8.0
+anyio==4.14.2
+asyncpg==0.31.0
+bcrypt==4.0.1
+billiard==4.2.4
+celery==5.6.3
+celery-types==0.26.0
+certifi==2026.7.22
+charset-normalizer==3.4.9
+chess==1.11.2
+click==8.4.2
+click-didyoumean==0.3.1
+click-plugins==1.1.1.2
+click-repl==0.3.0
+colorama==0.4.6
+fakeredis==2.37.0
+fastapi==0.141.1
+flake8==7.4.1
+greenlet==3.5.4
+h11==0.16.0
+httpcore==1.0.9
+httptools==0.8.0
+httpx==0.28.1
+idna==3.18
+iniconfig==2.3.0
+kombu==5.6.2
+Mako==1.4.0
+MarkupSafe==3.0.3
+mccabe==0.7.0
+packaging==26.3
+passlib==1.7.4
+pluggy==1.6.0
+prompt_toolkit==3.0.53
+pycodestyle==2.15.0
+pydantic==2.13.4
+pydantic-settings==2.14.2
+pydantic_core==2.46.4
+pyflakes==4.0.3
+Pygments==2.20.0
+PyJWT==2.13.0
+pytest==9.1.1
+pytest-asyncio==1.4.0
+python-chess==1.999
+python-dateutil==2.9.0.post0
+python-dotenv==1.2.2
+python-multipart==0.0.32
+PyYAML==6.0.3
+redis==8.1.0
+requests==2.34.2
+six==1.17.0
+sortedcontainers==2.4.0
+SQLAlchemy==2.0.51
+starlette==1.3.1
+stockfish==5.2.0
+typing-inspection==0.4.2
+typing_extensions==4.16.0
+tzdata==2026.3
+tzlocal==5.4.4
+urllib3==2.7.0
+uvicorn==0.52.1
+vine==5.1.0
+watchfiles==1.2.0
+wcwidth==0.8.2
+websockets==17.0.1
+
+========================================================================================
+FILE: pytest.ini
+========================================================================================
+[pytest]
+pythonpath = .
+asyncio_mode = auto
+testpaths = tests
+filterwarnings =
+    ignore::DeprecationWarning
+    ignore::PendingDeprecationWarning
+    ignore:.*httpx.*:UserWarning
+
+========================================================================================
+FILE: alembic.ini
+========================================================================================
+# A generic, single database configuration.
+
+[alembic]
+# path to migration scripts.
+# this is typically a path given in POSIX (e.g. forward slashes)
+# format, relative to the token %(here)s which refers to the location of this
+# ini file
+script_location = %(here)s/migrations
+
+# template used to generate migration file names; The default value is %%(rev)s_%%(slug)s
+# Uncomment the line below if you want the files to be prepended with date and time
+# see https://alembic.sqlalchemy.org/en/latest/tutorial.html#editing-the-ini-file
+# for all available tokens
+# file_template = %%(year)d_%%(month).2d_%%(day).2d_%%(hour).2d%%(minute).2d-%%(rev)s_%%(slug)s
+# Or organize into date-based subdirectories (requires recursive_version_locations = true)
+# file_template = %%(year)d/%%(month).2d/%%(day).2d_%%(hour).2d%%(minute).2d_%%(second).2d_%%(rev)s_%%(slug)s
+
+# sys.path path, will be prepended to sys.path if present.
+# defaults to the current working directory.  for multiple paths, the path separator
+# is defined by "path_separator" below.
+prepend_sys_path = .
+
+# timezone to use when rendering the date within the migration file
+# as well as the filename.
+# If specified, requires the tzdata library which can be installed by adding
+# `alembic[tz]` to the pip requirements.
+# string value is passed to ZoneInfo()
+# leave blank for localtime
+# timezone =
+
+# max length of characters to apply to the "slug" field
+# truncate_slug_length = 40
+
+# set to 'true' to run the environment during
+# the 'revision' command, regardless of autogenerate
+# revision_environment = false
+
+# set to 'true' to allow .pyc and .pyo files without
+# a source .py file to be detected as revisions in the
+# versions/ directory
+# sourceless = false
+
+# version location specification; This defaults
+# to <script_location>/versions.  When using multiple version
+# directories, initial revisions must be specified with --version-path.
+# The path separator used here should be the separator specified by "path_separator"
+# below.
+# version_locations = %(here)s/bar:%(here)s/bat:%(here)s/alembic/versions
+
+# path_separator; This indicates what character is used to split lists of file
+# paths, including version_locations and prepend_sys_path within configparser
+# files such as alembic.ini.
+# The default rendered in new alembic.ini files is "os", which uses os.pathsep
+# to provide os-dependent path splitting.
+#
+# Note that in order to support legacy alembic.ini files, this default does NOT
+# take place if path_separator is not present in alembic.ini.  If this
+# option is omitted entirely, fallback logic is as follows:
+#
+# 1. Parsing of the version_locations option falls back to using the legacy
+#    "version_path_separator" key, which if absent then falls back to the legacy
+#    behavior of splitting on spaces and/or commas.
+# 2. Parsing of the prepend_sys_path option falls back to the legacy
+#    behavior of splitting on spaces, commas, or colons.
+#
+# Valid values for path_separator are:
+#
+# path_separator = :
+# path_separator = ;
+# path_separator = space
+# path_separator = newline
+#
+# Use os.pathsep. Default configuration used for new projects.
+path_separator = os
+
+
+# set to 'true' to search source files recursively
+# in each "version_locations" directory
+# new in Alembic version 1.10
+# recursive_version_locations = false
+
+# the output encoding used when revision files
+# are written from script.py.mako
+# output_encoding = utf-8
+
+# database URL.  This is consumed by the user-maintained env.py script only.
+# other means of configuring database URLs may be customized within the env.py
+# file.
+sqlalchemy.url = driver://user:pass@localhost/dbname
+
+
+[post_write_hooks]
+# post_write_hooks defines scripts or Python functions that are run
+# on newly generated revision scripts.  See the documentation for further
+# detail and examples
+
+# format using "black" - use the console_scripts runner, against the "black" entrypoint
+# hooks = black
+# black.type = console_scripts
+# black.entrypoint = black
+# black.options = -l 79 REVISION_SCRIPT_FILENAME
+
+# lint with attempts to fix using "ruff" - use the module runner, against the "ruff" module
+# hooks = ruff
+# ruff.type = module
+# ruff.module = ruff
+# ruff.options = check --fix REVISION_SCRIPT_FILENAME
+
+# Alternatively, use the exec runner to execute a binary found on your PATH
+# hooks = ruff
+# ruff.type = exec
+# ruff.executable = ruff
+# ruff.options = check --fix REVISION_SCRIPT_FILENAME
+
+# Logging configuration.  This is also consumed by the user-maintained
+# env.py script only.
+[loggers]
+keys = root,sqlalchemy,alembic
+
+[handlers]
+keys = console
+
+[formatters]
+keys = generic
+
+[logger_root]
+level = WARNING
+handlers = console
+qualname =
+
+[logger_sqlalchemy]
+level = WARNING
+handlers =
+qualname = sqlalchemy.engine
+
+[logger_alembic]
+level = INFO
+handlers =
+qualname = alembic
+
+[handler_console]
+class = StreamHandler
+args = (sys.stderr,)
+level = NOTSET
+formatter = generic
+
+[formatter_generic]
+format = %(levelname)-5.5s [%(name)s] %(message)s
+datefmt = %H:%M:%S
+
+========================================================================================
+FILE: docker-compose.yml
+========================================================================================
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: michess_user
+      POSTGRES_PASSWORD: michess_password
+      POSTGRES_DB: michess_db
+    ports:
+      - "15432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  redis:
+    image: redis:8.0-M02-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+
+========================================================================================
+FILE: .github/workflows/ci.yml
+========================================================================================
+# --- FILE: .github/workflows/ci.yml ---
+
+name: Michess CI
+
+on:
+  push:
+    branches: [ "master", "dev" ]
+  pull_request:
+    branches: [ "master", "dev" ]
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  backend-test:
+    name: Backend Tests and Linters
+    runs-on: ubuntu-latest
+
+    services:
+      redis:
+        image: redis:8.0-M02-alpine
+        ports:
+          - 6379:6379
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install Stockfish engine for Linux CI
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y stockfish
+          mkdir -p bin
+          if [ -f /usr/games/stockfish ]; then ln -sf /usr/games/stockfish bin/stockfish; fi
+          if [ -f /usr/bin/stockfish ]; then ln -sf /usr/bin/stockfish bin/stockfish; fi
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Lint with flake8
+        run: |
+          python -m flake8 src tests scripts --count --select=E9,F63,F7,F82 --show-source --statistics
+          python -m flake8 src tests scripts --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Run pytest
+        env:
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          SECRET_KEY: test_secret_key_for_ci_only
+          POSTGRES_USER: ci_user
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_SERVER: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_DB: ci_db
+        run: |
+          python -m pytest -v
+
+  frontend-test:
+    name: Frontend Lint, Test and Build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run linter (oxlint)
+        run: npm run lint
+
+      - name: Run unit tests (vitest)
+        run: npm run test
+
+      - name: Build production bundle
+        run: npm run build
+
+========================================================================================
+FILE: frontend/package.json
+========================================================================================
+{
+  "name": "frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 3000 --strictPort",
+    "build": "tsc -b && vite build",
+    "lint": "oxlint",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "chess.js": "^1.0.0-beta.6",
+    "date-fns": "^4.1.0",
+    "lucide-react": "^1.16.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-router-dom": "^7.1.1",
+    "recharts": "^2.15.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/node": "^26.6.5",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "oxlint": "^0.15.3",
+    "tailwindcss": "^4.0.0",
+    "typescript": "~5.7.2",
+    "vite": "^6.0.5",
+    "vitest": "^3.0.4"
+  }
+}
+
+========================================================================================
+FILE: frontend/vite.config.ts
+========================================================================================
+// --- FILE: frontend/vite.config.ts ---
+
+import {defineConfig} from 'vite'
+import react from '@vitejs/plugin-react'
+import tailwindcss from '@tailwindcss/vite'
+
+export default defineConfig({
+    plugins: [react(), tailwindcss()],
+    server: {
+        host: '127.0.0.1',
+        port: 3000,
+        strictPort: true,
+    },
+})
+
+========================================================================================
+FILE: frontend/tsconfig.json
+========================================================================================
+{
+  "files": [],
+  "references": [
+    { "path": "./tsconfig.app.json" },
+    { "path": "./tsconfig.node.json" }
+  ]
+}
+
+========================================================================================
+FILE: migrations/env.py
+========================================================================================
+import asyncio
+from logging.config import fileConfig
+
+from sqlalchemy import pool
+from sqlalchemy.engine import Connection
+from sqlalchemy.ext.asyncio import async_engine_from_config
+
+from alembic import context
+
+# Импорт конфигурации и базовой модели
+from src.core.config import settings
+from src.models import Base
+
+config = context.config
+
+if config.config_file_name is not None:
+    fileConfig(config.config_file_name)
+
+target_metadata = Base.metadata
+
+
+def run_migrations_offline() -> None:
+    url = settings.async_database_url
+    context.configure(
+        url=url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        dialect_opts={"paramstyle": "named"},
+    )
+
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+def do_run_migrations(connection: Connection) -> None:
+    context.configure(connection=connection, target_metadata=target_metadata)
+
+    with context.begin_transaction():
+        context.run_migrations()
+
+
+async def run_async_migrations() -> None:
+    configuration = config.get_section(config.config_ini_section, {})
+    configuration["sqlalchemy.url"] = settings.async_database_url
+
+    connectable = async_engine_from_config(
+        configuration,
+        prefix="sqlalchemy.",
+        poolclass=pool.NullPool,
+    )
+
+    async with connectable.connect() as connection:
+        await connection.run_sync(do_run_migrations)
+
+    await connectable.dispose()
+
+
+def run_migrations_online() -> None:
+    asyncio.run(run_async_migrations())
+
+
+if context.is_offline_mode():
+    run_migrations_offline()
+else:
+    run_migrations_online()
+
+========================================================================================
+FILE: migrations/README
+========================================================================================
+Generic single-database configuration with an async dbapi.
+
+========================================================================================
+FILE: migrations/script.py.mako
+========================================================================================
+"""${message}
+
+Revision ID: ${up_revision}
+Revises: ${down_revision | comma,n}
+Create Date: ${create_date}
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+${imports if imports else ""}
+
+# revision identifiers, used by Alembic.
+revision: str = ${repr(up_revision)}
+down_revision: Union[str, Sequence[str], None] = ${repr(down_revision)}
+branch_labels: Union[str, Sequence[str], None] = ${repr(branch_labels)}
+depends_on: Union[str, Sequence[str], None] = ${repr(depends_on)}
+
+
+def upgrade() -> None:
+    """Upgrade schema."""
+    ${upgrades if upgrades else "pass"}
+
+
+def downgrade() -> None:
+    """Downgrade schema."""
+    ${downgrades if downgrades else "pass"}
+
+========================================================================================
+FILE: migrations/versions/3605cc4e4cfc_add_time_controls_to_game.py
+========================================================================================
+"""add_time_controls_to_game
+
+Revision ID: 3605cc4e4cfc
+Revises: af5330e8cef6
+Create Date: 2026-08-05
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision: str = '3605cc4e4cfc'
+down_revision: Union[str, Sequence[str], None] = 'af5330e8cef6'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.add_column('games', sa.Column('base_time_ms', sa.Integer(), server_default='180000', nullable=False))
+    op.add_column('games', sa.Column('increment_ms', sa.Integer(), server_default='0', nullable=False))
+    op.add_column('games', sa.Column('is_rated', sa.Boolean(), server_default='true', nullable=False))
+    # ### end Alembic commands ###
+
+
+def downgrade() -> None:
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_column('games', 'is_rated')
+    op.drop_column('games', 'increment_ms')
+    op.drop_column('games', 'base_time_ms')
+    # ### end Alembic commands ###
+
+========================================================================================
+FILE: migrations/versions/4101ce4b6d90_authoritative_game_state_and_move_.py
+========================================================================================
+"""authoritative_game_state_and_move_journal
+
+Revision ID: 4101ce4b6d90
+Revises: 3605cc4e4cfc
+Create Date: 2026-08-10 11:15:01.498264
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision: str = '4101ce4b6d90'
+down_revision: Union[str, Sequence[str], None] = '3605cc4e4cfc'
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    """Upgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.add_column('games', sa.Column('state_version', sa.Integer(), server_default='0', nullable=False))
+    op.add_column('games', sa.Column('turn', sa.String(length=1), server_default='w', nullable=False))
+    op.add_column('games', sa.Column('board_fen', sa.String(), server_default='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1', nullable=False))
+    op.add_column('games', sa.Column('white_time_ms', sa.Integer(), nullable=True))
+    op.add_column('games', sa.Column('black_time_ms', sa.Integer(), nullable=True))
+    op.add_column('games', sa.Column('last_move_at', sa.BigInteger(), nullable=True))
+    op.add_column('games', sa.Column('result', sa.String(length=10), nullable=True))
+    op.add_column('games', sa.Column('termination', sa.String(length=50), nullable=True))
+    op.add_column('games', sa.Column('winner_id', sa.Integer(), nullable=True))
+    op.add_column('games', sa.Column('white_initial_rating', sa.Integer(), nullable=True))
+    op.add_column('games', sa.Column('black_initial_rating', sa.Integer(), nullable=True))
+    op.add_column('games', sa.Column('white_rating_delta', sa.Integer(), nullable=True))
+    op.add_column('games', sa.Column('black_rating_delta', sa.Integer(), nullable=True))
+    op.create_foreign_key(None, 'games', 'users', ['winner_id'], ['id'])
+    op.add_column('moves', sa.Column('san', sa.String(length=10), nullable=True))
+    op.add_column('moves', sa.Column('fen_after', sa.String(), nullable=True))
+    # ### end Alembic commands ###
+
+
+def downgrade() -> None:
+    """Downgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_column('moves', 'fen_after')
+    op.drop_column('moves', 'san')
+    op.drop_constraint(None, 'games', type_='foreignkey')
+    op.drop_column('games', 'black_rating_delta')
+    op.drop_column('games', 'white_rating_delta')
+    op.drop_column('games', 'black_initial_rating')
+    op.drop_column('games', 'white_initial_rating')
+    op.drop_column('games', 'winner_id')
+    op.drop_column('games', 'termination')
+    op.drop_column('games', 'result')
+    op.drop_column('games', 'last_move_at')
+    op.drop_column('games', 'black_time_ms')
+    op.drop_column('games', 'white_time_ms')
+    op.drop_column('games', 'board_fen')
+    op.drop_column('games', 'turn')
+    op.drop_column('games', 'state_version')
+    # ### end Alembic commands ###
+
+========================================================================================
+FILE: migrations/versions/af5330e8cef6_init_tables.py
+========================================================================================
+"""init_tables
+
+Revision ID: af5330e8cef6
+Revises: 
+Create Date: 2026-08-04 23:22:54.554170
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+
+
+# revision identifiers, used by Alembic.
+revision: str = 'af5330e8cef6'
+down_revision: Union[str, Sequence[str], None] = None
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    """Upgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.create_table('users',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('username', sa.String(length=50), nullable=False),
+    sa.Column('hashed_password', sa.String(), nullable=False),
+    sa.Column('rating', sa.Integer(), nullable=False),
+    sa.Column('is_cheater', sa.Boolean(), nullable=False),
+    sa.Column('trust_factor', sa.Integer(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_users_id'), 'users', ['id'], unique=False)
+    op.create_index(op.f('ix_users_is_cheater'), 'users', ['is_cheater'], unique=False)
+    op.create_index(op.f('ix_users_username'), 'users', ['username'], unique=True)
+    op.create_table('games',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('white_player_id', sa.Integer(), nullable=False),
+    sa.Column('black_player_id', sa.Integer(), nullable=False),
+    sa.Column('pgn', sa.String(), nullable=True),
+    sa.Column('status', sa.Enum('PENDING', 'IN_PROGRESS', 'COMPLETED', 'ABORTED', name='gamestatus'), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('finished_at', sa.DateTime(timezone=True), nullable=True),
+    sa.ForeignKeyConstraint(['black_player_id'], ['users.id'], ),
+    sa.ForeignKeyConstraint(['white_player_id'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_games_id'), 'games', ['id'], unique=False)
+    op.create_table('moves',
+    sa.Column('id', sa.Integer(), nullable=False),
+    sa.Column('game_id', sa.Integer(), nullable=False),
+    sa.Column('player_id', sa.Integer(), nullable=False),
+    sa.Column('move_number', sa.Integer(), nullable=False),
+    sa.Column('notation', sa.String(length=10), nullable=False),
+    sa.Column('time_taken_ms', sa.Integer(), nullable=False),
+    sa.Column('window_blurred_before_move', sa.Boolean(), nullable=False),
+    sa.Column('is_premove', sa.Boolean(), nullable=False),
+    sa.Column('network_lag_ms', sa.Integer(), nullable=False),
+    sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.ForeignKeyConstraint(['game_id'], ['games.id'], ),
+    sa.ForeignKeyConstraint(['player_id'], ['users.id'], ),
+    sa.PrimaryKeyConstraint('id')
+    )
+    op.create_index(op.f('ix_moves_game_id'), 'moves', ['game_id'], unique=False)
+    op.create_index(op.f('ix_moves_id'), 'moves', ['id'], unique=False)
+    # ### end Alembic commands ###
+
+
+def downgrade() -> None:
+    """Downgrade schema."""
+    # ### commands auto generated by Alembic - please adjust! ###
+    op.drop_index(op.f('ix_moves_id'), table_name='moves')
+    op.drop_index(op.f('ix_moves_game_id'), table_name='moves')
+    op.drop_table('moves')
+    op.drop_index(op.f('ix_games_id'), table_name='games')
+    op.drop_table('games')
+    op.drop_index(op.f('ix_users_username'), table_name='users')
+    op.drop_index(op.f('ix_users_is_cheater'), table_name='users')
+    op.drop_index(op.f('ix_users_id'), table_name='users')
+    op.drop_table('users')
+    # ### end Alembic commands ###
+
+========================================================================================
+FILE: migrations/versions/c8a91e2f4b10_add_analysis_json_to_game.py
+========================================================================================
+# --- FILE: migrations/versions/c8a91e2f4b10_add_analysis_json_to_game.py ---
+
+"""add_analysis_json_to_game
+
+Revision ID: c8a91e2f4b10
+Revises: 4101ce4b6d90
+Create Date: 2026-11-03 23:45:00.000000
+
+"""
+from typing import Sequence, Union
+
+from alembic import op
+import sqlalchemy as sa
+
+revision: str = "c8a91e2f4b10"
+down_revision: Union[str, Sequence[str], None] = "4101ce4b6d90"
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+
+def upgrade() -> None:
+    op.add_column("games", sa.Column("analysis_json", sa.Text(), nullable=True))
+
+
+def downgrade() -> None:
+    op.drop_column("games", "analysis_json")
+
+========================================================================================
+FILE: migrations/versions/d9f4a1b2c3e4_add_metadata_columns_to_games.py
+========================================================================================
+# --- FILE: migrations/versions/d9f4a1b2c3e4_add_metadata_columns_to_games.py ---
+
+"""add_metadata_columns_to_games
+
+Revision ID: d9f4a1b2c3e4
+Revises: c8a91e2f4b10
+Create Date: 2026-11-05 22:30:00.000000
+
+"""
+import re
+from typing import Sequence, Union
+from alembic import op
+import sqlalchemy as sa
+
+revision: str = "d9f4a1b2c3e4"
+down_revision: Union[str, Sequence[str], None] = "c8a91e2f4b10"
+branch_labels: Union[str, Sequence[str], None] = None
+depends_on: Union[str, Sequence[str], None] = None
+
+DATE_RE = re.compile(r'\[(?:Event)?Date\s+"([^"]+)"\]')
+SITE_RE = re.compile(r'\[Site\s+"([^"]+)"\]')
+ECO_RE = re.compile(r'\[ECO\s+"([^"]+)"\]')
+RESULT_RE = re.compile(r'\[Result\s+"([^"]+)"\]')
+
+
+def upgrade() -> None:
+    op.add_column("games", sa.Column("pgn_date", sa.String(length=20), nullable=True))
+    op.add_column("games", sa.Column("site", sa.String(length=100), nullable=True))
+    op.add_column("games", sa.Column("eco", sa.String(length=10), nullable=True))
+
+    op.create_index(op.f("ix_games_pgn_date"), "games", ["pgn_date"], unique=False)
+    op.create_index(op.f("ix_games_site"), "games", ["site"], unique=False)
+    op.create_index(op.f("ix_games_eco"), "games", ["eco"], unique=False)
+    op.create_index(op.f("ix_games_white_player_id"), "games", ["white_player_id"], unique=False)
+    op.create_index(op.f("ix_games_black_player_id"), "games", ["black_player_id"], unique=False)
+    op.create_index(op.f("ix_games_status"), "games", ["status"], unique=False)
+    op.create_index(op.f("ix_games_finished_at"), "games", ["finished_at"], unique=False)
+
+    # Бэкфилл метаданных для уже существующих в базе партий
+    bind = op.get_bind()
+    rows = bind.execute(sa.text("SELECT id, pgn, result FROM games WHERE pgn IS NOT NULL AND pgn != ''")).fetchall()
+    for row in rows:
+        game_id, pgn_text, cur_result = row[0], row[1], row[2]
+        pgn_date = None
+        site = None
+        eco = None
+        res_val = cur_result
+
+        for m in DATE_RE.finditer(pgn_text):
+            val = m.group(1).strip()
+            if val and not val.startswith("?"):
+                pgn_date = val[:20]
+                break
+
+        s_match = SITE_RE.search(pgn_text)
+        if s_match and s_match.group(1).strip() != "?":
+            site = s_match.group(1).strip()[:100]
+
+        e_match = ECO_RE.search(pgn_text)
+        if e_match and e_match.group(1).strip() != "?":
+            eco = e_match.group(1).strip()[:10]
+
+        if not res_val or res_val == "*":
+            r_match = RESULT_RE.search(pgn_text)
+            if r_match:
+                res_val = r_match.group(1).strip()[:10]
+
+        bind.execute(
+            sa.text(
+                "UPDATE games SET pgn_date = :d, site = :s, eco = :e, result = :r WHERE id = :id"
+            ),
+            {"d": pgn_date, "s": site, "e": eco, "r": res_val, "id": game_id},
+        )
+
+
+def downgrade() -> None:
+    op.drop_index(op.f("ix_games_finished_at"), table_name="games")
+    op.drop_index(op.f("ix_games_status"), table_name="games")
+    op.drop_index(op.f("ix_games_black_player_id"), table_name="games")
+    op.drop_index(op.f("ix_games_white_player_id"), table_name="games")
+    op.drop_index(op.f("ix_games_eco"), table_name="games")
+    op.drop_index(op.f("ix_games_site"), table_name="games")
+    op.drop_index(op.f("ix_games_pgn_date"), table_name="games")
+    op.drop_column("games", "eco")
+    op.drop_column("games", "site")
+    op.drop_column("games", "pgn_date")
+
+========================================================================================
+FILE: src/__init__.py
+========================================================================================
+
+
+========================================================================================
+FILE: src/api/analysis.py
+========================================================================================
+# --- FILE: src/api/analysis.py ---
+
+import json
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.db.session import get_db
+from src.models.game import Game
+from src.schemas.analysis import FullGameAnalysisResponse, PositionAnalysisRequest
+from src.services.analysis_service import analysis_service
+
+router = APIRouter(prefix="/analysis", tags=["Game Analysis"])
+
+
+@router.post("/position")
+async def analyze_game_position(
+        request: PositionAnalysisRequest,
+        db: AsyncSession = Depends(get_db),
+):
+    """Возвращает оценку позиции Stockfish для заданного массива ходов."""
+    return await analysis_service.analyze_position(db, request.moves)
+
+
+@router.get("/game/{game_id}", response_model=FullGameAnalysisResponse | None)
+async def get_cached_game_analysis(
+        game_id: int,
+        db: AsyncSession = Depends(get_db),
+):
+    """Возвращает уже сохранённый компьютерный анализ партии из БД, если он есть."""
+    game = await db.get(Game, game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail=f"Партия {game_id} не найдена")
+    if not game.analysis_json:
+        return None
+    try:
+        data = json.loads(game.analysis_json)
+        data["game_id"] = game_id
+        return data
+    except Exception:
+        return None
+
+
+@router.post("/game/{game_id}", response_model=FullGameAnalysisResponse)
+async def analyze_full_game_endpoint(
+        game_id: int,
+        force: bool = Query(default=False, description="Принудительно пересчитать анализ"),
+        db: AsyncSession = Depends(get_db),
+):
+    """Выполняет полный разбор завершённой партии с расчётом точности и классификацией зевков."""
+    try:
+        return await analysis_service.analyze_full_game(db, game_id, force=force)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+========================================================================================
+FILE: src/api/auth.py
+========================================================================================
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+
+from src.db.session import get_db
+from src.core.security import get_password_hash, verify_password, create_access_token
+from src.models.user import User
+from src.schemas.user import UserCreate, UserResponse
+
+router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+
+@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+async def register_user(user_in: UserCreate, db: AsyncSession = Depends(get_db)):
+    """
+    Register a new user.
+    """
+    result = await db.execute(select(User).where(User.username == user_in.username))
+    existing_user = result.scalars().first()
+
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Username already registered."
+        )
+
+    hashed_pwd = get_password_hash(user_in.password)
+
+    new_user = User(
+        username=user_in.username,
+        hashed_password=hashed_pwd,
+    )
+
+    db.add(new_user)
+    await db.commit()
+    await db.refresh(new_user)
+
+    return new_user
+
+
+@router.post("/login")
+async def login(
+        form_data: OAuth2PasswordRequestForm = Depends(),
+        db: AsyncSession = Depends(get_db)
+):
+    """
+    OAuth2 compatible token login, get an access token for future requests.
+    """
+    # 1. Fetch user from database
+    result = await db.execute(select(User).where(User.username == form_data.username))
+    user = result.scalars().first()
+
+    # 2. Verify existence and password
+    if not user or not verify_password(form_data.password, user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect username or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # 3. Generate JWT
+    access_token = create_access_token(data={"sub": user.username})
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
+
+========================================================================================
+FILE: src/api/bots.py
+========================================================================================
+# --- FILE: src/api/bots.py ---
+
+import asyncio
+from datetime import datetime, timezone
+import random
+import chess
+import chess.pgn
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.api import deps
+from src.db import session as db_session
+from src.models.game import Game
+from src.models.user import User
+from src.services.bots.anderssen import anderssen_bot
+from src.services.bots.labourdonnais import labourdonnais_bot
+from src.services.bots.morphy import morphy_bot
+from src.services.bots.paulsen import paulsen_bot
+from src.services.bots.philidor import philidor_bot, resolve_stockfish_path
+from src.services.bots.staunton import staunton_bot
+from src.services.bots.zukertort import zukertort_bot
+
+router = APIRouter()
+
+get_db = getattr(deps, "get_db", None) or getattr(db_session, "get_db", None)
+get_current_user = getattr(deps, "get_current_user", None)
+
+AVAILABLE_BOTS = [
+    {
+        "id": "philidor",
+        "name": "Ф.-А. Филидор",
+        "full_name": "Франсуа-Андре Филидор",
+        "era": "1749–1795",
+        "title": "Мастер Просвещения",
+        "rating": 1850,
+        "motto": "Пешки — душа шахмат: именно они определяют атаку и защиту.",
+        "avatar": "/assets/champions/philidor.jpg",
+    },
+    {
+        "id": "labourdonnais",
+        "name": "Л.-Ш. Лабурдонне",
+        "full_name": "Луи-Шарль Лабурдонне",
+        "era": "1795–1840",
+        "title": "Король Комбинаций",
+        "rating": 1950,
+        "motto": "Инициатива, гамбит и стремительная атака на короля!",
+        "avatar": "/assets/champions/philidor.jpg",
+    },
+    {
+        "id": "staunton",
+        "name": "Г. Стаунтон",
+        "full_name": "Говард Стаунтон",
+        "era": "1810–1874",
+        "title": "Основатель Английской Школы",
+        "rating": 2000,
+        "motto": "Фланговый зажим центра, прочная структура и классический расчёт.",
+        "avatar": "/assets/champions/philidor.jpg",
+    },
+    {
+        "id": "anderssen",
+        "name": "А. Андерсен",
+        "full_name": "Адольф Андерсен",
+        "era": "1818–1879",
+        "title": "Маэстро Бессмертных Партий",
+        "rating": 2100,
+        "motto": "Бриллиантовая жертва фигуры ради вскрытия линий и мата королю!",
+        "avatar": "/assets/champions/philidor.jpg",
+    },
+    {
+        "id": "morphy",
+        "name": "Пол Морфи",
+        "full_name": "Пол Чарльз Морфи",
+        "era": "1837–1884",
+        "title": "Гордость и печаль шахмат",
+        "rating": 2150,
+        "motto": "Развивайте все фигуры с темпом и вскрывайте линии для атаки!",
+        "avatar": "/assets/champions/philidor.jpg",
+    },
+    {
+        "id": "paulsen",
+        "name": "Л. Паульсен",
+        "full_name": "Луи Паульсен",
+        "era": "1833–1891",
+        "title": "Гений Защиты и Двух Слонов",
+        "rating": 2080,
+        "motto": "Гибкая оборона, сила двух слонов и глубокие дебютные новинки.",
+        "avatar": "/assets/champions/philidor.jpg",
+    },
+    {
+        "id": "zukertort",
+        "name": "И. Цукерторт",
+        "full_name": "Иоганн Герман Цукерторт",
+        "era": "1842–1888",
+        "title": "Триумфатор Лондона 1883",
+        "rating": 2120,
+        "motto": "Универсальная гармония развития и сокрушительные комбинационные бури!",
+        "avatar": "/assets/champions/philidor.jpg",
+    },
+]
+
+BOT_INSTANCES = {
+    "philidor": philidor_bot,
+    "labourdonnais": labourdonnais_bot,
+    "staunton": staunton_bot,
+    "anderssen": anderssen_bot,
+    "morphy": morphy_bot,
+    "paulsen": paulsen_bot,
+    "zukertort": zukertort_bot,
+}
+
+BOT_METADATA = {b["id"]: b for b in AVAILABLE_BOTS}
+
+# Коэффициент темпа игры исторических мастеров (Морфи и Лабурдонне играли молниеносно, Стаунтон и Паульсен — долго)
+BOT_TEMPO_MULTIPLIER = {
+    "morphy": 0.72,
+    "labourdonnais": 0.78,
+    "anderssen": 0.90,
+    "philidor": 0.95,
+    "zukertort": 1.00,
+    "paulsen": 1.22,
+    "staunton": 1.28,
+}
+
+
+class BotMoveRequest(BaseModel):
+    bot_id: str = Field(default="philidor", description="ID исторического бота")
+    fen: str = Field(..., description="Текущая позиция на доске в формате FEN")
+
+
+class BotMoveResponse(BaseModel):
+    bot_id: str
+    uci: str
+    san: str
+    fen_after: str
+    source: str
+    comment: str
+    thinking_time_ms: int = Field(default=650, description="Рекомендуемое время размышления бота в мс")
+
+
+class BotGameSaveRequest(BaseModel):
+    bot_id: str = Field(..., description="ID исторического бота")
+    player_color: str = Field(..., description="Цвет игрока ('white' или 'black')")
+    result: str = Field(..., description="Результат партии ('1-0', '0-1', '1/2-1/2')")
+    moves_uci: list[str] = Field(default_factory=list, description="Список сделанных ходов в формате UCI")
+    base_time_ms: int = Field(default=180000, description="Базовый контроль времени в мс")
+    increment_ms: int = Field(default=0, description="Добавление времени на ход в мс")
+
+
+class BotGameSaveResponse(BaseModel):
+    game_id: int
+    status: str
+    result: str
+
+
+def calculate_authentic_thinking_time_ms(
+        bot_id: str,
+        board: chess.Board,
+        uci_move: str,
+        source: str,
+) -> int:
+    """
+    Вычисляет реалистичное человеческое время на ход (в мс) для исторического мастера
+    с учётом его темпа, дебютной книги, единственного ответа или тактической сложности позиции.
+    """
+    legal_moves = list(board.legal_moves)
+    num_legal = len(legal_moves)
+    tempo = BOT_TEMPO_MULTIPLIER.get(bot_id, 1.0)
+
+    # Единственный легальный ход (например, выход из шаха) — почти мгновенно
+    if num_legal <= 1:
+        return int(random.randint(240, 380) * tempo)
+
+    # Ход из дебютной книги — быстрое воспроизведение по памяти
+    if source == "book":
+        base_ms = random.randint(360, 680) + board.fullmove_number * 22
+        return int(base_ms * tempo)
+
+    move_obj = chess.Move.from_uci(uci_move)
+    is_capture = board.is_capture(move_obj)
+    gives_check = board.gives_check(move_obj)
+
+    # Оцениваем напряжённость позиции (количество возможных взятий и разветвлений)
+    captures_available = sum(1 for m in legal_moves if board.is_capture(m))
+    complexity_ms = min(num_legal * 26, 950) + min(captures_available * 95, 550)
+
+    if board.is_check():
+        complexity_ms += 250
+    if is_capture or gives_check:
+        complexity_ms += 280
+
+    # В глубоком эндшпиле (мало фигур) техническая реализация идёт быстрее
+    piece_count = len(board.piece_map())
+    if piece_count <= 10:
+        complexity_ms = int(complexity_ms * 0.65)
+
+    raw_ms = (520 + complexity_ms + random.randint(-110, 180)) * tempo
+    return max(320, min(int(raw_ms), 2900))
+
+
+def _detect_eco_code(moves_uci: list[str]) -> str:
+    """Определяет базовый код дебюта ECO по первым ходам партии."""
+    prefix = " ".join(moves_uci[:6])
+    if prefix.startswith("e2e4 e7e5 g1f3 d7d6"):
+        return "C41"
+    if prefix.startswith("e2e4 e7e5 f2f4"):
+        return "C30"
+    if prefix.startswith("e2e4 e7e5 f1c4"):
+        return "C23"
+    if prefix.startswith("e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 b2b4"):
+        return "C51"
+    if prefix.startswith("e2e4 e7e5 g1f3 b8c6 f1c4"):
+        return "C50"
+    if prefix.startswith("e2e4 e7e5 g1f3 b8c6 f1b5"):
+        return "C60"
+    if prefix.startswith("e2e4 c7c5"):
+        return "B20"
+    if prefix.startswith("e2e4 e7e6"):
+        return "C00"
+    if prefix.startswith("c2c4"):
+        return "A10"
+    if prefix.startswith("g1f3"):
+        return "A04"
+    if prefix.startswith("d2d4 d7d5 c2c4"):
+        return "D06"
+    if prefix.startswith("d2d4"):
+        return "D00"
+    if prefix.startswith("e2e4"):
+        return "B00"
+    return "A00"
+
+
+def _build_pgn_string(
+        moves_uci: list[str],
+        white_name: str,
+        white_elo: int,
+        black_name: str,
+        black_elo: int,
+        result: str,
+) -> tuple[str, str]:
+    """Строит валидный PGN-документ с заголовками и возвращает (pgn_text, final_fen)."""
+    board = chess.Board()
+    pgn_game = chess.pgn.Game()
+    pgn_game.headers["Event"] = "Historical Bot Match"
+    pgn_game.headers["Site"] = "Michess Bot Arena"
+    pgn_game.headers["Date"] = datetime.now(timezone.utc).strftime("%Y.%m.%d")
+    pgn_game.headers["Round"] = "-"
+    pgn_game.headers["White"] = white_name
+    pgn_game.headers["Black"] = black_name
+    pgn_game.headers["Result"] = result
+    pgn_game.headers["WhiteElo"] = str(white_elo)
+    pgn_game.headers["BlackElo"] = str(black_elo)
+    pgn_game.headers["ECO"] = _detect_eco_code(moves_uci)
+
+    node = pgn_game
+    for uci_str in moves_uci:
+        move = chess.Move.from_uci(uci_str)
+        if move not in board.legal_moves:
+            raise ValueError(f"Нелегальный ход в истории: {uci_str}")
+        board.push(move)
+        node = node.add_variation(move)
+
+    exporter = chess.pgn.StringExporter(headers=True, variations=False, comments=False)
+    return pgn_game.accept(exporter).strip(), board.fen()
+
+
+async def _get_or_create_bot_user(db: AsyncSession, bot_id: str) -> User:
+    """Находит или создаёт запись исторического бота в таблице пользователей."""
+    meta = BOT_METADATA[bot_id]
+    bot_username = meta["name"]
+
+    stmt = select(User).where(User.username == bot_username)
+    res = await db.execute(stmt)
+    bot_user = res.scalar_one_or_none()
+    if bot_user is not None:
+        return bot_user
+
+    user_cols = {c.name for c in User.__table__.columns}
+    user_kwargs: dict = {
+        "username": bot_username,
+        "rating": meta["rating"],
+    }
+    if "hashed_password" in user_cols:
+        user_kwargs["hashed_password"] = "!historical_bot_no_login!"
+    elif "password_hash" in user_cols:
+        user_kwargs["password_hash"] = "!historical_bot_no_login!"
+    if "email" in user_cols:
+        user_kwargs["email"] = f"{bot_id}@michess.local"
+    if "is_cheater" in user_cols:
+        user_kwargs["is_cheater"] = False
+    if "trust_factor" in user_cols:
+        user_kwargs["trust_factor"] = 100
+
+    bot_user = User(**user_kwargs)
+    db.add(bot_user)
+    await db.flush()
+    return bot_user
+
+
+def _prepare_game_kwargs(
+        white_id: int,
+        black_id: int,
+        pgn_text: str,
+        final_fen: str,
+        payload: BotGameSaveRequest,
+) -> dict:
+    """Формирует словарь полей модели Game в соответствии со схемой БД."""
+    game_cols = {c.name: c for c in Game.__table__.columns}
+    kwargs: dict = {}
+
+    if "pgn_date" in game_cols:
+        kwargs["pgn_date"] = datetime.now(timezone.utc).strftime("%Y.%m.%d")
+    if "site" in game_cols:
+        kwargs["site"] = "Michess Bot Arena"
+    if "eco" in game_cols:
+        kwargs["eco"] = _detect_eco_code(payload.moves_uci)
+        
+    if "white_player_id" in game_cols:
+        kwargs["white_player_id"] = white_id
+    elif "white_id" in game_cols:
+        kwargs["white_id"] = white_id
+
+    if "black_player_id" in game_cols:
+        kwargs["black_player_id"] = black_id
+    elif "black_id" in game_cols:
+        kwargs["black_id"] = black_id
+
+    if "pgn" in game_cols:
+        kwargs["pgn"] = pgn_text
+    if "board_fen" in game_cols:
+        kwargs["board_fen"] = final_fen
+    elif "fen" in game_cols:
+        kwargs["fen"] = final_fen
+    elif "current_fen" in game_cols:
+        kwargs["current_fen"] = final_fen
+
+    if "result" in game_cols:
+        kwargs["result"] = payload.result
+    if "termination" in game_cols:
+        kwargs["termination"] = "normal"
+    if "is_rated" in game_cols:
+        kwargs["is_rated"] = False
+    if "base_time_ms" in game_cols:
+        kwargs["base_time_ms"] = payload.base_time_ms
+    if "increment_ms" in game_cols:
+        kwargs["increment_ms"] = payload.increment_ms
+
+    if "status" in game_cols:
+        col_type = game_cols["status"].type
+        enums = getattr(col_type, "enums", None)
+        if enums and "COMPLETED" in enums:
+            kwargs["status"] = "COMPLETED"
+        elif enums and "FINISHED" in enums:
+            kwargs["status"] = "FINISHED"
+        else:
+            kwargs["status"] = "COMPLETED"
+
+    if "finished_at" in game_cols:
+        is_tz = getattr(game_cols["finished_at"].type, "timezone", False)
+        now_utc = datetime.now(timezone.utc)
+        kwargs["finished_at"] = now_utc if is_tz else now_utc.replace(tzinfo=None)
+
+    return kwargs
+
+
+@router.get("/list")
+async def get_available_bots():
+    """Возвращает список доступных исторических ботов и статус движка Stockfish."""
+    sf_path = resolve_stockfish_path()
+    return {
+        "bots": AVAILABLE_BOTS,
+        "stockfish_active": bool(sf_path),
+        "stockfish_path": sf_path,
+    }
+
+
+@router.post("/move", response_model=BotMoveResponse)
+async def get_bot_move(payload: BotMoveRequest):
+    """Принимает FEN позиции и возвращает ответный ход выбранного исторического бота."""
+    bot = BOT_INSTANCES.get(payload.bot_id)
+    if bot is None:
+        raise HTTPException(status_code=404, detail=f"Бот '{payload.bot_id}' не найден")
+
+    try:
+        board = chess.Board(payload.fen)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Некорректный формат FEN")
+
+    if board.is_game_over():
+        raise HTTPException(status_code=400, detail="Партия уже завершена")
+
+    result = await asyncio.to_thread(bot.choose_move, payload.fen)
+    thinking_time_ms = calculate_authentic_thinking_time_ms(
+        bot_id=payload.bot_id,
+        board=board,
+        uci_move=result["uci"],
+        source=result["source"],
+    )
+
+    return BotMoveResponse(
+        bot_id=payload.bot_id,
+        uci=result["uci"],
+        san=result["san"],
+        fen_after=result["fen_after"],
+        source=result["source"],
+        comment=result["comment"],
+        thinking_time_ms=thinking_time_ms,
+    )
+
+
+@router.post("/save-game", response_model=BotGameSaveResponse)
+async def save_bot_game(
+        payload: BotGameSaveRequest,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+):
+    """Сохраняет завершённую партию против исторического бота в базу данных."""
+    if payload.bot_id not in BOT_METADATA:
+        raise HTTPException(status_code=404, detail=f"Бот '{payload.bot_id}' не найден")
+
+    if payload.player_color not in ("white", "black"):
+        raise HTTPException(status_code=400, detail="Некорректный цвет игрока")
+
+    if payload.result not in ("1-0", "0-1", "1/2-1/2"):
+        raise HTTPException(status_code=400, detail="Некорректный результат партии")
+
+    if not payload.moves_uci:
+        raise HTTPException(status_code=400, detail="Список ходов пуст")
+
+    bot_user = await _get_or_create_bot_user(db, payload.bot_id)
+
+    if payload.player_color == "white":
+        white_user, black_user = current_user, bot_user
+    else:
+        white_user, black_user = bot_user, current_user
+
+    try:
+        pgn_text, final_fen = _build_pgn_string(
+            moves_uci=payload.moves_uci,
+            white_name=white_user.username,
+            white_elo=white_user.rating,
+            black_name=black_user.username,
+            black_elo=black_user.rating,
+            result=payload.result,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    game_kwargs = _prepare_game_kwargs(
+        white_id=white_user.id,
+        black_id=black_user.id,
+        pgn_text=pgn_text,
+        final_fen=final_fen,
+        payload=payload,
+    )
+
+    new_game = Game(**game_kwargs)
+    db.add(new_game)
+    await db.commit()
+    await db.refresh(new_game)
+
+    return BotGameSaveResponse(
+        game_id=new_game.id,
+        status="finished",
+        result=payload.result,
+    )
+
+========================================================================================
+FILE: src/api/deps.py
+========================================================================================
+from fastapi import Depends, Query, WebSocketException, HTTPException, status
+from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+import jwt
+
+from src.core.config import settings
+from src.db.session import get_db
+from src.models.user import User
+
+# Схема для извлечения токена из заголовка Authorization: Bearer
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
+
+
+async def get_current_user(
+        token: str = Depends(oauth2_scheme),
+        db: AsyncSession = Depends(get_db)
+) -> User:
+    """
+    Dependency for HTTP endpoints to authenticate users via Bearer token in headers.
+    """
+    credentials_exception = HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        username: str | None = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except jwt.InvalidTokenError:
+        raise credentials_exception
+
+    result = await db.execute(select(User).where(User.username == username))
+    user = result.scalars().first()
+
+    if user is None:
+        raise credentials_exception
+
+    return user
+
+
+async def get_current_user_ws(
+        token: str = Query(..., description="JWT access token passed as a query parameter"),
+        db: AsyncSession = Depends(get_db)
+) -> User:
+    """
+    Dependency for WebSocket endpoints to authenticate users via query parameter token.
+    """
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+        username: str | None = payload.get("sub")
+        if username is None:
+            raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid token payload")
+    except jwt.InvalidTokenError:
+        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid or expired token")
+
+    result = await db.execute(select(User).where(User.username == username))
+    user = result.scalars().first()
+
+    if user is None:
+        raise WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="User not found")
+
+    return user
+
+----------------------------------------------------------------------------------------
+END OF PART 1/11

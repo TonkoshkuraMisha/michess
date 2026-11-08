@@ -1,0 +1,1909 @@
+PROJECT SNAPSHOT — PART 4/11
+Project: michess
+Files in this part (12): src/services/connection_manager.py, src/services/game_engine.py, src/services/game_state.py, src/services/matchmaker.py, src/services/rating.py, src/worker/celery_app.py, src/worker/tasks.py, tests/conftest.py, tests/test_analysis_service.py, tests/test_anderssen_bot.py, tests/test_anticheat.py, tests/test_game_engine.py
+----------------------------------------------------------------------------------------
+
+========================================================================================
+FILE: src/services/connection_manager.py
+========================================================================================
+import json
+import asyncio
+import logging
+from fastapi import WebSocket
+from src.db.redis import redis_client
+
+logger = logging.getLogger(__name__)
+
+
+class ConnectionManager:
+    """
+    Scalable WebSocket manager powered by Redis Pub/Sub.
+    Handles personal messages and global lobby broadcasts across multiple processes.
+    """
+
+    def __init__(self):
+        self.game_spectators: dict[int, set[int]] = {}
+        self.active_connections: dict[int, WebSocket] = {}
+        self.redis = redis_client
+        self.pubsub = self.redis.pubsub()
+        self._listener_task: asyncio.Task | None = None
+
+    async def connect(self, websocket: WebSocket, user_id: int):
+        await websocket.accept()
+        self.active_connections[user_id] = websocket
+
+        await self.pubsub.subscribe(f"user:{user_id}")
+
+        if self._listener_task is None:
+            self._listener_task = asyncio.create_task(self._listen_pubsub())
+
+        # Уведомляем менеджер состояния о переподключении игрока
+        from src.services.game_state import state_manager
+        await state_manager.handle_player_reconnect(user_id, self)
+
+        logger.info("User %s connected. Active on this worker: %s", user_id, len(self.active_connections))
+
+    async def disconnect(self, user_id: int):
+        if user_id in self.active_connections:
+            del self.active_connections[user_id]
+
+        await self.pubsub.unsubscribe(f"user:{user_id}")
+
+        # Снимаем игрока с поиска, если он там был
+        from src.services.matchmaker import matchmaker
+        await matchmaker.leave_queue(user_id)
+
+        # Уведомляем менеджер состояния об обрыве связи (запуск Grace Period)
+        from src.services.game_state import state_manager
+        await state_manager.handle_player_disconnect(user_id, self)
+
+        logger.info("User %s disconnected.", user_id)
+
+    async def _listen_pubsub(self):
+        """Фоновый таск, который слушает Redis Pub/Sub и прокидывает сообщения в нужные WebSocket-ы."""
+        try:
+            async for message in self.pubsub.listen():
+                if message["type"] == "message":
+                    channel = message["channel"]
+                    data = message["data"]
+
+                    if channel.startswith("user:"):
+                        user_id = int(channel.split(":")[1])
+                        if user_id in self.active_connections:
+                            ws = self.active_connections[user_id]
+                            await ws.send_text(data)
+        except Exception as e:
+            logger.error("PubSub listener error: %s", e)
+
+    async def send_personal_message(self, message: dict, user_id: int):
+        """Отправляет сообщение пользователю через Redis."""
+        await self.redis.publish(f"user:{user_id}", json.dumps(message))
+
+
+
+    def add_spectator(self, game_id: int, user_id: int) -> None:
+        if not hasattr(self, "game_spectators"):
+            self.game_spectators: dict[int, set[int]] = {}
+        self.game_spectators.setdefault(int(game_id), set()).add(int(user_id))
+
+    def remove_spectator(self, game_id: int, user_id: int) -> None:
+        if not hasattr(self, "game_spectators"):
+            return
+        gid = int(game_id)
+        if gid in self.game_spectators:
+            self.game_spectators[gid].discard(int(user_id))
+            if not self.game_spectators[gid]:
+                del self.game_spectators[gid]
+
+    def remove_user_from_all_spectating(self, user_id: int) -> None:
+        if not hasattr(self, "game_spectators"):
+            return
+        uid = int(user_id)
+        empty_games = []
+        for gid, watchers in self.game_spectators.items():
+            watchers.discard(uid)
+            if not watchers:
+                empty_games.append(gid)
+        for gid in empty_games:
+            del self.game_spectators[gid]
+
+    async def broadcast_to_spectators(self, game_id: int, message: dict) -> None:
+        if not hasattr(self, "game_spectators"):
+            return
+        watchers = list(self.game_spectators.get(int(game_id), set()))
+        for uid in watchers:
+            await self.send_personal_message(message, uid)
+
+
+manager = ConnectionManager()
+
+========================================================================================
+FILE: src/services/game_engine.py
+========================================================================================
+# --- FILE: src/services/game_engine.py ---
+
+import chess
+
+STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
+
+class GameEngine:
+    @staticmethod
+    def process_move(fen: str, move_str: str, current_pgn: str = "") -> tuple[bool, dict | None]:
+        """
+        Проверяет ход, применяет его к текущей позиции (FEN) и возвращает новые данные.
+
+        Возвращает: (is_valid, move_data)
+        Где move_data содержит:
+        - new_fen: str (Новое состояние доски)
+        - new_pgn: str (Обновленная строка ходов PGN)
+        - san: str (Красивая нотация, например "Nf3")
+        - uci: str (Универсальная нотация, например "g1f3")
+        - fullmove_number: int (Номер хода)
+        - is_obvious: bool (Флаг единственного легального хода для античита)
+        - is_game_over: bool
+        - result: str | None ("1-0", "0-1", "1/2-1/2")
+        - termination: str | None ("checkmate", "stalemate", "repetition", etc.)
+        """
+        safe_fen = fen.strip() if fen and fen.strip() else STARTING_FEN
+        try:
+            board = chess.Board(safe_fen)
+        except ValueError:
+            return False, None
+
+        # 1. Пытаемся распарсить ход (UCI или SAN)
+        move = None
+        try:
+            candidate = chess.Move.from_uci(move_str)
+            if candidate in board.legal_moves:
+                move = candidate
+        except ValueError:
+            pass
+
+        if move is None:
+            try:
+                candidate = board.parse_san(move_str)
+                if candidate in board.legal_moves:
+                    move = candidate
+            except ValueError:
+                return False, None
+
+        if move is None or move not in board.legal_moves:
+            return False, None
+
+        # 2. Собираем метаданные ДО выполнения хода
+        legal_moves_count = board.legal_moves.count()
+        is_obvious = legal_moves_count == 1
+        is_white_turn = board.turn == chess.WHITE
+        fullmove_number = board.fullmove_number
+
+        san = board.san(move)
+        uci = move.uci()
+
+        # Формируем PGN-строку за O(1) без перестроения всего дерева
+        pgn_base = (current_pgn or "").strip()
+        if is_white_turn:
+            move_token = f"{fullmove_number}. {san}"
+        else:
+            move_token = san if pgn_base else f"{fullmove_number}... {san}"
+        new_pgn = f"{pgn_base} {move_token}".strip()
+
+        # 3. Применяем ход на доске
+        board.push(move)
+        new_fen = board.fen()
+
+        # 4. Проверяем условия завершения партии
+        is_game_over = board.is_game_over(claim_draw=True)
+        result = None
+        termination = None
+
+        if is_game_over:
+            res = board.result(claim_draw=True)
+            result = res if res != "*" else None
+
+            if board.is_checkmate():
+                termination = "checkmate"
+            elif board.is_stalemate():
+                termination = "stalemate"
+            elif board.is_insufficient_material():
+                termination = "insufficient_material"
+            elif board.is_fifty_moves():
+                termination = "50_move_rule"
+            elif board.is_repetition():
+                termination = "repetition"
+            else:
+                termination = "draw"
+
+        return True, {
+            "new_fen": new_fen,
+            "new_pgn": new_pgn,
+            "san": san,
+            "uci": uci,
+            "fullmove_number": fullmove_number,
+            "is_obvious": is_obvious,
+            "is_game_over": is_game_over,
+            "result": result,
+            "termination": termination
+        }
+
+
+engine = GameEngine()
+
+========================================================================================
+FILE: src/services/game_state.py
+========================================================================================
+# --- FILE: src/services/game_state.py ---
+
+import time
+import json
+import asyncio
+import logging
+import datetime
+import chess
+import chess.pgn
+from sqlalchemy.sql import func
+from redis.exceptions import WatchError
+
+from src.db.redis import redis_client
+from src.db.session import AsyncSessionLocal
+from src.models.game import Game, GameStatus
+from src.models.move import Move
+from src.models.user import User
+from src.services.rating import elo_calculator
+from src.worker.tasks import analyze_game_task
+from src.services.anticheat import evaluate_game_telemetry
+from src.services.game_engine import engine, STARTING_FEN
+
+logger = logging.getLogger(__name__)
+
+
+def _detect_eco_from_moves(moves_uci: list[str]) -> str:
+    prefix = " ".join(moves_uci[:6])
+    if prefix.startswith("e2e4 e7e5 g1f3 d7d6"):
+        return "C41"
+    if prefix.startswith("e2e4 e7e5 f2f4"):
+        return "C30"
+    if prefix.startswith("e2e4 e7e5 f1c4"):
+        return "C23"
+    if prefix.startswith("e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 b2b4"):
+        return "C51"
+    if prefix.startswith("e2e4 e7e5 g1f3 b8c6 f1c4"):
+        return "C50"
+    if prefix.startswith("e2e4 e7e5 g1f3 b8c6 f1b5"):
+        return "C60"
+    if prefix.startswith("e2e4 c7c5"):
+        return "B20"
+    if prefix.startswith("e2e4 e7e6"):
+        return "C00"
+    if prefix.startswith("c2c4"):
+        return "A10"
+    if prefix.startswith("g1f3"):
+        return "A04"
+    if prefix.startswith("d2d4 d7d5 c2c4"):
+        return "D06"
+    if prefix.startswith("d2d4"):
+        return "D00"
+    if prefix.startswith("e2e4"):
+        return "B00"
+    return "A00"
+
+
+class GameStateManager:
+    def __init__(self):
+        self.redis = redis_client
+
+    def _get_key(self, game_id: int) -> str:
+        return f"game:{game_id}:state"
+
+    async def initialize_game(self, game_id: int, white_id: int, black_id: int, base_time_ms: int, increment_ms: int):
+        now_ms = int(time.time() * 1000)
+        state = {
+            "white_id": str(white_id),
+            "black_id": str(black_id),
+            "board_fen": STARTING_FEN,
+            "pgn": "",
+            "state_version": "0",
+            "white_time_ms": str(base_time_ms),
+            "black_time_ms": str(base_time_ms),
+            "base_time_ms": str(base_time_ms),
+            "increment_ms": str(increment_ms),
+            "last_move_at": str(now_ms),
+            "turn": "white",
+            "status": "in_progress",
+            "white_disconnected": "false",
+            "black_disconnected": "false",
+            "white_disconnect_started_at": "0",
+            "black_disconnect_started_at": "0",
+            "draw_offer": "",
+            "rematch_offer": "",
+        }
+        await self.redis.hset(self._get_key(game_id), mapping=state)
+        await self.redis.sadd("active_games", str(game_id))
+        await self.redis.set(f"user:{white_id}:current_game", str(game_id))
+        await self.redis.set(f"user:{black_id}:current_game", str(game_id))
+
+    async def get_game_state(self, game_id: int) -> dict | None:
+        state = await self.redis.hgetall(self._get_key(game_id))
+        if not state:
+            return await self._recover_state_from_db(game_id)
+
+        int_keys = [
+            "white_id", "black_id", "white_time_ms", "black_time_ms",
+            "base_time_ms", "increment_ms", "last_move_at",
+            "white_disconnect_started_at", "black_disconnect_started_at",
+            "state_version",
+        ]
+        for key in int_keys:
+            if key in state and state[key] is not None and str(state[key]).lstrip("-").isdigit():
+                state[key] = int(state[key])
+        if "board_fen" not in state or not state["board_fen"]:
+            state["board_fen"] = STARTING_FEN
+        return state
+
+    async def _recover_state_from_db(self, game_id: int) -> dict | None:
+        """Восстанавливает состояние партии в Redis из PostgreSQL."""
+        try:
+            async with AsyncSessionLocal() as db:
+                db_game = await db.get(Game, game_id)
+                if not db_game:
+                    return None
+
+                now_ms = int(time.time() * 1000)
+                turn_str = "white" if db_game.turn in ("w", "white") else "black"
+                white_time = db_game.white_time_ms if db_game.white_time_ms is not None else db_game.base_time_ms
+                black_time = db_game.black_time_ms if db_game.black_time_ms is not None else db_game.base_time_ms
+                last_move = db_game.last_move_at if db_game.last_move_at is not None else now_ms
+
+                status_map = {
+                    GameStatus.IN_PROGRESS: "in_progress",
+                    GameStatus.COMPLETED: "completed",
+                    GameStatus.ABORTED: "aborted",
+                    GameStatus.PENDING: "pending",
+                }
+                status_str = status_map.get(db_game.status, "completed")
+
+                state = {
+                    "white_id": str(db_game.white_player_id),
+                    "black_id": str(db_game.black_player_id),
+                    "board_fen": db_game.board_fen or STARTING_FEN,
+                    "pgn": db_game.pgn or "",
+                    "state_version": str(db_game.state_version or 0),
+                    "white_time_ms": str(white_time),
+                    "black_time_ms": str(black_time),
+                    "base_time_ms": str(db_game.base_time_ms),
+                    "increment_ms": str(db_game.increment_ms),
+                    "last_move_at": str(last_move),
+                    "turn": turn_str,
+                    "status": status_str,
+                    "white_disconnected": "false",
+                    "black_disconnected": "false",
+                    "white_disconnect_started_at": "0",
+                    "black_disconnect_started_at": "0",
+                }
+                await self.redis.hset(self._get_key(game_id), mapping=state)
+                if status_str == "in_progress":
+                    await self.redis.sadd("active_games", str(game_id))
+                    await self.redis.set(f"user:{db_game.white_player_id}:current_game", str(game_id))
+                    await self.redis.set(f"user:{db_game.black_player_id}:current_game", str(game_id))
+                return await self.get_game_state(game_id)
+        except Exception as e:
+            logger.error("Failed to recover game %s from DB: %s", game_id, e)
+            return None
+
+    async def update_game_state(self, game_id: int, updates: dict):
+        str_updates = {k: str(v) for k, v in updates.items()}
+        await self.redis.hset(self._get_key(game_id), mapping=str_updates)
+
+    async def clear_game_state(self, game_id: int):
+        state = await self.redis.hgetall(self._get_key(game_id))
+        if state:
+            await self.redis.delete(f"user:{state.get('white_id')}:current_game")
+            await self.redis.delete(f"user:{state.get('black_id')}:current_game")
+        await self.redis.delete(self._get_key(game_id))
+        await self.redis.delete(f"game:{game_id}:commands")
+        await self.redis.srem("active_games", str(game_id))
+
+    async def save_move_telemetry(self, game_id: int, move_data: dict):
+        key = f"game:{game_id}:moves"
+        await self.redis.rpush(key, json.dumps(move_data))
+
+    async def extract_all_moves(self, game_id: int) -> list[dict]:
+        key = f"game:{game_id}:moves"
+        moves_raw = await self.redis.lrange(key, 0, -1)
+        await self.redis.delete(key)
+        return [json.loads(m) for m in moves_raw]
+
+    async def process_atomic_move(
+            self,
+            game_id: int,
+            user_id: int,
+            command_id: str,
+            move_str: str,
+            expected_version: int | None = None,
+    ) -> dict:
+        game_key = self._get_key(game_id)
+        cmd_key = f"game:{game_id}:commands"
+
+        async with self.redis.pipeline(transaction=True) as pipe:
+            while True:
+                try:
+                    await pipe.watch(game_key, cmd_key)
+
+                    is_processed = await pipe.sismember(cmd_key, command_id)
+                    if is_processed:
+                        await pipe.unwatch()
+                        return {"status": "ignored", "reason": "already_processed"}
+
+                    state = await pipe.hgetall(game_key)
+                    if not state or state.get("status") != "in_progress":
+                        await pipe.unwatch()
+                        return {"status": "error", "reason": "game_inactive"}
+
+                    current_version = int(state.get("state_version", 0))
+                    if expected_version is not None and int(expected_version) != current_version:
+                        await pipe.unwatch()
+                        return {
+                            "status": "error",
+                            "reason": "version_mismatch",
+                            "state_version": current_version,
+                            "fen": state.get("board_fen", STARTING_FEN),
+                            "pgn": state.get("pgn", ""),
+                        }
+
+                    turn = state.get("turn", "white")
+                    white_id = int(state["white_id"])
+                    black_id = int(state["black_id"])
+
+                    is_white_turn = turn in ("white", "w")
+                    expected_player_id = white_id if is_white_turn else black_id
+
+                    if user_id != expected_player_id:
+                        await pipe.unwatch()
+                        return {"status": "error", "reason": "not_your_turn"}
+
+                    now_ms = int(time.time() * 1000)
+                    last_move_at = int(state["last_move_at"])
+                    elapsed_ms = max(0, now_ms - last_move_at)
+
+                    increment = int(state["increment_ms"])
+                    white_time = int(state["white_time_ms"])
+                    black_time = int(state["black_time_ms"])
+
+                    if is_white_turn:
+                        new_white_time = white_time - elapsed_ms
+                        if new_white_time <= 0:
+                            await pipe.unwatch()
+                            return {
+                                "status": "game_over",
+                                "result": "0-1",
+                                "termination": "timeout",
+                                "white_id": white_id,
+                                "black_id": black_id,
+                                "white_time_ms": 0,
+                                "black_time_ms": black_time,
+                                "elapsed_ms": elapsed_ms,
+                            }
+                        new_white_time += increment
+                        new_black_time = black_time
+                    else:
+                        new_black_time = black_time - elapsed_ms
+                        if new_black_time <= 0:
+                            await pipe.unwatch()
+                            return {
+                                "status": "game_over",
+                                "result": "1-0",
+                                "termination": "timeout",
+                                "white_id": white_id,
+                                "black_id": black_id,
+                                "white_time_ms": white_time,
+                                "black_time_ms": 0,
+                                "elapsed_ms": elapsed_ms,
+                            }
+                        new_black_time += increment
+                        new_white_time = white_time
+
+                    current_fen = state.get("board_fen") or STARTING_FEN
+                    current_pgn = state.get("pgn") or ""
+
+                    is_valid, move_data = engine.process_move(current_fen, move_str, current_pgn)
+                    if not is_valid or not move_data:
+                        await pipe.unwatch()
+                        return {"status": "error", "reason": "illegal_move"}
+
+                    new_version = current_version + 1
+                    new_turn = "black" if is_white_turn else "white"
+
+                    pipe.multi()
+
+                    if move_data["is_game_over"]:
+                        updates = {
+                            "status": "completed",
+                            "state_version": str(new_version),
+                            "board_fen": move_data["new_fen"],
+                            "pgn": move_data["new_pgn"],
+                            "last_move_at": str(now_ms),
+                            "white_time_ms": str(new_white_time),
+                            "black_time_ms": str(new_black_time),
+                        }
+                        pipe.hset(game_key, mapping=updates)
+                        pipe.sadd(cmd_key, command_id)
+                        await pipe.execute()
+                        return {
+                            "status": "game_over",
+                            "result": move_data["result"],
+                            "termination": move_data["termination"],
+                            "move_data": move_data,
+                            "state_version": new_version,
+                            "white_time_ms": new_white_time,
+                            "black_time_ms": new_black_time,
+                            "white_id": white_id,
+                            "black_id": black_id,
+                            "elapsed_ms": elapsed_ms,
+                            "now_ms": now_ms,
+                        }
+
+                    updates = {
+                        "state_version": str(new_version),
+                        "turn": new_turn,
+                        "board_fen": move_data["new_fen"],
+                        "pgn": move_data["new_pgn"],
+                        "last_move_at": str(now_ms),
+                        "white_time_ms": str(new_white_time),
+                        "black_time_ms": str(new_black_time),
+                    }
+
+                    pipe.hset(game_key, mapping=updates)
+                    pipe.sadd(cmd_key, command_id)
+                    pipe.expire(cmd_key, 86400)
+
+                    await pipe.execute()
+
+                    return {
+                        "status": "success",
+                        "move_data": move_data,
+                        "state_version": new_version,
+                        "turn": new_turn,
+                        "white_time_ms": new_white_time,
+                        "black_time_ms": new_black_time,
+                        "white_id": white_id,
+                        "black_id": black_id,
+                        "elapsed_ms": elapsed_ms,
+                        "now_ms": now_ms,
+                    }
+
+                except WatchError:
+                    continue
+
+    async def sync_authoritative_state_to_db(self, db, game_id: int, res: dict):
+        db_game = await db.get(Game, game_id)
+        if not db_game:
+            return
+
+        move_data = res.get("move_data")
+        if move_data:
+            db_game.board_fen = move_data["new_fen"]
+            db_game.pgn = move_data["new_pgn"]
+
+        if "state_version" in res:
+            db_game.state_version = res["state_version"]
+        if "turn" in res:
+            db_game.turn = "w" if res["turn"] == "white" else "b"
+        if "white_time_ms" in res:
+            db_game.white_time_ms = res["white_time_ms"]
+        if "black_time_ms" in res:
+            db_game.black_time_ms = res["black_time_ms"]
+        if "now_ms" in res:
+            db_game.last_move_at = res["now_ms"]
+
+        await db.commit()
+
+    async def finish_game(self, db, game_id: int, result: str, termination: str = "unknown",
+                          final_pgn: str = None) -> dict:
+        db_game = await db.get(Game, game_id)
+        if not db_game:
+            return {}
+
+        if db_game.status == GameStatus.COMPLETED:
+            return {
+                "white_delta": db_game.white_rating_delta or 0,
+                "black_delta": db_game.black_rating_delta or 0
+            }
+
+        white_user = await db.get(User, db_game.white_player_id)
+        black_user = await db.get(User, db_game.black_player_id)
+
+        white_initial = white_user.rating
+        black_initial = black_user.rating
+        delta_w = delta_b = 0
+        new_w = white_initial
+        new_b = black_initial
+
+        if db_game.is_rated:
+            new_w, delta_w, new_b, delta_b = elo_calculator.calculate_new_ratings(
+                white_initial, black_initial, result
+            )
+            white_user.rating = new_w
+            black_user.rating = new_b
+
+        db_game.result = result
+        db_game.termination = termination
+
+        if result == "1-0":
+            db_game.winner_id = white_user.id
+        elif result == "0-1":
+            db_game.winner_id = black_user.id
+
+        db_game.white_initial_rating = white_initial
+        db_game.black_initial_rating = black_initial
+        db_game.white_rating_delta = delta_w
+        db_game.black_rating_delta = delta_b
+
+        state = await self.redis.hgetall(self._get_key(game_id))
+        if state:
+            if state.get("state_version"):
+                db_game.state_version = int(state["state_version"])
+            if state.get("board_fen"):
+                db_game.board_fen = state["board_fen"]
+            if state.get("white_time_ms"):
+                db_game.white_time_ms = int(state["white_time_ms"])
+            if state.get("black_time_ms"):
+                db_game.black_time_ms = int(state["black_time_ms"])
+            if not final_pgn:
+                final_pgn = state.get("pgn")
+
+        today_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y.%m.%d")
+        db_game.status = GameStatus.COMPLETED
+        db_game.finished_at = func.now()
+        db_game.pgn_date = today_str
+        db_game.site = "MiChess"
+
+        moves_telemetry = await self.extract_all_moves(game_id)
+        if moves_telemetry:
+            db_moves = [Move(game_id=game_id, **m) for m in moves_telemetry]
+            db.add_all(db_moves)
+
+            from src.api.bots import _detect_eco_code
+            uci_seq = [m.get("notation", "") for m in moves_telemetry if m.get("notation")]
+            eco_code = _detect_eco_code(uci_seq)
+            db_game.eco = eco_code
+
+            pgn_game = chess.pgn.Game()
+            pgn_game.headers["Event"] = "MiChess Rated Game" if db_game.is_rated else "MiChess Casual Game"
+            pgn_game.headers["Site"] = "MiChess"
+            pgn_game.headers["Date"] = today_str
+            pgn_game.headers["White"] = white_user.username
+            pgn_game.headers["Black"] = black_user.username
+            pgn_game.headers["WhiteElo"] = str(white_initial)
+            pgn_game.headers["BlackElo"] = str(black_initial)
+            pgn_game.headers["Result"] = result
+            pgn_game.headers["ECO"] = eco_code
+            pgn_game.headers["TimeControl"] = f"{db_game.base_time_ms // 1000}+{db_game.increment_ms // 1000}"
+            pgn_game.headers["Termination"] = termination
+
+            node = pgn_game
+            for m in moves_telemetry:
+                try:
+                    move_obj = chess.Move.from_uci(m["notation"])
+                    node = node.add_variation(move_obj)
+                except ValueError:
+                    pass
+            db_game.pgn = str(pgn_game)
+        elif final_pgn:
+            db_game.pgn = final_pgn
+            from src.db.seed import extract_pgn_metadata
+            meta = extract_pgn_metadata(final_pgn, fallback_result=result)
+            if meta["pgn_date"]:
+                db_game.pgn_date = meta["pgn_date"]
+            if meta["site"]:
+                db_game.site = meta["site"]
+            if meta["eco"]:
+                db_game.eco = meta["eco"]
+
+        await db.commit()
+
+        if db_game.is_rated:
+            try:
+                from src.services.anticheat import evaluate_game_telemetry
+                await evaluate_game_telemetry(db, game_id)
+            except Exception as ac_err:
+                logger.error("Telemetry anti-cheat evaluation failed for game %s: %s", game_id, ac_err)
+
+        await self.clear_game_state(game_id)
+
+        try:
+            analyze_game_task.delay(game_id)
+        except Exception as e:
+            logger.error("Could not schedule Celery analysis task for game %s: %s", game_id, e)
+
+        return {
+            "white_delta": delta_w,
+            "black_delta": delta_b,
+            "white_new_rating": new_w,
+            "black_new_rating": new_b
+        }
+
+    async def handle_player_disconnect(self, user_id: int, manager):
+        game_id_str = await self.redis.get(f"user:{user_id}:current_game")
+        if not game_id_str:
+            return
+        game_id = int(game_id_str)
+        state = await self.get_game_state(game_id)
+        if not state or state["status"] != "in_progress":
+            return
+
+        white_id, black_id = int(state["white_id"]), int(state["black_id"])
+        color = "white" if user_id == white_id else "black"
+        opponent_id = black_id if color == "white" else white_id
+
+        now_ms = int(time.time() * 1000)
+        await self.update_game_state(game_id, {
+            f"{color}_disconnected": "true",
+            f"{color}_disconnect_started_at": str(now_ms),
+        })
+
+        remaining_time = state["white_time_ms"] if color == "white" else state["black_time_ms"]
+        max_wait_ms = min(remaining_time, 3 * 60 * 1000)
+        await manager.send_personal_message(
+            {"event": "opponent_disconnected", "game_id": game_id, "max_wait_ms": max_wait_ms},
+            opponent_id,
+        )
+
+    async def handle_player_reconnect(self, user_id: int, manager):
+        game_id_str = await self.redis.get(f"user:{user_id}:current_game")
+        if not game_id_str:
+            return
+        game_id = int(game_id_str)
+        state = await self.get_game_state(game_id)
+        if not state or state["status"] != "in_progress":
+            return
+
+        white_id, black_id = int(state["white_id"]), int(state["black_id"])
+        color = "white" if user_id == white_id else "black"
+        opponent_id = black_id if color == "white" else white_id
+
+        if state.get(f"{color}_disconnected") == "true":
+            now_ms = int(time.time() * 1000)
+            offline_duration = now_ms - state.get(f"{color}_disconnect_started_at", now_ms)
+            updates = {f"{color}_disconnected": "false", f"{color}_disconnect_started_at": "0"}
+
+            turn = state.get("turn", "white")
+            if turn == color:
+                time_key = f"{color}_time_ms"
+                updates[time_key] = str(max(0, state[time_key] - offline_duration))
+            updates["last_move_at"] = str(state["last_move_at"] + offline_duration)
+
+            await self.update_game_state(game_id, updates)
+            await manager.send_personal_message({"event": "opponent_reconnected", "game_id": game_id}, opponent_id)
+
+    async def check_timeouts_loop(self, manager):
+        while True:
+            try:
+                active_game_ids = list(await self.redis.smembers("active_games"))
+                now_ms = int(time.time() * 1000)
+
+                for game_id_str in active_game_ids:
+                    game_id = int(game_id_str)
+                    state = await self.get_game_state(game_id)
+                    if not state or state["status"] != "in_progress":
+                        await self.redis.srem("active_games", game_id_str)
+                        continue
+
+                    # 1. Авто-отмена партии при неявке на 1-м ходу (30 секунд)
+                    if int(state.get("state_version", 0)) < 2 and now_ms - int(
+                            state.get("last_move_at", now_ms)) >= 30000:
+                        async with AsyncSessionLocal() as db:
+                            await self.check_first_move_abort_timeout(db, game_id, manager=manager, timeout_ms=30000)
+                        continue
+
+                    white_id, black_id = int(state["white_id"]), int(state["black_id"])
+                    turn = state.get("turn", "white")
+                    game_result, winner_id, reason = None, None, "timeout"
+
+                    for color in ["white", "black"]:
+                        if state.get(f"{color}_disconnected") == "true":
+                            offline_duration = now_ms - state.get(f"{color}_disconnect_started_at", now_ms)
+                            remaining_time = state["white_time_ms"] if color == "white" else state["black_time_ms"]
+                            current_player_time = remaining_time - offline_duration if turn == color else remaining_time
+
+                            if current_player_time <= 0 or offline_duration >= min(remaining_time, 3 * 60 * 1000):
+                                game_result = "0-1" if color == "white" else "1-0"
+                                winner_id = black_id if color == "white" else white_id
+                                reason = "abandoned"
+                                break
+
+                    if not game_result:
+                        elapsed = now_ms - state["last_move_at"]
+                        if turn in ("white", "w") and state.get("white_disconnected") != "true" and (
+                                state["white_time_ms"] - elapsed <= 0
+                        ):
+                            game_result, winner_id = "0-1", black_id
+                            reason = "timeout"
+                        elif turn in ("black", "b") and state.get("black_disconnected") != "true" and (
+                                state["black_time_ms"] - elapsed <= 0
+                        ):
+                            game_result, winner_id = "1-0", white_id
+                            reason = "timeout"
+
+                    if game_result:
+                        logger.info("Game %s ended. Result: %s, Reason: %s", game_id, game_result, reason)
+
+                        async with AsyncSessionLocal() as db:
+                            rating_updates = await self.finish_game(db, game_id, game_result, termination=reason)
+
+                        game_over_payload = {
+                            "event": "game_over",
+                            "game_id": game_id,
+                            "reason": reason,
+                            "winner_id": winner_id,
+                            "result": game_result,
+                        }
+                        game_over_payload.update(rating_updates)
+
+                        await manager.send_personal_message(game_over_payload, white_id)
+                        await manager.send_personal_message(game_over_payload, black_id)
+                        if hasattr(manager, "broadcast_to_spectators"):
+                            await manager.broadcast_to_spectators(game_id, game_over_payload)
+
+            except Exception as e:
+                logger.error("Error in check_timeouts_loop: %s", e)
+
+            await asyncio.sleep(0.5)
+
+    async def abort_game(self, db, game_id: int) -> dict:
+        """Отменяет партию на 1-м ходу (до 2 полуходов) без изменения рейтинга."""
+        state = await self.get_game_state(game_id)
+        if not state or state.get("status") != "in_progress":
+            return {"status": "error", "reason": "Game is not in progress"}
+
+        state_version = int(state.get("state_version", 0))
+        if state_version >= 2:
+            return {"status": "error", "reason": "Cannot abort game after move 1"}
+
+        white_id = int(state["white_id"])
+        black_id = int(state["black_id"])
+
+        await self.redis.hset(f"game:{game_id}:state", mapping={
+            "status": "aborted",
+            "result": "*",
+            "termination": "aborted",
+        })
+        await self.redis.srem("active_games", str(game_id))
+        await self.redis.delete(f"user:{white_id}:current_game")
+        await self.redis.delete(f"user:{black_id}:current_game")
+
+        from datetime import datetime, timezone
+
+        db_game = await db.get(Game, game_id)
+        white_user = await db.get(User, white_id)
+        black_user = await db.get(User, black_id)
+
+        w_rating = white_user.rating if white_user else 1200
+        b_rating = black_user.rating if black_user else 1200
+
+        if db_game:
+            db_game.status = GameStatus.ABORTED
+            db_game.result = "*"
+            db_game.termination = "aborted"
+            db_game.white_rating_delta = 0
+            db_game.black_rating_delta = 0
+            is_tz = getattr(Game.__table__.c.finished_at.type, "timezone", False)
+            now_utc = datetime.now(timezone.utc)
+            db_game.finished_at = now_utc if is_tz else now_utc.replace(tzinfo=None)
+            await db.commit()
+
+        return {
+            "status": "aborted",
+            "result": "*",
+            "termination": "aborted",
+            "white_id": white_id,
+            "black_id": black_id,
+            "white_delta": 0,
+            "black_delta": 0,
+            "white_new_rating": w_rating,
+            "black_new_rating": b_rating,
+        }
+
+    async def check_first_move_abort_timeout(self, db, game_id: int, manager=None, timeout_ms: int = 30000) -> bool:
+        """Проверяет, не истекли ли 30 секунд на первые 2 полухода партии. Если истекли — отменяет игру."""
+        state = await self.get_game_state(game_id)
+        if not state or state.get("status") != "in_progress":
+            return False
+
+        if int(state.get("state_version", 0)) >= 2:
+            return False
+
+        now_ms = int(time.time() * 1000)
+        last_move_at = int(state.get("last_move_at", now_ms))
+        if now_ms - last_move_at < timeout_ms:
+            return False
+
+        res = await self.abort_game(db, game_id)
+        if res.get("status") == "aborted" and manager is not None:
+            payload = {
+                "event": "game_over",
+                "game_id": game_id,
+                "reason": "aborted",
+                "result": "*",
+                "white_delta": 0,
+                "black_delta": 0,
+                "white_new_rating": res["white_new_rating"],
+                "black_new_rating": res["black_new_rating"],
+            }
+            await manager.send_personal_message(payload, res["white_id"])
+            await manager.send_personal_message(payload, res["black_id"])
+            if hasattr(manager, "broadcast_to_spectators"):
+                await manager.broadcast_to_spectators(game_id, payload)
+        return res.get("status") == "aborted"
+
+
+state_manager = GameStateManager()
+
+========================================================================================
+FILE: src/services/matchmaker.py
+========================================================================================
+# --- FILE: src/services/matchmaker.py ---
+
+import asyncio
+import logging
+import random
+from src.db.redis import redis_client
+from src.db.session import AsyncSessionLocal
+from src.models.game import Game, GameStatus
+from src.models.user import User
+
+logger = logging.getLogger(__name__)
+
+
+class Matchmaker:
+    """
+    Менеджер открытых вызовов и очереди лобби.
+    """
+
+    def __init__(self):
+        pass
+
+    @property
+    def redis(self):
+        from src.db.redis import redis_client
+        return redis_client
+
+    async def join_queue(self, user_id: int, username: str, rating: int, base_time_ms: int, increment_ms: int,
+                         min_rating: int, max_rating: int):
+        queue_name = f"queue:{base_time_ms}:{increment_ms}"
+
+        await self.redis.sadd("active_queues", queue_name)
+        await self.redis.zadd(queue_name, {str(user_id): rating})
+
+        prefs = {
+            "user_id": user_id,
+            "username": username,
+            "rating": rating,
+            "min_rating": min_rating,
+            "max_rating": max_rating,
+            "base_time_ms": base_time_ms,
+            "increment_ms": increment_ms
+        }
+        await self.redis.hset(f"queue:prefs:{user_id}", mapping=prefs)
+        logger.info("User %s (%s) published challenge in lobby", user_id, username)
+
+    async def leave_queue(self, user_id: int):
+        prefs = await self.redis.hgetall(f"queue:prefs:{user_id}")
+        if prefs:
+            queue_name = f"queue:{prefs['base_time_ms']}:{prefs['increment_ms']}"
+            await self.redis.zrem(queue_name, str(user_id))
+            await self.redis.delete(f"queue:prefs:{user_id}")
+            logger.info("User %s left lobby queue", user_id)
+
+    async def get_queue_players(self) -> list[dict]:
+        """Возвращает список всех активных вызовов в лобби."""
+        players = []
+        active_queues = await self.redis.smembers("active_queues")
+        for queue_name in active_queues:
+            user_ids = await self.redis.zrange(queue_name, 0, -1)
+            for u_id in user_ids:
+                prefs = await self.redis.hgetall(f"queue:prefs:{u_id}")
+                if prefs:
+                    players.append({
+                        "user_id": int(prefs.get("user_id", u_id)),
+                        "username": prefs.get("username", "Игрок"),
+                        "rating": int(prefs.get("rating", 1200)),
+                        "base_time_ms": int(prefs.get("base_time_ms", 180000)),
+                        "increment_ms": int(prefs.get("increment_ms", 0))
+                    })
+        return players
+
+    async def accept_challenge(self, challenger_id: int, acceptor_id: int, connection_manager, state_manager):
+        """Принятие вызова конкретного игрока из лобби с прямой верификацией из БД."""
+        if challenger_id == acceptor_id:
+            return None
+
+        p1_prefs = await self.redis.hgetall(f"queue:prefs:{challenger_id}")
+        if not p1_prefs:
+            logger.warning("Challenge from %s no longer active", challenger_id)
+            return None
+
+        base_time = int(p1_prefs["base_time_ms"])
+        inc_time = int(p1_prefs["increment_ms"])
+        queue_name = f"queue:{base_time}:{inc_time}"
+
+        # Убираем челенджера и акцептора из всех очередей
+        await self.redis.zrem(queue_name, str(challenger_id), str(acceptor_id))
+        await self.redis.delete(f"queue:prefs:{challenger_id}", f"queue:prefs:{acceptor_id}")
+
+        async with AsyncSessionLocal() as db:
+            u1_user = await db.get(User, challenger_id)
+            u2_user = await db.get(User, acceptor_id)
+
+            if not u1_user or not u2_user:
+                return None
+
+            active_queues = await self.redis.smembers("active_queues")
+            for qn in active_queues:
+                await self.redis.zrem(qn, str(acceptor_id), str(challenger_id))
+            await self.redis.delete(f"queue:prefs:{acceptor_id}", f"queue:prefs:{challenger_id}")
+
+            white_id, black_id = (u1_user.id, u2_user.id) if random.random() > 0.5 else (u2_user.id, u1_user.id)
+
+            white_user = u1_user if white_id == u1_user.id else u2_user
+            black_user = u1_user if black_id == u1_user.id else u2_user
+
+            new_game = Game(
+                white_player_id=white_user.id,
+                black_player_id=black_user.id,
+                base_time_ms=base_time,
+                increment_ms=inc_time,
+                status=GameStatus.IN_PROGRESS
+            )
+            db.add(new_game)
+            await db.commit()
+            await db.refresh(new_game)
+            game_id = new_game.id
+
+        await state_manager.initialize_game(
+            game_id=game_id, white_id=white_user.id, black_id=black_user.id, base_time_ms=base_time,
+            increment_ms=inc_time
+        )
+
+        match_payload = {
+            "event": "match_found",
+            "game_id": game_id,
+            "white_username": white_user.username,
+            "white_rating": white_user.rating,
+            "black_username": black_user.username,
+            "black_rating": black_user.rating,
+            "base_time_ms": base_time,  # Добавлено для фронтенда
+            "increment_ms": inc_time  # Добавлено для фронтенда
+        }
+
+        w_payload = {**match_payload, "color": "white", "opponent_id": black_user.id}
+        b_payload = {**match_payload, "color": "black", "opponent_id": white_user.id}
+
+        await connection_manager.send_personal_message(w_payload, white_user.id)
+        await connection_manager.send_personal_message(b_payload, black_user.id)
+
+        logger.info("Challenge accepted! Match created: White(%s) vs Black(%s) in game %s", white_user.id,
+                    black_user.id, game_id)
+        return game_id
+
+
+
+    async def create_private_invite(
+        self,
+        user_id: int,
+        username: str = "Игрок",
+        rating: int = 1200,
+        base_time_ms: int = 180000,
+        increment_ms: int = 2000,
+        color_pref: str = "random",
+    ) -> dict:
+        """Создаёт приватный инвайт в Redis по ключу invite:{code} с TTL 15 минут (900 сек)."""
+        import json
+        import secrets
+        from src.services.game_state import state_manager
+
+        redis_conn = getattr(self, "redis", None) or state_manager.redis
+        code = secrets.token_urlsafe(6).replace("-", "").replace("_", "")[:8]
+        if color_pref not in ("white", "black", "random"):
+            color_pref = "random"
+
+        payload = {
+            "code": code,
+            "creator_id": int(user_id),
+            "creator_username": username,
+            "creator_rating": int(rating),
+            "base_time_ms": int(base_time_ms),
+            "increment_ms": int(increment_ms),
+            "color_pref": color_pref,
+        }
+        try:
+            await redis_conn.set(f"invite:{code}", json.dumps(payload), ex=900)
+        except TypeError:
+            await redis_conn.set(f"invite:{code}", json.dumps(payload))
+        return payload
+
+    async def get_private_invite(self, code: str) -> dict | None:
+        import json
+        from src.services.game_state import state_manager
+
+        redis_conn = getattr(self, "redis", None) or state_manager.redis
+        raw = await redis_conn.get(f"invite:{code}")
+        if not raw:
+            return None
+        return json.loads(raw)
+
+    async def accept_private_invite(self, code: str, acceptor_id: int) -> dict | None:
+        """Погашает приватный инвайт (одноразово) и возвращает параметры создателя и определившиеся цвета."""
+        import json
+        import random
+        from src.services.game_state import state_manager
+
+        redis_conn = getattr(self, "redis", None) or state_manager.redis
+        key = f"invite:{code}"
+        raw = await redis_conn.get(key)
+        if not raw:
+            return None
+
+        invite = json.loads(raw)
+        creator_id = int(invite["creator_id"])
+        if creator_id == int(acceptor_id):
+            return None
+
+        await redis_conn.delete(key)
+
+        color_pref = invite.get("color_pref", "random")
+        if color_pref == "white":
+            white_id, black_id = creator_id, int(acceptor_id)
+        elif color_pref == "black":
+            white_id, black_id = int(acceptor_id), creator_id
+        else:
+            if random.random() < 0.5:
+                white_id, black_id = creator_id, int(acceptor_id)
+            else:
+                white_id, black_id = int(acceptor_id), creator_id
+
+        return {
+            "code": code,
+            "creator_id": creator_id,
+            "acceptor_id": int(acceptor_id),
+            "white_id": white_id,
+            "black_id": black_id,
+            "base_time_ms": int(invite.get("base_time_ms", 180000)),
+            "increment_ms": int(invite.get("increment_ms", 0)),
+        }
+
+
+matchmaker = Matchmaker()
+
+========================================================================================
+FILE: src/services/rating.py
+========================================================================================
+class FideEloSystem:
+    """
+    Система подсчета рейтинга по стандартам ФИДЕ.
+    Включает динамический K-фактор в зависимости от текущего рейтинга и опыта.
+    """
+
+    @staticmethod
+    def get_k_factor(rating: int, games_played: int = 30) -> int:
+        if games_played < 30:
+            return 40
+        if rating >= 2400:
+            return 10
+        return 20
+
+    @staticmethod
+    def expected_score(rating_a: int, rating_b: int) -> float:
+        return 1 / (1 + 10 ** ((rating_b - rating_a) / 400))
+
+    @classmethod
+    def calculate_new_ratings(
+        cls,
+        white_rating: int,
+        black_rating: int,
+        result: str,
+        white_games: int = 30,
+        black_games: int = 30
+    ) -> tuple[int, int, int, int]:
+        """
+        Возвращает: (новый_рейтинг_белых, дельта_белых, новый_рейтинг_черных, дельта_черных)
+        """
+        if result in ("1-0", "white_won_on_time"):
+            score_white, score_black = 1.0, 0.0
+        elif result in ("0-1", "black_won_on_time"):
+            score_white, score_black = 0.0, 1.0
+        elif result in ("1/2-1/2", "draw_agreement"):
+            score_white, score_black = 0.5, 0.5
+        else:
+            raise ValueError(f"Unknown game result: {result}")
+
+        expected_white = cls.expected_score(white_rating, black_rating)
+        expected_black = cls.expected_score(black_rating, white_rating)
+
+        k_white = cls.get_k_factor(white_rating, white_games)
+        k_black = cls.get_k_factor(black_rating, black_games)
+
+        delta_white = round(k_white * (score_white - expected_white))
+        delta_black = round(k_black * (score_black - expected_black))
+
+        # Защита от падения рейтинга ниже 100
+        new_white = max(100, white_rating + delta_white)
+        new_black = max(100, black_rating + delta_black)
+
+        return new_white, delta_white, new_black, delta_black
+
+
+elo_calculator = FideEloSystem()
+
+========================================================================================
+FILE: src/worker/celery_app.py
+========================================================================================
+from celery import Celery
+from src.core.config import settings
+
+celery_app = Celery(
+    "michess_worker",
+    broker=f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/0",
+    backend=f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/1",
+    include=["src.worker.tasks"]
+)
+
+celery_app.conf.update(
+    task_serializer="json",
+    accept_content=["json"],
+    result_serializer="json",
+    timezone="UTC",
+    enable_utc=True,
+)
+
+========================================================================================
+FILE: src/worker/tasks.py
+========================================================================================
+# --- FILE: src/worker/tasks.py ---
+
+import asyncio
+import logging
+from celery import shared_task
+
+from src.db.session import AsyncSessionLocal
+from src.services.anticheat import evaluate_game_telemetry
+
+logger = logging.getLogger(__name__)
+
+
+async def _process_anti_cheat_async(game_id: int) -> dict:
+    async with AsyncSessionLocal() as db:
+        return await evaluate_game_telemetry(db, game_id)
+
+
+@shared_task(name="analyze_game")
+def analyze_game_task(game_id: int):
+    """Синхронная обёртка Celery для запуска асинхронного анализатора телеметрии."""
+    try:
+        return asyncio.run(_process_anti_cheat_async(game_id))
+    except Exception as exc:
+        logger.error("Anti-cheat task failed for game %s: %s", game_id, exc)
+        return {"game_id": game_id, "status": "error"}
+
+========================================================================================
+FILE: tests/conftest.py
+========================================================================================
+import asyncio
+import pytest
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
+from fastapi.testclient import TestClient
+
+from src.main import app
+from src.db.session import get_db
+from src.models.base import Base
+from src.models.user import User
+from src.core.security import create_access_token
+
+TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
+
+test_engine = create_async_engine(TEST_DATABASE_URL, echo=False, future=True)
+TestSessionLocal = async_sessionmaker(test_engine, class_=AsyncSession, expire_on_commit=False)
+
+
+@pytest.fixture(scope="session")
+def event_loop():
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
+
+
+@pytest.fixture(autouse=True)
+async def setup_database():
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    async with test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+
+
+class MockPubSub:
+    """Заглушка для Redis Pub/Sub, чтобы фоновый таск не падал."""
+
+    async def subscribe(self, *args, **kwargs):
+        pass
+
+    async def unsubscribe(self, *args, **kwargs):
+        pass
+
+    async def listen(self):
+        while True:
+            await asyncio.sleep(3600)
+
+
+class MockPipeline:
+    def __init__(self, redis):
+        self.redis = redis
+        self.commands = []
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, exc_type, exc, tb):
+        pass
+
+    async def watch(self, *names):
+        pass
+
+    async def unwatch(self):
+        pass
+
+    def multi(self):
+        self.commands = []
+
+    def hset(self, name, key=None, value=None, mapping=None):
+        self.commands.append(("hset", name, key, value, mapping))
+
+    def sadd(self, name, *values):
+        self.commands.append(("sadd", name, values))
+
+    def expire(self, name, time):
+        self.commands.append(("expire", name, time))
+
+    async def execute(self):
+        for cmd in self.commands:
+            if cmd[0] == "hset":
+                await self.redis.hset(cmd[1], cmd[2], cmd[3], mapping=cmd[4])
+            elif cmd[0] == "sadd":
+                await self.redis.sadd(cmd[1], *cmd[2])
+        self.commands = []
+
+    async def sismember(self, name, value):
+        return str(value) in self.redis.sets.get(name, set())
+
+    async def hgetall(self, name):
+        return await self.redis.hgetall(name)
+
+
+class MockAsyncRedis:
+    """Высокопроизводительный асинхронный мок Redis в оперативной памяти для тестов."""
+
+    def __init__(self):
+        self.store = {}
+        self.sets = {}
+        self.lists = {}
+        self.kv = {}
+        self.zsets = {}
+
+    def pubsub(self):
+        return MockPubSub()
+
+    def pipeline(self, transaction=True):
+        return MockPipeline(self)
+
+    async def hset(self, name, mapping=None, **kwargs):
+        if name not in self.store:
+            self.store[name] = {}
+        if mapping:
+            self.store[name].update({str(k): str(v) for k, v in mapping.items()})
+        if kwargs:
+            self.store[name].update({str(k): str(v) for k, v in kwargs.items()})
+        return len(mapping or {}) + len(kwargs)
+
+    async def hgetall(self, name):
+        return self.store.get(name, {})
+
+    async def delete(self, *names):
+        count = 0
+        for name in names:
+            for container in (self.store, self.sets, self.lists, self.kv, self.zsets):
+                if name in container:
+                    del container[name]
+                    count += 1
+        return count
+
+    async def sadd(self, name, *values):
+        if name not in self.sets:
+            self.sets[name] = set()
+        added = 0
+        for v in values:
+            if str(v) not in self.sets[name]:
+                self.sets[name].add(str(v))
+                added += 1
+        return added
+
+    async def srem(self, name, *values):
+        if name not in self.sets:
+            return 0
+        removed = 0
+        for v in values:
+            if str(v) in self.sets[name]:
+                self.sets[name].remove(str(v))
+                removed += 1
+        return removed
+
+    async def smembers(self, name):
+        return self.sets.get(name, set())
+
+    async def set(self, name, value):
+        self.kv[name] = str(value)
+        return True
+
+    async def get(self, name):
+        return self.kv.get(name)
+
+    async def rpush(self, name, *values):
+        if name not in self.lists:
+            self.lists[name] = []
+        for v in values:
+            self.lists[name].append(v)
+        return len(self.lists[name])
+
+    async def lrange(self, name, start, end):
+        lst = self.lists.get(name, [])
+        if end == -1:
+            return lst[start:]
+        return lst[start:end + 1]
+
+    # --- Поддержка Sorted Sets для очередей матчмейкинга ---
+    async def zadd(self, name, mapping):
+        if name not in self.zsets:
+            self.zsets[name] = {}
+        added = 0
+        for k, v in mapping.items():
+            if k not in self.zsets[name] or self.zsets[name][k] != float(v):
+                added += 1
+            self.zsets[name][k] = float(v)
+        return added
+
+    async def zrange(self, name, start, end):
+        if name not in self.zsets:
+            return []
+        sorted_items = sorted(self.zsets[name].items(), key=lambda x: x[1])
+        keys = [k for k, v in sorted_items]
+        if end == -1:
+            return keys[start:]
+        return keys[start:end + 1]
+
+    async def zrem(self, name, *values):
+        if name not in self.zsets:
+            return 0
+        removed = 0
+        for v in values:
+            if v in self.zsets[name]:
+                del self.zsets[name][v]
+                removed += 1
+        return removed
+
+
+@pytest.fixture(autouse=True)
+def override_redis(monkeypatch):
+    mock_redis = MockAsyncRedis()
+
+    # 1. Подменяем глобальные переменные в модулях
+    monkeypatch.setattr("src.services.game_state.redis_client", mock_redis)
+    monkeypatch.setattr("src.services.connection_manager.redis_client", mock_redis)
+    monkeypatch.setattr("src.db.redis.redis_client", mock_redis)
+
+    # 2. Подменяем ссылки внутри уже созданных синглтонов
+    from src.services.game_state import state_manager
+    from src.services.connection_manager import manager
+    # Для Matchmaker
+    from src.services.matchmaker import matchmaker
+
+    # noinspection PyUnresolvedReferences
+    monkeypatch.setattr(state_manager, "redis", mock_redis)
+    # noinspection PyUnresolvedReferences
+    monkeypatch.setattr(manager, "redis", mock_redis)
+    # noinspection PyUnresolvedReferences
+    monkeypatch.setattr(manager, "pubsub", mock_redis.pubsub())
+
+
+async def override_get_db():
+    async with TestSessionLocal() as session:
+        yield session
+
+
+app.dependency_overrides[get_db] = override_get_db
+
+
+@pytest.fixture
+async def db_session():
+    async with TestSessionLocal() as session:
+        yield session
+
+
+@pytest.fixture
+def client():
+    return TestClient(app)
+
+
+@pytest.fixture
+async def test_user_1(db_session):
+    user = User(username="player1", email="player1@example.com", hashed_password="fakehash", rating=1200)
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest.fixture
+async def test_user_2(db_session):
+    user = User(username="player2", email="player2@example.com", hashed_password="fakehash", rating=1200)
+    db_session.add(user)
+    await db_session.commit()
+    await db_session.refresh(user)
+    return user
+
+
+@pytest.fixture
+def token_user_1(test_user_1):
+    return create_access_token({"sub": test_user_1.username})
+
+
+@pytest.fixture
+def token_user_2(test_user_2):
+    return create_access_token({"sub": test_user_2.username})
+
+========================================================================================
+FILE: tests/test_analysis_service.py
+========================================================================================
+# --- FILE: tests/test_analysis_service.py ---
+
+import pytest
+from src.services.analysis_service import (
+    calculate_accuracy,
+    classify_move_by_cp_loss,
+    _evaluate_board_sequence_sync,
+)
+
+
+def test_classify_move_by_cp_loss_thresholds():
+    assert classify_move_by_cp_loss(0, is_best_move=True) == ("Best", "!")
+    assert classify_move_by_cp_loss(8) == ("Best", "!")
+    assert classify_move_by_cp_loss(25) == ("Good", "")
+    assert classify_move_by_cp_loss(70) == ("Inaccuracy", "?!")
+    assert classify_move_by_cp_loss(140) == ("Mistake", "?")
+    assert classify_move_by_cp_loss(320) == ("Blunder", "??")
+
+
+def test_calculate_accuracy_bounds_and_monotonicity():
+    perfect = calculate_accuracy([0, 0, 5, 0])
+    decent = calculate_accuracy([15, 35, 60, 20])
+    blunder_heavy = calculate_accuracy([250, 400, 310, 500])
+
+    assert 95.0 <= perfect <= 100.0
+    assert decent < perfect
+    assert blunder_heavy < decent
+    assert 0.0 <= blunder_heavy <= 100.0
+
+
+@pytest.mark.asyncio
+async def test_evaluate_board_sequence_fools_mate():
+    sample_pgn = (
+        '[Event "Test Game"]\n'
+        '[White "Player1"]\n'
+        '[Black "Player2"]\n'
+        '[Result "0-1"]\n\n'
+        '1. f3 e5 2. g4 Qh4# 0-1\n'
+    )
+    report = _evaluate_board_sequence_sync(sample_pgn, depth=5)
+
+    assert "white" in report and "black" in report
+    assert len(report["moves"]) == 4
+    assert report["moves"][-1]["san"] == "Qh4#"
+    assert report["moves"][-1]["eval_cp"] <= -900
+    assert 0.0 <= report["white"]["accuracy"] <= 100.0
+    assert 0.0 <= report["black"]["accuracy"] <= 100.0
+
+========================================================================================
+FILE: tests/test_anderssen_bot.py
+========================================================================================
+# --- FILE: tests/test_anderssen_bot.py ---
+
+import chess
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+from src.main import app
+from src.services.bots.anderssen import (
+    ANDERSSEN_OPENING_BOOK,
+    AnderssenBot,
+    evaluate_anderssen_style_bonus,
+)
+from src.services.bots.philidor import normalize_fen_key
+
+
+def test_anderssen_opening_repertoire():
+    """Проверяем, что в книге Андерсена есть его исторические ходы (включая e2e4 и a2a3)."""
+    bot = AnderssenBot(stockfish_path=None)
+    board = chess.Board()
+    start_key = normalize_fen_key(board)
+    expected_moves = {item[0] for item in ANDERSSEN_OPENING_BOOK[start_key]}
+
+    assert "e2e4" in expected_moves
+
+    result = bot.choose_move(board.fen())
+    assert result["uci"] in expected_moves
+    assert result["source"] == "opening_book"
+
+
+def test_anderssen_plays_evans_gambit_from_book():
+    """Проверяем, что в итальянской позиции Андерсен выбирает ход из своей дебютной книги (гамбит Эванса b2b4)."""
+    bot = AnderssenBot(stockfish_path=None)
+    board = chess.Board()
+    for san in ["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5"]:
+        board.push_san(san)
+
+    fen_key = normalize_fen_key(board)
+    expected_moves = {item[0] for item in ANDERSSEN_OPENING_BOOK[fen_key]}
+
+    result = bot.choose_move(board.fen())
+    assert result["uci"] in expected_moves
+    assert result["source"] == "opening_book"
+
+
+def test_anderssen_style_rewards_checks_and_attacks():
+    """Проверяем, что комбинационный фильтр Андерсена поощряет шахи и развитие."""
+    board = chess.Board("r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4")
+
+    bf7_check_bonus, _ = evaluate_anderssen_style_bonus(board, chess.Move.from_uci("c4f7"))
+    passive_h3_bonus, _ = evaluate_anderssen_style_bonus(board, chess.Move.from_uci("h2h3"))
+    assert bf7_check_bonus > passive_h3_bonus
+
+
+def test_anderssen_immortal_game_mate_in_one():
+    """Проверяем, что Андерсен находит финальный мат слоном 23. Be7# из Бессмертной партии (1851)."""
+    bot = AnderssenBot(stockfish_path=None)
+    # Финал Бессмертной партии Андерсен — Кизерицкий (Лондон, 1851) перед 23. Be7#
+    immortal_board = chess.Board("r1bk3r/p2pBpNp/n4n2/1p1NP2P/6P1/3P4/P1P1K3/q5b1 b - - 1 22")
+    # Проверим позицию с ходом белых на мат в 1 ход:
+    mate_board = chess.Board("r1bk3r/p2p1pNp/n2B1n2/1p1NP2P/6P1/3P4/P1P1K3/q5b1 w - - 0 23")
+
+    result = bot.choose_move(mate_board.fen())
+    assert result["uci"] == "d6e7"
+    assert result["san"] == "Be7#"
+    assert result["source"] == "anderssen_style_engine"
+    assert immortal_board.is_checkmate()
+
+
+@pytest.mark.asyncio
+async def test_anderssen_api_move_endpoint():
+    """Проверяем REST-эндпоинты /api/v1/bots/list и /api/v1/bots/move для игры с Андерсеном."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        list_resp = await client.get("/api/v1/bots/list")
+        assert list_resp.status_code == 200
+        bot_ids = [b["id"] for b in list_resp.json()["bots"]]
+        assert "anderssen" in bot_ids
+
+        move_resp = await client.post(
+            "/api/v1/bots/move",
+            json={"bot_id": "anderssen", "fen": chess.STARTING_FEN},
+        )
+        assert move_resp.status_code == 200
+        data = move_resp.json()
+        assert data["bot_id"] == "anderssen"
+        assert data["source"] == "opening_book"
+
+========================================================================================
+FILE: tests/test_anticheat.py
+========================================================================================
+# --- FILE: tests/test_anticheat.py ---
+
+import pytest
+from src.models.game import Game, GameStatus
+from src.models.move import Move
+from src.models.user import User
+from src.services.anticheat import evaluate_game_telemetry
+from src.services.game_state import state_manager
+
+
+@pytest.mark.asyncio
+async def test_human_telemetry_keeps_high_trust_factor(db_session):
+    """На серии «человеческих» ходов (разное время, без ухода из вкладки) trust_factor остаётся 100."""
+    human = User(username="honest_gm", hashed_password="pw", rating=1850, trust_factor=100, is_cheater=False)
+    opponent = User(username="honest_opp", hashed_password="pw", rating=1840, trust_factor=100, is_cheater=False)
+    db_session.add_all([human, opponent])
+    await db_session.commit()
+    await db_session.refresh(human)
+    await db_session.refresh(opponent)
+
+    game = Game(
+        white_player_id=human.id,
+        black_player_id=opponent.id,
+        status=GameStatus.COMPLETED,
+        is_rated=True,
+        result="1-0",
+    )
+    db_session.add(game)
+    await db_session.commit()
+    await db_session.refresh(game)
+
+    human_times = [900, 1400, 3200, 8500, 2100, 14200, 1700, 6400, 950, 11800, 2800, 5100]
+    moves = [
+        Move(
+            game_id=game.id,
+            player_id=human.id if idx % 2 == 1 else opponent.id,
+            move_number=idx + 4,
+            notation="e2e4" if idx % 2 == 1 else "e7e5",
+            san="e4" if idx % 2 == 1 else "e5",
+            time_taken_ms=t_ms,
+            window_blurred_before_move=False,
+            is_premove=(idx == 9),
+            network_lag_ms=15,
+        )
+        for idx, t_ms in enumerate(human_times, start=1)
+    ]
+    db_session.add_all(moves)
+    await db_session.commit()
+
+    report = await evaluate_game_telemetry(db_session, game.id)
+    await db_session.refresh(human)
+
+    assert report[human.id]["penalty"] == 0
+    assert human.trust_factor == 100
+    assert human.is_cheater is False
+
+
+@pytest.mark.asyncio
+async def test_robotic_blurred_telemetry_flags_cheater(db_session):
+    """Постоянный window_blurred_before_move=True и монотонное время 4500 мс снижают trust_factor < 30."""
+    cheater = User(username="tab_switcher_bot", hashed_password="pw", rating=1500, trust_factor=100, is_cheater=False)
+    victim = User(username="fair_victim", hashed_password="pw", rating=1500, trust_factor=100, is_cheater=False)
+    db_session.add_all([cheater, victim])
+    await db_session.commit()
+    await db_session.refresh(cheater)
+    await db_session.refresh(victim)
+
+    game = Game(
+        white_player_id=cheater.id,
+        black_player_id=victim.id,
+        status=GameStatus.COMPLETED,
+        is_rated=True,
+        result="1-0",
+    )
+    db_session.add(game)
+    await db_session.commit()
+    await db_session.refresh(game)
+
+    cheater_moves = [
+        Move(
+            game_id=game.id,
+            player_id=cheater.id if move_num % 2 == 1 else victim.id,
+            move_number=move_num,
+            notation="g1f3" if move_num % 2 == 1 else "g8f6",
+            san="Nf3" if move_num % 2 == 1 else "Nf6",
+            time_taken_ms=4500,
+            window_blurred_before_move=True,
+            is_premove=False,
+            network_lag_ms=10,
+        )
+        for move_num in range(1, 16)
+    ]
+    db_session.add_all(cheater_moves)
+    await db_session.commit()
+
+    report = await evaluate_game_telemetry(db_session, game.id)
+    await db_session.refresh(cheater)
+
+    assert report[cheater.id]["blur_ratio"] == 1.0
+    assert report[cheater.id]["timing_cv"] == 0.0
+    assert cheater.trust_factor < 30
+    assert cheater.is_cheater is True
+
+
+@pytest.mark.asyncio
+async def test_finish_game_triggers_telemetry_anticheat(db_session):
+    """Проверяет автоматический запуск evaluate_game_telemetry внутри state_manager.finish_game."""
+    cheater = User(username="auto_ac_cheater", hashed_password="pw", rating=1400, trust_factor=100, is_cheater=False)
+    other = User(username="auto_ac_other", hashed_password="pw", rating=1400, trust_factor=100, is_cheater=False)
+    db_session.add_all([cheater, other])
+    await db_session.commit()
+    await db_session.refresh(cheater)
+    await db_session.refresh(other)
+
+    game = Game(
+        white_player_id=cheater.id,
+        black_player_id=other.id,
+        status=GameStatus.IN_PROGRESS,
+        base_time_ms=180000,
+        increment_ms=0,
+        is_rated=True,
+    )
+    db_session.add(game)
+    await db_session.commit()
+    await db_session.refresh(game)
+
+    await state_manager.initialize_game(game.id, cheater.id, other.id, 180000, 0)
+
+    # Используем валидную последовательность коротких ходов для построения PGN
+    valid_uci_moves = ["e2e4", "e7e5", "g1f3", "b8c6", "f1c4", "f8c5", "d2d3", "g8f6", "b1c3", "d7d6"]
+    for idx, uci in enumerate(valid_uci_moves, start=1):
+        await state_manager.save_move_telemetry(game.id, {
+            "player_id": cheater.id if idx % 2 == 1 else other.id,
+            "move_number": idx,
+            "notation": uci,
+            "san": uci[:2] + "-" + uci[2:],
+            "fen_after": "",
+            "time_taken_ms": 4500,
+            "window_blurred_before_move": True,
+            "is_premove": False,
+            "network_lag_ms": 5,
+        })
+
+    await state_manager.finish_game(db_session, game.id, "1-0", termination="checkmate")
+    await db_session.refresh(cheater)
+
+    assert cheater.trust_factor < 30
+    assert cheater.is_cheater is True
+
+========================================================================================
+FILE: tests/test_game_engine.py
+========================================================================================
+# --- FILE: tests/test_game_engine.py ---
+
+from src.services.game_engine import engine
+
+STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
+
+def test_process_valid_move():
+    is_valid, data = engine.process_move(STARTING_FEN, "e2e4")
+
+    assert is_valid is True
+    assert data is not None
+    assert data["san"] == "e4"
+    assert data["uci"] == "e2e4"
+    assert "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR" in data["new_fen"]
+    assert data["result"] is None
+    assert data["is_game_over"] is False
+
+
+def test_process_illegal_move():
+    is_valid, data = engine.process_move(STARTING_FEN, "e2e5")
+
+    assert is_valid is False
+    assert data is None
+
+
+def test_checkmate_detection():
+    # Позиция за шаг до детского мата (ход белых: Qf7#)
+    fen = "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 4 3"
+    is_valid, data = engine.process_move(fen, "f3f7")
+
+    assert is_valid is True
+    assert data["is_game_over"] is True
+    assert data["result"] == "1-0"
+    assert data["termination"] == "checkmate"
+
+
+def test_underpromotion_to_knight_and_rook():
+    """Проверка превращения пешки в коня (a7a8n) и ладью (a7a8r) с корректной записью SAN."""
+    promotion_fen = "4k3/P7/8/8/8/8/8/4K3 w - - 0 1"
+
+    is_valid_n, res_knight = engine.process_move(promotion_fen, "a7a8n")
+    assert is_valid_n is True
+    assert res_knight["uci"] == "a7a8n"
+    assert res_knight["san"].startswith("a8=N")
+
+    is_valid_r, res_rook = engine.process_move(promotion_fen, "a7a8r")
+    assert is_valid_r is True
+    assert res_rook["uci"] == "a7a8r"
+    assert res_rook["san"].startswith("a8=R")
+
+----------------------------------------------------------------------------------------
+END OF PART 4/11

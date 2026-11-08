@@ -9,15 +9,26 @@ import {
     getPieceSvgUrl,
     getHarmoniousPieceStyle
 } from '../../config/boardAppearance';
+import {MIN_BOARD_SIZE, getMaxViewportBoardSize} from '../../components/Chessboard';
 
 describe('GameWebSocketService & API Config', () => {
-    it('should be defined', () => {
+    it('should be defined and support listener registration without duplicates', () => {
         expect(gameSocket).toBeDefined();
+        const noop = () => {
+        };
+        gameSocket.on('test_event', noop);
+        gameSocket.on('test_event', noop);
+        gameSocket.off('test_event', noop);
     });
 
     it('should provide valid default API_BASE_URL and WS_BASE_URL', () => {
         expect(API_BASE_URL).toMatch(/^https?:\/\//);
         expect(WS_BASE_URL).toMatch(/^wss?:\/\//);
+    });
+
+    it('should provide mobile-friendly board size bounds', () => {
+        expect(MIN_BOARD_SIZE).toBe(280);
+        expect(getMaxViewportBoardSize()).toBeGreaterThanOrEqual(MIN_BOARD_SIZE);
     });
 
     it('should provide 5 piece sets and 5 board themes with harmonious styles', () => {

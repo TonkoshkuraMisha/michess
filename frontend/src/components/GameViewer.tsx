@@ -4,28 +4,11 @@ import {useState, useEffect, useRef, useMemo} from 'react';
 import {useParams, useLocation, Link} from 'react-router-dom';
 import {Chess} from 'chess.js';
 import {
-    AreaChart,
-    Area,
-    XAxis,
-    YAxis,
-    Tooltip,
-    ReferenceLine,
-    ResponsiveContainer
+    AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer
 } from 'recharts';
 import {
-    ChevronFirst,
-    ChevronLeft,
-    ChevronRight,
-    ChevronLast,
-    ArrowLeft,
-    Download,
-    Loader2,
-    Sword,
-    RefreshCw,
-    Palette,
-    Cpu,
-    Sparkles,
-    X
+    ChevronFirst, ChevronLeft, ChevronRight, ChevronLast, ArrowLeft,
+    Download, Loader2, Sword, RefreshCw, Palette, Cpu, Sparkles, X
 } from 'lucide-react';
 import {format, parseISO} from 'date-fns';
 import {ru} from 'date-fns/locale';
@@ -143,12 +126,10 @@ export default function GameViewer() {
     const [isFlipped, setIsFlipped] = useState(false);
     const [showAppearancePanel, setShowAppearancePanel] = useState(false);
 
-    // Состояния компьютерного анализа (Таск 4.1 / 4.2)
     const [analysisReport, setAnalysisReport] = useState<FullGameAnalysisReport | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisError, setAnalysisError] = useState<string | null>(null);
 
-    // Стрелки и выделенные клетки правой кнопкой мыши (Таск 4.2)
     const [arrows, setArrows] = useState<DrawnArrow[]>([]);
     const [highlightedSquares, setHighlightedSquares] = useState<Set<string>>(new Set());
     const rightClickStartRef = useRef<string | null>(null);
@@ -205,7 +186,7 @@ export default function GameViewer() {
         document.body.style.cursor = 'nwse-resize';
         document.body.style.userSelect = 'none';
 
-        const handleResizeMove = (e: MouseEvent) => {
+        const handleResizeMove = (e: PointerEvent) => {
             if (!resizeStartRef.current) return;
             const {startX, startY, startSize} = resizeStartRef.current;
             const deltaX = e.clientX - startX;
@@ -223,18 +204,20 @@ export default function GameViewer() {
             resizeStartRef.current = null;
         };
 
-        window.addEventListener('mousemove', handleResizeMove);
-        window.addEventListener('mouseup', handleResizeEnd);
+        window.addEventListener('pointermove', handleResizeMove);
+        window.addEventListener('pointerup', handleResizeEnd);
+        window.addEventListener('pointercancel', handleResizeEnd);
 
         return () => {
             document.body.style.cursor = prevCursor;
             document.body.style.userSelect = prevUserSelect;
-            window.removeEventListener('mousemove', handleResizeMove);
-            window.removeEventListener('mouseup', handleResizeEnd);
+            window.removeEventListener('pointermove', handleResizeMove);
+            window.removeEventListener('pointerup', handleResizeEnd);
+            window.removeEventListener('pointercancel', handleResizeEnd);
         };
     }, [isResizing]);
 
-    const handleResizeMouseDown = (e: React.MouseEvent) => {
+    const handleResizePointerDown = (e: React.PointerEvent) => {
         e.preventDefault();
         e.stopPropagation();
         resizeStartRef.current = {
@@ -259,19 +242,30 @@ export default function GameViewer() {
             setError(null);
             setAnalysisReport(null);
             try {
-                const res = await fetch(`${API_BASE_URL}/api/v1/profile/games/${gameId}/pgn`);
-                if (!res.ok) {
-                setError('Не удалось загрузить данные партии');
-                return;
-            }
+                const [pgnRes, cachedAnalysisRes] = await Promise.all([
+                    fetch(`${API_BASE_URL}/api/v1/profile/games/${gameId}/pgn`),
+                    fetch(`${API_BASE_URL}/api/v1/analysis/game/${gameId}`).catch(() => null)
+                ]);
 
-                const pgnText = await res.text();
+                if (!pgnRes.ok) {
+                    setError('Не удалось загрузить данные партии');
+                    return;
+                }
+
+                const pgnText = await pgnRes.text();
                 const newGame = new Chess();
                 newGame.loadPgn(pgnText);
 
                 setPgnHeaders(newGame.header());
                 setHistory(newGame.history({verbose: true}));
                 setViewIndex(-1);
+
+                if (cachedAnalysisRes && cachedAnalysisRes.ok) {
+                    const cachedData = await cachedAnalysisRes.json().catch(() => null);
+                    if (cachedData && Array.isArray(cachedData.moves)) {
+                        setAnalysisReport(cachedData);
+                    }
+                }
             } catch (err: any) {
                 setError(err.message);
             } finally {
@@ -349,7 +343,6 @@ export default function GameViewer() {
 
     const boardState = currentGame.board();
 
-    // Текущая оценка для шкалы EvalBar (из отчёта Stockfish либо мгновенного материального баланса)
     const currentEval = useMemo(() => {
         if (viewIndex < 0) {
             return {cp: 20, display: '+0.2', bestMoveUci: null as string | null};
@@ -368,7 +361,6 @@ export default function GameViewer() {
 
     const whiteBarPercent = evalCpToWhitePercentage(currentEval.cp);
 
-    // Данные для интерактивного графика Recharts
     const chartData = useMemo(() => {
         if (!analysisReport) return [];
         return analysisReport.moves.map((m, idx) => ({
@@ -505,32 +497,30 @@ export default function GameViewer() {
         return acc;
     }, []);
 
+    const responsiveBoardPx = typeof window !== 'undefined' ? Math.min(boardSize, window.innerWidth - 56) : boardSize;
+
     return (
         <div
             className="w-full max-w-[1800px] h-full flex flex-col xl:flex-row items-center xl:items-stretch justify-center gap-5 px-2 xl:overflow-hidden relative">
 
-            {/* ЦЕНТРАЛЬНАЯ ЧАСТЬ: ВЕРТИКАЛЬНАЯ ШКАЛА ОЦЕНКИ (EVAL BAR) + ИГРОКИ И ДОСКА */}
-            <div className="flex items-center justify-center gap-3 shrink-0 my-auto">
+            <div className="flex items-center justify-center gap-2.5 sm:gap-3 shrink-0 my-auto">
 
                 {/* Вертикальная шкала оценки EvalBar */}
                 <div
-                    style={{height: `${boardSize}px`}}
-                    className={`w-7 rounded-md overflow-hidden border-2 border-amber-950/90 shadow-heavy flex flex-col relative select-none shrink-0 ${
+                    style={{height: `${responsiveBoardPx}px`}}
+                    className={`w-6 sm:w-7 rounded-md overflow-hidden border-2 border-amber-950/90 shadow-heavy flex flex-col relative select-none shrink-0 ${
                         isFlipped ? 'flex-col-reverse' : 'flex-col'
                     }`}
                     title={`Оценка позиции: ${currentEval.display}`}
                 >
-                    {/* Чёрная полоса */}
                     <div
                         style={{height: `${100 - whiteBarPercent}%`}}
                         className="w-full bg-[#1E1916] transition-all duration-300"
                     />
-                    {/* Белая полоса */}
                     <div
                         style={{height: `${whiteBarPercent}%`}}
                         className="w-full bg-[#EBE1CE] transition-all duration-300"
                     />
-                    {/* Подпись оценки */}
                     <span
                         className={`absolute left-0 right-0 text-center font-mono text-[10px] font-extrabold tracking-tighter px-0.5 ${
                             currentEval.cp >= 0
@@ -542,11 +532,9 @@ export default function GameViewer() {
                     </span>
                 </div>
 
-                {/* Доска и плашки игроков */}
                 <div className="flex flex-col items-center gap-2.5">
-                    {/* Верхний игрок */}
                     <div
-                        style={{width: `${boardSize}px`}}
+                        style={{width: `${responsiveBoardPx}px`}}
                         className="bg-acacia-dark px-3.5 py-2 rounded-lg shadow-heavy border-2 border-amber-900/50 flex justify-between items-center text-boxwood-light"
                     >
                         <div className="flex items-center gap-3 min-w-0">
@@ -573,15 +561,14 @@ export default function GameViewer() {
                         )}
                     </div>
 
-                    {/* ДОСКА С SVG-ОВЕРЛЕЕМ СТРЕЛОК */}
                     <div
                         onContextMenu={(e) => e.preventDefault()}
                         style={{
-                            width: `${boardSize}px`,
-                            height: `${boardSize}px`,
+                            width: `${responsiveBoardPx}px`,
+                            height: `${responsiveBoardPx}px`,
                             backgroundColor: activeTheme.border
                         }}
-                        className={`p-3 rounded-lg shadow-heavy border-2 border-amber-950/80 relative select-none group/board ${isResizing ? 'transition-none ring-2 ring-amber-500/60' : 'transition-colors'}`}
+                        className={`p-3 rounded-lg shadow-heavy border-2 border-amber-950/80 relative select-none touch-none group/board ${isResizing ? 'transition-none ring-2 ring-amber-500/60' : 'transition-colors'}`}
                     >
                         {activeTheme.useWoodGrain && (
                             <div
@@ -659,7 +646,6 @@ export default function GameViewer() {
                                 })
                             )}
 
-                            {/* SVG-оверлей для стрелок правой кнопкой мыши */}
                             {arrows.length > 0 && (
                                 <svg
                                     viewBox="0 0 100 100"
@@ -702,12 +688,12 @@ export default function GameViewer() {
                         {isResizing && (
                             <div
                                 className="absolute bottom-5 right-5 z-40 px-2.5 py-1 rounded bg-black/85 border border-amber-500/60 text-amber-300 font-mono text-xs font-bold shadow-lg pointer-events-none">
-                                {boardSize} × {boardSize} px
+                                {responsiveBoardPx} × {responsiveBoardPx} px
                             </div>
                         )}
 
                         <div
-                            onMouseDown={handleResizeMouseDown}
+                            onPointerDown={handleResizePointerDown}
                             onDoubleClick={handleResizeDoubleClick}
                             title="Потяните, чтобы изменить размер доски (двойной клик — сбросить)"
                             className={`absolute bottom-0 right-0 w-6 h-6 z-40 cursor-nwse-resize flex items-end justify-end p-0.5 rounded-tl transition-opacity ${
@@ -731,9 +717,8 @@ export default function GameViewer() {
                         </div>
                     </div>
 
-                    {/* Нижний игрок */}
                     <div
-                        style={{width: `${boardSize}px`}}
+                        style={{width: `${responsiveBoardPx}px`}}
                         className="bg-acacia-dark px-3.5 py-2 rounded-lg shadow-heavy border-2 border-amber-900/50 flex justify-between items-center text-boxwood-light"
                     >
                         <div className="flex items-center gap-3 min-w-0">
@@ -766,7 +751,6 @@ export default function GameViewer() {
             <div
                 className="w-full xl:w-110 2xl:w-120 xl:h-full bg-acacia p-3.5 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-2.5 text-boxwood-light shrink-0 xl:overflow-hidden">
 
-                {/* Шапка студии разбора */}
                 <div className="flex items-center justify-between gap-2 border-b border-acacia-light pb-2.5 shrink-0">
                     <div className="flex items-center gap-2.5 min-w-0">
                         <button
@@ -806,7 +790,6 @@ export default function GameViewer() {
                     </div>
                 </div>
 
-                {/* Выдвижная панель выбора фигур и доски */}
                 {showAppearancePanel && (
                     <div
                         className="bg-acacia-dark p-3 rounded-md border border-amber-700/50 flex flex-col gap-2 shadow-lg shrink-0">
@@ -856,7 +839,6 @@ export default function GameViewer() {
                     </div>
                 )}
 
-                {/* Блок компьютерного анализа Stockfish + График перевеса Recharts */}
                 <div
                     className="bg-acacia-dark p-3 rounded-md border border-amber-800/50 flex flex-col gap-2.5 shrink-0">
                     {!analysisReport ? (
@@ -923,7 +905,6 @@ export default function GameViewer() {
                                 </div>
                             </div>
 
-                            {/* График перевеса по ходу партии */}
                             <div className="h-24 w-full bg-room-dark rounded border border-amber-900/50 p-1">
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart
@@ -972,7 +953,6 @@ export default function GameViewer() {
                     )}
                 </div>
 
-                {/* Таблица нотации ходов с бейджами классификации */}
                 <div
                     className="flex-1 min-h-0 flex flex-col bg-room-dark/90 rounded-md border border-amber-900/50 overflow-hidden shadow-inner">
                     <div
@@ -1054,7 +1034,6 @@ export default function GameViewer() {
                     </div>
                 </div>
 
-                {/* Навигация и скачивание PGN */}
                 <div className="flex flex-col gap-2 shrink-0">
                     <div
                         className="flex justify-between items-center bg-acacia-dark p-2 rounded-md border border-amber-900/40">

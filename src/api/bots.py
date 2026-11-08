@@ -46,7 +46,7 @@ AVAILABLE_BOTS = [
         "title": "Король Комбинаций",
         "rating": 1950,
         "motto": "Инициатива, гамбит и стремительная атака на короля!",
-        "avatar": "/assets/champions/philidor.jpg",
+        "avatar": "/assets/champions/labourdonnais.jpg",
     },
     {
         "id": "staunton",
@@ -56,7 +56,7 @@ AVAILABLE_BOTS = [
         "title": "Основатель Английской Школы",
         "rating": 2000,
         "motto": "Фланговый зажим центра, прочная структура и классический расчёт.",
-        "avatar": "/assets/champions/philidor.jpg",
+        "avatar": "/assets/champions/staunton.jpg",
     },
     {
         "id": "anderssen",
@@ -66,7 +66,7 @@ AVAILABLE_BOTS = [
         "title": "Маэстро Бессмертных Партий",
         "rating": 2100,
         "motto": "Бриллиантовая жертва фигуры ради вскрытия линий и мата королю!",
-        "avatar": "/assets/champions/philidor.jpg",
+        "avatar": "/assets/champions/anderssen.jpg",
     },
     {
         "id": "morphy",
@@ -76,7 +76,7 @@ AVAILABLE_BOTS = [
         "title": "Гордость и печаль шахмат",
         "rating": 2150,
         "motto": "Развивайте все фигуры с темпом и вскрывайте линии для атаки!",
-        "avatar": "/assets/champions/philidor.jpg",
+        "avatar": "/assets/champions/morphy.jpg",
     },
     {
         "id": "paulsen",
@@ -86,7 +86,7 @@ AVAILABLE_BOTS = [
         "title": "Гений Защиты и Двух Слонов",
         "rating": 2080,
         "motto": "Гибкая оборона, сила двух слонов и глубокие дебютные новинки.",
-        "avatar": "/assets/champions/philidor.jpg",
+        "avatar": "/assets/champions/paulsen.jpg",
     },
     {
         "id": "zukertort",
@@ -96,7 +96,7 @@ AVAILABLE_BOTS = [
         "title": "Триумфатор Лондона 1883",
         "rating": 2120,
         "motto": "Универсальная гармония развития и сокрушительные комбинационные бури!",
-        "avatar": "/assets/champions/philidor.jpg",
+        "avatar": "/assets/champions/zukertort.jpg",
     },
 ]
 
@@ -112,7 +112,6 @@ BOT_INSTANCES = {
 
 BOT_METADATA = {b["id"]: b for b in AVAILABLE_BOTS}
 
-# Коэффициент темпа игры исторических мастеров (Морфи и Лабурдонне играли молниеносно, Стаунтон и Паульсен — долго)
 BOT_TEMPO_MULTIPLIER = {
     "morphy": 0.72,
     "labourdonnais": 0.78,
@@ -168,12 +167,10 @@ def calculate_authentic_thinking_time_ms(
     num_legal = len(legal_moves)
     tempo = BOT_TEMPO_MULTIPLIER.get(bot_id, 1.0)
 
-    # Единственный легальный ход (например, выход из шаха) — почти мгновенно
     if num_legal <= 1:
         return int(random.randint(240, 380) * tempo)
 
-    # Ход из дебютной книги — быстрое воспроизведение по памяти
-    if source == "book":
+    if source in ("book", "opening_book"):
         base_ms = random.randint(360, 680) + board.fullmove_number * 22
         return int(base_ms * tempo)
 
@@ -181,7 +178,6 @@ def calculate_authentic_thinking_time_ms(
     is_capture = board.is_capture(move_obj)
     gives_check = board.gives_check(move_obj)
 
-    # Оцениваем напряжённость позиции (количество возможных взятий и разветвлений)
     captures_available = sum(1 for m in legal_moves if board.is_capture(m))
     complexity_ms = min(num_legal * 26, 950) + min(captures_available * 95, 550)
 
@@ -190,7 +186,6 @@ def calculate_authentic_thinking_time_ms(
     if is_capture or gives_check:
         complexity_ms += 280
 
-    # В глубоком эндшпиле (мало фигур) техническая реализация идёт быстрее
     piece_count = len(board.piece_map())
     if piece_count <= 10:
         complexity_ms = int(complexity_ms * 0.65)
@@ -308,6 +303,13 @@ def _prepare_game_kwargs(
     """Формирует словарь полей модели Game в соответствии со схемой БД."""
     game_cols = {c.name: c for c in Game.__table__.columns}
     kwargs: dict = {}
+
+    if "pgn_date" in game_cols:
+        kwargs["pgn_date"] = datetime.now(timezone.utc).strftime("%Y.%m.%d")
+    if "site" in game_cols:
+        kwargs["site"] = "Michess Bot Arena"
+    if "eco" in game_cols:
+        kwargs["eco"] = _detect_eco_code(payload.moves_uci)
 
     if "white_player_id" in game_cols:
         kwargs["white_player_id"] = white_id
