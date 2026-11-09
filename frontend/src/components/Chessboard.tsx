@@ -7,9 +7,11 @@ import {
     ChevronFirst, ChevronLeft, ChevronRight, ChevronLast, Users, Sword, Flag,
     Handshake, Loader2, Play, RotateCcw, Clock, ChevronDown, ChevronUp, Palette,
     RefreshCw, ListOrdered, Undo2, Bot, MessageSquareQuote, Download, Eye,
-    Sliders, Zap, X, Link2, Copy, Check, Send, MessageSquare, Radio
+    Sliders, Zap, X, Link2, Copy, Check, Send, MessageSquare, Radio, Volume2, VolumeX
 } from 'lucide-react';
 import {gameSocket} from '../services/gameSocket';
+import {soundEngine, resolveMoveSound} from '../services/soundEngine';
+import type {SoundEventType} from '../services/soundEngine';
 import {API_BASE_URL} from '../config/api';
 import {
     BOARD_THEMES,
@@ -526,6 +528,7 @@ export default function Chessboard() {
     const [lobbyTab, setLobbyTab] = useState<'lobby' | 'live'>('lobby');
     const [showInvitePanel, setShowInvitePanel] = useState(false);
     const [showAppearanceDropdown, setShowAppearanceDropdown] = useState(false);
+    const [isSoundMuted, setIsSoundMuted] = useState<boolean>(() => soundEngine.isMuted());
     const appearanceDropdownRef = useRef<HTMLDivElement>(null);
 
     const [liveGames, setLiveGames] = useState<LiveGameItem[]>([]);
@@ -561,10 +564,12 @@ export default function Chessboard() {
     const [gameId, setGameId] = useState<number | null>(null);
     const gameIdRef = useRef<number | null>(null);
     const [myColor, setMyColor] = useState<'white' | 'black'>('white');
+    const myColorRef = useRef<'white' | 'black'>('white');
     const [isSearching, setIsSearching] = useState(false);
     const [queuePlayers, setQueuePlayers] = useState<QueuePlayer[]>([]);
     const [currentUserId, setCurrentUserId] = useState<number | null>(null);
     const [currentUsername, setCurrentUsername] = useState<string>('Вы');
+    const currentUsernameRef = useRef<string>('Вы');
     const [currentUserRating, setCurrentUserRating] = useState<number>(1200);
     const [stateVersion, setStateVersion] = useState(0);
     const stateVersionRef = useRef<number>(0);
@@ -594,6 +599,7 @@ export default function Chessboard() {
 
     const moveStartTime = useRef<number>(Date.now());
     const botGameSavedRef = useRef<boolean>(false);
+    const lowTimeWarnedRef = useRef<boolean>(false);
     const appliedPeriodsRef = useRef<{ white: Set<number>; black: Set<number> }>({
         white: new Set(),
         black: new Set()
@@ -650,13 +656,31 @@ export default function Chessboard() {
 
     const isBoardFlipped = (myColor === 'black') !== isManualFlip;
 
-    const playAudio = useCallback((type: 'move' | 'capture' | 'start') => {
-        const file = type === 'capture' ? 'Capture.mp3' : type === 'start' ? 'GenericNotify.mp3' : 'Move.mp3';
-        const audio = new Audio(`/assets/sounds/${file}`);
-        audio.currentTime = 0;
-        audio.play().catch(() => {
-        });
+    const playAudio = useCallback((type: SoundEventType) => {
+        soundEngine.play(type);
     }, []);
+
+    const playOutcomeSound = useCallback((result: string, playerColor: 'white' | 'black' = myColorRef.current) => {
+        if (!result || result === '*') {
+            soundEngine.play('decline');
+            return;
+        }
+        if (result === '1/2-1/2' || result.includes('draw')) {
+            soundEngine.play('draw');
+            return;
+        }
+        const whiteWon = result === '1-0' || result === 'white_won_on_time';
+        const isWin = (whiteWon && playerColor === 'white') || (!whiteWon && playerColor === 'black');
+        soundEngine.play(isWin ? 'victory' : 'defeat');
+    }, []);
+
+    const handleToggleSound = () => {
+        const nextMuted = soundEngine.toggleMute();
+        setIsSoundMuted(nextMuted);
+        if (!nextMuted) {
+            soundEngine.play('move');
+        }
+    };
 
     const updateSessionStats = useCallback((result: string) => {
         if (!result || result === '*') return;
@@ -665,14 +689,14 @@ export default function Chessboard() {
                 return {...prev, draws: prev.draws + 1};
             }
             const whiteWon = result === '1-0' || result === 'white_won_on_time';
-            const userIsWhite = myColor === 'white';
+            const userIsWhite = myColorRef.current === 'white';
             if ((whiteWon && userIsWhite) || (!whiteWon && !userIsWhite)) {
                 return {...prev, wins: prev.wins + 1};
             } else {
                 return {...prev, losses: prev.losses + 1};
             }
         });
-    }, [myColor]);
+    }, []);
 
     const applyMatchFoundSnapshot = useCallback((data: any) => {
         if (!data || !data.game_id) return;
@@ -691,6 +715,7 @@ export default function Chessboard() {
         botGameSavedRef.current = false;
 
         if (isNewMatch) {
+            lowTimeWarnedRef.current = false;
             setChatMessages([]);
             appliedPeriodsRef.current = {white: new Set(), black: new Set()};
             setIsManualFlip(false);
@@ -704,6 +729,7 @@ export default function Chessboard() {
 
         gameIdRef.current = incomingGid;
         setGameId(incomingGid);
+        myColorRef.current = assignedColor;
         setMyColor(assignedColor);
         setStateVersion(ver);
         stateVersionRef.current = ver;
@@ -775,11 +801,12 @@ export default function Chessboard() {
         }
 
         if (loaded) {
+            const newHistory = nextGame.history({verbose: true});
+            const lastSan = data.san || (newHistory.length > 0 ? newHistory[newHistory.length - 1].san : '');
             setGame(nextGame);
-            setHistory(nextGame.history({verbose: true}));
+            setHistory(newHistory);
             setViewIndex(-1);
-            const isCapture = Boolean(data.san && data.san.includes('x'));
-            playAudio(isCapture ? 'capture' : 'move');
+            playAudio(resolveMoveSound(lastSan));
         }
 
         if (data.game_over) {
@@ -787,10 +814,10 @@ export default function Chessboard() {
             setPendingPromotion(null);
             setGameOverResult(data.result);
             setRatingInfo(data);
-            playAudio('start');
+            playOutcomeSound(data.result);
             updateSessionStats(data.result);
         }
-    }, [playAudio, updateSessionStats]);
+    }, [playAudio, playOutcomeSound, updateSessionStats]);
 
     const saveBotGameToDatabase = useCallback(async (
         botId: HistoricalBotId,
@@ -919,6 +946,7 @@ export default function Chessboard() {
         const botInfo = HISTORICAL_BOTS[botId];
 
         botGameSavedRef.current = false;
+        lowTimeWarnedRef.current = false;
         appliedPeriodsRef.current = {white: new Set(), black: new Set()};
         setSavedBotGameId(null);
         gameIdRef.current = null;
@@ -926,6 +954,7 @@ export default function Chessboard() {
         setSelectedBotId(botId);
         setActiveBot(botId);
         setLeftSectionTab('bots');
+        myColorRef.current = chosenColor;
         setMyColor(chosenColor);
         setIsManualFlip(false);
         setGame(freshGame);
@@ -1010,7 +1039,7 @@ export default function Chessboard() {
                         setBotComment(data.comment);
                         moveStartTime.current = Date.now();
 
-                        playAudio(moveObj.san.includes('x') ? 'capture' : 'move');
+                        playAudio(resolveMoveSound(moveObj.san));
 
                         if (nextGame.isGameOver()) {
                             let result = '1/2-1/2';
@@ -1021,7 +1050,7 @@ export default function Chessboard() {
                             setGameOverResult(result);
                             setDrawOfferStatus(`Партия против ${botName} окончена и сохранена в архив (${result}).`);
                             updateSessionStats(result);
-                            playAudio('start');
+                            playOutcomeSound(result, myColor);
                             saveBotGameToDatabase(activeBot, myColor, result, nextGame);
                         }
                     }
@@ -1039,7 +1068,7 @@ export default function Chessboard() {
             isCancelled = true;
             if (delayTimer) clearTimeout(delayTimer);
         };
-    }, [activeBot, game, myColor, gameOverResult, playAudio, updateSessionStats, saveBotGameToDatabase, applyDgtClockAfterMove]);
+    }, [activeBot, game, myColor, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyDgtClockAfterMove]);
 
     useEffect(() => {
         if (!isResizing) return;
@@ -1115,27 +1144,41 @@ export default function Chessboard() {
                 e.preventDefault();
                 setViewIndex(prev => {
                     const current = prev === -1 ? history.length - 1 : prev;
-                    return current <= 0 ? -2 : current - 1;
+                    const nextIdx = current <= 0 ? -2 : current - 1;
+                    if (nextIdx >= 0 && history[nextIdx]) {
+                        playAudio(resolveMoveSound(history[nextIdx].san));
+                    } else {
+                        playAudio('move');
+                    }
+                    return nextIdx;
                 });
             } else if (e.key === 'ArrowRight') {
                 e.preventDefault();
                 setViewIndex(prev => {
                     if (prev === -1) return -1;
-                    if (prev === -2) return history.length > 1 ? 0 : -1;
-                    return prev + 1 >= history.length - 1 ? -1 : prev + 1;
+                    const nextIdx = prev === -2
+                        ? (history.length > 1 ? 0 : -1)
+                        : (prev + 1 >= history.length - 1 ? -1 : prev + 1);
+                    const targetMove = nextIdx === -1 ? history[history.length - 1] : history[nextIdx];
+                    if (targetMove) {
+                        playAudio(resolveMoveSound(targetMove.san));
+                    }
+                    return nextIdx;
                 });
             } else if (e.key === 'ArrowUp') {
                 e.preventDefault();
                 setViewIndex(-2);
+                playAudio('move');
             } else if (e.key === 'ArrowDown') {
                 e.preventDefault();
                 setViewIndex(-1);
+                playAudio('move');
             }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [history.length]);
+    }, [history, playAudio]);
 
     useEffect(() => {
         if (notationScrollRef.current) {
@@ -1175,7 +1218,10 @@ export default function Chessboard() {
             .then(data => {
                 if (data) {
                     setCurrentUserId(data.id);
-                    if (data.username) setCurrentUsername(data.username);
+                    if (data.username) {
+                        setCurrentUsername(data.username);
+                        currentUsernameRef.current = data.username;
+                    }
                     if (data.rating) setCurrentUserRating(data.rating);
                 }
             })
@@ -1202,7 +1248,7 @@ export default function Chessboard() {
             setPendingPromotion(null);
             setGameOverResult(prev => {
                 if (!prev) {
-                    playAudio('start');
+                    playOutcomeSound(data.result);
                     updateSessionStats(data.result);
                 }
                 return data.result;
@@ -1219,19 +1265,23 @@ export default function Chessboard() {
 
         const handleDrawOffered = () => {
             setDrawOfferStatus('Соперник предлагает ничью.');
+            playAudio('offer');
         };
 
         const handleDrawDeclined = () => {
             setDrawOfferStatus('Предложение ничьей отклонено.');
+            playAudio('decline');
             setTimeout(() => setDrawOfferStatus(null), 3000);
         };
 
         const handleRematchOffered = () => {
             setRematchStatus('offered_by_opponent');
+            playAudio('offer');
         };
 
         const handleRematchDeclined = () => {
             setRematchStatus('declined');
+            playAudio('decline');
         };
 
         const handleInviteCreated = (data: any) => {
@@ -1243,6 +1293,7 @@ export default function Chessboard() {
                     });
                 }
                 setInviteCopied(true);
+                playAudio('offer');
                 setTimeout(() => setInviteCopied(false), 3000);
             }
         };
@@ -1274,6 +1325,7 @@ export default function Chessboard() {
             setGameOverResult(null);
             setChatMessages([]);
             setDrawOfferStatus(`Режим зрителя: ${data.white_username} vs ${data.black_username}`);
+            playAudio('start');
         };
 
         const handleChatMessage = (data: any) => {
@@ -1283,12 +1335,16 @@ export default function Chessboard() {
                     text: data.text,
                     timestamp: data.timestamp || Date.now()
                 }]);
+                if (data.sender !== currentUsernameRef.current) {
+                    playAudio('chat');
+                }
             }
         };
 
         const handleServerError = (data: any) => {
             console.warn('Сервер отклонил действие:', data);
             setPremove(null);
+            playAudio('illegal');
             if (data.pgn || data.fen) {
                 const syncedGame = new Chess();
                 if (data.pgn) {
@@ -1335,7 +1391,7 @@ export default function Chessboard() {
             gameSocket.off('chat_message', handleChatMessage);
             gameSocket.off('error', handleServerError);
         };
-    }, [applyMatchFoundSnapshot, applyMoveMadeSnapshot, playAudio, updateSessionStats]);
+    }, [applyMatchFoundSnapshot, applyMoveMadeSnapshot, playAudio, playOutcomeSound, updateSessionStats]);
 
     useEffect(() => {
         if (!inviteCode || !localStorage.getItem('token')) return;
@@ -1346,7 +1402,6 @@ export default function Chessboard() {
         return () => clearTimeout(timer);
     }, [inviteCode, navigate]);
 
-    // Поллинг лобби + автоматическая синхронизация старта партии и ходов (резервный канал)
     useEffect(() => {
         const syncLobbyAndActiveGame = async () => {
             const token = localStorage.getItem('token');
@@ -1423,6 +1478,16 @@ export default function Chessboard() {
         return () => clearInterval(interval);
     }, [gameId, activeBot, spectatingGameId, gameOverResult, currentTurnChar, selectedTimeControl.mode]);
 
+    // Звуковое предупреждение о цейтноте (< 10 секунд на часах игрока)
+    useEffect(() => {
+        if ((!gameId && !activeBot) || gameOverResult || lowTimeWarnedRef.current) return;
+        const myRemainingMs = myColor === 'white' ? whiteTimeMs : blackTimeMs;
+        if (myRemainingMs > 0 && myRemainingMs <= 10000) {
+            lowTimeWarnedRef.current = true;
+            playAudio('low_time');
+        }
+    }, [whiteTimeMs, blackTimeMs, gameId, activeBot, gameOverResult, myColor, playAudio]);
+
     useEffect(() => {
         if (!activeBot || gameOverResult || selectedTimeControl.mode === 'scrabble') return;
 
@@ -1434,10 +1499,10 @@ export default function Chessboard() {
             setGameOverResult(flagWinner);
             setDrawOfferStatus(`Флажок упал! Партия против ${botName} завершена по времени (${flagWinner}).`);
             updateSessionStats(flagWinner);
-            playAudio('start');
+            playOutcomeSound(flagWinner, myColor);
             saveBotGameToDatabase(activeBot, myColor, flagWinner, game);
         }
-    }, [whiteTimeMs, blackTimeMs, activeBot, gameOverResult, selectedTimeControl.mode, myColor, game, playAudio, updateSessionStats, saveBotGameToDatabase]);
+    }, [whiteTimeMs, blackTimeMs, activeBot, gameOverResult, selectedTimeControl.mode, myColor, game, playOutcomeSound, updateSessionStats, saveBotGameToDatabase]);
 
     const executeMove = useCallback((
         from: string,
@@ -1505,7 +1570,7 @@ export default function Chessboard() {
                 setGame(nextGame);
                 setHistory(newHistory);
                 setViewIndex(-1);
-                playAudio(move.san.includes('x') ? 'capture' : 'move');
+                playAudio(resolveMoveSound(move.san));
                 moveStartTime.current = Date.now();
 
                 if (gameId) {
@@ -1531,7 +1596,7 @@ export default function Chessboard() {
                     setGameOverResult(result);
                     setDrawOfferStatus(`Партия против ${botName} окончена и сохранена в архив (${result}).`);
                     updateSessionStats(result);
-                    playAudio('start');
+                    playOutcomeSound(result, myColor);
                     saveBotGameToDatabase(activeBot, myColor, result, nextGame);
                 }
                 setSelectedSquare(null);
@@ -1543,7 +1608,7 @@ export default function Chessboard() {
         }
         setDragState(null);
         return false;
-    }, [game, gameId, activeBot, spectatingGameId, myColor, stateVersion, viewIndex, gameOverResult, playAudio, updateSessionStats, saveBotGameToDatabase, applyDgtClockAfterMove]);
+    }, [game, gameId, activeBot, spectatingGameId, myColor, stateVersion, viewIndex, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyDgtClockAfterMove]);
 
     const scheduleOrPromotePremove = useCallback((from: string, to: string, explicitPromotion?: PromotionPiece) => {
         if (from === to) return;
@@ -1576,10 +1641,11 @@ export default function Chessboard() {
             to,
             promotion: isPawnPromotion ? (explicitPromotion || 'q') : undefined
         });
+        playAudio('premove');
         setPendingPromotion(null);
         setSelectedSquare(null);
         setDragState(null);
-    }, [game, myColor]);
+    }, [game, myColor, playAudio]);
 
     useEffect(() => {
         if (!premove || gameOverResult || viewIndex !== -1) return;
@@ -1689,6 +1755,7 @@ export default function Chessboard() {
         setBotComment(null);
         setSavedBotGameId(null);
         botGameSavedRef.current = false;
+        lowTimeWarnedRef.current = false;
         appliedPeriodsRef.current = {white: new Set(), black: new Set()};
         setPendingPromotion(null);
         setPremove(null);
@@ -1828,6 +1895,7 @@ export default function Chessboard() {
         } else if (activeBot) {
             setGameOverResult('*');
             setDrawOfferStatus('Партия отменена без изменения счёта.');
+            playAudio('decline');
         }
     };
 
@@ -1835,6 +1903,7 @@ export default function Chessboard() {
         if (gameId && gameOverResult) {
             gameSocket.send('offer_rematch', {game_id: gameId});
             setRematchStatus('offered_by_me');
+            playAudio('premove');
         } else if (activeBot && gameOverResult) {
             const nextColor = myColor === 'white' ? 'black' : 'white';
             startHistoricalBotGame(activeBot, nextColor);
@@ -1850,6 +1919,7 @@ export default function Chessboard() {
         if (!gameId) return;
         gameSocket.send('decline_rematch', {game_id: gameId});
         setRematchStatus('none');
+        playAudio('decline');
     };
 
     const handleResign = () => {
@@ -1865,7 +1935,7 @@ export default function Chessboard() {
                 setGameOverResult(res);
                 setDrawOfferStatus(`Вы сдались. Победа ${botName} (${res}).`);
                 updateSessionStats(res);
-                playAudio('start');
+                playOutcomeSound(res, myColor);
                 saveBotGameToDatabase(activeBot, myColor, res, game);
             }
         }
@@ -1875,6 +1945,7 @@ export default function Chessboard() {
         if (!gameId || gameOverResult) return;
         gameSocket.send('offer_draw', {game_id: gameId});
         setDrawOfferStatus('Вы предложили ничью...');
+        playAudio('premove');
     };
 
     const acceptDraw = () => {
@@ -1887,6 +1958,7 @@ export default function Chessboard() {
         if (!gameId) return;
         gameSocket.send('decline_draw', {game_id: gameId});
         setDrawOfferStatus(null);
+        playAudio('decline');
     };
 
     const handleResetSandbox = () => {
@@ -1897,6 +1969,7 @@ export default function Chessboard() {
         setBotComment(null);
         setSavedBotGameId(null);
         botGameSavedRef.current = false;
+        lowTimeWarnedRef.current = false;
         appliedPeriodsRef.current = {white: new Set(), black: new Set()};
         setIsBotThinking(false);
         setGameOverResult(null);
@@ -1928,6 +2001,7 @@ export default function Chessboard() {
         setPremove(null);
         setViewIndex(-1);
         setSelectedSquare(null);
+        playAudio('move');
     };
 
     const handlePromotionSelect = (pieceType: PromotionPiece) => {
@@ -2064,6 +2138,9 @@ export default function Chessboard() {
 
     const handleSelectMoveFromList = (targetIdx: number) => {
         setSelectedSquare(null);
+        if (history[targetIdx]) {
+            playAudio(resolveMoveSound(history[targetIdx].san));
+        }
         if (targetIdx >= history.length - 1) {
             setViewIndex(-1);
         } else {
@@ -2142,14 +2219,28 @@ export default function Chessboard() {
                         </div>
                     </div>
 
-                    <button
-                        type="button"
-                        onClick={() => setIsManualFlip(prev => !prev)}
-                        className="px-2.5 py-1 rounded-md bg-acacia-dark hover:bg-black/50 border border-amber-800/50 text-xs font-bold text-amber-200 flex items-center gap-1.5 transition cursor-pointer shadow-sm"
-                        title="Перевернуть доску"
-                    >
-                        <RefreshCw size={13} className="text-amber-400"/> Перевернуть
-                    </button>
+                    <div className="flex items-center gap-1.5">
+                        <button
+                            type="button"
+                            onClick={handleToggleSound}
+                            className={`p-1.5 rounded-md border transition cursor-pointer shadow-sm ${
+                                isSoundMuted
+                                    ? 'bg-red-950/60 border-red-800/60 text-red-300 hover:bg-red-900/60'
+                                    : 'bg-acacia-dark hover:bg-black/50 border-amber-800/50 text-amber-300'
+                            }`}
+                            title={isSoundMuted ? 'Включить звук' : 'Выключить звук'}
+                        >
+                            {isSoundMuted ? <VolumeX size={15}/> : <Volume2 size={15}/>}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setIsManualFlip(prev => !prev)}
+                            className="px-2.5 py-1 rounded-md bg-acacia-dark hover:bg-black/50 border border-amber-800/50 text-xs font-bold text-amber-200 flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+                            title="Перевернуть доску"
+                        >
+                            <RefreshCw size={13} className="text-amber-400"/> Перевернуть
+                        </button>
+                    </div>
                 </div>
 
                 <div
@@ -3297,7 +3388,10 @@ export default function Chessboard() {
                         <button
                             type="button"
                             disabled={history.length === 0 || viewIndex === -2}
-                            onClick={() => setViewIndex(-2)}
+                            onClick={() => {
+                                setViewIndex(-2);
+                                playAudio('move');
+                            }}
                             className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
                             title="В начало партии (Стрелка вверх)"
                         >
@@ -3309,7 +3403,13 @@ export default function Chessboard() {
                             onClick={() => {
                                 if (history.length > 0) {
                                     const current = viewIndex === -1 ? history.length - 1 : prevIndexHelper(viewIndex, history.length);
-                                    setViewIndex(current <= 0 ? -2 : current - 1);
+                                    const nextIdx = current <= 0 ? -2 : current - 1;
+                                    setViewIndex(nextIdx);
+                                    if (nextIdx >= 0 && history[nextIdx]) {
+                                        playAudio(resolveMoveSound(history[nextIdx].san));
+                                    } else {
+                                        playAudio('move');
+                                    }
                                 }
                             }}
                             className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
@@ -3321,12 +3421,16 @@ export default function Chessboard() {
                             type="button"
                             disabled={history.length === 0 || viewIndex === -1}
                             onClick={() => {
+                                let nextIdx = -1;
                                 if (viewIndex === -2 && history.length > 0) {
-                                    setViewIndex(history.length === 1 ? -1 : 0);
+                                    nextIdx = history.length === 1 ? -1 : 0;
                                 } else if (viewIndex !== -1 && viewIndex < history.length - 2) {
-                                    setViewIndex(viewIndex + 1);
-                                } else {
-                                    setViewIndex(-1);
+                                    nextIdx = viewIndex + 1;
+                                }
+                                setViewIndex(nextIdx);
+                                const targetMove = nextIdx === -1 ? history[history.length - 1] : history[nextIdx];
+                                if (targetMove) {
+                                    playAudio(resolveMoveSound(targetMove.san));
                                 }
                             }}
                             className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
@@ -3337,7 +3441,12 @@ export default function Chessboard() {
                         <button
                             type="button"
                             disabled={history.length === 0 || viewIndex === -1}
-                            onClick={() => setViewIndex(-1)}
+                            onClick={() => {
+                                setViewIndex(-1);
+                                if (history.length > 0) {
+                                    playAudio(resolveMoveSound(history[history.length - 1].san));
+                                }
+                            }}
                             className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
                             title="К последнему ходу (Стрелка вниз)"
                         >
