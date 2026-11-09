@@ -20,8 +20,10 @@ if (-not (Test-Path (Join-Path $frontendDir ".env")) -and (Test-Path (Join-Path 
     Write-Host "[+] Создан frontend/.env из шаблона" -ForegroundColor Green
 }
 
-# 2. Остановка старых фоновых задач и освобождение портов 8000 и 3000
+# 2. Остановка старых фоновых задач, процессов node и освобождение портов 8000 и 3000
 Get-Job -Name "MichessBackend", "MichessFrontend" -ErrorAction SilentlyContinue | Stop-Job -PassThru | Remove-Job -Force -ErrorAction SilentlyContinue
+
+Stop-Process -Name "node" -Force -ErrorAction SilentlyContinue
 
 foreach ($port in @(8000, 3000))
 {
@@ -85,7 +87,7 @@ if (-not (Test-Path $steinitzPgn))
     & $pythonExe -m src.db.seed
 }
 
-# 8. Запуск серверов в фоновых задачах PowerShell (работает одинаково на ноутбуке и ПК)
+# 8. Запуск FastAPI Backend в фоне
 Write-Host "[+] Запуск FastAPI Backend (порт 8000)..." -ForegroundColor Green
 Start-Job -Name "MichessBackend" -ScriptBlock {
     param($py, $r)
@@ -93,12 +95,9 @@ Start-Job -Name "MichessBackend" -ScriptBlock {
     & $py -m uvicorn src.main:app --host 127.0.0.1 --port 8000 --reload
 } -ArgumentList $pythonExe, $root | Out-Null
 
-Write-Host "[+] Запуск Vite Frontend (порт 3000)..." -ForegroundColor Green
-Start-Job -Name "MichessFrontend" -ScriptBlock {
-    param($fe)
-    Set-Location $fe
-    npm run dev -- --host 127.0.0.1 --port 3000 --strictPort
-} -ArgumentList $frontendDir | Out-Null
+# 8.1. Запуск Vite Frontend в отдельном видимом окне терминала
+Write-Host "[+] Запуск Vite Frontend (порт 3000 в новом окне)..." -ForegroundColor Green
+Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$frontendDir'; npm run dev"
 
 # 9. Ожидание фактического открытия порта 3000 перед запуском браузера
 $ready = $false
@@ -114,18 +113,18 @@ for ($i = 0; $i -lt 30; $i++)
 
 if ($ready)
 {
-    Write-Host "[+] Открываем браузер на [http://127.0.0.1:3000](http://127.0.0.1:3000) ..." -ForegroundColor Magenta
+    Write-Host "[+] Открываем браузер на http://127.0.0.1:3000 ..." -ForegroundColor Magenta
     Start-Process "http://127.0.0.1:3000"
 }
 else
 {
-    Write-Host "[!] Порт 3000 не ответил за 15 секунд. Проверьте лог: Receive-Job -Name MichessFrontend -Keep" -ForegroundColor Red
+    Write-Host "[!] Порт 3000 не ответил за 15 секунд. Проверьте открывшееся окно терминала Vite." -ForegroundColor Red
 }
 
 Write-Host "========================================================" -ForegroundColor Green
 Write-Host " Все сервисы запущены! Локальный сервер работает." -ForegroundColor Green
-Write-Host " Фронтенд: [http://127.0.0.1:3000](http://127.0.0.1:3000)" -ForegroundColor Cyan
-Write-Host " API Docs: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)" -ForegroundColor Cyan
-Write-Host " Просмотр логов: Receive-Job -Name MichessBackend -Keep" -ForegroundColor Gray
-Write-Host " Для остановки:  Get-Job | Stop-Job; Get-Job | Remove-Job" -ForegroundColor Yellow
+Write-Host " Фронтенд: http://127.0.0.1:3000" -ForegroundColor Cyan
+Write-Host " API Docs: http://127.0.0.1:8000/docs" -ForegroundColor Cyan
+Write-Host " Просмотр логов бэкенда: Receive-Job -Name MichessBackend -Keep" -ForegroundColor Gray
+Write-Host " Для остановки бэкенда: Get-Job | Stop-Job; Get-Job | Remove-Job" -ForegroundColor Yellow
 Write-Host "========================================================" -ForegroundColor Green
