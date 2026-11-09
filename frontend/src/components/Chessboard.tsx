@@ -559,6 +559,7 @@ export default function Chessboard() {
     const [pieceSetKey, setPieceSetKey] = useState<string>(() => getSavedPieceSetKey());
 
     const [gameId, setGameId] = useState<number | null>(null);
+    const gameIdRef = useRef<number | null>(null);
     const [myColor, setMyColor] = useState<'white' | 'black'>('white');
     const [isSearching, setIsSearching] = useState(false);
     const [queuePlayers, setQueuePlayers] = useState<QueuePlayer[]>([]);
@@ -566,6 +567,7 @@ export default function Chessboard() {
     const [currentUsername, setCurrentUsername] = useState<string>('Вы');
     const [currentUserRating, setCurrentUserRating] = useState<number>(1200);
     const [stateVersion, setStateVersion] = useState(0);
+    const stateVersionRef = useRef<number>(0);
 
     const [selectedBotId, setSelectedBotId] = useState<HistoricalBotId>('philidor');
     const [activeBot, setActiveBot] = useState<HistoricalBotId | null>(null);
@@ -671,6 +673,124 @@ export default function Chessboard() {
             }
         });
     }, [myColor]);
+
+    const applyMatchFoundSnapshot = useCallback((data: any) => {
+        if (!data || !data.game_id) return;
+        const incomingGid = Number(data.game_id);
+        const assignedColor: 'white' | 'black' = data.color === 'black' ? 'black' : 'white';
+        const ver = Number(data.state_version || 0);
+        const isNewMatch = gameIdRef.current !== incomingGid;
+
+        setIsSearching(false);
+        setSpectatingGameId(null);
+        setCreatedInviteCode(null);
+        setShowInvitePanel(false);
+        setActiveBot(null);
+        setBotComment(null);
+        setSavedBotGameId(null);
+        botGameSavedRef.current = false;
+
+        if (isNewMatch) {
+            setChatMessages([]);
+            appliedPeriodsRef.current = {white: new Set(), black: new Set()};
+            setIsManualFlip(false);
+            setRatingInfo(null);
+            setGameOverResult(null);
+            setRematchStatus('none');
+            setSelectedSquare(null);
+            setPendingPromotion(null);
+            setPremove(null);
+        }
+
+        gameIdRef.current = incomingGid;
+        setGameId(incomingGid);
+        setMyColor(assignedColor);
+        setStateVersion(ver);
+        stateVersionRef.current = ver;
+
+        const initialWhiteTime = data.white_time_ms !== undefined ? Number(data.white_time_ms) : Number(data.base_time_ms || 180000);
+        const initialBlackTime = data.black_time_ms !== undefined ? Number(data.black_time_ms) : Number(data.base_time_ms || 180000);
+        setWhiteTimeMs(initialWhiteTime);
+        setBlackTimeMs(initialBlackTime);
+
+        if (data.white_username) {
+            setWhitePlayer({username: data.white_username, rating: String(data.white_rating || '1200')});
+        }
+        if (data.black_username) {
+            setBlackPlayer({username: data.black_username, rating: String(data.black_rating || '1200')});
+        }
+
+        const restoredGame = new Chess();
+        if (data.pgn) {
+            try {
+                restoredGame.loadPgn(data.pgn);
+            } catch {
+                if (data.fen) restoredGame.load(data.fen);
+            }
+        } else if (data.fen) {
+            restoredGame.load(data.fen);
+        }
+
+        setGame(restoredGame);
+        setHistory(restoredGame.history({verbose: true}));
+        setViewIndex(-1);
+        moveStartTime.current = Date.now();
+
+        if (isNewMatch) {
+            setDrawOfferStatus(`Партия началась! Вы играете ${assignedColor === 'white' ? 'Белыми' : 'Чёрными'}.`);
+            playAudio('start');
+            setTimeout(() => setDrawOfferStatus(null), 3000);
+        }
+    }, [playAudio]);
+
+    const applyMoveMadeSnapshot = useCallback((data: any) => {
+        if (data.state_version !== undefined) {
+            const ver = Number(data.state_version);
+            setStateVersion(ver);
+            stateVersionRef.current = ver;
+        }
+        if (data.white_time_ms !== undefined) setWhiteTimeMs(Number(data.white_time_ms));
+        if (data.black_time_ms !== undefined) setBlackTimeMs(Number(data.black_time_ms));
+        moveStartTime.current = Date.now();
+
+        const nextGame = new Chess();
+        let loaded = false;
+
+        if (data.pgn) {
+            try {
+                nextGame.loadPgn(data.pgn);
+                loaded = true;
+            } catch {
+                loaded = false;
+            }
+        }
+
+        if (!loaded && data.fen) {
+            try {
+                nextGame.load(data.fen);
+                loaded = true;
+            } catch {
+                loaded = false;
+            }
+        }
+
+        if (loaded) {
+            setGame(nextGame);
+            setHistory(nextGame.history({verbose: true}));
+            setViewIndex(-1);
+            const isCapture = Boolean(data.san && data.san.includes('x'));
+            playAudio(isCapture ? 'capture' : 'move');
+        }
+
+        if (data.game_over) {
+            setPremove(null);
+            setPendingPromotion(null);
+            setGameOverResult(data.result);
+            setRatingInfo(data);
+            playAudio('start');
+            updateSessionStats(data.result);
+        }
+    }, [playAudio, updateSessionStats]);
 
     const saveBotGameToDatabase = useCallback(async (
         botId: HistoricalBotId,
@@ -801,6 +921,7 @@ export default function Chessboard() {
         botGameSavedRef.current = false;
         appliedPeriodsRef.current = {white: new Set(), black: new Set()};
         setSavedBotGameId(null);
+        gameIdRef.current = null;
         setGameId(null);
         setSelectedBotId(botId);
         setActiveBot(botId);
@@ -1069,118 +1190,11 @@ export default function Chessboard() {
         gameSocket.connect(token);
 
         const handleMatchFound = (data: any) => {
-            setIsSearching(false);
-            setSpectatingGameId(null);
-            setCreatedInviteCode(null);
-            setShowInvitePanel(false);
-            setChatMessages([]);
-            setActiveBot(null);
-            setBotComment(null);
-            setSavedBotGameId(null);
-            botGameSavedRef.current = false;
-            appliedPeriodsRef.current = {white: new Set(), black: new Set()};
-            setGameId(data.game_id);
-            setMyColor(data.color);
-            setIsManualFlip(false);
-            setRatingInfo(null);
-            setStateVersion(data.state_version || 0);
-
-            const initialWhiteTime = data.white_time_ms !== undefined ? data.white_time_ms : (data.base_time_ms || 180000);
-            const initialBlackTime = data.black_time_ms !== undefined ? data.black_time_ms : (data.base_time_ms || 180000);
-            setWhiteTimeMs(initialWhiteTime);
-            setBlackTimeMs(initialBlackTime);
-
-            if (data.white_username) {
-                setWhitePlayer({username: data.white_username, rating: String(data.white_rating || '1200')});
-            }
-            if (data.black_username) {
-                setBlackPlayer({username: data.black_username, rating: String(data.black_rating || '1200')});
-            }
-
-            const restoredGame = new Chess();
-            if (data.pgn) {
-                try {
-                    restoredGame.loadPgn(data.pgn);
-                } catch {
-                    if (data.fen) restoredGame.load(data.fen);
-                }
-            } else if (data.fen) {
-                restoredGame.load(data.fen);
-            }
-
-            setGame(restoredGame);
-            setHistory(restoredGame.history({verbose: true}));
-            setViewIndex(-1);
-            setSelectedSquare(null);
-            setPendingPromotion(null);
-            setPremove(null);
-            setGameOverResult(null);
-            setRematchStatus('none');
-            setDrawOfferStatus('Партия началась!');
-            playAudio('start');
-            setTimeout(() => setDrawOfferStatus(null), 3000);
+            applyMatchFoundSnapshot(data);
         };
 
         const handleMoveMade = (data: any) => {
-            setGame(prev => {
-                if (data.fen && prev.fen() === data.fen) {
-                    return prev;
-                }
-
-                const nextGame = cloneChessInstance(prev);
-                let applied = false;
-
-                if (data.pgn) {
-                    try {
-                        const pgnGame = new Chess();
-                        pgnGame.loadPgn(data.pgn);
-                        setHistory(pgnGame.history({verbose: true}));
-                        applied = true;
-                        const isCapture = data.san && data.san.includes('x');
-                        playAudio(isCapture ? 'capture' : 'move');
-                        return pgnGame;
-                    } catch {
-                        applied = false;
-                    }
-                }
-
-                if (!applied) {
-                    try {
-                        if (data.san) {
-                            nextGame.move(data.san);
-                        } else if (data.move) {
-                            const from = data.move.slice(0, 2);
-                            const to = data.move.slice(2, 4);
-                            const promotion = data.move.length > 4 ? data.move.slice(4, 5) : 'q';
-                            nextGame.move({from, to, promotion});
-                        }
-                    } catch {
-                        if (data.fen) nextGame.load(data.fen);
-                    }
-                }
-
-                setHistory(nextGame.history({verbose: true}));
-                const isCapture = data.san && data.san.includes('x');
-                playAudio(isCapture ? 'capture' : 'move');
-                return nextGame;
-            });
-
-            setViewIndex(-1);
-            if (data.state_version !== undefined) {
-                setStateVersion(data.state_version);
-            }
-            if (data.white_time_ms !== undefined) setWhiteTimeMs(data.white_time_ms);
-            if (data.black_time_ms !== undefined) setBlackTimeMs(data.black_time_ms);
-            moveStartTime.current = Date.now();
-
-            if (data.game_over) {
-                setPremove(null);
-                setPendingPromotion(null);
-                setGameOverResult(data.result);
-                setRatingInfo(data);
-                playAudio('start');
-                updateSessionStats(data.result);
-            }
+            applyMoveMadeSnapshot(data);
         };
 
         const handleGameOver = (data: any) => {
@@ -1236,6 +1250,7 @@ export default function Chessboard() {
         const handleSpectateStarted = (data: any) => {
             setIsSearching(false);
             setActiveBot(null);
+            gameIdRef.current = null;
             setGameId(null);
             setSpectatingGameId(data.game_id);
             setWhitePlayer({username: data.white_username || 'Белые', rating: String(data.white_rating || 1200)});
@@ -1289,7 +1304,9 @@ export default function Chessboard() {
                 setHistory(syncedGame.history({verbose: true}));
             }
             if (data.state_version !== undefined) {
-                setStateVersion(data.state_version);
+                const ver = Number(data.state_version);
+                setStateVersion(ver);
+                stateVersionRef.current = ver;
             }
         };
 
@@ -1318,7 +1335,7 @@ export default function Chessboard() {
             gameSocket.off('chat_message', handleChatMessage);
             gameSocket.off('error', handleServerError);
         };
-    }, [myColor, playAudio, updateSessionStats]);
+    }, [applyMatchFoundSnapshot, applyMoveMadeSnapshot, playAudio, updateSessionStats]);
 
     useEffect(() => {
         if (!inviteCode || !localStorage.getItem('token')) return;
@@ -1329,11 +1346,29 @@ export default function Chessboard() {
         return () => clearTimeout(timer);
     }, [inviteCode, navigate]);
 
+    // Поллинг лобби + автоматическая синхронизация старта партии и ходов (резервный канал)
     useEffect(() => {
-        let interval: any;
-        if (!gameId) {
-            const fetchLobbyAndLive = async () => {
-                try {
+        const syncLobbyAndActiveGame = async () => {
+            const token = localStorage.getItem('token');
+            try {
+                if (token && !activeBot && !spectatingGameId) {
+                    const activeRes = await fetch(`${API_BASE_URL}/api/v1/profile/games/my-active`, {
+                        headers: {'Authorization': `Bearer ${token}`}
+                    });
+                    if (activeRes.ok) {
+                        const activeData = await activeRes.json();
+                        if (activeData && activeData.active && activeData.game_id) {
+                            if (gameIdRef.current !== Number(activeData.game_id)) {
+                                applyMatchFoundSnapshot(activeData);
+                                return;
+                            } else if (Number(activeData.state_version || 0) > stateVersionRef.current) {
+                                applyMoveMadeSnapshot(activeData);
+                            }
+                        }
+                    }
+                }
+
+                if (!gameIdRef.current) {
                     const [qRes, liveRes] = await Promise.all([
                         fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/queue`),
                         fetch(`${API_BASE_URL}/api/v1/profile/games/live`)
@@ -1344,17 +1379,18 @@ export default function Chessboard() {
                     if (liveRes.ok) {
                         setLiveGames(await liveRes.json());
                     }
-                } catch (e) {
-                    console.error('Failed to fetch lobby/live data', e);
+                } else {
+                    setQueuePlayers([]);
                 }
-            };
-            fetchLobbyAndLive();
-            interval = setInterval(fetchLobbyAndLive, 2000);
-        } else {
-            setQueuePlayers([]);
-        }
+            } catch (e) {
+                console.error('Failed to sync lobby/active game data', e);
+            }
+        };
+
+        syncLobbyAndActiveGame();
+        const interval = setInterval(syncLobbyAndActiveGame, 1500);
         return () => clearInterval(interval);
-    }, [gameId]);
+    }, [activeBot, spectatingGameId, applyMatchFoundSnapshot, applyMoveMadeSnapshot]);
 
     const currentTurnChar = game.turn();
 
@@ -1481,7 +1517,7 @@ export default function Chessboard() {
                         game_id: gameId,
                         move: uciMove,
                         command_id: commandId,
-                        state_version: stateVersion,
+                        state_version: stateVersionRef.current,
                         time_taken_ms: timeTaken,
                         window_blurred: document.hidden,
                         is_premove: isPremoveMove
@@ -1646,7 +1682,8 @@ export default function Chessboard() {
         return `${prefix}${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
-    const startMatchmaking = () => {
+    const startMatchmaking = async () => {
+        gameIdRef.current = null;
         setGameId(null);
         setActiveBot(null);
         setBotComment(null);
@@ -1663,26 +1700,81 @@ export default function Chessboard() {
         setIsTimeDropdownOpen(false);
         setDrawOfferStatus(`Вы опубликовали вызов в лобби (Опция DGT #${selectedTimeControl.optionNumber})...`);
 
+        const baseMs = Math.round(effectiveWhiteBaseMinutes * 60 * 1000);
+        const incMs = Math.round(effectiveIncSeconds * 1000);
+
         gameSocket.send('join_queue', {
-            base_time_ms: Math.round(effectiveWhiteBaseMinutes * 60 * 1000),
-            increment_ms: Math.round(effectiveIncSeconds * 1000)
+            base_time_ms: baseMs,
+            increment_ms: incMs
         });
+
+        const token = localStorage.getItem('token');
+        if (token) {
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/join`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({base_time_ms: baseMs, increment_ms: incMs})
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.active && data.game_id) {
+                        applyMatchFoundSnapshot(data);
+                    }
+                }
+            } catch {
+                // Игнорируем ошибку, если сработал WebSocket
+            }
+        }
     };
 
-    const cancelMatchmaking = () => {
+    const cancelMatchmaking = async () => {
         setIsSearching(false);
         setDrawOfferStatus(null);
         gameSocket.send('leave_queue', {});
+        const token = localStorage.getItem('token');
+        if (token) {
+            fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/leave`, {
+                method: 'POST',
+                headers: {'Authorization': `Bearer ${token}`}
+            }).catch(() => {
+            });
+        }
     };
 
-    const acceptChallenge = (targetUserId: number) => {
+    const acceptChallenge = async (targetUserId: number) => {
         setActiveBot(null);
         setBotComment(null);
         setSavedBotGameId(null);
         setPendingPromotion(null);
         setPremove(null);
         botGameSavedRef.current = false;
+
         gameSocket.send('accept_challenge', {target_user_id: targetUserId});
+
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/accept/${targetUserId}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/json'
+                }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.game_id) {
+                    applyMatchFoundSnapshot(data);
+                }
+            }
+        } catch (err) {
+            console.error('Ошибка при принятии вызова по HTTP:', err);
+        }
     };
 
     const handleCreatePrivateInvite = () => {
@@ -1799,6 +1891,7 @@ export default function Chessboard() {
 
     const handleResetSandbox = () => {
         if (gameId && !gameOverResult) return;
+        gameIdRef.current = null;
         setGameId(null);
         setActiveBot(null);
         setBotComment(null);
@@ -2477,6 +2570,7 @@ export default function Chessboard() {
                                                 </div>
                                             </div>
                                             <button
+                                                type="button"
                                                 disabled={!!gameId && !gameOverResult}
                                                 onClick={() => acceptChallenge(p.user_id)}
                                                 className="px-3 py-1.5 bg-emerald-800 hover:bg-emerald-700 disabled:opacity-40 text-emerald-100 rounded text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer"

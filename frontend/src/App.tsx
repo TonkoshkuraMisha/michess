@@ -10,6 +10,7 @@ import ChampionGames from './components/ChampionGames';
 import Leaderboard from './components/Leaderboard';
 import {CHAMPIONS_LIST} from './config/champions';
 import {API_BASE_URL} from './config/api';
+import {gameSocket} from './services/gameSocket';
 
 import {
     Search,
@@ -58,8 +59,27 @@ export default function App() {
         location.pathname.startsWith('/game/');
 
     useEffect(() => {
+        const syncTokenFromStorage = () => {
+            const current = localStorage.getItem('token');
+            setToken(current);
+            if (!current) {
+                setUserProfile(null);
+                gameSocket.disconnect();
+            }
+        };
+
+        window.addEventListener('storage', syncTokenFromStorage);
+        window.addEventListener('michess-auth-expired', syncTokenFromStorage);
+        return () => {
+            window.removeEventListener('storage', syncTokenFromStorage);
+            window.removeEventListener('michess-auth-expired', syncTokenFromStorage);
+        };
+    }, []);
+
+    useEffect(() => {
         if (!token) {
             setUserProfile(null);
+            gameSocket.disconnect();
             return;
         }
 
@@ -76,6 +96,7 @@ export default function App() {
             .then(data => setUserProfile(data))
             .catch(() => {
                 localStorage.removeItem('token');
+                gameSocket.disconnect();
                 setToken(null);
                 setUserProfile(null);
             });
@@ -99,6 +120,7 @@ export default function App() {
 
     const handleLogout = () => {
         localStorage.removeItem('token');
+        gameSocket.disconnect();
         setToken(null);
         setUserProfile(null);
         setIsProfileOpen(false);
@@ -160,7 +182,6 @@ export default function App() {
                             <Trophy size={17}/> Лидеры
                         </Link>
 
-                        {/* Выпадающее меню легенд */}
                         <div className="relative" ref={championsMenuRef}>
                             <button
                                 onClick={() => setIsChampionsMenuOpen(!isChampionsMenuOpen)}

@@ -12,6 +12,18 @@ class GameWebSocketService {
     private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
     connect(token: string) {
+        if (!token) return;
+
+        // Если токен сменился (выход и вход под другим игроком), переоткрываем соединение
+        if (this.ws && this.currentToken && this.currentToken !== token) {
+            try {
+                this.ws.close(1000);
+            } catch {
+                // ignore
+            }
+            this.ws = null;
+        }
+
         this.currentToken = token;
 
         if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
@@ -53,12 +65,18 @@ class GameWebSocketService {
 
         this.ws.onclose = (event) => {
             this.ws = null;
-            if (this.currentToken && event.code !== 1000 && event.code !== 1008) {
+            if (event.code === 1008) {
+                // Токен истёк или невалиден — очищаем его и уведомляем приложение
+                localStorage.removeItem('token');
+                window.dispatchEvent(new Event('michess-auth-expired'));
+                return;
+            }
+            if (this.currentToken && event.code !== 1000) {
                 this.reconnectTimer = setTimeout(() => {
                     if (this.currentToken) {
                         this.connect(this.currentToken);
                     }
-                }, 2000);
+                }, 1500);
             }
         };
 
@@ -89,14 +107,12 @@ class GameWebSocketService {
             return;
         }
 
-        if (this.ws && this.ws.readyState === WebSocket.CONNECTING) {
+        const fallbackToken = this.currentToken || localStorage.getItem('token');
+        if (fallbackToken) {
             this.pendingMessages.push(serialized);
-            return;
-        }
-
-        if (this.currentToken) {
-            this.pendingMessages.push(serialized);
-            this.connect(this.currentToken);
+            this.connect(fallbackToken);
+        } else {
+            console.error('Невозможно отправить сообщение: пользователь не авторизован');
         }
     }
 
@@ -108,7 +124,11 @@ class GameWebSocketService {
             this.reconnectTimer = null;
         }
         if (this.ws) {
-            this.ws.close(1000);
+            try {
+                this.ws.close(1000);
+            } catch {
+                // ignore
+            }
             this.ws = null;
         }
     }
