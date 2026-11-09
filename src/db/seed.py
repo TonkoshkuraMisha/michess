@@ -1,9 +1,14 @@
 # --- FILE: src/db/seed.py ---
 
 import asyncio
+import io
 import logging
+import os
 import re
+import sys
+import zipfile
 from pathlib import Path
+import requests
 from sqlalchemy import select, or_, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,10 +19,13 @@ from src.models.user import User
 logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+PRIMARY_PGNS_DIR = PROJECT_ROOT / "src" / "db" / "data" / "pgns"
 PGNS_DIRS = [
-    PROJECT_ROOT / "src" / "db" / "data" / "pgns",
+    PRIMARY_PGNS_DIR,
     PROJECT_ROOT / "data" / "pgns",
 ]
+
+PGN_MENTOR_BASE_URL = "https://www.pgnmentor.com/players"
 
 CHAMPIONS_META: dict[str, dict] = {
     "steinitz": {"id": "Steinitz", "canonical": "Steinitz, Wilhelm", "rating": 2650, "exclude": ()},
@@ -56,7 +64,6 @@ _SEED_LOCKS: dict[str, asyncio.Lock] = {}
 
 
 def extract_pgn_metadata(raw_pgn: str, fallback_result: str = "*") -> dict[str, str | None]:
-    """Извлекает result, pgn_date, site и eco из PGN-текста один раз перед сохранением в БД."""
     result_str = fallback_result or "*"
     pgn_date: str | None = None
     site: str | None = None
@@ -107,12 +114,57 @@ def get_champion_meta(username_or_id: str) -> dict | None:
 
 def find_champion_pgn_file(champ_id: str) -> Path | None:
     target_lower = f"{champ_id.lower()}.pgn"
+    alt_lower = f"{champ_id.lower()}_all_games.pgn"
+
     for folder in PGNS_DIRS:
         if not folder.exists():
             continue
         for pgn_path in folder.glob("*.pgn"):
-            if pgn_path.name.lower() == target_lower:
+            name_low = pgn_path.name.lower()
+            if name_low in (target_lower, alt_lower) and pgn_path.stat().st_size > 100:
                 return pgn_path
+    return None
+
+
+def _download_champion_pgn_sync(champ_id: str) -> Path | None:
+    if "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST"):
+        return None
+
+    PRIMARY_PGNS_DIR.mkdir(parents=True, exist_ok=True)
+    target_path = PRIMARY_PGNS_DIR / f"{champ_id}.pgn"
+    if target_path.exists() and target_path.stat().st_size > 100:
+        return target_path
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0.0.0 Safari/537.36",
+        "Referer": "https://www.pgnmentor.com/files.html",
+    }
+
+    zip_url = f"{PGN_MENTOR_BASE_URL}/{champ_id}.zip"
+    pgn_url = f"{PGN_MENTOR_BASE_URL}/{champ_id}.pgn"
+
+    try:
+        resp = requests.get(zip_url, headers=headers, timeout=30)
+        if resp.status_code == 200 and len(resp.content) > 200:
+            with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
+                pgn_members = [m for m in zf.namelist() if m.lower().endswith(".pgn")]
+                if pgn_members:
+                    raw_bytes = zf.read(pgn_members[0])
+                    text = raw_bytes.decode("utf-8", errors="ignore")
+                    if "[Event " in text:
+                        target_path.write_text(text, encoding="utf-8")
+                        return target_path
+    except Exception as exc:
+        logger.warning("Не удалось скачать ZIP для %s (%s), пробуем прямой .pgn...", champ_id, exc)
+
+    try:
+        resp = requests.get(pgn_url, headers=headers, timeout=30)
+        if resp.status_code == 200 and "[Event " in resp.text:
+            target_path.write_text(resp.text, encoding="utf-8")
+            return target_path
+    except Exception as exc:
+        logger.error("Ошибка загрузки PGN для %s: %s", champ_id, exc)
+
     return None
 
 
@@ -120,7 +172,11 @@ def _is_target_champion_name(raw_name: str, champ_key: str, meta: dict) -> bool:
     low = raw_name.lower()
     if any(ex in low for ex in meta.get("exclude", ())):
         return False
-    return champ_key in low
+    # Надёжное сопоставление по фамилии (даже при сокращении инициалов в PGN Mentor)
+    surname = meta["canonical"].split(",")[0].strip().lower()
+    if surname in low or champ_key in low:
+        return True
+    return False
 
 
 def _split_pgn_games(content: str) -> list[str]:
@@ -173,6 +229,9 @@ async def ensure_champion_seeded(db: AsyncSession, username_or_id: str) -> User 
             users_by_name[canonical_name] = champ_user
 
         pgn_file = find_champion_pgn_file(meta["id"])
+        if not pgn_file or not pgn_file.exists():
+            pgn_file = await asyncio.to_thread(_download_champion_pgn_sync, meta["id"])
+
         if not pgn_file or not pgn_file.exists():
             await db.commit()
             return champ_user
@@ -264,7 +323,7 @@ async def ensure_champion_seeded(db: AsyncSession, username_or_id: str) -> User 
 
 
 async def seed_all_champions() -> None:
-    print(f"=== Импорт архивов чемпионов мира в БД (Корень: {PROJECT_ROOT}) ===")
+    print(f"=== Полный импорт архивов 21 чемпиона мира (Корень: {PROJECT_ROOT}) ===")
     async with AsyncSessionLocal() as db:
         for _, meta in CHAMPIONS_META.items():
             user = await ensure_champion_seeded(db, meta["id"])

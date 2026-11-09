@@ -1,6 +1,6 @@
 // --- FILE: frontend/src/components/GameViewer.tsx ---
 
-import {useState, useEffect, useRef, useMemo} from 'react';
+import {useState, useEffect, useRef, useMemo, useCallback} from 'react';
 import {useParams, useLocation, Link} from 'react-router-dom';
 import {Chess} from 'chess.js';
 import {
@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import {
     ChevronFirst, ChevronLeft, ChevronRight, ChevronLast, ArrowLeft,
-    Download, Loader2, Sword, RefreshCw, Palette, Cpu, Sparkles, X
+    Download, Loader2, Sword, RefreshCw, Palette, Cpu, Sparkles, X, Volume2, VolumeX
 } from 'lucide-react';
 import {format, parseISO} from 'date-fns';
 import {ru} from 'date-fns/locale';
@@ -19,6 +19,8 @@ import {
     getDefaultBoardSize
 } from './Chessboard';
 import {API_BASE_URL} from '../config/api';
+import {soundEngine, resolveMoveSound} from '../services/soundEngine';
+import type {SoundEventType} from '../services/soundEngine';
 import {
     PIECE_SETS,
     getSavedBoardThemeKey,
@@ -125,6 +127,7 @@ export default function GameViewer() {
     const [viewIndex, setViewIndex] = useState<number>(-1);
     const [isFlipped, setIsFlipped] = useState(false);
     const [showAppearancePanel, setShowAppearancePanel] = useState(false);
+    const [isSoundMuted, setIsSoundMuted] = useState<boolean>(() => soundEngine.isMuted());
 
     const [analysisReport, setAnalysisReport] = useState<FullGameAnalysisReport | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -158,6 +161,18 @@ export default function GameViewer() {
 
     const activeTheme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
     const activePieceSet = PIECE_SETS[pieceSetKey] || PIECE_SETS.merida;
+
+    const playAudio = useCallback((type: SoundEventType) => {
+        soundEngine.play(type);
+    }, []);
+
+    const handleToggleSound = () => {
+        const nextMuted = soundEngine.toggleMute();
+        setIsSoundMuted(nextMuted);
+        if (!nextMuted) {
+            soundEngine.play('move');
+        }
+    };
 
     useEffect(() => {
         const handleWindowResize = () => {
@@ -291,6 +306,7 @@ export default function GameViewer() {
             }
             const data: FullGameAnalysisReport = await res.json();
             setAnalysisReport(data);
+            playAudio('start');
         } catch (err: any) {
             setAnalysisError(err.message || 'Не удалось выполнить компьютерный анализ');
         } finally {
@@ -308,21 +324,42 @@ export default function GameViewer() {
             }
             if (e.key === 'ArrowLeft') {
                 e.preventDefault();
-                setViewIndex(p => Math.max(-1, p - 1));
+                setViewIndex(prev => {
+                    const current = prev === -1 ? history.length - 1 : prev;
+                    const nextIdx = current <= 0 ? -2 : current - 1;
+                    if (nextIdx >= 0 && history[nextIdx]) {
+                        playAudio(resolveMoveSound(history[nextIdx].san));
+                    } else {
+                        playAudio('move');
+                    }
+                    return nextIdx;
+                });
             } else if (e.key === 'ArrowRight') {
                 e.preventDefault();
-                setViewIndex(p => Math.min(history.length - 1, p + 1));
+                setViewIndex(prev => {
+                    if (prev === -1) return -1;
+                    const nextIdx = prev === -2
+                        ? (history.length > 1 ? 0 : -1)
+                        : (prev + 1 >= history.length - 1 ? -1 : prev + 1);
+                    const targetMove = nextIdx === -1 ? history[history.length - 1] : history[nextIdx];
+                    if (targetMove) {
+                        playAudio(resolveMoveSound(targetMove.san));
+                    }
+                    return nextIdx;
+                });
             } else if (e.key === 'ArrowUp') {
                 e.preventDefault();
-                setViewIndex(-1);
+                setViewIndex(-2);
+                playAudio('move');
             } else if (e.key === 'ArrowDown') {
                 e.preventDefault();
-                setViewIndex(history.length - 1);
+                setViewIndex(-1);
+                playAudio('move');
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [history.length]);
+    }, [history, playAudio]);
 
     useEffect(() => {
         if (notationScrollRef.current) {
@@ -505,7 +542,6 @@ export default function GameViewer() {
 
             <div className="flex items-center justify-center gap-2.5 sm:gap-3 shrink-0 my-auto">
 
-                {/* Вертикальная шкала оценки EvalBar */}
                 <div
                     style={{height: `${responsiveBoardPx}px`}}
                     className={`w-6 sm:w-7 rounded-md overflow-hidden border-2 border-amber-950/90 shadow-heavy flex flex-col relative select-none shrink-0 ${
@@ -747,7 +783,6 @@ export default function GameViewer() {
                 </div>
             </div>
 
-            {/* ПРАВАЯ КОЛОНКА: СТУДИЯ РАЗБОРА, КОМПЬЮТЕРНЫЙ АНАЛИЗ, ГРАФИК И НОТАЦИЯ */}
             <div
                 className="w-full xl:w-110 2xl:w-120 xl:h-full bg-acacia p-3.5 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-2.5 text-boxwood-light shrink-0 xl:overflow-hidden">
 
@@ -772,6 +807,18 @@ export default function GameViewer() {
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                            type="button"
+                            onClick={handleToggleSound}
+                            className={`p-1.5 rounded-md border transition cursor-pointer shadow-sm ${
+                                isSoundMuted
+                                    ? 'bg-red-950/60 border-red-800/60 text-red-300 hover:bg-red-900/60'
+                                    : 'bg-acacia-dark hover:bg-black/45 border-amber-800/50 text-amber-300'
+                            }`}
+                            title={isSoundMuted ? 'Включить звук' : 'Выключить звук'}
+                        >
+                            {isSoundMuted ? <VolumeX size={15}/> : <Volume2 size={15}/>}
+                        </button>
                         <button
                             type="button"
                             onClick={() => setShowAppearancePanel(prev => !prev)}
@@ -912,6 +959,7 @@ export default function GameViewer() {
                                         onClick={(state: any) => {
                                             if (state && typeof state.activeTooltipIndex === 'number') {
                                                 setViewIndex(state.activeTooltipIndex);
+                                                playAudio('move');
                                             }
                                         }}
                                     >
@@ -978,7 +1026,10 @@ export default function GameViewer() {
                                     <span className="text-xs text-amber-500/70 font-bold">{idx + 1}.</span>
 
                                     <button
-                                        onClick={() => setViewIndex(pair.whiteIndex)}
+                                        onClick={() => {
+                                            setViewIndex(pair.whiteIndex);
+                                            playAudio(resolveMoveSound(pair.white));
+                                        }}
                                         className={`text-left px-2 py-0.5 rounded flex items-center justify-between gap-1 cursor-pointer transition ${
                                             isActiveWhite
                                                 ? 'active-move bg-amber-600/40 text-white font-bold border border-amber-500/50'
@@ -1003,7 +1054,10 @@ export default function GameViewer() {
 
                                     {pair.black ? (
                                         <button
-                                            onClick={() => setViewIndex(pair.blackIndex)}
+                                            onClick={() => {
+                                                setViewIndex(pair.blackIndex);
+                                                playAudio(resolveMoveSound(pair.black));
+                                            }}
                                             className={`text-left px-2 py-0.5 rounded flex items-center justify-between gap-1 cursor-pointer transition ${
                                                 isActiveBlack
                                                     ? 'active-move bg-amber-600/40 text-white font-bold border border-amber-500/50'
@@ -1042,28 +1096,54 @@ export default function GameViewer() {
                         </span>
                         <div className="flex gap-1 items-center">
                             <button
-                                onClick={() => setViewIndex(-1)}
+                                onClick={() => {
+                                    setViewIndex(-1);
+                                    playAudio('move');
+                                }}
                                 className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition cursor-pointer"
                                 title="Начало партии"
                             >
                                 <ChevronFirst size={17}/>
                             </button>
                             <button
-                                onClick={() => setViewIndex(p => Math.max(-1, p - 1))}
+                                onClick={() => {
+                                    setViewIndex(p => {
+                                        const nextIdx = Math.max(-1, p - 1);
+                                        if (nextIdx >= 0 && history[nextIdx]) {
+                                            playAudio(resolveMoveSound(history[nextIdx].san));
+                                        } else {
+                                            playAudio('move');
+                                        }
+                                        return nextIdx;
+                                    });
+                                }}
                                 className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition cursor-pointer"
                                 title="Ход назад"
                             >
                                 <ChevronLeft size={17}/>
                             </button>
                             <button
-                                onClick={() => setViewIndex(p => Math.min(history.length - 1, p + 1))}
+                                onClick={() => {
+                                    setViewIndex(p => {
+                                        const nextIdx = Math.min(history.length - 1, p + 1);
+                                        if (history[nextIdx]) {
+                                            playAudio(resolveMoveSound(history[nextIdx].san));
+                                        }
+                                        return nextIdx;
+                                    });
+                                }}
                                 className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition cursor-pointer"
                                 title="Ход вперед"
                             >
                                 <ChevronRight size={17}/>
                             </button>
                             <button
-                                onClick={() => setViewIndex(history.length - 1)}
+                                onClick={() => {
+                                    setViewIndex(history.length - 1);
+                                    if (history.length > 0) {
+                                        playAudio(resolveMoveSound(history[history.length - 1].san));
+                                    }
+                                }}
                                 className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition cursor-pointer"
                                 title="Конец партии"
                             >

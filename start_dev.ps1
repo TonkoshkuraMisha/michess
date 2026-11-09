@@ -77,6 +77,14 @@ if ($LASTEXITCODE -ne 0)
 Write-Host "[*] Применяем миграции базы данных (Alembic)..." -ForegroundColor Cyan
 & $pythonExe -m alembic upgrade head
 
+# 7.1. Автопроверка и докачка архивов партий 21 чемпиона мира
+$steinitzPgn = Join-Path $root "src\db\data\pgns\Steinitz.pgn"
+if (-not (Test-Path $steinitzPgn))
+{
+    Write-Host "[*] PGN-архивы чемпионов мира не найдены на этом ПК. Скачиваем и импортируем в БД..." -ForegroundColor Yellow
+    & $pythonExe -m src.db.seed
+}
+
 # 8. Запуск серверов в фоновых задачах PowerShell (работает одинаково на ноутбуке и ПК)
 Write-Host "[+] Запуск FastAPI Backend (порт 8000)..." -ForegroundColor Green
 Start-Job -Name "MichessBackend" -ScriptBlock {
@@ -107,7 +115,7 @@ for ($i = 0; $i -lt 30; $i++)
 if ($ready)
 {
     Write-Host "[+] Открываем браузер на [http://127.0.0.1:3000](http://127.0.0.1:3000) ..." -ForegroundColor Magenta
-Start-Process "http://127.0.0.1:3000"
+    Start-Process "http://127.0.0.1:3000"
 }
 else
 {
