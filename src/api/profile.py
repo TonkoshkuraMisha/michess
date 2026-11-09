@@ -1,7 +1,9 @@
 # --- FILE: src/api/profile.py ---
 
+import time
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_, desc, asc, func, case
 from sqlalchemy.orm import aliased
@@ -15,11 +17,12 @@ from src.models.game import Game, GameStatus
 router = APIRouter(prefix="/profile", tags=["Profile & Games"])
 
 
+class QueueJoinRequest(BaseModel):
+    base_time_ms: int = 180000
+    increment_ms: int = 0
+
+
 async def _resolve_user(db: AsyncSession, username: str) -> User | None:
-    """
-    Находит пользователя по точному имени или ID чемпиона.
-    Если запрашивается чемпион из раздела «Легенды шахмат», автоматически засеивает его PGN-базу при первом обращении.
-    """
     champ_meta = get_champion_meta(username)
     if champ_meta is not None:
         champ_user = await ensure_champion_seeded(db, champ_meta["id"])
@@ -33,6 +36,51 @@ async def _resolve_user(db: AsyncSession, username: str) -> User | None:
 
     result = await db.execute(select(User).where(User.username.ilike(f"%{username}%")))
     return result.scalars().first()
+
+
+async def _build_active_game_payload(db: AsyncSession, game_id: int, user_id: int) -> dict | None:
+    """Формирует полный слепок активной партии для игрока (цвет, часы, FEN, PGN, версия стейта)."""
+    from src.services.game_state import state_manager
+
+    state = await state_manager.get_game_state(game_id)
+    if not state or state.get("status") != "in_progress":
+        return None
+
+    white_id = int(state["white_id"])
+    black_id = int(state["black_id"])
+    if int(user_id) not in (white_id, black_id):
+        return None
+
+    white_user = await db.get(User, white_id)
+    black_user = await db.get(User, black_id)
+
+    now_ms = int(time.time() * 1000)
+    elapsed = max(0, now_ms - int(state.get("last_move_at", now_ms)))
+    turn = state.get("turn", "white")
+    w_ms = int(state.get("white_time_ms", 180000))
+    b_ms = int(state.get("black_time_ms", 180000))
+
+    white_time = max(0, w_ms - elapsed) if turn in ("white", "w") else w_ms
+    black_time = max(0, b_ms - elapsed) if turn in ("black", "b") else b_ms
+
+    return {
+        "active": True,
+        "event": "match_found",
+        "game_id": int(game_id),
+        "color": "white" if int(user_id) == white_id else "black",
+        "opponent_id": black_id if int(user_id) == white_id else white_id,
+        "white_username": white_user.username if white_user else "Белые",
+        "white_rating": white_user.rating if white_user else 1200,
+        "black_username": black_user.username if black_user else "Черные",
+        "black_rating": black_user.rating if black_user else 1200,
+        "base_time_ms": int(state.get("base_time_ms", 180000)),
+        "increment_ms": int(state.get("increment_ms", 0)),
+        "white_time_ms": white_time,
+        "black_time_ms": black_time,
+        "fen": state.get("board_fen"),
+        "pgn": state.get("pgn", ""),
+        "state_version": int(state.get("state_version", 0)),
+    }
 
 
 @router.get("/me")
@@ -62,12 +110,101 @@ async def get_leaderboard(
     ]
 
 
+@router.get("/games/my-active")
+async def get_my_active_game(
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+):
+    """Возвращает текущую активную партию авторизованного игрока (для синхронизации старта и ходов)."""
+    from src.services.game_state import state_manager
+
+    gid_str = await state_manager.redis.get(f"user:{current_user.id}:current_game")
+    if not gid_str:
+        return {"active": False}
+
+    payload = await _build_active_game_payload(db, int(gid_str), current_user.id)
+    if not payload:
+        return {"active": False}
+    return payload
+
+
+@router.post("/matchmaking/join")
+async def join_matchmaking_http(
+        req: QueueJoinRequest,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+):
+    """Публикует вызов в лобби по HTTP (или сразу запускает матч, если соперник уже ждёт)."""
+    from src.services.matchmaker import matchmaker
+
+    matched_gid = await matchmaker.join_queue(
+        user_id=current_user.id,
+        username=current_user.username,
+        rating=current_user.rating,
+        base_time_ms=req.base_time_ms,
+        increment_ms=req.increment_ms,
+        min_rating=max(0, current_user.rating - 150),
+        max_rating=current_user.rating + 150,
+        db=db,
+    )
+    if matched_gid is not None:
+        payload = await _build_active_game_payload(db, int(matched_gid), current_user.id)
+        if payload:
+            return payload
+    return {"active": False, "queued": True}
+
+
+@router.post("/matchmaking/leave")
+async def leave_matchmaking_http(current_user: User = Depends(get_current_user)):
+    """Удаляет вызов игрока из очереди лобби."""
+    from src.services.matchmaker import matchmaker
+    await matchmaker.leave_queue(current_user.id)
+    return {"status": "left"}
+
+
+@router.post("/matchmaking/accept/{target_user_id}")
+async def accept_challenge_http(
+        target_user_id: int,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+):
+    """
+    Принимает вызов соперника из лобби по HTTP и возвращает данные начавшейся партии.
+    Безопасен к гонкам с WebSocket-сообщением accept_challenge.
+    """
+    from src.services.matchmaker import matchmaker
+    from src.services.connection_manager import manager
+    from src.services.game_state import state_manager
+
+    if int(target_user_id) == current_user.id:
+        raise HTTPException(status_code=400, detail="Нельзя принять собственный вызов")
+
+    game_id = await matchmaker.accept_challenge(
+        challenger_id=int(target_user_id),
+        acceptor_id=current_user.id,
+        connection_manager=manager,
+        state_manager=state_manager,
+        db=db,
+    )
+
+    if game_id is None:
+        existing_gid = await state_manager.redis.get(f"user:{current_user.id}:current_game")
+        if existing_gid:
+            game_id = int(existing_gid)
+
+    if game_id is None:
+        raise HTTPException(status_code=404, detail="Вызов уже неактивен или принят другим игроком")
+
+    payload = await _build_active_game_payload(db, int(game_id), current_user.id)
+    if not payload:
+        raise HTTPException(status_code=404, detail="Не удалось инициализировать состояние партии")
+
+    return payload
+
+
 @router.get("/games/live")
 async def get_live_games(db: AsyncSession = Depends(get_db)):
-    """
-    Возвращает список активных партий, идущих прямо сейчас (для вкладки Live и режима зрителя).
-    Оптимизировано: загружает всех игроков одним SQL-запросом вместо N+1.
-    """
+    """Возвращает список активных партий, идущих прямо сейчас (для вкладки Live и режима зрителя)."""
     from src.services.game_state import state_manager
     from src.services.connection_manager import manager
 

@@ -3,12 +3,16 @@
 import asyncio
 import chess
 import pytest
+from httpx import ASGITransport, AsyncClient
 
 from src.api.bots import calculate_authentic_thinking_time_ms
+from src.core.security import create_access_token
+from src.main import app
 from src.models.game import Game, GameStatus
 from src.models.move import Move
 from src.models.user import User
 from src.services.anticheat import evaluate_game_telemetry
+from src.services.connection_manager import ConnectionManager
 from src.services.game_state import state_manager
 from src.services.matchmaker import matchmaker
 
@@ -64,7 +68,6 @@ async def test_anticheat_idempotency_prevents_double_penalty(db_session):
     trust_after_first = u1.trust_factor
     assert trust_after_first < 100
 
-    # Повторный вызов для той же партии не должен уменьшать trust_factor ещё раз
     await evaluate_game_telemetry(db_session, game.id)
     await db_session.refresh(u1)
     assert u1.trust_factor == trust_after_first
@@ -120,3 +123,85 @@ async def test_concurrent_private_invite_redemption_is_atomic():
 
     successful = [r for r in (r1, r2) if r is not None]
     assert len(successful) == 1
+
+
+@pytest.mark.asyncio
+async def test_http_matchmaking_join_accept_and_active_game_sync(db_session):
+    """
+    Проверяет полный цикл PvP-вызова через HTTP-эндпоинты:
+    1. Игрок ps1 публикует вызов (/matchmaking/join).
+    2. Игрок ps2 принимает вызов (/matchmaking/accept/{ps1.id}).
+    3. Оба игрока получают активную партию через /games/my-active с противоположными цветами ('white' и 'black').
+    """
+    ps1 = User(username="ps1_test", hashed_password="pw", rating=1200)
+    ps2 = User(username="ps2_test", hashed_password="pw", rating=1200)
+    db_session.add_all([ps1, ps2])
+    await db_session.commit()
+    await db_session.refresh(ps1)
+    await db_session.refresh(ps2)
+
+    token_ps1 = create_access_token({"sub": ps1.username})
+    token_ps2 = create_access_token({"sub": ps2.username})
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        join_res = await ac.post(
+            "/api/v1/profile/matchmaking/join",
+            json={"base_time_ms": 180000, "increment_ms": 2000},
+            headers={"Authorization": f"Bearer {token_ps1}"},
+        )
+        assert join_res.status_code == 200
+        assert join_res.json()["queued"] is True
+
+        accept_res = await ac.post(
+            f"/api/v1/profile/matchmaking/accept/{ps1.id}",
+            headers={"Authorization": f"Bearer {token_ps2}"},
+        )
+        assert accept_res.status_code == 200
+        accept_data = accept_res.json()
+        assert accept_data["active"] is True
+        game_id = accept_data["game_id"]
+
+        active_ps1 = (
+            await ac.get(
+                "/api/v1/profile/games/my-active",
+                headers={"Authorization": f"Bearer {token_ps1}"},
+            )
+        ).json()
+        active_ps2 = (
+            await ac.get(
+                "/api/v1/profile/games/my-active",
+                headers={"Authorization": f"Bearer {token_ps2}"},
+            )
+        ).json()
+
+        assert active_ps1["active"] is True
+        assert active_ps2["active"] is True
+        assert active_ps1["game_id"] == game_id
+        assert active_ps2["game_id"] == game_id
+        assert {active_ps1["color"], active_ps2["color"]} == {"white", "black"}
+
+
+@pytest.mark.asyncio
+async def test_connection_manager_multi_socket_resilience():
+    """Проверяет, что закрытие первого сокета (например, в React StrictMode) не роняет второй сокет игрока."""
+    cm = ConnectionManager()
+    sent_messages: list[str] = []
+
+    class DummySocket:
+        async def accept(self):
+            pass
+
+        async def send_text(self, text: str):
+            sent_messages.append(text)
+
+    ws1 = DummySocket()
+    ws2 = DummySocket()
+
+    await cm.connect(ws1, user_id=77)
+    await cm.connect(ws2, user_id=77)
+    await cm.disconnect(user_id=77, websocket=ws1)
+
+    await cm.send_personal_message({"event": "match_found", "game_id": 42}, user_id=77)
+    assert len(sent_messages) == 1
+    assert '"game_id": 42' in sent_messages[0]

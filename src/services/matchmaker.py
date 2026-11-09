@@ -7,6 +7,7 @@ import random
 import secrets
 import time
 import chess
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.session import AsyncSessionLocal
 from src.models.game import Game, GameStatus
@@ -15,64 +16,90 @@ from src.models.user import User
 logger = logging.getLogger(__name__)
 
 _INVITE_REDEEM_LOCK = asyncio.Lock()
+_CHALLENGE_ACCEPT_LOCK = asyncio.Lock()
 
 
 class Matchmaker:
-    """Менеджер открытых вызовов, приватных инвайтов и очереди лобби."""
-
-    def __init__(self):
-        pass
+    """Менеджер открытых вызовов, автоматического паринга и приватных ссылок."""
 
     @property
     def redis(self):
         from src.db.redis import redis_client
         return redis_client
 
-    async def join_queue(self, user_id: int, username: str, rating: int, base_time_ms: int, increment_ms: int,
-                         min_rating: int, max_rating: int):
-        await self.leave_queue(user_id)
-        queue_name = f"queue:{base_time_ms}:{increment_ms}"
+    async def join_queue(
+            self,
+            user_id: int,
+            username: str,
+            rating: int,
+            base_time_ms: int,
+            increment_ms: int,
+            min_rating: int,
+            max_rating: int,
+            db: AsyncSession | None = None,
+    ):
+        uid = int(user_id)
+        base_ms = int(base_time_ms)
+        inc_ms = int(increment_ms)
+        queue_name = f"queue:{base_ms}:{inc_ms}"
 
+        existing_ids = await self.redis.zrange(queue_name, 0, -1)
+        for cand_raw in existing_ids:
+            cand_id = int(cand_raw)
+            if cand_id != uid:
+                from src.services.connection_manager import manager
+                from src.services.game_state import state_manager
+                matched_game_id = await self.accept_challenge(
+                    cand_id, uid, manager, state_manager, db=db
+                )
+                if matched_game_id is not None:
+                    return matched_game_id
+
+        await self.leave_queue(uid)
         await self.redis.sadd("active_queues", queue_name)
-        await self.redis.zadd(queue_name, {str(user_id): rating})
+        await self.redis.zadd(queue_name, {str(uid): int(rating)})
 
         prefs = {
-            "user_id": user_id,
-            "username": username,
-            "rating": rating,
-            "min_rating": min_rating,
-            "max_rating": max_rating,
-            "base_time_ms": base_time_ms,
-            "increment_ms": increment_ms,
+            "user_id": str(uid),
+            "username": str(username),
+            "rating": str(rating),
+            "min_rating": str(min_rating),
+            "max_rating": str(max_rating),
+            "base_time_ms": str(base_ms),
+            "increment_ms": str(inc_ms),
         }
-        await self.redis.hset(f"queue:prefs:{user_id}", mapping=prefs)
-        logger.info("User %s (%s) published challenge in lobby", user_id, username)
+        await self.redis.hset(f"queue:prefs:{uid}", mapping=prefs)
+        logger.info("User %s (%s) published challenge in lobby (%s+%s)", uid, username, base_ms, inc_ms)
+        return None
 
     async def leave_queue(self, user_id: int):
-        prefs = await self.redis.hgetall(f"queue:prefs:{user_id}")
+        uid = int(user_id)
+        prefs = await self.redis.hgetall(f"queue:prefs:{uid}")
         if prefs:
-            queue_name = f"queue:{prefs['base_time_ms']}:{prefs['increment_ms']}"
-            await self.redis.zrem(queue_name, str(user_id))
-            await self.redis.delete(f"queue:prefs:{user_id}")
-            logger.info("User %s left lobby queue", user_id)
+            queue_name = f"queue:{prefs.get('base_time_ms', 180000)}:{prefs.get('increment_ms', 0)}"
+            await self.redis.zrem(queue_name, str(uid))
+            await self.redis.delete(f"queue:prefs:{uid}")
+
+        active_queues = await self.redis.smembers("active_queues")
+        for qn in active_queues:
+            await self.redis.zrem(qn, str(uid))
 
     async def get_queue_players(self) -> list[dict]:
-        """Возвращает список всех активных вызовов в лобби без дубликатов."""
+        """Возвращает список всех активных вызовов в лобби."""
         players = []
-        seen_users: set[int] = set()
+        seen: set[int] = set()
         active_queues = await self.redis.smembers("active_queues")
-
         for queue_name in active_queues:
             user_ids = await self.redis.zrange(queue_name, 0, -1)
             for u_id in user_ids:
-                uid_int = int(u_id)
-                if uid_int in seen_users:
+                uid = int(u_id)
+                if uid in seen:
                     continue
-                prefs = await self.redis.hgetall(f"queue:prefs:{u_id}")
+                prefs = await self.redis.hgetall(f"queue:prefs:{uid}")
                 if prefs:
-                    seen_users.add(uid_int)
+                    seen.add(uid)
                     players.append({
-                        "user_id": int(prefs.get("user_id", u_id)),
+                        "user_id": int(prefs.get("user_id", uid)),
                         "username": prefs.get("username", "Игрок"),
                         "rating": int(prefs.get("rating", 1200)),
                         "base_time_ms": int(prefs.get("base_time_ms", 180000)),
@@ -80,67 +107,100 @@ class Matchmaker:
                     })
         return players
 
-    async def accept_challenge(self, challenger_id: int, acceptor_id: int, connection_manager, state_manager):
-        """Принятие вызова конкретного игрока из лобби с прямой верификацией из БД."""
-        if challenger_id == acceptor_id:
+    async def _create_match_record(
+            self,
+            session: AsyncSession,
+            c_id: int,
+            a_id: int,
+            base_time: int,
+            inc_time: int,
+            now_ms: int,
+    ) -> dict | None:
+        u1_user = await session.get(User, c_id)
+        u2_user = await session.get(User, a_id)
+
+        if not u1_user or not u2_user:
             return None
 
-        p1_prefs = await self.redis.hgetall(f"queue:prefs:{challenger_id}")
-        if not p1_prefs:
-            logger.warning("Challenge from %s no longer active", challenger_id)
+        white_id, black_id = (u1_user.id, u2_user.id) if random.random() > 0.5 else (u2_user.id, u1_user.id)
+        white_user = u1_user if white_id == u1_user.id else u2_user
+        black_user = u1_user if black_id == u1_user.id else u2_user
+
+        new_game = Game(
+            white_player_id=white_user.id,
+            black_player_id=black_user.id,
+            base_time_ms=base_time,
+            increment_ms=inc_time,
+            status=GameStatus.IN_PROGRESS,
+            is_rated=True,
+            state_version=0,
+            turn="w",
+            board_fen=chess.STARTING_FEN,
+            white_time_ms=base_time,
+            black_time_ms=base_time,
+            last_move_at=now_ms,
+            white_initial_rating=white_user.rating,
+            black_initial_rating=black_user.rating,
+        )
+        session.add(new_game)
+        await session.commit()
+        await session.refresh(new_game)
+
+        return {
+            "game_id": new_game.id,
+            "white_id": white_id,
+            "black_id": black_id,
+            "white_username": white_user.username,
+            "white_rating": white_user.rating,
+            "black_username": black_user.username,
+            "black_rating": black_user.rating,
+        }
+
+    async def accept_challenge(
+            self,
+            challenger_id: int,
+            acceptor_id: int,
+            connection_manager,
+            state_manager,
+            db: AsyncSession | None = None,
+    ):
+        """Атомарное принятие вызова из лобби с созданием партии в БД/Redis и оповещением обоих игроков."""
+        c_id = int(challenger_id)
+        a_id = int(acceptor_id)
+        if c_id == a_id:
             return None
 
-        base_time = int(p1_prefs["base_time_ms"])
-        inc_time = int(p1_prefs["increment_ms"])
-        queue_name = f"queue:{base_time}:{inc_time}"
+        async with _CHALLENGE_ACCEPT_LOCK:
+            p1_prefs = await self.redis.hgetall(f"queue:prefs:{c_id}")
+            if not p1_prefs:
+                logger.warning("Challenge from %s no longer active", c_id)
+                return None
 
-        await self.redis.zrem(queue_name, str(challenger_id), str(acceptor_id))
-        await self.redis.delete(f"queue:prefs:{challenger_id}", f"queue:prefs:{acceptor_id}")
+            base_time = int(p1_prefs.get("base_time_ms", 180000))
+            inc_time = int(p1_prefs.get("increment_ms", 0))
+
+            await self.leave_queue(c_id)
+            await self.leave_queue(a_id)
 
         now_ms = int(time.time() * 1000)
 
-        async with AsyncSessionLocal() as db:
-            u1_user = await db.get(User, challenger_id)
-            u2_user = await db.get(User, acceptor_id)
+        if db is not None:
+            created = await self._create_match_record(db, c_id, a_id, base_time, inc_time, now_ms)
+        else:
+            async with AsyncSessionLocal() as session:
+                created = await self._create_match_record(session, c_id, a_id, base_time, inc_time, now_ms)
 
-            if not u1_user or not u2_user:
-                return None
+        if not created:
+            return None
 
-            active_queues = await self.redis.smembers("active_queues")
-            for qn in active_queues:
-                await self.redis.zrem(qn, str(acceptor_id), str(challenger_id))
-            await self.redis.delete(f"queue:prefs:{acceptor_id}", f"queue:prefs:{challenger_id}")
-
-            white_id, black_id = (u1_user.id, u2_user.id) if random.random() > 0.5 else (u2_user.id, u1_user.id)
-
-            white_user = u1_user if white_id == u1_user.id else u2_user
-            black_user = u1_user if black_id == u1_user.id else u2_user
-
-            new_game = Game(
-                white_player_id=white_user.id,
-                black_player_id=black_user.id,
-                base_time_ms=base_time,
-                increment_ms=inc_time,
-                status=GameStatus.IN_PROGRESS,
-                is_rated=True,
-                state_version=0,
-                turn="w",
-                board_fen=chess.STARTING_FEN,
-                white_time_ms=base_time,
-                black_time_ms=base_time,
-                last_move_at=now_ms,
-                white_initial_rating=white_user.rating,
-                black_initial_rating=black_user.rating,
-            )
-            db.add(new_game)
-            await db.commit()
-            await db.refresh(new_game)
-            game_id = new_game.id
+        game_id = created["game_id"]
+        white_id = created["white_id"]
+        black_id = created["black_id"]
 
         await state_manager.initialize_game(
             game_id=game_id,
-            white_id=white_user.id,
-            black_id=black_user.id,
+            white_id=white_id,
+            black_id=black_id,
             base_time_ms=base_time,
             increment_ms=inc_time,
         )
@@ -148,10 +208,10 @@ class Matchmaker:
         match_payload = {
             "event": "match_found",
             "game_id": game_id,
-            "white_username": white_user.username,
-            "white_rating": white_user.rating,
-            "black_username": black_user.username,
-            "black_rating": black_user.rating,
+            "white_username": created["white_username"],
+            "white_rating": created["white_rating"],
+            "black_username": created["black_username"],
+            "black_rating": created["black_rating"],
             "base_time_ms": base_time,
             "increment_ms": inc_time,
             "white_time_ms": base_time,
@@ -161,18 +221,13 @@ class Matchmaker:
             "state_version": 0,
         }
 
-        w_payload = {**match_payload, "color": "white", "opponent_id": black_user.id}
-        b_payload = {**match_payload, "color": "black", "opponent_id": white_user.id}
+        w_payload = {**match_payload, "color": "white", "opponent_id": black_id}
+        b_payload = {**match_payload, "color": "black", "opponent_id": white_id}
 
-        await connection_manager.send_personal_message(w_payload, white_user.id)
-        await connection_manager.send_personal_message(b_payload, black_user.id)
+        await connection_manager.send_personal_message(w_payload, white_id)
+        await connection_manager.send_personal_message(b_payload, black_id)
 
-        logger.info(
-            "Challenge accepted! Match created: White(%s) vs Black(%s) in game %s",
-            white_user.id,
-            black_user.id,
-            game_id,
-        )
+        logger.info("Match started: White(%s) vs Black(%s) in game %s", white_id, black_id, game_id)
         return game_id
 
     async def create_private_invite(
@@ -184,7 +239,6 @@ class Matchmaker:
             increment_ms: int = 2000,
             color_pref: str = "random",
     ) -> dict:
-        """Создаёт приватный инвайт в Redis по ключу invite:{code} с TTL 15 минут (900 сек)."""
         from src.services.game_state import state_manager
 
         redis_conn = getattr(self, "redis", None) or state_manager.redis
@@ -217,10 +271,6 @@ class Matchmaker:
         return json.loads(raw)
 
     async def accept_private_invite(self, code: str, acceptor_id: int) -> dict | None:
-        """
-        Атомарно погашает приватный инвайт (одноразово) и возвращает параметры создателя и определившиеся цвета.
-        Защищён от конкурентного двойного погашения.
-        """
         from src.services.game_state import state_manager
 
         redis_conn = getattr(self, "redis", None) or state_manager.redis
