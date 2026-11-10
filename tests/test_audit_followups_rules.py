@@ -11,7 +11,7 @@ import pytest
 
 from src.api.bots import BotGameSaveRequest, resolve_bot_game_outcome
 from src.core.security import verify_password
-from src.services.game_state import ABANDON_TIMEOUT_MS, ABANDON_DRAW_TERMINATION, evaluate_clock_expiry
+from src.services.game_state import ABANDON_DRAW_TERMINATION, ABANDON_TIMEOUT_MS, evaluate_clock_expiry
 
 FOOLS_MATE = ["f2f3", "e7e5", "g2g4", "d8h4"]
 

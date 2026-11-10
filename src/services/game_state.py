@@ -1,15 +1,17 @@
 # --- FILE: src/services/game_state.py ---
 
-import time
-import json
 import asyncio
-import logging
 import datetime
+import json
+import logging
+import time
+from datetime import UTC
+
 import chess
 import chess.pgn
-from sqlalchemy import select, or_
-from sqlalchemy.sql import func
 from redis.exceptions import WatchError
+from sqlalchemy import or_, select
+from sqlalchemy.sql import func
 
 from src.core.instance import WORKER_ID
 from src.db.redis import redis_client
@@ -17,12 +19,16 @@ from src.db.session import AsyncSessionLocal
 from src.models.game import Game, GameStatus
 from src.models.move import Move
 from src.models.user import User
-from src.services.rating import elo_calculator
-from src.services.task_dispatch import schedule_game_analysis_in_background
 from src.services.anticheat import evaluate_game_telemetry
 from src.services.game_engine import (  # noqa: F401  (flag_outcome реэкспортируется для тестов)
-    FLAG_DRAW_TERMINATION, STARTING_FEN, engine, flag_outcome, side_has_mating_material,
+    FLAG_DRAW_TERMINATION,
+    STARTING_FEN,
+    engine,
+    flag_outcome,
+    side_has_mating_material,
 )
+from src.services.rating import elo_calculator
+from src.services.task_dispatch import schedule_game_analysis_in_background
 
 logger = logging.getLogger(__name__)
 
@@ -549,7 +555,7 @@ class GameStateManager:
         await db.commit()
 
     async def finish_game(self, db, game_id: int, result: str, termination: str = "unknown",
-                          final_pgn: str = None) -> dict:
+                          final_pgn: str | None = None) -> dict:
         """
         Фиксирует итог партии в БД и пересчитывает рейтинги.
 
@@ -638,7 +644,7 @@ class GameStateManager:
             if not final_pgn:
                 final_pgn = state.get("pgn")
 
-        today_str = datetime.datetime.now(datetime.timezone.utc).strftime("%Y.%m.%d")
+        today_str = datetime.datetime.now(datetime.UTC).strftime("%Y.%m.%d")
         db_game.status = GameStatus.COMPLETED
         db_game.finished_at = func.now()
         db_game.pgn_date = today_str
@@ -666,7 +672,7 @@ class GameStateManager:
             pgn_game.headers["TimeControl"] = f"{db_game.base_time_ms // 1000}+{db_game.increment_ms // 1000}"
             pgn_game.headers["Termination"] = termination
 
-            node = pgn_game
+            node: chess.pgn.GameNode = pgn_game
             board_for_pgn = chess.Board()
             for m in moves_telemetry:
                 try:
@@ -973,7 +979,7 @@ class GameStateManager:
         завершения со статусом aborted — из abort_game или из сверки после сбоя.
         Возвращает текущие рейтинги игроков (отмена их не меняет).
         """
-        from datetime import datetime, timezone
+        from datetime import datetime
 
         db_game = await db.get(Game, game_id, with_for_update=True, populate_existing=True)
         white_user = await db.get(User, white_id)
@@ -989,7 +995,7 @@ class GameStateManager:
             db_game.white_rating_delta = 0
             db_game.black_rating_delta = 0
             is_tz = getattr(Game.__table__.c.finished_at.type, "timezone", False)
-            now_utc = datetime.now(timezone.utc)
+            now_utc = datetime.now(UTC)
             db_game.finished_at = now_utc if is_tz else now_utc.replace(tzinfo=None)
         await db.commit()  # и снимает блокировку, если партия уже была завершена
         await self._mark_finished_in_db(game_id)
@@ -1013,7 +1019,7 @@ class GameStateManager:
            иначе можно поймать только что созданную партию до initialize_game.
         """
         now_ms = int(time.time() * 1000) if now_ms is None else now_ms
-        report = {"finished": [], "aborted": [], "restored": [], "failed": []}
+        report: dict[str, list[int]] = {"finished": [], "aborted": [], "restored": [], "failed": []}
 
         overdue = await self.redis.zrangebyscore(PENDING_FINISH_KEY, 0, now_ms - RECONCILE_GRACE_MS)
         for game_id_str in overdue:

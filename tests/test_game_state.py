@@ -1,7 +1,9 @@
 # --- FILE: tests/test_game_state.py ---
 
-import pytest
 import time
+
+import pytest
+
 from src.services.game_state import state_manager
 
 
@@ -58,8 +60,8 @@ async def test_disconnect_and_reconnect_keeps_clock_running():
 @pytest.mark.asyncio
 async def test_abort_game_without_rating_change(db_session):
     """Проверяет, что отмена партии на 1-м ходу (до 2 полуходов) не меняет рейтинг и ставит статус ABORTED."""
-    from src.models.user import User
     from src.models.game import Game, GameStatus
+    from src.models.user import User
     from src.services.game_state import state_manager
 
     u1 = User(username="abort_white_player", hashed_password="pw", rating=1500)

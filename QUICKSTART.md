@@ -86,8 +86,10 @@
 **Бэкенд:**
 
     .\michess_env\Scripts\Activate.ps1
-    python -m flake8 src tests scripts --count --select=E9,F63,F7,F82 --show-source --statistics
-    python -m pytest -v
+    pip install -r requirements-dev.txt   # один раз: ruff, mypy, pytest-cov
+    ruff check .                          # линтер (правила — pyproject.toml)
+    mypy                                  # проверка типов src/
+    python -m pytest --cov                # тесты и покрытие (порог — pyproject.toml)
 
 **Фронтенд:**
 

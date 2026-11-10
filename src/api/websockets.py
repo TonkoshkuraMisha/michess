@@ -1,22 +1,23 @@
 # --- FILE: src/api/websockets.py ---
 
 import json
-import time
 import logging
+import time
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Awaitable, Callable
+from typing import Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from src.api.deps import get_current_user_ws
 from src.api.rate_limit import try_consume
 from src.db.session import get_session_factory
+from src.models.user import User
 from src.services.anticheat import trusted_premove
 from src.services.connection_manager import manager
 from src.services.game_state import state_manager
-from src.api.deps import get_current_user_ws
-from src.models.user import User
 from src.services.matchmaker import MatchmakingError, matchmaker
 
 logger = logging.getLogger(__name__)
@@ -473,7 +474,7 @@ async def _make_move(ctx: ActionContext, data: dict) -> None:
         return
 
     game = GameRef(gid, {}, res["white_id"], res["black_id"])
-    move_data = res.get("move_data")
+    move_data: dict = res.get("move_data") or {}
 
     if move_data:
         server_elapsed_ms = res.get("elapsed_ms", 0)
@@ -594,7 +595,7 @@ async def _within_rate_limit(user_id: int, action_name: str) -> bool:
 
 
 async def _reject_rate_limited(user: User, action_name: str, data: dict) -> None:
-    payload = {
+    payload: dict[str, Any] = {
         "event": "error",
         "code": "rate_limited",
         "action": action_name,
@@ -630,7 +631,7 @@ async def _handle_message(
     if not isinstance(data, dict):
         return False
 
-    action_name = data.get("action")
+    action_name = str(data.get("action") or "")
     handler = ACTION_HANDLERS.get(action_name)
     if handler is None:
         return True  # неизвестное действие (например, от более новой версии клиента) — пропускаем

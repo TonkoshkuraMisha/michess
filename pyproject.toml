@@ -1,0 +1,65 @@
+# --- FILE: pyproject.toml ---
+# Настройки инструментов качества кода (pytest настроен в pytest.ini).
+# Проверка локально:  ruff check . ; ruff format --check не используется (форматирование не навязываем)
+#                     mypy ; pytest --cov
+
+[tool.ruff]
+target-version = "py311"
+line-length = 127
+extend-exclude = ["michess_env", "frontend", "_project_snapshot"]
+
+[tool.ruff.lint]
+select = [
+    "E", "W",   # pycodestyle
+    "F",        # pyflakes: неиспользуемое, неопределённые имена
+    "I",        # порядок импортов
+    "B",        # bugbear: типичные ошибки
+    "UP",       # современный синтаксис Python 3.11
+    "ASYNC",    # блокирующие вызовы и ошибки в async-коде
+    "SIM",      # упрощения
+    "PT",       # стиль pytest
+]
+ignore = [
+    "SIM105",   # contextlib.suppress вместо try/except/pass — дело вкуса
+    "SIM108",   # тернарный оператор вместо if/else — часто хуже читается
+    "PT006",    # тип первого аргумента parametrize — дело вкуса
+    "PT011",    # pytest.raises(ValueError) без match — допустимо в простых проверках
+    "PT018",    # составной assert — допустимо в тестах
+    "UP042",    # (str, Enum) -> StrEnum меняет str(): GameStatus.X стал бы "x" — не трогаем молча
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Старые миграции не переписываем: длинные строки SQL и автогенерированный код.
+"migrations/versions/*.py" = ["E501", "W291"]
+
+[tool.ruff.lint.flake8-bugbear]
+# Depends()/Query() в значениях по умолчанию — штатный способ объявлять зависимости FastAPI.
+extend-immutable-calls = [
+    "fastapi.Depends", "fastapi.Query", "fastapi.Body", "fastapi.Header", "fastapi.Form",
+    "fastapi.security.OAuth2PasswordRequestForm",
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src", "tests"]
+
+[tool.mypy]
+python_version = "3.11"
+files = ["src"]
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+check_untyped_defs = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+no_implicit_optional = true
+
+[tool.coverage.run]
+source = ["src"]
+omit = ["src/db/seed.py"]  # загрузка архивов партий из сети, в тестах не запускается
+
+[tool.coverage.report]
+# Текущий уровень ~80%; порог чуть ниже, чтобы мелкие колебания не роняли CI,
+# но заметное падение покрытия (код без тестов) — роняло.
+fail_under = 78
+show_missing = false
+skip_covered = true
+precision = 1

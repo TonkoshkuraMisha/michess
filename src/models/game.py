@@ -2,7 +2,8 @@
 
 import enum
 from datetime import datetime
-from sqlalchemy import String, Integer, BigInteger, Boolean, DateTime, ForeignKey, Enum, Text, func
+
+from sqlalchemy import BigInteger, Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.models.base import Base

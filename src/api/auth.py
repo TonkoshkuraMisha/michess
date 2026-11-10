@@ -84,7 +84,7 @@ async def register_user(user_in: UserCreate, request: Request, db: AsyncSession 
     except IntegrityError:
         # Параллельная регистрация того же имени (в другом регистре) — уникальный индекс в БД.
         await db.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=DUPLICATE_USERNAME_DETAIL)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=DUPLICATE_USERNAME_DETAIL) from None
     await db.refresh(new_user)
 
     return new_user

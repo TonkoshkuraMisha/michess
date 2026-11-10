@@ -1,6 +1,7 @@
 # --- FILE: tests/test_audit_fixes.py ---
 
 import asyncio
+
 import chess
 import pytest
 from httpx import ASGITransport, AsyncClient

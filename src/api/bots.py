@@ -1,8 +1,9 @@
 # --- FILE: src/api/bots.py ---
 
 import asyncio
-from datetime import datetime, timezone
 import random
+from datetime import UTC, datetime
+
 import chess
 import chess.pgn
 from fastapi import APIRouter, Depends, HTTPException
@@ -124,7 +125,7 @@ def reserved_bot_usernames() -> set[str]:
     names: set[str] = set()
     for bot in AVAILABLE_BOTS:
         for value in (bot["id"], bot["name"], bot["full_name"]):
-            names.add(value.strip().casefold())
+            names.add(str(value).strip().casefold())
     return names
 
 
@@ -253,7 +254,7 @@ def _replay_moves(moves_uci: list[str]) -> chess.Board:
         try:
             move = chess.Move.from_uci(uci_str)
         except ValueError:
-            raise ValueError(f"Некорректный ход в истории: {uci_str}")
+            raise ValueError(f"Некорректный ход в истории: {uci_str}") from None
         if move not in board.legal_moves:
             raise ValueError(f"Нелегальный ход в истории: {uci_str}")
         board.push(move)
@@ -300,7 +301,7 @@ def _build_pgn_string(
     pgn_game = chess.pgn.Game()
     pgn_game.headers["Event"] = "Historical Bot Match"
     pgn_game.headers["Site"] = "Michess Bot Arena"
-    pgn_game.headers["Date"] = datetime.now(timezone.utc).strftime("%Y.%m.%d")
+    pgn_game.headers["Date"] = datetime.now(UTC).strftime("%Y.%m.%d")
     pgn_game.headers["Round"] = "-"
     pgn_game.headers["White"] = white_name
     pgn_game.headers["Black"] = black_name
@@ -309,7 +310,7 @@ def _build_pgn_string(
     pgn_game.headers["BlackElo"] = str(black_elo)
     pgn_game.headers["ECO"] = _detect_eco_code(moves_uci)
 
-    node = pgn_game
+    node: chess.pgn.GameNode = pgn_game
     for uci_str in moves_uci:
         move = chess.Move.from_uci(uci_str)
         if move not in board.legal_moves:
@@ -374,7 +375,7 @@ def _prepare_game_kwargs(
     kwargs: dict = {}
 
     if "pgn_date" in game_cols:
-        kwargs["pgn_date"] = datetime.now(timezone.utc).strftime("%Y.%m.%d")
+        kwargs["pgn_date"] = datetime.now(UTC).strftime("%Y.%m.%d")
     if "site" in game_cols:
         kwargs["site"] = "Michess Bot Arena"
     if "eco" in game_cols:
@@ -422,7 +423,7 @@ def _prepare_game_kwargs(
 
     if "finished_at" in game_cols:
         is_tz = getattr(game_cols["finished_at"].type, "timezone", False)
-        now_utc = datetime.now(timezone.utc)
+        now_utc = datetime.now(UTC)
         kwargs["finished_at"] = now_utc if is_tz else now_utc.replace(tzinfo=None)
 
     return kwargs
@@ -451,7 +452,7 @@ async def get_bot_move(payload: BotMoveRequest):
     try:
         board = chess.Board(payload.fen)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Некорректный формат FEN")
+        raise HTTPException(status_code=400, detail="Некорректный формат FEN") from None
 
     if board.is_game_over():
         raise HTTPException(status_code=400, detail="Партия уже завершена")
@@ -498,7 +499,7 @@ async def save_bot_game(
         final_board = _replay_moves(payload.moves_uci)
         result, termination = resolve_bot_game_outcome(final_board, payload)
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     payload = payload.model_copy(update={"result": result, "termination": termination})
 
     bot_user = await _get_or_create_bot_user(db, payload.bot_id)
@@ -518,7 +519,7 @@ async def save_bot_game(
             result=payload.result,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     game_kwargs = _prepare_game_kwargs(
         white_id=white_user.id,
