@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from fastapi.testclient import TestClient
 
 from src.main import app
-from src.db.session import get_db
+from src.db.session import get_db, get_session_factory
 from src.models.base import Base
 from src.models.user import User
 from src.core.security import create_access_token
@@ -254,6 +254,7 @@ async def override_get_db():
 
 
 app.dependency_overrides[get_db] = override_get_db
+app.dependency_overrides[get_session_factory] = lambda: TestSessionLocal
 
 
 @pytest.fixture

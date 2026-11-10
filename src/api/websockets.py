@@ -7,9 +7,9 @@ from dataclasses import dataclass
 from typing import Awaitable, Callable
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from src.db.session import get_db
+from src.db.session import get_session_factory
 from src.services.anticheat import trusted_premove
 from src.services.connection_manager import manager
 from src.services.game_state import state_manager
@@ -88,8 +88,8 @@ async def create_rematch_game(db: AsyncSession, prev_state: dict, connection_man
 
 async def _fresh_current_user(db: AsyncSession, user: User) -> User:
     """
-    WebSocket-сессия живёт всё соединение (expire_on_commit=False), и объект пользователя в ней
-    не видит изменения рейтинга после сыгранных партий — перечитываем его из БД.
+    Объект пользователя из аутентификации загружен при подключении и не видит изменения
+    рейтинга после сыгранных партий — перечитываем его в сессии текущего действия.
     """
     return await db.get(User, user.id, populate_existing=True) or user
 
@@ -512,17 +512,46 @@ async def _make_move(ctx: ActionContext, data: dict) -> None:
 # ---------------------------------------------------------------------------------------
 
 
+async def _dispatch_action(
+        session_factory: async_sessionmaker[AsyncSession],
+        user: User,
+        action_name: str,
+        handler: ActionHandler,
+        data: dict,
+) -> None:
+    """
+    Выполняет одно действие в собственной короткой сессии БД.
+
+    Сессия закрывается сразу после действия, и соединение возвращается в пул. Одна сессия на
+    всё WebSocket-соединение держала бы транзакцию открытой, пока игрок подключён: при паре
+    десятков игроков в лобби пул бы кончился и все запросы к БД вставали бы по таймауту.
+    """
+    async with session_factory() as db:
+        ctx = ActionContext(user=user, db=db)
+        try:
+            await handler(ctx, data)
+        except _Ignore:
+            pass
+        except MatchmakingError as mm_err:
+            await ctx.error(mm_err.message, code=mm_err.code)
+        except Exception:
+            logger.exception("Error processing WS action '%s' for user %s", action_name, user.id)
+            await ctx.error("Internal server error processing action")
+
+
 @router.websocket("/matchmaking")
 async def matchmaking_endpoint(
         websocket: WebSocket,
         current_user: User = Depends(get_current_user_ws),
-        db: AsyncSession = Depends(get_db)
+        session_factory: async_sessionmaker[AsyncSession] = Depends(get_session_factory),
 ):
     await manager.connect(websocket, current_user.id)
-    ctx = ActionContext(user=current_user, db=db)
     try:
-        await ctx.send({"event": "connected", "message": f"Welcome, {current_user.username}!"})
-        await _send_active_game_snapshot_if_exists(db, current_user)
+        await manager.send_personal_message(
+            {"event": "connected", "message": f"Welcome, {current_user.username}!"}, current_user.id,
+        )
+        async with session_factory() as db:
+            await _send_active_game_snapshot_if_exists(db, current_user)
 
         while True:
             data = await websocket.receive_json()
@@ -532,16 +561,7 @@ async def matchmaking_endpoint(
             handler = ACTION_HANDLERS.get(action_name)
             if handler is None:
                 continue
-
-            try:
-                await handler(ctx, data)
-            except _Ignore:
-                pass
-            except MatchmakingError as mm_err:
-                await ctx.error(mm_err.message, code=mm_err.code)
-            except Exception:
-                logger.exception("Error processing WS action '%s' for user %s", action_name, current_user.id)
-                await ctx.error("Internal server error processing action")
+            await _dispatch_action(session_factory, current_user, action_name, handler, data)
 
     except WebSocketDisconnect:
         # Закрываем только это соединение: другие вкладки пользователя остаются онлайн.
