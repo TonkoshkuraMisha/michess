@@ -76,6 +76,9 @@ class MockPipeline:
     def expire(self, name, time):
         self.commands.append(("expire", name, time))
 
+    def zadd(self, name, mapping):
+        self.commands.append(("zadd", name, mapping))
+
     async def execute(self):
         for cmd in self.commands:
             if cmd[0] == "hset":
@@ -85,6 +88,8 @@ class MockPipeline:
                 await self.redis.hset(cmd[1], mapping=mapping)
             elif cmd[0] == "sadd":
                 await self.redis.sadd(cmd[1], *cmd[2])
+            elif cmd[0] == "zadd":
+                await self.redis.zadd(cmd[1], cmd[2])
         self.commands = []
 
     async def sismember(self, name, value):
@@ -202,11 +207,14 @@ class MockAsyncRedis:
             return lst[start:]
         return lst[start:end + 1]
 
-    async def zadd(self, name, mapping):
+    async def zadd(self, name, mapping, nx=False):
         if name not in self.zsets:
             self.zsets[name] = {}
         added = 0
         for k, v in mapping.items():
+            k = str(k)
+            if nx and k in self.zsets[name]:
+                continue
             if k not in self.zsets[name] or self.zsets[name][k] != float(v):
                 added += 1
             self.zsets[name][k] = float(v)
@@ -220,6 +228,11 @@ class MockAsyncRedis:
         if end == -1:
             return keys[start:]
         return keys[start:end + 1]
+
+    async def zrangebyscore(self, name, min_score, max_score):
+        zset = self.zsets.get(name, {})
+        items = sorted((v, k) for k, v in zset.items() if float(min_score) <= v <= float(max_score))
+        return [k for _, k in items]
 
     async def zrem(self, name, *values):
         if name not in self.zsets:
