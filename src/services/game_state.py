@@ -465,6 +465,11 @@ class GameStateManager:
                         "white_time_ms": str(new_white_time),
                         "black_time_ms": str(new_black_time),
                     }
+                    # Предложение ничьей действует, пока соперник не ответил ходом (ФИДЕ 9.1.2):
+                    # ход того, кому предложили, его отклоняет; свой ход предложившего — нет.
+                    draw_offer = str(state.get("draw_offer") or "")
+                    if draw_offer and draw_offer != str(user_id):
+                        updates["draw_offer"] = ""
 
                     pipe.hset(game_key, mapping=updates)
                     pipe.sadd(cmd_key, command_id)

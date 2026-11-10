@@ -199,3 +199,37 @@ def test_premove_flag_requires_near_instant_server_timing():
 def test_public_profile_hides_fair_play_data(client, test_user_1):
     body = client.get(f"/api/v1/profile/{test_user_1.username}").json()
     assert "trust_factor" not in body and "is_cheater" not in body
+
+
+# --- Предложение ничьей -----------------------------------------------------------------
+
+async def test_draw_offer_expires_when_opponent_moves():
+    from src.services.game_state import state_manager
+
+    await state_manager.initialize_game(game_id=71, white_id=801, black_id=802, base_time_ms=60000, increment_ms=0)
+    await state_manager.update_game_state(71, {"draw_offer": "802"})  # чёрные предложили ничью
+
+    await state_manager.process_atomic_move(71, 801, "c1", "e2e4")  # белые ответили ходом
+    assert (await state_manager.get_game_state(71))["draw_offer"] == ""
+
+
+async def test_own_move_keeps_draw_offer():
+    from src.services.game_state import state_manager
+
+    await state_manager.initialize_game(game_id=72, white_id=801, black_id=802, base_time_ms=60000, increment_ms=0)
+    await state_manager.update_game_state(72, {"draw_offer": "801"})  # белые предложили и ходят
+
+    await state_manager.process_atomic_move(72, 801, "c1", "e2e4")
+    assert (await state_manager.get_game_state(72))["draw_offer"] == "801"
+
+
+def test_every_ws_action_has_a_handler():
+    from src.api.websockets import ACTION_HANDLERS
+
+    expected = {
+        "join_queue", "leave_queue", "accept_challenge", "create_invite", "accept_invite",
+        "spectate_game", "leave_spectate", "chat_message", "abort_game", "resign",
+        "offer_draw", "accept_draw", "decline_draw", "offer_rematch", "accept_rematch",
+        "decline_rematch", "make_move",
+    }
+    assert set(ACTION_HANDLERS) == expected
