@@ -24,8 +24,8 @@ import {
 import type {BoardTheme} from '../config/boardAppearance';
 import {HISTORICAL_BOTS, HISTORICAL_BOTS_LIST} from '../config/champions';
 import type {HistoricalBotId, HistoricalBotProfile} from '../config/champions';
-import {DEFAULT_DGT_OPTION, TIME_CONTROLS} from '../config/timeControls';
-import type {DgtTimingMode, Dgt2500Option, Dgt2500Group} from '../config/timeControls';
+import {DEFAULT_TIME_CONTROL, TIME_CONTROLS} from '../config/timeControls';
+import type {TimeControlOption, TimeControlGroup} from '../config/timeControls';
 import {
     FILES, RANKS, MIN_BOARD_SIZE, MAX_BOARD_SIZE, PROMOTION_OPTIONS,
     getMaxViewportBoardSize, getDefaultBoardSize, calculateMaterialBalance, cloneChessInstance, prevIndexHelper
@@ -35,7 +35,7 @@ import {GAME_ACTION_ERROR_CODES, QUICK_CHAT_PRESETS} from './chessboard/types';
 import type {LiveGameItem, ChatMessageItem, QueuePlayer} from './chessboard/types';
 
 export {MIN_BOARD_SIZE, MAX_BOARD_SIZE, getMaxViewportBoardSize, getDefaultBoardSize, TIME_CONTROLS};
-export type {PromotionPiece, DgtTimingMode, Dgt2500Option, Dgt2500Group};
+export type {PromotionPiece, TimeControlOption, TimeControlGroup};
 
 export {BOARD_THEMES, HISTORICAL_BOTS};
 export type {BoardTheme, HistoricalBotId, HistoricalBotProfile};
@@ -100,7 +100,7 @@ export default function Chessboard() {
     const [isBotThinking, setIsBotThinking] = useState<boolean>(false);
     const [savedBotGameId, setSavedBotGameId] = useState<number | null>(null);
 
-    const [selectedTimeControl, setSelectedTimeControl] = useState<Dgt2500Option>(DEFAULT_DGT_OPTION);
+    const [selectedTimeControl, setSelectedTimeControl] = useState<TimeControlOption>(DEFAULT_TIME_CONTROL);
     const [manualBaseMinutes, setManualBaseMinutes] = useState<number>(5);
     const [manualIncSeconds, setManualIncSeconds] = useState<number>(3);
     const [isTimeDropdownOpen, setIsTimeDropdownOpen] = useState(false);
@@ -120,10 +120,6 @@ export default function Chessboard() {
     const moveStartTime = useRef<number>(Date.now());
     const botGameSavedRef = useRef<boolean>(false);
     const lowTimeWarnedRef = useRef<boolean>(false);
-    const appliedPeriodsRef = useRef<{ white: Set<number>; black: Set<number> }>({
-        white: new Set(),
-        black: new Set()
-    });
 
     const [dragState, setDragState] = useState<{
         from: string;
@@ -160,6 +156,10 @@ export default function Chessboard() {
 
     const [sessionStats, setSessionStats] = useState({wins: 0, losses: 0, draws: 0});
     const [gameOverResult, setGameOverResult] = useState<string | null>(null);
+    const gameOverResultRef = useRef<string | null>(null);
+    useEffect(() => {
+        gameOverResultRef.current = gameOverResult;
+    }, [gameOverResult]);
     const [drawOfferStatus, setDrawOfferStatus] = useState<string | null>(null);
     const [rematchStatus, setRematchStatus] = useState<'none' | 'offered_by_me' | 'offered_by_opponent' | 'declined'>('none');
 
@@ -169,9 +169,7 @@ export default function Chessboard() {
     const activeBotProfile = activeBot ? HISTORICAL_BOTS[activeBot] : null;
 
     const effectiveWhiteBaseMinutes = selectedTimeControl.isManual ? manualBaseMinutes : selectedTimeControl.base;
-    const effectiveBlackBaseMinutes = selectedTimeControl.isManual
-        ? manualBaseMinutes
-        : (selectedTimeControl.blackBase ?? selectedTimeControl.base);
+    const effectiveBlackBaseMinutes = effectiveWhiteBaseMinutes;
     const effectiveIncSeconds = selectedTimeControl.isManual ? manualIncSeconds : selectedTimeControl.inc;
 
     const isBoardFlipped = (myColor === 'black') !== isManualFlip;
@@ -237,7 +235,6 @@ export default function Chessboard() {
         if (isNewMatch) {
             lowTimeWarnedRef.current = false;
             setChatMessages([]);
-            appliedPeriodsRef.current = {white: new Set(), black: new Set()};
             setIsManualFlip(false);
             setRatingInfo(null);
             setGameOverResult(null);
@@ -326,7 +323,11 @@ export default function Chessboard() {
             setGame(nextGame);
             setHistory(newHistory);
             setViewIndex(-1);
-            playAudio(resolveMoveSound(lastSan));
+            // На завершающем ходу играет только исход (victory/defeat/draw) — звук самого
+            // хода (например, «шах» на мате) был бы лишним дублем перед фанфарой.
+            if (!data.game_over) {
+                playAudio(resolveMoveSound(lastSan));
+            }
         }
 
         if (data.game_over) {
@@ -391,61 +392,14 @@ export default function Chessboard() {
         }
     }, [effectiveWhiteBaseMinutes, effectiveIncSeconds]);
 
-    const applyDgtClockAfterMove = useCallback((
-        moverColor: 'white' | 'black',
-        elapsedMs: number,
-        totalHalfMovesAfter: number
-    ) => {
-        const mode = selectedTimeControl.mode;
-        const baseMs = Math.round(
-            (moverColor === 'white' ? effectiveWhiteBaseMinutes : effectiveBlackBaseMinutes) * 60 * 1000
-        );
-        const completedMovesForSide = Math.ceil(totalHalfMovesAfter / 2);
-
-        let incSeconds = effectiveIncSeconds;
-        if (selectedTimeControl.incrementFromMove) {
-            if (completedMovesForSide >= selectedTimeControl.incrementFromMove) {
-                const extraInc = selectedTimeControl.periods?.find(p => p.extraIncSeconds)?.extraIncSeconds;
-                incSeconds = extraInc ?? effectiveIncSeconds;
-            } else {
-                incSeconds = 0;
-            }
-        }
-        const incMs = Math.round(incSeconds * 1000);
-
-        let periodExtraMs = 0;
-        if (selectedTimeControl.periods) {
-            selectedTimeControl.periods.forEach((period, idx) => {
-                if (
-                    period.moves &&
-                    completedMovesForSide >= period.moves &&
-                    !appliedPeriodsRef.current[moverColor].has(idx)
-                ) {
-                    appliedPeriodsRef.current[moverColor].add(idx);
-                    periodExtraMs += Math.round(period.extraMinutes * 60 * 1000);
-                }
-            });
-        }
-
-        const updateTimer = (prevMs: number) => {
-            if (mode === 'gong' || mode === 'move_timer') {
-                return baseMs;
-            }
-            if (mode === 'delay' || mode === 'us_delay') {
-                return prevMs + Math.min(elapsedMs, incMs) + periodExtraMs;
-            }
-            if (mode === 'fischer' || mode === 'byo_yomi') {
-                return prevMs + incMs + periodExtraMs;
-            }
-            return prevMs + periodExtraMs;
-        };
-
+    const applyIncrementAfterMove = useCallback((moverColor: 'white' | 'black') => {
+        const incMs = Math.round(effectiveIncSeconds * 1000);
         if (moverColor === 'white') {
-            setWhiteTimeMs(updateTimer);
+            setWhiteTimeMs(prev => prev + incMs);
         } else {
-            setBlackTimeMs(updateTimer);
+            setBlackTimeMs(prev => prev + incMs);
         }
-    }, [selectedTimeControl, effectiveWhiteBaseMinutes, effectiveBlackBaseMinutes, effectiveIncSeconds]);
+    }, [effectiveIncSeconds]);
 
     const handleThemeChange = (themeId: string) => {
         setBoardThemeKey(themeId);
@@ -475,7 +429,6 @@ export default function Chessboard() {
 
         botGameSavedRef.current = false;
         lowTimeWarnedRef.current = false;
-        appliedPeriodsRef.current = {white: new Set(), black: new Set()};
         setSavedBotGameId(null);
         gameIdRef.current = null;
         setGameId(null);
@@ -569,18 +522,21 @@ export default function Chessboard() {
                     const moveObj = nextGame.move({from, to, promotion});
 
                     if (moveObj) {
-                        const elapsed = Date.now() - moveStartTime.current;
                         const newHistory = nextGame.history({verbose: true});
                         const botColor: 'white' | 'black' = myColor === 'white' ? 'black' : 'white';
 
-                        applyDgtClockAfterMove(botColor, elapsed, newHistory.length);
+                        applyIncrementAfterMove(botColor);
                         setGame(nextGame);
                         setHistory(newHistory);
                         setViewIndex(-1);
                         setBotComment(data.comment);
                         moveStartTime.current = Date.now();
 
-                        playAudio(resolveMoveSound(moveObj.san));
+                        // На завершающем ходу играет только исход (победа/поражение/ничья) —
+                        // звук самого хода («шах» и т.п.) был бы лишним дублем перед ним.
+                        if (!nextGame.isGameOver()) {
+                            playAudio(resolveMoveSound(moveObj.san));
+                        }
 
                         if (nextGame.isGameOver()) {
                             let result = '1/2-1/2';
@@ -609,7 +565,7 @@ export default function Chessboard() {
             isCancelled = true;
             if (delayTimer) clearTimeout(delayTimer);
         };
-    }, [activeBot, game, myColor, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyDgtClockAfterMove]);
+    }, [activeBot, game, myColor, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyIncrementAfterMove]);
 
     useEffect(() => {
         if (!isResizing) return;
@@ -681,37 +637,40 @@ export default function Chessboard() {
             if (history.length === 0) return;
             if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
+            // setViewIndex принимает только готовое значение, а не функцию-обновитель: React
+            // StrictMode в разработке вызывает такую функцию дважды, и звук из побочного эффекта
+            // внутри неё проигрывался бы два раза подряд (рассинхронизированно, по разным тикам
+            // Audio). Текущий viewIndex читаем из замыкания — он в зависимостях эффекта.
             if (e.key === 'ArrowLeft') {
                 e.preventDefault();
-                setViewIndex(prev => {
-                    const current = prev === -1 ? history.length - 1 : prev;
-                    const nextIdx = current <= 0 ? -2 : current - 1;
-                    if (nextIdx >= 0 && history[nextIdx]) {
-                        playAudio(resolveMoveSound(history[nextIdx].san));
-                    } else {
-                        playAudio('move');
-                    }
-                    return nextIdx;
-                });
+                const current = viewIndex === -1 ? history.length - 1 : prevIndexHelper(viewIndex, history.length);
+                const nextIdx = current <= 0 ? -2 : current - 1;
+                if (nextIdx === viewIndex) return;
+                setViewIndex(nextIdx);
+                if (nextIdx >= 0 && history[nextIdx]) {
+                    playAudio(resolveMoveSound(history[nextIdx].san));
+                } else {
+                    playAudio('move');
+                }
             } else if (e.key === 'ArrowRight') {
                 e.preventDefault();
-                setViewIndex(prev => {
-                    if (prev === -1) return -1;
-                    const nextIdx = prev === -2
-                        ? (history.length > 1 ? 0 : -1)
-                        : (prev + 1 >= history.length - 1 ? -1 : prev + 1);
-                    const targetMove = nextIdx === -1 ? history[history.length - 1] : history[nextIdx];
-                    if (targetMove) {
-                        playAudio(resolveMoveSound(targetMove.san));
-                    }
-                    return nextIdx;
-                });
+                if (viewIndex === -1) return;
+                const nextIdx = viewIndex === -2
+                    ? (history.length > 1 ? 0 : -1)
+                    : (viewIndex + 1 >= history.length - 1 ? -1 : viewIndex + 1);
+                setViewIndex(nextIdx);
+                const targetMove = nextIdx === -1 ? history[history.length - 1] : history[nextIdx];
+                if (targetMove) {
+                    playAudio(resolveMoveSound(targetMove.san));
+                }
             } else if (e.key === 'ArrowUp') {
                 e.preventDefault();
+                if (viewIndex === -2) return;
                 setViewIndex(-2);
                 playAudio('move');
             } else if (e.key === 'ArrowDown') {
                 e.preventDefault();
+                if (viewIndex === -1) return;
                 setViewIndex(-1);
                 playAudio('move');
             }
@@ -719,7 +678,7 @@ export default function Chessboard() {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [history, playAudio]);
+    }, [history, playAudio, viewIndex]);
 
     useEffect(() => {
         if (notationScrollRef.current) {
@@ -787,13 +746,13 @@ export default function Chessboard() {
         const handleGameOver = (data: any) => {
             setPremove(null);
             setPendingPromotion(null);
-            setGameOverResult(prev => {
-                if (!prev) {
-                    playOutcomeSound(data.result);
-                    updateSessionStats(data.result);
-                }
-                return data.result;
-            });
+            // Партия могла уже быть завершена сообщением move_made (оно приходит первым на том же
+            // соединении) — тогда исход уже озвучен и статистика уже обновлена, повторять не нужно.
+            if (!gameOverResultRef.current) {
+                playOutcomeSound(data.result);
+                updateSessionStats(data.result);
+            }
+            setGameOverResult(data.result);
             setRatingInfo(data);
             if (data.white_time_ms !== undefined) setWhiteTimeMs(data.white_time_ms);
             if (data.black_time_ms !== undefined) setBlackTimeMs(data.black_time_ms);
@@ -1004,8 +963,6 @@ export default function Chessboard() {
 
         let lastTick = Date.now();
         const currentTurnColor = currentTurnChar === 'w' ? 'white' : 'black';
-        const isHourglass = !gameId && selectedTimeControl.mode === 'hourglass';
-        const isScrabble = !gameId && selectedTimeControl.mode === 'scrabble';
 
         const interval = setInterval(() => {
             const now = Date.now();
@@ -1013,20 +970,14 @@ export default function Chessboard() {
             lastTick = now;
 
             if (currentTurnColor === 'white') {
-                setWhiteTimeMs(prev => isScrabble ? prev - delta : Math.max(0, prev - delta));
-                if (isHourglass) {
-                    setBlackTimeMs(prev => prev + delta);
-                }
+                setWhiteTimeMs(prev => Math.max(0, prev - delta));
             } else {
-                setBlackTimeMs(prev => isScrabble ? prev - delta : Math.max(0, prev - delta));
-                if (isHourglass) {
-                    setWhiteTimeMs(prev => prev + delta);
-                }
+                setBlackTimeMs(prev => Math.max(0, prev - delta));
             }
         }, 50);
 
         return () => clearInterval(interval);
-    }, [gameId, activeBot, spectatingGameId, gameOverResult, currentTurnChar, selectedTimeControl.mode]);
+    }, [gameId, activeBot, spectatingGameId, gameOverResult, currentTurnChar]);
 
     // Звуковое предупреждение о цейтноте (< 10 секунд на часах игрока)
     useEffect(() => {
@@ -1039,7 +990,7 @@ export default function Chessboard() {
     }, [whiteTimeMs, blackTimeMs, gameId, activeBot, gameOverResult, myColor, playAudio]);
 
     useEffect(() => {
-        if (!activeBot || gameOverResult || selectedTimeControl.mode === 'scrabble') return;
+        if (!activeBot || gameOverResult) return;
 
         if (whiteTimeMs <= 0 || blackTimeMs <= 0) {
             const flagWinner = whiteTimeMs <= 0 ? '0-1' : '1-0';
@@ -1052,7 +1003,7 @@ export default function Chessboard() {
             playOutcomeSound(flagWinner, myColor);
             saveBotGameToDatabase(activeBot, myColor, flagWinner, game, 'timeout');
         }
-    }, [whiteTimeMs, blackTimeMs, activeBot, gameOverResult, selectedTimeControl.mode, myColor, game, playOutcomeSound, updateSessionStats, saveBotGameToDatabase]);
+    }, [whiteTimeMs, blackTimeMs, activeBot, gameOverResult, myColor, game, playOutcomeSound, updateSessionStats, saveBotGameToDatabase]);
 
     const executeMove = useCallback((
         from: string,
@@ -1113,14 +1064,20 @@ export default function Chessboard() {
                 const newHistory = nextGame.history({verbose: true});
 
                 if (activeBot) {
-                    applyDgtClockAfterMove(myColor, timeTaken, newHistory.length);
+                    applyIncrementAfterMove(myColor);
                 }
 
                 setPendingPromotion(null);
                 setGame(nextGame);
                 setHistory(newHistory);
                 setViewIndex(-1);
-                playAudio(resolveMoveSound(move.san));
+                if (!gameId && !nextGame.isGameOver()) {
+                    // В PvP звук хода играет applyMoveMadeSnapshot, когда сервер эхом
+                    // присылает move_made (его получают оба игрока) — иначе свой ход звучит
+                    // дважды: сразу здесь и повторно из эха. На завершающем ходу (мат/пат)
+                    // играет только исход — звук самого хода был бы лишним дублем.
+                    playAudio(resolveMoveSound(move.san));
+                }
                 moveStartTime.current = Date.now();
 
                 if (gameId) {
@@ -1158,7 +1115,7 @@ export default function Chessboard() {
         }
         setDragState(null);
         return false;
-    }, [game, gameId, activeBot, spectatingGameId, myColor, stateVersion, viewIndex, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyDgtClockAfterMove]);
+    }, [game, gameId, activeBot, spectatingGameId, myColor, stateVersion, viewIndex, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyIncrementAfterMove]);
 
     const scheduleOrPromotePremove = useCallback((from: string, to: string, explicitPromotion?: PromotionPiece) => {
         if (from === to) return;
@@ -1278,24 +1235,22 @@ export default function Chessboard() {
     }, [dragState, isBoardFlipped, game, gameId, activeBot, spectatingGameId, myColor, executeMove, scheduleOrPromotePremove]);
 
     const formatTime = (ms: number) => {
-        const isOvertimeUpcount = ms < 0 && selectedTimeControl.mode === 'scrabble';
-        const totalMs = isOvertimeUpcount ? Math.abs(ms) : Math.max(0, ms);
+        const totalMs = Math.max(0, ms);
         const totalSecs = Math.floor(totalMs / 1000);
         const hours = Math.floor(totalSecs / 3600);
         const mins = Math.floor((totalSecs % 3600) / 60);
         const secs = totalSecs % 60;
-        const prefix = isOvertimeUpcount ? '+' : '';
 
         if (hours > 0) {
-            return `${prefix}${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+            return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
         }
 
-        if (!isOvertimeUpcount && totalMs < 30000 && totalMs > 0) {
+        if (totalMs < 30000 && totalMs > 0) {
             const tenths = Math.floor((totalMs % 1000) / 100);
             return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${tenths}`;
         }
 
-        return `${prefix}${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
     };
 
     const startMatchmaking = async () => {
@@ -1306,7 +1261,6 @@ export default function Chessboard() {
         setSavedBotGameId(null);
         botGameSavedRef.current = false;
         lowTimeWarnedRef.current = false;
-        appliedPeriodsRef.current = {white: new Set(), black: new Set()};
         setPendingPromotion(null);
         setPremove(null);
         setGameOverResult(null);
@@ -1315,7 +1269,7 @@ export default function Chessboard() {
         setLeftSectionTab('lobby');
         setLobbyTab('lobby');
         setIsTimeDropdownOpen(false);
-        setDrawOfferStatus(`Вы опубликовали вызов в лобби (Опция DGT #${selectedTimeControl.optionNumber})...`);
+        setDrawOfferStatus(`Вы опубликовали вызов в лобби (${selectedTimeControl.label})...`);
 
         const baseMs = Math.round(effectiveWhiteBaseMinutes * 60 * 1000);
         const incMs = Math.round(effectiveIncSeconds * 1000);
@@ -1520,7 +1474,6 @@ export default function Chessboard() {
         setSavedBotGameId(null);
         botGameSavedRef.current = false;
         lowTimeWarnedRef.current = false;
-        appliedPeriodsRef.current = {white: new Set(), black: new Set()};
         setIsBotThinking(false);
         setGameOverResult(null);
         setRatingInfo(null);
@@ -1688,6 +1641,10 @@ export default function Chessboard() {
 
     const handleSelectMoveFromList = (targetIdx: number) => {
         setSelectedSquare(null);
+        const isAlreadyActive = viewIndex === -1
+            ? targetIdx >= history.length - 1
+            : targetIdx === viewIndex;
+        if (isAlreadyActive) return;
         if (history[targetIdx]) {
             playAudio(resolveMoveSound(history[targetIdx].san));
         }
@@ -1747,7 +1704,7 @@ export default function Chessboard() {
                 </div>
             )}
 
-            {/* ЛЕВАЯ КОЛОНКА: ИГРОВОЙ ЦЕНТР (ЧАСЫ DGT2500, ИСТОРИЧЕСКИЕ БОТЫ, ЛОББИ И LIVE) */}
+            {/* ЛЕВАЯ КОЛОНКА: ИГРОВОЙ ЦЕНТР (ЧАСЫ, ИСТОРИЧЕСКИЕ БОТЫ, ЛОББИ И LIVE) */}
             <div
                 className="w-full xl:w-[400px] 2xl:w-[440px] xl:h-full bg-acacia p-3 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-2 text-boxwood-light order-2 xl:order-1 shrink-0 xl:overflow-hidden">
 
@@ -1798,11 +1755,11 @@ export default function Chessboard() {
                     <div className="flex items-center justify-between">
                         <label
                             className="text-xs uppercase tracking-wider text-boxwood/85 flex items-center gap-1.5 font-bold">
-                            <Clock className="text-amber-500" size={13}/> Часы FIDE DGT2500 (36 прогр.)
+                            <Clock className="text-amber-500" size={13}/> Контроль времени
                         </label>
                         <span
                             className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-900/45 text-amber-300 border border-amber-600/30">
-                            OPT #{selectedTimeControl.optionNumber}
+                            {TIME_CONTROLS.find(g => g.category === selectedTimeControl.category)?.title}
                         </span>
                     </div>
 
@@ -1814,7 +1771,7 @@ export default function Chessboard() {
                             className="w-full bg-black/45 border border-amber-700/50 hover:bg-black/65 disabled:opacity-50 transition text-amber-200 rounded-md px-2.5 py-1.5 text-xs sm:text-sm font-bold outline-none cursor-pointer flex justify-between items-center shadow-inner gap-2"
                         >
                             <span className="truncate">
-                                [{selectedTimeControl.optionNumber}] {selectedTimeControl.label}
+                                {selectedTimeControl.label}
                                 {selectedTimeControl.isManual ? ` (${manualBaseMinutes}м + ${manualIncSeconds}с)` : ''}
                             </span>
                             {isTimeDropdownOpen ? <ChevronUp className="text-amber-400 shrink-0" size={15}/> :
@@ -1824,17 +1781,17 @@ export default function Chessboard() {
                         {isTimeDropdownOpen && (
                             <div
                                 className="absolute z-50 w-full top-full mt-1 bg-[#1A120B] border-2 border-amber-700/60 rounded-md shadow-2xl max-h-72 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
-                                {TIME_CONTROLS.map((group, gIdx) => (
-                                    <div key={gIdx}>
+                                {TIME_CONTROLS.map((group) => (
+                                    <div key={group.category}>
                                         <div
                                             className="px-3 py-1.5 text-xs uppercase tracking-wider text-amber-400 bg-black/90 font-bold sticky top-0 z-10 border-b border-t border-amber-900/40 first:border-t-0">
-                                            {group.group}
+                                            {group.title}
                                         </div>
                                         {group.options.map((opt) => {
-                                            const isSelected = selectedTimeControl.optionNumber === opt.optionNumber;
+                                            const isSelected = selectedTimeControl.id === opt.id;
                                             return (
                                                 <button
-                                                    key={opt.optionNumber}
+                                                    key={opt.id}
                                                     type="button"
                                                     className={`w-full text-left px-3 py-2 text-xs sm:text-sm transition flex justify-between items-start gap-2 border-b border-amber-950/30 cursor-pointer ${
                                                         isSelected
@@ -1851,13 +1808,7 @@ export default function Chessboard() {
                                                     }}
                                                 >
                                                     <div className="min-w-0">
-                                                        <div className="flex items-center gap-2">
-                                                            <span
-                                                                className="font-mono text-xs px-1.5 py-0.5 rounded bg-black/50 text-amber-400 border border-amber-700/40 shrink-0">
-                                                                {opt.optionNumber}
-                                                            </span>
-                                                            <span className="truncate font-bold">{opt.label}</span>
-                                                        </div>
+                                                        <span className="truncate font-bold">{opt.label}</span>
                                                         <div className="text-xs text-boxwood/70 mt-0.5 leading-snug">
                                                             {opt.details}
                                                         </div>
@@ -1878,7 +1829,7 @@ export default function Chessboard() {
                             className="p-2 rounded bg-black/40 border border-amber-700/40 flex flex-col gap-1.5 text-xs">
                             <div
                                 className="text-[11px] uppercase tracking-wider text-amber-400 font-bold flex items-center gap-1.5">
-                                <Sliders size={12}/> Ручная настройка DGT2500
+                                <Sliders size={12}/> Ручная настройка времени
                             </div>
                             <div className="grid grid-cols-2 gap-2">
                                 <label className="flex flex-col gap-0.5 text-xs text-boxwood/85">
@@ -3161,6 +3112,35 @@ export default function Chessboard() {
                                             </button>
                                         </div>
                                     )}
+
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => navigate(`/game/${gameId}`, {
+                                                state: {
+                                                    game: {
+                                                        game_id: gameId,
+                                                        white_username: whitePlayer.username,
+                                                        white_rating: Number(whitePlayer.rating) || 1200,
+                                                        black_username: blackPlayer.username,
+                                                        black_rating: Number(blackPlayer.rating) || 1200,
+                                                        result: gameOverResult || '*',
+                                                        finished_at: new Date().toISOString()
+                                                    }
+                                                }
+                                            })}
+                                            className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 text-xs font-bold rounded-md transition shadow border border-emerald-600/50 cursor-pointer"
+                                        >
+                                            <Eye size={14}/> Разбор партии
+                                        </button>
+                                        <a
+                                            href={`${API_BASE_URL}/api/v1/profile/games/${gameId}/pgn`}
+                                            download
+                                            className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#1A120B] hover:bg-black text-amber-400 text-xs font-bold rounded-md transition shadow border border-amber-800/60"
+                                        >
+                                            <Download size={14}/> Скачать PGN
+                                        </a>
+                                    </div>
                                 </div>
                             )}
                         </>

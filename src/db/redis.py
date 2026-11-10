@@ -11,5 +11,7 @@ from src.core.config import settings
 redis_client: Any = redis.Redis(
     host=settings.REDIS_HOST,
     port=settings.REDIS_PORT,
-    decode_responses=True
+    decode_responses=True,
+    socket_connect_timeout=settings.REDIS_CONNECT_TIMEOUT_S,
+    socket_timeout=settings.REDIS_SOCKET_TIMEOUT_S,
 )

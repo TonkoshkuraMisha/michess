@@ -271,9 +271,12 @@ export default function GameViewer() {
                 const newGame = new Chess();
                 newGame.loadPgn(pgnText);
 
+                const newHistory = newGame.history({verbose: true});
                 setPgnHeaders(newGame.header());
-                setHistory(newGame.history({verbose: true}));
-                setViewIndex(-1);
+                setHistory(newHistory);
+                // По умолчанию показываем финальную позицию партии, а не начальную —
+                // это разбор только что сыгранной (или архивной) партии, а не пустая доска.
+                setViewIndex(newHistory.length - 1);
 
                 if (cachedAnalysisRes && cachedAnalysisRes.ok) {
                     const cachedData = await cachedAnalysisRes.json().catch(() => null);
@@ -325,44 +328,38 @@ export default function GameViewer() {
                 setShowAppearancePanel(false);
                 return;
             }
+            // setViewIndex принимает готовое значение, а не функцию-обновитель: React StrictMode
+            // в разработке вызывает такую функцию дважды, и звук из побочного эффекта внутри неё
+            // проигрывался бы два раза подряд (рассинхронизированно, по разным тикам Audio).
+            // Текущий viewIndex читаем из замыкания — он в зависимостях эффекта.
             if (e.key === 'ArrowLeft') {
                 e.preventDefault();
-                setViewIndex(prev => {
-                    const current = prev === -1 ? history.length - 1 : prev;
-                    const nextIdx = current <= 0 ? -2 : current - 1;
-                    if (nextIdx >= 0 && history[nextIdx]) {
-                        playAudio(resolveMoveSound(history[nextIdx].san));
-                    } else {
-                        playAudio('move');
-                    }
-                    return nextIdx;
-                });
+                const nextIdx = Math.max(-1, viewIndex - 1);
+                if (nextIdx === viewIndex) return;
+                setViewIndex(nextIdx);
+                playAudio(nextIdx >= 0 ? resolveMoveSound(history[nextIdx].san) : 'move');
             } else if (e.key === 'ArrowRight') {
                 e.preventDefault();
-                setViewIndex(prev => {
-                    if (prev === -1) return -1;
-                    const nextIdx = prev === -2
-                        ? (history.length > 1 ? 0 : -1)
-                        : (prev + 1 >= history.length - 1 ? -1 : prev + 1);
-                    const targetMove = nextIdx === -1 ? history[history.length - 1] : history[nextIdx];
-                    if (targetMove) {
-                        playAudio(resolveMoveSound(targetMove.san));
-                    }
-                    return nextIdx;
-                });
+                const nextIdx = Math.min(history.length - 1, viewIndex + 1);
+                if (nextIdx === viewIndex) return;
+                setViewIndex(nextIdx);
+                playAudio(resolveMoveSound(history[nextIdx].san));
             } else if (e.key === 'ArrowUp') {
                 e.preventDefault();
-                setViewIndex(-2);
+                if (viewIndex === -1) return;
+                setViewIndex(-1);
                 playAudio('move');
             } else if (e.key === 'ArrowDown') {
                 e.preventDefault();
-                setViewIndex(-1);
-                playAudio('move');
+                const lastIdx = history.length - 1;
+                if (viewIndex === lastIdx) return;
+                setViewIndex(lastIdx);
+                if (lastIdx >= 0) playAudio(resolveMoveSound(history[lastIdx].san));
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [history, playAudio]);
+    }, [history, playAudio, viewIndex]);
 
     useEffect(() => {
         if (notationScrollRef.current) {
@@ -960,10 +957,12 @@ export default function GameViewer() {
                                     <AreaChart
                                         data={chartData}
                                         onClick={(state: any) => {
-                                            if (state && typeof state.activeTooltipIndex === 'number') {
-                                                setViewIndex(state.activeTooltipIndex);
-                                                playAudio('move');
-                                            }
+                                            if (!state || typeof state.activeTooltipIndex !== 'number') return;
+                                            const idx = state.activeTooltipIndex;
+                                            if (idx === viewIndex) return;
+                                            setViewIndex(idx);
+                                            const san = analysisReport?.moves[idx]?.san;
+                                            playAudio(san ? resolveMoveSound(san) : 'move');
                                         }}
                                     >
                                         <XAxis dataKey="ply" hide/>
@@ -1030,6 +1029,7 @@ export default function GameViewer() {
 
                                     <button
                                         onClick={() => {
+                                            if (isActiveWhite) return;
                                             setViewIndex(pair.whiteIndex);
                                             playAudio(resolveMoveSound(pair.white));
                                         }}
@@ -1058,6 +1058,7 @@ export default function GameViewer() {
                                     {pair.black ? (
                                         <button
                                             onClick={() => {
+                                                if (isActiveBlack) return;
                                                 setViewIndex(pair.blackIndex);
                                                 playAudio(resolveMoveSound(pair.black));
                                             }}
@@ -1100,6 +1101,7 @@ export default function GameViewer() {
                         <div className="flex gap-1 items-center">
                             <button
                                 onClick={() => {
+                                    if (viewIndex === -1) return;
                                     setViewIndex(-1);
                                     playAudio('move');
                                 }}
@@ -1110,15 +1112,10 @@ export default function GameViewer() {
                             </button>
                             <button
                                 onClick={() => {
-                                    setViewIndex(p => {
-                                        const nextIdx = Math.max(-1, p - 1);
-                                        if (nextIdx >= 0 && history[nextIdx]) {
-                                            playAudio(resolveMoveSound(history[nextIdx].san));
-                                        } else {
-                                            playAudio('move');
-                                        }
-                                        return nextIdx;
-                                    });
+                                    const nextIdx = Math.max(-1, viewIndex - 1);
+                                    if (nextIdx === viewIndex) return;
+                                    setViewIndex(nextIdx);
+                                    playAudio(nextIdx >= 0 ? resolveMoveSound(history[nextIdx].san) : 'move');
                                 }}
                                 className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition cursor-pointer"
                                 title="Ход назад"
@@ -1127,13 +1124,10 @@ export default function GameViewer() {
                             </button>
                             <button
                                 onClick={() => {
-                                    setViewIndex(p => {
-                                        const nextIdx = Math.min(history.length - 1, p + 1);
-                                        if (history[nextIdx]) {
-                                            playAudio(resolveMoveSound(history[nextIdx].san));
-                                        }
-                                        return nextIdx;
-                                    });
+                                    const nextIdx = Math.min(history.length - 1, viewIndex + 1);
+                                    if (nextIdx === viewIndex) return;
+                                    setViewIndex(nextIdx);
+                                    playAudio(resolveMoveSound(history[nextIdx].san));
                                 }}
                                 className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition cursor-pointer"
                                 title="Ход вперед"
@@ -1142,10 +1136,10 @@ export default function GameViewer() {
                             </button>
                             <button
                                 onClick={() => {
-                                    setViewIndex(history.length - 1);
-                                    if (history.length > 0) {
-                                        playAudio(resolveMoveSound(history[history.length - 1].san));
-                                    }
+                                    const lastIdx = history.length - 1;
+                                    if (viewIndex === lastIdx) return;
+                                    setViewIndex(lastIdx);
+                                    if (lastIdx >= 0) playAudio(resolveMoveSound(history[lastIdx].san));
                                 }}
                                 className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition cursor-pointer"
                                 title="Конец партии"

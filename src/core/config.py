@@ -43,9 +43,13 @@ class Settings(BaseSettings):
     DB_MAX_OVERFLOW: int = 20
     DB_POOL_TIMEOUT_S: float = 30.0
 
-    # Redis
+    # Redis. Короткие таймауты: rate_limit.py и прочие вызовы рассчитаны на fail-open при
+    # недоступном Redis, но без них зависшее соединение (например, контейнер в restart-loop)
+    # блокирует запрос на десятки секунд вместо быстрого TCP-отказа.
     REDIS_HOST: str = "127.0.0.1"
     REDIS_PORT: int = 6379
+    REDIS_CONNECT_TIMEOUT_S: float = 1.0
+    REDIS_SOCKET_TIMEOUT_S: float = 1.0
 
     # Security (JWT)
     SECRET_KEY: str

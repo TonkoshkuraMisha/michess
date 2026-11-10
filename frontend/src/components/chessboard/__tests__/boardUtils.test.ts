@@ -3,7 +3,7 @@
 import {describe, expect, it} from 'vitest';
 import {Chess} from 'chess.js';
 import {calculateMaterialBalance, cloneChessInstance, prevIndexHelper} from '../boardUtils';
-import {DEFAULT_DGT_OPTION, TIME_CONTROLS} from '../../../config/timeControls';
+import {DEFAULT_TIME_CONTROL, TIME_CONTROLS} from '../../../config/timeControls';
 
 describe('calculateMaterialBalance', () => {
     it('is even in the starting position', () => {
@@ -41,9 +41,12 @@ describe('prevIndexHelper', () => {
 });
 
 describe('time controls', () => {
-    it('provides 36 DGT 2500 programs with the default among them', () => {
+    it('groups popular presets into bullet/blitz/rapid/classical with the default among them', () => {
+        expect(TIME_CONTROLS.map((g) => g.category)).toEqual(['bullet', 'blitz', 'rapid', 'classical']);
         const options = TIME_CONTROLS.flatMap((g) => g.options);
-        expect(options).toHaveLength(36);
-        expect(options).toContain(DEFAULT_DGT_OPTION);
+        expect(options).toContain(DEFAULT_TIME_CONTROL);
+        options.forEach((opt) => expect(opt.category).toBe(
+            TIME_CONTROLS.find((g) => g.options.includes(opt))?.category
+        ));
     });
 });
