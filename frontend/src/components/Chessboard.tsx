@@ -1343,6 +1343,13 @@ export default function Chessboard() {
 
         const handleServerError = (data: any) => {
             console.warn('Сервер отклонил действие:', data);
+            if (data.code) {
+                // Отказ матчмейкинга (уже в партии, вне диапазона рейтинга, вызов неактуален...):
+                // показываем причину и выходим из режима поиска, ход на доске не трогаем.
+                setIsSearching(false);
+                if (data.message) setDrawOfferStatus(data.message);
+                return;
+            }
             setPremove(null);
             playAudio('illegal');
             if (data.pgn || data.fen) {
