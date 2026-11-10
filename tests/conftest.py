@@ -189,6 +189,9 @@ class MockAsyncRedis:
     async def get(self, name):
         return self.kv.get(name)
 
+    async def ping(self):
+        return True
+
     async def getdel(self, name):
         return self.kv.pop(name, None)
 

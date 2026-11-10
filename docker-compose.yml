@@ -12,7 +12,7 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:8.0-M02-alpine
+    image: redis:7.4-alpine
     ports:
       - "6379:6379"
     volumes:

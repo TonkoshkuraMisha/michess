@@ -18,7 +18,7 @@ jobs:
 
     services:
       redis:
-        image: redis:8.0-M02-alpine
+        image: redis:7.4-alpine
         ports:
           - 6379:6379
       postgres:
@@ -108,3 +108,55 @@ jobs:
 
       - name: Build production bundle
         run: npm run build
+
+  production-stack:
+    name: Production images smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare production .env
+        run: |
+          cp .env.example .env
+          sed -i '/^SECRET_KEY=/d; /^ENVIRONMENT=/d; /^HTTP_PORT=/d' .env
+          echo "SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')" >> .env
+          echo "HTTP_PORT=8080" >> .env
+
+      - name: Validate compose file
+        run: docker compose -f docker-compose.prod.yml config --quiet
+
+      - name: Build images
+        run: docker compose -f docker-compose.prod.yml build
+
+      - name: Validate nginx config
+        run: docker run --rm --add-host api:127.0.0.1 michess-web:latest nginx -t
+
+      - name: Start the stack (migrations run on a fresh PostgreSQL)
+        run: |
+          docker compose -f docker-compose.prod.yml up -d
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/health; then echo; exit 0; fi
+            sleep 3
+          done
+          echo "Stack did not become healthy"; exit 1
+
+      - name: Smoke test through nginx
+        run: |
+          set -e
+          headers=$(curl -fsSI http://localhost:8080/)
+          echo "$headers" | grep -qi "content-security-policy"
+          curl -fsS http://localhost:8080/game/123 | grep -q '<div id="root">'
+          curl -fsS -X POST http://localhost:8080/api/v1/auth/register \
+            -H 'Content-Type: application/json' -d '{"username":"smoke_user","password":"smoke-pass-123"}'
+          token=$(curl -fsS -X POST http://localhost:8080/api/v1/auth/login \
+            -d 'username=smoke_user&password=smoke-pass-123' | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
+          curl -fsS -X POST http://localhost:8080/api/v1/auth/ws-ticket -H "Authorization: Bearer $token"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/v1/openapi.json)" = "404"
+          docker compose -f docker-compose.prod.yml exec -T api python -c \
+            "from src.services.bots.base import resolve_stockfish_path as r; assert r(), 'no stockfish'; print(r())"
+          docker compose -f docker-compose.prod.yml ps worker | grep -q "Up"
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.prod.yml logs --no-color --tail=200

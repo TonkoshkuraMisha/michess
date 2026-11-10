@@ -46,7 +46,7 @@
 
     Get-Job | Stop-Job; Get-Job | Remove-Job
 
-### Вариант Б — Ручной (в 3 терминалах)
+### Вариант Б — Ручной (в 4 терминалах)
 
 **Терминал 1 — Инфраструктура (Docker):**
 
@@ -58,13 +58,26 @@
     alembic upgrade head
     python -m uvicorn src.main:app --host 127.0.0.1 --port 8000 --reload
 
-**Терминал 3 — Фронтенд (Vite):**
+**Терминал 3 — Celery-воркер (фоновый анализ партий):**
+
+    .\michess_env\Scripts\Activate.ps1
+    celery -A src.worker.celery_app worker --loglevel=INFO --pool=solo
+
+`--pool=solo` нужен на Windows: пул prefork у Celery там не работает.
+
+**Терминал 4 — Фронтенд (Vite):**
 
     cd frontend
     npm run dev
 
 * **Фронтенд:** [http://127.0.0.1:3000](http://127.0.0.1:3000)
 * **Swagger API:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
+
+---
+
+## Продакшен
+
+Развёртывание в Docker (nginx, API, Celery, PostgreSQL, Redis) — см. [DEPLOY.md](DEPLOY.md).
 
 ---
 
