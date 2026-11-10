@@ -1,0 +1,102 @@
+# --- FILE: docker-compose.prod.yml ---
+# Продакшен: docker compose -f docker-compose.prod.yml up -d --build
+# Настройки и секреты — в .env (шаблон .env.example, инструкция — DEPLOY.md).
+#
+# Наружу открыт только web (nginx, порт 80): API, БД и Redis доступны лишь внутри сети compose.
+# Поэтому API может доверять X-Forwarded-For от любого адреса этой сети (FORWARDED_ALLOW_IPS).
+
+x-backend: &backend
+  build: .
+  image: michess-backend:latest
+  env_file: .env
+  environment:
+    ENVIRONMENT: production
+    POSTGRES_SERVER: db
+    POSTGRES_PORT: "5432"
+    REDIS_HOST: redis
+    REDIS_PORT: "6379"
+  restart: unless-stopped
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    # AOF: состояние идущих партий и очередь Celery переживают перезапуск Redis.
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+
+  # Одноразовый сервис: применяет миграции до старта API и воркера.
+  migrate:
+    <<: *backend
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  api:
+    <<: *backend
+    environment:
+      ENVIRONMENT: production
+      POSTGRES_SERVER: db
+      POSTGRES_PORT: "5432"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
+      FORWARDED_ALLOW_IPS: "*"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 20s
+
+  # Фоновый анализ завершённых партий (Stockfish).
+  worker:
+    <<: *backend
+    command: ["celery", "-A", "src.worker.celery_app", "worker", "--loglevel=INFO", "--concurrency=${CELERY_CONCURRENCY:-2}"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  web:
+    build: ./frontend
+    image: michess-web:latest
+    ports:
+      - "${HTTP_PORT:-80}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:

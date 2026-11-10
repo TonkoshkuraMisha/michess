@@ -209,7 +209,7 @@
 
 ### Приоритет 3 — инфраструктура и долг
 
-### - [ ] Таск 7.11. Готовность к продакшену (`feat/deploy`)
+### - [x] Таск 7.11. Готовность к продакшену (`feat/deploy`)
 
 * Dockerfile для бэкенда, фронтенда и Celery; prod-compose; nginx (статика + проксирование WS).
 * Celery-воркер нигде не запускается (нет в `start_dev.ps1` и compose) — фоновый анализ партий не работает.
@@ -220,6 +220,13 @@
   а по умолчанию uvicorn принимает кадры до 16 МБ.
 * Стабильный Redis вместо `redis:8.0-M02-alpine` в compose и CI.
 * Проверка `SECRET_KEY` при старте, `CORS_ORIGINS` из окружения, убрать `/ws/ping`; `/health` проверяет БД и Redis.
+* Сделано: `Dockerfile` (API/воркер/миграции, Stockfish из Debian, не root), `frontend/Dockerfile` + nginx
+  (SPA, прокси API/WS, CSP и заголовки безопасности), `docker-compose.prod.yml` (healthcheck, сервис `migrate`,
+  наружу только nginx), `DEPLOY.md`, `.env.example`; Redis 7.4 в compose и CI; `ENVIRONMENT=production`
+  проверяет `SECRET_KEY` и прячет `/docs`; `CORS_ORIGINS` через запятую; `/health` проверяет БД и Redis (503);
+  `/ws/ping` удалён; uvicorn с `--proxy-headers` и `--ws-max-size 16384`; Celery-воркер в `start_dev.ps1`.
+* Проверка образов: Docker локально недоступен — CI-job `production-stack` собирает образы, проверяет
+  `nginx -t`, поднимает стек (миграции на чистом PostgreSQL) и делает smoke-тест через nginx.
 
 ### - [ ] Таск 7.12. Строгий CI
 

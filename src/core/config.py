@@ -1,6 +1,13 @@
 # --- FILE: src/core/config.py ---
 
-from pydantic_settings import BaseSettings, SettingsConfigDict
+import json
+from typing import Annotated
+
+from pydantic import field_validator, model_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+MIN_SECRET_KEY_LENGTH = 32
+_WEAK_SECRET_KEYS = {"secret", "changeme", "change_me", "your-secret-key", "test", "dev"}
 
 
 class Settings(BaseSettings):
@@ -12,8 +19,12 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
 
-    # CORS
-    CORS_ORIGINS: list[str] = [
+    # "production" включает строгие проверки при старте (SECRET_KEY) и прячет /docs.
+    ENVIRONMENT: str = "development"
+
+    # CORS: в .env — через запятую или JSON-списком. В продакшене за nginx фронтенд и API
+    # на одном домене, и CORS не нужен вовсе.
+    CORS_ORIGINS: Annotated[list[str], NoDecode] = [
         "http://127.0.0.1:3000",
         "http://localhost:3000",
         "http://127.0.0.1:5173",
@@ -81,6 +92,35 @@ class Settings(BaseSettings):
     # One-time WebSocket tickets (the JWT never goes into the WS URL)
     WS_TICKET_TTL_S: int = 30
     RATE_LIMIT_WS_TICKETS: int = 30
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def _split_origins(cls, value):
+        if isinstance(value, str):
+            text = value.strip()
+            if text.startswith("["):
+                return json.loads(text)
+            return [origin.strip() for origin in text.split(",") if origin.strip()]
+        return value
+
+    @model_validator(mode="after")
+    def _check_production_secrets(self):
+        """
+        В продакшене слабый SECRET_KEY = возможность подделать токен любого пользователя.
+        Лучше не стартовать вовсе, чем работать с ключом из примера или коротким ключом.
+        """
+        if self.is_production:
+            key = self.SECRET_KEY
+            if len(key) < MIN_SECRET_KEY_LENGTH or key.lower() in _WEAK_SECRET_KEYS or "change-me" in key.lower():
+                raise ValueError(
+                    f"SECRET_KEY must be a random string of at least {MIN_SECRET_KEY_LENGTH} characters "
+                    "in production (e.g. `python -c \"import secrets; print(secrets.token_urlsafe(48))\"`)"
+                )
+        return self
+
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT.strip().lower() == "production"
 
     @property
     def async_database_url(self) -> str:

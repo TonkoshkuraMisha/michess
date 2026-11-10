@@ -1,0 +1,29 @@
+# Контекст сборки образа бэкенда: только то, что нужно для запуска API и воркера.
+.git
+.github
+.idea
+.vscode
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+
+# Окружения и секреты
+michess_env
+venv
+env
+.env
+.env.*
+!.env.example
+
+# Фронтенд собирается своим образом (frontend/Dockerfile)
+frontend
+
+# Windows-бинарники Stockfish: в образ движок ставится из пакетов Debian
+bin
+
+# Локальные данные и служебные файлы
+src/db/data/pgns
+_project_snapshot
+make_snapshot.py
+*.log
+*.sqlite3

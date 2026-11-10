@@ -21,7 +21,7 @@ if (-not (Test-Path (Join-Path $frontendDir ".env")) -and (Test-Path (Join-Path 
 }
 
 # 2. Остановка старых фоновых задач, процессов node и освобождение портов 8000 и 3000
-Get-Job -Name "MichessBackend", "MichessFrontend" -ErrorAction SilentlyContinue | Stop-Job -PassThru | Remove-Job -Force -ErrorAction SilentlyContinue
+Get-Job -Name "MichessBackend", "MichessWorker", "MichessFrontend" -ErrorAction SilentlyContinue | Stop-Job -PassThru | Remove-Job -Force -ErrorAction SilentlyContinue
 
 Stop-Process -Name "node" -Force -ErrorAction SilentlyContinue
 
@@ -95,6 +95,15 @@ Start-Job -Name "MichessBackend" -ScriptBlock {
     & $py -m uvicorn src.main:app --host 127.0.0.1 --port 8000 --reload
 } -ArgumentList $pythonExe, $root | Out-Null
 
+# 8.0. Запуск Celery-воркера (фоновый анализ завершённых партий) в фоне.
+# На Windows пул prefork у Celery не работает — используем solo (одна задача за раз).
+Write-Host "[+] Запуск Celery-воркера (фоновый анализ партий)..." -ForegroundColor Green
+Start-Job -Name "MichessWorker" -ScriptBlock {
+    param($py, $r)
+    Set-Location $r
+    & $py -m celery -A src.worker.celery_app worker --loglevel=INFO --pool=solo
+} -ArgumentList $pythonExe, $root | Out-Null
+
 # 8.1. Запуск Vite Frontend в отдельном видимом окне терминала
 Write-Host "[+] Запуск Vite Frontend (порт 3000 в новом окне)..." -ForegroundColor Green
 Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$frontendDir'; npm run dev"
@@ -126,5 +135,6 @@ Write-Host " Все сервисы запущены! Локальный серв
 Write-Host " Фронтенд: http://127.0.0.1:3000" -ForegroundColor Cyan
 Write-Host " API Docs: http://127.0.0.1:8000/docs" -ForegroundColor Cyan
 Write-Host " Просмотр логов бэкенда: Receive-Job -Name MichessBackend -Keep" -ForegroundColor Gray
+Write-Host " Логи Celery-воркера:   Receive-Job -Name MichessWorker -Keep" -ForegroundColor Gray
 Write-Host " Для остановки бэкенда: Get-Job | Stop-Job; Get-Job | Remove-Job" -ForegroundColor Yellow
 Write-Host "========================================================" -ForegroundColor Green
