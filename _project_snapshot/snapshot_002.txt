@@ -1,7 +1,635 @@
-PROJECT SNAPSHOT — PART 2/14
+PROJECT SNAPSHOT — PART 2/15
 Project: michess
-Files in this part (18): src/api/profile.py, src/api/rate_limit.py, src/api/websockets.py, src/core/config.py, src/core/instance.py, src/core/security.py, src/db/redis.py, src/db/seed.py, src/db/session.py, src/main.py, src/models/__init__.py, src/models/base.py, src/models/game.py, src/models/move.py, src/models/user.py, src/schemas/analysis.py, src/schemas/user.py, src/services/__init__.py
+Files in this part (5): src/api/bots.py, src/api/deps.py, src/api/profile.py, src/api/rate_limit.py, src/api/websockets.py
 ----------------------------------------------------------------------------------------
+
+========================================================================================
+FILE: src/api/bots.py
+========================================================================================
+# --- FILE: src/api/bots.py ---
+
+import asyncio
+import random
+from datetime import UTC, datetime
+
+import chess
+import chess.pgn
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.api import deps
+from src.api.rate_limit import rate_limit
+from src.db import session as db_session
+from src.models.game import Game
+from src.models.user import User
+from src.services.bots.anderssen import anderssen_bot
+from src.services.bots.labourdonnais import labourdonnais_bot
+from src.services.bots.morphy import morphy_bot
+from src.services.bots.paulsen import paulsen_bot
+from src.services.bots.philidor import philidor_bot, resolve_stockfish_path
+from src.services.bots.staunton import staunton_bot
+from src.services.bots.zukertort import zukertort_bot
+from src.services.game_engine import flag_outcome, terminal_outcome
+
+router = APIRouter()
+
+get_db = getattr(deps, "get_db", None) or getattr(db_session, "get_db", None)
+get_current_user = getattr(deps, "get_current_user", None)
+
+AVAILABLE_BOTS = [
+    {
+        "id": "philidor",
+        "name": "Ф.-А. Филидор",
+        "full_name": "Франсуа-Андре Филидор",
+        "era": "1749–1795",
+        "title": "Мастер Просвещения",
+        "rating": 1850,
+        "motto": "Пешки — душа шахмат: именно они определяют атаку и защиту.",
+        "avatar": "/assets/champions/philidor.jpg",
+    },
+    {
+        "id": "labourdonnais",
+        "name": "Л.-Ш. Лабурдонне",
+        "full_name": "Луи-Шарль Лабурдонне",
+        "era": "1795–1840",
+        "title": "Король Комбинаций",
+        "rating": 1950,
+        "motto": "Инициатива, гамбит и стремительная атака на короля!",
+        "avatar": "/assets/champions/labourdonnais.jpg",
+    },
+    {
+        "id": "staunton",
+        "name": "Г. Стаунтон",
+        "full_name": "Говард Стаунтон",
+        "era": "1810–1874",
+        "title": "Основатель Английской Школы",
+        "rating": 2000,
+        "motto": "Фланговый зажим центра, прочная структура и классический расчёт.",
+        "avatar": "/assets/champions/staunton.jpg",
+    },
+    {
+        "id": "anderssen",
+        "name": "А. Андерсен",
+        "full_name": "Адольф Андерсен",
+        "era": "1818–1879",
+        "title": "Маэстро Бессмертных Партий",
+        "rating": 2100,
+        "motto": "Бриллиантовая жертва фигуры ради вскрытия линий и мата королю!",
+        "avatar": "/assets/champions/anderssen.jpg",
+    },
+    {
+        "id": "morphy",
+        "name": "Пол Морфи",
+        "full_name": "Пол Чарльз Морфи",
+        "era": "1837–1884",
+        "title": "Гордость и печаль шахмат",
+        "rating": 2150,
+        "motto": "Развивайте все фигуры с темпом и вскрывайте линии для атаки!",
+        "avatar": "/assets/champions/morphy.jpg",
+    },
+    {
+        "id": "paulsen",
+        "name": "Л. Паульсен",
+        "full_name": "Луи Паульсен",
+        "era": "1833–1891",
+        "title": "Гений Защиты и Двух Слонов",
+        "rating": 2080,
+        "motto": "Гибкая оборона, сила двух слонов и глубокие дебютные новинки.",
+        "avatar": "/assets/champions/paulsen.jpg",
+    },
+    {
+        "id": "zukertort",
+        "name": "И. Цукерторт",
+        "full_name": "Иоганн Герман Цукерторт",
+        "era": "1842–1888",
+        "title": "Триумфатор Лондона 1883",
+        "rating": 2120,
+        "motto": "Универсальная гармония развития и сокрушительные комбинационные бури!",
+        "avatar": "/assets/champions/zukertort.jpg",
+    },
+]
+
+BOT_INSTANCES = {
+    "philidor": philidor_bot,
+    "labourdonnais": labourdonnais_bot,
+    "staunton": staunton_bot,
+    "anderssen": anderssen_bot,
+    "morphy": morphy_bot,
+    "paulsen": paulsen_bot,
+    "zukertort": zukertort_bot,
+}
+
+BOT_METADATA = {b["id"]: b for b in AVAILABLE_BOTS}
+
+# Служебный «хэш» в hashed_password, по которому учётная запись опознаётся как бот.
+# Это не валидный bcrypt-хэш, поэтому войти под ботом невозможно.
+BOT_PASSWORD_MARKER = "!historical_bot_no_login!"
+
+
+def reserved_bot_usernames() -> set[str]:
+    """Имена (и id) ботов, которые нельзя занять при регистрации (сравнение без регистра)."""
+    names: set[str] = set()
+    for bot in AVAILABLE_BOTS:
+        for value in (bot["id"], bot["name"], bot["full_name"]):
+            names.add(str(value).strip().casefold())
+    return names
+
+
+BOT_TEMPO_MULTIPLIER = {
+    "morphy": 0.72,
+    "labourdonnais": 0.78,
+    "anderssen": 0.90,
+    "philidor": 0.95,
+    "zukertort": 1.00,
+    "paulsen": 1.22,
+    "staunton": 1.28,
+}
+
+
+class BotMoveRequest(BaseModel):
+    bot_id: str = Field(default="philidor", description="ID исторического бота")
+    fen: str = Field(..., max_length=100, description="Текущая позиция на доске в формате FEN")
+
+
+class BotMoveResponse(BaseModel):
+    bot_id: str
+    uci: str
+    san: str
+    fen_after: str
+    source: str
+    comment: str
+    thinking_time_ms: int = Field(default=650, description="Рекомендуемое время размышления бота в мс")
+
+
+class BotGameSaveRequest(BaseModel):
+    bot_id: str = Field(..., description="ID исторического бота")
+    player_color: str = Field(..., description="Цвет игрока ('white' или 'black')")
+    result: str = Field(..., description="Результат партии ('1-0', '0-1', '1/2-1/2')")
+    termination: str | None = Field(
+        default=None,
+        description="Для незавершённой на доске позиции: 'resignation' (игрок сдался) или 'timeout' (упал флаг)",
+    )
+    moves_uci: list[str] = Field(default_factory=list, max_length=1000, description="Список сделанных ходов в формате UCI")
+    base_time_ms: int = Field(default=180000, description="Базовый контроль времени в мс")
+    increment_ms: int = Field(default=0, description="Добавление времени на ход в мс")
+
+
+class BotGameSaveResponse(BaseModel):
+    game_id: int
+    status: str
+    result: str
+
+
+def calculate_authentic_thinking_time_ms(
+        bot_id: str,
+        board: chess.Board,
+        uci_move: str,
+        source: str,
+) -> int:
+    """
+    Вычисляет реалистичное человеческое время на ход (в мс) для исторического мастера
+    с учётом его темпа, дебютной книги, единственного ответа или тактической сложности позиции.
+    """
+    legal_moves = list(board.legal_moves)
+    num_legal = len(legal_moves)
+    tempo = BOT_TEMPO_MULTIPLIER.get(bot_id, 1.0)
+
+    if num_legal <= 1:
+        return int(random.randint(240, 380) * tempo)
+
+    if source in ("book", "opening_book"):
+        base_ms = random.randint(360, 680) + board.fullmove_number * 22
+        return int(base_ms * tempo)
+
+    move_obj = chess.Move.from_uci(uci_move)
+    is_capture = board.is_capture(move_obj)
+    gives_check = board.gives_check(move_obj)
+
+    captures_available = sum(1 for m in legal_moves if board.is_capture(m))
+    complexity_ms = min(num_legal * 26, 950) + min(captures_available * 95, 550)
+
+    if board.is_check():
+        complexity_ms += 250
+    if is_capture or gives_check:
+        complexity_ms += 280
+
+    piece_count = len(board.piece_map())
+    if piece_count <= 10:
+        complexity_ms = int(complexity_ms * 0.65)
+
+    raw_ms = (520 + complexity_ms + random.randint(-110, 180)) * tempo
+    return max(320, min(int(raw_ms), 2900))
+
+
+def _detect_eco_code(moves_uci: list[str]) -> str:
+    """Определяет базовый код дебюта ECO по первым ходам партии."""
+    prefix = " ".join(moves_uci[:6])
+    if prefix.startswith("e2e4 e7e5 g1f3 d7d6"):
+        return "C41"
+    if prefix.startswith("e2e4 e7e5 f2f4"):
+        return "C30"
+    if prefix.startswith("e2e4 e7e5 f1c4"):
+        return "C23"
+    if prefix.startswith("e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 b2b4"):
+        return "C51"
+    if prefix.startswith("e2e4 e7e5 g1f3 b8c6 f1c4"):
+        return "C50"
+    if prefix.startswith("e2e4 e7e5 g1f3 b8c6 f1b5"):
+        return "C60"
+    if prefix.startswith("e2e4 c7c5"):
+        return "B20"
+    if prefix.startswith("e2e4 e7e6"):
+        return "C00"
+    if prefix.startswith("c2c4"):
+        return "A10"
+    if prefix.startswith("g1f3"):
+        return "A04"
+    if prefix.startswith("d2d4 d7d5 c2c4"):
+        return "D06"
+    if prefix.startswith("d2d4"):
+        return "D00"
+    if prefix.startswith("e2e4"):
+        return "B00"
+    return "A00"
+
+
+def _replay_moves(moves_uci: list[str]) -> chess.Board:
+    """Переигрывает ходы с историей (нужна для правил повторения); ValueError при нелегальном ходе."""
+    board = chess.Board()
+    for uci_str in moves_uci:
+        try:
+            move = chess.Move.from_uci(uci_str)
+        except ValueError:
+            raise ValueError(f"Некорректный ход в истории: {uci_str}") from None
+        if move not in board.legal_moves:
+            raise ValueError(f"Нелегальный ход в истории: {uci_str}")
+        board.push(move)
+    return board
+
+
+def resolve_bot_game_outcome(board: chess.Board, payload: "BotGameSaveRequest") -> tuple[str, str]:
+    """
+    Итог партии с ботом определяет сервер, а не клиент:
+    - позиция на доске финальная (мат, пат, повторение, ...) — результат с доски;
+    - игрок сдался — только поражение игрока;
+    - упал флаг — победа стороны с неупавшим флагом, но ничья, если у неё нет материала
+      для мата (правило ФИДЕ 6.9). Часы партии с ботом живут на клиенте, поэтому сторону
+      с упавшим флагом сервер берёт из присланного результата.
+    Иначе партия не завершена, и «победу» сохранить нельзя.
+    """
+    outcome = terminal_outcome(board)
+    if outcome is not None:
+        return outcome
+
+    if payload.termination == "resignation":
+        return ("0-1" if payload.player_color == "white" else "1-0"), "resignation"
+
+    if payload.termination == "timeout":
+        if payload.result == "1-0":
+            return flag_outcome(board.fen(), "black")
+        if payload.result == "0-1":
+            return flag_outcome(board.fen(), "white")
+        raise ValueError("Для флага укажите, чья сторона победила по времени")
+
+    raise ValueError("Партия не завершена на доске: укажите termination ('resignation' или 'timeout')")
+
+
+def _build_pgn_string(
+        moves_uci: list[str],
+        white_name: str,
+        white_elo: int,
+        black_name: str,
+        black_elo: int,
+        result: str,
+) -> tuple[str, str]:
+    """Строит валидный PGN-документ с заголовками и возвращает (pgn_text, final_fen)."""
+    board = chess.Board()
+    pgn_game = chess.pgn.Game()
+    pgn_game.headers["Event"] = "Historical Bot Match"
+    pgn_game.headers["Site"] = "Michess Bot Arena"
+    pgn_game.headers["Date"] = datetime.now(UTC).strftime("%Y.%m.%d")
+    pgn_game.headers["Round"] = "-"
+    pgn_game.headers["White"] = white_name
+    pgn_game.headers["Black"] = black_name
+    pgn_game.headers["Result"] = result
+    pgn_game.headers["WhiteElo"] = str(white_elo)
+    pgn_game.headers["BlackElo"] = str(black_elo)
+    pgn_game.headers["ECO"] = _detect_eco_code(moves_uci)
+
+    node: chess.pgn.GameNode = pgn_game
+    for uci_str in moves_uci:
+        move = chess.Move.from_uci(uci_str)
+        if move not in board.legal_moves:
+            raise ValueError(f"Нелегальный ход в истории: {uci_str}")
+        board.push(move)
+        node = node.add_variation(move)
+
+    exporter = chess.pgn.StringExporter(headers=True, variations=False, comments=False)
+    return pgn_game.accept(exporter).strip(), board.fen()
+
+
+async def _get_or_create_bot_user(db: AsyncSession, bot_id: str) -> User:
+    """Находит или создаёт запись исторического бота в таблице пользователей."""
+    meta = BOT_METADATA[bot_id]
+    bot_username = meta["name"]
+
+    stmt = select(User).where(User.username == bot_username)
+    res = await db.execute(stmt)
+    bot_user = res.scalar_one_or_none()
+    if bot_user is not None:
+        if bot_user.hashed_password == BOT_PASSWORD_MARKER:
+            return bot_user
+        # Имя занято человеком (до запрета регистрации имён ботов) — не приписываем ему
+        # партии бота, а заводим бота под служебным именем.
+        bot_username = f"{bot_username} [бот]"
+        res = await db.execute(select(User).where(User.username == bot_username))
+        bot_user = res.scalar_one_or_none()
+        if bot_user is not None:
+            return bot_user
+
+    user_cols = {c.name for c in User.__table__.columns}
+    user_kwargs: dict = {
+        "username": bot_username,
+        "rating": meta["rating"],
+    }
+    if "hashed_password" in user_cols:
+        user_kwargs["hashed_password"] = BOT_PASSWORD_MARKER
+    elif "password_hash" in user_cols:
+        user_kwargs["password_hash"] = BOT_PASSWORD_MARKER
+    if "email" in user_cols:
+        user_kwargs["email"] = f"{bot_id}@michess.local"
+    if "is_cheater" in user_cols:
+        user_kwargs["is_cheater"] = False
+    if "trust_factor" in user_cols:
+        user_kwargs["trust_factor"] = 100
+
+    bot_user = User(**user_kwargs)
+    db.add(bot_user)
+    await db.flush()
+    return bot_user
+
+
+def _prepare_game_kwargs(
+        white_id: int,
+        black_id: int,
+        pgn_text: str,
+        final_fen: str,
+        payload: BotGameSaveRequest,
+) -> dict:
+    """Формирует словарь полей модели Game в соответствии со схемой БД."""
+    game_cols = {c.name: c for c in Game.__table__.columns}
+    kwargs: dict = {}
+
+    if "pgn_date" in game_cols:
+        kwargs["pgn_date"] = datetime.now(UTC).strftime("%Y.%m.%d")
+    if "site" in game_cols:
+        kwargs["site"] = "Michess Bot Arena"
+    if "eco" in game_cols:
+        kwargs["eco"] = _detect_eco_code(payload.moves_uci)
+
+    if "white_player_id" in game_cols:
+        kwargs["white_player_id"] = white_id
+    elif "white_id" in game_cols:
+        kwargs["white_id"] = white_id
+
+    if "black_player_id" in game_cols:
+        kwargs["black_player_id"] = black_id
+    elif "black_id" in game_cols:
+        kwargs["black_id"] = black_id
+
+    if "pgn" in game_cols:
+        kwargs["pgn"] = pgn_text
+    if "board_fen" in game_cols:
+        kwargs["board_fen"] = final_fen
+    elif "fen" in game_cols:
+        kwargs["fen"] = final_fen
+    elif "current_fen" in game_cols:
+        kwargs["current_fen"] = final_fen
+
+    if "result" in game_cols:
+        kwargs["result"] = payload.result
+    if "termination" in game_cols:
+        kwargs["termination"] = payload.termination or "normal"
+    if "is_rated" in game_cols:
+        kwargs["is_rated"] = False
+    if "base_time_ms" in game_cols:
+        kwargs["base_time_ms"] = payload.base_time_ms
+    if "increment_ms" in game_cols:
+        kwargs["increment_ms"] = payload.increment_ms
+
+    if "status" in game_cols:
+        col_type = game_cols["status"].type
+        enums = getattr(col_type, "enums", None)
+        if enums and "COMPLETED" in enums:
+            kwargs["status"] = "COMPLETED"
+        elif enums and "FINISHED" in enums:
+            kwargs["status"] = "FINISHED"
+        else:
+            kwargs["status"] = "COMPLETED"
+
+    if "finished_at" in game_cols:
+        is_tz = getattr(game_cols["finished_at"].type, "timezone", False)
+        now_utc = datetime.now(UTC)
+        kwargs["finished_at"] = now_utc if is_tz else now_utc.replace(tzinfo=None)
+
+    return kwargs
+
+
+@router.get("/list")
+async def get_available_bots():
+    """Возвращает список доступных исторических ботов и статус движка Stockfish."""
+    return {
+        "bots": AVAILABLE_BOTS,
+        "stockfish_active": bool(resolve_stockfish_path()),
+    }
+
+
+@router.post(
+    "/move",
+    response_model=BotMoveResponse,
+    dependencies=[Depends(rate_limit("bot_move", "RATE_LIMIT_BOT_MOVE"))],
+)
+async def get_bot_move(payload: BotMoveRequest):
+    """Принимает FEN позиции и возвращает ответный ход выбранного исторического бота."""
+    bot = BOT_INSTANCES.get(payload.bot_id)
+    if bot is None:
+        raise HTTPException(status_code=404, detail=f"Бот '{payload.bot_id}' не найден")
+
+    try:
+        board = chess.Board(payload.fen)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Некорректный формат FEN") from None
+
+    if board.is_game_over():
+        raise HTTPException(status_code=400, detail="Партия уже завершена")
+
+    result = await asyncio.to_thread(bot.choose_move, payload.fen)
+    thinking_time_ms = calculate_authentic_thinking_time_ms(
+        bot_id=payload.bot_id,
+        board=board,
+        uci_move=result["uci"],
+        source=result["source"],
+    )
+
+    return BotMoveResponse(
+        bot_id=payload.bot_id,
+        uci=result["uci"],
+        san=result["san"],
+        fen_after=result["fen_after"],
+        source=result["source"],
+        comment=result["comment"],
+        thinking_time_ms=thinking_time_ms,
+    )
+
+
+@router.post("/save-game", response_model=BotGameSaveResponse)
+async def save_bot_game(
+        payload: BotGameSaveRequest,
+        db: AsyncSession = Depends(get_db),
+        current_user: User = Depends(get_current_user),
+):
+    """Сохраняет завершённую партию против исторического бота в базу данных."""
+    if payload.bot_id not in BOT_METADATA:
+        raise HTTPException(status_code=404, detail=f"Бот '{payload.bot_id}' не найден")
+
+    if payload.player_color not in ("white", "black"):
+        raise HTTPException(status_code=400, detail="Некорректный цвет игрока")
+
+    if payload.result not in ("1-0", "0-1", "1/2-1/2"):
+        raise HTTPException(status_code=400, detail="Некорректный результат партии")
+
+    if not payload.moves_uci:
+        raise HTTPException(status_code=400, detail="Список ходов пуст")
+
+    try:
+        final_board = _replay_moves(payload.moves_uci)
+        result, termination = resolve_bot_game_outcome(final_board, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    payload = payload.model_copy(update={"result": result, "termination": termination})
+
+    bot_user = await _get_or_create_bot_user(db, payload.bot_id)
+
+    if payload.player_color == "white":
+        white_user, black_user = current_user, bot_user
+    else:
+        white_user, black_user = bot_user, current_user
+
+    try:
+        pgn_text, final_fen = _build_pgn_string(
+            moves_uci=payload.moves_uci,
+            white_name=white_user.username,
+            white_elo=white_user.rating,
+            black_name=black_user.username,
+            black_elo=black_user.rating,
+            result=payload.result,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    game_kwargs = _prepare_game_kwargs(
+        white_id=white_user.id,
+        black_id=black_user.id,
+        pgn_text=pgn_text,
+        final_fen=final_fen,
+        payload=payload,
+    )
+
+    new_game = Game(**game_kwargs)
+    db.add(new_game)
+    await db.commit()
+    await db.refresh(new_game)
+
+    return BotGameSaveResponse(
+        game_id=new_game.id,
+        status="finished",
+        result=result,
+    )
+
+========================================================================================
+FILE: src/api/deps.py
+========================================================================================
+from fastapi import Depends, HTTPException, Query, WebSocketException, status
+from fastapi.security import OAuth2PasswordBearer
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
+
+from src.core.config import settings
+from src.core.security import InvalidTokenError, decode_user_token
+from src.db import redis as redis_module
+from src.db.session import get_db, get_session_factory
+from src.models.user import User
+
+# Схема для извлечения токена из заголовка Authorization: Bearer
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
+
+WS_TICKET_PREFIX = "ws_ticket:"
+
+
+async def user_from_token(db: AsyncSession, token: str) -> User | None:
+    """
+    Пользователь по JWT или None. Токен действителен, только пока его версия совпадает с
+    users.token_version: смена пароля и «выйти на всех устройствах» её увеличивают.
+    """
+    try:
+        user_id, version = decode_user_token(token)
+    except InvalidTokenError:
+        return None
+    user = await db.get(User, user_id)
+    if user is None or user.token_version != version:
+        return None
+    return user
+
+
+async def get_current_user(
+        token: str = Depends(oauth2_scheme),
+        db: AsyncSession = Depends(get_db)
+) -> User:
+    """
+    Dependency for HTTP endpoints to authenticate users via Bearer token in headers.
+    """
+    user = await user_from_token(db, token)
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Could not validate credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return user
+
+
+async def get_current_user_ws(
+        ticket: str = Query(..., max_length=128, description="One-time ticket from POST /auth/ws-ticket"),
+        session_factory: async_sessionmaker[AsyncSession] = Depends(get_session_factory),
+) -> User:
+    """
+    Dependency for WebSocket endpoints: authenticates by a one-time ticket.
+
+    JWT в адресе WebSocket попадал бы в access-логи uvicorn и прокси и жил там сутки. Вместо него
+    клиент получает по HTTP (токен в заголовке) одноразовый тикет на WS_TICKET_TTL_S секунд;
+    GETDEL гарантирует, что тикет сработает ровно один раз.
+
+    Пользователь читается в короткой сессии, которая закрывается сразу: зависимость с get_db
+    держала бы соединение пула всё время, пока открыт WebSocket. Возвращаемый объект
+    отсоединён от сессии, его поля уже загружены.
+    """
+    rejected = WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid or expired ticket")
+    try:
+        raw = await redis_module.redis_client.getdel(f"{WS_TICKET_PREFIX}{ticket}")
+    except Exception as exc:
+        raise WebSocketException(code=status.WS_1011_INTERNAL_ERROR, reason="Ticket store unavailable") from exc
+    if not raw:
+        raise rejected
+
+    user_id_str, _, version_str = str(raw).partition(":")
+    async with session_factory() as db:
+        user = await db.get(User, int(user_id_str))
+
+    # Токены отозвали между выдачей тикета и подключением — тикет тоже недействителен.
+    if user is None or str(user.token_version) != version_str:
+        raise rejected
+    return user
 
 ========================================================================================
 FILE: src/api/profile.py
@@ -9,18 +637,20 @@ FILE: src/api/profile.py
 # --- FILE: src/api/profile.py ---
 
 import time
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
+from sqlalchemy import asc, case, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_, desc, asc, func, case
 from sqlalchemy.orm import aliased
 
-from src.db.session import get_db
-from src.db.seed import ensure_champion_seeded, get_champion_meta, extract_pgn_metadata
 from src.api.deps import get_current_user
-from src.models.user import User
+from src.db.seed import ensure_champion_seeded, extract_pgn_metadata, get_champion_meta
+from src.db.session import get_db
 from src.models.game import Game, GameStatus
+from src.models.user import User
 
 router = APIRouter(prefix="/profile", tags=["Profile & Games"])
 
@@ -173,7 +803,7 @@ async def join_matchmaking_http(
         payload = await _active_game_payload_or_none(db, current_user.id) if err.code == "self_in_game" else None
         if payload:
             return payload
-        raise HTTPException(status_code=409, detail=err.message)
+        raise HTTPException(status_code=409, detail=err.message) from err
     if matched_gid is not None:
         payload = await _build_active_game_payload(db, int(matched_gid), current_user.id)
         if payload:
@@ -199,9 +829,9 @@ async def accept_challenge_http(
     Принимает вызов соперника из лобби по HTTP и возвращает данные начавшейся партии.
     Безопасен к гонкам с WebSocket-сообщением accept_challenge.
     """
-    from src.services.matchmaker import MatchmakingError, matchmaker
     from src.services.connection_manager import manager
     from src.services.game_state import state_manager
+    from src.services.matchmaker import MatchmakingError, matchmaker
 
     if int(target_user_id) == current_user.id:
         raise HTTPException(status_code=400, detail="Нельзя принять собственный вызов")
@@ -222,7 +852,7 @@ async def accept_challenge_http(
             if payload:
                 return payload
         status_code = 404 if err.code == "challenge_gone" else 409
-        raise HTTPException(status_code=status_code, detail=err.message)
+        raise HTTPException(status_code=status_code, detail=err.message) from err
 
     payload = await _build_active_game_payload(db, int(game_id), current_user.id)
     if not payload:
@@ -234,8 +864,8 @@ async def accept_challenge_http(
 @router.get("/games/live")
 async def get_live_games(db: AsyncSession = Depends(get_db)):
     """Возвращает список активных партий, идущих прямо сейчас (для вкладки Live и режима зрителя)."""
-    from src.services.game_state import state_manager
     from src.services.connection_manager import manager
+    from src.services.game_state import state_manager
 
     game_ids = await state_manager.redis.smembers("active_games")
     if not game_ids:
@@ -265,7 +895,7 @@ async def get_live_games(db: AsyncSession = Depends(get_db)):
     users_res = await db.execute(select(User).where(User.id.in_(user_ids)))
     users_map = {u.id: u for u in users_res.scalars().all()}
 
-    live_list = []
+    live_list: list[dict[str, Any]] = []
     for gid, state in active_states:
         white_id = int(state["white_id"])
         black_id = int(state["black_id"])
@@ -440,7 +1070,7 @@ FILE: src/api/rate_limit.py
 ========================================================================================
 # --- FILE: src/api/rate_limit.py ---
 """
-Ограничение частоты запросов к эндпоинтам, нагружающим Stockfish.
+Ограничение частоты запросов: эндпоинты, нагружающие Stockfish, вход и регистрация.
 
 Фиксированное окно в Redis (INCR + EXPIRE). Квота считается на пользователя, если запрос
 пришёл с валидным Bearer-токеном, иначе — на IP-адрес (гостевые партии с ботами и просмотр
@@ -470,41 +1100,93 @@ def _client_identity(request: Request) -> str:
                 return f"user:{subject}"
         except jwt.InvalidTokenError:
             pass
-    host = request.client.host if request.client else "unknown"
-    return f"ip:{host}"
+    return f"ip:{client_ip(request)}"
+
+
+def client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+
+def _window(window_s: int) -> tuple[int, int]:
+    """(номер текущего окна, секунд до его конца)."""
+    now = int(time.time())
+    return now // window_s, max(1, window_s - now % window_s)
+
+
+def _too_many(detail: str, retry_after: int) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+        detail=detail,
+        headers={"Retry-After": str(retry_after)},
+    )
+
+
+async def try_consume(scope: str, identity: str, limit: int, window_s: int) -> bool:
+    """
+    Засчитывает попытку; False, если в текущем окне их уже больше limit.
+    limit <= 0 — без ограничения. При недоступном Redis пропускает (fail-open).
+    """
+    if limit <= 0:
+        return True
+    window_id, _ = _window(window_s)
+    key = f"ratelimit:{scope}:{identity}:{window_id}"
+    redis_client = redis_module.redis_client
+    try:
+        count = await redis_client.incr(key)
+        if count == 1:
+            await redis_client.expire(key, window_s + 1)
+    except Exception as exc:
+        # Redis недоступен — не блокируем пользователей (fail-open), но фиксируем проблему.
+        logger.warning("Rate limiter unavailable for %s: %s", scope, exc)
+        return True
+    return count <= limit
+
+
+async def enforce_rate_limit(scope: str, identity: str, limit: int, window_s: int, detail: str) -> None:
+    """Как try_consume, но для HTTP: бросает 429 с Retry-After."""
+    if not await try_consume(scope, identity, limit, window_s):
+        raise _too_many(detail, _window(window_s)[1])
+
+
+async def ensure_below_limit(scope: str, identity: str, limit: int, window_s: int, detail: str) -> None:
+    """Проверяет счётчик, не увеличивая его (например, неудачных входов): 429, если лимит исчерпан."""
+    if limit <= 0:
+        return
+    window_id, retry_after = _window(window_s)
+    try:
+        count = int(await redis_module.redis_client.get(f"ratelimit:{scope}:{identity}:{window_id}") or 0)
+    except Exception as exc:
+        logger.warning("Rate limiter unavailable for %s: %s", scope, exc)
+        return
+    if count >= limit:
+        raise _too_many(detail, retry_after)
+
+
+async def record_attempt(scope: str, identity: str, window_s: int) -> None:
+    """Увеличивает счётчик без проверки (парный к ensure_below_limit)."""
+    window_id, _ = _window(window_s)
+    key = f"ratelimit:{scope}:{identity}:{window_id}"
+    try:
+        if await redis_module.redis_client.incr(key) == 1:
+            await redis_module.redis_client.expire(key, window_s + 1)
+    except Exception as exc:
+        logger.warning("Rate limiter unavailable for %s: %s", scope, exc)
 
 
 def rate_limit(scope: str, limit_setting: str):
     """
-    Фабрика зависимости FastAPI. limit_setting — имя поля Settings с лимитом на окно,
-    читается при каждом запросе (удобно переопределять в тестах и через .env).
+    Фабрика зависимости FastAPI для эндпоинтов движка. limit_setting — имя поля Settings
+    с лимитом на окно, читается при каждом запросе (удобно переопределять в тестах и через .env).
     """
 
     async def _dependency(request: Request) -> None:
-        limit = int(getattr(settings, limit_setting))
-        window_s = int(settings.RATE_LIMIT_WINDOW_S)
-        if limit <= 0:
-            return
-
-        window_id = int(time.time()) // window_s
-        key = f"ratelimit:{scope}:{_client_identity(request)}:{window_id}"
-        redis_client = redis_module.redis_client
-        try:
-            count = await redis_client.incr(key)
-            if count == 1:
-                await redis_client.expire(key, window_s + 1)
-        except Exception as exc:
-            # Redis недоступен — не блокируем пользователей (fail-open), но фиксируем проблему.
-            logger.warning("Rate limiter unavailable for %s: %s", scope, exc)
-            return
-
-        if count > limit:
-            retry_after = window_s - int(time.time()) % window_s
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Слишком много запросов к движку, попробуйте чуть позже",
-                headers={"Retry-After": str(max(1, retry_after))},
-            )
+        await enforce_rate_limit(
+            scope,
+            _client_identity(request),
+            int(getattr(settings, limit_setting)),
+            int(settings.RATE_LIMIT_WINDOW_S),
+            "Слишком много запросов к движку, попробуйте чуть позже",
+        )
 
     return _dependency
 
@@ -513,21 +1195,24 @@ FILE: src/api/websockets.py
 ========================================================================================
 # --- FILE: src/api/websockets.py ---
 
-import time
+import json
 import logging
+import time
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import Awaitable, Callable
+from typing import Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
-from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from src.db.session import get_db
+from src.api.deps import get_current_user_ws
+from src.api.rate_limit import try_consume
+from src.db.session import get_session_factory
+from src.models.user import User
 from src.services.anticheat import trusted_premove
 from src.services.connection_manager import manager
 from src.services.game_state import state_manager
-from src.api.deps import get_current_user_ws
-from src.models.user import User
 from src.services.matchmaker import MatchmakingError, matchmaker
 
 logger = logging.getLogger(__name__)
@@ -601,8 +1286,8 @@ async def create_rematch_game(db: AsyncSession, prev_state: dict, connection_man
 
 async def _fresh_current_user(db: AsyncSession, user: User) -> User:
     """
-    WebSocket-сессия живёт всё соединение (expire_on_commit=False), и объект пользователя в ней
-    не видит изменения рейтинга после сыгранных партий — перечитываем его из БД.
+    Объект пользователя из аутентификации загружен при подключении и не видит изменения
+    рейтинга после сыгранных партий — перечитываем его в сессии текущего действия.
     """
     return await db.get(User, user.id, populate_existing=True) or user
 
@@ -855,7 +1540,14 @@ async def _resign(ctx: ActionContext, data: dict) -> None:
 @action("offer_draw")
 async def _offer_draw(ctx: ActionContext, data: dict) -> None:
     game = await _participant_game(ctx, data, in_progress=True)
-    await state_manager.update_game_state(game.game_id, {"draw_offer": str(ctx.user.id)})
+    # Одно предложение на позицию: повторное (или после отказа) — только после следующего хода.
+    # Иначе предложения ничьей превращаются в способ дёргать соперника в цейтноте.
+    version = str(game.state.get("state_version", 0))
+    offered_key = f"draw_offered_at_{ctx.user.id}"
+    if str(game.state.get(offered_key, "")) == version:
+        await ctx.error("Ничью можно предложить один раз за ход", code="draw_offer_too_soon")
+        return
+    await state_manager.update_game_state(game.game_id, {"draw_offer": str(ctx.user.id), offered_key: version})
     await manager.send_personal_message(
         {"event": "draw_offered", "game_id": game.game_id, "player_id": ctx.user.id},
         game.opponent_of(ctx.user.id),
@@ -977,7 +1669,7 @@ async def _make_move(ctx: ActionContext, data: dict) -> None:
         return
 
     game = GameRef(gid, {}, res["white_id"], res["black_id"])
-    move_data = res.get("move_data")
+    move_data: dict = res.get("move_data") or {}
 
     if move_data:
         server_elapsed_ms = res.get("elapsed_ms", 0)
@@ -1025,907 +1717,158 @@ async def _make_move(ctx: ActionContext, data: dict) -> None:
 # ---------------------------------------------------------------------------------------
 
 
+async def _dispatch_action(
+        session_factory: async_sessionmaker[AsyncSession],
+        user: User,
+        action_name: str,
+        handler: ActionHandler,
+        data: dict,
+) -> None:
+    """
+    Выполняет одно действие в собственной короткой сессии БД.
+
+    Сессия закрывается сразу после действия, и соединение возвращается в пул. Одна сессия на
+    всё WebSocket-соединение держала бы транзакцию открытой, пока игрок подключён: при паре
+    десятков игроков в лобби пул бы кончился и все запросы к БД вставали бы по таймауту.
+    """
+    async with session_factory() as db:
+        ctx = ActionContext(user=user, db=db)
+        try:
+            await handler(ctx, data)
+        except _Ignore:
+            pass
+        except MatchmakingError as mm_err:
+            await ctx.error(mm_err.message, code=mm_err.code)
+        except Exception:
+            logger.exception("Error processing WS action '%s' for user %s", action_name, user.id)
+            await ctx.error("Internal server error processing action")
+
+
+# --- Ограничение частоты сообщений ------------------------------------------------------
+#
+# Лимиты считаются на пользователя (все его вкладки и воркеры вместе) в Redis, по группам
+# действий: (сообщений, окно в секундах). Ходы ограничены щедро — пуля с премувами не должна
+# упираться в лимит, — а чат и предложения строго, чтобы их нельзя было использовать для спама.
+
+WS_MAX_MESSAGE_CHARS = 4096
+WS_RATE_LIMITS: dict[str, tuple[int, int]] = {
+    "moves": (60, 10),
+    "chat": (5, 10),
+    "offers": (6, 60),
+    "lobby": (20, 10),
+    "other": (30, 10),
+}
+_ACTION_GROUPS = {
+    "make_move": "moves",
+    "chat_message": "chat",
+    "offer_draw": "offers", "offer_rematch": "offers",
+    "join_queue": "lobby", "leave_queue": "lobby", "accept_challenge": "lobby",
+    "create_invite": "lobby", "accept_invite": "lobby",
+}
+# Соединение, которое продолжает слать сообщения сверх лимита, закрывается: столько
+# отклонённых сообщений за WS_STRIKE_WINDOW_S честный клиент не набирает.
+WS_MAX_STRIKES = 30
+WS_STRIKE_WINDOW_S = 10.0
+WS_CLOSE_POLICY_VIOLATION = 1008
+
+
+class _StrikeCounter:
+    def __init__(self):
+        self._times: list[float] = []
+
+    def add(self) -> int:
+        now = time.monotonic()
+        self._times = [t for t in self._times if now - t < WS_STRIKE_WINDOW_S]
+        self._times.append(now)
+        return len(self._times)
+
+
+async def _within_rate_limit(user_id: int, action_name: str) -> bool:
+    group = _ACTION_GROUPS.get(action_name, "other")
+    limit, window_s = WS_RATE_LIMITS[group]
+    return await try_consume(f"ws:{group}", f"user:{user_id}", limit, window_s)
+
+
+async def _reject_rate_limited(user: User, action_name: str, data: dict) -> None:
+    payload: dict[str, Any] = {
+        "event": "error",
+        "code": "rate_limited",
+        "action": action_name,
+        "message": "Слишком много действий подряд, подождите немного",
+    }
+    if action_name == "make_move" and data.get("game_id"):
+        # Клиент уже показал ход на доске — возвращаем ему актуальную позицию.
+        try:
+            state = await state_manager.get_game_state(int(data["game_id"]))
+        except (TypeError, ValueError):
+            state = None
+        if state:
+            payload.update(
+                fen=state.get("board_fen"), pgn=state.get("pgn", ""),
+                state_version=int(state.get("state_version", 0)),
+            )
+    await manager.send_personal_message(payload, user.id)
+
+
+async def _handle_message(
+        session_factory: async_sessionmaker[AsyncSession], user: User, raw: str,
+) -> bool:
+    """Разбирает и выполняет одно сообщение. False — сообщение отклонено (засчитывается в флуд)."""
+    if len(raw) > WS_MAX_MESSAGE_CHARS:
+        await manager.send_personal_message(
+            {"event": "error", "code": "message_too_large", "message": "Слишком длинное сообщение"}, user.id,
+        )
+        return False
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        return False  # мусор: ответа не шлём, но засчитываем
+    if not isinstance(data, dict):
+        return False
+
+    action_name = str(data.get("action") or "")
+    handler = ACTION_HANDLERS.get(action_name)
+    if handler is None:
+        return True  # неизвестное действие (например, от более новой версии клиента) — пропускаем
+
+    if not await _within_rate_limit(user.id, action_name):
+        await _reject_rate_limited(user, action_name, data)
+        return False
+
+    await _dispatch_action(session_factory, user, action_name, handler, data)
+    return True
+
+
 @router.websocket("/matchmaking")
 async def matchmaking_endpoint(
         websocket: WebSocket,
         current_user: User = Depends(get_current_user_ws),
-        db: AsyncSession = Depends(get_db)
+        session_factory: async_sessionmaker[AsyncSession] = Depends(get_session_factory),
 ):
     await manager.connect(websocket, current_user.id)
-    ctx = ActionContext(user=current_user, db=db)
+    strikes = _StrikeCounter()
     try:
-        await ctx.send({"event": "connected", "message": f"Welcome, {current_user.username}!"})
-        await _send_active_game_snapshot_if_exists(db, current_user)
+        await manager.send_personal_message(
+            {"event": "connected", "message": f"Welcome, {current_user.username}!"}, current_user.id,
+        )
+        async with session_factory() as db:
+            await _send_active_game_snapshot_if_exists(db, current_user)
 
         while True:
-            data = await websocket.receive_json()
-            if not isinstance(data, dict):
-                continue
-            action_name = data.get("action")
-            handler = ACTION_HANDLERS.get(action_name)
-            if handler is None:
-                continue
-
-            try:
-                await handler(ctx, data)
-            except _Ignore:
-                pass
-            except MatchmakingError as mm_err:
-                await ctx.error(mm_err.message, code=mm_err.code)
-            except Exception:
-                logger.exception("Error processing WS action '%s' for user %s", action_name, current_user.id)
-                await ctx.error("Internal server error processing action")
+            raw = await websocket.receive_text()
+            accepted = await _handle_message(session_factory, current_user, raw)
+            if not accepted and strikes.add() >= WS_MAX_STRIKES:
+                logger.warning("Closing WebSocket of user %s: message flood", current_user.id)
+                await websocket.close(code=WS_CLOSE_POLICY_VIOLATION)
+                break
 
     except WebSocketDisconnect:
-        # Закрываем только это соединение: другие вкладки пользователя остаются онлайн.
-        await manager.disconnect(current_user.id, websocket)
+        pass
     except Exception:
         logger.exception("WebSocket unexpected error for user %s", current_user.id)
+    finally:
+        # Закрываем только это соединение: другие вкладки пользователя остаются онлайн.
         await manager.disconnect(current_user.id, websocket)
 
-========================================================================================
-FILE: src/core/config.py
-========================================================================================
-# --- FILE: src/core/config.py ---
-
-from pydantic_settings import BaseSettings, SettingsConfigDict
-
-
-class Settings(BaseSettings):
-    """
-    Application core settings configuration.
-    Uses Pydantic for environment variable validation.
-    """
-    PROJECT_NAME: str = "Michess API"
-    VERSION: str = "1.0.0"
-    API_V1_STR: str = "/api/v1"
-
-    # CORS
-    CORS_ORIGINS: list[str] = [
-        "http://127.0.0.1:3000",
-        "http://localhost:3000",
-        "http://127.0.0.1:5173",
-        "http://localhost:5173",
-    ]
-
-    # PostgreSQL
-    POSTGRES_USER: str
-    POSTGRES_PASSWORD: str
-    POSTGRES_SERVER: str
-    POSTGRES_PORT: int
-    POSTGRES_DB: str
-
-    # Redis
-    REDIS_HOST: str = "127.0.0.1"
-    REDIS_PORT: int = 6379
-
-    # Security (JWT)
-    SECRET_KEY: str
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
-
-    # Anti-Cheat Thresholds
-    AC_BLUR_RATE_HIGH: float = 0.8
-    AC_BLUR_RATE_MED: float = 0.5
-    AC_MIN_MOVE_TIME_MS: int = 3000
-    AC_MAX_MOVE_TIME_MS: int = 8000
-    AC_STOCKFISH_PATH: str = "bin/stockfish-windows-x86-64-avx2.exe"
-    AC_MAX_CENTIPAWN_LOSS: int = 15
-    # A client-claimed premove is trusted only if the server saw the move arrive this fast
-    AC_PREMOVE_MAX_ELAPSED_MS: int = 600
-
-    # Matchmaking: rating window (±N) used when the client sends no explicit range; 0 = unrestricted
-    MATCHMAKING_DEFAULT_RATING_RANGE: int = 0
-
-    # Stockfish engine pool
-    ENGINE_POOL_SIZE: int = 2
-    ENGINE_ACQUIRE_TIMEOUT_S: float = 10.0
-
-    # Rate limits for engine-backed endpoints (requests per window, per user or per IP for guests)
-    RATE_LIMIT_WINDOW_S: int = 60
-    RATE_LIMIT_BOT_MOVE: int = 90
-    RATE_LIMIT_POSITION_ANALYSIS: int = 30
-    RATE_LIMIT_GAME_ANALYSIS: int = 6
-
-    @property
-    def async_database_url(self) -> str:
-        """Assembles the database connection string for asyncpg."""
-        return (
-            f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
-            f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
-        )
-
-    model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=True,
-        extra="ignore",
-    )
-
-
-settings = Settings()
-
-========================================================================================
-FILE: src/core/instance.py
-========================================================================================
-# --- FILE: src/core/instance.py ---
-"""Идентификатор текущего процесса-воркера (uvicorn / gunicorn worker) для координации через Redis."""
-
-import os
-import socket
-import uuid
-
-WORKER_ID: str = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:8]}"
-
-========================================================================================
-FILE: src/core/security.py
-========================================================================================
-from datetime import datetime, timedelta, timezone
-import jwt
-from passlib.context import CryptContext
-from src.core.config import settings
-
-# Password hashing context using bcrypt algorithm
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-
-
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verifies a plain password against a hashed counterpart.
-
-    A hash passlib cannot identify (e.g. the marker stored for bot accounts) never matches
-    instead of raising and turning a login attempt into a 500.
-    """
-    try:
-        return pwd_context.verify(plain_password, hashed_password)
-    except (ValueError, TypeError):
-        return False
-
-
-def get_password_hash(password: str) -> str:
-    """Generates a secure bcrypt hash for a plain password."""
-    return pwd_context.hash(password)
-
-
-def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
-    """Generates a JSON Web Token (JWT) for user authentication."""
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
-    else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
-    return encoded_jwt
-
-========================================================================================
-FILE: src/db/redis.py
-========================================================================================
-import redis.asyncio as redis
-from src.core.config import settings
-
-# Глобальный асинхронный клиент Redis.
-redis_client = redis.Redis(
-    host=settings.REDIS_HOST,
-    port=settings.REDIS_PORT,
-    decode_responses=True
-)
-
-========================================================================================
-FILE: src/db/seed.py
-========================================================================================
-# --- FILE: src/db/seed.py ---
-
-import asyncio
-import io
-import logging
-import os
-import re
-import sys
-import zipfile
-from pathlib import Path
-import requests
-from sqlalchemy import select, or_, func
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from src.db.session import AsyncSessionLocal
-from src.models.game import Game, GameStatus
-from src.models.user import User
-
-logger = logging.getLogger(__name__)
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-PRIMARY_PGNS_DIR = PROJECT_ROOT / "src" / "db" / "data" / "pgns"
-PGNS_DIRS = [
-    PRIMARY_PGNS_DIR,
-    PROJECT_ROOT / "data" / "pgns",
-]
-
-PGN_MENTOR_BASE_URL = "https://www.pgnmentor.com/players"
-
-CHAMPIONS_META: dict[str, dict] = {
-    "steinitz": {"id": "Steinitz", "canonical": "Steinitz, Wilhelm", "rating": 2650, "exclude": ()},
-    "lasker": {"id": "Lasker", "canonical": "Lasker, Emanuel", "rating": 2720,
-               "exclude": ("edward", "berthold", "alfred")},
-    "rubinstein": {"id": "Rubinstein", "canonical": "Rubinstein, Akiba", "rating": 2690, "exclude": ("simon",)},
-    "capablanca": {"id": "Capablanca", "canonical": "Capablanca, Jose Raul", "rating": 2725, "exclude": ()},
-    "alekhine": {"id": "Alekhine", "canonical": "Alekhine, Alexander", "rating": 2690, "exclude": ("alexei",)},
-    "euwe": {"id": "Euwe", "canonical": "Euwe, Max", "rating": 2650, "exclude": ()},
-    "keres": {"id": "Keres", "canonical": "Keres, Paul", "rating": 2670, "exclude": ()},
-    "botvinnik": {"id": "Botvinnik", "canonical": "Botvinnik, Mikhail", "rating": 2720, "exclude": ()},
-    "geller": {"id": "Geller", "canonical": "Geller, Efim", "rating": 2665, "exclude": ("jakov",)},
-    "korchnoi": {"id": "Korchnoi", "canonical": "Korchnoi, Viktor", "rating": 2695, "exclude": ()},
-    "smyslov": {"id": "Smyslov", "canonical": "Smyslov, Vasily", "rating": 2690, "exclude": ()},
-    "tal": {"id": "Tal", "canonical": "Tal, Mikhail", "rating": 2705, "exclude": ()},
-    "petrosian": {"id": "Petrosian", "canonical": "Petrosian, Tigran", "rating": 2690,
-                  "exclude": ("tigran l", "arshak", "manuel")},
-    "spassky": {"id": "Spassky", "canonical": "Spassky, Boris", "rating": 2690, "exclude": ()},
-    "fischer": {"id": "Fischer", "canonical": "Fischer, Robert James", "rating": 2785, "exclude": ("julie",)},
-    "karpov": {"id": "Karpov", "canonical": "Karpov, Anatoly", "rating": 2780, "exclude": ()},
-    "kasparov": {"id": "Kasparov", "canonical": "Kasparov, Garry", "rating": 2851, "exclude": ("sergey",)},
-    "kramnik": {"id": "Kramnik", "canonical": "Kramnik, Vladimir", "rating": 2817, "exclude": ()},
-    "anand": {"id": "Anand", "canonical": "Anand, Viswanathan", "rating": 2817, "exclude": ()},
-    "carlsen": {"id": "Carlsen", "canonical": "Carlsen, Magnus", "rating": 2882, "exclude": ("henrik",)},
-    "ding": {"id": "Ding", "canonical": "Ding, Liren", "rating": 2816, "exclude": ("yilun",)},
-}
-
-WHITE_TAG_RE = re.compile(r'\[White\s+"([^"]+)"\]')
-BLACK_TAG_RE = re.compile(r'\[Black\s+"([^"]+)"\]')
-RESULT_TAG_RE = re.compile(r'\[Result\s+"([^"]+)"\]')
-DATE_TAG_RE = re.compile(r'\[(?:Event)?Date\s+"([^"]+)"\]')
-SITE_TAG_RE = re.compile(r'\[Site\s+"([^"]+)"\]')
-ECO_TAG_RE = re.compile(r'\[ECO\s+"([^"]+)"\]')
-
-_SEED_LOCKS: dict[str, asyncio.Lock] = {}
-
-
-def extract_pgn_metadata(raw_pgn: str, fallback_result: str = "*") -> dict[str, str | None]:
-    result_str = fallback_result or "*"
-    pgn_date: str | None = None
-    site: str | None = None
-    eco: str | None = None
-
-    if not raw_pgn:
-        return {"result": result_str, "pgn_date": None, "site": None, "eco": None}
-
-    res_match = RESULT_TAG_RE.search(raw_pgn)
-    if res_match:
-        result_str = res_match.group(1).strip()[:10]
-    elif result_str == "*":
-        tail_match = re.search(r"(1-0|0-1|1/2-1/2)\s*$", raw_pgn.strip())
-        if tail_match:
-            result_str = tail_match.group(1)
-
-    for d_match in DATE_TAG_RE.finditer(raw_pgn):
-        val = d_match.group(1).strip()
-        if val and not val.startswith("?"):
-            pgn_date = val[:20]
-            break
-
-    s_match = SITE_TAG_RE.search(raw_pgn)
-    if s_match and s_match.group(1).strip() != "?":
-        site = s_match.group(1).strip()[:100]
-
-    e_match = ECO_TAG_RE.search(raw_pgn)
-    if e_match and e_match.group(1).strip() != "?":
-        eco = e_match.group(1).strip()[:10]
-
-    return {
-        "result": result_str,
-        "pgn_date": pgn_date,
-        "site": site,
-        "eco": eco,
-    }
-
-
-def get_champion_meta(username_or_id: str) -> dict | None:
-    key = (username_or_id or "").strip().lower()
-    if key in CHAMPIONS_META:
-        return CHAMPIONS_META[key]
-    for meta in CHAMPIONS_META.values():
-        if meta["canonical"].lower() == key:
-            return meta
-    return None
-
-
-def find_champion_pgn_file(champ_id: str) -> Path | None:
-    target_lower = f"{champ_id.lower()}.pgn"
-    alt_lower = f"{champ_id.lower()}_all_games.pgn"
-
-    for folder in PGNS_DIRS:
-        if not folder.exists():
-            continue
-        for pgn_path in folder.glob("*.pgn"):
-            name_low = pgn_path.name.lower()
-            if name_low in (target_lower, alt_lower) and pgn_path.stat().st_size > 100:
-                return pgn_path
-    return None
-
-
-def _download_champion_pgn_sync(champ_id: str) -> Path | None:
-    if "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST"):
-        return None
-
-    PRIMARY_PGNS_DIR.mkdir(parents=True, exist_ok=True)
-    target_path = PRIMARY_PGNS_DIR / f"{champ_id}.pgn"
-    if target_path.exists() and target_path.stat().st_size > 100:
-        return target_path
-
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0.0.0 Safari/537.36",
-        "Referer": "https://www.pgnmentor.com/files.html",
-    }
-
-    zip_url = f"{PGN_MENTOR_BASE_URL}/{champ_id}.zip"
-    pgn_url = f"{PGN_MENTOR_BASE_URL}/{champ_id}.pgn"
-
-    try:
-        resp = requests.get(zip_url, headers=headers, timeout=30)
-        if resp.status_code == 200 and len(resp.content) > 200:
-            with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
-                pgn_members = [m for m in zf.namelist() if m.lower().endswith(".pgn")]
-                if pgn_members:
-                    raw_bytes = zf.read(pgn_members[0])
-                    text = raw_bytes.decode("utf-8", errors="ignore")
-                    if "[Event " in text:
-                        target_path.write_text(text, encoding="utf-8")
-                        return target_path
-    except Exception as exc:
-        logger.warning("Не удалось скачать ZIP для %s (%s), пробуем прямой .pgn...", champ_id, exc)
-
-    try:
-        resp = requests.get(pgn_url, headers=headers, timeout=30)
-        if resp.status_code == 200 and "[Event " in resp.text:
-            target_path.write_text(resp.text, encoding="utf-8")
-            return target_path
-    except Exception as exc:
-        logger.error("Ошибка загрузки PGN для %s: %s", champ_id, exc)
-
-    return None
-
-
-def _is_target_champion_name(raw_name: str, champ_key: str, meta: dict) -> bool:
-    low = raw_name.lower()
-    if any(ex in low for ex in meta.get("exclude", ())):
-        return False
-    # Надёжное сопоставление по фамилии (даже при сокращении инициалов в PGN Mentor)
-    surname = meta["canonical"].split(",")[0].strip().lower()
-    if surname in low or champ_key in low:
-        return True
-    return False
-
-
-def _split_pgn_games(content: str) -> list[str]:
-    cleaned = content.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n").strip()
-    if not cleaned:
-        return []
-    chunks = re.split(r'(?m)^(?=\[Event\s+")', cleaned)
-    return [c.strip() for c in chunks if c.strip() and "[White " in c]
-
-
-async def ensure_champion_seeded(db: AsyncSession, username_or_id: str) -> User | None:
-    meta = get_champion_meta(username_or_id)
-    if not meta:
-        return None
-
-    champ_key = meta["id"].lower()
-    lock = _SEED_LOCKS.setdefault(champ_key, asyncio.Lock())
-
-    async with lock:
-        canonical_name = meta["canonical"]
-        res = await db.execute(
-            select(User).where(
-                or_(User.username == canonical_name, User.username == meta["id"])
-            )
-        )
-        champ_user = res.scalars().first()
-
-        if champ_user is not None:
-            count_q = select(func.count(Game.id)).where(
-                or_(Game.white_player_id == champ_user.id, Game.black_player_id == champ_user.id),
-                Game.status == GameStatus.COMPLETED,
-            )
-            games_count = (await db.execute(count_q)).scalar() or 0
-            if games_count > 0:
-                return champ_user
-
-        all_users_res = await db.execute(select(User))
-        users_by_name: dict[str, User] = {u.username: u for u in all_users_res.scalars().all()}
-
-        if champ_user is None:
-            champ_user = User(
-                username=canonical_name,
-                hashed_password="!historical_archive_no_login!",
-                rating=meta["rating"],
-                is_cheater=False,
-                trust_factor=100,
-            )
-            db.add(champ_user)
-            await db.flush()
-            users_by_name[canonical_name] = champ_user
-
-        pgn_file = find_champion_pgn_file(meta["id"])
-        if not pgn_file or not pgn_file.exists():
-            pgn_file = await asyncio.to_thread(_download_champion_pgn_sync, meta["id"])
-
-        if not pgn_file or not pgn_file.exists():
-            await db.commit()
-            return champ_user
-
-        content = pgn_file.read_text(encoding="utf-8", errors="ignore")
-        raw_games = _split_pgn_games(content)
-        if not raw_games:
-            await db.commit()
-            return champ_user
-
-        new_opponents: dict[str, User] = {}
-        parsed_entries: list[tuple[str, str, dict, str]] = []
-
-        for raw_pgn in raw_games:
-            w_match = WHITE_TAG_RE.search(raw_pgn)
-            b_match = BLACK_TAG_RE.search(raw_pgn)
-            if not w_match or not b_match:
-                continue
-
-            w_raw = w_match.group(1).strip()[:50]
-            b_raw = b_match.group(1).strip()[:50]
-            meta_fields = extract_pgn_metadata(raw_pgn)
-
-            w_name = canonical_name if _is_target_champion_name(w_raw, champ_key, meta) else w_raw
-            b_name = canonical_name if _is_target_champion_name(b_raw, champ_key, meta) else b_raw
-
-            if w_name != canonical_name and b_name != canonical_name:
-                continue
-
-            for opp_name in (w_name, b_name):
-                if opp_name not in users_by_name and opp_name not in new_opponents:
-                    opp_meta = get_champion_meta(opp_name)
-                    opp_rating = opp_meta["rating"] if opp_meta else 2450
-                    new_opponents[opp_name] = User(
-                        username=opp_name,
-                        hashed_password="!historical_archive_no_login!",
-                        rating=opp_rating,
-                        is_cheater=False,
-                        trust_factor=100,
-                    )
-
-            parsed_entries.append((w_name, b_name, meta_fields, raw_pgn))
-
-        if new_opponents:
-            db.add_all(new_opponents.values())
-            await db.flush()
-            users_by_name.update(new_opponents)
-
-        existing_pgns_res = await db.execute(
-            select(Game.pgn).where(
-                or_(Game.white_player_id == champ_user.id, Game.black_player_id == champ_user.id)
-            )
-        )
-        existing_pgns = {row[0] for row in existing_pgns_res.all() if row[0]}
-
-        games_to_insert: list[Game] = []
-        for w_name, b_name, meta_fields, raw_pgn in parsed_entries:
-            if raw_pgn in existing_pgns:
-                continue
-            existing_pgns.add(raw_pgn)
-
-            w_user = users_by_name[w_name]
-            b_user = users_by_name[b_name]
-            games_to_insert.append(
-                Game(
-                    white_player_id=w_user.id,
-                    black_player_id=b_user.id,
-                    pgn=raw_pgn,
-                    status=GameStatus.COMPLETED,
-                    result=meta_fields["result"],
-                    pgn_date=meta_fields["pgn_date"],
-                    site=meta_fields["site"],
-                    eco=meta_fields["eco"],
-                    is_rated=True,
-                )
-            )
-
-        if games_to_insert:
-            db.add_all(games_to_insert)
-
-        await db.commit()
-        logger.info(
-            "Импортировано %d партий для чемпиона %s из %s",
-            len(games_to_insert),
-            canonical_name,
-            pgn_file.name,
-        )
-        return champ_user
-
-
-async def seed_all_champions() -> None:
-    print(f"=== Полный импорт архивов 21 чемпиона мира (Корень: {PROJECT_ROOT}) ===")
-    async with AsyncSessionLocal() as db:
-        for _, meta in CHAMPIONS_META.items():
-            user = await ensure_champion_seeded(db, meta["id"])
-            if user:
-                count_q = select(func.count(Game.id)).where(
-                    or_(Game.white_player_id == user.id, Game.black_player_id == user.id),
-                    Game.status == GameStatus.COMPLETED,
-                )
-                total = (await db.execute(count_q)).scalar() or 0
-                print(f"[+] {meta['id']:12s} ({meta['canonical']:24s}): в базе {total:4d} партий")
-    print("=== Импорт всех чемпионов успешно завершён! ===")
-
-
-if __name__ == "__main__":
-    asyncio.run(seed_all_champions())
-
-========================================================================================
-FILE: src/db/session.py
-========================================================================================
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
-from src.core.config import settings
-
-# Create asynchronous engine using configuration URL
-engine = create_async_engine(
-    settings.async_database_url,
-    echo=False,
-    future=True,
-)
-
-# Create asynchronous session factory
-AsyncSessionLocal = async_sessionmaker(
-    bind=engine,
-    autoflush=False,
-    autocommit=False,
-    expire_on_commit=False,
-)
-
-async def get_db():
-    """
-    Dependency generator that yields an asynchronous database session.
-    Ensures proper cleanup after request completion.
-    """
-    async with AsyncSessionLocal() as session:
-        yield session
-
-========================================================================================
-FILE: src/main.py
-========================================================================================
-# --- FILE: src/main.py ---
-
-import asyncio
-import logging
-from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
-
-from src.core.config import settings
-from src.api.auth import router as auth_router
-from src.api.websockets import router as ws_router
-from src.api import bots
-from src.api.profile import router as profile_router
-from src.api.analysis import router as analysis_router
-from src.db.redis import redis_client
-from src.services.game_state import state_manager
-from src.services.connection_manager import manager
-from src.services.engine_pool import close_all_engine_pools
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-)
-logger = logging.getLogger(__name__)
-
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    """Lifespan context manager for handling startup and shutdown events gracefully."""
-    logger.info("Starting up %s...", settings.PROJECT_NAME)
-    timeout_task = asyncio.create_task(state_manager.check_timeouts_loop(manager))
-
-    yield
-
-    timeout_task.cancel()
-    try:
-        await asyncio.gather(timeout_task, return_exceptions=True)
-    except asyncio.CancelledError:
-        pass
-
-    logger.info("Shutting down %s...", settings.PROJECT_NAME)
-    await asyncio.to_thread(close_all_engine_pools)
-    await redis_client.aclose()
-
-
-def create_app() -> FastAPI:
-    app = FastAPI(
-        title=settings.PROJECT_NAME,
-        version=settings.VERSION,
-        lifespan=lifespan,
-        docs_url="/docs",
-        openapi_url=f"{settings.API_V1_STR}/openapi.json",
-    )
-
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=settings.CORS_ORIGINS,
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
-
-    app.include_router(auth_router, prefix=settings.API_V1_STR)
-    app.include_router(ws_router, prefix=settings.API_V1_STR)
-    app.include_router(profile_router, prefix=settings.API_V1_STR)
-    app.include_router(analysis_router, prefix=settings.API_V1_STR)
-    app.include_router(bots.router, prefix="/api/v1/bots", tags=["bots"])
-
-    return app
-
-
-app = create_app()
-
-
-@app.get("/health")
-async def health_check() -> dict:
-    return {"status": "healthy", "version": settings.VERSION}
-
-
-@app.websocket("/ws/ping")
-async def websocket_test_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    try:
-        await websocket.send_json({"event": "connected", "message": "Connection established"})
-        while True:
-            data = await websocket.receive_text()
-            await websocket.send_json({"event": "echo", "received": data})
-    except WebSocketDisconnect:
-        logger.info("WebSocket client disconnected normally.")
-    except Exception as e:
-        logger.error("WebSocket connection error: %s", e)
-
-
-if __name__ == "__main__":
-    uvicorn.run("src.main:app", host="127.0.0.1", port=8000, reload=True)
-
-========================================================================================
-FILE: src/models/__init__.py
-========================================================================================
-from src.models.base import Base
-from src.models.user import User
-from src.models.game import Game
-from src.models.move import Move
-
-# This ensures all models are loaded when Alembic imports this file.
-
-========================================================================================
-FILE: src/models/base.py
-========================================================================================
-from sqlalchemy.orm import DeclarativeBase
-
-class Base(DeclarativeBase):
-    """
-    Base class for all SQLAlchemy declarative models.
-    """
-    pass
-
-========================================================================================
-FILE: src/models/game.py
-========================================================================================
-# --- FILE: src/models/game.py ---
-
-import enum
-from datetime import datetime
-from sqlalchemy import String, Integer, BigInteger, Boolean, DateTime, ForeignKey, Enum, Text, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from src.models.base import Base
-
-
-class GameStatus(str, enum.Enum):
-    PENDING = "PENDING"
-    IN_PROGRESS = "IN_PROGRESS"
-    COMPLETED = "COMPLETED"
-    ABORTED = "ABORTED"
-
-
-class Game(Base):
-    __tablename__ = "games"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
-    white_player_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    black_player_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-
-    pgn: Mapped[str | None] = mapped_column(String, nullable=True)
-    status: Mapped[GameStatus] = mapped_column(
-        Enum(GameStatus, name="gamestatus"),
-        default=GameStatus.PENDING,
-        nullable=False,
-        index=True,
-    )
-
-    base_time_ms: Mapped[int] = mapped_column(Integer, default=180000, server_default="180000", nullable=False)
-    increment_ms: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
-    is_rated: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
-
-    state_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
-    turn: Mapped[str] = mapped_column(String(1), default="w", server_default="w", nullable=False)
-    board_fen: Mapped[str] = mapped_column(
-        String,
-        default="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-        server_default="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
-        nullable=False,
-    )
-
-    white_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    black_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    last_move_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
-
-    result: Mapped[str | None] = mapped_column(String(10), nullable=True)
-    termination: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    winner_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
-
-    white_initial_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    black_initial_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    white_rating_delta: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    black_rating_delta: Mapped[int | None] = mapped_column(Integer, nullable=True)
-
-    pgn_date: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
-    site: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
-    eco: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
-
-    analysis_json: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True),
-        server_default=func.now(),
-        nullable=False,
-    )
-    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
-
-    white_player = relationship("User", foreign_keys=[white_player_id])
-    black_player = relationship("User", foreign_keys=[black_player_id])
-    moves = relationship("Move", cascade="all, delete-orphan")
-
-========================================================================================
-FILE: src/models/move.py
-========================================================================================
-# --- FILE: src/models/move.py ---
-
-from sqlalchemy import String, Integer, Boolean, ForeignKey, DateTime
-from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.sql import func
-from datetime import datetime
-
-from src.models.base import Base
-
-
-class Move(Base):
-    """
-    Authoritative Move Journal & Anti-Cheat Telemetry.
-    """
-    __tablename__ = "moves"
-
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    game_id: Mapped[int] = mapped_column(ForeignKey("games.id"), index=True)
-    player_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
-
-    # Порядковый номер полухода (ply)
-    move_number: Mapped[int] = mapped_column(Integer)
-
-    # --- CHESS DATA ---
-    notation: Mapped[str] = mapped_column(String(10))  # Универсальный UCI (e.g., e2e4)
-    san: Mapped[str | None] = mapped_column(String(10), nullable=True)  # Для красивого отображения (e.g., Nf3)
-    fen_after: Mapped[str | None] = mapped_column(String, nullable=True)  # Состояние доски ПОСЛЕ хода
-    # ------------------
-
-    # --- TELEMETRY ---
-    time_taken_ms: Mapped[int] = mapped_column(Integer)  # Client-side estimation
-    window_blurred_before_move: Mapped[bool] = mapped_column(Boolean, default=False)
-    is_premove: Mapped[bool] = mapped_column(Boolean, default=False)
-    network_lag_ms: Mapped[int] = mapped_column(Integer, default=0)
-
-    # Server-side timestamp
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-========================================================================================
-FILE: src/models/user.py
-========================================================================================
-from sqlalchemy import String, Boolean, Integer, DateTime
-from sqlalchemy.orm import Mapped, mapped_column
-from sqlalchemy.sql import func
-from datetime import datetime
-
-from src.models.base import Base
-
-
-class User(Base):
-    """
-    Core user model for authentication and matchmaking.
-    """
-    __tablename__ = "users"
-
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
-    username: Mapped[str] = mapped_column(String(50), unique=True, index=True)
-    hashed_password: Mapped[str] = mapped_column(String)
-
-    # ELO or Glicko-2 rating
-    rating: Mapped[int] = mapped_column(Integer, default=1200)
-
-    # Anti-cheat specific fields
-    is_cheater: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
-    trust_factor: Mapped[int] = mapped_column(Integer, default=100)
-
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-
-========================================================================================
-FILE: src/schemas/analysis.py
-========================================================================================
-# --- FILE: src/schemas/analysis.py ---
-
-from pydantic import BaseModel, Field
-
-
-class PositionAnalysisRequest(BaseModel):
-    moves: list[str] = Field(default_factory=list, max_length=1000, description="Список ходов в формате SAN или UCI")
-
-
-class MoveEvaluationItem(BaseModel):
-    ply: int
-    move_number: int
-    color: str
-    san: str
-    uci: str
-    eval_cp: int
-    eval_display: str
-    mate: int | None = None
-    best_move_uci: str | None = None
-    cp_loss: int
-    classification: str
-    symbol: str
-
-
-class SideSummaryStats(BaseModel):
-    accuracy: float
-    best: int
-    good: int
-    inaccuracies: int
-    mistakes: int
-    blunders: int
-    avg_cp_loss: float
-
-
-class FullGameAnalysisResponse(BaseModel):
-    game_id: int
-    engine: str
-    white: SideSummaryStats
-    black: SideSummaryStats
-    moves: list[MoveEvaluationItem]
-
-========================================================================================
-FILE: src/schemas/user.py
-========================================================================================
-from pydantic import BaseModel, Field, ConfigDict
-from datetime import datetime
-
-class UserCreate(BaseModel):
-    """Schema for incoming user registration data."""
-    username: str = Field(..., min_length=3, max_length=50, description="Unique username")
-    password: str = Field(..., min_length=8, description="Strong password")
-
-class UserResponse(BaseModel):
-    """Schema for outgoing user data (password excluded)."""
-    id: int
-    username: str
-    rating: int
-    is_cheater: bool
-    trust_factor: int
-    created_at: datetime
-
-    # This config allows Pydantic to read data directly from SQLAlchemy models
-    model_config = ConfigDict(from_attributes=True)
-
-========================================================================================
-FILE: src/services/__init__.py
-========================================================================================
-
-
 ----------------------------------------------------------------------------------------
-END OF PART 2/14
+END OF PART 2/15

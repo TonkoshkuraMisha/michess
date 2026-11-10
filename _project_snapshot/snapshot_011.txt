@@ -1,7 +1,1145 @@
-PROJECT SNAPSHOT — PART 11/14
+PROJECT SNAPSHOT — PART 11/15
 Project: michess
-Files in this part (4): frontend/src/components/Chessboard.tsx (chunk 3), frontend/src/components/chessboard/__tests__/boardUtils.test.ts, frontend/src/components/chessboard/boardUtils.ts, frontend/src/components/chessboard/types.ts
+Files in this part (1): frontend/src/components/Chessboard.tsx (chunk 2)
 ----------------------------------------------------------------------------------------
+                                                    }}
+                                                >
+                                                    <div className="min-w-0">
+                                                        <span className="truncate font-bold">{opt.label}</span>
+                                                        <div className="text-xs text-boxwood/70 mt-0.5 leading-snug">
+                                                            {opt.details}
+                                                        </div>
+                                                    </div>
+                                                    {isSelected && <div
+                                                        className="w-2 h-2 rounded-full bg-amber-500 shrink-0 mt-1.5"/>}
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {selectedTimeControl.isManual && (
+                        <div
+                            className="p-2 rounded bg-black/40 border border-amber-700/40 flex flex-col gap-1.5 text-xs">
+                            <div
+                                className="text-[11px] uppercase tracking-wider text-amber-400 font-bold flex items-center gap-1.5">
+                                <Sliders size={12}/> Ручная настройка времени
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <label className="flex flex-col gap-0.5 text-xs text-boxwood/85">
+                                    <span>Время (мин):</span>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        max={240}
+                                        value={manualBaseMinutes}
+                                        onChange={(e) => setManualBaseMinutes(Math.max(1, Math.min(240, Number(e.target.value) || 1)))}
+                                        className="bg-black/60 border border-amber-700/50 rounded px-2 py-1 text-amber-200 font-mono text-xs outline-none"
+                                    />
+                                </label>
+                                <label className="flex flex-col gap-0.5 text-xs text-boxwood/85">
+                                    <span>Бонус / Delay (сек):</span>
+                                    <input
+                                        type="number"
+                                        min={0}
+                                        max={180}
+                                        value={manualIncSeconds}
+                                        onChange={(e) => setManualIncSeconds(Math.max(0, Math.min(180, Number(e.target.value) || 0)))}
+                                        className="bg-black/60 border border-amber-700/50 rounded px-2 py-1 text-amber-200 font-mono text-xs outline-none"
+                                    />
+                                </label>
+                            </div>
+                        </div>
+                    )}
+
+                    {!gameId ? (
+                        <div className="grid grid-cols-[1fr_auto] gap-2">
+                            <button
+                                onClick={isSearching ? cancelMatchmaking : startMatchmaking}
+                                className={`flex items-center justify-center gap-2 px-3 py-1.5 font-bold text-xs sm:text-sm rounded-md transition shadow border cursor-pointer ${
+                                    isSearching
+                                        ? 'bg-red-900/85 text-red-100 border-red-700 hover:bg-red-900'
+                                        : 'bg-boxwood text-acacia-dark border-amber-700/50 hover:bg-boxwood-light'
+                                }`}
+                            >
+                                {isSearching ? <Loader2 className="animate-spin" size={15}/> : <Users size={15}/>}
+                                {isSearching ? 'Отменить поиск' : 'Найти соперника'}
+                            </button>
+
+                            <button
+                                type="button"
+                                onClick={() => setShowInvitePanel(prev => !prev)}
+                                className={`px-2.5 py-1.5 rounded-md border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow ${
+                                    showInvitePanel
+                                        ? 'bg-amber-700 text-white border-amber-400'
+                                        : 'bg-black/45 hover:bg-black/65 text-amber-200 border-amber-700/50'
+                                }`}
+                                title="Создать ссылку для игры с другом"
+                            >
+                                <Link2 size={14}/> С другом
+                            </button>
+                        </div>
+                    ) : (
+                        <div
+                            className="text-center py-1.5 px-3 rounded bg-emerald-950/60 border border-emerald-700/50 text-emerald-300 text-xs sm:text-sm font-bold">
+                            {gameOverResult ? `Партия завершена (${gameOverResult})` : 'Идет рейтинговая партия'}
+                        </div>
+                    )}
+
+                    {showInvitePanel && !gameId && (
+                        <div className="p-2 rounded bg-black/45 border border-amber-700/40 flex flex-col gap-1.5">
+                            <div className="flex items-center justify-between text-xs font-bold text-amber-200">
+                                <span>Цвет в партии с другом:</span>
+                                <div
+                                    className="flex items-center gap-1 bg-black/50 p-0.5 rounded border border-amber-900/50">
+                                    {(['white', 'random', 'black'] as const).map(c => (
+                                        <button
+                                            key={c}
+                                            type="button"
+                                            onClick={() => setInviteColorPref(c)}
+                                            className={`px-2 py-0.5 rounded text-xs font-bold transition cursor-pointer ${
+                                                inviteColorPref === c ? 'bg-amber-700 text-white' : 'text-boxwood/70 hover:text-amber-200'
+                                            }`}
+                                        >
+                                            {c === 'white' ? '♔ Белые' : c === 'black' ? '♚ Чёрные' : '🎲 Случайно'}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {!createdInviteCode ? (
+                                <button
+                                    type="button"
+                                    onClick={handleCreatePrivateInvite}
+                                    className="w-full py-1.5 px-3 rounded bg-amber-800/70 hover:bg-amber-700 text-amber-100 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow"
+                                >
+                                    <Link2 size={13}/> Сгенерировать и скопировать ссылку
+                                </button>
+                            ) : (
+                                <div className="flex items-center gap-1.5">
+                                    <input
+                                        type="text"
+                                        readOnly
+                                        value={`${window.location.origin}/challenge/${createdInviteCode}`}
+                                        className="flex-1 bg-black/60 border border-amber-700/50 rounded px-2 py-1 text-xs font-mono text-amber-200 outline-none"
+                                    />
+                                    <button
+                                        type="button"
+                                        onClick={handleCopyInviteLink}
+                                        className="px-2.5 py-1 rounded bg-emerald-800 hover:bg-emerald-700 text-emerald-100 text-xs font-bold flex items-center gap-1 shrink-0 cursor-pointer"
+                                    >
+                                        {inviteCopied ? <Check size={13}/> : <Copy size={13}/>}
+                                        {inviteCopied ? 'Скопировано' : 'Копия'}
+                                    </button>
+                                </div>
+                            )}
+                        </div>
+                    )}
+                </div>
+
+                <div
+                    className="grid grid-cols-2 gap-1.5 p-1 bg-acacia-dark rounded-md border border-amber-900/50 shrink-0">
+                    <button
+                        type="button"
+                        onClick={() => setLeftSectionTab('bots')}
+                        className={`py-1.5 px-2.5 rounded text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                            leftSectionTab === 'bots'
+                                ? 'bg-amber-700 text-white shadow border border-amber-500/50'
+                                : 'text-boxwood/75 hover:text-amber-200 hover:bg-white/5'
+                        }`}
+                    >
+                        <Bot size={15}/> Исторические боты
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setLeftSectionTab('lobby')}
+                        className={`py-1.5 px-2.5 rounded text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                            leftSectionTab === 'lobby'
+                                ? 'bg-amber-700 text-white shadow border border-amber-500/50'
+                                : 'text-boxwood/75 hover:text-amber-200 hover:bg-white/5'
+                        }`}
+                    >
+                        <Radio size={14}
+                               className={filteredQueue.length + liveGames.length > 0 ? 'text-emerald-400 animate-pulse' : ''}/>
+                        <span>Лобби / Live</span>
+                        <span className="text-xs font-mono px-1.5 py-0.2 rounded bg-black/40 text-amber-300">
+                            {filteredQueue.length + liveGames.length}
+                        </span>
+                    </button>
+                </div>
+
+                {leftSectionTab === 'bots' ? (
+                    <div
+                        className="flex-1 min-h-0 bg-acacia-dark p-2.5 rounded-md border border-amber-700/40 flex flex-col justify-between gap-2 shadow-inner overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
+                        <div className="grid grid-cols-2 gap-1.5">
+                            {HISTORICAL_BOTS_LIST.map((botItem) => {
+                                const isSelected = selectedBotId === botItem.id;
+                                return (
+                                    <button
+                                        key={botItem.id}
+                                        type="button"
+                                        onClick={() => setSelectedBotId(botItem.id)}
+                                        className={`p-1.5 rounded-md text-left transition cursor-pointer flex items-center gap-2 border ${
+                                            isSelected
+                                                ? 'bg-amber-800/80 text-white border-amber-400 shadow'
+                                                : 'bg-black/35 text-boxwood/85 border-amber-900/40 hover:border-amber-600/50 hover:bg-black/55'
+                                        }`}
+                                    >
+                                        <img
+                                            src={botItem.avatar}
+                                            alt={botItem.shortName}
+                                            onError={(e) => {
+                                                const img = e.target as HTMLImageElement;
+                                                if (!img.src.endsWith(botItem.fallbackAvatar)) {
+                                                    img.src = botItem.fallbackAvatar;
+                                                }
+                                            }}
+                                            className={`w-8 h-8 rounded-full object-cover shrink-0 border ${
+                                                isSelected ? 'border-amber-300' : 'border-amber-700/60'
+                                            }`}
+                                        />
+                                        <div className="min-w-0 flex-1">
+                                            <div className="text-xs font-bold truncate leading-tight">
+                                                {botItem.shortName}
+                                            </div>
+                                            <div className="text-[11px] font-mono text-amber-300/90">
+                                                Эло {botItem.rating}
+                                            </div>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+
+                        <div className="p-2.5 rounded-md bg-black/40 border border-amber-800/50 flex flex-col gap-2">
+                            <div className="flex items-center gap-2.5">
+                                <img
+                                    src={selectedBotProfile.avatar}
+                                    alt={selectedBotProfile.name}
+                                    onError={(e) => {
+                                        const img = e.target as HTMLImageElement;
+                                        if (!img.src.endsWith(selectedBotProfile.fallbackAvatar)) {
+                                            img.src = selectedBotProfile.fallbackAvatar;
+                                        }
+                                    }}
+                                    className="w-12 h-12 rounded-lg object-cover border-2 border-amber-500/80 shadow-md shrink-0"
+                                />
+                                <div className="min-w-0 flex-1">
+                                    <div className="flex items-center justify-between gap-1">
+                                        <span className="text-sm font-bold text-amber-200 truncate">
+                                            {selectedBotProfile.name}
+                                        </span>
+                                        {activeBot === selectedBotProfile.id && !gameOverResult && (
+                                            <span
+                                                className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-600/50 shrink-0">
+                                                В игре
+                                            </span>
+                                        )}
+                                    </div>
+                                    <div className="text-xs text-amber-400 font-semibold">
+                                        {selectedBotProfile.title}
+                                    </div>
+                                    <div className="text-[11px] text-boxwood/75 font-mono">
+                                        Годы: {selectedBotProfile.era} • Рейтинг ~{selectedBotProfile.rating}
+                                    </div>
+                                </div>
+                            </div>
+
+                            <p className="text-xs italic text-boxwood/90 leading-snug bg-black/30 p-2 rounded border border-amber-900/30">
+                                «{selectedBotProfile.motto}»
+                            </p>
+
+                            <div className="grid grid-cols-3 gap-1.5">
+                                <button
+                                    type="button"
+                                    disabled={!!gameId && !gameOverResult}
+                                    onClick={() => startHistoricalBotGame(selectedBotId, 'white')}
+                                    className="py-1.5 px-2 text-xs font-bold rounded-md bg-boxwood text-acacia-dark hover:bg-boxwood-light disabled:opacity-40 transition cursor-pointer shadow"
+                                >
+                                    ♔ Белыми
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={!!gameId && !gameOverResult}
+                                    onClick={() => startHistoricalBotGame(selectedBotId, 'random')}
+                                    className="py-1.5 px-2 text-xs font-bold rounded-md bg-amber-700 text-white border border-amber-500/50 hover:bg-amber-600 disabled:opacity-40 transition cursor-pointer shadow"
+                                >
+                                    🎲 Случайно
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={!!gameId && !gameOverResult}
+                                    onClick={() => startHistoricalBotGame(selectedBotId, 'black')}
+                                    className="py-1.5 px-2 text-xs font-bold rounded-md bg-black/70 text-amber-200 border border-amber-700/60 hover:bg-black disabled:opacity-40 transition cursor-pointer shadow"
+                                >
+                                    ♚ Чёрными
+                                </button>
+                            </div>
+                        </div>
+
+                        {activeBotProfile && (
+                            <div
+                                className="p-2 rounded-md bg-black/55 border border-amber-600/40 text-xs text-amber-100">
+                                <div
+                                    className="font-bold text-amber-400 mb-0.5 flex items-center justify-between text-xs">
+                                    <span className="flex items-center gap-1.5">
+                                        <MessageSquareQuote size={13}/> Мысль ({activeBotProfile.shortName}):
+                                    </span>
+                                    {isBotThinking && (
+                                        <span className="animate-pulse text-amber-300 font-mono text-[11px]">
+                                            обдумывает ход...
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="text-xs text-boxwood-light leading-snug">
+                                    {botComment || 'Посмотрим, как развернётся борьба за центр.'}
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                ) : (
+                    <div
+                        className="flex-1 min-h-0 bg-acacia-dark rounded-md border border-amber-900/50 p-2.5 flex flex-col shadow-inner">
+                        <div
+                            className="grid grid-cols-2 gap-1.5 p-1 bg-black/40 rounded border border-amber-900/40 mb-2 shrink-0">
+                            <button
+                                type="button"
+                                onClick={() => setLobbyTab('lobby')}
+                                className={`py-1.5 px-2 rounded text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                                    lobbyTab === 'lobby'
+                                        ? 'bg-amber-700 text-amber-100 shadow'
+                                        : 'text-boxwood/70 hover:text-amber-200'
+                                }`}
+                            >
+                                <span>Вызовы в лобби</span>
+                                <span
+                                    className="text-xs font-mono px-1.5 rounded bg-black/40">{filteredQueue.length}</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setLobbyTab('live')}
+                                className={`py-1.5 px-2 rounded text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
+                                    lobbyTab === 'live'
+                                        ? 'bg-amber-700 text-amber-100 shadow'
+                                        : 'text-boxwood/70 hover:text-amber-200'
+                                }`}
+                            >
+                                <Radio size={13}
+                                       className={liveGames.length > 0 ? 'text-emerald-400 animate-pulse' : ''}/>
+                                <span>Идут сейчас (Live)</span>
+                                <span className="text-xs font-mono px-1.5 rounded bg-black/40">{liveGames.length}</span>
+                            </button>
+                        </div>
+
+                        <div
+                            className="flex-1 min-h-0 overflow-y-auto space-y-2 text-sm [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
+                            {lobbyTab === 'lobby' ? (
+                                filteredQueue.length === 0 ? (
+                                    <div
+                                        className="h-full flex flex-col items-center justify-center p-4 text-boxwood/60 text-center text-xs sm:text-sm">
+                                        <span>
+                                            {isSearching
+                                                ? 'Вы в очереди. Ожидание соперников...'
+                                                : 'В лобби пока нет открытых вызовов. Нажмите «Найти соперника» выше.'}
+                                        </span>
+                                    </div>
+                                ) : (
+                                    filteredQueue.map((p) => (
+                                        <div
+                                            key={p.user_id}
+                                            className="p-2.5 bg-black/45 rounded-md border border-amber-600/30 flex justify-between items-center hover:border-amber-500/60 transition"
+                                        >
+                                            <div>
+                                                <span className="text-amber-300 font-bold text-sm">{p.username}</span>
+                                                <div className="text-xs text-boxwood/75 font-mono">
+                                                    Рейтинг: {p.rating} • {Math.round(p.base_time_ms / 60000)}+{(p.increment_ms || 0) / 1000}
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                disabled={!!gameId && !gameOverResult}
+                                                onClick={() => acceptChallenge(p.user_id)}
+                                                className="px-3 py-1.5 bg-emerald-800 hover:bg-emerald-700 disabled:opacity-40 text-emerald-100 rounded text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer"
+                                            >
+                                                <Play size={13}/> Принять
+                                            </button>
+                                        </div>
+                                    ))
+                                )
+                            ) : (
+                                liveGames.length === 0 ? (
+                                    <div
+                                        className="h-full flex flex-col items-center justify-center p-4 text-boxwood/60 text-center text-xs sm:text-sm">
+                                        <span>Сейчас нет активных PvP-партий.</span>
+                                    </div>
+                                ) : (
+                                    liveGames.map((lg) => (
+                                        <div
+                                            key={lg.game_id}
+                                            className="p-2.5 bg-black/45 rounded-md border border-amber-600/30 flex justify-between items-center hover:border-amber-500/60 transition gap-2"
+                                        >
+                                            <div className="min-w-0">
+                                                <div className="text-amber-200 font-bold truncate text-sm">
+                                                    {lg.white_username} <span
+                                                    className="text-boxwood/50">vs</span> {lg.black_username}
+                                                </div>
+                                                <div className="text-xs text-boxwood/75 font-mono">
+                                                    {Math.round(lg.base_time_ms / 60000)}+{(lg.increment_ms || 0) / 1000} •
+                                                    👁 {lg.spectators_count}
+                                                </div>
+                                            </div>
+                                            <button
+                                                type="button"
+                                                disabled={!!gameId && !gameOverResult}
+                                                onClick={() => handleSpectateGame(lg.game_id)}
+                                                className="px-3 py-1.5 bg-amber-800 hover:bg-amber-700 disabled:opacity-40 text-amber-100 rounded text-xs font-bold transition flex items-center gap-1.5 shrink-0 shadow cursor-pointer"
+                                            >
+                                                <Eye size={13}/> Смотреть
+                                            </button>
+                                        </div>
+                                    ))
+                                )
+                            )}
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* ЦЕНТРАЛЬНАЯ КОЛОНКА: ИГРОКИ И ШАХМАТНАЯ ДОСКА */}
+            <div className="xl:h-full flex flex-col items-center justify-center gap-2 order-1 xl:order-2 shrink-0">
+
+                <div
+                    style={{width: `${responsiveBoardPx}px`}}
+                    className={`bg-acacia-dark px-3 py-1.5 rounded-lg shadow-heavy border-2 border-amber-900/50 flex justify-between items-center text-boxwood-light shrink-0 ${isResizing ? 'transition-none' : 'transition-colors'}`}
+                >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        {isBotOnTop && activeBotProfile ? (
+                            <img
+                                src={activeBotProfile.avatar}
+                                alt={activeBotProfile.name}
+                                onError={(e) => {
+                                    const img = e.target as HTMLImageElement;
+                                    if (!img.src.endsWith(activeBotProfile.fallbackAvatar)) {
+                                        img.src = activeBotProfile.fallbackAvatar;
+                                    }
+                                }}
+                                className="w-9 h-9 rounded-md object-cover border-2 border-amber-500/70 shrink-0 shadow"
+                            />
+                        ) : (
+                            <div
+                                className={`w-9 h-9 rounded-md flex items-center justify-center border border-amber-600/30 font-bold text-lg shrink-0 ${
+                                    topIsWhite ? 'bg-boxwood text-acacia-dark' : 'bg-acacia text-amber-200'
+                                }`}
+                            >
+                                {topIsWhite ? '♙' : '♟'}
+                            </div>
+                        )}
+                        <div className="min-w-0">
+                            <div className="font-bold text-sm sm:text-base flex items-center gap-2 leading-tight">
+                                <span className="truncate">
+                                    {(gameId || activeBot || spectatingGameId) ? topPlayerInfo.username : (topIsWhite ? 'Белые (Разбор)' : 'Чёрные (Разбор)')}
+                                </span>
+                                {(gameId || activeBot || spectatingGameId) && (
+                                    <span
+                                        className="text-xs px-1.5 py-0.5 rounded bg-black/45 text-amber-400 border border-amber-600/25 flex items-center gap-1 font-mono">
+                                        {topPlayerInfo.rating}
+                                        {ratingInfo && (
+                                            <span
+                                                className={topIsWhite ? (Number(ratingInfo.white_delta) >= 0 ? 'text-emerald-400' : 'text-red-400') : (Number(ratingInfo.black_delta) >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+                                                ({topIsWhite ? (Number(ratingInfo.white_delta) >= 0 ? `+${ratingInfo.white_delta}` : ratingInfo.white_delta) : (Number(ratingInfo.black_delta) >= 0 ? `+${ratingInfo.black_delta}` : ratingInfo.black_delta)})
+                                            </span>
+                                        )}
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-1.5 text-xs text-amber-200/90 min-h-[16px]">
+                                <span className="tracking-tight truncate">{topCaptured.join('')}</span>
+                                {topAdvantage > 0 && (
+                                    <span
+                                        className="text-[11px] font-mono font-bold px-1.5 rounded bg-amber-900/60 text-amber-300">
+                                        +{topAdvantage}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    <div
+                        className="bg-[#1A120B] px-3.5 py-1 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-xl sm:text-2xl font-bold tracking-wider text-amber-400 min-w-[116px] sm:min-w-[124px] text-center">
+                        {(gameId || activeBot || spectatingGameId) ? formatTime(topPlayerTime) : formatTime(topIdlePreviewMs)}
+                    </div>
+                </div>
+
+                {/* ШАХМАТНАЯ ДОСКА С ПОДДЕРЖКОЙ TOUCH / POINTER EVENTS */}
+                <div
+                    ref={boardContainerRef}
+                    onContextMenu={(e) => {
+                        e.preventDefault();
+                        if (premove || pendingPromotion || selectedSquare) {
+                            setPremove(null);
+                            setPendingPromotion(null);
+                            setSelectedSquare(null);
+                        }
+                    }}
+                    style={{
+                        width: `${responsiveBoardPx}px`,
+                        height: `${responsiveBoardPx}px`,
+                        backgroundColor: activeTheme.border
+                    }}
+                    className={`p-2.5 rounded-lg shadow-heavy border-2 border-amber-950/80 relative select-none touch-none group/board shrink-0 ${isResizing ? 'transition-none ring-2 ring-amber-500/60' : 'transition-colors'}`}
+                >
+                    {activeTheme.useWoodGrain && (
+                        <div
+                            className="absolute inset-0 opacity-25 mix-blend-multiply pointer-events-none"
+                            style={{backgroundImage: "url('/assets/textures/wood-grain.png')"}}
+                        />
+                    )}
+
+                    {pendingPromotion && (() => {
+                        const fileIdx = displayedFiles.indexOf(pendingPromotion.to[0]);
+                        const rankIdx = displayedRanks.indexOf(pendingPromotion.to[1]);
+                        const openDownwards = rankIdx <= 3;
+                        const clampedLeftPercent = Math.min(Math.max((fileIdx + 0.5) * 12.5, 22), 78);
+
+                        return (
+                            <div
+                                className="absolute inset-0 z-50 bg-black/55 backdrop-blur-[1px] flex items-center justify-center rounded-[2px]"
+                                onClick={() => setPendingPromotion(null)}
+                            >
+                                <div
+                                    style={{
+                                        left: `${clampedLeftPercent}%`,
+                                        top: openDownwards ? '6%' : 'auto',
+                                        bottom: openDownwards ? 'auto' : '6%',
+                                        transform: 'translateX(-50%)'
+                                    }}
+                                    onClick={(e) => e.stopPropagation()}
+                                    className="absolute bg-[#1A120B] border-2 border-amber-500 rounded-lg p-3 shadow-2xl flex flex-col items-center gap-2.5"
+                                >
+                                    <div className="flex items-center justify-between w-full gap-3 px-1">
+                                        <span className="text-xs font-bold uppercase tracking-wider text-amber-300">
+                                            Превращение пешки ({pendingPromotion.to})
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setPendingPromotion(null)}
+                                            className="text-boxwood/60 hover:text-amber-300 transition cursor-pointer"
+                                            title="Отмена (Esc)"
+                                        >
+                                            <X size={15}/>
+                                        </button>
+                                    </div>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        {PROMOTION_OPTIONS.map((opt) => (
+                                            <button
+                                                key={opt.type}
+                                                type="button"
+                                                onClick={() => handlePromotionSelect(opt.type)}
+                                                className="w-16 h-18 rounded-md bg-acacia-dark hover:bg-amber-800/70 border border-amber-600/50 hover:border-amber-300 transition flex flex-col items-center justify-between py-2 px-1 shadow cursor-pointer group"
+                                                title={opt.label}
+                                            >
+                                                <div
+                                                    className="w-10 h-10 flex items-center justify-center overflow-hidden shrink-0">
+                                                    {renderPieceSvg({type: opt.type, color: pendingPromotion.color})}
+                                                </div>
+                                                <span
+                                                    className="text-xs font-bold text-amber-200 group-hover:text-white leading-none">
+                                                    {opt.label}
+                                                </span>
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })()}
+
+                    <div
+                        className="grid grid-cols-8 grid-rows-8 w-full h-full border border-black/60 relative z-10 shadow-inner-board rounded-[2px] overflow-hidden">
+                        {displayedRanks.map((rank) =>
+                            displayedFiles.map((file) => {
+                                const rIdx = RANKS.indexOf(rank);
+                                const fIdx = FILES.indexOf(file);
+                                const isDark = (rIdx + fIdx) % 2 !== 0;
+                                const squareId = `${file}${rank}`;
+
+                                const piece = boardState[rIdx][fIdx];
+
+                                const isSelected = selectedSquare === squareId;
+                                const isLastMove = lastMove && (lastMove.from === squareId || lastMove.to === squareId);
+                                const isPremoveSquare = premove && (premove.from === squareId || premove.to === squareId);
+                                const isLegalTarget = legalTargetSquares.has(squareId);
+                                const isBeingDragged = dragState?.from === squareId;
+
+                                return (
+                                    <div
+                                        key={squareId}
+                                        data-square={squareId}
+                                        onClick={() => handleSquareClick(squareId)}
+                                        style={{
+                                            backgroundColor: isDark ? activeTheme.dark : activeTheme.light
+                                        }}
+                                        className="w-full h-full flex items-center justify-center relative cursor-pointer transition-colors duration-75"
+                                    >
+                                        {activeTheme.useWoodGrain && (
+                                            <div
+                                                className="absolute inset-0 opacity-15 mix-blend-multiply pointer-events-none"
+                                                style={{backgroundImage: "url('/assets/textures/wood-grain.png')"}}
+                                            />
+                                        )}
+
+                                        {isLastMove && !isSelected && !isPremoveSquare && (
+                                            <div className="absolute inset-0 bg-amber-300/35 z-10 pointer-events-none"/>
+                                        )}
+
+                                        {isPremoveSquare && (
+                                            <div
+                                                className="absolute inset-0 bg-rose-500/45 ring-2 ring-inset ring-rose-300/80 z-10 pointer-events-none"/>
+                                        )}
+
+                                        {isSelected && (
+                                            <div
+                                                className="absolute inset-0 bg-amber-400/50 ring-2 ring-inset ring-amber-300/80 z-10 pointer-events-none"/>
+                                        )}
+
+                                        {isLegalTarget && (
+                                            piece ? (
+                                                <div
+                                                    className="absolute inset-0 rounded-full border-[5px] border-black/25 z-30 pointer-events-none m-1"/>
+                                            ) : (
+                                                <div
+                                                    className="w-3.5 h-3.5 rounded-full bg-black/25 z-30 pointer-events-none"/>
+                                            )
+                                        )}
+
+                                        {piece && !isBeingDragged && (
+                                            <div
+                                                onPointerDown={(e) => {
+                                                    if ((e.pointerType === 'mouse' && e.button !== 0) || viewIndex !== -1 || gameOverResult) return;
+                                                    const turnChar = currentGame.turn();
+                                                    const myColorChar = myColor === 'white' ? 'w' : 'b';
+
+                                                    if (gameId || activeBot || spectatingGameId) {
+                                                        if (piece.color !== myColorChar) return;
+                                                    } else {
+                                                        if (piece.color !== turnChar) return;
+                                                    }
+
+                                                    e.stopPropagation();
+                                                    if ((currentGame.turn() === 'w' ? 'white' : 'black') === myColor) {
+                                                        moveStartTime.current = Date.now();
+                                                    }
+                                                    setSelectedSquare(squareId);
+                                                    setDragState({
+                                                        from: squareId,
+                                                        piece,
+                                                        x: e.clientX,
+                                                        y: e.clientY
+                                                    });
+                                                }}
+                                                className={`relative w-full h-full p-[1.5%] z-20 transition-transform duration-75 ${
+                                                    viewIndex === -1 && !gameOverResult && (
+                                                        (gameId || activeBot || spectatingGameId)
+                                                            ? piece.color === (myColor === 'white' ? 'w' : 'b')
+                                                            : piece.color === currentGame.turn()
+                                                    )
+                                                        ? 'cursor-grab active:cursor-grabbing hover:scale-[1.03]'
+                                                        : ''
+                                                }`}
+                                            >
+                                                {renderPieceSvg(piece)}
+                                            </div>
+                                        )}
+
+                                        {file === displayedFiles[0] && (
+                                            <span
+                                                style={{color: isDark ? activeTheme.coordDark : activeTheme.coordLight}}
+                                                className="absolute top-0.5 left-1 text-xs font-sans font-bold opacity-90 z-20 pointer-events-none leading-none"
+                                            >
+                                                {rank}
+                                            </span>
+                                        )}
+                                        {rank === displayedRanks[7] && (
+                                            <span
+                                                style={{color: isDark ? activeTheme.coordDark : activeTheme.coordLight}}
+                                                className="absolute bottom-0.5 right-1 text-xs font-sans font-bold opacity-90 z-20 pointer-events-none leading-none"
+                                            >
+                                                {file}
+                                            </span>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+
+                    {isResizing && (
+                        <div
+                            className="absolute bottom-5 right-5 z-40 px-2.5 py-1 rounded bg-black/85 border border-amber-500/60 text-amber-300 font-mono text-xs font-bold shadow-lg pointer-events-none">
+                            {responsiveBoardPx} × {responsiveBoardPx} px
+                        </div>
+                    )}
+
+                    <div
+                        onPointerDown={handleResizePointerDown}
+                        onDoubleClick={handleResizeDoubleClick}
+                        title="Потяните, чтобы изменить размер доски (двойной клик — авторазмер под экран)"
+                        className={`absolute bottom-0 right-0 w-6 h-6 z-40 cursor-nwse-resize flex items-end justify-end p-0.5 rounded-tl transition-opacity ${
+                            isResizing
+                                ? 'opacity-100 text-amber-400'
+                                : 'opacity-50 group-hover/board:opacity-90 hover:opacity-100! text-amber-200/80 hover:text-amber-300'
+                        }`}
+                    >
+                        <svg
+                            viewBox="0 0 16 16"
+                            className="w-3.5 h-3.5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                        >
+                            <line x1="14" y1="4" x2="4" y2="14"/>
+                            <line x1="14" y1="9" x2="9" y2="14"/>
+                            <line x1="14" y1="14" x2="14" y2="14"/>
+                        </svg>
+                    </div>
+                </div>
+
+                <div
+                    style={{width: `${responsiveBoardPx}px`}}
+                    className={`bg-acacia-dark px-3 py-1.5 rounded-lg shadow-heavy border-2 border-amber-900/50 flex justify-between items-center text-boxwood-light shrink-0 ${isResizing ? 'transition-none' : 'transition-colors'}`}
+                >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                        {isBotOnBottom && activeBotProfile ? (
+                            <img
+                                src={activeBotProfile.avatar}
+                                alt={activeBotProfile.name}
+                                onError={(e) => {
+                                    const img = e.target as HTMLImageElement;
+                                    if (!img.src.endsWith(activeBotProfile.fallbackAvatar)) {
+                                        img.src = activeBotProfile.fallbackAvatar;
+                                    }
+                                }}
+                                className="w-9 h-9 rounded-md object-cover border-2 border-amber-500/70 shrink-0 shadow"
+                            />
+                        ) : (
+                            <div
+                                className={`w-9 h-9 rounded-md flex items-center justify-center border border-amber-600/30 font-bold text-lg shrink-0 ${
+                                    !topIsWhite ? 'bg-boxwood text-acacia-dark' : 'bg-acacia text-amber-200'
+                                }`}
+                            >
+                                {!topIsWhite ? '♙' : '♟'}
+                            </div>
+                        )}
+                        <div className="min-w-0">
+                            <div className="font-bold text-sm sm:text-base flex items-center gap-2 leading-tight">
+                                <span className="truncate">
+                                    {(gameId || activeBot || spectatingGameId) ? bottomPlayerInfo.username : (!topIsWhite ? 'Вы (Белые)' : 'Вы (Чёрные)')}
+                                </span>
+                                {(gameId || activeBot || spectatingGameId) && (
+                                    <span
+                                        className="text-xs px-1.5 py-0.5 rounded bg-black/45 text-amber-400 border border-amber-600/25 flex items-center gap-1 font-mono">
+                                        {bottomPlayerInfo.rating}
+                                        {ratingInfo && (
+                                            <span
+                                                className={!topIsWhite ? (Number(ratingInfo.white_delta) >= 0 ? 'text-emerald-400' : 'text-red-400') : (Number(ratingInfo.black_delta) >= 0 ? 'text-emerald-400' : 'text-red-400')}>
+                                                ({!topIsWhite ? (Number(ratingInfo.white_delta) >= 0 ? `+${ratingInfo.white_delta}` : ratingInfo.white_delta) : (Number(ratingInfo.black_delta) >= 0 ? `+${ratingInfo.black_delta}` : ratingInfo.black_delta)})
+                                            </span>
+                                        )}
+                                    </span>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-1.5 text-xs text-amber-200/90 min-h-[16px]">
+                                <span className="tracking-tight truncate">{bottomCaptured.join('')}</span>
+                                {bottomAdvantage > 0 && (
+                                    <span
+                                        className="text-[11px] font-mono font-bold px-1.5 rounded bg-amber-900/60 text-amber-300">
+                                        +{bottomAdvantage}
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                    <div
+                        className="bg-[#1A120B] px-3.5 py-1 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-xl sm:text-2xl font-bold tracking-wider text-amber-400 min-w-[116px] sm:min-w-[124px] text-center">
+                        {(gameId || activeBot || spectatingGameId) ? formatTime(bottomPlayerTime) : formatTime(bottomIdlePreviewMs)}
+                    </div>
+                </div>
+
+            </div>
+
+            {/* ПРАВАЯ КОЛОНКА: ЖУРНАЛ ХОДОВ, ОФОРМЛЕНИЕ, ЧАТ И УПРАВЛЕНИЕ ПАРТИЕЙ */}
+            <div
+                className="w-full xl:w-[390px] 2xl:w-[430px] xl:h-full bg-acacia p-3 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-2 text-boxwood-light order-3 shrink-0 xl:overflow-hidden relative">
+
+                <div
+                    className="border-b border-acacia-light pb-2 flex justify-between items-center gap-2 shrink-0 relative"
+                    ref={appearanceDropdownRef}
+                >
+                    <div className="min-w-0">
+                        <div
+                            className="text-xs tracking-wider uppercase text-boxwood/75 font-bold flex items-center gap-1.5">
+                            <ListOrdered className="text-amber-400" size={15}/> Журнал ходов
+                        </div>
+                        <div className="text-xs sm:text-sm font-bold text-amber-200 mt-0.5 truncate">
+                            {(gameId || activeBot || spectatingGameId)
+                                ? `${whitePlayer.username} vs ${blackPlayer.username}`
+                                : 'Свободная доска / Анализ'}
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="relative">
+                            <button
+                                type="button"
+                                onClick={() => setShowAppearanceDropdown(prev => !prev)}
+                                className={`px-2.5 py-1 rounded-md border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm ${
+                                    showAppearanceDropdown
+                                        ? 'bg-amber-700 text-white border-amber-400'
+                                        : 'bg-acacia-dark hover:bg-black/45 text-amber-200 border-amber-800/50'
+                                }`}
+                                title="Выбрать комплект фигур, тему и размер доски"
+                            >
+                                <span
+                                    className="w-5 h-5 rounded-xs flex items-center justify-center border border-black/50 shrink-0"
+                                    style={{backgroundColor: activeTheme.dark}}
+                                >
+                                    <img
+                                        src={getPieceSvgUrl(pieceSetKey, 'w', 'N')}
+                                        alt=""
+                                        className="w-4 h-4 object-contain"
+                                    />
+                                </span>
+                                <span
+                                    className="hidden sm:inline">{activePieceSet.shortName} • {activeTheme.name}</span>
+                                <span className="sm:hidden">Вид</span>
+                                {showAppearanceDropdown ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
+                            </button>
+
+                            {showAppearanceDropdown && (
+                                <div
+                                    className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-[#261C14] border-2 border-amber-600/80 rounded-lg shadow-2xl z-50 p-3.5 flex flex-col gap-3 text-boxwood-light">
+                                    <div
+                                        className="flex justify-between items-center border-b border-amber-900/50 pb-2">
+                                        <span className="font-bold text-amber-200 text-sm flex items-center gap-1.5">
+                                            <Palette size={15} className="text-amber-400"/> Оформление фигур и доски
+                                        </span>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowAppearanceDropdown(false)}
+                                            className="text-boxwood/60 hover:text-white cursor-pointer"
+                                        >
+                                            <X size={15}/>
+                                        </button>
+                                    </div>
+
+                                    <div className="flex flex-col gap-1.5">
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="font-bold text-boxwood/90">♟ Комплект фигур:</span>
+                                            <span className="text-amber-400 font-bold">{activePieceSet.name}</span>
+                                        </div>
+                                        <div className="grid grid-cols-5 gap-1.5">
+                                            {Object.values(PIECE_SETS).map((pset) => {
+                                                const isCurrent = pset.id === activePieceSet.id;
+                                                return (
+                                                    <button
+                                                        key={pset.id}
+                                                        type="button"
+                                                        onClick={() => handlePieceSetChange(pset.id)}
+                                                        title={pset.description}
+                                                        className={`flex flex-col items-center gap-1 p-1.5 rounded-md border text-xs font-bold transition cursor-pointer ${
+                                                            isCurrent
+                                                                ? 'bg-amber-900/60 border-amber-400 text-amber-200 shadow'
+                                                                : 'bg-black/35 border-amber-900/40 text-boxwood/75 hover:bg-black/55 hover:text-amber-200'
+                                                        }`}
+                                                    >
+                                                        <div
+                                                            className="w-10 h-9 rounded flex items-center justify-center border border-black/50 shadow-inner"
+                                                            style={{
+                                                                background: `linear-gradient(90deg, ${activeTheme.dark} 50%, ${activeTheme.light} 50%)`
+                                                            }}
+                                                        >
+                                                            <img
+                                                                src={getPieceSvgUrl(pset.id, 'w', 'N')}
+                                                                alt={pset.shortName}
+                                                                className="w-5 h-5 object-contain"
+                                                            />
+                                                            <img
+                                                                src={getPieceSvgUrl(pset.id, 'b', 'Q')}
+                                                                alt=""
+                                                                className="w-5 h-5 object-contain"
+                                                            />
+                                                        </div>
+                                                        <span className="truncate w-full text-center text-[11px]">
+                                                            {pset.shortName}
+                                                        </span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-col gap-1.5 pt-2 border-t border-amber-900/40">
+                                        <div className="flex justify-between items-center text-xs">
+                                            <span className="font-bold text-boxwood/90">🎨 Поверхность доски:</span>
+                                            <span className="text-amber-400 font-bold">{activeTheme.name}</span>
+                                        </div>
+                                        <div className="grid grid-cols-5 gap-1.5">
+                                            {Object.values(BOARD_THEMES).map((theme) => {
+                                                const isCurrent = theme.id === activeTheme.id;
+                                                return (
+                                                    <button
+                                                        key={theme.id}
+                                                        type="button"
+                                                        onClick={() => handleThemeChange(theme.id)}
+                                                        className={`flex flex-col items-center gap-1 p-1.5 rounded-md border text-xs font-bold transition cursor-pointer ${
+                                                            isCurrent
+                                                                ? 'bg-amber-900/60 border-amber-400 text-amber-200 shadow'
+                                                                : 'bg-black/35 border-amber-900/40 text-boxwood/75 hover:bg-black/55 hover:text-amber-200'
+                                                        }`}
+                                                    >
+                                                        <div
+                                                            className="w-8 h-8 rounded-xs overflow-hidden grid grid-cols-2 grid-rows-2 border-2 shadow-sm"
+                                                            style={{borderColor: theme.border}}
+                                                        >
+                                                            <div style={{backgroundColor: theme.light}}/>
+                                                            <div style={{backgroundColor: theme.dark}}/>
+                                                            <div style={{backgroundColor: theme.dark}}/>
+                                                            <div style={{backgroundColor: theme.light}}/>
+                                                        </div>
+                                                        <span className="truncate w-full text-center text-[11px]">
+                                                            {theme.name}
+                                                        </span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    <div
+                                        className="flex items-center justify-between gap-2 pt-2 border-t border-amber-900/40 text-xs">
+                                        <span className="text-boxwood/80 font-bold">Размер: {responsiveBoardPx}px</span>
+                                        <input
+                                            type="range"
+                                            min={MIN_BOARD_SIZE}
+                                            max={getMaxViewportBoardSize()}
+                                            value={boardSize}
+                                            onChange={(e) => {
+                                                const val = Number(e.target.value);
+                                                setBoardSize(val);
+                                                localStorage.setItem('michess_board_size', String(val));
+                                            }}
+                                            className="flex-1 accent-amber-500 cursor-pointer"
+                                        />
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const fit = getMaxViewportBoardSize();
+                                                setBoardSize(fit);
+                                                localStorage.setItem('michess_board_size', String(fit));
+                                            }}
+                                            className="px-2 py-1 rounded bg-black/45 hover:bg-amber-800/60 border border-amber-700/50 text-amber-200 font-bold cursor-pointer"
+                                        >
+                                            Авто
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <span
+                            className="px-2 py-1 rounded-md bg-acacia-dark border border-amber-700/40 font-mono text-xs text-amber-400 font-bold">
+                            {gameOverResult || (history.length > 0 ? `${Math.ceil(history.length / 2)} х.` : 'Старт')}
+                        </span>
+                    </div>
+                </div>
+
+                {premove && (
+                    <div
+                        className="bg-rose-950/90 px-3 py-1.5 rounded-md border border-rose-500/60 text-xs text-rose-100 flex items-center justify-between shadow shrink-0">
+                        <span className="flex items-center gap-1.5 font-bold font-mono">
+                            <Zap size={14} className="text-rose-400"/>
+                            Предход: {premove.from} → {premove.to}{premove.promotion ? `=${premove.promotion.toUpperCase()}` : ''}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => setPremove(null)}
+                            className="px-2 py-0.5 bg-black/40 hover:bg-black/70 rounded text-xs font-sans text-rose-200 transition cursor-pointer"
+                        >
+                            Отмена
+                        </button>
+                    </div>
+                )}
+
+                {drawOfferStatus && (
+                    <div
+                        className="bg-amber-950/90 p-2 rounded-md border border-amber-600/50 text-xs text-amber-200 text-center flex flex-col gap-1.5 shrink-0">
+                        <span>{drawOfferStatus}</span>
+                        {drawOfferStatus.includes('предлагает ничью') && (
+                            <div className="flex justify-center gap-2">
+                                <button
+                                    onClick={acceptDraw}
+                                    className="px-3 py-1 bg-emerald-800 hover:bg-emerald-700 text-white rounded text-xs font-bold cursor-pointer"
+                                >
+                                    Принять
+                                </button>
+                                <button
+                                    onClick={declineDraw}
+                                    className="px-3 py-1 bg-red-800 hover:bg-red-700 text-white rounded text-xs font-bold cursor-pointer"
+                                >
+                                    Отклонить
+                                </button>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                <div
+                    className="flex-1 min-h-0 flex flex-col bg-[#1A120B]/90 rounded-md border border-amber-900/50 overflow-hidden shadow-inner">
+                    <div
+                        className="grid grid-cols-[44px_1fr_1fr] px-3 py-1.5 bg-black/55 border-b border-amber-900/40 text-xs uppercase tracking-wider text-boxwood/65 font-bold shrink-0">
+                        <span>№</span>
+                        <span>Белые</span>
+                        <span>Чёрные</span>
+                    </div>
+
+                    <div
+                        ref={notationScrollRef}
+                        className="flex-1 min-h-0 overflow-y-auto divide-y divide-amber-900/15 font-mono text-sm [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-amber-900/50"
+                    >
+                        {movePairs.length === 0 ? (
+                            <div
+                                className="h-full flex flex-col items-center justify-center p-6 text-center text-boxwood/50 font-sans text-sm gap-1.5">
+                                <span className="font-semibold">Ходов пока нет</span>
+                                <span className="text-xs text-boxwood/40">
+                                    {(gameId || activeBot || spectatingGameId)
+                                        ? 'Сделайте первый ход на доске.'
+                                        : 'Двигайте фигуры для анализа или выберите соперника слева.'}
+                                </span>
+                            </div>
+                        ) : (
+                            movePairs.map((pair) => {
+                                const isWhiteActive = activeMoveIndex === pair.whiteIdx;
+                                const isBlackActive = pair.blackIdx !== undefined && activeMoveIndex === pair.blackIdx;
+
+                                return (
+                                    <div
+                                        key={pair.moveNumber}
+                                        className="grid grid-cols-[44px_1fr_1fr] items-center px-2.5 py-1 hover:bg-white/5 transition-colors"
+                                    >
+                                        <span className="text-xs text-amber-500/70 font-bold pl-1 select-none">
+                                            {pair.moveNumber}.
+                                        </span>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => handleSelectMoveFromList(pair.whiteIdx)}
+                                            className={`text-left px-2 py-0.5 rounded text-sm font-bold transition truncate cursor-pointer ${
+                                                isWhiteActive
+                                                    ? 'active-move-btn bg-amber-600/40 text-amber-200 border border-amber-500/50 shadow-sm'
+                                                    : 'text-boxwood-light hover:bg-amber-900/30 hover:text-white'
+                                            }`}
+                                        >
+                                            {pair.whiteSan}
+                                        </button>
+
+                                        {pair.blackSan !== undefined && pair.blackIdx !== undefined ? (
+                                            <button
+                                                type="button"
+                                                onClick={() => handleSelectMoveFromList(pair.blackIdx!)}
+                                                className={`text-left px-2 py-0.5 rounded text-sm font-bold transition truncate cursor-pointer ${
+                                                    isBlackActive
+                                                        ? 'active-move-btn bg-amber-600/40 text-amber-200 border border-amber-500/50 shadow-sm'
+                                                        : 'text-boxwood-light hover:bg-amber-900/30 hover:text-white'
+                                                }`}
+                                            >
+                                                {pair.blackSan}
+                                            </button>
+                                        ) : (
+                                            <span/>
+                                        )}
+                                    </div>
+                                );
+                            })
+                        )}
+                    </div>
+
+                    {viewIndex !== -1 && history.length > 0 && (
+                        <button
+                            type="button"
+                            onClick={() => setViewIndex(-1)}
+                            className="w-full py-1.5 px-3 bg-amber-700/40 hover:bg-amber-700/60 border-t border-amber-500/40 text-amber-200 text-xs font-bold text-center transition shrink-0 cursor-pointer"
+                        >
+                            Просмотр истории
+                            ({viewIndex === -2 ? 'Начало' : `полуход ${viewIndex + 1} из ${history.length}`}) —
+                            Вернуться к игре
+                        </button>
+                    )}
+                </div>
+
+                <div
+                    className="bg-acacia-dark p-2 rounded-md border border-amber-900/40 flex items-center justify-between shrink-0">
+                    <span className="text-xs font-semibold text-boxwood/80 pl-1">Навигация:</span>
+                    <div className="flex gap-1.5">
+                        <button
+                            type="button"
+                            disabled={history.length === 0 || viewIndex === -2}
+                            onClick={() => {
+                                setViewIndex(-2);
+                                playAudio('move');
+                            }}
+                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
+                            title="В начало партии (Стрелка вверх)"
+                        >
+                            <ChevronFirst size={16}/>
+                        </button>
+                        <button
+                            type="button"
+                            disabled={history.length === 0 || viewIndex === -2}
+                            onClick={() => {
+                                if (history.length > 0) {
+                                    const current = viewIndex === -1 ? history.length - 1 : prevIndexHelper(viewIndex, history.length);
+                                    const nextIdx = current <= 0 ? -2 : current - 1;
+                                    setViewIndex(nextIdx);
+                                    if (nextIdx >= 0 && history[nextIdx]) {
+                                        playAudio(resolveMoveSound(history[nextIdx].san));
+                                    } else {
+                                        playAudio('move');
+                                    }
+                                }
+                            }}
+                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
+                            title="Ход назад (Стрелка влево)"
+                        >
+                            <ChevronLeft size={16}/>
+                        </button>
+                        <button
+                            type="button"
+                            disabled={history.length === 0 || viewIndex === -1}
+                            onClick={() => {
+                                let nextIdx = -1;
+                                if (viewIndex === -2 && history.length > 0) {
+                                    nextIdx = history.length === 1 ? -1 : 0;
+                                } else if (viewIndex !== -1 && viewIndex < history.length - 2) {
+                                    nextIdx = viewIndex + 1;
+                                }
+                                setViewIndex(nextIdx);
+                                const targetMove = nextIdx === -1 ? history[history.length - 1] : history[nextIdx];
+                                if (targetMove) {
+                                    playAudio(resolveMoveSound(targetMove.san));
+                                }
+                            }}
+                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
+                            title="Ход вперед (Стрелка вправо)"
+                        >
+                            <ChevronRight size={16}/>
+                        </button>
+                        <button
+                            type="button"
+                            disabled={history.length === 0 || viewIndex === -1}
+                            onClick={() => {
                                 setViewIndex(-1);
                                 if (history.length > 0) {
                                     playAudio(resolveMoveSound(history[history.length - 1].san));
@@ -34,426 +1172,6 @@ Files in this part (4): frontend/src/components/Chessboard.tsx (chunk 3), fronte
                             )}
                         </div>
 
-                        <div
-                            className="h-16 overflow-y-auto bg-black/40 rounded p-2 text-xs space-y-1 font-sans border border-amber-950/50 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
-                            {chatMessages.length === 0 ? (
-                                <div className="h-full flex items-center justify-center text-xs text-boxwood/45 italic">
-                                    Сообщений пока нет. Поприветствуйте соперника!
-                                </div>
-                            ) : (
-                                chatMessages.map((msg, i) => (
-                                    <div key={i} className="leading-snug wrap-break-word">
-                                        <span className="font-bold text-amber-300 mr-1.5">{msg.sender}:</span>
-                                        <span className="text-boxwood-light">{msg.text}</span>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-
-                        <div className="flex flex-wrap gap-1">
-                            {QUICK_CHAT_PRESETS.map((preset) => (
-                                <button
-                                    key={preset}
-                                    type="button"
-                                    onClick={() => handleSendChatMessage(preset)}
-                                    className="px-2 py-0.5 rounded bg-black/40 hover:bg-amber-900/50 border border-amber-800/40 text-xs text-amber-200 transition cursor-pointer"
-                                >
-                                    {preset}
-                                </button>
-                            ))}
-                        </div>
-
-                        <form
-                            onSubmit={(e) => {
-                                e.preventDefault();
-                                handleSendChatMessage();
-                            }}
-                            className="flex gap-1.5"
-                        >
-                            <input
-                                type="text"
-                                maxLength={140}
-                                value={chatInput}
-                                onChange={(e) => setChatInput(e.target.value)}
-                                placeholder="Написать сообщение..."
-                                className="flex-1 bg-black/50 border border-amber-800/50 rounded px-2.5 py-1 text-xs text-amber-100 outline-none focus:border-amber-500 font-sans"
-                            />
-                            <button
-                                type="submit"
-                                className="px-3 py-1 bg-amber-700 hover:bg-amber-600 text-amber-100 rounded text-xs font-bold flex items-center justify-center transition cursor-pointer"
-                                title="Отправить"
-                            >
-                                <Send size={13}/>
-                            </button>
-                        </form>
-                    </div>
-                )}
-
-                <div className="shrink-0 flex flex-col gap-1.5">
-                    {gameId ? (
-                        <>
-                            <div className="grid grid-cols-2 gap-2">
-                                {history.length < 2 ? (
-                                    <button
-                                        type="button"
-                                        onClick={handleAbortGame}
-                                        disabled={!!gameOverResult}
-                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-amber-950/90 text-amber-200 text-xs sm:text-sm font-bold rounded-md hover:bg-amber-900 transition shadow border border-amber-700/60 disabled:opacity-40 cursor-pointer"
-                                    >
-                                        <X size={15}/> Отменить игру
-                                    </button>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        onClick={handleResign}
-                                        disabled={!!gameOverResult}
-                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/85 text-red-200 text-xs sm:text-sm font-bold rounded-md hover:bg-red-900 transition shadow border border-red-800/50 disabled:opacity-40 cursor-pointer"
-                                    >
-                                        <Flag size={15}/> Сдаться
-                                    </button>
-                                )}
-                                <button
-                                    type="button"
-                                    onClick={handleOfferDraw}
-                                    disabled={!!gameOverResult || history.length < 2}
-                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
-                                >
-                                    <Handshake size={15}/> Ничья
-                                </button>
-                            </div>
-
-                            {gameOverResult && (
-                                <div className="flex flex-col gap-1.5">
-                                    {rematchStatus === 'offered_by_opponent' ? (
-                                        <div
-                                            className="p-2 rounded-md bg-emerald-950/90 border border-emerald-500/60 flex flex-col gap-1.5 text-xs text-emerald-100 text-center shadow">
-                                            <span
-                                                className="font-bold">Соперник предлагает реванш (со сменой цвета)!</span>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={handleAcceptRematch}
-                                                    className="py-1.5 px-3 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded transition shadow cursor-pointer"
-                                                >
-                                                    Принять реванш
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={handleDeclineRematch}
-                                                    className="py-1.5 px-3 bg-red-900/80 hover:bg-red-800 text-red-100 font-bold rounded transition cursor-pointer"
-                                                >
-                                                    Отклонить
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <button
-                                                type="button"
-                                                disabled={rematchStatus === 'offered_by_me' || rematchStatus === 'declined'}
-                                                onClick={handleOfferRematch}
-                                                className="flex items-center justify-center gap-1.5 px-3 py-2 font-bold text-xs sm:text-sm rounded-md transition shadow bg-emerald-800 hover:bg-emerald-700 text-emerald-100 border border-emerald-500/50 disabled:opacity-50 cursor-pointer"
-                                            >
-                                                <RefreshCw size={15}
-                                                           className={rematchStatus === 'offered_by_me' ? 'animate-spin' : ''}/>
-                                                {rematchStatus === 'offered_by_me'
-                                                    ? 'Ждём ответа...'
-                                                    : rematchStatus === 'declined'
-                                                        ? 'Реванш отклонён'
-                                                        : 'Реванш'}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={handleResetSandbox}
-                                                className="flex items-center justify-center gap-1.5 px-3 py-2 font-bold text-xs sm:text-sm rounded-md transition shadow bg-boxwood text-acacia-dark border border-amber-700/50 hover:bg-boxwood-light cursor-pointer"
-                                            >
-                                                <RotateCcw size={15}/> В лобби
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </>
-                    ) : activeBot ? (
-                        <div className="flex flex-col gap-1.5">
-                            <div className="grid grid-cols-2 gap-2">
-                                <button
-                                    type="button"
-                                    disabled={history.length === 0 || isBotThinking || !!gameOverResult}
-                                    onClick={handleUndoSandboxMove}
-                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
-                                >
-                                    <Undo2 size={15}/> Вернуть ход
-                                </button>
-                                {!gameOverResult ? (
-                                    <button
-                                        type="button"
-                                        onClick={handleResign}
-                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/85 text-red-200 text-xs sm:text-sm font-bold rounded-md hover:bg-red-900 transition shadow border border-red-800/50 cursor-pointer"
-                                    >
-                                        <Flag size={15}/> Сдаться
-                                    </button>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        onClick={handleOfferRematch}
-                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-800 text-emerald-100 text-xs sm:text-sm font-bold rounded-md hover:bg-emerald-700 transition shadow border border-emerald-500/50 cursor-pointer"
-                                    >
-                                        <RefreshCw size={15}/> Реванш
-                                    </button>
-                                )}
-                            </div>
-
-                            {savedBotGameId && (
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => navigate(`/game/${savedBotGameId}`, {
-                                            state: {
-                                                game: {
-                                                    game_id: savedBotGameId,
-                                                    white_username: whitePlayer.username,
-                                                    white_rating: Number(whitePlayer.rating) || 1200,
-                                                    black_username: blackPlayer.username,
-                                                    black_rating: Number(blackPlayer.rating) || 1850,
-                                                    result: gameOverResult || '*',
-                                                    site: 'Michess Bot Arena',
-                                                    finished_at: new Date().toISOString()
-                                                }
-                                            }
-                                        })}
-                                        className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 text-xs font-bold rounded-md transition shadow border border-emerald-600/50 cursor-pointer"
-                                    >
-                                        <Eye size={14}/> Разбор партии
-                                    </button>
-                                    <a
-                                        href={`${API_BASE_URL}/api/v1/profile/games/${savedBotGameId}/pgn`}
-                                        download
-                                        className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#1A120B] hover:bg-black text-amber-400 text-xs font-bold rounded-md transition shadow border border-amber-800/60"
-                                    >
-                                        <Download size={14}/> Скачать PGN
-                                    </a>
-                                </div>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-2 gap-2">
-                            <button
-                                type="button"
-                                disabled={history.length === 0}
-                                onClick={handleUndoSandboxMove}
-                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
-                            >
-                                <Undo2 size={15}/> Отменить ход
-                            </button>
-                            <button
-                                type="button"
-                                disabled={history.length === 0}
-                                onClick={handleResetSandbox}
-                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-amber-300 text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
-                            >
-                                <RotateCcw size={15}/> Сбросить доску
-                            </button>
-                        </div>
-                    )}
-                </div>
-
-            </div>
-
-        </div>
-    );
-}
-
-========================================================================================
-FILE: frontend/src/components/chessboard/__tests__/boardUtils.test.ts
-========================================================================================
-// --- FILE: frontend/src/components/chessboard/__tests__/boardUtils.test.ts ---
-
-import {describe, expect, it} from 'vitest';
-import {Chess} from 'chess.js';
-import {calculateMaterialBalance, cloneChessInstance, prevIndexHelper} from '../boardUtils';
-import {DEFAULT_DGT_OPTION, TIME_CONTROLS} from '../../../config/timeControls';
-
-describe('calculateMaterialBalance', () => {
-    it('is even in the starting position', () => {
-        const balance = calculateMaterialBalance(new Chess().board());
-        expect(balance.whiteAdvantage).toBe(0);
-        expect(balance.blackAdvantage).toBe(0);
-        expect(balance.whiteCapturedSymbols).toEqual([]);
-    });
-
-    it('counts a captured piece for the capturing side', () => {
-        const game = new Chess();
-        ['e4', 'd5', 'exd5'].forEach((m) => game.move(m));
-        const balance = calculateMaterialBalance(game.board());
-        expect(balance.whiteAdvantage).toBe(1);
-        expect(balance.whiteCapturedSymbols).toEqual(['♟']);
-    });
-});
-
-describe('cloneChessInstance', () => {
-    it('keeps move history and is independent of the source', () => {
-        const game = new Chess();
-        ['e4', 'e5', 'Nf3'].forEach((m) => game.move(m));
-        const copy = cloneChessInstance(game);
-        expect(copy.history()).toEqual(['e4', 'e5', 'Nf3']);
-        copy.move('Nc6');
-        expect(game.history()).toHaveLength(3);
-    });
-});
-
-describe('prevIndexHelper', () => {
-    it('maps the live view (-1) to the last move', () => {
-        expect(prevIndexHelper(-1, 10)).toBe(9);
-        expect(prevIndexHelper(4, 10)).toBe(4);
-    });
-});
-
-describe('time controls', () => {
-    it('provides 36 DGT 2500 programs with the default among them', () => {
-        const options = TIME_CONTROLS.flatMap((g) => g.options);
-        expect(options).toHaveLength(36);
-        expect(options).toContain(DEFAULT_DGT_OPTION);
-    });
-});
-
-========================================================================================
-FILE: frontend/src/components/chessboard/boardUtils.ts
-========================================================================================
-// --- FILE: frontend/src/components/chessboard/boardUtils.ts ---
-// Константы и чистые функции доски (вынесено из Chessboard.tsx).
-
-import {Chess} from 'chess.js';
-
-export const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-export const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
-
-export const MIN_BOARD_SIZE = 280;
-export const MAX_BOARD_SIZE = 860;
-
-export type PromotionPiece = 'q' | 'n' | 'r' | 'b';
-
-export const PROMOTION_OPTIONS: Array<{ type: PromotionPiece; label: string }> = [
-    {type: 'q', label: 'Ферзь'},
-    {type: 'n', label: 'Конь'},
-    {type: 'r', label: 'Ладья'},
-    {type: 'b', label: 'Слон'}
-];
-
-export function getMaxViewportBoardSize(): number {
-    if (typeof window === 'undefined') return 560;
-    const availableHeight = window.innerHeight - 220;
-    const availableWidth = window.innerWidth >= 1280
-        ? window.innerWidth - 850
-        : window.innerWidth - 24;
-    const limit = Math.min(availableHeight, availableWidth, MAX_BOARD_SIZE);
-    return Math.max(MIN_BOARD_SIZE, Math.min(limit, window.innerWidth - 24));
-}
-
-export function getDefaultBoardSize(): number {
-    if (typeof window !== 'undefined') {
-        return getMaxViewportBoardSize();
-    }
-    return 540;
-}
-
-export const PIECE_VALUES: Record<string, number> = {p: 1, n: 3, b: 3, r: 5, q: 9, k: 0};
-
-export function calculateMaterialBalance(boardState: any[][]) {
-    const startCounts: Record<string, number> = {p: 8, n: 2, b: 2, r: 2, q: 1};
-    const currentWhite: Record<string, number> = {p: 0, n: 0, b: 0, r: 0, q: 0};
-    const currentBlack: Record<string, number> = {p: 0, n: 0, b: 0, r: 0, q: 0};
-
-    let whiteScore = 0;
-    let blackScore = 0;
-
-    for (const row of boardState) {
-        for (const cell of row) {
-            if (!cell) continue;
-            const val = PIECE_VALUES[cell.type] || 0;
-            if (cell.color === 'w') {
-                whiteScore += val;
-                if (currentWhite[cell.type] !== undefined) currentWhite[cell.type]++;
-            } else {
-                blackScore += val;
-                if (currentBlack[cell.type] !== undefined) currentBlack[cell.type]++;
-            }
-        }
-    }
-
-    const whiteCapturedSymbols: string[] = [];
-    const blackCapturedSymbols: string[] = [];
-    const order = ['q', 'r', 'b', 'n', 'p'];
-    const glyphs: Record<string, string> = {q: '♛', r: '♜', b: '♝', n: '♞', p: '♟'};
-
-    for (const t of order) {
-        const missingBlack = Math.max(0, startCounts[t] - currentBlack[t]);
-        for (let i = 0; i < missingBlack; i++) whiteCapturedSymbols.push(glyphs[t]);
-
-        const missingWhite = Math.max(0, startCounts[t] - currentWhite[t]);
-        for (let i = 0; i < missingWhite; i++) blackCapturedSymbols.push(glyphs[t]);
-    }
-
-    return {
-        whiteAdvantage: Math.max(0, whiteScore - blackScore),
-        blackAdvantage: Math.max(0, blackScore - whiteScore),
-        whiteCapturedSymbols,
-        blackCapturedSymbols
-    };
-}
-
-export function cloneChessInstance(source: Chess): Chess {
-    const copy = new Chess();
-    const currentPgn = source.pgn();
-    if (currentPgn) {
-        copy.loadPgn(currentPgn);
-    } else {
-        copy.load(source.fen());
-    }
-    return copy;
-}
-
-export function prevIndexHelper(viewIndex: number, historyLength: number): number {
-    return viewIndex === -1 ? historyLength - 1 : viewIndex;
-}
-
-========================================================================================
-FILE: frontend/src/components/chessboard/types.ts
-========================================================================================
-// --- FILE: frontend/src/components/chessboard/types.ts ---
-// Типы лобби, Live-партий и чата (вынесено из Chessboard.tsx).
-
-export interface LiveGameItem {
-    game_id: number;
-    white_username: string;
-    white_rating: number;
-    black_username: string;
-    black_rating: number;
-    base_time_ms: number;
-    increment_ms: number;
-    spectators_count: number;
-}
-
-export interface ChatMessageItem {
-    sender: string;
-    text: string;
-    timestamp: number;
-}
-
-export const QUICK_CHAT_PRESETS = [
-    '👋 Удачи!',
-    '🤝 Спасибо за игру!',
-    '👏 Красивый ход!',
-    '⏱ Цейтнот!'
-];
-
-export interface QueuePlayer {
-    user_id: number;
-    username: string;
-    rating: number;
-    base_time_ms: number;
-    increment_ms: number;
-}
 
 ----------------------------------------------------------------------------------------
-END OF PART 11/14
+END OF PART 11/15

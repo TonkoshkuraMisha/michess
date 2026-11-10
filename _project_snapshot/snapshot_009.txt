@@ -1,1846 +1,1439 @@
-PROJECT SNAPSHOT — PART 9/14
+PROJECT SNAPSHOT — PART 9/15
 Project: michess
-Files in this part (1): frontend/src/components/Chessboard.tsx (chunk 1)
+Files in this part (13): scripts/download_champions.py, scripts/setup_piece_sets.py, scripts/setup_stockfish.py, frontend/.dockerignore, frontend/.gitignore, frontend/.oxlintrc.json, frontend/Dockerfile, frontend/index.html, frontend/postcss.config.js, frontend/README.md, frontend/src/App.tsx, frontend/src/components/AuthModal.tsx, frontend/src/components/ChampionGames.tsx
 ----------------------------------------------------------------------------------------
 
 ========================================================================================
-FILE: frontend/src/components/Chessboard.tsx
+FILE: scripts/download_champions.py
 ========================================================================================
-// --- FILE: frontend/src/components/Chessboard.tsx ---
+# --- FILE: scripts/download_champions.py ---
 
-import {useState, useEffect, useRef, useCallback} from 'react';
-import {useNavigate, useParams} from 'react-router-dom';
-import {Chess} from 'chess.js';
+import shutil
+import subprocess
+import time
+from pathlib import Path
+
+import requests
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PUBLIC_CHAMPIONS_DIR = PROJECT_ROOT / "frontend" / "public" / "assets" / "champions"
+SRC_CHAMPIONS_DIR = PROJECT_ROOT / "frontend" / "src" / "assets" / "champions"
+
+PUBLIC_CHAMPIONS_DIR.mkdir(parents=True, exist_ok=True)
+SRC_CHAMPIONS_DIR.mkdir(parents=True, exist_ok=True)
+
+champions = {
+    "Steinitz": "Стейниц, Вильгельм",
+    "Lasker": "Ласкер, Эмануил",
+    "Rubinstein": "Рубинштейн, Акиба Кивелевич",
+    "Capablanca": "Капабланка, Хосе Рауль",
+    "Alekhine": "Алехин, Александр Александрович",
+    "Euwe": "Эйве, Макс",
+    "Keres": "Керес, Пауль Петрович",
+    "Botvinnik": "Ботвинник, Михаил Моисеевич",
+    "Geller": "Геллер, Ефим Петрович",
+    "Korchnoi": "Корчной, Виктор Львович",
+    "Smyslov": "Смыслов, Василий Васильевич",
+    "Tal": "Таль, Михаил Нехемьевич",
+    "Petrosian": "Петросян, Тигран Вартанович",
+    "Spassky": "Спасский, Борис Васильевич",
+    "Fischer": "Фишер, Роберт Джеймс",
+    "Karpov": "Анатолий Карпов",
+    "Kasparov": "Каспаров, Гарри Кимович",
+    "Kramnik": "Крамник, Владимир Борисович",
+    "Anand": "Ананд, Вишванатан",
+    "Carlsen": "Карлсен, Магнус",
+    "Ding": "Дин Лижэнь",
+}
+
+
+def sync_historical_portraits() -> None:
+    """Синхронизирует портреты между frontend/src/assets/champions и frontend/public/assets/champions."""
+    copied = 0
+    for src_img in SRC_CHAMPIONS_DIR.glob("*.*"):
+        if src_img.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
+            dst = PUBLIC_CHAMPIONS_DIR / src_img.name
+            if not dst.exists() or src_img.stat().st_size != dst.stat().st_size:
+                shutil.copy2(src_img, dst)
+                copied += 1
+
+    for pub_img in PUBLIC_CHAMPIONS_DIR.glob("*.*"):
+        if pub_img.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
+            dst = SRC_CHAMPIONS_DIR / pub_img.name
+            if not dst.exists():
+                shutil.copy2(pub_img, dst)
+                copied += 1
+
+    print(f"[+] Синхронизировано портретов между src/assets и public/assets: {copied}")
+
+
+def main() -> None:
+    sync_historical_portraits()
+
+    api_url = "https://ru.wikipedia.org/w/api.php"
+    headers = {"User-Agent": "MiChess/1.0 (chess application; python-requests)"}
+    session = requests.Session()
+    session.headers.update(headers)
+
+    print("Проверка и докачка портретов чемпионов...\n")
+
+    for champ_id, wiki_title in champions.items():
+        save_path = PUBLIC_CHAMPIONS_DIR / f"{champ_id}.jpg"
+        if save_path.exists() and save_path.stat().st_size > 0:
+            print(f"[~] {champ_id}.jpg уже существует, пропускаем.")
+            continue
+
+        params = {
+            "action": "query",
+            "titles": wiki_title,
+            "prop": "pageimages",
+            "piprop": "thumbnail",
+            "pithumbsize": "500",
+            "format": "json",
+            "formatversion": "2",
+        }
+
+        for _attempt in range(3):
+            try:
+                response = session.get(api_url, params=params, timeout=15)
+                if response.status_code == 429:
+                    time.sleep(15)
+                    continue
+                if response.status_code != 200:
+                    break
+
+                pages = response.json().get("query", {}).get("pages", [])
+                if not pages or not pages[0].get("thumbnail"):
+                    break
+
+                img_url = pages[0]["thumbnail"]["source"].split("?")[0]
+                cmd = [
+                    "curl", "-sS", "-L",
+                    "-A", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0.0.0 Safari/537.36",
+                    "-e", "https://ru.wikipedia.org/",
+                    "--fail", img_url, "-o", str(save_path),
+                ]
+                result = subprocess.run(cmd, capture_output=True)
+                if result.returncode == 0 and save_path.exists() and save_path.stat().st_size > 0:
+                    print(f"[+] {champ_id}.jpg успешно скачан!")
+                    break
+            except Exception as exc:
+                print(f"[-] Ошибка для {champ_id}: {exc}")
+                break
+        time.sleep(2)
+
+    sync_historical_portraits()
+    print("\nГотово! Все портреты синхронизированы.")
+
+
+if __name__ == "__main__":
+    main()
+
+========================================================================================
+FILE: scripts/setup_piece_sets.py
+========================================================================================
+# --- FILE: scripts/setup_piece_sets.py ---
+
+import shutil
+import urllib.request
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PIECES_ROOT = PROJECT_ROOT / "frontend" / "public" / "assets" / "pieces"
+
+PIECE_CODES = ["wP", "wN", "wB", "wR", "wQ", "wK", "bP", "bN", "bB", "bR", "bQ", "bK"]
+
+REMOTE_SETS = {
+    "merida": "https://raw.githubusercontent.com/lichess-org/lila/master/public/piece/merida/{code}.svg",
+    "alpha": "https://raw.githubusercontent.com/lichess-org/lila/master/public/piece/alpha/{code}.svg",
+    "cburnett": "https://raw.githubusercontent.com/lichess-org/lila/master/public/piece/cburnett/{code}.svg",
+    "maestro": "https://raw.githubusercontent.com/lichess-org/lila/master/public/piece/maestro/{code}.svg",
+}
+
+
+def make_cardinal_outlined_svg(base_svg: str, code: str) -> str:
+    is_black = code.startswith("b")
+    halo_color = "#FFFFFF" if is_black else "#111827"
+    filter_id = f"cardinal_halo_{code}"
+
+    halo_def = (
+        f'<defs><filter id="{filter_id}" x="-12%" y="-12%" width="124%" height="124%">'
+        f'<feMorphology in="SourceAlpha" operator="dilate" radius="1.15" result="dilated"/>'
+        f'<feFlood flood-color="{halo_color}" flood-opacity="0.98" result="flood"/>'
+        f'<feComposite in="flood" in2="dilated" operator="in" result="outline"/>'
+        f'<feMerge><feMergeNode in="outline"/><feMergeNode in="SourceGraphic"/></feMerge>'
+        f'</filter></defs>'
+    )
+
+    idx = base_svg.find(">")
+    if idx == -1 or "</svg>" not in base_svg:
+        return base_svg
+
+    header = base_svg[: idx + 1]
+    body = base_svg[idx + 1:].replace("</svg>", "")
+    return f'{header}{halo_def}<g filter="url(#{filter_id})">{body}</g></svg>\n'
+
+
+def backup_existing_classic_pieces() -> None:
+    classic_dir = PIECES_ROOT / "classic"
+    classic_dir.mkdir(parents=True, exist_ok=True)
+    for code in PIECE_CODES:
+        root_svg = PIECES_ROOT / f"{code}.svg"
+        target_svg = classic_dir / f"{code}.svg"
+        if root_svg.exists() and not target_svg.exists():
+            shutil.copy2(root_svg, target_svg)
+
+
+def download_svg(url: str) -> str | None:
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "Michess-PieceSetup/1.0"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            if resp.status == 200:
+                text = resp.read().decode("utf-8", errors="ignore")
+                if "<svg" in text:
+                    return text
+    except Exception as exc:
+        print(f"[!] Предупреждение при загрузке {url}: {exc}")
+    return None
+
+
+def setup_all_piece_sets() -> None:
+    PIECES_ROOT.mkdir(parents=True, exist_ok=True)
+    backup_existing_classic_pieces()
+    classic_dir = PIECES_ROOT / "classic"
+
+    for set_name, url_tpl in REMOTE_SETS.items():
+        set_dir = PIECES_ROOT / set_name
+        set_dir.mkdir(parents=True, exist_ok=True)
+        downloaded_count = 0
+
+        for code in PIECE_CODES:
+            target_file = set_dir / f"{code}.svg"
+            if target_file.exists() and target_file.stat().st_size > 200:
+                downloaded_count += 1
+                continue
+
+            svg_content = download_svg(url_tpl.format(code=code))
+            if svg_content:
+                target_file.write_text(svg_content, encoding="utf-8")
+                downloaded_count += 1
+            elif (classic_dir / f"{code}.svg").exists():
+                shutil.copy2(classic_dir / f"{code}.svg", target_file)
+
+        print(f"[+] Набор '{set_name:8s}' готов ({downloaded_count}/12 фигур) -> {set_dir.relative_to(PROJECT_ROOT)}")
+
+    cardinal_dir = PIECES_ROOT / "cardinal"
+    cardinal_dir.mkdir(parents=True, exist_ok=True)
+    merida_dir = PIECES_ROOT / "merida"
+
+    for code in PIECE_CODES:
+        src_file = merida_dir / f"{code}.svg"
+        if not src_file.exists():
+            src_file = classic_dir / f"{code}.svg"
+        if src_file.exists():
+            raw_svg = src_file.read_text(encoding="utf-8")
+            outlined_svg = make_cardinal_outlined_svg(raw_svg, code)
+            (cardinal_dir / f"{code}.svg").write_text(outlined_svg, encoding="utf-8")
+
+    print(f"[+] Набор 'cardinal' готов (12/12 фигур) -> {cardinal_dir.relative_to(PROJECT_ROOT)}")
+
+    for code in PIECE_CODES:
+        merida_svg = merida_dir / f"{code}.svg"
+        if merida_svg.exists():
+            shutil.copy2(merida_svg, PIECES_ROOT / f"{code}.svg")
+
+    print("[+] Все 5 комплектов шахматных фигур (60 SVG-файлов) успешно установлены!")
+
+
+if __name__ == "__main__":
+    setup_all_piece_sets()
+
+========================================================================================
+FILE: scripts/setup_stockfish.py
+========================================================================================
+# --- FILE: setup_stockfish.py ---
+
+import io
+import os
+import platform
+import shutil
+import stat
+import tarfile
+import zipfile
+
+import chess.engine
+import requests
+
+GITHUB_RELEASE_API = "https://api.github.com/repos/official-stockfish/Stockfish/releases/latest"
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+BIN_DIR = os.path.join(PROJECT_ROOT, "bin")
+
+
+def get_target_asset_url(assets: list[dict]) -> tuple[str, str]:
+    """Подбирает оптимальный бинарник Stockfish под текущую ОС (включая universal-сборки SF 19+)."""
+    sys_name = platform.system().lower()
+
+    if sys_name == "windows":
+        preferred = [
+            "windows-x86-64-universal.zip",
+            "windows-x86-64-avx2.zip",
+            "windows-x86-64-sse41-popcnt.zip",
+            "windows-x86-64.zip",
+        ]
+    elif sys_name == "linux":
+        preferred = [
+            "linux-x86-64-universal.tar.gz",
+            "linux-x86-64-universal.tar",
+            "ubuntu-x86-64-avx2.tar",
+            "ubuntu-x86-64-sse41-popcnt.tar",
+            "ubuntu-x86-64.tar",
+        ]
+    else:
+        preferred = [
+            "macos-universal.tar.gz",
+            "macos-m1-apple-silicon.tar",
+            "macos-x86-64-avx2.tar",
+        ]
+
+    for suffix in preferred:
+        for asset in assets:
+            name = asset.get("name", "")
+            if suffix in name:
+                return name, asset["browser_download_url"]
+
+    # Fallback: любой x86-64 архив под нужную ОС
+    for asset in assets:
+        name = asset.get("name", "").lower()
+        if sys_name == "windows" and "windows" in name and "x86-64" in name and name.endswith(".zip"):
+            return asset["name"], asset["browser_download_url"]
+        if sys_name == "linux" and ("linux" in name or "ubuntu" in name) and "x86-64" in name:
+            return asset["name"], asset["browser_download_url"]
+
+    available = [a.get("name", "") for a in assets]
+    raise RuntimeError(f"Не найден подходящий архив Stockfish для ОС '{sys_name}'. Доступные: {available}")
+
+
+def download_and_install_stockfish() -> str:
+    os.makedirs(BIN_DIR, exist_ok=True)
+    is_windows = platform.system().lower() == "windows"
+    target_filename = "stockfish.exe" if is_windows else "stockfish"
+    target_path = os.path.join(BIN_DIR, target_filename)
+
+    if os.path.exists(target_path) and os.path.getsize(target_path) > 1_000_000:
+        print(f"[~] Бинарник Stockfish уже установлен: {target_path}")
+        return target_path
+
+    print("[1/3] Запрашиваем последний релиз Stockfish с GitHub...")
+    headers = {"User-Agent": "Michess-Setup/1.0"}
+    resp = requests.get(GITHUB_RELEASE_API, headers=headers, timeout=20)
+    resp.raise_for_status()
+    release_data = resp.json()
+    tag_name = release_data.get("tag_name", "latest")
+
+    asset_name, download_url = get_target_asset_url(release_data.get("assets", []))
+    print(f"[2/3] Скачиваем {asset_name} (версия {tag_name})...")
+
+    archive_resp = requests.get(download_url, headers=headers, stream=True, timeout=180)
+    archive_resp.raise_for_status()
+    archive_bytes = io.BytesIO(archive_resp.content)
+
+    print(f"[3/3] Распаковываем движок в {target_path}...")
+    extracted = False
+
+    if asset_name.endswith(".zip"):
+        with zipfile.ZipFile(archive_bytes) as zf:
+            # Берём самый крупный .exe файл со словом stockfish (илиavx2/universal), игнорируя мелкие обёртки
+            exe_members = [
+                m for m in zf.infolist()
+                if not m.is_dir() and m.filename.lower().endswith(".exe") and "stockfish" in m.filename.lower()
+            ]
+            exe_members.sort(key=lambda m: m.file_size, reverse=True)
+            if exe_members:
+                best_member = exe_members[0]
+                with zf.open(best_member) as src, open(target_path, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                extracted = True
+    elif asset_name.endswith((".tar", ".tar.gz", ".tgz")):
+        with tarfile.open(fileobj=archive_bytes, mode="r:*") as tf:
+            bin_members = [
+                m for m in tf.getmembers()
+                if m.isfile()
+                   and "stockfish" in os.path.basename(m.name).lower()
+                   and not m.name.lower().endswith((".txt", ".md", ".1", ".cpp", ".h", ".sh"))
+            ]
+            bin_members.sort(key=lambda m: m.size, reverse=True)
+            if bin_members:
+                src = tf.extractfile(bin_members[0])
+                if src:
+                    with src, open(target_path, "wb") as dst:
+                        shutil.copyfileobj(src, dst)
+                    os.chmod(target_path, os.stat(target_path).st_mode | stat.S_IEXEC)
+                    extracted = True
+
+    if not extracted:
+        raise RuntimeError("Не удалось найти исполняемый файл Stockfish внутри архива.")
+
+    with chess.engine.SimpleEngine.popen_uci(target_path) as engine:
+        engine_name = engine.id.get("name", "Stockfish")
+        print(f"[+] Успешно! Движок готов к работе: {engine_name} -> {target_path}")
+
+    return target_path
+
+
+if __name__ == "__main__":
+    download_and_install_stockfish()
+
+========================================================================================
+FILE: frontend/.dockerignore
+========================================================================================
+node_modules
+dist
+.env
+.env.*
+!.env.example
+
+========================================================================================
+FILE: frontend/.gitignore
+========================================================================================
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+project_snapshot.txt
+
+========================================================================================
+FILE: frontend/.oxlintrc.json
+========================================================================================
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "oxc"],
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/only-export-components": ["warn", { "allowConstantExport": true }]
+  }
+}
+
+========================================================================================
+FILE: frontend/Dockerfile
+========================================================================================
+# --- FILE: frontend/Dockerfile ---
+# Сборка фронтенда и раздача статики через nginx, который же проксирует API и WebSocket
+# на бэкенд — фронтенд и API на одном домене, CORS не нужен.
+
+FROM node:24-alpine AS build
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci
+COPY . .
+# VITE_API_URL / VITE_WS_URL не задаём: в продакшен-сборке API берётся с того же домена.
+RUN npm run build
+
+FROM nginx:1.27-alpine
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+# .inc, а не .conf: штатный nginx.conf подключает только conf.d/*.conf, а этот файл
+# включается вручную внутри server и location.
+COPY security_headers.inc /etc/nginx/conf.d/security_headers.inc
+COPY --from=build /app/dist /usr/share/nginx/html
+EXPOSE 80
+
+========================================================================================
+FILE: frontend/index.html
+========================================================================================
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Эта строка запрещает браузеру передавать Referer и обходит блокировку Википедии -->
+    <meta name="referrer" content="no-referrer" />
+    <title>michess</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
+========================================================================================
+FILE: frontend/postcss.config.js
+========================================================================================
+// --- FILE: frontend/postcss.config.js ---
+
+export default {
+    plugins: {},
+}
+
+========================================================================================
+FILE: frontend/README.md
+========================================================================================
+# React + TypeScript + Vite
+
+This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+
+Currently, two official plugins are available:
+
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+
+## React Compiler
+
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+
+## Expanding the Oxlint configuration
+
+If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+
+```json
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "oxc"],
+  "options": {
+    "typeAware": true
+  },
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/only-export-components": ["warn", { "allowConstantExport": true }]
+  }
+}
+```
+
+See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+
+========================================================================================
+FILE: frontend/src/App.tsx
+========================================================================================
+// --- FILE: frontend/src/App.tsx ---
+
+import {useState, useRef, useEffect} from 'react';
+import {Routes, Route, useNavigate, Link, useLocation} from 'react-router-dom';
+import Chessboard from './components/Chessboard';
+import AuthModal from './components/AuthModal';
+import Profile from './components/Profile';
+import GameViewer from './components/GameViewer';
+import ChampionGames from './components/ChampionGames';
+import Leaderboard from './components/Leaderboard';
+import {CHAMPIONS_LIST} from './config/champions';
+import {API_BASE_URL} from './config/api';
+import {gameSocket} from './services/gameSocket';
+
 import {
-    ChevronFirst, ChevronLeft, ChevronRight, ChevronLast, Users, Sword, Flag,
-    Handshake, Loader2, Play, RotateCcw, Clock, ChevronDown, ChevronUp, Palette,
-    RefreshCw, ListOrdered, Undo2, Bot, MessageSquareQuote, Download, Eye,
-    Sliders, Zap, X, Link2, Copy, Check, Send, MessageSquare, Radio, Volume2, VolumeX
+    Search,
+    Bell,
+    Swords,
+    BookOpen,
+    Eye,
+    Cpu,
+    Wrench,
+    LogOut,
+    User,
+    Mail,
+    Settings,
+    LogIn,
+    Crown,
+    ChevronDown,
+    Trophy
 } from 'lucide-react';
-import {gameSocket} from '../services/gameSocket';
-import {soundEngine, resolveMoveSound} from '../services/soundEngine';
-import type {SoundEventType} from '../services/soundEngine';
-import {API_BASE_URL} from '../config/api';
-import {
-    BOARD_THEMES,
-    PIECE_SETS,
-    getSavedBoardThemeKey,
-    getSavedPieceSetKey,
-    getPieceSvgUrl,
-    getHarmoniousPieceStyle
-} from '../config/boardAppearance';
-import type {BoardTheme} from '../config/boardAppearance';
-import {HISTORICAL_BOTS, HISTORICAL_BOTS_LIST} from '../config/champions';
-import type {HistoricalBotId, HistoricalBotProfile} from '../config/champions';
-import {DEFAULT_DGT_OPTION, TIME_CONTROLS} from '../config/timeControls';
-import type {DgtTimingMode, Dgt2500Option, Dgt2500Group} from '../config/timeControls';
-import {
-    FILES, RANKS, MIN_BOARD_SIZE, MAX_BOARD_SIZE, PROMOTION_OPTIONS,
-    getMaxViewportBoardSize, getDefaultBoardSize, calculateMaterialBalance, cloneChessInstance, prevIndexHelper
-} from './chessboard/boardUtils';
-import type {PromotionPiece} from './chessboard/boardUtils';
-import {QUICK_CHAT_PRESETS} from './chessboard/types';
-import type {LiveGameItem, ChatMessageItem, QueuePlayer} from './chessboard/types';
 
-export {MIN_BOARD_SIZE, MAX_BOARD_SIZE, getMaxViewportBoardSize, getDefaultBoardSize, TIME_CONTROLS};
-export type {PromotionPiece, DgtTimingMode, Dgt2500Option, Dgt2500Group};
+interface UserProfile {
+    id: number;
+    username: string;
+    rating: number;
+    is_cheater: boolean;
+}
 
-export {BOARD_THEMES, HISTORICAL_BOTS};
-export type {BoardTheme, HistoricalBotId, HistoricalBotProfile};
+export default function App() {
+    const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
+    const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
-export default function Chessboard() {
+    const [isProfileOpen, setIsProfileOpen] = useState(false);
+    const [isChampionsMenuOpen, setIsChampionsMenuOpen] = useState(false);
+
+    const [showAuthModal, setShowAuthModal] = useState(false);
+    const [serverPing, setServerPing] = useState<number | null>(null);
+
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const championsMenuRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
-    const {inviteCode} = useParams<{ inviteCode?: string }>();
+    const location = useLocation();
 
-    const [leftSectionTab, setLeftSectionTab] = useState<'bots' | 'lobby'>('bots');
-    const [lobbyTab, setLobbyTab] = useState<'lobby' | 'live'>('lobby');
-    const [showInvitePanel, setShowInvitePanel] = useState(false);
-    const [showAppearanceDropdown, setShowAppearanceDropdown] = useState(false);
-    const [isSoundMuted, setIsSoundMuted] = useState<boolean>(() => soundEngine.isMuted());
-    const appearanceDropdownRef = useRef<HTMLDivElement>(null);
-
-    const [liveGames, setLiveGames] = useState<LiveGameItem[]>([]);
-    const [spectatingGameId, setSpectatingGameId] = useState<number | null>(null);
-    const [inviteColorPref, setInviteColorPref] = useState<'white' | 'black' | 'random'>('random');
-    const [createdInviteCode, setCreatedInviteCode] = useState<string | null>(null);
-    const [inviteCopied, setInviteCopied] = useState(false);
-    const [chatMessages, setChatMessages] = useState<ChatMessageItem[]>([]);
-    const [chatInput, setChatInput] = useState('');
-
-    const [game, setGame] = useState(new Chess());
-    const [history, setHistory] = useState<any[]>([]);
-    const [viewIndex, setViewIndex] = useState<number>(-1);
-    const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
-    const [isManualFlip, setIsManualFlip] = useState<boolean>(false);
-
-    const [pendingPromotion, setPendingPromotion] = useState<{
-        from: string;
-        to: string;
-        color: 'w' | 'b';
-        isPremove?: boolean;
-    } | null>(null);
-
-    const [premove, setPremove] = useState<{
-        from: string;
-        to: string;
-        promotion?: PromotionPiece;
-    } | null>(null);
-
-    const [boardThemeKey, setBoardThemeKey] = useState<string>(() => getSavedBoardThemeKey());
-    const [pieceSetKey, setPieceSetKey] = useState<string>(() => getSavedPieceSetKey());
-
-    const [gameId, setGameId] = useState<number | null>(null);
-    const gameIdRef = useRef<number | null>(null);
-    const [myColor, setMyColor] = useState<'white' | 'black'>('white');
-    const myColorRef = useRef<'white' | 'black'>('white');
-    const [isSearching, setIsSearching] = useState(false);
-    const [queuePlayers, setQueuePlayers] = useState<QueuePlayer[]>([]);
-    const [currentUserId, setCurrentUserId] = useState<number | null>(null);
-    const [currentUsername, setCurrentUsername] = useState<string>('Вы');
-    const currentUsernameRef = useRef<string>('Вы');
-    const [currentUserRating, setCurrentUserRating] = useState<number>(1200);
-    const [stateVersion, setStateVersion] = useState(0);
-    const stateVersionRef = useRef<number>(0);
-
-    const [selectedBotId, setSelectedBotId] = useState<HistoricalBotId>('philidor');
-    const [activeBot, setActiveBot] = useState<HistoricalBotId | null>(null);
-    const [botComment, setBotComment] = useState<string | null>(null);
-    const [isBotThinking, setIsBotThinking] = useState<boolean>(false);
-    const [savedBotGameId, setSavedBotGameId] = useState<number | null>(null);
-
-    const [selectedTimeControl, setSelectedTimeControl] = useState<Dgt2500Option>(DEFAULT_DGT_OPTION);
-    const [manualBaseMinutes, setManualBaseMinutes] = useState<number>(5);
-    const [manualIncSeconds, setManualIncSeconds] = useState<number>(3);
-    const [isTimeDropdownOpen, setIsTimeDropdownOpen] = useState(false);
-    const timeDropdownRef = useRef<HTMLDivElement>(null);
-    const boardContainerRef = useRef<HTMLDivElement>(null);
-    const notationScrollRef = useRef<HTMLDivElement>(null);
-
-    const [whitePlayer, setWhitePlayer] = useState({username: 'Белые', rating: '1200'});
-    const [blackPlayer, setBlackPlayer] = useState({username: 'Черные', rating: '1200'});
-    const [ratingInfo, setRatingInfo] = useState<{
-        white_delta?: number;
-        black_delta?: number;
-        white_new_rating?: number;
-        black_new_rating?: number;
-    } | null>(null);
-
-    const moveStartTime = useRef<number>(Date.now());
-    const botGameSavedRef = useRef<boolean>(false);
-    const lowTimeWarnedRef = useRef<boolean>(false);
-    const appliedPeriodsRef = useRef<{ white: Set<number>; black: Set<number> }>({
-        white: new Set(),
-        black: new Set()
-    });
-
-    const [dragState, setDragState] = useState<{
-        from: string;
-        piece: { type: string; color: string };
-        x: number;
-        y: number;
-    } | null>(null);
-
-    const [boardSize, setBoardSize] = useState<number>(() => {
-        const maxFit = getMaxViewportBoardSize();
-        const savedSize = localStorage.getItem('michess_board_size');
-        if (savedSize) {
-            const parsed = Number(savedSize);
-            if (!Number.isNaN(parsed) && parsed >= MIN_BOARD_SIZE) {
-                return Math.min(parsed, maxFit);
-            }
-        }
-        return maxFit;
-    });
-    const [isResizing, setIsResizing] = useState(false);
-    const resizeStartRef = useRef<{ startX: number; startY: number; startSize: number } | null>(null);
+    const isSingleScreenRoute =
+        location.pathname === '/' ||
+        location.pathname.startsWith('/challenge/') ||
+        location.pathname.startsWith('/game/');
 
     useEffect(() => {
-        const handleWindowResize = () => {
-            const maxFit = getMaxViewportBoardSize();
-            setBoardSize(prev => Math.min(prev, maxFit));
+        const syncTokenFromStorage = () => {
+            const current = localStorage.getItem('token');
+            setToken(current);
+            if (!current) {
+                setUserProfile(null);
+                gameSocket.disconnect();
+            }
         };
-        window.addEventListener('resize', handleWindowResize);
-        return () => window.removeEventListener('resize', handleWindowResize);
+
+        window.addEventListener('storage', syncTokenFromStorage);
+        window.addEventListener('michess-auth-expired', syncTokenFromStorage);
+        return () => {
+            window.removeEventListener('storage', syncTokenFromStorage);
+            window.removeEventListener('michess-auth-expired', syncTokenFromStorage);
+        };
     }, []);
 
-    const [whiteTimeMs, setWhiteTimeMs] = useState(180000);
-    const [blackTimeMs, setBlackTimeMs] = useState(180000);
-
-    const [sessionStats, setSessionStats] = useState({wins: 0, losses: 0, draws: 0});
-    const [gameOverResult, setGameOverResult] = useState<string | null>(null);
-    const [drawOfferStatus, setDrawOfferStatus] = useState<string | null>(null);
-    const [rematchStatus, setRematchStatus] = useState<'none' | 'offered_by_me' | 'offered_by_opponent' | 'declined'>('none');
-
-    const activeTheme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
-    const activePieceSet = PIECE_SETS[pieceSetKey] || PIECE_SETS.merida;
-    const selectedBotProfile = HISTORICAL_BOTS[selectedBotId];
-    const activeBotProfile = activeBot ? HISTORICAL_BOTS[activeBot] : null;
-
-    const effectiveWhiteBaseMinutes = selectedTimeControl.isManual ? manualBaseMinutes : selectedTimeControl.base;
-    const effectiveBlackBaseMinutes = selectedTimeControl.isManual
-        ? manualBaseMinutes
-        : (selectedTimeControl.blackBase ?? selectedTimeControl.base);
-    const effectiveIncSeconds = selectedTimeControl.isManual ? manualIncSeconds : selectedTimeControl.inc;
-
-    const isBoardFlipped = (myColor === 'black') !== isManualFlip;
-
-    const playAudio = useCallback((type: SoundEventType) => {
-        soundEngine.play(type);
-    }, []);
-
-    const playOutcomeSound = useCallback((result: string, playerColor: 'white' | 'black' = myColorRef.current) => {
-        if (!result || result === '*') {
-            soundEngine.play('decline');
+    useEffect(() => {
+        if (!token) {
+            setUserProfile(null);
+            gameSocket.disconnect();
             return;
         }
-        if (result === '1/2-1/2' || result.includes('draw')) {
-            soundEngine.play('draw');
-            return;
-        }
-        const whiteWon = result === '1-0' || result === 'white_won_on_time';
-        const isWin = (whiteWon && playerColor === 'white') || (!whiteWon && playerColor === 'black');
-        soundEngine.play(isWin ? 'victory' : 'defeat');
-    }, []);
 
-    const handleToggleSound = () => {
-        const nextMuted = soundEngine.toggleMute();
-        setIsSoundMuted(nextMuted);
-        if (!nextMuted) {
-            soundEngine.play('move');
-        }
-    };
-
-    const updateSessionStats = useCallback((result: string) => {
-        if (!result || result === '*') return;
-        setSessionStats(prev => {
-            if (result === '1/2-1/2' || result.includes('draw')) {
-                return {...prev, draws: prev.draws + 1};
+        fetch(`${API_BASE_URL}/api/v1/profile/me`, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'accept': 'application/json'
             }
-            const whiteWon = result === '1-0' || result === 'white_won_on_time';
-            const userIsWhite = myColorRef.current === 'white';
-            if ((whiteWon && userIsWhite) || (!whiteWon && !userIsWhite)) {
-                return {...prev, wins: prev.wins + 1};
-            } else {
-                return {...prev, losses: prev.losses + 1};
-            }
-        });
-    }, []);
-
-    const applyMatchFoundSnapshot = useCallback((data: any) => {
-        if (!data || !data.game_id) return;
-        const incomingGid = Number(data.game_id);
-        const assignedColor: 'white' | 'black' = data.color === 'black' ? 'black' : 'white';
-        const ver = Number(data.state_version || 0);
-        const isNewMatch = gameIdRef.current !== incomingGid;
-
-        setIsSearching(false);
-        setSpectatingGameId(null);
-        setCreatedInviteCode(null);
-        setShowInvitePanel(false);
-        setActiveBot(null);
-        setBotComment(null);
-        setSavedBotGameId(null);
-        botGameSavedRef.current = false;
-
-        if (isNewMatch) {
-            lowTimeWarnedRef.current = false;
-            setChatMessages([]);
-            appliedPeriodsRef.current = {white: new Set(), black: new Set()};
-            setIsManualFlip(false);
-            setRatingInfo(null);
-            setGameOverResult(null);
-            setRematchStatus('none');
-            setSelectedSquare(null);
-            setPendingPromotion(null);
-            setPremove(null);
-        }
-
-        gameIdRef.current = incomingGid;
-        setGameId(incomingGid);
-        myColorRef.current = assignedColor;
-        setMyColor(assignedColor);
-        setStateVersion(ver);
-        stateVersionRef.current = ver;
-
-        const initialWhiteTime = data.white_time_ms !== undefined ? Number(data.white_time_ms) : Number(data.base_time_ms || 180000);
-        const initialBlackTime = data.black_time_ms !== undefined ? Number(data.black_time_ms) : Number(data.base_time_ms || 180000);
-        setWhiteTimeMs(initialWhiteTime);
-        setBlackTimeMs(initialBlackTime);
-
-        if (data.white_username) {
-            setWhitePlayer({username: data.white_username, rating: String(data.white_rating || '1200')});
-        }
-        if (data.black_username) {
-            setBlackPlayer({username: data.black_username, rating: String(data.black_rating || '1200')});
-        }
-
-        const restoredGame = new Chess();
-        if (data.pgn) {
-            try {
-                restoredGame.loadPgn(data.pgn);
-            } catch {
-                if (data.fen) restoredGame.load(data.fen);
-            }
-        } else if (data.fen) {
-            restoredGame.load(data.fen);
-        }
-
-        setGame(restoredGame);
-        setHistory(restoredGame.history({verbose: true}));
-        setViewIndex(-1);
-        moveStartTime.current = Date.now();
-
-        if (isNewMatch) {
-            setDrawOfferStatus(`Партия началась! Вы играете ${assignedColor === 'white' ? 'Белыми' : 'Чёрными'}.`);
-            playAudio('start');
-            setTimeout(() => setDrawOfferStatus(null), 3000);
-        }
-    }, [playAudio]);
-
-    const applyMoveMadeSnapshot = useCallback((data: any) => {
-        if (data.state_version !== undefined) {
-            const ver = Number(data.state_version);
-            setStateVersion(ver);
-            stateVersionRef.current = ver;
-        }
-        if (data.white_time_ms !== undefined) setWhiteTimeMs(Number(data.white_time_ms));
-        if (data.black_time_ms !== undefined) setBlackTimeMs(Number(data.black_time_ms));
-        moveStartTime.current = Date.now();
-
-        const nextGame = new Chess();
-        let loaded = false;
-
-        if (data.pgn) {
-            try {
-                nextGame.loadPgn(data.pgn);
-                loaded = true;
-            } catch {
-                loaded = false;
-            }
-        }
-
-        if (!loaded && data.fen) {
-            try {
-                nextGame.load(data.fen);
-                loaded = true;
-            } catch {
-                loaded = false;
-            }
-        }
-
-        if (loaded) {
-            const newHistory = nextGame.history({verbose: true});
-            const lastSan = data.san || (newHistory.length > 0 ? newHistory[newHistory.length - 1].san : '');
-            setGame(nextGame);
-            setHistory(newHistory);
-            setViewIndex(-1);
-            playAudio(resolveMoveSound(lastSan));
-        }
-
-        if (data.game_over) {
-            setPremove(null);
-            setPendingPromotion(null);
-            setGameOverResult(data.result);
-            setRatingInfo(data);
-            playOutcomeSound(data.result);
-            updateSessionStats(data.result);
-        }
-    }, [playAudio, playOutcomeSound, updateSessionStats]);
-
-    const saveBotGameToDatabase = useCallback(async (
-        botId: HistoricalBotId,
-        playerColor: 'white' | 'black',
-        result: string,
-        completedGame: Chess,
-        termination?: 'resignation' | 'timeout'
-    ) => {
-        if (botGameSavedRef.current) return;
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        const verboseMoves = completedGame.history({verbose: true});
-        if (verboseMoves.length === 0) return;
-
-        botGameSavedRef.current = true;
-        const movesUci = verboseMoves.map((m: any) => `${m.from}${m.to}${m.promotion || ''}`);
-
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/bots/save-game`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    bot_id: botId,
-                    player_color: playerColor,
-                    result,
-                    // Для позиции, не завершённой на доске, сервер требует причину окончания.
-                    termination: termination ?? null,
-                    moves_uci: movesUci,
-                    base_time_ms: Math.round(effectiveWhiteBaseMinutes * 60 * 1000),
-                    increment_ms: Math.round(effectiveIncSeconds * 1000)
-                })
+        })
+            .then(res => {
+                if (!res.ok) throw new Error('Unauthorized');
+                return res.json();
+            })
+            .then(data => setUserProfile(data))
+            .catch(() => {
+                localStorage.removeItem('token');
+                gameSocket.disconnect();
+                setToken(null);
+                setUserProfile(null);
             });
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data.game_id) {
-                    setSavedBotGameId(data.game_id);
-                }
-                // Итог определяет сервер: например, флаг при недостатке материала у соперника — ничья.
-                if (data.result && data.result !== result) {
-                    setGameOverResult(data.result);
-                    setDrawOfferStatus(`Итог по правилам ФИДЕ: ${data.result}`);
-                }
-            }
-        } catch (err) {
-            console.error('Ошибка сохранения партии с ботом в БД:', err);
-        }
-    }, [effectiveWhiteBaseMinutes, effectiveIncSeconds]);
-
-    const applyDgtClockAfterMove = useCallback((
-        moverColor: 'white' | 'black',
-        elapsedMs: number,
-        totalHalfMovesAfter: number
-    ) => {
-        const mode = selectedTimeControl.mode;
-        const baseMs = Math.round(
-            (moverColor === 'white' ? effectiveWhiteBaseMinutes : effectiveBlackBaseMinutes) * 60 * 1000
-        );
-        const completedMovesForSide = Math.ceil(totalHalfMovesAfter / 2);
-
-        let incSeconds = effectiveIncSeconds;
-        if (selectedTimeControl.incrementFromMove) {
-            if (completedMovesForSide >= selectedTimeControl.incrementFromMove) {
-                const extraInc = selectedTimeControl.periods?.find(p => p.extraIncSeconds)?.extraIncSeconds;
-                incSeconds = extraInc ?? effectiveIncSeconds;
-            } else {
-                incSeconds = 0;
-            }
-        }
-        const incMs = Math.round(incSeconds * 1000);
-
-        let periodExtraMs = 0;
-        if (selectedTimeControl.periods) {
-            selectedTimeControl.periods.forEach((period, idx) => {
-                if (
-                    period.moves &&
-                    completedMovesForSide >= period.moves &&
-                    !appliedPeriodsRef.current[moverColor].has(idx)
-                ) {
-                    appliedPeriodsRef.current[moverColor].add(idx);
-                    periodExtraMs += Math.round(period.extraMinutes * 60 * 1000);
-                }
-            });
-        }
-
-        const updateTimer = (prevMs: number) => {
-            if (mode === 'gong' || mode === 'move_timer') {
-                return baseMs;
-            }
-            if (mode === 'delay' || mode === 'us_delay') {
-                return prevMs + Math.min(elapsedMs, incMs) + periodExtraMs;
-            }
-            if (mode === 'fischer' || mode === 'byo_yomi') {
-                return prevMs + incMs + periodExtraMs;
-            }
-            return prevMs + periodExtraMs;
-        };
-
-        if (moverColor === 'white') {
-            setWhiteTimeMs(updateTimer);
-        } else {
-            setBlackTimeMs(updateTimer);
-        }
-    }, [selectedTimeControl, effectiveWhiteBaseMinutes, effectiveBlackBaseMinutes, effectiveIncSeconds]);
-
-    const handleThemeChange = (themeId: string) => {
-        setBoardThemeKey(themeId);
-        localStorage.setItem('michess_board_theme', themeId);
-    };
-
-    const handlePieceSetChange = (setId: string) => {
-        setPieceSetKey(setId);
-        localStorage.setItem('michess_piece_set', setId);
-    };
-
-    const startHistoricalBotGame = (botId: HistoricalBotId, colorPref: 'white' | 'black' | 'random' = 'random') => {
-        if (isSearching) {
-            setIsSearching(false);
-            gameSocket.send('leave_queue', {});
-        }
-
-        const chosenColor: 'white' | 'black' =
-            colorPref === 'random'
-                ? (Math.random() < 0.5 ? 'white' : 'black')
-                : colorPref;
-
-        const whiteStartMs = Math.round(effectiveWhiteBaseMinutes * 60 * 1000);
-        const blackStartMs = Math.round(effectiveBlackBaseMinutes * 60 * 1000);
-        const freshGame = new Chess();
-        const botInfo = HISTORICAL_BOTS[botId];
-
-        botGameSavedRef.current = false;
-        lowTimeWarnedRef.current = false;
-        appliedPeriodsRef.current = {white: new Set(), black: new Set()};
-        setSavedBotGameId(null);
-        gameIdRef.current = null;
-        setGameId(null);
-        setSelectedBotId(botId);
-        setActiveBot(botId);
-        setLeftSectionTab('bots');
-        myColorRef.current = chosenColor;
-        setMyColor(chosenColor);
-        setIsManualFlip(false);
-        setGame(freshGame);
-        setHistory([]);
-        setViewIndex(-1);
-        setSelectedSquare(null);
-        setPendingPromotion(null);
-        setPremove(null);
-        setGameOverResult(null);
-        setRatingInfo(null);
-        setDrawOfferStatus(null);
-        setRematchStatus('none');
-        setWhiteTimeMs(whiteStartMs);
-        setBlackTimeMs(blackStartMs);
-        moveStartTime.current = Date.now();
-
-        if (chosenColor === 'white') {
-            setWhitePlayer({username: currentUsername, rating: String(currentUserRating)});
-            setBlackPlayer({username: botInfo.playerLabel, rating: String(botInfo.rating)});
-        } else {
-            setWhitePlayer({username: botInfo.playerLabel, rating: String(botInfo.rating)});
-            setBlackPlayer({username: currentUsername, rating: String(currentUserRating)});
-        }
-
-        setBotComment(`«${botInfo.motto}»`);
-        playAudio('start');
-    };
+    }, [token]);
 
     useEffect(() => {
-        if (!activeBot || gameOverResult || game.isGameOver()) return;
-
-        const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
-        if (currentTurnColor === myColor) return;
-
-        let isCancelled = false;
-        let delayTimer: ReturnType<typeof setTimeout> | null = null;
-        setIsBotThinking(true);
-        const botName = HISTORICAL_BOTS[activeBot].shortName;
-        const requestStartedAt = Date.now();
-
-        (async () => {
+        if (!isProfileOpen) return;
+        const measurePing = async () => {
+            const start = Date.now();
             try {
-                const authToken = localStorage.getItem('token');
-                const headers: Record<string, string> = {'Content-Type': 'application/json'};
-                // С токеном лимит запросов считается на пользователя, а не на общий IP.
-                if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
-
-                let response: Response | null = null;
-                // 429 (лимит) и 503 (пул движков занят) — временные: ждём Retry-After и повторяем.
-                for (let attempt = 0; attempt < 4 && !isCancelled; attempt++) {
-                    response = await fetch(`${API_BASE_URL}/api/v1/bots/move`, {
-                        method: 'POST',
-                        headers,
-                        body: JSON.stringify({
-                            bot_id: activeBot,
-                            fen: game.fen()
-                        })
-                    });
-                    if (response.status !== 429 && response.status !== 503) break;
-                    const retryAfterS = Number(response.headers.get('Retry-After')) || 2;
-                    await new Promise((resolve) => setTimeout(resolve, Math.min(retryAfterS, 10) * 1000));
-                }
-                if (!response) return;
-
-                if (!response.ok || isCancelled) {
-                    if (!isCancelled) setIsBotThinking(false);
-                    return;
-                }
-                const data = await response.json();
-                if (isCancelled) return;
-
-                const targetThinkMs = typeof data.thinking_time_ms === 'number' ? data.thinking_time_ms : 600;
-                const networkElapsed = Date.now() - requestStartedAt;
-                const remainingDelay = Math.max(80, targetThinkMs - networkElapsed);
-
-                delayTimer = setTimeout(() => {
-                    if (isCancelled) return;
-
-                    const from = data.uci.slice(0, 2);
-                    const to = data.uci.slice(2, 4);
-                    const promotion = data.uci.length > 4 ? data.uci.slice(4, 5) : 'q';
-
-                    const nextGame = cloneChessInstance(game);
-                    const moveObj = nextGame.move({from, to, promotion});
-
-                    if (moveObj) {
-                        const elapsed = Date.now() - moveStartTime.current;
-                        const newHistory = nextGame.history({verbose: true});
-                        const botColor: 'white' | 'black' = myColor === 'white' ? 'black' : 'white';
-
-                        applyDgtClockAfterMove(botColor, elapsed, newHistory.length);
-                        setGame(nextGame);
-                        setHistory(newHistory);
-                        setViewIndex(-1);
-                        setBotComment(data.comment);
-                        moveStartTime.current = Date.now();
-
-                        playAudio(resolveMoveSound(moveObj.san));
-
-                        if (nextGame.isGameOver()) {
-                            let result = '1/2-1/2';
-                            if (nextGame.isCheckmate()) {
-                                result = nextGame.turn() === 'w' ? '0-1' : '1-0';
-                            }
-                            setPremove(null);
-                            setGameOverResult(result);
-                            setDrawOfferStatus(`Партия против ${botName} окончена и сохранена в архив (${result}).`);
-                            updateSessionStats(result);
-                            playOutcomeSound(result, myColor);
-                            saveBotGameToDatabase(activeBot, myColor, result, nextGame);
-                        }
-                    }
-                    setIsBotThinking(false);
-                }, remainingDelay);
-            } catch (err) {
-                console.error('Ошибка получения хода бота:', err);
-                if (!isCancelled) {
-                    setIsBotThinking(false);
-                }
+                await fetch(`${API_BASE_URL}/health`);
+                setServerPing(Date.now() - start);
+            } catch {
+                setServerPing(-1);
             }
-        })();
-
-        return () => {
-            isCancelled = true;
-            if (delayTimer) clearTimeout(delayTimer);
         };
-    }, [activeBot, game, myColor, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyDgtClockAfterMove]);
+        measurePing();
+        const interval = setInterval(measurePing, 3000);
+        return () => clearInterval(interval);
+    }, [isProfileOpen]);
 
-    useEffect(() => {
-        if (!isResizing) return;
-
-        const prevCursor = document.body.style.cursor;
-        const prevUserSelect = document.body.style.userSelect;
-        document.body.style.cursor = 'nwse-resize';
-        document.body.style.userSelect = 'none';
-
-        const handleResizeMove = (e: PointerEvent) => {
-            if (!resizeStartRef.current) return;
-            const {startX, startY, startSize} = resizeStartRef.current;
-            const deltaX = e.clientX - startX;
-            const deltaY = e.clientY - startY;
-            const delta = Math.round((deltaX + deltaY) / 2);
-
-            const dynamicMax = getMaxViewportBoardSize();
-            const nextSize = Math.min(Math.max(startSize + delta, MIN_BOARD_SIZE), dynamicMax);
-            setBoardSize(nextSize);
-            localStorage.setItem('michess_board_size', String(nextSize));
-        };
-
-        const handleResizeEnd = () => {
-            setIsResizing(false);
-            resizeStartRef.current = null;
-        };
-
-        window.addEventListener('pointermove', handleResizeMove);
-        window.addEventListener('pointerup', handleResizeEnd);
-        window.addEventListener('pointercancel', handleResizeEnd);
-
-        return () => {
-            document.body.style.cursor = prevCursor;
-            document.body.style.userSelect = prevUserSelect;
-            window.removeEventListener('pointermove', handleResizeMove);
-            window.removeEventListener('pointerup', handleResizeEnd);
-            window.removeEventListener('pointercancel', handleResizeEnd);
-        };
-    }, [isResizing]);
-
-    const handleResizePointerDown = (e: React.PointerEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        resizeStartRef.current = {
-            startX: e.clientX,
-            startY: e.clientY,
-            startSize: boardSize
-        };
-        setIsResizing(true);
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        gameSocket.disconnect();
+        setToken(null);
+        setUserProfile(null);
+        setIsProfileOpen(false);
+        navigate('/');
     };
 
-    const handleResizeDoubleClick = (e: React.MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const defaultSize = getDefaultBoardSize();
-        setBoardSize(defaultSize);
-        localStorage.setItem('michess_board_size', String(defaultSize));
-    };
-
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                setPendingPromotion(null);
-                setPremove(null);
-                setSelectedSquare(null);
-                setShowAppearanceDropdown(false);
-                return;
-            }
-            if (history.length === 0) return;
-            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-
-            if (e.key === 'ArrowLeft') {
-                e.preventDefault();
-                setViewIndex(prev => {
-                    const current = prev === -1 ? history.length - 1 : prev;
-                    const nextIdx = current <= 0 ? -2 : current - 1;
-                    if (nextIdx >= 0 && history[nextIdx]) {
-                        playAudio(resolveMoveSound(history[nextIdx].san));
-                    } else {
-                        playAudio('move');
-                    }
-                    return nextIdx;
+    const handleLogoutEverywhere = async () => {
+        // Сервер отзывает все токены и закрывает WebSocket во всех вкладках и на всех устройствах.
+        if (token) {
+            try {
+                await fetch(`${API_BASE_URL}/api/v1/auth/logout-all`, {
+                    method: 'POST',
+                    headers: {Authorization: `Bearer ${token}`},
                 });
-            } else if (e.key === 'ArrowRight') {
-                e.preventDefault();
-                setViewIndex(prev => {
-                    if (prev === -1) return -1;
-                    const nextIdx = prev === -2
-                        ? (history.length > 1 ? 0 : -1)
-                        : (prev + 1 >= history.length - 1 ? -1 : prev + 1);
-                    const targetMove = nextIdx === -1 ? history[history.length - 1] : history[nextIdx];
-                    if (targetMove) {
-                        playAudio(resolveMoveSound(targetMove.san));
-                    }
-                    return nextIdx;
-                });
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                setViewIndex(-2);
-                playAudio('move');
-            } else if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                setViewIndex(-1);
-                playAudio('move');
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [history, playAudio]);
-
-    useEffect(() => {
-        if (notationScrollRef.current) {
-            const activeEl = notationScrollRef.current.querySelector('.active-move-btn');
-            if (activeEl) {
-                activeEl.scrollIntoView({behavior: 'smooth', block: 'nearest'});
-            } else if (viewIndex === -1) {
-                notationScrollRef.current.scrollTop = notationScrollRef.current.scrollHeight;
+            } catch {
+                // Сеть недоступна — локальный выход всё равно выполняем.
             }
         }
-    }, [history.length, viewIndex]);
+        handleLogout();
+    };
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (timeDropdownRef.current && !timeDropdownRef.current.contains(event.target as Node)) {
-                setIsTimeDropdownOpen(false);
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsProfileOpen(false);
             }
-            if (appearanceDropdownRef.current && !appearanceDropdownRef.current.contains(event.target as Node)) {
-                setShowAppearanceDropdown(false);
+            if (championsMenuRef.current && !championsMenuRef.current.contains(event.target as Node)) {
+                setIsChampionsMenuOpen(false);
             }
         };
-
-        if (isTimeDropdownOpen || showAppearanceDropdown) {
-            document.addEventListener('mousedown', handleClickOutside);
-        }
+        document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [isTimeDropdownOpen, showAppearanceDropdown]);
-
-    useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        fetch(`${API_BASE_URL}/api/v1/profile/me`, {
-            headers: {'Authorization': `Bearer ${token}`}
-        })
-            .then(res => res.ok ? res.json() : null)
-            .then(data => {
-                if (data) {
-                    setCurrentUserId(data.id);
-                    if (data.username) {
-                        setCurrentUsername(data.username);
-                        currentUsernameRef.current = data.username;
-                    }
-                    if (data.rating) setCurrentUserRating(data.rating);
-                }
-            })
-            .catch(() => {
-            });
     }, []);
 
-    useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        gameSocket.connect(token);
-
-        const handleMatchFound = (data: any) => {
-            applyMatchFoundSnapshot(data);
-        };
-
-        const handleMoveMade = (data: any) => {
-            applyMoveMadeSnapshot(data);
-        };
-
-        const handleGameOver = (data: any) => {
-            setPremove(null);
-            setPendingPromotion(null);
-            setGameOverResult(prev => {
-                if (!prev) {
-                    playOutcomeSound(data.result);
-                    updateSessionStats(data.result);
-                }
-                return data.result;
-            });
-            setRatingInfo(data);
-            if (data.white_time_ms !== undefined) setWhiteTimeMs(data.white_time_ms);
-            if (data.black_time_ms !== undefined) setBlackTimeMs(data.black_time_ms);
-            if (data.reason === 'aborted' || data.result === '*') {
-                setDrawOfferStatus('Партия отменена на 1-м ходу (рейтинг не изменён).');
-            } else if (data.result) {
-                setDrawOfferStatus(`Партия окончена. Результат: ${data.result}`);
-            }
-        };
-
-        const handleDrawOffered = () => {
-            setDrawOfferStatus('Соперник предлагает ничью.');
-            playAudio('offer');
-        };
-
-        const handleDrawDeclined = () => {
-            setDrawOfferStatus('Предложение ничьей отклонено.');
-            playAudio('decline');
-            setTimeout(() => setDrawOfferStatus(null), 3000);
-        };
-
-        const handleRematchOffered = () => {
-            setRematchStatus('offered_by_opponent');
-            playAudio('offer');
-        };
-
-        const handleRematchDeclined = () => {
-            setRematchStatus('declined');
-            playAudio('decline');
-        };
-
-        const handleInviteCreated = (data: any) => {
-            if (data.code) {
-                setCreatedInviteCode(data.code);
-                const url = `${window.location.origin}/challenge/${data.code}`;
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(url).catch(() => {
-                    });
-                }
-                setInviteCopied(true);
-                playAudio('offer');
-                setTimeout(() => setInviteCopied(false), 3000);
-            }
-        };
-
-        const handleSpectateStarted = (data: any) => {
-            setIsSearching(false);
-            setActiveBot(null);
-            gameIdRef.current = null;
-            setGameId(null);
-            setSpectatingGameId(data.game_id);
-            setWhitePlayer({username: data.white_username || 'Белые', rating: String(data.white_rating || 1200)});
-            setBlackPlayer({username: data.black_username || 'Черные', rating: String(data.black_rating || 1200)});
-            setWhiteTimeMs(data.white_time_ms ?? data.base_time_ms ?? 180000);
-            setBlackTimeMs(data.black_time_ms ?? data.base_time_ms ?? 180000);
-
-            const restored = new Chess();
-            if (data.pgn) {
-                try {
-                    restored.loadPgn(data.pgn);
-                } catch {
-                    if (data.fen) restored.load(data.fen);
-                }
-            } else if (data.fen) {
-                restored.load(data.fen);
-            }
-            setGame(restored);
-            setHistory(restored.history({verbose: true}));
-            setViewIndex(-1);
-            setGameOverResult(null);
-            setChatMessages([]);
-            setDrawOfferStatus(`Режим зрителя: ${data.white_username} vs ${data.black_username}`);
-            playAudio('start');
-        };
-
-        const handleChatMessage = (data: any) => {
-            if (data.text && data.sender) {
-                setChatMessages(prev => [...prev.slice(-49), {
-                    sender: data.sender,
-                    text: data.text,
-                    timestamp: data.timestamp || Date.now()
-                }]);
-                if (data.sender !== currentUsernameRef.current) {
-                    playAudio('chat');
-                }
-            }
-        };
-
-        const handleServerError = (data: any) => {
-            console.warn('Сервер отклонил действие:', data);
-            if (data.code) {
-                // Отказ матчмейкинга (уже в партии, вне диапазона рейтинга, вызов неактуален...):
-                // показываем причину и выходим из режима поиска, ход на доске не трогаем.
-                setIsSearching(false);
-                if (data.message) setDrawOfferStatus(data.message);
-                return;
-            }
-            setPremove(null);
-            playAudio('illegal');
-            if (data.pgn || data.fen) {
-                const syncedGame = new Chess();
-                if (data.pgn) {
-                    try {
-                        syncedGame.loadPgn(data.pgn);
-                    } catch {
-                        if (data.fen) syncedGame.load(data.fen);
-                    }
-                } else if (data.fen) {
-                    syncedGame.load(data.fen);
-                }
-                setGame(syncedGame);
-                setHistory(syncedGame.history({verbose: true}));
-            }
-            if (data.state_version !== undefined) {
-                const ver = Number(data.state_version);
-                setStateVersion(ver);
-                stateVersionRef.current = ver;
-            }
-        };
-
-        gameSocket.on('match_found', handleMatchFound);
-        gameSocket.on('move_made', handleMoveMade);
-        gameSocket.on('game_over', handleGameOver);
-        gameSocket.on('draw_offered', handleDrawOffered);
-        gameSocket.on('draw_declined', handleDrawDeclined);
-        gameSocket.on('rematch_offered', handleRematchOffered);
-        gameSocket.on('rematch_declined', handleRematchDeclined);
-        gameSocket.on('invite_created', handleInviteCreated);
-        gameSocket.on('spectate_started', handleSpectateStarted);
-        gameSocket.on('chat_message', handleChatMessage);
-        gameSocket.on('error', handleServerError);
-
-        return () => {
-            gameSocket.off('match_found', handleMatchFound);
-            gameSocket.off('move_made', handleMoveMade);
-            gameSocket.off('game_over', handleGameOver);
-            gameSocket.off('draw_offered', handleDrawOffered);
-            gameSocket.off('draw_declined', handleDrawDeclined);
-            gameSocket.off('rematch_offered', handleRematchOffered);
-            gameSocket.off('rematch_declined', handleRematchDeclined);
-            gameSocket.off('invite_created', handleInviteCreated);
-            gameSocket.off('spectate_started', handleSpectateStarted);
-            gameSocket.off('chat_message', handleChatMessage);
-            gameSocket.off('error', handleServerError);
-        };
-    }, [applyMatchFoundSnapshot, applyMoveMadeSnapshot, playAudio, playOutcomeSound, updateSessionStats]);
-
-    useEffect(() => {
-        if (!inviteCode || !localStorage.getItem('token')) return;
-        const timer = setTimeout(() => {
-            gameSocket.send('accept_invite', {code: inviteCode});
-            navigate('/', {replace: true});
-        }, 450);
-        return () => clearTimeout(timer);
-    }, [inviteCode, navigate]);
-
-    useEffect(() => {
-        const syncLobbyAndActiveGame = async () => {
-            const token = localStorage.getItem('token');
-            try {
-                if (token && !activeBot && !spectatingGameId) {
-                    const activeRes = await fetch(`${API_BASE_URL}/api/v1/profile/games/my-active`, {
-                        headers: {'Authorization': `Bearer ${token}`}
-                    });
-                    if (activeRes.ok) {
-                        const activeData = await activeRes.json();
-                        if (activeData && activeData.active && activeData.game_id) {
-                            if (gameIdRef.current !== Number(activeData.game_id)) {
-                                applyMatchFoundSnapshot(activeData);
-                                return;
-                            } else if (Number(activeData.state_version || 0) > stateVersionRef.current) {
-                                applyMoveMadeSnapshot(activeData);
-                            }
-                        }
-                    }
-                }
-
-                if (!gameIdRef.current) {
-                    const [qRes, liveRes] = await Promise.all([
-                        fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/queue`),
-                        fetch(`${API_BASE_URL}/api/v1/profile/games/live`)
-                    ]);
-                    if (qRes.ok) {
-                        setQueuePlayers(await qRes.json());
-                    }
-                    if (liveRes.ok) {
-                        setLiveGames(await liveRes.json());
-                    }
-                } else {
-                    setQueuePlayers([]);
-                }
-            } catch (e) {
-                console.error('Failed to sync lobby/active game data', e);
-            }
-        };
-
-        syncLobbyAndActiveGame();
-        const interval = setInterval(syncLobbyAndActiveGame, 1500);
-        return () => clearInterval(interval);
-    }, [activeBot, spectatingGameId, applyMatchFoundSnapshot, applyMoveMadeSnapshot]);
-
-    const currentTurnChar = game.turn();
-
-    useEffect(() => {
-        if ((!gameId && !activeBot && !spectatingGameId) || gameOverResult) return;
-
-        let lastTick = Date.now();
-        const currentTurnColor = currentTurnChar === 'w' ? 'white' : 'black';
-        const isHourglass = !gameId && selectedTimeControl.mode === 'hourglass';
-        const isScrabble = !gameId && selectedTimeControl.mode === 'scrabble';
-
-        const interval = setInterval(() => {
-            const now = Date.now();
-            const delta = now - lastTick;
-            lastTick = now;
-
-            if (currentTurnColor === 'white') {
-                setWhiteTimeMs(prev => isScrabble ? prev - delta : Math.max(0, prev - delta));
-                if (isHourglass) {
-                    setBlackTimeMs(prev => prev + delta);
-                }
-            } else {
-                setBlackTimeMs(prev => isScrabble ? prev - delta : Math.max(0, prev - delta));
-                if (isHourglass) {
-                    setWhiteTimeMs(prev => prev + delta);
-                }
-            }
-        }, 50);
-
-        return () => clearInterval(interval);
-    }, [gameId, activeBot, spectatingGameId, gameOverResult, currentTurnChar, selectedTimeControl.mode]);
-
-    // Звуковое предупреждение о цейтноте (< 10 секунд на часах игрока)
-    useEffect(() => {
-        if ((!gameId && !activeBot) || gameOverResult || lowTimeWarnedRef.current) return;
-        const myRemainingMs = myColor === 'white' ? whiteTimeMs : blackTimeMs;
-        if (myRemainingMs > 0 && myRemainingMs <= 10000) {
-            lowTimeWarnedRef.current = true;
-            playAudio('low_time');
-        }
-    }, [whiteTimeMs, blackTimeMs, gameId, activeBot, gameOverResult, myColor, playAudio]);
-
-    useEffect(() => {
-        if (!activeBot || gameOverResult || selectedTimeControl.mode === 'scrabble') return;
-
-        if (whiteTimeMs <= 0 || blackTimeMs <= 0) {
-            const flagWinner = whiteTimeMs <= 0 ? '0-1' : '1-0';
-            const botName = HISTORICAL_BOTS[activeBot].shortName;
-            setPremove(null);
-            setPendingPromotion(null);
-            setGameOverResult(flagWinner);
-            setDrawOfferStatus(`Флажок упал! Партия против ${botName} завершена по времени (${flagWinner}).`);
-            updateSessionStats(flagWinner);
-            playOutcomeSound(flagWinner, myColor);
-            saveBotGameToDatabase(activeBot, myColor, flagWinner, game, 'timeout');
-        }
-    }, [whiteTimeMs, blackTimeMs, activeBot, gameOverResult, selectedTimeControl.mode, myColor, game, playOutcomeSound, updateSessionStats, saveBotGameToDatabase]);
-
-    const executeMove = useCallback((
-        from: string,
-        to: string,
-        explicitPromotion?: PromotionPiece,
-        isPremoveMove: boolean = false
-    ): boolean => {
-        if (gameOverResult || viewIndex !== -1 || spectatingGameId) return false;
-
-        const piece = game.get(from as any);
-        const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
-
-        if (!piece || piece.color !== (game.turn() === 'w' ? 'w' : 'b') || ((gameId || activeBot || spectatingGameId) && currentTurnColor !== myColor)) {
-            setSelectedSquare(null);
-            return false;
-        }
-
-        const targetRank = to[1];
-        const isPawnPromotion =
-            piece.type === 'p' &&
-            ((piece.color === 'w' && targetRank === '8') || (piece.color === 'b' && targetRank === '1'));
-
-        if (isPawnPromotion && !explicitPromotion && !isPremoveMove) {
-            try {
-                const probeGame = cloneChessInstance(game);
-                const testMove = probeGame.move({from, to, promotion: 'q'});
-                if (testMove) {
-                    setPendingPromotion({
-                        from,
-                        to,
-                        color: piece.color as 'w' | 'b',
-                        isPremove: false
-                    });
-                    setSelectedSquare(null);
-                    setDragState(null);
-                    return true;
-                }
-            } catch {
-                setSelectedSquare(null);
-                setDragState(null);
-                return false;
-            }
-        }
-
-        const chosenPromotion: PromotionPiece = explicitPromotion || 'q';
-
-        try {
-            const nextGame = cloneChessInstance(game);
-            const move = nextGame.move({
-                from,
-                to,
-                ...(isPawnPromotion ? {promotion: chosenPromotion} : {})
-            });
-
-            if (move) {
-                const timeTaken = isPremoveMove ? 0 : Math.max(0, Date.now() - moveStartTime.current);
-                const uciMove = (move as any).uci || `${move.from}${move.to}${move.promotion || ''}`;
-                const newHistory = nextGame.history({verbose: true});
-
-                if (activeBot) {
-                    applyDgtClockAfterMove(myColor, timeTaken, newHistory.length);
-                }
-
-                setPendingPromotion(null);
-                setGame(nextGame);
-                setHistory(newHistory);
-                setViewIndex(-1);
-                playAudio(resolveMoveSound(move.san));
-                moveStartTime.current = Date.now();
-
-                if (gameId) {
-                    const commandId = typeof crypto !== 'undefined' && crypto.randomUUID
-                        ? crypto.randomUUID()
-                        : Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
-
-                    gameSocket.send('make_move', {
-                        game_id: gameId,
-                        move: uciMove,
-                        command_id: commandId,
-                        state_version: stateVersionRef.current,
-                        time_taken_ms: timeTaken,
-                        window_blurred: document.hidden,
-                        is_premove: isPremoveMove
-                    });
-                } else if (activeBot && nextGame.isGameOver()) {
-                    let result = '1/2-1/2';
-                    if (nextGame.isCheckmate()) {
-                        result = nextGame.turn() === 'w' ? '0-1' : '1-0';
-                    }
-                    const botName = HISTORICAL_BOTS[activeBot].shortName;
-                    setGameOverResult(result);
-                    setDrawOfferStatus(`Партия против ${botName} окончена и сохранена в архив (${result}).`);
-                    updateSessionStats(result);
-                    playOutcomeSound(result, myColor);
-                    saveBotGameToDatabase(activeBot, myColor, result, nextGame);
-                }
-                setSelectedSquare(null);
-                setDragState(null);
-                return true;
-            }
-        } catch {
-            setSelectedSquare(null);
-        }
-        setDragState(null);
-        return false;
-    }, [game, gameId, activeBot, spectatingGameId, myColor, stateVersion, viewIndex, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyDgtClockAfterMove]);
-
-    const scheduleOrPromotePremove = useCallback((from: string, to: string, explicitPromotion?: PromotionPiece) => {
-        if (from === to) return;
-        const piece = game.get(from as any);
-        const myColorChar = myColor === 'white' ? 'w' : 'b';
-        if (!piece || piece.color !== myColorChar) {
-            setSelectedSquare(null);
-            return;
-        }
-
-        const targetRank = to[1];
-        const isPawnPromotion =
-            piece.type === 'p' &&
-            ((piece.color === 'w' && targetRank === '8') || (piece.color === 'b' && targetRank === '1'));
-
-        if (isPawnPromotion && !explicitPromotion) {
-            setPendingPromotion({
-                from,
-                to,
-                color: myColorChar,
-                isPremove: true
-            });
-            setSelectedSquare(null);
-            setDragState(null);
-            return;
-        }
-
-        setPremove({
-            from,
-            to,
-            promotion: isPawnPromotion ? (explicitPromotion || 'q') : undefined
-        });
-        playAudio('premove');
-        setPendingPromotion(null);
-        setSelectedSquare(null);
-        setDragState(null);
-    }, [game, myColor, playAudio]);
-
-    useEffect(() => {
-        if (!premove || gameOverResult || viewIndex !== -1) return;
-        if (!gameId && !activeBot) return;
-
-        const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
-        if (currentTurnColor !== myColor) return;
-
-        const currentPremove = premove;
-        setPremove(null);
-        executeMove(currentPremove.from, currentPremove.to, currentPremove.promotion || 'q', true);
-    }, [game, premove, gameId, activeBot, myColor, gameOverResult, viewIndex, executeMove]);
-
-    useEffect(() => {
-        const handlePointerMove = (e: PointerEvent) => {
-            if (!dragState) return;
-            setDragState(prev => prev ? {...prev, x: e.clientX, y: e.clientY} : null);
-        };
-
-        const handlePointerUp = (e: PointerEvent) => {
-            if (!dragState) return;
-
-            let targetSquare: string | null = null;
-
-            const elements = document.elementsFromPoint(e.clientX, e.clientY);
-            const squareEl = Array.from(elements || []).find(el => el.hasAttribute('data-square'));
-            if (squareEl) {
-                targetSquare = squareEl.getAttribute('data-square');
-            }
-
-            if (!targetSquare && boardContainerRef.current) {
-                const rect = boardContainerRef.current.getBoundingClientRect();
-                const padding = 10;
-                const innerLeft = rect.left + padding;
-                const innerTop = rect.top + padding;
-                const innerWidth = rect.width - padding * 2;
-                const innerHeight = rect.height - padding * 2;
-
-                const x = e.clientX - innerLeft;
-                const y = e.clientY - innerTop;
-
-                if (x >= 0 && x <= innerWidth && y >= 0 && y <= innerHeight) {
-                    const fileIdx = Math.floor((x / innerWidth) * 8);
-                    const rankIdx = Math.floor((y / innerHeight) * 8);
-
-                    const files = isBoardFlipped ? [...FILES].reverse() : FILES;
-                    const ranks = isBoardFlipped
-                        ? ['1', '2', '3', '4', '5', '6', '7', '8']
-                        : ['8', '7', '6', '5', '4', '3', '2', '1'];
-
-                    if (files[fileIdx] && ranks[rankIdx]) {
-                        targetSquare = `${files[fileIdx]}${ranks[rankIdx]}`;
-                    }
-                }
-            }
-
-            if (targetSquare && targetSquare !== dragState.from) {
-                const turnColor = game.turn() === 'w' ? 'white' : 'black';
-                if ((gameId || activeBot || spectatingGameId) && turnColor !== myColor) {
-                    scheduleOrPromotePremove(dragState.from, targetSquare);
-                } else {
-                    executeMove(dragState.from, targetSquare);
-                }
-            }
-
-            setDragState(null);
-        };
-
-        if (dragState) {
-            window.addEventListener('pointermove', handlePointerMove);
-            window.addEventListener('pointerup', handlePointerUp);
-            window.addEventListener('pointercancel', handlePointerUp);
-        }
-
-        return () => {
-            window.removeEventListener('pointermove', handlePointerMove);
-            window.removeEventListener('pointerup', handlePointerUp);
-            window.removeEventListener('pointercancel', handlePointerUp);
-        };
-    }, [dragState, isBoardFlipped, game, gameId, activeBot, spectatingGameId, myColor, executeMove, scheduleOrPromotePremove]);
-
-    const formatTime = (ms: number) => {
-        const isOvertimeUpcount = ms < 0 && selectedTimeControl.mode === 'scrabble';
-        const totalMs = isOvertimeUpcount ? Math.abs(ms) : Math.max(0, ms);
-        const totalSecs = Math.floor(totalMs / 1000);
-        const hours = Math.floor(totalSecs / 3600);
-        const mins = Math.floor((totalSecs % 3600) / 60);
-        const secs = totalSecs % 60;
-        const prefix = isOvertimeUpcount ? '+' : '';
-
-        if (hours > 0) {
-            return `${prefix}${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-        }
-
-        if (!isOvertimeUpcount && totalMs < 30000 && totalMs > 0) {
-            const tenths = Math.floor((totalMs % 1000) / 100);
-            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${tenths}`;
-        }
-
-        return `${prefix}${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    };
-
-    const startMatchmaking = async () => {
-        gameIdRef.current = null;
-        setGameId(null);
-        setActiveBot(null);
-        setBotComment(null);
-        setSavedBotGameId(null);
-        botGameSavedRef.current = false;
-        lowTimeWarnedRef.current = false;
-        appliedPeriodsRef.current = {white: new Set(), black: new Set()};
-        setPendingPromotion(null);
-        setPremove(null);
-        setGameOverResult(null);
-        setRatingInfo(null);
-        setIsSearching(true);
-        setLeftSectionTab('lobby');
-        setLobbyTab('lobby');
-        setIsTimeDropdownOpen(false);
-        setDrawOfferStatus(`Вы опубликовали вызов в лобби (Опция DGT #${selectedTimeControl.optionNumber})...`);
-
-        const baseMs = Math.round(effectiveWhiteBaseMinutes * 60 * 1000);
-        const incMs = Math.round(effectiveIncSeconds * 1000);
-
-        gameSocket.send('join_queue', {
-            base_time_ms: baseMs,
-            increment_ms: incMs
-        });
-
-        const token = localStorage.getItem('token');
-        if (token) {
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/join`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({base_time_ms: baseMs, increment_ms: incMs})
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data && data.active && data.game_id) {
-                        applyMatchFoundSnapshot(data);
-                    }
-                }
-            } catch {
-                // Игнорируем ошибку, если сработал WebSocket
-            }
-        }
-    };
-
-    const cancelMatchmaking = async () => {
-        setIsSearching(false);
-        setDrawOfferStatus(null);
-        gameSocket.send('leave_queue', {});
-        const token = localStorage.getItem('token');
-        if (token) {
-            fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/leave`, {
-                method: 'POST',
-                headers: {'Authorization': `Bearer ${token}`}
-            }).catch(() => {
-            });
-        }
-    };
-
-    const acceptChallenge = async (targetUserId: number) => {
-        setActiveBot(null);
-        setBotComment(null);
-        setSavedBotGameId(null);
-        setPendingPromotion(null);
-        setPremove(null);
-        botGameSavedRef.current = false;
-
-        gameSocket.send('accept_challenge', {target_user_id: targetUserId});
-
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/accept/${targetUserId}`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Accept': 'application/json'
-                }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                if (data && data.game_id) {
-                    applyMatchFoundSnapshot(data);
-                }
-            }
-        } catch (err) {
-            console.error('Ошибка при принятии вызова по HTTP:', err);
-        }
-    };
-
-    const handleCreatePrivateInvite = () => {
-        gameSocket.send('create_invite', {
-            base_time_ms: Math.round(effectiveWhiteBaseMinutes * 60 * 1000),
-            increment_ms: Math.round(effectiveIncSeconds * 1000),
-            color_pref: inviteColorPref
-        });
-    };
-
-    const handleCopyInviteLink = () => {
-        if (!createdInviteCode) return;
-        const url = `${window.location.origin}/challenge/${createdInviteCode}`;
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(url).catch(() => {
-            });
-        }
-        setInviteCopied(true);
-        setTimeout(() => setInviteCopied(false), 2500);
-    };
-
-    const handleSpectateGame = (targetGameId: number) => {
-        gameSocket.send('spectate_game', {game_id: targetGameId});
-    };
-
-    const handleLeaveSpectate = () => {
-        if (spectatingGameId) {
-            gameSocket.send('leave_spectate', {game_id: spectatingGameId});
-        }
-        setSpectatingGameId(null);
-        handleResetSandbox();
-    };
-
-    const handleSendChatMessage = (textToSend?: string) => {
-        const activeGid = gameId || spectatingGameId;
-        const finalMsg = (textToSend ?? chatInput).trim();
-        if (!activeGid || !finalMsg) return;
-        gameSocket.send('chat_message', {
-            game_id: activeGid,
-            text: finalMsg.slice(0, 140)
-        });
-        if (!textToSend) setChatInput('');
-    };
-
-    const handleAbortGame = () => {
-        if ((!gameId && !activeBot) || gameOverResult || history.length >= 2) return;
-        setPendingPromotion(null);
-        setPremove(null);
-        if (gameId) {
-            gameSocket.send('abort_game', {game_id: gameId});
-        } else if (activeBot) {
-            setGameOverResult('*');
-            setDrawOfferStatus('Партия отменена без изменения счёта.');
-            playAudio('decline');
-        }
-    };
-
-    const handleOfferRematch = () => {
-        if (gameId && gameOverResult) {
-            gameSocket.send('offer_rematch', {game_id: gameId});
-            setRematchStatus('offered_by_me');
-            playAudio('premove');
-        } else if (activeBot && gameOverResult) {
-            const nextColor = myColor === 'white' ? 'black' : 'white';
-            startHistoricalBotGame(activeBot, nextColor);
-        }
-    };
-
-    const handleAcceptRematch = () => {
-        if (!gameId) return;
-        gameSocket.send('accept_rematch', {game_id: gameId});
-    };
-
-    const handleDeclineRematch = () => {
-        if (!gameId) return;
-        gameSocket.send('decline_rematch', {game_id: gameId});
-        setRematchStatus('none');
-        playAudio('decline');
-    };
-
-    const handleResign = () => {
-        if ((!gameId && !activeBot) || gameOverResult) return;
-        if (window.confirm('Вы действительно хотите сдаться?')) {
-            setPendingPromotion(null);
-            setPremove(null);
-            if (gameId) {
-                gameSocket.send('resign', {game_id: gameId});
-            } else if (activeBot) {
-                const res = myColor === 'white' ? '0-1' : '1-0';
-                const botName = HISTORICAL_BOTS[activeBot].shortName;
-                setGameOverResult(res);
-                setDrawOfferStatus(`Вы сдались. Победа ${botName} (${res}).`);
-                updateSessionStats(res);
-                playOutcomeSound(res, myColor);
-                saveBotGameToDatabase(activeBot, myColor, res, game, 'resignation');
-            }
-        }
-    };
-
-    const handleOfferDraw = () => {
-        if (!gameId || gameOverResult) return;
-        gameSocket.send('offer_draw', {game_id: gameId});
-        setDrawOfferStatus('Вы предложили ничью...');
-        playAudio('premove');
-    };
-
-    const acceptDraw = () => {
-        if (!gameId) return;
-        gameSocket.send('accept_draw', {game_id: gameId});
-        setDrawOfferStatus(null);
-    };
-
-    const declineDraw = () => {
-        if (!gameId) return;
-        gameSocket.send('decline_draw', {game_id: gameId});
-        setDrawOfferStatus(null);
-        playAudio('decline');
-    };
-
-    const handleResetSandbox = () => {
-        if (gameId && !gameOverResult) return;
-        gameIdRef.current = null;
-        setGameId(null);
-        setActiveBot(null);
-        setBotComment(null);
-        setSavedBotGameId(null);
-        botGameSavedRef.current = false;
-        lowTimeWarnedRef.current = false;
-        appliedPeriodsRef.current = {white: new Set(), black: new Set()};
-        setIsBotThinking(false);
-        setGameOverResult(null);
-        setRatingInfo(null);
-        setDrawOfferStatus(null);
-        setSelectedSquare(null);
-        setPendingPromotion(null);
-        setPremove(null);
-        setViewIndex(-1);
-        setGame(new Chess());
-        setHistory([]);
-    };
-
-    const handleUndoSandboxMove = () => {
-        if (gameId || history.length === 0 || isBotThinking || !!gameOverResult) return;
-        const nextGame = cloneChessInstance(game);
-        nextGame.undo();
-        if (activeBot && nextGame.history().length > 0) {
-            const turnAfterFirstUndo = nextGame.turn() === 'w' ? 'white' : 'black';
-            if (turnAfterFirstUndo !== myColor) {
-                nextGame.undo();
-            }
-        }
-        setGame(nextGame);
-        setHistory(nextGame.history({verbose: true}));
-        setGameOverResult(null);
-        setDrawOfferStatus(null);
-        setPendingPromotion(null);
-        setPremove(null);
-        setViewIndex(-1);
-        setSelectedSquare(null);
-        playAudio('move');
-    };
-
-    const handlePromotionSelect = (pieceType: PromotionPiece) => {
-        if (!pendingPromotion) return;
-        const {from, to, isPremove} = pendingPromotion;
-        setPendingPromotion(null);
-        if (isPremove) {
-            scheduleOrPromotePremove(from, to, pieceType);
-        } else {
-            executeMove(from, to, pieceType, false);
-        }
-    };
-
-    const handleSquareClick = (squareId: string) => {
-        if (viewIndex !== -1 || gameOverResult || spectatingGameId) return;
-
-        if (pendingPromotion) {
-            setPendingPromotion(null);
-            return;
-        }
-
-        const turnChar = game.turn();
-        const currentTurnColor = turnChar === 'w' ? 'white' : 'black';
-        const myColorChar = myColor === 'white' ? 'w' : 'b';
-        const isOpponentTurn = (gameId || activeBot || spectatingGameId) && currentTurnColor !== myColor;
-
-        if (isOpponentTurn) {
-            if (selectedSquare) {
-                if (selectedSquare === squareId) {
-                    setSelectedSquare(null);
-                } else {
-                    const pieceOnTarget = game.get(squareId as any);
-                    if (pieceOnTarget && pieceOnTarget.color === myColorChar) {
-                        setSelectedSquare(squareId);
-                    } else {
-                        scheduleOrPromotePremove(selectedSquare, squareId);
-                    }
-                }
-            } else {
-                const piece = game.get(squareId as any);
-                if (piece && piece.color === myColorChar) {
-                    setSelectedSquare(squareId);
-                } else if (premove) {
-                    setPremove(null);
-                }
-            }
-            return;
-        }
-
-        if (selectedSquare) {
-            if (selectedSquare === squareId) {
-                setSelectedSquare(null);
-            } else {
-                const pieceOnTarget = game.get(squareId as any);
-                if (pieceOnTarget && pieceOnTarget.color === turnChar && ((!gameId && !activeBot) || currentTurnColor === myColor)) {
-                    setSelectedSquare(squareId);
-                } else {
-                    executeMove(selectedSquare, squareId);
-                }
-            }
-        } else {
-            const piece = game.get(squareId as any);
-            if (piece && piece.color === turnChar && ((!gameId && !activeBot) || currentTurnColor === myColor)) {
-                setSelectedSquare(squareId);
-            }
-        }
-    };
-
-    const currentGame = viewIndex === -1 ? game : (() => {
-        const tg = new Chess();
-        const limit = viewIndex === -2 ? -1 : viewIndex;
-        for (let i = 0; i <= limit; i++) {
-            if (history[i]) tg.move(history[i]);
-        }
-        return tg;
-    })();
-    const boardState = currentGame.board();
-    const material = calculateMaterialBalance(boardState);
-
-    const activeMoveIndex = viewIndex === -1 ? history.length - 1 : viewIndex;
-    const lastMove = activeMoveIndex >= 0 ? history[activeMoveIndex] : null;
-
-    const legalTargetSquares = new Set<string>();
-    if (selectedSquare && viewIndex === -1 && !gameOverResult) {
-        const currentTurnColor = currentGame.turn() === 'w' ? 'white' : 'black';
-        const isMyTurnNow = (!gameId && !activeBot) || currentTurnColor === myColor;
-        if (isMyTurnNow) {
-            try {
-                const movesForSquare = currentGame.moves({square: selectedSquare as any, verbose: true});
-                movesForSquare.forEach((m: any) => legalTargetSquares.add(m.to));
-            } catch {
-                // Игнорируем некорректный квадрат
-            }
-        }
-    }
-
-    const displayedRanks = isBoardFlipped ? ['1', '2', '3', '4', '5', '6', '7', '8'] : ['8', '7', '6', '5', '4', '3', '2', '1'];
-    const displayedFiles = isBoardFlipped ? [...FILES].reverse() : FILES;
-
-    const topIsWhite = isBoardFlipped;
-    const topPlayerInfo = topIsWhite ? whitePlayer : blackPlayer;
-    const bottomPlayerInfo = topIsWhite ? blackPlayer : whitePlayer;
-    const topPlayerTime = topIsWhite ? whiteTimeMs : blackTimeMs;
-    const bottomPlayerTime = topIsWhite ? blackTimeMs : whiteTimeMs;
-    const topIdlePreviewMs = Math.round((topIsWhite ? effectiveWhiteBaseMinutes : effectiveBlackBaseMinutes) * 60 * 1000);
-    const bottomIdlePreviewMs = Math.round((!topIsWhite ? effectiveWhiteBaseMinutes : effectiveBlackBaseMinutes) * 60 * 1000);
-    const topCaptured = topIsWhite ? material.whiteCapturedSymbols : material.blackCapturedSymbols;
-    const bottomCaptured = topIsWhite ? material.blackCapturedSymbols : material.whiteCapturedSymbols;
-    const topAdvantage = topIsWhite ? material.whiteAdvantage : material.blackAdvantage;
-    const bottomAdvantage = topIsWhite ? material.blackAdvantage : material.whiteAdvantage;
-
-    const isBotOnTop = !!activeBotProfile && ((topIsWhite && myColor === 'black') || (!topIsWhite && myColor === 'white'));
-    const isBotOnBottom = !!activeBotProfile && !isBotOnTop;
-
-    const movePairs = history.reduce((acc: Array<{
-        moveNumber: number;
-        whiteSan: string;
-        whiteIdx: number;
-        blackSan?: string;
-        blackIdx?: number;
-    }>, move: any, idx: number) => {
-        if (idx % 2 === 0) {
-            acc.push({
-                moveNumber: Math.floor(idx / 2) + 1,
-                whiteSan: move.san,
-                whiteIdx: idx
-            });
-        } else {
-            acc[acc.length - 1].blackSan = move.san;
-            acc[acc.length - 1].blackIdx = idx;
-        }
-        return acc;
-    }, []);
-
-    const handleSelectMoveFromList = (targetIdx: number) => {
-        setSelectedSquare(null);
-        if (history[targetIdx]) {
-            playAudio(resolveMoveSound(history[targetIdx].san));
-        }
-        if (targetIdx >= history.length - 1) {
-            setViewIndex(-1);
-        } else {
-            setViewIndex(targetIdx);
-        }
-    };
-
-    const renderPieceSvg = (piece: { type: string; color: string }) => {
-        const styleProps = getHarmoniousPieceStyle(pieceSetKey, boardThemeKey, piece.color);
-        return (
-            <div className="relative w-full h-full pointer-events-none flex items-center justify-center">
-                <img
-                    src={getPieceSvgUrl(pieceSetKey, piece.color, piece.type)}
-                    className="object-contain select-none transition-transform duration-75"
-                    style={styleProps}
-                    draggable={false}
-                    alt={`${piece.color}${piece.type}`}
-                />
-            </div>
-        );
-    };
-
-    if (!localStorage.getItem('token')) {
-        return (
-            <div
-                className="my-auto flex flex-col items-center justify-center p-8 bg-acacia rounded-lg shadow-heavy border-4 border-acacia-dark text-boxwood-light text-center">
-                <div className="text-2xl font-bold mb-2">Требуется авторизация</div>
-                <p className="text-base text-boxwood/85 mb-2">
-                    Пожалуйста, войдите в систему в правом верхнем углу, чтобы начать игру.
-                </p>
-            </div>
-        );
-    }
-
-    const filteredQueue = queuePlayers.filter(p => p.user_id !== currentUserId);
-    const responsiveBoardPx = typeof window !== 'undefined' ? Math.min(boardSize, window.innerWidth - 24) : boardSize;
+    const username = userProfile?.username || 'Гость';
+    const userRating = userProfile?.rating || 1200;
 
     return (
         <div
-            className="w-full max-w-[1920px] h-full flex flex-col xl:flex-row items-center xl:items-stretch justify-between gap-3 px-1 xl:overflow-hidden relative">
+            className={`w-full flex flex-col bg-room text-paper font-sans select-none ${
+                isSingleScreenRoute ? 'min-h-dvh xl:h-dvh xl:overflow-hidden' : 'min-h-dvh'
+            }`}
+        >
+            <header
+                className="h-14 shrink-0 bg-acacia-dark border-b-2 border-amber-900/60 px-5 flex items-center justify-between shadow-heavy relative z-30">
+                <div className="flex items-center gap-7">
+                    <Link to="/" className="flex items-center gap-2.5 cursor-pointer group outline-none">
+                        <div
+                            className="w-9 h-9 rounded-md bg-boxwood flex items-center justify-center shadow-inner border border-amber-600/40 text-acacia-dark font-bold text-xl">
+                            ♞
+                        </div>
+                        <span
+                            className="text-2xl font-extrabold tracking-wide text-boxwood-light group-hover:text-white transition">
+                            michess
+                        </span>
+                    </Link>
 
-            {dragState && (
-                <div
-                    className="fixed pointer-events-none z-50 scale-110"
-                    style={{
-                        left: `${dragState.x}px`,
-                        top: `${dragState.y}px`,
-                        width: `${responsiveBoardPx / 8}px`,
-                        height: `${responsiveBoardPx / 8}px`,
-                        transform: 'translate(-50%, -50%)'
+                    <nav className="hidden md:flex items-center gap-6 text-[15px] font-semibold text-boxwood/90">
+                        <Link
+                            to="/"
+                            className={`flex items-center gap-2 transition ${
+                                location.pathname === '/' ? 'text-amber-300' : 'hover:text-amber-300'
+                            }`}
+                        >
+                            <Swords size={17}/> Игра
+                        </Link>
+
+                        <Link
+                            to="/leaderboard"
+                            className={`flex items-center gap-2 transition ${
+                                location.pathname === '/leaderboard' ? 'text-amber-300' : 'hover:text-amber-300'
+                            }`}
+                        >
+                            <Trophy size={17}/> Лидеры
+                        </Link>
+
+                        <div className="relative" ref={championsMenuRef}>
+                            <button
+                                onClick={() => setIsChampionsMenuOpen(!isChampionsMenuOpen)}
+                                className={`flex items-center gap-2 transition outline-none cursor-pointer ${
+                                    isChampionsMenuOpen || location.pathname.startsWith('/champions')
+                                        ? 'text-amber-300'
+                                        : 'hover:text-amber-300'
+                                }`}
+                            >
+                                <Crown size={17}/> Легенды шахмат
+                                <ChevronDown
+                                    size={15}
+                                    className={`transition-transform ${isChampionsMenuOpen ? 'rotate-180' : ''}`}
+                                />
+                            </button>
+
+                            {isChampionsMenuOpen && (
+                                <div
+                                    className="absolute top-full left-0 mt-3 w-80 bg-[#261C14] border-2 border-amber-900/80 rounded-lg shadow-2xl z-50 max-h-[75vh] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
+                                    {CHAMPIONS_LIST.map(champ => (
+                                        <Link
+                                            key={champ.id}
+                                            to={`/champions/${encodeURIComponent(champ.id)}`}
+                                            onClick={() => setIsChampionsMenuOpen(false)}
+                                            className="flex items-center gap-3.5 px-4 py-2.5 hover:bg-black/40 transition border-b border-amber-900/30 last:border-b-0 group outline-none"
+                                        >
+                                            <img
+                                                src={champ.img}
+                                                alt={champ.name}
+                                                referrerPolicy="no-referrer"
+                                                className="w-11 h-11 object-cover rounded-md shadow border border-amber-900/50 group-hover:border-amber-500/60 transition shrink-0"
+                                            />
+                                            <div className="flex flex-col min-w-0">
+                                                <span
+                                                    className="font-bold text-amber-200 text-[15px] group-hover:text-white transition truncate">
+                                                    {champ.name}
+                                                </span>
+                                                <span
+                                                    className="text-xs text-boxwood/70 font-mono group-hover:text-amber-400 transition">
+                                                    Чемпион • {champ.years}
+                                                </span>
+                                            </div>
+                                        </Link>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+
+                        <button className="flex items-center gap-2 hover:text-amber-300 transition cursor-pointer">
+                            <BookOpen size={17}/> Задачи
+                        </button>
+                        <button className="flex items-center gap-2 hover:text-amber-300 transition cursor-pointer">
+                            <Cpu size={17}/> Обучение
+                        </button>
+                        <button className="flex items-center gap-2 hover:text-amber-300 transition cursor-pointer">
+                            <Eye size={17}/> Просмотр
+                        </button>
+                        <button className="flex items-center gap-2 hover:text-amber-300 transition cursor-pointer">
+                            <Wrench size={17}/> Инструменты
+                        </button>
+                    </nav>
+                </div>
+
+                <div className="flex items-center gap-3 text-boxwood-light relative" ref={dropdownRef}>
+                    <Link
+                        to="/leaderboard"
+                        className="md:hidden p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300"
+                        title="Таблица лидеров"
+                    >
+                        <Trophy size={19}/>
+                    </Link>
+                    <button
+                        className="p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300 cursor-pointer"
+                        title="Поиск партии"
+                    >
+                        <Search size={19}/>
+                    </button>
+                    <button
+                        className="p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300 cursor-pointer"
+                        title="Уведомления"
+                    >
+                        <Bell size={19}/>
+                    </button>
+
+                    {token && userProfile ? (
+                        <>
+                            <div
+                                onClick={() => setIsProfileOpen(!isProfileOpen)}
+                                className="flex items-center gap-2.5 pl-3 border-l border-amber-900/50 cursor-pointer hover:opacity-90 transition select-none py-1 px-2.5 rounded-md hover:bg-black/25"
+                            >
+                                <img
+                                    src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${username}&backgroundColor=D0A972`}
+                                    alt="Avatar"
+                                    className="w-8 h-8 rounded bg-black/40 border border-amber-900/50 shadow"
+                                />
+                                <div className="flex flex-col items-start hidden sm:flex">
+                                    <span className="font-bold text-sm text-amber-200 leading-tight">{username}</span>
+                                    <span
+                                        className="text-xs text-amber-400 font-mono font-semibold">({userRating})</span>
+                                </div>
+                                <span className="text-xs text-amber-400 ml-0.5">▼</span>
+                            </div>
+
+                            {isProfileOpen && (
+                                <div
+                                    className="absolute right-0 top-12 w-64 bg-[#261C14] border-2 border-amber-900/80 rounded-lg shadow-2xl py-2 z-50 text-boxwood-light">
+                                    <div className="px-4 py-2.5 border-b border-amber-900/40 flex items-center gap-3">
+                                        <img
+                                            src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${username}&backgroundColor=D0A972`}
+                                            alt="Avatar"
+                                            className="w-10 h-10 rounded bg-black/40 border border-amber-900/50 shadow"
+                                        />
+                                        <div>
+                                            <div className="font-bold text-base text-amber-200">{username}</div>
+                                            <div
+                                                className="text-xs text-amber-400 font-mono">Рейтинг: {userRating}</div>
+                                            <div className="text-xs text-emerald-400 flex items-center gap-1.5 mt-0.5">
+                                                <span
+                                                    className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+                                                В сети
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="py-1 border-b border-amber-900/40 text-sm font-medium">
+                                        <button
+                                            onClick={() => {
+                                                setIsProfileOpen(false);
+                                                navigate(`/profile/${username}`);
+                                            }}
+                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
+                                        >
+                                            <User size={16} className="text-amber-500"/> Профиль
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setIsProfileOpen(false);
+                                                navigate('/leaderboard');
+                                            }}
+                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
+                                        >
+                                            <Trophy size={16} className="text-amber-500"/> Таблица лидеров
+                                        </button>
+                                        <button
+                                            onClick={() => setIsProfileOpen(false)}
+                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
+                                        >
+                                            <Mail size={16} className="text-amber-500"/> Входящие
+                                        </button>
+                                        <button
+                                            onClick={() => setIsProfileOpen(false)}
+                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
+                                        >
+                                            <Settings size={16} className="text-amber-500"/> Настройки
+                                        </button>
+                                        <button
+                                            onClick={handleLogout}
+                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-red-950/40 transition text-red-300 hover:text-red-200 cursor-pointer"
+                                        >
+                                            <LogOut size={16} className="text-red-400"/> Выйти
+                                        </button>
+                                        <button
+                                            onClick={handleLogoutEverywhere}
+                                            title="Завершить сессии на всех устройствах и во всех вкладках"
+                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-red-950/40 transition text-red-300/80 hover:text-red-200 cursor-pointer text-sm"
+                                        >
+                                            <LogOut size={16} className="text-red-500"/> Выйти на всех устройствах
+                                        </button>
+                                    </div>
+
+                                    <div
+                                        className="px-4 py-2 text-xs font-mono text-boxwood/70 flex justify-between items-center bg-black/20">
+                                        <span>ПИНГ {serverPing !== null ? (serverPing === -1 ? 'ОШИБКА' : `${serverPing} ms`) : '...'}</span>
+                                        <span className="text-emerald-400 font-bold">● СЕРВЕР</span>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <button
+                            onClick={() => setShowAuthModal(true)}
+                            className="flex items-center gap-2 px-4 py-1.5 bg-boxwood text-acacia-dark font-bold text-sm rounded-md hover:bg-boxwood-light transition shadow border border-amber-600/40 cursor-pointer"
+                        >
+                            <LogIn size={16}/> Войти
+                        </button>
+                    )}
+                </div>
+            </header>
+
+            <main
+                className={`flex-1 flex justify-center w-full ${
+                    isSingleScreenRoute
+                        ? 'items-stretch p-2 sm:p-3 xl:overflow-hidden'
+                        : 'items-start p-4 sm:p-6 overflow-y-auto'
+                }`}
+            >
+                <Routes>
+                    <Route path="/" element={<Chessboard key={token ? token : 'guest'}/>}/>
+                    <Route path="/challenge/:inviteCode" element={<Chessboard key={token ? token : 'guest'}/>}/>
+                    <Route path="/leaderboard" element={<Leaderboard/>}/>
+                    <Route path="/profile/:targetUsername" element={<Profile/>}/>
+                    <Route path="/game/:gameId" element={<GameViewer/>}/>
+                    <Route path="/champions/:championId" element={<ChampionGames/>}/>
+                </Routes>
+            </main>
+
+            {showAuthModal && (
+                <AuthModal
+                    onSuccess={(newToken) => {
+                        setToken(newToken);
+                        setShowAuthModal(false);
                     }}
-                >
-                    {renderPieceSvg(dragState.piece)}
+                />
+            )}
+        </div>
+    );
+}
+
+========================================================================================
+FILE: frontend/src/components/AuthModal.tsx
+========================================================================================
+// --- FILE: frontend/src/components/AuthModal.tsx ---
+
+import {useState} from 'react';
+import {LogIn, UserPlus} from 'lucide-react';
+import {API_BASE_URL} from '../config/api';
+import {readErrorDetail} from '../services/apiErrors';
+
+interface AuthModalProps {
+    onSuccess: (token: string) => void;
+}
+
+export default function AuthModal({onSuccess}: AuthModalProps) {
+    const [isLogin, setIsLogin] = useState(true);
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+
+        try {
+            if (isLogin) {
+                // Логин (OAuth2 form URL encoded)
+                const formData = new URLSearchParams();
+                formData.append('username', username);
+                formData.append('password', password);
+
+                const res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: formData,
+                });
+
+                if (!res.ok) {
+                    // 429 — превышен лимит попыток: показываем, сколько ждать, а не «неверный пароль».
+                    if (res.status === 429) {
+                        throw new Error(await readErrorDetail(res, 'Слишком много попыток входа, попробуйте позже'));
+                    }
+                    throw new Error('Неверное имя пользователя или пароль');
+                }
+                const data = await res.json();
+                localStorage.setItem('token', data.access_token);
+                onSuccess(data.access_token);
+            } else {
+                // Регистрация
+                const res = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username, password}),
+                });
+
+                if (!res.ok) {
+                    throw new Error(await readErrorDetail(res, 'Ошибка регистрации'));
+                }
+
+                // Автоматический вход после успешной регистрации
+                setIsLogin(true);
+                setError('Регистрация успешна! Теперь войдите в систему.');
+            }
+        } catch (err: any) {
+            setError(err.message || 'Произошла ошибка');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div
+                className="bg-[#261C14] border-2 border-amber-900/80 rounded-lg p-6 w-full max-w-md shadow-heavy text-boxwood-light font-serif">
+
+                <div className="flex justify-center mb-4">
+                    <div
+                        className="w-12 h-12 rounded bg-boxwood flex items-center justify-center text-acacia-dark font-bold text-2xl shadow-inner border border-amber-600/40">
+                        ♞
+                    </div>
+                </div>
+
+                <h2 className="text-2xl font-bold text-center text-amber-200 mb-1">
+                    {isLogin ? 'Вход в michess' : 'Регистрация аккаунта'}
+                </h2>
+                <p className="text-xs text-center text-boxwood/70 mb-6">
+                    {isLogin ? 'Введите свои учетные данные для игры' : 'Создайте новый аккаунт для старта'}
+                </p>
+
+                {error && (
+                    <div
+                        className={`p-3 mb-4 rounded text-xs text-center border ${error.includes('успешна') ? 'bg-emerald-950/60 border-emerald-600/50 text-emerald-200' : 'bg-red-950/80 border-red-800/50 text-red-200'}`}>
+                        {error}
+                    </div>
+                )}
+
+                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                    <div>
+                        <label className="block text-xs text-boxwood/80 mb-1">Имя пользователя (Логин)</label>
+                        <input
+                            type="text"
+                            required
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            className="w-full px-3 py-2 bg-black/40 border border-amber-900/60 rounded text-amber-100 text-sm focus:outline-none focus:border-amber-600"
+                            placeholder="например, string1"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-xs text-boxwood/80 mb-1">Пароль</label>
+                        <input
+                            type="password"
+                            required
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            className="w-full px-3 py-2 bg-black/40 border border-amber-900/60 rounded text-amber-100 text-sm focus:outline-none focus:border-amber-600"
+                            placeholder="••••••••"
+                        />
+                    </div>
+
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="mt-2 flex items-center justify-center gap-2 py-2.5 bg-boxwood text-acacia-dark font-bold rounded hover:bg-boxwood-light transition shadow border border-amber-600/40 disabled:opacity-50"
+                    >
+                        {isLogin ? <LogIn size={18}/> : <UserPlus size={18}/>}
+                        {loading ? 'Загрузка...' : (isLogin ? 'Войти' : 'Зарегистрироваться')}
+                    </button>
+                </form>
+
+                <div className="mt-4 text-center text-xs">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setIsLogin(!isLogin);
+                            setError('');
+                        }}
+                        className="text-amber-400 hover:underline"
+                    >
+                        {isLogin ? 'Нет аккаунта? Зарегистрируйтесь' : 'Уже есть аккаунт? Войдите'}
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    );
+}
+
+========================================================================================
+FILE: frontend/src/components/ChampionGames.tsx
+========================================================================================
+// --- FILE: frontend/src/components/ChampionGames.tsx ---
+
+import {useState, useEffect} from 'react';
+import {useParams, Link, useNavigate} from 'react-router-dom';
+import {format, parseISO} from 'date-fns';
+import {ru} from 'date-fns/locale';
+import {
+    Swords, Download, ArrowLeft, Crown,
+    ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
+} from 'lucide-react';
+import {CHAMPIONS_LIST} from '../config/champions';
+import {API_BASE_URL} from '../config/api';
+
+interface GameData {
+    game_id: number;
+    white_username: string;
+    white_rating: number;
+    black_username: string;
+    black_rating: number;
+    status: string;
+    is_rated: boolean;
+    result: string;
+    pgn_date: string | null;
+    site: string | null;
+    eco: string | null;
+    finished_at: string | null;
+}
+
+const displayDate = (game: GameData) => {
+    if (game.pgn_date && !game.pgn_date.includes('????')) {
+        // Очищаем дату от неизвестных месяцев/дней: "1860.??.??" -> "1860"
+        return game.pgn_date.replace(/\??/g, '').replace(/\.$/, '');
+    }
+    if (game.finished_at) {
+        return format(parseISO(game.finished_at), 'd MMM yyyy', {locale: ru});
+    }
+    return '—';
+};
+
+export default function ChampionGames() {
+    const {championId} = useParams<{ championId: string }>();
+    const navigate = useNavigate();
+
+    const [games, setGames] = useState<GameData[]>([]);
+    const [totalGames, setTotalGames] = useState<number>(0);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    const [page, setPage] = useState(1);
+    const [limit, setLimit] = useState(25);
+
+    const champion = CHAMPIONS_LIST.find(c => c.id === championId);
+
+    useEffect(() => {
+        const fetchGames = async () => {
+            setLoading(true);
+            setError(null);
+            try {
+                const offset = (page - 1) * limit;
+                const res = await fetch(`${API_BASE_URL}/api/v1/profile/${championId}/games?limit=${limit}&offset=${offset}&sort=asc`);
+
+                if (!res.ok) {
+                    const errData = await res.json();
+                    throw new Error(errData.detail || 'Не удалось загрузить партии из базы данных');
+                }
+
+                const data = await res.json();
+                setTotalGames(data.total || 0);
+                setGames(data.items || []);
+
+            } catch (err: any) {
+                setError(err.message);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (championId) fetchGames();
+    }, [championId, page, limit]);
+
+    if (!champion) {
+        return (
+            <div className="bg-red-950/80 border border-red-800 p-6 rounded text-red-200 text-center font-serif">
+                <h2 className="text-xl font-bold mb-2">Ошибка</h2>
+                <p>Игрок с идентификатором {championId} не найден в конфигурации.</p>
+                <Link to="/" className="mt-4 inline-block text-amber-400 hover:underline">На главную</Link>
+            </div>
+        );
+    }
+
+    const totalPages = Math.max(1, Math.ceil(totalGames / limit));
+
+    const getVisiblePages = () => {
+        const pages = [];
+        let start = Math.max(1, page - 2);
+        let end = Math.min(totalPages, page + 2);
+
+        if (page <= 3) end = Math.min(5, totalPages);
+        if (page >= totalPages - 2) start = Math.max(1, totalPages - 4);
+
+        for (let i = start; i <= end; i++) {
+            pages.push(i);
+        }
+        return pages;
+    };
+
+    return (
+        <div className="w-full max-w-6xl flex flex-col gap-6 font-serif">
+
+            <div
+                className="bg-acacia-dark border border-amber-900/40 p-6 rounded shadow-heavy flex items-center gap-6 relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                    <Crown size={180}/>
+                </div>
+
+                <img
+                    src={champion.img}
+                    alt={champion.name}
+                    referrerPolicy="no-referrer"
+                    className="w-32 h-32 object-cover rounded-lg bg-black/40 shadow-inner border-2 border-amber-600/40 z-10"
+                />
+
+                <div className="flex flex-col z-10">
+                    <div
+                        className="text-amber-600 text-sm font-bold uppercase tracking-widest mb-1 flex items-center gap-2">
+                        <Crown size={16}/> Исторический архив
+                    </div>
+                    <h1 className="text-4xl font-bold text-amber-200 mb-2">{champion.name}</h1>
+                    <div className="text-boxwood-light/80">
+                        Эпоха: <span className="font-mono text-amber-400 font-bold ml-1">{champion.years}</span>
+                    </div>
+                    <div className="text-boxwood-light/80 mt-1">
+                        Партий в базе: <span className="font-mono text-amber-400 font-bold ml-1">{totalGames}</span>
+                    </div>
+                </div>
+            </div>
+
+            {error && (
+                <div className="bg-red-950/80 border border-red-800 p-6 rounded text-red-200 text-center shadow-heavy">
+                    <h2 className="text-xl font-bold mb-2">Ошибка загрузки</h2>
+                    <p>{error}</p>
                 </div>
             )}
 
-            {/* ЛЕВАЯ КОЛОНКА: ИГРОВОЙ ЦЕНТР (ЧАСЫ DGT2500, ИСТОРИЧЕСКИЕ БОТЫ, ЛОББИ И LIVE) */}
-            <div
-                className="w-full xl:w-[400px] 2xl:w-[440px] xl:h-full bg-acacia p-3 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-2 text-boxwood-light order-2 xl:order-1 shrink-0 xl:overflow-hidden">
-
-                <div className="border-b border-acacia-light pb-2 flex justify-between items-center shrink-0">
-                    <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-acacia-dark rounded-md border border-amber-600/30 text-amber-400">
-                            <Sword size={16}/>
-                        </div>
-                        <div>
-                            <div className="text-[11px] tracking-wider uppercase text-boxwood/75 font-bold">
-                                Игровой зал
-                            </div>
-                            <div className="text-xs font-bold flex items-center gap-1.5 font-mono">
-                                <span className="text-boxwood/80 font-sans">Счёт сессии:</span>
-                                <span className="text-emerald-400">+{sessionStats.wins}</span>
-                                <span className="text-red-400">-{sessionStats.losses}</span>
-                                <span className="text-gray-300">={sessionStats.draws}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                        <button
-                            type="button"
-                            onClick={handleToggleSound}
-                            className={`p-1.5 rounded-md border transition cursor-pointer shadow-sm ${
-                                isSoundMuted
-                                    ? 'bg-red-950/60 border-red-800/60 text-red-300 hover:bg-red-900/60'
-                                    : 'bg-acacia-dark hover:bg-black/50 border-amber-800/50 text-amber-300'
-                            }`}
-                            title={isSoundMuted ? 'Включить звук' : 'Выключить звук'}
-                        >
-                            {isSoundMuted ? <VolumeX size={15}/> : <Volume2 size={15}/>}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setIsManualFlip(prev => !prev)}
-                            className="px-2.5 py-1 rounded-md bg-acacia-dark hover:bg-black/50 border border-amber-800/50 text-xs font-bold text-amber-200 flex items-center gap-1.5 transition cursor-pointer shadow-sm"
-                            title="Перевернуть доску"
-                        >
-                            <RefreshCw size={13} className="text-amber-400"/> Перевернуть
-                        </button>
-                    </div>
+            <div className="bg-acacia-dark border border-amber-900/40 rounded shadow-heavy flex flex-col min-h-[500px]">
+                <div className="p-5 border-b border-amber-900/40 bg-black/20 flex items-center gap-4">
+                    <button
+                        onClick={() => window.history.back()}
+                        className="p-1.5 bg-black/20 hover:bg-black/40 rounded transition border border-amber-900/50"
+                        title="Назад"
+                    >
+                        <ArrowLeft size={16} className="text-amber-500"/>
+                    </button>
+                    <h2 className="text-sm uppercase tracking-widest text-amber-500/80 font-bold">
+                        Хронология игр (От самых ранних к поздним)
+                    </h2>
                 </div>
 
-                <div
-                    className="bg-acacia-dark p-2.5 rounded-md border border-amber-900/50 flex flex-col gap-2 shadow-inner shrink-0">
-                    <div className="flex items-center justify-between">
-                        <label
-                            className="text-xs uppercase tracking-wider text-boxwood/85 flex items-center gap-1.5 font-bold">
-                            <Clock className="text-amber-500" size={13}/> Часы FIDE DGT2500 (36 прогр.)
-                        </label>
-                        <span
-                            className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-900/45 text-amber-300 border border-amber-600/30">
-                            OPT #{selectedTimeControl.optionNumber}
-                        </span>
+                <div className="flex-1 overflow-x-auto relative">
+                    {loading && (
+                        <div
+                            className="absolute inset-0 z-20 bg-acacia-dark/80 backdrop-blur-sm flex flex-col items-center justify-center text-amber-500">
+                            <Swords size={40} className="animate-spin mb-4"/>
+                            <span className="font-bold">Загрузка архивов...</span>
+                        </div>
+                    )}
+
+                    <table className="w-full text-left text-sm font-sans whitespace-nowrap">
+                        <thead
+                            className="bg-[#1A120B] text-boxwood/60 uppercase text-xs tracking-wider sticky top-0 z-10 border-b border-amber-900/50 shadow">
+                        <tr>
+                            <th className="px-4 py-4 font-medium">№</th>
+                            <th className="px-4 py-4 font-medium">Белые</th>
+                            <th className="px-4 py-4 font-medium">Черные</th>
+                            <th className="px-4 py-4 font-medium text-center">Результат</th>
+                            <th className="px-4 py-4 font-medium text-center">Дебют</th>
+                            <th className="px-4 py-4 font-medium text-center">Место</th>
+                            <th className="px-4 py-4 font-medium text-center">Дата</th>
+                            <th className="px-4 py-4 font-medium text-right">PGN</th>
+                        </tr>
+                        </thead>
+                        <tbody className="divide-y divide-amber-900/20 text-boxwood-light">
+                        {games.length === 0 && !loading ? (
+                            <tr>
+                                <td colSpan={8} className="px-6 py-12 text-center text-boxwood/50 font-serif text-lg">
+                                    В архиве нет записей для этой страницы.
+                                </td>
+                            </tr>
+                        ) : (
+                            games.map((game, index) => {
+                                const isWhite = game.white_username.includes(champion.id);
+                                let resultColor = 'text-gray-400';
+                                let resultText = 'Ничья';
+
+                                if (game.result === '1-0') {
+                                    resultColor = isWhite ? 'text-emerald-400' : 'text-red-400';
+                                    resultText = isWhite ? 'Победа' : 'Поражение';
+                                } else if (game.result === '0-1') {
+                                    resultColor = isWhite ? 'text-red-400' : 'text-emerald-400';
+                                    resultText = isWhite ? 'Поражение' : 'Победа';
+                                }
+
+                                const absoluteIndex = (page - 1) * limit + index + 1;
+
+                                return (
+                                    <tr
+                                        key={game.game_id}
+                                        onClick={() => navigate(`/game/${game.game_id}`, {state: {game}})}
+                                        className="hover:bg-black/30 transition group cursor-pointer"
+                                    >
+                                        <td className="px-4 py-4 font-mono text-boxwood/40">
+                                            {absoluteIndex}
+                                        </td>
+                                        <td className="px-4 py-4">
+                                            <div className="flex items-center gap-2">
+                                                <span
+                                                    className="w-3 h-3 rounded-sm border border-gray-400 bg-white inline-block"></span>
+                                                <span className={`font-bold ${isWhite ? 'text-amber-300' : ''}`}>
+                            {game.white_username}
+                          </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-4">
+                                            <div className="flex items-center gap-2">
+                                                <span
+                                                    className="w-3 h-3 rounded-sm border border-gray-600 bg-black inline-block"></span>
+                                                <span className={`font-bold ${!isWhite ? 'text-amber-300' : ''}`}>
+                            {game.black_username}
+                          </span>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-4 text-center">
+                                            <div className={`font-bold font-serif ${resultColor}`}>
+                                                {resultText} <span
+                                                className="text-xs opacity-70 ml-1">({game.result})</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-4 text-center font-mono text-amber-500/80">
+                                            {game.eco || '—'}
+                                        </td>
+                                        <td className="px-4 py-4 text-center text-boxwood/70">
+                                            {game.site || '—'}
+                                        </td>
+                                        <td className="px-4 py-4 text-center text-boxwood/70 font-mono">
+                                            {displayDate(game)}
+                                        </td>
+                                        <td className="px-4 py-4 text-right">
+                                            <a
+                                                href={`${API_BASE_URL}/api/v1/profile/games/${game.game_id}/pgn`}
+                                                download
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black/30 hover:bg-amber-900/60 text-amber-400 rounded transition border border-amber-900/40 text-xs font-bold"
+                                                title="Скачать PGN"
+                                            >
+                                                <Download size={14}/>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                )
+                            })
+                        )}
+                        </tbody>
+                    </table>
+                </div>
+
+                {/* Панель пагинации */}
+                {totalGames > 0 && (
+                    <div
+                        className="bg-[#1A120B] p-4 border-t border-amber-900/50 flex flex-col sm:flex-row justify-between items-center gap-4">
+                        <div className="flex items-center gap-3 text-boxwood/60 text-sm">
+                            <span className="hidden sm:inline">Показывать по:</span>
+                            <select
+                                value={limit}
+                                onChange={(e) => {
+                                    setLimit(Number(e.target.value));
+                                    setPage(1);
+                                }}
+                                className="bg-black/40 border border-amber-900/50 rounded px-2 py-1 text-amber-200 outline-none cursor-pointer focus:border-amber-600"
+                            >
+                                <option value="25">25</option>
+                                <option value="50">50</option>
+                            </select>
+                            <span className="font-mono bg-black/30 px-2 py-1 rounded">Всего: {totalGames}</span>
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                            <button
+                                onClick={() => setPage(1)}
+                                disabled={page === 1}
+                                className="p-1.5 rounded bg-black/40 hover:bg-amber-900/60 disabled:opacity-30 disabled:cursor-not-allowed text-amber-500 transition border border-transparent hover:border-amber-900/50"
+                            >
+                                <ChevronsLeft size={18}/>
+                            </button>
+                            <button
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={page === 1}
+                                className="p-1.5 rounded bg-black/40 hover:bg-amber-900/60 disabled:opacity-30 disabled:cursor-not-allowed text-amber-500 transition border border-transparent hover:border-amber-900/50"
+                            >
+                                <ChevronLeft size={18}/>
+                            </button>
+
+                            <div className="flex items-center gap-1 mx-2">
+                                {getVisiblePages().map(p => (
+                                    <button
+                                        key={p}
+                                        onClick={() => setPage(p)}
+                                        className={`w-8 h-8 rounded text-sm font-bold font-mono transition flex items-center justify-center ${
+                                            page === p
+                                                ? 'bg-amber-600 text-white shadow shadow-amber-600/20'
+                                                : 'bg-black/40 text-amber-500 hover:bg-amber-900/60 border border-transparent hover:border-amber-900/50'
+                                        }`}
+                                    >
+                                        {p}
+                                    </button>
+                                ))}
+                            </div>
+
+                            <button
+                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                disabled={page === totalPages}
+                                className="p-1.5 rounded bg-black/40 hover:bg-amber-900/60 disabled:opacity-30 disabled:cursor-not-allowed text-amber-500 transition border border-transparent hover:border-amber-900/50"
+                            >
+                                <ChevronRight size={18}/>
+                            </button>
+                            <button
+                                onClick={() => setPage(totalPages)}
+                                disabled={page === totalPages}
+                                className="p-1.5 rounded bg-black/40 hover:bg-amber-900/60 disabled:opacity-30 disabled:cursor-not-allowed text-amber-500 transition border border-transparent hover:border-amber-900/50"
+                            >
+                                <ChevronsRight size={18}/>
+                            </button>
+                        </div>
                     </div>
-
-                    <div className="relative w-full" ref={timeDropdownRef}>
-                        <button
-                            type="button"
-                            disabled={isSearching || !!gameId}
-                            onClick={() => setIsTimeDropdownOpen(!isTimeDropdownOpen)}
-                            className="w-full bg-black/45 border border-amber-700/50 hover:bg-black/65 disabled:opacity-50 transition text-amber-200 rounded-md px-2.5 py-1.5 text-xs sm:text-sm font-bold outline-none cursor-pointer flex justify-between items-center shadow-inner gap-2"
-                        >
-                            <span className="truncate">
-                                [{selectedTimeControl.optionNumber}] {selectedTimeControl.label}
-                                {selectedTimeControl.isManual ? ` (${manualBaseMinutes}м + ${manualIncSeconds}с)` : ''}
-                            </span>
-                            {isTimeDropdownOpen ? <ChevronUp className="text-amber-400 shrink-0" size={15}/> :
-                                <ChevronDown className="text-amber-400 shrink-0" size={15}/>}
-                        </button>
-
-                        {isTimeDropdownOpen && (
-                            <div
-                                className="absolute z-50 w-full top-full mt-1 bg-[#1A120B] border-2 border-amber-700/60 rounded-md shadow-2xl max-h-72 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
-                                {TIME_CONTROLS.map((group, gIdx) => (
-                                    <div key={gIdx}>
-                                        <div
-                                            className="px-3 py-1.5 text-xs uppercase tracking-wider text-amber-400 bg-black/90 font-bold sticky top-0 z-10 border-b border-t border-amber-900/40 first:border-t-0">
-                                            {group.group}
-                                        </div>
-                                        {group.options.map((opt) => {
-                                            const isSelected = selectedTimeControl.optionNumber === opt.optionNumber;
-                                            return (
-                                                <button
-                                                    key={opt.optionNumber}
+                )}
+            </div>
+        </div>
+    );
+}
 
 ----------------------------------------------------------------------------------------
-END OF PART 9/14
+END OF PART 9/15

@@ -1,1477 +1,1794 @@
-PROJECT SNAPSHOT — PART 7/14
+PROJECT SNAPSHOT — PART 7/15
 Project: michess
-Files in this part (12): scripts/build_opening_books.py, scripts/chessgames_downloader.py, scripts/download_champions.py, scripts/setup_piece_sets.py, scripts/setup_stockfish.py, frontend/.gitignore, frontend/.oxlintrc.json, frontend/index.html, frontend/postcss.config.js, frontend/README.md, frontend/src/App.tsx, frontend/src/components/AuthModal.tsx
+Files in this part (12): tests/test_audit_followups_rules.py, tests/test_auth_hardening.py, tests/test_deploy_config.py, tests/test_disconnect_clock.py, tests/test_engine_endpoints.py, tests/test_game_end_atomicity.py, tests/test_game_end_reconciliation.py, tests/test_game_engine.py, tests/test_game_state.py, tests/test_labourdonnais_bot.py, tests/test_matchmaking_rules.py, tests/test_morphy_bot.py
 ----------------------------------------------------------------------------------------
 
 ========================================================================================
-FILE: scripts/build_opening_books.py
+FILE: tests/test_audit_followups_rules.py
 ========================================================================================
-# --- FILE: scripts/build_opening_books.py ---
+# --- FILE: tests/test_audit_followups_rules.py ---
+"""
+Правила, доделанные после аудита: итог партии с ботом определяет сервер, имена ботов
+зарезервированы, чат — только для игроков, брошенная партия при недостатке материала — ничья.
+"""
+
+import time
+
+import chess
+import pytest
+
+from src.api.bots import BotGameSaveRequest, resolve_bot_game_outcome
+from src.core.security import verify_password
+from src.services.game_state import ABANDON_DRAW_TERMINATION, ABANDON_TIMEOUT_MS, evaluate_clock_expiry
+
+FOOLS_MATE = ["f2f3", "e7e5", "g2g4", "d8h4"]
+
+
+def _payload(**kwargs) -> BotGameSaveRequest:
+    base = {"bot_id": "morphy", "player_color": "white", "result": "1-0", "moves_uci": ["e2e4"]}
+    return BotGameSaveRequest(**{**base, **kwargs})
+
+
+def _board(moves: list[str]) -> chess.Board:
+    board = chess.Board()
+    for mv in moves:
+        board.push_uci(mv)
+    return board
+
+
+# --- Итог партии с ботом ----------------------------------------------------------------
+
+def test_terminal_position_result_comes_from_board():
+    """Клиент заявил победу белых, но на доске мат белым — сохраняется 0-1."""
+    assert resolve_bot_game_outcome(_board(FOOLS_MATE), _payload(result="1-0")) == ("0-1", "checkmate")
+
+
+def test_unfinished_position_win_without_reason_is_rejected():
+    with pytest.raises(ValueError):
+        resolve_bot_game_outcome(_board(["e2e4"]), _payload(result="1-0"))
+
+
+def test_resignation_is_always_players_loss():
+    assert resolve_bot_game_outcome(
+        _board(["e2e4"]), _payload(result="1-0", termination="resignation", player_color="white"),
+    ) == ("0-1", "resignation")
+
+
+def test_timeout_follows_fide_insufficient_material():
+    board = chess.Board("4q3/8/8/4k3/8/8/2N5/K7 b - - 0 60")  # у белых только конь против ферзя
+    assert resolve_bot_game_outcome(board, _payload(result="1-0", termination="timeout")) == (
+        "1/2-1/2", "timeout_vs_insufficient_material",
+    )
+    assert resolve_bot_game_outcome(_board(["e2e4"]), _payload(result="0-1", termination="timeout")) == (
+        "0-1", "timeout",
+    )
+
+
+def test_save_game_endpoint_stores_server_result(client, token_user_1):
+    res = client.post(
+        "/api/v1/bots/save-game",
+        json={"bot_id": "morphy", "player_color": "white", "result": "1-0", "moves_uci": FOOLS_MATE},
+        headers={"Authorization": f"Bearer {token_user_1}"},
+    )
+    assert res.status_code == 200
+    assert res.json()["result"] == "0-1"
+
+    rejected = client.post(
+        "/api/v1/bots/save-game",
+        json={"bot_id": "morphy", "player_color": "white", "result": "1-0", "moves_uci": ["e2e4"]},
+        headers={"Authorization": f"Bearer {token_user_1}"},
+    )
+    assert rejected.status_code == 400
+
+
+# --- Имена ботов ------------------------------------------------------------------------
+
+@pytest.mark.parametrize("name", ["Пол Морфи", "  пол морфи ", "morphy", "Пол Чарльз Морфи"])
+def test_bot_names_cannot_be_registered(client, name):
+    res = client.post("/api/v1/auth/register", json={"username": name, "password": "secret123"})
+    # 400 — имя бота; 422 — имя с пробелами не проходит правила имени ещё раньше.
+    assert res.status_code in (400, 422)
+
+
+async def test_bot_game_is_not_attributed_to_human_with_bot_name(client, db_session, token_user_1):
+    from src.models.game import Game
+    from src.models.user import User
+
+    impostor = User(username="Пол Морфи", hashed_password="real-hash", rating=1500)
+    db_session.add(impostor)
+    await db_session.commit()
+
+    res = client.post(
+        "/api/v1/bots/save-game",
+        json={"bot_id": "morphy", "player_color": "white", "result": "0-1", "moves_uci": FOOLS_MATE},
+        headers={"Authorization": f"Bearer {token_user_1}"},
+    )
+    game = await db_session.get(Game, res.json()["game_id"])
+    assert impostor.id not in (game.white_player_id, game.black_player_id)
+
+
+def test_bot_marker_password_never_verifies():
+    assert verify_password("anything", "!historical_bot_no_login!") is False
+
+
+# --- Брошенная партия -------------------------------------------------------------------
+
+def test_abandon_vs_insufficient_material_is_draw():
+    now = int(time.time() * 1000)
+    state = {
+        "white_id": 1, "black_id": 2, "turn": "black", "board_fen": "8/8/8/4k3/8/8/2q5/K7 b - - 0 60",
+        "white_time_ms": 60000, "black_time_ms": 60000, "last_move_at": now,
+        "white_disconnected": "false", "black_disconnected": "true",
+        "black_disconnect_started_at": now - ABANDON_TIMEOUT_MS,
+    }
+    # Чёрные (с ферзём) ушли, у белых голый король — победу белым не засчитываем.
+    assert evaluate_clock_expiry(state, now) == ("1/2-1/2", None, ABANDON_DRAW_TERMINATION)
+
+
+# --- Чат --------------------------------------------------------------------------------
+
+class _NoDbSession:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def get(self, *args, **kwargs):
+        return None
+
+
+def _ws_as(monkeypatch, user_id: int):
+    from src.api.deps import get_current_user_ws
+    from src.db.session import get_session_factory
+    from src.main import app
+    from src.models.user import User
+
+    async def _user():
+        return User(id=user_id, username=f"u{user_id}", rating=1500)
+
+
+    monkeypatch.setitem(app.dependency_overrides, get_current_user_ws, _user)
+    monkeypatch.setitem(app.dependency_overrides, get_session_factory, lambda: _NoDbSession)
+
+
+def _receive_event(ws, event: str, attempts: int = 6) -> dict:
+    for _ in range(attempts):
+        message = ws.receive_json()
+        if message.get("event") == event:
+            return message
+    raise AssertionError(f"event {event} not received")
+
+
+async def test_only_players_can_write_to_game_chat(client, monkeypatch):
+    from src.services.game_state import state_manager
+
+    await state_manager.initialize_game(game_id=61, white_id=701, black_id=702, base_time_ms=60000, increment_ms=0)
+
+    _ws_as(monkeypatch, 703)  # посторонний / зритель
+    with client.websocket_connect("/api/v1/ws/matchmaking?ticket=unused") as ws:
+        ws.send_json({"action": "chat_message", "game_id": 61, "text": "играй Фxf7!"})
+        assert _receive_event(ws, "error")["code"] == "chat_forbidden"
+
+    _ws_as(monkeypatch, 701)  # игрок
+    with client.websocket_connect("/api/v1/ws/matchmaking?ticket=unused") as ws:
+        ws.send_json({"action": "chat_message", "game_id": 61, "text": "удачи!"})
+        assert _receive_event(ws, "chat_message")["text"] == "удачи!"
+
+
+# --- Античит ----------------------------------------------------------------------------
+
+class _FakeMove:
+    def __init__(self, n: int, ms: int, blurred: bool, premove: bool = False):
+        self.move_number, self.time_taken_ms = n, ms
+        self.window_blurred_before_move, self.is_premove = blurred, premove
+
+
+def test_blur_alone_does_not_penalize():
+    """Второй монитор: фокус теряется постоянно, но ритм ходов человеческий — штрафа нет."""
+    from src.services.anticheat import compute_telemetry_penalty
+
+    human_times = [1200, 9500, 3100, 22000, 4800, 2600, 15000, 7000, 1800, 11000, 5200, 3900]
+    moves = [_FakeMove(i + 1, t, blurred=True) for i, t in enumerate(human_times)]
+    assert compute_telemetry_penalty(moves)["penalty"] == 0
+
+
+def test_blur_aggravates_engine_like_timing():
+    from src.services.anticheat import compute_telemetry_penalty
+
+    focused = [_FakeMove(i + 1, 4500 + (i % 2) * 100, blurred=False) for i in range(12)]
+    blurred = [_FakeMove(i + 1, 4500 + (i % 2) * 100, blurred=True) for i in range(12)]
+    assert 0 < compute_telemetry_penalty(focused)["penalty"] < compute_telemetry_penalty(blurred)["penalty"]
+
+
+def test_premove_flag_requires_near_instant_server_timing():
+    from src.services.anticheat import trusted_premove
+
+    assert trusted_premove(True, 120) is True
+    assert trusted_premove(True, 4500) is False  # «премув» через 4.5 с — подделка
+    assert trusted_premove(False, 50) is False
+
+
+def test_public_profile_hides_fair_play_data(client, test_user_1):
+    body = client.get(f"/api/v1/profile/{test_user_1.username}").json()
+    assert "trust_factor" not in body and "is_cheater" not in body
+
+
+# --- Предложение ничьей -----------------------------------------------------------------
+
+async def test_draw_offer_expires_when_opponent_moves():
+    from src.services.game_state import state_manager
+
+    await state_manager.initialize_game(game_id=71, white_id=801, black_id=802, base_time_ms=60000, increment_ms=0)
+    await state_manager.update_game_state(71, {"draw_offer": "802"})  # чёрные предложили ничью
+
+    await state_manager.process_atomic_move(71, 801, "c1", "e2e4")  # белые ответили ходом
+    assert (await state_manager.get_game_state(71))["draw_offer"] == ""
+
+
+async def test_own_move_keeps_draw_offer():
+    from src.services.game_state import state_manager
+
+    await state_manager.initialize_game(game_id=72, white_id=801, black_id=802, base_time_ms=60000, increment_ms=0)
+    await state_manager.update_game_state(72, {"draw_offer": "801"})  # белые предложили и ходят
+
+    await state_manager.process_atomic_move(72, 801, "c1", "e2e4")
+    assert (await state_manager.get_game_state(72))["draw_offer"] == "801"
+
+
+def test_every_ws_action_has_a_handler():
+    from src.api.websockets import ACTION_HANDLERS
+
+    expected = {
+        "join_queue", "leave_queue", "accept_challenge", "create_invite", "accept_invite",
+        "spectate_game", "leave_spectate", "chat_message", "abort_game", "resign",
+        "offer_draw", "accept_draw", "decline_draw", "offer_rematch", "accept_rematch",
+        "decline_rematch", "make_move",
+    }
+    assert set(ACTION_HANDLERS) == expected
+
+========================================================================================
+FILE: tests/test_auth_hardening.py
+========================================================================================
+# --- FILE: tests/test_auth_hardening.py ---
+"""
+Вход и регистрация: лимиты попыток (подбор пароля), правила имени пользователя,
+уникальность и вход без учёта регистра, зарезервированные имена.
+"""
+
+import pytest
+from sqlalchemy import select
+
+from src.api import auth as auth_module
+from src.core.config import settings
+from src.models.user import User
+
+REGISTER = "/api/v1/auth/register"
+LOGIN = "/api/v1/auth/login"
+PASSWORD = "secret123"
+
+
+def _register(client, username: str, password: str = PASSWORD):
+    return client.post(REGISTER, json={"username": username, "password": password})
+
+
+def _login(client, username: str, password: str = PASSWORD):
+    return client.post(LOGIN, data={"username": username, "password": password})
+
+
+# --- Имя пользователя ----------------------------------------------------------------------
+
+def test_register_response_hides_trust_factor(client):
+    res = _register(client, "Misha")
+    assert res.status_code == 201
+    body = res.json()
+    assert body["username"] == "Misha"
+    assert "trust_factor" not in body
+
+
+@pytest.mark.parametrize("name", [
+    "ab",                  # короче 3 символов
+    "a" * 31,              # длиннее 30
+    "Misha K",             # пробел
+    " Misha",              # пробел по краю
+    "Мorphy",              # кириллическая «М» + латиница — подделка под бота/игрока
+    "misha​",         # невидимый символ
+    "misha!",
+    "12345",               # без единой буквы
+    "--__--",
+])
+def test_invalid_usernames_are_rejected(client, name):
+    assert _register(client, name).status_code == 422
+
+
+@pytest.mark.parametrize("name", ["Misha_K", "misha-2006", "Пётр", "ёжик_1"])
+def test_valid_usernames_are_accepted(client, name):
+    assert _register(client, name).status_code == 201
+
+
+# («me» короче трёх символов — его отсекает уже правило длины.)
+@pytest.mark.parametrize("name", ["games", "Leaderboard", "ADMIN", "morphy", "Steinitz", "Capablanca"])
+def test_reserved_usernames_are_rejected(client, name):
+    res = _register(client, name)
+    assert res.status_code == 400
+    assert "зарезервировано" in res.json()["detail"]
+
+
+@pytest.mark.parametrize("first, second", [("Misha", "misha"), ("Пётр", "пётр"), ("ёжик", "ЁЖИК")])
+def test_usernames_are_unique_regardless_of_case(client, first, second):
+    assert _register(client, first).status_code == 201
+    res = _register(client, second)
+    assert res.status_code == 400
+    assert res.json()["detail"] == auth_module.DUPLICATE_USERNAME_DETAIL
+
+
+async def test_registered_user_gets_username_key(client, db_session):
+    assert _register(client, "Пётр").status_code == 201
+    user = (await db_session.execute(select(User).where(User.username == "Пётр"))).scalars().one()
+    assert user.username_key == "пётр"
+
+
+# --- Вход ----------------------------------------------------------------------------------
+
+def test_login_is_case_insensitive_and_opens_the_canonical_account(client):
+    assert _register(client, "Misha").status_code == 201
+    res = _login(client, "mISHA")
+    assert res.status_code == 200
+    me = client.get("/api/v1/profile/me", headers={"Authorization": f"Bearer {res.json()['access_token']}"})
+    assert me.json()["username"] == "Misha"
+
+
+def test_unknown_user_still_runs_password_check(client, monkeypatch):
+    """Ответ для несуществующего аккаунта не должен быть быстрее: по времени узнали бы, есть ли он."""
+    checked: list[str] = []
+
+    def spy_verify(plain, hashed):
+        checked.append(hashed)
+        return False
+
+    monkeypatch.setattr(auth_module, "verify_password", spy_verify)
+    assert _login(client, "nobody_here").status_code == 401
+    assert checked == [auth_module._DUMMY_PASSWORD_HASH]
+
+
+def test_failed_logins_lock_the_account_temporarily(client, monkeypatch):
+    monkeypatch.setattr(settings, "RATE_LIMIT_LOGIN_FAILURES_PER_ACCOUNT", 3)
+    assert _register(client, "victim").status_code == 201
+    assert _register(client, "bystander").status_code == 201
+
+    for _ in range(3):
+        assert _login(client, "victim", "wrong-password").status_code == 401
+
+    # Даже верный пароль не проверяется, пока не истечёт окно: подбор остановлен.
+    locked = _login(client, "VICTIM")
+    assert locked.status_code == 429
+    assert int(locked.headers["Retry-After"]) > 0
+
+    assert _login(client, "bystander").status_code == 200  # другие аккаунты не затронуты
+
+
+def test_successful_logins_do_not_count_as_failures(client, monkeypatch):
+    monkeypatch.setattr(settings, "RATE_LIMIT_LOGIN_FAILURES_PER_ACCOUNT", 2)
+    assert _register(client, "regular").status_code == 201
+    for _ in range(5):
+        assert _login(client, "regular").status_code == 200
+
+
+def test_login_attempts_are_limited_per_ip(client, monkeypatch):
+    monkeypatch.setattr(settings, "RATE_LIMIT_LOGIN_PER_IP", 3)
+    for i in range(3):
+        assert _login(client, f"spray_{i}", "guess").status_code == 401
+    assert _login(client, "spray_4", "guess").status_code == 429
+
+
+def test_registrations_are_limited_per_ip(client, monkeypatch):
+    monkeypatch.setattr(settings, "RATE_LIMIT_REGISTER_PER_IP", 2)
+    assert _register(client, "first_one").status_code == 201
+    assert _register(client, "second_one").status_code == 201
+    assert _register(client, "third_one").status_code == 429
+
+========================================================================================
+FILE: tests/test_deploy_config.py
+========================================================================================
+# --- FILE: tests/test_deploy_config.py ---
+"""
+Готовность к продакшену: /health проверяет зависимости, продакшен-режим не стартует со слабым
+SECRET_KEY и прячет документацию, CORS_ORIGINS задаётся из окружения.
+"""
+
+import pytest
+from pydantic import ValidationError
+
+from src import main as main_module
+from src.core.config import Settings, settings
+
+BASE_ENV = {
+    "POSTGRES_USER": "u", "POSTGRES_PASSWORD": "p", "POSTGRES_SERVER": "db",
+    "POSTGRES_PORT": "5432", "POSTGRES_DB": "d",
+}
+STRONG_KEY = "k3Jx9-" * 8
+
+
+def _settings(monkeypatch, **env) -> Settings:
+    for key, value in {**BASE_ENV, **env}.items():
+        monkeypatch.setenv(key, value)
+    return Settings(_env_file=None)
+
+
+# --- /health ---------------------------------------------------------------------------------
+
+@pytest.fixture
+def database_ok(monkeypatch):
+    async def ok():
+        return None
+
+    monkeypatch.setattr(main_module, "_check_database", ok)
+
+
+def test_health_reports_ok_when_dependencies_answer(client, database_ok):
+    res = client.get("/health")
+    assert res.status_code == 200
+    assert res.json()["checks"] == {"database": "ok", "redis": "ok"}
+
+
+def test_health_is_503_when_redis_is_down(client, database_ok, monkeypatch):
+    from src.db import redis as redis_module
+
+    async def broken_ping():
+        raise ConnectionError("redis is down")
+
+    monkeypatch.setattr(redis_module.redis_client, "ping", broken_ping)
+    res = client.get("/health")
+    assert res.status_code == 503
+    assert res.json()["checks"]["redis"] == "unavailable"
+
+
+def test_health_is_503_when_database_is_down(client, monkeypatch):
+    async def broken():
+        raise OSError("connection refused")
+
+    monkeypatch.setattr(main_module, "_check_database", broken)
+    res = client.get("/health")
+    assert res.status_code == 503
+    assert res.json()["checks"]["database"] == "unavailable"
+
+
+def test_debug_echo_websocket_is_gone():
+    paths = {getattr(route, "path", None) for route in main_module.app.routes}
+    assert "/ws/ping" not in paths
+
+
+# --- Настройки --------------------------------------------------------------------------------
+
+@pytest.mark.parametrize("weak_key", ["test", "change-me-dev-only-secret-key", "x" * 31])
+def test_production_refuses_weak_secret_key(monkeypatch, weak_key):
+    with pytest.raises(ValidationError, match="SECRET_KEY"):
+        _settings(monkeypatch, ENVIRONMENT="production", SECRET_KEY=weak_key)
+
+
+def test_production_accepts_strong_secret_key(monkeypatch):
+    assert _settings(monkeypatch, ENVIRONMENT="production", SECRET_KEY=STRONG_KEY).is_production
+
+
+def test_development_allows_simple_secret_key(monkeypatch):
+    assert not _settings(monkeypatch, ENVIRONMENT="development", SECRET_KEY="dev").is_production
+
+
+@pytest.mark.parametrize("raw, expected", [
+    ("https://a.example, https://b.example", ["https://a.example", "https://b.example"]),
+    ('["https://c.example"]', ["https://c.example"]),
+    ("", []),
+])
+def test_cors_origins_from_environment(monkeypatch, raw, expected):
+    assert expected == _settings(monkeypatch, SECRET_KEY="dev", CORS_ORIGINS=raw).CORS_ORIGINS
+
+
+def test_production_hides_api_docs(monkeypatch):
+    monkeypatch.setattr(settings, "ENVIRONMENT", "production")
+    app = main_module.create_app()
+    assert app.docs_url is None
+    assert app.openapi_url is None
+
+    monkeypatch.setattr(settings, "ENVIRONMENT", "development")
+    assert main_module.create_app().docs_url == "/docs"
+
+========================================================================================
+FILE: tests/test_disconnect_clock.py
+========================================================================================
+# --- FILE: tests/test_disconnect_clock.py ---
+"""
+Разрыв соединения: часы при переподключении, флаг и брошенная партия у отключённого игрока,
+несколько вкладок одного пользователя и гонка «перезагрузка страницы».
+"""
+
+import time
+
+from src.services.connection_manager import ConnectionManager
+from src.services.game_state import ABANDON_TIMEOUT_MS, evaluate_clock_expiry, state_manager
+
+
+class DummyManager:
+    def __init__(self):
+        self.sent: list[tuple[int, dict]] = []
+
+    async def send_personal_message(self, message: dict, user_id: int):
+        self.sent.append((user_id, message))
+
+
+class DummySocket:
+    async def accept(self):
+        pass
+
+    async def send_text(self, text: str):
+        pass
+
+
+def _state(now: int, **overrides) -> dict:
+    state = {
+        "white_id": 1, "black_id": 2, "turn": "white",
+        "white_time_ms": 60000, "black_time_ms": 60000, "last_move_at": now,
+        "white_disconnected": "false", "black_disconnected": "false",
+        "white_disconnect_started_at": 0, "black_disconnect_started_at": 0,
+    }
+    state.update(overrides)
+    return state
+
+
+async def test_reconnect_during_opponent_turn_does_not_give_opponent_time():
+    """Раньше last_move_at сдвигался на время офлайна, и часы соперника стояли всё это время."""
+    await state_manager.initialize_game(game_id=31, white_id=10, black_id=20, base_time_ms=60000, increment_ms=0)
+    now = int(time.time() * 1000)
+    # Ход белых; чёрные отключились 20 секунд назад.
+    await state_manager.update_game_state(31, {
+        "last_move_at": now - 30000,
+        "black_disconnected": "true",
+        "black_disconnect_started_at": now - 20000,
+    })
+
+    await state_manager.handle_player_reconnect(20, DummyManager())
+
+    state = await state_manager.get_game_state(31)
+    assert state["black_disconnected"] == "false"
+    assert state["last_move_at"] == now - 30000
+    assert state["white_time_ms"] == 60000
+
+
+def test_disconnected_player_flags_counting_time_before_disconnect():
+    """Время между последним ходом и разрывом тоже идёт в зачёт (раньше терялось)."""
+    now = int(time.time() * 1000)
+    state = _state(
+        now,
+        white_time_ms=8000, last_move_at=now - 10000,
+        white_disconnected="true", white_disconnect_started_at=now - 3000,
+    )
+    assert evaluate_clock_expiry(state, now) == ("0-1", 2, "timeout")
+
+
+def test_abandon_timer_ignores_stopped_clock_on_opponent_turn():
+    """
+    Если сейчас ход соперника, часы отключённого стоят: при 5 секундах на часах он не должен
+    проигрывать через 5 секунд офлайна — только по общему таймеру брошенной партии.
+    """
+    now = int(time.time() * 1000)
+    state = _state(now, black_time_ms=5000, black_disconnected="true", black_disconnect_started_at=now - 10000)
+    assert evaluate_clock_expiry(state, now) is None
+
+    abandoned = {**state, "black_disconnect_started_at": now - ABANDON_TIMEOUT_MS}
+    assert evaluate_clock_expiry(abandoned, now) == ("1-0", 1, "abandoned")
+
+
+async def test_opponent_gets_wait_limited_by_live_clock():
+    await state_manager.initialize_game(game_id=32, white_id=10, black_id=20, base_time_ms=60000, increment_ms=0)
+    now = int(time.time() * 1000)
+    await state_manager.update_game_state(32, {"last_move_at": now - 50000})
+
+    manager = DummyManager()
+    await state_manager.handle_player_disconnect(10, manager)
+
+    (recipient, message), = manager.sent
+    assert recipient == 20
+    assert 9000 <= message["max_wait_ms"] <= 10000
+
+
+async def test_disconnect_flag_not_written_after_game_finished():
+    """Флаг отключения не пишется в партию, которая уже не идёт."""
+    await state_manager.initialize_game(game_id=33, white_id=10, black_id=20, base_time_ms=60000, increment_ms=0)
+    await state_manager.update_game_state(33, {"status": "completed"})
+
+    await state_manager.handle_player_disconnect(10, DummyManager())
+
+    state = await state_manager.redis.hgetall("game:33:state")
+    assert state.get("white_disconnected") == "false"
+
+
+class _NoDbSession:
+    """Сессия-заглушка: тест проверяет жизненный цикл соединений, БД ему не нужна.
+    (Настоящая сессия из event loop TestClient ломает общее SQLite-соединение тестов.)"""
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def get(self, *args, **kwargs):
+        return None
+
+
+async def test_closing_one_tab_keeps_player_online(client, monkeypatch):
+    from src.api.deps import get_current_user_ws
+    from src.db.session import get_session_factory
+    from src.main import app
+    from src.models.user import User
+
+    player = User(id=501, username="multitab", rating=1500)
+
+    async def _user():
+        return player
+
+
+    monkeypatch.setitem(app.dependency_overrides, get_current_user_ws, _user)
+    monkeypatch.setitem(app.dependency_overrides, get_session_factory, lambda: _NoDbSession)
+
+    await state_manager.initialize_game(game_id=34, white_id=501, black_id=502, base_time_ms=60000, increment_ms=0)
+    url = "/api/v1/ws/matchmaking?ticket=unused"
+
+    with client.websocket_connect(url) as tab2:
+        with client.websocket_connect(url):
+            pass  # первая вкладка закрыта
+
+        state = await state_manager.get_game_state(34)
+        assert state["white_disconnected"] == "false"
+        tab2.send_json({"action": "leave_queue"})
+        assert any(tab2.receive_json()["event"] == "queue_left" for _ in range(5))
+
+    state = await state_manager.get_game_state(34)
+    assert state["white_disconnected"] == "true"  # закрыта последняя вкладка
+
+
+async def test_reload_race_does_not_leave_player_marked_disconnected(monkeypatch):
+    """
+    Перезагрузка страницы: новая вкладка подключается (и выполняет handle_player_reconnect,
+    который ничего не делает), пока старая ещё обрабатывает разрыв и только потом ставит флаг.
+    """
+    await state_manager.initialize_game(game_id=35, white_id=10, black_id=20, base_time_ms=60000, increment_ms=0)
+    cm = ConnectionManager()
+    old_tab, new_tab = DummySocket(), DummySocket()
+    await cm.connect(old_tab, user_id=10)
+
+    original_disconnect_handler = state_manager.handle_player_disconnect
+
+    async def reconnect_then_mark(user_id, manager):
+        await cm.connect(new_tab, user_id=10)  # новая вкладка успела подключиться
+        await original_disconnect_handler(user_id, manager)
+
+    monkeypatch.setattr(state_manager, "handle_player_disconnect", reconnect_then_mark)
+    await cm.disconnect(10, old_tab)
+
+    state = await state_manager.get_game_state(35)
+    assert state["white_disconnected"] == "false"
+    assert cm._has_open_sockets(10)
+
+========================================================================================
+FILE: tests/test_engine_endpoints.py
+========================================================================================
+# --- FILE: tests/test_engine_endpoints.py ---
+"""
+Защита эндпоинтов, нагружающих Stockfish: запрет анализа идущих партий, лимиты частоты,
+503 при занятом пуле и сам пул долгоживущих движков.
+"""
 
 import json
-import shutil
-import sys
-from pathlib import Path
+import threading
+
 import chess
-import chess.pgn
-
-# Жёсткая привязка к корню проекта (независимо от Working Directory в PyCharm)
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-BOOKS_DIR = PROJECT_ROOT / "src" / "services" / "bots" / "books"
-MAX_BOOK_PLY = 16
-
-BOT_BOOK_CONFIG = {
-    "philidor": {
-        "identifiers": ("philidor", "филидор"),
-        "surname_filter": "philidor",
-        "exclude": (),
-        "comment_tpl": "Исторический выбор Филидора (встречалось в партиях: {count} раз(а)).",
-    },
-    "labourdonnais": {
-        "identifiers": ("bourdonnais", "labourdonnais", "лабурдонне"),
-        "surname_filter": "bourdonnais",
-        "exclude": (),
-        "comment_tpl": "Любимый ход Лабурдонне в атаке (встречалось в партиях: {count} раз(а)).",
-    },
-    "staunton": {
-        "identifiers": ("staunton", "стаунтон"),
-        "surname_filter": "staunton",
-        "exclude": (),
-        "comment_tpl": "Классический выбор Стаунтона (встречалось в партиях: {count} раз(а)).",
-    },
-    "anderssen": {
-        "identifiers": ("anderssen", "андерсен"),
-        "surname_filter": "anderssen",
-        "exclude": (),
-        "comment_tpl": "Бриллиантовый гамбит Андерсена (встречалось в партиях: {count} раз(а)).",
-    },
-    "morphy": {
-        "identifiers": ("morphy", "морфи"),
-        "surname_filter": "morphy",
-        "exclude": ("alonzo", "ernest"),
-        "comment_tpl": "Исторический ход Пола Морфи (встречалось в партиях: {count} раз(а)).",
-    },
-    "paulsen": {
-        "identifiers": ("paulsen", "паульсен"),
-        "surname_filter": "paulsen",
-        "exclude": ("wilfried",),
-        "comment_tpl": "Глубокая новинка Паульсена (встречалось в партиях: {count} раз(а)).",
-    },
-    "zukertort": {
-        "identifiers": ("zukertort", "цукерторт"),
-        "surname_filter": "zukertort",
-        "exclude": (),
-        "comment_tpl": "Универсальный дебютный выбор Цукерторта (встречалось в партиях: {count} раз(а)).",
-    },
-}
-
-
-def cleanup_misplaced_artifacts() -> None:
-    """
-    Удаляет ошибочно созданную папку scripts/src (возникшую из-за запуска с CWD=scripts/)
-    и переносит все *_generated_book.json из корня в src/services/bots/books/.
-    """
-    BOOKS_DIR.mkdir(parents=True, exist_ok=True)
-
-    accidental_scripts_src = PROJECT_ROOT / "scripts" / "src"
-    if accidental_scripts_src.exists():
-        for stray_json in accidental_scripts_src.rglob("*.json"):
-            target = BOOKS_DIR / stray_json.name
-            if not target.exists():
-                shutil.move(str(stray_json), str(target))
-        shutil.rmtree(accidental_scripts_src, ignore_errors=True)
-        print(f"[+] Очищена лишняя вложенная папка: {accidental_scripts_src}")
-
-    for bot_id in BOT_BOOK_CONFIG:
-        legacy_root_json = PROJECT_ROOT / f"{bot_id}_generated_book.json"
-        target_json = BOOKS_DIR / f"{bot_id}.json"
-        if legacy_root_json.exists():
-            if not target_json.exists() or legacy_root_json.stat().st_size > target_json.stat().st_size:
-                shutil.move(str(legacy_root_json), str(target_json))
-                print(f"[+] Перенесена книга из корня: {legacy_root_json.name} -> {target_json}")
-            else:
-                legacy_root_json.unlink()
-
-
-def matches_player(header_name: str, surname: str, exclude: tuple[str, ...]) -> bool:
-    name_lower = (header_name or "").lower()
-    if any(ex in name_lower for ex in exclude):
-        return False
-    return surname in name_lower
-
-
-def process_pgn_stream(pgn_stream, surname: str, exclude: tuple[str, ...], book_additions: dict) -> int:
-    games_processed = 0
-    while True:
-        try:
-            game = chess.pgn.read_game(pgn_stream)
-            if game is None:
-                break
-
-            is_w = matches_player(game.headers.get("White", ""), surname, exclude)
-            is_b = matches_player(game.headers.get("Black", ""), surname, exclude)
-            track_both = not (is_w or is_b)
-
-            board = game.board()
-            ply = 0
-            for move in game.mainline_moves():
-                if ply >= MAX_BOOK_PLY:
-                    break
-                uci = move.uci()
-                if uci == "0000" or not bool(move):
-                    break
-
-                white_turn = board.turn == chess.WHITE
-                if track_both or (white_turn and is_w) or (not white_turn and is_b):
-                    parts = board.fen().split(" ")
-                    fen_key = f"{parts[0]} {parts[1]} {parts[2]} -"
-                    book_additions.setdefault(fen_key, {})
-                    book_additions[fen_key][uci] = book_additions[fen_key].get(uci, 0) + 1
-
-                try:
-                    board.push(move)
-                except ValueError:
-                    break
-                ply += 1
-
-            games_processed += 1
-        except Exception:
-            continue
-    return games_processed
-
-
-def find_pgn_files_for_bot(identifiers: tuple[str, ...]) -> list[Path]:
-    """Ищет PGN-файлы чемпиона во всех возможных директориях проекта."""
-    search_dirs = [
-        PROJECT_ROOT / "data",
-        PROJECT_ROOT / "downloaded_pgns",
-        PROJECT_ROOT / "src" / "db" / "data",
-        PROJECT_ROOT,
-    ]
-    found: list[Path] = []
-    seen: set[Path] = set()
-
-    for directory in search_dirs:
-        if not directory.exists():
-            continue
-        iterator = directory.glob("*.pgn") if directory == PROJECT_ROOT else directory.rglob("*.pgn")
-        for pgn_path in iterator:
-            resolved = pgn_path.resolve()
-            if resolved in seen or not resolved.is_file():
-                continue
-            path_lower = str(resolved).lower()
-            if any(ident in path_lower for ident in identifiers):
-                seen.add(resolved)
-                found.append(resolved)
-
-    # Если есть как объединённый файл (*_all_*.pgn), так и мелкие файлы из папки —
-    # отдаём приоритет объединённому файлу, чтобы не считать одни и те же партии дважды
-    combined = [p for p in found if "all" in p.name.lower() or "все партии" in p.name.lower()]
-    if combined:
-        return [max(combined, key=lambda p: p.stat().st_size)]
-    return found
-
-
-def build_book_for_bot(bot_id: str) -> None:
-    cfg = BOT_BOOK_CONFIG[bot_id]
-    target_json = BOOKS_DIR / f"{bot_id}.json"
-
-    existing_book: dict = {}
-    if target_json.exists():
-        try:
-            with open(target_json, "r", encoding="utf-8") as f:
-                loaded = json.load(f)
-                if isinstance(loaded, dict):
-                    existing_book = loaded
-        except Exception:
-            existing_book = {}
-
-    matched_files = find_pgn_files_for_bot(cfg["identifiers"])
-    book_additions: dict[str, dict[str, int]] = {}
-    total_games = 0
-
-    for filepath in matched_files:
-        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
-            total_games += process_pgn_stream(f, cfg["surname_filter"], cfg["exclude"], book_additions)
-
-    if total_games > 0:
-        formatted_book: dict[str, list] = dict(existing_book)
-        for fen, moves_dict in book_additions.items():
-            sorted_moves = sorted(moves_dict.items(), key=lambda x: x[1], reverse=True)
-            total_count = sum(moves_dict.values())
-            formatted_book[fen] = [
-                [
-                    uci,
-                    max(int((count / total_count) * 100), 1),
-                    cfg["comment_tpl"].format(count=count),
-                ]
-                for uci, count in sorted_moves
-            ]
-
-        with open(target_json, "w", encoding="utf-8") as out_f:
-            json.dump(formatted_book, out_f, ensure_ascii=False, indent=2)
-        print(
-            f"[+] {bot_id:13s}: спарсено партий из PGN: {total_games:4d} | "
-            f"Позиций в книге: {len(formatted_book):4d} -> {target_json.relative_to(PROJECT_ROOT)}"
-        )
-        return
-
-    # Если сырых PGN-файлов нет, но JSON-книга уже перенесена и лежит в src/services/bots/books/
-    if existing_book:
-        print(
-            f"[+] {bot_id:13s}: книга активна и проверена | "
-            f"Позиций в книге: {len(existing_book):4d} -> {target_json.relative_to(PROJECT_ROOT)}"
-        )
-        return
-
-    # Если нет ни PGN, ни JSON-книги — инициализируем JSON-файл базовым репертуаром из модуля бота
-    try:
-        module = __import__(f"src.services.bots.{bot_id}", fromlist=["*"])
-        default_attr = f"DEFAULT_{bot_id.upper()}_BOOK"
-        fallback_data = getattr(module, default_attr, {})
-        if fallback_data:
-            serializable = {
-                fen: [[m[0], int(m[1]), str(m[2])] for m in moves]
-                for fen, moves in fallback_data.items()
-            }
-            with open(target_json, "w", encoding="utf-8") as out_f:
-                json.dump(serializable, out_f, ensure_ascii=False, indent=2)
-            print(
-                f"[~] {bot_id:13s}: создана базовая книга | "
-                f"Позиций в книге: {len(serializable):4d} -> {target_json.relative_to(PROJECT_ROOT)}"
-            )
-            return
-    except Exception as exc:
-        print(f"[!] Ошибка инициализации базовой книги для {bot_id}: {exc}")
-
-
-def main() -> None:
-    print(f"=== Сборка и проверка дебютных книг (Корень: {PROJECT_ROOT}) ===")
-    cleanup_misplaced_artifacts()
-    for b_id in BOT_BOOK_CONFIG:
-        build_book_for_bot(b_id)
-    print("=== Все дебютные книги готовы! ===")
-
-
-if __name__ == "__main__":
-    main()
-
-========================================================================================
-FILE: scripts/chessgames_downloader.py
-========================================================================================
-# --- FILE: scripts/chessgames_downloader.py ---
-
-import argparse
-import asyncio
-import re
-import sys
-from pathlib import Path
-import httpx
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
-from scripts.build_opening_books import build_book_for_bot  # noqa: E402
-
-BASE_URL = "https://www.chessgames.com"
-DATA_PGNS_DIR = PROJECT_ROOT / "data" / "pgns"
-
-PLAYERS_CONFIG = {
-    "staunton": {"pid": 19077, "pages": 25, "name": "Howard Staunton"},
-    "anderssen": {"pid": 10342, "pages": 34, "name": "Adolf Anderssen"},
-    "morphy": {"pid": 16002, "pages": 19, "name": "Paul Morphy"},
-    "paulsen": {"pid": 10343, "pages": 22, "name": "Louis Paulsen"},
-    "zukertort": {"pid": 10427, "pages": 25, "name": "Johannes Zukertort"},
-}
-
-TABLE_GAME_REGEX = re.compile(
-    r'\d+\.(?:&nbsp;|\xa0|\s)*<a[^>]*href="/perl/chessgame\?gid=(\d+)"',
-    re.IGNORECASE,
-)
-PAGINATION_INFO_REGEX = re.compile(
-    r"page\s+\d+\s+of\s+(\d+)\s*;\s*games\s+\d+-\d+\s+of\s+(\d+)",
-    re.IGNORECASE,
-)
-
-
-async def fetch_gids_from_page(
-        client: httpx.AsyncClient, pid: int, page: int
-) -> tuple[list[str], int | None, int | None]:
-    url = (
-        f"{BASE_URL}/perl/chessplayer?pid={pid}"
-        if page == 1
-        else f"{BASE_URL}/perl/chess.pl?page={page}&pid={pid}"
-    )
-
-    for attempt in range(1, 7):
-        try:
-            response = await client.get(url)
-            if response.status_code in (429, 403, 503):
-                wait_sec = 10 * attempt
-                print(f"[!] Лимит ({response.status_code}) на стр. {page}, пауза {wait_sec} сек...")
-                await asyncio.sleep(wait_sec)
-                continue
-
-            response.raise_for_status()
-            gids = list(dict.fromkeys(TABLE_GAME_REGEX.findall(response.text)))
-
-            detected_pages, detected_total = None, None
-            match = PAGINATION_INFO_REGEX.search(response.text)
-            if match:
-                detected_pages, detected_total = int(match.group(1)), int(match.group(2))
-
-            if not gids:
-                wait_sec = 8 * attempt
-                print(f"[!] Стр. {page} вернула 0 партий (попытка {attempt}/6), пауза {wait_sec} сек...")
-                await asyncio.sleep(wait_sec)
-                continue
-
-            return gids, detected_pages, detected_total
-        except httpx.HTTPError as exc:
-            wait_sec = 4 * attempt
-            print(f"[!] Ошибка сети на стр. {page} (попытка {attempt}): {exc}")
-            await asyncio.sleep(wait_sec)
-
-    return [], None, None
-
-
-async def download_pgn(
-        client: httpx.AsyncClient,
-        player_key: str,
-        player_dir: Path,
-        gid: str,
-        semaphore: asyncio.Semaphore,
-        index: int,
-        total: int,
-) -> tuple[int, str, str]:
-    file_path = player_dir / f"{index:03d}_{player_key}_{gid}.pgn"
-    if file_path.exists():
-        cached = file_path.read_text(encoding="utf-8", errors="ignore").strip()
-        if "[Event " in cached:
-            return index, gid, cached
-
-    url = f"{BASE_URL}/njs/api/game/downloadPGN/{gid}"
-    async with semaphore:
-        for attempt in range(1, 7):
-            try:
-                resp = await client.get(url)
-                text = resp.text.strip()
-                if resp.status_code == 200 and "[Event " in text:
-                    file_path.write_text(text + "\n", encoding="utf-8")
-                    if index % 25 == 0 or index == total:
-                        print(f"[{index:03d}/{total}] Скачано (gid={gid})...")
-                    await asyncio.sleep(0.35)
-                    return index, gid, text
-                await asyncio.sleep(15 * attempt)
-            except httpx.RequestError:
-                await asyncio.sleep(3 * attempt)
-
-    return index, gid, ""
-
-
-async def download_player_games(player_key: str) -> None:
-    cfg = PLAYERS_CONFIG[player_key]
-    pid = cfg["pid"]
-    total_pages = cfg["pages"]
-    player_dir = DATA_PGNS_DIR / f"{player_key}_pgns"
-    player_dir.mkdir(parents=True, exist_ok=True)
-    combined_file = DATA_PGNS_DIR / f"{player_key}_all_games.pgn"
-
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0.0.0 Safari/537.36",
-        "Referer": f"{BASE_URL}/perl/chessplayer?pid={pid}",
-    }
-    semaphore = asyncio.Semaphore(3)
-
-    async with httpx.AsyncClient(headers=headers, timeout=25.0, follow_redirects=True) as client:
-        print(f"=== Скачивание базы: {cfg['name']} (pid={pid}) ===")
-        all_gids: list[str] = []
-        page = 1
-        while page <= total_pages:
-            gids, det_pages, det_total = await fetch_gids_from_page(client, pid, page)
-            if det_pages:
-                total_pages = det_pages
-            for gid in gids:
-                if gid not in all_gids:
-                    all_gids.append(gid)
-            total_info = f"/{det_total}" if det_total else ""
-            print(
-                f"[Страница {page:02d}/{total_pages:02d}] Найдено: {len(gids)} | Всего ID: {len(all_gids)}{total_info}")
-            page += 1
-            await asyncio.sleep(0.35)
-
-        if not all_gids:
-            print(f"[-] Партии для {player_key} не найдены.")
-            return
-
-        tasks = [
-            download_pgn(client, player_key, player_dir, gid, semaphore, idx, len(all_gids))
-            for idx, gid in enumerate(all_gids, start=1)
-        ]
-        results = await asyncio.gather(*tasks)
-        results.sort(key=lambda x: x[0])
-        valid_pgns = [pgn for _, _, pgn in results if pgn]
-
-        combined_file.write_text("\n\n".join(valid_pgns) + "\n", encoding="utf-8")
-        print(f"[+] Сохранено {len(valid_pgns)} партий в {combined_file}")
-
-    build_book_for_bot(player_key)
-
-
-async def main() -> None:
-    parser = argparse.ArgumentParser(description="Единый загрузчик PGN исторических чемпионов с Chessgames.")
-    parser.add_argument(
-        "player",
-        nargs="?",
-        default="zukertort",
-        choices=list(PLAYERS_CONFIG.keys()),
-        help="Ключ шахматиста (по умолчанию: zukertort)",
-    )
-    parser.add_argument("--all", action="store_true", help="Скачать партии всех шахматистов")
-    args = parser.parse_args()
-
-    if args.all:
-        for key in PLAYERS_CONFIG:
-            await download_player_games(key)
-    else:
-        await download_player_games(args.player)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
-
-========================================================================================
-FILE: scripts/download_champions.py
-========================================================================================
-# --- FILE: scripts/download_champions.py ---
-
-import os
-import shutil
-import subprocess
-import time
-from pathlib import Path
-import requests
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-PUBLIC_CHAMPIONS_DIR = PROJECT_ROOT / "frontend" / "public" / "assets" / "champions"
-SRC_CHAMPIONS_DIR = PROJECT_ROOT / "frontend" / "src" / "assets" / "champions"
-
-PUBLIC_CHAMPIONS_DIR.mkdir(parents=True, exist_ok=True)
-SRC_CHAMPIONS_DIR.mkdir(parents=True, exist_ok=True)
-
-champions = {
-    "Steinitz": "Стейниц, Вильгельм",
-    "Lasker": "Ласкер, Эмануил",
-    "Rubinstein": "Рубинштейн, Акиба Кивелевич",
-    "Capablanca": "Капабланка, Хосе Рауль",
-    "Alekhine": "Алехин, Александр Александрович",
-    "Euwe": "Эйве, Макс",
-    "Keres": "Керес, Пауль Петрович",
-    "Botvinnik": "Ботвинник, Михаил Моисеевич",
-    "Geller": "Геллер, Ефим Петрович",
-    "Korchnoi": "Корчной, Виктор Львович",
-    "Smyslov": "Смыслов, Василий Васильевич",
-    "Tal": "Таль, Михаил Нехемьевич",
-    "Petrosian": "Петросян, Тигран Вартанович",
-    "Spassky": "Спасский, Борис Васильевич",
-    "Fischer": "Фишер, Роберт Джеймс",
-    "Karpov": "Анатолий Карпов",
-    "Kasparov": "Каспаров, Гарри Кимович",
-    "Kramnik": "Крамник, Владимир Борисович",
-    "Anand": "Ананд, Вишванатан",
-    "Carlsen": "Карлсен, Магнус",
-    "Ding": "Дин Лижэнь",
-}
-
-
-def sync_historical_portraits() -> None:
-    """Синхронизирует портреты между frontend/src/assets/champions и frontend/public/assets/champions."""
-    copied = 0
-    for src_img in SRC_CHAMPIONS_DIR.glob("*.*"):
-        if src_img.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
-            dst = PUBLIC_CHAMPIONS_DIR / src_img.name
-            if not dst.exists() or src_img.stat().st_size != dst.stat().st_size:
-                shutil.copy2(src_img, dst)
-                copied += 1
-
-    for pub_img in PUBLIC_CHAMPIONS_DIR.glob("*.*"):
-        if pub_img.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
-            dst = SRC_CHAMPIONS_DIR / pub_img.name
-            if not dst.exists():
-                shutil.copy2(pub_img, dst)
-                copied += 1
-
-    print(f"[+] Синхронизировано портретов между src/assets и public/assets: {copied}")
-
-
-def main() -> None:
-    sync_historical_portraits()
-
-    api_url = "https://ru.wikipedia.org/w/api.php"
-    headers = {"User-Agent": "MiChess/1.0 (chess application; python-requests)"}
-    session = requests.Session()
-    session.headers.update(headers)
-
-    print("Проверка и докачка портретов чемпионов...\n")
-
-    for champ_id, wiki_title in champions.items():
-        save_path = PUBLIC_CHAMPIONS_DIR / f"{champ_id}.jpg"
-        if save_path.exists() and save_path.stat().st_size > 0:
-            print(f"[~] {champ_id}.jpg уже существует, пропускаем.")
-            continue
-
-        params = {
-            "action": "query",
-            "titles": wiki_title,
-            "prop": "pageimages",
-            "piprop": "thumbnail",
-            "pithumbsize": "500",
-            "format": "json",
-            "formatversion": "2",
-        }
-
-        for attempt in range(3):
-            try:
-                response = session.get(api_url, params=params, timeout=15)
-                if response.status_code == 429:
-                    time.sleep(15)
-                    continue
-                if response.status_code != 200:
-                    break
-
-                pages = response.json().get("query", {}).get("pages", [])
-                if not pages or not pages[0].get("thumbnail"):
-                    break
-
-                img_url = pages[0]["thumbnail"]["source"].split("?")[0]
-                cmd = [
-                    "curl", "-sS", "-L",
-                    "-A", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0.0.0 Safari/537.36",
-                    "-e", "https://ru.wikipedia.org/",
-                    "--fail", img_url, "-o", str(save_path),
-                ]
-                result = subprocess.run(cmd, capture_output=True)
-                if result.returncode == 0 and save_path.exists() and save_path.stat().st_size > 0:
-                    print(f"[+] {champ_id}.jpg успешно скачан!")
-                    break
-            except Exception as exc:
-                print(f"[-] Ошибка для {champ_id}: {exc}")
-                break
-        time.sleep(2)
-
-    sync_historical_portraits()
-    print("\nГотово! Все портреты синхронизированы.")
-
-
-if __name__ == "__main__":
-    main()
-
-========================================================================================
-FILE: scripts/setup_piece_sets.py
-========================================================================================
-# --- FILE: scripts/setup_piece_sets.py ---
-
-import shutil
-import urllib.request
-from pathlib import Path
-
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-PIECES_ROOT = PROJECT_ROOT / "frontend" / "public" / "assets" / "pieces"
-
-PIECE_CODES = ["wP", "wN", "wB", "wR", "wQ", "wK", "bP", "bN", "bB", "bR", "bQ", "bK"]
-
-REMOTE_SETS = {
-    "merida": "https://raw.githubusercontent.com/lichess-org/lila/master/public/piece/merida/{code}.svg",
-    "alpha": "https://raw.githubusercontent.com/lichess-org/lila/master/public/piece/alpha/{code}.svg",
-    "cburnett": "https://raw.githubusercontent.com/lichess-org/lila/master/public/piece/cburnett/{code}.svg",
-    "maestro": "https://raw.githubusercontent.com/lichess-org/lila/master/public/piece/maestro/{code}.svg",
-}
-
-
-def make_cardinal_outlined_svg(base_svg: str, code: str) -> str:
-    is_black = code.startswith("b")
-    halo_color = "#FFFFFF" if is_black else "#111827"
-    filter_id = f"cardinal_halo_{code}"
-
-    halo_def = (
-        f'<defs><filter id="{filter_id}" x="-12%" y="-12%" width="124%" height="124%">'
-        f'<feMorphology in="SourceAlpha" operator="dilate" radius="1.15" result="dilated"/>'
-        f'<feFlood flood-color="{halo_color}" flood-opacity="0.98" result="flood"/>'
-        f'<feComposite in="flood" in2="dilated" operator="in" result="outline"/>'
-        f'<feMerge><feMergeNode in="outline"/><feMergeNode in="SourceGraphic"/></feMerge>'
-        f'</filter></defs>'
-    )
-
-    idx = base_svg.find(">")
-    if idx == -1 or "</svg>" not in base_svg:
-        return base_svg
-
-    header = base_svg[: idx + 1]
-    body = base_svg[idx + 1:].replace("</svg>", "")
-    return f'{header}{halo_def}<g filter="url(#{filter_id})">{body}</g></svg>\n'
-
-
-def backup_existing_classic_pieces() -> None:
-    classic_dir = PIECES_ROOT / "classic"
-    classic_dir.mkdir(parents=True, exist_ok=True)
-    for code in PIECE_CODES:
-        root_svg = PIECES_ROOT / f"{code}.svg"
-        target_svg = classic_dir / f"{code}.svg"
-        if root_svg.exists() and not target_svg.exists():
-            shutil.copy2(root_svg, target_svg)
-
-
-def download_svg(url: str) -> str | None:
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": "Michess-PieceSetup/1.0"},
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=15) as resp:
-            if resp.status == 200:
-                text = resp.read().decode("utf-8", errors="ignore")
-                if "<svg" in text:
-                    return text
-    except Exception as exc:
-        print(f"[!] Предупреждение при загрузке {url}: {exc}")
-    return None
-
-
-def setup_all_piece_sets() -> None:
-    PIECES_ROOT.mkdir(parents=True, exist_ok=True)
-    backup_existing_classic_pieces()
-    classic_dir = PIECES_ROOT / "classic"
-
-    for set_name, url_tpl in REMOTE_SETS.items():
-        set_dir = PIECES_ROOT / set_name
-        set_dir.mkdir(parents=True, exist_ok=True)
-        downloaded_count = 0
-
-        for code in PIECE_CODES:
-            target_file = set_dir / f"{code}.svg"
-            if target_file.exists() and target_file.stat().st_size > 200:
-                downloaded_count += 1
-                continue
-
-            svg_content = download_svg(url_tpl.format(code=code))
-            if svg_content:
-                target_file.write_text(svg_content, encoding="utf-8")
-                downloaded_count += 1
-            elif (classic_dir / f"{code}.svg").exists():
-                shutil.copy2(classic_dir / f"{code}.svg", target_file)
-
-        print(f"[+] Набор '{set_name:8s}' готов ({downloaded_count}/12 фигур) -> {set_dir.relative_to(PROJECT_ROOT)}")
-
-    cardinal_dir = PIECES_ROOT / "cardinal"
-    cardinal_dir.mkdir(parents=True, exist_ok=True)
-    merida_dir = PIECES_ROOT / "merida"
-
-    for code in PIECE_CODES:
-        src_file = merida_dir / f"{code}.svg"
-        if not src_file.exists():
-            src_file = classic_dir / f"{code}.svg"
-        if src_file.exists():
-            raw_svg = src_file.read_text(encoding="utf-8")
-            outlined_svg = make_cardinal_outlined_svg(raw_svg, code)
-            (cardinal_dir / f"{code}.svg").write_text(outlined_svg, encoding="utf-8")
-
-    print(f"[+] Набор 'cardinal' готов (12/12 фигур) -> {cardinal_dir.relative_to(PROJECT_ROOT)}")
-
-    for code in PIECE_CODES:
-        merida_svg = merida_dir / f"{code}.svg"
-        if merida_svg.exists():
-            shutil.copy2(merida_svg, PIECES_ROOT / f"{code}.svg")
-
-    print("[+] Все 5 комплектов шахматных фигур (60 SVG-файлов) успешно установлены!")
-
-
-if __name__ == "__main__":
-    setup_all_piece_sets()
-
-========================================================================================
-FILE: scripts/setup_stockfish.py
-========================================================================================
-# --- FILE: setup_stockfish.py ---
-
-import io
-import os
-import platform
-import shutil
-import stat
-import tarfile
-import zipfile
-import requests
 import chess.engine
+import pytest
 
-GITHUB_RELEASE_API = "https://api.github.com/repos/official-stockfish/Stockfish/releases/latest"
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-BIN_DIR = os.path.join(PROJECT_ROOT, "bin")
+from src.api import analysis as analysis_api
+from src.core.config import settings
+from src.models.game import Game, GameStatus
+from src.models.user import User
+from src.services.bots.base import resolve_stockfish_path
+from src.services.engine_pool import EngineBusyError, EnginePool
 
+SF_PATH = resolve_stockfish_path()
+needs_stockfish = pytest.mark.skipif(SF_PATH is None, reason="Stockfish binary not available")
 
-def get_target_asset_url(assets: list[dict]) -> tuple[str, str]:
-    """Подбирает оптимальный бинарник Stockfish под текущую ОС (включая universal-сборки SF 19+)."""
-    sys_name = platform.system().lower()
-
-    if sys_name == "windows":
-        preferred = [
-            "windows-x86-64-universal.zip",
-            "windows-x86-64-avx2.zip",
-            "windows-x86-64-sse41-popcnt.zip",
-            "windows-x86-64.zip",
-        ]
-    elif sys_name == "linux":
-        preferred = [
-            "linux-x86-64-universal.tar.gz",
-            "linux-x86-64-universal.tar",
-            "ubuntu-x86-64-avx2.tar",
-            "ubuntu-x86-64-sse41-popcnt.tar",
-            "ubuntu-x86-64.tar",
-        ]
-    else:
-        preferred = [
-            "macos-universal.tar.gz",
-            "macos-m1-apple-silicon.tar",
-            "macos-x86-64-avx2.tar",
-        ]
-
-    for suffix in preferred:
-        for asset in assets:
-            name = asset.get("name", "")
-            if suffix in name:
-                return name, asset["browser_download_url"]
-
-    # Fallback: любой x86-64 архив под нужную ОС
-    for asset in assets:
-        name = asset.get("name", "").lower()
-        if sys_name == "windows" and "windows" in name and "x86-64" in name and name.endswith(".zip"):
-            return asset["name"], asset["browser_download_url"]
-        if sys_name == "linux" and ("linux" in name or "ubuntu" in name) and "x86-64" in name:
-            return asset["name"], asset["browser_download_url"]
-
-    available = [a.get("name", "") for a in assets]
-    raise RuntimeError(f"Не найден подходящий архив Stockfish для ОС '{sys_name}'. Доступные: {available}")
+FOUR_PLY_PGN = '[Event "t"]\n[Result "*"]\n\n1. e4 e5 2. Nf3 Nc6 *'
 
 
-def download_and_install_stockfish() -> str:
-    os.makedirs(BIN_DIR, exist_ok=True)
-    is_windows = platform.system().lower() == "windows"
-    target_filename = "stockfish.exe" if is_windows else "stockfish"
-    target_path = os.path.join(BIN_DIR, target_filename)
-
-    if os.path.exists(target_path) and os.path.getsize(target_path) > 1_000_000:
-        print(f"[~] Бинарник Stockfish уже установлен: {target_path}")
-        return target_path
-
-    print("[1/3] Запрашиваем последний релиз Stockfish с GitHub...")
-    headers = {"User-Agent": "Michess-Setup/1.0"}
-    resp = requests.get(GITHUB_RELEASE_API, headers=headers, timeout=20)
-    resp.raise_for_status()
-    release_data = resp.json()
-    tag_name = release_data.get("tag_name", "latest")
-
-    asset_name, download_url = get_target_asset_url(release_data.get("assets", []))
-    print(f"[2/3] Скачиваем {asset_name} (версия {tag_name})...")
-
-    archive_resp = requests.get(download_url, headers=headers, stream=True, timeout=180)
-    archive_resp.raise_for_status()
-    archive_bytes = io.BytesIO(archive_resp.content)
-
-    print(f"[3/3] Распаковываем движок в {target_path}...")
-    extracted = False
-
-    if asset_name.endswith(".zip"):
-        with zipfile.ZipFile(archive_bytes) as zf:
-            # Берём самый крупный .exe файл со словом stockfish (илиavx2/universal), игнорируя мелкие обёртки
-            exe_members = [
-                m for m in zf.infolist()
-                if not m.is_dir() and m.filename.lower().endswith(".exe") and "stockfish" in m.filename.lower()
-            ]
-            exe_members.sort(key=lambda m: m.file_size, reverse=True)
-            if exe_members:
-                best_member = exe_members[0]
-                with zf.open(best_member) as src, open(target_path, "wb") as dst:
-                    shutil.copyfileobj(src, dst)
-                extracted = True
-    elif asset_name.endswith((".tar", ".tar.gz", ".tgz")):
-        with tarfile.open(fileobj=archive_bytes, mode="r:*") as tf:
-            bin_members = [
-                m for m in tf.getmembers()
-                if m.isfile()
-                   and "stockfish" in os.path.basename(m.name).lower()
-                   and not m.name.lower().endswith((".txt", ".md", ".1", ".cpp", ".h", ".sh"))
-            ]
-            bin_members.sort(key=lambda m: m.size, reverse=True)
-            if bin_members:
-                src = tf.extractfile(bin_members[0])
-                if src:
-                    with src, open(target_path, "wb") as dst:
-                        shutil.copyfileobj(src, dst)
-                    os.chmod(target_path, os.stat(target_path).st_mode | stat.S_IEXEC)
-                    extracted = True
-
-    if not extracted:
-        raise RuntimeError("Не удалось найти исполняемый файл Stockfish внутри архива.")
-
-    with chess.engine.SimpleEngine.popen_uci(target_path) as engine:
-        engine_name = engine.id.get("name", "Stockfish")
-        print(f"[+] Успешно! Движок готов к работе: {engine_name} -> {target_path}")
-
-    return target_path
+async def _make_game(db_session, status: GameStatus, pgn: str = FOUR_PLY_PGN, analysis_json: str | None = None):
+    white = User(username=f"w_{status.name}", hashed_password="pw", rating=1500)
+    black = User(username=f"b_{status.name}", hashed_password="pw", rating=1500)
+    db_session.add_all([white, black])
+    await db_session.commit()
+    game = Game(
+        white_player_id=white.id,
+        black_player_id=black.id,
+        status=status,
+        base_time_ms=180000,
+        increment_ms=0,
+        is_rated=True,
+        pgn=pgn,
+        analysis_json=analysis_json,
+    )
+    db_session.add(game)
+    await db_session.commit()
+    return game
 
 
-if __name__ == "__main__":
-    download_and_install_stockfish()
+# --- Анализ идущих партий ---------------------------------------------------------------
 
-========================================================================================
-FILE: frontend/.gitignore
-========================================================================================
-# Logs
-logs
-*.log
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-pnpm-debug.log*
-lerna-debug.log*
+async def test_analysis_of_in_progress_game_is_forbidden(client, db_session):
+    game = await _make_game(db_session, GameStatus.IN_PROGRESS)
 
-node_modules
-dist
-dist-ssr
-*.local
+    post = client.post(f"/api/v1/analysis/game/{game.id}")
+    get = client.get(f"/api/v1/analysis/game/{game.id}")
 
-# Editor directories and files
-.vscode/*
-!.vscode/extensions.json
-.idea
-.DS_Store
-*.suo
-*.ntvs*
-*.njsproj
-*.sln
-*.sw?
-project_snapshot.txt
+    assert post.status_code == 409
+    assert get.status_code == 409
+    assert not analysis_api._ANALYSIS_LOCKS  # лок по партии освобождён и удалён
 
-========================================================================================
-FILE: frontend/.oxlintrc.json
-========================================================================================
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
 
-========================================================================================
-FILE: frontend/index.html
-========================================================================================
-<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Эта строка запрещает браузеру передавать Referer и обходит блокировку Википедии -->
-    <meta name="referrer" content="no-referrer" />
-    <title>michess</title>
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
-</html>
+async def test_cached_analysis_of_finished_game_is_available(client, db_session):
+    game = await _make_game(db_session, GameStatus.COMPLETED)
+    assert client.get(f"/api/v1/analysis/game/{game.id}").status_code == 200
 
-========================================================================================
-FILE: frontend/postcss.config.js
-========================================================================================
-// --- FILE: frontend/postcss.config.js ---
 
-export default {
-    plugins: {},
-}
+@needs_stockfish
+async def test_stale_cache_is_recomputed(client, db_session):
+    """Кэш, посчитанный по неполной партии (например, во время игры), не отдаётся как итоговый."""
+    stale = {"engine": "x", "white": {}, "black": {}, "moves": [{"ply": 1}, {"ply": 2}]}
+    game = await _make_game(db_session, GameStatus.COMPLETED, analysis_json=json.dumps(stale))
 
-========================================================================================
-FILE: frontend/README.md
-========================================================================================
-# React + TypeScript + Vite
+    res = client.post(f"/api/v1/analysis/game/{game.id}")
+    assert res.status_code == 200
+    assert len(res.json()["moves"]) == 4
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
-Currently, two official plugins are available:
+# --- Лимиты частоты ---------------------------------------------------------------------
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+def test_rate_limit_returns_429_with_retry_after(client, monkeypatch):
+    monkeypatch.setattr(settings, "RATE_LIMIT_POSITION_ANALYSIS", 2)
 
-## React Compiler
+    codes = [client.post("/api/v1/analysis/position", json={"moves": []}).status_code for _ in range(3)]
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+    assert codes[:2] == [200, 200]
+    assert codes[2] == 429
+    limited = client.post("/api/v1/analysis/position", json={"moves": []})
+    assert int(limited.headers["Retry-After"]) >= 1
 
-## Expanding the Oxlint configuration
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+def test_rate_limit_is_per_user_when_token_present(client, monkeypatch, token_user_1, token_user_2):
+    monkeypatch.setattr(settings, "RATE_LIMIT_POSITION_ANALYSIS", 1)
+    url = "/api/v1/analysis/position"
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
+    assert client.post(url, json={"moves": []}).status_code == 200  # гость (IP)
+    assert client.post(url, json={"moves": []}).status_code == 429
+    for token in (token_user_1, token_user_2):
+        res = client.post(url, json={"moves": []}, headers={"Authorization": f"Bearer {token}"})
+        assert res.status_code == 200
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
 
-========================================================================================
-FILE: frontend/src/App.tsx
-========================================================================================
-// --- FILE: frontend/src/App.tsx ---
+def test_engine_busy_maps_to_503(client, monkeypatch):
+    async def _busy(*args, **kwargs):
+        raise EngineBusyError("busy")
 
-import {useState, useRef, useEffect} from 'react';
-import {Routes, Route, useNavigate, Link, useLocation} from 'react-router-dom';
-import Chessboard from './components/Chessboard';
-import AuthModal from './components/AuthModal';
-import Profile from './components/Profile';
-import GameViewer from './components/GameViewer';
-import ChampionGames from './components/ChampionGames';
-import Leaderboard from './components/Leaderboard';
-import {CHAMPIONS_LIST} from './config/champions';
-import {API_BASE_URL} from './config/api';
-import {gameSocket} from './services/gameSocket';
+    monkeypatch.setattr(analysis_api.analysis_service, "analyze_position", _busy)
+    res = client.post("/api/v1/analysis/position", json={"moves": []})
+    assert res.status_code == 503
+    assert "Retry-After" in res.headers
 
-import {
-    Search,
-    Bell,
-    Swords,
-    BookOpen,
-    Eye,
-    Cpu,
-    Wrench,
-    LogOut,
-    User,
-    Mail,
-    Settings,
-    LogIn,
-    Crown,
-    ChevronDown,
-    Trophy
-} from 'lucide-react';
 
-interface UserProfile {
-    id: number;
-    username: string;
-    rating: number;
-    is_cheater: boolean;
-}
+def test_bot_list_does_not_leak_engine_path(client):
+    body = client.get("/api/v1/bots/list").json()
+    assert "stockfish_path" not in body
 
-export default function App() {
-    const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
-    const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
-    const [isProfileOpen, setIsProfileOpen] = useState(false);
-    const [isChampionsMenuOpen, setIsChampionsMenuOpen] = useState(false);
+# --- Пул движков ------------------------------------------------------------------------
 
-    const [showAuthModal, setShowAuthModal] = useState(false);
-    const [serverPing, setServerPing] = useState<number | null>(null);
-
-    const dropdownRef = useRef<HTMLDivElement>(null);
-    const championsMenuRef = useRef<HTMLDivElement>(null);
-    const navigate = useNavigate();
-    const location = useLocation();
-
-    const isSingleScreenRoute =
-        location.pathname === '/' ||
-        location.pathname.startsWith('/challenge/') ||
-        location.pathname.startsWith('/game/');
-
-    useEffect(() => {
-        const syncTokenFromStorage = () => {
-            const current = localStorage.getItem('token');
-            setToken(current);
-            if (!current) {
-                setUserProfile(null);
-                gameSocket.disconnect();
-            }
-        };
-
-        window.addEventListener('storage', syncTokenFromStorage);
-        window.addEventListener('michess-auth-expired', syncTokenFromStorage);
-        return () => {
-            window.removeEventListener('storage', syncTokenFromStorage);
-            window.removeEventListener('michess-auth-expired', syncTokenFromStorage);
-        };
-    }, []);
-
-    useEffect(() => {
-        if (!token) {
-            setUserProfile(null);
-            gameSocket.disconnect();
-            return;
+class _FakeEngine:
+    def __init__(self):
+        self.options = {
+            "Skill Level": chess.engine.Option("Skill Level", "spin", 20, 0, 20, []),
+            "UCI_LimitStrength": chess.engine.Option("UCI_LimitStrength", "check", False, None, None, []),
+            "UCI_Elo": chess.engine.Option("UCI_Elo", "spin", 1320, 1320, 3190, []),
         }
+        self.configured: dict = {}
 
-        fetch(`${API_BASE_URL}/api/v1/profile/me`, {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'accept': 'application/json'
-            }
-        })
-            .then(res => {
-                if (!res.ok) throw new Error('Unauthorized');
-                return res.json();
-            })
-            .then(data => setUserProfile(data))
-            .catch(() => {
-                localStorage.removeItem('token');
-                gameSocket.disconnect();
-                setToken(null);
-                setUserProfile(null);
-            });
-    }, [token]);
+    def configure(self, options: dict):
+        self.configured = dict(options)
 
-    useEffect(() => {
-        if (!isProfileOpen) return;
-        const measurePing = async () => {
-            const start = Date.now();
-            try {
-                await fetch(`${API_BASE_URL}/health`);
-                setServerPing(Date.now() - start);
-            } catch {
-                setServerPing(-1);
-            }
-        };
-        measurePing();
-        const interval = setInterval(measurePing, 3000);
-        return () => clearInterval(interval);
-    }, [isProfileOpen]);
 
-    const handleLogout = () => {
-        localStorage.removeItem('token');
-        gameSocket.disconnect();
-        setToken(null);
-        setUserProfile(null);
-        setIsProfileOpen(false);
-        navigate('/');
-    };
+def test_pool_resets_and_clamps_options():
+    engine = _FakeEngine()
+    EnginePool._configure(engine, {"Skill Level": 3, "UCI_LimitStrength": True, "UCI_Elo": 900, "Unknown": 1})
+    assert engine.configured == {"Skill Level": 3, "UCI_LimitStrength": True, "UCI_Elo": 1320}
 
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-                setIsProfileOpen(false);
-            }
-            if (championsMenuRef.current && !championsMenuRef.current.contains(event.target as Node)) {
-                setIsChampionsMenuOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    # Следующий вызов без опций возвращает полную силу — настройки бота не «протекают».
+    EnginePool._configure(engine, {})
+    assert engine.configured == {"Skill Level": 20, "UCI_LimitStrength": False}
 
-    const username = userProfile?.username || 'Гость';
-    const userRating = userProfile?.rating || 1200;
 
-    return (
-        <div
-            className={`w-full flex flex-col bg-room text-paper font-sans select-none ${
-                isSingleScreenRoute ? 'min-h-dvh xl:h-dvh xl:overflow-hidden' : 'min-h-dvh'
-            }`}
-        >
-            <header
-                className="h-14 shrink-0 bg-acacia-dark border-b-2 border-amber-900/60 px-5 flex items-center justify-between shadow-heavy relative z-30">
-                <div className="flex items-center gap-7">
-                    <Link to="/" className="flex items-center gap-2.5 cursor-pointer group outline-none">
-                        <div
-                            className="w-9 h-9 rounded-md bg-boxwood flex items-center justify-center shadow-inner border border-amber-600/40 text-acacia-dark font-bold text-xl">
-                            ♞
-                        </div>
-                        <span
-                            className="text-2xl font-extrabold tracking-wide text-boxwood-light group-hover:text-white transition">
-                            michess
-                        </span>
-                    </Link>
+@needs_stockfish
+def test_pool_reuses_process_and_limits_concurrency():
+    pool = EnginePool(SF_PATH, size=1, acquire_timeout_s=0.2)
+    try:
+        with pool.acquire() as first:
+            pass
+        with pool.acquire() as second:
+            assert second is first  # процесс переиспользован, а не запущен заново
 
-                    <nav className="hidden md:flex items-center gap-6 text-[15px] font-semibold text-boxwood/90">
-                        <Link
-                            to="/"
-                            className={`flex items-center gap-2 transition ${
-                                location.pathname === '/' ? 'text-amber-300' : 'hover:text-amber-300'
-                            }`}
-                        >
-                            <Swords size={17}/> Игра
-                        </Link>
+            errors = []
 
-                        <Link
-                            to="/leaderboard"
-                            className={`flex items-center gap-2 transition ${
-                                location.pathname === '/leaderboard' ? 'text-amber-300' : 'hover:text-amber-300'
-                            }`}
-                        >
-                            <Trophy size={17}/> Лидеры
-                        </Link>
+            def _try_acquire():
+                try:
+                    with pool.acquire():
+                        pass
+                except EngineBusyError as exc:
+                    errors.append(exc)
 
-                        <div className="relative" ref={championsMenuRef}>
-                            <button
-                                onClick={() => setIsChampionsMenuOpen(!isChampionsMenuOpen)}
-                                className={`flex items-center gap-2 transition outline-none cursor-pointer ${
-                                    isChampionsMenuOpen || location.pathname.startsWith('/champions')
-                                        ? 'text-amber-300'
-                                        : 'hover:text-amber-300'
-                                }`}
-                            >
-                                <Crown size={17}/> Легенды шахмат
-                                <ChevronDown
-                                    size={15}
-                                    className={`transition-transform ${isChampionsMenuOpen ? 'rotate-180' : ''}`}
-                                />
-                            </button>
+            t = threading.Thread(target=_try_acquire)
+            t.start()
+            t.join()
+            assert len(errors) == 1
+    finally:
+        pool.close()
 
-                            {isChampionsMenuOpen && (
-                                <div
-                                    className="absolute top-full left-0 mt-3 w-80 bg-[#261C14] border-2 border-amber-900/80 rounded-lg shadow-2xl z-50 max-h-[75vh] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
-                                    {CHAMPIONS_LIST.map(champ => (
-                                        <Link
-                                            key={champ.id}
-                                            to={`/champions/${encodeURIComponent(champ.id)}`}
-                                            onClick={() => setIsChampionsMenuOpen(false)}
-                                            className="flex items-center gap-3.5 px-4 py-2.5 hover:bg-black/40 transition border-b border-amber-900/30 last:border-b-0 group outline-none"
-                                        >
-                                            <img
-                                                src={champ.img}
-                                                alt={champ.name}
-                                                referrerPolicy="no-referrer"
-                                                className="w-11 h-11 object-cover rounded-md shadow border border-amber-900/50 group-hover:border-amber-500/60 transition shrink-0"
-                                            />
-                                            <div className="flex flex-col min-w-0">
-                                                <span
-                                                    className="font-bold text-amber-200 text-[15px] group-hover:text-white transition truncate">
-                                                    {champ.name}
-                                                </span>
-                                                <span
-                                                    className="text-xs text-boxwood/70 font-mono group-hover:text-amber-400 transition">
-                                                    Чемпион • {champ.years}
-                                                </span>
-                                            </div>
-                                        </Link>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
 
-                        <button className="flex items-center gap-2 hover:text-amber-300 transition cursor-pointer">
-                            <BookOpen size={17}/> Задачи
-                        </button>
-                        <button className="flex items-center gap-2 hover:text-amber-300 transition cursor-pointer">
-                            <Cpu size={17}/> Обучение
-                        </button>
-                        <button className="flex items-center gap-2 hover:text-amber-300 transition cursor-pointer">
-                            <Eye size={17}/> Просмотр
-                        </button>
-                        <button className="flex items-center gap-2 hover:text-amber-300 transition cursor-pointer">
-                            <Wrench size={17}/> Инструменты
-                        </button>
-                    </nav>
-                </div>
-
-                <div className="flex items-center gap-3 text-boxwood-light relative" ref={dropdownRef}>
-                    <Link
-                        to="/leaderboard"
-                        className="md:hidden p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300"
-                        title="Таблица лидеров"
-                    >
-                        <Trophy size={19}/>
-                    </Link>
-                    <button
-                        className="p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300 cursor-pointer"
-                        title="Поиск партии"
-                    >
-                        <Search size={19}/>
-                    </button>
-                    <button
-                        className="p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300 cursor-pointer"
-                        title="Уведомления"
-                    >
-                        <Bell size={19}/>
-                    </button>
-
-                    {token && userProfile ? (
-                        <>
-                            <div
-                                onClick={() => setIsProfileOpen(!isProfileOpen)}
-                                className="flex items-center gap-2.5 pl-3 border-l border-amber-900/50 cursor-pointer hover:opacity-90 transition select-none py-1 px-2.5 rounded-md hover:bg-black/25"
-                            >
-                                <img
-                                    src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${username}&backgroundColor=D0A972`}
-                                    alt="Avatar"
-                                    className="w-8 h-8 rounded bg-black/40 border border-amber-900/50 shadow"
-                                />
-                                <div className="flex flex-col items-start hidden sm:flex">
-                                    <span className="font-bold text-sm text-amber-200 leading-tight">{username}</span>
-                                    <span
-                                        className="text-xs text-amber-400 font-mono font-semibold">({userRating})</span>
-                                </div>
-                                <span className="text-xs text-amber-400 ml-0.5">▼</span>
-                            </div>
-
-                            {isProfileOpen && (
-                                <div
-                                    className="absolute right-0 top-12 w-64 bg-[#261C14] border-2 border-amber-900/80 rounded-lg shadow-2xl py-2 z-50 text-boxwood-light">
-                                    <div className="px-4 py-2.5 border-b border-amber-900/40 flex items-center gap-3">
-                                        <img
-                                            src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${username}&backgroundColor=D0A972`}
-                                            alt="Avatar"
-                                            className="w-10 h-10 rounded bg-black/40 border border-amber-900/50 shadow"
-                                        />
-                                        <div>
-                                            <div className="font-bold text-base text-amber-200">{username}</div>
-                                            <div
-                                                className="text-xs text-amber-400 font-mono">Рейтинг: {userRating}</div>
-                                            <div className="text-xs text-emerald-400 flex items-center gap-1.5 mt-0.5">
-                                                <span
-                                                    className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
-                                                В сети
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="py-1 border-b border-amber-900/40 text-sm font-medium">
-                                        <button
-                                            onClick={() => {
-                                                setIsProfileOpen(false);
-                                                navigate(`/profile/${username}`);
-                                            }}
-                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
-                                        >
-                                            <User size={16} className="text-amber-500"/> Профиль
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setIsProfileOpen(false);
-                                                navigate('/leaderboard');
-                                            }}
-                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
-                                        >
-                                            <Trophy size={16} className="text-amber-500"/> Таблица лидеров
-                                        </button>
-                                        <button
-                                            onClick={() => setIsProfileOpen(false)}
-                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
-                                        >
-                                            <Mail size={16} className="text-amber-500"/> Входящие
-                                        </button>
-                                        <button
-                                            onClick={() => setIsProfileOpen(false)}
-                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
-                                        >
-                                            <Settings size={16} className="text-amber-500"/> Настройки
-                                        </button>
-                                        <button
-                                            onClick={handleLogout}
-                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-red-950/40 transition text-red-300 hover:text-red-200 cursor-pointer"
-                                        >
-                                            <LogOut size={16} className="text-red-400"/> Выйти
-                                        </button>
-                                    </div>
-
-                                    <div
-                                        className="px-4 py-2 text-xs font-mono text-boxwood/70 flex justify-between items-center bg-black/20">
-                                        <span>ПИНГ {serverPing !== null ? (serverPing === -1 ? 'ОШИБКА' : `${serverPing} ms`) : '...'}</span>
-                                        <span className="text-emerald-400 font-bold">● СЕРВЕР</span>
-                                    </div>
-                                </div>
-                            )}
-                        </>
-                    ) : (
-                        <button
-                            onClick={() => setShowAuthModal(true)}
-                            className="flex items-center gap-2 px-4 py-1.5 bg-boxwood text-acacia-dark font-bold text-sm rounded-md hover:bg-boxwood-light transition shadow border border-amber-600/40 cursor-pointer"
-                        >
-                            <LogIn size={16}/> Войти
-                        </button>
-                    )}
-                </div>
-            </header>
-
-            <main
-                className={`flex-1 flex justify-center w-full ${
-                    isSingleScreenRoute
-                        ? 'items-stretch p-2 sm:p-3 xl:overflow-hidden'
-                        : 'items-start p-4 sm:p-6 overflow-y-auto'
-                }`}
-            >
-                <Routes>
-                    <Route path="/" element={<Chessboard key={token ? token : 'guest'}/>}/>
-                    <Route path="/challenge/:inviteCode" element={<Chessboard key={token ? token : 'guest'}/>}/>
-                    <Route path="/leaderboard" element={<Leaderboard/>}/>
-                    <Route path="/profile/:targetUsername" element={<Profile/>}/>
-                    <Route path="/game/:gameId" element={<GameViewer/>}/>
-                    <Route path="/champions/:championId" element={<ChampionGames/>}/>
-                </Routes>
-            </main>
-
-            {showAuthModal && (
-                <AuthModal
-                    onSuccess={(newToken) => {
-                        setToken(newToken);
-                        setShowAuthModal(false);
-                    }}
-                />
-            )}
-        </div>
-    );
-}
+@needs_stockfish
+def test_pool_replaces_dead_engine():
+    pool = EnginePool(SF_PATH, size=1, acquire_timeout_s=1.0)
+    try:
+        with pool.acquire() as engine:
+            engine.quit()  # процесс завершился, а вызывающий код ошибку «проглотил»
+        with pool.acquire() as fresh:
+            assert fresh is not engine
+            info = fresh.analyse(chess.Board(), chess.engine.Limit(depth=1))
+            assert "score" in info
+    finally:
+        pool.close()
 
 ========================================================================================
-FILE: frontend/src/components/AuthModal.tsx
+FILE: tests/test_game_end_atomicity.py
 ========================================================================================
-// --- FILE: frontend/src/components/AuthModal.tsx ---
+# --- FILE: tests/test_game_end_atomicity.py ---
+"""
+Атомарность завершения партии: из конкурентных претендентов (сдача, ничья, флаг, отмена)
+партию завершает ровно один, а рейтинг начисляется ровно один раз.
+"""
 
-import {useState} from 'react';
-import {LogIn, UserPlus} from 'lucide-react';
-import {API_BASE_URL} from '../config/api';
+import asyncio
+import time
 
-interface AuthModalProps {
-    onSuccess: (token: string) => void;
-}
+import fakeredis.aioredis
+import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker
 
-export default function AuthModal({onSuccess}: AuthModalProps) {
-    const [isLogin, setIsLogin] = useState(true);
-    const [username, setUsername] = useState('');
-    const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
+from src.models.game import Game, GameStatus
+from src.models.user import User
+from src.services.game_state import ABANDON_TIMEOUT_MS, evaluate_clock_expiry, state_manager
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
-        setLoading(true);
 
-        try {
-            if (isLogin) {
-                // Логин (OAuth2 form URL encoded)
-                const formData = new URLSearchParams();
-                formData.append('username', username);
-                formData.append('password', password);
+@pytest.fixture
+def real_redis(monkeypatch):
+    """fakeredis с настоящей семантикой WATCH/MULTI (самодельный мок её не эмулирует)."""
+    client = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    monkeypatch.setattr(state_manager, "redis", client)
+    return client
 
-                const res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                    body: formData,
-                });
 
-                if (!res.ok) throw new Error('Неверное имя пользователя или пароль');
-                const data = await res.json();
-                localStorage.setItem('token', data.access_token);
-                onSuccess(data.access_token);
-            } else {
-                // Регистрация
-                const res = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({username, password}),
-                });
+async def _make_game(db_session, *, rated: bool = True) -> tuple[Game, User, User]:
+    white = User(username="w_atomic", hashed_password="pw", rating=1500)
+    black = User(username="b_atomic", hashed_password="pw", rating=1500)
+    db_session.add_all([white, black])
+    await db_session.commit()
+    game = Game(
+        white_player_id=white.id,
+        black_player_id=black.id,
+        status=GameStatus.IN_PROGRESS,
+        base_time_ms=180000,
+        increment_ms=0,
+        is_rated=rated,
+    )
+    db_session.add(game)
+    await db_session.commit()
+    await state_manager.initialize_game(game.id, white.id, black.id, 180000, 0)
+    return game, white, black
 
-                if (!res.ok) {
-                    const errData = await res.json();
-                    throw new Error(errData.detail || 'Ошибка регистрации');
-                }
 
-                // Автоматический вход после успешной регистрации
-                setIsLogin(true);
-                setError('Регистрация успешна! Теперь войдите в систему.');
-            }
-        } catch (err: any) {
-            setError(err.message || 'Произошла ошибка');
-        } finally {
-            setLoading(false);
-        }
-    };
+async def test_concurrent_claims_have_single_winner(real_redis, db_session):
+    game, _, _ = await _make_game(db_session)
 
-    return (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div
-                className="bg-[#261C14] border-2 border-amber-900/80 rounded-lg p-6 w-full max-w-md shadow-heavy text-boxwood-light font-serif">
+    claims = await asyncio.gather(
+        state_manager.claim_game_end(game.id, "0-1", "resignation"),
+        state_manager.claim_game_end(game.id, "1-0", "resignation"),
+        state_manager.claim_game_end(game.id, "1/2-1/2", "agreement"),
+        state_manager.claim_game_end(game.id, "0-1", "timeout"),
+        state_manager.claim_game_end(game.id, "*", "aborted", status="aborted"),
+    )
 
-                <div className="flex justify-center mb-4">
-                    <div
-                        className="w-12 h-12 rounded bg-boxwood flex items-center justify-center text-acacia-dark font-bold text-2xl shadow-inner border border-amber-600/40">
-                        ♞
-                    </div>
-                </div>
+    assert sum(c is not None for c in claims) == 1
+    state = await real_redis.hgetall(f"game:{game.id}:state")
+    assert state["status"] in ("completed", "aborted")
 
-                <h2 className="text-2xl font-bold text-center text-amber-200 mb-1">
-                    {isLogin ? 'Вход в michess' : 'Регистрация аккаунта'}
-                </h2>
-                <p className="text-xs text-center text-boxwood/70 mb-6">
-                    {isLogin ? 'Введите свои учетные данные для игры' : 'Создайте новый аккаунт для старта'}
-                </p>
 
-                {error && (
-                    <div
-                        className={`p-3 mb-4 rounded text-xs text-center border ${error.includes('успешна') ? 'bg-emerald-950/60 border-emerald-600/50 text-emerald-200' : 'bg-red-950/80 border-red-800/50 text-red-200'}`}>
-                        {error}
-                    </div>
-                )}
+async def test_claim_guard_is_rechecked(real_redis, db_session):
+    game, _, _ = await _make_game(db_session)
 
-                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                    <div>
-                        <label className="block text-xs text-boxwood/80 mb-1">Имя пользователя (Логин)</label>
-                        <input
-                            type="text"
-                            required
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            className="w-full px-3 py-2 bg-black/40 border border-amber-900/60 rounded text-amber-100 text-sm focus:outline-none focus:border-amber-600"
-                            placeholder="например, string1"
-                        />
-                    </div>
+    assert await state_manager.claim_game_end(game.id, "1/2-1/2", "agreement", guard=lambda s: False) is None
+    state = await real_redis.hgetall(f"game:{game.id}:state")
+    assert state["status"] == "in_progress"
 
-                    <div>
-                        <label className="block text-xs text-boxwood/80 mb-1">Пароль</label>
-                        <input
-                            type="password"
-                            required
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className="w-full px-3 py-2 bg-black/40 border border-amber-900/60 rounded text-amber-100 text-sm focus:outline-none focus:border-amber-600"
-                            placeholder="••••••••"
-                        />
-                    </div>
 
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="mt-2 flex items-center justify-center gap-2 py-2.5 bg-boxwood text-acacia-dark font-bold rounded hover:bg-boxwood-light transition shadow border border-amber-600/40 disabled:opacity-50"
-                    >
-                        {isLogin ? <LogIn size={18}/> : <UserPlus size={18}/>}
-                        {loading ? 'Загрузка...' : (isLogin ? 'Войти' : 'Зарегистрироваться')}
-                    </button>
-                </form>
+async def test_flag_inside_move_blocks_second_finisher(real_redis, db_session):
+    """Флаг при попытке хода сразу фиксируется в Redis: цикл таймаутов и сдача уже не завершат партию."""
+    game, white, _ = await _make_game(db_session)
+    await state_manager.update_game_state(game.id, {"last_move_at": int(time.time() * 1000) - 200_000})
 
-                <div className="mt-4 text-center text-xs">
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setIsLogin(!isLogin);
-                            setError('');
-                        }}
-                        className="text-amber-400 hover:underline"
-                    >
-                        {isLogin ? 'Нет аккаунта? Зарегистрируйтесь' : 'Уже есть аккаунт? Войдите'}
-                    </button>
-                </div>
+    res = await state_manager.process_atomic_move(game.id, white.id, "cmd-1", "e2e4")
+    assert res["status"] == "game_over"
+    assert res["termination"] == "timeout"
 
-            </div>
-        </div>
-    );
-}
+    state = await real_redis.hgetall(f"game:{game.id}:state")
+    assert state["status"] == "completed"
+    assert await state_manager.claim_game_end(game.id, "0-1", "timeout") is None
+
+
+async def test_finish_game_with_stale_session_does_not_double_rate(real_redis, db_session):
+    """
+    Сессия WS-обработчика долгоживущая (expire_on_commit=False) и может держать устаревший
+    объект Game со статусом IN_PROGRESS. finish_game обязан перечитать строку из БД.
+    """
+    game, white, black = await _make_game(db_session)
+    # Фабрика на том же тестовом движке (импортировать conftest напрямую нельзя: это создаст его копию).
+    TestSessionLocal = async_sessionmaker(db_session.bind, expire_on_commit=False)
+
+    async with TestSessionLocal() as stale_session:
+        stale_game = await stale_session.get(Game, game.id)
+        assert stale_game.status == GameStatus.IN_PROGRESS  # объект закэширован в identity map
+
+        async with TestSessionLocal() as other_session:
+            first = await state_manager.finish_game(other_session, game.id, "1-0", termination="resignation")
+        assert first["white_delta"] > 0
+
+        second = await state_manager.finish_game(stale_session, game.id, "1-0", termination="resignation")
+        assert second["white_delta"] == first["white_delta"]
+
+    async with TestSessionLocal() as check:
+        w = await check.get(User, white.id)
+        b = await check.get(User, black.id)
+        assert w.rating == 1500 + first["white_delta"]
+        assert b.rating == 1500 + first["black_delta"]
+
+
+def test_evaluate_clock_expiry():
+    now = int(time.time() * 1000)
+    base = {
+        "white_id": 1, "black_id": 2, "turn": "white",
+        "white_time_ms": 1000, "black_time_ms": 5000, "last_move_at": now - 500,
+        "white_disconnected": "false", "black_disconnected": "false",
+        "white_disconnect_started_at": 0, "black_disconnect_started_at": 0,
+    }
+    assert evaluate_clock_expiry(base, now) is None
+    assert evaluate_clock_expiry({**base, "last_move_at": now - 1500}, now) == ("0-1", 2, "timeout")
+    abandoned = {**base, "black_disconnected": "true", "black_disconnect_started_at": now - ABANDON_TIMEOUT_MS}
+    assert evaluate_clock_expiry(abandoned, now) == ("1-0", 1, "abandoned")
+
+========================================================================================
+FILE: tests/test_game_end_reconciliation.py
+========================================================================================
+# --- FILE: tests/test_game_end_reconciliation.py ---
+"""
+Сверка Redis и БД: партия, завершённая в Redis, но не записанная в БД (процесс упал или БД
+была недоступна между claim_game_end и finish_game), должна быть дозавершена, а партия,
+потерявшая состояние в Redis, — восстановлена.
+"""
+
+import asyncio
+import time
+
+import fakeredis.aioredis
+import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker
+
+from src.models.game import Game, GameStatus
+from src.models.user import User
+from src.services import game_state as game_state_module
+from src.services.game_state import PENDING_FINISH_KEY, RECONCILE_GRACE_MS, state_manager
+
+
+class DummyManager:
+    def __init__(self):
+        self.sent: list[tuple[int, dict]] = []
+
+    async def send_personal_message(self, message: dict, user_id: int):
+        self.sent.append((user_id, message))
+
+    async def broadcast_to_spectators(self, game_id: int, message: dict):
+        pass
+
+
+@pytest.fixture
+def real_redis(monkeypatch):
+    """fakeredis: настоящая семантика WATCH/MULTI и sorted set."""
+    client = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    monkeypatch.setattr(state_manager, "redis", client)
+    monkeypatch.setattr(state_manager, "_missing_state_seen", set())
+    return client
+
+
+@pytest.fixture
+def session_factory(db_session, monkeypatch):
+    factory = async_sessionmaker(db_session.bind, expire_on_commit=False)
+    monkeypatch.setattr(game_state_module, "AsyncSessionLocal", factory)
+    return factory
+
+
+async def _make_game(db_session, *, init_redis: bool = True) -> tuple[Game, User, User]:
+    white = User(username="w_reconcile", hashed_password="pw", rating=1500)
+    black = User(username="b_reconcile", hashed_password="pw", rating=1500)
+    db_session.add_all([white, black])
+    await db_session.commit()
+    game = Game(
+        white_player_id=white.id, black_player_id=black.id, status=GameStatus.IN_PROGRESS,
+        base_time_ms=180000, increment_ms=0, is_rated=True,
+    )
+    db_session.add(game)
+    await db_session.commit()
+    if init_redis:
+        await state_manager.initialize_game(game.id, white.id, black.id, 180000, 0)
+    return game, white, black
+
+
+async def _db_game(factory, game_id: int) -> Game:
+    async with factory() as db:
+        return await db.get(Game, game_id)
+
+
+def _after_grace() -> int:
+    return int(time.time() * 1000) + RECONCILE_GRACE_MS + 1
+
+
+async def test_claim_registers_pending_finish_and_finish_game_clears_it(
+        real_redis, session_factory, db_session, no_celery_publish):
+    game, _, _ = await _make_game(db_session)
+
+    await state_manager.claim_game_end(game.id, "0-1", "resignation")
+    assert await real_redis.zscore(PENDING_FINISH_KEY, str(game.id)) is not None
+
+    async with session_factory() as db:
+        await state_manager.finish_game(db, game.id, "0-1", termination="resignation")
+    assert await real_redis.zscore(PENDING_FINISH_KEY, str(game.id)) is None
+
+    # Фоновый анализ ставится в очередь, не задерживая finish_game.
+    for _ in range(50):
+        if no_celery_publish:
+            break
+        await asyncio.sleep(0.01)
+    assert no_celery_publish == [game.id]
+
+
+async def test_move_ending_the_game_registers_pending_finish(real_redis, session_factory, db_session):
+    """Флаг при ходе завершает партию в транзакции хода — она тоже должна попасть в реестр."""
+    game, white, _ = await _make_game(db_session)
+    await state_manager.update_game_state(game.id, {"last_move_at": int(time.time() * 1000) - 200_000})
+
+    res = await state_manager.process_atomic_move(game.id, white.id, "cmd-1", "e2e4")
+    assert res["status"] == "game_over"
+    assert await real_redis.zscore(PENDING_FINISH_KEY, str(game.id)) is not None
+
+
+async def test_game_claimed_but_never_written_is_finished_after_grace(real_redis, session_factory, db_session):
+    game, white, black = await _make_game(db_session)
+    # Сдача захвачена в Redis, а до finish_game процесс не дожил.
+    await state_manager.claim_game_end(game.id, "0-1", "resignation")
+    manager = DummyManager()
+
+    # Пока не прошёл grace-период, штатный обработчик мог ещё работать — не трогаем.
+    report = await state_manager.reconcile_unfinished_games(int(time.time() * 1000), manager=manager)
+    assert report["finished"] == []
+    assert (await _db_game(session_factory, game.id)).status == GameStatus.IN_PROGRESS
+
+    report = await state_manager.reconcile_unfinished_games(_after_grace(), manager=manager)
+    assert report["finished"] == [game.id]
+
+    db_game = await _db_game(session_factory, game.id)
+    assert db_game.status == GameStatus.COMPLETED
+    assert (db_game.result, db_game.termination) == ("0-1", "resignation")
+    async with session_factory() as db:
+        assert (await db.get(User, black.id)).rating > 1500  # рейтинг начислен
+
+    assert await real_redis.zscore(PENDING_FINISH_KEY, str(game.id)) is None
+    assert not await real_redis.hgetall(f"game:{game.id}:state")
+    assert {uid for uid, msg in manager.sent if msg["event"] == "game_over"} == {white.id, black.id}
+
+    # Повторная сверка ничего не делает и не начисляет рейтинг второй раз.
+    report = await state_manager.reconcile_unfinished_games(_after_grace(), manager=manager)
+    assert report["finished"] == []
+
+
+async def test_failed_finish_stays_pending_and_is_retried(real_redis, session_factory, db_session, monkeypatch):
+    game, _, _ = await _make_game(db_session)
+    await state_manager.claim_game_end(game.id, "1-0", "resignation")
+
+    original_finish = state_manager.finish_game
+
+    async def broken_finish(*args, **kwargs):
+        raise RuntimeError("database is down")
+
+    monkeypatch.setattr(state_manager, "finish_game", broken_finish)
+    report = await state_manager.reconcile_unfinished_games(_after_grace())
+    assert report["failed"] == [game.id]
+    assert await real_redis.zscore(PENDING_FINISH_KEY, str(game.id)) is not None
+
+    monkeypatch.setattr(state_manager, "finish_game", original_finish)
+    report = await state_manager.reconcile_unfinished_games(_after_grace())
+    assert report["finished"] == [game.id]
+    assert (await _db_game(session_factory, game.id)).status == GameStatus.COMPLETED
+
+
+async def test_abort_claimed_but_never_written_is_aborted_in_db(real_redis, session_factory, db_session):
+    game, white, black = await _make_game(db_session)
+    await state_manager.claim_game_end(game.id, "*", "aborted", status="aborted")
+    manager = DummyManager()
+
+    report = await state_manager.reconcile_unfinished_games(_after_grace(), manager=manager)
+
+    assert report["aborted"] == [game.id]
+    db_game = await _db_game(session_factory, game.id)
+    assert db_game.status == GameStatus.ABORTED
+    assert db_game.white_rating_delta == 0
+    assert {uid for uid, msg in manager.sent if msg["reason"] == "aborted"} == {white.id, black.id}
+
+
+async def test_game_lost_from_redis_is_restored_on_second_pass(real_redis, session_factory, db_session):
+    """Redis перезапущен без персистентности: партия есть только в БД."""
+    game, _, _ = await _make_game(db_session, init_redis=False)
+
+    report = await state_manager.reconcile_unfinished_games(_after_grace())
+    assert report["restored"] == []  # мог быть только что созданной партией до initialize_game
+
+    report = await state_manager.reconcile_unfinished_games(_after_grace())
+    assert report["restored"] == [game.id]
+    state = await real_redis.hgetall(f"game:{game.id}:state")
+    assert state["status"] == "in_progress"
+    assert str(game.id) in await real_redis.smembers("active_games")
+
+
+async def test_in_progress_game_missing_from_active_set_is_readded(real_redis, session_factory, db_session):
+    game, _, _ = await _make_game(db_session)
+    await real_redis.srem("active_games", str(game.id))
+
+    report = await state_manager.reconcile_unfinished_games(_after_grace())
+
+    assert report["restored"] == [game.id]
+    assert str(game.id) in await real_redis.smembers("active_games")
+
+
+async def test_move_telemetry_survives_until_result_is_committed(real_redis, session_factory, db_session):
+    """Телеметрия не удаляется до коммита: при сбое повторная попытка не останется без ходов."""
+    game, _, _ = await _make_game(db_session)
+    await state_manager.save_move_telemetry(game.id, {"notation": "e2e4"})
+
+    assert await state_manager.read_all_moves(game.id) == [{"notation": "e2e4"}]
+    assert await state_manager.read_all_moves(game.id) == [{"notation": "e2e4"}]
+
+    await state_manager.clear_game_state(game.id)
+    assert await state_manager.read_all_moves(game.id) == []
+
+========================================================================================
+FILE: tests/test_game_engine.py
+========================================================================================
+# --- FILE: tests/test_game_engine.py ---
+
+from src.services.game_engine import engine
+
+STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
+
+def test_process_valid_move():
+    is_valid, data = engine.process_move(STARTING_FEN, "e2e4")
+
+    assert is_valid is True
+    assert data is not None
+    assert data["san"] == "e4"
+    assert data["uci"] == "e2e4"
+    assert "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR" in data["new_fen"]
+    assert data["result"] is None
+    assert data["is_game_over"] is False
+
+
+def test_process_illegal_move():
+    is_valid, data = engine.process_move(STARTING_FEN, "e2e5")
+
+    assert is_valid is False
+    assert data is None
+
+
+def test_checkmate_detection():
+    # Позиция за шаг до детского мата (ход белых: Qf7#)
+    fen = "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 4 3"
+    is_valid, data = engine.process_move(fen, "f3f7")
+
+    assert is_valid is True
+    assert data["is_game_over"] is True
+    assert data["result"] == "1-0"
+    assert data["termination"] == "checkmate"
+
+
+def test_underpromotion_to_knight_and_rook():
+    """Проверка превращения пешки в коня (a7a8n) и ладью (a7a8r) с корректной записью SAN."""
+    promotion_fen = "4k3/P7/8/8/8/8/8/4K3 w - - 0 1"
+
+    is_valid_n, res_knight = engine.process_move(promotion_fen, "a7a8n")
+    assert is_valid_n is True
+    assert res_knight["uci"] == "a7a8n"
+    assert res_knight["san"].startswith("a8=N")
+
+    is_valid_r, res_rook = engine.process_move(promotion_fen, "a7a8r")
+    assert is_valid_r is True
+    assert res_rook["uci"] == "a7a8r"
+    assert res_rook["san"].startswith("a8=R")
+
+
+def _play(moves: list[str]) -> list[dict]:
+    """Проигрывает ходы через engine.process_move, передавая FEN и PGN, как это делает сервер."""
+    fen, pgn, results = STARTING_FEN, "", []
+    for mv in moves:
+        is_valid, data = engine.process_move(fen, mv, pgn)
+        assert is_valid, f"move {mv} rejected"
+        fen, pgn = data["new_fen"], data["new_pgn"]
+        results.append(data)
+    return results
+
+
+def test_threefold_repetition_ends_game():
+    """Третье повторение позиции завершает партию ничьей (раньше не детектировалось: доска строилась из FEN)."""
+    dance = ["g1f3", "g8f6", "f3g1", "f6g8"]
+    results = _play(dance * 2)
+
+    assert all(not r["is_game_over"] for r in results[:-1])
+    last = results[-1]
+    assert last["is_game_over"] is True
+    assert last["termination"] == "repetition"
+    assert last["result"] == "1/2-1/2"
+
+
+def test_repetition_not_ended_when_only_reachable():
+    """Позиция, из которой повторение лишь достижимо следующим ходом, партию не завершает."""
+    results = _play(["g1f3", "g8f6", "f3g1", "f6g8", "g1f3", "g8f6", "f3g1"])
+    assert results[-1]["is_game_over"] is False
+
+
+def test_inconsistent_pgn_falls_back_to_fen():
+    """Если PGN не соответствует FEN, ход валидируется по FEN, как раньше."""
+    is_valid, data = engine.process_move(STARTING_FEN, "e2e4", "1. d4 d5")
+    assert is_valid is True
+    assert data["san"] == "e4"
+
+========================================================================================
+FILE: tests/test_game_state.py
+========================================================================================
+# --- FILE: tests/test_game_state.py ---
+
+import time
+
+import pytest
+
+from src.services.game_state import state_manager
+
+
+class DummyManager:
+    """Заглушка WebSocket-менеджера для изоляции тестов логики состояний."""
+    async def send_personal_message(self, message: dict, user_id: int):
+        pass
+
+
+@pytest.mark.asyncio
+async def test_game_state_initialization():
+    await state_manager.initialize_game(
+        game_id=1, white_id=10, black_id=20, base_time_ms=180000, increment_ms=0
+    )
+    state = await state_manager.get_game_state(1)
+
+    assert state is not None
+    assert state["white_id"] == 10
+    assert state["black_id"] == 20
+    assert state["white_time_ms"] == 180000
+    assert state["status"] == "in_progress"
+
+
+@pytest.mark.asyncio
+async def test_disconnect_and_reconnect_keeps_clock_running():
+    """
+    Разрыв соединения не останавливает и не сдвигает часы: после переподключения остаток
+    белых равен base - (now - last_move_at), а last_move_at и сохранённое время не меняются.
+    """
+    from src.services.game_state import live_clock_ms
+
+    await state_manager.initialize_game(
+        game_id=2, white_id=10, black_id=20, base_time_ms=180000, increment_ms=0
+    )
+    now_ms = int(time.time() * 1000)
+    # Ход белых идёт 5 секунд, из них 3 секунды белые были офлайн.
+    await state_manager.update_game_state(2, {"last_move_at": now_ms - 5000})
+
+    dummy_manager = DummyManager()
+    await state_manager.handle_player_disconnect(10, dummy_manager)
+    state_after_dc = await state_manager.get_game_state(2)
+    assert state_after_dc["white_disconnected"] == "true"
+    await state_manager.update_game_state(2, {"white_disconnect_started_at": now_ms - 3000})
+
+    await state_manager.handle_player_reconnect(10, dummy_manager)
+
+    state = await state_manager.get_game_state(2)
+    assert state["white_disconnected"] == "false"
+    assert state["white_time_ms"] == 180000
+    assert state["last_move_at"] == now_ms - 5000
+    assert 174000 <= live_clock_ms(state, "white", int(time.time() * 1000)) <= 175000
+
+
+@pytest.mark.asyncio
+async def test_abort_game_without_rating_change(db_session):
+    """Проверяет, что отмена партии на 1-м ходу (до 2 полуходов) не меняет рейтинг и ставит статус ABORTED."""
+    from src.models.game import Game, GameStatus
+    from src.models.user import User
+    from src.services.game_state import state_manager
+
+    u1 = User(username="abort_white_player", hashed_password="pw", rating=1500)
+    u2 = User(username="abort_black_player", hashed_password="pw", rating=1500)
+    db_session.add_all([u1, u2])
+    await db_session.commit()
+    await db_session.refresh(u1)
+    await db_session.refresh(u2)
+
+    game = Game(
+        white_player_id=u1.id,
+        black_player_id=u2.id,
+        status=GameStatus.IN_PROGRESS,
+        base_time_ms=180000,
+        increment_ms=2000,
+        is_rated=True,
+    )
+    db_session.add(game)
+    await db_session.commit()
+    await db_session.refresh(game)
+
+    await state_manager.redis.hset(f"game:{game.id}:state", mapping={
+        "white_id": str(u1.id),
+        "black_id": str(u2.id),
+        "status": "in_progress",
+        "state_version": "1",
+        "last_move_at": "1000",
+    })
+
+    res = await state_manager.abort_game(db_session, game.id)
+    assert res["status"] == "aborted"
+    assert res["result"] == "*"
+    assert res["white_delta"] == 0
+    assert res["black_delta"] == 0
+
+    await db_session.refresh(u1)
+    await db_session.refresh(u2)
+    await db_session.refresh(game)
+    assert u1.rating == 1500
+    assert u2.rating == 1500
+    assert game.status == GameStatus.ABORTED
+
+
+@pytest.mark.asyncio
+async def test_private_invite_create_and_redeem():
+    """Проверяет создание приватного вызова по ссылке в Redis и его одноразовое погашение."""
+    from src.services.matchmaker import matchmaker
+
+    invite = await matchmaker.create_private_invite(
+        user_id=101,
+        username="teacher_misha",
+        rating=2050,
+        base_time_ms=600000,
+        increment_ms=5000,
+        color_pref="white",
+    )
+    code = invite["code"]
+    assert len(code) >= 6
+
+    # Создатель не может принять собственный вызов
+    self_accept = await matchmaker.accept_private_invite(code, acceptor_id=101)
+    assert self_accept is None
+
+    # Второй игрок успешно принимает вызов
+    redeemed = await matchmaker.accept_private_invite(code, acceptor_id=202)
+    assert redeemed is not None
+    assert redeemed["white_id"] == 101
+    assert redeemed["black_id"] == 202
+    assert redeemed["base_time_ms"] == 600000
+    assert redeemed["increment_ms"] == 5000
+
+    # Повторное погашение того же кода невозможно
+    second_try = await matchmaker.accept_private_invite(code, acceptor_id=303)
+    assert second_try is None
+
+========================================================================================
+FILE: tests/test_labourdonnais_bot.py
+========================================================================================
+# --- FILE: tests/test_labourdonnais_bot.py ---
+
+import chess
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+from src.main import app
+from src.services.bots.labourdonnais import (
+    LABOURDONNAIS_OPENING_BOOK,
+    LabourdonnaisBot,
+    evaluate_labourdonnais_style_bonus,
+)
+from src.services.bots.philidor import normalize_fen_key
+
+
+def test_labourdonnais_opening_repertoire_branches():
+    """Проверяем, что в книге Лабурдонне сохранены все стартовые ветки (e4, d4, f4)."""
+    bot = LabourdonnaisBot(stockfish_path=None)
+    board = chess.Board()
+    start_key = normalize_fen_key(board)
+    expected_book_moves = {item[0] for item in LABOURDONNAIS_OPENING_BOOK[start_key]}
+
+    assert {"e2e4", "d2d4", "f2f4"}.issubset(expected_book_moves)
+
+    result = bot.choose_move(board.fen())
+    assert result["uci"] in expected_book_moves
+    assert result["source"] == "opening_book"
+
+
+def test_labourdonnais_plays_evans_gambit_or_italian_from_book():
+    """Проверяем, что в итальянской позиции Лабурдонне выбирает гамбит Эванса (b2b4) или c2c3."""
+    bot = LabourdonnaisBot(stockfish_path=None)
+    board = chess.Board()
+    for san in ["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5"]:
+        board.push_san(san)
+
+    result = bot.choose_move(board.fen())
+    assert result["uci"] in {"b2b4", "c2c3"}
+    assert result["source"] == "opening_book"
+
+
+def test_labourdonnais_style_rewards_castling_and_development():
+    """Проверяем, что атакующий фильтр Лабурдонне поощряет рокировку и вывод фигур в центр."""
+    board = chess.Board("r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4")
+
+    castle_bonus, _ = evaluate_labourdonnais_style_bonus(board, chess.Move.from_uci("e1g1"))
+    nc3_bonus, _ = evaluate_labourdonnais_style_bonus(board, chess.Move.from_uci("b1c3"))
+    passive_h3_bonus, _ = evaluate_labourdonnais_style_bonus(board, chess.Move.from_uci("h2h3"))
+
+    assert castle_bonus > passive_h3_bonus
+    assert nc3_bonus > passive_h3_bonus
+
+
+def test_labourdonnais_middlegame_move_generation():
+    """Проверяем генерацию хода Лабурдонне в миттельшпиле вне дебютной книги."""
+    bot = LabourdonnaisBot(stockfish_path=None)
+    board = chess.Board("r1bq1rk1/ppp2ppp/2np1n2/2b1p3/2B1P3/2PP1N2/PP3PPP/RNBQ1RK1 w - - 3 7")
+
+    result = bot.choose_move(board.fen())
+    assert chess.Move.from_uci(result["uci"]) in board.legal_moves
+    assert result["source"] == "labourdonnais_style_engine"
+
+
+@pytest.mark.asyncio
+async def test_labourdonnais_api_move_endpoint():
+    """Проверяем REST-эндпоинт /api/v1/bots/move для игры с Лабурдонне."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        list_resp = await client.get("/api/v1/bots/list")
+        assert list_resp.status_code == 200
+        bot_ids = [b["id"] for b in list_resp.json()["bots"]]
+        assert "labourdonnais" in bot_ids
+
+        start_key = normalize_fen_key(chess.Board())
+        labourdonnais_start_moves = {item[0] for item in LABOURDONNAIS_OPENING_BOOK[start_key]}
+
+        move_resp = await client.post(
+            "/api/v1/bots/move",
+            json={
+                "bot_id": "labourdonnais",
+                "fen": chess.STARTING_FEN,
+            },
+        )
+        assert move_resp.status_code == 200
+        data = move_resp.json()
+        assert data["bot_id"] == "labourdonnais"
+        assert data["uci"] in labourdonnais_start_moves
+        assert data["source"] == "opening_book"
+
+========================================================================================
+FILE: tests/test_matchmaking_rules.py
+========================================================================================
+# --- FILE: tests/test_matchmaking_rules.py ---
+"""
+Матчмейкинг: свежий рейтинг из БД, диапазон рейтинга, запрет второй партии одновременно.
+"""
+
+import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker
+
+from src.core.config import settings
+from src.models.game import Game
+from src.models.user import User
+from src.services.game_state import state_manager
+from src.services.matchmaker import MatchmakingError, matchmaker
+
+
+async def _users(db_session, *ratings: int) -> list[User]:
+    users = [User(username=f"mm_{i}_{r}", hashed_password="pw", rating=r) for i, r in enumerate(ratings)]
+    db_session.add_all(users)
+    await db_session.commit()
+    return users
+
+
+async def _in_queue(uid: int) -> bool:
+    return bool(await matchmaker.redis.hgetall(f"queue:prefs:{uid}"))
+
+
+# --- Свежий рейтинг ---------------------------------------------------------------------
+
+async def test_stale_session_sees_fresh_rating(db_session):
+    """Долгоживущая WS-сессия держит старый объект пользователя; рейтинг перечитывается из БД."""
+    from src.api.websockets import _fresh_current_user
+
+    (user,) = await _users(db_session, 1500)
+
+    other = async_sessionmaker(db_session.bind, expire_on_commit=False)
+    async with other() as session:
+        (await session.get(User, user.id)).rating = 1700
+        await session.commit()
+
+    assert user.rating == 1500  # объект в identity map WS-сессии устарел
+    assert (await _fresh_current_user(db_session, user)).rating == 1700
+
+
+async def test_game_record_uses_fresh_ratings(db_session):
+    white, black = await _users(db_session, 1500, 1600)
+    other = async_sessionmaker(db_session.bind, expire_on_commit=False)
+    async with other() as session:
+        (await session.get(User, white.id)).rating = 1555
+        await session.commit()
+
+    started = await matchmaker.start_pvp_game(white.id, black.id, 180000, 0, db=db_session)
+
+    game = await db_session.get(Game, started["game_id"])
+    assert started["white_rating"] == 1555
+    assert game.white_initial_rating == 1555
+
+
+# --- Диапазон рейтинга ------------------------------------------------------------------
+
+async def test_auto_match_respects_both_rating_windows(db_session):
+    a, b, c = await _users(db_session, 1200, 1800, 1250)
+
+    assert await matchmaker.join_queue(a.id, "a", 1200, 180000, 0, 1100, 1300, db=db_session) is None
+    # b без ограничений, но a его не принимает (1800 вне 1100–1300).
+    assert await matchmaker.join_queue(b.id, "b", 1800, 180000, 0, db=db_session) is None
+    assert await _in_queue(a.id) and await _in_queue(b.id)
+
+    game_id = await matchmaker.join_queue(c.id, "c", 1250, 180000, 0, 1000, 1500, db=db_session)
+    assert game_id is not None
+    state = await state_manager.get_game_state(game_id)
+    assert {int(state["white_id"]), int(state["black_id"])} == {a.id, c.id}
+    assert await _in_queue(b.id)
+
+
+async def test_auto_match_prefers_closest_rating(db_session):
+    a, d, e = await _users(db_session, 1200, 1400, 1380)
+    # a и d друг другу не подходят (d не принимает 1200), а e (1380) подходит обоим.
+    await matchmaker.join_queue(a.id, "a", 1200, 180000, 0, 1100, 1400, db=db_session)
+    assert await matchmaker.join_queue(d.id, "d", 1400, 180000, 0, 1350, 1450, db=db_session) is None
+
+    game_id = await matchmaker.join_queue(e.id, "e", 1380, 180000, 0, db=db_session)
+
+    state = await state_manager.get_game_state(game_id)
+    assert {int(state["white_id"]), int(state["black_id"])} == {d.id, e.id}
+
+
+async def test_manual_accept_outside_challenge_range_is_rejected(db_session):
+    a, b = await _users(db_session, 1200, 1900)
+    await matchmaker.join_queue(a.id, "a", 1200, 180000, 0, 1100, 1300, db=db_session)
+
+    with pytest.raises(MatchmakingError) as err:
+        await matchmaker.accept_challenge(a.id, b.id, None, db=db_session)
+
+    assert err.value.code == "rating_out_of_range"
+    assert await _in_queue(a.id)  # вызов остался в лобби
+
+
+async def test_default_rating_window_from_settings(db_session, monkeypatch):
+    monkeypatch.setattr(settings, "MATCHMAKING_DEFAULT_RATING_RANGE", 100)
+    (a,) = await _users(db_session, 1500)
+
+    await matchmaker.join_queue(a.id, "a", 1500, 180000, 0, db=db_session)
+
+    prefs = await matchmaker.redis.hgetall(f"queue:prefs:{a.id}")
+    assert (int(prefs["min_rating"]), int(prefs["max_rating"])) == (1400, 1600)
+
+
+async def test_invalid_time_control_is_rejected(db_session):
+    (a,) = await _users(db_session, 1500)
+    with pytest.raises(MatchmakingError) as err:
+        await matchmaker.join_queue(a.id, "a", 1500, -5, 0, db=db_session)
+    assert err.value.code == "invalid_time_control"
+
+
+# --- Уже в партии -----------------------------------------------------------------------
+
+async def test_player_in_game_cannot_join_or_accept(db_session):
+    a, b, c = await _users(db_session, 1500, 1500, 1500)
+    await matchmaker.start_pvp_game(a.id, b.id, 180000, 0, db=db_session)
+    await matchmaker.join_queue(c.id, "c", 1500, 180000, 0, db=db_session)
+
+    with pytest.raises(MatchmakingError) as join_err:
+        await matchmaker.join_queue(a.id, "a", 1500, 180000, 0, db=db_session)
+    with pytest.raises(MatchmakingError) as accept_err:
+        await matchmaker.accept_challenge(c.id, a.id, None, db=db_session)
+
+    assert join_err.value.code == "self_in_game"
+    assert accept_err.value.code == "self_in_game"
+    assert await _in_queue(c.id)
+
+
+async def test_challenge_of_busy_player_is_removed(db_session):
+    a, b, c = await _users(db_session, 1500, 1500, 1500)
+    await matchmaker.join_queue(a.id, "a", 1500, 180000, 0, db=db_session)
+    # a начал партию по приглашению, а его вызов остался бы в лобби.
+    await state_manager.initialize_game(4242, a.id, b.id, 180000, 0)
+
+    with pytest.raises(MatchmakingError) as err:
+        await matchmaker.accept_challenge(a.id, c.id, None, db=db_session)
+
+    assert err.value.code == "opponent_in_game"
+    assert not await _in_queue(a.id)
+
+
+async def test_starting_game_removes_both_players_from_lobby(db_session):
+    a, b = await _users(db_session, 1500, 1500)
+    await matchmaker.join_queue(a.id, "a", 1500, 300000, 0, db=db_session)  # другой контроль — не сведутся
+    await matchmaker.join_queue(b.id, "b", 1500, 180000, 0, db=db_session)
+
+    await matchmaker.start_pvp_game(a.id, b.id, 600000, 0, db=db_session)
+
+    assert not await _in_queue(a.id) and not await _in_queue(b.id)
+
+
+async def test_invite_is_kept_when_creator_is_busy(db_session):
+    creator, acceptor, other = await _users(db_session, 1500, 1500, 1500)
+    invite = await matchmaker.create_private_invite(creator.id, "creator", 1500, 180000, 0)
+    await state_manager.initialize_game(4343, creator.id, other.id, 180000, 0)
+
+    with pytest.raises(MatchmakingError) as err:
+        await matchmaker.start_game_from_invite(invite["code"], acceptor.id, db=db_session)
+
+    assert err.value.code == "opponent_in_game"
+    assert await matchmaker.get_private_invite(invite["code"]) is not None
+
+
+async def test_finished_game_does_not_block_new_one(db_session):
+    a, b = await _users(db_session, 1500, 1500)
+    await state_manager.initialize_game(4444, a.id, b.id, 180000, 0)
+    await state_manager.update_game_state(4444, {"status": "completed"})
+
+    started = await matchmaker.start_pvp_game(a.id, b.id, 180000, 0, db=db_session)
+    assert started["game_id"]
+
+
+async def test_http_join_while_in_game_returns_active_game(client, db_session, test_user_1, test_user_2, token_user_1):
+    """Фронтенд шлёт join и по WS, и по HTTP: проигравший гонку HTTP-запрос отдаёт начатую партию."""
+    started = await matchmaker.start_pvp_game(test_user_1.id, test_user_2.id, 180000, 0, db=db_session)
+
+    res = client.post(
+        "/api/v1/profile/matchmaking/join",
+        json={"base_time_ms": 180000, "increment_ms": 0},
+        headers={"Authorization": f"Bearer {token_user_1}"},
+    )
+
+    assert res.status_code == 200
+    assert res.json()["game_id"] == started["game_id"]
+
+========================================================================================
+FILE: tests/test_morphy_bot.py
+========================================================================================
+# --- FILE: tests/test_morphy_bot.py ---
+
+import chess
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+from src.main import app
+from src.services.bots.morphy import (
+    MORPHY_OPENING_BOOK,
+    MorphyBot,
+    evaluate_morphy_style_bonus,
+)
+from src.services.bots.philidor import normalize_fen_key
+
+
+def test_morphy_opening_repertoire_branches():
+    """Проверяем, что в дебютной книге Морфи есть стартовые ходы и они выбираются из книги."""
+    bot = MorphyBot(stockfish_path=None)
+    board = chess.Board()
+    start_key = normalize_fen_key(board)
+    expected_book_moves = {item[0] for item in MORPHY_OPENING_BOOK[start_key]}
+
+    assert "e2e4" in expected_book_moves
+
+    result = bot.choose_move(board.fen())
+    assert result["uci"] in expected_book_moves
+    assert result["source"] == "opening_book"
+
+
+def test_morphy_plays_active_openings_from_book():
+    """Проверяем, что в итальянской позиции Морфи выбирает ход из своей дебютной книги."""
+    bot = MorphyBot(stockfish_path=None)
+    board = chess.Board()
+    for san in ["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5"]:
+        board.push_san(san)
+
+    fen_key = normalize_fen_key(board)
+    expected_moves = {item[0] for item in MORPHY_OPENING_BOOK[fen_key]}
+
+    result = bot.choose_move(board.fen())
+    assert result["uci"] in expected_moves
+    assert result["source"] == "opening_book"
+
+
+def test_morphy_style_rewards_castling_and_open_files():
+    """Проверяем, что стилевой фильтр Морфи поощряет рокировку, развитие и выход ладьи на центральную линию."""
+    board = chess.Board("r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4")
+
+    castle_bonus, _ = evaluate_morphy_style_bonus(board, chess.Move.from_uci("e1g1"))
+    nc3_bonus, _ = evaluate_morphy_style_bonus(board, chess.Move.from_uci("b1c3"))
+    passive_h3_bonus, _ = evaluate_morphy_style_bonus(board, chess.Move.from_uci("h2h3"))
+
+    assert castle_bonus > passive_h3_bonus
+    assert nc3_bonus > passive_h3_bonus
+
+
+def test_morphy_middlegame_move_generation():
+    """Проверяем генерацию хода Морфи в миттельшпиле вне дебютной книги (и мат в 1 ход 17. Rd8# из Оперной партии)."""
+    bot = MorphyBot(stockfish_path=None)
+    # Точный финал Оперной партии Морфи (Париж, 1858) после 16. Qb8+! Nxb8 — ход 17. Rd8#
+    opera_board = chess.Board("1n2kb1r/p4ppp/4q3/4p1B1/4P3/8/PPP2PPP/2KR4 w k - 0 17")
+
+    result = bot.choose_move(opera_board.fen())
+    assert result["uci"] == "d1d8"
+    assert result["san"] == "Rd8#"
+    assert result["source"] == "morphy_style_engine"
+
+
+@pytest.mark.asyncio
+async def test_morphy_api_move_endpoint():
+    """Проверяем REST-эндпоинты /api/v1/bots/list и /api/v1/bots/move для игры с Полом Морфи."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        list_resp = await client.get("/api/v1/bots/list")
+        assert list_resp.status_code == 200
+        bot_ids = [b["id"] for b in list_resp.json()["bots"]]
+        assert "morphy" in bot_ids
+
+        start_key = normalize_fen_key(chess.Board())
+        morphy_start_moves = {item[0] for item in MORPHY_OPENING_BOOK[start_key]}
+
+        move_resp = await client.post(
+            "/api/v1/bots/move",
+            json={
+                "bot_id": "morphy",
+                "fen": chess.STARTING_FEN,
+            },
+        )
+        assert move_resp.status_code == 200
+        data = move_resp.json()
+        assert data["bot_id"] == "morphy"
+        assert data["uci"] in morphy_start_moves
+        assert data["source"] == "opening_book"
 
 ----------------------------------------------------------------------------------------
-END OF PART 7/14
+END OF PART 7/15
