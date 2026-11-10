@@ -70,6 +70,14 @@ class Settings(BaseSettings):
     RATE_LIMIT_POSITION_ANALYSIS: int = 30
     RATE_LIMIT_GAME_ANALYSIS: int = 6
 
+    # Authentication: attempts per IP, failed logins per account, registrations per IP
+    RATE_LIMIT_LOGIN_PER_IP: int = 20
+    RATE_LIMIT_LOGIN_WINDOW_S: int = 60
+    RATE_LIMIT_LOGIN_FAILURES_PER_ACCOUNT: int = 10
+    RATE_LIMIT_LOGIN_FAILURES_WINDOW_S: int = 900
+    RATE_LIMIT_REGISTER_PER_IP: int = 5
+    RATE_LIMIT_REGISTER_WINDOW_S: int = 3600
+
     @property
     def async_database_url(self) -> str:
         """Assembles the database connection string for asyncpg."""
