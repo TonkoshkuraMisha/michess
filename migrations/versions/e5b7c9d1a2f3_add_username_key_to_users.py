@@ -12,15 +12,15 @@ Create Date: 2026-11-10 18:00:00.000000
 
 """
 import logging
-from typing import Sequence, Union
+from collections.abc import Sequence
 
 import sqlalchemy as sa
 from alembic import op
 
 revision: str = "e5b7c9d1a2f3"
-down_revision: Union[str, Sequence[str], None] = "d9f4a1b2c3e4"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "d9f4a1b2c3e4"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 logger = logging.getLogger("alembic.runtime.migration")
 

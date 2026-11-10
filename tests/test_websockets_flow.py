@@ -1,6 +1,7 @@
 # --- FILE: tests/test_websockets_flow.py ---
 
 import json
+
 import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
@@ -9,9 +10,11 @@ from starlette.websockets import WebSocketDisconnect
 @pytest.mark.parametrize("query", ["ticket=invalid_ticket", "token=some.jwt.token"])
 def test_websocket_unauthorized_access(client: TestClient, query: str):
     """Без действующего одноразового тикета соединение закрывается с 1008 (JWT в адресе больше не принимается)."""
-    with pytest.raises(WebSocketDisconnect) as exc_info:
-        with client.websocket_connect(f"/api/v1/ws/matchmaking?{query}") as websocket:
-            websocket.receive_json()
+    with (
+        pytest.raises(WebSocketDisconnect) as exc_info,
+        client.websocket_connect(f"/api/v1/ws/matchmaking?{query}") as websocket,
+    ):
+        websocket.receive_json()
     assert exc_info.value.code == 1008
 
 
@@ -19,8 +22,9 @@ def test_websocket_unauthorized_access(client: TestClient, query: str):
 async def test_premove_telemetry_saved_and_bot_thinking_time():
     """Проверяет сохранение флага is_premove=True в Redis-телеметрии и расчёт времени хода бота."""
     import chess
-    from src.services.game_state import state_manager
+
     from src.api.bots import calculate_authentic_thinking_time_ms
+    from src.services.game_state import state_manager
 
     game_id = 999123
     await state_manager.redis.delete(f"game:{game_id}:moves")
@@ -53,8 +57,8 @@ async def test_premove_telemetry_saved_and_bot_thinking_time():
 @pytest.mark.asyncio
 async def test_rematch_swaps_colors(db_session):
     """Проверяет, что при принятии реванша создаётся новая партия со сменой цветов (white_id <-> black_id)."""
-    from src.models.user import User
     from src.api.websockets import create_rematch_game
+    from src.models.user import User
     from src.services.game_state import state_manager
 
     p1 = User(username="rematch_p1", hashed_password="pw", rating=1600)
@@ -85,8 +89,8 @@ async def test_rematch_swaps_colors(db_session):
 @pytest.mark.asyncio
 async def test_spectator_receives_live_moves_and_chat():
     """Проверяет подписку зрителей на партию и рассылку ходов и сообщений чата."""
-    from src.services.connection_manager import manager
     from src.api.websockets import broadcast_to_game_participants_and_spectators
+    from src.services.connection_manager import manager
 
     received: dict[int, list[dict]] = {}
 

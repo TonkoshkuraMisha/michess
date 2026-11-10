@@ -44,14 +44,14 @@ class QueueSocket:
             raise WebSocketDisconnect(code=1000)
         return json.dumps(item)
 
-    async def wait_for(self, event: str, timeout: float = 5.0) -> dict:
+    async def wait_for(self, event: str, wait_s: float = 5.0) -> dict:
         async def _poll():
             while True:
                 for message in self.sent:
                     if message.get("event") == event:
                         return message
                 await asyncio.sleep(0.01)
-        return await asyncio.wait_for(_poll(), timeout)
+        return await asyncio.wait_for(_poll(), wait_s)
 
 
 async def _make_users(url: str, count: int) -> list[tuple[int, str]]:
@@ -126,7 +126,7 @@ async def test_each_action_gets_its_own_closed_session(action_name):
     """Каждое действие — своя сессия, закрытая к моменту, когда обработчик вернул управление."""
     from src.api.websockets import ACTION_HANDLERS, _dispatch_action
 
-    opened: list["TrackingSession"] = []
+    opened: list = []
 
     class TrackingSession:
         def __init__(self):

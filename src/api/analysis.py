@@ -54,7 +54,7 @@ async def analyze_game_position(
     try:
         return await analysis_service.analyze_position(db, request.moves)
     except EngineBusyError:
-        raise _engine_busy()
+        raise _engine_busy() from None
 
 
 @router.get("/game/{game_id}", response_model=FullGameAnalysisResponse | None)
@@ -69,7 +69,7 @@ async def get_cached_game_analysis(
     try:
         ensure_game_finished(game)
     except GameNotFinishedError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     if not game.analysis_json:
         return None
     try:
@@ -99,10 +99,10 @@ async def analyze_full_game_endpoint(
         try:
             return await analysis_service.analyze_full_game(db, game_id, force=force)
         except LookupError as exc:
-            raise HTTPException(status_code=404, detail=str(exc))
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
         except GameNotFinishedError as exc:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
         except EngineBusyError:
-            raise _engine_busy()
+            raise _engine_busy() from None
         except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc))
+            raise HTTPException(status_code=400, detail=str(exc)) from exc

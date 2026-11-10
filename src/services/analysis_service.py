@@ -7,6 +7,7 @@ import json
 import logging
 import math
 import os
+
 import chess
 import chess.engine
 import chess.pgn
@@ -254,7 +255,7 @@ class AnalysisService:
         eval_cp = int(static_board_eval_cp(board, chess.WHITE))
         best_move = None
 
-        if sf_path and os.path.exists(sf_path) and not board.is_game_over():
+        if sf_path and not board.is_game_over():  # resolve_stockfish_path уже проверил файл
             def _run_pos():
                 with get_engine_pool(sf_path).acquire() as eng:
                     info = eng.analyse(board, chess.engine.Limit(depth=10, time=0.1))

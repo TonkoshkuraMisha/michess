@@ -99,8 +99,9 @@
 
 ### - [ ] Таск 6.3. Финальный релиз в ветку `master`
 
-    python -m flake8 src tests scripts --count --select=E9,F63,F7,F82 --show-source --statistics
-    python -m pytest -v
+    ruff check .
+    mypy
+    python -m pytest -v --cov
     cd frontend && npm run lint && npm run test && npm run build && cd ..
 
     git checkout master
@@ -228,10 +229,14 @@
 * Проверка образов: Docker локально недоступен — CI-job `production-stack` собирает образы, проверяет
   `nginx -t`, поднимает стек (миграции на чистом PostgreSQL) и делает smoke-тест через nginx.
 
-### - [ ] Таск 7.12. Строгий CI
+### - [x] Таск 7.12. Строгий CI
 
 * ruff с полным набором правил вместо `flake8 --exit-zero`, mypy для `src/services`.
 * `alembic upgrade head` + `alembic check` на Postgres; отчёт покрытия с порогом.
+* Сделано: ruff (E/W/F/I/B/UP/ASYNC/SIM/PT, конфиг в `pyproject.toml`) — 0 замечаний, исправлено ~150;
+  mypy на весь `src/` — 0 ошибок; в CI миграции применяются на пустой базе, `alembic check`, откат до base
+  и повторное применение (починены сломанные downgrade двух старых миграций); покрытие 80,6%, порог 78%;
+  тестовые пакеты вынесены в `requirements-dev.txt`, flake8 удалён.
 
 ### - [ ] Таск 7.13. Декомпозиция `Chessboard.tsx` с UI-тестами (`refactor/chessboard-split`)
 

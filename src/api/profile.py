@@ -1,18 +1,20 @@
 # --- FILE: src/api/profile.py ---
 
 import time
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
+from sqlalchemy import asc, case, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_, desc, asc, func, case
 from sqlalchemy.orm import aliased
 
-from src.db.session import get_db
-from src.db.seed import ensure_champion_seeded, get_champion_meta, extract_pgn_metadata
 from src.api.deps import get_current_user
-from src.models.user import User
+from src.db.seed import ensure_champion_seeded, extract_pgn_metadata, get_champion_meta
+from src.db.session import get_db
 from src.models.game import Game, GameStatus
+from src.models.user import User
 
 router = APIRouter(prefix="/profile", tags=["Profile & Games"])
 
@@ -165,7 +167,7 @@ async def join_matchmaking_http(
         payload = await _active_game_payload_or_none(db, current_user.id) if err.code == "self_in_game" else None
         if payload:
             return payload
-        raise HTTPException(status_code=409, detail=err.message)
+        raise HTTPException(status_code=409, detail=err.message) from err
     if matched_gid is not None:
         payload = await _build_active_game_payload(db, int(matched_gid), current_user.id)
         if payload:
@@ -191,9 +193,9 @@ async def accept_challenge_http(
     Принимает вызов соперника из лобби по HTTP и возвращает данные начавшейся партии.
     Безопасен к гонкам с WebSocket-сообщением accept_challenge.
     """
-    from src.services.matchmaker import MatchmakingError, matchmaker
     from src.services.connection_manager import manager
     from src.services.game_state import state_manager
+    from src.services.matchmaker import MatchmakingError, matchmaker
 
     if int(target_user_id) == current_user.id:
         raise HTTPException(status_code=400, detail="Нельзя принять собственный вызов")
@@ -214,7 +216,7 @@ async def accept_challenge_http(
             if payload:
                 return payload
         status_code = 404 if err.code == "challenge_gone" else 409
-        raise HTTPException(status_code=status_code, detail=err.message)
+        raise HTTPException(status_code=status_code, detail=err.message) from err
 
     payload = await _build_active_game_payload(db, int(game_id), current_user.id)
     if not payload:
@@ -226,8 +228,8 @@ async def accept_challenge_http(
 @router.get("/games/live")
 async def get_live_games(db: AsyncSession = Depends(get_db)):
     """Возвращает список активных партий, идущих прямо сейчас (для вкладки Live и режима зрителя)."""
-    from src.services.game_state import state_manager
     from src.services.connection_manager import manager
+    from src.services.game_state import state_manager
 
     game_ids = await state_manager.redis.smembers("active_games")
     if not game_ids:
@@ -257,7 +259,7 @@ async def get_live_games(db: AsyncSession = Depends(get_db)):
     users_res = await db.execute(select(User).where(User.id.in_(user_ids)))
     users_map = {u.id: u for u in users_res.scalars().all()}
 
-    live_list = []
+    live_list: list[dict[str, Any]] = []
     for gid, state in active_states:
         white_id = int(state["white_id"])
         black_id = int(state["black_id"])

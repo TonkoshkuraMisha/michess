@@ -88,7 +88,7 @@ def test_development_allows_simple_secret_key(monkeypatch):
     ("", []),
 ])
 def test_cors_origins_from_environment(monkeypatch, raw, expected):
-    assert _settings(monkeypatch, SECRET_KEY="dev", CORS_ORIGINS=raw).CORS_ORIGINS == expected
+    assert expected == _settings(monkeypatch, SECRET_KEY="dev", CORS_ORIGINS=raw).CORS_ORIGINS
 
 
 def test_production_hides_api_docs(monkeypatch):

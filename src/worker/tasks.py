@@ -9,6 +9,7 @@ from sqlalchemy.pool import NullPool
 from src.core.config import settings
 from src.services.analysis_service import analysis_service
 from src.services.engine_pool import EngineBusyError
+
 # Задача привязана к нашему приложению Celery явно. С @shared_task API-процесс, где celery_app
 # никто не импортировал, публиковал через приложение по умолчанию — в amqp://localhost:5672
 # вместо брокера Redis, и фоновый анализ до воркера не доходил.
@@ -51,7 +52,7 @@ def analyze_game_task(self, game_id: int):
         return asyncio.run(_prewarm_game_analysis_async(game_id))
     except EngineBusyError as exc:
         # Все движки заняты — анализ не теряем, а откладываем.
-        raise self.retry(exc=exc, countdown=ENGINE_BUSY_RETRY_S)
+        raise self.retry(exc=exc, countdown=ENGINE_BUSY_RETRY_S) from exc
     except Exception:
         logger.exception("Background analysis task failed for game %s", game_id)
         return {"game_id": game_id, "status": "error"}

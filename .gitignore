@@ -38,3 +38,10 @@ node_modules/
 # Project snapshots
 project_snapshot*.txt
 data/pgns/
+
+# Кэши и отчёты инструментов качества кода
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/

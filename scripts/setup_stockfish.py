@@ -7,8 +7,9 @@ import shutil
 import stat
 import tarfile
 import zipfile
-import requests
+
 import chess.engine
+import requests
 
 GITHUB_RELEASE_API = "https://api.github.com/repos/official-stockfish/Stockfish/releases/latest"
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))

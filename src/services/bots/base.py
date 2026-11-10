@@ -6,6 +6,7 @@ import os
 import random
 import shutil
 from pathlib import Path
+
 import chess
 import chess.engine
 
@@ -81,7 +82,7 @@ def load_bot_opening_book(
     for json_path in candidates:
         if json_path.exists():
             try:
-                with open(json_path, "r", encoding="utf-8") as f:
+                with open(json_path, encoding="utf-8") as f:
                     data = json.load(f)
                 if isinstance(data, dict) and data:
                     for fen_key, moves in data.items():
@@ -272,7 +273,7 @@ class HistoricalBot:
 
             if valid_book_moves:
                 _simulate_human_thinking_time(board, is_book_move=True)
-                moves, weights, comments = zip(*valid_book_moves)
+                moves, weights, comments = zip(*valid_book_moves, strict=True)
                 idx = random.choices(range(len(moves)), weights=weights, k=1)[0]
                 chosen_move = moves[idx]
                 san = board.san(chosen_move)

@@ -28,7 +28,7 @@ async def _max_loop_stall(coro) -> tuple[object, float]:
     finally:
         done.set()
         await ticker_task
-    gaps = [b - a for a, b in zip(ticks, ticks[1:])] or [0.0]
+    gaps = [b - a for a, b in zip(ticks, ticks[1:], strict=False)] or [0.0]
     return result, max(gaps)
 
 

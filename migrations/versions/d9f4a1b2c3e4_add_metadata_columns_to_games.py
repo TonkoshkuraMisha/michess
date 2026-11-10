@@ -8,14 +8,15 @@ Create Date: 2026-11-05 22:30:00.000000
 
 """
 import re
-from typing import Sequence, Union
-from alembic import op
+from collections.abc import Sequence
+
 import sqlalchemy as sa
+from alembic import op
 
 revision: str = "d9f4a1b2c3e4"
-down_revision: Union[str, Sequence[str], None] = "c8a91e2f4b10"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = "c8a91e2f4b10"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 DATE_RE = re.compile(r'\[(?:Event)?Date\s+"([^"]+)"\]')
 SITE_RE = re.compile(r'\[Site\s+"([^"]+)"\]')

@@ -1,8 +1,9 @@
 # --- FILE: tests/test_stockfish_engine.py ---
 
 import chess
-from src.services.bots.base import analyse_with_stockfish, resolve_stockfish_path
+
 from src.services.bots import BOT_INSTANCES
+from src.services.bots.base import analyse_with_stockfish, resolve_stockfish_path
 
 
 def test_stockfish_binary_exists_and_works():

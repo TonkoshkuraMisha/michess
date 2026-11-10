@@ -29,7 +29,7 @@ _background_tasks: set[asyncio.Task] = set()
 
 
 def _publish_analysis(game_id: int) -> None:
-    analyze_game_task.apply_async(args=[game_id], retry=False)
+    analyze_game_task.apply_async(args=(game_id,), retry=False)
 
 
 async def schedule_game_analysis(game_id: int) -> bool:

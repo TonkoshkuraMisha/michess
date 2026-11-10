@@ -64,8 +64,8 @@ async def get_current_user_ws(
     rejected = WebSocketException(code=status.WS_1008_POLICY_VIOLATION, reason="Invalid or expired ticket")
     try:
         raw = await redis_module.redis_client.getdel(f"{WS_TICKET_PREFIX}{ticket}")
-    except Exception:
-        raise WebSocketException(code=status.WS_1011_INTERNAL_ERROR, reason="Ticket store unavailable")
+    except Exception as exc:
+        raise WebSocketException(code=status.WS_1011_INTERNAL_ERROR, reason="Ticket store unavailable") from exc
     if not raw:
         raise rejected
 

@@ -1,15 +1,16 @@
 # --- FILE: tests/conftest.py ---
 
 import asyncio
-import pytest
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from fastapi.testclient import TestClient
 
-from src.main import app
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from src.core.security import create_user_token
 from src.db.session import get_db, get_session_factory
+from src.main import app
 from src.models.base import Base
 from src.models.user import User
-from src.core.security import create_user_token
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -43,7 +44,7 @@ class MockPubSub:
         pass
 
     async def listen(self):
-        while True:
+        while True:  # noqa: ASYNC110 — заглушка «вечной» подписки, ждать нечего
             await asyncio.sleep(3600)
 
 
@@ -259,8 +260,8 @@ def override_redis(monkeypatch):
     monkeypatch.setattr("src.services.connection_manager.redis_client", mock_redis)
     monkeypatch.setattr("src.db.redis.redis_client", mock_redis)
 
-    from src.services.game_state import state_manager
     from src.services.connection_manager import manager
+    from src.services.game_state import state_manager
 
     monkeypatch.setattr(state_manager, "redis", mock_redis)
     monkeypatch.setattr(manager, "redis", mock_redis)

@@ -1,6 +1,7 @@
 # --- FILE: tests/test_anticheat.py ---
 
 import pytest
+
 from src.models.game import Game, GameStatus
 from src.models.move import Move
 from src.models.user import User
