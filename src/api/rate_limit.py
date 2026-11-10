@@ -51,14 +51,14 @@ def _too_many(detail: str, retry_after: int) -> HTTPException:
     )
 
 
-async def enforce_rate_limit(scope: str, identity: str, limit: int, window_s: int, detail: str) -> None:
+async def try_consume(scope: str, identity: str, limit: int, window_s: int) -> bool:
     """
-    Засчитывает попытку и бросает 429, если в текущем окне их больше limit.
+    Засчитывает попытку; False, если в текущем окне их уже больше limit.
     limit <= 0 — без ограничения. При недоступном Redis пропускает (fail-open).
     """
     if limit <= 0:
-        return
-    window_id, retry_after = _window(window_s)
+        return True
+    window_id, _ = _window(window_s)
     key = f"ratelimit:{scope}:{identity}:{window_id}"
     redis_client = redis_module.redis_client
     try:
@@ -68,10 +68,14 @@ async def enforce_rate_limit(scope: str, identity: str, limit: int, window_s: in
     except Exception as exc:
         # Redis недоступен — не блокируем пользователей (fail-open), но фиксируем проблему.
         logger.warning("Rate limiter unavailable for %s: %s", scope, exc)
-        return
+        return True
+    return count <= limit
 
-    if count > limit:
-        raise _too_many(detail, retry_after)
+
+async def enforce_rate_limit(scope: str, identity: str, limit: int, window_s: int, detail: str) -> None:
+    """Как try_consume, но для HTTP: бросает 429 с Retry-After."""
+    if not await try_consume(scope, identity, limit, window_s):
+        raise _too_many(detail, _window(window_s)[1])
 
 
 async def ensure_below_limit(scope: str, identity: str, limit: int, window_s: int, detail: str) -> None:

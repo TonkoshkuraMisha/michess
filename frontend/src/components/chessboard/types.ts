@@ -32,3 +32,14 @@ export interface QueuePlayer {
     base_time_ms: number;
     increment_ms: number;
 }
+
+/**
+ * Коды ошибок сервера, не связанные с матчмейкингом: они не должны сбрасывать поиск соперника
+ * (в отличие от «уже в партии», «вызов неактуален» и т. п.).
+ */
+export const GAME_ACTION_ERROR_CODES: ReadonlySet<string> = new Set([
+    'rate_limited',
+    'message_too_large',
+    'draw_offer_too_soon',
+    'chat_forbidden',
+]);

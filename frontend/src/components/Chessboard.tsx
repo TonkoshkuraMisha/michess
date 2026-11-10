@@ -31,7 +31,7 @@ import {
     getMaxViewportBoardSize, getDefaultBoardSize, calculateMaterialBalance, cloneChessInstance, prevIndexHelper
 } from './chessboard/boardUtils';
 import type {PromotionPiece} from './chessboard/boardUtils';
-import {QUICK_CHAT_PRESETS} from './chessboard/types';
+import {GAME_ACTION_ERROR_CODES, QUICK_CHAT_PRESETS} from './chessboard/types';
 import type {LiveGameItem, ChatMessageItem, QueuePlayer} from './chessboard/types';
 
 export {MIN_BOARD_SIZE, MAX_BOARD_SIZE, getMaxViewportBoardSize, getDefaultBoardSize, TIME_CONTROLS};
@@ -885,11 +885,13 @@ export default function Chessboard() {
         const handleServerError = (data: any) => {
             console.warn('Сервер отклонил действие:', data);
             if (data.code) {
-                // Отказ матчмейкинга (уже в партии, вне диапазона рейтинга, вызов неактуален...):
-                // показываем причину и выходим из режима поиска, ход на доске не трогаем.
-                setIsSearching(false);
                 if (data.message) setDrawOfferStatus(data.message);
-                return;
+                // Отказ матчмейкинга (уже в партии, вне диапазона рейтинга, вызов неактуален...)
+                // выводит из режима поиска; ограничения чата, предложений и частоты — нет.
+                if (!GAME_ACTION_ERROR_CODES.has(data.code)) setIsSearching(false);
+                // Ход, отклонённый по лимиту частоты, приходит с актуальной позицией —
+                // её нужно вернуть на доску (ниже). Остальные отказы позицию не трогают.
+                if (!data.fen && !data.pgn) return;
             }
             setPremove(null);
             playAudio('illegal');

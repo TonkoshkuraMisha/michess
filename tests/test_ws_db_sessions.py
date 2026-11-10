@@ -38,11 +38,11 @@ class QueueSocket:
     async def send_text(self, text: str):
         self.sent.append(json.loads(text))
 
-    async def receive_json(self):
+    async def receive_text(self):
         item = await self.incoming.get()
         if item is _CLOSE:
             raise WebSocketDisconnect(code=1000)
-        return item
+        return json.dumps(item)
 
     async def wait_for(self, event: str, timeout: float = 5.0) -> dict:
         async def _poll():
