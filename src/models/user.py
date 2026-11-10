@@ -14,6 +14,11 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True, index=True)
     username: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    # Нормализованное имя (casefold) аккаунтов, входящих по паролю: уникальность без учёта
+    # регистра («Misha» и «misha» — один аккаунт) и вход в любом регистре. У архивных игроков
+    # из PGN и ботов — NULL: их имена из заголовков партий могут различаться только регистром,
+    # а NULL уникальный индекс не ограничивает.
+    username_key: Mapped[str | None] = mapped_column(String(50), unique=True, index=True, nullable=True)
     hashed_password: Mapped[str] = mapped_column(String)
 
     # ELO or Glicko-2 rating

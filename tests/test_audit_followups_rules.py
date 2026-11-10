@@ -78,7 +78,8 @@ def test_save_game_endpoint_stores_server_result(client, token_user_1):
 @pytest.mark.parametrize("name", ["Пол Морфи", "  пол морфи ", "morphy", "Пол Чарльз Морфи"])
 def test_bot_names_cannot_be_registered(client, name):
     res = client.post("/api/v1/auth/register", json={"username": name, "password": "secret123"})
-    assert res.status_code == 400
+    # 400 — имя бота; 422 — имя с пробелами не проходит правила имени ещё раньше.
+    assert res.status_code in (400, 422)
 
 
 async def test_bot_game_is_not_attributed_to_human_with_bot_name(client, db_session, token_user_1):
