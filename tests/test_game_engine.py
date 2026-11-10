@@ -48,3 +48,39 @@ def test_underpromotion_to_knight_and_rook():
     assert is_valid_r is True
     assert res_rook["uci"] == "a7a8r"
     assert res_rook["san"].startswith("a8=R")
+
+
+def _play(moves: list[str]) -> list[dict]:
+    """Проигрывает ходы через engine.process_move, передавая FEN и PGN, как это делает сервер."""
+    fen, pgn, results = STARTING_FEN, "", []
+    for mv in moves:
+        is_valid, data = engine.process_move(fen, mv, pgn)
+        assert is_valid, f"move {mv} rejected"
+        fen, pgn = data["new_fen"], data["new_pgn"]
+        results.append(data)
+    return results
+
+
+def test_threefold_repetition_ends_game():
+    """Третье повторение позиции завершает партию ничьей (раньше не детектировалось: доска строилась из FEN)."""
+    dance = ["g1f3", "g8f6", "f3g1", "f6g8"]
+    results = _play(dance * 2)
+
+    assert all(not r["is_game_over"] for r in results[:-1])
+    last = results[-1]
+    assert last["is_game_over"] is True
+    assert last["termination"] == "repetition"
+    assert last["result"] == "1/2-1/2"
+
+
+def test_repetition_not_ended_when_only_reachable():
+    """Позиция, из которой повторение лишь достижимо следующим ходом, партию не завершает."""
+    results = _play(["g1f3", "g8f6", "f3g1", "f6g8", "g1f3", "g8f6", "f3g1"])
+    assert results[-1]["is_game_over"] is False
+
+
+def test_inconsistent_pgn_falls_back_to_fen():
+    """Если PGN не соответствует FEN, ход валидируется по FEN, как раньше."""
+    is_valid, data = engine.process_move(STARTING_FEN, "e2e4", "1. d4 d5")
+    assert is_valid is True
+    assert data["san"] == "e4"

@@ -55,6 +55,56 @@ def _detect_eco_from_moves(moves_uci: list[str]) -> str:
     return "A00"
 
 
+_INT_STATE_KEYS = (
+    "white_id", "black_id", "white_time_ms", "black_time_ms",
+    "base_time_ms", "increment_ms", "last_move_at",
+    "white_disconnect_started_at", "black_disconnect_started_at",
+    "state_version",
+)
+
+ABANDON_TIMEOUT_MS = 3 * 60 * 1000
+
+
+def _coerce_state(raw: dict) -> dict:
+    """Приводит числовые поля сырого Redis-хэша к int (возвращает новый словарь)."""
+    state = dict(raw)
+    for key in _INT_STATE_KEYS:
+        value = state.get(key)
+        if value is not None and str(value).lstrip("-").isdigit():
+            state[key] = int(value)
+    if not state.get("board_fen"):
+        state["board_fen"] = STARTING_FEN
+    return state
+
+
+def evaluate_clock_expiry(state: dict, now_ms: int) -> tuple[str, int, str] | None:
+    """
+    Чистая проверка флага / брошенной партии по состоянию (уже приведённому _coerce_state).
+    Возвращает (result, winner_id, reason) или None, если партия продолжается.
+    """
+    white_id, black_id = int(state["white_id"]), int(state["black_id"])
+    turn = state.get("turn", "white")
+
+    for color in ("white", "black"):
+        if state.get(f"{color}_disconnected") == "true":
+            offline_duration = now_ms - int(state.get(f"{color}_disconnect_started_at") or now_ms)
+            remaining_time = int(state[f"{color}_time_ms"])
+            current_player_time = remaining_time - offline_duration if turn == color else remaining_time
+            if current_player_time <= 0 or offline_duration >= min(remaining_time, ABANDON_TIMEOUT_MS):
+                if color == "white":
+                    return "0-1", black_id, "abandoned"
+                return "1-0", white_id, "abandoned"
+
+    elapsed = now_ms - int(state["last_move_at"])
+    if turn in ("white", "w") and state.get("white_disconnected") != "true":
+        if int(state["white_time_ms"]) - elapsed <= 0:
+            return "0-1", black_id, "timeout"
+    elif turn in ("black", "b") and state.get("black_disconnected") != "true":
+        if int(state["black_time_ms"]) - elapsed <= 0:
+            return "1-0", white_id, "timeout"
+    return None
+
+
 class GameStateManager:
     def __init__(self):
         self.redis = redis_client
@@ -95,19 +145,54 @@ class GameStateManager:
         state = await self.redis.hgetall(self._get_key(game_id))
         if not state:
             return await self._recover_state_from_db(game_id)
+        return _coerce_state(state)
 
-        int_keys = [
-            "white_id", "black_id", "white_time_ms", "black_time_ms",
-            "base_time_ms", "increment_ms", "last_move_at",
-            "white_disconnect_started_at", "black_disconnect_started_at",
-            "state_version",
-        ]
-        for key in int_keys:
-            if key in state and state[key] is not None and str(state[key]).lstrip("-").isdigit():
-                state[key] = int(state[key])
-        if "board_fen" not in state or not state["board_fen"]:
-            state["board_fen"] = STARTING_FEN
-        return state
+    async def claim_game_end(
+            self,
+            game_id: int,
+            result: str,
+            termination: str,
+            status: str = "completed",
+            guard=None,
+    ) -> dict | None:
+        """
+        Атомарно переводит партию из in_progress в финальный статус (WATCH/MULTI).
+
+        Это единственная точка «захвата» завершения партии: из нескольких конкурентных
+        претендентов (сдача, ничья, флаг, отмена, брошенная партия) успех получает ровно один,
+        и только он должен вызывать finish_game / abort_game и рассылать game_over.
+
+        guard(state) -> bool — дополнительное условие, перепроверяемое на свежем состоянии
+        внутри транзакции (например, что флаг всё ещё упал, а предложение ничьей ещё в силе).
+
+        Возвращает состояние партии на момент захвата или None, если партию уже завершил
+        кто-то другой либо guard не выполнен.
+        """
+        game_key = self._get_key(game_id)
+        async with self.redis.pipeline(transaction=True) as pipe:
+            while True:
+                try:
+                    await pipe.watch(game_key)
+                    raw = await pipe.hgetall(game_key)
+                    if not raw or raw.get("status") != "in_progress":
+                        await pipe.unwatch()
+                        return None
+
+                    state = _coerce_state(raw)
+                    if guard is not None and not guard(state):
+                        await pipe.unwatch()
+                        return None
+
+                    pipe.multi()
+                    pipe.hset(game_key, mapping={
+                        "status": status,
+                        "result": result,
+                        "termination": termination,
+                    })
+                    await pipe.execute()
+                    return state
+                except WatchError:
+                    continue
 
     async def _recover_state_from_db(self, game_id: int) -> dict | None:
         """Восстанавливает состояние партии в Redis из PostgreSQL."""
@@ -238,37 +323,39 @@ class GameStateManager:
                     white_time = int(state["white_time_ms"])
                     black_time = int(state["black_time_ms"])
 
+                    remaining_after_move = (white_time if is_white_turn else black_time) - elapsed_ms
+                    if remaining_after_move <= 0:
+                        # Флаг упал до хода: завершаем партию в той же транзакции, чтобы
+                        # check_timeouts_loop или другой обработчик не завершили её повторно.
+                        flag_result = "0-1" if is_white_turn else "1-0"
+                        final_white = 0 if is_white_turn else white_time
+                        final_black = black_time if is_white_turn else 0
+                        pipe.multi()
+                        pipe.hset(game_key, mapping={
+                            "status": "completed",
+                            "result": flag_result,
+                            "termination": "timeout",
+                            "white_time_ms": str(final_white),
+                            "black_time_ms": str(final_black),
+                        })
+                        pipe.sadd(cmd_key, command_id)
+                        await pipe.execute()
+                        return {
+                            "status": "game_over",
+                            "result": flag_result,
+                            "termination": "timeout",
+                            "white_id": white_id,
+                            "black_id": black_id,
+                            "white_time_ms": final_white,
+                            "black_time_ms": final_black,
+                            "elapsed_ms": elapsed_ms,
+                        }
+
                     if is_white_turn:
-                        new_white_time = white_time - elapsed_ms
-                        if new_white_time <= 0:
-                            await pipe.unwatch()
-                            return {
-                                "status": "game_over",
-                                "result": "0-1",
-                                "termination": "timeout",
-                                "white_id": white_id,
-                                "black_id": black_id,
-                                "white_time_ms": 0,
-                                "black_time_ms": black_time,
-                                "elapsed_ms": elapsed_ms,
-                            }
-                        new_white_time += increment
+                        new_white_time = remaining_after_move + increment
                         new_black_time = black_time
                     else:
-                        new_black_time = black_time - elapsed_ms
-                        if new_black_time <= 0:
-                            await pipe.unwatch()
-                            return {
-                                "status": "game_over",
-                                "result": "1-0",
-                                "termination": "timeout",
-                                "white_id": white_id,
-                                "black_id": black_id,
-                                "white_time_ms": white_time,
-                                "black_time_ms": 0,
-                                "elapsed_ms": elapsed_ms,
-                            }
-                        new_black_time += increment
+                        new_black_time = remaining_after_move + increment
                         new_white_time = white_time
 
                     current_fen = state.get("board_fen") or STARTING_FEN
@@ -287,6 +374,8 @@ class GameStateManager:
                     if move_data["is_game_over"]:
                         updates = {
                             "status": "completed",
+                            "result": move_data["result"],
+                            "termination": move_data["termination"],
                             "state_version": str(new_version),
                             "board_fen": move_data["new_fen"],
                             "pgn": move_data["new_pgn"],
@@ -368,18 +457,33 @@ class GameStateManager:
 
     async def finish_game(self, db, game_id: int, result: str, termination: str = "unknown",
                           final_pgn: str = None) -> dict:
-        db_game = await db.get(Game, game_id)
+        """
+        Фиксирует итог партии в БД и пересчитывает рейтинги.
+
+        Вызывать только после успешного claim_game_end (или из ветки game_over process_atomic_move,
+        которая захватывает завершение в своей транзакции). Дополнительно, на случай гонки между
+        процессами или потери состояния Redis, строки партии и игроков блокируются
+        (SELECT ... FOR UPDATE) и перечитываются из БД мимо identity map сессии, поэтому
+        повторный вызов не начислит рейтинг второй раз.
+        """
+        db_game = await db.get(Game, game_id, with_for_update=True, populate_existing=True)
         if not db_game:
             return {}
 
-        if db_game.status == GameStatus.COMPLETED:
+        if db_game.status in (GameStatus.COMPLETED, GameStatus.ABORTED):
+            await db.commit()  # снимаем блокировку
             return {
                 "white_delta": db_game.white_rating_delta or 0,
                 "black_delta": db_game.black_rating_delta or 0
             }
 
-        white_user = await db.get(User, db_game.white_player_id)
-        black_user = await db.get(User, db_game.black_player_id)
+        # Блокируем игроков в фиксированном порядке (по id), чтобы параллельно завершающиеся
+        # партии одного игрока не теряли обновление рейтинга и не взаимоблокировались.
+        locked_users: dict[int, User] = {}
+        for uid in sorted({db_game.white_player_id, db_game.black_player_id}):
+            locked_users[uid] = await db.get(User, uid, with_for_update=True, populate_existing=True)
+        white_user = locked_users[db_game.white_player_id]
+        black_user = locked_users[db_game.black_player_id]
 
         white_initial = white_user.rating
         black_initial = black_user.rating
@@ -584,35 +688,20 @@ class GameStateManager:
                         continue
 
                     white_id, black_id = int(state["white_id"]), int(state["black_id"])
-                    turn = state.get("turn", "white")
-                    game_result, winner_id, reason = None, None, "timeout"
+                    decision = evaluate_clock_expiry(state, now_ms)
 
-                    for color in ["white", "black"]:
-                        if state.get(f"{color}_disconnected") == "true":
-                            offline_duration = now_ms - state.get(f"{color}_disconnect_started_at", now_ms)
-                            remaining_time = state["white_time_ms"] if color == "white" else state["black_time_ms"]
-                            current_player_time = remaining_time - offline_duration if turn == color else remaining_time
+                    if decision:
+                        game_result, winner_id, reason = decision
 
-                            if current_player_time <= 0 or offline_duration >= min(remaining_time, 3 * 60 * 1000):
-                                game_result = "0-1" if color == "white" else "1-0"
-                                winner_id = black_id if color == "white" else white_id
-                                reason = "abandoned"
-                                break
+                        # Решение перепроверяется на свежем состоянии внутри транзакции: игрок мог
+                        # успеть сходить, переподключиться или сдаться, пока мы читали состояние.
+                        claimed = await self.claim_game_end(
+                            game_id, game_result, reason,
+                            guard=lambda fresh, expected=decision: evaluate_clock_expiry(fresh, now_ms) == expected,
+                        )
+                        if not claimed:
+                            continue
 
-                    if not game_result:
-                        elapsed = now_ms - state["last_move_at"]
-                        if turn in ("white", "w") and state.get("white_disconnected") != "true" and (
-                                state["white_time_ms"] - elapsed <= 0
-                        ):
-                            game_result, winner_id = "0-1", black_id
-                            reason = "timeout"
-                        elif turn in ("black", "b") and state.get("black_disconnected") != "true" and (
-                                state["black_time_ms"] - elapsed <= 0
-                        ):
-                            game_result, winner_id = "1-0", white_id
-                            reason = "timeout"
-
-                    if game_result:
                         logger.info("Game %s ended. Result: %s, Reason: %s", game_id, game_result, reason)
 
                         async with AsyncSessionLocal() as db:
@@ -637,8 +726,11 @@ class GameStateManager:
 
             await asyncio.sleep(0.5)
 
-    async def abort_game(self, db, game_id: int) -> dict:
-        """Отменяет партию на 1-м ходу (до 2 полуходов) без изменения рейтинга."""
+    async def abort_game(self, db, game_id: int, guard=None) -> dict:
+        """
+        Отменяет партию на 1-м ходу (до 2 полуходов) без изменения рейтинга.
+        guard(state) -> bool — дополнительное условие, атомарно перепроверяемое при захвате.
+        """
         state = await self.get_game_state(game_id)
         if not state or state.get("status") != "in_progress":
             return {"status": "error", "reason": "Game is not in progress"}
@@ -650,25 +742,31 @@ class GameStateManager:
         white_id = int(state["white_id"])
         black_id = int(state["black_id"])
 
-        await self.redis.hset(f"game:{game_id}:state", mapping={
-            "status": "aborted",
-            "result": "*",
-            "termination": "aborted",
-        })
+        def _abort_allowed(fresh: dict) -> bool:
+            if int(fresh.get("state_version", 0)) >= 2:
+                return False
+            return guard(fresh) if guard is not None else True
+
+        claimed = await self.claim_game_end(
+            game_id, "*", "aborted", status="aborted", guard=_abort_allowed,
+        )
+        if not claimed:
+            return {"status": "error", "reason": "Game is not in progress"}
+
         await self.redis.srem("active_games", str(game_id))
         await self.redis.delete(f"user:{white_id}:current_game")
         await self.redis.delete(f"user:{black_id}:current_game")
 
         from datetime import datetime, timezone
 
-        db_game = await db.get(Game, game_id)
+        db_game = await db.get(Game, game_id, with_for_update=True, populate_existing=True)
         white_user = await db.get(User, white_id)
         black_user = await db.get(User, black_id)
 
         w_rating = white_user.rating if white_user else 1200
         b_rating = black_user.rating if black_user else 1200
 
-        if db_game:
+        if db_game and db_game.status not in (GameStatus.COMPLETED, GameStatus.ABORTED):
             db_game.status = GameStatus.ABORTED
             db_game.result = "*"
             db_game.termination = "aborted"
@@ -705,7 +803,10 @@ class GameStateManager:
         if now_ms - last_move_at < timeout_ms:
             return False
 
-        res = await self.abort_game(db, game_id)
+        def _still_idle(fresh: dict) -> bool:
+            return int(time.time() * 1000) - int(fresh.get("last_move_at", 0)) >= timeout_ms
+
+        res = await self.abort_game(db, game_id, guard=_still_idle)
         if res.get("status") == "aborted" and manager is not None:
             payload = {
                 "event": "game_over",
