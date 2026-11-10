@@ -158,12 +158,12 @@ async def test_only_players_can_write_to_game_chat(client, monkeypatch):
     await state_manager.initialize_game(game_id=61, white_id=701, black_id=702, base_time_ms=60000, increment_ms=0)
 
     _ws_as(monkeypatch, 703)  # посторонний / зритель
-    with client.websocket_connect("/api/v1/ws/matchmaking?token=unused") as ws:
+    with client.websocket_connect("/api/v1/ws/matchmaking?ticket=unused") as ws:
         ws.send_json({"action": "chat_message", "game_id": 61, "text": "играй Фxf7!"})
         assert _receive_event(ws, "error")["code"] == "chat_forbidden"
 
     _ws_as(monkeypatch, 701)  # игрок
-    with client.websocket_connect("/api/v1/ws/matchmaking?token=unused") as ws:
+    with client.websocket_connect("/api/v1/ws/matchmaking?ticket=unused") as ws:
         ws.send_json({"action": "chat_message", "game_id": 61, "text": "удачи!"})
         assert _receive_event(ws, "chat_message")["text"] == "удачи!"
 

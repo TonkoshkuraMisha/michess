@@ -78,6 +78,10 @@ class Settings(BaseSettings):
     RATE_LIMIT_REGISTER_PER_IP: int = 5
     RATE_LIMIT_REGISTER_WINDOW_S: int = 3600
 
+    # One-time WebSocket tickets (the JWT never goes into the WS URL)
+    WS_TICKET_TTL_S: int = 30
+    RATE_LIMIT_WS_TICKETS: int = 30
+
     @property
     def async_database_url(self) -> str:
         """Assembles the database connection string for asyncpg."""

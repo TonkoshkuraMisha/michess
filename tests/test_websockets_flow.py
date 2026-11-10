@@ -4,16 +4,15 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
-from src.main import app
 
 
-def test_websocket_unauthorized_access(client: TestClient):
-    try:
-        with client.websocket_connect("/api/v1/ws/matchmaking?token=invalid_token") as websocket:
-            pass
-    except WebSocketDisconnect as e:
-        # 1008 Policy Violation / закрытие из-за неверного токена — ожидаемое поведение
-        assert e.code == 1008
+@pytest.mark.parametrize("query", ["ticket=invalid_ticket", "token=some.jwt.token"])
+def test_websocket_unauthorized_access(client: TestClient, query: str):
+    """Без действующего одноразового тикета соединение закрывается с 1008 (JWT в адресе больше не принимается)."""
+    with pytest.raises(WebSocketDisconnect) as exc_info:
+        with client.websocket_connect(f"/api/v1/ws/matchmaking?{query}") as websocket:
+            websocket.receive_json()
+    assert exc_info.value.code == 1008
 
 
 @pytest.mark.asyncio

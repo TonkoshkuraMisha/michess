@@ -9,7 +9,7 @@ from src.main import app
 from src.db.session import get_db, get_session_factory
 from src.models.base import Base
 from src.models.user import User
-from src.core.security import create_access_token
+from src.core.security import create_user_token
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -189,6 +189,9 @@ class MockAsyncRedis:
     async def get(self, name):
         return self.kv.get(name)
 
+    async def getdel(self, name):
+        return self.kv.pop(name, None)
+
     async def incr(self, name, amount=1):
         value = int(self.kv.get(name, 0)) + amount
         self.kv[name] = str(value)
@@ -313,9 +316,9 @@ async def test_user_2(db_session):
 
 @pytest.fixture
 def token_user_1(test_user_1):
-    return create_access_token({"sub": test_user_1.username})
+    return create_user_token(test_user_1)
 
 
 @pytest.fixture
 def token_user_2(test_user_2):
-    return create_access_token({"sub": test_user_2.username})
+    return create_user_token(test_user_2)

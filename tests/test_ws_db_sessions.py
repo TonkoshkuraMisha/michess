@@ -17,7 +17,7 @@ from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
 
 from src.api.deps import get_current_user_ws
 from src.api.websockets import matchmaking_endpoint
-from src.core.security import create_access_token
+from src.db import redis as redis_module
 from src.models.base import Base
 from src.models.user import User
 from src.services.game_state import state_manager
@@ -54,21 +54,31 @@ class QueueSocket:
         return await asyncio.wait_for(_poll(), timeout)
 
 
-async def _make_users(url: str, count: int) -> list[str]:
+async def _make_users(url: str, count: int) -> list[tuple[int, str]]:
     setup_engine = create_async_engine(url, poolclass=NullPool)
     async with setup_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    async with async_sessionmaker(setup_engine)() as db:
+    async with async_sessionmaker(setup_engine, expire_on_commit=False)() as db:
         names = [f"pool_user_{i}" for i in range(count)]
-        db.add_all([User(username=name, hashed_password="pw", rating=1500) for name in names])
+        users = [User(username=name, hashed_password="pw", rating=1500) for name in names]
+        db.add_all(users)
         await db.commit()
+        created = [(u.id, u.username) for u in users]
     await setup_engine.dispose()
-    return names
+    return created
+
+
+async def _issue_ticket(user_id: int) -> str:
+    """Как POST /auth/ws-ticket: одноразовый тикет в Redis (token_version новых пользователей — 0)."""
+    ticket = f"ticket-{user_id}"
+    await redis_module.redis_client.set(f"ws_ticket:{ticket}", f"{user_id}:0", ex=30)
+    return ticket
 
 
 async def test_connected_players_do_not_hold_pool_connections(tmp_path):
     url = f"sqlite+aiosqlite:///{(tmp_path / 'pool.db').as_posix()}"
-    names = await _make_users(url, 3)
+    created = await _make_users(url, 3)
+    names = [name for _, name in created]
 
     # Пул на одно соединение: при старой схеме второй подключившийся уже не прошёл бы аутентификацию.
     engine = create_async_engine(
@@ -79,8 +89,8 @@ async def test_connected_players_do_not_hold_pool_connections(tmp_path):
     tasks: list[asyncio.Task] = []
     try:
         users = [
-            await get_current_user_ws(token=create_access_token({"sub": name}), session_factory=session_factory)
-            for name in names
+            await get_current_user_ws(ticket=await _issue_ticket(user_id), session_factory=session_factory)
+            for user_id, _ in created
         ]
         assert engine.pool.checkedout() == 0
         assert users[0].username == names[0]  # объект отсоединён от сессии, но поля загружены
