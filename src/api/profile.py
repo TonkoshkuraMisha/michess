@@ -20,6 +20,8 @@ router = APIRouter(prefix="/profile", tags=["Profile & Games"])
 class QueueJoinRequest(BaseModel):
     base_time_ms: int = 180000
     increment_ms: int = 0
+    min_rating: int | None = None
+    max_rating: int | None = None
 
 
 async def _resolve_user(db: AsyncSession, username: str) -> User | None:
@@ -128,6 +130,15 @@ async def get_my_active_game(
     return payload
 
 
+async def _active_game_payload_or_none(db: AsyncSession, user_id: int) -> dict | None:
+    from src.services.game_state import state_manager
+
+    game_id = await state_manager.get_active_game_id(user_id)
+    if game_id is None:
+        return None
+    return await _build_active_game_payload(db, game_id, user_id)
+
+
 @router.post("/matchmaking/join")
 async def join_matchmaking_http(
         req: QueueJoinRequest,
@@ -135,18 +146,25 @@ async def join_matchmaking_http(
         db: AsyncSession = Depends(get_db),
 ):
     """Публикует вызов в лобби по HTTP (или сразу запускает матч, если соперник уже ждёт)."""
-    from src.services.matchmaker import matchmaker
+    from src.services.matchmaker import MatchmakingError, matchmaker
 
-    matched_gid = await matchmaker.join_queue(
-        user_id=current_user.id,
-        username=current_user.username,
-        rating=current_user.rating,
-        base_time_ms=req.base_time_ms,
-        increment_ms=req.increment_ms,
-        min_rating=max(0, current_user.rating - 150),
-        max_rating=current_user.rating + 150,
-        db=db,
-    )
+    try:
+        matched_gid = await matchmaker.join_queue(
+            user_id=current_user.id,
+            username=current_user.username,
+            rating=current_user.rating,
+            base_time_ms=req.base_time_ms,
+            increment_ms=req.increment_ms,
+            min_rating=req.min_rating,
+            max_rating=req.max_rating,
+            db=db,
+        )
+    except MatchmakingError as err:
+        # Фронтенд дублирует действие по WS и HTTP: если WS уже стартовал партию, отдаём её.
+        payload = await _active_game_payload_or_none(db, current_user.id) if err.code == "self_in_game" else None
+        if payload:
+            return payload
+        raise HTTPException(status_code=409, detail=err.message)
     if matched_gid is not None:
         payload = await _build_active_game_payload(db, int(matched_gid), current_user.id)
         if payload:
@@ -172,28 +190,30 @@ async def accept_challenge_http(
     Принимает вызов соперника из лобби по HTTP и возвращает данные начавшейся партии.
     Безопасен к гонкам с WebSocket-сообщением accept_challenge.
     """
-    from src.services.matchmaker import matchmaker
+    from src.services.matchmaker import MatchmakingError, matchmaker
     from src.services.connection_manager import manager
     from src.services.game_state import state_manager
 
     if int(target_user_id) == current_user.id:
         raise HTTPException(status_code=400, detail="Нельзя принять собственный вызов")
 
-    game_id = await matchmaker.accept_challenge(
-        challenger_id=int(target_user_id),
-        acceptor_id=current_user.id,
-        connection_manager=manager,
-        state_manager=state_manager,
-        db=db,
-    )
-
-    if game_id is None:
-        existing_gid = await state_manager.redis.get(f"user:{current_user.id}:current_game")
-        if existing_gid:
-            game_id = int(existing_gid)
-
-    if game_id is None:
-        raise HTTPException(status_code=404, detail="Вызов уже неактивен или принят другим игроком")
+    try:
+        game_id = await matchmaker.accept_challenge(
+            challenger_id=int(target_user_id),
+            acceptor_id=current_user.id,
+            connection_manager=manager,
+            state_manager=state_manager,
+            db=db,
+        )
+    except MatchmakingError as err:
+        # Фронтенд дублирует действие по WS и HTTP: проигравший гонку запрос отдаёт уже
+        # начавшуюся партию игрока, а не ошибку.
+        if err.code in ("self_in_game", "challenge_gone", "players_busy"):
+            payload = await _active_game_payload_or_none(db, current_user.id)
+            if payload:
+                return payload
+        status_code = 404 if err.code == "challenge_gone" else 409
+        raise HTTPException(status_code=status_code, detail=err.message)
 
     payload = await _build_active_game_payload(db, int(game_id), current_user.id)
     if not payload:

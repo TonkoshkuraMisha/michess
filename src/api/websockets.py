@@ -3,7 +3,6 @@
 import time
 import logging
 import uuid
-import chess
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +11,7 @@ from src.services.connection_manager import manager
 from src.services.game_state import state_manager
 from src.api.deps import get_current_user_ws
 from src.models.user import User
-from src.models.game import Game, GameStatus
+from src.services.matchmaker import MatchmakingError, matchmaker
 
 logger = logging.getLogger(__name__)
 
@@ -68,80 +67,27 @@ async def _send_active_game_snapshot_if_exists(db: AsyncSession, user: User):
     await manager.send_personal_message(payload, user.id)
 
 
-async def _init_new_pvp_game_in_db_and_redis(
-        db: AsyncSession,
-        white_id: int,
-        black_id: int,
-        base_time_ms: int,
-        increment_ms: int,
-) -> dict:
-    """Создаёт новую рейтинговую PvP-партию в PostgreSQL и инициализирует её полный стейт в Redis."""
-    white_user = await db.get(User, white_id)
-    black_user = await db.get(User, black_id)
-
-    white_rating = white_user.rating if white_user else 1200
-    black_rating = black_user.rating if black_user else 1200
-    white_username = white_user.username if white_user else "Белые"
-    black_username = black_user.username if black_user else "Черные"
-
-    now_ms = int(time.time() * 1000)
-    initial_fen = chess.STARTING_FEN
-
-    new_game = Game(
-        white_player_id=white_id,
-        black_player_id=black_id,
-        status=GameStatus.IN_PROGRESS,
-        base_time_ms=base_time_ms,
-        increment_ms=increment_ms,
-        is_rated=True,
-        state_version=0,
-        turn="w",
-        board_fen=initial_fen,
-        white_time_ms=base_time_ms,
-        black_time_ms=base_time_ms,
-        last_move_at=now_ms,
-        white_initial_rating=white_rating,
-        black_initial_rating=black_rating,
-    )
-    db.add(new_game)
-    await db.commit()
-    await db.refresh(new_game)
-
-    new_game_id = new_game.id
-    await state_manager.initialize_game(
-        game_id=new_game_id,
-        white_id=white_id,
-        black_id=black_id,
-        base_time_ms=base_time_ms,
-        increment_ms=increment_ms,
-    )
-
-    return {
-        "game_id": new_game_id,
-        "white_id": white_id,
-        "black_id": black_id,
-        "white_username": white_username,
-        "white_rating": white_rating,
-        "black_username": black_username,
-        "black_rating": black_rating,
-        "base_time_ms": base_time_ms,
-        "increment_ms": increment_ms,
-        "fen": initial_fen,
-    }
-
-
-async def create_rematch_game(db: AsyncSession, prev_state: dict) -> dict:
+async def create_rematch_game(db: AsyncSession, prev_state: dict, connection_manager=None) -> dict:
     """
-    Создаёт новую партию-реванш в БД и Redis с переменой цвета фигур (white_id <-> black_id)
-    и тем же контролем времени.
+    Создаёт партию-реванш со сменой цветов (white_id <-> black_id) и тем же контролем времени.
+    Проверки занятости игроков и старт партии — в matchmaker.start_pvp_game.
     """
-    return await _init_new_pvp_game_in_db_and_redis(
-        db=db,
+    return await matchmaker.start_pvp_game(
         white_id=int(prev_state["black_id"]),
         black_id=int(prev_state["white_id"]),
         base_time_ms=int(prev_state.get("base_time_ms", 180000)),
         increment_ms=int(prev_state.get("increment_ms", 0)),
+        connection_manager=connection_manager,
+        db=db,
     )
+
+
+async def _fresh_current_user(db: AsyncSession, user: User) -> User:
+    """
+    WebSocket-сессия живёт всё соединение (expire_on_commit=False), и объект пользователя в ней
+    не видит изменения рейтинга после сыгранных партий — перечитываем его из БД.
+    """
+    return await db.get(User, user.id, populate_existing=True) or user
 
 
 async def broadcast_to_game_participants_and_spectators(
@@ -177,43 +123,39 @@ async def matchmaking_endpoint(
 
             try:
                 if action == "join_queue":
-                    base_time = int(data.get("base_time_ms", 180000))
-                    inc_time = int(data.get("increment_ms", 0))
-
-                    default_min = max(0, current_user.rating - 150)
-                    default_max = current_user.rating + 150
-
-                    min_rating = int(data.get("min_rating", default_min))
-                    max_rating = int(data.get("max_rating", default_max))
-
-                    from src.services.matchmaker import matchmaker
-                    await matchmaker.join_queue(
-                        current_user.id, current_user.username, current_user.rating,
-                        base_time, inc_time, min_rating, max_rating
+                    fresh_user = await _fresh_current_user(db, current_user)
+                    matched_game_id = await matchmaker.join_queue(
+                        fresh_user.id, fresh_user.username, fresh_user.rating,
+                        int(data.get("base_time_ms", 180000)),
+                        int(data.get("increment_ms", 0)),
+                        min_rating=data.get("min_rating"),
+                        max_rating=data.get("max_rating"),
+                        db=db,
                     )
-                    await manager.send_personal_message({"event": "queue_joined"}, current_user.id)
+                    if matched_game_id is None:
+                        await manager.send_personal_message({"event": "queue_joined"}, current_user.id)
 
                 elif action == "leave_queue":
-                    from src.services.matchmaker import matchmaker
                     await matchmaker.leave_queue(current_user.id)
                     await manager.send_personal_message({"event": "queue_left"}, current_user.id)
 
                 elif action == "accept_challenge":
                     target_user_id = data.get("target_user_id")
-                    if target_user_id and int(target_user_id) != current_user.id:
-                        from src.services.matchmaker import matchmaker
-                        await matchmaker.accept_challenge(int(target_user_id), current_user.id, manager, state_manager)
+                    if target_user_id:
+                        await matchmaker.accept_challenge(
+                            int(target_user_id), current_user.id, manager, state_manager, db=db,
+                        )
 
                 elif action == "create_invite":
                     base_time = int(data.get("base_time_ms", 180000))
                     inc_time = int(data.get("increment_ms", 2000))
                     color_pref = str(data.get("color_pref", "random"))
 
-                    from src.services.matchmaker import matchmaker
+                    fresh_user = await _fresh_current_user(db, current_user)
                     invite_data = await matchmaker.create_private_invite(
-                        user_id=current_user.id,
-                        username=current_user.username,
-                        rating=current_user.rating,
+                        user_id=fresh_user.id,
+                        username=fresh_user.username,
+                        rating=fresh_user.rating,
                         base_time_ms=base_time,
                         increment_ms=inc_time,
                         color_pref=color_pref,
@@ -228,47 +170,7 @@ async def matchmaking_endpoint(
                     if not code:
                         continue
 
-                    from src.services.matchmaker import matchmaker
-                    accepted = await matchmaker.accept_private_invite(code, current_user.id)
-                    if not accepted:
-                        await manager.send_personal_message(
-                            {"event": "error", "message": "Приглашение недействительно или истекло"},
-                            current_user.id,
-                        )
-                        continue
-
-                    game_info = await _init_new_pvp_game_in_db_and_redis(
-                        db=db,
-                        white_id=accepted["white_id"],
-                        black_id=accepted["black_id"],
-                        base_time_ms=accepted["base_time_ms"],
-                        increment_ms=accepted["increment_ms"],
-                    )
-
-                    common_payload = {
-                        "event": "match_found",
-                        "game_id": game_info["game_id"],
-                        "white_username": game_info["white_username"],
-                        "white_rating": game_info["white_rating"],
-                        "black_username": game_info["black_username"],
-                        "black_rating": game_info["black_rating"],
-                        "base_time_ms": game_info["base_time_ms"],
-                        "increment_ms": game_info["increment_ms"],
-                        "white_time_ms": game_info["base_time_ms"],
-                        "black_time_ms": game_info["base_time_ms"],
-                        "fen": game_info["fen"],
-                        "pgn": "",
-                        "state_version": 0,
-                    }
-
-                    await manager.send_personal_message(
-                        {**common_payload, "color": "white", "opponent_id": game_info["black_id"]},
-                        game_info["white_id"],
-                    )
-                    await manager.send_personal_message(
-                        {**common_payload, "color": "black", "opponent_id": game_info["white_id"]},
-                        game_info["black_id"],
-                    )
+                    await matchmaker.start_game_from_invite(code, current_user.id, manager, db=db)
 
                 elif action == "spectate_game":
                     game_id = data.get("game_id")
@@ -537,33 +439,10 @@ async def matchmaking_endpoint(
                         )
                         continue
 
+                    # Оповещение обоих игроков — внутри start_pvp_game. Если кто-то уже начал другую
+                    # партию, придёт MatchmakingError, и предложение реванша останется в силе.
+                    await create_rematch_game(db, game_state, connection_manager=manager)
                     await state_manager.update_game_state(game_id, {"rematch_offer": ""})
-                    rematch_info = await create_rematch_game(db, game_state)
-
-                    common_payload = {
-                        "event": "match_found",
-                        "game_id": rematch_info["game_id"],
-                        "white_username": rematch_info["white_username"],
-                        "white_rating": rematch_info["white_rating"],
-                        "black_username": rematch_info["black_username"],
-                        "black_rating": rematch_info["black_rating"],
-                        "base_time_ms": rematch_info["base_time_ms"],
-                        "increment_ms": rematch_info["increment_ms"],
-                        "white_time_ms": rematch_info["base_time_ms"],
-                        "black_time_ms": rematch_info["base_time_ms"],
-                        "fen": rematch_info["fen"],
-                        "pgn": "",
-                        "state_version": 0,
-                    }
-
-                    await manager.send_personal_message(
-                        {**common_payload, "color": "white", "opponent_id": rematch_info["black_id"]},
-                        rematch_info["white_id"],
-                    )
-                    await manager.send_personal_message(
-                        {**common_payload, "color": "black", "opponent_id": rematch_info["white_id"]},
-                        rematch_info["black_id"],
-                    )
 
                 elif action == "decline_rematch":
                     game_id = data.get("game_id")
@@ -699,6 +578,11 @@ async def matchmaking_endpoint(
 
                         await broadcast_to_game_participants_and_spectators(gid, white_id, black_id, move_payload)
 
+            except MatchmakingError as mm_err:
+                await manager.send_personal_message(
+                    {"event": "error", "code": mm_err.code, "message": mm_err.message},
+                    current_user.id,
+                )
             except Exception as action_err:
                 logger.error("Error processing WS action '%s' for user %s: %s", action, current_user.id, action_err)
                 await manager.send_personal_message(

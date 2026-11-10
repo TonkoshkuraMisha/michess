@@ -44,6 +44,9 @@ class Settings(BaseSettings):
     AC_STOCKFISH_PATH: str = "bin/stockfish-windows-x86-64-avx2.exe"
     AC_MAX_CENTIPAWN_LOSS: int = 15
 
+    # Matchmaking: rating window (±N) used when the client sends no explicit range; 0 = unrestricted
+    MATCHMAKING_DEFAULT_RATING_RANGE: int = 0
+
     @property
     def async_database_url(self) -> str:
         """Assembles the database connection string for asyncpg."""

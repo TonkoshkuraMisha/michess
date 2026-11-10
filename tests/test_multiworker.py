@@ -184,7 +184,7 @@ async def test_only_one_worker_runs_timeouts_loop(monkeypatch):
 
 
 async def test_challenge_accepted_once_across_workers(monkeypatch):
-    from src.services.matchmaker import matchmaker
+    from src.services.matchmaker import MatchmakingError, matchmaker
 
     created: list[tuple[int, int]] = []
 
@@ -199,13 +199,19 @@ async def test_challenge_accepted_once_across_workers(monkeypatch):
         async def send_personal_message(self, message, user_id):
             pass
 
+    async def fake_rating(session, user_id):
+        return 1500
+
     monkeypatch.setattr(matchmaker, "_create_match_record", fake_create)
+    monkeypatch.setattr(matchmaker, "_fresh_rating", fake_rating)
     await matchmaker.join_queue(1, "challenger", 1500, 180000, 0, 0, 3000)
 
     results = await asyncio.gather(
         matchmaker.accept_challenge(1, 2, _Silent(), state_manager, db=object()),
         matchmaker.accept_challenge(1, 3, _Silent(), state_manager, db=object()),
+        return_exceptions=True,
     )
 
     assert len(created) == 1
-    assert sum(r is not None for r in results) == 1
+    assert sum(isinstance(r, int) for r in results) == 1
+    assert all(isinstance(r, (int, MatchmakingError)) for r in results)

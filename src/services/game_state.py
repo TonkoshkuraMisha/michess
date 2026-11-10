@@ -192,6 +192,24 @@ class GameStateManager:
 
     init_game = initialize_game
 
+    async def get_active_game_id(self, user_id: int) -> int | None:
+        """
+        id партии, которую игрок сейчас играет, или None. Устаревшую ссылку
+        user:{id}:current_game (партия уже завершена) заодно удаляет.
+        """
+        key = f"user:{int(user_id)}:current_game"
+        raw = await self.redis.get(key)
+        if not raw:
+            return None
+        game_id = int(raw)
+        state = await self.get_game_state(game_id)
+        if state and state.get("status") == "in_progress" and int(user_id) in (
+                int(state["white_id"]), int(state["black_id"])):
+            return game_id
+        if await self.redis.get(key) == raw:
+            await self.redis.delete(key)
+        return None
+
     async def get_game_state(self, game_id: int) -> dict | None:
         state = await self.redis.hgetall(self._get_key(game_id))
         if not state:
