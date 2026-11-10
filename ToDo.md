@@ -97,18 +97,12 @@
 * В `Chessboard.tsx` и `GameViewer.tsx` внедрены `Pointer Events` (`onPointerDown`, `pointermove`, `pointerup`) и
   адаптивный размер доски для мобильных экранов.
 
-### - [ ] Таск 6.3. Финальный релиз в ветку `master`
+### - [x] Таск 6.3. Финальный релиз в ветку `master`
 
-    ruff check .
-    mypy
-    python -m pytest -v --cov
-    cd frontend && npm run lint && npm run test && npm run build && cd ..
-
-    git checkout master
-    git pull origin master
-    git merge --no-ff dev -m "Release v1.0: Full PvP Chess Portal with Stockfish Analysis and Anti-Cheat"
-    git push origin master
-    git checkout dev
+* Сделано: до этого пункта `master` уже обновлялся отдельными релизными мержами (v1.0, v1.0.1, v1.0.2)
+  без git-тегов — документ не успевал это отражать. Текущий релиз (`v1.0.3`) подтянул в `master` все
+  40 коммитов Спринта 7 (надёжность под нагрузкой, безопасность, деплой, строгий CI) плюс правки
+  логина/звука/контролей времени из этой сессии; слияние прошло без конфликтов (merge-base не разошёлся).
 
 ---
 
@@ -243,6 +237,7 @@
 * Сначала тесты (React Testing Library): ход, премув, флаг, сдача, реванш.
 * Затем хуки `useGameSocket`, `useClock`, `useBotGame`, `usePremoves` и подкомпоненты; позже — `GameViewer.tsx`.
 
-### - [ ] Таск 7.14. Релиз `v1.0.0`
+### - [x] Таск 7.14. Релиз
 
-* После 7.1–7.4 выполнить таск 6.3, поставить тег `v1.0.0`, удалить слитые локальные ветки `fix/*`.
+* Сделано: таск 6.3 выполнен, поставлен тег `v1.0.3` (`v1.0.0`–`v1.0.2` были релизными мержами в
+  `master` ранее, без тегов), все слитые локальные ветки (`feature/*`, `chore/*`) удалены.
