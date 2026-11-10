@@ -58,8 +58,7 @@ async def real_redis(monkeypatch):
     await client.flushdb()
     monkeypatch.setattr(state_manager, "redis", client)
     monkeypatch.setattr("src.db.redis.redis_client", client)
-    # Фоновый анализ после партии здесь не нужен (и брокер Celery может быть недоступен).
-    monkeypatch.setattr("src.services.game_state.analyze_game_task.delay", lambda *a, **k: None)
+    # Публикацию фонового анализа в брокер Celery отключает общая фикстура no_celery_publish (conftest).
     yield client
     await client.flushdb()
     await client.aclose()
