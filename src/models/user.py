@@ -20,6 +20,9 @@ class User(Base):
     # а NULL уникальный индекс не ограничивает.
     username_key: Mapped[str | None] = mapped_column(String(50), unique=True, index=True, nullable=True)
     hashed_password: Mapped[str] = mapped_column(String)
+    # Версия токенов: входит в JWT и сверяется при каждой проверке. Увеличение (смена пароля,
+    # «выйти на всех устройствах») делает недействительными все ранее выданные токены.
+    token_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
 
     # ELO or Glicko-2 rating
     rating: Mapped[int] = mapped_column(Integer, default=1200)

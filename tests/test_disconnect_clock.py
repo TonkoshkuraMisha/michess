@@ -134,7 +134,7 @@ async def test_closing_one_tab_keeps_player_online(client, monkeypatch):
     monkeypatch.setitem(app.dependency_overrides, get_session_factory, lambda: _NoDbSession)
 
     await state_manager.initialize_game(game_id=34, white_id=501, black_id=502, base_time_ms=60000, increment_ms=0)
-    url = "/api/v1/ws/matchmaking?token=unused"
+    url = "/api/v1/ws/matchmaking?ticket=unused"
 
     with client.websocket_connect(url) as tab2:
         with client.websocket_connect(url):

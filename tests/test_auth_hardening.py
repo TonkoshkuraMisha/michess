@@ -78,14 +78,12 @@ async def test_registered_user_gets_username_key(client, db_session):
 
 # --- Вход ----------------------------------------------------------------------------------
 
-def test_login_is_case_insensitive_and_token_uses_canonical_name(client):
-    import jwt
-
+def test_login_is_case_insensitive_and_opens_the_canonical_account(client):
     assert _register(client, "Misha").status_code == 201
     res = _login(client, "mISHA")
     assert res.status_code == 200
-    payload = jwt.decode(res.json()["access_token"], settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
-    assert payload["sub"] == "Misha"
+    me = client.get("/api/v1/profile/me", headers={"Authorization": f"Bearer {res.json()['access_token']}"})
+    assert me.json()["username"] == "Misha"
 
 
 def test_unknown_user_still_runs_password_check(client, monkeypatch):

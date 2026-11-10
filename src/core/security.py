@@ -24,6 +24,31 @@ def get_password_hash(password: str) -> str:
     return pwd_context.hash(password)
 
 
+class InvalidTokenError(Exception):
+    """Токен не подписан нами, истёк или имеет старый формат."""
+
+
+def create_user_token(user, expires_delta: timedelta | None = None) -> str:
+    """
+    JWT пользователя: sub — id (имя можно было бы сменить, id — нет), ver — версия токенов,
+    по которой отзываются все выданные ранее токены.
+    """
+    return create_access_token({"sub": str(user.id), "ver": int(user.token_version or 0)}, expires_delta)
+
+
+def decode_user_token(token: str) -> tuple[int, int]:
+    """(user_id, token_version) из токена; InvalidTokenError для чужих, истёкших и старых токенов."""
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    except jwt.InvalidTokenError as exc:
+        raise InvalidTokenError(str(exc)) from exc
+    subject, version = payload.get("sub"), payload.get("ver")
+    # Токены старого формата (sub = имя пользователя, без ver) не принимаются: войти заново.
+    if not isinstance(subject, str) or not subject.isdigit() or not isinstance(version, int):
+        raise InvalidTokenError("unsupported token format")
+    return int(subject), version
+
+
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
     """Generates a JSON Web Token (JWT) for user authentication."""
     to_encode = data.copy()

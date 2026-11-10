@@ -1,12 +1,17 @@
+import secrets
+
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
+from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.deps import WS_TICKET_PREFIX, get_current_user
 from src.api.rate_limit import client_ip, enforce_rate_limit, ensure_below_limit, record_attempt
 from src.core.config import settings
-from src.core.security import create_access_token, get_password_hash, verify_password
+from src.core.security import create_user_token, get_password_hash, verify_password
+from src.db import redis as redis_module
 from src.db.session import get_db
 from src.models.user import User
 from src.schemas.user import UserCreate, UserResponse, username_key
@@ -130,9 +135,73 @@ async def login(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    access_token = create_access_token(data={"sub": user.username})
+    access_token = create_user_token(user)
 
     return {
         "access_token": access_token,
         "token_type": "bearer"
     }
+
+
+@router.post("/ws-ticket")
+async def issue_ws_ticket(current_user: User = Depends(get_current_user)):
+    """
+    Одноразовый тикет для подключения WebSocket (?ticket=...), действует WS_TICKET_TTL_S секунд.
+    JWT в адресе WebSocket попадал бы в логи сервера и прокси.
+    """
+    await enforce_rate_limit(
+        "ws_ticket", f"user:{current_user.id}", settings.RATE_LIMIT_WS_TICKETS, 60,
+        "Слишком частые переподключения, попробуйте через минуту",
+    )
+    ticket = secrets.token_urlsafe(32)
+    await redis_module.redis_client.set(
+        f"{WS_TICKET_PREFIX}{ticket}",
+        f"{current_user.id}:{current_user.token_version}",
+        ex=settings.WS_TICKET_TTL_S,
+    )
+    return {"ticket": ticket, "expires_in": settings.WS_TICKET_TTL_S}
+
+
+async def _revoke_all_tokens(db: AsyncSession, user: User) -> None:
+    """Отзывает все выданные токены пользователя и закрывает его открытые WebSocket."""
+    from src.services.connection_manager import manager
+
+    user.token_version = (user.token_version or 0) + 1
+    await db.commit()
+    await manager.revoke_sessions(user.id)
+
+
+@router.post("/logout-all", status_code=status.HTTP_204_NO_CONTENT)
+async def logout_everywhere(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Выход на всех устройствах: все выданные токены (включая текущий) перестают действовать."""
+    await _revoke_all_tokens(db, current_user)
+
+
+class PasswordChange(BaseModel):
+    current_password: str = Field(..., max_length=128)
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+
+@router.post("/change-password")
+async def change_password(
+        payload: PasswordChange,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+):
+    """
+    Смена пароля. Все ранее выданные токены отзываются (на случай, если пароль меняют из-за
+    утечки), а текущему клиенту возвращается новый токен, чтобы он остался в системе.
+    """
+    account = f"account:{current_user.username_key or username_key(current_user.username)}"
+    await ensure_below_limit(
+        "login_failures", account,
+        settings.RATE_LIMIT_LOGIN_FAILURES_PER_ACCOUNT, settings.RATE_LIMIT_LOGIN_FAILURES_WINDOW_S,
+        "Слишком много неудачных попыток, попробуйте позже",
+    )
+    if not verify_password(payload.current_password, current_user.hashed_password):
+        await record_attempt("login_failures", account, settings.RATE_LIMIT_LOGIN_FAILURES_WINDOW_S)
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Текущий пароль указан неверно")
+
+    current_user.hashed_password = get_password_hash(payload.new_password)
+    await _revoke_all_tokens(db, current_user)
+    return {"access_token": create_user_token(current_user), "token_type": "bearer"}

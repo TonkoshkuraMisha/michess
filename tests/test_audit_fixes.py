@@ -6,7 +6,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 
 from src.api.bots import calculate_authentic_thinking_time_ms
-from src.core.security import create_access_token
+from src.core.security import create_user_token
 from src.main import app
 from src.models.game import Game, GameStatus
 from src.models.move import Move
@@ -141,8 +141,8 @@ async def test_http_matchmaking_join_accept_and_active_game_sync(db_session):
     await db_session.refresh(ps1)
     await db_session.refresh(ps2)
 
-    token_ps1 = create_access_token({"sub": ps1.username})
-    token_ps2 = create_access_token({"sub": ps2.username})
+    token_ps1 = create_user_token(ps1)
+    token_ps2 = create_user_token(ps2)
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:

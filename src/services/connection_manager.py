@@ -28,6 +28,20 @@ logger = logging.getLogger(__name__)
 
 PRESENCE_HEARTBEAT_S = 10
 PRESENCE_STALE_MS = 35_000
+
+SESSION_REVOKED_EVENT = "session_revoked"
+WS_CLOSE_SESSION_REVOKED = 1008
+
+
+def _is_session_revoked(raw: str) -> bool:
+    if SESSION_REVOKED_EVENT not in raw:  # дешёвый фильтр до разбора JSON
+        return False
+    try:
+        return json.loads(raw).get("event") == SESSION_REVOKED_EVENT
+    except (ValueError, AttributeError):
+        return False
+
+
 SPECTATING_TTL_S = 6 * 60 * 60
 
 
@@ -100,12 +114,19 @@ class ConnectionManager:
                     continue
                 raw = self._unwrap_envelope(str(message.get("data", "")))
                 if raw is not None:
-                    await self._deliver_local(int(channel.split(":")[1]), raw)
+                    await self._on_remote_message(int(channel.split(":")[1]), raw)
             except asyncio.CancelledError:
                 raise
             except Exception as e:
                 logger.debug("PubSub listener loop warning: %s", e)
                 await asyncio.sleep(0.5)
+
+    async def _on_remote_message(self, uid: int, raw: str) -> None:
+        """Сообщение для пользователя, опубликованное другим воркером."""
+        await self._deliver_local(uid, raw)
+        if _is_session_revoked(raw):
+            # Токены отозваны на другом воркере — закрываем и здешние вкладки.
+            await self._close_local_sockets(uid)
 
     def _unwrap_envelope(self, data: str) -> str | None:
         """Возвращает полезную нагрузку или None, если сообщение опубликовал этот же воркер."""
@@ -258,6 +279,23 @@ class ConnectionManager:
                 self.active_connections.pop(uid, None)
 
         return delivered
+
+    async def revoke_sessions(self, user_id: int) -> None:
+        """
+        Токены пользователя отозваны (смена пароля, «выйти на всех устройствах»): сообщаем всем
+        его вкладкам и закрываем их WebSocket — на этом воркере сразу, на остальных при получении
+        события через pub/sub. Иначе уже открытое соединение продолжало бы работать со старым
+        токеном. Код 1008 клиент понимает как «сессия недействительна, войдите заново».
+        """
+        await self.send_personal_message({"event": SESSION_REVOKED_EVENT}, user_id)
+        await self._close_local_sockets(int(user_id))
+
+    async def _close_local_sockets(self, uid: int) -> None:
+        for ws in list(self._user_sockets.get(uid, set())):
+            try:
+                await ws.close(code=WS_CLOSE_SESSION_REVOKED)
+            except Exception:
+                pass  # сокет уже закрыт; его уберёт disconnect из обработчика соединения
 
     async def send_personal_message(self, message: dict, user_id: int):
         """
