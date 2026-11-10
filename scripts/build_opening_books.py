@@ -4,6 +4,7 @@ import json
 import shutil
 import sys
 from pathlib import Path
+
 import chess
 import chess.pgn
 
@@ -127,7 +128,7 @@ def process_pgn_stream(pgn_stream, surname: str, exclude: tuple[str, ...], book_
                     board.push(move)
                 except ValueError:
                     break
-                ply += 1
+                ply += 1  # noqa: SIM113 — считаем только успешно сыгранные ходы
 
             games_processed += 1
         except Exception:
@@ -174,7 +175,7 @@ def build_book_for_bot(bot_id: str) -> None:
     existing_book: dict = {}
     if target_json.exists():
         try:
-            with open(target_json, "r", encoding="utf-8") as f:
+            with open(target_json, encoding="utf-8") as f:
                 loaded = json.load(f)
                 if isinstance(loaded, dict):
                     existing_book = loaded
@@ -186,7 +187,7 @@ def build_book_for_bot(bot_id: str) -> None:
     total_games = 0
 
     for filepath in matched_files:
-        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
             total_games += process_pgn_stream(f, cfg["surname_filter"], cfg["exclude"], book_additions)
 
     if total_games > 0:

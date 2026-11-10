@@ -1,16 +1,16 @@
 # --- FILE: tests/conftest.py ---
 
 import asyncio
-import pytest
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from fastapi.testclient import TestClient
 
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from src.core.security import create_user_token
+from src.db.session import get_db, get_session_factory
 from src.main import app
-from src.db.session import get_db
 from src.models.base import Base
 from src.models.user import User
-from src.core.security import create_access_token
-from src.services.anticheat import _EVALUATED_GAME_IDS
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -27,7 +27,6 @@ def event_loop():
 
 @pytest.fixture(autouse=True)
 async def setup_database():
-    _EVALUATED_GAME_IDS.clear()
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield
@@ -45,7 +44,7 @@ class MockPubSub:
         pass
 
     async def listen(self):
-        while True:
+        while True:  # noqa: ASYNC110 — заглушка «вечной» подписки, ждать нечего
             await asyncio.sleep(3600)
 
 
@@ -78,12 +77,20 @@ class MockPipeline:
     def expire(self, name, time):
         self.commands.append(("expire", name, time))
 
+    def zadd(self, name, mapping):
+        self.commands.append(("zadd", name, mapping))
+
     async def execute(self):
         for cmd in self.commands:
             if cmd[0] == "hset":
-                await self.redis.hset(cmd[1], cmd[2], cmd[3], mapping=cmd[4])
+                mapping = dict(cmd[4] or {})
+                if cmd[2] is not None:
+                    mapping[cmd[2]] = cmd[3]
+                await self.redis.hset(cmd[1], mapping=mapping)
             elif cmd[0] == "sadd":
                 await self.redis.sadd(cmd[1], *cmd[2])
+            elif cmd[0] == "zadd":
+                await self.redis.zadd(cmd[1], cmd[2])
         self.commands = []
 
     async def sismember(self, name, value):
@@ -153,12 +160,46 @@ class MockAsyncRedis:
     async def smembers(self, name):
         return self.sets.get(name, set())
 
-    async def set(self, name, value, ex=None):
+    async def set(self, name, value, ex=None, px=None, nx=False):
+        if nx and name in self.kv:
+            return None
         self.kv[name] = str(value)
         return True
 
+    async def pexpire(self, name, time):
+        return name in self.kv
+
+    async def expire(self, name, time):
+        return any(name in c for c in (self.store, self.sets, self.lists, self.kv, self.zsets))
+
+    async def publish(self, channel, message):
+        self.published = getattr(self, "published", [])
+        self.published.append((channel, message))
+        return 0
+
+    async def zcard(self, name):
+        return len(self.zsets.get(name, {}))
+
+    async def zremrangebyscore(self, name, min_score, max_score):
+        zset = self.zsets.get(name, {})
+        doomed = [k for k, v in zset.items() if float(min_score) <= v <= float(max_score)]
+        for k in doomed:
+            del zset[k]
+        return len(doomed)
+
     async def get(self, name):
         return self.kv.get(name)
+
+    async def ping(self):
+        return True
+
+    async def getdel(self, name):
+        return self.kv.pop(name, None)
+
+    async def incr(self, name, amount=1):
+        value = int(self.kv.get(name, 0)) + amount
+        self.kv[name] = str(value)
+        return value
 
     async def rpush(self, name, *values):
         if name not in self.lists:
@@ -173,11 +214,14 @@ class MockAsyncRedis:
             return lst[start:]
         return lst[start:end + 1]
 
-    async def zadd(self, name, mapping):
+    async def zadd(self, name, mapping, nx=False):
         if name not in self.zsets:
             self.zsets[name] = {}
         added = 0
         for k, v in mapping.items():
+            k = str(k)
+            if nx and k in self.zsets[name]:
+                continue
             if k not in self.zsets[name] or self.zsets[name][k] != float(v):
                 added += 1
             self.zsets[name][k] = float(v)
@@ -191,6 +235,11 @@ class MockAsyncRedis:
         if end == -1:
             return keys[start:]
         return keys[start:end + 1]
+
+    async def zrangebyscore(self, name, min_score, max_score):
+        zset = self.zsets.get(name, {})
+        items = sorted((v, k) for k, v in zset.items() if float(min_score) <= v <= float(max_score))
+        return [k for _, k in items]
 
     async def zrem(self, name, *values):
         if name not in self.zsets:
@@ -211,12 +260,24 @@ def override_redis(monkeypatch):
     monkeypatch.setattr("src.services.connection_manager.redis_client", mock_redis)
     monkeypatch.setattr("src.db.redis.redis_client", mock_redis)
 
-    from src.services.game_state import state_manager
     from src.services.connection_manager import manager
+    from src.services.game_state import state_manager
 
     monkeypatch.setattr(state_manager, "redis", mock_redis)
     monkeypatch.setattr(manager, "redis", mock_redis)
     monkeypatch.setattr(manager, "pubsub", mock_redis.pubsub())
+
+
+@pytest.fixture(autouse=True)
+def no_celery_publish(monkeypatch):
+    """Тесты не публикуют задачи в брокер: список опубликованных id партий — для проверок."""
+    from src.services import task_dispatch
+
+    published: list[int] = []
+    monkeypatch.setattr(task_dispatch, "_publish_analysis", published.append)
+    task_dispatch.reset_broker_cooldown()
+    yield published
+    task_dispatch.reset_broker_cooldown()
 
 
 async def override_get_db():
@@ -225,6 +286,7 @@ async def override_get_db():
 
 
 app.dependency_overrides[get_db] = override_get_db
+app.dependency_overrides[get_session_factory] = lambda: TestSessionLocal
 
 
 @pytest.fixture
@@ -258,9 +320,9 @@ async def test_user_2(db_session):
 
 @pytest.fixture
 def token_user_1(test_user_1):
-    return create_access_token({"sub": test_user_1.username})
+    return create_user_token(test_user_1)
 
 
 @pytest.fixture
 def token_user_2(test_user_2):
-    return create_access_token({"sub": test_user_2.username})
+    return create_user_token(test_user_2)

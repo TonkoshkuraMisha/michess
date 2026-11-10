@@ -1,18 +1,20 @@
 # --- FILE: src/api/profile.py ---
 
 import time
+from typing import Any
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
+from sqlalchemy import asc, case, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, or_, desc, asc, func, case
 from sqlalchemy.orm import aliased
 
-from src.db.session import get_db
-from src.db.seed import ensure_champion_seeded, get_champion_meta, extract_pgn_metadata
 from src.api.deps import get_current_user
-from src.models.user import User
+from src.db.seed import ensure_champion_seeded, extract_pgn_metadata, get_champion_meta
+from src.db.session import get_db
 from src.models.game import Game, GameStatus
+from src.models.user import User
 
 router = APIRouter(prefix="/profile", tags=["Profile & Games"])
 
@@ -20,6 +22,8 @@ router = APIRouter(prefix="/profile", tags=["Profile & Games"])
 class QueueJoinRequest(BaseModel):
     base_time_ms: int = 180000
     increment_ms: int = 0
+    min_rating: int | None = None
+    max_rating: int | None = None
 
 
 async def _resolve_user(db: AsyncSession, username: str) -> User | None:
@@ -89,8 +93,9 @@ async def get_my_profile(current_user: User = Depends(get_current_user)):
         "id": current_user.id,
         "username": current_user.username,
         "rating": current_user.rating,
+        # Свой флаг игрок видит; числовой фактор доверия не отдаём, чтобы им нельзя было
+        # калибровать обход античита.
         "is_cheater": current_user.is_cheater,
-        "trust_factor": current_user.trust_factor,
         "created_at": current_user.created_at,
     }
 
@@ -128,6 +133,15 @@ async def get_my_active_game(
     return payload
 
 
+async def _active_game_payload_or_none(db: AsyncSession, user_id: int) -> dict | None:
+    from src.services.game_state import state_manager
+
+    game_id = await state_manager.get_active_game_id(user_id)
+    if game_id is None:
+        return None
+    return await _build_active_game_payload(db, game_id, user_id)
+
+
 @router.post("/matchmaking/join")
 async def join_matchmaking_http(
         req: QueueJoinRequest,
@@ -135,18 +149,25 @@ async def join_matchmaking_http(
         db: AsyncSession = Depends(get_db),
 ):
     """Публикует вызов в лобби по HTTP (или сразу запускает матч, если соперник уже ждёт)."""
-    from src.services.matchmaker import matchmaker
+    from src.services.matchmaker import MatchmakingError, matchmaker
 
-    matched_gid = await matchmaker.join_queue(
-        user_id=current_user.id,
-        username=current_user.username,
-        rating=current_user.rating,
-        base_time_ms=req.base_time_ms,
-        increment_ms=req.increment_ms,
-        min_rating=max(0, current_user.rating - 150),
-        max_rating=current_user.rating + 150,
-        db=db,
-    )
+    try:
+        matched_gid = await matchmaker.join_queue(
+            user_id=current_user.id,
+            username=current_user.username,
+            rating=current_user.rating,
+            base_time_ms=req.base_time_ms,
+            increment_ms=req.increment_ms,
+            min_rating=req.min_rating,
+            max_rating=req.max_rating,
+            db=db,
+        )
+    except MatchmakingError as err:
+        # Фронтенд дублирует действие по WS и HTTP: если WS уже стартовал партию, отдаём её.
+        payload = await _active_game_payload_or_none(db, current_user.id) if err.code == "self_in_game" else None
+        if payload:
+            return payload
+        raise HTTPException(status_code=409, detail=err.message) from err
     if matched_gid is not None:
         payload = await _build_active_game_payload(db, int(matched_gid), current_user.id)
         if payload:
@@ -172,28 +193,30 @@ async def accept_challenge_http(
     Принимает вызов соперника из лобби по HTTP и возвращает данные начавшейся партии.
     Безопасен к гонкам с WebSocket-сообщением accept_challenge.
     """
-    from src.services.matchmaker import matchmaker
     from src.services.connection_manager import manager
     from src.services.game_state import state_manager
+    from src.services.matchmaker import MatchmakingError, matchmaker
 
     if int(target_user_id) == current_user.id:
         raise HTTPException(status_code=400, detail="Нельзя принять собственный вызов")
 
-    game_id = await matchmaker.accept_challenge(
-        challenger_id=int(target_user_id),
-        acceptor_id=current_user.id,
-        connection_manager=manager,
-        state_manager=state_manager,
-        db=db,
-    )
-
-    if game_id is None:
-        existing_gid = await state_manager.redis.get(f"user:{current_user.id}:current_game")
-        if existing_gid:
-            game_id = int(existing_gid)
-
-    if game_id is None:
-        raise HTTPException(status_code=404, detail="Вызов уже неактивен или принят другим игроком")
+    try:
+        game_id = await matchmaker.accept_challenge(
+            challenger_id=int(target_user_id),
+            acceptor_id=current_user.id,
+            connection_manager=manager,
+            state_manager=state_manager,
+            db=db,
+        )
+    except MatchmakingError as err:
+        # Фронтенд дублирует действие по WS и HTTP: проигравший гонку запрос отдаёт уже
+        # начавшуюся партию игрока, а не ошибку.
+        if err.code in ("self_in_game", "challenge_gone", "players_busy"):
+            payload = await _active_game_payload_or_none(db, current_user.id)
+            if payload:
+                return payload
+        status_code = 404 if err.code == "challenge_gone" else 409
+        raise HTTPException(status_code=status_code, detail=err.message) from err
 
     payload = await _build_active_game_payload(db, int(game_id), current_user.id)
     if not payload:
@@ -205,8 +228,8 @@ async def accept_challenge_http(
 @router.get("/games/live")
 async def get_live_games(db: AsyncSession = Depends(get_db)):
     """Возвращает список активных партий, идущих прямо сейчас (для вкладки Live и режима зрителя)."""
-    from src.services.game_state import state_manager
     from src.services.connection_manager import manager
+    from src.services.game_state import state_manager
 
     game_ids = await state_manager.redis.smembers("active_games")
     if not game_ids:
@@ -236,13 +259,13 @@ async def get_live_games(db: AsyncSession = Depends(get_db)):
     users_res = await db.execute(select(User).where(User.id.in_(user_ids)))
     users_map = {u.id: u for u in users_res.scalars().all()}
 
-    live_list = []
+    live_list: list[dict[str, Any]] = []
     for gid, state in active_states:
         white_id = int(state["white_id"])
         black_id = int(state["black_id"])
         white_user = users_map.get(white_id)
         black_user = users_map.get(black_id)
-        spectators_set = getattr(manager, "game_spectators", {}).get(gid, set())
+        spectators_set = await manager.get_spectator_ids(gid)
 
         live_list.append({
             "game_id": gid,
@@ -272,8 +295,6 @@ async def get_user_profile(username: str, db: AsyncSession = Depends(get_db)):
         "id": user.id,
         "username": user.username,
         "rating": user.rating,
-        "is_cheater": user.is_cheater,
-        "trust_factor": user.trust_factor,
         "created_at": user.created_at,
     }
 

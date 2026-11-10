@@ -1,12 +1,13 @@
 # --- FILE: tests/test_audit_fixes.py ---
 
 import asyncio
+
 import chess
 import pytest
 from httpx import ASGITransport, AsyncClient
 
 from src.api.bots import calculate_authentic_thinking_time_ms
-from src.core.security import create_access_token
+from src.core.security import create_user_token
 from src.main import app
 from src.models.game import Game, GameStatus
 from src.models.move import Move
@@ -53,7 +54,8 @@ async def test_anticheat_idempotency_prevents_double_penalty(db_session):
             move_number=idx + 8,
             notation="g1f3",
             san="Nf3",
-            time_taken_ms=1000 + idx * 900,
+            # Ровный «машинный» ритм: одна лишь потеря фокуса больше не штрафует.
+            time_taken_ms=4500 + (idx % 2) * 100,
             window_blurred_before_move=(idx % 2 == 0),
             is_premove=False,
             network_lag_ms=10,
@@ -140,8 +142,8 @@ async def test_http_matchmaking_join_accept_and_active_game_sync(db_session):
     await db_session.refresh(ps1)
     await db_session.refresh(ps2)
 
-    token_ps1 = create_access_token({"sub": ps1.username})
-    token_ps2 = create_access_token({"sub": ps2.username})
+    token_ps1 = create_user_token(ps1)
+    token_ps2 = create_user_token(ps2)
 
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:

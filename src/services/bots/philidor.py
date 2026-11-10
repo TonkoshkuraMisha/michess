@@ -1,17 +1,18 @@
 # --- FILE: src/services/bots/philidor.py ---
 
 import chess
+
 from src.services.bots.base import (
     CENTER_SQUARES,
     EXTENDED_CENTER,
     PIECE_VALUES,
     HistoricalBot,
+    _simulate_human_thinking_time,
     analyse_with_stockfish,
     load_bot_opening_book,
     normalize_fen_key,
     resolve_stockfish_path,
     static_board_eval_cp,
-    _simulate_human_thinking_time,
 )
 
 PHILIDOR_BLUNDER_GUARD_CP = 120.0
@@ -60,11 +61,12 @@ def _evaluate_pawn_structure(board: chess.Board, us: chess.Color) -> float:
         if f < 7 and chess.square(f + 1, r) in our_pawns:
             score += 15.0
         support_rank = (r - 1) if us == chess.WHITE else (r + 1)
-        if 0 <= support_rank <= 7:
-            if (f > 0 and chess.square(f - 1, support_rank) in our_pawns) or (
-                    f < 7 and chess.square(f + 1, support_rank) in our_pawns
-            ):
-                score += 10.0
+        # Диапазон проверяется первым: для крайних горизонталей support_rank выходит за доску.
+        if 0 <= support_rank <= 7 and (
+                (f > 0 and chess.square(f - 1, support_rank) in our_pawns)
+                or (f < 7 and chess.square(f + 1, support_rank) in our_pawns)
+        ):
+            score += 10.0
 
     doubled_pawns = len(pawn_files) - len(set(pawn_files))
     score -= float(doubled_pawns) * 20.0

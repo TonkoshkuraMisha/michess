@@ -1,0 +1,470 @@
+PROJECT SNAPSHOT — PART 12/15
+Project: michess
+Files in this part (4): frontend/src/components/Chessboard.tsx (chunk 3), frontend/src/components/chessboard/__tests__/boardUtils.test.ts, frontend/src/components/chessboard/boardUtils.ts, frontend/src/components/chessboard/types.ts
+----------------------------------------------------------------------------------------
+                        <div
+                            className="h-16 overflow-y-auto bg-black/40 rounded p-2 text-xs space-y-1 font-sans border border-amber-950/50 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
+                            {chatMessages.length === 0 ? (
+                                <div className="h-full flex items-center justify-center text-xs text-boxwood/45 italic">
+                                    Сообщений пока нет. Поприветствуйте соперника!
+                                </div>
+                            ) : (
+                                chatMessages.map((msg, i) => (
+                                    <div key={i} className="leading-snug wrap-break-word">
+                                        <span className="font-bold text-amber-300 mr-1.5">{msg.sender}:</span>
+                                        <span className="text-boxwood-light">{msg.text}</span>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        <div className="flex flex-wrap gap-1">
+                            {QUICK_CHAT_PRESETS.map((preset) => (
+                                <button
+                                    key={preset}
+                                    type="button"
+                                    onClick={() => handleSendChatMessage(preset)}
+                                    className="px-2 py-0.5 rounded bg-black/40 hover:bg-amber-900/50 border border-amber-800/40 text-xs text-amber-200 transition cursor-pointer"
+                                >
+                                    {preset}
+                                </button>
+                            ))}
+                        </div>
+
+                        <form
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                handleSendChatMessage();
+                            }}
+                            className="flex gap-1.5"
+                        >
+                            <input
+                                type="text"
+                                maxLength={140}
+                                value={chatInput}
+                                onChange={(e) => setChatInput(e.target.value)}
+                                placeholder="Написать сообщение..."
+                                className="flex-1 bg-black/50 border border-amber-800/50 rounded px-2.5 py-1 text-xs text-amber-100 outline-none focus:border-amber-500 font-sans"
+                            />
+                            <button
+                                type="submit"
+                                className="px-3 py-1 bg-amber-700 hover:bg-amber-600 text-amber-100 rounded text-xs font-bold flex items-center justify-center transition cursor-pointer"
+                                title="Отправить"
+                            >
+                                <Send size={13}/>
+                            </button>
+                        </form>
+                    </div>
+                )}
+
+                <div className="shrink-0 flex flex-col gap-1.5">
+                    {gameId ? (
+                        <>
+                            <div className="grid grid-cols-2 gap-2">
+                                {history.length < 2 ? (
+                                    <button
+                                        type="button"
+                                        onClick={handleAbortGame}
+                                        disabled={!!gameOverResult}
+                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-amber-950/90 text-amber-200 text-xs sm:text-sm font-bold rounded-md hover:bg-amber-900 transition shadow border border-amber-700/60 disabled:opacity-40 cursor-pointer"
+                                    >
+                                        <X size={15}/> Отменить игру
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={handleResign}
+                                        disabled={!!gameOverResult}
+                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/85 text-red-200 text-xs sm:text-sm font-bold rounded-md hover:bg-red-900 transition shadow border border-red-800/50 disabled:opacity-40 cursor-pointer"
+                                    >
+                                        <Flag size={15}/> Сдаться
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={handleOfferDraw}
+                                    disabled={!!gameOverResult || history.length < 2}
+                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
+                                >
+                                    <Handshake size={15}/> Ничья
+                                </button>
+                            </div>
+
+                            {gameOverResult && (
+                                <div className="flex flex-col gap-1.5">
+                                    {rematchStatus === 'offered_by_opponent' ? (
+                                        <div
+                                            className="p-2 rounded-md bg-emerald-950/90 border border-emerald-500/60 flex flex-col gap-1.5 text-xs text-emerald-100 text-center shadow">
+                                            <span
+                                                className="font-bold">Соперник предлагает реванш (со сменой цвета)!</span>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={handleAcceptRematch}
+                                                    className="py-1.5 px-3 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded transition shadow cursor-pointer"
+                                                >
+                                                    Принять реванш
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleDeclineRematch}
+                                                    className="py-1.5 px-3 bg-red-900/80 hover:bg-red-800 text-red-100 font-bold rounded transition cursor-pointer"
+                                                >
+                                                    Отклонить
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button
+                                                type="button"
+                                                disabled={rematchStatus === 'offered_by_me' || rematchStatus === 'declined'}
+                                                onClick={handleOfferRematch}
+                                                className="flex items-center justify-center gap-1.5 px-3 py-2 font-bold text-xs sm:text-sm rounded-md transition shadow bg-emerald-800 hover:bg-emerald-700 text-emerald-100 border border-emerald-500/50 disabled:opacity-50 cursor-pointer"
+                                            >
+                                                <RefreshCw size={15}
+                                                           className={rematchStatus === 'offered_by_me' ? 'animate-spin' : ''}/>
+                                                {rematchStatus === 'offered_by_me'
+                                                    ? 'Ждём ответа...'
+                                                    : rematchStatus === 'declined'
+                                                        ? 'Реванш отклонён'
+                                                        : 'Реванш'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleResetSandbox}
+                                                className="flex items-center justify-center gap-1.5 px-3 py-2 font-bold text-xs sm:text-sm rounded-md transition shadow bg-boxwood text-acacia-dark border border-amber-700/50 hover:bg-boxwood-light cursor-pointer"
+                                            >
+                                                <RotateCcw size={15}/> В лобби
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => navigate(`/game/${gameId}`, {
+                                                state: {
+                                                    game: {
+                                                        game_id: gameId,
+                                                        white_username: whitePlayer.username,
+                                                        white_rating: Number(whitePlayer.rating) || 1200,
+                                                        black_username: blackPlayer.username,
+                                                        black_rating: Number(blackPlayer.rating) || 1200,
+                                                        result: gameOverResult || '*',
+                                                        finished_at: new Date().toISOString()
+                                                    }
+                                                }
+                                            })}
+                                            className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 text-xs font-bold rounded-md transition shadow border border-emerald-600/50 cursor-pointer"
+                                        >
+                                            <Eye size={14}/> Разбор партии
+                                        </button>
+                                        <a
+                                            href={`${API_BASE_URL}/api/v1/profile/games/${gameId}/pgn`}
+                                            download
+                                            className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#1A120B] hover:bg-black text-amber-400 text-xs font-bold rounded-md transition shadow border border-amber-800/60"
+                                        >
+                                            <Download size={14}/> Скачать PGN
+                                        </a>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    ) : activeBot ? (
+                        <div className="flex flex-col gap-1.5">
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    disabled={history.length === 0 || isBotThinking || !!gameOverResult}
+                                    onClick={handleUndoSandboxMove}
+                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
+                                >
+                                    <Undo2 size={15}/> Вернуть ход
+                                </button>
+                                {!gameOverResult ? (
+                                    <button
+                                        type="button"
+                                        onClick={handleResign}
+                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/85 text-red-200 text-xs sm:text-sm font-bold rounded-md hover:bg-red-900 transition shadow border border-red-800/50 cursor-pointer"
+                                    >
+                                        <Flag size={15}/> Сдаться
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={handleOfferRematch}
+                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-800 text-emerald-100 text-xs sm:text-sm font-bold rounded-md hover:bg-emerald-700 transition shadow border border-emerald-500/50 cursor-pointer"
+                                    >
+                                        <RefreshCw size={15}/> Реванш
+                                    </button>
+                                )}
+                            </div>
+
+                            {savedBotGameId && (
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate(`/game/${savedBotGameId}`, {
+                                            state: {
+                                                game: {
+                                                    game_id: savedBotGameId,
+                                                    white_username: whitePlayer.username,
+                                                    white_rating: Number(whitePlayer.rating) || 1200,
+                                                    black_username: blackPlayer.username,
+                                                    black_rating: Number(blackPlayer.rating) || 1850,
+                                                    result: gameOverResult || '*',
+                                                    site: 'Michess Bot Arena',
+                                                    finished_at: new Date().toISOString()
+                                                }
+                                            }
+                                        })}
+                                        className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 text-xs font-bold rounded-md transition shadow border border-emerald-600/50 cursor-pointer"
+                                    >
+                                        <Eye size={14}/> Разбор партии
+                                    </button>
+                                    <a
+                                        href={`${API_BASE_URL}/api/v1/profile/games/${savedBotGameId}/pgn`}
+                                        download
+                                        className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#1A120B] hover:bg-black text-amber-400 text-xs font-bold rounded-md transition shadow border border-amber-800/60"
+                                    >
+                                        <Download size={14}/> Скачать PGN
+                                    </a>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                type="button"
+                                disabled={history.length === 0}
+                                onClick={handleUndoSandboxMove}
+                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
+                            >
+                                <Undo2 size={15}/> Отменить ход
+                            </button>
+                            <button
+                                type="button"
+                                disabled={history.length === 0}
+                                onClick={handleResetSandbox}
+                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-amber-300 text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
+                            >
+                                <RotateCcw size={15}/> Сбросить доску
+                            </button>
+                        </div>
+                    )}
+                </div>
+
+            </div>
+
+        </div>
+    );
+}
+
+========================================================================================
+FILE: frontend/src/components/chessboard/__tests__/boardUtils.test.ts
+========================================================================================
+// --- FILE: frontend/src/components/chessboard/__tests__/boardUtils.test.ts ---
+
+import {describe, expect, it} from 'vitest';
+import {Chess} from 'chess.js';
+import {calculateMaterialBalance, cloneChessInstance, prevIndexHelper} from '../boardUtils';
+import {DEFAULT_TIME_CONTROL, TIME_CONTROLS} from '../../../config/timeControls';
+
+describe('calculateMaterialBalance', () => {
+    it('is even in the starting position', () => {
+        const balance = calculateMaterialBalance(new Chess().board());
+        expect(balance.whiteAdvantage).toBe(0);
+        expect(balance.blackAdvantage).toBe(0);
+        expect(balance.whiteCapturedSymbols).toEqual([]);
+    });
+
+    it('counts a captured piece for the capturing side', () => {
+        const game = new Chess();
+        ['e4', 'd5', 'exd5'].forEach((m) => game.move(m));
+        const balance = calculateMaterialBalance(game.board());
+        expect(balance.whiteAdvantage).toBe(1);
+        expect(balance.whiteCapturedSymbols).toEqual(['♟']);
+    });
+});
+
+describe('cloneChessInstance', () => {
+    it('keeps move history and is independent of the source', () => {
+        const game = new Chess();
+        ['e4', 'e5', 'Nf3'].forEach((m) => game.move(m));
+        const copy = cloneChessInstance(game);
+        expect(copy.history()).toEqual(['e4', 'e5', 'Nf3']);
+        copy.move('Nc6');
+        expect(game.history()).toHaveLength(3);
+    });
+});
+
+describe('prevIndexHelper', () => {
+    it('maps the live view (-1) to the last move', () => {
+        expect(prevIndexHelper(-1, 10)).toBe(9);
+        expect(prevIndexHelper(4, 10)).toBe(4);
+    });
+});
+
+describe('time controls', () => {
+    it('groups popular presets into bullet/blitz/rapid/classical with the default among them', () => {
+        expect(TIME_CONTROLS.map((g) => g.category)).toEqual(['bullet', 'blitz', 'rapid', 'classical']);
+        const options = TIME_CONTROLS.flatMap((g) => g.options);
+        expect(options).toContain(DEFAULT_TIME_CONTROL);
+        options.forEach((opt) => expect(opt.category).toBe(
+            TIME_CONTROLS.find((g) => g.options.includes(opt))?.category
+        ));
+    });
+});
+
+========================================================================================
+FILE: frontend/src/components/chessboard/boardUtils.ts
+========================================================================================
+// --- FILE: frontend/src/components/chessboard/boardUtils.ts ---
+// Константы и чистые функции доски (вынесено из Chessboard.tsx).
+
+import {Chess} from 'chess.js';
+
+export const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+export const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
+
+export const MIN_BOARD_SIZE = 280;
+export const MAX_BOARD_SIZE = 860;
+
+export type PromotionPiece = 'q' | 'n' | 'r' | 'b';
+
+export const PROMOTION_OPTIONS: Array<{ type: PromotionPiece; label: string }> = [
+    {type: 'q', label: 'Ферзь'},
+    {type: 'n', label: 'Конь'},
+    {type: 'r', label: 'Ладья'},
+    {type: 'b', label: 'Слон'}
+];
+
+export function getMaxViewportBoardSize(): number {
+    if (typeof window === 'undefined') return 560;
+    const availableHeight = window.innerHeight - 220;
+    const availableWidth = window.innerWidth >= 1280
+        ? window.innerWidth - 850
+        : window.innerWidth - 24;
+    const limit = Math.min(availableHeight, availableWidth, MAX_BOARD_SIZE);
+    return Math.max(MIN_BOARD_SIZE, Math.min(limit, window.innerWidth - 24));
+}
+
+export function getDefaultBoardSize(): number {
+    if (typeof window !== 'undefined') {
+        return getMaxViewportBoardSize();
+    }
+    return 540;
+}
+
+export const PIECE_VALUES: Record<string, number> = {p: 1, n: 3, b: 3, r: 5, q: 9, k: 0};
+
+export function calculateMaterialBalance(boardState: any[][]) {
+    const startCounts: Record<string, number> = {p: 8, n: 2, b: 2, r: 2, q: 1};
+    const currentWhite: Record<string, number> = {p: 0, n: 0, b: 0, r: 0, q: 0};
+    const currentBlack: Record<string, number> = {p: 0, n: 0, b: 0, r: 0, q: 0};
+
+    let whiteScore = 0;
+    let blackScore = 0;
+
+    for (const row of boardState) {
+        for (const cell of row) {
+            if (!cell) continue;
+            const val = PIECE_VALUES[cell.type] || 0;
+            if (cell.color === 'w') {
+                whiteScore += val;
+                if (currentWhite[cell.type] !== undefined) currentWhite[cell.type]++;
+            } else {
+                blackScore += val;
+                if (currentBlack[cell.type] !== undefined) currentBlack[cell.type]++;
+            }
+        }
+    }
+
+    const whiteCapturedSymbols: string[] = [];
+    const blackCapturedSymbols: string[] = [];
+    const order = ['q', 'r', 'b', 'n', 'p'];
+    const glyphs: Record<string, string> = {q: '♛', r: '♜', b: '♝', n: '♞', p: '♟'};
+
+    for (const t of order) {
+        const missingBlack = Math.max(0, startCounts[t] - currentBlack[t]);
+        for (let i = 0; i < missingBlack; i++) whiteCapturedSymbols.push(glyphs[t]);
+
+        const missingWhite = Math.max(0, startCounts[t] - currentWhite[t]);
+        for (let i = 0; i < missingWhite; i++) blackCapturedSymbols.push(glyphs[t]);
+    }
+
+    return {
+        whiteAdvantage: Math.max(0, whiteScore - blackScore),
+        blackAdvantage: Math.max(0, blackScore - whiteScore),
+        whiteCapturedSymbols,
+        blackCapturedSymbols
+    };
+}
+
+export function cloneChessInstance(source: Chess): Chess {
+    const copy = new Chess();
+    const currentPgn = source.pgn();
+    if (currentPgn) {
+        copy.loadPgn(currentPgn);
+    } else {
+        copy.load(source.fen());
+    }
+    return copy;
+}
+
+export function prevIndexHelper(viewIndex: number, historyLength: number): number {
+    return viewIndex === -1 ? historyLength - 1 : viewIndex;
+}
+
+========================================================================================
+FILE: frontend/src/components/chessboard/types.ts
+========================================================================================
+// --- FILE: frontend/src/components/chessboard/types.ts ---
+// Типы лобби, Live-партий и чата (вынесено из Chessboard.tsx).
+
+export interface LiveGameItem {
+    game_id: number;
+    white_username: string;
+    white_rating: number;
+    black_username: string;
+    black_rating: number;
+    base_time_ms: number;
+    increment_ms: number;
+    spectators_count: number;
+}
+
+export interface ChatMessageItem {
+    sender: string;
+    text: string;
+    timestamp: number;
+}
+
+export const QUICK_CHAT_PRESETS = [
+    '👋 Удачи!',
+    '🤝 Спасибо за игру!',
+    '👏 Красивый ход!',
+    '⏱ Цейтнот!'
+];
+
+export interface QueuePlayer {
+    user_id: number;
+    username: string;
+    rating: number;
+    base_time_ms: number;
+    increment_ms: number;
+}
+
+/**
+ * Коды ошибок сервера, не связанные с матчмейкингом: они не должны сбрасывать поиск соперника
+ * (в отличие от «уже в партии», «вызов неактуален» и т. п.).
+ */
+export const GAME_ACTION_ERROR_CODES: ReadonlySet<string> = new Set([
+    'rate_limited',
+    'message_too_large',
+    'draw_offer_too_soon',
+    'chat_forbidden',
+]);
+
+----------------------------------------------------------------------------------------
+END OF PART 12/15

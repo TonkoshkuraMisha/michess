@@ -1,0 +1,1944 @@
+PROJECT SNAPSHOT — PART 14/15
+Project: michess
+Files in this part (19): frontend/src/components/Profile.tsx, frontend/src/config/api.ts, frontend/src/config/boardAppearance.ts, frontend/src/config/champions.ts, frontend/src/config/timeControls.ts, frontend/src/index.css, frontend/src/main.tsx, frontend/src/services/__tests__/apiErrors.test.ts, frontend/src/services/__tests__/gameSocket.test.ts, frontend/src/services/__tests__/gameSocketTicket.test.ts, frontend/src/services/apiErrors.ts, frontend/src/services/gameSocket.ts, frontend/src/services/soundEngine.ts, frontend/tailwind.config.js, frontend/tsconfig.app.json, frontend/tsconfig.node.json, .dockerignore, .gitignore, DEPLOY.md
+----------------------------------------------------------------------------------------
+
+========================================================================================
+FILE: frontend/src/components/Profile.tsx
+========================================================================================
+// --- FILE: frontend/src/components/Profile.tsx ---
+
+import {useState, useEffect} from 'react';
+import {useParams, Link, useNavigate} from 'react-router-dom';
+import {format, parseISO} from 'date-fns';
+import {ru} from 'date-fns/locale';
+import {
+    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+} from 'recharts';
+import {
+    Trophy,
+    Swords,
+    Calendar,
+    Download,
+    Crosshair,
+    Target
+} from 'lucide-react';
+import {API_BASE_URL} from '../config/api';
+
+interface UserProfile {
+    id: number;
+    username: string;
+    rating: number;
+    created_at: string;
+}
+
+interface GameData {
+    game_id: number;
+    white_username: string;
+    white_rating: number;
+    black_username: string;
+    black_rating: number;
+    status: string;
+    is_rated: boolean;
+    result: string;
+    pgn_date: string | null;
+    site: string | null;
+    eco: string | null;
+    finished_at: string | null;
+}
+
+const displayDate = (game: GameData) => {
+    if (game.pgn_date && !game.pgn_date.includes('????')) {
+        return game.pgn_date.replace(/\??/g, '').replace(/\.$/, '');
+    }
+    if (game.finished_at) {
+        return format(parseISO(game.finished_at), 'd MMM yyyy', {locale: ru});
+    }
+    return '—';
+};
+
+export default function Profile() {
+    const {targetUsername} = useParams<{ targetUsername: string }>();
+    const navigate = useNavigate();
+    const [profile, setProfile] = useState<UserProfile | null>(null);
+    const [games, setGames] = useState<GameData[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const fetchProfileData = async () => {
+            setLoading(true);
+            setError(null);
+            try {
+                const profileRes = await fetch(`${API_BASE_URL}/api/v1/profile/${targetUsername}`);
+                if (!profileRes.ok) throw new Error('Пользователь не найден');
+                const profileData = await profileRes.json();
+                setProfile(profileData);
+
+                const gamesRes = await fetch(`${API_BASE_URL}/api/v1/profile/${targetUsername}/games?limit=30`);
+                if (gamesRes.ok) {
+                    const gamesData = await gamesRes.json();
+                    setGames(gamesData.items || []);
+                }
+            } catch (err: any) {
+                setError(err.message);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (targetUsername) {
+            fetchProfileData();
+        }
+    }, [targetUsername]);
+
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center w-full h-full text-boxwood-light font-serif">
+                <div className="animate-spin text-amber-500 mb-4"><Swords size={40}/></div>
+                <div>Загрузка профиля...</div>
+            </div>
+        );
+    }
+
+    if (error || !profile) {
+        return (
+            <div className="bg-red-950/80 border border-red-800 p-6 rounded text-red-200 text-center font-serif">
+                <h2 className="text-xl font-bold mb-2">Ошибка</h2>
+                <p>{error || 'Не удалось загрузить профиль'}</p>
+                <Link to="/" className="mt-4 inline-block text-amber-400 hover:underline">На главную</Link>
+            </div>
+        );
+    }
+
+    let wins = 0, losses = 0, draws = 0;
+    let tempRating = profile.rating;
+
+    const chartDataReversed = games.map((game) => {
+        const isWhite = game.white_username === profile.username;
+        let delta = 0;
+
+        if (game.result === '1-0') {
+            if (isWhite) {
+                wins++;
+                delta = 15;
+            } else {
+                losses++;
+                delta = -15;
+            }
+        } else if (game.result === '0-1') {
+            if (isWhite) {
+                losses++;
+                delta = -15;
+            } else {
+                wins++;
+                delta = 15;
+            }
+        } else if (game.result === '1/2-1/2') {
+            draws++;
+        }
+
+        const pointRating = tempRating;
+        tempRating -= delta;
+
+        const chartDate = game.pgn_date ? game.pgn_date.split('.')[0] : (game.finished_at ? format(parseISO(game.finished_at), 'd MMM', {locale: ru}) : '');
+
+        return {
+            name: 'Партия',
+            rating: pointRating,
+            date: chartDate
+        };
+    });
+
+    const chartData = chartDataReversed.reverse();
+    const winRate = games.length > 0 ? Math.round((wins / games.length) * 100) : 0;
+
+    return (
+        <div className="w-full max-w-6xl flex flex-col gap-6 font-serif">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div
+                    className="bg-acacia-dark border border-amber-900/40 p-6 rounded shadow-heavy flex flex-col items-center justify-center text-center relative overflow-hidden">
+                    <img
+                        src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${profile.username}&backgroundColor=D0A972`}
+                        alt="Avatar Background"
+                        className="absolute top-0 right-0 w-48 h-48 opacity-10 pointer-events-none translate-x-10 -translate-y-10"
+                    />
+                    <img
+                        src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${profile.username}&backgroundColor=E6C998`}
+                        alt="Avatar"
+                        className="w-24 h-24 rounded-lg bg-black/40 shadow-inner border-2 border-amber-600/40 mb-3 z-10"
+                    />
+                    <h1 className="text-3xl font-bold text-amber-200 z-10">{profile.username}</h1>
+
+                    <div className="flex items-center gap-2 mt-3 text-boxwood-light/80 text-sm z-10">
+                        <Calendar size={16} className="text-amber-600"/>
+                        На сайте с {format(parseISO(profile.created_at), 'd MMMM yyyy', {locale: ru})}
+                    </div>
+                </div>
+
+                <div className="md:col-span-2 grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div
+                        className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
+                        <div
+                            className="text-boxwood/60 text-xs uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                            <Trophy size={14}/> Рейтинг
+                        </div>
+                        <div className="text-4xl font-mono font-bold text-amber-400">{profile.rating}</div>
+                    </div>
+                    <div
+                        className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
+                        <div
+                            className="text-boxwood/60 text-xs uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                            <Swords size={14}/> Игр сыграно
+                        </div>
+                        <div className="text-4xl font-mono font-bold text-blue-400">{games.length}</div>
+                    </div>
+                    <div
+                        className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
+                        <div
+                            className="text-boxwood/60 text-xs uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                            <Target size={14}/> Винрейт
+                        </div>
+                        <div className="text-4xl font-mono font-bold text-emerald-400">{winRate}%</div>
+                    </div>
+                    <div
+                        className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
+                        <div
+                            className="text-boxwood/60 text-[10px] xl:text-xs uppercase tracking-wider mb-1 flex items-center gap-1.5 whitespace-nowrap">
+                            <Crosshair size={14}/> WIN / DRAW / LOSE
+                        </div>
+                        <div className="text-2xl font-mono font-bold flex gap-2">
+                            <span className="text-emerald-400">{wins}</span>
+                            <span className="text-boxwood/40">/</span>
+                            <span className="text-gray-400">{draws}</span>
+                            <span className="text-boxwood/40">/</span>
+                            <span className="text-red-400">{losses}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="bg-acacia-dark border border-amber-900/40 p-5 rounded shadow-heavy">
+                <h2 className="text-sm uppercase tracking-widest text-amber-500/80 mb-6 font-bold">Динамика рейтинга
+                    (последние партии)</h2>
+                <div className="h-64 w-full font-sans">
+                    {chartData.length > 1 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={chartData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#5C3A21" vertical={false}/>
+                                <XAxis dataKey="date" stroke="#8B5A2B" tick={{fill: '#D0A972', fontSize: 12}} dy={10}/>
+                                <YAxis domain={['dataMin - 30', 'dataMax + 30']} stroke="#8B5A2B"
+                                       tick={{fill: '#D0A972', fontSize: 12}} dx={-10}/>
+                                <Tooltip contentStyle={{
+                                    backgroundColor: '#1A120B',
+                                    borderColor: '#7A4B31',
+                                    color: '#F5DEB3',
+                                    borderRadius: '8px'
+                                }} itemStyle={{color: '#fbbf24', fontWeight: 'bold'}}/>
+                                <Line type="monotone" dataKey="rating" stroke="#fbbf24" strokeWidth={3}
+                                      dot={{r: 4, fill: '#1A120B', stroke: '#fbbf24', strokeWidth: 2}}
+                                      activeDot={{r: 6, fill: '#fbbf24'}}/>
+                            </LineChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="h-full flex items-center justify-center text-boxwood/50">
+                            Недостаточно данных для графика
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            <div className="bg-acacia-dark border border-amber-900/40 rounded shadow-heavy overflow-hidden">
+                <div className="p-5 border-b border-amber-900/40 bg-black/20">
+                    <h2 className="text-sm uppercase tracking-widest text-amber-500/80 font-bold">История партий</h2>
+                </div>
+
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm font-sans whitespace-nowrap">
+                        <thead className="bg-black/40 text-boxwood/60 uppercase text-xs tracking-wider">
+                        <tr>
+                            <th className="px-4 py-4 font-medium">Белые</th>
+                            <th className="px-4 py-4 font-medium">Черные</th>
+                            <th className="px-4 py-4 font-medium text-center">Результат</th>
+                            <th className="px-4 py-4 font-medium text-center">Дебют</th>
+                            <th className="px-4 py-4 font-medium text-center">Место</th>
+                            <th className="px-4 py-4 font-medium text-center">Дата</th>
+                            <th className="px-4 py-4 font-medium text-right">PGN</th>
+                        </tr>
+                        </thead>
+                        <tbody className="divide-y divide-amber-900/20 text-boxwood-light">
+                        {games.length === 0 ? (
+                            <tr>
+                                <td colSpan={7} className="px-6 py-8 text-center text-boxwood/50 font-serif">
+                                    Партий пока нет.
+                                </td>
+                            </tr>
+                        ) : (
+                            games.map((game) => {
+                                const isWhite = game.white_username === profile.username;
+                                let resultColor = 'text-gray-400';
+                                let resultText = 'Ничья';
+
+                                if (game.result === '1-0') {
+                                    resultColor = isWhite ? 'text-emerald-400' : 'text-red-400';
+                                    resultText = isWhite ? 'Победа' : 'Поражение';
+                                } else if (game.result === '0-1') {
+                                    resultColor = isWhite ? 'text-red-400' : 'text-emerald-400';
+                                    resultText = isWhite ? 'Поражение' : 'Победа';
+                                }
+
+                                return (
+                                    <tr
+                                        key={game.game_id}
+                                        onClick={() => navigate(`/game/${game.game_id}`, {state: {game}})}
+                                        className="hover:bg-black/30 transition group cursor-pointer"
+                                        title="Нажмите, чтобы просмотреть партию"
+                                    >
+                                        <td className="px-4 py-4">
+                                            <div className="flex items-center gap-2">
+                                                <span
+                                                    className="w-3 h-3 rounded-sm border border-gray-400 bg-white inline-block"></span>
+                                                <Link
+                                                    to={`/profile/${game.white_username}`}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className={`font-bold hover:underline ${isWhite ? 'text-amber-300' : ''}`}
+                                                >
+                                                    {game.white_username}
+                                                </Link>
+                                                <span
+                                                    className="text-xs font-mono text-boxwood/50">({game.white_rating})</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-4">
+                                            <div className="flex items-center gap-2">
+                                                <span
+                                                    className="w-3 h-3 rounded-sm border border-gray-600 bg-black inline-block"></span>
+                                                <Link
+                                                    to={`/profile/${game.black_username}`}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className={`font-bold hover:underline ${!isWhite ? 'text-amber-300' : ''}`}
+                                                >
+                                                    {game.black_username}
+                                                </Link>
+                                                <span
+                                                    className="text-xs font-mono text-boxwood/50">({game.black_rating})</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-4 text-center">
+                                            <div className={`font-bold font-serif ${resultColor}`}>
+                                                {resultText} <span
+                                                className="text-xs opacity-70 ml-1">({game.result})</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-4 text-center font-mono text-amber-500/80">
+                                            {game.eco || '—'}
+                                        </td>
+                                        <td className="px-4 py-4 text-center text-boxwood/70">
+                                            {game.site || '—'}
+                                        </td>
+                                        <td className="px-4 py-4 text-center text-boxwood/70 font-mono">
+                                            {displayDate(game)}
+                                        </td>
+                                        <td className="px-4 py-4 text-right">
+                                            <a
+                                                href={`${API_BASE_URL}/api/v1/profile/games/${game.game_id}/pgn`}
+                                                download
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black/30 hover:bg-amber-900/60 text-amber-400 rounded transition border border-amber-900/40 text-xs font-bold"
+                                                title="Скачать PGN"
+                                            >
+                                                <Download size={14}/>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                );
+                            })
+                        )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+========================================================================================
+FILE: frontend/src/config/api.ts
+========================================================================================
+// --- FILE: frontend/src/config/api.ts ---
+
+/**
+ * Адреса API и WebSocket.
+ *
+ * Разработка: Vite (порт 3000) и uvicorn (порт 8000) — разные адреса, по умолчанию 127.0.0.1:8000.
+ * Продакшен (сборка за nginx): фронтенд и API на одном домене, поэтому по умолчанию API —
+ * относительный путь, а WebSocket — тот же хост с ws/wss по протоколу страницы.
+ * VITE_API_URL / VITE_WS_URL переопределяют оба варианта.
+ */
+
+const DEV_API_URL = 'http://127.0.0.1:8000';
+const DEV_WS_URL = 'ws://127.0.0.1:8000';
+
+function sameOriginWsUrl(): string {
+    if (typeof window === 'undefined' || !window.location) return DEV_WS_URL;
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return `${protocol}//${window.location.host}`;
+}
+
+export const API_BASE_URL: string =
+    import.meta.env.VITE_API_URL ?? (import.meta.env.PROD ? '' : DEV_API_URL);
+
+export const WS_BASE_URL: string =
+    import.meta.env.VITE_WS_URL || (import.meta.env.PROD ? sameOriginWsUrl() : DEV_WS_URL);
+
+========================================================================================
+FILE: frontend/src/config/boardAppearance.ts
+========================================================================================
+// --- FILE: frontend/src/config/boardAppearance.ts ---
+
+export interface BoardTheme {
+    id: string;
+    name: string;
+    light: string;
+    dark: string;
+    coordLight: string;
+    coordDark: string;
+    border: string;
+    useWoodGrain: boolean;
+    isDarkBoard?: boolean;
+}
+
+export interface PieceSetConfig {
+    id: string;
+    name: string;
+    shortName: string;
+    folder: string;
+    scalePercent: number;
+    description: string;
+}
+
+export const BOARD_THEMES: Record<string, BoardTheme> = {
+    walnut: {
+        id: 'walnut',
+        name: 'Орех',
+        light: '#DFC8A2',
+        dark: '#966C46',
+        coordLight: '#6E4B2A',
+        coordDark: '#F3E5AB',
+        border: '#2A1810',
+        useWoodGrain: true,
+        isDarkBoard: true
+    },
+    maple: {
+        id: 'maple',
+        name: 'Клён',
+        light: '#F0D9B5',
+        dark: '#B58863',
+        coordLight: '#8C6239',
+        coordDark: '#F0D9B5',
+        border: '#3D2314',
+        useWoodGrain: false,
+        isDarkBoard: false
+    },
+    tournament: {
+        id: 'tournament',
+        name: 'Турнирная',
+        light: '#EBECD0',
+        dark: '#739552',
+        coordLight: '#537133',
+        coordDark: '#EBECD0',
+        border: '#263318',
+        useWoodGrain: false,
+        isDarkBoard: false
+    },
+    slate: {
+        id: 'slate',
+        name: 'Графит',
+        light: '#DEE3E6',
+        dark: '#788A94',
+        coordLight: '#4E5D66',
+        coordDark: '#DEE3E6',
+        border: '#1F292E',
+        useWoodGrain: false,
+        isDarkBoard: true
+    },
+    sapphire: {
+        id: 'sapphire',
+        name: 'Сапфир',
+        light: '#ECEFF4',
+        dark: '#6E88AC',
+        coordLight: '#435B7D',
+        coordDark: '#ECEFF4',
+        border: '#233142',
+        useWoodGrain: false,
+        isDarkBoard: false
+    }
+};
+
+export const PIECE_SETS: Record<string, PieceSetConfig> = {
+    merida: {
+        id: 'merida',
+        name: 'Мерида (ChessBase)',
+        shortName: 'Мерида',
+        folder: 'merida',
+        scalePercent: 93,
+        description: 'Классические объёмные фигуры Fritz / ChessBase с широкой короной'
+    },
+    cardinal: {
+        id: 'cardinal',
+        name: 'Контур (Cardinal)',
+        shortName: 'Контур',
+        folder: 'cardinal',
+        scalePercent: 94,
+        description: 'Крупные контрастные фигуры с белой окантовкой чёрных фигур'
+    },
+    maestro: {
+        id: 'maestro',
+        name: 'Маэстро (Объёмный)',
+        shortName: 'Маэстро',
+        folder: 'maestro',
+        scalePercent: 93,
+        description: 'Выразительный комплект с глубокой прорисовкой деталей'
+    },
+    alpha: {
+        id: 'alpha',
+        name: 'Альфа (Книжный)',
+        shortName: 'Альфа',
+        folder: 'alpha',
+        scalePercent: 94,
+        description: 'Строгий классический диаграммный стиль с широким основанием'
+    },
+    cburnett: {
+        id: 'cburnett',
+        name: 'Стаунтон (Турнирный)',
+        shortName: 'Стаунтон',
+        folder: 'cburnett',
+        scalePercent: 92,
+        description: 'Чистый современный турнирный стандарт'
+    }
+};
+
+export function getSavedBoardThemeKey(): string {
+    if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('michess_board_theme');
+        if (saved && BOARD_THEMES[saved]) return saved;
+    }
+    return 'walnut';
+}
+
+export function getSavedPieceSetKey(): string {
+    if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('michess_piece_set');
+        if (saved && PIECE_SETS[saved]) return saved;
+    }
+    return 'merida';
+}
+
+export function getPieceSvgUrl(pieceSetKey: string, color: string, type: string): string {
+    const setConfig = PIECE_SETS[pieceSetKey] || PIECE_SETS.merida;
+    return `/assets/pieces/${setConfig.folder}/${color}${type.toUpperCase()}.svg`;
+}
+
+export function getHarmoniousPieceStyle(
+    pieceSetKey: string,
+    boardThemeKey: string,
+    pieceColor: string
+): { width: string; height: string; filter: string } {
+    const setConfig = PIECE_SETS[pieceSetKey] || PIECE_SETS.merida;
+    const theme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
+    const isWhite = pieceColor === 'w';
+    const size = `${setConfig.scalePercent}%`;
+
+    if (setConfig.id === 'cardinal') {
+        return {
+            width: size,
+            height: size,
+            filter: 'drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45))'
+        };
+    }
+
+    if (theme.id === 'walnut' || theme.id === 'maple') {
+        return {
+            width: size,
+            height: size,
+            filter: isWhite
+                ? 'sepia(0.08) brightness(1.01) drop-shadow(0 2px 2.5px rgba(0, 0, 0, 0.55))'
+                : 'drop-shadow(0 0 1px rgba(255, 248, 225, 0.55)) drop-shadow(0 2.5px 3px rgba(0, 0, 0, 0.6))'
+        };
+    }
+
+    return {
+        width: size,
+        height: size,
+        filter: isWhite
+            ? 'drop-shadow(0 2px 2.5px rgba(0, 0, 0, 0.5))'
+            : 'drop-shadow(0 0 1px rgba(255, 255, 255, 0.5)) drop-shadow(0 2.5px 3px rgba(0, 0, 0, 0.55))'
+    };
+}
+
+========================================================================================
+FILE: frontend/src/config/champions.ts
+========================================================================================
+// --- FILE: frontend/src/config/champions.ts ---
+
+import philidorAvatar from '../assets/champions/philidor.jpg';
+import labourdonnaisAvatar from '../assets/champions/labourdonnais.jpg';
+import stauntonAvatar from '../assets/champions/staunton.jpg';
+import anderssenAvatar from '../assets/champions/anderssen.jpg';
+import morphyAvatar from '../assets/champions/morphy.jpg';
+import paulsenAvatar from '../assets/champions/paulsen.jpg';
+import zukertortAvatar from '../assets/champions/zukertort.jpg';
+
+export type HistoricalBotId =
+    | 'philidor'
+    | 'labourdonnais'
+    | 'staunton'
+    | 'anderssen'
+    | 'morphy'
+    | 'paulsen'
+    | 'zukertort';
+
+export interface HistoricalBotProfile {
+    id: HistoricalBotId;
+    name: string;
+    shortName: string;
+    playerLabel: string;
+    title: string;
+    era: string;
+    rating: number;
+    motto: string;
+    avatar: string;
+    fallbackAvatar: string;
+}
+
+export const HISTORICAL_BOTS: Record<HistoricalBotId, HistoricalBotProfile> = {
+    philidor: {
+        id: 'philidor',
+        name: 'Франсуа-Андре Филидор',
+        shortName: 'Филидор',
+        playerLabel: 'Ф.-А. Филидор',
+        title: 'Мастер Просвещения',
+        era: '1749–1795',
+        rating: 1850,
+        motto: 'Пешки — душа шахмат: именно они определяют атаку и защиту.',
+        avatar: philidorAvatar,
+        fallbackAvatar: '/assets/champions/philidor.jpg'
+    },
+    labourdonnais: {
+        id: 'labourdonnais',
+        name: 'Луи-Шарль Лабурдонне',
+        shortName: 'Лабурдонне',
+        playerLabel: 'Л.-Ш. Лабурдонне',
+        title: 'Король Комбинаций',
+        era: '1795–1840',
+        rating: 1950,
+        motto: 'Инициатива, гамбит и стремительная атака на короля!',
+        avatar: labourdonnaisAvatar,
+        fallbackAvatar: '/assets/champions/labourdonnais.jpg'
+    },
+    staunton: {
+        id: 'staunton',
+        name: 'Говард Стаунтон',
+        shortName: 'Стаунтон',
+        playerLabel: 'Г. Стаунтон',
+        title: 'Глава Английской Школы',
+        era: '1810–1874',
+        rating: 2000,
+        motto: 'Фланговый зажим центра, прочная структура и классический расчёт.',
+        avatar: stauntonAvatar,
+        fallbackAvatar: '/assets/champions/staunton.jpg'
+    },
+    anderssen: {
+        id: 'anderssen',
+        name: 'Адольф Андерсен',
+        shortName: 'Андерсен',
+        playerLabel: 'А. Андерсен',
+        title: 'Маэстро Бессмертных Партий',
+        era: '1818–1879',
+        rating: 2100,
+        motto: 'Бриллиантовая жертва фигуры ради вскрытия линий и мата королю!',
+        avatar: anderssenAvatar,
+        fallbackAvatar: '/assets/champions/anderssen.jpg'
+    },
+    morphy: {
+        id: 'morphy',
+        name: 'Пол Чарльз Морфи',
+        shortName: 'Морфи',
+        playerLabel: 'Пол Морфи',
+        title: 'Гордость и печаль шахмат',
+        era: '1837–1884',
+        rating: 2150,
+        motto: 'Развивайте все фигуры с темпом и вскрывайте линии для атаки!',
+        avatar: morphyAvatar,
+        fallbackAvatar: '/assets/champions/morphy.jpg'
+    },
+    paulsen: {
+        id: 'paulsen',
+        name: 'Луи Паульсен',
+        shortName: 'Паульсен',
+        playerLabel: 'Л. Паульсен',
+        title: 'Мастер Защиты и Двух Слонов',
+        era: '1833–1891',
+        rating: 2080,
+        motto: 'Гибкая оборона, сила двух слонов и глубокие дебютные новинки.',
+        avatar: paulsenAvatar,
+        fallbackAvatar: '/assets/champions/paulsen.jpg'
+    },
+    zukertort: {
+        id: 'zukertort',
+        name: 'Иоганн Герман Цукерторт',
+        shortName: 'Цукерторт',
+        playerLabel: 'И. Цукерторт',
+        title: 'Триумфатор Лондона 1883',
+        era: '1842–1888',
+        rating: 2120,
+        motto: 'Универсальная гармония развития и сокрушительные комбинационные бури!',
+        avatar: zukertortAvatar,
+        fallbackAvatar: '/assets/champions/zukertort.jpg'
+    }
+};
+
+export const HISTORICAL_BOTS_LIST: HistoricalBotProfile[] = Object.values(HISTORICAL_BOTS);
+
+export const CHAMPIONS_LIST = [
+    {id: 'Steinitz', name: 'Вильгельм Стейниц', years: '1886–1894', img: '/assets/champions/Steinitz.jpg'},
+    {id: 'Lasker', name: 'Эмануил Ласкер', years: '1894–1921', img: '/assets/champions/Lasker.jpg'},
+    {id: 'Rubinstein', name: 'Акиба Рубинштейн', years: '1901–1932', img: '/assets/champions/Rubinstein.jpg'},
+    {id: 'Capablanca', name: 'Хосе Рауль Капабланка', years: '1921–1927', img: '/assets/champions/Capablanca.jpg'},
+    {id: 'Alekhine', name: 'Александр Алехин', years: '1927–1946', img: '/assets/champions/Alekhine.jpg'},
+    {id: 'Euwe', name: 'Макс Эйве', years: '1935–1937', img: '/assets/champions/Euwe.jpg'},
+    {id: 'Keres', name: 'Пауль Керес', years: '1935–1975', img: '/assets/champions/Keres.jpg'},
+    {id: 'Botvinnik', name: 'Михаил Ботвинник', years: '1948–1963', img: '/assets/champions/Botvinnik.jpg'},
+    {id: 'Geller', name: 'Ефим Геллер', years: '1949–1998', img: '/assets/champions/Geller.jpg'},
+    {id: 'Korchnoi', name: 'Виктор Корчной', years: '1952–2015', img: '/assets/champions/Korchnoi.jpg'},
+    {id: 'Smyslov', name: 'Василий Смыслов', years: '1957–1958', img: '/assets/champions/Smyslov.jpg'},
+    {id: 'Tal', name: 'Михаил Таль', years: '1960–1961', img: '/assets/champions/Tal.jpg'},
+    {id: 'Petrosian', name: 'Тигран Петросян', years: '1963–1969', img: '/assets/champions/Petrosian.jpg'},
+    {id: 'Spassky', name: 'Борис Спасский', years: '1969–1972', img: '/assets/champions/Spassky.jpg'},
+    {id: 'Fischer', name: 'Роберт Фишер', years: '1972–1975', img: '/assets/champions/Fischer.jpg'},
+    {id: 'Karpov', name: 'Анатолий Карпов', years: '1975–1985', img: '/assets/champions/Karpov.jpg'},
+    {id: 'Kasparov', name: 'Гарри Каспаров', years: '1985–2000', img: '/assets/champions/Kasparov.jpg'},
+    {id: 'Kramnik', name: 'Владимир Крамник', years: '2000–2007', img: '/assets/champions/Kramnik.jpg'},
+    {id: 'Anand', name: 'Вишванатан Ананд', years: '2007–2013', img: '/assets/champions/Anand.jpg'},
+    {id: 'Carlsen', name: 'Магнус Карлсен', years: '2013–2023', img: '/assets/champions/Carlsen.jpg'},
+    {id: 'Ding', name: 'Дин Лижэнь', years: '2023–н.в.', img: '/assets/champions/Ding.jpg'}
+];
+
+========================================================================================
+FILE: frontend/src/config/timeControls.ts
+========================================================================================
+// --- FILE: frontend/src/config/timeControls.ts ---
+// Контроли времени для онлайн-игры: 4 категории (как на chess.com и lichess.org), в каждой —
+// самые популярные пресеты. Раньше здесь был полный список программ часов DGT 2500 (36 штук,
+// включая задержку Бронштейна/US Delay, бё-ёми, песочные часы, гонг, Scrabble) — но сервер
+// для сетевых партий понимает только простое время + добавление за ход (Fischer), так что
+// все эти экзотические режимы для онлайн-игры были чисто декоративными и только путали выбор.
+
+export type TimeControlCategory = 'bullet' | 'blitz' | 'rapid' | 'classical';
+
+export interface TimeControlOption {
+    id: string;
+    category: TimeControlCategory;
+    base: number; // минут на старте
+    inc: number; // секунд добавления за ход (Fischer); 0 — без добавления
+    label: string;
+    details: string;
+    isManual?: boolean;
+}
+
+export interface TimeControlGroup {
+    category: TimeControlCategory;
+    title: string;
+    options: TimeControlOption[];
+}
+
+export const TIME_CONTROLS: TimeControlGroup[] = [
+    {
+        category: 'bullet',
+        title: 'Пуля',
+        options: [
+            {
+                id: 'bullet-1+0',
+                category: 'bullet',
+                base: 1,
+                inc: 0,
+                label: '1 мин',
+                details: 'Самый быстрый формат — чистая пуля без добавления'
+            },
+            {
+                id: 'bullet-1+1',
+                category: 'bullet',
+                base: 1,
+                inc: 1,
+                label: '1 мин + 1 сек/ход',
+                details: 'Популярная пуля с добавлением Фишера'
+            },
+            {
+                id: 'bullet-2+1',
+                category: 'bullet',
+                base: 2,
+                inc: 1,
+                label: '2 мин + 1 сек/ход',
+                details: 'Самая популярная пуля на lichess.org'
+            },
+            {
+                id: 'bullet-manual',
+                category: 'bullet',
+                base: 1,
+                inc: 0,
+                isManual: true,
+                label: 'Ручная настройка (Пуля)',
+                details: 'Своё время и добавление в диапазоне пули'
+            }
+        ]
+    },
+    {
+        category: 'blitz',
+        title: 'Блиц',
+        options: [
+            {
+                id: 'blitz-3+0',
+                category: 'blitz',
+                base: 3,
+                inc: 0,
+                label: '3 мин',
+                details: 'Классический быстрый блиц без добавления'
+            },
+            {
+                id: 'blitz-3+2',
+                category: 'blitz',
+                base: 3,
+                inc: 2,
+                label: '3 мин + 2 сек/ход',
+                details: 'Стандартный блиц FIDE (3+2)'
+            },
+            {
+                id: 'blitz-5+0',
+                category: 'blitz',
+                base: 5,
+                inc: 0,
+                label: '5 мин',
+                details: 'Самый популярный блиц на chess.com'
+            },
+            {
+                id: 'blitz-5+3',
+                category: 'blitz',
+                base: 5,
+                inc: 3,
+                label: '5 мин + 3 сек/ход',
+                details: 'Блиц с добавлением — популярный выбор на lichess.org'
+            },
+            {
+                id: 'blitz-manual',
+                category: 'blitz',
+                base: 5,
+                inc: 0,
+                isManual: true,
+                label: 'Ручная настройка (Блиц)',
+                details: 'Своё время и добавление в диапазоне блица'
+            }
+        ]
+    },
+    {
+        category: 'rapid',
+        title: 'Рапид',
+        options: [
+            {
+                id: 'rapid-10+0',
+                category: 'rapid',
+                base: 10,
+                inc: 0,
+                label: '10 мин',
+                details: 'Самый популярный рапид на chess.com'
+            },
+            {
+                id: 'rapid-10+5',
+                category: 'rapid',
+                base: 10,
+                inc: 5,
+                label: '10 мин + 5 сек/ход',
+                details: 'Рапид с добавлением — популярный выбор на lichess.org'
+            },
+            {
+                id: 'rapid-15+10',
+                category: 'rapid',
+                base: 15,
+                inc: 10,
+                label: '15 мин + 10 сек/ход',
+                details: 'Стандартный рапид FIDE (15+10)'
+            },
+            {
+                id: 'rapid-30+0',
+                category: 'rapid',
+                base: 30,
+                inc: 0,
+                label: '30 мин',
+                details: 'Долгий рапид без добавления'
+            },
+            {
+                id: 'rapid-manual',
+                category: 'rapid',
+                base: 15,
+                inc: 10,
+                isManual: true,
+                label: 'Ручная настройка (Рапид)',
+                details: 'Своё время и добавление в диапазоне рапида'
+            }
+        ]
+    },
+    {
+        category: 'classical',
+        title: 'Классика',
+        options: [
+            {
+                id: 'classical-30+20',
+                category: 'classical',
+                base: 30,
+                inc: 20,
+                label: '30 мин + 20 сек/ход',
+                details: 'Классика lichess.org — развёрнутая игра без цейтнота'
+            },
+            {
+                id: 'classical-60+30',
+                category: 'classical',
+                base: 60,
+                inc: 30,
+                label: '60 мин + 30 сек/ход',
+                details: 'Длинная классика, близкая к турнирному темпу'
+            },
+            {
+                id: 'classical-manual',
+                category: 'classical',
+                base: 60,
+                inc: 30,
+                isManual: true,
+                label: 'Ручная настройка (Классика)',
+                details: 'Своё время и добавление в диапазоне классики'
+            }
+        ]
+    }
+];
+
+export const ALL_TIME_CONTROLS: TimeControlOption[] = TIME_CONTROLS.flatMap(g => g.options);
+export const DEFAULT_TIME_CONTROL: TimeControlOption =
+    ALL_TIME_CONTROLS.find(o => o.id === 'blitz-3+2') || ALL_TIME_CONTROLS[0];
+
+========================================================================================
+FILE: frontend/src/index.css
+========================================================================================
+/* --- FILE: frontend/src/index.css --- */
+
+@import "tailwindcss";
+
+@theme {
+    /* Светлые элементы интерфейса (Самшит индийский) */
+    --color-boxwood-light: #F5DEB3;
+    --color-boxwood: #E6C998;
+    --color-boxwood-dark: #D0A972;
+
+    /* Темные элементы интерфейса (Акация) */
+    --color-acacia-light: #7A4B31;
+    --color-acacia: #5C3A21;
+    --color-acacia-dark: #3D2314;
+
+    /* Клетки шахматной доски */
+    --color-board-light: #DFC8A2;
+    --color-board-dark: #966C46;
+
+    /* Фон и элементы интерфейса (Стол/Комната) */
+    --color-room-light: #4A3B32;
+    --color-room: #2C221C;
+    --color-room-dark: #1A120B;
+
+    --color-paper: #FDFBF7;
+
+    /* Универсальные читаемые шрифты */
+    --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-serif: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Mono", Consolas, ui-monospace, monospace;
+
+    /* Тени */
+    --shadow-heavy: 0 15px 35px -5px rgba(0, 0, 0, 0.6), 0 10px 15px -5px rgba(0, 0, 0, 0.4);
+    --shadow-piece: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+    --shadow-inner-board: inset 0 2px 6px 0 rgba(0, 0, 0, 0.35);
+
+    /* Текстуры */
+    --background-image-wood-texture: url('/assets/textures/wood-grain.png');
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--color-room);
+    color: var(--color-paper);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+========================================================================================
+FILE: frontend/src/main.tsx
+========================================================================================
+// --- FILE: frontend/src/main.tsx ---
+
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
+import './index.css'
+import App from './App.tsx'
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
+  </StrictMode>,
+)
+
+========================================================================================
+FILE: frontend/src/services/__tests__/apiErrors.test.ts
+========================================================================================
+// --- FILE: frontend/src/services/__tests__/apiErrors.test.ts ---
+
+import {describe, expect, it} from 'vitest';
+import {formatErrorDetail} from '../apiErrors';
+
+describe('formatErrorDetail', () => {
+    it('returns a string detail as is', () => {
+        expect(formatErrorDetail('Username already registered.', 'fallback')).toBe('Username already registered.');
+    });
+
+    it('joins pydantic validation messages without the "Value error" prefix', () => {
+        const detail = [
+            {loc: ['body', 'username'], msg: 'Value error, Имя не может смешивать латиницу и кириллицу'},
+            {loc: ['body', 'password'], msg: 'String should have at least 8 characters'},
+        ];
+        expect(formatErrorDetail(detail, 'fallback')).toBe(
+            'Имя не может смешивать латиницу и кириллицу; String should have at least 8 characters',
+        );
+    });
+
+    it('falls back for unknown shapes', () => {
+        expect(formatErrorDetail(undefined, 'Ошибка регистрации')).toBe('Ошибка регистрации');
+        expect(formatErrorDetail([{}], 'Ошибка')).toBe('Ошибка');
+    });
+});
+
+========================================================================================
+FILE: frontend/src/services/__tests__/gameSocket.test.ts
+========================================================================================
+// --- FILE: frontend/src/services/__tests__/gameSocket.test.ts ---
+
+import {describe, it, expect} from 'vitest';
+import {gameSocket} from '../gameSocket';
+import {soundEngine, resolveMoveSound} from '../soundEngine';
+import {API_BASE_URL, WS_BASE_URL} from '../../config/api';
+import {
+    BOARD_THEMES,
+    PIECE_SETS,
+    getPieceSvgUrl,
+    getHarmoniousPieceStyle
+} from '../../config/boardAppearance';
+import {MIN_BOARD_SIZE, getMaxViewportBoardSize} from '../../components/Chessboard';
+
+describe('GameWebSocketService, SoundEngine & API Config', () => {
+    it('should be defined and support listener registration without duplicates', () => {
+        expect(gameSocket).toBeDefined();
+        const noop = () => {
+        };
+        gameSocket.on('test_event', noop);
+        gameSocket.on('test_event', noop);
+        gameSocket.off('test_event', noop);
+    });
+
+    it('should classify chess SAN notation into accurate sound events', () => {
+        expect(resolveMoveSound('Nf3')).toBe('move');
+        expect(resolveMoveSound('exd5')).toBe('capture');
+        expect(resolveMoveSound('O-O')).toBe('castle');
+        expect(resolveMoveSound('O-O-O')).toBe('castle');
+        expect(resolveMoveSound('Qh4#')).toBe('check');
+        expect(resolveMoveSound('Bb5+')).toBe('check');
+        expect(resolveMoveSound('e8=Q')).toBe('promote');
+        expect(resolveMoveSound('a8=N+')).toBe('check');
+
+        const initialMute = soundEngine.isMuted();
+        expect(soundEngine.toggleMute()).toBe(!initialMute);
+        expect(soundEngine.toggleMute()).toBe(initialMute);
+    });
+
+    it('should provide valid default API_BASE_URL and WS_BASE_URL', () => {
+        expect(API_BASE_URL).toMatch(/^https?:\/\//);
+        expect(WS_BASE_URL).toMatch(/^wss?:\/\//);
+    });
+
+    it('should provide mobile-friendly board size bounds', () => {
+        expect(MIN_BOARD_SIZE).toBe(280);
+        expect(getMaxViewportBoardSize()).toBeGreaterThanOrEqual(MIN_BOARD_SIZE);
+    });
+
+    it('should provide 5 piece sets and 5 board themes with harmonious styles', () => {
+        expect(Object.keys(PIECE_SETS).length).toBe(5);
+        expect(Object.keys(BOARD_THEMES).length).toBe(5);
+
+        for (const setKey of Object.keys(PIECE_SETS)) {
+            expect(getPieceSvgUrl(setKey, 'w', 'q')).toContain(`/assets/pieces/${setKey}/wQ.svg`);
+            for (const themeKey of Object.keys(BOARD_THEMES)) {
+                const whiteStyle = getHarmoniousPieceStyle(setKey, themeKey, 'w');
+                const blackStyle = getHarmoniousPieceStyle(setKey, themeKey, 'b');
+                expect(whiteStyle.width).toMatch(/^\d+%$/);
+                expect(blackStyle.filter.length).toBeGreaterThan(5);
+            }
+        }
+    });
+});
+
+========================================================================================
+FILE: frontend/src/services/__tests__/gameSocketTicket.test.ts
+========================================================================================
+// --- FILE: frontend/src/services/__tests__/gameSocketTicket.test.ts ---
+
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import {gameSocket} from '../gameSocket';
+
+class FakeWebSocket {
+    static OPEN = 1;
+    static CONNECTING = 0;
+    static instances: FakeWebSocket[] = [];
+    readyState = FakeWebSocket.CONNECTING;
+    onopen: (() => void) | null = null;
+    onmessage: ((e: {data: string}) => void) | null = null;
+    onclose: ((e: {code: number}) => void) | null = null;
+    onerror: ((e: unknown) => void) | null = null;
+
+    constructor(public url: string) {
+        FakeWebSocket.instances.push(this);
+    }
+
+    send() {
+    }
+
+    close() {
+    }
+}
+
+const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+describe('gameSocket: подключение по одноразовому тикету', () => {
+    let storage: Map<string, string>;
+    let events: string[];
+
+    beforeEach(() => {
+        FakeWebSocket.instances = [];
+        storage = new Map([['token', 'jwt.secret.token']]);
+        events = [];
+        vi.stubGlobal('WebSocket', FakeWebSocket);
+        vi.stubGlobal('localStorage', {
+            getItem: (k: string) => storage.get(k) ?? null,
+            setItem: (k: string, v: string) => storage.set(k, v),
+            removeItem: (k: string) => storage.delete(k),
+        });
+        vi.stubGlobal('window', {dispatchEvent: (e: Event) => events.push(e.type)});
+    });
+
+    afterEach(() => {
+        gameSocket.disconnect();
+        vi.unstubAllGlobals();
+    });
+
+    it('кладёт в адрес WebSocket тикет, а не JWT', async () => {
+        const fetchMock = vi.fn().mockResolvedValue({ok: true, status: 200, json: async () => ({ticket: 'one-time'})});
+        vi.stubGlobal('fetch', fetchMock);
+
+        gameSocket.connect('jwt.secret.token');
+        await flush();
+
+        expect(fetchMock).toHaveBeenCalledOnce();
+        const [, init] = fetchMock.mock.calls[0];
+        expect(init.headers.Authorization).toBe('Bearer jwt.secret.token');
+        expect(FakeWebSocket.instances).toHaveLength(1);
+        expect(FakeWebSocket.instances[0].url).toContain('ticket=one-time');
+        expect(FakeWebSocket.instances[0].url).not.toContain('jwt.secret.token');
+    });
+
+    it('при 401 на запрос тикета разлогинивает и не подключается', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ok: false, status: 401}));
+
+        gameSocket.connect('jwt.secret.token');
+        await flush();
+
+        expect(FakeWebSocket.instances).toHaveLength(0);
+        expect(storage.has('token')).toBe(false);
+        expect(events).toContain('michess-auth-expired');
+    });
+
+    it('закрытие с кодом 1008 (сессия отозвана) разлогинивает', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ok: true, status: 200, json: async () => ({ticket: 't'})}));
+
+        gameSocket.connect('jwt.secret.token');
+        await flush();
+        FakeWebSocket.instances[0].onclose?.({code: 1008});
+
+        expect(storage.has('token')).toBe(false);
+        expect(events).toContain('michess-auth-expired');
+    });
+
+    it('не открывает сокет, если отключились, пока ждали тикет', async () => {
+        let resolveFetch: (v: unknown) => void = () => {
+        };
+        vi.stubGlobal('fetch', vi.fn().mockReturnValue(new Promise((r) => (resolveFetch = r))));
+
+        gameSocket.connect('jwt.secret.token');
+        gameSocket.disconnect();
+        resolveFetch({ok: true, status: 200, json: async () => ({ticket: 'late'})});
+        await flush();
+
+        expect(FakeWebSocket.instances).toHaveLength(0);
+    });
+});
+
+========================================================================================
+FILE: frontend/src/services/apiErrors.ts
+========================================================================================
+// --- FILE: frontend/src/services/apiErrors.ts ---
+
+/**
+ * Текст ошибки из ответа API. detail бывает строкой (HTTPException) или списком ошибок
+ * валидации Pydantic — его без разбора React показал бы как «[object Object]».
+ */
+export function formatErrorDetail(detail: unknown, fallback: string): string {
+    if (typeof detail === 'string' && detail) return detail;
+    if (Array.isArray(detail)) {
+        const messages = detail
+            .map((item) => (item && typeof item === 'object' ? String((item as {msg?: unknown}).msg ?? '') : ''))
+            .map((msg) => msg.replace(/^Value error, /, ''))
+            .filter(Boolean);
+        if (messages.length) return messages.join('; ');
+    }
+    return fallback;
+}
+
+export async function readErrorDetail(res: Response, fallback: string): Promise<string> {
+    try {
+        const data = await res.json();
+        return formatErrorDetail(data?.detail, fallback);
+    } catch {
+        return fallback;
+    }
+}
+
+========================================================================================
+FILE: frontend/src/services/gameSocket.ts
+========================================================================================
+// --- FILE: frontend/src/services/gameSocket.ts ---
+
+import {API_BASE_URL, WS_BASE_URL} from '../config/api';
+
+type EventCallback = (data: any) => void;
+
+const RECONNECT_DELAY_MS = 1500;
+const RATE_LIMITED_RECONNECT_DELAY_MS = 15000;
+
+class AuthExpiredError extends Error {}
+
+class RateLimitedError extends Error {}
+
+/**
+ * Одноразовый тикет для WebSocket. JWT в адрес WebSocket не кладём: адреса попадают в логи
+ * сервера и прокси. Тикет получаем по HTTP с токеном в заголовке, он действует ~30 с и один раз.
+ */
+async function fetchWsTicket(token: string): Promise<string> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/auth/ws-ticket`, {
+        method: 'POST',
+        headers: {Authorization: `Bearer ${token}`},
+    });
+    if (res.status === 401) throw new AuthExpiredError('Сессия истекла');
+    if (res.status === 429) throw new RateLimitedError('Слишком частые переподключения');
+    if (!res.ok) throw new Error(`ws-ticket: HTTP ${res.status}`);
+    const data = await res.json();
+    return data.ticket;
+}
+
+class GameWebSocketService {
+    private ws: WebSocket | null = null;
+    private currentToken: string | null = null;
+    private listeners: { [event: string]: EventCallback[] } = {};
+    private pendingMessages: string[] = [];
+    private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    // Идёт запрос тикета; номер попытки отсекает устаревшие (после disconnect или смены токена).
+    private connecting = false;
+    private attempt = 0;
+
+    connect(token: string) {
+        if (!token) return;
+
+        // Если токен сменился (выход и вход под другим игроком), переоткрываем соединение
+        if (this.currentToken && this.currentToken !== token) {
+            this.closeSocket();
+            this.attempt += 1;
+            this.connecting = false;
+        }
+
+        this.currentToken = token;
+
+        if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+            return;
+        }
+        if (this.connecting) return;
+
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+
+        void this.openSocket(token);
+    }
+
+    private async openSocket(token: string) {
+        this.connecting = true;
+        const attempt = ++this.attempt;
+
+        let ticket: string;
+        try {
+            ticket = await fetchWsTicket(token);
+        } catch (err) {
+            if (attempt !== this.attempt) return;
+            this.connecting = false;
+            if (err instanceof AuthExpiredError) {
+                this.handleAuthExpired();
+            } else {
+                console.warn('Не удалось получить тикет WebSocket:', err);
+                this.scheduleReconnect(err instanceof RateLimitedError ? RATE_LIMITED_RECONNECT_DELAY_MS : RECONNECT_DELAY_MS);
+            }
+            return;
+        }
+
+        if (attempt !== this.attempt || this.currentToken !== token) return;  // отключились, пока ждали
+        this.connecting = false;
+
+        const wsUrl = `${WS_BASE_URL}/api/v1/ws/matchmaking?ticket=${encodeURIComponent(ticket)}`;
+        this.ws = new WebSocket(wsUrl);
+
+        this.ws.onopen = () => {
+            while (this.pendingMessages.length > 0 && this.ws && this.ws.readyState === WebSocket.OPEN) {
+                const msg = this.pendingMessages.shift();
+                if (msg) {
+                    this.ws.send(msg);
+                }
+            }
+        };
+
+        this.ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                const eventType = data.event;
+
+                if (this.listeners[eventType]) {
+                    this.listeners[eventType].forEach(cb => cb(data));
+                }
+                if (this.listeners['*']) {
+                    this.listeners['*'].forEach(cb => cb(data));
+                }
+            } catch (e) {
+                console.error('Ошибка парсинга JSON от WebSocket:', e);
+            }
+        };
+
+        this.ws.onclose = (event) => {
+            this.ws = null;
+            if (event.code === 1008) {
+                // Тикет недействителен или токены отозваны (смена пароля, выход на всех устройствах)
+                this.handleAuthExpired();
+                return;
+            }
+            if (this.currentToken && event.code !== 1000) {
+                this.scheduleReconnect(RECONNECT_DELAY_MS);
+            }
+        };
+
+        this.ws.onerror = (error) => {
+            console.error('WebSocket ошибка:', error);
+        };
+    }
+
+    private scheduleReconnect(delayMs: number) {
+        if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = setTimeout(() => {
+            this.reconnectTimer = null;
+            if (this.currentToken) {
+                this.connect(this.currentToken);
+            }
+        }, delayMs);
+    }
+
+    private handleAuthExpired() {
+        // Токен истёк или отозван — очищаем его и уведомляем приложение
+        this.currentToken = null;
+        this.pendingMessages = [];
+        localStorage.removeItem('token');
+        window.dispatchEvent(new Event('michess-auth-expired'));
+    }
+
+    private closeSocket() {
+        if (this.ws) {
+            try {
+                this.ws.close(1000);
+            } catch {
+                // ignore
+            }
+            this.ws = null;
+        }
+    }
+
+    on(event: string, callback: EventCallback) {
+        if (!this.listeners[event]) {
+            this.listeners[event] = [];
+        }
+        if (!this.listeners[event].includes(callback)) {
+            this.listeners[event].push(callback);
+        }
+    }
+
+    off(event: string, callback: EventCallback) {
+        if (!this.listeners[event]) return;
+        this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
+    }
+
+    send(action: string, payload: any = {}) {
+        const serialized = JSON.stringify({action, ...payload});
+
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(serialized);
+            return;
+        }
+
+        const fallbackToken = this.currentToken || localStorage.getItem('token');
+        if (fallbackToken) {
+            this.pendingMessages.push(serialized);
+            this.connect(fallbackToken);
+        } else {
+            console.error('Невозможно отправить сообщение: пользователь не авторизован');
+        }
+    }
+
+    disconnect() {
+        this.currentToken = null;
+        this.pendingMessages = [];
+        this.attempt += 1;  // отменяет запрос тикета, если он ещё идёт
+        this.connecting = false;
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+        this.closeSocket();
+    }
+}
+
+export const gameSocket = new GameWebSocketService();
+
+========================================================================================
+FILE: frontend/src/services/soundEngine.ts
+========================================================================================
+// --- FILE: frontend/src/services/soundEngine.ts ---
+
+export type SoundEventType =
+    | 'move'
+    | 'capture'
+    | 'check'
+    | 'castle'
+    | 'promote'
+    | 'premove'
+    | 'illegal'
+    | 'start'
+    | 'victory'
+    | 'defeat'
+    | 'draw'
+    | 'offer'
+    | 'decline'
+    | 'chat'
+    | 'low_time';
+
+const MUTE_STORAGE_KEY = 'michess_sound_muted';
+
+class SoundEngine {
+    private ctx: AudioContext | null = null;
+    private muted: boolean = false;
+
+    constructor() {
+        if (typeof window !== 'undefined') {
+            this.muted = localStorage.getItem(MUTE_STORAGE_KEY) === 'true';
+        }
+    }
+
+    public isMuted(): boolean {
+        return this.muted;
+    }
+
+    public setMuted(mute: boolean): void {
+        this.muted = mute;
+        if (typeof window !== 'undefined') {
+            localStorage.setItem(MUTE_STORAGE_KEY, String(mute));
+        }
+    }
+
+    public toggleMute(): boolean {
+        this.setMuted(!this.muted);
+        return this.muted;
+    }
+
+    private getContext(): AudioContext | null {
+        if (typeof window === 'undefined') return null;
+        if (!this.ctx) {
+            const AudioCtx = window.AudioContext || (window as unknown as {
+                webkitAudioContext?: typeof AudioContext
+            }).webkitAudioContext;
+            if (AudioCtx) {
+                this.ctx = new AudioCtx();
+            }
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+            this.ctx.resume().catch(() => {
+            });
+        }
+        return this.ctx;
+    }
+
+    private playTone(
+        freq: number,
+        durationSec: number,
+        delaySec: number = 0,
+        type: OscillatorType = 'sine',
+        peakGain: number = 0.14,
+        endFreq?: number
+    ): void {
+        const ctx = this.getContext();
+        if (!ctx) return;
+
+        const startTime = ctx.currentTime + delaySec;
+        const stopTime = startTime + durationSec;
+
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, startTime);
+        if (endFreq !== undefined) {
+            osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFreq), stopTime);
+        }
+
+        gain.gain.setValueAtTime(0.0001, startTime);
+        gain.gain.linearRampToValueAtTime(peakGain, startTime + Math.min(0.015, durationSec * 0.2));
+        gain.gain.exponentialRampToValueAtTime(0.0001, stopTime);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(startTime);
+        osc.stop(stopTime + 0.01);
+    }
+
+    private playSample(file: string, volume: number = 0.75, fallbackFn?: () => void): void {
+        if (typeof window === 'undefined' || typeof Audio === 'undefined') {
+            fallbackFn?.();
+            return;
+        }
+        try {
+            const audio = new Audio(`/assets/sounds/${file}`);
+            audio.volume = volume;
+            audio.currentTime = 0;
+            audio.play().catch(() => {
+                fallbackFn?.();
+            });
+        } catch {
+            fallbackFn?.();
+        }
+    }
+
+    public play(event: SoundEventType): void {
+        if (this.muted) return;
+
+        switch (event) {
+            case 'move':
+                this.playSample('Move.mp3', 0.8, () => {
+                    this.playTone(170, 0.065, 0, 'triangle', 0.16, 85);
+                });
+                break;
+
+            case 'capture':
+                this.playSample('Capture.mp3', 0.85, () => {
+                    this.playTone(260, 0.075, 0, 'sawtooth', 0.15, 95);
+                });
+                break;
+
+            case 'castle':
+                this.playSample('Move.mp3', 0.75);
+                setTimeout(() => {
+                    if (!this.muted) {
+                        this.playSample('Move.mp3', 0.85, () => {
+                            this.playTone(190, 0.07, 0, 'triangle', 0.15, 100);
+                        });
+                    }
+                }, 95);
+                break;
+
+            case 'check':
+                this.playSample('Capture.mp3', 0.55);
+                this.playTone(587.33, 0.11, 0, 'triangle', 0.16);
+                this.playTone(880.0, 0.24, 0.08, 'sine', 0.18, 830.0);
+                break;
+
+            case 'promote':
+                this.playSample('Move.mp3', 0.65);
+                this.playTone(523.25, 0.10, 0, 'triangle', 0.14);
+                this.playTone(659.25, 0.10, 0.07, 'triangle', 0.15);
+                this.playTone(783.99, 0.12, 0.14, 'triangle', 0.16);
+                this.playTone(1046.5, 0.25, 0.21, 'sine', 0.18);
+                break;
+
+            case 'premove':
+                this.playTone(420, 0.045, 0, 'sine', 0.09, 310);
+                break;
+
+            case 'illegal':
+                this.playTone(155, 0.11, 0, 'sawtooth', 0.14, 115);
+                this.playTone(130, 0.14, 0.09, 'sawtooth', 0.14, 95);
+                break;
+
+            case 'start':
+                this.playSample('GenericNotify.mp3', 0.7);
+                this.playTone(440.0, 0.12, 0, 'triangle', 0.12);
+                this.playTone(554.37, 0.14, 0.09, 'triangle', 0.13);
+                this.playTone(659.25, 0.26, 0.18, 'sine', 0.15);
+                break;
+
+            case 'chat':
+                this.playTone(660, 0.07, 0, 'sine', 0.11);
+                this.playTone(880, 0.11, 0.06, 'sine', 0.12);
+                break;
+
+            case 'offer':
+                this.playTone(587.33, 0.14, 0, 'sine', 0.16);
+                this.playTone(783.99, 0.22, 0.12, 'sine', 0.16);
+                this.playTone(987.77, 0.28, 0.24, 'triangle', 0.14);
+                break;
+
+            case 'decline':
+                this.playTone(440.0, 0.12, 0, 'triangle', 0.13);
+                this.playTone(329.63, 0.22, 0.11, 'triangle', 0.13);
+                break;
+
+            case 'low_time':
+                this.playTone(880.0, 0.08, 0, 'square', 0.11);
+                this.playTone(880.0, 0.08, 0.12, 'square', 0.11);
+                this.playTone(1046.5, 0.14, 0.24, 'square', 0.13);
+                break;
+
+            case 'victory':
+                this.playTone(523.25, 0.12, 0, 'triangle', 0.16);
+                this.playTone(659.25, 0.12, 0.10, 'triangle', 0.16);
+                this.playTone(783.99, 0.14, 0.20, 'triangle', 0.17);
+                this.playTone(1046.5, 0.38, 0.30, 'sine', 0.20);
+                break;
+
+            case 'defeat':
+                this.playTone(392.0, 0.16, 0, 'triangle', 0.15);
+                this.playTone(349.23, 0.16, 0.14, 'triangle', 0.15);
+                this.playTone(311.13, 0.18, 0.28, 'triangle', 0.15);
+                this.playTone(261.63, 0.40, 0.42, 'sine', 0.17);
+                break;
+
+            case 'draw':
+                this.playTone(440.0, 0.16, 0, 'triangle', 0.14);
+                this.playTone(523.25, 0.16, 0.14, 'triangle', 0.14);
+                this.playTone(440.0, 0.30, 0.28, 'sine', 0.14);
+                break;
+        }
+    }
+}
+
+export const soundEngine = new SoundEngine();
+
+/**
+ * Определяет подходящий звуковой эффект хода по его нотации SAN.
+ */
+export function resolveMoveSound(san?: string | null): SoundEventType {
+    if (!san) return 'move';
+    if (san.includes('#') || san.includes('+')) return 'check';
+    if (san.includes('=')) return 'promote';
+    if (san.startsWith('O-O')) return 'castle';
+    if (san.includes('x')) return 'capture';
+    return 'move';
+}
+
+========================================================================================
+FILE: frontend/tailwind.config.js
+========================================================================================
+// --- FILE: frontend/tailwind.config.js ---
+
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        // Светлые элементы интерфейса (Самшит индийский)
+        boxwood: {
+          light: '#F5DEB3',
+          DEFAULT: '#E6C998',
+          dark: '#D0A972',
+        },
+        // Темные элементы интерфейса (Акация)
+        acacia: {
+          light: '#7A4B31',
+          DEFAULT: '#5C3A21',
+          dark: '#3D2314',
+        },
+        // Сбалансированные цвета самой шахматной доски (средний контраст клеток)
+        board: {
+          light: '#DFC8A2',
+          dark: '#966C46',
+        },
+        // Фон и элементы интерфейса (Стол/Комната)
+        room: {
+          light: '#4A3B32',
+          DEFAULT: '#2C221C',
+          dark: '#1A120B',
+        },
+        paper: '#FDFBF7',
+      },
+      fontFamily: {
+        serif: ['"Playfair Display"', '"Merriweather"', 'Georgia', 'serif'],
+        sans: ['"Inter"', 'system-ui', 'sans-serif'],
+      },
+      boxShadow: {
+        'heavy': '0 15px 35px -5px rgba(0, 0, 0, 0.6), 0 10px 15px -5px rgba(0, 0, 0, 0.4)',
+        'piece': '0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3)',
+        'inner-board': 'inset 0 2px 6px 0 rgba(0, 0, 0, 0.35)',
+      },
+      backgroundImage: {
+        'wood-texture': "url('/assets/textures/wood-grain.png')",
+      }
+    },
+  },
+  plugins: [],
+}
+
+========================================================================================
+FILE: frontend/tsconfig.app.json
+========================================================================================
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "target": "es2023",
+    "lib": ["ES2023", "DOM"],
+    "module": "esnext",
+    "types": ["vite/client"],
+    "allowArbitraryExtensions": true,
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Linting */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src"]
+}
+
+========================================================================================
+FILE: frontend/tsconfig.node.json
+========================================================================================
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+    "target": "es2023",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "module": "nodenext",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    /* Linting */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["vite.config.ts"]
+}
+
+========================================================================================
+FILE: .dockerignore
+========================================================================================
+# Контекст сборки образа бэкенда: только то, что нужно для запуска API и воркера.
+.git
+.github
+.idea
+.vscode
+**/__pycache__
+**/*.py[cod]
+.pytest_cache
+
+# Окружения и секреты
+michess_env
+venv
+env
+.env
+.env.*
+!.env.example
+
+# Фронтенд собирается своим образом (frontend/Dockerfile)
+frontend
+
+# Windows-бинарники Stockfish: в образ движок ставится из пакетов Debian
+bin
+
+# Локальные данные и служебные файлы
+src/db/data/pgns
+_project_snapshot
+make_snapshot.py
+*.log
+*.sqlite3
+
+========================================================================================
+FILE: .gitignore
+========================================================================================
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+michess_env/
+venv/
+env/
+
+# IDE settings
+.idea/
+.vscode/
+
+# Environment variables and secrets
+.env
+.env.*
+# Шаблоны без секретов — в репозитории
+!.env.example
+
+# Logs and databases
+*.log
+*.sqlite3
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Seed data
+src/db/data/pgns/
+*.pgn
+
+# Engine binaries
+bin/
+*.exe
+
+node_modules/
+# Project snapshots
+project_snapshot*.txt
+data/pgns/
+
+# Кэши и отчёты инструментов качества кода
+.coverage
+coverage.xml
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+========================================================================================
+FILE: DEPLOY.md
+========================================================================================
+<!-- --- FILE: DEPLOY.md --- -->
+
+# Развёртывание michess (продакшен)
+
+Стек поднимается одной командой через `docker-compose.prod.yml`:
+
+| Сервис    | Что делает                                                        | Наружу       |
+|-----------|-------------------------------------------------------------------|--------------|
+| `web`     | nginx: статика фронтенда, прокси `/api/` и WebSocket, CSP          | порт 80      |
+| `api`     | FastAPI (uvicorn, `WEB_CONCURRENCY` процессов)                     | —            |
+| `worker`  | Celery: фоновый анализ завершённых партий (Stockfish)              | —            |
+| `migrate` | одноразово применяет миграции Alembic перед стартом api и worker  | —            |
+| `db`      | PostgreSQL 16                                                      | —            |
+| `redis`   | Redis 7.4 с AOF (состояние партий, очереди, лимиты, брокер Celery) | —            |
+
+## 1. Настройка
+
+    cp .env.example .env
+
+Обязательно поменять в `.env`:
+
+- `SECRET_KEY` — случайная строка не короче 32 символов. Со слабым ключом API в продакшене
+  **не стартует** (по нему подписываются токены всех пользователей):
+
+      python -c "import secrets; print(secrets.token_urlsafe(48))"
+
+- `POSTGRES_PASSWORD` — свой пароль БД.
+
+`ENVIRONMENT=production`, адреса БД и Redis задаёт сам `docker-compose.prod.yml`.
+
+## 2. Запуск
+
+    docker compose -f docker-compose.prod.yml up -d --build
+    docker compose -f docker-compose.prod.yml ps
+    curl http://localhost/health      # {"status": "healthy", "checks": {...}}
+
+Загрузка архива партий чемпионов мира (однократно, по желанию):
+
+    docker compose -f docker-compose.prod.yml exec api python -m src.db.seed
+
+## 3. Обновление
+
+    git pull
+    docker compose -f docker-compose.prod.yml up -d --build
+
+Миграции применяются автоматически сервисом `migrate` до перезапуска `api` и `worker`.
+
+> Релиз со спринта 7 меняет формат токенов: все пользователи один раз войдут заново.
+
+## 4. HTTPS
+
+nginx в образе `web` слушает только HTTP. TLS завершается снаружи — балансировщиком облака
+или отдельным прокси (Caddy, Traefik) перед портом `HTTP_PORT`. Прокси должен передавать
+`Upgrade`/`Connection` для WebSocket (`/api/v1/ws/`). Если TLS завершается прямо в nginx,
+добавьте `listen 443 ssl` в `frontend/nginx.conf` и включите `Strict-Transport-Security`
+в `frontend/security_headers.inc`.
+
+Внешний прокси должен подменять, а не дописывать `X-Forwarded-For`: лимиты попыток входа
+и запросов к движку считаются по IP клиента.
+
+## 5. Что важно знать
+
+- **Наружу открыт только `web`.** API доверяет `X-Forwarded-For` от любого адреса внутренней
+  сети compose (`FORWARDED_ALLOW_IPS=*`) — это безопасно, пока порт `api` не опубликован.
+- **Несколько процессов API** поддерживаются: присутствие, зрители, рассылка событий и цикл
+  таймаутов (с выбором лидера) работают через Redis.
+- **Мониторинг:** `GET /health` возвращает 503, если недоступна БД или Redis.
+- **Документация API** (`/docs`) в продакшене отключена.
+- **Celery-воркер** обязателен для фонового анализа партий; без него анализ всё равно
+  считается по кнопке на странице партии.
+
+----------------------------------------------------------------------------------------
+END OF PART 14/15

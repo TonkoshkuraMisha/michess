@@ -1,8 +1,9 @@
 # --- FILE: src/api/bots.py ---
 
 import asyncio
-from datetime import datetime, timezone
 import random
+from datetime import UTC, datetime
+
 import chess
 import chess.pgn
 from fastapi import APIRouter, Depends, HTTPException
@@ -11,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api import deps
+from src.api.rate_limit import rate_limit
 from src.db import session as db_session
 from src.models.game import Game
 from src.models.user import User
@@ -21,6 +23,7 @@ from src.services.bots.paulsen import paulsen_bot
 from src.services.bots.philidor import philidor_bot, resolve_stockfish_path
 from src.services.bots.staunton import staunton_bot
 from src.services.bots.zukertort import zukertort_bot
+from src.services.game_engine import flag_outcome, terminal_outcome
 
 router = APIRouter()
 
@@ -112,6 +115,20 @@ BOT_INSTANCES = {
 
 BOT_METADATA = {b["id"]: b for b in AVAILABLE_BOTS}
 
+# Служебный «хэш» в hashed_password, по которому учётная запись опознаётся как бот.
+# Это не валидный bcrypt-хэш, поэтому войти под ботом невозможно.
+BOT_PASSWORD_MARKER = "!historical_bot_no_login!"
+
+
+def reserved_bot_usernames() -> set[str]:
+    """Имена (и id) ботов, которые нельзя занять при регистрации (сравнение без регистра)."""
+    names: set[str] = set()
+    for bot in AVAILABLE_BOTS:
+        for value in (bot["id"], bot["name"], bot["full_name"]):
+            names.add(str(value).strip().casefold())
+    return names
+
+
 BOT_TEMPO_MULTIPLIER = {
     "morphy": 0.72,
     "labourdonnais": 0.78,
@@ -125,7 +142,7 @@ BOT_TEMPO_MULTIPLIER = {
 
 class BotMoveRequest(BaseModel):
     bot_id: str = Field(default="philidor", description="ID исторического бота")
-    fen: str = Field(..., description="Текущая позиция на доске в формате FEN")
+    fen: str = Field(..., max_length=100, description="Текущая позиция на доске в формате FEN")
 
 
 class BotMoveResponse(BaseModel):
@@ -142,7 +159,11 @@ class BotGameSaveRequest(BaseModel):
     bot_id: str = Field(..., description="ID исторического бота")
     player_color: str = Field(..., description="Цвет игрока ('white' или 'black')")
     result: str = Field(..., description="Результат партии ('1-0', '0-1', '1/2-1/2')")
-    moves_uci: list[str] = Field(default_factory=list, description="Список сделанных ходов в формате UCI")
+    termination: str | None = Field(
+        default=None,
+        description="Для незавершённой на доске позиции: 'resignation' (игрок сдался) или 'timeout' (упал флаг)",
+    )
+    moves_uci: list[str] = Field(default_factory=list, max_length=1000, description="Список сделанных ходов в формате UCI")
     base_time_ms: int = Field(default=180000, description="Базовый контроль времени в мс")
     increment_ms: int = Field(default=0, description="Добавление времени на ход в мс")
 
@@ -226,6 +247,47 @@ def _detect_eco_code(moves_uci: list[str]) -> str:
     return "A00"
 
 
+def _replay_moves(moves_uci: list[str]) -> chess.Board:
+    """Переигрывает ходы с историей (нужна для правил повторения); ValueError при нелегальном ходе."""
+    board = chess.Board()
+    for uci_str in moves_uci:
+        try:
+            move = chess.Move.from_uci(uci_str)
+        except ValueError:
+            raise ValueError(f"Некорректный ход в истории: {uci_str}") from None
+        if move not in board.legal_moves:
+            raise ValueError(f"Нелегальный ход в истории: {uci_str}")
+        board.push(move)
+    return board
+
+
+def resolve_bot_game_outcome(board: chess.Board, payload: "BotGameSaveRequest") -> tuple[str, str]:
+    """
+    Итог партии с ботом определяет сервер, а не клиент:
+    - позиция на доске финальная (мат, пат, повторение, ...) — результат с доски;
+    - игрок сдался — только поражение игрока;
+    - упал флаг — победа стороны с неупавшим флагом, но ничья, если у неё нет материала
+      для мата (правило ФИДЕ 6.9). Часы партии с ботом живут на клиенте, поэтому сторону
+      с упавшим флагом сервер берёт из присланного результата.
+    Иначе партия не завершена, и «победу» сохранить нельзя.
+    """
+    outcome = terminal_outcome(board)
+    if outcome is not None:
+        return outcome
+
+    if payload.termination == "resignation":
+        return ("0-1" if payload.player_color == "white" else "1-0"), "resignation"
+
+    if payload.termination == "timeout":
+        if payload.result == "1-0":
+            return flag_outcome(board.fen(), "black")
+        if payload.result == "0-1":
+            return flag_outcome(board.fen(), "white")
+        raise ValueError("Для флага укажите, чья сторона победила по времени")
+
+    raise ValueError("Партия не завершена на доске: укажите termination ('resignation' или 'timeout')")
+
+
 def _build_pgn_string(
         moves_uci: list[str],
         white_name: str,
@@ -239,7 +301,7 @@ def _build_pgn_string(
     pgn_game = chess.pgn.Game()
     pgn_game.headers["Event"] = "Historical Bot Match"
     pgn_game.headers["Site"] = "Michess Bot Arena"
-    pgn_game.headers["Date"] = datetime.now(timezone.utc).strftime("%Y.%m.%d")
+    pgn_game.headers["Date"] = datetime.now(UTC).strftime("%Y.%m.%d")
     pgn_game.headers["Round"] = "-"
     pgn_game.headers["White"] = white_name
     pgn_game.headers["Black"] = black_name
@@ -248,7 +310,7 @@ def _build_pgn_string(
     pgn_game.headers["BlackElo"] = str(black_elo)
     pgn_game.headers["ECO"] = _detect_eco_code(moves_uci)
 
-    node = pgn_game
+    node: chess.pgn.GameNode = pgn_game
     for uci_str in moves_uci:
         move = chess.Move.from_uci(uci_str)
         if move not in board.legal_moves:
@@ -269,7 +331,15 @@ async def _get_or_create_bot_user(db: AsyncSession, bot_id: str) -> User:
     res = await db.execute(stmt)
     bot_user = res.scalar_one_or_none()
     if bot_user is not None:
-        return bot_user
+        if bot_user.hashed_password == BOT_PASSWORD_MARKER:
+            return bot_user
+        # Имя занято человеком (до запрета регистрации имён ботов) — не приписываем ему
+        # партии бота, а заводим бота под служебным именем.
+        bot_username = f"{bot_username} [бот]"
+        res = await db.execute(select(User).where(User.username == bot_username))
+        bot_user = res.scalar_one_or_none()
+        if bot_user is not None:
+            return bot_user
 
     user_cols = {c.name for c in User.__table__.columns}
     user_kwargs: dict = {
@@ -277,9 +347,9 @@ async def _get_or_create_bot_user(db: AsyncSession, bot_id: str) -> User:
         "rating": meta["rating"],
     }
     if "hashed_password" in user_cols:
-        user_kwargs["hashed_password"] = "!historical_bot_no_login!"
+        user_kwargs["hashed_password"] = BOT_PASSWORD_MARKER
     elif "password_hash" in user_cols:
-        user_kwargs["password_hash"] = "!historical_bot_no_login!"
+        user_kwargs["password_hash"] = BOT_PASSWORD_MARKER
     if "email" in user_cols:
         user_kwargs["email"] = f"{bot_id}@michess.local"
     if "is_cheater" in user_cols:
@@ -305,7 +375,7 @@ def _prepare_game_kwargs(
     kwargs: dict = {}
 
     if "pgn_date" in game_cols:
-        kwargs["pgn_date"] = datetime.now(timezone.utc).strftime("%Y.%m.%d")
+        kwargs["pgn_date"] = datetime.now(UTC).strftime("%Y.%m.%d")
     if "site" in game_cols:
         kwargs["site"] = "Michess Bot Arena"
     if "eco" in game_cols:
@@ -333,7 +403,7 @@ def _prepare_game_kwargs(
     if "result" in game_cols:
         kwargs["result"] = payload.result
     if "termination" in game_cols:
-        kwargs["termination"] = "normal"
+        kwargs["termination"] = payload.termination or "normal"
     if "is_rated" in game_cols:
         kwargs["is_rated"] = False
     if "base_time_ms" in game_cols:
@@ -353,7 +423,7 @@ def _prepare_game_kwargs(
 
     if "finished_at" in game_cols:
         is_tz = getattr(game_cols["finished_at"].type, "timezone", False)
-        now_utc = datetime.now(timezone.utc)
+        now_utc = datetime.now(UTC)
         kwargs["finished_at"] = now_utc if is_tz else now_utc.replace(tzinfo=None)
 
     return kwargs
@@ -362,15 +432,17 @@ def _prepare_game_kwargs(
 @router.get("/list")
 async def get_available_bots():
     """Возвращает список доступных исторических ботов и статус движка Stockfish."""
-    sf_path = resolve_stockfish_path()
     return {
         "bots": AVAILABLE_BOTS,
-        "stockfish_active": bool(sf_path),
-        "stockfish_path": sf_path,
+        "stockfish_active": bool(resolve_stockfish_path()),
     }
 
 
-@router.post("/move", response_model=BotMoveResponse)
+@router.post(
+    "/move",
+    response_model=BotMoveResponse,
+    dependencies=[Depends(rate_limit("bot_move", "RATE_LIMIT_BOT_MOVE"))],
+)
 async def get_bot_move(payload: BotMoveRequest):
     """Принимает FEN позиции и возвращает ответный ход выбранного исторического бота."""
     bot = BOT_INSTANCES.get(payload.bot_id)
@@ -380,7 +452,7 @@ async def get_bot_move(payload: BotMoveRequest):
     try:
         board = chess.Board(payload.fen)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Некорректный формат FEN")
+        raise HTTPException(status_code=400, detail="Некорректный формат FEN") from None
 
     if board.is_game_over():
         raise HTTPException(status_code=400, detail="Партия уже завершена")
@@ -423,6 +495,13 @@ async def save_bot_game(
     if not payload.moves_uci:
         raise HTTPException(status_code=400, detail="Список ходов пуст")
 
+    try:
+        final_board = _replay_moves(payload.moves_uci)
+        result, termination = resolve_bot_game_outcome(final_board, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    payload = payload.model_copy(update={"result": result, "termination": termination})
+
     bot_user = await _get_or_create_bot_user(db, payload.bot_id)
 
     if payload.player_color == "white":
@@ -440,7 +519,7 @@ async def save_bot_game(
             result=payload.result,
         )
     except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     game_kwargs = _prepare_game_kwargs(
         white_id=white_user.id,
@@ -458,5 +537,5 @@ async def save_bot_game(
     return BotGameSaveResponse(
         game_id=new_game.id,
         status="finished",
-        result=payload.result,
+        result=result,
     )

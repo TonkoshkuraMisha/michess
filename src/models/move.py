@@ -1,9 +1,10 @@
 # --- FILE: src/models/move.py ---
 
-from sqlalchemy import String, Integer, Boolean, ForeignKey, DateTime
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
-from datetime import datetime
 
 from src.models.base import Base
 

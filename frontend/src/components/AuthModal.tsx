@@ -3,6 +3,7 @@
 import {useState} from 'react';
 import {LogIn, UserPlus} from 'lucide-react';
 import {API_BASE_URL} from '../config/api';
+import {readErrorDetail} from '../services/apiErrors';
 
 interface AuthModalProps {
     onSuccess: (token: string) => void;
@@ -33,7 +34,13 @@ export default function AuthModal({onSuccess}: AuthModalProps) {
                     body: formData,
                 });
 
-                if (!res.ok) throw new Error('Неверное имя пользователя или пароль');
+                if (!res.ok) {
+                    // 429 — превышен лимит попыток: показываем, сколько ждать, а не «неверный пароль».
+                    if (res.status === 429) {
+                        throw new Error(await readErrorDetail(res, 'Слишком много попыток входа, попробуйте позже'));
+                    }
+                    throw new Error('Неверное имя пользователя или пароль');
+                }
                 const data = await res.json();
                 localStorage.setItem('token', data.access_token);
                 onSuccess(data.access_token);
@@ -46,8 +53,7 @@ export default function AuthModal({onSuccess}: AuthModalProps) {
                 });
 
                 if (!res.ok) {
-                    const errData = await res.json();
-                    throw new Error(errData.detail || 'Ошибка регистрации');
+                    throw new Error(await readErrorDetail(res, 'Ошибка регистрации'));
                 }
 
                 // Автоматический вход после успешной регистрации

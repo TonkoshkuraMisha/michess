@@ -1,6 +1,7 @@
 # --- FILE: src/services/bots/morphy.py ---
 
 import chess
+
 from src.services.bots.base import (
     CENTER_SQUARES,
     EXTENDED_CENTER,

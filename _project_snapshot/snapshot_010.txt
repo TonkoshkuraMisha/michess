@@ -1,168 +1,140 @@
-PROJECT SNAPSHOT — PART 10/11
+PROJECT SNAPSHOT — PART 10/15
 Project: michess
-Files in this part (2): frontend/src/components/GameViewer.tsx, frontend/src/components/Leaderboard.tsx
+Files in this part (1): frontend/src/components/Chessboard.tsx (chunk 1)
 ----------------------------------------------------------------------------------------
 
 ========================================================================================
-FILE: frontend/src/components/GameViewer.tsx
+FILE: frontend/src/components/Chessboard.tsx
 ========================================================================================
-// --- FILE: frontend/src/components/GameViewer.tsx ---
+// --- FILE: frontend/src/components/Chessboard.tsx ---
 
-import {useState, useEffect, useRef, useMemo} from 'react';
-import {useParams, useLocation, Link} from 'react-router-dom';
+import {useState, useEffect, useRef, useCallback} from 'react';
+import {useNavigate, useParams} from 'react-router-dom';
 import {Chess} from 'chess.js';
 import {
-    AreaChart,
-    Area,
-    XAxis,
-    YAxis,
-    Tooltip,
-    ReferenceLine,
-    ResponsiveContainer
-} from 'recharts';
-import {
-    ChevronFirst,
-    ChevronLeft,
-    ChevronRight,
-    ChevronLast,
-    ArrowLeft,
-    Download,
-    Loader2,
-    Sword,
-    RefreshCw,
-    Palette,
-    Cpu,
-    Sparkles,
-    X
+    ChevronFirst, ChevronLeft, ChevronRight, ChevronLast, Users, Sword, Flag,
+    Handshake, Loader2, Play, RotateCcw, Clock, ChevronDown, ChevronUp, Palette,
+    RefreshCw, ListOrdered, Undo2, Bot, MessageSquareQuote, Download, Eye,
+    Sliders, Zap, X, Link2, Copy, Check, Send, MessageSquare, Radio, Volume2, VolumeX
 } from 'lucide-react';
-import {format, parseISO} from 'date-fns';
-import {ru} from 'date-fns/locale';
-import {
-    BOARD_THEMES,
-    MIN_BOARD_SIZE,
-    getMaxViewportBoardSize,
-    getDefaultBoardSize
-} from './Chessboard';
+import {gameSocket} from '../services/gameSocket';
+import {soundEngine, resolveMoveSound} from '../services/soundEngine';
+import type {SoundEventType} from '../services/soundEngine';
 import {API_BASE_URL} from '../config/api';
 import {
+    BOARD_THEMES,
     PIECE_SETS,
     getSavedBoardThemeKey,
     getSavedPieceSetKey,
     getPieceSvgUrl,
     getHarmoniousPieceStyle
 } from '../config/boardAppearance';
+import type {BoardTheme} from '../config/boardAppearance';
+import {HISTORICAL_BOTS, HISTORICAL_BOTS_LIST} from '../config/champions';
+import type {HistoricalBotId, HistoricalBotProfile} from '../config/champions';
+import {DEFAULT_TIME_CONTROL, TIME_CONTROLS} from '../config/timeControls';
+import type {TimeControlOption, TimeControlGroup} from '../config/timeControls';
+import {
+    FILES, RANKS, MIN_BOARD_SIZE, MAX_BOARD_SIZE, PROMOTION_OPTIONS,
+    getMaxViewportBoardSize, getDefaultBoardSize, calculateMaterialBalance, cloneChessInstance, prevIndexHelper
+} from './chessboard/boardUtils';
+import type {PromotionPiece} from './chessboard/boardUtils';
+import {GAME_ACTION_ERROR_CODES, QUICK_CHAT_PRESETS} from './chessboard/types';
+import type {LiveGameItem, ChatMessageItem, QueuePlayer} from './chessboard/types';
 
-const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
+export {MIN_BOARD_SIZE, MAX_BOARD_SIZE, getMaxViewportBoardSize, getDefaultBoardSize, TIME_CONTROLS};
+export type {PromotionPiece, TimeControlOption, TimeControlGroup};
 
-interface MoveEvaluationItem {
-    ply: number;
-    move_number: number;
-    color: string;
-    san: string;
-    uci: string;
-    eval_cp: number;
-    eval_display: string;
-    mate: number | null;
-    best_move_uci: string | null;
-    cp_loss: number;
-    classification: string;
-    symbol: string;
-}
+export {BOARD_THEMES, HISTORICAL_BOTS};
+export type {BoardTheme, HistoricalBotId, HistoricalBotProfile};
 
-interface SideSummaryStats {
-    accuracy: number;
-    best: number;
-    good: number;
-    inaccuracies: number;
-    mistakes: number;
-    blunders: number;
-    avg_cp_loss: number;
-}
+export default function Chessboard() {
+    const navigate = useNavigate();
+    const {inviteCode} = useParams<{ inviteCode?: string }>();
 
-interface FullGameAnalysisReport {
-    game_id: number;
-    engine: string;
-    white: SideSummaryStats;
-    black: SideSummaryStats;
-    moves: MoveEvaluationItem[];
-}
+    const [leftSectionTab, setLeftSectionTab] = useState<'bots' | 'lobby'>('bots');
+    const [lobbyTab, setLobbyTab] = useState<'lobby' | 'live'>('lobby');
+    const [showInvitePanel, setShowInvitePanel] = useState(false);
+    const [showAppearanceDropdown, setShowAppearanceDropdown] = useState(false);
+    const [isSoundMuted, setIsSoundMuted] = useState<boolean>(() => soundEngine.isMuted());
+    const appearanceDropdownRef = useRef<HTMLDivElement>(null);
 
-interface DrawnArrow {
-    from: string;
-    to: string;
-}
+    const [liveGames, setLiveGames] = useState<LiveGameItem[]>([]);
+    const [spectatingGameId, setSpectatingGameId] = useState<number | null>(null);
+    const [inviteColorPref, setInviteColorPref] = useState<'white' | 'black' | 'random'>('random');
+    const [createdInviteCode, setCreatedInviteCode] = useState<string | null>(null);
+    const [inviteCopied, setInviteCopied] = useState(false);
+    const [chatMessages, setChatMessages] = useState<ChatMessageItem[]>([]);
+    const [chatInput, setChatInput] = useState('');
 
-const PIECE_MAT_VALUES: Record<string, number> = {p: 100, n: 320, b: 330, r: 500, q: 900, k: 0};
-
-function computeStaticWhiteEvalCp(gameInstance: Chess): { cp: number; display: string } {
-    if (gameInstance.isCheckmate()) {
-        const whiteMated = gameInstance.turn() === 'w';
-        return {
-            cp: whiteMated ? -1000 : 1000,
-            display: whiteMated ? '-M1' : 'M1'
-        };
-    }
-    if (gameInstance.isDraw()) {
-        return {cp: 0, display: '0.0'};
-    }
-    let score = 0;
-    for (const row of gameInstance.board()) {
-        for (const cell of row) {
-            if (!cell) continue;
-            const v = PIECE_MAT_VALUES[cell.type] || 0;
-            score += cell.color === 'w' ? v : -v;
-        }
-    }
-    const pawns = score / 100;
-    const sign = pawns > 0 ? '+' : '';
-    return {cp: score, display: `${sign}${pawns.toFixed(1)}`};
-}
-
-function evalCpToWhitePercentage(evalCp: number): number {
-    const clamped = Math.max(-1000, Math.min(1000, evalCp));
-    const pct = 50 + (clamped / 1000) * 46;
-    return Math.max(4, Math.min(96, Math.round(pct)));
-}
-
-function classificationBadgeClass(classification?: string): string {
-    switch (classification) {
-        case 'Best':
-            return 'text-emerald-400 font-extrabold';
-        case 'Inaccuracy':
-            return 'text-sky-400 font-bold';
-        case 'Mistake':
-            return 'text-amber-400 font-bold';
-        case 'Blunder':
-            return 'text-rose-400 font-extrabold';
-        default:
-            return 'text-boxwood/70';
-    }
-}
-
-export default function GameViewer() {
-    const {gameId} = useParams<{ gameId: string }>();
-    const location = useLocation();
-    const gameDataFromState = location.state?.game;
-
+    const [game, setGame] = useState(new Chess());
     const [history, setHistory] = useState<any[]>([]);
-    const [pgnHeaders, setPgnHeaders] = useState<Record<string, string>>({});
     const [viewIndex, setViewIndex] = useState<number>(-1);
-    const [isFlipped, setIsFlipped] = useState(false);
-    const [showAppearancePanel, setShowAppearancePanel] = useState(false);
+    const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
+    const [isManualFlip, setIsManualFlip] = useState<boolean>(false);
 
-    // Состояния компьютерного анализа (Таск 4.1 / 4.2)
-    const [analysisReport, setAnalysisReport] = useState<FullGameAnalysisReport | null>(null);
-    const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [analysisError, setAnalysisError] = useState<string | null>(null);
+    const [pendingPromotion, setPendingPromotion] = useState<{
+        from: string;
+        to: string;
+        color: 'w' | 'b';
+        isPremove?: boolean;
+    } | null>(null);
 
-    // Стрелки и выделенные клетки правой кнопкой мыши (Таск 4.2)
-    const [arrows, setArrows] = useState<DrawnArrow[]>([]);
-    const [highlightedSquares, setHighlightedSquares] = useState<Set<string>>(new Set());
-    const rightClickStartRef = useRef<string | null>(null);
+    const [premove, setPremove] = useState<{
+        from: string;
+        to: string;
+        promotion?: PromotionPiece;
+    } | null>(null);
 
     const [boardThemeKey, setBoardThemeKey] = useState<string>(() => getSavedBoardThemeKey());
     const [pieceSetKey, setPieceSetKey] = useState<string>(() => getSavedPieceSetKey());
+
+    const [gameId, setGameId] = useState<number | null>(null);
+    const gameIdRef = useRef<number | null>(null);
+    const [myColor, setMyColor] = useState<'white' | 'black'>('white');
+    const myColorRef = useRef<'white' | 'black'>('white');
+    const [isSearching, setIsSearching] = useState(false);
+    const [queuePlayers, setQueuePlayers] = useState<QueuePlayer[]>([]);
+    const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+    const [currentUsername, setCurrentUsername] = useState<string>('Вы');
+    const currentUsernameRef = useRef<string>('Вы');
+    const [currentUserRating, setCurrentUserRating] = useState<number>(1200);
+    const [stateVersion, setStateVersion] = useState(0);
+    const stateVersionRef = useRef<number>(0);
+
+    const [selectedBotId, setSelectedBotId] = useState<HistoricalBotId>('philidor');
+    const [activeBot, setActiveBot] = useState<HistoricalBotId | null>(null);
+    const [botComment, setBotComment] = useState<string | null>(null);
+    const [isBotThinking, setIsBotThinking] = useState<boolean>(false);
+    const [savedBotGameId, setSavedBotGameId] = useState<number | null>(null);
+
+    const [selectedTimeControl, setSelectedTimeControl] = useState<TimeControlOption>(DEFAULT_TIME_CONTROL);
+    const [manualBaseMinutes, setManualBaseMinutes] = useState<number>(5);
+    const [manualIncSeconds, setManualIncSeconds] = useState<number>(3);
+    const [isTimeDropdownOpen, setIsTimeDropdownOpen] = useState(false);
+    const timeDropdownRef = useRef<HTMLDivElement>(null);
+    const boardContainerRef = useRef<HTMLDivElement>(null);
+    const notationScrollRef = useRef<HTMLDivElement>(null);
+
+    const [whitePlayer, setWhitePlayer] = useState({username: 'Белые', rating: '1200'});
+    const [blackPlayer, setBlackPlayer] = useState({username: 'Черные', rating: '1200'});
+    const [ratingInfo, setRatingInfo] = useState<{
+        white_delta?: number;
+        black_delta?: number;
+        white_new_rating?: number;
+        black_new_rating?: number;
+    } | null>(null);
+
+    const moveStartTime = useRef<number>(Date.now());
+    const botGameSavedRef = useRef<boolean>(false);
+    const lowTimeWarnedRef = useRef<boolean>(false);
+
+    const [dragState, setDragState] = useState<{
+        from: string;
+        piece: { type: string; color: string };
+        x: number;
+        y: number;
+    } | null>(null);
 
     const [boardSize, setBoardSize] = useState<number>(() => {
         const maxFit = getMaxViewportBoardSize();
@@ -173,18 +145,10 @@ export default function GameViewer() {
                 return Math.min(parsed, maxFit);
             }
         }
-        return getDefaultBoardSize();
+        return maxFit;
     });
     const [isResizing, setIsResizing] = useState(false);
     const resizeStartRef = useRef<{ startX: number; startY: number; startSize: number } | null>(null);
-
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
-    const notationScrollRef = useRef<HTMLDivElement>(null);
-
-    const activeTheme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
-    const activePieceSet = PIECE_SETS[pieceSetKey] || PIECE_SETS.merida;
 
     useEffect(() => {
         const handleWindowResize = () => {
@@ -194,6 +158,252 @@ export default function GameViewer() {
         window.addEventListener('resize', handleWindowResize);
         return () => window.removeEventListener('resize', handleWindowResize);
     }, []);
+
+    const [whiteTimeMs, setWhiteTimeMs] = useState(180000);
+    const [blackTimeMs, setBlackTimeMs] = useState(180000);
+
+    const [sessionStats, setSessionStats] = useState({wins: 0, losses: 0, draws: 0});
+    const [gameOverResult, setGameOverResult] = useState<string | null>(null);
+    const [drawOfferStatus, setDrawOfferStatus] = useState<string | null>(null);
+    const [rematchStatus, setRematchStatus] = useState<'none' | 'offered_by_me' | 'offered_by_opponent' | 'declined'>('none');
+
+    const activeTheme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
+    const activePieceSet = PIECE_SETS[pieceSetKey] || PIECE_SETS.merida;
+    const selectedBotProfile = HISTORICAL_BOTS[selectedBotId];
+    const activeBotProfile = activeBot ? HISTORICAL_BOTS[activeBot] : null;
+
+    const effectiveWhiteBaseMinutes = selectedTimeControl.isManual ? manualBaseMinutes : selectedTimeControl.base;
+    const effectiveBlackBaseMinutes = effectiveWhiteBaseMinutes;
+    const effectiveIncSeconds = selectedTimeControl.isManual ? manualIncSeconds : selectedTimeControl.inc;
+
+    const isBoardFlipped = (myColor === 'black') !== isManualFlip;
+
+    const playAudio = useCallback((type: SoundEventType) => {
+        soundEngine.play(type);
+    }, []);
+
+    const playOutcomeSound = useCallback((result: string, playerColor: 'white' | 'black' = myColorRef.current) => {
+        if (!result || result === '*') {
+            soundEngine.play('decline');
+            return;
+        }
+        if (result === '1/2-1/2' || result.includes('draw')) {
+            soundEngine.play('draw');
+            return;
+        }
+        const whiteWon = result === '1-0' || result === 'white_won_on_time';
+        const isWin = (whiteWon && playerColor === 'white') || (!whiteWon && playerColor === 'black');
+        soundEngine.play(isWin ? 'victory' : 'defeat');
+    }, []);
+
+    const handleToggleSound = () => {
+        const nextMuted = soundEngine.toggleMute();
+        setIsSoundMuted(nextMuted);
+        if (!nextMuted) {
+            soundEngine.play('move');
+        }
+    };
+
+    const updateSessionStats = useCallback((result: string) => {
+        if (!result || result === '*') return;
+        setSessionStats(prev => {
+            if (result === '1/2-1/2' || result.includes('draw')) {
+                return {...prev, draws: prev.draws + 1};
+            }
+            const whiteWon = result === '1-0' || result === 'white_won_on_time';
+            const userIsWhite = myColorRef.current === 'white';
+            if ((whiteWon && userIsWhite) || (!whiteWon && !userIsWhite)) {
+                return {...prev, wins: prev.wins + 1};
+            } else {
+                return {...prev, losses: prev.losses + 1};
+            }
+        });
+    }, []);
+
+    const applyMatchFoundSnapshot = useCallback((data: any) => {
+        if (!data || !data.game_id) return;
+        const incomingGid = Number(data.game_id);
+        const assignedColor: 'white' | 'black' = data.color === 'black' ? 'black' : 'white';
+        const ver = Number(data.state_version || 0);
+        const isNewMatch = gameIdRef.current !== incomingGid;
+
+        setIsSearching(false);
+        setSpectatingGameId(null);
+        setCreatedInviteCode(null);
+        setShowInvitePanel(false);
+        setActiveBot(null);
+        setBotComment(null);
+        setSavedBotGameId(null);
+        botGameSavedRef.current = false;
+
+        if (isNewMatch) {
+            lowTimeWarnedRef.current = false;
+            setChatMessages([]);
+            setIsManualFlip(false);
+            setRatingInfo(null);
+            setGameOverResult(null);
+            setRematchStatus('none');
+            setSelectedSquare(null);
+            setPendingPromotion(null);
+            setPremove(null);
+        }
+
+        gameIdRef.current = incomingGid;
+        setGameId(incomingGid);
+        myColorRef.current = assignedColor;
+        setMyColor(assignedColor);
+        setStateVersion(ver);
+        stateVersionRef.current = ver;
+
+        const initialWhiteTime = data.white_time_ms !== undefined ? Number(data.white_time_ms) : Number(data.base_time_ms || 180000);
+        const initialBlackTime = data.black_time_ms !== undefined ? Number(data.black_time_ms) : Number(data.base_time_ms || 180000);
+        setWhiteTimeMs(initialWhiteTime);
+        setBlackTimeMs(initialBlackTime);
+
+        if (data.white_username) {
+            setWhitePlayer({username: data.white_username, rating: String(data.white_rating || '1200')});
+        }
+        if (data.black_username) {
+            setBlackPlayer({username: data.black_username, rating: String(data.black_rating || '1200')});
+        }
+
+        const restoredGame = new Chess();
+        if (data.pgn) {
+            try {
+                restoredGame.loadPgn(data.pgn);
+            } catch {
+                if (data.fen) restoredGame.load(data.fen);
+            }
+        } else if (data.fen) {
+            restoredGame.load(data.fen);
+        }
+
+        setGame(restoredGame);
+        setHistory(restoredGame.history({verbose: true}));
+        setViewIndex(-1);
+        moveStartTime.current = Date.now();
+
+        if (isNewMatch) {
+            setDrawOfferStatus(`Партия началась! Вы играете ${assignedColor === 'white' ? 'Белыми' : 'Чёрными'}.`);
+            playAudio('start');
+            setTimeout(() => setDrawOfferStatus(null), 3000);
+        }
+    }, [playAudio]);
+
+    const applyMoveMadeSnapshot = useCallback((data: any) => {
+        if (data.state_version !== undefined) {
+            const ver = Number(data.state_version);
+            setStateVersion(ver);
+            stateVersionRef.current = ver;
+        }
+        if (data.white_time_ms !== undefined) setWhiteTimeMs(Number(data.white_time_ms));
+        if (data.black_time_ms !== undefined) setBlackTimeMs(Number(data.black_time_ms));
+        moveStartTime.current = Date.now();
+
+        const nextGame = new Chess();
+        let loaded = false;
+
+        if (data.pgn) {
+            try {
+                nextGame.loadPgn(data.pgn);
+                loaded = true;
+            } catch {
+                loaded = false;
+            }
+        }
+
+        if (!loaded && data.fen) {
+            try {
+                nextGame.load(data.fen);
+                loaded = true;
+            } catch {
+                loaded = false;
+            }
+        }
+
+        if (loaded) {
+            const newHistory = nextGame.history({verbose: true});
+            const lastSan = data.san || (newHistory.length > 0 ? newHistory[newHistory.length - 1].san : '');
+            setGame(nextGame);
+            setHistory(newHistory);
+            setViewIndex(-1);
+            // На завершающем ходу играет только исход (victory/defeat/draw) — звук самого
+            // хода (например, «шах» на мате) был бы лишним дублем перед фанфарой.
+            if (!data.game_over) {
+                playAudio(resolveMoveSound(lastSan));
+            }
+        }
+
+        if (data.game_over) {
+            setPremove(null);
+            setPendingPromotion(null);
+            setGameOverResult(data.result);
+            setRatingInfo(data);
+            playOutcomeSound(data.result);
+            updateSessionStats(data.result);
+        }
+    }, [playAudio, playOutcomeSound, updateSessionStats]);
+
+    const saveBotGameToDatabase = useCallback(async (
+        botId: HistoricalBotId,
+        playerColor: 'white' | 'black',
+        result: string,
+        completedGame: Chess,
+        termination?: 'resignation' | 'timeout'
+    ) => {
+        if (botGameSavedRef.current) return;
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const verboseMoves = completedGame.history({verbose: true});
+        if (verboseMoves.length === 0) return;
+
+        botGameSavedRef.current = true;
+        const movesUci = verboseMoves.map((m: any) => `${m.from}${m.to}${m.promotion || ''}`);
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/bots/save-game`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    bot_id: botId,
+                    player_color: playerColor,
+                    result,
+                    // Для позиции, не завершённой на доске, сервер требует причину окончания.
+                    termination: termination ?? null,
+                    moves_uci: movesUci,
+                    base_time_ms: Math.round(effectiveWhiteBaseMinutes * 60 * 1000),
+                    increment_ms: Math.round(effectiveIncSeconds * 1000)
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.game_id) {
+                    setSavedBotGameId(data.game_id);
+                }
+                // Итог определяет сервер: например, флаг при недостатке материала у соперника — ничья.
+                if (data.result && data.result !== result) {
+                    setGameOverResult(data.result);
+                    setDrawOfferStatus(`Итог по правилам ФИДЕ: ${data.result}`);
+                }
+            }
+        } catch (err) {
+            console.error('Ошибка сохранения партии с ботом в БД:', err);
+        }
+    }, [effectiveWhiteBaseMinutes, effectiveIncSeconds]);
+
+    const applyIncrementAfterMove = useCallback((moverColor: 'white' | 'black') => {
+        const incMs = Math.round(effectiveIncSeconds * 1000);
+        if (moverColor === 'white') {
+            setWhiteTimeMs(prev => prev + incMs);
+        } else {
+            setBlackTimeMs(prev => prev + incMs);
+        }
+    }, [effectiveIncSeconds]);
 
     const handleThemeChange = (themeId: string) => {
         setBoardThemeKey(themeId);
@@ -205,6 +415,162 @@ export default function GameViewer() {
         localStorage.setItem('michess_piece_set', setId);
     };
 
+    const startHistoricalBotGame = (botId: HistoricalBotId, colorPref: 'white' | 'black' | 'random' = 'random') => {
+        if (isSearching) {
+            setIsSearching(false);
+            gameSocket.send('leave_queue', {});
+        }
+
+        const chosenColor: 'white' | 'black' =
+            colorPref === 'random'
+                ? (Math.random() < 0.5 ? 'white' : 'black')
+                : colorPref;
+
+        const whiteStartMs = Math.round(effectiveWhiteBaseMinutes * 60 * 1000);
+        const blackStartMs = Math.round(effectiveBlackBaseMinutes * 60 * 1000);
+        const freshGame = new Chess();
+        const botInfo = HISTORICAL_BOTS[botId];
+
+        botGameSavedRef.current = false;
+        lowTimeWarnedRef.current = false;
+        setSavedBotGameId(null);
+        gameIdRef.current = null;
+        setGameId(null);
+        setSelectedBotId(botId);
+        setActiveBot(botId);
+        setLeftSectionTab('bots');
+        myColorRef.current = chosenColor;
+        setMyColor(chosenColor);
+        setIsManualFlip(false);
+        setGame(freshGame);
+        setHistory([]);
+        setViewIndex(-1);
+        setSelectedSquare(null);
+        setPendingPromotion(null);
+        setPremove(null);
+        setGameOverResult(null);
+        setRatingInfo(null);
+        setDrawOfferStatus(null);
+        setRematchStatus('none');
+        setWhiteTimeMs(whiteStartMs);
+        setBlackTimeMs(blackStartMs);
+        moveStartTime.current = Date.now();
+
+        if (chosenColor === 'white') {
+            setWhitePlayer({username: currentUsername, rating: String(currentUserRating)});
+            setBlackPlayer({username: botInfo.playerLabel, rating: String(botInfo.rating)});
+        } else {
+            setWhitePlayer({username: botInfo.playerLabel, rating: String(botInfo.rating)});
+            setBlackPlayer({username: currentUsername, rating: String(currentUserRating)});
+        }
+
+        setBotComment(`«${botInfo.motto}»`);
+        playAudio('start');
+    };
+
+    useEffect(() => {
+        if (!activeBot || gameOverResult || game.isGameOver()) return;
+
+        const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
+        if (currentTurnColor === myColor) return;
+
+        let isCancelled = false;
+        let delayTimer: ReturnType<typeof setTimeout> | null = null;
+        setIsBotThinking(true);
+        const botName = HISTORICAL_BOTS[activeBot].shortName;
+        const requestStartedAt = Date.now();
+
+        (async () => {
+            try {
+                const authToken = localStorage.getItem('token');
+                const headers: Record<string, string> = {'Content-Type': 'application/json'};
+                // С токеном лимит запросов считается на пользователя, а не на общий IP.
+                if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
+                let response: Response | null = null;
+                // 429 (лимит) и 503 (пул движков занят) — временные: ждём Retry-After и повторяем.
+                for (let attempt = 0; attempt < 4 && !isCancelled; attempt++) {
+                    response = await fetch(`${API_BASE_URL}/api/v1/bots/move`, {
+                        method: 'POST',
+                        headers,
+                        body: JSON.stringify({
+                            bot_id: activeBot,
+                            fen: game.fen()
+                        })
+                    });
+                    if (response.status !== 429 && response.status !== 503) break;
+                    const retryAfterS = Number(response.headers.get('Retry-After')) || 2;
+                    await new Promise((resolve) => setTimeout(resolve, Math.min(retryAfterS, 10) * 1000));
+                }
+                if (!response) return;
+
+                if (!response.ok || isCancelled) {
+                    if (!isCancelled) setIsBotThinking(false);
+                    return;
+                }
+                const data = await response.json();
+                if (isCancelled) return;
+
+                const targetThinkMs = typeof data.thinking_time_ms === 'number' ? data.thinking_time_ms : 600;
+                const networkElapsed = Date.now() - requestStartedAt;
+                const remainingDelay = Math.max(80, targetThinkMs - networkElapsed);
+
+                delayTimer = setTimeout(() => {
+                    if (isCancelled) return;
+
+                    const from = data.uci.slice(0, 2);
+                    const to = data.uci.slice(2, 4);
+                    const promotion = data.uci.length > 4 ? data.uci.slice(4, 5) : 'q';
+
+                    const nextGame = cloneChessInstance(game);
+                    const moveObj = nextGame.move({from, to, promotion});
+
+                    if (moveObj) {
+                        const newHistory = nextGame.history({verbose: true});
+                        const botColor: 'white' | 'black' = myColor === 'white' ? 'black' : 'white';
+
+                        applyIncrementAfterMove(botColor);
+                        setGame(nextGame);
+                        setHistory(newHistory);
+                        setViewIndex(-1);
+                        setBotComment(data.comment);
+                        moveStartTime.current = Date.now();
+
+                        // На завершающем ходу играет только исход (победа/поражение/ничья) —
+                        // звук самого хода («шах» и т.п.) был бы лишним дублем перед ним.
+                        if (!nextGame.isGameOver()) {
+                            playAudio(resolveMoveSound(moveObj.san));
+                        }
+
+                        if (nextGame.isGameOver()) {
+                            let result = '1/2-1/2';
+                            if (nextGame.isCheckmate()) {
+                                result = nextGame.turn() === 'w' ? '0-1' : '1-0';
+                            }
+                            setPremove(null);
+                            setGameOverResult(result);
+                            setDrawOfferStatus(`Партия против ${botName} окончена и сохранена в архив (${result}).`);
+                            updateSessionStats(result);
+                            playOutcomeSound(result, myColor);
+                            saveBotGameToDatabase(activeBot, myColor, result, nextGame);
+                        }
+                    }
+                    setIsBotThinking(false);
+                }, remainingDelay);
+            } catch (err) {
+                console.error('Ошибка получения хода бота:', err);
+                if (!isCancelled) {
+                    setIsBotThinking(false);
+                }
+            }
+        })();
+
+        return () => {
+            isCancelled = true;
+            if (delayTimer) clearTimeout(delayTimer);
+        };
+    }, [activeBot, game, myColor, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyIncrementAfterMove]);
+
     useEffect(() => {
         if (!isResizing) return;
 
@@ -213,7 +579,7 @@ export default function GameViewer() {
         document.body.style.cursor = 'nwse-resize';
         document.body.style.userSelect = 'none';
 
-        const handleResizeMove = (e: MouseEvent) => {
+        const handleResizeMove = (e: PointerEvent) => {
             if (!resizeStartRef.current) return;
             const {startX, startY, startSize} = resizeStartRef.current;
             const deltaX = e.clientX - startX;
@@ -231,18 +597,20 @@ export default function GameViewer() {
             resizeStartRef.current = null;
         };
 
-        window.addEventListener('mousemove', handleResizeMove);
-        window.addEventListener('mouseup', handleResizeEnd);
+        window.addEventListener('pointermove', handleResizeMove);
+        window.addEventListener('pointerup', handleResizeEnd);
+        window.addEventListener('pointercancel', handleResizeEnd);
 
         return () => {
             document.body.style.cursor = prevCursor;
             document.body.style.userSelect = prevUserSelect;
-            window.removeEventListener('mousemove', handleResizeMove);
-            window.removeEventListener('mouseup', handleResizeEnd);
+            window.removeEventListener('pointermove', handleResizeMove);
+            window.removeEventListener('pointerup', handleResizeEnd);
+            window.removeEventListener('pointercancel', handleResizeEnd);
         };
     }, [isResizing]);
 
-    const handleResizeMouseDown = (e: React.MouseEvent) => {
+    const handleResizePointerDown = (e: React.PointerEvent) => {
         e.preventDefault();
         e.stopPropagation();
         resizeStartRef.current = {
@@ -262,132 +630,1038 @@ export default function GameViewer() {
     };
 
     useEffect(() => {
-        const loadGame = async () => {
-            setLoading(true);
-            setError(null);
-            setAnalysisReport(null);
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/v1/profile/games/${gameId}/pgn`);
-                if (!res.ok) {
-                setError('Не удалось загрузить данные партии');
-                return;
-            }
-
-                const pgnText = await res.text();
-                const newGame = new Chess();
-                newGame.loadPgn(pgnText);
-
-                setPgnHeaders(newGame.header());
-                setHistory(newGame.history({verbose: true}));
-                setViewIndex(-1);
-            } catch (err: any) {
-                setError(err.message);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        if (gameId) loadGame();
-    }, [gameId]);
-
-    const handleRunFullAnalysis = async () => {
-        if (!gameId || isAnalyzing) return;
-        setIsAnalyzing(true);
-        setAnalysisError(null);
-        try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/analysis/game/${gameId}`, {
-                method: 'POST'
-            });
-            if (!res.ok) {
-                const errData = await res.json().catch(() => ({}));
-                setAnalysisError(errData.detail || 'Ошибка при анализе партии');
-                return;
-            }
-            const data: FullGameAnalysisReport = await res.json();
-            setAnalysisReport(data);
-        } catch (err: any) {
-            setAnalysisError(err.message || 'Не удалось выполнить компьютерный анализ');
-        } finally {
-            setIsAnalyzing(false);
-        }
-    };
-
-    useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-                setArrows([]);
-                setHighlightedSquares(new Set());
-                setShowAppearancePanel(false);
+                setPendingPromotion(null);
+                setPremove(null);
+                setSelectedSquare(null);
+                setShowAppearanceDropdown(false);
                 return;
             }
+            if (history.length === 0) return;
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
             if (e.key === 'ArrowLeft') {
                 e.preventDefault();
-                setViewIndex(p => Math.max(-1, p - 1));
+                setViewIndex(prev => {
+                    const current = prev === -1 ? history.length - 1 : prev;
+                    const nextIdx = current <= 0 ? -2 : current - 1;
+                    if (nextIdx === prev) return prev;
+                    if (nextIdx >= 0 && history[nextIdx]) {
+                        playAudio(resolveMoveSound(history[nextIdx].san));
+                    } else {
+                        playAudio('move');
+                    }
+                    return nextIdx;
+                });
             } else if (e.key === 'ArrowRight') {
                 e.preventDefault();
-                setViewIndex(p => Math.min(history.length - 1, p + 1));
+                setViewIndex(prev => {
+                    if (prev === -1) return -1;
+                    const nextIdx = prev === -2
+                        ? (history.length > 1 ? 0 : -1)
+                        : (prev + 1 >= history.length - 1 ? -1 : prev + 1);
+                    const targetMove = nextIdx === -1 ? history[history.length - 1] : history[nextIdx];
+                    if (targetMove) {
+                        playAudio(resolveMoveSound(targetMove.san));
+                    }
+                    return nextIdx;
+                });
             } else if (e.key === 'ArrowUp') {
                 e.preventDefault();
-                setViewIndex(-1);
+                setViewIndex(prev => {
+                    if (prev === -2) return prev;
+                    playAudio('move');
+                    return -2;
+                });
             } else if (e.key === 'ArrowDown') {
                 e.preventDefault();
-                setViewIndex(history.length - 1);
+                setViewIndex(prev => {
+                    if (prev === -1) return prev;
+                    playAudio('move');
+                    return -1;
+                });
             }
         };
+
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [history.length]);
+    }, [history, playAudio]);
 
     useEffect(() => {
         if (notationScrollRef.current) {
-            const activeElement = notationScrollRef.current.querySelector('.active-move');
-            if (activeElement) {
-                activeElement.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+            const activeEl = notationScrollRef.current.querySelector('.active-move-btn');
+            if (activeEl) {
+                activeEl.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+            } else if (viewIndex === -1) {
+                notationScrollRef.current.scrollTop = notationScrollRef.current.scrollHeight;
             }
         }
-    }, [viewIndex]);
+    }, [history.length, viewIndex]);
 
-    const currentGame = useMemo(() => {
-        const cg = new Chess();
-        for (let i = 0; i <= viewIndex; i++) {
-            if (history[i]) cg.move(history[i]);
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (timeDropdownRef.current && !timeDropdownRef.current.contains(event.target as Node)) {
+                setIsTimeDropdownOpen(false);
+            }
+            if (appearanceDropdownRef.current && !appearanceDropdownRef.current.contains(event.target as Node)) {
+                setShowAppearanceDropdown(false);
+            }
+        };
+
+        if (isTimeDropdownOpen || showAppearanceDropdown) {
+            document.addEventListener('mousedown', handleClickOutside);
         }
-        return cg;
-    }, [history, viewIndex]);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isTimeDropdownOpen, showAppearanceDropdown]);
 
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        fetch(`${API_BASE_URL}/api/v1/profile/me`, {
+            headers: {'Authorization': `Bearer ${token}`}
+        })
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (data) {
+                    setCurrentUserId(data.id);
+                    if (data.username) {
+                        setCurrentUsername(data.username);
+                        currentUsernameRef.current = data.username;
+                    }
+                    if (data.rating) setCurrentUserRating(data.rating);
+                }
+            })
+            .catch(() => {
+            });
+    }, []);
+
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        gameSocket.connect(token);
+
+        const handleMatchFound = (data: any) => {
+            applyMatchFoundSnapshot(data);
+        };
+
+        const handleMoveMade = (data: any) => {
+            applyMoveMadeSnapshot(data);
+        };
+
+        const handleGameOver = (data: any) => {
+            setPremove(null);
+            setPendingPromotion(null);
+            setGameOverResult(prev => {
+                if (!prev) {
+                    playOutcomeSound(data.result);
+                    updateSessionStats(data.result);
+                }
+                return data.result;
+            });
+            setRatingInfo(data);
+            if (data.white_time_ms !== undefined) setWhiteTimeMs(data.white_time_ms);
+            if (data.black_time_ms !== undefined) setBlackTimeMs(data.black_time_ms);
+            if (data.reason === 'aborted' || data.result === '*') {
+                setDrawOfferStatus('Партия отменена на 1-м ходу (рейтинг не изменён).');
+            } else if (data.result) {
+                setDrawOfferStatus(`Партия окончена. Результат: ${data.result}`);
+            }
+        };
+
+        const handleDrawOffered = () => {
+            setDrawOfferStatus('Соперник предлагает ничью.');
+            playAudio('offer');
+        };
+
+        const handleDrawDeclined = () => {
+            setDrawOfferStatus('Предложение ничьей отклонено.');
+            playAudio('decline');
+            setTimeout(() => setDrawOfferStatus(null), 3000);
+        };
+
+        const handleRematchOffered = () => {
+            setRematchStatus('offered_by_opponent');
+            playAudio('offer');
+        };
+
+        const handleRematchDeclined = () => {
+            setRematchStatus('declined');
+            playAudio('decline');
+        };
+
+        const handleInviteCreated = (data: any) => {
+            if (data.code) {
+                setCreatedInviteCode(data.code);
+                const url = `${window.location.origin}/challenge/${data.code}`;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(url).catch(() => {
+                    });
+                }
+                setInviteCopied(true);
+                playAudio('offer');
+                setTimeout(() => setInviteCopied(false), 3000);
+            }
+        };
+
+        const handleSpectateStarted = (data: any) => {
+            setIsSearching(false);
+            setActiveBot(null);
+            gameIdRef.current = null;
+            setGameId(null);
+            setSpectatingGameId(data.game_id);
+            setWhitePlayer({username: data.white_username || 'Белые', rating: String(data.white_rating || 1200)});
+            setBlackPlayer({username: data.black_username || 'Черные', rating: String(data.black_rating || 1200)});
+            setWhiteTimeMs(data.white_time_ms ?? data.base_time_ms ?? 180000);
+            setBlackTimeMs(data.black_time_ms ?? data.base_time_ms ?? 180000);
+
+            const restored = new Chess();
+            if (data.pgn) {
+                try {
+                    restored.loadPgn(data.pgn);
+                } catch {
+                    if (data.fen) restored.load(data.fen);
+                }
+            } else if (data.fen) {
+                restored.load(data.fen);
+            }
+            setGame(restored);
+            setHistory(restored.history({verbose: true}));
+            setViewIndex(-1);
+            setGameOverResult(null);
+            setChatMessages([]);
+            setDrawOfferStatus(`Режим зрителя: ${data.white_username} vs ${data.black_username}`);
+            playAudio('start');
+        };
+
+        const handleChatMessage = (data: any) => {
+            if (data.text && data.sender) {
+                setChatMessages(prev => [...prev.slice(-49), {
+                    sender: data.sender,
+                    text: data.text,
+                    timestamp: data.timestamp || Date.now()
+                }]);
+                if (data.sender !== currentUsernameRef.current) {
+                    playAudio('chat');
+                }
+            }
+        };
+
+        const handleServerError = (data: any) => {
+            console.warn('Сервер отклонил действие:', data);
+            if (data.code) {
+                if (data.message) setDrawOfferStatus(data.message);
+                // Отказ матчмейкинга (уже в партии, вне диапазона рейтинга, вызов неактуален...)
+                // выводит из режима поиска; ограничения чата, предложений и частоты — нет.
+                if (!GAME_ACTION_ERROR_CODES.has(data.code)) setIsSearching(false);
+                // Ход, отклонённый по лимиту частоты, приходит с актуальной позицией —
+                // её нужно вернуть на доску (ниже). Остальные отказы позицию не трогают.
+                if (!data.fen && !data.pgn) return;
+            }
+            setPremove(null);
+            playAudio('illegal');
+            if (data.pgn || data.fen) {
+                const syncedGame = new Chess();
+                if (data.pgn) {
+                    try {
+                        syncedGame.loadPgn(data.pgn);
+                    } catch {
+                        if (data.fen) syncedGame.load(data.fen);
+                    }
+                } else if (data.fen) {
+                    syncedGame.load(data.fen);
+                }
+                setGame(syncedGame);
+                setHistory(syncedGame.history({verbose: true}));
+            }
+            if (data.state_version !== undefined) {
+                const ver = Number(data.state_version);
+                setStateVersion(ver);
+                stateVersionRef.current = ver;
+            }
+        };
+
+        gameSocket.on('match_found', handleMatchFound);
+        gameSocket.on('move_made', handleMoveMade);
+        gameSocket.on('game_over', handleGameOver);
+        gameSocket.on('draw_offered', handleDrawOffered);
+        gameSocket.on('draw_declined', handleDrawDeclined);
+        gameSocket.on('rematch_offered', handleRematchOffered);
+        gameSocket.on('rematch_declined', handleRematchDeclined);
+        gameSocket.on('invite_created', handleInviteCreated);
+        gameSocket.on('spectate_started', handleSpectateStarted);
+        gameSocket.on('chat_message', handleChatMessage);
+        gameSocket.on('error', handleServerError);
+
+        return () => {
+            gameSocket.off('match_found', handleMatchFound);
+            gameSocket.off('move_made', handleMoveMade);
+            gameSocket.off('game_over', handleGameOver);
+            gameSocket.off('draw_offered', handleDrawOffered);
+            gameSocket.off('draw_declined', handleDrawDeclined);
+            gameSocket.off('rematch_offered', handleRematchOffered);
+            gameSocket.off('rematch_declined', handleRematchDeclined);
+            gameSocket.off('invite_created', handleInviteCreated);
+            gameSocket.off('spectate_started', handleSpectateStarted);
+            gameSocket.off('chat_message', handleChatMessage);
+            gameSocket.off('error', handleServerError);
+        };
+    }, [applyMatchFoundSnapshot, applyMoveMadeSnapshot, playAudio, playOutcomeSound, updateSessionStats]);
+
+    useEffect(() => {
+        if (!inviteCode || !localStorage.getItem('token')) return;
+        const timer = setTimeout(() => {
+            gameSocket.send('accept_invite', {code: inviteCode});
+            navigate('/', {replace: true});
+        }, 450);
+        return () => clearTimeout(timer);
+    }, [inviteCode, navigate]);
+
+    useEffect(() => {
+        const syncLobbyAndActiveGame = async () => {
+            const token = localStorage.getItem('token');
+            try {
+                if (token && !activeBot && !spectatingGameId) {
+                    const activeRes = await fetch(`${API_BASE_URL}/api/v1/profile/games/my-active`, {
+                        headers: {'Authorization': `Bearer ${token}`}
+                    });
+                    if (activeRes.ok) {
+                        const activeData = await activeRes.json();
+                        if (activeData && activeData.active && activeData.game_id) {
+                            if (gameIdRef.current !== Number(activeData.game_id)) {
+                                applyMatchFoundSnapshot(activeData);
+                                return;
+                            } else if (Number(activeData.state_version || 0) > stateVersionRef.current) {
+                                applyMoveMadeSnapshot(activeData);
+                            }
+                        }
+                    }
+                }
+
+                if (!gameIdRef.current) {
+                    const [qRes, liveRes] = await Promise.all([
+                        fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/queue`),
+                        fetch(`${API_BASE_URL}/api/v1/profile/games/live`)
+                    ]);
+                    if (qRes.ok) {
+                        setQueuePlayers(await qRes.json());
+                    }
+                    if (liveRes.ok) {
+                        setLiveGames(await liveRes.json());
+                    }
+                } else {
+                    setQueuePlayers([]);
+                }
+            } catch (e) {
+                console.error('Failed to sync lobby/active game data', e);
+            }
+        };
+
+        syncLobbyAndActiveGame();
+        const interval = setInterval(syncLobbyAndActiveGame, 1500);
+        return () => clearInterval(interval);
+    }, [activeBot, spectatingGameId, applyMatchFoundSnapshot, applyMoveMadeSnapshot]);
+
+    const currentTurnChar = game.turn();
+
+    useEffect(() => {
+        if ((!gameId && !activeBot && !spectatingGameId) || gameOverResult) return;
+
+        let lastTick = Date.now();
+        const currentTurnColor = currentTurnChar === 'w' ? 'white' : 'black';
+
+        const interval = setInterval(() => {
+            const now = Date.now();
+            const delta = now - lastTick;
+            lastTick = now;
+
+            if (currentTurnColor === 'white') {
+                setWhiteTimeMs(prev => Math.max(0, prev - delta));
+            } else {
+                setBlackTimeMs(prev => Math.max(0, prev - delta));
+            }
+        }, 50);
+
+        return () => clearInterval(interval);
+    }, [gameId, activeBot, spectatingGameId, gameOverResult, currentTurnChar]);
+
+    // Звуковое предупреждение о цейтноте (< 10 секунд на часах игрока)
+    useEffect(() => {
+        if ((!gameId && !activeBot) || gameOverResult || lowTimeWarnedRef.current) return;
+        const myRemainingMs = myColor === 'white' ? whiteTimeMs : blackTimeMs;
+        if (myRemainingMs > 0 && myRemainingMs <= 10000) {
+            lowTimeWarnedRef.current = true;
+            playAudio('low_time');
+        }
+    }, [whiteTimeMs, blackTimeMs, gameId, activeBot, gameOverResult, myColor, playAudio]);
+
+    useEffect(() => {
+        if (!activeBot || gameOverResult) return;
+
+        if (whiteTimeMs <= 0 || blackTimeMs <= 0) {
+            const flagWinner = whiteTimeMs <= 0 ? '0-1' : '1-0';
+            const botName = HISTORICAL_BOTS[activeBot].shortName;
+            setPremove(null);
+            setPendingPromotion(null);
+            setGameOverResult(flagWinner);
+            setDrawOfferStatus(`Флажок упал! Партия против ${botName} завершена по времени (${flagWinner}).`);
+            updateSessionStats(flagWinner);
+            playOutcomeSound(flagWinner, myColor);
+            saveBotGameToDatabase(activeBot, myColor, flagWinner, game, 'timeout');
+        }
+    }, [whiteTimeMs, blackTimeMs, activeBot, gameOverResult, myColor, game, playOutcomeSound, updateSessionStats, saveBotGameToDatabase]);
+
+    const executeMove = useCallback((
+        from: string,
+        to: string,
+        explicitPromotion?: PromotionPiece,
+        isPremoveMove: boolean = false
+    ): boolean => {
+        if (gameOverResult || viewIndex !== -1 || spectatingGameId) return false;
+
+        const piece = game.get(from as any);
+        const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
+
+        if (!piece || piece.color !== (game.turn() === 'w' ? 'w' : 'b') || ((gameId || activeBot || spectatingGameId) && currentTurnColor !== myColor)) {
+            setSelectedSquare(null);
+            return false;
+        }
+
+        const targetRank = to[1];
+        const isPawnPromotion =
+            piece.type === 'p' &&
+            ((piece.color === 'w' && targetRank === '8') || (piece.color === 'b' && targetRank === '1'));
+
+        if (isPawnPromotion && !explicitPromotion && !isPremoveMove) {
+            try {
+                const probeGame = cloneChessInstance(game);
+                const testMove = probeGame.move({from, to, promotion: 'q'});
+                if (testMove) {
+                    setPendingPromotion({
+                        from,
+                        to,
+                        color: piece.color as 'w' | 'b',
+                        isPremove: false
+                    });
+                    setSelectedSquare(null);
+                    setDragState(null);
+                    return true;
+                }
+            } catch {
+                setSelectedSquare(null);
+                setDragState(null);
+                return false;
+            }
+        }
+
+        const chosenPromotion: PromotionPiece = explicitPromotion || 'q';
+
+        try {
+            const nextGame = cloneChessInstance(game);
+            const move = nextGame.move({
+                from,
+                to,
+                ...(isPawnPromotion ? {promotion: chosenPromotion} : {})
+            });
+
+            if (move) {
+                const timeTaken = isPremoveMove ? 0 : Math.max(0, Date.now() - moveStartTime.current);
+                const uciMove = (move as any).uci || `${move.from}${move.to}${move.promotion || ''}`;
+                const newHistory = nextGame.history({verbose: true});
+
+                if (activeBot) {
+                    applyIncrementAfterMove(myColor);
+                }
+
+                setPendingPromotion(null);
+                setGame(nextGame);
+                setHistory(newHistory);
+                setViewIndex(-1);
+                if (!gameId && !nextGame.isGameOver()) {
+                    // В PvP звук хода играет applyMoveMadeSnapshot, когда сервер эхом
+                    // присылает move_made (его получают оба игрока) — иначе свой ход звучит
+                    // дважды: сразу здесь и повторно из эха. На завершающем ходу (мат/пат)
+                    // играет только исход — звук самого хода был бы лишним дублем.
+                    playAudio(resolveMoveSound(move.san));
+                }
+                moveStartTime.current = Date.now();
+
+                if (gameId) {
+                    const commandId = typeof crypto !== 'undefined' && crypto.randomUUID
+                        ? crypto.randomUUID()
+                        : Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+
+                    gameSocket.send('make_move', {
+                        game_id: gameId,
+                        move: uciMove,
+                        command_id: commandId,
+                        state_version: stateVersionRef.current,
+                        time_taken_ms: timeTaken,
+                        window_blurred: document.hidden,
+                        is_premove: isPremoveMove
+                    });
+                } else if (activeBot && nextGame.isGameOver()) {
+                    let result = '1/2-1/2';
+                    if (nextGame.isCheckmate()) {
+                        result = nextGame.turn() === 'w' ? '0-1' : '1-0';
+                    }
+                    const botName = HISTORICAL_BOTS[activeBot].shortName;
+                    setGameOverResult(result);
+                    setDrawOfferStatus(`Партия против ${botName} окончена и сохранена в архив (${result}).`);
+                    updateSessionStats(result);
+                    playOutcomeSound(result, myColor);
+                    saveBotGameToDatabase(activeBot, myColor, result, nextGame);
+                }
+                setSelectedSquare(null);
+                setDragState(null);
+                return true;
+            }
+        } catch {
+            setSelectedSquare(null);
+        }
+        setDragState(null);
+        return false;
+    }, [game, gameId, activeBot, spectatingGameId, myColor, stateVersion, viewIndex, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyIncrementAfterMove]);
+
+    const scheduleOrPromotePremove = useCallback((from: string, to: string, explicitPromotion?: PromotionPiece) => {
+        if (from === to) return;
+        const piece = game.get(from as any);
+        const myColorChar = myColor === 'white' ? 'w' : 'b';
+        if (!piece || piece.color !== myColorChar) {
+            setSelectedSquare(null);
+            return;
+        }
+
+        const targetRank = to[1];
+        const isPawnPromotion =
+            piece.type === 'p' &&
+            ((piece.color === 'w' && targetRank === '8') || (piece.color === 'b' && targetRank === '1'));
+
+        if (isPawnPromotion && !explicitPromotion) {
+            setPendingPromotion({
+                from,
+                to,
+                color: myColorChar,
+                isPremove: true
+            });
+            setSelectedSquare(null);
+            setDragState(null);
+            return;
+        }
+
+        setPremove({
+            from,
+            to,
+            promotion: isPawnPromotion ? (explicitPromotion || 'q') : undefined
+        });
+        playAudio('premove');
+        setPendingPromotion(null);
+        setSelectedSquare(null);
+        setDragState(null);
+    }, [game, myColor, playAudio]);
+
+    useEffect(() => {
+        if (!premove || gameOverResult || viewIndex !== -1) return;
+        if (!gameId && !activeBot) return;
+
+        const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
+        if (currentTurnColor !== myColor) return;
+
+        const currentPremove = premove;
+        setPremove(null);
+        executeMove(currentPremove.from, currentPremove.to, currentPremove.promotion || 'q', true);
+    }, [game, premove, gameId, activeBot, myColor, gameOverResult, viewIndex, executeMove]);
+
+    useEffect(() => {
+        const handlePointerMove = (e: PointerEvent) => {
+            if (!dragState) return;
+            setDragState(prev => prev ? {...prev, x: e.clientX, y: e.clientY} : null);
+        };
+
+        const handlePointerUp = (e: PointerEvent) => {
+            if (!dragState) return;
+
+            let targetSquare: string | null = null;
+
+            const elements = document.elementsFromPoint(e.clientX, e.clientY);
+            const squareEl = Array.from(elements || []).find(el => el.hasAttribute('data-square'));
+            if (squareEl) {
+                targetSquare = squareEl.getAttribute('data-square');
+            }
+
+            if (!targetSquare && boardContainerRef.current) {
+                const rect = boardContainerRef.current.getBoundingClientRect();
+                const padding = 10;
+                const innerLeft = rect.left + padding;
+                const innerTop = rect.top + padding;
+                const innerWidth = rect.width - padding * 2;
+                const innerHeight = rect.height - padding * 2;
+
+                const x = e.clientX - innerLeft;
+                const y = e.clientY - innerTop;
+
+                if (x >= 0 && x <= innerWidth && y >= 0 && y <= innerHeight) {
+                    const fileIdx = Math.floor((x / innerWidth) * 8);
+                    const rankIdx = Math.floor((y / innerHeight) * 8);
+
+                    const files = isBoardFlipped ? [...FILES].reverse() : FILES;
+                    const ranks = isBoardFlipped
+                        ? ['1', '2', '3', '4', '5', '6', '7', '8']
+                        : ['8', '7', '6', '5', '4', '3', '2', '1'];
+
+                    if (files[fileIdx] && ranks[rankIdx]) {
+                        targetSquare = `${files[fileIdx]}${ranks[rankIdx]}`;
+                    }
+                }
+            }
+
+            if (targetSquare && targetSquare !== dragState.from) {
+                const turnColor = game.turn() === 'w' ? 'white' : 'black';
+                if ((gameId || activeBot || spectatingGameId) && turnColor !== myColor) {
+                    scheduleOrPromotePremove(dragState.from, targetSquare);
+                } else {
+                    executeMove(dragState.from, targetSquare);
+                }
+            }
+
+            setDragState(null);
+        };
+
+        if (dragState) {
+            window.addEventListener('pointermove', handlePointerMove);
+            window.addEventListener('pointerup', handlePointerUp);
+            window.addEventListener('pointercancel', handlePointerUp);
+        }
+
+        return () => {
+            window.removeEventListener('pointermove', handlePointerMove);
+            window.removeEventListener('pointerup', handlePointerUp);
+            window.removeEventListener('pointercancel', handlePointerUp);
+        };
+    }, [dragState, isBoardFlipped, game, gameId, activeBot, spectatingGameId, myColor, executeMove, scheduleOrPromotePremove]);
+
+    const formatTime = (ms: number) => {
+        const totalMs = Math.max(0, ms);
+        const totalSecs = Math.floor(totalMs / 1000);
+        const hours = Math.floor(totalSecs / 3600);
+        const mins = Math.floor((totalSecs % 3600) / 60);
+        const secs = totalSecs % 60;
+
+        if (hours > 0) {
+            return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        if (totalMs < 30000 && totalMs > 0) {
+            const tenths = Math.floor((totalMs % 1000) / 100);
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${tenths}`;
+        }
+
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const startMatchmaking = async () => {
+        gameIdRef.current = null;
+        setGameId(null);
+        setActiveBot(null);
+        setBotComment(null);
+        setSavedBotGameId(null);
+        botGameSavedRef.current = false;
+        lowTimeWarnedRef.current = false;
+        setPendingPromotion(null);
+        setPremove(null);
+        setGameOverResult(null);
+        setRatingInfo(null);
+        setIsSearching(true);
+        setLeftSectionTab('lobby');
+        setLobbyTab('lobby');
+        setIsTimeDropdownOpen(false);
+        setDrawOfferStatus(`Вы опубликовали вызов в лобби (${selectedTimeControl.label})...`);
+
+        const baseMs = Math.round(effectiveWhiteBaseMinutes * 60 * 1000);
+        const incMs = Math.round(effectiveIncSeconds * 1000);
+
+        gameSocket.send('join_queue', {
+            base_time_ms: baseMs,
+            increment_ms: incMs
+        });
+
+        const token = localStorage.getItem('token');
+        if (token) {
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/join`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({base_time_ms: baseMs, increment_ms: incMs})
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.active && data.game_id) {
+                        applyMatchFoundSnapshot(data);
+                    }
+                }
+            } catch {
+                // Игнорируем ошибку, если сработал WebSocket
+            }
+        }
+    };
+
+    const cancelMatchmaking = async () => {
+        setIsSearching(false);
+        setDrawOfferStatus(null);
+        gameSocket.send('leave_queue', {});
+        const token = localStorage.getItem('token');
+        if (token) {
+            fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/leave`, {
+                method: 'POST',
+                headers: {'Authorization': `Bearer ${token}`}
+            }).catch(() => {
+            });
+        }
+    };
+
+    const acceptChallenge = async (targetUserId: number) => {
+        setActiveBot(null);
+        setBotComment(null);
+        setSavedBotGameId(null);
+        setPendingPromotion(null);
+        setPremove(null);
+        botGameSavedRef.current = false;
+
+        gameSocket.send('accept_challenge', {target_user_id: targetUserId});
+
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/accept/${targetUserId}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/json'
+                }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.game_id) {
+                    applyMatchFoundSnapshot(data);
+                }
+            }
+        } catch (err) {
+            console.error('Ошибка при принятии вызова по HTTP:', err);
+        }
+    };
+
+    const handleCreatePrivateInvite = () => {
+        gameSocket.send('create_invite', {
+            base_time_ms: Math.round(effectiveWhiteBaseMinutes * 60 * 1000),
+            increment_ms: Math.round(effectiveIncSeconds * 1000),
+            color_pref: inviteColorPref
+        });
+    };
+
+    const handleCopyInviteLink = () => {
+        if (!createdInviteCode) return;
+        const url = `${window.location.origin}/challenge/${createdInviteCode}`;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).catch(() => {
+            });
+        }
+        setInviteCopied(true);
+        setTimeout(() => setInviteCopied(false), 2500);
+    };
+
+    const handleSpectateGame = (targetGameId: number) => {
+        gameSocket.send('spectate_game', {game_id: targetGameId});
+    };
+
+    const handleLeaveSpectate = () => {
+        if (spectatingGameId) {
+            gameSocket.send('leave_spectate', {game_id: spectatingGameId});
+        }
+        setSpectatingGameId(null);
+        handleResetSandbox();
+    };
+
+    const handleSendChatMessage = (textToSend?: string) => {
+        const activeGid = gameId || spectatingGameId;
+        const finalMsg = (textToSend ?? chatInput).trim();
+        if (!activeGid || !finalMsg) return;
+        gameSocket.send('chat_message', {
+            game_id: activeGid,
+            text: finalMsg.slice(0, 140)
+        });
+        if (!textToSend) setChatInput('');
+    };
+
+    const handleAbortGame = () => {
+        if ((!gameId && !activeBot) || gameOverResult || history.length >= 2) return;
+        setPendingPromotion(null);
+        setPremove(null);
+        if (gameId) {
+            gameSocket.send('abort_game', {game_id: gameId});
+        } else if (activeBot) {
+            setGameOverResult('*');
+            setDrawOfferStatus('Партия отменена без изменения счёта.');
+            playAudio('decline');
+        }
+    };
+
+    const handleOfferRematch = () => {
+        if (gameId && gameOverResult) {
+            gameSocket.send('offer_rematch', {game_id: gameId});
+            setRematchStatus('offered_by_me');
+            playAudio('premove');
+        } else if (activeBot && gameOverResult) {
+            const nextColor = myColor === 'white' ? 'black' : 'white';
+            startHistoricalBotGame(activeBot, nextColor);
+        }
+    };
+
+    const handleAcceptRematch = () => {
+        if (!gameId) return;
+        gameSocket.send('accept_rematch', {game_id: gameId});
+    };
+
+    const handleDeclineRematch = () => {
+        if (!gameId) return;
+        gameSocket.send('decline_rematch', {game_id: gameId});
+        setRematchStatus('none');
+        playAudio('decline');
+    };
+
+    const handleResign = () => {
+        if ((!gameId && !activeBot) || gameOverResult) return;
+        if (window.confirm('Вы действительно хотите сдаться?')) {
+            setPendingPromotion(null);
+            setPremove(null);
+            if (gameId) {
+                gameSocket.send('resign', {game_id: gameId});
+            } else if (activeBot) {
+                const res = myColor === 'white' ? '0-1' : '1-0';
+                const botName = HISTORICAL_BOTS[activeBot].shortName;
+                setGameOverResult(res);
+                setDrawOfferStatus(`Вы сдались. Победа ${botName} (${res}).`);
+                updateSessionStats(res);
+                playOutcomeSound(res, myColor);
+                saveBotGameToDatabase(activeBot, myColor, res, game, 'resignation');
+            }
+        }
+    };
+
+    const handleOfferDraw = () => {
+        if (!gameId || gameOverResult) return;
+        gameSocket.send('offer_draw', {game_id: gameId});
+        setDrawOfferStatus('Вы предложили ничью...');
+        playAudio('premove');
+    };
+
+    const acceptDraw = () => {
+        if (!gameId) return;
+        gameSocket.send('accept_draw', {game_id: gameId});
+        setDrawOfferStatus(null);
+    };
+
+    const declineDraw = () => {
+        if (!gameId) return;
+        gameSocket.send('decline_draw', {game_id: gameId});
+        setDrawOfferStatus(null);
+        playAudio('decline');
+    };
+
+    const handleResetSandbox = () => {
+        if (gameId && !gameOverResult) return;
+        gameIdRef.current = null;
+        setGameId(null);
+        setActiveBot(null);
+        setBotComment(null);
+        setSavedBotGameId(null);
+        botGameSavedRef.current = false;
+        lowTimeWarnedRef.current = false;
+        setIsBotThinking(false);
+        setGameOverResult(null);
+        setRatingInfo(null);
+        setDrawOfferStatus(null);
+        setSelectedSquare(null);
+        setPendingPromotion(null);
+        setPremove(null);
+        setViewIndex(-1);
+        setGame(new Chess());
+        setHistory([]);
+    };
+
+    const handleUndoSandboxMove = () => {
+        if (gameId || history.length === 0 || isBotThinking || !!gameOverResult) return;
+        const nextGame = cloneChessInstance(game);
+        nextGame.undo();
+        if (activeBot && nextGame.history().length > 0) {
+            const turnAfterFirstUndo = nextGame.turn() === 'w' ? 'white' : 'black';
+            if (turnAfterFirstUndo !== myColor) {
+                nextGame.undo();
+            }
+        }
+        setGame(nextGame);
+        setHistory(nextGame.history({verbose: true}));
+        setGameOverResult(null);
+        setDrawOfferStatus(null);
+        setPendingPromotion(null);
+        setPremove(null);
+        setViewIndex(-1);
+        setSelectedSquare(null);
+        playAudio('move');
+    };
+
+    const handlePromotionSelect = (pieceType: PromotionPiece) => {
+        if (!pendingPromotion) return;
+        const {from, to, isPremove} = pendingPromotion;
+        setPendingPromotion(null);
+        if (isPremove) {
+            scheduleOrPromotePremove(from, to, pieceType);
+        } else {
+            executeMove(from, to, pieceType, false);
+        }
+    };
+
+    const handleSquareClick = (squareId: string) => {
+        if (viewIndex !== -1 || gameOverResult || spectatingGameId) return;
+
+        if (pendingPromotion) {
+            setPendingPromotion(null);
+            return;
+        }
+
+        const turnChar = game.turn();
+        const currentTurnColor = turnChar === 'w' ? 'white' : 'black';
+        const myColorChar = myColor === 'white' ? 'w' : 'b';
+        const isOpponentTurn = (gameId || activeBot || spectatingGameId) && currentTurnColor !== myColor;
+
+        if (isOpponentTurn) {
+            if (selectedSquare) {
+                if (selectedSquare === squareId) {
+                    setSelectedSquare(null);
+                } else {
+                    const pieceOnTarget = game.get(squareId as any);
+                    if (pieceOnTarget && pieceOnTarget.color === myColorChar) {
+                        setSelectedSquare(squareId);
+                    } else {
+                        scheduleOrPromotePremove(selectedSquare, squareId);
+                    }
+                }
+            } else {
+                const piece = game.get(squareId as any);
+                if (piece && piece.color === myColorChar) {
+                    setSelectedSquare(squareId);
+                } else if (premove) {
+                    setPremove(null);
+                }
+            }
+            return;
+        }
+
+        if (selectedSquare) {
+            if (selectedSquare === squareId) {
+                setSelectedSquare(null);
+            } else {
+                const pieceOnTarget = game.get(squareId as any);
+                if (pieceOnTarget && pieceOnTarget.color === turnChar && ((!gameId && !activeBot) || currentTurnColor === myColor)) {
+                    setSelectedSquare(squareId);
+                } else {
+                    executeMove(selectedSquare, squareId);
+                }
+            }
+        } else {
+            const piece = game.get(squareId as any);
+            if (piece && piece.color === turnChar && ((!gameId && !activeBot) || currentTurnColor === myColor)) {
+                setSelectedSquare(squareId);
+            }
+        }
+    };
+
+    const currentGame = viewIndex === -1 ? game : (() => {
+        const tg = new Chess();
+        const limit = viewIndex === -2 ? -1 : viewIndex;
+        for (let i = 0; i <= limit; i++) {
+            if (history[i]) tg.move(history[i]);
+        }
+        return tg;
+    })();
     const boardState = currentGame.board();
+    const material = calculateMaterialBalance(boardState);
 
-    // Текущая оценка для шкалы EvalBar (из отчёта Stockfish либо мгновенного материального баланса)
-    const currentEval = useMemo(() => {
-        if (viewIndex < 0) {
-            return {cp: 20, display: '+0.2', bestMoveUci: null as string | null};
+    const activeMoveIndex = viewIndex === -1 ? history.length - 1 : viewIndex;
+    const lastMove = activeMoveIndex >= 0 ? history[activeMoveIndex] : null;
+
+    const legalTargetSquares = new Set<string>();
+    if (selectedSquare && viewIndex === -1 && !gameOverResult) {
+        const currentTurnColor = currentGame.turn() === 'w' ? 'white' : 'black';
+        const isMyTurnNow = (!gameId && !activeBot) || currentTurnColor === myColor;
+        if (isMyTurnNow) {
+            try {
+                const movesForSquare = currentGame.moves({square: selectedSquare as any, verbose: true});
+                movesForSquare.forEach((m: any) => legalTargetSquares.add(m.to));
+            } catch {
+                // Игнорируем некорректный квадрат
+            }
         }
-        if (analysisReport && analysisReport.moves[viewIndex]) {
-            const m = analysisReport.moves[viewIndex];
-            return {
-                cp: m.eval_cp,
-                display: m.eval_display,
-                bestMoveUci: m.best_move_uci
-            };
+    }
+
+    const displayedRanks = isBoardFlipped ? ['1', '2', '3', '4', '5', '6', '7', '8'] : ['8', '7', '6', '5', '4', '3', '2', '1'];
+    const displayedFiles = isBoardFlipped ? [...FILES].reverse() : FILES;
+
+    const topIsWhite = isBoardFlipped;
+    const topPlayerInfo = topIsWhite ? whitePlayer : blackPlayer;
+    const bottomPlayerInfo = topIsWhite ? blackPlayer : whitePlayer;
+    const topPlayerTime = topIsWhite ? whiteTimeMs : blackTimeMs;
+    const bottomPlayerTime = topIsWhite ? blackTimeMs : whiteTimeMs;
+    const topIdlePreviewMs = Math.round((topIsWhite ? effectiveWhiteBaseMinutes : effectiveBlackBaseMinutes) * 60 * 1000);
+    const bottomIdlePreviewMs = Math.round((!topIsWhite ? effectiveWhiteBaseMinutes : effectiveBlackBaseMinutes) * 60 * 1000);
+    const topCaptured = topIsWhite ? material.whiteCapturedSymbols : material.blackCapturedSymbols;
+    const bottomCaptured = topIsWhite ? material.blackCapturedSymbols : material.whiteCapturedSymbols;
+    const topAdvantage = topIsWhite ? material.whiteAdvantage : material.blackAdvantage;
+    const bottomAdvantage = topIsWhite ? material.blackAdvantage : material.whiteAdvantage;
+
+    const isBotOnTop = !!activeBotProfile && ((topIsWhite && myColor === 'black') || (!topIsWhite && myColor === 'white'));
+    const isBotOnBottom = !!activeBotProfile && !isBotOnTop;
+
+    const movePairs = history.reduce((acc: Array<{
+        moveNumber: number;
+        whiteSan: string;
+        whiteIdx: number;
+        blackSan?: string;
+        blackIdx?: number;
+    }>, move: any, idx: number) => {
+        if (idx % 2 === 0) {
+            acc.push({
+                moveNumber: Math.floor(idx / 2) + 1,
+                whiteSan: move.san,
+                whiteIdx: idx
+            });
+        } else {
+            acc[acc.length - 1].blackSan = move.san;
+            acc[acc.length - 1].blackIdx = idx;
         }
-        const fallback = computeStaticWhiteEvalCp(currentGame);
-        return {cp: fallback.cp, display: fallback.display, bestMoveUci: null as string | null};
-    }, [viewIndex, analysisReport, currentGame]);
+        return acc;
+    }, []);
 
-    const whiteBarPercent = evalCpToWhitePercentage(currentEval.cp);
-
-    // Данные для интерактивного графика Recharts
-    const chartData = useMemo(() => {
-        if (!analysisReport) return [];
-        return analysisReport.moves.map((m, idx) => ({
-            idx,
-            ply: m.ply,
-            label: `${m.move_number}${m.color === 'white' ? '.' : '...'} ${m.san}`,
-            evalPawns: Number((Math.max(-1000, Math.min(1000, m.eval_cp)) / 100).toFixed(2)),
-            display: m.eval_display,
-            classification: m.classification
-        }));
-    }, [analysisReport]);
+    const handleSelectMoveFromList = (targetIdx: number) => {
+        setSelectedSquare(null);
+        const isAlreadyActive = viewIndex === -1
+            ? targetIdx >= history.length - 1
+            : targetIdx === viewIndex;
+        if (isAlreadyActive) return;
+        if (history[targetIdx]) {
+            playAudio(resolveMoveSound(history[targetIdx].san));
+        }
+        if (targetIdx >= history.length - 1) {
+            setViewIndex(-1);
+        } else {
+            setViewIndex(targetIdx);
+        }
+    };
 
     const renderPieceSvg = (piece: { type: string; color: string }) => {
         const styleProps = getHarmoniousPieceStyle(pieceSetKey, boardThemeKey, piece.color);
@@ -395,921 +1669,150 @@ export default function GameViewer() {
             <div className="relative w-full h-full pointer-events-none flex items-center justify-center">
                 <img
                     src={getPieceSvgUrl(pieceSetKey, piece.color, piece.type)}
-                    className="object-contain select-none"
+                    className="object-contain select-none transition-transform duration-75"
                     style={styleProps}
                     draggable={false}
-                    alt={`${piece.color} ${piece.type}`}
+                    alt={`${piece.color}${piece.type}`}
                 />
             </div>
         );
     };
 
-    const whiteName = gameDataFromState?.white_username || pgnHeaders.White || 'Белые';
-    const whiteRating = gameDataFromState?.white_rating || pgnHeaders.WhiteElo || '?';
-    const blackName = gameDataFromState?.black_username || pgnHeaders.Black || 'Чёрные';
-    const blackRating = gameDataFromState?.black_rating || pgnHeaders.BlackElo || '?';
-    const resultStr = gameDataFromState?.result || pgnHeaders.Result || '*';
-
-    const displayedRanks = isFlipped ? [...RANKS].reverse() : RANKS;
-    const displayedFiles = isFlipped ? [...FILES].reverse() : FILES;
-
-    const topName = isFlipped ? whiteName : blackName;
-    const topRating = isFlipped ? whiteRating : blackRating;
-    const bottomName = isFlipped ? blackName : whiteName;
-    const bottomRating = isFlipped ? blackRating : whiteRating;
-
-    const TopIcon = isFlipped ? '♙' : '♟';
-    const BottomIcon = isFlipped ? '♟' : '♙';
-
-    const topIconBg = isFlipped ? 'bg-boxwood text-acacia-dark' : 'bg-acacia text-amber-200';
-    const bottomIconBg = isFlipped ? 'bg-acacia text-amber-200' : 'bg-boxwood text-acacia-dark';
-
-    let displayDate = 'Архивная партия';
-    const rawDate = gameDataFromState?.pgn_date || pgnHeaders.Date;
-    if (rawDate && !rawDate.includes('????')) {
-        displayDate = rawDate.replace(/\??/g, '').replace(/\.$/, '');
-    } else if (gameDataFromState?.finished_at) {
-        displayDate = format(parseISO(gameDataFromState.finished_at), 'd MMM yyyy', {locale: ru});
-    }
-
-    const squareToSvgCoords = (sq: string): { x: number; y: number } | null => {
-        if (!sq || sq.length < 2) return null;
-        const fIdx = displayedFiles.indexOf(sq[0]);
-        const rIdx = displayedRanks.indexOf(sq[1]);
-        if (fIdx === -1 || rIdx === -1) return null;
-        return {
-            x: (fIdx + 0.5) * 12.5,
-            y: (rIdx + 0.5) * 12.5
-        };
-    };
-
-    const handleSquareMouseDown = (e: React.MouseEvent, squareId: string) => {
-        if (e.button === 2) {
-            e.preventDefault();
-            rightClickStartRef.current = squareId;
-        } else if (e.button === 0) {
-            if (arrows.length > 0 || highlightedSquares.size > 0) {
-                setArrows([]);
-                setHighlightedSquares(new Set());
-            }
-        }
-    };
-
-    const handleSquareMouseUp = (e: React.MouseEvent, targetSquareId: string) => {
-        if (e.button !== 2 || !rightClickStartRef.current) return;
-        e.preventDefault();
-        const startSq = rightClickStartRef.current;
-        rightClickStartRef.current = null;
-
-        if (startSq === targetSquareId) {
-            setHighlightedSquares(prev => {
-                const next = new Set(prev);
-                if (next.has(targetSquareId)) next.delete(targetSquareId);
-                else next.add(targetSquareId);
-                return next;
-            });
-        } else {
-            setArrows(prev => {
-                const exists = prev.some(a => a.from === startSq && a.to === targetSquareId);
-                if (exists) {
-                    return prev.filter(a => !(a.from === startSq && a.to === targetSquareId));
-                }
-                return [...prev, {from: startSq, to: targetSquareId}];
-            });
-        }
-    };
-
-    if (loading) {
+    if (!localStorage.getItem('token')) {
         return (
-            <div className="my-auto flex flex-col items-center justify-center w-full text-boxwood-light">
-                <Loader2 className="animate-spin text-amber-500 mb-3" size={40}/>
-                <div className="text-base font-bold">Загрузка студии разбора...</div>
+            <div
+                className="my-auto flex flex-col items-center justify-center p-8 bg-acacia rounded-lg shadow-heavy border-4 border-acacia-dark text-boxwood-light text-center">
+                <div className="text-2xl font-bold mb-2">Требуется авторизация</div>
+                <p className="text-base text-boxwood/85 mb-2">
+                    Пожалуйста, войдите в систему в правом верхнем углу, чтобы начать игру.
+                </p>
             </div>
         );
     }
 
-    if (error) {
-        return (
-            <div className="my-auto bg-red-950/80 border border-red-800 p-6 rounded-lg text-red-200 text-center">
-                <h2 className="text-xl font-bold mb-2">Ошибка</h2>
-                <p>{error}</p>
-                <button
-                    onClick={() => window.history.back()}
-                    className="mt-4 inline-block px-4 py-2 bg-black/40 rounded hover:bg-black/60 transition text-amber-400 border border-amber-900/50 cursor-pointer"
-                >
-                    Вернуться
-                </button>
-            </div>
-        );
-    }
-
-    const movePairs = history.reduce((acc: any[], move: any, index: number) => {
-        if (index % 2 === 0) {
-            acc.push({white: move.san, black: '', whiteIndex: index, blackIndex: -1});
-        } else {
-            acc[acc.length - 1].black = move.san;
-            acc[acc.length - 1].blackIndex = index;
-        }
-        return acc;
-    }, []);
+    const filteredQueue = queuePlayers.filter(p => p.user_id !== currentUserId);
+    const responsiveBoardPx = typeof window !== 'undefined' ? Math.min(boardSize, window.innerWidth - 24) : boardSize;
 
     return (
         <div
-            className="w-full max-w-[1800px] h-full flex flex-col xl:flex-row items-center xl:items-stretch justify-center gap-5 px-2 xl:overflow-hidden relative">
+            className="w-full max-w-[1920px] h-full flex flex-col xl:flex-row items-center xl:items-stretch justify-between gap-3 px-1 xl:overflow-hidden relative">
 
-            {/* ЦЕНТРАЛЬНАЯ ЧАСТЬ: ВЕРТИКАЛЬНАЯ ШКАЛА ОЦЕНКИ (EVAL BAR) + ИГРОКИ И ДОСКА */}
-            <div className="flex items-center justify-center gap-3 shrink-0 my-auto">
-
-                {/* Вертикальная шкала оценки EvalBar */}
+            {dragState && (
                 <div
-                    style={{height: `${boardSize}px`}}
-                    className={`w-7 rounded-md overflow-hidden border-2 border-amber-950/90 shadow-heavy flex flex-col relative select-none shrink-0 ${
-                        isFlipped ? 'flex-col-reverse' : 'flex-col'
-                    }`}
-                    title={`Оценка позиции: ${currentEval.display}`}
+                    className="fixed pointer-events-none z-50 scale-110"
+                    style={{
+                        left: `${dragState.x}px`,
+                        top: `${dragState.y}px`,
+                        width: `${responsiveBoardPx / 8}px`,
+                        height: `${responsiveBoardPx / 8}px`,
+                        transform: 'translate(-50%, -50%)'
+                    }}
                 >
-                    {/* Чёрная полоса */}
-                    <div
-                        style={{height: `${100 - whiteBarPercent}%`}}
-                        className="w-full bg-[#1E1916] transition-all duration-300"
-                    />
-                    {/* Белая полоса */}
-                    <div
-                        style={{height: `${whiteBarPercent}%`}}
-                        className="w-full bg-[#EBE1CE] transition-all duration-300"
-                    />
-                    {/* Подпись оценки */}
-                    <span
-                        className={`absolute left-0 right-0 text-center font-mono text-[10px] font-extrabold tracking-tighter px-0.5 ${
-                            currentEval.cp >= 0
-                                ? (isFlipped ? 'top-1.5 text-[#1E1916]' : 'bottom-1.5 text-[#1E1916]')
-                                : (isFlipped ? 'bottom-1.5 text-[#EBE1CE]' : 'top-1.5 text-[#EBE1CE]')
-                        }`}
-                    >
-                        {currentEval.display}
-                    </span>
-                </div>
-
-                {/* Доска и плашки игроков */}
-                <div className="flex flex-col items-center gap-2.5">
-                    {/* Верхний игрок */}
-                    <div
-                        style={{width: `${boardSize}px`}}
-                        className="bg-acacia-dark px-3.5 py-2 rounded-lg shadow-heavy border-2 border-amber-900/50 flex justify-between items-center text-boxwood-light"
-                    >
-                        <div className="flex items-center gap-3 min-w-0">
-                            <div
-                                className={`w-9 h-9 rounded-md flex items-center justify-center border border-amber-600/30 font-bold text-lg shrink-0 ${topIconBg}`}>
-                                {TopIcon}
-                            </div>
-                            <div className="font-bold text-base flex items-center gap-2 truncate">
-                                <Link to={`/profile/${topName}`} className="hover:underline text-amber-200 truncate">
-                                    {topName}
-                                </Link>
-                                <span
-                                    className="text-xs px-2 py-0.5 rounded bg-black/45 text-amber-400 border border-amber-600/25 font-mono">
-                                    {topRating}
-                                </span>
-                            </div>
-                        </div>
-
-                        {analysisReport && (
-                            <div
-                                className="text-xs font-mono font-bold px-2.5 py-1 rounded bg-black/50 border border-amber-700/40 text-emerald-300">
-                                Точность: {isFlipped ? analysisReport.white.accuracy : analysisReport.black.accuracy}%
-                            </div>
-                        )}
-                    </div>
-
-                    {/* ДОСКА С SVG-ОВЕРЛЕЕМ СТРЕЛОК */}
-                    <div
-                        onContextMenu={(e) => e.preventDefault()}
-                        style={{
-                            width: `${boardSize}px`,
-                            height: `${boardSize}px`,
-                            backgroundColor: activeTheme.border
-                        }}
-                        className={`p-3 rounded-lg shadow-heavy border-2 border-amber-950/80 relative select-none group/board ${isResizing ? 'transition-none ring-2 ring-amber-500/60' : 'transition-colors'}`}
-                    >
-                        {activeTheme.useWoodGrain && (
-                            <div
-                                className="absolute inset-0 opacity-25 mix-blend-multiply pointer-events-none"
-                                style={{backgroundImage: "url('/assets/textures/wood-grain.png')"}}
-                            />
-                        )}
-
-                        <div
-                            className="grid grid-cols-8 grid-rows-8 w-full h-full border border-black/60 relative z-10 shadow-inner-board rounded-xs overflow-hidden">
-                            {displayedRanks.map((rank) =>
-                                displayedFiles.map((file) => {
-                                    const rIdx = RANKS.indexOf(rank);
-                                    const fIdx = FILES.indexOf(file);
-                                    const isDark = (rIdx + fIdx) % 2 !== 0;
-                                    const squareId = `${file}${rank}`;
-                                    const piece = boardState[rIdx][fIdx];
-
-                                    const lastMove = viewIndex >= 0 ? history[viewIndex] : null;
-                                    const isLastMoveSquare = lastMove && (lastMove.from === squareId || lastMove.to === squareId);
-                                    const isRightHighlighted = highlightedSquares.has(squareId);
-
-                                    return (
-                                        <div
-                                            key={squareId}
-                                            onMouseDown={(e) => handleSquareMouseDown(e, squareId)}
-                                            onMouseUp={(e) => handleSquareMouseUp(e, squareId)}
-                                            style={{
-                                                backgroundColor: isDark ? activeTheme.dark : activeTheme.light
-                                            }}
-                                            className="w-full h-full flex items-center justify-center relative"
-                                        >
-                                            {activeTheme.useWoodGrain && (
-                                                <div
-                                                    className="absolute inset-0 opacity-15 mix-blend-multiply pointer-events-none"
-                                                    style={{backgroundImage: "url('/assets/textures/wood-grain.png')"}}
-                                                />
-                                            )}
-
-                                            {isLastMoveSquare && (
-                                                <div
-                                                    className="absolute inset-0 bg-amber-300/40 z-10 pointer-events-none"/>
-                                            )}
-
-                                            {isRightHighlighted && (
-                                                <div
-                                                    className="absolute inset-0 bg-emerald-500/45 ring-2 ring-inset ring-emerald-300 z-10 pointer-events-none"/>
-                                            )}
-
-                                            {piece && (
-                                                <div
-                                                    className="relative w-full h-full p-[1.5%] z-20 pointer-events-none">
-                                                    {renderPieceSvg(piece)}
-                                                </div>
-                                            )}
-
-                                            {file === displayedFiles[0] && (
-                                                <span
-                                                    style={{color: isDark ? activeTheme.coordDark : activeTheme.coordLight}}
-                                                    className="absolute top-0.5 left-1 text-xs font-sans font-bold opacity-90 z-20 pointer-events-none leading-none"
-                                                >
-                                                    {rank}
-                                                </span>
-                                            )}
-                                            {rank === displayedRanks[7] && (
-                                                <span
-                                                    style={{color: isDark ? activeTheme.coordDark : activeTheme.coordLight}}
-                                                    className="absolute bottom-0.5 right-1 text-xs font-sans font-bold opacity-90 z-20 pointer-events-none leading-none"
-                                                >
-                                                    {file}
-                                                </span>
-                                            )}
-                                        </div>
-                                    );
-                                })
-                            )}
-
-                            {/* SVG-оверлей для стрелок правой кнопкой мыши */}
-                            {arrows.length > 0 && (
-                                <svg
-                                    viewBox="0 0 100 100"
-                                    className="absolute inset-0 w-full h-full z-30 pointer-events-none"
-                                >
-                                    <defs>
-                                        <marker
-                                            id="viewer-arrowhead"
-                                            markerWidth="3.5"
-                                            markerHeight="3.5"
-                                            refX="2.3"
-                                            refY="1.75"
-                                            orient="auto"
-                                        >
-                                            <polygon points="0 0, 3.5 1.75, 0 3.5" fill="rgba(245, 158, 11, 0.88)"/>
-                                        </marker>
-                                    </defs>
-                                    {arrows.map((arr, idx) => {
-                                        const start = squareToSvgCoords(arr.from);
-                                        const end = squareToSvgCoords(arr.to);
-                                        if (!start || !end) return null;
-                                        return (
-                                            <line
-                                                key={`${arr.from}-${arr.to}-${idx}`}
-                                                x1={start.x}
-                                                y1={start.y}
-                                                x2={end.x}
-                                                y2={end.y}
-                                                stroke="rgba(245, 158, 11, 0.88)"
-                                                strokeWidth="2.1"
-                                                strokeLinecap="round"
-                                                markerEnd="url(#viewer-arrowhead)"
-                                            />
-                                        );
-                                    })}
-                                </svg>
-                            )}
-                        </div>
-
-                        {isResizing && (
-                            <div
-                                className="absolute bottom-5 right-5 z-40 px-2.5 py-1 rounded bg-black/85 border border-amber-500/60 text-amber-300 font-mono text-xs font-bold shadow-lg pointer-events-none">
-                                {boardSize} × {boardSize} px
-                            </div>
-                        )}
-
-                        <div
-                            onMouseDown={handleResizeMouseDown}
-                            onDoubleClick={handleResizeDoubleClick}
-                            title="Потяните, чтобы изменить размер доски (двойной клик — сбросить)"
-                            className={`absolute bottom-0 right-0 w-6 h-6 z-40 cursor-nwse-resize flex items-end justify-end p-0.5 rounded-tl transition-opacity ${
-                                isResizing
-                                    ? 'opacity-100 text-amber-400'
-                                    : 'opacity-50 group-hover/board:opacity-90 hover:opacity-100! text-amber-200/80 hover:text-amber-300'
-                            }`}
-                        >
-                            <svg
-                                viewBox="0 0 16 16"
-                                className="w-3.5 h-3.5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                            >
-                                <line x1="14" y1="4" x2="4" y2="14"/>
-                                <line x1="14" y1="9" x2="9" y2="14"/>
-                                <line x1="14" y1="14" x2="14" y2="14"/>
-                            </svg>
-                        </div>
-                    </div>
-
-                    {/* Нижний игрок */}
-                    <div
-                        style={{width: `${boardSize}px`}}
-                        className="bg-acacia-dark px-3.5 py-2 rounded-lg shadow-heavy border-2 border-amber-900/50 flex justify-between items-center text-boxwood-light"
-                    >
-                        <div className="flex items-center gap-3 min-w-0">
-                            <div
-                                className={`w-9 h-9 rounded-md flex items-center justify-center border border-amber-600/30 font-bold text-lg shrink-0 ${bottomIconBg}`}>
-                                {BottomIcon}
-                            </div>
-                            <div className="font-bold text-base flex items-center gap-2 truncate">
-                                <Link to={`/profile/${bottomName}`} className="hover:underline text-amber-200 truncate">
-                                    {bottomName}
-                                </Link>
-                                <span
-                                    className="text-xs px-2 py-0.5 rounded bg-black/45 text-amber-400 border border-amber-600/25 font-mono">
-                                    {bottomRating}
-                                </span>
-                            </div>
-                        </div>
-
-                        {analysisReport && (
-                            <div
-                                className="text-xs font-mono font-bold px-2.5 py-1 rounded bg-black/50 border border-amber-700/40 text-emerald-300">
-                                Точность: {isFlipped ? analysisReport.black.accuracy : analysisReport.white.accuracy}%
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-
-            {/* ПРАВАЯ КОЛОНКА: СТУДИЯ РАЗБОРА, КОМПЬЮТЕРНЫЙ АНАЛИЗ, ГРАФИК И НОТАЦИЯ */}
-            <div
-                className="w-full xl:w-110 2xl:w-120 xl:h-full bg-acacia p-3.5 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-2.5 text-boxwood-light shrink-0 xl:overflow-hidden">
-
-                {/* Шапка студии разбора */}
-                <div className="flex items-center justify-between gap-2 border-b border-acacia-light pb-2.5 shrink-0">
-                    <div className="flex items-center gap-2.5 min-w-0">
-                        <button
-                            onClick={() => window.history.back()}
-                            className="p-1.5 bg-black/25 hover:bg-black/45 rounded-md transition border border-amber-900/50 cursor-pointer shrink-0"
-                            title="Назад"
-                        >
-                            <ArrowLeft size={16} className="text-amber-400"/>
-                        </button>
-                        <div className="min-w-0">
-                            <div
-                                className="text-xs tracking-wider uppercase text-boxwood/75 font-bold flex items-center gap-1.5">
-                                <Sword size={13} className="text-amber-400"/> Студия разбора партии
-                            </div>
-                            <div className="text-xs text-amber-300 mt-0.5 font-mono truncate">
-                                {displayDate} {pgnHeaders.ECO ? `• ECO ${pgnHeaders.ECO}` : ''}
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5 shrink-0">
-                        <button
-                            type="button"
-                            onClick={() => setShowAppearancePanel(prev => !prev)}
-                            className={`px-2.5 py-1.5 rounded-md border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
-                                showAppearancePanel
-                                    ? 'bg-amber-700 text-white border-amber-400'
-                                    : 'bg-acacia-dark hover:bg-black/45 text-amber-200 border-amber-800/50'
-                            }`}
-                        >
-                            <Palette size={14} className="text-amber-400"/> Вид
-                        </button>
-                        <span
-                            className="bg-acacia-dark px-2.5 py-1 rounded-md border border-amber-700/50 text-amber-400 font-mono text-xs font-bold">
-                            {resultStr}
-                        </span>
-                    </div>
-                </div>
-
-                {/* Выдвижная панель выбора фигур и доски */}
-                {showAppearancePanel && (
-                    <div
-                        className="bg-acacia-dark p-3 rounded-md border border-amber-700/50 flex flex-col gap-2 shadow-lg shrink-0">
-                        <div className="flex justify-between items-center text-xs text-boxwood/90">
-                            <span className="font-bold">♟ Фигуры: <span
-                                className="text-amber-400">{activePieceSet.name}</span></span>
-                            <button
-                                type="button"
-                                onClick={() => setShowAppearancePanel(false)}
-                                className="text-boxwood/60 hover:text-white cursor-pointer"
-                            >
-                                <X size={14}/>
-                            </button>
-                        </div>
-                        <div className="grid grid-cols-5 gap-1">
-                            {Object.values(PIECE_SETS).map((pset) => (
-                                <button
-                                    key={pset.id}
-                                    type="button"
-                                    onClick={() => handlePieceSetChange(pset.id)}
-                                    className={`py-1 px-1 rounded border text-xs font-bold transition cursor-pointer truncate ${
-                                        pset.id === activePieceSet.id
-                                            ? 'bg-amber-900/50 border-amber-400 text-amber-200'
-                                            : 'bg-black/35 border-amber-900/40 text-boxwood/75 hover:text-amber-200'
-                                    }`}
-                                >
-                                    {pset.shortName}
-                                </button>
-                            ))}
-                        </div>
-                        <div className="grid grid-cols-5 gap-1 pt-1 border-t border-amber-900/30">
-                            {Object.values(BOARD_THEMES).map((theme) => (
-                                <button
-                                    key={theme.id}
-                                    type="button"
-                                    onClick={() => handleThemeChange(theme.id)}
-                                    className={`py-1 px-1 rounded border text-xs font-bold transition cursor-pointer truncate ${
-                                        theme.id === activeTheme.id
-                                            ? 'bg-amber-900/50 border-amber-400 text-amber-200'
-                                            : 'bg-black/35 border-amber-900/40 text-boxwood/75 hover:text-amber-200'
-                                    }`}
-                                >
-                                    {theme.name}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-                )}
-
-                {/* Блок компьютерного анализа Stockfish + График перевеса Recharts */}
-                <div
-                    className="bg-acacia-dark p-3 rounded-md border border-amber-800/50 flex flex-col gap-2.5 shrink-0">
-                    {!analysisReport ? (
-                        <div className="flex items-center justify-between gap-3">
-                            <div className="text-xs text-boxwood/85 leading-snug">
-                                <div className="font-bold text-amber-200 flex items-center gap-1.5">
-                                    <Cpu size={14} className="text-amber-400"/> Компьютерный разбор Stockfish
-                                </div>
-                                <div className="text-boxwood/65 mt-0.5">
-                                    Точность игроков, поиск зевков (??) и интерактивный график перевеса
-                                </div>
-                            </div>
-                            <button
-                                type="button"
-                                disabled={isAnalyzing || history.length === 0}
-                                onClick={handleRunFullAnalysis}
-                                className="px-3.5 py-2 rounded-md bg-boxwood hover:bg-boxwood-light disabled:opacity-50 text-acacia-dark font-bold text-xs flex items-center gap-1.5 shrink-0 shadow cursor-pointer transition"
-                            >
-                                {isAnalyzing ? <Loader2 size={15} className="animate-spin"/> : <Sparkles size={15}/>}
-                                {isAnalyzing ? 'Анализ...' : 'Компьютерный анализ'}
-                            </button>
-                        </div>
-                    ) : (
-                        <>
-                            <div className="grid grid-cols-2 gap-2 text-xs">
-                                <div className="p-2 rounded bg-black/40 border border-amber-900/40 flex flex-col gap-1">
-                                    <div className="flex justify-between items-center">
-                                        <span className="font-bold text-amber-200 truncate">♔ {whiteName}</span>
-                                        <span className="font-mono font-extrabold text-sm text-emerald-400">
-                                            {analysisReport.white.accuracy}%
-                                        </span>
-                                    </div>
-                                    <div
-                                        className="flex items-center justify-between text-[11px] font-mono text-boxwood/80">
-                                        <span className="text-emerald-400"
-                                              title="Лучшие ходы">! {analysisReport.white.best}</span>
-                                        <span className="text-sky-400"
-                                              title="Неточности">?! {analysisReport.white.inaccuracies}</span>
-                                        <span className="text-amber-400"
-                                              title="Ошибки">? {analysisReport.white.mistakes}</span>
-                                        <span className="text-rose-400 font-bold"
-                                              title="Зевки">?? {analysisReport.white.blunders}</span>
-                                    </div>
-                                </div>
-
-                                <div className="p-2 rounded bg-black/40 border border-amber-900/40 flex flex-col gap-1">
-                                    <div className="flex justify-between items-center">
-                                        <span className="font-bold text-amber-200 truncate">♚ {blackName}</span>
-                                        <span className="font-mono font-extrabold text-sm text-emerald-400">
-                                            {analysisReport.black.accuracy}%
-                                        </span>
-                                    </div>
-                                    <div
-                                        className="flex items-center justify-between text-[11px] font-mono text-boxwood/80">
-                                        <span className="text-emerald-400"
-                                              title="Лучшие ходы">! {analysisReport.black.best}</span>
-                                        <span className="text-sky-400"
-                                              title="Неточности">?! {analysisReport.black.inaccuracies}</span>
-                                        <span className="text-amber-400"
-                                              title="Ошибки">? {analysisReport.black.mistakes}</span>
-                                        <span className="text-rose-400 font-bold"
-                                              title="Зевки">?? {analysisReport.black.blunders}</span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* График перевеса по ходу партии */}
-                            <div className="h-24 w-full bg-room-dark rounded border border-amber-900/50 p-1">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <AreaChart
-                                        data={chartData}
-                                        onClick={(state: any) => {
-                                            if (state && typeof state.activeTooltipIndex === 'number') {
-                                                setViewIndex(state.activeTooltipIndex);
-                                            }
-                                        }}
-                                    >
-                                        <XAxis dataKey="ply" hide/>
-                                        <YAxis domain={[-10, 10]} hide/>
-                                        <ReferenceLine y={0} stroke="#7A4B31" strokeDasharray="3 3"/>
-                                        <Tooltip
-                                            contentStyle={{
-                                                backgroundColor: '#1A120B',
-                                                borderColor: '#7A4B31',
-                                                fontSize: '12px',
-                                                padding: '4px 8px'
-                                            }}
-                                            formatter={(_val: any, _name: any, props: any) => [
-                                                `${props.payload.display} (${props.payload.classification})`,
-                                                props.payload.label
-                                            ]}
-                                            labelFormatter={() => ''}
-                                        />
-                                        <Area
-                                            type="monotone"
-                                            dataKey="evalPawns"
-                                            stroke="#f59e0b"
-                                            fill="#E6C998"
-                                            fillOpacity={0.35}
-                                            strokeWidth={2}
-                                        />
-                                    </AreaChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </>
-                    )}
-
-                    {analysisError && (
-                        <div
-                            className="text-xs text-rose-300 bg-rose-950/60 border border-rose-700/50 rounded px-2.5 py-1.5">
-                            {analysisError}
-                        </div>
-                    )}
-                </div>
-
-                {/* Таблица нотации ходов с бейджами классификации */}
-                <div
-                    className="flex-1 min-h-0 flex flex-col bg-room-dark/90 rounded-md border border-amber-900/50 overflow-hidden shadow-inner">
-                    <div
-                        className="grid grid-cols-[44px_1fr_1fr] px-3 py-1.5 bg-black/55 border-b border-amber-900/40 text-xs uppercase tracking-wider text-boxwood/65 font-bold shrink-0">
-                        <span>№</span>
-                        <span>Белые</span>
-                        <span>Чёрные</span>
-                    </div>
-
-                    <div
-                        ref={notationScrollRef}
-                        className="flex-1 min-h-0 overflow-y-auto p-1.5 font-mono text-sm divide-y divide-amber-900/15 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-amber-900/50"
-                    >
-                        {movePairs.map((pair: any, idx: number) => {
-                            const isActiveWhite = viewIndex === pair.whiteIndex;
-                            const isActiveBlack = viewIndex === pair.blackIndex;
-                            const whiteAnalysis = analysisReport?.moves[pair.whiteIndex];
-                            const blackAnalysis = pair.blackIndex >= 0 ? analysisReport?.moves[pair.blackIndex] : undefined;
-
-                            return (
-                                <div key={idx}
-                                     className="grid grid-cols-[44px_1fr_1fr] items-center px-2 py-1 hover:bg-white/5 rounded">
-                                    <span className="text-xs text-amber-500/70 font-bold">{idx + 1}.</span>
-
-                                    <button
-                                        onClick={() => setViewIndex(pair.whiteIndex)}
-                                        className={`text-left px-2 py-0.5 rounded flex items-center justify-between gap-1 cursor-pointer transition ${
-                                            isActiveWhite
-                                                ? 'active-move bg-amber-600/40 text-white font-bold border border-amber-500/50'
-                                                : 'text-amber-100/90 hover:bg-amber-900/30 hover:text-white'
-                                        }`}
-                                    >
-                                        <span className="truncate">
-                                            {pair.white}
-                                            {whiteAnalysis?.symbol && (
-                                                <span
-                                                    className={`ml-0.5 ${classificationBadgeClass(whiteAnalysis.classification)}`}>
-                                                    {whiteAnalysis.symbol}
-                                                </span>
-                                            )}
-                                        </span>
-                                        {whiteAnalysis && (
-                                            <span className="text-[10px] text-boxwood/55 shrink-0">
-                                                {whiteAnalysis.eval_display}
-                                            </span>
-                                        )}
-                                    </button>
-
-                                    {pair.black ? (
-                                        <button
-                                            onClick={() => setViewIndex(pair.blackIndex)}
-                                            className={`text-left px-2 py-0.5 rounded flex items-center justify-between gap-1 cursor-pointer transition ${
-                                                isActiveBlack
-                                                    ? 'active-move bg-amber-600/40 text-white font-bold border border-amber-500/50'
-                                                    : 'text-amber-100/90 hover:bg-amber-900/30 hover:text-white'
-                                            }`}
-                                        >
-                                            <span className="truncate">
-                                                {pair.black}
-                                                {blackAnalysis?.symbol && (
-                                                    <span
-                                                        className={`ml-0.5 ${classificationBadgeClass(blackAnalysis.classification)}`}>
-                                                        {blackAnalysis.symbol}
-                                                    </span>
-                                                )}
-                                            </span>
-                                            {blackAnalysis && (
-                                                <span className="text-[10px] text-boxwood/55 shrink-0">
-                                                    {blackAnalysis.eval_display}
-                                                </span>
-                                            )}
-                                        </button>
-                                    ) : (
-                                        <span/>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-
-                {/* Навигация и скачивание PGN */}
-                <div className="flex flex-col gap-2 shrink-0">
-                    <div
-                        className="flex justify-between items-center bg-acacia-dark p-2 rounded-md border border-amber-900/40">
-                        <span className="text-xs font-semibold text-boxwood/80 pl-1">
-                            Управление (ПКМ по доске — стрелки):
-                        </span>
-                        <div className="flex gap-1 items-center">
-                            <button
-                                onClick={() => setViewIndex(-1)}
-                                className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition cursor-pointer"
-                                title="Начало партии"
-                            >
-                                <ChevronFirst size={17}/>
-                            </button>
-                            <button
-                                onClick={() => setViewIndex(p => Math.max(-1, p - 1))}
-                                className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition cursor-pointer"
-                                title="Ход назад"
-                            >
-                                <ChevronLeft size={17}/>
-                            </button>
-                            <button
-                                onClick={() => setViewIndex(p => Math.min(history.length - 1, p + 1))}
-                                className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition cursor-pointer"
-                                title="Ход вперед"
-                            >
-                                <ChevronRight size={17}/>
-                            </button>
-                            <button
-                                onClick={() => setViewIndex(history.length - 1)}
-                                className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition cursor-pointer"
-                                title="Конец партии"
-                            >
-                                <ChevronLast size={17}/>
-                            </button>
-                            <div className="w-px h-4 bg-amber-900/50 mx-1"/>
-                            <button
-                                onClick={() => setIsFlipped(!isFlipped)}
-                                className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition text-amber-400 cursor-pointer"
-                                title="Перевернуть доску"
-                            >
-                                <RefreshCw size={15}/>
-                            </button>
-                        </div>
-                    </div>
-
-                    <a
-                        href={`${API_BASE_URL}/api/v1/profile/games/${gameId}/pgn`}
-                        download
-                        className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-room-dark text-amber-400 font-bold text-sm rounded-md hover:bg-black transition shadow border border-amber-800/60"
-                    >
-                        <Download size={16}/> Скачать PGN файл
-                    </a>
-                </div>
-
-            </div>
-        </div>
-    );
-}
-
-========================================================================================
-FILE: frontend/src/components/Leaderboard.tsx
-========================================================================================
-// --- FILE: frontend/src/components/Leaderboard.tsx ---
-
-import {useState, useEffect} from 'react';
-import {Link, useNavigate} from 'react-router-dom';
-import {Trophy, Medal, Crown, ArrowLeft, Swords, User} from 'lucide-react';
-import {API_BASE_URL} from '../config/api';
-
-interface LeaderboardEntry {
-    rank: number;
-    username: string;
-    rating: number;
-}
-
-export default function Leaderboard() {
-    const navigate = useNavigate();
-    const [players, setPlayers] = useState<LeaderboardEntry[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
-    useEffect(() => {
-        const fetchLeaderboard = async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/v1/profile/leaderboard?limit=50`);
-                if (!res.ok) {
-                    throw new Error('Не удалось загрузить таблицу лидеров');
-                }
-                const data = await res.json();
-                setPlayers(Array.isArray(data) ? data : []);
-            } catch (err: any) {
-                setError(err.message || 'Ошибка сети');
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        fetchLeaderboard();
-    }, []);
-
-    const renderRankBadge = (rank: number) => {
-        if (rank === 1) {
-            return (
-                <span
-                    className="inline-flex items-center justify-center w-8 h-8 rounded-md bg-amber-500/20 border border-amber-400 text-amber-300 font-bold shadow">
-                    <Crown size={18}/>
-                </span>
-            );
-        }
-        if (rank === 2) {
-            return (
-                <span
-                    className="inline-flex items-center justify-center w-8 h-8 rounded-md bg-slate-300/15 border border-slate-300/60 text-slate-200 font-bold">
-                    <Medal size={17}/>
-                </span>
-            );
-        }
-        if (rank === 3) {
-            return (
-                <span
-                    className="inline-flex items-center justify-center w-8 h-8 rounded-md bg-amber-700/25 border border-amber-600/60 text-amber-400 font-bold">
-                    <Medal size={17}/>
-                </span>
-            );
-        }
-        return (
-            <span className="inline-flex items-center justify-center w-8 h-8 font-mono font-bold text-boxwood/60">
-                {rank}
-            </span>
-        );
-    };
-
-    return (
-        <div className="w-full max-w-5xl flex flex-col gap-6 font-serif">
-            <div
-                className="bg-acacia-dark border border-amber-900/40 p-6 rounded shadow-heavy flex items-center justify-between gap-4 relative overflow-hidden">
-                <div className="flex items-center gap-4 z-10">
-                    <div
-                        className="w-14 h-14 rounded-lg bg-black/40 border-2 border-amber-600/50 flex items-center justify-center text-amber-400 shadow-inner shrink-0">
-                        <Trophy size={30}/>
-                    </div>
-                    <div>
-                        <div className="text-amber-500 text-xs font-bold uppercase tracking-widest mb-1">
-                            Рейтинговый зачёт Fair Play
-                        </div>
-                        <h1 className="text-2xl sm:text-3xl font-bold text-amber-200">
-                            Таблица лидеров Michess
-                        </h1>
-                        <p className="text-xs sm:text-sm text-boxwood/75 mt-0.5">
-                            Топ-50 лучших игроков и исторических чемпионов по рейтингу Эло
-                        </p>
-                    </div>
-                </div>
-
-                <button
-                    onClick={() => navigate('/')}
-                    className="px-3.5 py-2 bg-black/35 hover:bg-black/55 text-amber-300 rounded-md border border-amber-800/50 text-xs sm:text-sm font-bold flex items-center gap-2 transition cursor-pointer z-10 shrink-0"
-                >
-                    <ArrowLeft size={16}/> На доску
-                </button>
-            </div>
-
-            {error && (
-                <div className="bg-red-950/80 border border-red-800 p-5 rounded text-red-200 text-center">
-                    {error}
+                    {renderPieceSvg(dragState.piece)}
                 </div>
             )}
 
+            {/* ЛЕВАЯ КОЛОНКА: ИГРОВОЙ ЦЕНТР (ЧАСЫ, ИСТОРИЧЕСКИЕ БОТЫ, ЛОББИ И LIVE) */}
             <div
-                className="bg-acacia-dark border border-amber-900/40 rounded shadow-heavy overflow-hidden min-h-[420px] relative">
-                {loading ? (
-                    <div className="py-20 flex flex-col items-center justify-center text-amber-500">
-                        <Swords size={38} className="animate-spin mb-3"/>
-                        <span className="font-bold">Загрузка рейтинга...</span>
+                className="w-full xl:w-[400px] 2xl:w-[440px] xl:h-full bg-acacia p-3 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-2 text-boxwood-light order-2 xl:order-1 shrink-0 xl:overflow-hidden">
+
+                <div className="border-b border-acacia-light pb-2 flex justify-between items-center shrink-0">
+                    <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-acacia-dark rounded-md border border-amber-600/30 text-amber-400">
+                            <Sword size={16}/>
+                        </div>
+                        <div>
+                            <div className="text-[11px] tracking-wider uppercase text-boxwood/75 font-bold">
+                                Игровой зал
+                            </div>
+                            <div className="text-xs font-bold flex items-center gap-1.5 font-mono">
+                                <span className="text-boxwood/80 font-sans">Счёт сессии:</span>
+                                <span className="text-emerald-400">+{sessionStats.wins}</span>
+                                <span className="text-red-400">-{sessionStats.losses}</span>
+                                <span className="text-gray-300">={sessionStats.draws}</span>
+                            </div>
+                        </div>
                     </div>
-                ) : (
-                    <div className="overflow-x-auto">
-                        <table className="w-full text-left text-sm font-sans whitespace-nowrap">
-                            <thead
-                                className="bg-[#1A120B] text-boxwood/60 uppercase text-xs tracking-wider border-b border-amber-900/50">
-                            <tr>
-                                <th className="px-5 py-4 font-medium w-20">Место</th>
-                                <th className="px-5 py-4 font-medium">Игрок</th>
-                                <th className="px-5 py-4 font-medium text-right">Рейтинг Эло</th>
-                                <th className="px-5 py-4 font-medium text-right">Профиль</th>
-                            </tr>
-                            </thead>
-                            <tbody className="divide-y divide-amber-900/20 text-boxwood-light">
-                            {players.length === 0 ? (
-                                <tr>
-                                    <td colSpan={4}
-                                        className="px-6 py-12 text-center text-boxwood/50 font-serif text-base">
-                                        Список лидеров пока пуст.
-                                    </td>
-                                </tr>
-                            ) : (
-                                players.map((player) => (
-                                    <tr
-                                        key={player.username}
-                                        onClick={() => navigate(`/profile/${encodeURIComponent(player.username)}`)}
-                                        className="hover:bg-black/30 transition cursor-pointer group"
-                                    >
-                                        <td className="px-5 py-3.5">
-                                            {renderRankBadge(player.rank)}
-                                        </td>
-                                        <td className="px-5 py-3.5">
-                                            <div className="flex items-center gap-3">
-                                                <img
-                                                    src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${player.username}&backgroundColor=D0A972`}
-                                                    alt={player.username}
-                                                    className="w-9 h-9 rounded bg-black/40 border border-amber-900/50 shadow shrink-0"
-                                                />
-                                                <span
-                                                    className="font-bold text-base text-amber-200 group-hover:text-white transition">
-                                                    {player.username}
-                                                </span>
-                                            </div>
-                                        </td>
-                                        <td className="px-5 py-3.5 text-right">
-                                            <span
-                                                className="font-mono font-extrabold text-base text-amber-400 px-2.5 py-1 rounded bg-black/40 border border-amber-800/40">
-                                                {player.rating}
-                                            </span>
-                                        </td>
-                                        <td className="px-5 py-3.5 text-right">
-                                            <Link
-                                                to={`/profile/${encodeURIComponent(player.username)}`}
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black/30 hover:bg-amber-900/60 text-amber-300 rounded border border-amber-900/40 text-xs font-bold transition"
-                                            >
-                                                <User size={14}/> Открыть
-                                            </Link>
-                                        </td>
-                                    </tr>
-                                ))
-                            )}
-                            </tbody>
-                        </table>
+
+                    <div className="flex items-center gap-1.5">
+                        <button
+                            type="button"
+                            onClick={handleToggleSound}
+                            className={`p-1.5 rounded-md border transition cursor-pointer shadow-sm ${
+                                isSoundMuted
+                                    ? 'bg-red-950/60 border-red-800/60 text-red-300 hover:bg-red-900/60'
+                                    : 'bg-acacia-dark hover:bg-black/50 border-amber-800/50 text-amber-300'
+                            }`}
+                            title={isSoundMuted ? 'Включить звук' : 'Выключить звук'}
+                        >
+                            {isSoundMuted ? <VolumeX size={15}/> : <Volume2 size={15}/>}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setIsManualFlip(prev => !prev)}
+                            className="px-2.5 py-1 rounded-md bg-acacia-dark hover:bg-black/50 border border-amber-800/50 text-xs font-bold text-amber-200 flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+                            title="Перевернуть доску"
+                        >
+                            <RefreshCw size={13} className="text-amber-400"/> Перевернуть
+                        </button>
                     </div>
-                )}
-            </div>
-        </div>
-    );
-}
+                </div>
+
+                <div
+                    className="bg-acacia-dark p-2.5 rounded-md border border-amber-900/50 flex flex-col gap-2 shadow-inner shrink-0">
+                    <div className="flex items-center justify-between">
+                        <label
+                            className="text-xs uppercase tracking-wider text-boxwood/85 flex items-center gap-1.5 font-bold">
+                            <Clock className="text-amber-500" size={13}/> Контроль времени
+                        </label>
+                        <span
+                            className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-900/45 text-amber-300 border border-amber-600/30">
+                            {TIME_CONTROLS.find(g => g.category === selectedTimeControl.category)?.title}
+                        </span>
+                    </div>
+
+                    <div className="relative w-full" ref={timeDropdownRef}>
+                        <button
+                            type="button"
+                            disabled={isSearching || !!gameId}
+                            onClick={() => setIsTimeDropdownOpen(!isTimeDropdownOpen)}
+                            className="w-full bg-black/45 border border-amber-700/50 hover:bg-black/65 disabled:opacity-50 transition text-amber-200 rounded-md px-2.5 py-1.5 text-xs sm:text-sm font-bold outline-none cursor-pointer flex justify-between items-center shadow-inner gap-2"
+                        >
+                            <span className="truncate">
+                                {selectedTimeControl.label}
+                                {selectedTimeControl.isManual ? ` (${manualBaseMinutes}м + ${manualIncSeconds}с)` : ''}
+                            </span>
+                            {isTimeDropdownOpen ? <ChevronUp className="text-amber-400 shrink-0" size={15}/> :
+                                <ChevronDown className="text-amber-400 shrink-0" size={15}/>}
+                        </button>
+
+                        {isTimeDropdownOpen && (
+                            <div
+                                className="absolute z-50 w-full top-full mt-1 bg-[#1A120B] border-2 border-amber-700/60 rounded-md shadow-2xl max-h-72 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
+                                {TIME_CONTROLS.map((group) => (
+                                    <div key={group.category}>
+                                        <div
+                                            className="px-3 py-1.5 text-xs uppercase tracking-wider text-amber-400 bg-black/90 font-bold sticky top-0 z-10 border-b border-t border-amber-900/40 first:border-t-0">
+                                            {group.title}
+                                        </div>
+                                        {group.options.map((opt) => {
+                                            const isSelected = selectedTimeControl.id === opt.id;
+                                            return (
+                                                <button
+                                                    key={opt.id}
+                                                    type="button"
+                                                    className={`w-full text-left px-3 py-2 text-xs sm:text-sm transition flex justify-between items-start gap-2 border-b border-amber-950/30 cursor-pointer ${
+                                                        isSelected
+                                                            ? 'bg-amber-900/45 text-amber-300 font-bold'
+                                                            : 'text-amber-100/90 hover:bg-amber-900/25 hover:text-amber-200'
+                                                    }`}
+                                                    onClick={() => {
+                                                        setSelectedTimeControl(opt);
+                                                        if (opt.isManual) {
+                                                            setManualBaseMinutes(Math.max(1, Math.round(opt.base)));
+                                                            setManualIncSeconds(opt.inc);
+                                                        }
+                                                        setIsTimeDropdownOpen(false);
 
 ----------------------------------------------------------------------------------------
-END OF PART 10/11
+END OF PART 10/15

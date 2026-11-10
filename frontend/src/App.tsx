@@ -35,7 +35,6 @@ interface UserProfile {
     username: string;
     rating: number;
     is_cheater: boolean;
-    trust_factor: number;
 }
 
 export default function App() {
@@ -125,6 +124,21 @@ export default function App() {
         setUserProfile(null);
         setIsProfileOpen(false);
         navigate('/');
+    };
+
+    const handleLogoutEverywhere = async () => {
+        // Сервер отзывает все токены и закрывает WebSocket во всех вкладках и на всех устройствах.
+        if (token) {
+            try {
+                await fetch(`${API_BASE_URL}/api/v1/auth/logout-all`, {
+                    method: 'POST',
+                    headers: {Authorization: `Bearer ${token}`},
+                });
+            } catch {
+                // Сеть недоступна — локальный выход всё равно выполняем.
+            }
+        }
+        handleLogout();
     };
 
     useEffect(() => {
@@ -342,6 +356,13 @@ export default function App() {
                                             className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-red-950/40 transition text-red-300 hover:text-red-200 cursor-pointer"
                                         >
                                             <LogOut size={16} className="text-red-400"/> Выйти
+                                        </button>
+                                        <button
+                                            onClick={handleLogoutEverywhere}
+                                            title="Завершить сессии на всех устройствах и во всех вкладках"
+                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-red-950/40 transition text-red-300/80 hover:text-red-200 cursor-pointer text-sm"
+                                        >
+                                            <LogOut size={16} className="text-red-500"/> Выйти на всех устройствах
                                         </button>
                                     </div>
 

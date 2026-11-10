@@ -1,19 +1,22 @@
 # --- FILE: src/services/analysis_service.py ---
 
 import asyncio
+import contextlib
 import io
 import json
 import logging
 import math
 import os
+
 import chess
 import chess.engine
 import chess.pgn
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models.game import Game
+from src.models.game import Game, GameStatus
 from src.services.bots.base import resolve_stockfish_path, static_board_eval_cp
+from src.services.engine_pool import EngineUnavailableError, get_engine_pool
 
 logger = logging.getLogger(__name__)
 
@@ -75,12 +78,15 @@ def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
     sf_path = resolve_stockfish_path()
     engine = None
     engine_label = "Static Fallback Evaluator"
+    engine_stack = contextlib.ExitStack()
 
     if sf_path and os.path.exists(sf_path):
+        # EngineBusyError намеренно не перехватывается: под нагрузкой лучше вернуть 503, чем
+        # закэшировать в БД анализ статическим оценщиком вместо Stockfish.
         try:
-            engine = chess.engine.SimpleEngine.popen_uci(sf_path)
+            engine = engine_stack.enter_context(get_engine_pool(sf_path).acquire())
             engine_label = engine.id.get("name", "Stockfish")
-        except Exception as exc:
+        except EngineUnavailableError as exc:
             logger.warning("Не удалось запустить Stockfish (%s), используем fallback: %s", sf_path, exc)
             engine = None
 
@@ -147,11 +153,7 @@ def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
             mates_white.append(mate_i)
             best_moves_uci.append(best_i)
     finally:
-        if engine is not None:
-            try:
-                engine.quit()
-            except Exception:
-                pass
+        engine_stack.close()  # возвращает движок в пул
 
     moves_report: list[dict] = []
     white_losses: list[int] = []
@@ -218,6 +220,25 @@ def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
     }
 
 
+class GameNotFinishedError(Exception):
+    """Анализ идущей партии запрещён: он работал бы как подсказка движка игрокам."""
+
+
+_FINISHED_STATUSES = (GameStatus.COMPLETED, GameStatus.ABORTED)
+
+
+def ensure_game_finished(game: Game) -> None:
+    if game.status not in _FINISHED_STATUSES:
+        raise GameNotFinishedError(f"Партия {game.id} ещё не завершена")
+
+
+def _count_mainline_plies(pgn_text: str) -> int:
+    pgn_game = chess.pgn.read_game(io.StringIO(pgn_text))
+    if pgn_game is None:
+        return -1
+    return sum(1 for _ in pgn_game.mainline_moves())
+
+
 class AnalysisService:
     async def analyze_position(self, db: AsyncSession, moves: list[str]) -> dict:
         board = chess.Board()
@@ -234,9 +255,9 @@ class AnalysisService:
         eval_cp = int(static_board_eval_cp(board, chess.WHITE))
         best_move = None
 
-        if sf_path and os.path.exists(sf_path) and not board.is_game_over():
+        if sf_path and not board.is_game_over():  # resolve_stockfish_path уже проверил файл
             def _run_pos():
-                with chess.engine.SimpleEngine.popen_uci(sf_path) as eng:
+                with get_engine_pool(sf_path).acquire() as eng:
                     info = eng.analyse(board, chess.engine.Limit(depth=10, time=0.1))
                     if isinstance(info, list):
                         info = info[0]
@@ -246,8 +267,8 @@ class AnalysisService:
 
             try:
                 eval_cp, best_move = await asyncio.to_thread(_run_pos)
-            except Exception:
-                pass
+            except EngineUnavailableError as exc:
+                logger.warning("Stockfish недоступен, отдаём статическую оценку: %s", exc)
 
         return {
             "fen": board.fen(),
@@ -261,15 +282,22 @@ class AnalysisService:
         game = result.scalars().first()
         if not game or not game.pgn:
             raise LookupError(f"Партия {game_id} или её PGN не найдены")
+        ensure_game_finished(game)
 
         # Если анализ уже сохранён в БД и не запрошен пересчёт — отдаём мгновенно из кэша
         cached_raw = getattr(game, "analysis_json", None)
         if cached_raw and not force:
             try:
                 cached_data = json.loads(cached_raw)
-                if isinstance(cached_data, dict) and "moves" in cached_data:
+                if (
+                        isinstance(cached_data, dict)
+                        and "moves" in cached_data
+                        and len(cached_data["moves"]) == _count_mainline_plies(game.pgn)
+                ):
                     cached_data["game_id"] = game_id
                     return cached_data
+                # Кэш не соответствует итоговому PGN (например, сохранён по незавершённой партии
+                # до запрета анализа идущих игр) — пересчитываем.
             except Exception:
                 pass
 

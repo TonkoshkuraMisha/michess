@@ -1,7 +1,9 @@
 # --- FILE: tests/test_game_state.py ---
 
-import pytest
 import time
+
+import pytest
+
 from src.services.game_state import state_manager
 
 
@@ -26,37 +28,40 @@ async def test_game_state_initialization():
 
 
 @pytest.mark.asyncio
-async def test_disconnect_and_reconnect_time_deduction():
+async def test_disconnect_and_reconnect_keeps_clock_running():
+    """
+    Разрыв соединения не останавливает и не сдвигает часы: после переподключения остаток
+    белых равен base - (now - last_move_at), а last_move_at и сохранённое время не меняются.
+    """
+    from src.services.game_state import live_clock_ms
+
     await state_manager.initialize_game(
         game_id=2, white_id=10, black_id=20, base_time_ms=180000, increment_ms=0
     )
+    now_ms = int(time.time() * 1000)
+    # Ход белых идёт 5 секунд, из них 3 секунды белые были офлайн.
+    await state_manager.update_game_state(2, {"last_move_at": now_ms - 5000})
 
     dummy_manager = DummyManager()
-
-    # Эмулируем дисконект белых (ход белых)
     await state_manager.handle_player_disconnect(10, dummy_manager)
-
     state_after_dc = await state_manager.get_game_state(2)
     assert state_after_dc["white_disconnected"] == "true"
+    await state_manager.update_game_state(2, {"white_disconnect_started_at": now_ms - 3000})
 
-    # Искусственно состарим время начала дисконекта на 5 секунд (5000 мс)
-    old_dc_time = int(state_after_dc["white_disconnect_started_at"]) - 5000
-    await state_manager.update_game_state(2, {"white_disconnect_started_at": old_dc_time})
-
-    # Эмулируем переподключение
     await state_manager.handle_player_reconnect(10, dummy_manager)
 
-    state_after_reconnect = await state_manager.get_game_state(2)
-    assert state_after_reconnect["white_disconnected"] == "false"
-    # Время должно уменьшиться примерно на 5 секунд (180000 - 5000 = 175000)
-    assert state_after_reconnect["white_time_ms"] <= 175000
+    state = await state_manager.get_game_state(2)
+    assert state["white_disconnected"] == "false"
+    assert state["white_time_ms"] == 180000
+    assert state["last_move_at"] == now_ms - 5000
+    assert 174000 <= live_clock_ms(state, "white", int(time.time() * 1000)) <= 175000
 
 
 @pytest.mark.asyncio
 async def test_abort_game_without_rating_change(db_session):
     """Проверяет, что отмена партии на 1-м ходу (до 2 полуходов) не меняет рейтинг и ставит статус ABORTED."""
-    from src.models.user import User
     from src.models.game import Game, GameStatus
+    from src.models.user import User
     from src.services.game_state import state_manager
 
     u1 = User(username="abort_white_player", hashed_password="pw", rating=1500)

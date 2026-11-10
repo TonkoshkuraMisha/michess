@@ -8,8 +8,9 @@ import re
 import sys
 import zipfile
 from pathlib import Path
+
 import requests
-from sqlalchemy import select, or_, func
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.session import AsyncSessionLocal
@@ -174,9 +175,7 @@ def _is_target_champion_name(raw_name: str, champ_key: str, meta: dict) -> bool:
         return False
     # Надёжное сопоставление по фамилии (даже при сокращении инициалов в PGN Mentor)
     surname = meta["canonical"].split(",")[0].strip().lower()
-    if surname in low or champ_key in low:
-        return True
-    return False
+    return surname in low or champ_key in low
 
 
 def _split_pgn_games(content: str) -> list[str]:

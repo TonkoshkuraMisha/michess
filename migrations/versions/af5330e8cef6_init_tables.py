@@ -5,17 +5,16 @@ Revises:
 Create Date: 2026-08-04 23:22:54.554170
 
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
-
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = 'af5330e8cef6'
-down_revision: Union[str, Sequence[str], None] = None
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = None
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -80,3 +79,5 @@ def downgrade() -> None:
     op.drop_index(op.f('ix_users_id'), table_name='users')
     op.drop_table('users')
     # ### end Alembic commands ###
+    # Enum-тип статуса остаётся после drop_table — без этого повторный upgrade падает.
+    sa.Enum(name='gamestatus').drop(op.get_bind(), checkfirst=True)

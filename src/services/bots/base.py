@@ -6,8 +6,11 @@ import os
 import random
 import shutil
 from pathlib import Path
+
 import chess
 import chess.engine
+
+from src.services.engine_pool import get_engine_pool
 
 logger = logging.getLogger(__name__)
 
@@ -79,7 +82,7 @@ def load_bot_opening_book(
     for json_path in candidates:
         if json_path.exists():
             try:
-                with open(json_path, "r", encoding="utf-8") as f:
+                with open(json_path, encoding="utf-8") as f:
                     data = json.load(f)
                 if isinstance(data, dict) and data:
                     for fen_key, moves in data.items():
@@ -179,18 +182,14 @@ def analyse_with_stockfish(
         return {}
 
     scores: dict[chess.Move, float] = {}
-    try:
-        with chess.engine.SimpleEngine.popen_uci(engine_path) as engine:
-            options: dict[str, int | bool] = {"Skill Level": skill_level}
-            if uci_elo is not None:
-                if "UCI_LimitStrength" in engine.options:
-                    options["UCI_LimitStrength"] = True
-                if "UCI_Elo" in engine.options:
-                    min_elo = getattr(engine.options["UCI_Elo"], "min", 1320) or 1320
-                    max_elo = getattr(engine.options["UCI_Elo"], "max", 3190) or 3190
-                    options["UCI_Elo"] = max(min_elo, min(max_elo, uci_elo))
-            engine.configure(options)
+    options: dict[str, int | bool] = {"Skill Level": skill_level}
+    if uci_elo is not None:
+        options["UCI_LimitStrength"] = True
+        options["UCI_Elo"] = uci_elo
 
+    try:
+        # Пул сам приводит UCI_Elo / Skill Level к допустимому диапазону движка.
+        with get_engine_pool(engine_path).acquire(options) as engine:
             infos = engine.analyse(
                 board,
                 chess.engine.Limit(depth=depth, time=time_limit),
@@ -274,7 +273,7 @@ class HistoricalBot:
 
             if valid_book_moves:
                 _simulate_human_thinking_time(board, is_book_move=True)
-                moves, weights, comments = zip(*valid_book_moves)
+                moves, weights, comments = zip(*valid_book_moves, strict=True)
                 idx = random.choices(range(len(moves)), weights=weights, k=1)[0]
                 chosen_move = moves[idx]
                 san = board.san(chosen_move)

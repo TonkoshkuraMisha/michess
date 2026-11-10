@@ -1,1156 +1,1911 @@
-PROJECT SNAPSHOT — PART 8/11
+PROJECT SNAPSHOT — PART 8/15
 Project: michess
-Files in this part (1): frontend/src/components/Chessboard.tsx (chunk 2)
+Files in this part (15): tests/test_multiworker.py, tests/test_paulsen_bot.py, tests/test_philidor_bot.py, tests/test_staunton_bot.py, tests/test_stockfish_engine.py, tests/test_task_dispatch.py, tests/test_timeouts_loop.py, tests/test_token_lifecycle.py, tests/test_websockets_flow.py, tests/test_worker_tasks.py, tests/test_ws_db_sessions.py, tests/test_ws_rate_limit.py, tests/test_zukertort_bot.py, scripts/build_opening_books.py, scripts/chessgames_downloader.py
 ----------------------------------------------------------------------------------------
-                    style={styleProps}
-                    draggable={false}
-                    alt={`${piece.color}${piece.type}`}
-                />
-            </div>
-        );
-    };
 
-    if (!localStorage.getItem('token')) {
-        return (
-            <div
-                className="my-auto flex flex-col items-center justify-center p-8 bg-acacia rounded-lg shadow-heavy border-4 border-acacia-dark text-boxwood-light text-center">
-                <div className="text-2xl font-bold mb-2">Требуется авторизация</div>
-                <p className="text-base text-boxwood/85 mb-2">
-                    Пожалуйста, войдите в систему в правом верхнем углу, чтобы начать игру.
-                </p>
-            </div>
-        );
+========================================================================================
+FILE: tests/test_multiworker.py
+========================================================================================
+# --- FILE: tests/test_multiworker.py ---
+"""
+Несколько воркеров и вкладок: присутствие, доставка сообщений и зрители через Redis,
+лидерство цикла таймаутов, атомарное принятие вызова. Плюс флаг по правилу ФИДЕ 6.9.
+"""
+
+import asyncio
+import json
+import time
+
+import fakeredis
+import fakeredis.aioredis
+import pytest
+
+from src.services import game_state as game_state_module
+from src.services.connection_manager import ConnectionManager
+from src.services.game_state import FLAG_DRAW_TERMINATION, evaluate_clock_expiry, flag_outcome, state_manager
+
+
+class RecordingSocket:
+    def __init__(self):
+        self.received: list[dict] = []
+
+    async def accept(self):
+        pass
+
+    async def send_text(self, text: str):
+        self.received.append(json.loads(text))
+
+
+# --- Флаг по правилу ФИДЕ 6.9 -----------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "fen, flagged, expected",
+    [
+        # У чёрных (победителя по флагу) только конь против голого короля — мат невозможен.
+        ("8/8/8/4k3/8/8/2n5/K7 w - - 0 60", "white", ("1/2-1/2", FLAG_DRAW_TERMINATION)),
+        # Голый король у победителя.
+        ("8/8/8/4k3/8/8/2q5/K7 b - - 0 60", "black", ("1/2-1/2", FLAG_DRAW_TERMINATION)),
+        # Ладья у победителя — обычное поражение по времени.
+        ("8/8/8/4k3/8/8/2r5/K7 w - - 0 60", "white", ("0-1", "timeout")),
+        # Конь против ладьи: кооперативный мат существует, значит, победа.
+        ("8/8/8/4k3/8/8/2n5/KR6 w - - 0 60", "white", ("0-1", "timeout")),
+        # Одноцветные слоны у обоих: мат невозможен.
+        ("8/8/8/4k3/2b5/8/8/K2B4 w - - 0 60", "white", ("1/2-1/2", FLAG_DRAW_TERMINATION)),
+    ],
+)
+def test_flag_outcome_follows_fide(fen, flagged, expected):
+    assert flag_outcome(fen, flagged) == expected
+
+
+def test_clock_expiry_draw_has_no_winner():
+    now = int(time.time() * 1000)
+    state = {
+        "white_id": 1, "black_id": 2, "turn": "white", "board_fen": "8/8/8/4k3/8/8/2n5/K7 w - - 0 60",
+        "white_time_ms": 1000, "black_time_ms": 5000, "last_move_at": now - 2000,
+        "white_disconnected": "false", "black_disconnected": "false",
+    }
+    assert evaluate_clock_expiry(state, now) == ("1/2-1/2", None, FLAG_DRAW_TERMINATION)
+
+
+async def test_flag_during_move_attempt_is_draw_vs_insufficient_material():
+    await state_manager.initialize_game(game_id=41, white_id=10, black_id=20, base_time_ms=60000, increment_ms=0)
+    await state_manager.update_game_state(41, {
+        "board_fen": "8/8/8/4k3/8/8/2n5/K7 w - - 0 60",
+        "last_move_at": int(time.time() * 1000) - 70000,
+    })
+
+    res = await state_manager.process_atomic_move(41, 10, "cmd-flag", "a1b1")
+
+    assert res["status"] == "game_over"
+    assert res["result"] == "1/2-1/2"
+    assert res["termination"] == FLAG_DRAW_TERMINATION
+
+
+# --- Два воркера на общем Redis ---------------------------------------------------------
+
+@pytest.fixture
+def shared_redis(monkeypatch):
+    server = fakeredis.FakeServer()
+    client = fakeredis.aioredis.FakeRedis(server=server, decode_responses=True)
+    monkeypatch.setattr(state_manager, "redis", client)
+    monkeypatch.setattr("src.db.redis.redis_client", client)
+    return client
+
+
+def _worker(client, worker_id: str) -> ConnectionManager:
+    cm = ConnectionManager()
+    cm.worker_id = worker_id
+    cm.redis = client
+    cm.pubsub = client.pubsub()
+    return cm
+
+
+async def _stop(*managers: ConnectionManager):
+    for cm in managers:
+        for task in (cm._listener_task, cm._heartbeat_task):
+            if task is not None:
+                task.cancel()
+        await asyncio.gather(
+            *(t for t in (cm._listener_task, cm._heartbeat_task) if t is not None), return_exceptions=True,
+        )
+        await cm.pubsub.aclose()
+
+
+async def _wait_for(predicate, timeout_s: float = 3.0):
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        await asyncio.sleep(0.02)
+    return False
+
+
+async def test_tab_on_other_worker_keeps_player_online(shared_redis):
+    worker_a, worker_b = _worker(shared_redis, "A"), _worker(shared_redis, "B")
+    try:
+        await state_manager.initialize_game(game_id=42, white_id=10, black_id=20, base_time_ms=60000, increment_ms=0)
+        tab_a, tab_b = RecordingSocket(), RecordingSocket()
+        await worker_a.connect(tab_a, user_id=10)
+        await worker_b.connect(tab_b, user_id=10)
+
+        await worker_a.disconnect(10, tab_a)
+        state = await state_manager.get_game_state(42)
+        assert state["white_disconnected"] == "false"
+
+        await worker_b.disconnect(10, tab_b)
+        state = await state_manager.get_game_state(42)
+        assert state["white_disconnected"] == "true"
+    finally:
+        await _stop(worker_a, worker_b)
+
+
+async def test_message_reaches_tabs_on_all_workers_without_duplicates(shared_redis):
+    worker_a, worker_b = _worker(shared_redis, "A"), _worker(shared_redis, "B")
+    try:
+        tab_a, tab_b = RecordingSocket(), RecordingSocket()
+        await worker_a.connect(tab_a, user_id=77)
+        await worker_b.connect(tab_b, user_id=77)
+
+        await worker_a.send_personal_message({"event": "move_made", "san": "e4"}, 77)
+
+        assert await _wait_for(lambda: tab_b.received)
+        await asyncio.sleep(0.2)  # даём шанс прийти дублю, если он есть
+        assert [m["san"] for m in tab_a.received] == ["e4"]
+        assert [m["san"] for m in tab_b.received] == ["e4"]
+    finally:
+        await _stop(worker_a, worker_b)
+
+
+async def test_stale_presence_of_crashed_worker_expires(shared_redis):
+    worker = _worker(shared_redis, "A")
+    try:
+        await shared_redis.zadd("presence:user:88", {"conn-from-dead-worker": int(time.time() * 1000) - 60_000})
+        assert await worker.is_user_online(88) is False
+    finally:
+        await _stop(worker)
+
+
+async def test_spectators_are_shared_between_workers():
+    worker_a, worker_b = ConnectionManager(), ConnectionManager()
+
+    await worker_a.add_spectator(500, 33)
+    assert await worker_b.get_spectator_ids(500) == {33}
+
+    await worker_b.add_spectator(501, 33)  # перешёл смотреть другую партию
+    assert await worker_a.get_spectator_ids(500) == set()
+    assert await worker_a.get_spectator_ids(501) == {33}
+
+    await worker_a.remove_user_from_all_spectating(33)
+    assert await worker_b.get_spectator_ids(501) == set()
+
+
+async def test_only_one_worker_runs_timeouts_loop(monkeypatch):
+    monkeypatch.setattr(game_state_module, "WORKER_ID", "A")
+    assert await state_manager._hold_timeouts_leadership() is True
+    assert await state_manager._hold_timeouts_leadership() is True  # лидер продлевает
+
+    monkeypatch.setattr(game_state_module, "WORKER_ID", "B")
+    assert await state_manager._hold_timeouts_leadership() is False
+
+    await state_manager.redis.delete(game_state_module.TIMEOUTS_LEADER_KEY)  # лидер упал, TTL истёк
+    assert await state_manager._hold_timeouts_leadership() is True
+
+
+async def test_challenge_accepted_once_across_workers(monkeypatch):
+    from src.services.matchmaker import MatchmakingError, matchmaker
+
+    created: list[tuple[int, int]] = []
+
+    async def fake_create(session, c_id, a_id, base_time, inc_time, now_ms):
+        created.append((c_id, a_id))
+        return {
+            "game_id": 900 + len(created), "white_id": c_id, "black_id": a_id,
+            "white_username": "c", "white_rating": 1500, "black_username": "a", "black_rating": 1500,
+        }
+
+    class _Silent:
+        async def send_personal_message(self, message, user_id):
+            pass
+
+    async def fake_rating(session, user_id):
+        return 1500
+
+    monkeypatch.setattr(matchmaker, "_create_match_record", fake_create)
+    monkeypatch.setattr(matchmaker, "_fresh_rating", fake_rating)
+    await matchmaker.join_queue(1, "challenger", 1500, 180000, 0, 0, 3000)
+
+    results = await asyncio.gather(
+        matchmaker.accept_challenge(1, 2, _Silent(), state_manager, db=object()),
+        matchmaker.accept_challenge(1, 3, _Silent(), state_manager, db=object()),
+        return_exceptions=True,
+    )
+
+    assert len(created) == 1
+    assert sum(isinstance(r, int) for r in results) == 1
+    assert all(isinstance(r, (int, MatchmakingError)) for r in results)
+
+========================================================================================
+FILE: tests/test_paulsen_bot.py
+========================================================================================
+# --- FILE: tests/test_paulsen_bot.py ---
+
+import chess
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+from src.main import app
+from src.services.bots.paulsen import (
+    PAULSEN_OPENING_BOOK,
+    PaulsenBot,
+    evaluate_paulsen_style_bonus,
+)
+from src.services.bots.philidor import normalize_fen_key
+
+
+def test_paulsen_opening_repertoire():
+    """Проверяем, что Паульсен выбирает ход из своей дебютной книги."""
+    bot = PaulsenBot(stockfish_path=None)
+    board = chess.Board()
+    start_key = normalize_fen_key(board)
+    expected_moves = {item[0] for item in PAULSEN_OPENING_BOOK[start_key]}
+
+    result = bot.choose_move(board.fen())
+    assert result["uci"] in expected_moves
+    assert result["source"] == "opening_book"
+
+
+def test_paulsen_style_rewards_flexible_pawn_shield_and_bishops():
+    """Проверяем, что стилевой фильтр Паульсена поощряет сицилианские построения (c5/e6/a6) и фианкетто слона."""
+    board = chess.Board("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2")
+
+    e6_bonus, _ = evaluate_paulsen_style_bonus(board, chess.Move.from_uci("e7e6"))
+    h6_bonus, _ = evaluate_paulsen_style_bonus(board, chess.Move.from_uci("h7h6"))
+    assert e6_bonus > h6_bonus
+
+
+def test_paulsen_middlegame_move_generation():
+    """Проверяем генерацию хода Паульсена в миттельшпиле вне книги."""
+    bot = PaulsenBot(stockfish_path=None)
+    board = chess.Board("r1bq1rk1/1p2bppp/p1nppn2/8/3NP3/2N1B3/PPPQBPPP/2KR3R b - - 3 10")
+
+    result = bot.choose_move(board.fen())
+    assert chess.Move.from_uci(result["uci"]) in board.legal_moves
+    assert result["source"] == "paulsen_style_engine"
+
+
+@pytest.mark.asyncio
+async def test_paulsen_api_move_endpoint():
+    """Проверяем REST-эндпоинты /api/v1/bots/list и /api/v1/bots/move для игры с Паульсеном."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        list_resp = await client.get("/api/v1/bots/list")
+        assert list_resp.status_code == 200
+        bot_ids = [b["id"] for b in list_resp.json()["bots"]]
+        assert "paulsen" in bot_ids
+
+        move_resp = await client.post(
+            "/api/v1/bots/move",
+            json={"bot_id": "paulsen", "fen": chess.STARTING_FEN},
+        )
+        assert move_resp.status_code == 200
+        data = move_resp.json()
+        assert data["bot_id"] == "paulsen"
+        assert data["source"] == "opening_book"
+
+========================================================================================
+FILE: tests/test_philidor_bot.py
+========================================================================================
+# --- FILE: tests/test_philidor_bot.py ---
+
+import chess
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+from src.main import app
+from src.services.bots.philidor import (
+    PHILIDOR_OPENING_BOOK,
+    PhilidorBot,
+    evaluate_philidor_style_bonus,
+    normalize_fen_key,
+)
+
+
+def test_philidor_plays_philidor_defense_as_black():
+    """Проверяем, что на 1. e4 e5 2. Nf3 Филидор всегда отвечает своей защитой 2... d6."""
+    bot = PhilidorBot(stockfish_path=None)
+    board = chess.Board()
+    for san in ["e4", "e5", "Nf3"]:
+        board.push_san(san)
+
+    result = bot.choose_move(board.fen())
+    assert result["uci"] == "d7d6"
+    assert result["source"] == "opening_book"
+
+
+def test_philidor_dislikes_blocking_c_pawn_with_knight():
+    """Проверяем, что стилевой фильтр штрафует ход Nc3 при пешке на c2 и поощряет c2-c3."""
+    board = chess.Board()
+    for san in ["e4", "e5", "Bc4", "Bc5"]:
+        board.push_san(san)
+
+    c3_bonus, _ = evaluate_philidor_style_bonus(board, chess.Move.from_uci("c2c3"))
+    nc3_bonus, _ = evaluate_philidor_style_bonus(board, chess.Move.from_uci("b1c3"))
+
+    assert c3_bonus > 0
+    assert nc3_bonus < 0
+    assert c3_bonus > nc3_bonus
+
+
+def test_philidor_middlegame_move_generation():
+    """Проверяем генерацию хода Филидора в миттельшпиле вне дебютной книги."""
+    bot = PhilidorBot(stockfish_path=None)
+    board = chess.Board("r1bqk2r/ppp2ppp/2np1n2/2b1p3/2B1P3/2PP1N2/PP3PPP/RNBQK2R w KQkq - 1 6")
+
+    result = bot.choose_move(board.fen())
+    assert chess.Move.from_uci(result["uci"]) in board.legal_moves
+    assert result["source"] == "philidor_style_engine_deep"
+
+
+@pytest.mark.asyncio
+async def test_philidor_api_move_endpoint():
+    """Проверяем REST-эндпоинт /api/v1/bots/move для игры с Филидором."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        list_resp = await client.get("/api/v1/bots/list")
+        assert list_resp.status_code == 200
+        bot_ids = [b["id"] for b in list_resp.json()["bots"]]
+        assert "philidor" in bot_ids
+
+        start_key = normalize_fen_key(chess.Board())
+        philidor_start_moves = {item[0] for item in PHILIDOR_OPENING_BOOK[start_key]}
+
+        move_resp = await client.post(
+            "/api/v1/bots/move",
+            json={
+                "bot_id": "philidor",
+                "fen": chess.STARTING_FEN,
+            },
+        )
+        assert move_resp.status_code == 200
+        data = move_resp.json()
+        assert data["bot_id"] == "philidor"
+        assert data["uci"] in philidor_start_moves
+        assert data["source"] == "opening_book"
+
+========================================================================================
+FILE: tests/test_staunton_bot.py
+========================================================================================
+# --- FILE: tests/test_staunton_bot.py ---
+
+import chess
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+from src.main import app
+from src.services.bots.philidor import normalize_fen_key
+from src.services.bots.staunton import (
+    STAUNTON_OPENING_BOOK,
+    StauntonBot,
+    evaluate_staunton_style_bonus,
+)
+
+
+def test_staunton_opening_book_initial_move():
+    """Проверяем, что Стаунтон выбирает дебютный ход из своей книги."""
+    bot = StauntonBot(stockfish_path=None)
+    board = chess.Board()
+    start_key = normalize_fen_key(board)
+    expected_moves = {item[0] for item in STAUNTON_OPENING_BOOK[start_key]}
+
+    result = bot.choose_move(board.fen())
+    assert result["uci"] in expected_moves
+    assert result["source"] == "opening_book"
+
+
+def test_staunton_style_rewards_c4_and_castling():
+    """Проверяем, что позиционный фильтр Стаунтона поощряет английское начало (c2-c4) и рокировку."""
+    start_board = chess.Board()
+    c4_bonus, _ = evaluate_staunton_style_bonus(start_board, chess.Move.from_uci("c2c4"))
+    h3_bonus, _ = evaluate_staunton_style_bonus(start_board, chess.Move.from_uci("h2h3"))
+    assert c4_bonus > h3_bonus
+
+    castle_board = chess.Board("r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4")
+    castle_bonus, _ = evaluate_staunton_style_bonus(castle_board, chess.Move.from_uci("e1g1"))
+    assert castle_bonus > h3_bonus
+
+
+def test_staunton_middlegame_move_generation():
+    """Проверяем генерацию хода Стаунтона вне дебютной книги."""
+    bot = StauntonBot(stockfish_path=None)
+    board = chess.Board("r1bq1rk1/pp2ppbp/2np1np1/8/2PPP3/2N2N2/PP2BPPP/R1BQ1RK1 w - - 3 8")
+
+    result = bot.choose_move(board.fen())
+    assert chess.Move.from_uci(result["uci"]) in board.legal_moves
+    assert result["source"] == "staunton_style_engine"
+
+
+@pytest.mark.asyncio
+async def test_staunton_api_move_endpoint():
+    """Проверяем REST-эндпоинты /api/v1/bots/list и /api/v1/bots/move для игры со Стаунтоном."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        list_resp = await client.get("/api/v1/bots/list")
+        assert list_resp.status_code == 200
+        bot_ids = [b["id"] for b in list_resp.json()["bots"]]
+        assert "staunton" in bot_ids
+
+        move_resp = await client.post(
+            "/api/v1/bots/move",
+            json={"bot_id": "staunton", "fen": chess.STARTING_FEN},
+        )
+        assert move_resp.status_code == 200
+        data = move_resp.json()
+        assert data["bot_id"] == "staunton"
+        assert data["source"] == "opening_book"
+
+========================================================================================
+FILE: tests/test_stockfish_engine.py
+========================================================================================
+# --- FILE: tests/test_stockfish_engine.py ---
+
+import chess
+
+from src.services.bots import BOT_INSTANCES
+from src.services.bots.base import analyse_with_stockfish, resolve_stockfish_path
+
+
+def test_stockfish_binary_exists_and_works():
+    sf_path = resolve_stockfish_path()
+    assert sf_path is not None, "Бинарник Stockfish не найден ни в bin/, ни в системном PATH"
+
+    board = chess.Board()
+    scores = analyse_with_stockfish(board, sf_path, skill_level=5, uci_elo=1800, depth=4, multipv=3)
+    assert len(scores) > 0, "Stockfish должен возвращать оценки кандидатов для стартовой позиции"
+
+    for bot_id, bot in BOT_INSTANCES.items():
+        assert bot._get_active_engine_path() is not None, f"У бота {bot_id} не подключен путь к Stockfish"
+
+========================================================================================
+FILE: tests/test_task_dispatch.py
+========================================================================================
+# --- FILE: tests/test_task_dispatch.py ---
+"""
+Постановка Celery-задач из async-кода не должна блокировать event loop: раньше
+analyze_game_task.delay() шёл прямо в loop и при недоступном брокере подвешивал весь воркер.
+"""
+
+import asyncio
+import threading
+import time
+
+from src.services import task_dispatch
+from src.worker.tasks import analyze_game_task
+
+
+async def _max_loop_stall(coro) -> tuple[object, float]:
+    """Выполняет coro и меряет самую длинную паузу, на которую останавливался event loop."""
+    ticks: list[float] = []
+    done = asyncio.Event()
+
+    async def ticker():
+        while not done.is_set():
+            ticks.append(time.monotonic())
+            await asyncio.sleep(0.01)
+
+    ticker_task = asyncio.create_task(ticker())
+    try:
+        result = await coro
+    finally:
+        done.set()
+        await ticker_task
+    gaps = [b - a for a, b in zip(ticks, ticks[1:], strict=False)] or [0.0]
+    return result, max(gaps)
+
+
+async def test_publish_runs_in_a_thread(no_celery_publish):
+    assert await task_dispatch.schedule_game_analysis(7) is True
+    assert no_celery_publish == [7]
+
+
+async def test_slow_broker_does_not_block_event_loop(monkeypatch):
+    release = threading.Event()
+
+    def hanging_publish(game_id):
+        release.wait(5)  # брокер «висит» дольше таймаута публикации
+
+    monkeypatch.setattr(task_dispatch, "_publish_analysis", hanging_publish)
+    monkeypatch.setattr(task_dispatch.settings, "CELERY_PUBLISH_TIMEOUT_S", 0.3)
+
+    published, stall = await _max_loop_stall(task_dispatch.schedule_game_analysis(8))
+    release.set()
+
+    assert published is False
+    assert stall < 0.2  # loop продолжал работать, пока поток ждал брокер
+
+
+async def test_broker_failure_starts_cooldown(monkeypatch):
+    calls: list[int] = []
+
+    def failing_publish(game_id):
+        calls.append(game_id)
+        raise ConnectionError("broker is down")
+
+    monkeypatch.setattr(task_dispatch, "_publish_analysis", failing_publish)
+
+    assert await task_dispatch.schedule_game_analysis(1) is False
+    # Пока длится пауза, новые публикации не пытаются достучаться до брокера и не плодят потоков.
+    assert await task_dispatch.schedule_game_analysis(2) is False
+    assert calls == [1]
+
+    task_dispatch.reset_broker_cooldown()
+    assert await task_dispatch.schedule_game_analysis(3) is False
+    assert calls == [1, 3]
+
+
+async def test_background_scheduling_returns_immediately(monkeypatch):
+    release = threading.Event()
+    monkeypatch.setattr(task_dispatch, "_publish_analysis", lambda game_id: release.wait(5))
+
+    started = time.monotonic()
+    task = task_dispatch.schedule_game_analysis_in_background(9)
+    assert time.monotonic() - started < 0.05
+    assert task in task_dispatch._background_tasks  # ссылка держится, задачу не соберёт GC
+
+    release.set()
+    assert await task is True
+    assert task not in task_dispatch._background_tasks
+
+
+def test_task_is_bound_to_project_celery_app():
+    """С @shared_task API-процесс публиковал в amqp://localhost вместо брокера Redis."""
+    assert analyze_game_task.app.main == "michess_worker"
+    assert analyze_game_task.app.conf.broker_url.startswith("redis://")
+    assert analyze_game_task.ignore_result is True
+
+========================================================================================
+FILE: tests/test_timeouts_loop.py
+========================================================================================
+# --- FILE: tests/test_timeouts_loop.py ---
+"""
+Проверка таймаутов изолирует ошибки по партиям: одна «битая» партия не должна останавливать
+флаги и отмены во всех остальных (раньше весь проход шёл в одном try и обрывался на ней).
+"""
+
+import pytest
+
+from src.services import game_state as game_state_module
+from src.services.game_state import (
+    TIMEOUT_RETRY_BASE_MS,
+    TIMEOUT_RETRY_MAX_MS,
+    state_manager,
+)
+
+NOW = 10_000_000
+
+
+class DummyManager:
+    def __init__(self):
+        self.sent: list[tuple[int, dict]] = []
+
+    async def send_personal_message(self, message: dict, user_id: int):
+        self.sent.append((user_id, message))
+
+    async def broadcast_to_spectators(self, game_id: int, message: dict):
+        pass
+
+
+class _NoDbSession:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+@pytest.fixture
+def finished(monkeypatch) -> list[tuple[int, str, str]]:
+    """Подменяет запись итога в БД: тест проверяет цикл, а не finish_game."""
+    calls: list[tuple[int, str, str]] = []
+
+    async def fake_finish_game(db, game_id, result, termination="unknown", final_pgn=None):
+        calls.append((game_id, result, termination))
+        return {"white_delta": 0, "black_delta": 0}
+
+    monkeypatch.setattr(state_manager, "finish_game", fake_finish_game)
+    monkeypatch.setattr(game_state_module, "AsyncSessionLocal", _NoDbSession)
+    monkeypatch.setattr(state_manager, "_timeout_failures", {})
+    return calls
+
+
+async def _flagged_game(game_id: int, white_id: int, black_id: int) -> None:
+    """Партия, где у белых (их ход) кончилось время."""
+    await state_manager.initialize_game(game_id, white_id, black_id, base_time_ms=60000, increment_ms=0)
+    await state_manager.update_game_state(game_id, {
+        "state_version": "4", "white_time_ms": "1000", "last_move_at": str(NOW - 5000),
+    })
+
+
+async def _broken_game(game_id: int) -> None:
+    await state_manager.initialize_game(game_id, 1, 2, base_time_ms=60000, increment_ms=0)
+    await state_manager.update_game_state(game_id, {"state_version": "4", "white_id": "broken"})
+
+
+async def test_broken_game_does_not_block_flags_in_other_games(finished):
+    await _broken_game(91)
+    await _flagged_game(92, 10, 20)
+
+    manager = DummyManager()
+    await state_manager.check_timeouts_once(manager, now_ms=NOW)
+
+    assert finished == [(92, "0-1", "timeout")]
+    assert {uid for uid, msg in manager.sent if msg["event"] == "game_over"} == {10, 20}
+    assert state_manager._timeout_failures[91][0] == 1
+
+
+async def test_failing_game_is_retried_with_backoff_and_recovers(finished):
+    await _broken_game(93)
+    manager = DummyManager()
+
+    await state_manager.check_timeouts_once(manager, now_ms=NOW)
+    assert state_manager._timeout_failures[93] == (1, NOW + TIMEOUT_RETRY_BASE_MS)
+
+    # Состояние починили (или сбой БД прошёл), и у белых тем временем упал флаг.
+    await state_manager.update_game_state(93, {
+        "white_id": "1", "white_time_ms": "1000", "last_move_at": str(NOW - 5000),
+    })
+
+    await state_manager.check_timeouts_once(manager, now_ms=NOW + TIMEOUT_RETRY_BASE_MS // 2)
+    assert finished == []  # пауза ещё не прошла — партию не трогаем
+
+    await state_manager.check_timeouts_once(manager, now_ms=NOW + TIMEOUT_RETRY_BASE_MS)
+    assert finished == [(93, "0-1", "timeout")]
+    assert 93 not in state_manager._timeout_failures
+
+
+async def test_backoff_grows_and_is_capped(finished):
+    for _ in range(12):
+        state_manager._record_timeout_failure(94, NOW)
+    count, retry_at = state_manager._timeout_failures[94]
+    assert count == 12
+    assert retry_at == NOW + TIMEOUT_RETRY_MAX_MS
+
+
+async def test_broken_game_stays_active_for_later_retries(finished):
+    """Партия с ошибкой не выбрасывается: при временном сбое БД иначе потерялись бы все партии."""
+    await _broken_game(95)
+    await state_manager.check_timeouts_once(DummyManager(), now_ms=NOW)
+    assert "95" in await state_manager.redis.smembers("active_games")
+
+
+async def test_malformed_active_game_id_is_removed(finished):
+    await state_manager.redis.sadd("active_games", "not-a-number")
+    await _flagged_game(96, 30, 40)
+
+    await state_manager.check_timeouts_once(DummyManager(), now_ms=NOW)
+
+    assert "not-a-number" not in await state_manager.redis.smembers("active_games")
+    assert finished == [(96, "0-1", "timeout")]
+
+
+async def test_failure_counters_of_finished_games_are_dropped(finished):
+    state_manager._timeout_failures[97] = (3, NOW + 5000)  # партии 97 среди активных уже нет
+    await state_manager.check_timeouts_once(DummyManager(), now_ms=NOW)
+    assert 97 not in state_manager._timeout_failures
+
+========================================================================================
+FILE: tests/test_token_lifecycle.py
+========================================================================================
+# --- FILE: tests/test_token_lifecycle.py ---
+"""
+Жизненный цикл токенов: sub = id пользователя, отзыв всех токенов (смена пароля, «выйти на
+всех устройствах») и одноразовые тикеты для WebSocket вместо JWT в адресе.
+"""
+
+import json
+
+import jwt
+import pytest
+from fastapi import WebSocketException
+
+from src.api.deps import get_current_user_ws
+from src.core.config import settings
+from src.core.security import create_access_token, create_user_token
+from src.models.user import User
+from src.services.connection_manager import (
+    SESSION_REVOKED_EVENT,
+    WS_CLOSE_SESSION_REVOKED,
+    ConnectionManager,
+)
+
+PASSWORD = "secret123"
+
+
+def _auth(token: str) -> dict:
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _register_and_login(client, username: str = "tokenuser") -> str:
+    assert client.post("/api/v1/auth/register", json={"username": username, "password": PASSWORD}).status_code == 201
+    res = client.post("/api/v1/auth/login", data={"username": username, "password": PASSWORD})
+    assert res.status_code == 200
+    return res.json()["access_token"]
+
+
+def _me(client, token: str):
+    return client.get("/api/v1/profile/me", headers=_auth(token))
+
+
+class _NoDbFactory:
+    """Фабрика сессий для get_current_user_ws: отдаёт заранее известного пользователя."""
+
+    def __init__(self, user: User | None):
+        self.user = user
+
+    def __call__(self):
+        return self
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def get(self, model, pk):
+        return self.user if self.user is not None and self.user.id == pk else None
+
+
+# --- Формат токена -------------------------------------------------------------------------
+
+def test_token_subject_is_user_id_with_version(client):
+    token = _register_and_login(client)
+    payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    me = _me(client, token).json()
+    assert payload["sub"] == str(me["id"])
+    assert payload["ver"] == 0
+
+
+def test_old_format_token_is_rejected(client):
+    """Токены, выданные до перехода (sub = имя пользователя), больше не принимаются."""
+    _register_and_login(client, "legacy")
+    legacy_token = create_access_token({"sub": "legacy"})
+    assert _me(client, legacy_token).status_code == 401
+
+
+# --- Отзыв токенов -------------------------------------------------------------------------
+
+def test_logout_everywhere_revokes_all_tokens(client):
+    token = _register_and_login(client)
+    second_device = client.post("/api/v1/auth/login", data={"username": "tokenuser", "password": PASSWORD})
+    other_token = second_device.json()["access_token"]
+    assert _me(client, other_token).status_code == 200
+
+    assert client.post("/api/v1/auth/logout-all", headers=_auth(token)).status_code == 204
+
+    assert _me(client, token).status_code == 401
+    assert _me(client, other_token).status_code == 401
+    # Новый вход выдаёт рабочий токен.
+    fresh = client.post("/api/v1/auth/login", data={"username": "tokenuser", "password": PASSWORD})
+    assert _me(client, fresh.json()["access_token"]).status_code == 200
+
+
+def test_change_password_revokes_old_tokens_and_keeps_current_session(client):
+    token = _register_and_login(client)
+
+    wrong = client.post("/api/v1/auth/change-password", headers=_auth(token),
+                        json={"current_password": "not-it", "new_password": "brand-new-pass"})
+    assert wrong.status_code == 400
+    assert _me(client, token).status_code == 200  # неудачная попытка ничего не отзывает
+
+    res = client.post("/api/v1/auth/change-password", headers=_auth(token),
+                      json={"current_password": PASSWORD, "new_password": "brand-new-pass"})
+    assert res.status_code == 200
+    new_token = res.json()["access_token"]
+
+    assert _me(client, token).status_code == 401
+    assert _me(client, new_token).status_code == 200
+    assert client.post("/api/v1/auth/login", data={"username": "tokenuser", "password": PASSWORD}).status_code == 401
+    assert client.post("/api/v1/auth/login",
+                       data={"username": "tokenuser", "password": "brand-new-pass"}).status_code == 200
+
+
+# --- Тикеты WebSocket ------------------------------------------------------------------------
+
+def test_ws_ticket_requires_authentication(client):
+    assert client.post("/api/v1/auth/ws-ticket").status_code == 401
+
+
+async def test_ws_ticket_works_exactly_once(client):
+    token = _register_and_login(client)
+    me = _me(client, token).json()
+    res = client.post("/api/v1/auth/ws-ticket", headers=_auth(token))
+    assert res.status_code == 200
+    ticket = res.json()["ticket"]
+    assert token not in ticket
+
+    user = User(id=me["id"], username=me["username"], rating=1200, token_version=0)
+    authed = await get_current_user_ws(ticket=ticket, session_factory=_NoDbFactory(user))
+    assert authed.id == me["id"]
+
+    with pytest.raises(WebSocketException) as exc_info:
+        await get_current_user_ws(ticket=ticket, session_factory=_NoDbFactory(user))
+    assert exc_info.value.code == 1008
+
+
+async def test_ws_ticket_is_void_after_tokens_are_revoked(client):
+    token = _register_and_login(client)
+    me = _me(client, token).json()
+    ticket = client.post("/api/v1/auth/ws-ticket", headers=_auth(token)).json()["ticket"]
+
+    # Между выдачей тикета и подключением пользователь вышел на всех устройствах.
+    revoked_user = User(id=me["id"], username=me["username"], rating=1200, token_version=1)
+    with pytest.raises(WebSocketException):
+        await get_current_user_ws(ticket=ticket, session_factory=_NoDbFactory(revoked_user))
+
+
+async def test_unknown_ticket_is_rejected():
+    with pytest.raises(WebSocketException) as exc_info:
+        await get_current_user_ws(ticket="made-up", session_factory=_NoDbFactory(None))
+    assert exc_info.value.code == 1008
+
+
+def test_ws_ticket_issuance_is_rate_limited(client, monkeypatch):
+    monkeypatch.setattr(settings, "RATE_LIMIT_WS_TICKETS", 2)
+    token = _register_and_login(client)
+    codes = [client.post("/api/v1/auth/ws-ticket", headers=_auth(token)).status_code for _ in range(3)]
+    assert codes == [200, 200, 429]
+
+
+# --- Закрытие открытых WebSocket при отзыве -------------------------------------------------
+
+class _Socket:
+    def __init__(self):
+        self.sent: list[dict] = []
+        self.closed_with: int | None = None
+
+    async def accept(self):
+        pass
+
+    async def send_text(self, text: str):
+        self.sent.append(json.loads(text))
+
+    async def close(self, code: int = 1000):
+        self.closed_with = code
+
+
+async def test_revoke_sessions_notifies_and_closes_local_tabs():
+    cm = ConnectionManager()
+    tab1, tab2, other_user = _Socket(), _Socket(), _Socket()
+    await cm.connect(tab1, user_id=41)
+    await cm.connect(tab2, user_id=41)
+    await cm.connect(other_user, user_id=42)
+
+    await cm.revoke_sessions(41)
+
+    for tab in (tab1, tab2):
+        assert tab.sent[-1]["event"] == SESSION_REVOKED_EVENT
+        assert tab.closed_with == WS_CLOSE_SESSION_REVOKED
+    assert other_user.closed_with is None
+
+
+async def test_revocation_from_another_worker_closes_tabs_here():
+    cm = ConnectionManager()
+    tab = _Socket()
+    await cm.connect(tab, user_id=43)
+
+    await cm._on_remote_message(43, json.dumps({"event": "chat_message", "text": SESSION_REVOKED_EVENT}))
+    assert tab.closed_with is None  # слово в тексте чата — не событие отзыва
+
+    await cm._on_remote_message(43, json.dumps({"event": SESSION_REVOKED_EVENT}))
+    assert tab.closed_with == WS_CLOSE_SESSION_REVOKED
+
+
+def test_user_token_helper_matches_login_format():
+    user = User(id=7, username="x", rating=1200, token_version=3)
+    payload = jwt.decode(create_user_token(user), settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    assert (payload["sub"], payload["ver"]) == ("7", 3)
+
+========================================================================================
+FILE: tests/test_websockets_flow.py
+========================================================================================
+# --- FILE: tests/test_websockets_flow.py ---
+
+import json
+
+import pytest
+from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
+
+
+@pytest.mark.parametrize("query", ["ticket=invalid_ticket", "token=some.jwt.token"])
+def test_websocket_unauthorized_access(client: TestClient, query: str):
+    """Без действующего одноразового тикета соединение закрывается с 1008 (JWT в адресе больше не принимается)."""
+    with (
+        pytest.raises(WebSocketDisconnect) as exc_info,
+        client.websocket_connect(f"/api/v1/ws/matchmaking?{query}") as websocket,
+    ):
+        websocket.receive_json()
+    assert exc_info.value.code == 1008
+
+
+@pytest.mark.asyncio
+async def test_premove_telemetry_saved_and_bot_thinking_time():
+    """Проверяет сохранение флага is_premove=True в Redis-телеметрии и расчёт времени хода бота."""
+    import chess
+
+    from src.api.bots import calculate_authentic_thinking_time_ms
+    from src.services.game_state import state_manager
+
+    game_id = 999123
+    await state_manager.redis.delete(f"game:{game_id}:moves")
+
+    await state_manager.save_move_telemetry(game_id, {
+        "player_id": 1,
+        "move_number": 1,
+        "notation": "g1f3",
+        "san": "Nf3",
+        "fen_after": chess.Board().fen(),
+        "time_taken_ms": 0,
+        "window_blurred_before_move": False,
+        "is_premove": True,
+        "network_lag_ms": 5,
+    })
+
+    raw_moves = await state_manager.redis.lrange(f"game:{game_id}:moves", 0, -1)
+    assert len(raw_moves) == 1
+    saved = json.loads(raw_moves[0])
+    assert saved["is_premove"] is True
+    assert saved["time_taken_ms"] == 0
+
+    # Проверка тайминга: Морфи из книги думает быстрее, чем Паульсен в расчёте
+    board = chess.Board()
+    morphy_book_ms = calculate_authentic_thinking_time_ms("morphy", board, "e2e4", "book")
+    paulsen_engine_ms = calculate_authentic_thinking_time_ms("paulsen", board, "e2e4", "engine")
+    assert 200 <= morphy_book_ms < paulsen_engine_ms <= 3000
+
+
+@pytest.mark.asyncio
+async def test_rematch_swaps_colors(db_session):
+    """Проверяет, что при принятии реванша создаётся новая партия со сменой цветов (white_id <-> black_id)."""
+    from src.api.websockets import create_rematch_game
+    from src.models.user import User
+    from src.services.game_state import state_manager
+
+    p1 = User(username="rematch_p1", hashed_password="pw", rating=1600)
+    p2 = User(username="rematch_p2", hashed_password="pw", rating=1650)
+    db_session.add_all([p1, p2])
+    await db_session.commit()
+    await db_session.refresh(p1)
+    await db_session.refresh(p2)
+
+    prev_state = {
+        "white_id": str(p1.id),
+        "black_id": str(p2.id),
+        "base_time_ms": "300000",
+        "increment_ms": "3000",
     }
 
-    const filteredQueue = queuePlayers.filter(p => p.user_id !== currentUserId);
+    rematch_info = await create_rematch_game(db_session, prev_state)
+    assert rematch_info["white_id"] == p2.id
+    assert rematch_info["black_id"] == p1.id
+    assert rematch_info["base_time_ms"] == 300000
+    assert rematch_info["increment_ms"] == 3000
 
-    return (
-        <div
-            className="w-full max-w-[1920px] h-full flex flex-col xl:flex-row items-center xl:items-stretch justify-between gap-3 px-1 xl:overflow-hidden relative">
+    new_state = await state_manager.get_game_state(rematch_info["game_id"])
+    assert int(new_state["white_id"]) == p2.id
+    assert int(new_state["black_id"]) == p1.id
 
-            {dragState && (
-                <div
-                    className="fixed pointer-events-none z-50 scale-110"
-                    style={{
-                        left: `${dragState.x}px`,
-                        top: `${dragState.y}px`,
-                        width: `${boardSize / 8}px`,
-                        height: `${boardSize / 8}px`,
-                        transform: 'translate(-50%, -50%)'
-                    }}
-                >
-                    {renderPieceSvg(dragState.piece)}
-                </div>
-            )}
 
-            {/* ЛЕВАЯ КОЛОНКА: ИГРОВОЙ ЦЕНТР (ЧАСЫ DGT2500, ИСТОРИЧЕСКИЕ БОТЫ С ФОТО, ЛОББИ И LIVE) */}
-            <div
-                className="w-full xl:w-[400px] 2xl:w-[440px] xl:h-full bg-acacia p-3 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-2 text-boxwood-light order-2 xl:order-1 shrink-0 xl:overflow-hidden">
+@pytest.mark.asyncio
+async def test_spectator_receives_live_moves_and_chat():
+    """Проверяет подписку зрителей на партию и рассылку ходов и сообщений чата."""
+    from src.api.websockets import broadcast_to_game_participants_and_spectators
+    from src.services.connection_manager import manager
 
-                {/* Шапка левой панели: Статистика сессии */}
-                <div className="border-b border-acacia-light pb-2 flex justify-between items-center shrink-0">
-                    <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-acacia-dark rounded-md border border-amber-600/30 text-amber-400">
-                            <Sword size={16}/>
-                        </div>
-                        <div>
-                            <div className="text-[11px] tracking-wider uppercase text-boxwood/75 font-bold">
-                                Игровой зал
-                            </div>
-                            <div className="text-xs font-bold flex items-center gap-1.5 font-mono">
-                                <span className="text-boxwood/80 font-sans">Счёт сессии:</span>
-                                <span className="text-emerald-400">+{sessionStats.wins}</span>
-                                <span className="text-red-400">-{sessionStats.losses}</span>
-                                <span className="text-gray-300">={sessionStats.draws}</span>
-                            </div>
-                        </div>
-                    </div>
+    received: dict[int, list[dict]] = {}
 
-                    <button
-                        type="button"
-                        onClick={() => setIsManualFlip(prev => !prev)}
-                        className="px-2.5 py-1 rounded-md bg-acacia-dark hover:bg-black/50 border border-amber-800/50 text-xs font-bold text-amber-200 flex items-center gap-1.5 transition cursor-pointer shadow-sm"
-                        title="Перевернуть доску"
-                    >
-                        <RefreshCw size={13} className="text-amber-400"/> Перевернуть
-                    </button>
-                </div>
+    async def fake_send(message: dict, user_id: int):
+        received.setdefault(user_id, []).append(message)
 
-                {/* Блок часов FIDE DGT2500 и быстрого вызова */}
-                <div
-                    className="bg-acacia-dark p-2.5 rounded-md border border-amber-900/50 flex flex-col gap-2 shadow-inner shrink-0">
-                    <div className="flex items-center justify-between">
-                        <label
-                            className="text-xs uppercase tracking-wider text-boxwood/85 flex items-center gap-1.5 font-bold">
-                            <Clock className="text-amber-500" size={13}/> Часы FIDE DGT2500 (36 прогр.)
-                        </label>
-                        <span
-                            className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-900/45 text-amber-300 border border-amber-600/30">
-                            OPT #{selectedTimeControl.optionNumber}
-                        </span>
-                    </div>
+    orig_send = manager.send_personal_message
+    manager.send_personal_message = fake_send
+    try:
+        game_id = 777001
+        white_id, black_id, spectator_id = 11, 22, 33
+        await manager.add_spectator(game_id, spectator_id)
 
-                    <div className="relative w-full" ref={timeDropdownRef}>
-                        <button
-                            type="button"
-                            disabled={isSearching || !!gameId}
-                            onClick={() => setIsTimeDropdownOpen(!isTimeDropdownOpen)}
-                            className="w-full bg-black/45 border border-amber-700/50 hover:bg-black/65 disabled:opacity-50 transition text-amber-200 rounded-md px-2.5 py-1.5 text-xs sm:text-sm font-bold outline-none cursor-pointer flex justify-between items-center shadow-inner gap-2"
-                        >
-                            <span className="truncate">
-                                [{selectedTimeControl.optionNumber}] {selectedTimeControl.label}
-                                {selectedTimeControl.isManual ? ` (${manualBaseMinutes}м + ${manualIncSeconds}с)` : ''}
-                            </span>
-                            {isTimeDropdownOpen ? <ChevronUp className="text-amber-400 shrink-0" size={15}/> :
-                                <ChevronDown className="text-amber-400 shrink-0" size={15}/>}
-                        </button>
+        move_event = {"event": "move_made", "game_id": game_id, "san": "e4"}
+        await broadcast_to_game_participants_and_spectators(game_id, white_id, black_id, move_event)
 
-                        {isTimeDropdownOpen && (
-                            <div
-                                className="absolute z-50 w-full top-full mt-1 bg-[#1A120B] border-2 border-amber-700/60 rounded-md shadow-2xl max-h-72 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
-                                {TIME_CONTROLS.map((group, gIdx) => (
-                                    <div key={gIdx}>
-                                        <div
-                                            className="px-3 py-1.5 text-xs uppercase tracking-wider text-amber-400 bg-black/90 font-bold sticky top-0 z-10 border-b border-t border-amber-900/40 first:border-t-0">
-                                            {group.group}
-                                        </div>
-                                        {group.options.map((opt) => {
-                                            const isSelected = selectedTimeControl.optionNumber === opt.optionNumber;
-                                            return (
-                                                <button
-                                                    key={opt.optionNumber}
-                                                    type="button"
-                                                    className={`w-full text-left px-3 py-2 text-xs sm:text-sm transition flex justify-between items-start gap-2 border-b border-amber-950/30 cursor-pointer ${
-                                                        isSelected
-                                                            ? 'bg-amber-900/45 text-amber-300 font-bold'
-                                                            : 'text-amber-100/90 hover:bg-amber-900/25 hover:text-amber-200'
-                                                    }`}
-                                                    onClick={() => {
-                                                        setSelectedTimeControl(opt);
-                                                        if (opt.isManual) {
-                                                            setManualBaseMinutes(Math.max(1, Math.round(opt.base)));
-                                                            setManualIncSeconds(opt.inc);
-                                                        }
-                                                        setIsTimeDropdownOpen(false);
-                                                    }}
-                                                >
-                                                    <div className="min-w-0">
-                                                        <div className="flex items-center gap-2">
-                                                            <span
-                                                                className="font-mono text-xs px-1.5 py-0.5 rounded bg-black/50 text-amber-400 border border-amber-700/40 shrink-0">
-                                                                {opt.optionNumber}
-                                                            </span>
-                                                            <span className="truncate font-bold">{opt.label}</span>
-                                                        </div>
-                                                        <div className="text-xs text-boxwood/70 mt-0.5 leading-snug">
-                                                            {opt.details}
-                                                        </div>
-                                                    </div>
-                                                    {isSelected && <div
-                                                        className="w-2 h-2 rounded-full bg-amber-500 shrink-0 mt-1.5"/>}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
+        assert received[white_id][0]["san"] == "e4"
+        assert received[black_id][0]["san"] == "e4"
+        assert received[spectator_id][0]["san"] == "e4"
 
-                    {selectedTimeControl.isManual && (
-                        <div
-                            className="p-2 rounded bg-black/40 border border-amber-700/40 flex flex-col gap-1.5 text-xs">
-                            <div
-                                className="text-[11px] uppercase tracking-wider text-amber-400 font-bold flex items-center gap-1.5">
-                                <Sliders size={12}/> Ручная настройка DGT2500
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                                <label className="flex flex-col gap-0.5 text-xs text-boxwood/85">
-                                    <span>Время (мин):</span>
-                                    <input
-                                        type="number"
-                                        min={1}
-                                        max={240}
-                                        value={manualBaseMinutes}
-                                        onChange={(e) => setManualBaseMinutes(Math.max(1, Math.min(240, Number(e.target.value) || 1)))}
-                                        className="bg-black/60 border border-amber-700/50 rounded px-2 py-1 text-amber-200 font-mono text-xs outline-none"
-                                    />
-                                </label>
-                                <label className="flex flex-col gap-0.5 text-xs text-boxwood/85">
-                                    <span>Бонус / Delay (сек):</span>
-                                    <input
-                                        type="number"
-                                        min={0}
-                                        max={180}
-                                        value={manualIncSeconds}
-                                        onChange={(e) => setManualIncSeconds(Math.max(0, Math.min(180, Number(e.target.value) || 0)))}
-                                        className="bg-black/60 border border-amber-700/50 rounded px-2 py-1 text-amber-200 font-mono text-xs outline-none"
-                                    />
-                                </label>
-                            </div>
-                        </div>
-                    )}
+        chat_event = {"event": "chat_message", "game_id": game_id, "sender": "Spectator", "text": "👏 Красивый ход!"}
+        await broadcast_to_game_participants_and_spectators(game_id, white_id, black_id, chat_event)
+        assert received[spectator_id][1]["event"] == "chat_message"
+        assert received[white_id][1]["text"] == "👏 Красивый ход!"
 
-                    {!gameId ? (
-                        <div className="grid grid-cols-[1fr_auto] gap-2">
-                            <button
-                                onClick={isSearching ? cancelMatchmaking : startMatchmaking}
-                                className={`flex items-center justify-center gap-2 px-3 py-1.5 font-bold text-xs sm:text-sm rounded-md transition shadow border cursor-pointer ${
-                                    isSearching
-                                        ? 'bg-red-900/85 text-red-100 border-red-700 hover:bg-red-900'
-                                        : 'bg-boxwood text-acacia-dark border-amber-700/50 hover:bg-boxwood-light'
-                                }`}
-                            >
-                                {isSearching ? <Loader2 className="animate-spin" size={15}/> : <Users size={15}/>}
-                                {isSearching ? 'Отменить поиск' : 'Найти соперника'}
-                            </button>
+        await manager.remove_spectator(game_id, spectator_id)
+    finally:
+        manager.send_personal_message = orig_send
 
-                            <button
-                                type="button"
-                                onClick={() => setShowInvitePanel(prev => !prev)}
-                                className={`px-2.5 py-1.5 rounded-md border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow ${
-                                    showInvitePanel
-                                        ? 'bg-amber-700 text-white border-amber-400'
-                                        : 'bg-black/45 hover:bg-black/65 text-amber-200 border-amber-700/50'
-                                }`}
-                                title="Создать ссылку для игры с другом"
-                            >
-                                <Link2 size={14}/> С другом
-                            </button>
-                        </div>
-                    ) : (
-                        <div
-                            className="text-center py-1.5 px-3 rounded bg-emerald-950/60 border border-emerald-700/50 text-emerald-300 text-xs sm:text-sm font-bold">
-                            {gameOverResult ? `Партия завершена (${gameOverResult})` : 'Идет рейтинговая партия'}
-                        </div>
-                    )}
+========================================================================================
+FILE: tests/test_worker_tasks.py
+========================================================================================
+# --- FILE: tests/test_worker_tasks.py ---
+"""
+Celery-задача анализа: каждая задача идёт в собственном asyncio.run, поэтому глобальный
+пул соединений использовать нельзя — со второй задачи он ломался («different loop»).
+"""
 
-                    {/* Выдвижная плашка вызова друга по ссылке */}
-                    {showInvitePanel && !gameId && (
-                        <div className="p-2 rounded bg-black/45 border border-amber-700/40 flex flex-col gap-1.5">
-                            <div className="flex items-center justify-between text-xs font-bold text-amber-200">
-                                <span>Цвет в партии с другом:</span>
-                                <div
-                                    className="flex items-center gap-1 bg-black/50 p-0.5 rounded border border-amber-900/50">
-                                    {(['white', 'random', 'black'] as const).map(c => (
-                                        <button
-                                            key={c}
-                                            type="button"
-                                            onClick={() => setInviteColorPref(c)}
-                                            className={`px-2 py-0.5 rounded text-xs font-bold transition cursor-pointer ${
-                                                inviteColorPref === c ? 'bg-amber-700 text-white' : 'text-boxwood/70 hover:text-amber-200'
-                                            }`}
-                                        >
-                                            {c === 'white' ? '♔ Белые' : c === 'black' ? '♚ Чёрные' : '🎲 Случайно'}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
+import asyncio
+import json
 
-                            {!createdInviteCode ? (
-                                <button
-                                    type="button"
-                                    onClick={handleCreatePrivateInvite}
-                                    className="w-full py-1.5 px-3 rounded bg-amber-800/70 hover:bg-amber-700 text-amber-100 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow"
-                                >
-                                    <Link2 size={13}/> Сгенерировать и скопировать ссылку
-                                </button>
-                            ) : (
-                                <div className="flex items-center gap-1.5">
-                                    <input
-                                        type="text"
-                                        readOnly
-                                        value={`${window.location.origin}/challenge/${createdInviteCode}`}
-                                        className="flex-1 bg-black/60 border border-amber-700/50 rounded px-2 py-1 text-xs font-mono text-amber-200 outline-none"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={handleCopyInviteLink}
-                                        className="px-2.5 py-1 rounded bg-emerald-800 hover:bg-emerald-700 text-emerald-100 text-xs font-bold flex items-center gap-1 shrink-0 cursor-pointer"
-                                    >
-                                        {inviteCopied ? <Check size={13}/> : <Copy size={13}/>}
-                                        {inviteCopied ? 'Скопировано' : 'Копия'}
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    )}
-                </div>
+import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-                {/* Переключатель секций: Исторические персоны (Боты) | Лобби & Live */}
-                <div
-                    className="grid grid-cols-2 gap-1.5 p-1 bg-acacia-dark rounded-md border border-amber-900/50 shrink-0">
-                    <button
-                        type="button"
-                        onClick={() => setLeftSectionTab('bots')}
-                        className={`py-1.5 px-2.5 rounded text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                            leftSectionTab === 'bots'
-                                ? 'bg-amber-700 text-white shadow border border-amber-500/50'
-                                : 'text-boxwood/75 hover:text-amber-200 hover:bg-white/5'
-                        }`}
-                    >
-                        <Bot size={15}/> Исторические боты
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setLeftSectionTab('lobby')}
-                        className={`py-1.5 px-2.5 rounded text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                            leftSectionTab === 'lobby'
-                                ? 'bg-amber-700 text-white shadow border border-amber-500/50'
-                                : 'text-boxwood/75 hover:text-amber-200 hover:bg-white/5'
-                        }`}
-                    >
-                        <Radio size={14}
-                               className={filteredQueue.length + liveGames.length > 0 ? 'text-emerald-400 animate-pulse' : ''}/>
-                        <span>Лобби / Live</span>
-                        <span className="text-xs font-mono px-1.5 py-0.2 rounded bg-black/40 text-amber-300">
-                            {filteredQueue.length + liveGames.length}
-                        </span>
-                    </button>
-                </div>
+from src.models.base import Base
+from src.models.game import Game, GameStatus
+from src.models.user import User
+from src.services.bots.base import resolve_stockfish_path
+from src.worker import tasks
 
-                {/* СОДЕРЖИМОЕ ВЫБРАННОЙ ВКЛАДКИ ЛЕВОЙ ПАНЕЛИ (flex-1 min-h-0) */}
-                {leftSectionTab === 'bots' ? (
-                    <div
-                        className="flex-1 min-h-0 bg-acacia-dark p-2.5 rounded-md border border-amber-700/40 flex flex-col justify-between gap-2 shadow-inner overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
-                        {/* Сетка портретов всех 7 исторических мастеров */}
-                        <div className="grid grid-cols-2 gap-1.5">
-                            {HISTORICAL_BOTS_LIST.map((botItem) => {
-                                const isSelected = selectedBotId === botItem.id;
-                                return (
-                                    <button
-                                        key={botItem.id}
-                                        type="button"
-                                        onClick={() => setSelectedBotId(botItem.id)}
-                                        className={`p-1.5 rounded-md text-left transition cursor-pointer flex items-center gap-2 border ${
-                                            isSelected
-                                                ? 'bg-amber-800/80 text-white border-amber-400 shadow'
-                                                : 'bg-black/35 text-boxwood/85 border-amber-900/40 hover:border-amber-600/50 hover:bg-black/55'
-                                        }`}
-                                    >
-                                        <img
-                                            src={botItem.avatar}
-                                            alt={botItem.shortName}
-                                            onError={(e) => {
-                                                const img = e.target as HTMLImageElement;
-                                                if (!img.src.endsWith(botItem.fallbackAvatar)) {
-                                                    img.src = botItem.fallbackAvatar;
-                                                }
-                                            }}
-                                            className={`w-8 h-8 rounded-full object-cover shrink-0 border ${
-                                                isSelected ? 'border-amber-300' : 'border-amber-700/60'
-                                            }`}
-                                        />
-                                        <div className="min-w-0 flex-1">
-                                            <div className="text-xs font-bold truncate leading-tight">
-                                                {botItem.shortName}
-                                            </div>
-                                            <div className="text-[11px] font-mono text-amber-300/90">
-                                                Эло {botItem.rating}
-                                            </div>
-                                        </div>
-                                    </button>
-                                );
-                            })}
-                        </div>
+PGN = '[Event "t"]\n[Result "1-0"]\n\n1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7# 1-0'
 
-                        {/* Детальная карточка выбранной исторической личности */}
-                        <div className="p-2.5 rounded-md bg-black/40 border border-amber-800/50 flex flex-col gap-2">
-                            <div className="flex items-center gap-2.5">
-                                <img
-                                    src={selectedBotProfile.avatar}
-                                    alt={selectedBotProfile.name}
-                                    onError={(e) => {
-                                        const img = e.target as HTMLImageElement;
-                                        if (!img.src.endsWith(selectedBotProfile.fallbackAvatar)) {
-                                            img.src = selectedBotProfile.fallbackAvatar;
-                                        }
-                                    }}
-                                    className="w-12 h-12 rounded-lg object-cover border-2 border-amber-500/80 shadow-md shrink-0"
-                                />
-                                <div className="min-w-0 flex-1">
-                                    <div className="flex items-center justify-between gap-1">
-                                        <span className="text-sm font-bold text-amber-200 truncate">
-                                            {selectedBotProfile.name}
-                                        </span>
-                                        {activeBot === selectedBotProfile.id && !gameOverResult && (
-                                            <span
-                                                className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-600/50 shrink-0">
-                                                В игре
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="text-xs text-amber-400 font-semibold">
-                                        {selectedBotProfile.title}
-                                    </div>
-                                    <div className="text-[11px] text-boxwood/75 font-mono">
-                                        Годы: {selectedBotProfile.era} • Рейтинг ~{selectedBotProfile.rating}
-                                    </div>
-                                </div>
-                            </div>
 
-                            <p className="text-xs italic text-boxwood/90 leading-snug bg-black/30 p-2 rounded border border-amber-900/30">
-                                «{selectedBotProfile.motto}»
-                            </p>
+async def _prepare_db(url: str) -> list[int]:
+    engine = create_async_engine(url)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with session_factory() as db:
+        white = User(username="worker_w", hashed_password="pw", rating=1500)
+        black = User(username="worker_b", hashed_password="pw", rating=1500)
+        db.add_all([white, black])
+        await db.commit()
+        games = [
+            Game(white_player_id=white.id, black_player_id=black.id, status=GameStatus.COMPLETED,
+                 base_time_ms=180000, increment_ms=0, is_rated=True, pgn=PGN)
+            for _ in range(2)
+        ]
+        db.add_all(games)
+        await db.commit()
+        ids = [g.id for g in games]
+    await engine.dispose()
+    return ids
 
-                            <div className="grid grid-cols-3 gap-1.5">
-                                <button
-                                    type="button"
-                                    disabled={!!gameId && !gameOverResult}
-                                    onClick={() => startHistoricalBotGame(selectedBotId, 'white')}
-                                    className="py-1.5 px-2 text-xs font-bold rounded-md bg-boxwood text-acacia-dark hover:bg-boxwood-light disabled:opacity-40 transition cursor-pointer shadow"
-                                >
-                                    ♔ Белыми
-                                </button>
-                                <button
-                                    type="button"
-                                    disabled={!!gameId && !gameOverResult}
-                                    onClick={() => startHistoricalBotGame(selectedBotId, 'random')}
-                                    className="py-1.5 px-2 text-xs font-bold rounded-md bg-amber-700 text-white border border-amber-500/50 hover:bg-amber-600 disabled:opacity-40 transition cursor-pointer shadow"
-                                >
-                                    🎲 Случайно
-                                </button>
-                                <button
-                                    type="button"
-                                    disabled={!!gameId && !gameOverResult}
-                                    onClick={() => startHistoricalBotGame(selectedBotId, 'black')}
-                                    className="py-1.5 px-2 text-xs font-bold rounded-md bg-black/70 text-amber-200 border border-amber-700/60 hover:bg-black disabled:opacity-40 transition cursor-pointer shadow"
-                                >
-                                    ♚ Чёрными
-                                </button>
-                            </div>
-                        </div>
 
-                        {/* Комментарий исторического бота по ходу партии */}
-                        {activeBotProfile && (
-                            <div
-                                className="p-2 rounded-md bg-black/55 border border-amber-600/40 text-xs text-amber-100">
-                                <div
-                                    className="font-bold text-amber-400 mb-0.5 flex items-center justify-between text-xs">
-                                    <span className="flex items-center gap-1.5">
-                                        <MessageSquareQuote size={13}/> Мысль ({activeBotProfile.shortName}):
-                                    </span>
-                                    {isBotThinking && (
-                                        <span className="animate-pulse text-amber-300 font-mono text-[11px]">
-                                            обдумывает ход...
-                                        </span>
-                                    )}
-                                </div>
-                                <div className="text-xs text-boxwood-light leading-snug">
-                                    {botComment || 'Посмотрим, как развернётся борьба за центр.'}
-                                </div>
-                            </div>
-                        )}
-                    </div>
-                ) : (
-                    /* Вкладка Вызовы в лобби и Live-партии */
-                    <div
-                        className="flex-1 min-h-0 bg-acacia-dark rounded-md border border-amber-900/50 p-2.5 flex flex-col shadow-inner">
-                        <div
-                            className="grid grid-cols-2 gap-1.5 p-1 bg-black/40 rounded border border-amber-900/40 mb-2 shrink-0">
-                            <button
-                                type="button"
-                                onClick={() => setLobbyTab('lobby')}
-                                className={`py-1.5 px-2 rounded text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                                    lobbyTab === 'lobby'
-                                        ? 'bg-amber-700 text-amber-100 shadow'
-                                        : 'text-boxwood/70 hover:text-amber-200'
-                                }`}
-                            >
-                                <span>Вызовы в лобби</span>
-                                <span
-                                    className="text-xs font-mono px-1.5 rounded bg-black/40">{filteredQueue.length}</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setLobbyTab('live')}
-                                className={`py-1.5 px-2 rounded text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                                    lobbyTab === 'live'
-                                        ? 'bg-amber-700 text-amber-100 shadow'
-                                        : 'text-boxwood/70 hover:text-amber-200'
-                                }`}
-                            >
-                                <Radio size={13}
-                                       className={liveGames.length > 0 ? 'text-emerald-400 animate-pulse' : ''}/>
-                                <span>Идут сейчас (Live)</span>
-                                <span className="text-xs font-mono px-1.5 rounded bg-black/40">{liveGames.length}</span>
-                            </button>
-                        </div>
+async def _cached_analysis(url: str, game_id: int) -> str | None:
+    engine = create_async_engine(url)
+    async with async_sessionmaker(engine)() as db:
+        game = await db.get(Game, game_id)
+        value = game.analysis_json
+    await engine.dispose()
+    return value
 
-                        <div
-                            className="flex-1 min-h-0 overflow-y-auto space-y-2 text-sm [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
-                            {lobbyTab === 'lobby' ? (
-                                filteredQueue.length === 0 ? (
-                                    <div
-                                        className="h-full flex flex-col items-center justify-center p-4 text-boxwood/60 text-center text-xs sm:text-sm">
-                                        <span>
-                                            {isSearching
-                                                ? 'Вы в очереди. Ожидание соперников...'
-                                                : 'В лобби пока нет открытых вызовов. Нажмите «Найти соперника» выше.'}
-                                        </span>
-                                    </div>
-                                ) : (
-                                    filteredQueue.map((p) => (
-                                        <div
-                                            key={p.user_id}
-                                            className="p-2.5 bg-black/45 rounded-md border border-amber-600/30 flex justify-between items-center hover:border-amber-500/60 transition"
-                                        >
-                                            <div>
-                                                <span className="text-amber-300 font-bold text-sm">{p.username}</span>
-                                                <div className="text-xs text-boxwood/75 font-mono">
-                                                    Рейтинг: {p.rating} • {Math.round(p.base_time_ms / 60000)}+{(p.increment_ms || 0) / 1000}
-                                                </div>
-                                            </div>
-                                            <button
-                                                disabled={!!gameId && !gameOverResult}
-                                                onClick={() => acceptChallenge(p.user_id)}
-                                                className="px-3 py-1.5 bg-emerald-800 hover:bg-emerald-700 disabled:opacity-40 text-emerald-100 rounded text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer"
-                                            >
-                                                <Play size={13}/> Принять
-                                            </button>
-                                        </div>
-                                    ))
-                                )
-                            ) : (
-                                liveGames.length === 0 ? (
-                                    <div
-                                        className="h-full flex flex-col items-center justify-center p-4 text-boxwood/60 text-center text-xs sm:text-sm">
-                                        <span>Сейчас нет активных PvP-партий.</span>
-                                    </div>
-                                ) : (
-                                    liveGames.map((lg) => (
-                                        <div
-                                            key={lg.game_id}
-                                            className="p-2.5 bg-black/45 rounded-md border border-amber-600/30 flex justify-between items-center hover:border-amber-500/60 transition gap-2"
-                                        >
-                                            <div className="min-w-0">
-                                                <div className="text-amber-200 font-bold truncate text-sm">
-                                                    {lg.white_username} <span
-                                                    className="text-boxwood/50">vs</span> {lg.black_username}
-                                                </div>
-                                                <div className="text-xs text-boxwood/75 font-mono">
-                                                    {Math.round(lg.base_time_ms / 60000)}+{(lg.increment_ms || 0) / 1000} •
-                                                    👁 {lg.spectators_count}
-                                                </div>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                disabled={!!gameId && !gameOverResult}
-                                                onClick={() => handleSpectateGame(lg.game_id)}
-                                                className="px-3 py-1.5 bg-amber-800 hover:bg-amber-700 disabled:opacity-40 text-amber-100 rounded text-xs font-bold transition flex items-center gap-1.5 shrink-0 shadow cursor-pointer"
-                                            >
-                                                <Eye size={13}/> Смотреть
-                                            </button>
-                                        </div>
-                                    ))
-                                )
-                            )}
-                        </div>
-                    </div>
-                )}
-            </div>
 
-            {/* ЦЕНТРАЛЬНАЯ КОЛОНКА: ИГРОКИ И ШАХМАТНАЯ ДОСКА */}
-            <div className="xl:h-full flex flex-col items-center justify-center gap-2 order-1 xl:order-2 shrink-0">
+@pytest.mark.skipif(resolve_stockfish_path() is None, reason="Stockfish binary not available")
+def test_consecutive_tasks_each_in_own_event_loop(tmp_path, monkeypatch):
+    url = f"sqlite+aiosqlite:///{(tmp_path / 'worker.db').as_posix()}"
+    game_ids = asyncio.run(_prepare_db(url))
+    monkeypatch.setattr(tasks, "_task_database_url", lambda: url)
 
-                {/* Верхний игрок */}
-                <div
-                    style={{width: `${boardSize}px`}}
-                    className={`bg-acacia-dark px-3 py-1.5 rounded-lg shadow-heavy border-2 border-amber-900/50 flex justify-between items-center text-boxwood-light shrink-0 ${isResizing ? 'transition-none' : 'transition-colors'}`}
-                >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                        {isBotOnTop && activeBotProfile ? (
-                            <img
-                                src={activeBotProfile.avatar}
-                                alt={activeBotProfile.name}
-                                onError={(e) => {
-                                    const img = e.target as HTMLImageElement;
-                                    if (!img.src.endsWith(activeBotProfile.fallbackAvatar)) {
-                                        img.src = activeBotProfile.fallbackAvatar;
-                                    }
-                                }}
-                                className="w-9 h-9 rounded-md object-cover border-2 border-amber-500/70 shrink-0 shadow"
-                            />
-                        ) : (
-                            <div
-                                className={`w-9 h-9 rounded-md flex items-center justify-center border border-amber-600/30 font-bold text-lg shrink-0 ${
-                                    topIsWhite ? 'bg-boxwood text-acacia-dark' : 'bg-acacia text-amber-200'
-                                }`}
-                            >
-                                {topIsWhite ? '♙' : '♟'}
-                            </div>
-                        )}
-                        <div className="min-w-0">
-                            <div className="font-bold text-sm sm:text-base flex items-center gap-2 leading-tight">
-                                <span className="truncate">
-                                    {(gameId || activeBot || spectatingGameId) ? topPlayerInfo.username : (topIsWhite ? 'Белые (Разбор)' : 'Чёрные (Разбор)')}
-                                </span>
-                                {(gameId || activeBot || spectatingGameId) && (
-                                    <span
-                                        className="text-xs px-1.5 py-0.5 rounded bg-black/45 text-amber-400 border border-amber-600/25 flex items-center gap-1 font-mono">
-                                        {topPlayerInfo.rating}
-                                        {ratingInfo && (
-                                            <span
-                                                className={topIsWhite ? (Number(ratingInfo.white_delta) >= 0 ? 'text-emerald-400' : 'text-red-400') : (Number(ratingInfo.black_delta) >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-                                                ({topIsWhite ? (Number(ratingInfo.white_delta) >= 0 ? `+${ratingInfo.white_delta}` : ratingInfo.white_delta) : (Number(ratingInfo.black_delta) >= 0 ? `+${ratingInfo.black_delta}` : ratingInfo.black_delta)})
-                                            </span>
-                                        )}
-                                    </span>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-1.5 text-xs text-amber-200/90 min-h-[16px]">
-                                <span className="tracking-tight truncate">{topCaptured.join('')}</span>
-                                {topAdvantage > 0 && (
-                                    <span
-                                        className="text-[11px] font-mono font-bold px-1.5 rounded bg-amber-900/60 text-amber-300">
-                                        +{topAdvantage}
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                    <div
-                        className="bg-[#1A120B] px-3.5 py-1 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-xl sm:text-2xl font-bold tracking-wider text-amber-400 min-w-[124px] text-center">
-                        {(gameId || activeBot || spectatingGameId) ? formatTime(topPlayerTime) : formatTime(topIdlePreviewMs)}
-                    </div>
-                </div>
+    for game_id in game_ids:  # две задачи подряд — как в живом воркере
+        report = tasks.analyze_game_task(game_id)
+        assert report.get("status") != "error"
+        assert len(report["moves"]) == 7
 
-                {/* ШАХМАТНАЯ ДОСКА */}
-                <div
-                    ref={boardContainerRef}
-                    onContextMenu={(e) => {
-                        e.preventDefault();
-                        if (premove || pendingPromotion || selectedSquare) {
-                            setPremove(null);
-                            setPendingPromotion(null);
-                            setSelectedSquare(null);
-                        }
-                    }}
-                    style={{
-                        width: `${boardSize}px`,
-                        height: `${boardSize}px`,
-                        backgroundColor: activeTheme.border
-                    }}
-                    className={`p-2.5 rounded-lg shadow-heavy border-2 border-amber-950/80 relative select-none group/board shrink-0 ${isResizing ? 'transition-none ring-2 ring-amber-500/60' : 'transition-colors'}`}
-                >
-                    {activeTheme.useWoodGrain && (
-                        <div
-                            className="absolute inset-0 opacity-25 mix-blend-multiply pointer-events-none"
-                            style={{backgroundImage: "url('/assets/textures/wood-grain.png')"}}
-                        />
-                    )}
+    for game_id in game_ids:
+        assert json.loads(asyncio.run(_cached_analysis(url, game_id)))["moves"]
 
-                    {/* Диалог превращения пешки */}
-                    {pendingPromotion && (() => {
-                        const fileIdx = displayedFiles.indexOf(pendingPromotion.to[0]);
-                        const rankIdx = displayedRanks.indexOf(pendingPromotion.to[1]);
-                        const openDownwards = rankIdx <= 3;
-                        const clampedLeftPercent = Math.min(Math.max((fileIdx + 0.5) * 12.5, 22), 78);
+========================================================================================
+FILE: tests/test_ws_db_sessions.py
+========================================================================================
+# --- FILE: tests/test_ws_db_sessions.py ---
+"""
+WebSocket не должен держать соединение пула БД, пока игрок просто подключён.
 
-                        return (
-                            <div
-                                className="absolute inset-0 z-50 bg-black/55 backdrop-blur-[1px] flex items-center justify-center rounded-[2px]"
-                                onClick={() => setPendingPromotion(null)}
-                            >
-                                <div
-                                    style={{
-                                        left: `${clampedLeftPercent}%`,
-                                        top: openDownwards ? '6%' : 'auto',
-                                        bottom: openDownwards ? 'auto' : '6%',
-                                        transform: 'translateX(-50%)'
-                                    }}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="absolute bg-[#1A120B] border-2 border-amber-500 rounded-lg p-3 shadow-2xl flex flex-col items-center gap-2.5"
-                                >
-                                    <div className="flex items-center justify-between w-full gap-3 px-1">
-                                        <span className="text-xs font-bold uppercase tracking-wider text-amber-300">
-                                            Превращение пешки ({pendingPromotion.to})
-                                        </span>
-                                        <button
-                                            type="button"
-                                            onClick={() => setPendingPromotion(null)}
-                                            className="text-boxwood/60 hover:text-amber-300 transition cursor-pointer"
-                                            title="Отмена (Esc)"
-                                        >
-                                            <X size={15}/>
-                                        </button>
-                                    </div>
-                                    <div className="grid grid-cols-4 gap-2">
-                                        {PROMOTION_OPTIONS.map((opt) => (
-                                            <button
-                                                key={opt.type}
-                                                type="button"
-                                                onClick={() => handlePromotionSelect(opt.type)}
-                                                className="w-16 h-18 rounded-md bg-acacia-dark hover:bg-amber-800/70 border border-amber-600/50 hover:border-amber-300 transition flex flex-col items-center justify-between py-2 px-1 shadow cursor-pointer group"
-                                                title={opt.label}
-                                            >
-                                                <div
-                                                    className="w-10 h-10 flex items-center justify-center overflow-hidden shrink-0">
-                                                    {renderPieceSvg({type: opt.type, color: pendingPromotion.color})}
-                                                </div>
-                                                <span
-                                                    className="text-xs font-bold text-amber-200 group-hover:text-white leading-none">
-                                                    {opt.label}
-                                                </span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })()}
+Раньше обработчик брал одну сессию на всё соединение: первый запрос (проверка токена) открывал
+транзакцию, и соединение пула оставалось занятым до отключения игрока. При пуле на N соединений
+(N+1)-й подключившийся игрок ждал pool_timeout и получал ошибку.
+"""
 
-                    <div
-                        className="grid grid-cols-8 grid-rows-8 w-full h-full border border-black/60 relative z-10 shadow-inner-board rounded-[2px] overflow-hidden">
-                        {displayedRanks.map((rank) =>
-                            displayedFiles.map((file) => {
-                                const rIdx = RANKS.indexOf(rank);
-                                const fIdx = FILES.indexOf(file);
-                                const isDark = (rIdx + fIdx) % 2 !== 0;
-                                const squareId = `${file}${rank}`;
+import asyncio
+import json
 
-                                const piece = boardState[rIdx][fIdx];
+import pytest
+from fastapi import WebSocketDisconnect
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+from sqlalchemy.pool import AsyncAdaptedQueuePool, NullPool
 
-                                const isSelected = selectedSquare === squareId;
-                                const isLastMove = lastMove && (lastMove.from === squareId || lastMove.to === squareId);
-                                const isPremoveSquare = premove && (premove.from === squareId || premove.to === squareId);
-                                const isLegalTarget = legalTargetSquares.has(squareId);
-                                const isBeingDragged = dragState?.from === squareId;
+from src.api.deps import get_current_user_ws
+from src.api.websockets import matchmaking_endpoint
+from src.db import redis as redis_module
+from src.models.base import Base
+from src.models.user import User
+from src.services.game_state import state_manager
 
-                                return (
-                                    <div
-                                        key={squareId}
-                                        data-square={squareId}
-                                        onClick={() => handleSquareClick(squareId)}
-                                        style={{
-                                            backgroundColor: isDark ? activeTheme.dark : activeTheme.light
-                                        }}
-                                        className="w-full h-full flex items-center justify-center relative cursor-pointer transition-colors duration-75"
-                                    >
-                                        {activeTheme.useWoodGrain && (
-                                            <div
-                                                className="absolute inset-0 opacity-15 mix-blend-multiply pointer-events-none"
-                                                style={{backgroundImage: "url('/assets/textures/wood-grain.png')"}}
-                                            />
-                                        )}
+_CLOSE = object()
 
-                                        {isLastMove && !isSelected && !isPremoveSquare && (
-                                            <div className="absolute inset-0 bg-amber-300/35 z-10 pointer-events-none"/>
-                                        )}
 
-                                        {isPremoveSquare && (
-                                            <div
-                                                className="absolute inset-0 bg-rose-500/45 ring-2 ring-inset ring-rose-300/80 z-10 pointer-events-none"/>
-                                        )}
+class QueueSocket:
+    """WebSocket-заглушка: входящие сообщения — из очереди, исходящие складываются в список."""
 
-                                        {isSelected && (
-                                            <div
-                                                className="absolute inset-0 bg-amber-400/50 ring-2 ring-inset ring-amber-300/80 z-10 pointer-events-none"/>
-                                        )}
+    def __init__(self):
+        self.incoming: asyncio.Queue = asyncio.Queue()
+        self.sent: list[dict] = []
 
-                                        {isLegalTarget && (
-                                            piece ? (
-                                                <div
-                                                    className="absolute inset-0 rounded-full border-[5px] border-black/25 z-30 pointer-events-none m-1"/>
-                                            ) : (
-                                                <div
-                                                    className="w-3.5 h-3.5 rounded-full bg-black/25 z-30 pointer-events-none"/>
-                                            )
-                                        )}
+    async def accept(self):
+        pass
 
-                                        {piece && !isBeingDragged && (
-                                            <div
-                                                onMouseDown={(e) => {
-                                                    if (e.button !== 0 || viewIndex !== -1 || gameOverResult) return;
-                                                    const turnChar = currentGame.turn();
-                                                    const myColorChar = myColor === 'white' ? 'w' : 'b';
+    async def send_text(self, text: str):
+        self.sent.append(json.loads(text))
 
-                                                    if (gameId || activeBot || spectatingGameId) {
-                                                        if (piece.color !== myColorChar) return;
-                                                    } else {
-                                                        if (piece.color !== turnChar) return;
-                                                    }
+    async def receive_text(self):
+        item = await self.incoming.get()
+        if item is _CLOSE:
+            raise WebSocketDisconnect(code=1000)
+        return json.dumps(item)
 
-                                                    e.stopPropagation();
-                                                    if ((currentGame.turn() === 'w' ? 'white' : 'black') === myColor) {
-                                                        moveStartTime.current = Date.now();
-                                                    }
-                                                    setSelectedSquare(squareId);
-                                                    setDragState({
-                                                        from: squareId,
-                                                        piece,
-                                                        x: e.clientX,
-                                                        y: e.clientY
-                                                    });
-                                                }}
-                                                className={`relative w-full h-full p-[1.5%] z-20 transition-transform duration-75 ${
-                                                    viewIndex === -1 && !gameOverResult && (
-                                                        (gameId || activeBot || spectatingGameId)
-                                                            ? piece.color === (myColor === 'white' ? 'w' : 'b')
-                                                            : piece.color === currentGame.turn()
-                                                    )
-                                                        ? 'cursor-grab active:cursor-grabbing hover:scale-[1.03]'
-                                                        : ''
-                                                }`}
-                                            >
-                                                {renderPieceSvg(piece)}
-                                            </div>
-                                        )}
+    async def wait_for(self, event: str, wait_s: float = 5.0) -> dict:
+        async def _poll():
+            while True:
+                for message in self.sent:
+                    if message.get("event") == event:
+                        return message
+                await asyncio.sleep(0.01)
+        return await asyncio.wait_for(_poll(), wait_s)
 
-                                        {file === displayedFiles[0] && (
-                                            <span
-                                                style={{color: isDark ? activeTheme.coordDark : activeTheme.coordLight}}
-                                                className="absolute top-0.5 left-1 text-xs font-sans font-bold opacity-90 z-20 pointer-events-none leading-none"
-                                            >
-                                                {rank}
-                                            </span>
-                                        )}
-                                        {rank === displayedRanks[7] && (
-                                            <span
-                                                style={{color: isDark ? activeTheme.coordDark : activeTheme.coordLight}}
-                                                className="absolute bottom-0.5 right-1 text-xs font-sans font-bold opacity-90 z-20 pointer-events-none leading-none"
-                                            >
-                                                {file}
-                                            </span>
-                                        )}
-                                    </div>
-                                );
-                            })
-                        )}
-                    </div>
 
-                    {isResizing && (
-                        <div
-                            className="absolute bottom-5 right-5 z-40 px-2.5 py-1 rounded bg-black/85 border border-amber-500/60 text-amber-300 font-mono text-xs font-bold shadow-lg pointer-events-none">
-                            {boardSize} × {boardSize} px
-                        </div>
-                    )}
+async def _make_users(url: str, count: int) -> list[tuple[int, str]]:
+    setup_engine = create_async_engine(url, poolclass=NullPool)
+    async with setup_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    async with async_sessionmaker(setup_engine, expire_on_commit=False)() as db:
+        names = [f"pool_user_{i}" for i in range(count)]
+        users = [User(username=name, hashed_password="pw", rating=1500) for name in names]
+        db.add_all(users)
+        await db.commit()
+        created = [(u.id, u.username) for u in users]
+    await setup_engine.dispose()
+    return created
 
-                    {/* Уголок изменения размера доски */}
-                    <div
-                        onMouseDown={handleResizeMouseDown}
-                        onDoubleClick={handleResizeDoubleClick}
-                        title="Потяните, чтобы изменить размер доски (двойной клик — авторазмер под экран)"
-                        className={`absolute bottom-0 right-0 w-6 h-6 z-40 cursor-nwse-resize flex items-end justify-end p-0.5 rounded-tl transition-opacity ${
-                            isResizing
-                                ? 'opacity-100 text-amber-400'
-                                : 'opacity-50 group-hover/board:opacity-90 hover:opacity-100! text-amber-200/80 hover:text-amber-300'
-                        }`}
-                    >
-                        <svg
-                            viewBox="0 0 16 16"
-                            className="w-3.5 h-3.5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                            strokeLinecap="round"
-                        >
-                            <line x1="14" y1="4" x2="4" y2="14"/>
-                            <line x1="14" y1="9" x2="9" y2="14"/>
-                            <line x1="14" y1="14" x2="14" y2="14"/>
-                        </svg>
-                    </div>
-                </div>
 
-                {/* Нижний игрок */}
-                <div
-                    style={{width: `${boardSize}px`}}
-                    className={`bg-acacia-dark px-3 py-1.5 rounded-lg shadow-heavy border-2 border-amber-900/50 flex justify-between items-center text-boxwood-light shrink-0 ${isResizing ? 'transition-none' : 'transition-colors'}`}
-                >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                        {isBotOnBottom && activeBotProfile ? (
-                            <img
-                                src={activeBotProfile.avatar}
-                                alt={activeBotProfile.name}
-                                onError={(e) => {
-                                    const img = e.target as HTMLImageElement;
-                                    if (!img.src.endsWith(activeBotProfile.fallbackAvatar)) {
-                                        img.src = activeBotProfile.fallbackAvatar;
-                                    }
-                                }}
-                                className="w-9 h-9 rounded-md object-cover border-2 border-amber-500/70 shrink-0 shadow"
-                            />
-                        ) : (
-                            <div
-                                className={`w-9 h-9 rounded-md flex items-center justify-center border border-amber-600/30 font-bold text-lg shrink-0 ${
-                                    !topIsWhite ? 'bg-boxwood text-acacia-dark' : 'bg-acacia text-amber-200'
-                                }`}
-                            >
-                                {!topIsWhite ? '♙' : '♟'}
-                            </div>
-                        )}
-                        <div className="min-w-0">
-                            <div className="font-bold text-sm sm:text-base flex items-center gap-2 leading-tight">
-                                <span className="truncate">
-                                    {(gameId || activeBot || spectatingGameId) ? bottomPlayerInfo.username : (!topIsWhite ? 'Вы (Белые)' : 'Вы (Чёрные)')}
-                                </span>
-                                {(gameId || activeBot || spectatingGameId) && (
-                                    <span
-                                        className="text-xs px-1.5 py-0.5 rounded bg-black/45 text-amber-400 border border-amber-600/25 flex items-center gap-1 font-mono">
-                                        {bottomPlayerInfo.rating}
-                                        {ratingInfo && (
-                                            <span
-                                                className={!topIsWhite ? (Number(ratingInfo.white_delta) >= 0 ? 'text-emerald-400' : 'text-red-400') : (Number(ratingInfo.black_delta) >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-                                                ({!topIsWhite ? (Number(ratingInfo.white_delta) >= 0 ? `+${ratingInfo.white_delta}` : ratingInfo.white_delta) : (Number(ratingInfo.black_delta) >= 0 ? `+${ratingInfo.black_delta}` : ratingInfo.black_delta)})
-                                            </span>
-                                        )}
-                                    </span>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-1.5 text-xs text-amber-200/90 min-h-[16px]">
-                                <span className="tracking-tight truncate">{bottomCaptured.join('')}</span>
-                                {bottomAdvantage > 0 && (
-                                    <span
-                                        className="text-[11px] font-mono font-bold px-1.5 rounded bg-amber-900/60 text-amber-300">
-                                        +{bottomAdvantage}
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                    <div
-                        className="bg-[#1A120B] px-3.5 py-1 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-xl sm:text-2xl font-bold tracking-wider text-amber-400 min-w-[124px] text-center">
-                        {(gameId || activeBot || spectatingGameId) ? formatTime(bottomPlayerTime) : formatTime(bottomIdlePreviewMs)}
-                    </div>
-                </div>
+async def _issue_ticket(user_id: int) -> str:
+    """Как POST /auth/ws-ticket: одноразовый тикет в Redis (token_version новых пользователей — 0)."""
+    ticket = f"ticket-{user_id}"
+    await redis_module.redis_client.set(f"ws_ticket:{ticket}", f"{user_id}:0", ex=30)
+    return ticket
 
-            </div>
 
-            {/* ПРАВАЯ КОЛОНКА: ЖУРНАЛ ХОДОВ, ВЫПАДАЮЩЕЕ МЕНЮ ВИДА С ПРЕВЬЮ, ЧАТ И УПРАВЛЕНИЕ ПАРТИЕЙ */}
-            <div
-                className="w-full xl:w-[390px] 2xl:w-[430px] xl:h-full bg-acacia p-3 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-2 text-boxwood-light order-3 shrink-0 xl:overflow-hidden relative">
+async def test_connected_players_do_not_hold_pool_connections(tmp_path):
+    url = f"sqlite+aiosqlite:///{(tmp_path / 'pool.db').as_posix()}"
+    created = await _make_users(url, 3)
+    names = [name for _, name in created]
 
-                {/* Шапка правой панели + кнопка выпадающего меню с превью досок и фигур */}
-                <div
-                    className="border-b border-acacia-light pb-2 flex justify-between items-center gap-2 shrink-0 relative"
-                    ref={appearanceDropdownRef}
-                >
-                    <div className="min-w-0">
-                        <div
-                            className="text-xs tracking-wider uppercase text-boxwood/75 font-bold flex items-center gap-1.5">
-                            <ListOrdered className="text-amber-400" size={15}/> Журнал ходов
-                        </div>
-                        <div className="text-xs sm:text-sm font-bold text-amber-200 mt-0.5 truncate">
-                            {(gameId || activeBot || spectatingGameId)
-                                ? `${whitePlayer.username} vs ${blackPlayer.username}`
-                                : 'Свободная доска / Анализ'}
-                        </div>
-                    </div>
+    # Пул на одно соединение: при старой схеме второй подключившийся уже не прошёл бы аутентификацию.
+    engine = create_async_engine(
+        url, poolclass=AsyncAdaptedQueuePool, pool_size=1, max_overflow=0, pool_timeout=1,
+    )
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    sockets: list[QueueSocket] = []
+    tasks: list[asyncio.Task] = []
+    try:
+        users = [
+            await get_current_user_ws(ticket=await _issue_ticket(user_id), session_factory=session_factory)
+            for user_id, _ in created
+        ]
+        assert engine.pool.checkedout() == 0
+        assert users[0].username == names[0]  # объект отсоединён от сессии, но поля загружены
 
-                    <div className="flex items-center gap-1.5 shrink-0">
-                        {/* Кнопка выпадающего меню с живым мини-превью текущей фигуры и доски */}
-                        <div className="relative">
-                            <button
-                                type="button"
-                                onClick={() => setShowAppearanceDropdown(prev => !prev)}
-                                className={`px-2.5 py-1 rounded-md border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm ${
-                                    showAppearanceDropdown
-                                        ? 'bg-amber-700 text-white border-amber-400'
-                                        : 'bg-acacia-dark hover:bg-black/45 text-amber-200 border-amber-800/50'
-                                }`}
-                                title="Выбрать комплект фигур, тему и размер доски"
-                            >
-                                <span
-                                    className="w-5 h-5 rounded-xs flex items-center justify-center border border-black/50 shrink-0"
-                                    style={{backgroundColor: activeTheme.dark}}
-                                >
-                                    <img
-                                        src={getPieceSvgUrl(pieceSetKey, 'w', 'N')}
-                                        alt=""
-                                        className="w-4 h-4 object-contain"
-                                    />
-                                </span>
-                                <span
-                                    className="hidden sm:inline">{activePieceSet.shortName} • {activeTheme.name}</span>
-                                <span className="sm:hidden">Вид</span>
-                                {showAppearanceDropdown ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
-                            </button>
+        await state_manager.initialize_game(
+            game_id=77, white_id=users[0].id, black_id=users[1].id, base_time_ms=60000, increment_ms=0,
+        )
 
-                            {/* Выпадающее меню (Popover) с превью всех 5 комплектов фигур и 5 тем доски */}
-                            {showAppearanceDropdown && (
-                                <div
-                                    className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-[#261C14] border-2 border-amber-600/80 rounded-lg shadow-2xl z-50 p-3.5 flex flex-col gap-3 text-boxwood-light">
-                                    <div
-                                        className="flex justify-between items-center border-b border-amber-900/50 pb-2">
-                                        <span className="font-bold text-amber-200 text-sm flex items-center gap-1.5">
-                                            <Palette size={15} className="text-amber-400"/> Оформление фигур и доски
-                                        </span>
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowAppearanceDropdown(false)}
-                                            className="text-boxwood/60 hover:text-white cursor-pointer"
-                                        >
-                                            <X size={15}/>
-                                        </button>
-                                    </div>
+        for user in users:
+            socket = QueueSocket()
+            sockets.append(socket)
+            tasks.append(asyncio.create_task(matchmaking_endpoint(socket, user, session_factory)))
 
-                                    {/* 5 комплектов фигур с парным превью (Белый конь + Чёрный ферзь) */}
-                                    <div className="flex flex-col gap-1.5">
-                                        <div className="flex justify-between items-center text-xs">
-                                            <span className="font-bold text-boxwood/90">♟ Комплект фигур:</span>
-                                            <span className="text-amber-400 font-bold">{activePieceSet.name}</span>
-                                        </div>
-                                        <div className="grid grid-cols-5 gap-1.5">
-                                            {Object.values(PIECE_SETS).map((pset) => {
-                                                const isCurrent = pset.id === activePieceSet.id;
-                                                return (
-                                                    <button
-                                                        key={pset.id}
-                                                        type="button"
-                                                        onClick={() => handlePieceSetChange(pset.id)}
-                                                        title={pset.description}
-                                                        className={`flex flex-col items-center gap-1 p-1.5 rounded-md border text-xs font-bold transition cursor-pointer ${
-                                                            isCurrent
-                                                                ? 'bg-amber-900/60 border-amber-400 text-amber-200 shadow'
-                                                                : 'bg-black/35 border-amber-900/40 text-boxwood/75 hover:bg-black/55 hover:text-amber-200'
-                                                        }`}
-                                                    >
-                                                        <div
-                                                            className="w-10 h-9 rounded flex items-center justify-center border border-black/50 shadow-inner"
-                                                            style={{
-                                                                background: `linear-gradient(90deg, ${activeTheme.dark} 50%, ${activeTheme.light} 50%)`
-                                                            }}
-                                                        >
-                                                            <img
-                                                                src={getPieceSvgUrl(pset.id, 'w', 'N')}
-                                                                alt={pset.shortName}
-                                                                className="w-5 h-5 object-contain"
-                                                            />
-                                                            <img
-                                                                src={getPieceSvgUrl(pset.id, 'b', 'Q')}
-                                                                alt=""
-                                                                className="w-5 h-5 object-contain"
-                                                            />
-                                                        </div>
-                                                        <span className="truncate w-full text-center text-[11px]">
-                                                            {pset.shortName}
-                                                        </span>
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
+        # Все трое одновременно подключены и выполняют действие, которому нужна БД.
+        for socket in sockets:
+            socket.incoming.put_nowait({"action": "spectate_game", "game_id": 77})
+        for socket in sockets:
+            started = await socket.wait_for("spectate_started")
+            assert started["white_username"] == names[0]
 
-                                    {/* 5 тем доски с мини-превью клеток 2x2 */}
-                                    <div className="flex flex-col gap-1.5 pt-2 border-t border-amber-900/40">
-                                        <div className="flex justify-between items-center text-xs">
-                                            <span className="font-bold text-boxwood/90">🎨 Поверхность доски:</span>
-                                            <span className="text-amber-400 font-bold">{activeTheme.name}</span>
-                                        </div>
-                                        <div className="grid grid-cols-5 gap-1.5">
-                                            {Object.values(BOARD_THEMES).map((theme) => {
-                                                const isCurrent = theme.id === activeTheme.id;
-                                                return (
-                                                    <button
-                                                        key={theme.id}
-                                                        type="button"
-                                                        onClick={() => handleThemeChange(theme.id)}
-                                                        className={`flex flex-col items-center gap-1 p-1.5 rounded-md border text-xs font-bold transition cursor-pointer ${
-                                                            isCurrent
-                                                                ? 'bg-amber-900/60 border-amber-400 text-amber-200 shadow'
-                                                                : 'bg-black/35 border-amber-900/40 text-boxwood/75 hover:bg-black/55 hover:text-amber-200'
-                                                        }`}
-                                                    >
-                                                        <div
-                                                            className="w-8 h-8 rounded-xs overflow-hidden grid grid-cols-2 grid-rows-2 border-2 shadow-sm"
-                                                            style={{borderColor: theme.border}}
-                                                        >
-                                                            <div style={{backgroundColor: theme.light}}/>
-                                                            <div style={{backgroundColor: theme.dark}}/>
-                                                            <div style={{backgroundColor: theme.dark}}/>
-                                                            <div style={{backgroundColor: theme.light}}/>
-                                                        </div>
-                                                        <span className="truncate w-full text-center text-[11px]">
-                                                            {theme.name}
-                                                        </span>
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
+        # Соединения открыты, но ни одно соединение пула не занято.
+        assert engine.pool.checkedout() == 0
+    finally:
+        for socket in sockets:
+            socket.incoming.put_nowait(_CLOSE)
+        # Отключение обрабатывает сам эндпоинт (manager.disconnect в ветке WebSocketDisconnect).
+        await asyncio.gather(*tasks, return_exceptions=True)
+        await engine.dispose()
 
-                                    {/* Регулировка масштаба доски */}
-                                    <div
-                                        className="flex items-center justify-between gap-2 pt-2 border-t border-amber-900/40 text-xs">
-                                        <span className="text-boxwood/80 font-bold">Размер: {boardSize}px</span>
-                                        <input
-                                            type="range"
-                                            min={MIN_BOARD_SIZE}
-                                            max={getMaxViewportBoardSize()}
-                                            value={boardSize}
-                                            onChange={(e) => {
-                                                const val = Number(e.target.value);
-                                                setBoardSize(val);
-                                                localStorage.setItem('michess_board_size', String(val));
-                                            }}
-                                            className="flex-1 accent-amber-500 cursor-pointer"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                const fit = getMaxViewportBoardSize();
-                                                setBoardSize(fit);
-                                                localStorage.setItem('michess_board_size', String(fit));
-                                            }}
-                                            className="px-2 py-1 rounded bg-black/45 hover:bg-amber-800/60 border border-amber-700/50 text-amber-200 font-bold cursor-pointer"
-                                        >
-                                            Авто
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
 
-                        <span
-                            className="px-2 py-1 rounded-md bg-acacia-dark border border-amber-700/40 font-mono text-xs text-amber-400 font-bold">
-                            {gameOverResult || (history.length > 0 ? `${Math.ceil(history.length / 2)} х.` : 'Старт')}
-                        </span>
-                    </div>
-                </div>
+@pytest.mark.parametrize("action_name", ["leave_queue", "spectate_game"])
+async def test_each_action_gets_its_own_closed_session(action_name):
+    """Каждое действие — своя сессия, закрытая к моменту, когда обработчик вернул управление."""
+    from src.api.websockets import ACTION_HANDLERS, _dispatch_action
 
-                {/* Индикатор активного предхода (Premove) */}
-                {premove && (
-                    <div
-                        className="bg-rose-950/90 px-3 py-1.5 rounded-md border border-rose-500/60 text-xs text-rose-100 flex items-center justify-between shadow shrink-0">
-                        <span className="flex items-center gap-1.5 font-bold font-mono">
-                            <Zap size={14} className="text-rose-400"/>
-                            Предход: {premove.from} → {premove.to}{premove.promotion ? `=${premove.promotion.toUpperCase()}` : ''}
-                        </span>
-                        <button
-                            type="button"
-                            onClick={() => setPremove(null)}
-                            className="px-2 py-0.5 bg-black/40 hover:bg-black/70 rounded text-xs font-sans text-rose-200 transition cursor-pointer"
-                        >
-                            Отмена
-                        </button>
-                    </div>
-                )}
+    opened: list = []
 
-                {drawOfferStatus && (
-                    <div
-                        className="bg-amber-950/90 p-2 rounded-md border border-amber-600/50 text-xs text-amber-200 text-center flex flex-col gap-1.5 shrink-0">
-                        <span>{drawOfferStatus}</span>
-                        {drawOfferStatus.includes('предлагает ничью') && (
-                            <div className="flex justify-center gap-2">
-                                <button
-                                    onClick={acceptDraw}
-                                    className="px-3 py-1 bg-emerald-800 hover:bg-emerald-700 text-white rounded text-xs font-bold cursor-pointer"
-                                >
-                                    Принять
-                                </button>
-                                <button
-                                    onClick={declineDraw}
-                                    className="px-3 py-1 bg-red-800 hover:bg-red-700 text-white rounded text-xs font-bold cursor-pointer"
-                                >
-                                    Отклонить
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                )}
+    class TrackingSession:
+        def __init__(self):
+            self.closed = False
+            opened.append(self)
 
-                {/* Интерактивный список сделанных ходов (flex-1 min-h-0) */}
-                <div
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            self.closed = True
+            return False
+
+        async def get(self, *args, **kwargs):
+            return None
+
+    await state_manager.initialize_game(game_id=78, white_id=1, black_id=2, base_time_ms=60000, increment_ms=0)
+    user = User(id=3, username="tracker", rating=1500)
+    for _ in range(2):
+        await _dispatch_action(
+            TrackingSession, user, action_name, ACTION_HANDLERS[action_name], {"game_id": 78},
+        )
+
+    assert len(opened) == 2
+    assert all(session.closed for session in opened)
+
+========================================================================================
+FILE: tests/test_ws_rate_limit.py
+========================================================================================
+# --- FILE: tests/test_ws_rate_limit.py ---
+"""
+Ограничение частоты сообщений WebSocket: чат и предложения нельзя использовать для спама,
+поток мусора закрывает соединение, а отклонённый по лимиту ход возвращает клиенту позицию.
+"""
+
+import asyncio
+import json
+
+import pytest
+from fastapi import WebSocketDisconnect
+
+from src.api import websockets as ws_module
+from src.api.websockets import matchmaking_endpoint
+from src.models.user import User
+from src.services.game_state import state_manager
+
+_CLOSE = object()
+
+
+class _NoDbSession:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
+    async def get(self, *args, **kwargs):
+        return None
+
+
+class QueueSocket:
+    def __init__(self):
+        self.incoming: asyncio.Queue = asyncio.Queue()
+        self.sent: list[dict] = []
+        self.closed_with: int | None = None
+
+    async def accept(self):
+        pass
+
+    async def send_text(self, text: str):
+        self.sent.append(json.loads(text))
+
+    async def receive_text(self):
+        item = await self.incoming.get()
+        if item is _CLOSE:
+            raise WebSocketDisconnect(code=1000)
+        return item if isinstance(item, str) else json.dumps(item)
+
+    async def close(self, code: int = 1000):
+        self.closed_with = code
+
+    def events(self, event: str) -> list[dict]:
+        return [m for m in self.sent if m.get("event") == event]
+
+
+async def _run(user: User, messages: list, *, close: bool = True) -> QueueSocket:
+    """Прогоняет сообщения через эндпоинт и дожидается, пока он их обработает."""
+    socket = QueueSocket()
+    for message in messages:
+        socket.incoming.put_nowait(message)
+    if close:
+        socket.incoming.put_nowait(_CLOSE)
+    await asyncio.wait_for(matchmaking_endpoint(socket, user, _NoDbSession), timeout=5)
+    return socket
+
+
+def _user(user_id: int) -> User:
+    return User(id=user_id, username=f"u{user_id}", rating=1500)
+
+
+@pytest.fixture
+async def game():
+    await state_manager.initialize_game(game_id=81, white_id=901, black_id=902, base_time_ms=60000, increment_ms=0)
+    return 81
+
+
+async def test_chat_flood_is_cut_off(game):
+    chat = {"action": "chat_message", "game_id": game, "text": "спам"}
+    socket = await _run(_user(901), [chat] * 7)
+
+    assert len(socket.events("chat_message")) == ws_module.WS_RATE_LIMITS["chat"][0]
+    errors = socket.events("error")
+    assert [e["code"] for e in errors] == ["rate_limited", "rate_limited"]
+    assert errors[0]["action"] == "chat_message"
+
+
+async def test_limit_is_shared_between_tabs_of_one_user(game):
+    chat = {"action": "chat_message", "game_id": game, "text": "привет"}
+    first_tab = await _run(_user(901), [chat] * 5)
+    second_tab = await _run(_user(901), [chat])
+
+    assert len(first_tab.events("chat_message")) == 5
+    assert second_tab.events("error")[0]["code"] == "rate_limited"
+
+
+async def test_rate_limited_move_returns_current_position(game, monkeypatch):
+    monkeypatch.setitem(ws_module.WS_RATE_LIMITS, "moves", (1, 10))
+    move = {"action": "make_move", "game_id": game, "move": "e2e4", "state_version": 0}
+    socket = await _run(_user(901), [move, {**move, "move": "d2d4", "command_id": "second"}])
+
+    assert len(socket.events("move_made")) == 1
+    error = socket.events("error")[0]
+    assert error["code"] == "rate_limited"
+    # Клиент уже нарисовал d2d4 — сервер возвращает позицию после e2e4, чтобы доска синхронизировалась.
+    assert "e4" in error["pgn"] and "d4" not in error["pgn"]
+    assert error["state_version"] == 1
+
+
+async def test_oversized_message_is_rejected():
+    huge = json.dumps({"action": "chat_message", "game_id": 1, "text": "x" * ws_module.WS_MAX_MESSAGE_CHARS})
+    socket = await _run(_user(903), [huge])
+    assert socket.events("error")[0]["code"] == "message_too_large"
+
+
+async def test_garbage_does_not_break_the_connection():
+    socket = await _run(_user(904), ["not json", "[1, 2]", {"action": "leave_queue"}])
+    assert socket.events("queue_left")  # соединение живо, следующее действие выполнено
+    assert socket.closed_with is None
+
+
+async def test_flooding_connection_is_closed(monkeypatch):
+    monkeypatch.setattr(ws_module, "WS_MAX_STRIKES", 5)
+    socket = await _run(_user(905), ["garbage"] * 5, close=False)  # эндпоинт завершается сам
+    assert socket.closed_with == ws_module.WS_CLOSE_POLICY_VIOLATION
+
+
+async def test_draw_can_be_offered_once_per_move(game):
+    offer = {"action": "offer_draw", "game_id": game}
+    socket = await _run(_user(901), [offer, offer])
+    assert socket.events("error")[0]["code"] == "draw_offer_too_soon"
+
+    # Соперник отклонил, позиция не изменилась — повторить нельзя.
+    await state_manager.update_game_state(game, {"draw_offer": ""})
+    socket = await _run(_user(901), [offer])
+    assert socket.events("error")[0]["code"] == "draw_offer_too_soon"
+
+    # После хода — снова можно.
+    await state_manager.update_game_state(game, {"state_version": "2"})
+    socket = await _run(_user(901), [offer])
+    assert not socket.events("error")
+    state = await state_manager.get_game_state(game)
+    assert state["draw_offer"] == "901"
+
+========================================================================================
+FILE: tests/test_zukertort_bot.py
+========================================================================================
+# --- FILE: tests/test_zukertort_bot.py ---
+
+import chess
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+from src.main import app
+from src.services.bots.philidor import normalize_fen_key
+from src.services.bots.zukertort import (
+    ZUKERTORT_OPENING_BOOK,
+    ZukertortBot,
+    evaluate_zukertort_style_bonus,
+)
+
+
+def test_zukertort_opening_repertoire():
+    """Проверяем, что Цукерторт делает ход из дебютной книги."""
+    bot = ZukertortBot(stockfish_path=None)
+    board = chess.Board()
+    start_key = normalize_fen_key(board)
+    expected_moves = {item[0] for item in ZUKERTORT_OPENING_BOOK[start_key]}
+
+    result = bot.choose_move(board.fen())
+    assert result["uci"] in expected_moves
+    assert result["source"] == "opening_book"
+
+
+def test_zukertort_style_rewards_development_and_castling():
+    """Проверяем, что стилевой фильтр Цукерторта поощряет развитие лёгких фигур и рокировку."""
+    board = chess.Board("r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4")
+
+    castle_bonus, _ = evaluate_zukertort_style_bonus(board, chess.Move.from_uci("e1g1"))
+    nc3_bonus, _ = evaluate_zukertort_style_bonus(board, chess.Move.from_uci("b1c3"))
+    h3_bonus, _ = evaluate_zukertort_style_bonus(board, chess.Move.from_uci("h2h3"))
+
+    assert castle_bonus > h3_bonus
+    assert nc3_bonus > h3_bonus
+
+
+@pytest.mark.asyncio
+async def test_zukertort_api_move_endpoint():
+    """Проверяем REST-эндпоинты /api/v1/bots/list и /api/v1/bots/move для игры с Цукертортом."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        list_resp = await client.get("/api/v1/bots/list")
+        assert list_resp.status_code == 200
+        bot_ids = [b["id"] for b in list_resp.json()["bots"]]
+        assert "zukertort" in bot_ids
+
+        move_resp = await client.post(
+            "/api/v1/bots/move",
+            json={"bot_id": "zukertort", "fen": chess.STARTING_FEN},
+        )
+        assert move_resp.status_code == 200
+        data = move_resp.json()
+        assert data["bot_id"] == "zukertort"
+        assert data["source"] == "opening_book"
+
+========================================================================================
+FILE: scripts/build_opening_books.py
+========================================================================================
+# --- FILE: scripts/build_opening_books.py ---
+
+import json
+import shutil
+import sys
+from pathlib import Path
+
+import chess
+import chess.pgn
+
+# Жёсткая привязка к корню проекта (независимо от Working Directory в PyCharm)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+BOOKS_DIR = PROJECT_ROOT / "src" / "services" / "bots" / "books"
+MAX_BOOK_PLY = 16
+
+BOT_BOOK_CONFIG = {
+    "philidor": {
+        "identifiers": ("philidor", "филидор"),
+        "surname_filter": "philidor",
+        "exclude": (),
+        "comment_tpl": "Исторический выбор Филидора (встречалось в партиях: {count} раз(а)).",
+    },
+    "labourdonnais": {
+        "identifiers": ("bourdonnais", "labourdonnais", "лабурдонне"),
+        "surname_filter": "bourdonnais",
+        "exclude": (),
+        "comment_tpl": "Любимый ход Лабурдонне в атаке (встречалось в партиях: {count} раз(а)).",
+    },
+    "staunton": {
+        "identifiers": ("staunton", "стаунтон"),
+        "surname_filter": "staunton",
+        "exclude": (),
+        "comment_tpl": "Классический выбор Стаунтона (встречалось в партиях: {count} раз(а)).",
+    },
+    "anderssen": {
+        "identifiers": ("anderssen", "андерсен"),
+        "surname_filter": "anderssen",
+        "exclude": (),
+        "comment_tpl": "Бриллиантовый гамбит Андерсена (встречалось в партиях: {count} раз(а)).",
+    },
+    "morphy": {
+        "identifiers": ("morphy", "морфи"),
+        "surname_filter": "morphy",
+        "exclude": ("alonzo", "ernest"),
+        "comment_tpl": "Исторический ход Пола Морфи (встречалось в партиях: {count} раз(а)).",
+    },
+    "paulsen": {
+        "identifiers": ("paulsen", "паульсен"),
+        "surname_filter": "paulsen",
+        "exclude": ("wilfried",),
+        "comment_tpl": "Глубокая новинка Паульсена (встречалось в партиях: {count} раз(а)).",
+    },
+    "zukertort": {
+        "identifiers": ("zukertort", "цукерторт"),
+        "surname_filter": "zukertort",
+        "exclude": (),
+        "comment_tpl": "Универсальный дебютный выбор Цукерторта (встречалось в партиях: {count} раз(а)).",
+    },
+}
+
+
+def cleanup_misplaced_artifacts() -> None:
+    """
+    Удаляет ошибочно созданную папку scripts/src (возникшую из-за запуска с CWD=scripts/)
+    и переносит все *_generated_book.json из корня в src/services/bots/books/.
+    """
+    BOOKS_DIR.mkdir(parents=True, exist_ok=True)
+
+    accidental_scripts_src = PROJECT_ROOT / "scripts" / "src"
+    if accidental_scripts_src.exists():
+        for stray_json in accidental_scripts_src.rglob("*.json"):
+            target = BOOKS_DIR / stray_json.name
+            if not target.exists():
+                shutil.move(str(stray_json), str(target))
+        shutil.rmtree(accidental_scripts_src, ignore_errors=True)
+        print(f"[+] Очищена лишняя вложенная папка: {accidental_scripts_src}")
+
+    for bot_id in BOT_BOOK_CONFIG:
+        legacy_root_json = PROJECT_ROOT / f"{bot_id}_generated_book.json"
+        target_json = BOOKS_DIR / f"{bot_id}.json"
+        if legacy_root_json.exists():
+            if not target_json.exists() or legacy_root_json.stat().st_size > target_json.stat().st_size:
+                shutil.move(str(legacy_root_json), str(target_json))
+                print(f"[+] Перенесена книга из корня: {legacy_root_json.name} -> {target_json}")
+            else:
+                legacy_root_json.unlink()
+
+
+def matches_player(header_name: str, surname: str, exclude: tuple[str, ...]) -> bool:
+    name_lower = (header_name or "").lower()
+    if any(ex in name_lower for ex in exclude):
+        return False
+    return surname in name_lower
+
+
+def process_pgn_stream(pgn_stream, surname: str, exclude: tuple[str, ...], book_additions: dict) -> int:
+    games_processed = 0
+    while True:
+        try:
+            game = chess.pgn.read_game(pgn_stream)
+            if game is None:
+                break
+
+            is_w = matches_player(game.headers.get("White", ""), surname, exclude)
+            is_b = matches_player(game.headers.get("Black", ""), surname, exclude)
+            track_both = not (is_w or is_b)
+
+            board = game.board()
+            ply = 0
+            for move in game.mainline_moves():
+                if ply >= MAX_BOOK_PLY:
+                    break
+                uci = move.uci()
+                if uci == "0000" or not bool(move):
+                    break
+
+                white_turn = board.turn == chess.WHITE
+                if track_both or (white_turn and is_w) or (not white_turn and is_b):
+                    parts = board.fen().split(" ")
+                    fen_key = f"{parts[0]} {parts[1]} {parts[2]} -"
+                    book_additions.setdefault(fen_key, {})
+                    book_additions[fen_key][uci] = book_additions[fen_key].get(uci, 0) + 1
+
+                try:
+                    board.push(move)
+                except ValueError:
+                    break
+                ply += 1  # noqa: SIM113 — считаем только успешно сыгранные ходы
+
+            games_processed += 1
+        except Exception:
+            continue
+    return games_processed
+
+
+def find_pgn_files_for_bot(identifiers: tuple[str, ...]) -> list[Path]:
+    """Ищет PGN-файлы чемпиона во всех возможных директориях проекта."""
+    search_dirs = [
+        PROJECT_ROOT / "data",
+        PROJECT_ROOT / "downloaded_pgns",
+        PROJECT_ROOT / "src" / "db" / "data",
+        PROJECT_ROOT,
+    ]
+    found: list[Path] = []
+    seen: set[Path] = set()
+
+    for directory in search_dirs:
+        if not directory.exists():
+            continue
+        iterator = directory.glob("*.pgn") if directory == PROJECT_ROOT else directory.rglob("*.pgn")
+        for pgn_path in iterator:
+            resolved = pgn_path.resolve()
+            if resolved in seen or not resolved.is_file():
+                continue
+            path_lower = str(resolved).lower()
+            if any(ident in path_lower for ident in identifiers):
+                seen.add(resolved)
+                found.append(resolved)
+
+    # Если есть как объединённый файл (*_all_*.pgn), так и мелкие файлы из папки —
+    # отдаём приоритет объединённому файлу, чтобы не считать одни и те же партии дважды
+    combined = [p for p in found if "all" in p.name.lower() or "все партии" in p.name.lower()]
+    if combined:
+        return [max(combined, key=lambda p: p.stat().st_size)]
+    return found
+
+
+def build_book_for_bot(bot_id: str) -> None:
+    cfg = BOT_BOOK_CONFIG[bot_id]
+    target_json = BOOKS_DIR / f"{bot_id}.json"
+
+    existing_book: dict = {}
+    if target_json.exists():
+        try:
+            with open(target_json, encoding="utf-8") as f:
+                loaded = json.load(f)
+                if isinstance(loaded, dict):
+                    existing_book = loaded
+        except Exception:
+            existing_book = {}
+
+    matched_files = find_pgn_files_for_bot(cfg["identifiers"])
+    book_additions: dict[str, dict[str, int]] = {}
+    total_games = 0
+
+    for filepath in matched_files:
+        with open(filepath, encoding="utf-8", errors="ignore") as f:
+            total_games += process_pgn_stream(f, cfg["surname_filter"], cfg["exclude"], book_additions)
+
+    if total_games > 0:
+        formatted_book: dict[str, list] = dict(existing_book)
+        for fen, moves_dict in book_additions.items():
+            sorted_moves = sorted(moves_dict.items(), key=lambda x: x[1], reverse=True)
+            total_count = sum(moves_dict.values())
+            formatted_book[fen] = [
+                [
+                    uci,
+                    max(int((count / total_count) * 100), 1),
+                    cfg["comment_tpl"].format(count=count),
+                ]
+                for uci, count in sorted_moves
+            ]
+
+        with open(target_json, "w", encoding="utf-8") as out_f:
+            json.dump(formatted_book, out_f, ensure_ascii=False, indent=2)
+        print(
+            f"[+] {bot_id:13s}: спарсено партий из PGN: {total_games:4d} | "
+            f"Позиций в книге: {len(formatted_book):4d} -> {target_json.relative_to(PROJECT_ROOT)}"
+        )
+        return
+
+    # Если сырых PGN-файлов нет, но JSON-книга уже перенесена и лежит в src/services/bots/books/
+    if existing_book:
+        print(
+            f"[+] {bot_id:13s}: книга активна и проверена | "
+            f"Позиций в книге: {len(existing_book):4d} -> {target_json.relative_to(PROJECT_ROOT)}"
+        )
+        return
+
+    # Если нет ни PGN, ни JSON-книги — инициализируем JSON-файл базовым репертуаром из модуля бота
+    try:
+        module = __import__(f"src.services.bots.{bot_id}", fromlist=["*"])
+        default_attr = f"DEFAULT_{bot_id.upper()}_BOOK"
+        fallback_data = getattr(module, default_attr, {})
+        if fallback_data:
+            serializable = {
+                fen: [[m[0], int(m[1]), str(m[2])] for m in moves]
+                for fen, moves in fallback_data.items()
+            }
+            with open(target_json, "w", encoding="utf-8") as out_f:
+                json.dump(serializable, out_f, ensure_ascii=False, indent=2)
+            print(
+                f"[~] {bot_id:13s}: создана базовая книга | "
+                f"Позиций в книге: {len(serializable):4d} -> {target_json.relative_to(PROJECT_ROOT)}"
+            )
+            return
+    except Exception as exc:
+        print(f"[!] Ошибка инициализации базовой книги для {bot_id}: {exc}")
+
+
+def main() -> None:
+    print(f"=== Сборка и проверка дебютных книг (Корень: {PROJECT_ROOT}) ===")
+    cleanup_misplaced_artifacts()
+    for b_id in BOT_BOOK_CONFIG:
+        build_book_for_bot(b_id)
+    print("=== Все дебютные книги готовы! ===")
+
+
+if __name__ == "__main__":
+    main()
+
+========================================================================================
+FILE: scripts/chessgames_downloader.py
+========================================================================================
+# --- FILE: scripts/chessgames_downloader.py ---
+
+import argparse
+import asyncio
+import re
+import sys
+from pathlib import Path
+
+import httpx
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from scripts.build_opening_books import build_book_for_bot  # noqa: E402
+
+BASE_URL = "https://www.chessgames.com"
+DATA_PGNS_DIR = PROJECT_ROOT / "data" / "pgns"
+
+PLAYERS_CONFIG = {
+    "staunton": {"pid": 19077, "pages": 25, "name": "Howard Staunton"},
+    "anderssen": {"pid": 10342, "pages": 34, "name": "Adolf Anderssen"},
+    "morphy": {"pid": 16002, "pages": 19, "name": "Paul Morphy"},
+    "paulsen": {"pid": 10343, "pages": 22, "name": "Louis Paulsen"},
+    "zukertort": {"pid": 10427, "pages": 25, "name": "Johannes Zukertort"},
+}
+
+TABLE_GAME_REGEX = re.compile(
+    r'\d+\.(?:&nbsp;|\xa0|\s)*<a[^>]*href="/perl/chessgame\?gid=(\d+)"',
+    re.IGNORECASE,
+)
+PAGINATION_INFO_REGEX = re.compile(
+    r"page\s+\d+\s+of\s+(\d+)\s*;\s*games\s+\d+-\d+\s+of\s+(\d+)",
+    re.IGNORECASE,
+)
+
+
+async def fetch_gids_from_page(
+        client: httpx.AsyncClient, pid: int, page: int
+) -> tuple[list[str], int | None, int | None]:
+    url = (
+        f"{BASE_URL}/perl/chessplayer?pid={pid}"
+        if page == 1
+        else f"{BASE_URL}/perl/chess.pl?page={page}&pid={pid}"
+    )
+
+    for attempt in range(1, 7):
+        try:
+            response = await client.get(url)
+            if response.status_code in (429, 403, 503):
+                wait_sec = 10 * attempt
+                print(f"[!] Лимит ({response.status_code}) на стр. {page}, пауза {wait_sec} сек...")
+                await asyncio.sleep(wait_sec)
+                continue
+
+            response.raise_for_status()
+            gids = list(dict.fromkeys(TABLE_GAME_REGEX.findall(response.text)))
+
+            detected_pages, detected_total = None, None
+            match = PAGINATION_INFO_REGEX.search(response.text)
+            if match:
+                detected_pages, detected_total = int(match.group(1)), int(match.group(2))
+
+            if not gids:
+                wait_sec = 8 * attempt
+                print(f"[!] Стр. {page} вернула 0 партий (попытка {attempt}/6), пауза {wait_sec} сек...")
+                await asyncio.sleep(wait_sec)
+                continue
+
+            return gids, detected_pages, detected_total
+        except httpx.HTTPError as exc:
+            wait_sec = 4 * attempt
+            print(f"[!] Ошибка сети на стр. {page} (попытка {attempt}): {exc}")
+            await asyncio.sleep(wait_sec)
+
+    return [], None, None
+
+
+async def download_pgn(
+        client: httpx.AsyncClient,
+        player_key: str,
+        player_dir: Path,
+        gid: str,
+        semaphore: asyncio.Semaphore,
+        index: int,
+        total: int,
+) -> tuple[int, str, str]:
+    file_path = player_dir / f"{index:03d}_{player_key}_{gid}.pgn"
+    if file_path.exists():
+        cached = file_path.read_text(encoding="utf-8", errors="ignore").strip()
+        if "[Event " in cached:
+            return index, gid, cached
+
+    url = f"{BASE_URL}/njs/api/game/downloadPGN/{gid}"
+    async with semaphore:
+        for attempt in range(1, 7):
+            try:
+                resp = await client.get(url)
+                text = resp.text.strip()
+                if resp.status_code == 200 and "[Event " in text:
+                    file_path.write_text(text + "\n", encoding="utf-8")
+                    if index % 25 == 0 or index == total:
+                        print(f"[{index:03d}/{total}] Скачано (gid={gid})...")
+                    await asyncio.sleep(0.35)
+                    return index, gid, text
+                await asyncio.sleep(15 * attempt)
+            except httpx.RequestError:
+                await asyncio.sleep(3 * attempt)
+
+    return index, gid, ""
+
+
+async def download_player_games(player_key: str) -> None:
+    cfg = PLAYERS_CONFIG[player_key]
+    pid = cfg["pid"]
+    total_pages = cfg["pages"]
+    player_dir = DATA_PGNS_DIR / f"{player_key}_pgns"
+    player_dir.mkdir(parents=True, exist_ok=True)
+    combined_file = DATA_PGNS_DIR / f"{player_key}_all_games.pgn"
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0.0.0 Safari/537.36",
+        "Referer": f"{BASE_URL}/perl/chessplayer?pid={pid}",
+    }
+    semaphore = asyncio.Semaphore(3)
+
+    async with httpx.AsyncClient(headers=headers, timeout=25.0, follow_redirects=True) as client:
+        print(f"=== Скачивание базы: {cfg['name']} (pid={pid}) ===")
+        all_gids: list[str] = []
+        page = 1
+        while page <= total_pages:
+            gids, det_pages, det_total = await fetch_gids_from_page(client, pid, page)
+            if det_pages:
+                total_pages = det_pages
+            for gid in gids:
+                if gid not in all_gids:
+                    all_gids.append(gid)
+            total_info = f"/{det_total}" if det_total else ""
+            print(
+                f"[Страница {page:02d}/{total_pages:02d}] Найдено: {len(gids)} | Всего ID: {len(all_gids)}{total_info}")
+            page += 1
+            await asyncio.sleep(0.35)
+
+        if not all_gids:
+            print(f"[-] Партии для {player_key} не найдены.")
+            return
+
+        tasks = [
+            download_pgn(client, player_key, player_dir, gid, semaphore, idx, len(all_gids))
+            for idx, gid in enumerate(all_gids, start=1)
+        ]
+        results = await asyncio.gather(*tasks)
+        results.sort(key=lambda x: x[0])
+        valid_pgns = [pgn for _, _, pgn in results if pgn]
+
+        combined_file.write_text("\n\n".join(valid_pgns) + "\n", encoding="utf-8")
+        print(f"[+] Сохранено {len(valid_pgns)} партий в {combined_file}")
+
+    build_book_for_bot(player_key)
+
+
+async def main() -> None:
+    parser = argparse.ArgumentParser(description="Единый загрузчик PGN исторических чемпионов с Chessgames.")
+    parser.add_argument(
+        "player",
+        nargs="?",
+        default="zukertort",
+        choices=list(PLAYERS_CONFIG.keys()),
+        help="Ключ шахматиста (по умолчанию: zukertort)",
+    )
+    parser.add_argument("--all", action="store_true", help="Скачать партии всех шахматистов")
+    args = parser.parse_args()
+
+    if args.all:
+        for key in PLAYERS_CONFIG:
+            await download_player_games(key)
+    else:
+        await download_player_games(args.player)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
 
 ----------------------------------------------------------------------------------------
-END OF PART 8/11
+END OF PART 8/15

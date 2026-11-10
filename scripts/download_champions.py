@@ -1,10 +1,10 @@
 # --- FILE: scripts/download_champions.py ---
 
-import os
 import shutil
 import subprocess
 import time
 from pathlib import Path
+
 import requests
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -85,7 +85,7 @@ def main() -> None:
             "formatversion": "2",
         }
 
-        for attempt in range(3):
+        for _attempt in range(3):
             try:
                 response = session.get(api_url, params=params, timeout=15)
                 if response.status_code == 429:

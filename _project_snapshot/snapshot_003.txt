@@ -1,7 +1,1063 @@
-PROJECT SNAPSHOT — PART 3/11
+PROJECT SNAPSHOT — PART 3/15
 Project: michess
-Files in this part (18): src/services/analysis_service.py, src/services/anticheat.py, src/services/bots/__init__.py, src/services/bots/anderssen.py, src/services/bots/base.py, src/services/bots/books/anderssen.json, src/services/bots/books/labourdonnais.json, src/services/bots/books/morphy.json, src/services/bots/books/paulsen.json, src/services/bots/books/philidor.json, src/services/bots/books/staunton.json, src/services/bots/books/zukertort.json, src/services/bots/labourdonnais.py, src/services/bots/morphy.py, src/services/bots/paulsen.py, src/services/bots/philidor.py, src/services/bots/staunton.py, src/services/bots/zukertort.py
+Files in this part (19): src/core/config.py, src/core/instance.py, src/core/security.py, src/db/redis.py, src/db/seed.py, src/db/session.py, src/main.py, src/models/__init__.py, src/models/base.py, src/models/game.py, src/models/move.py, src/models/user.py, src/schemas/analysis.py, src/schemas/user.py, src/services/__init__.py, src/services/analysis_service.py, src/services/anticheat.py, src/services/bots/__init__.py, src/services/bots/anderssen.py
 ----------------------------------------------------------------------------------------
+
+========================================================================================
+FILE: src/core/config.py
+========================================================================================
+# --- FILE: src/core/config.py ---
+
+import json
+from typing import Annotated
+
+from pydantic import field_validator, model_validator
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
+
+MIN_SECRET_KEY_LENGTH = 32
+_WEAK_SECRET_KEYS = {"secret", "changeme", "change_me", "your-secret-key", "test", "dev"}
+
+
+class Settings(BaseSettings):
+    """
+    Application core settings configuration.
+    Uses Pydantic for environment variable validation.
+    """
+    PROJECT_NAME: str = "Michess API"
+    VERSION: str = "1.0.0"
+    API_V1_STR: str = "/api/v1"
+
+    # "production" включает строгие проверки при старте (SECRET_KEY) и прячет /docs.
+    ENVIRONMENT: str = "development"
+
+    # CORS: в .env — через запятую или JSON-списком. В продакшене за nginx фронтенд и API
+    # на одном домене, и CORS не нужен вовсе.
+    CORS_ORIGINS: Annotated[list[str], NoDecode] = [
+        "http://127.0.0.1:3000",
+        "http://localhost:3000",
+        "http://127.0.0.1:5173",
+        "http://localhost:5173",
+    ]
+
+    # PostgreSQL
+    POSTGRES_USER: str
+    POSTGRES_PASSWORD: str
+    POSTGRES_SERVER: str
+    POSTGRES_PORT: int
+    POSTGRES_DB: str
+
+    # Connection pool (per process)
+    DB_POOL_SIZE: int = 10
+    DB_MAX_OVERFLOW: int = 20
+    DB_POOL_TIMEOUT_S: float = 30.0
+
+    # Redis. Короткие таймауты: rate_limit.py и прочие вызовы рассчитаны на fail-open при
+    # недоступном Redis, но без них зависшее соединение (например, контейнер в restart-loop)
+    # блокирует запрос на десятки секунд вместо быстрого TCP-отказа.
+    REDIS_HOST: str = "127.0.0.1"
+    REDIS_PORT: int = 6379
+    REDIS_CONNECT_TIMEOUT_S: float = 1.0
+    REDIS_SOCKET_TIMEOUT_S: float = 1.0
+
+    # Security (JWT)
+    SECRET_KEY: str
+    ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+
+    # Anti-Cheat Thresholds
+    AC_BLUR_RATE_HIGH: float = 0.8
+    AC_BLUR_RATE_MED: float = 0.5
+    AC_MIN_MOVE_TIME_MS: int = 3000
+    AC_MAX_MOVE_TIME_MS: int = 8000
+    AC_STOCKFISH_PATH: str = "bin/stockfish-windows-x86-64-avx2.exe"
+    AC_MAX_CENTIPAWN_LOSS: int = 15
+    # A client-claimed premove is trusted only if the server saw the move arrive this fast
+    AC_PREMOVE_MAX_ELAPSED_MS: int = 600
+
+    # Matchmaking: rating window (±N) used when the client sends no explicit range; 0 = unrestricted
+    MATCHMAKING_DEFAULT_RATING_RANGE: int = 0
+
+    # Celery publishing from the API process: short timeouts, no publish retries, and a pause
+    # after a broker failure so a dead broker cannot stall the event loop or pile up threads
+    CELERY_PUBLISH_TIMEOUT_S: float = 3.0
+    CELERY_BROKER_CONNECT_TIMEOUT_S: float = 1.0
+    CELERY_BROKER_COOLDOWN_S: float = 30.0
+
+    # Stockfish engine pool
+    ENGINE_POOL_SIZE: int = 2
+    ENGINE_ACQUIRE_TIMEOUT_S: float = 10.0
+
+    # Rate limits for engine-backed endpoints (requests per window, per user or per IP for guests)
+    RATE_LIMIT_WINDOW_S: int = 60
+    RATE_LIMIT_BOT_MOVE: int = 90
+    RATE_LIMIT_POSITION_ANALYSIS: int = 30
+    RATE_LIMIT_GAME_ANALYSIS: int = 6
+
+    # Authentication: attempts per IP, failed logins per account, registrations per IP
+    RATE_LIMIT_LOGIN_PER_IP: int = 20
+    RATE_LIMIT_LOGIN_WINDOW_S: int = 60
+    RATE_LIMIT_LOGIN_FAILURES_PER_ACCOUNT: int = 10
+    RATE_LIMIT_LOGIN_FAILURES_WINDOW_S: int = 900
+    RATE_LIMIT_REGISTER_PER_IP: int = 5
+    RATE_LIMIT_REGISTER_WINDOW_S: int = 3600
+
+    # One-time WebSocket tickets (the JWT never goes into the WS URL)
+    WS_TICKET_TTL_S: int = 30
+    RATE_LIMIT_WS_TICKETS: int = 30
+
+    @field_validator("CORS_ORIGINS", mode="before")
+    @classmethod
+    def _split_origins(cls, value):
+        if isinstance(value, str):
+            text = value.strip()
+            if text.startswith("["):
+                return json.loads(text)
+            return [origin.strip() for origin in text.split(",") if origin.strip()]
+        return value
+
+    @model_validator(mode="after")
+    def _check_production_secrets(self):
+        """
+        В продакшене слабый SECRET_KEY = возможность подделать токен любого пользователя.
+        Лучше не стартовать вовсе, чем работать с ключом из примера или коротким ключом.
+        """
+        if self.is_production:
+            key = self.SECRET_KEY
+            if len(key) < MIN_SECRET_KEY_LENGTH or key.lower() in _WEAK_SECRET_KEYS or "change-me" in key.lower():
+                raise ValueError(
+                    f"SECRET_KEY must be a random string of at least {MIN_SECRET_KEY_LENGTH} characters "
+                    "in production (e.g. `python -c \"import secrets; print(secrets.token_urlsafe(48))\"`)"
+                )
+        return self
+
+    @property
+    def is_production(self) -> bool:
+        return self.ENVIRONMENT.strip().lower() == "production"
+
+    @property
+    def async_database_url(self) -> str:
+        """Assembles the database connection string for asyncpg."""
+        return (
+            f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
+            f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
+        )
+
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        case_sensitive=True,
+        extra="ignore",
+    )
+
+
+settings = Settings()
+
+========================================================================================
+FILE: src/core/instance.py
+========================================================================================
+# --- FILE: src/core/instance.py ---
+"""Идентификатор текущего процесса-воркера (uvicorn / gunicorn worker) для координации через Redis."""
+
+import os
+import socket
+import uuid
+
+WORKER_ID: str = f"{socket.gethostname()}:{os.getpid()}:{uuid.uuid4().hex[:8]}"
+
+========================================================================================
+FILE: src/core/security.py
+========================================================================================
+from datetime import UTC, datetime, timedelta
+
+import jwt
+from passlib.context import CryptContext
+
+from src.core.config import settings
+
+# Password hashing context using bcrypt algorithm
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verifies a plain password against a hashed counterpart.
+
+    A hash passlib cannot identify (e.g. the marker stored for bot accounts) never matches
+    instead of raising and turning a login attempt into a 500.
+    """
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except (ValueError, TypeError):
+        return False
+
+
+def get_password_hash(password: str) -> str:
+    """Generates a secure bcrypt hash for a plain password."""
+    return pwd_context.hash(password)
+
+
+class InvalidTokenError(Exception):
+    """Токен не подписан нами, истёк или имеет старый формат."""
+
+
+def create_user_token(user, expires_delta: timedelta | None = None) -> str:
+    """
+    JWT пользователя: sub — id (имя можно было бы сменить, id — нет), ver — версия токенов,
+    по которой отзываются все выданные ранее токены.
+    """
+    return create_access_token({"sub": str(user.id), "ver": int(user.token_version or 0)}, expires_delta)
+
+
+def decode_user_token(token: str) -> tuple[int, int]:
+    """(user_id, token_version) из токена; InvalidTokenError для чужих, истёкших и старых токенов."""
+    try:
+        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
+    except jwt.InvalidTokenError as exc:
+        raise InvalidTokenError(str(exc)) from exc
+    subject, version = payload.get("sub"), payload.get("ver")
+    # Токены старого формата (sub = имя пользователя, без ver) не принимаются: войти заново.
+    if not isinstance(subject, str) or not subject.isdigit() or not isinstance(version, int):
+        raise InvalidTokenError("unsupported token format")
+    return int(subject), version
+
+
+def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
+    """Generates a JSON Web Token (JWT) for user authentication."""
+    to_encode = data.copy()
+    if expires_delta:
+        expire = datetime.now(UTC) + expires_delta
+    else:
+        expire = datetime.now(UTC) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+
+    to_encode.update({"exp": expire})
+    encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
+    return encoded_jwt
+
+========================================================================================
+FILE: src/db/redis.py
+========================================================================================
+from typing import Any
+
+import redis.asyncio as redis
+
+from src.core.config import settings
+
+# Глобальный асинхронный клиент Redis.
+# Тип Any сознательно: с decode_responses=True все ответы — str, но заглушки типов redis-py
+# этого не выражают и описывают каждый ответ как bytes | str. Без Any mypy требовал бы
+# декодировать то, что уже декодировано, в каждом месте использования.
+redis_client: Any = redis.Redis(
+    host=settings.REDIS_HOST,
+    port=settings.REDIS_PORT,
+    decode_responses=True,
+    socket_connect_timeout=settings.REDIS_CONNECT_TIMEOUT_S,
+    socket_timeout=settings.REDIS_SOCKET_TIMEOUT_S,
+)
+
+========================================================================================
+FILE: src/db/seed.py
+========================================================================================
+# --- FILE: src/db/seed.py ---
+
+import asyncio
+import io
+import logging
+import os
+import re
+import sys
+import zipfile
+from pathlib import Path
+
+import requests
+from sqlalchemy import func, or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from src.db.session import AsyncSessionLocal
+from src.models.game import Game, GameStatus
+from src.models.user import User
+
+logger = logging.getLogger(__name__)
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+PRIMARY_PGNS_DIR = PROJECT_ROOT / "src" / "db" / "data" / "pgns"
+PGNS_DIRS = [
+    PRIMARY_PGNS_DIR,
+    PROJECT_ROOT / "data" / "pgns",
+]
+
+PGN_MENTOR_BASE_URL = "https://www.pgnmentor.com/players"
+
+CHAMPIONS_META: dict[str, dict] = {
+    "steinitz": {"id": "Steinitz", "canonical": "Steinitz, Wilhelm", "rating": 2650, "exclude": ()},
+    "lasker": {"id": "Lasker", "canonical": "Lasker, Emanuel", "rating": 2720,
+               "exclude": ("edward", "berthold", "alfred")},
+    "rubinstein": {"id": "Rubinstein", "canonical": "Rubinstein, Akiba", "rating": 2690, "exclude": ("simon",)},
+    "capablanca": {"id": "Capablanca", "canonical": "Capablanca, Jose Raul", "rating": 2725, "exclude": ()},
+    "alekhine": {"id": "Alekhine", "canonical": "Alekhine, Alexander", "rating": 2690, "exclude": ("alexei",)},
+    "euwe": {"id": "Euwe", "canonical": "Euwe, Max", "rating": 2650, "exclude": ()},
+    "keres": {"id": "Keres", "canonical": "Keres, Paul", "rating": 2670, "exclude": ()},
+    "botvinnik": {"id": "Botvinnik", "canonical": "Botvinnik, Mikhail", "rating": 2720, "exclude": ()},
+    "geller": {"id": "Geller", "canonical": "Geller, Efim", "rating": 2665, "exclude": ("jakov",)},
+    "korchnoi": {"id": "Korchnoi", "canonical": "Korchnoi, Viktor", "rating": 2695, "exclude": ()},
+    "smyslov": {"id": "Smyslov", "canonical": "Smyslov, Vasily", "rating": 2690, "exclude": ()},
+    "tal": {"id": "Tal", "canonical": "Tal, Mikhail", "rating": 2705, "exclude": ()},
+    "petrosian": {"id": "Petrosian", "canonical": "Petrosian, Tigran", "rating": 2690,
+                  "exclude": ("tigran l", "arshak", "manuel")},
+    "spassky": {"id": "Spassky", "canonical": "Spassky, Boris", "rating": 2690, "exclude": ()},
+    "fischer": {"id": "Fischer", "canonical": "Fischer, Robert James", "rating": 2785, "exclude": ("julie",)},
+    "karpov": {"id": "Karpov", "canonical": "Karpov, Anatoly", "rating": 2780, "exclude": ()},
+    "kasparov": {"id": "Kasparov", "canonical": "Kasparov, Garry", "rating": 2851, "exclude": ("sergey",)},
+    "kramnik": {"id": "Kramnik", "canonical": "Kramnik, Vladimir", "rating": 2817, "exclude": ()},
+    "anand": {"id": "Anand", "canonical": "Anand, Viswanathan", "rating": 2817, "exclude": ()},
+    "carlsen": {"id": "Carlsen", "canonical": "Carlsen, Magnus", "rating": 2882, "exclude": ("henrik",)},
+    "ding": {"id": "Ding", "canonical": "Ding, Liren", "rating": 2816, "exclude": ("yilun",)},
+}
+
+WHITE_TAG_RE = re.compile(r'\[White\s+"([^"]+)"\]')
+BLACK_TAG_RE = re.compile(r'\[Black\s+"([^"]+)"\]')
+RESULT_TAG_RE = re.compile(r'\[Result\s+"([^"]+)"\]')
+DATE_TAG_RE = re.compile(r'\[(?:Event)?Date\s+"([^"]+)"\]')
+SITE_TAG_RE = re.compile(r'\[Site\s+"([^"]+)"\]')
+ECO_TAG_RE = re.compile(r'\[ECO\s+"([^"]+)"\]')
+
+_SEED_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def extract_pgn_metadata(raw_pgn: str, fallback_result: str = "*") -> dict[str, str | None]:
+    result_str = fallback_result or "*"
+    pgn_date: str | None = None
+    site: str | None = None
+    eco: str | None = None
+
+    if not raw_pgn:
+        return {"result": result_str, "pgn_date": None, "site": None, "eco": None}
+
+    res_match = RESULT_TAG_RE.search(raw_pgn)
+    if res_match:
+        result_str = res_match.group(1).strip()[:10]
+    elif result_str == "*":
+        tail_match = re.search(r"(1-0|0-1|1/2-1/2)\s*$", raw_pgn.strip())
+        if tail_match:
+            result_str = tail_match.group(1)
+
+    for d_match in DATE_TAG_RE.finditer(raw_pgn):
+        val = d_match.group(1).strip()
+        if val and not val.startswith("?"):
+            pgn_date = val[:20]
+            break
+
+    s_match = SITE_TAG_RE.search(raw_pgn)
+    if s_match and s_match.group(1).strip() != "?":
+        site = s_match.group(1).strip()[:100]
+
+    e_match = ECO_TAG_RE.search(raw_pgn)
+    if e_match and e_match.group(1).strip() != "?":
+        eco = e_match.group(1).strip()[:10]
+
+    return {
+        "result": result_str,
+        "pgn_date": pgn_date,
+        "site": site,
+        "eco": eco,
+    }
+
+
+def get_champion_meta(username_or_id: str) -> dict | None:
+    key = (username_or_id or "").strip().lower()
+    if key in CHAMPIONS_META:
+        return CHAMPIONS_META[key]
+    for meta in CHAMPIONS_META.values():
+        if meta["canonical"].lower() == key:
+            return meta
+    return None
+
+
+def find_champion_pgn_file(champ_id: str) -> Path | None:
+    target_lower = f"{champ_id.lower()}.pgn"
+    alt_lower = f"{champ_id.lower()}_all_games.pgn"
+
+    for folder in PGNS_DIRS:
+        if not folder.exists():
+            continue
+        for pgn_path in folder.glob("*.pgn"):
+            name_low = pgn_path.name.lower()
+            if name_low in (target_lower, alt_lower) and pgn_path.stat().st_size > 100:
+                return pgn_path
+    return None
+
+
+def _download_champion_pgn_sync(champ_id: str) -> Path | None:
+    if "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST"):
+        return None
+
+    PRIMARY_PGNS_DIR.mkdir(parents=True, exist_ok=True)
+    target_path = PRIMARY_PGNS_DIR / f"{champ_id}.pgn"
+    if target_path.exists() and target_path.stat().st_size > 100:
+        return target_path
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0.0.0 Safari/537.36",
+        "Referer": "https://www.pgnmentor.com/files.html",
+    }
+
+    zip_url = f"{PGN_MENTOR_BASE_URL}/{champ_id}.zip"
+    pgn_url = f"{PGN_MENTOR_BASE_URL}/{champ_id}.pgn"
+
+    try:
+        resp = requests.get(zip_url, headers=headers, timeout=30)
+        if resp.status_code == 200 and len(resp.content) > 200:
+            with zipfile.ZipFile(io.BytesIO(resp.content)) as zf:
+                pgn_members = [m for m in zf.namelist() if m.lower().endswith(".pgn")]
+                if pgn_members:
+                    raw_bytes = zf.read(pgn_members[0])
+                    text = raw_bytes.decode("utf-8", errors="ignore")
+                    if "[Event " in text:
+                        target_path.write_text(text, encoding="utf-8")
+                        return target_path
+    except Exception as exc:
+        logger.warning("Не удалось скачать ZIP для %s (%s), пробуем прямой .pgn...", champ_id, exc)
+
+    try:
+        resp = requests.get(pgn_url, headers=headers, timeout=30)
+        if resp.status_code == 200 and "[Event " in resp.text:
+            target_path.write_text(resp.text, encoding="utf-8")
+            return target_path
+    except Exception as exc:
+        logger.error("Ошибка загрузки PGN для %s: %s", champ_id, exc)
+
+    return None
+
+
+def _is_target_champion_name(raw_name: str, champ_key: str, meta: dict) -> bool:
+    low = raw_name.lower()
+    if any(ex in low for ex in meta.get("exclude", ())):
+        return False
+    # Надёжное сопоставление по фамилии (даже при сокращении инициалов в PGN Mentor)
+    surname = meta["canonical"].split(",")[0].strip().lower()
+    return surname in low or champ_key in low
+
+
+def _split_pgn_games(content: str) -> list[str]:
+    cleaned = content.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n").strip()
+    if not cleaned:
+        return []
+    chunks = re.split(r'(?m)^(?=\[Event\s+")', cleaned)
+    return [c.strip() for c in chunks if c.strip() and "[White " in c]
+
+
+async def ensure_champion_seeded(db: AsyncSession, username_or_id: str) -> User | None:
+    meta = get_champion_meta(username_or_id)
+    if not meta:
+        return None
+
+    champ_key = meta["id"].lower()
+    lock = _SEED_LOCKS.setdefault(champ_key, asyncio.Lock())
+
+    async with lock:
+        canonical_name = meta["canonical"]
+        res = await db.execute(
+            select(User).where(
+                or_(User.username == canonical_name, User.username == meta["id"])
+            )
+        )
+        champ_user = res.scalars().first()
+
+        if champ_user is not None:
+            count_q = select(func.count(Game.id)).where(
+                or_(Game.white_player_id == champ_user.id, Game.black_player_id == champ_user.id),
+                Game.status == GameStatus.COMPLETED,
+            )
+            games_count = (await db.execute(count_q)).scalar() or 0
+            if games_count > 0:
+                return champ_user
+
+        all_users_res = await db.execute(select(User))
+        users_by_name: dict[str, User] = {u.username: u for u in all_users_res.scalars().all()}
+
+        if champ_user is None:
+            champ_user = User(
+                username=canonical_name,
+                hashed_password="!historical_archive_no_login!",
+                rating=meta["rating"],
+                is_cheater=False,
+                trust_factor=100,
+            )
+            db.add(champ_user)
+            await db.flush()
+            users_by_name[canonical_name] = champ_user
+
+        pgn_file = find_champion_pgn_file(meta["id"])
+        if not pgn_file or not pgn_file.exists():
+            pgn_file = await asyncio.to_thread(_download_champion_pgn_sync, meta["id"])
+
+        if not pgn_file or not pgn_file.exists():
+            await db.commit()
+            return champ_user
+
+        content = pgn_file.read_text(encoding="utf-8", errors="ignore")
+        raw_games = _split_pgn_games(content)
+        if not raw_games:
+            await db.commit()
+            return champ_user
+
+        new_opponents: dict[str, User] = {}
+        parsed_entries: list[tuple[str, str, dict, str]] = []
+
+        for raw_pgn in raw_games:
+            w_match = WHITE_TAG_RE.search(raw_pgn)
+            b_match = BLACK_TAG_RE.search(raw_pgn)
+            if not w_match or not b_match:
+                continue
+
+            w_raw = w_match.group(1).strip()[:50]
+            b_raw = b_match.group(1).strip()[:50]
+            meta_fields = extract_pgn_metadata(raw_pgn)
+
+            w_name = canonical_name if _is_target_champion_name(w_raw, champ_key, meta) else w_raw
+            b_name = canonical_name if _is_target_champion_name(b_raw, champ_key, meta) else b_raw
+
+            if w_name != canonical_name and b_name != canonical_name:
+                continue
+
+            for opp_name in (w_name, b_name):
+                if opp_name not in users_by_name and opp_name not in new_opponents:
+                    opp_meta = get_champion_meta(opp_name)
+                    opp_rating = opp_meta["rating"] if opp_meta else 2450
+                    new_opponents[opp_name] = User(
+                        username=opp_name,
+                        hashed_password="!historical_archive_no_login!",
+                        rating=opp_rating,
+                        is_cheater=False,
+                        trust_factor=100,
+                    )
+
+            parsed_entries.append((w_name, b_name, meta_fields, raw_pgn))
+
+        if new_opponents:
+            db.add_all(new_opponents.values())
+            await db.flush()
+            users_by_name.update(new_opponents)
+
+        existing_pgns_res = await db.execute(
+            select(Game.pgn).where(
+                or_(Game.white_player_id == champ_user.id, Game.black_player_id == champ_user.id)
+            )
+        )
+        existing_pgns = {row[0] for row in existing_pgns_res.all() if row[0]}
+
+        games_to_insert: list[Game] = []
+        for w_name, b_name, meta_fields, raw_pgn in parsed_entries:
+            if raw_pgn in existing_pgns:
+                continue
+            existing_pgns.add(raw_pgn)
+
+            w_user = users_by_name[w_name]
+            b_user = users_by_name[b_name]
+            games_to_insert.append(
+                Game(
+                    white_player_id=w_user.id,
+                    black_player_id=b_user.id,
+                    pgn=raw_pgn,
+                    status=GameStatus.COMPLETED,
+                    result=meta_fields["result"],
+                    pgn_date=meta_fields["pgn_date"],
+                    site=meta_fields["site"],
+                    eco=meta_fields["eco"],
+                    is_rated=True,
+                )
+            )
+
+        if games_to_insert:
+            db.add_all(games_to_insert)
+
+        await db.commit()
+        logger.info(
+            "Импортировано %d партий для чемпиона %s из %s",
+            len(games_to_insert),
+            canonical_name,
+            pgn_file.name,
+        )
+        return champ_user
+
+
+async def seed_all_champions() -> None:
+    print(f"=== Полный импорт архивов 21 чемпиона мира (Корень: {PROJECT_ROOT}) ===")
+    async with AsyncSessionLocal() as db:
+        for _, meta in CHAMPIONS_META.items():
+            user = await ensure_champion_seeded(db, meta["id"])
+            if user:
+                count_q = select(func.count(Game.id)).where(
+                    or_(Game.white_player_id == user.id, Game.black_player_id == user.id),
+                    Game.status == GameStatus.COMPLETED,
+                )
+                total = (await db.execute(count_q)).scalar() or 0
+                print(f"[+] {meta['id']:12s} ({meta['canonical']:24s}): в базе {total:4d} партий")
+    print("=== Импорт всех чемпионов успешно завершён! ===")
+
+
+if __name__ == "__main__":
+    asyncio.run(seed_all_champions())
+
+========================================================================================
+FILE: src/db/session.py
+========================================================================================
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from src.core.config import settings
+
+# Create asynchronous engine using configuration URL
+engine = create_async_engine(
+    settings.async_database_url,
+    echo=False,
+    future=True,
+    pool_size=settings.DB_POOL_SIZE,
+    max_overflow=settings.DB_MAX_OVERFLOW,
+    pool_timeout=settings.DB_POOL_TIMEOUT_S,
+    pool_pre_ping=True,
+)
+
+# Create asynchronous session factory
+AsyncSessionLocal = async_sessionmaker(
+    bind=engine,
+    autoflush=False,
+    autocommit=False,
+    expire_on_commit=False,
+)
+
+
+async def get_db():
+    """
+    Dependency generator that yields an asynchronous database session.
+    Ensures proper cleanup after request completion.
+
+    Только для HTTP-запросов: сессия живёт до конца запроса. Долгоживущим обработчикам
+    (WebSocket) нужна фабрика get_session_factory и короткая сессия на каждую операцию.
+    """
+    async with AsyncSessionLocal() as session:
+        yield session
+
+
+def get_session_factory() -> async_sessionmaker[AsyncSession]:
+    """
+    Dependency: фабрика сессий для долгоживущих соединений.
+
+    Сессия из get_db, взятая WebSocket-обработчиком, жила бы всё соединение: первый же запрос
+    открывает транзакцию, и соединение пула остаётся занятым («idle in transaction»), пока
+    игрок подключён. Поэтому WebSocket открывает по короткой сессии на каждое действие.
+    """
+    return AsyncSessionLocal
+
+========================================================================================
+FILE: src/main.py
+========================================================================================
+# --- FILE: src/main.py ---
+
+import asyncio
+import logging
+from contextlib import asynccontextmanager
+
+import uvicorn
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+
+from src.api import bots
+from src.api.analysis import router as analysis_router
+from src.api.auth import router as auth_router
+from src.api.profile import router as profile_router
+from src.api.websockets import router as ws_router
+from src.core.config import settings
+from src.db import redis as redis_module
+from src.db.session import AsyncSessionLocal
+from src.services.connection_manager import manager
+from src.services.engine_pool import close_all_engine_pools
+from src.services.game_state import state_manager
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+)
+logger = logging.getLogger(__name__)
+
+HEALTH_CHECK_TIMEOUT_S = 2.0
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for handling startup and shutdown events gracefully."""
+    logger.info("Starting up %s (%s)...", settings.PROJECT_NAME, settings.ENVIRONMENT)
+    timeout_task = asyncio.create_task(state_manager.check_timeouts_loop(manager))
+
+    yield
+
+    timeout_task.cancel()
+    try:
+        await asyncio.gather(timeout_task, return_exceptions=True)
+    except asyncio.CancelledError:
+        pass
+
+    logger.info("Shutting down %s...", settings.PROJECT_NAME)
+    await asyncio.to_thread(close_all_engine_pools)
+    await redis_module.redis_client.aclose()
+
+
+def create_app() -> FastAPI:
+    # Документация API в продакшене не публикуется: она раскрывает все эндпоинты и схемы.
+    docs_enabled = not settings.is_production
+    app = FastAPI(
+        title=settings.PROJECT_NAME,
+        version=settings.VERSION,
+        lifespan=lifespan,
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url=f"{settings.API_V1_STR}/openapi.json" if docs_enabled else None,
+    )
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=settings.CORS_ORIGINS,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    app.include_router(auth_router, prefix=settings.API_V1_STR)
+    app.include_router(ws_router, prefix=settings.API_V1_STR)
+    app.include_router(profile_router, prefix=settings.API_V1_STR)
+    app.include_router(analysis_router, prefix=settings.API_V1_STR)
+    app.include_router(bots.router, prefix="/api/v1/bots", tags=["bots"])
+
+    return app
+
+
+app = create_app()
+
+
+async def _check_database() -> None:
+    async with AsyncSessionLocal() as db:
+        await db.execute(text("SELECT 1"))
+
+
+async def _check_redis() -> None:
+    await redis_module.redis_client.ping()
+
+
+@app.get("/health")
+async def health_check():
+    """
+    Готовность сервиса: отвечают ли PostgreSQL и Redis. 503, если хоть что-то недоступно, —
+    по этому коду Docker и балансировщик понимают, что экземпляр нельзя нагружать.
+    """
+    checks: dict[str, str] = {}
+    for name, check in (("database", _check_database), ("redis", _check_redis)):
+        try:
+            await asyncio.wait_for(check(), timeout=HEALTH_CHECK_TIMEOUT_S)
+            checks[name] = "ok"
+        except Exception as exc:
+            logger.warning("Health check '%s' failed: %s", name, exc)
+            checks[name] = "unavailable"
+
+    healthy = all(status == "ok" for status in checks.values())
+    return JSONResponse(
+        status_code=200 if healthy else 503,
+        content={"status": "healthy" if healthy else "degraded", "version": settings.VERSION, "checks": checks},
+    )
+
+
+if __name__ == "__main__":
+    uvicorn.run("src.main:app", host="127.0.0.1", port=8000, reload=True)
+
+========================================================================================
+FILE: src/models/__init__.py
+========================================================================================
+from src.models.base import Base
+from src.models.game import Game
+from src.models.move import Move
+from src.models.user import User
+
+__all__ = ["Base", "Game", "Move", "User"]
+
+# This ensures all models are loaded when Alembic imports this file.
+
+========================================================================================
+FILE: src/models/base.py
+========================================================================================
+from sqlalchemy.orm import DeclarativeBase
+
+
+class Base(DeclarativeBase):
+    """
+    Base class for all SQLAlchemy declarative models.
+    """
+    pass
+
+========================================================================================
+FILE: src/models/game.py
+========================================================================================
+# --- FILE: src/models/game.py ---
+
+import enum
+from datetime import datetime
+
+from sqlalchemy import BigInteger, Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+
+from src.models.base import Base
+
+
+class GameStatus(str, enum.Enum):
+    PENDING = "PENDING"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+    ABORTED = "ABORTED"
+
+
+class Game(Base):
+    __tablename__ = "games"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    white_player_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    black_player_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+
+    pgn: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[GameStatus] = mapped_column(
+        Enum(GameStatus, name="gamestatus"),
+        default=GameStatus.PENDING,
+        nullable=False,
+        index=True,
+    )
+
+    base_time_ms: Mapped[int] = mapped_column(Integer, default=180000, server_default="180000", nullable=False)
+    increment_ms: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    is_rated: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+
+    state_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    turn: Mapped[str] = mapped_column(String(1), default="w", server_default="w", nullable=False)
+    board_fen: Mapped[str] = mapped_column(
+        String,
+        default="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        server_default="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",
+        nullable=False,
+    )
+
+    white_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    black_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_move_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+
+    result: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    termination: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    winner_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+
+    white_initial_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    black_initial_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    white_rating_delta: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    black_rating_delta: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    pgn_date: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    site: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    eco: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
+
+    analysis_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+
+    white_player = relationship("User", foreign_keys=[white_player_id])
+    black_player = relationship("User", foreign_keys=[black_player_id])
+    moves = relationship("Move", cascade="all, delete-orphan")
+
+========================================================================================
+FILE: src/models/move.py
+========================================================================================
+# --- FILE: src/models/move.py ---
+
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql import func
+
+from src.models.base import Base
+
+
+class Move(Base):
+    """
+    Authoritative Move Journal & Anti-Cheat Telemetry.
+    """
+    __tablename__ = "moves"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    game_id: Mapped[int] = mapped_column(ForeignKey("games.id"), index=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+
+    # Порядковый номер полухода (ply)
+    move_number: Mapped[int] = mapped_column(Integer)
+
+    # --- CHESS DATA ---
+    notation: Mapped[str] = mapped_column(String(10))  # Универсальный UCI (e.g., e2e4)
+    san: Mapped[str | None] = mapped_column(String(10), nullable=True)  # Для красивого отображения (e.g., Nf3)
+    fen_after: Mapped[str | None] = mapped_column(String, nullable=True)  # Состояние доски ПОСЛЕ хода
+    # ------------------
+
+    # --- TELEMETRY ---
+    time_taken_ms: Mapped[int] = mapped_column(Integer)  # Client-side estimation
+    window_blurred_before_move: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_premove: Mapped[bool] = mapped_column(Boolean, default=False)
+    network_lag_ms: Mapped[int] = mapped_column(Integer, default=0)
+
+    # Server-side timestamp
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+========================================================================================
+FILE: src/models/user.py
+========================================================================================
+from datetime import datetime
+
+from sqlalchemy import Boolean, DateTime, Integer, String
+from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.sql import func
+
+from src.models.base import Base
+
+
+class User(Base):
+    """
+    Core user model for authentication and matchmaking.
+    """
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    username: Mapped[str] = mapped_column(String(50), unique=True, index=True)
+    # Нормализованное имя (casefold) аккаунтов, входящих по паролю: уникальность без учёта
+    # регистра («Misha» и «misha» — один аккаунт) и вход в любом регистре. У архивных игроков
+    # из PGN и ботов — NULL: их имена из заголовков партий могут различаться только регистром,
+    # а NULL уникальный индекс не ограничивает.
+    username_key: Mapped[str | None] = mapped_column(String(50), unique=True, index=True, nullable=True)
+    hashed_password: Mapped[str] = mapped_column(String)
+    # Версия токенов: входит в JWT и сверяется при каждой проверке. Увеличение (смена пароля,
+    # «выйти на всех устройствах») делает недействительными все ранее выданные токены.
+    token_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+
+    # ELO or Glicko-2 rating
+    rating: Mapped[int] = mapped_column(Integer, default=1200)
+
+    # Anti-cheat specific fields
+    is_cheater: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    trust_factor: Mapped[int] = mapped_column(Integer, default=100)
+
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+========================================================================================
+FILE: src/schemas/analysis.py
+========================================================================================
+# --- FILE: src/schemas/analysis.py ---
+
+from pydantic import BaseModel, Field
+
+
+class PositionAnalysisRequest(BaseModel):
+    moves: list[str] = Field(default_factory=list, max_length=1000, description="Список ходов в формате SAN или UCI")
+
+
+class MoveEvaluationItem(BaseModel):
+    ply: int
+    move_number: int
+    color: str
+    san: str
+    uci: str
+    eval_cp: int
+    eval_display: str
+    mate: int | None = None
+    best_move_uci: str | None = None
+    cp_loss: int
+    classification: str
+    symbol: str
+
+
+class SideSummaryStats(BaseModel):
+    accuracy: float
+    best: int
+    good: int
+    inaccuracies: int
+    mistakes: int
+    blunders: int
+    avg_cp_loss: float
+
+
+class FullGameAnalysisResponse(BaseModel):
+    game_id: int
+    engine: str
+    white: SideSummaryStats
+    black: SideSummaryStats
+    moves: list[MoveEvaluationItem]
+
+========================================================================================
+FILE: src/schemas/user.py
+========================================================================================
+import re
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+USERNAME_MIN_LENGTH = 3
+USERNAME_MAX_LENGTH = 30
+_USERNAME_RE = re.compile(r"[A-Za-z0-9А-Яа-яЁё_-]+")
+_LATIN_RE = re.compile(r"[A-Za-z]")
+_CYRILLIC_RE = re.compile(r"[А-Яа-яЁё]")
+
+
+def username_key(username: str) -> str:
+    """Ключ для сравнения имён без учёта регистра."""
+    return username.strip().casefold()
+
+
+def validate_username(value: str) -> str:
+    """
+    Правила имени при регистрации. Белый список символов отсекает пробелы, невидимые и
+    управляющие символы, а запрет смешивать алфавиты — подделки вида «Мorphy» (кириллическая М).
+    """
+    if not _USERNAME_RE.fullmatch(value):
+        raise ValueError("Имя может содержать только буквы (латиница или кириллица), цифры, «_» и «-»")
+    if _LATIN_RE.search(value) and _CYRILLIC_RE.search(value):
+        raise ValueError("Имя не может смешивать латиницу и кириллицу")
+    if not any(ch.isalpha() for ch in value):
+        raise ValueError("Имя должно содержать хотя бы одну букву")
+    return value
+
+
+class UserCreate(BaseModel):
+    """Schema for incoming user registration data."""
+    username: str = Field(
+        ..., min_length=USERNAME_MIN_LENGTH, max_length=USERNAME_MAX_LENGTH, description="Unique username",
+    )
+    # Верхняя граница — чтобы не хэшировать мегабайтные «пароли»; bcrypt всё равно учитывает 72 байта.
+    password: str = Field(..., min_length=8, max_length=128, description="Strong password")
+
+    @field_validator("username")
+    @classmethod
+    def _check_username(cls, value: str) -> str:
+        return validate_username(value)
+
+
+class UserResponse(BaseModel):
+    """Schema for outgoing user data (password and anti-cheat internals excluded)."""
+    id: int
+    username: str
+    rating: int
+    is_cheater: bool
+    created_at: datetime
+
+    # This config allows Pydantic to read data directly from SQLAlchemy models
+    model_config = ConfigDict(from_attributes=True)
+
+========================================================================================
+FILE: src/services/__init__.py
+========================================================================================
+
 
 ========================================================================================
 FILE: src/services/analysis_service.py
@@ -9,19 +1065,22 @@ FILE: src/services/analysis_service.py
 # --- FILE: src/services/analysis_service.py ---
 
 import asyncio
+import contextlib
 import io
 import json
 import logging
 import math
 import os
+
 import chess
 import chess.engine
 import chess.pgn
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models.game import Game
+from src.models.game import Game, GameStatus
 from src.services.bots.base import resolve_stockfish_path, static_board_eval_cp
+from src.services.engine_pool import EngineUnavailableError, get_engine_pool
 
 logger = logging.getLogger(__name__)
 
@@ -83,12 +1142,15 @@ def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
     sf_path = resolve_stockfish_path()
     engine = None
     engine_label = "Static Fallback Evaluator"
+    engine_stack = contextlib.ExitStack()
 
     if sf_path and os.path.exists(sf_path):
+        # EngineBusyError намеренно не перехватывается: под нагрузкой лучше вернуть 503, чем
+        # закэшировать в БД анализ статическим оценщиком вместо Stockfish.
         try:
-            engine = chess.engine.SimpleEngine.popen_uci(sf_path)
+            engine = engine_stack.enter_context(get_engine_pool(sf_path).acquire())
             engine_label = engine.id.get("name", "Stockfish")
-        except Exception as exc:
+        except EngineUnavailableError as exc:
             logger.warning("Не удалось запустить Stockfish (%s), используем fallback: %s", sf_path, exc)
             engine = None
 
@@ -155,11 +1217,7 @@ def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
             mates_white.append(mate_i)
             best_moves_uci.append(best_i)
     finally:
-        if engine is not None:
-            try:
-                engine.quit()
-            except Exception:
-                pass
+        engine_stack.close()  # возвращает движок в пул
 
     moves_report: list[dict] = []
     white_losses: list[int] = []
@@ -226,6 +1284,25 @@ def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
     }
 
 
+class GameNotFinishedError(Exception):
+    """Анализ идущей партии запрещён: он работал бы как подсказка движка игрокам."""
+
+
+_FINISHED_STATUSES = (GameStatus.COMPLETED, GameStatus.ABORTED)
+
+
+def ensure_game_finished(game: Game) -> None:
+    if game.status not in _FINISHED_STATUSES:
+        raise GameNotFinishedError(f"Партия {game.id} ещё не завершена")
+
+
+def _count_mainline_plies(pgn_text: str) -> int:
+    pgn_game = chess.pgn.read_game(io.StringIO(pgn_text))
+    if pgn_game is None:
+        return -1
+    return sum(1 for _ in pgn_game.mainline_moves())
+
+
 class AnalysisService:
     async def analyze_position(self, db: AsyncSession, moves: list[str]) -> dict:
         board = chess.Board()
@@ -242,9 +1319,9 @@ class AnalysisService:
         eval_cp = int(static_board_eval_cp(board, chess.WHITE))
         best_move = None
 
-        if sf_path and os.path.exists(sf_path) and not board.is_game_over():
+        if sf_path and not board.is_game_over():  # resolve_stockfish_path уже проверил файл
             def _run_pos():
-                with chess.engine.SimpleEngine.popen_uci(sf_path) as eng:
+                with get_engine_pool(sf_path).acquire() as eng:
                     info = eng.analyse(board, chess.engine.Limit(depth=10, time=0.1))
                     if isinstance(info, list):
                         info = info[0]
@@ -254,8 +1331,8 @@ class AnalysisService:
 
             try:
                 eval_cp, best_move = await asyncio.to_thread(_run_pos)
-            except Exception:
-                pass
+            except EngineUnavailableError as exc:
+                logger.warning("Stockfish недоступен, отдаём статическую оценку: %s", exc)
 
         return {
             "fen": board.fen(),
@@ -269,15 +1346,22 @@ class AnalysisService:
         game = result.scalars().first()
         if not game or not game.pgn:
             raise LookupError(f"Партия {game_id} или её PGN не найдены")
+        ensure_game_finished(game)
 
         # Если анализ уже сохранён в БД и не запрошен пересчёт — отдаём мгновенно из кэша
         cached_raw = getattr(game, "analysis_json", None)
         if cached_raw and not force:
             try:
                 cached_data = json.loads(cached_raw)
-                if isinstance(cached_data, dict) and "moves" in cached_data:
+                if (
+                        isinstance(cached_data, dict)
+                        and "moves" in cached_data
+                        and len(cached_data["moves"]) == _count_mainline_plies(game.pgn)
+                ):
                     cached_data["game_id"] = game_id
                     return cached_data
+                # Кэш не соответствует итоговому PGN (например, сохранён по незавершённой партии
+                # до запрета анализа идущих игр) — пересчитываем.
             except Exception:
                 pass
 
@@ -304,6 +1388,7 @@ FILE: src/services/anticheat.py
 
 import logging
 import math
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -316,6 +1401,34 @@ logger = logging.getLogger(__name__)
 MIN_MOVES_FOR_ANALYSIS = 5
 OPENING_MOVE_CUTOFF = 8
 CHEATER_TRUST_THRESHOLD = 30
+EVALUATED_MARKER_TTL_S = 90 * 24 * 60 * 60
+
+
+def trusted_premove(client_flag, server_elapsed_ms: int) -> bool:
+    """
+    Премув исключает ход из анализа ритма, поэтому флаг клиента принимаем, только если сервер
+    сам видит почти мгновенный ход. Иначе читер мог бы пометить премувом все ходы.
+    """
+    from src.core.config import settings
+
+    return bool(client_flag) and int(server_elapsed_ms) <= settings.AC_PREMOVE_MAX_ELAPSED_MS
+
+
+async def _claim_first_evaluation(game_id: int) -> bool:
+    """
+    True, если партия оценивается впервые. Отметка хранится в Redis (SET NX), а не в памяти
+    процесса: после рестарта или на другом воркере штраф за ту же партию не начислится снова.
+    """
+    from src.db import redis as redis_module
+
+    try:
+        claimed = await redis_module.redis_client.set(
+            f"anticheat:evaluated:{int(game_id)}", "1", nx=True, ex=EVALUATED_MARKER_TTL_S,
+        )
+        return bool(claimed)
+    except Exception as exc:
+        logger.warning("Anti-cheat idempotency marker unavailable for game %s: %s", game_id, exc)
+        return False  # без отметки не штрафуем: повторный штраф хуже пропущенного
 
 
 def calculate_blur_ratio(moves: list[Move]) -> float:
@@ -369,24 +1482,30 @@ def compute_telemetry_penalty(moves: list[Move]) -> dict:
     blur_ratio = calculate_blur_ratio(moves)
     timing_cv, mean_time_ms = calculate_timing_cv(moves)
 
-    penalty = 0
-
-    if blur_ratio >= 0.75:
-        penalty += 45
-    elif blur_ratio >= 0.50:
-        penalty += 25
-    elif blur_ratio >= 0.35:
-        penalty += 12
-
+    # Основной сигнал — ритм ходов, который измеряет сервер (time_taken_ms — серверное время
+    # между ходами). Потеря фокуса окна сообщается клиентом и подделывается в обе стороны,
+    # поэтому сама по себе не штрафует (иначе страдают честные игроки со вторым монитором)
+    # и лишь усиливает штраф, когда серверный ритм уже похож на движок.
+    timing_penalty = 0
     is_engine_pacing = 1500.0 <= mean_time_ms <= 15000.0
     if is_engine_pacing:
         if timing_cv <= 0.12:
-            penalty += 40
+            timing_penalty = 40
         elif timing_cv <= 0.22:
-            penalty += 22
+            timing_penalty = 22
 
-    if blur_ratio >= 0.65 and is_engine_pacing and timing_cv <= 0.20:
-        penalty += 15
+    blur_penalty = 0
+    if timing_penalty > 0:
+        if blur_ratio >= 0.75:
+            blur_penalty = 45
+        elif blur_ratio >= 0.50:
+            blur_penalty = 25
+        elif blur_ratio >= 0.35:
+            blur_penalty = 12
+        if blur_ratio >= 0.65 and timing_cv <= 0.20:
+            blur_penalty += 15
+
+    penalty = timing_penalty + blur_penalty
 
     return {
         "penalty": penalty,
@@ -396,10 +1515,11 @@ def compute_telemetry_penalty(moves: list[Move]) -> dict:
     }
 
 
-async def evaluate_game_telemetry(db: AsyncSession, game_id: int) -> dict[int, dict]:
+async def evaluate_game_telemetry(db: AsyncSession, game_id: int, force: bool = False) -> dict[int, dict]:
     """
     Анализирует телеметрию завершённой партии для обоих игроков,
     снижает user.trust_factor при аномалиях и выставляет is_cheater = True при trust_factor < 30.
+    Идемпотентна по game_id (повторный вызов для той же партии не штрафует игрока дважды).
     """
     game = await db.get(Game, game_id)
     if not game:
@@ -412,6 +1532,8 @@ async def evaluate_game_telemetry(db: AsyncSession, game_id: int) -> dict[int, d
     if not all_moves:
         return {}
 
+    already_evaluated = not force and not await _claim_first_evaluation(game_id)
+
     moves_by_player: dict[int, list[Move]] = {
         game.white_player_id: [],
         game.black_player_id: [],
@@ -423,7 +1545,7 @@ async def evaluate_game_telemetry(db: AsyncSession, game_id: int) -> dict[int, d
 
     for player_id, player_moves in moves_by_player.items():
         metrics = compute_telemetry_penalty(player_moves)
-        penalty = metrics["penalty"]
+        penalty = 0 if already_evaluated else metrics["penalty"]
 
         user = await db.get(User, player_id)
         if not user:
@@ -503,6 +1625,7 @@ FILE: src/services/bots/anderssen.py
 # --- FILE: src/services/bots/anderssen.py ---
 
 import chess
+
 from src.services.bots.base import (
     CENTER_SQUARES,
     EXTENDED_CENTER,
@@ -593,1381 +1716,5 @@ class AnderssenBot(HistoricalBot):
 
 anderssen_bot = AnderssenBot()
 
-========================================================================================
-FILE: src/services/bots/base.py
-========================================================================================
-# --- FILE: src/services/bots/base.py ---
-
-import json
-import logging
-import os
-import random
-import shutil
-import sys
-import time
-from pathlib import Path
-import chess
-import chess.engine
-
-logger = logging.getLogger(__name__)
-
-BOTS_DIR = Path(__file__).resolve().parent
-BOOKS_DIR = BOTS_DIR / "books"
-PROJECT_ROOT = BOTS_DIR.parent.parent.parent
-
-CENTER_SQUARES = {chess.D4, chess.E4, chess.D5, chess.E5}
-EXTENDED_CENTER = {
-    chess.C4, chess.D4, chess.E4, chess.F4,
-    chess.C5, chess.D5, chess.E5, chess.F5,
-}
-
-PIECE_VALUES = {
-    chess.PAWN: 100,
-    chess.KNIGHT: 320,
-    chess.BISHOP: 330,
-    chess.ROOK: 500,
-    chess.QUEEN: 900,
-    chess.KING: 20000,
-}
-
-
-def normalize_fen_key(board: chess.Board) -> str:
-    """Нормализует FEN до первых 3 полей (позиция, очередь хода, права рокировки)."""
-    parts = board.fen().split(" ")
-    return f"{parts[0]} {parts[1]} {parts[2]} -"
-
-
-def resolve_stockfish_path(custom_path: str | None = None) -> str | None:
-    """Ищет бинарник Stockfish в локальной папке bin/ проекта, системном PATH или стандартных путях Linux."""
-    if custom_path and os.path.exists(custom_path):
-        return custom_path
-
-    for binary_name in ("stockfish.exe", "stockfish"):
-        candidate = PROJECT_ROOT / "bin" / binary_name
-        if candidate.exists() and candidate.is_file():
-            return str(candidate)
-
-    which_path = shutil.which("stockfish")
-    if which_path:
-        return which_path
-
-    for linux_path in ("/usr/games/stockfish", "/usr/bin/stockfish", "/usr/local/bin/stockfish"):
-        if os.path.exists(linux_path) and os.path.isfile(linux_path):
-            return linux_path
-
-    return None
-
-
-def load_bot_opening_book(
-        bot_id: str,
-        fallback_book: dict[str, list[tuple[str, int, str]]] | None = None,
-) -> dict[str, list[tuple[str, int, str]]]:
-    """
-    Загружает дебютную книгу бота из src/services/bots/books/{bot_id}.json
-    и аккуратно объединяет её с фирменными дебютными линиями fallback_book.
-    """
-    book: dict[str, list[tuple[str, int, str]]] = {}
-    if fallback_book:
-        for k, v in fallback_book.items():
-            book[k] = list(v)
-
-    candidates = [
-        BOOKS_DIR / f"{bot_id}.json",
-        PROJECT_ROOT / f"{bot_id}_generated_book.json",
-    ]
-
-    for json_path in candidates:
-        if json_path.exists():
-            try:
-                with open(json_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                if isinstance(data, dict) and data:
-                    for fen_key, moves in data.items():
-                        parsed_moves = [
-                            (str(m[0]), int(m[1]), str(m[2]))
-                            for m in moves
-                            if len(m) >= 3 and str(m[0]) != "0000"
-                        ]
-                        if not parsed_moves:
-                            continue
-
-                        if fen_key in book:
-                            existing_ucis = {m[0] for m in parsed_moves}
-                            for fb_move in book[fen_key]:
-                                if fb_move[0] not in existing_ucis:
-                                    parsed_moves.append(fb_move)
-                        book[fen_key] = parsed_moves
-                    break
-            except Exception as exc:
-                logger.warning("Не удалось загрузить книгу %s: %s", json_path, exc)
-
-    return book
-
-
-def _simulate_human_thinking_time(
-        board: chess.Board,
-        is_book_move: bool,
-        bot_time_left_ms: int = 180000,
-        base_time_ms: int = 180000,
-) -> None:
-    """
-    Имитирует человеческое время раздумий шахматиста.
-    При запуске тестов (pytest) задержка автоматически отключается.
-    """
-    if "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST"):
-        return
-
-    piece_count = len(board.piece_map())
-    move_number = board.fullmove_number
-
-    is_opening = move_number <= 10 and piece_count >= 28
-    is_endgame = piece_count <= 12
-
-    if is_opening:
-        base_delay = random.uniform(0.8, 1.8) if is_book_move else random.uniform(3.5, 8.0)
-    elif is_endgame:
-        base_delay = random.uniform(0.8, 2.0) if piece_count <= 6 else random.uniform(4.0, 12.0)
-    else:
-        legal_moves_count = board.legal_moves.count()
-        complexity_mult = 0.7 + (min(legal_moves_count, 45) / 45.0) * 0.8
-        base_delay = random.uniform(4.0, 14.0) * complexity_mult
-        if random.random() < 0.08 and base_time_ms > 60000:
-            base_delay = random.uniform(18.0, 35.0)
-
-    control_scale_factor = max(0.3, min(3.0, base_time_ms / 300000.0))
-    if base_time_ms > 600000:
-        control_scale_factor = 1.5 + (base_time_ms / 1800000.0) * 1.5
-
-    adjusted_delay = base_delay * control_scale_factor
-
-    if bot_time_left_ms < 30000:
-        time_ratio = bot_time_left_ms / 30000.0
-        adjusted_delay = max(0.5, adjusted_delay * time_ratio)
-
-    noise = random.gauss(0, 0.3) * adjusted_delay
-    final_thinking_time = max(0.6, adjusted_delay + noise)
-    max_allowed = max(0.5, (bot_time_left_ms - 2000) / 1000.0)
-    time.sleep(min(final_thinking_time, max_allowed))
-
-
-def static_board_eval_cp(board: chess.Board, perspective: chess.Color) -> float:
-    """Базовая статическая оценка позиции в сантипешках (fallback при отсутствии Stockfish)."""
-    if board.is_checkmate():
-        return -100000.0 if board.turn == perspective else 100000.0
-    if board.is_stalemate() or board.is_insufficient_material():
-        return 0.0
-
-    score = 0.0
-    for sq in chess.SQUARES:
-        p = board.piece_at(sq)
-        if not p:
-            continue
-        val = float(PIECE_VALUES[p.piece_type])
-        if sq in CENTER_SQUARES:
-            val += 25.0 if p.piece_type == chess.PAWN else 15.0
-        elif sq in EXTENDED_CENTER:
-            val += 15.0 if p.piece_type == chess.PAWN else 8.0
-
-        if p.color == perspective:
-            score += val
-        else:
-            score -= val
-    return score
-
-
-def analyse_with_stockfish(
-        board: chess.Board,
-        engine_path: str | None,
-        skill_level: int = 7,
-        uci_elo: int | None = 1850,
-        depth: int = 6,
-        time_limit: float = 0.25,
-        multipv: int = 6,
-) -> dict[chess.Move, float]:
-    """Запрашивает оценку топ-ходов у движка Stockfish."""
-    if not engine_path or not os.path.exists(engine_path):
-        return {}
-
-    scores: dict[chess.Move, float] = {}
-    try:
-        with chess.engine.SimpleEngine.popen_uci(engine_path) as engine:
-            options: dict[str, int | bool] = {"Skill Level": skill_level}
-            if uci_elo is not None:
-                if "UCI_LimitStrength" in engine.options:
-                    options["UCI_LimitStrength"] = True
-                if "UCI_Elo" in engine.options:
-                    min_elo = getattr(engine.options["UCI_Elo"], "min", 1320) or 1320
-                    max_elo = getattr(engine.options["UCI_Elo"], "max", 3190) or 3190
-                    options["UCI_Elo"] = max(min_elo, min(max_elo, uci_elo))
-            engine.configure(options)
-
-            infos = engine.analyse(
-                board,
-                chess.engine.Limit(depth=depth, time=time_limit),
-                multipv=min(multipv, board.legal_moves.count()),
-            )
-            if isinstance(infos, dict):
-                infos = [infos]
-            for info in infos:
-                pv = info.get("pv")
-                if pv:
-                    mv = pv[0]
-                    cp = info["score"].pov(board.turn).score(mate_score=100000)
-                    if cp is not None:
-                        scores[mv] = float(cp)
-    except Exception as exc:
-        logger.warning("Ошибка запуска Stockfish (%s): %s", engine_path, exc)
-        return {}
-
-    return scores
-
-
-class HistoricalBot:
-    """
-    Базовый класс исторической шахматной персоны.
-    Наследники задают только параметры силы, дебютную книгу и функцию стилевого бонуса.
-    """
-
-    bot_id: str = "base"
-    engine_source_name: str = "historical_style_engine"
-    default_comment: str = "Классический позиционный ход."
-    blunder_guard_cp: float = 130.0
-    jitter_range: float = 8.0
-    multipv: int = 6
-    opening_book: dict[str, list[tuple[str, int, str]]] = {}
-
-    def __init__(
-            self,
-            stockfish_path: str | None = None,
-            skill_level: int = 7,
-            uci_elo: int = 1850,
-            search_depth: int = 6,
-    ):
-        self._explicit_stockfish_path = stockfish_path
-        self.stockfish_path = resolve_stockfish_path(stockfish_path)
-        self.skill_level = skill_level
-        self.uci_elo = uci_elo
-        self.search_depth = search_depth
-
-    def _get_active_engine_path(self) -> str | None:
-        if self._explicit_stockfish_path is not None:
-            return self._explicit_stockfish_path if os.path.exists(self._explicit_stockfish_path) else None
-        if self.stockfish_path and os.path.exists(self.stockfish_path):
-            return self.stockfish_path
-        self.stockfish_path = resolve_stockfish_path()
-        return self.stockfish_path
-
-    def evaluate_style_bonus(self, board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-        """Переопределяется в подклассах для придания уникального шахматного стиля."""
-        return 0.0, None
-
-    def choose_move(self, fen: str) -> dict:
-        board = chess.Board(fen)
-        if board.is_game_over():
-            raise ValueError("Game is already over")
-
-        # 1. Поиск хода в дебютной книге чемпиона
-        fen_key = normalize_fen_key(board)
-        if fen_key in self.opening_book:
-            candidates = self.opening_book[fen_key]
-            valid_book_moves = []
-            for item in candidates:
-                uci_str, weight, comment = item[0], int(item[1]), item[2]
-                if uci_str == "0000":
-                    continue
-                try:
-                    move = chess.Move.from_uci(uci_str)
-                except ValueError:
-                    continue
-                if move in board.legal_moves:
-                    valid_book_moves.append((move, max(weight, 1), comment))
-
-            if valid_book_moves:
-                _simulate_human_thinking_time(board, is_book_move=True)
-                moves, weights, comments = zip(*valid_book_moves)
-                idx = random.choices(range(len(moves)), weights=weights, k=1)[0]
-                chosen_move = moves[idx]
-                san = board.san(chosen_move)
-                board.push(chosen_move)
-                return {
-                    "uci": chosen_move.uci(),
-                    "san": san,
-                    "fen_after": board.fen(),
-                    "source": "opening_book",
-                    "comment": comments[idx],
-                }
-
-        _simulate_human_thinking_time(board, is_book_move=False)
-
-        # 2. Тактический расчёт Stockfish
-        engine_path = self._get_active_engine_path() if self.stockfish_path is not None else None
-        base_scores = analyse_with_stockfish(
-            board=board,
-            engine_path=engine_path,
-            skill_level=self.skill_level,
-            uci_elo=self.uci_elo,
-            depth=self.search_depth,
-            time_limit=0.25,
-            multipv=self.multipv,
-        )
-
-        used_stockfish = bool(base_scores)
-        # Fallback-расчёт при отсутствии бинарника Stockfish
-        if not base_scores:
-            us = board.turn
-            for mv in board.legal_moves:
-                b1 = board.copy()
-                b1.push(mv)
-                if b1.is_checkmate():
-                    base_scores[mv] = 100000.0
-                    continue
-                worst_reply_score = 100000.0
-                for reply in b1.legal_moves:
-                    b2 = b1.copy()
-                    b2.push(reply)
-                    s = static_board_eval_cp(b2, us)
-                    if s < worst_reply_score:
-                        worst_reply_score = s
-                base_scores[mv] = worst_reply_score if b1.legal_moves.count() > 0 else 0.0
-
-        # 3. Коридор допустимой уступки + индивидуальный стилевой бонус чемпиона
-        max_tactical_cp = max(base_scores.values())
-        candidate_scores = {
-                               mv: cp for mv, cp in base_scores.items()
-                               if cp >= max_tactical_cp - self.blunder_guard_cp
-                           } or base_scores
-
-        best_move = None
-        best_total_score = -float("inf")
-        best_comment = None
-
-        for mv, tactical_cp in candidate_scores.items():
-            style_bonus, note = self.evaluate_style_bonus(board, mv)
-            jitter = random.uniform(-self.jitter_range, self.jitter_range)
-            total_score = tactical_cp + style_bonus + jitter
-
-            if total_score > best_total_score:
-                best_total_score = total_score
-                best_move = mv
-                best_comment = note
-
-        if best_move is None:
-            best_move = next(iter(board.legal_moves))
-
-        san = board.san(best_move)
-        board.push(best_move)
-
-        engine_backend = "stockfish" if used_stockfish else "fallback_minimax"
-        logger.info("Bot %s move %s via %s [%s] (engine=%s)", self.bot_id, san, self.engine_source_name, engine_backend, engine_path)
-        return {
-            "uci": best_move.uci(),
-            "san": san,
-            "fen_after": board.fen(),
-            "source": self.engine_source_name,
-            "engine_backend": engine_backend,
-            "comment": best_comment or self.default_comment,
-        }
-
-========================================================================================
-FILE: src/services/bots/books/anderssen.json
-========================================================================================
-// [AUTO-SUMMARY: Большой JSON-файл (512 KiB, 2044 ключей). Показаны первые 3 записи. Для полного вывода запустите с --full-json]
-{
-  "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -": [
-    [
-      "e7e5",
-      89,
-      "Бриллиантовый гамбит Андерсена (встречалось в партиях: 371 раз(а))."
-    ],
-    [
-      "c7c5",
-      9,
-      "Бриллиантовый гамбит Андерсена (встречалось в партиях: 38 раз(а))."
-    ],
-    [
-      "e7e6",
-      1,
-      "Бриллиантовый гамбит Андерсена (встречалось в партиях: 2 раз(а))."
-    ],
-    [
-      "d7d5",
-      1,
-      "Бриллиантовый гамбит Андерсена (встречалось в партиях: 2 раз(а))."
-    ]
-  ],
-  "rnbqkbnr/pppp1ppp/8/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq -": [
-    [
-      "g8f6",
-      42,
-      "Бриллиантовый гамбит Андерсена (встречалось в партиях: 6 раз(а))."
-    ],
-    [
-      "b7b5",
-      35,
-      "Бриллиантовый гамбит Андерсена (встречалось в партиях: 5 раз(а))."
-    ],
-    [
-      "f8c5",
-      14,
-      "Бриллиантовый гамбит Андерсена (встречалось в партиях: 2 раз(а))."
-    ],
-    [
-      "f7f5",
-      7,
-      "Бриллиантовый гамбит Андерсена (встречалось в партиях: 1 раз(а))."
-    ]
-  ],
-  "rnbqkb1r/pppp1ppp/5n2/4p3/2B1P3/2N5/PPPP1PPP/R1BQK1NR b KQkq -": [
-    [
-      "f8c5",
-      100,
-      "Бриллиантовый гамбит Андерсена (встречалось в партиях: 2 раз(а))."
-    ]
-  ]
-}
-// ... ещё 2041 записей скрыто ...
-
-========================================================================================
-FILE: src/services/bots/books/labourdonnais.json
-========================================================================================
-// [AUTO-SUMMARY: Большой JSON-файл (73 KiB, 250 ключей). Показаны первые 3 записи. Для полного вывода запустите с --full-json]
-{
-  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
-    [
-      "e2e4",
-      81,
-      "Любимый ход Лабурдонне в атаке (встречалось в партиях: 82 раз(а))."
-    ],
-    [
-      "d2d4",
-      16,
-      "Любимый ход Лабурдонне в атаке (встречалось в партиях: 17 раз(а))."
-    ],
-    [
-      "f2f4",
-      1,
-      "Любимый ход Лабурдонне в атаке (встречалось в партиях: 2 раз(а))."
-    ]
-  ],
-  "rnbqkbnr/pppppppp/8/8/3P4/8/PPP1PPPP/RNBQKBNR b KQkq -": [
-    [
-      "d7d5",
-      100,
-      "Любимый ход Лабурдонне в атаке (встречалось в партиях: 17 раз(а))."
-    ]
-  ],
-  "rnbqkbnr/ppp1pppp/8/3p4/3P4/8/PPP1PPPP/RNBQKBNR w KQkq -": [
-    [
-      "c2c4",
-      94,
-      "Любимый ход Лабурдонне в атаке (встречалось в партиях: 16 раз(а))."
-    ],
-    [
-      "c1f4",
-      5,
-      "Любимый ход Лабурдонне в атаке (встречалось в партиях: 1 раз(а))."
-    ]
-  ]
-}
-// ... ещё 247 записей скрыто ...
-
-========================================================================================
-FILE: src/services/bots/books/morphy.json
-========================================================================================
-// [AUTO-SUMMARY: Большой JSON-файл (365 KiB, 1560 ключей). Показаны первые 3 записи. Для полного вывода запустите с --full-json]
-{
-  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
-    [
-      "e2e4",
-      100,
-      "Исторический ход Пола Морфи (встречалось в партиях: 169 раз(а))."
-    ]
-  ],
-  "rnbqkbnr/pppp1ppp/8/4p3/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": [
-    [
-      "g1f3",
-      68,
-      "Исторический ход Пола Морфи (встречалось в партиях: 93 раз(а))."
-    ],
-    [
-      "f2f4",
-      25,
-      "Исторический ход Пола Морфи (встречалось в партиях: 34 раз(а))."
-    ],
-    [
-      "f1c4",
-      3,
-      "Исторический ход Пола Морфи (встречалось в партиях: 5 раз(а))."
-    ],
-    [
-      "c2c3",
-      1,
-      "Исторический ход Пола Морфи (встречалось в партиях: 2 раз(а))."
-    ],
-    [
-      "h2h3",
-      1,
-      "Исторический ход Пола Морфи (встречалось в партиях: 1 раз(а))."
-    ]
-  ],
-  "rnbqkbnr/pppp1ppp/8/8/4Pp2/8/PPPP2PP/RNBQKBNR w KQkq -": [
-    [
-      "g1f3",
-      95,
-      "Исторический ход Пола Морфи (встречалось в партиях: 21 раз(а))."
-    ],
-    [
-      "f1c4",
-      4,
-      "Исторический ход Пола Морфи (встречалось в партиях: 1 раз(а))."
-    ]
-  ]
-}
-// ... ещё 1557 записей скрыто ...
-
-========================================================================================
-FILE: src/services/bots/books/paulsen.json
-========================================================================================
-// [AUTO-SUMMARY: Большой JSON-файл (473 KiB, 2004 ключей). Показаны первые 3 записи. Для полного вывода запустите с --full-json]
-{
-  "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -": [
-    [
-      "e7e5",
-      56,
-      "Глубокая новинка Паульсена (встречалось в партиях: 116 раз(а))."
-    ],
-    [
-      "c7c5",
-      32,
-      "Глубокая новинка Паульсена (встречалось в партиях: 66 раз(а))."
-    ],
-    [
-      "e7e6",
-      5,
-      "Глубокая новинка Паульсена (встречалось в партиях: 11 раз(а))."
-    ],
-    [
-      "d7d6",
-      2,
-      "Глубокая новинка Паульсена (встречалось в партиях: 5 раз(а))."
-    ],
-    [
-      "b7b6",
-      1,
-      "Глубокая новинка Паульсена (встречалось в партиях: 3 раз(а))."
-    ],
-    [
-      "g7g6",
-      1,
-      "Глубокая новинка Паульсена (встречалось в партиях: 3 раз(а))."
-    ]
-  ],
-  "rnbqkbnr/pppp1ppp/8/4p3/3PP3/8/PPP2PPP/RNBQKBNR b KQkq -": [
-    [
-      "e5d4",
-      100,
-      "Глубокая новинка Паульсена (встречалось в партиях: 3 раз(а))."
-    ]
-  ],
-  "rnbqkbnr/pppp1ppp/8/8/2BpP3/8/PPP2PPP/RNBQK1NR b KQkq -": [
-    [
-      "g8f6",
-      100,
-      "Глубокая новинка Паульсена (встречалось в партиях: 2 раз(а))."
-    ]
-  ]
-}
-// ... ещё 2001 записей скрыто ...
-
-========================================================================================
-FILE: src/services/bots/books/philidor.json
-========================================================================================
-// [AUTO-SUMMARY: Большой JSON-файл (58 KiB, 244 ключей). Показаны первые 3 записи. Для полного вывода запустите с --full-json]
-{
-  "rnbqkbnr/ppppp1pp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
-    [
-      "e2e4",
-      96,
-      "Исторический выбор Филидора (встречалось в партиях: 24 раз(а))."
-    ],
-    [
-      "d2d4",
-      4,
-      "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
-    ]
-  ],
-  "rnbqkbnr/ppppp1pp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -": [
-    [
-      "g8h6",
-      45,
-      "Исторический выбор Филидора (встречалось в партиях: 5 раз(а))."
-    ],
-    [
-      "e7e6",
-      27,
-      "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."
-    ],
-    [
-      "c7c5",
-      27,
-      "Исторический выбор Филидора (встречалось в партиях: 3 раз(а))."
-    ]
-  ],
-  "rnbqkbnr/pppp2pp/4p3/8/4P3/8/PPPP1PPP/RNBQKBNR w KQkq -": [
-    [
-      "d2d4",
-      66,
-      "Исторический выбор Филидора (встречалось в партиях: 2 раз(а))."
-    ],
-    [
-      "f1c4",
-      33,
-      "Исторический выбор Филидора (встречалось в партиях: 1 раз(а))."
-    ]
-  ]
-}
-// ... ещё 241 записей скрыто ...
-
-========================================================================================
-FILE: src/services/bots/books/staunton.json
-========================================================================================
-// [AUTO-SUMMARY: Большой JSON-файл (510 KiB, 2094 ключей). Показаны первые 3 записи. Для полного вывода запустите с --full-json]
-{
-  "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
-    [
-      "e2e4",
-      82,
-      "Классический выбор Стаунтона (встречалось в партиях: 146 раз(а))."
-    ],
-    [
-      "c2c4",
-      7,
-      "Классический выбор Стаунтона (встречалось в партиях: 14 раз(а))."
-    ],
-    [
-      "d2d4",
-      5,
-      "Классический выбор Стаунтона (встречалось в партиях: 9 раз(а))."
-    ],
-    [
-      "f2f4",
-      2,
-      "Классический выбор Стаунтона (встречалось в партиях: 5 раз(а))."
-    ],
-    [
-      "b1c3",
-      1,
-      "Классический выбор Стаунтона (встречалось в партиях: 1 раз(а))."
-    ],
-    [
-      "g1f3",
-      1,
-      "Классический выбор Стаунтона (встречалось в партиях: 1 раз(а))."
-    ]
-  ],
-  "rnbqkbnr/ppp1pppp/8/3p4/5P2/8/PPPPP1PP/RNBQKBNR w KQkq -": [
-    [
-      "g1f3",
-      66,
-      "Классический выбор Стаунтона (встречалось в партиях: 2 раз(а))."
-    ],
-    [
-      "d2d4",
-      33,
-      "Классический выбор Стаунтона (встречалось в партиях: 1 раз(а))."
-    ]
-  ],
-  "rnbqkbnr/pp2pppp/8/2pp4/5P2/5N2/PPPPP1PP/RNBQKB1R w KQkq -": [
-    [
-      "e2e3",
-      100,
-      "Классический выбор Стаунтона (встречалось в партиях: 1 раз(а))."
-    ]
-  ]
-}
-// ... ещё 2091 записей скрыто ...
-
-========================================================================================
-FILE: src/services/bots/books/zukertort.json
-========================================================================================
-// [AUTO-SUMMARY: Большой JSON-файл (551 KiB, 2078 ключей). Показаны первые 3 записи. Для полного вывода запустите с --full-json]
-{
-  "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -": [
-    [
-      "e7e5",
-      97,
-      "Универсальный дебютный выбор Цукерторта (встречалось в партиях: 255 раз(а))."
-    ],
-    [
-      "c7c5",
-      1,
-      "Универсальный дебютный выбор Цукерторта (встречалось в партиях: 5 раз(а))."
-    ],
-    [
-      "b7b6",
-      1,
-      "Универсальный дебютный выбор Цукерторта (встречалось в партиях: 2 раз(а))."
-    ]
-  ],
-  "rnbqkbnr/pppp1ppp/8/4p3/2B1P3/8/PPPP1PPP/RNBQK1NR b KQkq -": [
-    [
-      "g8f6",
-      83,
-      "Универсальный дебютный выбор Цукерторта (встречалось в партиях: 5 раз(а))."
-    ],
-    [
-      "f7f5",
-      16,
-      "Универсальный дебютный выбор Цукерторта (встречалось в партиях: 1 раз(а))."
-    ]
-  ],
-  "rnbqkb1r/pppp1ppp/5n2/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq -": [
-    [
-      "f6e4",
-      100,
-      "Универсальный дебютный выбор Цукерторта (встречалось в партиях: 1 раз(а))."
-    ]
-  ]
-}
-// ... ещё 2075 записей скрыто ...
-
-========================================================================================
-FILE: src/services/bots/labourdonnais.py
-========================================================================================
-# --- FILE: src/services/bots/labourdonnais.py ---
-
-import chess
-from src.services.bots.base import (
-    CENTER_SQUARES,
-    EXTENDED_CENTER,
-    HistoricalBot,
-    load_bot_opening_book,
-)
-
-LABOURDONNAIS_BLUNDER_GUARD_CP = 200.0
-
-DEFAULT_LABOURDONNAIS_BOOK: dict[str, list[tuple[str, int, str]]] = {
-    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
-        ("e2e4", 81, "Любимый ход Лабурдонне в атаке: открываем линии для фигур!"),
-        ("d2d4", 16, "Ферзевый гамбит в стиле матчей с Мак-Доннеллом."),
-        ("f2f4", 3, "Дебют Берда — фланговый зажим центра."),
-    ],
-    "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq -": [
-        ("b2b4", 86, "Гамбит Эванса! Жертвуем пешку ради стремительного захвата центра!"),
-        ("c2c3", 14, "Тихая итальянская партия с подготовкой d2-d4."),
-    ],
-}
-
-LABOURDONNAIS_OPENING_BOOK = load_bot_opening_book("labourdonnais", DEFAULT_LABOURDONNAIS_BOOK)
-
-
-def evaluate_labourdonnais_style_bonus(board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-    piece = board_before.piece_at(move.from_square)
-    if not piece:
-        return 0.0, None
-
-    bonus = 0.0
-    note = None
-
-    if board_before.is_castling(move):
-        bonus += 38.0
-        note = "Рокировка! Вводим ладью в бой и готовим решительный штурм."
-
-    if piece.piece_type in {chess.KNIGHT, chess.BISHOP} and board_before.fullmove_number <= 12:
-        back_rank = 0 if board_before.turn == chess.WHITE else 7
-        if chess.square_rank(move.from_square) == back_rank:
-            bonus += 25.0
-            note = "Быстро выводим фигуры в бой — каждый темп на счету!"
-        if move.to_square in EXTENDED_CENTER:
-            bonus += 18.0
-            note = "Фигуры устремляются в центр для комбинационной атаки!"
-
-    if move.to_square in CENTER_SQUARES:
-        bonus += 22.0
-        if not note:
-            note = "Захватываем инициативу в центре в духе французской романтической школы!"
-
-    if board_before.gives_check(move):
-        bonus += 24.0
-        note = "Шах! Не даём сопернику передышки!"
-    elif board_before.is_capture(move):
-        bonus += 14.0
-
-    return bonus, note
-
-
-class LabourdonnaisBot(HistoricalBot):
-    """Луи-Шарль Маэ де Лабурдонне (~1650 UCI Эло, depth=5, skill=5)."""
-
-    bot_id = "labourdonnais"
-    engine_source_name = "labourdonnais_style_engine"
-    default_comment = "Атака и комбинационный натиск в стиле «Кафе де ля Режанс»!"
-    blunder_guard_cp = LABOURDONNAIS_BLUNDER_GUARD_CP
-    jitter_range = 12.0
-    multipv = 8
-    opening_book = LABOURDONNAIS_OPENING_BOOK
-
-    def __init__(
-            self,
-            stockfish_path: str | None = None,
-            skill_level: int = 5,
-            uci_elo: int = 1650,
-            search_depth: int = 5,
-    ):
-        super().__init__(stockfish_path, skill_level, uci_elo, search_depth)
-
-    def evaluate_style_bonus(self, board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-        return evaluate_labourdonnais_style_bonus(board_before, move)
-
-
-labourdonnais_bot = LabourdonnaisBot()
-
-========================================================================================
-FILE: src/services/bots/morphy.py
-========================================================================================
-# --- FILE: src/services/bots/morphy.py ---
-
-import chess
-from src.services.bots.base import (
-    CENTER_SQUARES,
-    EXTENDED_CENTER,
-    HistoricalBot,
-    load_bot_opening_book,
-)
-
-MORPHY_BLUNDER_GUARD_CP = 150.0
-
-DEFAULT_MORPHY_BOOK: dict[str, list[tuple[str, int, str]]] = {
-    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
-        ("e2e4", 94, "Открытая игра 1. e4! — основа шахматной эстетики Пола Морфи."),
-        ("d2d4", 6, "Закрытый дебют для разнообразия матчевой борьбы."),
-    ],
-    "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq -": [
-        ("b2b4", 82, "Гамбит Эванса! Жертвуем пешку ради выигрыша темпа и захвата центра c3-d4!"),
-        ("c2c3", 12, "Подготовка мощного пешечного прорыва d2-d4."),
-        ("e1g1", 6, "Немедленная рокировка для скорейшего ввода ладьи по линии «e»."),
-    ],
-    "rnbqkbnr/ppp2ppp/3p4/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R w KQkq -": [
-        ("d2d4", 100, "Как в Оперной партии 1858 года: немедленно вскрываем центр ходом d2-d4!"),
-    ],
-}
-
-MORPHY_OPENING_BOOK = load_bot_opening_book("morphy", DEFAULT_MORPHY_BOOK)
-
-
-def evaluate_morphy_style_bonus(board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-    piece = board_before.piece_at(move.from_square)
-    if not piece:
-        return 0.0, None
-
-    bonus = 0.0
-    note = None
-
-    if board_before.is_castling(move):
-        bonus += 45.0
-        note = "Рокировка! Уводим короля в безопасность и подключаем ладью к борьбе за открытые линии."
-
-    if piece.piece_type in {chess.KNIGHT, chess.BISHOP} and board_before.fullmove_number <= 14:
-        back_rank = 0 if board_before.turn == chess.WHITE else 7
-        if chess.square_rank(move.from_square) == back_rank:
-            bonus += 32.0
-            note = "Каждая фигура должна вступить в бой! Быстрое развитие — секрет сокрушительной атаки."
-        if move.to_square in EXTENDED_CENTER:
-            bonus += 18.0
-            if not note:
-                note = "Размещаем фигуры в центре на идеальных ударных позициях!"
-
-    if piece.piece_type == chess.ROOK:
-        to_file = chess.square_file(move.to_square)
-        if to_file in (3, 4):
-            bonus += 26.0
-            note = "Ладья занимает центральную вертикаль для решающего вторжения!"
-
-    if move.to_square in CENTER_SQUARES:
-        bonus += 24.0
-        if not note:
-            note = "Вскрываем центр, чтобы дать простор нашим слонам и ладьям!"
-
-    if board_before.gives_check(move):
-        bonus += 28.0
-        note = "Шах с выигрышем темпа! Не даём сопернику времени перевести дух."
-    elif board_before.is_capture(move):
-        bonus += 16.0
-        if not note:
-            note = "Устраняем защитника и вскрываем линии для фигурной атаки!"
-
-    return bonus, note
-
-
-class MorphyBot(HistoricalBot):
-    """Пол Морфи (~1850 UCI Эло, depth=6, skill=8)."""
-
-    bot_id = "morphy"
-    engine_source_name = "morphy_style_engine"
-    default_comment = "Гармоничная мобилизация всех сил и давление по открытым линиям в стиле Пола Морфи!"
-    blunder_guard_cp = MORPHY_BLUNDER_GUARD_CP
-    jitter_range = 8.0
-    multipv = 8
-    opening_book = MORPHY_OPENING_BOOK
-
-    def __init__(
-            self,
-            stockfish_path: str | None = None,
-            skill_level: int = 8,
-            uci_elo: int = 1850,
-            search_depth: int = 6,
-    ):
-        super().__init__(stockfish_path, skill_level, uci_elo, search_depth)
-
-    def evaluate_style_bonus(self, board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-        return evaluate_morphy_style_bonus(board_before, move)
-
-
-morphy_bot = MorphyBot()
-
-========================================================================================
-FILE: src/services/bots/paulsen.py
-========================================================================================
-# --- FILE: src/services/bots/paulsen.py ---
-
-import chess
-from src.services.bots.base import (
-    CENTER_SQUARES,
-    EXTENDED_CENTER,
-    HistoricalBot,
-    load_bot_opening_book,
-)
-
-PAULSEN_BLUNDER_GUARD_CP = 110.0
-
-DEFAULT_PAULSEN_BOOK: dict[str, list[tuple[str, int, str]]] = {
-    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
-        ("e2e4", 90, "Открытое начало с переходом в венскую или шотландскую систему Паульсена."),
-        ("d2d4", 6, "Позиционная игра ферзевой пешкой."),
-        ("c2c4", 4, "Фланговое развитие с гибким контролем центра."),
-    ],
-    "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -": [
-        ("c7c5", 48, "Сицилианская защита (система Паульсена) — гибкая пружина для контратаки!"),
-        ("e7e5", 38, "Классический ответ 1...e5."),
-        ("e7e6", 10, "Французская защита."),
-        ("d7d6", 4, "Гипермодернистская защита Пирца-Уфимцева, предвосхищённая Паульсеном!"),
-    ],
-}
-
-PAULSEN_OPENING_BOOK = load_bot_opening_book("paulsen", DEFAULT_PAULSEN_BOOK)
-
-
-def evaluate_paulsen_style_bonus(board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-    piece = board_before.piece_at(move.from_square)
-    if not piece:
-        return 0.0, None
-
-    bonus = 0.0
-    note = None
-
-    if board_before.is_castling(move):
-        bonus += 40.0
-        note = "Уводим короля в надёжное укрытие — фундамент глубокой защиты Паульсена."
-
-    if piece.piece_type == chess.PAWN and board_before.fullmove_number <= 14:
-        if move.to_square in {chess.C5, chess.E6, chess.D6, chess.A6, chess.B6, chess.G6}:
-            bonus += 24.0
-            note = "Выстраиваем гибкую и неуязвимую оборонительную структуру по системе Паульсена!"
-        elif move.to_square in CENTER_SQUARES:
-            bonus += 20.0
-            note = "Укрепляем центральные устои позиции."
-
-    if piece.piece_type == chess.BISHOP:
-        if move.to_square in {chess.G2, chess.B2, chess.G7, chess.B7, chess.E2, chess.E7}:
-            bonus += 26.0
-            note = "Развиваем слона на дальнобойную позицию — два слона определят исход борьбы!"
-        elif move.to_square in EXTENDED_CENTER:
-            bonus += 18.0
-
-    if piece.piece_type == chess.KNIGHT and move.to_square in EXTENDED_CENTER:
-        bonus += 16.0
-        if not note:
-            note = "Гармоничная централизация коня."
-
-    if board_before.gives_check(move):
-        bonus += 18.0
-    elif board_before.is_capture(move):
-        bonus += 14.0
-
-    return bonus, note
-
-
-class PaulsenBot(HistoricalBot):
-    """Луи Паульсен (~1800 UCI Эло, depth=6, skill=8)."""
-
-    bot_id = "paulsen"
-    engine_source_name = "paulsen_style_engine"
-    default_comment = "Глубокий профилактический манёвр и укрепление позиции в стиле Луи Паульсена."
-    blunder_guard_cp = PAULSEN_BLUNDER_GUARD_CP
-    jitter_range = 6.0
-    multipv = 6
-    opening_book = PAULSEN_OPENING_BOOK
-
-    def __init__(
-            self,
-            stockfish_path: str | None = None,
-            skill_level: int = 8,
-            uci_elo: int = 1800,
-            search_depth: int = 6,
-    ):
-        super().__init__(stockfish_path, skill_level, uci_elo, search_depth)
-
-    def evaluate_style_bonus(self, board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-        return evaluate_paulsen_style_bonus(board_before, move)
-
-
-paulsen_bot = PaulsenBot()
-
-========================================================================================
-FILE: src/services/bots/philidor.py
-========================================================================================
-# --- FILE: src/services/bots/philidor.py ---
-
-import chess
-from src.services.bots.base import (
-    CENTER_SQUARES,
-    EXTENDED_CENTER,
-    PIECE_VALUES,
-    HistoricalBot,
-    analyse_with_stockfish,
-    load_bot_opening_book,
-    normalize_fen_key,
-    resolve_stockfish_path,
-    static_board_eval_cp,
-    _simulate_human_thinking_time,
-)
-
-PHILIDOR_BLUNDER_GUARD_CP = 120.0
-BLUNDER_GUARD_MARGIN_CP = PHILIDOR_BLUNDER_GUARD_CP
-
-DEFAULT_PHILIDOR_BOOK: dict[str, list[tuple[str, int, str]]] = {
-    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
-        ("e2e4", 92, "Пешка короля открывает путь слону и занимает центр (11 партий)."),
-        ("d2d4", 8, "Атака ферзевой пешкой с последующим c2-c4."),
-    ],
-    "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -": [
-        ("e7e5", 72, "Встретим пешку соперника в центре: e7-e5 (8 партий)."),
-        ("c7c5", 18, "Асимметричный фланговый ответ c7-c5 (3 партии)."),
-        ("e7e6", 10, "Сдержанное построение e7-e6, готовя удар d7-d5."),
-    ],
-    "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq -": [
-        ("d7d6", 100, "Моя фирменная защита (d7-d6)! Белые напрасно вывели коня на f3, заперев свою пешку f2."),
-    ],
-    "rnbqkbnr/ppp2ppp/3p4/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq -": [
-        ("f7f5", 65, "Контрудар f7-f5! Как я писал в «Анализе шахматной игры», перехватим инициативу пешками."),
-        ("e5d4", 35, "Разменяем центральную пешку, удерживая прочный редут на d6."),
-    ],
-    "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq -": [
-        ("c2c3", 100, "Сначала c2-c3! Конь никогда не должен становиться впереди пешки c."),
-    ],
-}
-
-PHILIDOR_OPENING_BOOK = load_bot_opening_book("philidor", DEFAULT_PHILIDOR_BOOK)
-# Гарантируем, что классическая защита Филидора 1.e4 e5 2.Nf3 d6 всегда имеет приоритет
-PHILIDOR_OPENING_BOOK["rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq -"] = [
-    ("d7d6", 100, "Моя фирменная защита (d7-d6)! Белые напрасно вывели коня на f3, заперев свою пешку f2."),
-]
-
-
-def _evaluate_pawn_structure(board: chess.Board, us: chess.Color) -> float:
-    our_pawns = board.pieces(chess.PAWN, us)
-    start_rank = 1 if us == chess.WHITE else 6
-    pawn_files = [chess.square_file(sq) for sq in our_pawns]
-
-    score = 0.0
-    for sq in our_pawns:
-        f = chess.square_file(sq)
-        r = chess.square_rank(sq)
-        if r != start_rank:
-            score += float(r if us == chess.WHITE else (7 - r)) * 3.0
-        if f < 7 and chess.square(f + 1, r) in our_pawns:
-            score += 15.0
-        support_rank = (r - 1) if us == chess.WHITE else (r + 1)
-        if 0 <= support_rank <= 7:
-            if (f > 0 and chess.square(f - 1, support_rank) in our_pawns) or (
-                    f < 7 and chess.square(f + 1, support_rank) in our_pawns
-            ):
-                score += 10.0
-
-    doubled_pawns = len(pawn_files) - len(set(pawn_files))
-    score -= float(doubled_pawns) * 20.0
-    return score
-
-
-def evaluate_philidor_style_bonus(board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-    us = board_before.turn
-    piece = board_before.piece_at(move.from_square)
-    if not piece:
-        return 0.0, None
-
-    bonus = 0.0
-    note = None
-
-    if piece.piece_type == chess.PAWN:
-        bonus += 14.0
-        if move.to_square in CENTER_SQUARES:
-            bonus += 35.0
-            note = "Пешки — душа шахмат! Мощный удар в центр доски."
-        elif move.to_square in EXTENDED_CENTER:
-            bonus += 22.0
-            note = "Занимаем пространство пешечной фалангой."
-        elif move.to_square in {chess.C3, chess.C6, chess.D3, chess.D6}:
-            bonus += 16.0
-            note = "Подготавливаем продвижение центральной пешки по методу Филидора."
-
-    if piece.piece_type == chess.KNIGHT and board_before.fullmove_number <= 10:
-        if us == chess.WHITE:
-            if move.to_square == chess.C3 and board_before.piece_at(chess.C2) == chess.Piece(chess.PAWN, chess.WHITE):
-                bonus -= 55.0
-            if move.to_square == chess.F3 and board_before.piece_at(chess.F2) == chess.Piece(chess.PAWN, chess.WHITE):
-                bonus -= 45.0
-        else:
-            if move.to_square == chess.C6 and board_before.piece_at(chess.C7) == chess.Piece(chess.PAWN, chess.BLACK):
-                bonus -= 55.0
-            if move.to_square == chess.F6 and board_before.piece_at(chess.F7) == chess.Piece(chess.PAWN, chess.BLACK):
-                bonus -= 45.0
-
-    structure_before = _evaluate_pawn_structure(board_before, us)
-    board_after = board_before.copy()
-    board_after.push(move)
-    structure_after = _evaluate_pawn_structure(board_after, us)
-    bonus += structure_after - structure_before
-
-    return bonus, note
-
-
-class PhilidorBot(HistoricalBot):
-    """Франсуа-Андре Филидор (~1850 Эло, depth=6, skill=7)."""
-
-    bot_id = "philidor"
-    engine_source_name = "philidor_style_engine_deep"
-    default_comment = "Пешки — душа шахмат. Строим несокрушимую пешечную цепь."
-    blunder_guard_cp = PHILIDOR_BLUNDER_GUARD_CP
-    jitter_range = 8.0
-    multipv = 6
-    opening_book = PHILIDOR_OPENING_BOOK
-
-    def __init__(
-            self,
-            stockfish_path: str | None = None,
-            skill_level: int = 7,
-            uci_elo: int = 1850,
-            search_depth: int = 6,
-    ):
-        super().__init__(stockfish_path, skill_level, uci_elo, search_depth)
-
-    def evaluate_style_bonus(self, board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-        return evaluate_philidor_style_bonus(board_before, move)
-
-
-philidor_bot = PhilidorBot()
-
-__all__ = [
-    "CENTER_SQUARES",
-    "EXTENDED_CENTER",
-    "PIECE_VALUES",
-    "PHILIDOR_OPENING_BOOK",
-    "PhilidorBot",
-    "philidor_bot",
-    "evaluate_philidor_style_bonus",
-    "analyse_with_stockfish",
-    "normalize_fen_key",
-    "resolve_stockfish_path",
-    "static_board_eval_cp",
-    "_simulate_human_thinking_time",
-]
-
-========================================================================================
-FILE: src/services/bots/staunton.py
-========================================================================================
-# --- FILE: src/services/bots/staunton.py ---
-
-import chess
-from src.services.bots.base import (
-    CENTER_SQUARES,
-    EXTENDED_CENTER,
-    HistoricalBot,
-    load_bot_opening_book,
-)
-
-STAUNTON_BLUNDER_GUARD_CP = 110.0
-
-DEFAULT_STAUNTON_BOOK: dict[str, list[tuple[str, int, str]]] = {
-    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
-        ("e2e4", 82, "Классический открытый дебют в традициях лондонской школы."),
-        ("c2c4", 12, "Английское начало (1. c4) — фирменное позиционное оружие Говарда Стаунтона!"),
-        ("d2d4", 6, "Солидная закрытая игра ферзевой пешкой."),
-    ],
-    "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -": [
-        ("c7c5", 52, "Сицилианская защита — любимый асимметричный ответ Стаунтона чёрными!"),
-        ("e7e5", 38, "Классический симметричный ответ в центре."),
-        ("e7e6", 10, "Французская защита для прочной позиционной борьбы."),
-    ],
-}
-
-STAUNTON_OPENING_BOOK = load_bot_opening_book("staunton", DEFAULT_STAUNTON_BOOK)
-
-
-def evaluate_staunton_style_bonus(board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-    piece = board_before.piece_at(move.from_square)
-    if not piece:
-        return 0.0, None
-
-    bonus = 0.0
-    note = None
-
-    if board_before.is_castling(move):
-        bonus += 40.0
-        note = "Рокировка в духе английской классической школы: король в безопасности, ладья входит в игру."
-
-    if piece.piece_type == chess.PAWN and board_before.fullmove_number <= 12:
-        if move.to_square in {chess.C4, chess.C5}:
-            bonus += 30.0
-            note = "Берём под фланговый контроль центральный пункт по системе Стаунтона!"
-        elif move.to_square in CENTER_SQUARES:
-            bonus += 24.0
-            note = "Укрепляем позиции в центре доски."
-
-    if piece.piece_type in {chess.KNIGHT, chess.BISHOP} and board_before.fullmove_number <= 12:
-        back_rank = 0 if board_before.turn == chess.WHITE else 7
-        if chess.square_rank(move.from_square) == back_rank:
-            bonus += 26.0
-            if not note:
-                note = "Развиваем фигуры на стратегически важные поля."
-        if move.to_square in EXTENDED_CENTER:
-            bonus += 16.0
-
-    if board_before.gives_check(move):
-        bonus += 18.0
-        if not note:
-            note = "Тактический шах для перехвата инициативы."
-    elif board_before.is_capture(move):
-        bonus += 14.0
-
-    return bonus, note
-
-
-class StauntonBot(HistoricalBot):
-    """Говард Стаунтон (~1750 UCI Эло, depth=6, skill=7)."""
-
-    bot_id = "staunton"
-    engine_source_name = "staunton_style_engine"
-    default_comment = "Фундаментальная позиционная игра по канонам «The Chess-Player's Handbook»."
-    blunder_guard_cp = STAUNTON_BLUNDER_GUARD_CP
-    jitter_range = 6.0
-    multipv = 6
-    opening_book = STAUNTON_OPENING_BOOK
-
-    def __init__(
-            self,
-            stockfish_path: str | None = None,
-            skill_level: int = 7,
-            uci_elo: int = 1750,
-            search_depth: int = 6,
-    ):
-        super().__init__(stockfish_path, skill_level, uci_elo, search_depth)
-
-    def evaluate_style_bonus(self, board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-        return evaluate_staunton_style_bonus(board_before, move)
-
-
-staunton_bot = StauntonBot()
-
-========================================================================================
-FILE: src/services/bots/zukertort.py
-========================================================================================
-# --- FILE: src/services/bots/zukertort.py ---
-
-import chess
-from src.services.bots.base import (
-    CENTER_SQUARES,
-    EXTENDED_CENTER,
-    HistoricalBot,
-    load_bot_opening_book,
-)
-
-ZUKERTORT_BLUNDER_GUARD_CP = 140.0
-
-DEFAULT_ZUKERTORT_BOOK: dict[str, list[tuple[str, int, str]]] = {
-    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
-        ("e2e4", 72, "Открытая игра с последующим комбинационным штурмом."),
-        ("g1f3", 16, "Дебют Цукерторта (1. Nf3!) — гибкое развитие с сохранением выбора плана в центре!"),
-        ("d2d4", 12, "Закрытое начало с переходом в систему Цукерторта (d4, Nf3, e3, Bd3, b3)."),
-    ],
-    "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -": [
-        ("e7e5", 75, "Классический открытый бой 1...e5."),
-        ("c7c5", 15, "Сицилианская защита."),
-        ("e7e6", 10, "Французская защита."),
-    ],
-}
-
-ZUKERTORT_OPENING_BOOK = load_bot_opening_book("zukertort", DEFAULT_ZUKERTORT_BOOK)
-
-
-def evaluate_zukertort_style_bonus(board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-    piece = board_before.piece_at(move.from_square)
-    if not piece:
-        return 0.0, None
-
-    bonus = 0.0
-    note = None
-
-    if board_before.is_castling(move):
-        bonus += 40.0
-        note = "Рокировка! Завершаем развитие и готовим тактический прорыв."
-
-    if piece.piece_type in {chess.KNIGHT, chess.BISHOP} and board_before.fullmove_number <= 14:
-        back_rank = 0 if board_before.turn == chess.WHITE else 7
-        if chess.square_rank(move.from_square) == back_rank:
-            bonus += 28.0
-            note = "Гибкое развитие фигур по системе Цукерторта."
-        if move.to_square in EXTENDED_CENTER:
-            bonus += 18.0
-
-    if move.to_square in CENTER_SQUARES:
-        bonus += 22.0
-        if not note:
-            note = "Энергичный захват ключевых центральных полей!"
-
-    if board_before.gives_check(move):
-        bonus += 26.0
-        note = "Шах! Переходим к решительной комбинационной атаке в стиле Лондонского турнира 1883 года!"
-    elif board_before.is_capture(move):
-        bonus += 16.0
-
-    return bonus, note
-
-
-class ZukertortBot(HistoricalBot):
-    """Иоганн Цукерторт (~1840 UCI Эло, depth=6, skill=8)."""
-
-    bot_id = "zukertort"
-    engine_source_name = "zukertort_style_engine"
-    default_comment = "Тонкий стратегический манёвр с подготовкой комбинационного взрыва в стиле Цукерторта!"
-    blunder_guard_cp = ZUKERTORT_BLUNDER_GUARD_CP
-    jitter_range = 8.0
-    multipv = 8
-    opening_book = ZUKERTORT_OPENING_BOOK
-
-    def __init__(
-            self,
-            stockfish_path: str | None = None,
-            skill_level: int = 8,
-            uci_elo: int = 1840,
-            search_depth: int = 6,
-    ):
-        super().__init__(stockfish_path, skill_level, uci_elo, search_depth)
-
-    def evaluate_style_bonus(self, board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-        return evaluate_zukertort_style_bonus(board_before, move)
-
-
-zukertort_bot = ZukertortBot()
-
 ----------------------------------------------------------------------------------------
-END OF PART 3/11
+END OF PART 3/15

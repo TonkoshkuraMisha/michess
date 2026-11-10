@@ -3,19 +3,24 @@
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
-from fastapi.middleware.cors import CORSMiddleware
-import uvicorn
 
-from src.core.config import settings
-from src.api.auth import router as auth_router
-from src.api.websockets import router as ws_router
+import uvicorn
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from sqlalchemy import text
+
 from src.api import bots
-from src.api.profile import router as profile_router
 from src.api.analysis import router as analysis_router
-from src.db.redis import redis_client
-from src.services.game_state import state_manager
+from src.api.auth import router as auth_router
+from src.api.profile import router as profile_router
+from src.api.websockets import router as ws_router
+from src.core.config import settings
+from src.db import redis as redis_module
+from src.db.session import AsyncSessionLocal
 from src.services.connection_manager import manager
+from src.services.engine_pool import close_all_engine_pools
+from src.services.game_state import state_manager
 
 logging.basicConfig(
     level=logging.INFO,
@@ -23,11 +28,13 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+HEALTH_CHECK_TIMEOUT_S = 2.0
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Lifespan context manager for handling startup and shutdown events gracefully."""
-    logger.info("Starting up %s...", settings.PROJECT_NAME)
+    logger.info("Starting up %s (%s)...", settings.PROJECT_NAME, settings.ENVIRONMENT)
     timeout_task = asyncio.create_task(state_manager.check_timeouts_loop(manager))
 
     yield
@@ -39,16 +46,20 @@ async def lifespan(app: FastAPI):
         pass
 
     logger.info("Shutting down %s...", settings.PROJECT_NAME)
-    await redis_client.aclose()
+    await asyncio.to_thread(close_all_engine_pools)
+    await redis_module.redis_client.aclose()
 
 
 def create_app() -> FastAPI:
+    # Документация API в продакшене не публикуется: она раскрывает все эндпоинты и схемы.
+    docs_enabled = not settings.is_production
     app = FastAPI(
         title=settings.PROJECT_NAME,
         version=settings.VERSION,
         lifespan=lifespan,
-        docs_url="/docs",
-        openapi_url=f"{settings.API_V1_STR}/openapi.json",
+        docs_url="/docs" if docs_enabled else None,
+        redoc_url="/redoc" if docs_enabled else None,
+        openapi_url=f"{settings.API_V1_STR}/openapi.json" if docs_enabled else None,
     )
 
     app.add_middleware(
@@ -71,23 +82,35 @@ def create_app() -> FastAPI:
 app = create_app()
 
 
+async def _check_database() -> None:
+    async with AsyncSessionLocal() as db:
+        await db.execute(text("SELECT 1"))
+
+
+async def _check_redis() -> None:
+    await redis_module.redis_client.ping()
+
+
 @app.get("/health")
-async def health_check() -> dict:
-    return {"status": "healthy", "version": settings.VERSION}
+async def health_check():
+    """
+    Готовность сервиса: отвечают ли PostgreSQL и Redis. 503, если хоть что-то недоступно, —
+    по этому коду Docker и балансировщик понимают, что экземпляр нельзя нагружать.
+    """
+    checks: dict[str, str] = {}
+    for name, check in (("database", _check_database), ("redis", _check_redis)):
+        try:
+            await asyncio.wait_for(check(), timeout=HEALTH_CHECK_TIMEOUT_S)
+            checks[name] = "ok"
+        except Exception as exc:
+            logger.warning("Health check '%s' failed: %s", name, exc)
+            checks[name] = "unavailable"
 
-
-@app.websocket("/ws/ping")
-async def websocket_test_endpoint(websocket: WebSocket):
-    await websocket.accept()
-    try:
-        await websocket.send_json({"event": "connected", "message": "Connection established"})
-        while True:
-            data = await websocket.receive_text()
-            await websocket.send_json({"event": "echo", "received": data})
-    except WebSocketDisconnect:
-        logger.info("WebSocket client disconnected normally.")
-    except Exception as e:
-        logger.error("WebSocket connection error: %s", e)
+    healthy = all(status == "ok" for status in checks.values())
+    return JSONResponse(
+        status_code=200 if healthy else 503,
+        content={"status": "healthy" if healthy else "degraded", "version": settings.VERSION, "checks": checks},
+    )
 
 
 if __name__ == "__main__":

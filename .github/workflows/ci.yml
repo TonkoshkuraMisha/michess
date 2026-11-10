@@ -18,9 +18,22 @@ jobs:
 
     services:
       redis:
-        image: redis:8.0-M02-alpine
+        image: redis:7.4-alpine
         ports:
           - 6379:6379
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ci_user
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: ci_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_user -d ci_db"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - name: Checkout repository
@@ -31,6 +44,9 @@ jobs:
         with:
           python-version: "3.11"
           cache: "pip"
+          cache-dependency-path: |
+            requirements.txt
+            requirements-dev.txt
 
       - name: Install Stockfish engine for Linux CI
         run: |
@@ -43,14 +59,34 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements-dev.txt
 
-      - name: Lint with flake8
+      # Правила и исключения — в pyproject.toml. Любое замечание роняет сборку.
+      - name: Lint (ruff)
+        run: ruff check . --output-format github
+
+      - name: Type check (mypy)
+        run: mypy
+
+      # Миграции применяются на отдельной пустой базе, затем alembic check сверяет
+      # получившуюся схему с моделями: модель изменили, а миграцию забыли — сборка падает.
+      - name: Migrations apply cleanly and match the models
+        env:
+          REDIS_HOST: localhost
+          SECRET_KEY: test_secret_key_for_ci_only
+          POSTGRES_USER: ci_user
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_SERVER: localhost
+          POSTGRES_PORT: 5432
+          POSTGRES_DB: ci_migrations
         run: |
-          python -m flake8 src tests scripts --count --select=E9,F63,F7,F82 --show-source --statistics
-          python -m flake8 src tests scripts --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+          PGPASSWORD=ci_password psql -h localhost -U ci_user -d ci_db -c "CREATE DATABASE ci_migrations"
+          alembic upgrade head
+          alembic check
+          alembic downgrade base
+          alembic upgrade head
 
-      - name: Run pytest
+      - name: Run pytest with coverage
         env:
           REDIS_HOST: localhost
           REDIS_PORT: 6379
@@ -60,8 +96,12 @@ jobs:
           POSTGRES_SERVER: localhost
           POSTGRES_PORT: 5432
           POSTGRES_DB: ci_db
+          # Гонки на настоящих PostgreSQL и Redis (tests/integration): FOR UPDATE, WATCH/MULTI.
+          TEST_DATABASE_URL: postgresql+asyncpg://ci_user:ci_password@localhost:5432/ci_db
+          TEST_REDIS_URL: redis://localhost:6379/15
+        # Порог покрытия (fail_under) — в pyproject.toml.
         run: |
-          python -m pytest -v
+          python -m pytest -v --cov --cov-report=term
 
   frontend-test:
     name: Frontend Lint, Test and Build
@@ -92,3 +132,55 @@ jobs:
 
       - name: Build production bundle
         run: npm run build
+
+  production-stack:
+    name: Production images smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Prepare production .env
+        run: |
+          cp .env.example .env
+          sed -i '/^SECRET_KEY=/d; /^ENVIRONMENT=/d; /^HTTP_PORT=/d' .env
+          echo "SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')" >> .env
+          echo "HTTP_PORT=8080" >> .env
+
+      - name: Validate compose file
+        run: docker compose -f docker-compose.prod.yml config --quiet
+
+      - name: Build images
+        run: docker compose -f docker-compose.prod.yml build
+
+      - name: Validate nginx config
+        run: docker run --rm --add-host api:127.0.0.1 michess-web:latest nginx -t
+
+      - name: Start the stack (migrations run on a fresh PostgreSQL)
+        run: |
+          docker compose -f docker-compose.prod.yml up -d
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/health; then echo; exit 0; fi
+            sleep 3
+          done
+          echo "Stack did not become healthy"; exit 1
+
+      - name: Smoke test through nginx
+        run: |
+          set -e
+          headers=$(curl -fsSI http://localhost:8080/)
+          echo "$headers" | grep -qi "content-security-policy"
+          curl -fsS http://localhost:8080/game/123 | grep -q '<div id="root">'
+          curl -fsS -X POST http://localhost:8080/api/v1/auth/register \
+            -H 'Content-Type: application/json' -d '{"username":"smoke_user","password":"smoke-pass-123"}'
+          token=$(curl -fsS -X POST http://localhost:8080/api/v1/auth/login \
+            -d 'username=smoke_user&password=smoke-pass-123' | python3 -c 'import json,sys; print(json.load(sys.stdin)["access_token"])')
+          curl -fsS -X POST http://localhost:8080/api/v1/auth/ws-ticket -H "Authorization: Bearer $token"
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8080/api/v1/openapi.json)" = "404"
+          docker compose -f docker-compose.prod.yml exec -T api python -c \
+            "from src.services.bots.base import resolve_stockfish_path as r; assert r(), 'no stockfish'; print(r())"
+          docker compose -f docker-compose.prod.yml ps worker | grep -q "Up"
+
+      - name: Logs on failure
+        if: failure()
+        run: docker compose -f docker-compose.prod.yml logs --no-color --tail=200

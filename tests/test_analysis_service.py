@@ -1,10 +1,11 @@
 # --- FILE: tests/test_analysis_service.py ---
 
 import pytest
+
 from src.services.analysis_service import (
+    _evaluate_board_sequence_sync,
     calculate_accuracy,
     classify_move_by_cp_loss,
-    _evaluate_board_sequence_sync,
 )
 
 
