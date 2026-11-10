@@ -81,7 +81,10 @@ class MockPipeline:
     async def execute(self):
         for cmd in self.commands:
             if cmd[0] == "hset":
-                await self.redis.hset(cmd[1], cmd[2], cmd[3], mapping=cmd[4])
+                mapping = dict(cmd[4] or {})
+                if cmd[2] is not None:
+                    mapping[cmd[2]] = cmd[3]
+                await self.redis.hset(cmd[1], mapping=mapping)
             elif cmd[0] == "sadd":
                 await self.redis.sadd(cmd[1], *cmd[2])
         self.commands = []

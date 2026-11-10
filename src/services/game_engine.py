@@ -1,8 +1,42 @@
 # --- FILE: src/services/game_engine.py ---
 
+import logging
+
 import chess
 
+logger = logging.getLogger(__name__)
+
 STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
+
+def restore_board(fen: str, pgn_movetext: str = "") -> chess.Board:
+    """
+    Восстанавливает доску вместе с историей ходов.
+
+    История нужна для правил повторения позиции (троекратное / пятикратное), которые
+    невозможно проверить по одному FEN. Ходы переигрываются из PGN-строки партии
+    («1. e4 e5 2. Nf3 ...») от стартовой позиции. Если PGN пуст, повреждён или не
+    приводит к переданному FEN, используется доска из FEN без истории.
+    """
+    safe_fen = fen.strip() if fen and fen.strip() else STARTING_FEN
+    movetext = (pgn_movetext or "").strip()
+
+    if movetext:
+        board = chess.Board()
+        try:
+            for token in movetext.split():
+                # Номера ходов («12.», «12...») и результат («1-0») начинаются с цифры, SAN — никогда.
+                if token[0].isdigit() or token == "*":
+                    continue
+                board.push_san(token)
+        except ValueError as exc:
+            logger.warning("Cannot replay PGN history (%s), falling back to FEN-only board", exc)
+        else:
+            if board.fen() == safe_fen:
+                return board
+            logger.warning("Replayed PGN does not match stored FEN, falling back to FEN-only board")
+
+    return chess.Board(safe_fen)
 
 
 class GameEngine:
@@ -23,9 +57,8 @@ class GameEngine:
         - result: str | None ("1-0", "0-1", "1/2-1/2")
         - termination: str | None ("checkmate", "stalemate", "repetition", etc.)
         """
-        safe_fen = fen.strip() if fen and fen.strip() else STARTING_FEN
         try:
-            board = chess.Board(safe_fen)
+            board = restore_board(fen, current_pgn)
         except ValueError:
             return False, None
 
@@ -71,13 +104,17 @@ class GameEngine:
         new_fen = board.fen()
 
         # 4. Проверяем условия завершения партии
-        is_game_over = board.is_game_over(claim_draw=True)
+        # Ничьи по повторению и правилу 50 ходов фиксируются автоматически, но только по
+        # фактически сложившейся позиции. board.is_game_over(claim_draw=True) здесь не подходит:
+        # он засчитывает ничью и тогда, когда повторение лишь достижимо следующим ходом.
+        is_game_over = board.is_game_over() or board.is_repetition(3) or board.is_fifty_moves()
         result = None
         termination = None
 
         if is_game_over:
-            res = board.result(claim_draw=True)
-            result = res if res != "*" else None
+            result = "1/2-1/2"
+            if board.is_checkmate():
+                result = "0-1" if board.turn == chess.WHITE else "1-0"
 
             if board.is_checkmate():
                 termination = "checkmate"

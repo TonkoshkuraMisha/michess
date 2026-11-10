@@ -394,6 +394,10 @@ async def matchmaking_endpoint(
                         continue
 
                     game_result = "0-1" if current_user.id == white_id else "1-0"
+                    if not await state_manager.claim_game_end(gid, game_result, "resignation"):
+                        # Партию уже завершил другой обработчик (мат, флаг, ничья) — итог разослан им.
+                        continue
+
                     rating_updates = await state_manager.finish_game(
                         db, gid, game_result, termination="resignation"
                     )
@@ -451,6 +455,17 @@ async def matchmaking_endpoint(
                         continue
 
                     game_result = "1/2-1/2"
+
+                    def _draw_offer_still_valid(fresh: dict, acceptor_id: int = current_user.id) -> bool:
+                        offer = str(fresh.get("draw_offer") or "")
+                        return offer.isdigit() and int(offer) != acceptor_id
+
+                    claimed = await state_manager.claim_game_end(
+                        gid, game_result, "agreement", guard=_draw_offer_still_valid,
+                    )
+                    if not claimed:
+                        continue
+
                     rating_updates = await state_manager.finish_game(
                         db, gid, game_result, termination="agreement"
                     )
