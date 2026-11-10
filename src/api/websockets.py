@@ -19,6 +19,7 @@ from src.services.anticheat import trusted_premove
 from src.services.connection_manager import manager
 from src.services.game_state import state_manager
 from src.services.matchmaker import MatchmakingError, matchmaker
+from src.services.rating import classify_time_control
 
 logger = logging.getLogger(__name__)
 
@@ -53,6 +54,7 @@ async def _send_active_game_snapshot_if_exists(db: AsyncSession, user: User):
     white_user = await db.get(User, white_id)
     black_user = await db.get(User, black_id)
     white_time, black_time = _compute_live_clocks(state)
+    category = classify_time_control(int(state.get("base_time_ms", 180000)), int(state.get("increment_ms", 0)))
 
     payload = {
         "event": "match_found",
@@ -60,9 +62,9 @@ async def _send_active_game_snapshot_if_exists(db: AsyncSession, user: User):
         "color": "white" if user.id == white_id else "black",
         "opponent_id": black_id if user.id == white_id else white_id,
         "white_username": white_user.username if white_user else "Белые",
-        "white_rating": white_user.rating if white_user else 1200,
+        "white_rating": white_user.rating_for(category) if white_user else 1200,
         "black_username": black_user.username if black_user else "Черные",
-        "black_rating": black_user.rating if black_user else 1200,
+        "black_rating": black_user.rating_for(category) if black_user else 1200,
         "base_time_ms": int(state.get("base_time_ms", 180000)),
         "increment_ms": int(state.get("increment_ms", 0)),
         "white_time_ms": white_time,
@@ -191,10 +193,13 @@ def action(name: str):
 @action("join_queue")
 async def _join_queue(ctx: ActionContext, data: dict) -> None:
     fresh_user = await _fresh_current_user(ctx.db, ctx.user)
+    base_time_ms = int(data.get("base_time_ms", 180000))
+    increment_ms = int(data.get("increment_ms", 0))
+    category = classify_time_control(base_time_ms, increment_ms)
     matched_game_id = await matchmaker.join_queue(
-        fresh_user.id, fresh_user.username, fresh_user.rating,
-        int(data.get("base_time_ms", 180000)),
-        int(data.get("increment_ms", 0)),
+        fresh_user.id, fresh_user.username, fresh_user.rating_for(category),
+        base_time_ms,
+        increment_ms,
         min_rating=data.get("min_rating"),
         max_rating=data.get("max_rating"),
         db=ctx.db,
@@ -220,12 +225,14 @@ async def _accept_challenge(ctx: ActionContext, data: dict) -> None:
 @action("create_invite")
 async def _create_invite(ctx: ActionContext, data: dict) -> None:
     fresh_user = await _fresh_current_user(ctx.db, ctx.user)
+    base_time_ms = int(data.get("base_time_ms", 180000))
+    increment_ms = int(data.get("increment_ms", 2000))
     invite_data = await matchmaker.create_private_invite(
         user_id=fresh_user.id,
         username=fresh_user.username,
-        rating=fresh_user.rating,
-        base_time_ms=int(data.get("base_time_ms", 180000)),
-        increment_ms=int(data.get("increment_ms", 2000)),
+        rating=fresh_user.rating_for(classify_time_control(base_time_ms, increment_ms)),
+        base_time_ms=base_time_ms,
+        increment_ms=increment_ms,
         color_pref=str(data.get("color_pref", "random")),
     )
     await ctx.send({"event": "invite_created", **invite_data})
@@ -252,14 +259,17 @@ async def _spectate_game(ctx: ActionContext, data: dict) -> None:
     white_user = await ctx.db.get(User, game.white_id)
     black_user = await ctx.db.get(User, game.black_id)
     white_time, black_time = _compute_live_clocks(game.state)
+    category = classify_time_control(
+        int(game.state.get("base_time_ms", 180000)), int(game.state.get("increment_ms", 0)),
+    )
 
     await ctx.send({
         "event": "spectate_started",
         "game_id": game.game_id,
         "white_username": white_user.username if white_user else "Белые",
-        "white_rating": white_user.rating if white_user else 1200,
+        "white_rating": white_user.rating_for(category) if white_user else 1200,
         "black_username": black_user.username if black_user else "Черные",
-        "black_rating": black_user.rating if black_user else 1200,
+        "black_rating": black_user.rating_for(category) if black_user else 1200,
         "base_time_ms": int(game.state.get("base_time_ms", 180000)),
         "increment_ms": int(game.state.get("increment_ms", 0)),
         "white_time_ms": white_time,

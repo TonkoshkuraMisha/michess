@@ -20,9 +20,19 @@ import {API_BASE_URL} from '../config/api';
 interface UserProfile {
     id: number;
     username: string;
-    rating: number;
+    bullet_rating: number;
+    blitz_rating: number;
+    rapid_rating: number;
+    classical_rating: number;
     created_at: string;
 }
+
+const RATING_CATEGORIES: Array<{ key: 'bullet_rating' | 'blitz_rating' | 'rapid_rating' | 'classical_rating'; label: string }> = [
+    {key: 'bullet_rating', label: 'Пуля'},
+    {key: 'blitz_rating', label: 'Блиц'},
+    {key: 'rapid_rating', label: 'Рапид'},
+    {key: 'classical_rating', label: 'Классика'},
+];
 
 interface GameData {
     game_id: number;
@@ -104,7 +114,9 @@ export default function Profile() {
     }
 
     let wins = 0, losses = 0, draws = 0;
-    let tempRating = profile.rating;
+    // Блиц — база для приблизительного графика ниже; у каждой партии своя категория,
+    // а список игр здесь общий для всех контролей времени.
+    let tempRating = profile.blitz_rating;
 
     const chartDataReversed = games.map((game) => {
         const isWhite = game.white_username === profile.username;
@@ -168,43 +180,50 @@ export default function Profile() {
                     </div>
                 </div>
 
-                <div className="md:col-span-2 grid grid-cols-2 lg:grid-cols-4 gap-4">
-                    <div
-                        className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
-                        <div
-                            className="text-boxwood/60 text-xs uppercase tracking-widest mb-1 flex items-center gap-1.5">
-                            <Trophy size={14}/> Рейтинг
-                        </div>
-                        <div className="text-4xl font-mono font-bold text-amber-400">{profile.rating}</div>
+                <div className="md:col-span-2 flex flex-col gap-4">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        {RATING_CATEGORIES.map(({key, label}) => (
+                            <div
+                                key={key}
+                                className="bg-[#1A120B] border border-amber-900/60 px-3 py-2.5 rounded shadow-inner flex flex-col items-center justify-center"
+                            >
+                                <div className="text-boxwood/60 text-[11px] uppercase tracking-widest mb-0.5 flex items-center gap-1">
+                                    <Trophy size={11}/> {label}
+                                </div>
+                                <div className="text-2xl font-mono font-bold text-amber-400">{profile[key]}</div>
+                            </div>
+                        ))}
                     </div>
-                    <div
-                        className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                         <div
-                            className="text-boxwood/60 text-xs uppercase tracking-widest mb-1 flex items-center gap-1.5">
-                            <Swords size={14}/> Игр сыграно
+                            className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
+                            <div
+                                className="text-boxwood/60 text-xs uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                                <Swords size={14}/> Игр сыграно
+                            </div>
+                            <div className="text-4xl font-mono font-bold text-blue-400">{games.length}</div>
                         </div>
-                        <div className="text-4xl font-mono font-bold text-blue-400">{games.length}</div>
-                    </div>
-                    <div
-                        className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
                         <div
-                            className="text-boxwood/60 text-xs uppercase tracking-widest mb-1 flex items-center gap-1.5">
-                            <Target size={14}/> Винрейт
+                            className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
+                            <div
+                                className="text-boxwood/60 text-xs uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                                <Target size={14}/> Винрейт
+                            </div>
+                            <div className="text-4xl font-mono font-bold text-emerald-400">{winRate}%</div>
                         </div>
-                        <div className="text-4xl font-mono font-bold text-emerald-400">{winRate}%</div>
-                    </div>
-                    <div
-                        className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
                         <div
-                            className="text-boxwood/60 text-[10px] xl:text-xs uppercase tracking-wider mb-1 flex items-center gap-1.5 whitespace-nowrap">
-                            <Crosshair size={14}/> WIN / DRAW / LOSE
-                        </div>
-                        <div className="text-2xl font-mono font-bold flex gap-2">
-                            <span className="text-emerald-400">{wins}</span>
-                            <span className="text-boxwood/40">/</span>
-                            <span className="text-gray-400">{draws}</span>
-                            <span className="text-boxwood/40">/</span>
-                            <span className="text-red-400">{losses}</span>
+                            className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
+                            <div
+                                className="text-boxwood/60 text-[10px] xl:text-xs uppercase tracking-wider mb-1 flex items-center gap-1.5 whitespace-nowrap">
+                                <Crosshair size={14}/> WIN / DRAW / LOSE
+                            </div>
+                            <div className="text-2xl font-mono font-bold flex gap-2">
+                                <span className="text-emerald-400">{wins}</span>
+                                <span className="text-boxwood/40">/</span>
+                                <span className="text-gray-400">{draws}</span>
+                                <span className="text-boxwood/40">/</span>
+                                <span className="text-red-400">{losses}</span>
+                            </div>
                         </div>
                     </div>
                 </div>

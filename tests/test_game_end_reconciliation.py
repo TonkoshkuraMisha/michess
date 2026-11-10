@@ -46,8 +46,14 @@ def session_factory(db_session, monkeypatch):
 
 
 async def _make_game(db_session, *, init_redis: bool = True) -> tuple[Game, User, User]:
-    white = User(username="w_reconcile", hashed_password="pw", rating=1500)
-    black = User(username="b_reconcile", hashed_password="pw", rating=1500)
+    white = User(
+        username="w_reconcile", hashed_password="pw", bullet_rating=1500,
+        blitz_rating=1500, rapid_rating=1500, classical_rating=1500
+    )
+    black = User(
+        username="b_reconcile", hashed_password="pw", bullet_rating=1500,
+        blitz_rating=1500, rapid_rating=1500, classical_rating=1500
+    )
     db_session.add_all([white, black])
     await db_session.commit()
     game = Game(
@@ -117,7 +123,7 @@ async def test_game_claimed_but_never_written_is_finished_after_grace(real_redis
     assert db_game.status == GameStatus.COMPLETED
     assert (db_game.result, db_game.termination) == ("0-1", "resignation")
     async with session_factory() as db:
-        assert (await db.get(User, black.id)).rating > 1500  # рейтинг начислен
+        assert (await db.get(User, black.id)).blitz_rating > 1500  # рейтинг начислен
 
     assert await real_redis.zscore(PENDING_FINISH_KEY, str(game.id)) is None
     assert not await real_redis.hgetall(f"game:{game.id}:state")

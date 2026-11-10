@@ -1,10 +1,14 @@
 from datetime import datetime
+from typing import Literal
 
 from sqlalchemy import Boolean, DateTime, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
 from src.models.base import Base
+
+RatingCategory = Literal["bullet", "blitz", "rapid", "classical"]
+RATING_CATEGORIES: tuple[RatingCategory, ...] = ("bullet", "blitz", "rapid", "classical")
 
 
 class User(Base):
@@ -25,8 +29,22 @@ class User(Base):
     # «выйти на всех устройствах») делает недействительными все ранее выданные токены.
     token_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
 
-    # ELO or Glicko-2 rating
-    rating: Mapped[int] = mapped_column(Integer, default=1200)
+    # ELO-рейтинг по отдельности для каждой категории контроля времени (как на chess.com и
+    # lichess.org) — единого «общего» рейтинга больше нет, пуля/блиц/рапид/классика не
+    # сравнимы между собой. Категория определяется по base_time_ms/increment_ms партии,
+    # см. src.services.rating.classify_time_control.
+    bullet_rating: Mapped[int] = mapped_column(Integer, default=1200, server_default="1200", nullable=False)
+    blitz_rating: Mapped[int] = mapped_column(Integer, default=1200, server_default="1200", nullable=False)
+    rapid_rating: Mapped[int] = mapped_column(Integer, default=1200, server_default="1200", nullable=False)
+    classical_rating: Mapped[int] = mapped_column(Integer, default=1200, server_default="1200", nullable=False)
+
+    # Число сыгранных рейтинговых партий в каждой категории — определяет K-фактор ELO
+    # (новичкам рейтинг двигается быстрее). Хранится как счётчик, а не через COUNT(*) по
+    # games при каждом завершении партии.
+    bullet_games_played: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    blitz_games_played: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    rapid_games_played: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    classical_games_played: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
 
     # Исторический бот (играбельный AI) или архивный исторический игрок (партии из PGN,
     # посмотреть — нельзя сыграть) — не реальный зарегистрированный игрок, вне таблицы лидеров.
@@ -37,3 +55,9 @@ class User(Base):
     trust_factor: Mapped[int] = mapped_column(Integer, default=100)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+    def rating_for(self, category: RatingCategory) -> int:
+        return getattr(self, f"{category}_rating")
+
+    def games_played_for(self, category: RatingCategory) -> int:
+        return getattr(self, f"{category}_games_played")

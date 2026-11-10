@@ -125,7 +125,10 @@ async def test_ws_ticket_works_exactly_once(client):
     ticket = res.json()["ticket"]
     assert token not in ticket
 
-    user = User(id=me["id"], username=me["username"], rating=1200, token_version=0)
+    user = User(
+        id=me["id"], username=me["username"], bullet_rating=1200,
+        blitz_rating=1200, rapid_rating=1200, classical_rating=1200, token_version=0
+    )
     authed = await get_current_user_ws(ticket=ticket, session_factory=_NoDbFactory(user))
     assert authed.id == me["id"]
 
@@ -140,7 +143,10 @@ async def test_ws_ticket_is_void_after_tokens_are_revoked(client):
     ticket = client.post("/api/v1/auth/ws-ticket", headers=_auth(token)).json()["ticket"]
 
     # Между выдачей тикета и подключением пользователь вышел на всех устройствах.
-    revoked_user = User(id=me["id"], username=me["username"], rating=1200, token_version=1)
+    revoked_user = User(
+        id=me["id"], username=me["username"], bullet_rating=1200,
+        blitz_rating=1200, rapid_rating=1200, classical_rating=1200, token_version=1
+    )
     with pytest.raises(WebSocketException):
         await get_current_user_ws(ticket=ticket, session_factory=_NoDbFactory(revoked_user))
 
@@ -203,6 +209,8 @@ async def test_revocation_from_another_worker_closes_tabs_here():
 
 
 def test_user_token_helper_matches_login_format():
-    user = User(id=7, username="x", rating=1200, token_version=3)
+    user = User(
+        id=7, username="x", bullet_rating=1200, blitz_rating=1200, rapid_rating=1200, classical_rating=1200, token_version=3
+    )
     payload = jwt.decode(create_user_token(user), settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
     assert (payload["sub"], payload["ver"]) == ("7", 3)

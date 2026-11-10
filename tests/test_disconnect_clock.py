@@ -124,7 +124,7 @@ async def test_closing_one_tab_keeps_player_online(client, monkeypatch):
     from src.main import app
     from src.models.user import User
 
-    player = User(id=501, username="multitab", rating=1500)
+    player = User(id=501, username="multitab", bullet_rating=1500, blitz_rating=1500, rapid_rating=1500, classical_rating=1500)
 
     async def _user():
         return player

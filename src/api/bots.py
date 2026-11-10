@@ -24,6 +24,7 @@ from src.services.bots.philidor import philidor_bot, resolve_stockfish_path
 from src.services.bots.staunton import staunton_bot
 from src.services.bots.zukertort import zukertort_bot
 from src.services.game_engine import flag_outcome, terminal_outcome
+from src.services.rating import classify_time_control
 
 router = APIRouter()
 
@@ -344,7 +345,12 @@ async def _get_or_create_bot_user(db: AsyncSession, bot_id: str) -> User:
     bot_user = User(
         username=bot_username,
         hashed_password=BOT_PASSWORD_MARKER,
-        rating=meta["rating"],
+        # Фиксированная «историческая сила» бота — одинаковая во всех категориях: партии
+        # с ботом не рейтинговые (is_rated=False), это чисто отображаемое значение.
+        bullet_rating=meta["rating"],
+        blitz_rating=meta["rating"],
+        rapid_rating=meta["rating"],
+        classical_rating=meta["rating"],
         is_bot=True,
     )
     db.add(bot_user)
@@ -459,13 +465,14 @@ async def save_bot_game(
     else:
         white_user, black_user = bot_user, current_user
 
+    category = classify_time_control(payload.base_time_ms, payload.increment_ms)
     try:
         pgn_text, final_fen = _build_pgn_string(
             moves_uci=payload.moves_uci,
             white_name=white_user.username,
-            white_elo=white_user.rating,
+            white_elo=white_user.rating_for(category),
             black_name=black_user.username,
-            black_elo=black_user.rating,
+            black_elo=black_user.rating_for(category),
             result=payload.result,
         )
     except ValueError as exc:

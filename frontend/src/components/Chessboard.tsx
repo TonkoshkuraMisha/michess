@@ -722,7 +722,10 @@ export default function Chessboard() {
                         setCurrentUsername(data.username);
                         currentUsernameRef.current = data.username;
                     }
-                    if (data.rating) setCurrentUserRating(data.rating);
+                    // Блиц — для отображения в карточке игрока до старта партии с ботом;
+                    // для настоящих PvP-партий карточки обновляются авторитетным рейтингом
+                    // с сервера (по категории именно этой партии) в applyMatchFoundSnapshot.
+                    if (data.blitz_rating) setCurrentUserRating(data.blitz_rating);
                 }
             })
             .catch(() => {

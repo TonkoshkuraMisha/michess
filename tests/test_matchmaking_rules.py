@@ -14,7 +14,9 @@ from src.services.matchmaker import MatchmakingError, matchmaker
 
 
 async def _users(db_session, *ratings: int) -> list[User]:
-    users = [User(username=f"mm_{i}_{r}", hashed_password="pw", rating=r) for i, r in enumerate(ratings)]
+    users = [User(
+        username=f"mm_{i}_{r}", hashed_password="pw", bullet_rating=r, blitz_rating=r, rapid_rating=r, classical_rating=r
+    ) for i, r in enumerate(ratings)]
     db_session.add_all(users)
     await db_session.commit()
     return users
@@ -34,18 +36,18 @@ async def test_stale_session_sees_fresh_rating(db_session):
 
     other = async_sessionmaker(db_session.bind, expire_on_commit=False)
     async with other() as session:
-        (await session.get(User, user.id)).rating = 1700
+        (await session.get(User, user.id)).blitz_rating = 1700
         await session.commit()
 
-    assert user.rating == 1500  # объект в identity map WS-сессии устарел
-    assert (await _fresh_current_user(db_session, user)).rating == 1700
+    assert user.blitz_rating == 1500  # объект в identity map WS-сессии устарел
+    assert (await _fresh_current_user(db_session, user)).blitz_rating == 1700
 
 
 async def test_game_record_uses_fresh_ratings(db_session):
     white, black = await _users(db_session, 1500, 1600)
     other = async_sessionmaker(db_session.bind, expire_on_commit=False)
     async with other() as session:
-        (await session.get(User, white.id)).rating = 1555
+        (await session.get(User, white.id)).blitz_rating = 1555
         await session.commit()
 
     started = await matchmaker.start_pvp_game(white.id, black.id, 180000, 0, db=db_session)

@@ -86,7 +86,10 @@ async def test_bot_game_is_not_attributed_to_human_with_bot_name(client, db_sess
     from src.models.game import Game
     from src.models.user import User
 
-    impostor = User(username="Пол Морфи", hashed_password="real-hash", rating=1500)
+    impostor = User(
+        username="Пол Морфи", hashed_password="real-hash", bullet_rating=1500,
+        blitz_rating=1500, rapid_rating=1500, classical_rating=1500
+    )
     db_session.add(impostor)
     await db_session.commit()
 
@@ -109,8 +112,14 @@ async def test_leaderboard_excludes_bots_and_cheaters(client, db_session, test_u
     from src.models.user import User
 
     db_session.add_all([
-        User(username="HighRatedBot", hashed_password="!historical_bot_no_login!", rating=2800, is_bot=True),
-        User(username="Cheater", hashed_password="fakehash", rating=2700, is_cheater=True),
+        User(
+            username="HighRatedBot", hashed_password="!historical_bot_no_login!", bullet_rating=2800,
+            blitz_rating=2800, rapid_rating=2800, classical_rating=2800, is_bot=True
+        ),
+        User(
+            username="Cheater", hashed_password="fakehash", bullet_rating=2700,
+            blitz_rating=2700, rapid_rating=2700, classical_rating=2700, is_cheater=True
+        ),
     ])
     await db_session.commit()
 
@@ -170,7 +179,9 @@ def _ws_as(monkeypatch, user_id: int):
     from src.models.user import User
 
     async def _user():
-        return User(id=user_id, username=f"u{user_id}", rating=1500)
+        return User(
+            id=user_id, username=f"u{user_id}", bullet_rating=1500, blitz_rating=1500, rapid_rating=1500, classical_rating=1500
+        )
 
 
     monkeypatch.setitem(app.dependency_overrides, get_current_user_ws, _user)

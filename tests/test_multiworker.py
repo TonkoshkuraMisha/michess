@@ -199,7 +199,7 @@ async def test_challenge_accepted_once_across_workers(monkeypatch):
         async def send_personal_message(self, message, user_id):
             pass
 
-    async def fake_rating(session, user_id):
+    async def fake_rating(session, user_id, category):
         return 1500
 
     monkeypatch.setattr(matchmaker, "_create_match_record", fake_create)

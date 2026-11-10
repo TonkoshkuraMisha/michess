@@ -12,8 +12,14 @@ from src.services.game_state import state_manager
 @pytest.mark.asyncio
 async def test_human_telemetry_keeps_high_trust_factor(db_session):
     """На серии «человеческих» ходов (разное время, без ухода из вкладки) trust_factor остаётся 100."""
-    human = User(username="honest_gm", hashed_password="pw", rating=1850, trust_factor=100, is_cheater=False)
-    opponent = User(username="honest_opp", hashed_password="pw", rating=1840, trust_factor=100, is_cheater=False)
+    human = User(
+        username="honest_gm", hashed_password="pw", bullet_rating=1850, blitz_rating=1850,
+        rapid_rating=1850, classical_rating=1850, trust_factor=100, is_cheater=False
+    )
+    opponent = User(
+        username="honest_opp", hashed_password="pw", bullet_rating=1840, blitz_rating=1840,
+        rapid_rating=1840, classical_rating=1840, trust_factor=100, is_cheater=False
+    )
     db_session.add_all([human, opponent])
     await db_session.commit()
     await db_session.refresh(human)
@@ -59,8 +65,14 @@ async def test_human_telemetry_keeps_high_trust_factor(db_session):
 @pytest.mark.asyncio
 async def test_robotic_blurred_telemetry_flags_cheater(db_session):
     """Постоянный window_blurred_before_move=True и монотонное время 4500 мс снижают trust_factor < 30."""
-    cheater = User(username="tab_switcher_bot", hashed_password="pw", rating=1500, trust_factor=100, is_cheater=False)
-    victim = User(username="fair_victim", hashed_password="pw", rating=1500, trust_factor=100, is_cheater=False)
+    cheater = User(
+        username="tab_switcher_bot", hashed_password="pw", bullet_rating=1500, blitz_rating=1500,
+        rapid_rating=1500, classical_rating=1500, trust_factor=100, is_cheater=False
+    )
+    victim = User(
+        username="fair_victim", hashed_password="pw", bullet_rating=1500, blitz_rating=1500,
+        rapid_rating=1500, classical_rating=1500, trust_factor=100, is_cheater=False
+    )
     db_session.add_all([cheater, victim])
     await db_session.commit()
     await db_session.refresh(cheater)
@@ -106,8 +118,14 @@ async def test_robotic_blurred_telemetry_flags_cheater(db_session):
 @pytest.mark.asyncio
 async def test_finish_game_triggers_telemetry_anticheat(db_session):
     """Проверяет автоматический запуск evaluate_game_telemetry внутри state_manager.finish_game."""
-    cheater = User(username="auto_ac_cheater", hashed_password="pw", rating=1400, trust_factor=100, is_cheater=False)
-    other = User(username="auto_ac_other", hashed_password="pw", rating=1400, trust_factor=100, is_cheater=False)
+    cheater = User(
+        username="auto_ac_cheater", hashed_password="pw", bullet_rating=1400, blitz_rating=1400,
+        rapid_rating=1400, classical_rating=1400, trust_factor=100, is_cheater=False
+    )
+    other = User(
+        username="auto_ac_other", hashed_password="pw", bullet_rating=1400, blitz_rating=1400,
+        rapid_rating=1400, classical_rating=1400, trust_factor=100, is_cheater=False
+    )
     db_session.add_all([cheater, other])
     await db_session.commit()
     await db_session.refresh(cheater)

@@ -302,7 +302,10 @@ def client():
 
 @pytest.fixture
 async def test_user_1(db_session):
-    user = User(username="player1", hashed_password="fakehash", rating=1200)
+    user = User(
+        username="player1", hashed_password="fakehash", bullet_rating=1200,
+        blitz_rating=1200, rapid_rating=1200, classical_rating=1200
+    )
     db_session.add(user)
     await db_session.commit()
     await db_session.refresh(user)
@@ -311,7 +314,10 @@ async def test_user_1(db_session):
 
 @pytest.fixture
 async def test_user_2(db_session):
-    user = User(username="player2", hashed_password="fakehash", rating=1200)
+    user = User(
+        username="player2", hashed_password="fakehash", bullet_rating=1200,
+        blitz_rating=1200, rapid_rating=1200, classical_rating=1200
+    )
     db_session.add(user)
     await db_session.commit()
     await db_session.refresh(user)

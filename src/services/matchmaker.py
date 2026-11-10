@@ -29,7 +29,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.config import settings
 from src.db.session import AsyncSessionLocal
 from src.models.game import Game, GameStatus
-from src.models.user import User
+from src.models.user import RatingCategory, User
+from src.services.rating import classify_time_control
 
 logger = logging.getLogger(__name__)
 
@@ -104,9 +105,9 @@ class Matchmaker:
         """Перечитывает пользователя из БД мимо identity map (рейтинг мог измениться)."""
         return await session.get(User, int(user_id), populate_existing=True)
 
-    async def _fresh_rating(self, session: AsyncSession, user_id: int) -> int | None:
+    async def _fresh_rating(self, session: AsyncSession, user_id: int, category: RatingCategory) -> int | None:
         user = await self._fresh_user(session, user_id)
-        return user.rating if user else None
+        return user.rating_for(category) if user else None
 
     async def _ensure_not_in_game(self, user_id: int, *, is_self: bool) -> None:
         if await self._state_manager.get_active_game_id(user_id) is not None:
@@ -250,6 +251,10 @@ class Matchmaker:
         if not white_user or not black_user:
             return None
 
+        category = classify_time_control(base_time, inc_time)
+        white_rating = white_user.rating_for(category)
+        black_rating = black_user.rating_for(category)
+
         new_game = Game(
             white_player_id=white_user.id,
             black_player_id=black_user.id,
@@ -263,8 +268,8 @@ class Matchmaker:
             white_time_ms=base_time,
             black_time_ms=base_time,
             last_move_at=now_ms,
-            white_initial_rating=white_user.rating,
-            black_initial_rating=black_user.rating,
+            white_initial_rating=white_rating,
+            black_initial_rating=black_rating,
         )
         session.add(new_game)
         await session.commit()
@@ -275,9 +280,9 @@ class Matchmaker:
             "white_id": white_user.id,
             "black_id": black_user.id,
             "white_username": white_user.username,
-            "white_rating": white_user.rating,
+            "white_rating": white_rating,
             "black_username": black_user.username,
-            "black_rating": black_user.rating,
+            "black_rating": black_rating,
         }
 
     async def _create_match_record(
@@ -417,8 +422,12 @@ class Matchmaker:
                 await self.leave_queue(c_id)  # вызов игрока, который уже играет, устарел
                 raise MatchmakingError("opponent_in_game", "Соперник уже играет другую партию")
 
+            base_time = int(prefs.get("base_time_ms", 180000))
+            inc_time = int(prefs.get("increment_ms", 0))
+            category = classify_time_control(base_time, inc_time)
+
             async with self._session(db) as session:
-                acceptor_rating = await self._fresh_rating(session, a_id)
+                acceptor_rating = await self._fresh_rating(session, a_id, category)
                 if acceptor_rating is None:
                     raise MatchmakingError("invalid", "Игрок не найден")
                 lo = int(prefs.get("min_rating", 0))
@@ -433,8 +442,6 @@ class Matchmaker:
                 if not await self.redis.delete(prefs_key):
                     raise MatchmakingError("challenge_gone", "Вызов уже неактивен или принят другим игроком")
 
-                base_time = int(prefs.get("base_time_ms", 180000))
-                inc_time = int(prefs.get("increment_ms", 0))
                 started = await self._start_reserved_game(
                     session,
                     lambda s, now_ms: self._create_match_record(s, c_id, a_id, base_time, inc_time, now_ms),

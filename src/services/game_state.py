@@ -10,7 +10,7 @@ from datetime import UTC
 import chess
 import chess.pgn
 from redis.exceptions import WatchError
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.sql import func
 
 from src.core.instance import WORKER_ID
@@ -27,7 +27,7 @@ from src.services.game_engine import (  # noqa: F401  (flag_outcome реэксп
     flag_outcome,
     side_has_mating_material,
 )
-from src.services.rating import elo_calculator
+from src.services.rating import classify_time_control, elo_calculator
 from src.services.task_dispatch import schedule_game_analysis_in_background
 
 logger = logging.getLogger(__name__)
@@ -588,25 +588,18 @@ class GameStateManager:
         white_user = locked_users[db_game.white_player_id]
         black_user = locked_users[db_game.black_player_id]
 
-        white_initial = white_user.rating
-        black_initial = black_user.rating
+        # Рейтинг и число сыгранных партий — отдельно по категории контроля времени этой
+        # партии (пуля/блиц/рапид/классика), а не один общий счёт.
+        category = classify_time_control(db_game.base_time_ms, db_game.increment_ms)
+        white_initial = white_user.rating_for(category)
+        black_initial = black_user.rating_for(category)
         delta_w = delta_b = 0
         new_w = white_initial
         new_b = black_initial
 
         if db_game.is_rated:
-            w_games_q = select(func.count(Game.id)).where(
-                or_(Game.white_player_id == white_user.id, Game.black_player_id == white_user.id),
-                Game.status == GameStatus.COMPLETED,
-                Game.is_rated == True,  # noqa: E712
-            )
-            b_games_q = select(func.count(Game.id)).where(
-                or_(Game.white_player_id == black_user.id, Game.black_player_id == black_user.id),
-                Game.status == GameStatus.COMPLETED,
-                Game.is_rated == True,  # noqa: E712
-            )
-            white_games_count = (await db.execute(w_games_q)).scalar() or 0
-            black_games_count = (await db.execute(b_games_q)).scalar() or 0
+            white_games_count = white_user.games_played_for(category)
+            black_games_count = black_user.games_played_for(category)
 
             new_w, delta_w, new_b, delta_b = elo_calculator.calculate_new_ratings(
                 white_initial,
@@ -615,8 +608,10 @@ class GameStateManager:
                 white_games=white_games_count,
                 black_games=black_games_count,
             )
-            white_user.rating = new_w
-            black_user.rating = new_b
+            setattr(white_user, f"{category}_rating", new_w)
+            setattr(black_user, f"{category}_rating", new_b)
+            setattr(white_user, f"{category}_games_played", white_games_count + 1)
+            setattr(black_user, f"{category}_games_played", black_games_count + 1)
 
         db_game.result = result
         db_game.termination = termination
@@ -985,8 +980,9 @@ class GameStateManager:
         white_user = await db.get(User, white_id)
         black_user = await db.get(User, black_id)
 
-        w_rating = white_user.rating if white_user else 1200
-        b_rating = black_user.rating if black_user else 1200
+        category = classify_time_control(db_game.base_time_ms, db_game.increment_ms) if db_game else "blitz"
+        w_rating = white_user.rating_for(category) if white_user else 1200
+        b_rating = black_user.rating_for(category) if black_user else 1200
 
         if db_game and db_game.status not in (GameStatus.COMPLETED, GameStatus.ABORTED):
             db_game.status = GameStatus.ABORTED

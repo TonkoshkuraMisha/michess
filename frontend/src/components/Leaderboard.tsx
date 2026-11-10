@@ -11,8 +11,18 @@ interface LeaderboardEntry {
     rating: number;
 }
 
+type RatingCategory = 'bullet' | 'blitz' | 'rapid' | 'classical';
+
+const CATEGORY_TABS: Array<{ key: RatingCategory; label: string }> = [
+    {key: 'bullet', label: 'Пуля'},
+    {key: 'blitz', label: 'Блиц'},
+    {key: 'rapid', label: 'Рапид'},
+    {key: 'classical', label: 'Классика'},
+];
+
 export default function Leaderboard() {
     const navigate = useNavigate();
+    const [category, setCategory] = useState<RatingCategory>('blitz');
     const [players, setPlayers] = useState<LeaderboardEntry[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -22,7 +32,7 @@ export default function Leaderboard() {
             setLoading(true);
             setError(null);
             try {
-                const res = await fetch(`${API_BASE_URL}/api/v1/profile/leaderboard?limit=50`);
+                const res = await fetch(`${API_BASE_URL}/api/v1/profile/leaderboard?limit=50&category=${category}`);
                 if (!res.ok) {
                     throw new Error('Не удалось загрузить таблицу лидеров');
                 }
@@ -36,7 +46,7 @@ export default function Leaderboard() {
         };
 
         fetchLeaderboard();
-    }, []);
+    }, [category]);
 
     const renderRankBadge = (rank: number) => {
         if (rank === 1) {
@@ -87,7 +97,7 @@ export default function Leaderboard() {
                             Таблица лидеров Michess
                         </h1>
                         <p className="text-xs sm:text-sm text-boxwood/75 mt-0.5">
-                            Топ-50 лучших игроков и исторических чемпионов по рейтингу Эло
+                            Топ-50 лучших игроков по рейтингу Эло — {CATEGORY_TABS.find(t => t.key === category)?.label.toLowerCase()}
                         </p>
                     </div>
                 </div>
@@ -105,6 +115,23 @@ export default function Leaderboard() {
                     {error}
                 </div>
             )}
+
+            <div className="flex gap-2">
+                {CATEGORY_TABS.map((tab) => (
+                    <button
+                        key={tab.key}
+                        type="button"
+                        onClick={() => setCategory(tab.key)}
+                        className={`flex-1 px-3.5 py-2.5 rounded-md border text-sm font-bold transition cursor-pointer ${
+                            category === tab.key
+                                ? 'bg-amber-700 text-white border-amber-400'
+                                : 'bg-acacia-dark hover:bg-black/45 text-amber-200 border-amber-800/50'
+                        }`}
+                    >
+                        {tab.label}
+                    </button>
+                ))}
+            </div>
 
             <div
                 className="bg-acacia-dark border border-amber-900/40 rounded shadow-heavy overflow-hidden min-h-[420px] relative">
