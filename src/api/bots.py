@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api import deps
 from src.api.rate_limit import rate_limit
 from src.db import session as db_session
-from src.models.game import Game
+from src.models.game import Game, GameStatus
 from src.models.user import User
 from src.services.bots.anderssen import anderssen_bot
 from src.services.bots.labourdonnais import labourdonnais_bot
@@ -331,7 +331,7 @@ async def _get_or_create_bot_user(db: AsyncSession, bot_id: str) -> User:
     res = await db.execute(stmt)
     bot_user = res.scalar_one_or_none()
     if bot_user is not None:
-        if bot_user.hashed_password == BOT_PASSWORD_MARKER:
+        if bot_user.is_bot:
             return bot_user
         # Имя занято человеком (до запрета регистрации имён ботов) — не приписываем ему
         # партии бота, а заводим бота под служебным именем.
@@ -341,23 +341,12 @@ async def _get_or_create_bot_user(db: AsyncSession, bot_id: str) -> User:
         if bot_user is not None:
             return bot_user
 
-    user_cols = {c.name for c in User.__table__.columns}
-    user_kwargs: dict = {
-        "username": bot_username,
-        "rating": meta["rating"],
-    }
-    if "hashed_password" in user_cols:
-        user_kwargs["hashed_password"] = BOT_PASSWORD_MARKER
-    elif "password_hash" in user_cols:
-        user_kwargs["password_hash"] = BOT_PASSWORD_MARKER
-    if "email" in user_cols:
-        user_kwargs["email"] = f"{bot_id}@michess.local"
-    if "is_cheater" in user_cols:
-        user_kwargs["is_cheater"] = False
-    if "trust_factor" in user_cols:
-        user_kwargs["trust_factor"] = 100
-
-    bot_user = User(**user_kwargs)
+    bot_user = User(
+        username=bot_username,
+        hashed_password=BOT_PASSWORD_MARKER,
+        rating=meta["rating"],
+        is_bot=True,
+    )
     db.add(bot_user)
     await db.flush()
     return bot_user
@@ -370,63 +359,24 @@ def _prepare_game_kwargs(
         final_fen: str,
         payload: BotGameSaveRequest,
 ) -> dict:
-    """Формирует словарь полей модели Game в соответствии со схемой БД."""
-    game_cols = {c.name: c for c in Game.__table__.columns}
-    kwargs: dict = {}
-
-    if "pgn_date" in game_cols:
-        kwargs["pgn_date"] = datetime.now(UTC).strftime("%Y.%m.%d")
-    if "site" in game_cols:
-        kwargs["site"] = "Michess Bot Arena"
-    if "eco" in game_cols:
-        kwargs["eco"] = _detect_eco_code(payload.moves_uci)
-
-    if "white_player_id" in game_cols:
-        kwargs["white_player_id"] = white_id
-    elif "white_id" in game_cols:
-        kwargs["white_id"] = white_id
-
-    if "black_player_id" in game_cols:
-        kwargs["black_player_id"] = black_id
-    elif "black_id" in game_cols:
-        kwargs["black_id"] = black_id
-
-    if "pgn" in game_cols:
-        kwargs["pgn"] = pgn_text
-    if "board_fen" in game_cols:
-        kwargs["board_fen"] = final_fen
-    elif "fen" in game_cols:
-        kwargs["fen"] = final_fen
-    elif "current_fen" in game_cols:
-        kwargs["current_fen"] = final_fen
-
-    if "result" in game_cols:
-        kwargs["result"] = payload.result
-    if "termination" in game_cols:
-        kwargs["termination"] = payload.termination or "normal"
-    if "is_rated" in game_cols:
-        kwargs["is_rated"] = False
-    if "base_time_ms" in game_cols:
-        kwargs["base_time_ms"] = payload.base_time_ms
-    if "increment_ms" in game_cols:
-        kwargs["increment_ms"] = payload.increment_ms
-
-    if "status" in game_cols:
-        col_type = game_cols["status"].type
-        enums = getattr(col_type, "enums", None)
-        if enums and "COMPLETED" in enums:
-            kwargs["status"] = "COMPLETED"
-        elif enums and "FINISHED" in enums:
-            kwargs["status"] = "FINISHED"
-        else:
-            kwargs["status"] = "COMPLETED"
-
-    if "finished_at" in game_cols:
-        is_tz = getattr(game_cols["finished_at"].type, "timezone", False)
-        now_utc = datetime.now(UTC)
-        kwargs["finished_at"] = now_utc if is_tz else now_utc.replace(tzinfo=None)
-
-    return kwargs
+    """Формирует словарь полей модели Game для завершённой партии с ботом."""
+    now_utc = datetime.now(UTC)
+    return {
+        "white_player_id": white_id,
+        "black_player_id": black_id,
+        "pgn": pgn_text,
+        "board_fen": final_fen,
+        "result": payload.result,
+        "termination": payload.termination or "normal",
+        "is_rated": False,
+        "base_time_ms": payload.base_time_ms,
+        "increment_ms": payload.increment_ms,
+        "status": GameStatus.COMPLETED,
+        "finished_at": now_utc,
+        "pgn_date": now_utc.strftime("%Y.%m.%d"),
+        "site": "Michess Bot Arena",
+        "eco": _detect_eco_code(payload.moves_uci),
+    }
 
 
 @router.get("/list")

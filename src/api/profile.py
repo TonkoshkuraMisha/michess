@@ -105,7 +105,12 @@ async def get_leaderboard(
         limit: int = Query(50, ge=1, le=100, description="Количество игроков в топе"),
         db: AsyncSession = Depends(get_db),
 ):
-    query = select(User).where(User.is_cheater == False).order_by(desc(User.rating)).limit(limit)  # noqa: E712
+    query = (
+        select(User)
+        .where(User.is_cheater == False, User.is_bot == False)  # noqa: E712
+        .order_by(desc(User.rating))
+        .limit(limit)
+    )
     result = await db.execute(query)
     top_users = result.scalars().all()
 

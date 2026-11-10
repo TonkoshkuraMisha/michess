@@ -28,6 +28,10 @@ class User(Base):
     # ELO or Glicko-2 rating
     rating: Mapped[int] = mapped_column(Integer, default=1200)
 
+    # Исторический бот (играбельный AI) или архивный исторический игрок (партии из PGN,
+    # посмотреть — нельзя сыграть) — не реальный зарегистрированный игрок, вне таблицы лидеров.
+    is_bot: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+
     # Anti-cheat specific fields
     is_cheater: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     trust_factor: Mapped[int] = mapped_column(Integer, default=100)

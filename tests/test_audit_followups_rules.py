@@ -103,6 +103,39 @@ def test_bot_marker_password_never_verifies():
     assert verify_password("anything", "!historical_bot_no_login!") is False
 
 
+# --- is_bot / лидеры ---------------------------------------------------------------------
+
+async def test_leaderboard_excludes_bots_and_cheaters(client, db_session, test_user_1):
+    from src.models.user import User
+
+    db_session.add_all([
+        User(username="HighRatedBot", hashed_password="!historical_bot_no_login!", rating=2800, is_bot=True),
+        User(username="Cheater", hashed_password="fakehash", rating=2700, is_cheater=True),
+    ])
+    await db_session.commit()
+
+    body = client.get("/api/v1/profile/leaderboard").json()
+    usernames = [row["username"] for row in body]
+    assert "HighRatedBot" not in usernames
+    assert "Cheater" not in usernames
+    assert test_user_1.username in usernames
+
+
+async def test_save_game_marks_bot_account_as_is_bot(client, db_session, token_user_1):
+    from sqlalchemy import select
+
+    from src.models.user import User
+
+    res = client.post(
+        "/api/v1/bots/save-game",
+        json={"bot_id": "morphy", "player_color": "white", "result": "1-0", "moves_uci": FOOLS_MATE},
+        headers={"Authorization": f"Bearer {token_user_1}"},
+    )
+    assert res.status_code == 200
+    bot_user = (await db_session.execute(select(User).where(User.username == "Пол Морфи"))).scalar_one()
+    assert bot_user.is_bot is True
+
+
 # --- Брошенная партия -------------------------------------------------------------------
 
 def test_abandon_vs_insufficient_material_is_draw():

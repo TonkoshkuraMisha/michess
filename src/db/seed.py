@@ -222,6 +222,7 @@ async def ensure_champion_seeded(db: AsyncSession, username_or_id: str) -> User 
                 rating=meta["rating"],
                 is_cheater=False,
                 trust_factor=100,
+                is_bot=True,
             )
             db.add(champ_user)
             await db.flush()
@@ -270,6 +271,7 @@ async def ensure_champion_seeded(db: AsyncSession, username_or_id: str) -> User 
                         rating=opp_rating,
                         is_cheater=False,
                         trust_factor=100,
+                        is_bot=True,
                     )
 
             parsed_entries.append((w_name, b_name, meta_fields, raw_pgn))
