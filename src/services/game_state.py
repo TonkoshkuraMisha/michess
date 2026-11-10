@@ -160,6 +160,34 @@ def evaluate_clock_expiry(state: dict, now_ms: int) -> tuple[str, int | None, st
     return None
 
 
+GAME_DEADLINES_KEY = "game_deadlines"
+
+
+def next_timeout_deadline_ms(state: dict) -> int:
+    """
+    Следующий момент (абсолютные мс), когда у партии может сработать флаг, брошенность или
+    неявка на 1-м ходу — минимум применимых дедлайнов. Используется только как score в
+    сортированном множестве GAME_DEADLINES_KEY, чтобы check_timeouts_once не перебирал все
+    активные партии каждые 0.5 с, а брал через ZRANGEBYSCORE только те, чей срок подошёл.
+    Не подменяет evaluate_clock_expiry — та решает исход по актуальному состоянию на момент
+    самой проверки, а это только планирование следующего пробуждения.
+    """
+    last_move_at = int(state.get("last_move_at", 0) or 0)
+    mover = side_to_move(state)
+    deadlines = [last_move_at + int(state.get(f"{mover}_time_ms", 0) or 0)]
+
+    if int(state.get("state_version", 0) or 0) < 2:
+        deadlines.append(last_move_at + 30000)
+
+    for color in ("white", "black"):
+        if state.get(f"{color}_disconnected") == "true":
+            started_at = int(state.get(f"{color}_disconnect_started_at", 0) or 0)
+            if started_at > 0:
+                deadlines.append(started_at + ABANDON_TIMEOUT_MS)
+
+    return min(deadlines)
+
+
 class GameStateManager:
     def __init__(self):
         self.redis = redis_client
@@ -196,6 +224,7 @@ class GameStateManager:
         }
         await self.redis.hset(self._get_key(game_id), mapping=state)
         await self.redis.sadd("active_games", str(game_id))
+        await self.redis.zadd(GAME_DEADLINES_KEY, {str(game_id): next_timeout_deadline_ms(state)})
         await self.redis.set(f"user:{white_id}:current_game", str(game_id))
         await self.redis.set(f"user:{black_id}:current_game", str(game_id))
 
@@ -270,6 +299,7 @@ class GameStateManager:
                         "ended_at": str(ended_at),
                     })
                     pipe.zadd(PENDING_FINISH_KEY, {str(game_id): ended_at})
+                    pipe.zrem(GAME_DEADLINES_KEY, str(game_id))
                     await pipe.execute()
                     return state
                 except WatchError:
@@ -318,6 +348,7 @@ class GameStateManager:
                 await self.redis.hset(self._get_key(game_id), mapping=state)
                 if status_str == "in_progress":
                     await self.redis.sadd("active_games", str(game_id))
+                    await self.redis.zadd(GAME_DEADLINES_KEY, {str(game_id): next_timeout_deadline_ms(state)})
                     await self.redis.set(f"user:{db_game.white_player_id}:current_game", str(game_id))
                     await self.redis.set(f"user:{db_game.black_player_id}:current_game", str(game_id))
                 return await self.get_game_state(game_id)
@@ -338,6 +369,7 @@ class GameStateManager:
         await self.redis.delete(f"game:{game_id}:commands")
         await self.redis.delete(f"game:{game_id}:moves")
         await self.redis.srem("active_games", str(game_id))
+        await self.redis.zrem(GAME_DEADLINES_KEY, str(game_id))
 
     async def save_move_telemetry(self, game_id: int, move_data: dict):
         key = f"game:{game_id}:moves"
@@ -430,6 +462,7 @@ class GameStateManager:
                             "ended_at": str(now_ms),
                         })
                         pipe.zadd(PENDING_FINISH_KEY, {str(game_id): now_ms})
+                        pipe.zrem(GAME_DEADLINES_KEY, str(game_id))
                         pipe.sadd(cmd_key, command_id)
                         await pipe.execute()
                         return {
@@ -478,6 +511,7 @@ class GameStateManager:
                         }
                         pipe.hset(game_key, mapping=updates)
                         pipe.zadd(PENDING_FINISH_KEY, {str(game_id): now_ms})
+                        pipe.zrem(GAME_DEADLINES_KEY, str(game_id))
                         pipe.sadd(cmd_key, command_id)
                         await pipe.execute()
                         return {
@@ -510,6 +544,7 @@ class GameStateManager:
                         updates["draw_offer"] = ""
 
                     pipe.hset(game_key, mapping=updates)
+                    pipe.zadd(GAME_DEADLINES_KEY, {str(game_id): next_timeout_deadline_ms({**state, **updates})})
                     pipe.sadd(cmd_key, command_id)
                     pipe.expire(cmd_key, 86400)
 
@@ -783,8 +818,10 @@ class GameStateManager:
                     if not raw or raw.get("status") != "in_progress":
                         await pipe.unwatch()
                         return None
+                    str_updates = {k: str(v) for k, v in updates.items()}
                     pipe.multi()
-                    pipe.hset(game_key, mapping={k: str(v) for k, v in updates.items()})
+                    pipe.hset(game_key, mapping=str_updates)
+                    pipe.zadd(GAME_DEADLINES_KEY, {str(game_id): next_timeout_deadline_ms({**raw, **str_updates})})
                     await pipe.execute()
                     return _coerce_state(raw)
                 except WatchError:
@@ -823,7 +860,10 @@ class GameStateManager:
 
     async def check_timeouts_once(self, manager, now_ms: int | None = None) -> None:
         """
-        Один проход по активным партиям: флаги, брошенные партии, неявка на первый ход.
+        Один проход: флаги, брошенные партии, неявка на первый ход — но не по всем активным
+        партиям, а только по тем, чей дедлайн (GAME_DEADLINES_KEY) уже подошёл. При сотнях
+        одновременных партий большинство не близко к флагу, и полный перебор active_games
+        каждые 0.5 с не масштабируется; ZRANGEBYSCORE достаёт ровно те, кому пора.
 
         Каждая партия обрабатывается в собственном try: раньше исключение на одной «битой»
         партии (повреждённое состояние, сбой БД в finish_game) прерывало весь проход, и на каждом
@@ -832,19 +872,21 @@ class GameStateManager:
         при временном сбое БД иначе потерялись бы все идущие партии.
         """
         now_ms = int(time.time() * 1000) if now_ms is None else now_ms
-        active_game_ids = list(await self.redis.smembers("active_games"))
+        due_game_ids = await self.redis.zrangebyscore(GAME_DEADLINES_KEY, 0, now_ms)
 
         # Счётчики сбоев партий, которые уже не активны (завершены другим путём), не нужны.
-        active_set = {str(gid) for gid in active_game_ids}
-        for stale_id in [gid for gid in self._timeout_failures if str(gid) not in active_set]:
-            del self._timeout_failures[stale_id]
+        # active_games, а не due_game_ids: партия с ещё не подошедшим дедлайном не должна
+        # терять накопленный backoff только из-за того, что в этот тик её не разбирали.
+        for stale_id in list(self._timeout_failures):
+            if not await self.redis.sismember("active_games", str(stale_id)):
+                del self._timeout_failures[stale_id]
 
-        for game_id_str in active_game_ids:
+        for game_id_str in due_game_ids:
             try:
                 game_id = int(game_id_str)
             except (TypeError, ValueError):
-                logger.error("Removing malformed id %r from active_games", game_id_str)
-                await self.redis.srem("active_games", game_id_str)
+                logger.error("Removing malformed id %r from %s", game_id_str, GAME_DEADLINES_KEY)
+                await self.redis.zrem(GAME_DEADLINES_KEY, game_id_str)
                 continue
 
             failure = self._timeout_failures.get(game_id)
@@ -881,6 +923,7 @@ class GameStateManager:
         state = await self.get_game_state(game_id)
         if not state or state["status"] != "in_progress":
             await self.redis.srem("active_games", game_id_str)
+            await self.redis.zrem(GAME_DEADLINES_KEY, game_id_str)
             return
 
         if int(state.get("state_version", 0)) < 2 and now_ms - int(state.get("last_move_at", now_ms)) >= 30000:
@@ -891,6 +934,10 @@ class GameStateManager:
         white_id, black_id = int(state["white_id"]), int(state["black_id"])
         decision = evaluate_clock_expiry(state, now_ms)
         if not decision:
+            # Дедлайн в GAME_DEADLINES_KEY подошёл, но на свежем состоянии исход не сработал
+            # (например, ход и наш тик пересеклись) — переставляем его на будущий момент,
+            # иначе эта партия будет попадать в ZRANGEBYSCORE на каждом тике без дела.
+            await self.redis.zadd(GAME_DEADLINES_KEY, {game_id_str: next_timeout_deadline_ms(state)})
             return
 
         game_result, winner_id, reason = decision
@@ -1043,9 +1090,15 @@ class GameStateManager:
                         report["restored"].append(game_id)
                 else:
                     missing_now.add(game_id)
-            elif raw.get("status") == "in_progress" and str(game_id) not in active:
-                await self.redis.sadd("active_games", str(game_id))
-                report["restored"].append(game_id)
+            elif raw.get("status") == "in_progress":
+                if str(game_id) not in active:
+                    await self.redis.sadd("active_games", str(game_id))
+                    report["restored"].append(game_id)
+                # Партия активна, но для неё нет дедлайна (деплой этой схемы на уже идущие
+                # партии, либо дедлайн потерялся по другой причине) — без него флаг у неё
+                # никогда не сработал бы, пока не случится следующий ход/дисконнект.
+                if await self.redis.zscore(GAME_DEADLINES_KEY, str(game_id)) is None:
+                    await self.redis.zadd(GAME_DEADLINES_KEY, {str(game_id): next_timeout_deadline_ms(raw)})
             elif raw.get("status") in ("completed", "aborted"):
                 # Завершена в Redis, но в реестре незавершённых её нет (например, захвачена
                 # до появления реестра) — ставим в очередь сверки.
