@@ -71,6 +71,11 @@ ABANDON_DRAW_TERMINATION = "abandoned_vs_insufficient_material"
 TIMEOUTS_LEADER_KEY = "timeouts:leader"
 TIMEOUTS_LEADER_TTL_MS = 3000
 
+# Партия, на которой проверка таймаутов падает, откладывается: 1 с, 2 с, 4 с ... до 30 с.
+TIMEOUT_RETRY_BASE_MS = 1000
+TIMEOUT_RETRY_MAX_MS = 30_000
+TIMEOUT_FAILURE_LOG_EVERY = 20
+
 
 def _coerce_state(raw: dict) -> dict:
     """Приводит числовые поля сырого Redis-хэша к int (возвращает новый словарь)."""
@@ -144,6 +149,8 @@ def evaluate_clock_expiry(state: dict, now_ms: int) -> tuple[str, int | None, st
 class GameStateManager:
     def __init__(self):
         self.redis = redis_client
+        # game_id -> (сбоев подряд, не проверять раньше чем, ms) — для проверки таймаутов
+        self._timeout_failures: dict[int, tuple[int, int]] = {}
 
     def _get_key(self, game_id: int) -> str:
         return f"game:{game_id}:state"
@@ -775,64 +782,108 @@ class GameStateManager:
     async def check_timeouts_loop(self, manager):
         while True:
             try:
-                if not await self._hold_timeouts_leadership():
-                    await asyncio.sleep(0.5)
-                    continue
-
-                active_game_ids = list(await self.redis.smembers("active_games"))
-                now_ms = int(time.time() * 1000)
-
-                for game_id_str in active_game_ids:
-                    game_id = int(game_id_str)
-                    state = await self.get_game_state(game_id)
-                    if not state or state["status"] != "in_progress":
-                        await self.redis.srem("active_games", game_id_str)
-                        continue
-
-                    if int(state.get("state_version", 0)) < 2 and now_ms - int(
-                            state.get("last_move_at", now_ms)) >= 30000:
-                        async with AsyncSessionLocal() as db:
-                            await self.check_first_move_abort_timeout(db, game_id, manager=manager, timeout_ms=30000)
-                        continue
-
-                    white_id, black_id = int(state["white_id"]), int(state["black_id"])
-                    decision = evaluate_clock_expiry(state, now_ms)
-
-                    if decision:
-                        game_result, winner_id, reason = decision
-
-                        # Решение перепроверяется на свежем состоянии внутри транзакции: игрок мог
-                        # успеть сходить, переподключиться или сдаться, пока мы читали состояние.
-                        claimed = await self.claim_game_end(
-                            game_id, game_result, reason,
-                            guard=lambda fresh, expected=decision: evaluate_clock_expiry(fresh, now_ms) == expected,
-                        )
-                        if not claimed:
-                            continue
-
-                        logger.info("Game %s ended. Result: %s, Reason: %s", game_id, game_result, reason)
-
-                        async with AsyncSessionLocal() as db:
-                            rating_updates = await self.finish_game(db, game_id, game_result, termination=reason)
-
-                        game_over_payload = {
-                            "event": "game_over",
-                            "game_id": game_id,
-                            "reason": reason,
-                            "winner_id": winner_id,
-                            "result": game_result,
-                        }
-                        game_over_payload.update(rating_updates)
-
-                        await manager.send_personal_message(game_over_payload, white_id)
-                        await manager.send_personal_message(game_over_payload, black_id)
-                        if hasattr(manager, "broadcast_to_spectators"):
-                            await manager.broadcast_to_spectators(game_id, game_over_payload)
-
-            except Exception as e:
-                logger.error("Error in check_timeouts_loop: %s", e)
+                if await self._hold_timeouts_leadership():
+                    await self.check_timeouts_once(manager)
+            except Exception:
+                # Сюда попадают только сбои самого прохода (Redis недоступен и т. п.);
+                # ошибки отдельных партий изолированы в check_timeouts_once.
+                logger.exception("Error in check_timeouts_loop")
 
             await asyncio.sleep(0.5)
+
+    async def check_timeouts_once(self, manager, now_ms: int | None = None) -> None:
+        """
+        Один проход по активным партиям: флаги, брошенные партии, неявка на первый ход.
+
+        Каждая партия обрабатывается в собственном try: раньше исключение на одной «битой»
+        партии (повреждённое состояние, сбой БД в finish_game) прерывало весь проход, и на каждом
+        тике всё повторялось — флаги и отмены переставали срабатывать во всех партиях сразу.
+        Партия, которая падает раз за разом, откладывается с растущей паузой, но не выбрасывается:
+        при временном сбое БД иначе потерялись бы все идущие партии.
+        """
+        now_ms = int(time.time() * 1000) if now_ms is None else now_ms
+        active_game_ids = list(await self.redis.smembers("active_games"))
+
+        # Счётчики сбоев партий, которые уже не активны (завершены другим путём), не нужны.
+        active_set = {str(gid) for gid in active_game_ids}
+        for stale_id in [gid for gid in self._timeout_failures if str(gid) not in active_set]:
+            del self._timeout_failures[stale_id]
+
+        for game_id_str in active_game_ids:
+            try:
+                game_id = int(game_id_str)
+            except (TypeError, ValueError):
+                logger.error("Removing malformed id %r from active_games", game_id_str)
+                await self.redis.srem("active_games", game_id_str)
+                continue
+
+            failure = self._timeout_failures.get(game_id)
+            if failure and now_ms < failure[1]:
+                continue  # пауза после повторяющихся сбоев ещё не прошла
+
+            try:
+                await self._check_game_timeout(game_id, game_id_str, manager, now_ms)
+            except Exception:
+                self._record_timeout_failure(game_id, now_ms)
+            else:
+                self._timeout_failures.pop(game_id, None)
+
+    def _record_timeout_failure(self, game_id: int, now_ms: int) -> None:
+        count = self._timeout_failures.get(game_id, (0, 0))[0] + 1
+        delay_ms = min(TIMEOUT_RETRY_MAX_MS, TIMEOUT_RETRY_BASE_MS * 2 ** (count - 1))
+        self._timeout_failures[game_id] = (count, now_ms + delay_ms)
+        # Полный стек — на первом сбое и затем изредка, чтобы не заливать лог каждые полсекунды.
+        if count == 1 or count % TIMEOUT_FAILURE_LOG_EVERY == 0:
+            logger.exception(
+                "Timeout check failed for game %s (%s in a row), next attempt in %s ms",
+                game_id, count, delay_ms,
+            )
+
+    async def _check_game_timeout(self, game_id: int, game_id_str: str, manager, now_ms: int) -> None:
+        state = await self.get_game_state(game_id)
+        if not state or state["status"] != "in_progress":
+            await self.redis.srem("active_games", game_id_str)
+            return
+
+        if int(state.get("state_version", 0)) < 2 and now_ms - int(state.get("last_move_at", now_ms)) >= 30000:
+            async with AsyncSessionLocal() as db:
+                await self.check_first_move_abort_timeout(db, game_id, manager=manager, timeout_ms=30000)
+            return
+
+        white_id, black_id = int(state["white_id"]), int(state["black_id"])
+        decision = evaluate_clock_expiry(state, now_ms)
+        if not decision:
+            return
+
+        game_result, winner_id, reason = decision
+
+        # Решение перепроверяется на свежем состоянии внутри транзакции: игрок мог
+        # успеть сходить, переподключиться или сдаться, пока мы читали состояние.
+        claimed = await self.claim_game_end(
+            game_id, game_result, reason,
+            guard=lambda fresh, expected=decision: evaluate_clock_expiry(fresh, now_ms) == expected,
+        )
+        if not claimed:
+            return
+
+        logger.info("Game %s ended. Result: %s, Reason: %s", game_id, game_result, reason)
+
+        async with AsyncSessionLocal() as db:
+            rating_updates = await self.finish_game(db, game_id, game_result, termination=reason)
+
+        game_over_payload = {
+            "event": "game_over",
+            "game_id": game_id,
+            "reason": reason,
+            "winner_id": winner_id,
+            "result": game_result,
+        }
+        game_over_payload.update(rating_updates)
+
+        await manager.send_personal_message(game_over_payload, white_id)
+        await manager.send_personal_message(game_over_payload, black_id)
+        if hasattr(manager, "broadcast_to_spectators"):
+            await manager.broadcast_to_spectators(game_id, game_over_payload)
 
     async def abort_game(self, db, game_id: int, guard=None) -> dict:
         """
