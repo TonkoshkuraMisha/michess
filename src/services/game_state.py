@@ -76,6 +76,14 @@ TIMEOUT_RETRY_BASE_MS = 1000
 TIMEOUT_RETRY_MAX_MS = 30_000
 TIMEOUT_FAILURE_LOG_EVERY = 20
 
+# Партии, завершённые в Redis, но ещё не записанные в БД: id -> момент завершения (ms).
+# Запись добавляется в той же транзакции, что и смена статуса, и снимается только после
+# коммита итога в БД. Если процесс упал между этими шагами, сверка дозавершит партию.
+PENDING_FINISH_KEY = "games:pending_finish"
+# Сколько ждать штатного обработчика, прежде чем дозавершать партию сверкой.
+RECONCILE_GRACE_MS = 30_000
+RECONCILE_INTERVAL_MS = 30_000
+
 
 def _coerce_state(raw: dict) -> dict:
     """Приводит числовые поля сырого Redis-хэша к int (возвращает новый словарь)."""
@@ -151,6 +159,9 @@ class GameStateManager:
         self.redis = redis_client
         # game_id -> (сбоев подряд, не проверять раньше чем, ms) — для проверки таймаутов
         self._timeout_failures: dict[int, tuple[int, int]] = {}
+        # Сверка Redis и БД (только у лидера цикла таймаутов): 0 — первый проход сразу при старте.
+        self._last_reconcile_ms = 0
+        self._missing_state_seen: set[int] = set()
 
     def _get_key(self, game_id: int) -> str:
         return f"game:{game_id}:state"
@@ -244,12 +255,15 @@ class GameStateManager:
                         await pipe.unwatch()
                         return None
 
+                    ended_at = int(time.time() * 1000)
                     pipe.multi()
                     pipe.hset(game_key, mapping={
                         "status": status,
                         "result": result,
                         "termination": termination,
+                        "ended_at": str(ended_at),
                     })
+                    pipe.zadd(PENDING_FINISH_KEY, {str(game_id): ended_at})
                     await pipe.execute()
                     return state
                 except WatchError:
@@ -316,17 +330,24 @@ class GameStateManager:
             await self.redis.delete(f"user:{state.get('black_id')}:current_game")
         await self.redis.delete(self._get_key(game_id))
         await self.redis.delete(f"game:{game_id}:commands")
+        await self.redis.delete(f"game:{game_id}:moves")
         await self.redis.srem("active_games", str(game_id))
 
     async def save_move_telemetry(self, game_id: int, move_data: dict):
         key = f"game:{game_id}:moves"
         await self.redis.rpush(key, json.dumps(move_data))
 
-    async def extract_all_moves(self, game_id: int) -> list[dict]:
-        key = f"game:{game_id}:moves"
-        moves_raw = await self.redis.lrange(key, 0, -1)
-        await self.redis.delete(key)
+    async def read_all_moves(self, game_id: int) -> list[dict]:
+        """
+        Телеметрия ходов партии. Не удаляет её: удаление — после коммита итога в БД
+        (clear_game_state), иначе при сбое коммита повторная попытка осталась бы без ходов.
+        """
+        moves_raw = await self.redis.lrange(f"game:{game_id}:moves", 0, -1)
         return [json.loads(m) for m in moves_raw]
+
+    async def _mark_finished_in_db(self, game_id: int) -> None:
+        """Итог партии записан в БД — сверке её дозавершать больше не нужно."""
+        await self.redis.zrem(PENDING_FINISH_KEY, str(game_id))
 
     async def process_atomic_move(
             self,
@@ -400,7 +421,9 @@ class GameStateManager:
                             "termination": flag_termination,
                             "white_time_ms": str(final_white),
                             "black_time_ms": str(final_black),
+                            "ended_at": str(now_ms),
                         })
+                        pipe.zadd(PENDING_FINISH_KEY, {str(game_id): now_ms})
                         pipe.sadd(cmd_key, command_id)
                         await pipe.execute()
                         return {
@@ -445,8 +468,10 @@ class GameStateManager:
                             "last_move_at": str(now_ms),
                             "white_time_ms": str(new_white_time),
                             "black_time_ms": str(new_black_time),
+                            "ended_at": str(now_ms),
                         }
                         pipe.hset(game_key, mapping=updates)
+                        pipe.zadd(PENDING_FINISH_KEY, {str(game_id): now_ms})
                         pipe.sadd(cmd_key, command_id)
                         await pipe.execute()
                         return {
@@ -540,6 +565,10 @@ class GameStateManager:
 
         if db_game.status in (GameStatus.COMPLETED, GameStatus.ABORTED):
             await db.commit()  # снимаем блокировку
+            # Итог уже записан (повторный вызов или сверка после сбоя между коммитом и
+            # очисткой Redis) — достаточно убрать остатки состояния.
+            await self._mark_finished_in_db(game_id)
+            await self.clear_game_state(game_id)
             return {
                 "white_delta": db_game.white_rating_delta or 0,
                 "black_delta": db_game.black_rating_delta or 0
@@ -615,7 +644,7 @@ class GameStateManager:
         db_game.pgn_date = today_str
         db_game.site = "MiChess"
 
-        moves_telemetry = await self.extract_all_moves(game_id)
+        moves_telemetry = await self.read_all_moves(game_id)
         if moves_telemetry:
             db_moves = [Move(game_id=game_id, **m) for m in moves_telemetry]
             db.add_all(db_moves)
@@ -662,6 +691,7 @@ class GameStateManager:
                 db_game.eco = meta["eco"]
 
         await db.commit()
+        await self._mark_finished_in_db(game_id)
 
         if db_game.is_rated:
             try:
@@ -784,6 +814,7 @@ class GameStateManager:
             try:
                 if await self._hold_timeouts_leadership():
                     await self.check_timeouts_once(manager)
+                    await self._maybe_reconcile(manager)
             except Exception:
                 # Сюда попадают только сбои самого прохода (Redis недоступен и т. п.);
                 # ошибки отдельных партий изолированы в check_timeouts_once.
@@ -827,6 +858,14 @@ class GameStateManager:
                 self._record_timeout_failure(game_id, now_ms)
             else:
                 self._timeout_failures.pop(game_id, None)
+
+    async def _maybe_reconcile(self, manager) -> None:
+        now_ms = int(time.time() * 1000)
+        if now_ms - self._last_reconcile_ms < RECONCILE_INTERVAL_MS:
+            return
+        # Время отмечаем до прохода: упавшая сверка не должна повторяться каждые полсекунды.
+        self._last_reconcile_ms = now_ms
+        await self.reconcile_unfinished_games(now_ms, manager=manager)
 
     def _record_timeout_failure(self, game_id: int, now_ms: int) -> None:
         count = self._timeout_failures.get(game_id, (0, 0))[0] + 1
@@ -916,6 +955,26 @@ class GameStateManager:
         await self.redis.delete(f"user:{white_id}:current_game")
         await self.redis.delete(f"user:{black_id}:current_game")
 
+        w_rating, b_rating = await self._finalize_abort_in_db(db, game_id, white_id, black_id)
+
+        return {
+            "status": "aborted",
+            "result": "*",
+            "termination": "aborted",
+            "white_id": white_id,
+            "black_id": black_id,
+            "white_delta": 0,
+            "black_delta": 0,
+            "white_new_rating": w_rating,
+            "black_new_rating": b_rating,
+        }
+
+    async def _finalize_abort_in_db(self, db, game_id: int, white_id: int, black_id: int) -> tuple[int, int]:
+        """
+        Записывает отмену партии в БД (идемпотентно). Вызывается после успешного захвата
+        завершения со статусом aborted — из abort_game или из сверки после сбоя.
+        Возвращает текущие рейтинги игроков (отмена их не меняет).
+        """
         from datetime import datetime, timezone
 
         db_game = await db.get(Game, game_id, with_for_update=True, populate_existing=True)
@@ -934,19 +993,111 @@ class GameStateManager:
             is_tz = getattr(Game.__table__.c.finished_at.type, "timezone", False)
             now_utc = datetime.now(timezone.utc)
             db_game.finished_at = now_utc if is_tz else now_utc.replace(tzinfo=None)
-            await db.commit()
+        await db.commit()  # и снимает блокировку, если партия уже была завершена
+        await self._mark_finished_in_db(game_id)
+        return w_rating, b_rating
 
-        return {
-            "status": "aborted",
-            "result": "*",
-            "termination": "aborted",
-            "white_id": white_id,
-            "black_id": black_id,
-            "white_delta": 0,
-            "black_delta": 0,
-            "white_new_rating": w_rating,
-            "black_new_rating": b_rating,
-        }
+    # --- Сверка Redis и БД ----------------------------------------------------------------
+
+    async def reconcile_unfinished_games(self, now_ms: int | None = None, manager=None) -> dict:
+        """
+        Дозавершает партии, застрявшие между Redis и БД.
+
+        1. Партия завершена в Redis (claim_game_end / мат / флаг при ходе), но итог не записан
+           в БД: процесс упал или БД была недоступна между этими шагами. Без сверки партия
+           навсегда оставалась бы in_progress в БД без рейтинга, а цикл таймаутов её уже не видит.
+           Такие партии лежат в PENDING_FINISH_KEY; берём те, что висят дольше RECONCILE_GRACE_MS
+           (штатный обработчик к этому моменту давно бы закончил) и прогоняем через
+           идемпотентные finish_game / _finalize_abort_in_db.
+        2. Партия in_progress в БД, но в Redis её состояния нет (Redis перезапущен без
+           персистентности) или она выпала из active_games: восстанавливаем состояние, чтобы
+           работали ходы и часы. Состояние должно отсутствовать на двух проходах подряд —
+           иначе можно поймать только что созданную партию до initialize_game.
+        """
+        now_ms = int(time.time() * 1000) if now_ms is None else now_ms
+        report = {"finished": [], "aborted": [], "restored": [], "failed": []}
+
+        overdue = await self.redis.zrangebyscore(PENDING_FINISH_KEY, 0, now_ms - RECONCILE_GRACE_MS)
+        for game_id_str in overdue:
+            game_id = int(game_id_str)
+            try:
+                outcome = await self._finish_pending_game(game_id, manager)
+            except Exception:
+                logger.exception("Reconciliation could not finish game %s; will retry", game_id)
+                report["failed"].append(game_id)
+                continue
+            if outcome:
+                report[outcome].append(game_id)
+
+        async with AsyncSessionLocal() as db:
+            rows = await db.execute(select(Game.id).where(Game.status == GameStatus.IN_PROGRESS))
+            db_in_progress = [row[0] for row in rows.all()]
+
+        active = {str(gid) for gid in await self.redis.smembers("active_games")}
+        missing_now: set[int] = set()
+        for game_id in db_in_progress:
+            raw = await self.redis.hgetall(self._get_key(game_id))
+            if not raw:
+                if game_id in self._missing_state_seen:
+                    if await self._recover_state_from_db(game_id):
+                        report["restored"].append(game_id)
+                else:
+                    missing_now.add(game_id)
+            elif raw.get("status") == "in_progress" and str(game_id) not in active:
+                await self.redis.sadd("active_games", str(game_id))
+                report["restored"].append(game_id)
+            elif raw.get("status") in ("completed", "aborted"):
+                # Завершена в Redis, но в реестре незавершённых её нет (например, захвачена
+                # до появления реестра) — ставим в очередь сверки.
+                ended_at = int(raw.get("ended_at") or now_ms)
+                await self.redis.zadd(PENDING_FINISH_KEY, {str(game_id): ended_at}, nx=True)
+        self._missing_state_seen = missing_now
+
+        if any(report.values()):
+            logger.warning("Reconciliation report: %s", report)
+        return report
+
+    async def _finish_pending_game(self, game_id: int, manager=None) -> str | None:
+        raw = await self.redis.hgetall(self._get_key(game_id))
+        status = raw.get("status") if raw else None
+
+        if status == "completed":
+            result = raw.get("result") or "1/2-1/2"
+            termination = raw.get("termination") or "unknown"
+            async with AsyncSessionLocal() as db:
+                rating_updates = await self.finish_game(db, game_id, result, termination=termination)
+            # Штатный обработчик не успел разослать итог — сообщаем игрокам сами
+            # (повторное game_over клиент переживёт, а без него партия «висит» на экране).
+            await self._notify_reconciled(manager, raw, {
+                "event": "game_over", "game_id": game_id, "reason": termination, "result": result,
+                **rating_updates,
+            })
+            return "finished"
+        if status == "aborted":
+            white_id, black_id = int(raw["white_id"]), int(raw["black_id"])
+            async with AsyncSessionLocal() as db:
+                w_rating, b_rating = await self._finalize_abort_in_db(db, game_id, white_id, black_id)
+            await self.clear_game_state(game_id)
+            await self._notify_reconciled(manager, raw, {
+                "event": "game_over", "game_id": game_id, "reason": "aborted", "result": "*",
+                "white_delta": 0, "black_delta": 0,
+                "white_new_rating": w_rating, "black_new_rating": b_rating,
+            })
+            return "aborted"
+
+        # Состояния нет (Redis потерян) или партия снова in_progress — дозавершать нечего:
+        # итог неизвестен, партию при необходимости восстановит вторая часть сверки.
+        await self.redis.zrem(PENDING_FINISH_KEY, str(game_id))
+        return None
+
+    @staticmethod
+    async def _notify_reconciled(manager, raw_state: dict, payload: dict) -> None:
+        if manager is None:
+            return
+        for key in ("white_id", "black_id"):
+            await manager.send_personal_message(payload, int(raw_state[key]))
+        if hasattr(manager, "broadcast_to_spectators"):
+            await manager.broadcast_to_spectators(payload["game_id"], payload)
 
     async def check_first_move_abort_timeout(self, db, game_id: int, manager=None, timeout_ms: int = 30000) -> bool:
         """Проверяет, не истекли ли 30 секунд на первые 2 полухода партии. Если истекли — отменяет игру."""
