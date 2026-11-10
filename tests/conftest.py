@@ -10,7 +10,6 @@ from src.db.session import get_db
 from src.models.base import Base
 from src.models.user import User
 from src.core.security import create_access_token
-from src.services.anticheat import _EVALUATED_GAME_IDS
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///:memory:"
 
@@ -27,7 +26,6 @@ def event_loop():
 
 @pytest.fixture(autouse=True)
 async def setup_database():
-    _EVALUATED_GAME_IDS.clear()
     async with test_engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield

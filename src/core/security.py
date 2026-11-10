@@ -8,8 +8,15 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verifies a plain password against a hashed counterpart."""
-    return pwd_context.verify(plain_password, hashed_password)
+    """Verifies a plain password against a hashed counterpart.
+
+    A hash passlib cannot identify (e.g. the marker stored for bot accounts) never matches
+    instead of raising and turning a login attempt into a 500.
+    """
+    try:
+        return pwd_context.verify(plain_password, hashed_password)
+    except (ValueError, TypeError):
+        return False
 
 
 def get_password_hash(password: str) -> str:

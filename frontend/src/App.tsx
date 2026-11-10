@@ -35,7 +35,6 @@ interface UserProfile {
     username: string;
     rating: number;
     is_cheater: boolean;
-    trust_factor: number;
 }
 
 export default function App() {

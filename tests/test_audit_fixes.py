@@ -53,7 +53,8 @@ async def test_anticheat_idempotency_prevents_double_penalty(db_session):
             move_number=idx + 8,
             notation="g1f3",
             san="Nf3",
-            time_taken_ms=1000 + idx * 900,
+            # Ровный «машинный» ритм: одна лишь потеря фокуса больше не штрафует.
+            time_taken_ms=4500 + (idx % 2) * 100,
             window_blurred_before_move=(idx % 2 == 0),
             is_premove=False,
             network_lag_ms=10,

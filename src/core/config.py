@@ -43,6 +43,8 @@ class Settings(BaseSettings):
     AC_MAX_MOVE_TIME_MS: int = 8000
     AC_STOCKFISH_PATH: str = "bin/stockfish-windows-x86-64-avx2.exe"
     AC_MAX_CENTIPAWN_LOSS: int = 15
+    # A client-claimed premove is trusted only if the server saw the move arrive this fast
+    AC_PREMOVE_MAX_ELAPSED_MS: int = 600
 
     # Matchmaking: rating window (±N) used when the client sends no explicit range; 0 = unrestricted
     MATCHMAKING_DEFAULT_RATING_RANGE: int = 0
