@@ -108,13 +108,19 @@ class _NoDbSession:
     """Сессия-заглушка: тест проверяет жизненный цикл соединений, БД ему не нужна.
     (Настоящая сессия из event loop TestClient ломает общее SQLite-соединение тестов.)"""
 
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
     async def get(self, *args, **kwargs):
         return None
 
 
 async def test_closing_one_tab_keeps_player_online(client, monkeypatch):
     from src.api.deps import get_current_user_ws
-    from src.db.session import get_db
+    from src.db.session import get_session_factory
     from src.main import app
     from src.models.user import User
 
@@ -123,11 +129,9 @@ async def test_closing_one_tab_keeps_player_online(client, monkeypatch):
     async def _user():
         return player
 
-    async def _db():
-        yield _NoDbSession()
 
     monkeypatch.setitem(app.dependency_overrides, get_current_user_ws, _user)
-    monkeypatch.setitem(app.dependency_overrides, get_db, _db)
+    monkeypatch.setitem(app.dependency_overrides, get_session_factory, lambda: _NoDbSession)
 
     await state_manager.initialize_game(game_id=34, white_id=501, black_id=502, base_time_ms=60000, increment_ms=0)
     url = "/api/v1/ws/matchmaking?token=unused"

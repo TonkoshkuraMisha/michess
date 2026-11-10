@@ -119,24 +119,28 @@ def test_abandon_vs_insufficient_material_is_draw():
 # --- Чат --------------------------------------------------------------------------------
 
 class _NoDbSession:
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *exc):
+        return False
+
     async def get(self, *args, **kwargs):
         return None
 
 
 def _ws_as(monkeypatch, user_id: int):
     from src.api.deps import get_current_user_ws
-    from src.db.session import get_db
+    from src.db.session import get_session_factory
     from src.main import app
     from src.models.user import User
 
     async def _user():
         return User(id=user_id, username=f"u{user_id}", rating=1500)
 
-    async def _db():
-        yield _NoDbSession()
 
     monkeypatch.setitem(app.dependency_overrides, get_current_user_ws, _user)
-    monkeypatch.setitem(app.dependency_overrides, get_db, _db)
+    monkeypatch.setitem(app.dependency_overrides, get_session_factory, lambda: _NoDbSession)
 
 
 def _receive_event(ws, event: str, attempts: int = 6) -> dict:
