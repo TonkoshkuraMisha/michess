@@ -9,6 +9,8 @@ from pathlib import Path
 import chess
 import chess.engine
 
+from src.services.engine_pool import get_engine_pool
+
 logger = logging.getLogger(__name__)
 
 BOTS_DIR = Path(__file__).resolve().parent
@@ -179,18 +181,14 @@ def analyse_with_stockfish(
         return {}
 
     scores: dict[chess.Move, float] = {}
-    try:
-        with chess.engine.SimpleEngine.popen_uci(engine_path) as engine:
-            options: dict[str, int | bool] = {"Skill Level": skill_level}
-            if uci_elo is not None:
-                if "UCI_LimitStrength" in engine.options:
-                    options["UCI_LimitStrength"] = True
-                if "UCI_Elo" in engine.options:
-                    min_elo = getattr(engine.options["UCI_Elo"], "min", 1320) or 1320
-                    max_elo = getattr(engine.options["UCI_Elo"], "max", 3190) or 3190
-                    options["UCI_Elo"] = max(min_elo, min(max_elo, uci_elo))
-            engine.configure(options)
+    options: dict[str, int | bool] = {"Skill Level": skill_level}
+    if uci_elo is not None:
+        options["UCI_LimitStrength"] = True
+        options["UCI_Elo"] = uci_elo
 
+    try:
+        # Пул сам приводит UCI_Elo / Skill Level к допустимому диапазону движка.
+        with get_engine_pool(engine_path).acquire(options) as engine:
             infos = engine.analyse(
                 board,
                 chess.engine.Limit(depth=depth, time=time_limit),

@@ -296,8 +296,11 @@ export default function GameViewer() {
         setIsAnalyzing(true);
         setAnalysisError(null);
         try {
+            const authToken = localStorage.getItem('token');
             const res = await fetch(`${API_BASE_URL}/api/v1/analysis/game/${gameId}`, {
-                method: 'POST'
+                method: 'POST',
+                // С токеном лимит запросов считается на пользователя, а не на общий IP.
+                headers: authToken ? {'Authorization': `Bearer ${authToken}`} : undefined,
             });
             if (!res.ok) {
                 const errData = await res.json().catch(() => ({}));
