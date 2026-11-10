@@ -232,6 +232,15 @@ async def matchmaking_endpoint(
 
                     white_id = int(game_state["white_id"])
                     black_id = int(game_state["black_id"])
+                    if current_user.id not in (white_id, black_id):
+                        # Писать в чат партии могут только игроки: зрители (и кто угодно,
+                        # знающий id партии) не должны спамить или подсказывать ходы.
+                        await manager.send_personal_message(
+                            {"event": "error", "code": "chat_forbidden",
+                             "message": "Писать в чат партии могут только её участники"},
+                            current_user.id,
+                        )
+                        continue
 
                     chat_payload = {
                         "event": "chat_message",

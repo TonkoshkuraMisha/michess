@@ -22,6 +22,7 @@ from src.services.bots.paulsen import paulsen_bot
 from src.services.bots.philidor import philidor_bot, resolve_stockfish_path
 from src.services.bots.staunton import staunton_bot
 from src.services.bots.zukertort import zukertort_bot
+from src.services.game_engine import flag_outcome, terminal_outcome
 
 router = APIRouter()
 
@@ -113,6 +114,20 @@ BOT_INSTANCES = {
 
 BOT_METADATA = {b["id"]: b for b in AVAILABLE_BOTS}
 
+# Служебный «хэш» в hashed_password, по которому учётная запись опознаётся как бот.
+# Это не валидный bcrypt-хэш, поэтому войти под ботом невозможно.
+BOT_PASSWORD_MARKER = "!historical_bot_no_login!"
+
+
+def reserved_bot_usernames() -> set[str]:
+    """Имена (и id) ботов, которые нельзя занять при регистрации (сравнение без регистра)."""
+    names: set[str] = set()
+    for bot in AVAILABLE_BOTS:
+        for value in (bot["id"], bot["name"], bot["full_name"]):
+            names.add(value.strip().casefold())
+    return names
+
+
 BOT_TEMPO_MULTIPLIER = {
     "morphy": 0.72,
     "labourdonnais": 0.78,
@@ -143,6 +158,10 @@ class BotGameSaveRequest(BaseModel):
     bot_id: str = Field(..., description="ID исторического бота")
     player_color: str = Field(..., description="Цвет игрока ('white' или 'black')")
     result: str = Field(..., description="Результат партии ('1-0', '0-1', '1/2-1/2')")
+    termination: str | None = Field(
+        default=None,
+        description="Для незавершённой на доске позиции: 'resignation' (игрок сдался) или 'timeout' (упал флаг)",
+    )
     moves_uci: list[str] = Field(default_factory=list, max_length=1000, description="Список сделанных ходов в формате UCI")
     base_time_ms: int = Field(default=180000, description="Базовый контроль времени в мс")
     increment_ms: int = Field(default=0, description="Добавление времени на ход в мс")
@@ -227,6 +246,47 @@ def _detect_eco_code(moves_uci: list[str]) -> str:
     return "A00"
 
 
+def _replay_moves(moves_uci: list[str]) -> chess.Board:
+    """Переигрывает ходы с историей (нужна для правил повторения); ValueError при нелегальном ходе."""
+    board = chess.Board()
+    for uci_str in moves_uci:
+        try:
+            move = chess.Move.from_uci(uci_str)
+        except ValueError:
+            raise ValueError(f"Некорректный ход в истории: {uci_str}")
+        if move not in board.legal_moves:
+            raise ValueError(f"Нелегальный ход в истории: {uci_str}")
+        board.push(move)
+    return board
+
+
+def resolve_bot_game_outcome(board: chess.Board, payload: "BotGameSaveRequest") -> tuple[str, str]:
+    """
+    Итог партии с ботом определяет сервер, а не клиент:
+    - позиция на доске финальная (мат, пат, повторение, ...) — результат с доски;
+    - игрок сдался — только поражение игрока;
+    - упал флаг — победа стороны с неупавшим флагом, но ничья, если у неё нет материала
+      для мата (правило ФИДЕ 6.9). Часы партии с ботом живут на клиенте, поэтому сторону
+      с упавшим флагом сервер берёт из присланного результата.
+    Иначе партия не завершена, и «победу» сохранить нельзя.
+    """
+    outcome = terminal_outcome(board)
+    if outcome is not None:
+        return outcome
+
+    if payload.termination == "resignation":
+        return ("0-1" if payload.player_color == "white" else "1-0"), "resignation"
+
+    if payload.termination == "timeout":
+        if payload.result == "1-0":
+            return flag_outcome(board.fen(), "black")
+        if payload.result == "0-1":
+            return flag_outcome(board.fen(), "white")
+        raise ValueError("Для флага укажите, чья сторона победила по времени")
+
+    raise ValueError("Партия не завершена на доске: укажите termination ('resignation' или 'timeout')")
+
+
 def _build_pgn_string(
         moves_uci: list[str],
         white_name: str,
@@ -270,7 +330,15 @@ async def _get_or_create_bot_user(db: AsyncSession, bot_id: str) -> User:
     res = await db.execute(stmt)
     bot_user = res.scalar_one_or_none()
     if bot_user is not None:
-        return bot_user
+        if bot_user.hashed_password == BOT_PASSWORD_MARKER:
+            return bot_user
+        # Имя занято человеком (до запрета регистрации имён ботов) — не приписываем ему
+        # партии бота, а заводим бота под служебным именем.
+        bot_username = f"{bot_username} [бот]"
+        res = await db.execute(select(User).where(User.username == bot_username))
+        bot_user = res.scalar_one_or_none()
+        if bot_user is not None:
+            return bot_user
 
     user_cols = {c.name for c in User.__table__.columns}
     user_kwargs: dict = {
@@ -278,9 +346,9 @@ async def _get_or_create_bot_user(db: AsyncSession, bot_id: str) -> User:
         "rating": meta["rating"],
     }
     if "hashed_password" in user_cols:
-        user_kwargs["hashed_password"] = "!historical_bot_no_login!"
+        user_kwargs["hashed_password"] = BOT_PASSWORD_MARKER
     elif "password_hash" in user_cols:
-        user_kwargs["password_hash"] = "!historical_bot_no_login!"
+        user_kwargs["password_hash"] = BOT_PASSWORD_MARKER
     if "email" in user_cols:
         user_kwargs["email"] = f"{bot_id}@michess.local"
     if "is_cheater" in user_cols:
@@ -334,7 +402,7 @@ def _prepare_game_kwargs(
     if "result" in game_cols:
         kwargs["result"] = payload.result
     if "termination" in game_cols:
-        kwargs["termination"] = "normal"
+        kwargs["termination"] = payload.termination or "normal"
     if "is_rated" in game_cols:
         kwargs["is_rated"] = False
     if "base_time_ms" in game_cols:
@@ -426,6 +494,13 @@ async def save_bot_game(
     if not payload.moves_uci:
         raise HTTPException(status_code=400, detail="Список ходов пуст")
 
+    try:
+        final_board = _replay_moves(payload.moves_uci)
+        result, termination = resolve_bot_game_outcome(final_board, payload)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    payload = payload.model_copy(update={"result": result, "termination": termination})
+
     bot_user = await _get_or_create_bot_user(db, payload.bot_id)
 
     if payload.player_color == "white":
@@ -461,5 +536,5 @@ async def save_bot_game(
     return BotGameSaveResponse(
         game_id=new_game.id,
         status="finished",
-        result=payload.result,
+        result=result,
     )

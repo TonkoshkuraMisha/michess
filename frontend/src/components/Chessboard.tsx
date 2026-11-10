@@ -823,7 +823,8 @@ export default function Chessboard() {
         botId: HistoricalBotId,
         playerColor: 'white' | 'black',
         result: string,
-        completedGame: Chess
+        completedGame: Chess,
+        termination?: 'resignation' | 'timeout'
     ) => {
         if (botGameSavedRef.current) return;
         const token = localStorage.getItem('token');
@@ -846,6 +847,8 @@ export default function Chessboard() {
                     bot_id: botId,
                     player_color: playerColor,
                     result,
+                    // Для позиции, не завершённой на доске, сервер требует причину окончания.
+                    termination: termination ?? null,
                     moves_uci: movesUci,
                     base_time_ms: Math.round(effectiveWhiteBaseMinutes * 60 * 1000),
                     increment_ms: Math.round(effectiveIncSeconds * 1000)
@@ -856,6 +859,11 @@ export default function Chessboard() {
                 const data = await response.json();
                 if (data.game_id) {
                     setSavedBotGameId(data.game_id);
+                }
+                // Итог определяет сервер: например, флаг при недостатке материала у соперника — ничья.
+                if (data.result && data.result !== result) {
+                    setGameOverResult(data.result);
+                    setDrawOfferStatus(`Итог по правилам ФИДЕ: ${data.result}`);
                 }
             }
         } catch (err) {
@@ -1520,7 +1528,7 @@ export default function Chessboard() {
             setDrawOfferStatus(`Флажок упал! Партия против ${botName} завершена по времени (${flagWinner}).`);
             updateSessionStats(flagWinner);
             playOutcomeSound(flagWinner, myColor);
-            saveBotGameToDatabase(activeBot, myColor, flagWinner, game);
+            saveBotGameToDatabase(activeBot, myColor, flagWinner, game, 'timeout');
         }
     }, [whiteTimeMs, blackTimeMs, activeBot, gameOverResult, selectedTimeControl.mode, myColor, game, playOutcomeSound, updateSessionStats, saveBotGameToDatabase]);
 
@@ -1956,7 +1964,7 @@ export default function Chessboard() {
                 setDrawOfferStatus(`Вы сдались. Победа ${botName} (${res}).`);
                 updateSessionStats(res);
                 playOutcomeSound(res, myColor);
-                saveBotGameToDatabase(activeBot, myColor, res, game);
+                saveBotGameToDatabase(activeBot, myColor, res, game, 'resignation');
             }
         }
     };

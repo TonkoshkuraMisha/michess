@@ -16,6 +16,14 @@ async def register_user(user_in: UserCreate, db: AsyncSession = Depends(get_db))
     """
     Register a new user.
     """
+    from src.api.bots import reserved_bot_usernames
+
+    if user_in.username.strip().casefold() in reserved_bot_usernames():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Это имя зарезервировано за историческим ботом."
+        )
+
     result = await db.execute(select(User).where(User.username == user_in.username))
     existing_user = result.scalars().first()
 

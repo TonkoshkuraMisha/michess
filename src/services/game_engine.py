@@ -39,6 +39,60 @@ def restore_board(fen: str, pgn_movetext: str = "") -> chess.Board:
     return chess.Board(safe_fen)
 
 
+def terminal_outcome(board: chess.Board) -> tuple[str, str] | None:
+    """
+    Итог партии по позиции на доске (с историей ходов) или None, если партия продолжается.
+
+    Ничьи по повторению и правилу 50 ходов фиксируются автоматически, но только по фактически
+    сложившейся позиции. board.is_game_over(claim_draw=True) здесь не подходит: он засчитывает
+    ничью и тогда, когда повторение лишь достижимо следующим ходом.
+    """
+    if not (board.is_game_over() or board.is_repetition(3) or board.is_fifty_moves()):
+        return None
+    if board.is_checkmate():
+        return ("0-1" if board.turn == chess.WHITE else "1-0"), "checkmate"
+    if board.is_stalemate():
+        return "1/2-1/2", "stalemate"
+    if board.is_insufficient_material():
+        return "1/2-1/2", "insufficient_material"
+    if board.is_fifty_moves():
+        return "1/2-1/2", "50_move_rule"
+    if board.is_repetition(3):
+        return "1/2-1/2", "repetition"
+    return "1/2-1/2", "draw"
+
+
+def side_has_mating_material(board_fen: str | None, color: str) -> bool:
+    """
+    Может ли color в принципе поставить мат какой-либо последовательностью легальных ходов
+    (по материалу, с учётом цвета полей слонов). Если FEN не разбирается — считаем, что может.
+    """
+    try:
+        board = chess.Board(board_fen or STARTING_FEN)
+    except ValueError:
+        return True
+    return not board.has_insufficient_material(chess.WHITE if color == "white" else chess.BLACK)
+
+
+FLAG_DRAW_TERMINATION = "timeout_vs_insufficient_material"
+
+
+def flag_outcome(board_fen: str | None, flagged_color: str) -> tuple[str, str]:
+    """
+    Итог партии, когда у flagged_color кончилось время (правило ФИДЕ 6.9).
+
+    Поражение, если только у соперника нет материала, которым мат невозможен никакой
+    последовательностью легальных ходов, — тогда ничья. has_insufficient_material учитывает
+    только материал (и цвета полей слонов) и гарантированно не объявит ничью там, где мат
+    возможен: например, конь против ладьи — победа (кооперативный мат существует).
+    Возвращает (result, termination).
+    """
+    winner = "black" if flagged_color == "white" else "white"
+    if not side_has_mating_material(board_fen, winner):
+        return "1/2-1/2", FLAG_DRAW_TERMINATION
+    return ("0-1" if flagged_color == "white" else "1-0"), "timeout"
+
+
 class GameEngine:
     @staticmethod
     def process_move(fen: str, move_str: str, current_pgn: str = "") -> tuple[bool, dict | None]:
@@ -104,30 +158,9 @@ class GameEngine:
         new_fen = board.fen()
 
         # 4. Проверяем условия завершения партии
-        # Ничьи по повторению и правилу 50 ходов фиксируются автоматически, но только по
-        # фактически сложившейся позиции. board.is_game_over(claim_draw=True) здесь не подходит:
-        # он засчитывает ничью и тогда, когда повторение лишь достижимо следующим ходом.
-        is_game_over = board.is_game_over() or board.is_repetition(3) or board.is_fifty_moves()
-        result = None
-        termination = None
-
-        if is_game_over:
-            result = "1/2-1/2"
-            if board.is_checkmate():
-                result = "0-1" if board.turn == chess.WHITE else "1-0"
-
-            if board.is_checkmate():
-                termination = "checkmate"
-            elif board.is_stalemate():
-                termination = "stalemate"
-            elif board.is_insufficient_material():
-                termination = "insufficient_material"
-            elif board.is_fifty_moves():
-                termination = "50_move_rule"
-            elif board.is_repetition():
-                termination = "repetition"
-            else:
-                termination = "draw"
+        outcome = terminal_outcome(board)
+        is_game_over = outcome is not None
+        result, termination = outcome if outcome else (None, None)
 
         return True, {
             "new_fen": new_fen,

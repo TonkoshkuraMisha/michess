@@ -20,7 +20,9 @@ from src.models.user import User
 from src.services.rating import elo_calculator
 from src.worker.tasks import analyze_game_task
 from src.services.anticheat import evaluate_game_telemetry
-from src.services.game_engine import engine, STARTING_FEN
+from src.services.game_engine import (  # noqa: F401  (flag_outcome реэкспортируется для тестов)
+    FLAG_DRAW_TERMINATION, STARTING_FEN, engine, flag_outcome, side_has_mating_material,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -64,6 +66,7 @@ _INT_STATE_KEYS = (
 )
 
 ABANDON_TIMEOUT_MS = 3 * 60 * 1000
+ABANDON_DRAW_TERMINATION = "abandoned_vs_insufficient_material"
 
 TIMEOUTS_LEADER_KEY = "timeouts:leader"
 TIMEOUTS_LEADER_TTL_MS = 3000
@@ -104,29 +107,6 @@ def abandon_wait_ms(state: dict, color: str, now_ms: int) -> int:
     return wait
 
 
-FLAG_DRAW_TERMINATION = "timeout_vs_insufficient_material"
-
-
-def flag_outcome(board_fen: str | None, flagged_color: str) -> tuple[str, str]:
-    """
-    Итог партии, когда у flagged_color кончилось время (правило ФИДЕ 6.9).
-
-    Поражение, если только у соперника нет материала, которым мат невозможен никакой
-    последовательностью легальных ходов, — тогда ничья. has_insufficient_material учитывает
-    только материал (и цвета полей слонов) и гарантированно не объявит ничью там, где мат
-    возможен: например, конь против ладьи — победа (кооперативный мат существует).
-    Возвращает (result, termination).
-    """
-    winner = chess.BLACK if flagged_color == "white" else chess.WHITE
-    try:
-        board = chess.Board(board_fen or STARTING_FEN)
-    except ValueError:
-        board = None
-    if board is not None and board.has_insufficient_material(winner):
-        return "1/2-1/2", FLAG_DRAW_TERMINATION
-    return ("0-1" if flagged_color == "white" else "1-0"), "timeout"
-
-
 def evaluate_clock_expiry(state: dict, now_ms: int) -> tuple[str, int | None, str] | None:
     """
     Чистая проверка флага / брошенной партии по состоянию (уже приведённому _coerce_state).
@@ -150,6 +130,11 @@ def evaluate_clock_expiry(state: dict, now_ms: int) -> tuple[str, int | None, st
             continue
         started_at = int(state.get(f"{color}_disconnect_started_at") or 0)
         if started_at > 0 and now_ms - started_at >= ABANDON_TIMEOUT_MS:
+            stayed = "black" if color == "white" else "white"
+            # Как и при флаге: если оставшийся игрок не может поставить мат никакой
+            # последовательностью ходов, победу ему не засчитываем — ничья.
+            if not side_has_mating_material(state.get("board_fen"), stayed):
+                return "1/2-1/2", None, ABANDON_DRAW_TERMINATION
             if color == "white":
                 return "0-1", black_id, "abandoned"
             return "1-0", white_id, "abandoned"
