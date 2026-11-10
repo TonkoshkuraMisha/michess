@@ -1,400 +1,1846 @@
-PROJECT SNAPSHOT — PART 9/11
+PROJECT SNAPSHOT — PART 9/14
 Project: michess
-Files in this part (1): frontend/src/components/Chessboard.tsx (chunk 3)
+Files in this part (1): frontend/src/components/Chessboard.tsx (chunk 1)
 ----------------------------------------------------------------------------------------
-                    className="flex-1 min-h-0 flex flex-col bg-[#1A120B]/90 rounded-md border border-amber-900/50 overflow-hidden shadow-inner">
-                    <div
-                        className="grid grid-cols-[44px_1fr_1fr] px-3 py-1.5 bg-black/55 border-b border-amber-900/40 text-xs uppercase tracking-wider text-boxwood/65 font-bold shrink-0">
-                        <span>№</span>
-                        <span>Белые</span>
-                        <span>Чёрные</span>
-                    </div>
 
-                    <div
-                        ref={notationScrollRef}
-                        className="flex-1 min-h-0 overflow-y-auto divide-y divide-amber-900/15 font-mono text-sm [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-amber-900/50"
-                    >
-                        {movePairs.length === 0 ? (
-                            <div
-                                className="h-full flex flex-col items-center justify-center p-6 text-center text-boxwood/50 font-sans text-sm gap-1.5">
-                                <span className="font-semibold">Ходов пока нет</span>
-                                <span className="text-xs text-boxwood/40">
-                                    {(gameId || activeBot || spectatingGameId)
-                                        ? 'Сделайте первый ход на доске.'
-                                        : 'Двигайте фигуры для анализа или выберите соперника слева.'}
-                                </span>
-                            </div>
-                        ) : (
-                            movePairs.map((pair) => {
-                                const isWhiteActive = activeMoveIndex === pair.whiteIdx;
-                                const isBlackActive = pair.blackIdx !== undefined && activeMoveIndex === pair.blackIdx;
+========================================================================================
+FILE: frontend/src/components/Chessboard.tsx
+========================================================================================
+// --- FILE: frontend/src/components/Chessboard.tsx ---
 
-                                return (
-                                    <div
-                                        key={pair.moveNumber}
-                                        className="grid grid-cols-[44px_1fr_1fr] items-center px-2.5 py-1 hover:bg-white/5 transition-colors"
-                                    >
-                                        <span className="text-xs text-amber-500/70 font-bold pl-1 select-none">
-                                            {pair.moveNumber}.
-                                        </span>
+import {useState, useEffect, useRef, useCallback} from 'react';
+import {useNavigate, useParams} from 'react-router-dom';
+import {Chess} from 'chess.js';
+import {
+    ChevronFirst, ChevronLeft, ChevronRight, ChevronLast, Users, Sword, Flag,
+    Handshake, Loader2, Play, RotateCcw, Clock, ChevronDown, ChevronUp, Palette,
+    RefreshCw, ListOrdered, Undo2, Bot, MessageSquareQuote, Download, Eye,
+    Sliders, Zap, X, Link2, Copy, Check, Send, MessageSquare, Radio, Volume2, VolumeX
+} from 'lucide-react';
+import {gameSocket} from '../services/gameSocket';
+import {soundEngine, resolveMoveSound} from '../services/soundEngine';
+import type {SoundEventType} from '../services/soundEngine';
+import {API_BASE_URL} from '../config/api';
+import {
+    BOARD_THEMES,
+    PIECE_SETS,
+    getSavedBoardThemeKey,
+    getSavedPieceSetKey,
+    getPieceSvgUrl,
+    getHarmoniousPieceStyle
+} from '../config/boardAppearance';
+import type {BoardTheme} from '../config/boardAppearance';
+import {HISTORICAL_BOTS, HISTORICAL_BOTS_LIST} from '../config/champions';
+import type {HistoricalBotId, HistoricalBotProfile} from '../config/champions';
+import {DEFAULT_DGT_OPTION, TIME_CONTROLS} from '../config/timeControls';
+import type {DgtTimingMode, Dgt2500Option, Dgt2500Group} from '../config/timeControls';
+import {
+    FILES, RANKS, MIN_BOARD_SIZE, MAX_BOARD_SIZE, PROMOTION_OPTIONS,
+    getMaxViewportBoardSize, getDefaultBoardSize, calculateMaterialBalance, cloneChessInstance, prevIndexHelper
+} from './chessboard/boardUtils';
+import type {PromotionPiece} from './chessboard/boardUtils';
+import {QUICK_CHAT_PRESETS} from './chessboard/types';
+import type {LiveGameItem, ChatMessageItem, QueuePlayer} from './chessboard/types';
 
-                                        <button
-                                            type="button"
-                                            onClick={() => handleSelectMoveFromList(pair.whiteIdx)}
-                                            className={`text-left px-2 py-0.5 rounded text-sm font-bold transition truncate cursor-pointer ${
-                                                isWhiteActive
-                                                    ? 'active-move-btn bg-amber-600/40 text-amber-200 border border-amber-500/50 shadow-sm'
-                                                    : 'text-boxwood-light hover:bg-amber-900/30 hover:text-white'
-                                            }`}
-                                        >
-                                            {pair.whiteSan}
-                                        </button>
+export {MIN_BOARD_SIZE, MAX_BOARD_SIZE, getMaxViewportBoardSize, getDefaultBoardSize, TIME_CONTROLS};
+export type {PromotionPiece, DgtTimingMode, Dgt2500Option, Dgt2500Group};
 
-                                        {pair.blackSan !== undefined && pair.blackIdx !== undefined ? (
-                                            <button
-                                                type="button"
-                                                onClick={() => handleSelectMoveFromList(pair.blackIdx!)}
-                                                className={`text-left px-2 py-0.5 rounded text-sm font-bold transition truncate cursor-pointer ${
-                                                    isBlackActive
-                                                        ? 'active-move-btn bg-amber-600/40 text-amber-200 border border-amber-500/50 shadow-sm'
-                                                        : 'text-boxwood-light hover:bg-amber-900/30 hover:text-white'
-                                                }`}
-                                            >
-                                                {pair.blackSan}
-                                            </button>
-                                        ) : (
-                                            <span/>
-                                        )}
-                                    </div>
-                                );
-                            })
-                        )}
-                    </div>
+export {BOARD_THEMES, HISTORICAL_BOTS};
+export type {BoardTheme, HistoricalBotId, HistoricalBotProfile};
 
-                    {viewIndex !== -1 && history.length > 0 && (
-                        <button
-                            type="button"
-                            onClick={() => setViewIndex(-1)}
-                            className="w-full py-1.5 px-3 bg-amber-700/40 hover:bg-amber-700/60 border-t border-amber-500/40 text-amber-200 text-xs font-bold text-center transition shrink-0 cursor-pointer"
-                        >
-                            Просмотр истории
-                            ({viewIndex === -2 ? 'Начало' : `полуход ${viewIndex + 1} из ${history.length}`}) —
-                            Вернуться к игре
-                        </button>
-                    )}
-                </div>
+export default function Chessboard() {
+    const navigate = useNavigate();
+    const {inviteCode} = useParams<{ inviteCode?: string }>();
 
-                {/* Кнопки пошаговой навигации */}
-                <div
-                    className="bg-acacia-dark p-2 rounded-md border border-amber-900/40 flex items-center justify-between shrink-0">
-                    <span className="text-xs font-semibold text-boxwood/80 pl-1">Навигация:</span>
-                    <div className="flex gap-1.5">
-                        <button
-                            type="button"
-                            disabled={history.length === 0 || viewIndex === -2}
-                            onClick={() => setViewIndex(-2)}
-                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
-                            title="В начало партии (Стрелка вверх)"
-                        >
-                            <ChevronFirst size={16}/>
-                        </button>
-                        <button
-                            type="button"
-                            disabled={history.length === 0 || viewIndex === -2}
-                            onClick={() => {
-                                if (history.length > 0) {
-                                    const current = viewIndex === -1 ? history.length - 1 : prevIndexHelper(viewIndex, history.length);
-                                    setViewIndex(current <= 0 ? -2 : current - 1);
-                                }
-                            }}
-                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
-                            title="Ход назад (Стрелка влево)"
-                        >
-                            <ChevronLeft size={16}/>
-                        </button>
-                        <button
-                            type="button"
-                            disabled={history.length === 0 || viewIndex === -1}
-                            onClick={() => {
-                                if (viewIndex === -2 && history.length > 0) {
-                                    setViewIndex(history.length === 1 ? -1 : 0);
-                                } else if (viewIndex !== -1 && viewIndex < history.length - 2) {
-                                    setViewIndex(viewIndex + 1);
-                                } else {
-                                    setViewIndex(-1);
-                                }
-                            }}
-                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
-                            title="Ход вперед (Стрелка вправо)"
-                        >
-                            <ChevronRight size={16}/>
-                        </button>
-                        <button
-                            type="button"
-                            disabled={history.length === 0 || viewIndex === -1}
-                            onClick={() => setViewIndex(-1)}
-                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
-                            title="К последнему ходу (Стрелка вниз)"
-                        >
-                            <ChevronLast size={16}/>
-                        </button>
-                    </div>
-                </div>
+    const [leftSectionTab, setLeftSectionTab] = useState<'bots' | 'lobby'>('bots');
+    const [lobbyTab, setLobbyTab] = useState<'lobby' | 'live'>('lobby');
+    const [showInvitePanel, setShowInvitePanel] = useState(false);
+    const [showAppearanceDropdown, setShowAppearanceDropdown] = useState(false);
+    const [isSoundMuted, setIsSoundMuted] = useState<boolean>(() => soundEngine.isMuted());
+    const appearanceDropdownRef = useRef<HTMLDivElement>(null);
 
-                {/* Компактный игровой чат и быстрые реплики */}
-                {(gameId || spectatingGameId) && (
-                    <div
-                        className="bg-acacia-dark p-2 rounded-md border border-amber-900/50 flex flex-col gap-1.5 shrink-0">
-                        <div
-                            className="flex items-center justify-between text-xs uppercase tracking-wider text-amber-400 font-bold">
-                            <span className="flex items-center gap-1.5">
-                                <MessageSquare size={13}/> Игровой чат
-                            </span>
-                            {spectatingGameId && (
-                                <button
-                                    type="button"
-                                    onClick={handleLeaveSpectate}
-                                    className="text-rose-300 hover:text-rose-200 underline text-xs font-sans cursor-pointer"
-                                >
-                                    Выйти из просмотра
-                                </button>
-                            )}
-                        </div>
+    const [liveGames, setLiveGames] = useState<LiveGameItem[]>([]);
+    const [spectatingGameId, setSpectatingGameId] = useState<number | null>(null);
+    const [inviteColorPref, setInviteColorPref] = useState<'white' | 'black' | 'random'>('random');
+    const [createdInviteCode, setCreatedInviteCode] = useState<string | null>(null);
+    const [inviteCopied, setInviteCopied] = useState(false);
+    const [chatMessages, setChatMessages] = useState<ChatMessageItem[]>([]);
+    const [chatInput, setChatInput] = useState('');
 
-                        <div
-                            className="h-16 overflow-y-auto bg-black/40 rounded p-2 text-xs space-y-1 font-sans border border-amber-950/50 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
-                            {chatMessages.length === 0 ? (
-                                <div className="h-full flex items-center justify-center text-xs text-boxwood/45 italic">
-                                    Сообщений пока нет. Поприветствуйте соперника!
-                                </div>
-                            ) : (
-                                chatMessages.map((msg, i) => (
-                                    <div key={i} className="leading-snug wrap-break-word">
-                                        <span className="font-bold text-amber-300 mr-1.5">{msg.sender}:</span>
-                                        <span className="text-boxwood-light">{msg.text}</span>
-                                    </div>
-                                ))
-                            )}
-                        </div>
+    const [game, setGame] = useState(new Chess());
+    const [history, setHistory] = useState<any[]>([]);
+    const [viewIndex, setViewIndex] = useState<number>(-1);
+    const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
+    const [isManualFlip, setIsManualFlip] = useState<boolean>(false);
 
-                        <div className="flex flex-wrap gap-1">
-                            {QUICK_CHAT_PRESETS.map((preset) => (
-                                <button
-                                    key={preset}
-                                    type="button"
-                                    onClick={() => handleSendChatMessage(preset)}
-                                    className="px-2 py-0.5 rounded bg-black/40 hover:bg-amber-900/50 border border-amber-800/40 text-xs text-amber-200 transition cursor-pointer"
-                                >
-                                    {preset}
-                                </button>
-                            ))}
-                        </div>
+    const [pendingPromotion, setPendingPromotion] = useState<{
+        from: string;
+        to: string;
+        color: 'w' | 'b';
+        isPremove?: boolean;
+    } | null>(null);
 
-                        <form
-                            onSubmit={(e) => {
-                                e.preventDefault();
-                                handleSendChatMessage();
-                            }}
-                            className="flex gap-1.5"
-                        >
-                            <input
-                                type="text"
-                                maxLength={140}
-                                value={chatInput}
-                                onChange={(e) => setChatInput(e.target.value)}
-                                placeholder="Написать сообщение..."
-                                className="flex-1 bg-black/50 border border-amber-800/50 rounded px-2.5 py-1 text-xs text-amber-100 outline-none focus:border-amber-500 font-sans"
-                            />
-                            <button
-                                type="submit"
-                                className="px-3 py-1 bg-amber-700 hover:bg-amber-600 text-amber-100 rounded text-xs font-bold flex items-center justify-center transition cursor-pointer"
-                                title="Отправить"
-                            >
-                                <Send size={13}/>
-                            </button>
-                        </form>
-                    </div>
-                )}
+    const [premove, setPremove] = useState<{
+        from: string;
+        to: string;
+        promotion?: PromotionPiece;
+    } | null>(null);
 
-                {/* Кнопки управления партией */}
-                <div className="shrink-0 flex flex-col gap-1.5">
-                    {gameId ? (
-                        <>
-                            <div className="grid grid-cols-2 gap-2">
-                                {history.length < 2 ? (
-                                    <button
-                                        type="button"
-                                        onClick={handleAbortGame}
-                                        disabled={!!gameOverResult}
-                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-amber-950/90 text-amber-200 text-xs sm:text-sm font-bold rounded-md hover:bg-amber-900 transition shadow border border-amber-700/60 disabled:opacity-40 cursor-pointer"
-                                    >
-                                        <X size={15}/> Отменить игру
-                                    </button>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        onClick={handleResign}
-                                        disabled={!!gameOverResult}
-                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/85 text-red-200 text-xs sm:text-sm font-bold rounded-md hover:bg-red-900 transition shadow border border-red-800/50 disabled:opacity-40 cursor-pointer"
-                                    >
-                                        <Flag size={15}/> Сдаться
-                                    </button>
-                                )}
-                                <button
-                                    type="button"
-                                    onClick={handleOfferDraw}
-                                    disabled={!!gameOverResult || history.length < 2}
-                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
-                                >
-                                    <Handshake size={15}/> Ничья
-                                </button>
-                            </div>
+    const [boardThemeKey, setBoardThemeKey] = useState<string>(() => getSavedBoardThemeKey());
+    const [pieceSetKey, setPieceSetKey] = useState<string>(() => getSavedPieceSetKey());
 
-                            {gameOverResult && (
-                                <div className="flex flex-col gap-1.5">
-                                    {rematchStatus === 'offered_by_opponent' ? (
-                                        <div
-                                            className="p-2 rounded-md bg-emerald-950/90 border border-emerald-500/60 flex flex-col gap-1.5 text-xs text-emerald-100 text-center shadow">
-                                            <span
-                                                className="font-bold">Соперник предлагает реванш (со сменой цвета)!</span>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={handleAcceptRematch}
-                                                    className="py-1.5 px-3 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded transition shadow cursor-pointer"
-                                                >
-                                                    Принять реванш
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={handleDeclineRematch}
-                                                    className="py-1.5 px-3 bg-red-900/80 hover:bg-red-800 text-red-100 font-bold rounded transition cursor-pointer"
-                                                >
-                                                    Отклонить
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <button
-                                                type="button"
-                                                disabled={rematchStatus === 'offered_by_me' || rematchStatus === 'declined'}
-                                                onClick={handleOfferRematch}
-                                                className="flex items-center justify-center gap-1.5 px-3 py-2 font-bold text-xs sm:text-sm rounded-md transition shadow bg-emerald-800 hover:bg-emerald-700 text-emerald-100 border border-emerald-500/50 disabled:opacity-50 cursor-pointer"
-                                            >
-                                                <RefreshCw size={15}
-                                                           className={rematchStatus === 'offered_by_me' ? 'animate-spin' : ''}/>
-                                                {rematchStatus === 'offered_by_me'
-                                                    ? 'Ждём ответа...'
-                                                    : rematchStatus === 'declined'
-                                                        ? 'Реванш отклонён'
-                                                        : 'Реванш'}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={handleResetSandbox}
-                                                className="flex items-center justify-center gap-1.5 px-3 py-2 font-bold text-xs sm:text-sm rounded-md transition shadow bg-boxwood text-acacia-dark border border-amber-700/50 hover:bg-boxwood-light cursor-pointer"
-                                            >
-                                                <RotateCcw size={15}/> В лобби
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
-                            )}
-                        </>
-                    ) : activeBot ? (
-                        <div className="flex flex-col gap-1.5">
-                            <div className="grid grid-cols-2 gap-2">
-                                <button
-                                    type="button"
-                                    disabled={history.length === 0 || isBotThinking || !!gameOverResult}
-                                    onClick={handleUndoSandboxMove}
-                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
-                                >
-                                    <Undo2 size={15}/> Вернуть ход
-                                </button>
-                                {!gameOverResult ? (
-                                    <button
-                                        type="button"
-                                        onClick={handleResign}
-                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/85 text-red-200 text-xs sm:text-sm font-bold rounded-md hover:bg-red-900 transition shadow border border-red-800/50 cursor-pointer"
-                                    >
-                                        <Flag size={15}/> Сдаться
-                                    </button>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        onClick={handleOfferRematch}
-                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-800 text-emerald-100 text-xs sm:text-sm font-bold rounded-md hover:bg-emerald-700 transition shadow border border-emerald-500/50 cursor-pointer"
-                                    >
-                                        <RefreshCw size={15}/> Реванш
-                                    </button>
-                                )}
-                            </div>
+    const [gameId, setGameId] = useState<number | null>(null);
+    const gameIdRef = useRef<number | null>(null);
+    const [myColor, setMyColor] = useState<'white' | 'black'>('white');
+    const myColorRef = useRef<'white' | 'black'>('white');
+    const [isSearching, setIsSearching] = useState(false);
+    const [queuePlayers, setQueuePlayers] = useState<QueuePlayer[]>([]);
+    const [currentUserId, setCurrentUserId] = useState<number | null>(null);
+    const [currentUsername, setCurrentUsername] = useState<string>('Вы');
+    const currentUsernameRef = useRef<string>('Вы');
+    const [currentUserRating, setCurrentUserRating] = useState<number>(1200);
+    const [stateVersion, setStateVersion] = useState(0);
+    const stateVersionRef = useRef<number>(0);
 
-                            {savedBotGameId && (
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => navigate(`/game/${savedBotGameId}`, {
-                                            state: {
-                                                game: {
-                                                    game_id: savedBotGameId,
-                                                    white_username: whitePlayer.username,
-                                                    white_rating: Number(whitePlayer.rating) || 1200,
-                                                    black_username: blackPlayer.username,
-                                                    black_rating: Number(blackPlayer.rating) || 1850,
-                                                    result: gameOverResult || '*',
-                                                    site: 'Michess Bot Arena',
-                                                    finished_at: new Date().toISOString()
-                                                }
-                                            }
-                                        })}
-                                        className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 text-xs font-bold rounded-md transition shadow border border-emerald-600/50 cursor-pointer"
-                                    >
-                                        <Eye size={14}/> Разбор партии
-                                    </button>
-                                    <a
-                                        href={`${API_BASE_URL}/api/v1/profile/games/${savedBotGameId}/pgn`}
-                                        download
-                                        className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#1A120B] hover:bg-black text-amber-400 text-xs font-bold rounded-md transition shadow border border-amber-800/60"
-                                    >
-                                        <Download size={14}/> Скачать PGN
-                                    </a>
-                                </div>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-2 gap-2">
-                            <button
-                                type="button"
-                                disabled={history.length === 0}
-                                onClick={handleUndoSandboxMove}
-                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
-                            >
-                                <Undo2 size={15}/> Отменить ход
-                            </button>
-                            <button
-                                type="button"
-                                disabled={history.length === 0}
-                                onClick={handleResetSandbox}
-                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-amber-300 text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
-                            >
-                                <RotateCcw size={15}/> Сбросить доску
-                            </button>
-                        </div>
-                    )}
-                </div>
+    const [selectedBotId, setSelectedBotId] = useState<HistoricalBotId>('philidor');
+    const [activeBot, setActiveBot] = useState<HistoricalBotId | null>(null);
+    const [botComment, setBotComment] = useState<string | null>(null);
+    const [isBotThinking, setIsBotThinking] = useState<boolean>(false);
+    const [savedBotGameId, setSavedBotGameId] = useState<number | null>(null);
 
+    const [selectedTimeControl, setSelectedTimeControl] = useState<Dgt2500Option>(DEFAULT_DGT_OPTION);
+    const [manualBaseMinutes, setManualBaseMinutes] = useState<number>(5);
+    const [manualIncSeconds, setManualIncSeconds] = useState<number>(3);
+    const [isTimeDropdownOpen, setIsTimeDropdownOpen] = useState(false);
+    const timeDropdownRef = useRef<HTMLDivElement>(null);
+    const boardContainerRef = useRef<HTMLDivElement>(null);
+    const notationScrollRef = useRef<HTMLDivElement>(null);
+
+    const [whitePlayer, setWhitePlayer] = useState({username: 'Белые', rating: '1200'});
+    const [blackPlayer, setBlackPlayer] = useState({username: 'Черные', rating: '1200'});
+    const [ratingInfo, setRatingInfo] = useState<{
+        white_delta?: number;
+        black_delta?: number;
+        white_new_rating?: number;
+        black_new_rating?: number;
+    } | null>(null);
+
+    const moveStartTime = useRef<number>(Date.now());
+    const botGameSavedRef = useRef<boolean>(false);
+    const lowTimeWarnedRef = useRef<boolean>(false);
+    const appliedPeriodsRef = useRef<{ white: Set<number>; black: Set<number> }>({
+        white: new Set(),
+        black: new Set()
+    });
+
+    const [dragState, setDragState] = useState<{
+        from: string;
+        piece: { type: string; color: string };
+        x: number;
+        y: number;
+    } | null>(null);
+
+    const [boardSize, setBoardSize] = useState<number>(() => {
+        const maxFit = getMaxViewportBoardSize();
+        const savedSize = localStorage.getItem('michess_board_size');
+        if (savedSize) {
+            const parsed = Number(savedSize);
+            if (!Number.isNaN(parsed) && parsed >= MIN_BOARD_SIZE) {
+                return Math.min(parsed, maxFit);
+            }
+        }
+        return maxFit;
+    });
+    const [isResizing, setIsResizing] = useState(false);
+    const resizeStartRef = useRef<{ startX: number; startY: number; startSize: number } | null>(null);
+
+    useEffect(() => {
+        const handleWindowResize = () => {
+            const maxFit = getMaxViewportBoardSize();
+            setBoardSize(prev => Math.min(prev, maxFit));
+        };
+        window.addEventListener('resize', handleWindowResize);
+        return () => window.removeEventListener('resize', handleWindowResize);
+    }, []);
+
+    const [whiteTimeMs, setWhiteTimeMs] = useState(180000);
+    const [blackTimeMs, setBlackTimeMs] = useState(180000);
+
+    const [sessionStats, setSessionStats] = useState({wins: 0, losses: 0, draws: 0});
+    const [gameOverResult, setGameOverResult] = useState<string | null>(null);
+    const [drawOfferStatus, setDrawOfferStatus] = useState<string | null>(null);
+    const [rematchStatus, setRematchStatus] = useState<'none' | 'offered_by_me' | 'offered_by_opponent' | 'declined'>('none');
+
+    const activeTheme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
+    const activePieceSet = PIECE_SETS[pieceSetKey] || PIECE_SETS.merida;
+    const selectedBotProfile = HISTORICAL_BOTS[selectedBotId];
+    const activeBotProfile = activeBot ? HISTORICAL_BOTS[activeBot] : null;
+
+    const effectiveWhiteBaseMinutes = selectedTimeControl.isManual ? manualBaseMinutes : selectedTimeControl.base;
+    const effectiveBlackBaseMinutes = selectedTimeControl.isManual
+        ? manualBaseMinutes
+        : (selectedTimeControl.blackBase ?? selectedTimeControl.base);
+    const effectiveIncSeconds = selectedTimeControl.isManual ? manualIncSeconds : selectedTimeControl.inc;
+
+    const isBoardFlipped = (myColor === 'black') !== isManualFlip;
+
+    const playAudio = useCallback((type: SoundEventType) => {
+        soundEngine.play(type);
+    }, []);
+
+    const playOutcomeSound = useCallback((result: string, playerColor: 'white' | 'black' = myColorRef.current) => {
+        if (!result || result === '*') {
+            soundEngine.play('decline');
+            return;
+        }
+        if (result === '1/2-1/2' || result.includes('draw')) {
+            soundEngine.play('draw');
+            return;
+        }
+        const whiteWon = result === '1-0' || result === 'white_won_on_time';
+        const isWin = (whiteWon && playerColor === 'white') || (!whiteWon && playerColor === 'black');
+        soundEngine.play(isWin ? 'victory' : 'defeat');
+    }, []);
+
+    const handleToggleSound = () => {
+        const nextMuted = soundEngine.toggleMute();
+        setIsSoundMuted(nextMuted);
+        if (!nextMuted) {
+            soundEngine.play('move');
+        }
+    };
+
+    const updateSessionStats = useCallback((result: string) => {
+        if (!result || result === '*') return;
+        setSessionStats(prev => {
+            if (result === '1/2-1/2' || result.includes('draw')) {
+                return {...prev, draws: prev.draws + 1};
+            }
+            const whiteWon = result === '1-0' || result === 'white_won_on_time';
+            const userIsWhite = myColorRef.current === 'white';
+            if ((whiteWon && userIsWhite) || (!whiteWon && !userIsWhite)) {
+                return {...prev, wins: prev.wins + 1};
+            } else {
+                return {...prev, losses: prev.losses + 1};
+            }
+        });
+    }, []);
+
+    const applyMatchFoundSnapshot = useCallback((data: any) => {
+        if (!data || !data.game_id) return;
+        const incomingGid = Number(data.game_id);
+        const assignedColor: 'white' | 'black' = data.color === 'black' ? 'black' : 'white';
+        const ver = Number(data.state_version || 0);
+        const isNewMatch = gameIdRef.current !== incomingGid;
+
+        setIsSearching(false);
+        setSpectatingGameId(null);
+        setCreatedInviteCode(null);
+        setShowInvitePanel(false);
+        setActiveBot(null);
+        setBotComment(null);
+        setSavedBotGameId(null);
+        botGameSavedRef.current = false;
+
+        if (isNewMatch) {
+            lowTimeWarnedRef.current = false;
+            setChatMessages([]);
+            appliedPeriodsRef.current = {white: new Set(), black: new Set()};
+            setIsManualFlip(false);
+            setRatingInfo(null);
+            setGameOverResult(null);
+            setRematchStatus('none');
+            setSelectedSquare(null);
+            setPendingPromotion(null);
+            setPremove(null);
+        }
+
+        gameIdRef.current = incomingGid;
+        setGameId(incomingGid);
+        myColorRef.current = assignedColor;
+        setMyColor(assignedColor);
+        setStateVersion(ver);
+        stateVersionRef.current = ver;
+
+        const initialWhiteTime = data.white_time_ms !== undefined ? Number(data.white_time_ms) : Number(data.base_time_ms || 180000);
+        const initialBlackTime = data.black_time_ms !== undefined ? Number(data.black_time_ms) : Number(data.base_time_ms || 180000);
+        setWhiteTimeMs(initialWhiteTime);
+        setBlackTimeMs(initialBlackTime);
+
+        if (data.white_username) {
+            setWhitePlayer({username: data.white_username, rating: String(data.white_rating || '1200')});
+        }
+        if (data.black_username) {
+            setBlackPlayer({username: data.black_username, rating: String(data.black_rating || '1200')});
+        }
+
+        const restoredGame = new Chess();
+        if (data.pgn) {
+            try {
+                restoredGame.loadPgn(data.pgn);
+            } catch {
+                if (data.fen) restoredGame.load(data.fen);
+            }
+        } else if (data.fen) {
+            restoredGame.load(data.fen);
+        }
+
+        setGame(restoredGame);
+        setHistory(restoredGame.history({verbose: true}));
+        setViewIndex(-1);
+        moveStartTime.current = Date.now();
+
+        if (isNewMatch) {
+            setDrawOfferStatus(`Партия началась! Вы играете ${assignedColor === 'white' ? 'Белыми' : 'Чёрными'}.`);
+            playAudio('start');
+            setTimeout(() => setDrawOfferStatus(null), 3000);
+        }
+    }, [playAudio]);
+
+    const applyMoveMadeSnapshot = useCallback((data: any) => {
+        if (data.state_version !== undefined) {
+            const ver = Number(data.state_version);
+            setStateVersion(ver);
+            stateVersionRef.current = ver;
+        }
+        if (data.white_time_ms !== undefined) setWhiteTimeMs(Number(data.white_time_ms));
+        if (data.black_time_ms !== undefined) setBlackTimeMs(Number(data.black_time_ms));
+        moveStartTime.current = Date.now();
+
+        const nextGame = new Chess();
+        let loaded = false;
+
+        if (data.pgn) {
+            try {
+                nextGame.loadPgn(data.pgn);
+                loaded = true;
+            } catch {
+                loaded = false;
+            }
+        }
+
+        if (!loaded && data.fen) {
+            try {
+                nextGame.load(data.fen);
+                loaded = true;
+            } catch {
+                loaded = false;
+            }
+        }
+
+        if (loaded) {
+            const newHistory = nextGame.history({verbose: true});
+            const lastSan = data.san || (newHistory.length > 0 ? newHistory[newHistory.length - 1].san : '');
+            setGame(nextGame);
+            setHistory(newHistory);
+            setViewIndex(-1);
+            playAudio(resolveMoveSound(lastSan));
+        }
+
+        if (data.game_over) {
+            setPremove(null);
+            setPendingPromotion(null);
+            setGameOverResult(data.result);
+            setRatingInfo(data);
+            playOutcomeSound(data.result);
+            updateSessionStats(data.result);
+        }
+    }, [playAudio, playOutcomeSound, updateSessionStats]);
+
+    const saveBotGameToDatabase = useCallback(async (
+        botId: HistoricalBotId,
+        playerColor: 'white' | 'black',
+        result: string,
+        completedGame: Chess,
+        termination?: 'resignation' | 'timeout'
+    ) => {
+        if (botGameSavedRef.current) return;
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        const verboseMoves = completedGame.history({verbose: true});
+        if (verboseMoves.length === 0) return;
+
+        botGameSavedRef.current = true;
+        const movesUci = verboseMoves.map((m: any) => `${m.from}${m.to}${m.promotion || ''}`);
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/v1/bots/save-game`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    bot_id: botId,
+                    player_color: playerColor,
+                    result,
+                    // Для позиции, не завершённой на доске, сервер требует причину окончания.
+                    termination: termination ?? null,
+                    moves_uci: movesUci,
+                    base_time_ms: Math.round(effectiveWhiteBaseMinutes * 60 * 1000),
+                    increment_ms: Math.round(effectiveIncSeconds * 1000)
+                })
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                if (data.game_id) {
+                    setSavedBotGameId(data.game_id);
+                }
+                // Итог определяет сервер: например, флаг при недостатке материала у соперника — ничья.
+                if (data.result && data.result !== result) {
+                    setGameOverResult(data.result);
+                    setDrawOfferStatus(`Итог по правилам ФИДЕ: ${data.result}`);
+                }
+            }
+        } catch (err) {
+            console.error('Ошибка сохранения партии с ботом в БД:', err);
+        }
+    }, [effectiveWhiteBaseMinutes, effectiveIncSeconds]);
+
+    const applyDgtClockAfterMove = useCallback((
+        moverColor: 'white' | 'black',
+        elapsedMs: number,
+        totalHalfMovesAfter: number
+    ) => {
+        const mode = selectedTimeControl.mode;
+        const baseMs = Math.round(
+            (moverColor === 'white' ? effectiveWhiteBaseMinutes : effectiveBlackBaseMinutes) * 60 * 1000
+        );
+        const completedMovesForSide = Math.ceil(totalHalfMovesAfter / 2);
+
+        let incSeconds = effectiveIncSeconds;
+        if (selectedTimeControl.incrementFromMove) {
+            if (completedMovesForSide >= selectedTimeControl.incrementFromMove) {
+                const extraInc = selectedTimeControl.periods?.find(p => p.extraIncSeconds)?.extraIncSeconds;
+                incSeconds = extraInc ?? effectiveIncSeconds;
+            } else {
+                incSeconds = 0;
+            }
+        }
+        const incMs = Math.round(incSeconds * 1000);
+
+        let periodExtraMs = 0;
+        if (selectedTimeControl.periods) {
+            selectedTimeControl.periods.forEach((period, idx) => {
+                if (
+                    period.moves &&
+                    completedMovesForSide >= period.moves &&
+                    !appliedPeriodsRef.current[moverColor].has(idx)
+                ) {
+                    appliedPeriodsRef.current[moverColor].add(idx);
+                    periodExtraMs += Math.round(period.extraMinutes * 60 * 1000);
+                }
+            });
+        }
+
+        const updateTimer = (prevMs: number) => {
+            if (mode === 'gong' || mode === 'move_timer') {
+                return baseMs;
+            }
+            if (mode === 'delay' || mode === 'us_delay') {
+                return prevMs + Math.min(elapsedMs, incMs) + periodExtraMs;
+            }
+            if (mode === 'fischer' || mode === 'byo_yomi') {
+                return prevMs + incMs + periodExtraMs;
+            }
+            return prevMs + periodExtraMs;
+        };
+
+        if (moverColor === 'white') {
+            setWhiteTimeMs(updateTimer);
+        } else {
+            setBlackTimeMs(updateTimer);
+        }
+    }, [selectedTimeControl, effectiveWhiteBaseMinutes, effectiveBlackBaseMinutes, effectiveIncSeconds]);
+
+    const handleThemeChange = (themeId: string) => {
+        setBoardThemeKey(themeId);
+        localStorage.setItem('michess_board_theme', themeId);
+    };
+
+    const handlePieceSetChange = (setId: string) => {
+        setPieceSetKey(setId);
+        localStorage.setItem('michess_piece_set', setId);
+    };
+
+    const startHistoricalBotGame = (botId: HistoricalBotId, colorPref: 'white' | 'black' | 'random' = 'random') => {
+        if (isSearching) {
+            setIsSearching(false);
+            gameSocket.send('leave_queue', {});
+        }
+
+        const chosenColor: 'white' | 'black' =
+            colorPref === 'random'
+                ? (Math.random() < 0.5 ? 'white' : 'black')
+                : colorPref;
+
+        const whiteStartMs = Math.round(effectiveWhiteBaseMinutes * 60 * 1000);
+        const blackStartMs = Math.round(effectiveBlackBaseMinutes * 60 * 1000);
+        const freshGame = new Chess();
+        const botInfo = HISTORICAL_BOTS[botId];
+
+        botGameSavedRef.current = false;
+        lowTimeWarnedRef.current = false;
+        appliedPeriodsRef.current = {white: new Set(), black: new Set()};
+        setSavedBotGameId(null);
+        gameIdRef.current = null;
+        setGameId(null);
+        setSelectedBotId(botId);
+        setActiveBot(botId);
+        setLeftSectionTab('bots');
+        myColorRef.current = chosenColor;
+        setMyColor(chosenColor);
+        setIsManualFlip(false);
+        setGame(freshGame);
+        setHistory([]);
+        setViewIndex(-1);
+        setSelectedSquare(null);
+        setPendingPromotion(null);
+        setPremove(null);
+        setGameOverResult(null);
+        setRatingInfo(null);
+        setDrawOfferStatus(null);
+        setRematchStatus('none');
+        setWhiteTimeMs(whiteStartMs);
+        setBlackTimeMs(blackStartMs);
+        moveStartTime.current = Date.now();
+
+        if (chosenColor === 'white') {
+            setWhitePlayer({username: currentUsername, rating: String(currentUserRating)});
+            setBlackPlayer({username: botInfo.playerLabel, rating: String(botInfo.rating)});
+        } else {
+            setWhitePlayer({username: botInfo.playerLabel, rating: String(botInfo.rating)});
+            setBlackPlayer({username: currentUsername, rating: String(currentUserRating)});
+        }
+
+        setBotComment(`«${botInfo.motto}»`);
+        playAudio('start');
+    };
+
+    useEffect(() => {
+        if (!activeBot || gameOverResult || game.isGameOver()) return;
+
+        const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
+        if (currentTurnColor === myColor) return;
+
+        let isCancelled = false;
+        let delayTimer: ReturnType<typeof setTimeout> | null = null;
+        setIsBotThinking(true);
+        const botName = HISTORICAL_BOTS[activeBot].shortName;
+        const requestStartedAt = Date.now();
+
+        (async () => {
+            try {
+                const authToken = localStorage.getItem('token');
+                const headers: Record<string, string> = {'Content-Type': 'application/json'};
+                // С токеном лимит запросов считается на пользователя, а не на общий IP.
+                if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
+                let response: Response | null = null;
+                // 429 (лимит) и 503 (пул движков занят) — временные: ждём Retry-After и повторяем.
+                for (let attempt = 0; attempt < 4 && !isCancelled; attempt++) {
+                    response = await fetch(`${API_BASE_URL}/api/v1/bots/move`, {
+                        method: 'POST',
+                        headers,
+                        body: JSON.stringify({
+                            bot_id: activeBot,
+                            fen: game.fen()
+                        })
+                    });
+                    if (response.status !== 429 && response.status !== 503) break;
+                    const retryAfterS = Number(response.headers.get('Retry-After')) || 2;
+                    await new Promise((resolve) => setTimeout(resolve, Math.min(retryAfterS, 10) * 1000));
+                }
+                if (!response) return;
+
+                if (!response.ok || isCancelled) {
+                    if (!isCancelled) setIsBotThinking(false);
+                    return;
+                }
+                const data = await response.json();
+                if (isCancelled) return;
+
+                const targetThinkMs = typeof data.thinking_time_ms === 'number' ? data.thinking_time_ms : 600;
+                const networkElapsed = Date.now() - requestStartedAt;
+                const remainingDelay = Math.max(80, targetThinkMs - networkElapsed);
+
+                delayTimer = setTimeout(() => {
+                    if (isCancelled) return;
+
+                    const from = data.uci.slice(0, 2);
+                    const to = data.uci.slice(2, 4);
+                    const promotion = data.uci.length > 4 ? data.uci.slice(4, 5) : 'q';
+
+                    const nextGame = cloneChessInstance(game);
+                    const moveObj = nextGame.move({from, to, promotion});
+
+                    if (moveObj) {
+                        const elapsed = Date.now() - moveStartTime.current;
+                        const newHistory = nextGame.history({verbose: true});
+                        const botColor: 'white' | 'black' = myColor === 'white' ? 'black' : 'white';
+
+                        applyDgtClockAfterMove(botColor, elapsed, newHistory.length);
+                        setGame(nextGame);
+                        setHistory(newHistory);
+                        setViewIndex(-1);
+                        setBotComment(data.comment);
+                        moveStartTime.current = Date.now();
+
+                        playAudio(resolveMoveSound(moveObj.san));
+
+                        if (nextGame.isGameOver()) {
+                            let result = '1/2-1/2';
+                            if (nextGame.isCheckmate()) {
+                                result = nextGame.turn() === 'w' ? '0-1' : '1-0';
+                            }
+                            setPremove(null);
+                            setGameOverResult(result);
+                            setDrawOfferStatus(`Партия против ${botName} окончена и сохранена в архив (${result}).`);
+                            updateSessionStats(result);
+                            playOutcomeSound(result, myColor);
+                            saveBotGameToDatabase(activeBot, myColor, result, nextGame);
+                        }
+                    }
+                    setIsBotThinking(false);
+                }, remainingDelay);
+            } catch (err) {
+                console.error('Ошибка получения хода бота:', err);
+                if (!isCancelled) {
+                    setIsBotThinking(false);
+                }
+            }
+        })();
+
+        return () => {
+            isCancelled = true;
+            if (delayTimer) clearTimeout(delayTimer);
+        };
+    }, [activeBot, game, myColor, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyDgtClockAfterMove]);
+
+    useEffect(() => {
+        if (!isResizing) return;
+
+        const prevCursor = document.body.style.cursor;
+        const prevUserSelect = document.body.style.userSelect;
+        document.body.style.cursor = 'nwse-resize';
+        document.body.style.userSelect = 'none';
+
+        const handleResizeMove = (e: PointerEvent) => {
+            if (!resizeStartRef.current) return;
+            const {startX, startY, startSize} = resizeStartRef.current;
+            const deltaX = e.clientX - startX;
+            const deltaY = e.clientY - startY;
+            const delta = Math.round((deltaX + deltaY) / 2);
+
+            const dynamicMax = getMaxViewportBoardSize();
+            const nextSize = Math.min(Math.max(startSize + delta, MIN_BOARD_SIZE), dynamicMax);
+            setBoardSize(nextSize);
+            localStorage.setItem('michess_board_size', String(nextSize));
+        };
+
+        const handleResizeEnd = () => {
+            setIsResizing(false);
+            resizeStartRef.current = null;
+        };
+
+        window.addEventListener('pointermove', handleResizeMove);
+        window.addEventListener('pointerup', handleResizeEnd);
+        window.addEventListener('pointercancel', handleResizeEnd);
+
+        return () => {
+            document.body.style.cursor = prevCursor;
+            document.body.style.userSelect = prevUserSelect;
+            window.removeEventListener('pointermove', handleResizeMove);
+            window.removeEventListener('pointerup', handleResizeEnd);
+            window.removeEventListener('pointercancel', handleResizeEnd);
+        };
+    }, [isResizing]);
+
+    const handleResizePointerDown = (e: React.PointerEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        resizeStartRef.current = {
+            startX: e.clientX,
+            startY: e.clientY,
+            startSize: boardSize
+        };
+        setIsResizing(true);
+    };
+
+    const handleResizeDoubleClick = (e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const defaultSize = getDefaultBoardSize();
+        setBoardSize(defaultSize);
+        localStorage.setItem('michess_board_size', String(defaultSize));
+    };
+
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setPendingPromotion(null);
+                setPremove(null);
+                setSelectedSquare(null);
+                setShowAppearanceDropdown(false);
+                return;
+            }
+            if (history.length === 0) return;
+            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+            if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                setViewIndex(prev => {
+                    const current = prev === -1 ? history.length - 1 : prev;
+                    const nextIdx = current <= 0 ? -2 : current - 1;
+                    if (nextIdx >= 0 && history[nextIdx]) {
+                        playAudio(resolveMoveSound(history[nextIdx].san));
+                    } else {
+                        playAudio('move');
+                    }
+                    return nextIdx;
+                });
+            } else if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                setViewIndex(prev => {
+                    if (prev === -1) return -1;
+                    const nextIdx = prev === -2
+                        ? (history.length > 1 ? 0 : -1)
+                        : (prev + 1 >= history.length - 1 ? -1 : prev + 1);
+                    const targetMove = nextIdx === -1 ? history[history.length - 1] : history[nextIdx];
+                    if (targetMove) {
+                        playAudio(resolveMoveSound(targetMove.san));
+                    }
+                    return nextIdx;
+                });
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                setViewIndex(-2);
+                playAudio('move');
+            } else if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                setViewIndex(-1);
+                playAudio('move');
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [history, playAudio]);
+
+    useEffect(() => {
+        if (notationScrollRef.current) {
+            const activeEl = notationScrollRef.current.querySelector('.active-move-btn');
+            if (activeEl) {
+                activeEl.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+            } else if (viewIndex === -1) {
+                notationScrollRef.current.scrollTop = notationScrollRef.current.scrollHeight;
+            }
+        }
+    }, [history.length, viewIndex]);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (timeDropdownRef.current && !timeDropdownRef.current.contains(event.target as Node)) {
+                setIsTimeDropdownOpen(false);
+            }
+            if (appearanceDropdownRef.current && !appearanceDropdownRef.current.contains(event.target as Node)) {
+                setShowAppearanceDropdown(false);
+            }
+        };
+
+        if (isTimeDropdownOpen || showAppearanceDropdown) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [isTimeDropdownOpen, showAppearanceDropdown]);
+
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        fetch(`${API_BASE_URL}/api/v1/profile/me`, {
+            headers: {'Authorization': `Bearer ${token}`}
+        })
+            .then(res => res.ok ? res.json() : null)
+            .then(data => {
+                if (data) {
+                    setCurrentUserId(data.id);
+                    if (data.username) {
+                        setCurrentUsername(data.username);
+                        currentUsernameRef.current = data.username;
+                    }
+                    if (data.rating) setCurrentUserRating(data.rating);
+                }
+            })
+            .catch(() => {
+            });
+    }, []);
+
+    useEffect(() => {
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        gameSocket.connect(token);
+
+        const handleMatchFound = (data: any) => {
+            applyMatchFoundSnapshot(data);
+        };
+
+        const handleMoveMade = (data: any) => {
+            applyMoveMadeSnapshot(data);
+        };
+
+        const handleGameOver = (data: any) => {
+            setPremove(null);
+            setPendingPromotion(null);
+            setGameOverResult(prev => {
+                if (!prev) {
+                    playOutcomeSound(data.result);
+                    updateSessionStats(data.result);
+                }
+                return data.result;
+            });
+            setRatingInfo(data);
+            if (data.white_time_ms !== undefined) setWhiteTimeMs(data.white_time_ms);
+            if (data.black_time_ms !== undefined) setBlackTimeMs(data.black_time_ms);
+            if (data.reason === 'aborted' || data.result === '*') {
+                setDrawOfferStatus('Партия отменена на 1-м ходу (рейтинг не изменён).');
+            } else if (data.result) {
+                setDrawOfferStatus(`Партия окончена. Результат: ${data.result}`);
+            }
+        };
+
+        const handleDrawOffered = () => {
+            setDrawOfferStatus('Соперник предлагает ничью.');
+            playAudio('offer');
+        };
+
+        const handleDrawDeclined = () => {
+            setDrawOfferStatus('Предложение ничьей отклонено.');
+            playAudio('decline');
+            setTimeout(() => setDrawOfferStatus(null), 3000);
+        };
+
+        const handleRematchOffered = () => {
+            setRematchStatus('offered_by_opponent');
+            playAudio('offer');
+        };
+
+        const handleRematchDeclined = () => {
+            setRematchStatus('declined');
+            playAudio('decline');
+        };
+
+        const handleInviteCreated = (data: any) => {
+            if (data.code) {
+                setCreatedInviteCode(data.code);
+                const url = `${window.location.origin}/challenge/${data.code}`;
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(url).catch(() => {
+                    });
+                }
+                setInviteCopied(true);
+                playAudio('offer');
+                setTimeout(() => setInviteCopied(false), 3000);
+            }
+        };
+
+        const handleSpectateStarted = (data: any) => {
+            setIsSearching(false);
+            setActiveBot(null);
+            gameIdRef.current = null;
+            setGameId(null);
+            setSpectatingGameId(data.game_id);
+            setWhitePlayer({username: data.white_username || 'Белые', rating: String(data.white_rating || 1200)});
+            setBlackPlayer({username: data.black_username || 'Черные', rating: String(data.black_rating || 1200)});
+            setWhiteTimeMs(data.white_time_ms ?? data.base_time_ms ?? 180000);
+            setBlackTimeMs(data.black_time_ms ?? data.base_time_ms ?? 180000);
+
+            const restored = new Chess();
+            if (data.pgn) {
+                try {
+                    restored.loadPgn(data.pgn);
+                } catch {
+                    if (data.fen) restored.load(data.fen);
+                }
+            } else if (data.fen) {
+                restored.load(data.fen);
+            }
+            setGame(restored);
+            setHistory(restored.history({verbose: true}));
+            setViewIndex(-1);
+            setGameOverResult(null);
+            setChatMessages([]);
+            setDrawOfferStatus(`Режим зрителя: ${data.white_username} vs ${data.black_username}`);
+            playAudio('start');
+        };
+
+        const handleChatMessage = (data: any) => {
+            if (data.text && data.sender) {
+                setChatMessages(prev => [...prev.slice(-49), {
+                    sender: data.sender,
+                    text: data.text,
+                    timestamp: data.timestamp || Date.now()
+                }]);
+                if (data.sender !== currentUsernameRef.current) {
+                    playAudio('chat');
+                }
+            }
+        };
+
+        const handleServerError = (data: any) => {
+            console.warn('Сервер отклонил действие:', data);
+            if (data.code) {
+                // Отказ матчмейкинга (уже в партии, вне диапазона рейтинга, вызов неактуален...):
+                // показываем причину и выходим из режима поиска, ход на доске не трогаем.
+                setIsSearching(false);
+                if (data.message) setDrawOfferStatus(data.message);
+                return;
+            }
+            setPremove(null);
+            playAudio('illegal');
+            if (data.pgn || data.fen) {
+                const syncedGame = new Chess();
+                if (data.pgn) {
+                    try {
+                        syncedGame.loadPgn(data.pgn);
+                    } catch {
+                        if (data.fen) syncedGame.load(data.fen);
+                    }
+                } else if (data.fen) {
+                    syncedGame.load(data.fen);
+                }
+                setGame(syncedGame);
+                setHistory(syncedGame.history({verbose: true}));
+            }
+            if (data.state_version !== undefined) {
+                const ver = Number(data.state_version);
+                setStateVersion(ver);
+                stateVersionRef.current = ver;
+            }
+        };
+
+        gameSocket.on('match_found', handleMatchFound);
+        gameSocket.on('move_made', handleMoveMade);
+        gameSocket.on('game_over', handleGameOver);
+        gameSocket.on('draw_offered', handleDrawOffered);
+        gameSocket.on('draw_declined', handleDrawDeclined);
+        gameSocket.on('rematch_offered', handleRematchOffered);
+        gameSocket.on('rematch_declined', handleRematchDeclined);
+        gameSocket.on('invite_created', handleInviteCreated);
+        gameSocket.on('spectate_started', handleSpectateStarted);
+        gameSocket.on('chat_message', handleChatMessage);
+        gameSocket.on('error', handleServerError);
+
+        return () => {
+            gameSocket.off('match_found', handleMatchFound);
+            gameSocket.off('move_made', handleMoveMade);
+            gameSocket.off('game_over', handleGameOver);
+            gameSocket.off('draw_offered', handleDrawOffered);
+            gameSocket.off('draw_declined', handleDrawDeclined);
+            gameSocket.off('rematch_offered', handleRematchOffered);
+            gameSocket.off('rematch_declined', handleRematchDeclined);
+            gameSocket.off('invite_created', handleInviteCreated);
+            gameSocket.off('spectate_started', handleSpectateStarted);
+            gameSocket.off('chat_message', handleChatMessage);
+            gameSocket.off('error', handleServerError);
+        };
+    }, [applyMatchFoundSnapshot, applyMoveMadeSnapshot, playAudio, playOutcomeSound, updateSessionStats]);
+
+    useEffect(() => {
+        if (!inviteCode || !localStorage.getItem('token')) return;
+        const timer = setTimeout(() => {
+            gameSocket.send('accept_invite', {code: inviteCode});
+            navigate('/', {replace: true});
+        }, 450);
+        return () => clearTimeout(timer);
+    }, [inviteCode, navigate]);
+
+    useEffect(() => {
+        const syncLobbyAndActiveGame = async () => {
+            const token = localStorage.getItem('token');
+            try {
+                if (token && !activeBot && !spectatingGameId) {
+                    const activeRes = await fetch(`${API_BASE_URL}/api/v1/profile/games/my-active`, {
+                        headers: {'Authorization': `Bearer ${token}`}
+                    });
+                    if (activeRes.ok) {
+                        const activeData = await activeRes.json();
+                        if (activeData && activeData.active && activeData.game_id) {
+                            if (gameIdRef.current !== Number(activeData.game_id)) {
+                                applyMatchFoundSnapshot(activeData);
+                                return;
+                            } else if (Number(activeData.state_version || 0) > stateVersionRef.current) {
+                                applyMoveMadeSnapshot(activeData);
+                            }
+                        }
+                    }
+                }
+
+                if (!gameIdRef.current) {
+                    const [qRes, liveRes] = await Promise.all([
+                        fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/queue`),
+                        fetch(`${API_BASE_URL}/api/v1/profile/games/live`)
+                    ]);
+                    if (qRes.ok) {
+                        setQueuePlayers(await qRes.json());
+                    }
+                    if (liveRes.ok) {
+                        setLiveGames(await liveRes.json());
+                    }
+                } else {
+                    setQueuePlayers([]);
+                }
+            } catch (e) {
+                console.error('Failed to sync lobby/active game data', e);
+            }
+        };
+
+        syncLobbyAndActiveGame();
+        const interval = setInterval(syncLobbyAndActiveGame, 1500);
+        return () => clearInterval(interval);
+    }, [activeBot, spectatingGameId, applyMatchFoundSnapshot, applyMoveMadeSnapshot]);
+
+    const currentTurnChar = game.turn();
+
+    useEffect(() => {
+        if ((!gameId && !activeBot && !spectatingGameId) || gameOverResult) return;
+
+        let lastTick = Date.now();
+        const currentTurnColor = currentTurnChar === 'w' ? 'white' : 'black';
+        const isHourglass = !gameId && selectedTimeControl.mode === 'hourglass';
+        const isScrabble = !gameId && selectedTimeControl.mode === 'scrabble';
+
+        const interval = setInterval(() => {
+            const now = Date.now();
+            const delta = now - lastTick;
+            lastTick = now;
+
+            if (currentTurnColor === 'white') {
+                setWhiteTimeMs(prev => isScrabble ? prev - delta : Math.max(0, prev - delta));
+                if (isHourglass) {
+                    setBlackTimeMs(prev => prev + delta);
+                }
+            } else {
+                setBlackTimeMs(prev => isScrabble ? prev - delta : Math.max(0, prev - delta));
+                if (isHourglass) {
+                    setWhiteTimeMs(prev => prev + delta);
+                }
+            }
+        }, 50);
+
+        return () => clearInterval(interval);
+    }, [gameId, activeBot, spectatingGameId, gameOverResult, currentTurnChar, selectedTimeControl.mode]);
+
+    // Звуковое предупреждение о цейтноте (< 10 секунд на часах игрока)
+    useEffect(() => {
+        if ((!gameId && !activeBot) || gameOverResult || lowTimeWarnedRef.current) return;
+        const myRemainingMs = myColor === 'white' ? whiteTimeMs : blackTimeMs;
+        if (myRemainingMs > 0 && myRemainingMs <= 10000) {
+            lowTimeWarnedRef.current = true;
+            playAudio('low_time');
+        }
+    }, [whiteTimeMs, blackTimeMs, gameId, activeBot, gameOverResult, myColor, playAudio]);
+
+    useEffect(() => {
+        if (!activeBot || gameOverResult || selectedTimeControl.mode === 'scrabble') return;
+
+        if (whiteTimeMs <= 0 || blackTimeMs <= 0) {
+            const flagWinner = whiteTimeMs <= 0 ? '0-1' : '1-0';
+            const botName = HISTORICAL_BOTS[activeBot].shortName;
+            setPremove(null);
+            setPendingPromotion(null);
+            setGameOverResult(flagWinner);
+            setDrawOfferStatus(`Флажок упал! Партия против ${botName} завершена по времени (${flagWinner}).`);
+            updateSessionStats(flagWinner);
+            playOutcomeSound(flagWinner, myColor);
+            saveBotGameToDatabase(activeBot, myColor, flagWinner, game, 'timeout');
+        }
+    }, [whiteTimeMs, blackTimeMs, activeBot, gameOverResult, selectedTimeControl.mode, myColor, game, playOutcomeSound, updateSessionStats, saveBotGameToDatabase]);
+
+    const executeMove = useCallback((
+        from: string,
+        to: string,
+        explicitPromotion?: PromotionPiece,
+        isPremoveMove: boolean = false
+    ): boolean => {
+        if (gameOverResult || viewIndex !== -1 || spectatingGameId) return false;
+
+        const piece = game.get(from as any);
+        const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
+
+        if (!piece || piece.color !== (game.turn() === 'w' ? 'w' : 'b') || ((gameId || activeBot || spectatingGameId) && currentTurnColor !== myColor)) {
+            setSelectedSquare(null);
+            return false;
+        }
+
+        const targetRank = to[1];
+        const isPawnPromotion =
+            piece.type === 'p' &&
+            ((piece.color === 'w' && targetRank === '8') || (piece.color === 'b' && targetRank === '1'));
+
+        if (isPawnPromotion && !explicitPromotion && !isPremoveMove) {
+            try {
+                const probeGame = cloneChessInstance(game);
+                const testMove = probeGame.move({from, to, promotion: 'q'});
+                if (testMove) {
+                    setPendingPromotion({
+                        from,
+                        to,
+                        color: piece.color as 'w' | 'b',
+                        isPremove: false
+                    });
+                    setSelectedSquare(null);
+                    setDragState(null);
+                    return true;
+                }
+            } catch {
+                setSelectedSquare(null);
+                setDragState(null);
+                return false;
+            }
+        }
+
+        const chosenPromotion: PromotionPiece = explicitPromotion || 'q';
+
+        try {
+            const nextGame = cloneChessInstance(game);
+            const move = nextGame.move({
+                from,
+                to,
+                ...(isPawnPromotion ? {promotion: chosenPromotion} : {})
+            });
+
+            if (move) {
+                const timeTaken = isPremoveMove ? 0 : Math.max(0, Date.now() - moveStartTime.current);
+                const uciMove = (move as any).uci || `${move.from}${move.to}${move.promotion || ''}`;
+                const newHistory = nextGame.history({verbose: true});
+
+                if (activeBot) {
+                    applyDgtClockAfterMove(myColor, timeTaken, newHistory.length);
+                }
+
+                setPendingPromotion(null);
+                setGame(nextGame);
+                setHistory(newHistory);
+                setViewIndex(-1);
+                playAudio(resolveMoveSound(move.san));
+                moveStartTime.current = Date.now();
+
+                if (gameId) {
+                    const commandId = typeof crypto !== 'undefined' && crypto.randomUUID
+                        ? crypto.randomUUID()
+                        : Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
+
+                    gameSocket.send('make_move', {
+                        game_id: gameId,
+                        move: uciMove,
+                        command_id: commandId,
+                        state_version: stateVersionRef.current,
+                        time_taken_ms: timeTaken,
+                        window_blurred: document.hidden,
+                        is_premove: isPremoveMove
+                    });
+                } else if (activeBot && nextGame.isGameOver()) {
+                    let result = '1/2-1/2';
+                    if (nextGame.isCheckmate()) {
+                        result = nextGame.turn() === 'w' ? '0-1' : '1-0';
+                    }
+                    const botName = HISTORICAL_BOTS[activeBot].shortName;
+                    setGameOverResult(result);
+                    setDrawOfferStatus(`Партия против ${botName} окончена и сохранена в архив (${result}).`);
+                    updateSessionStats(result);
+                    playOutcomeSound(result, myColor);
+                    saveBotGameToDatabase(activeBot, myColor, result, nextGame);
+                }
+                setSelectedSquare(null);
+                setDragState(null);
+                return true;
+            }
+        } catch {
+            setSelectedSquare(null);
+        }
+        setDragState(null);
+        return false;
+    }, [game, gameId, activeBot, spectatingGameId, myColor, stateVersion, viewIndex, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyDgtClockAfterMove]);
+
+    const scheduleOrPromotePremove = useCallback((from: string, to: string, explicitPromotion?: PromotionPiece) => {
+        if (from === to) return;
+        const piece = game.get(from as any);
+        const myColorChar = myColor === 'white' ? 'w' : 'b';
+        if (!piece || piece.color !== myColorChar) {
+            setSelectedSquare(null);
+            return;
+        }
+
+        const targetRank = to[1];
+        const isPawnPromotion =
+            piece.type === 'p' &&
+            ((piece.color === 'w' && targetRank === '8') || (piece.color === 'b' && targetRank === '1'));
+
+        if (isPawnPromotion && !explicitPromotion) {
+            setPendingPromotion({
+                from,
+                to,
+                color: myColorChar,
+                isPremove: true
+            });
+            setSelectedSquare(null);
+            setDragState(null);
+            return;
+        }
+
+        setPremove({
+            from,
+            to,
+            promotion: isPawnPromotion ? (explicitPromotion || 'q') : undefined
+        });
+        playAudio('premove');
+        setPendingPromotion(null);
+        setSelectedSquare(null);
+        setDragState(null);
+    }, [game, myColor, playAudio]);
+
+    useEffect(() => {
+        if (!premove || gameOverResult || viewIndex !== -1) return;
+        if (!gameId && !activeBot) return;
+
+        const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
+        if (currentTurnColor !== myColor) return;
+
+        const currentPremove = premove;
+        setPremove(null);
+        executeMove(currentPremove.from, currentPremove.to, currentPremove.promotion || 'q', true);
+    }, [game, premove, gameId, activeBot, myColor, gameOverResult, viewIndex, executeMove]);
+
+    useEffect(() => {
+        const handlePointerMove = (e: PointerEvent) => {
+            if (!dragState) return;
+            setDragState(prev => prev ? {...prev, x: e.clientX, y: e.clientY} : null);
+        };
+
+        const handlePointerUp = (e: PointerEvent) => {
+            if (!dragState) return;
+
+            let targetSquare: string | null = null;
+
+            const elements = document.elementsFromPoint(e.clientX, e.clientY);
+            const squareEl = Array.from(elements || []).find(el => el.hasAttribute('data-square'));
+            if (squareEl) {
+                targetSquare = squareEl.getAttribute('data-square');
+            }
+
+            if (!targetSquare && boardContainerRef.current) {
+                const rect = boardContainerRef.current.getBoundingClientRect();
+                const padding = 10;
+                const innerLeft = rect.left + padding;
+                const innerTop = rect.top + padding;
+                const innerWidth = rect.width - padding * 2;
+                const innerHeight = rect.height - padding * 2;
+
+                const x = e.clientX - innerLeft;
+                const y = e.clientY - innerTop;
+
+                if (x >= 0 && x <= innerWidth && y >= 0 && y <= innerHeight) {
+                    const fileIdx = Math.floor((x / innerWidth) * 8);
+                    const rankIdx = Math.floor((y / innerHeight) * 8);
+
+                    const files = isBoardFlipped ? [...FILES].reverse() : FILES;
+                    const ranks = isBoardFlipped
+                        ? ['1', '2', '3', '4', '5', '6', '7', '8']
+                        : ['8', '7', '6', '5', '4', '3', '2', '1'];
+
+                    if (files[fileIdx] && ranks[rankIdx]) {
+                        targetSquare = `${files[fileIdx]}${ranks[rankIdx]}`;
+                    }
+                }
+            }
+
+            if (targetSquare && targetSquare !== dragState.from) {
+                const turnColor = game.turn() === 'w' ? 'white' : 'black';
+                if ((gameId || activeBot || spectatingGameId) && turnColor !== myColor) {
+                    scheduleOrPromotePremove(dragState.from, targetSquare);
+                } else {
+                    executeMove(dragState.from, targetSquare);
+                }
+            }
+
+            setDragState(null);
+        };
+
+        if (dragState) {
+            window.addEventListener('pointermove', handlePointerMove);
+            window.addEventListener('pointerup', handlePointerUp);
+            window.addEventListener('pointercancel', handlePointerUp);
+        }
+
+        return () => {
+            window.removeEventListener('pointermove', handlePointerMove);
+            window.removeEventListener('pointerup', handlePointerUp);
+            window.removeEventListener('pointercancel', handlePointerUp);
+        };
+    }, [dragState, isBoardFlipped, game, gameId, activeBot, spectatingGameId, myColor, executeMove, scheduleOrPromotePremove]);
+
+    const formatTime = (ms: number) => {
+        const isOvertimeUpcount = ms < 0 && selectedTimeControl.mode === 'scrabble';
+        const totalMs = isOvertimeUpcount ? Math.abs(ms) : Math.max(0, ms);
+        const totalSecs = Math.floor(totalMs / 1000);
+        const hours = Math.floor(totalSecs / 3600);
+        const mins = Math.floor((totalSecs % 3600) / 60);
+        const secs = totalSecs % 60;
+        const prefix = isOvertimeUpcount ? '+' : '';
+
+        if (hours > 0) {
+            return `${prefix}${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+        }
+
+        if (!isOvertimeUpcount && totalMs < 30000 && totalMs > 0) {
+            const tenths = Math.floor((totalMs % 1000) / 100);
+            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${tenths}`;
+        }
+
+        return `${prefix}${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    };
+
+    const startMatchmaking = async () => {
+        gameIdRef.current = null;
+        setGameId(null);
+        setActiveBot(null);
+        setBotComment(null);
+        setSavedBotGameId(null);
+        botGameSavedRef.current = false;
+        lowTimeWarnedRef.current = false;
+        appliedPeriodsRef.current = {white: new Set(), black: new Set()};
+        setPendingPromotion(null);
+        setPremove(null);
+        setGameOverResult(null);
+        setRatingInfo(null);
+        setIsSearching(true);
+        setLeftSectionTab('lobby');
+        setLobbyTab('lobby');
+        setIsTimeDropdownOpen(false);
+        setDrawOfferStatus(`Вы опубликовали вызов в лобби (Опция DGT #${selectedTimeControl.optionNumber})...`);
+
+        const baseMs = Math.round(effectiveWhiteBaseMinutes * 60 * 1000);
+        const incMs = Math.round(effectiveIncSeconds * 1000);
+
+        gameSocket.send('join_queue', {
+            base_time_ms: baseMs,
+            increment_ms: incMs
+        });
+
+        const token = localStorage.getItem('token');
+        if (token) {
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/join`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({base_time_ms: baseMs, increment_ms: incMs})
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data && data.active && data.game_id) {
+                        applyMatchFoundSnapshot(data);
+                    }
+                }
+            } catch {
+                // Игнорируем ошибку, если сработал WebSocket
+            }
+        }
+    };
+
+    const cancelMatchmaking = async () => {
+        setIsSearching(false);
+        setDrawOfferStatus(null);
+        gameSocket.send('leave_queue', {});
+        const token = localStorage.getItem('token');
+        if (token) {
+            fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/leave`, {
+                method: 'POST',
+                headers: {'Authorization': `Bearer ${token}`}
+            }).catch(() => {
+            });
+        }
+    };
+
+    const acceptChallenge = async (targetUserId: number) => {
+        setActiveBot(null);
+        setBotComment(null);
+        setSavedBotGameId(null);
+        setPendingPromotion(null);
+        setPremove(null);
+        botGameSavedRef.current = false;
+
+        gameSocket.send('accept_challenge', {target_user_id: targetUserId});
+
+        const token = localStorage.getItem('token');
+        if (!token) return;
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/accept/${targetUserId}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Accept': 'application/json'
+                }
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data && data.game_id) {
+                    applyMatchFoundSnapshot(data);
+                }
+            }
+        } catch (err) {
+            console.error('Ошибка при принятии вызова по HTTP:', err);
+        }
+    };
+
+    const handleCreatePrivateInvite = () => {
+        gameSocket.send('create_invite', {
+            base_time_ms: Math.round(effectiveWhiteBaseMinutes * 60 * 1000),
+            increment_ms: Math.round(effectiveIncSeconds * 1000),
+            color_pref: inviteColorPref
+        });
+    };
+
+    const handleCopyInviteLink = () => {
+        if (!createdInviteCode) return;
+        const url = `${window.location.origin}/challenge/${createdInviteCode}`;
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).catch(() => {
+            });
+        }
+        setInviteCopied(true);
+        setTimeout(() => setInviteCopied(false), 2500);
+    };
+
+    const handleSpectateGame = (targetGameId: number) => {
+        gameSocket.send('spectate_game', {game_id: targetGameId});
+    };
+
+    const handleLeaveSpectate = () => {
+        if (spectatingGameId) {
+            gameSocket.send('leave_spectate', {game_id: spectatingGameId});
+        }
+        setSpectatingGameId(null);
+        handleResetSandbox();
+    };
+
+    const handleSendChatMessage = (textToSend?: string) => {
+        const activeGid = gameId || spectatingGameId;
+        const finalMsg = (textToSend ?? chatInput).trim();
+        if (!activeGid || !finalMsg) return;
+        gameSocket.send('chat_message', {
+            game_id: activeGid,
+            text: finalMsg.slice(0, 140)
+        });
+        if (!textToSend) setChatInput('');
+    };
+
+    const handleAbortGame = () => {
+        if ((!gameId && !activeBot) || gameOverResult || history.length >= 2) return;
+        setPendingPromotion(null);
+        setPremove(null);
+        if (gameId) {
+            gameSocket.send('abort_game', {game_id: gameId});
+        } else if (activeBot) {
+            setGameOverResult('*');
+            setDrawOfferStatus('Партия отменена без изменения счёта.');
+            playAudio('decline');
+        }
+    };
+
+    const handleOfferRematch = () => {
+        if (gameId && gameOverResult) {
+            gameSocket.send('offer_rematch', {game_id: gameId});
+            setRematchStatus('offered_by_me');
+            playAudio('premove');
+        } else if (activeBot && gameOverResult) {
+            const nextColor = myColor === 'white' ? 'black' : 'white';
+            startHistoricalBotGame(activeBot, nextColor);
+        }
+    };
+
+    const handleAcceptRematch = () => {
+        if (!gameId) return;
+        gameSocket.send('accept_rematch', {game_id: gameId});
+    };
+
+    const handleDeclineRematch = () => {
+        if (!gameId) return;
+        gameSocket.send('decline_rematch', {game_id: gameId});
+        setRematchStatus('none');
+        playAudio('decline');
+    };
+
+    const handleResign = () => {
+        if ((!gameId && !activeBot) || gameOverResult) return;
+        if (window.confirm('Вы действительно хотите сдаться?')) {
+            setPendingPromotion(null);
+            setPremove(null);
+            if (gameId) {
+                gameSocket.send('resign', {game_id: gameId});
+            } else if (activeBot) {
+                const res = myColor === 'white' ? '0-1' : '1-0';
+                const botName = HISTORICAL_BOTS[activeBot].shortName;
+                setGameOverResult(res);
+                setDrawOfferStatus(`Вы сдались. Победа ${botName} (${res}).`);
+                updateSessionStats(res);
+                playOutcomeSound(res, myColor);
+                saveBotGameToDatabase(activeBot, myColor, res, game, 'resignation');
+            }
+        }
+    };
+
+    const handleOfferDraw = () => {
+        if (!gameId || gameOverResult) return;
+        gameSocket.send('offer_draw', {game_id: gameId});
+        setDrawOfferStatus('Вы предложили ничью...');
+        playAudio('premove');
+    };
+
+    const acceptDraw = () => {
+        if (!gameId) return;
+        gameSocket.send('accept_draw', {game_id: gameId});
+        setDrawOfferStatus(null);
+    };
+
+    const declineDraw = () => {
+        if (!gameId) return;
+        gameSocket.send('decline_draw', {game_id: gameId});
+        setDrawOfferStatus(null);
+        playAudio('decline');
+    };
+
+    const handleResetSandbox = () => {
+        if (gameId && !gameOverResult) return;
+        gameIdRef.current = null;
+        setGameId(null);
+        setActiveBot(null);
+        setBotComment(null);
+        setSavedBotGameId(null);
+        botGameSavedRef.current = false;
+        lowTimeWarnedRef.current = false;
+        appliedPeriodsRef.current = {white: new Set(), black: new Set()};
+        setIsBotThinking(false);
+        setGameOverResult(null);
+        setRatingInfo(null);
+        setDrawOfferStatus(null);
+        setSelectedSquare(null);
+        setPendingPromotion(null);
+        setPremove(null);
+        setViewIndex(-1);
+        setGame(new Chess());
+        setHistory([]);
+    };
+
+    const handleUndoSandboxMove = () => {
+        if (gameId || history.length === 0 || isBotThinking || !!gameOverResult) return;
+        const nextGame = cloneChessInstance(game);
+        nextGame.undo();
+        if (activeBot && nextGame.history().length > 0) {
+            const turnAfterFirstUndo = nextGame.turn() === 'w' ? 'white' : 'black';
+            if (turnAfterFirstUndo !== myColor) {
+                nextGame.undo();
+            }
+        }
+        setGame(nextGame);
+        setHistory(nextGame.history({verbose: true}));
+        setGameOverResult(null);
+        setDrawOfferStatus(null);
+        setPendingPromotion(null);
+        setPremove(null);
+        setViewIndex(-1);
+        setSelectedSquare(null);
+        playAudio('move');
+    };
+
+    const handlePromotionSelect = (pieceType: PromotionPiece) => {
+        if (!pendingPromotion) return;
+        const {from, to, isPremove} = pendingPromotion;
+        setPendingPromotion(null);
+        if (isPremove) {
+            scheduleOrPromotePremove(from, to, pieceType);
+        } else {
+            executeMove(from, to, pieceType, false);
+        }
+    };
+
+    const handleSquareClick = (squareId: string) => {
+        if (viewIndex !== -1 || gameOverResult || spectatingGameId) return;
+
+        if (pendingPromotion) {
+            setPendingPromotion(null);
+            return;
+        }
+
+        const turnChar = game.turn();
+        const currentTurnColor = turnChar === 'w' ? 'white' : 'black';
+        const myColorChar = myColor === 'white' ? 'w' : 'b';
+        const isOpponentTurn = (gameId || activeBot || spectatingGameId) && currentTurnColor !== myColor;
+
+        if (isOpponentTurn) {
+            if (selectedSquare) {
+                if (selectedSquare === squareId) {
+                    setSelectedSquare(null);
+                } else {
+                    const pieceOnTarget = game.get(squareId as any);
+                    if (pieceOnTarget && pieceOnTarget.color === myColorChar) {
+                        setSelectedSquare(squareId);
+                    } else {
+                        scheduleOrPromotePremove(selectedSquare, squareId);
+                    }
+                }
+            } else {
+                const piece = game.get(squareId as any);
+                if (piece && piece.color === myColorChar) {
+                    setSelectedSquare(squareId);
+                } else if (premove) {
+                    setPremove(null);
+                }
+            }
+            return;
+        }
+
+        if (selectedSquare) {
+            if (selectedSquare === squareId) {
+                setSelectedSquare(null);
+            } else {
+                const pieceOnTarget = game.get(squareId as any);
+                if (pieceOnTarget && pieceOnTarget.color === turnChar && ((!gameId && !activeBot) || currentTurnColor === myColor)) {
+                    setSelectedSquare(squareId);
+                } else {
+                    executeMove(selectedSquare, squareId);
+                }
+            }
+        } else {
+            const piece = game.get(squareId as any);
+            if (piece && piece.color === turnChar && ((!gameId && !activeBot) || currentTurnColor === myColor)) {
+                setSelectedSquare(squareId);
+            }
+        }
+    };
+
+    const currentGame = viewIndex === -1 ? game : (() => {
+        const tg = new Chess();
+        const limit = viewIndex === -2 ? -1 : viewIndex;
+        for (let i = 0; i <= limit; i++) {
+            if (history[i]) tg.move(history[i]);
+        }
+        return tg;
+    })();
+    const boardState = currentGame.board();
+    const material = calculateMaterialBalance(boardState);
+
+    const activeMoveIndex = viewIndex === -1 ? history.length - 1 : viewIndex;
+    const lastMove = activeMoveIndex >= 0 ? history[activeMoveIndex] : null;
+
+    const legalTargetSquares = new Set<string>();
+    if (selectedSquare && viewIndex === -1 && !gameOverResult) {
+        const currentTurnColor = currentGame.turn() === 'w' ? 'white' : 'black';
+        const isMyTurnNow = (!gameId && !activeBot) || currentTurnColor === myColor;
+        if (isMyTurnNow) {
+            try {
+                const movesForSquare = currentGame.moves({square: selectedSquare as any, verbose: true});
+                movesForSquare.forEach((m: any) => legalTargetSquares.add(m.to));
+            } catch {
+                // Игнорируем некорректный квадрат
+            }
+        }
+    }
+
+    const displayedRanks = isBoardFlipped ? ['1', '2', '3', '4', '5', '6', '7', '8'] : ['8', '7', '6', '5', '4', '3', '2', '1'];
+    const displayedFiles = isBoardFlipped ? [...FILES].reverse() : FILES;
+
+    const topIsWhite = isBoardFlipped;
+    const topPlayerInfo = topIsWhite ? whitePlayer : blackPlayer;
+    const bottomPlayerInfo = topIsWhite ? blackPlayer : whitePlayer;
+    const topPlayerTime = topIsWhite ? whiteTimeMs : blackTimeMs;
+    const bottomPlayerTime = topIsWhite ? blackTimeMs : whiteTimeMs;
+    const topIdlePreviewMs = Math.round((topIsWhite ? effectiveWhiteBaseMinutes : effectiveBlackBaseMinutes) * 60 * 1000);
+    const bottomIdlePreviewMs = Math.round((!topIsWhite ? effectiveWhiteBaseMinutes : effectiveBlackBaseMinutes) * 60 * 1000);
+    const topCaptured = topIsWhite ? material.whiteCapturedSymbols : material.blackCapturedSymbols;
+    const bottomCaptured = topIsWhite ? material.blackCapturedSymbols : material.whiteCapturedSymbols;
+    const topAdvantage = topIsWhite ? material.whiteAdvantage : material.blackAdvantage;
+    const bottomAdvantage = topIsWhite ? material.blackAdvantage : material.whiteAdvantage;
+
+    const isBotOnTop = !!activeBotProfile && ((topIsWhite && myColor === 'black') || (!topIsWhite && myColor === 'white'));
+    const isBotOnBottom = !!activeBotProfile && !isBotOnTop;
+
+    const movePairs = history.reduce((acc: Array<{
+        moveNumber: number;
+        whiteSan: string;
+        whiteIdx: number;
+        blackSan?: string;
+        blackIdx?: number;
+    }>, move: any, idx: number) => {
+        if (idx % 2 === 0) {
+            acc.push({
+                moveNumber: Math.floor(idx / 2) + 1,
+                whiteSan: move.san,
+                whiteIdx: idx
+            });
+        } else {
+            acc[acc.length - 1].blackSan = move.san;
+            acc[acc.length - 1].blackIdx = idx;
+        }
+        return acc;
+    }, []);
+
+    const handleSelectMoveFromList = (targetIdx: number) => {
+        setSelectedSquare(null);
+        if (history[targetIdx]) {
+            playAudio(resolveMoveSound(history[targetIdx].san));
+        }
+        if (targetIdx >= history.length - 1) {
+            setViewIndex(-1);
+        } else {
+            setViewIndex(targetIdx);
+        }
+    };
+
+    const renderPieceSvg = (piece: { type: string; color: string }) => {
+        const styleProps = getHarmoniousPieceStyle(pieceSetKey, boardThemeKey, piece.color);
+        return (
+            <div className="relative w-full h-full pointer-events-none flex items-center justify-center">
+                <img
+                    src={getPieceSvgUrl(pieceSetKey, piece.color, piece.type)}
+                    className="object-contain select-none transition-transform duration-75"
+                    style={styleProps}
+                    draggable={false}
+                    alt={`${piece.color}${piece.type}`}
+                />
             </div>
+        );
+    };
 
-        </div>
-    );
-}
+    if (!localStorage.getItem('token')) {
+        return (
+            <div
+                className="my-auto flex flex-col items-center justify-center p-8 bg-acacia rounded-lg shadow-heavy border-4 border-acacia-dark text-boxwood-light text-center">
+                <div className="text-2xl font-bold mb-2">Требуется авторизация</div>
+                <p className="text-base text-boxwood/85 mb-2">
+                    Пожалуйста, войдите в систему в правом верхнем углу, чтобы начать игру.
+                </p>
+            </div>
+        );
+    }
 
-function prevIndexHelper(viewIndex: number, historyLength: number): number {
-    return viewIndex === -1 ? historyLength - 1 : viewIndex;
-}
+    const filteredQueue = queuePlayers.filter(p => p.user_id !== currentUserId);
+    const responsiveBoardPx = typeof window !== 'undefined' ? Math.min(boardSize, window.innerWidth - 24) : boardSize;
+
+    return (
+        <div
+            className="w-full max-w-[1920px] h-full flex flex-col xl:flex-row items-center xl:items-stretch justify-between gap-3 px-1 xl:overflow-hidden relative">
+
+            {dragState && (
+                <div
+                    className="fixed pointer-events-none z-50 scale-110"
+                    style={{
+                        left: `${dragState.x}px`,
+                        top: `${dragState.y}px`,
+                        width: `${responsiveBoardPx / 8}px`,
+                        height: `${responsiveBoardPx / 8}px`,
+                        transform: 'translate(-50%, -50%)'
+                    }}
+                >
+                    {renderPieceSvg(dragState.piece)}
+                </div>
+            )}
+
+            {/* ЛЕВАЯ КОЛОНКА: ИГРОВОЙ ЦЕНТР (ЧАСЫ DGT2500, ИСТОРИЧЕСКИЕ БОТЫ, ЛОББИ И LIVE) */}
+            <div
+                className="w-full xl:w-[400px] 2xl:w-[440px] xl:h-full bg-acacia p-3 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-2 text-boxwood-light order-2 xl:order-1 shrink-0 xl:overflow-hidden">
+
+                <div className="border-b border-acacia-light pb-2 flex justify-between items-center shrink-0">
+                    <div className="flex items-center gap-2">
+                        <div className="p-1.5 bg-acacia-dark rounded-md border border-amber-600/30 text-amber-400">
+                            <Sword size={16}/>
+                        </div>
+                        <div>
+                            <div className="text-[11px] tracking-wider uppercase text-boxwood/75 font-bold">
+                                Игровой зал
+                            </div>
+                            <div className="text-xs font-bold flex items-center gap-1.5 font-mono">
+                                <span className="text-boxwood/80 font-sans">Счёт сессии:</span>
+                                <span className="text-emerald-400">+{sessionStats.wins}</span>
+                                <span className="text-red-400">-{sessionStats.losses}</span>
+                                <span className="text-gray-300">={sessionStats.draws}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5">
+                        <button
+                            type="button"
+                            onClick={handleToggleSound}
+                            className={`p-1.5 rounded-md border transition cursor-pointer shadow-sm ${
+                                isSoundMuted
+                                    ? 'bg-red-950/60 border-red-800/60 text-red-300 hover:bg-red-900/60'
+                                    : 'bg-acacia-dark hover:bg-black/50 border-amber-800/50 text-amber-300'
+                            }`}
+                            title={isSoundMuted ? 'Включить звук' : 'Выключить звук'}
+                        >
+                            {isSoundMuted ? <VolumeX size={15}/> : <Volume2 size={15}/>}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => setIsManualFlip(prev => !prev)}
+                            className="px-2.5 py-1 rounded-md bg-acacia-dark hover:bg-black/50 border border-amber-800/50 text-xs font-bold text-amber-200 flex items-center gap-1.5 transition cursor-pointer shadow-sm"
+                            title="Перевернуть доску"
+                        >
+                            <RefreshCw size={13} className="text-amber-400"/> Перевернуть
+                        </button>
+                    </div>
+                </div>
+
+                <div
+                    className="bg-acacia-dark p-2.5 rounded-md border border-amber-900/50 flex flex-col gap-2 shadow-inner shrink-0">
+                    <div className="flex items-center justify-between">
+                        <label
+                            className="text-xs uppercase tracking-wider text-boxwood/85 flex items-center gap-1.5 font-bold">
+                            <Clock className="text-amber-500" size={13}/> Часы FIDE DGT2500 (36 прогр.)
+                        </label>
+                        <span
+                            className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-900/45 text-amber-300 border border-amber-600/30">
+                            OPT #{selectedTimeControl.optionNumber}
+                        </span>
+                    </div>
+
+                    <div className="relative w-full" ref={timeDropdownRef}>
+                        <button
+                            type="button"
+                            disabled={isSearching || !!gameId}
+                            onClick={() => setIsTimeDropdownOpen(!isTimeDropdownOpen)}
+                            className="w-full bg-black/45 border border-amber-700/50 hover:bg-black/65 disabled:opacity-50 transition text-amber-200 rounded-md px-2.5 py-1.5 text-xs sm:text-sm font-bold outline-none cursor-pointer flex justify-between items-center shadow-inner gap-2"
+                        >
+                            <span className="truncate">
+                                [{selectedTimeControl.optionNumber}] {selectedTimeControl.label}
+                                {selectedTimeControl.isManual ? ` (${manualBaseMinutes}м + ${manualIncSeconds}с)` : ''}
+                            </span>
+                            {isTimeDropdownOpen ? <ChevronUp className="text-amber-400 shrink-0" size={15}/> :
+                                <ChevronDown className="text-amber-400 shrink-0" size={15}/>}
+                        </button>
+
+                        {isTimeDropdownOpen && (
+                            <div
+                                className="absolute z-50 w-full top-full mt-1 bg-[#1A120B] border-2 border-amber-700/60 rounded-md shadow-2xl max-h-72 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
+                                {TIME_CONTROLS.map((group, gIdx) => (
+                                    <div key={gIdx}>
+                                        <div
+                                            className="px-3 py-1.5 text-xs uppercase tracking-wider text-amber-400 bg-black/90 font-bold sticky top-0 z-10 border-b border-t border-amber-900/40 first:border-t-0">
+                                            {group.group}
+                                        </div>
+                                        {group.options.map((opt) => {
+                                            const isSelected = selectedTimeControl.optionNumber === opt.optionNumber;
+                                            return (
+                                                <button
+                                                    key={opt.optionNumber}
 
 ----------------------------------------------------------------------------------------
-END OF PART 9/11
+END OF PART 9/14

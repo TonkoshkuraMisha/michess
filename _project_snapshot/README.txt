@@ -1,13 +1,13 @@
 PROJECT: michess
-ROOT: C:\Users\misha\PycharmProjects\michess
-FILES INCLUDED: 110
-PARTS: 11 (target <= 80 KiB per part)
+ROOT: C:\Users\User_Fayna\PycharmProjects\michess
+FILES INCLUDED: 127
+PARTS: 14 (target <= 80 KiB per part)
 
 UPLOAD ALL PARTS IN NUMERICAL ORDER (snapshot_001.txt .. snapshot_00N.txt).
 
 TABLE OF CONTENTS BY PART:
 
---- snapshot_001.txt (73.9 KiB) ---
+--- snapshot_001.txt (66.3 KiB) ---
   - ToDo.md
   - requirements.txt
   - pytest.ini
@@ -31,10 +31,12 @@ TABLE OF CONTENTS BY PART:
   - src/api/bots.py
   - src/api/deps.py
 
---- snapshot_002.txt (70.6 KiB) ---
+--- snapshot_002.txt (72.7 KiB) ---
   - src/api/profile.py
+  - src/api/rate_limit.py
   - src/api/websockets.py
   - src/core/config.py
+  - src/core/instance.py
   - src/core/security.py
   - src/db/redis.py
   - src/db/seed.py
@@ -49,7 +51,7 @@ TABLE OF CONTENTS BY PART:
   - src/schemas/user.py
   - src/services/__init__.py
 
---- snapshot_003.txt (75.7 KiB) ---
+--- snapshot_003.txt (75.5 KiB) ---
   - src/services/analysis_service.py
   - src/services/anticheat.py
   - src/services/bots/__init__.py
@@ -67,32 +69,46 @@ TABLE OF CONTENTS BY PART:
   - src/services/bots/paulsen.py
   - src/services/bots/philidor.py
   - src/services/bots/staunton.py
-  - src/services/bots/zukertort.py
 
---- snapshot_004.txt (73.6 KiB) ---
+--- snapshot_004.txt (75.8 KiB) ---
+  - src/services/bots/zukertort.py
   - src/services/connection_manager.py
+  - src/services/engine_pool.py
   - src/services/game_engine.py
   - src/services/game_state.py
+
+--- snapshot_005.txt (74.2 KiB) ---
   - src/services/matchmaker.py
   - src/services/rating.py
   - src/worker/celery_app.py
   - src/worker/tasks.py
   - tests/conftest.py
+  - tests/integration/test_real_backends.py
   - tests/test_analysis_service.py
   - tests/test_anderssen_bot.py
   - tests/test_anticheat.py
-  - tests/test_game_engine.py
+  - tests/test_audit_fixes.py
+  - tests/test_audit_followups_rules.py
 
---- snapshot_005.txt (67.1 KiB) ---
+--- snapshot_006.txt (74.5 KiB) ---
+  - tests/test_disconnect_clock.py
+  - tests/test_engine_endpoints.py
+  - tests/test_game_end_atomicity.py
+  - tests/test_game_engine.py
   - tests/test_game_state.py
   - tests/test_labourdonnais_bot.py
+  - tests/test_matchmaking_rules.py
   - tests/test_morphy_bot.py
+  - tests/test_multiworker.py
   - tests/test_paulsen_bot.py
   - tests/test_philidor_bot.py
   - tests/test_staunton_bot.py
   - tests/test_stockfish_engine.py
   - tests/test_websockets_flow.py
+  - tests/test_worker_tasks.py
   - tests/test_zukertort_bot.py
+
+--- snapshot_007.txt (63.3 KiB) ---
   - scripts/build_opening_books.py
   - scripts/chessgames_downloader.py
   - scripts/download_champions.py
@@ -103,38 +119,45 @@ TABLE OF CONTENTS BY PART:
   - frontend/index.html
   - frontend/postcss.config.js
   - frontend/README.md
-
---- snapshot_006.txt (44.1 KiB) ---
   - frontend/src/App.tsx
   - frontend/src/components/AuthModal.tsx
+
+--- snapshot_008.txt (18.1 KiB) ---
   - frontend/src/components/ChampionGames.tsx
 
---- snapshot_007.txt (77.3 KiB) ---
+--- snapshot_009.txt (77.3 KiB) ---
   - frontend/src/components/Chessboard.tsx (chunk 1)
 
---- snapshot_008.txt (77.2 KiB) ---
+--- snapshot_010.txt (77.3 KiB) ---
   - frontend/src/components/Chessboard.tsx (chunk 2)
 
---- snapshot_009.txt (25.7 KiB) ---
+--- snapshot_011.txt (24.2 KiB) ---
   - frontend/src/components/Chessboard.tsx (chunk 3)
+  - frontend/src/components/chessboard/__tests__/boardUtils.test.ts
+  - frontend/src/components/chessboard/boardUtils.ts
+  - frontend/src/components/chessboard/types.ts
 
---- snapshot_010.txt (65.5 KiB) ---
+--- snapshot_012.txt (68.8 KiB) ---
   - frontend/src/components/GameViewer.tsx
   - frontend/src/components/Leaderboard.tsx
 
---- snapshot_011.txt (77.5 KiB) ---
+--- snapshot_013.txt (67.5 KiB) ---
   - frontend/src/components/Profile.tsx
   - frontend/src/config/api.ts
   - frontend/src/config/boardAppearance.ts
   - frontend/src/config/champions.ts
+  - frontend/src/config/timeControls.ts
   - frontend/src/index.css
   - frontend/src/main.tsx
   - frontend/src/services/__tests__/gameSocket.test.ts
   - frontend/src/services/gameSocket.ts
+  - frontend/src/services/soundEngine.ts
   - frontend/tailwind.config.js
   - frontend/tsconfig.app.json
   - frontend/tsconfig.node.json
   - .gitignore
+
+--- snapshot_014.txt (33.9 KiB) ---
   - make_snapshot.py
   - QUICKSTART.md
   - README.md

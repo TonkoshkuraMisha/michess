@@ -1,1931 +1,459 @@
-PROJECT SNAPSHOT — PART 11/11
+PROJECT SNAPSHOT — PART 11/14
 Project: michess
-Files in this part (17): frontend/src/components/Profile.tsx, frontend/src/config/api.ts, frontend/src/config/boardAppearance.ts, frontend/src/config/champions.ts, frontend/src/index.css, frontend/src/main.tsx, frontend/src/services/__tests__/gameSocket.test.ts, frontend/src/services/gameSocket.ts, frontend/tailwind.config.js, frontend/tsconfig.app.json, frontend/tsconfig.node.json, .gitignore, make_snapshot.py, QUICKSTART.md, README.md, start_dev.ps1, WORKFLOW.md
+Files in this part (4): frontend/src/components/Chessboard.tsx (chunk 3), frontend/src/components/chessboard/__tests__/boardUtils.test.ts, frontend/src/components/chessboard/boardUtils.ts, frontend/src/components/chessboard/types.ts
 ----------------------------------------------------------------------------------------
-
-========================================================================================
-FILE: frontend/src/components/Profile.tsx
-========================================================================================
-// --- FILE: frontend/src/components/Profile.tsx ---
-
-import {useState, useEffect} from 'react';
-import {useParams, Link, useNavigate} from 'react-router-dom';
-import {format, parseISO} from 'date-fns';
-import {ru} from 'date-fns/locale';
-import {
-    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
-} from 'recharts';
-import {
-    Trophy,
-    Swords,
-    Calendar,
-    Download,
-    Crosshair,
-    Target,
-    ShieldCheck,
-    ShieldAlert
-} from 'lucide-react';
-import {API_BASE_URL} from '../config/api';
-
-interface UserProfile {
-    id: number;
-    username: string;
-    rating: number;
-    is_cheater?: boolean;
-    trust_factor?: number;
-    created_at: string;
-}
-
-interface GameData {
-    game_id: number;
-    white_username: string;
-    white_rating: number;
-    black_username: string;
-    black_rating: number;
-    status: string;
-    is_rated: boolean;
-    result: string;
-    pgn_date: string | null;
-    site: string | null;
-    eco: string | null;
-    finished_at: string | null;
-}
-
-const displayDate = (game: GameData) => {
-    if (game.pgn_date && !game.pgn_date.includes('????')) {
-        return game.pgn_date.replace(/\??/g, '').replace(/\.$/, '');
-    }
-    if (game.finished_at) {
-        return format(parseISO(game.finished_at), 'd MMM yyyy', {locale: ru});
-    }
-    return '—';
-};
-
-export default function Profile() {
-    const {targetUsername} = useParams<{ targetUsername: string }>();
-    const navigate = useNavigate();
-    const [profile, setProfile] = useState<UserProfile | null>(null);
-    const [games, setGames] = useState<GameData[]>([]);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
-    useEffect(() => {
-        const fetchProfileData = async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                const profileRes = await fetch(`${API_BASE_URL}/api/v1/profile/${targetUsername}`);
-                if (!profileRes.ok) throw new Error('Пользователь не найден');
-                const profileData = await profileRes.json();
-                setProfile(profileData);
-
-                const gamesRes = await fetch(`${API_BASE_URL}/api/v1/profile/${targetUsername}/games?limit=30`);
-                if (gamesRes.ok) {
-                    const gamesData = await gamesRes.json();
-                    setGames(gamesData.items || []);
-                }
-            } catch (err: any) {
-                setError(err.message);
-            } finally {
-                setLoading(false);
-            }
-        };
-
-        if (targetUsername) {
-            fetchProfileData();
-        }
-    }, [targetUsername]);
-
-    if (loading) {
-        return (
-            <div className="flex flex-col items-center justify-center w-full h-full text-boxwood-light font-serif">
-                <div className="animate-spin text-amber-500 mb-4"><Swords size={40}/></div>
-                <div>Загрузка профиля...</div>
-            </div>
-        );
-    }
-
-    if (error || !profile) {
-        return (
-            <div className="bg-red-950/80 border border-red-800 p-6 rounded text-red-200 text-center font-serif">
-                <h2 className="text-xl font-bold mb-2">Ошибка</h2>
-                <p>{error || 'Не удалось загрузить профиль'}</p>
-                <Link to="/" className="mt-4 inline-block text-amber-400 hover:underline">На главную</Link>
-            </div>
-        );
-    }
-
-    let wins = 0, losses = 0, draws = 0;
-    let tempRating = profile.rating;
-
-    const chartDataReversed = games.map((game) => {
-        const isWhite = game.white_username === profile.username;
-        let delta = 0;
-
-        if (game.result === '1-0') {
-            if (isWhite) {
-                wins++;
-                delta = 15;
-            } else {
-                losses++;
-                delta = -15;
-            }
-        } else if (game.result === '0-1') {
-            if (isWhite) {
-                losses++;
-                delta = -15;
-            } else {
-                wins++;
-                delta = 15;
-            }
-        } else if (game.result === '1/2-1/2') {
-            draws++;
-        }
-
-        const pointRating = tempRating;
-        tempRating -= delta;
-
-        const chartDate = game.pgn_date ? game.pgn_date.split('.')[0] : (game.finished_at ? format(parseISO(game.finished_at), 'd MMM', {locale: ru}) : '');
-
-        return {
-            name: 'Партия',
-            rating: pointRating,
-            date: chartDate
-        };
-    });
-
-    const chartData = chartDataReversed.reverse();
-    const winRate = games.length > 0 ? Math.round((wins / games.length) * 100) : 0;
-    const trustFactor = profile.trust_factor ?? 100;
-    const isUnderFairPlayWatch = Boolean(profile.is_cheater) || trustFactor < 60;
-
-    return (
-        <div className="w-full max-w-6xl flex flex-col gap-6 font-serif">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <div
-                    className="bg-acacia-dark border border-amber-900/40 p-6 rounded shadow-heavy flex flex-col items-center justify-center text-center relative overflow-hidden">
-                    <img
-                        src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${profile.username}&backgroundColor=D0A972`}
-                        alt="Avatar Background"
-                        className="absolute top-0 right-0 w-48 h-48 opacity-10 pointer-events-none translate-x-10 -translate-y-10"
-                    />
-                    <img
-                        src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${profile.username}&backgroundColor=E6C998`}
-                        alt="Avatar"
-                        className="w-24 h-24 rounded-lg bg-black/40 shadow-inner border-2 border-amber-600/40 mb-3 z-10"
-                    />
-                    <h1 className="text-3xl font-bold text-amber-200 z-10">{profile.username}</h1>
-
-                    {/* Бейдж репутации Fair Play (Таск 5.1) */}
-                    <div className="mt-2.5 z-10">
-                        {isUnderFairPlayWatch ? (
-                            <span
-                                data-testid="reputation-badge"
-                                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-bold bg-rose-950/85 border border-rose-600/60 text-rose-200 shadow"
-                                title={`Фактор доверия: ${trustFactor}%`}
-                            >
-                                <ShieldAlert size={14} className="text-rose-400"/>
-                                Под наблюдением Fair Play
-                            </span>
-                        ) : (
-                            <span
-                                data-testid="reputation-badge"
-                                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-sans font-bold bg-emerald-950/85 border border-emerald-600/50 text-emerald-200 shadow"
-                                title={`Фактор доверия: ${trustFactor}%`}
-                            >
-                                <ShieldCheck size={14} className="text-emerald-400"/>
-                                Высокий фактор доверия
-                            </span>
-                        )}
-                    </div>
-
-                    <div className="flex items-center gap-2 mt-3 text-boxwood-light/80 text-sm z-10">
-                        <Calendar size={16} className="text-amber-600"/>
-                        На сайте с {format(parseISO(profile.created_at), 'd MMMM yyyy', {locale: ru})}
+                                setViewIndex(-1);
+                                if (history.length > 0) {
+                                    playAudio(resolveMoveSound(history[history.length - 1].san));
+                                }
+                            }}
+                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
+                            title="К последнему ходу (Стрелка вниз)"
+                        >
+                            <ChevronLast size={16}/>
+                        </button>
                     </div>
                 </div>
 
-                <div className="md:col-span-2 grid grid-cols-2 lg:grid-cols-4 gap-4">
+                {(gameId || spectatingGameId) && (
                     <div
-                        className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
+                        className="bg-acacia-dark p-2 rounded-md border border-amber-900/50 flex flex-col gap-1.5 shrink-0">
                         <div
-                            className="text-boxwood/60 text-xs uppercase tracking-widest mb-1 flex items-center gap-1.5">
-                            <Trophy size={14}/> Рейтинг
+                            className="flex items-center justify-between text-xs uppercase tracking-wider text-amber-400 font-bold">
+                            <span className="flex items-center gap-1.5">
+                                <MessageSquare size={13}/> Игровой чат
+                            </span>
+                            {spectatingGameId && (
+                                <button
+                                    type="button"
+                                    onClick={handleLeaveSpectate}
+                                    className="text-rose-300 hover:text-rose-200 underline text-xs font-sans cursor-pointer"
+                                >
+                                    Выйти из просмотра
+                                </button>
+                            )}
                         </div>
-                        <div className="text-4xl font-mono font-bold text-amber-400">{profile.rating}</div>
-                    </div>
-                    <div
-                        className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
-                        <div
-                            className="text-boxwood/60 text-xs uppercase tracking-widest mb-1 flex items-center gap-1.5">
-                            <Swords size={14}/> Игр сыграно
-                        </div>
-                        <div className="text-4xl font-mono font-bold text-blue-400">{games.length}</div>
-                    </div>
-                    <div
-                        className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
-                        <div
-                            className="text-boxwood/60 text-xs uppercase tracking-widest mb-1 flex items-center gap-1.5">
-                            <Target size={14}/> Винрейт
-                        </div>
-                        <div className="text-4xl font-mono font-bold text-emerald-400">{winRate}%</div>
-                    </div>
-                    <div
-                        className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
-                        <div
-                            className="text-boxwood/60 text-[10px] xl:text-xs uppercase tracking-wider mb-1 flex items-center gap-1.5 whitespace-nowrap">
-                            <Crosshair size={14}/> WIN / DRAW / LOSE
-                        </div>
-                        <div className="text-2xl font-mono font-bold flex gap-2">
-                            <span className="text-emerald-400">{wins}</span>
-                            <span className="text-boxwood/40">/</span>
-                            <span className="text-gray-400">{draws}</span>
-                            <span className="text-boxwood/40">/</span>
-                            <span className="text-red-400">{losses}</span>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
-            <div className="bg-acacia-dark border border-amber-900/40 p-5 rounded shadow-heavy">
-                <h2 className="text-sm uppercase tracking-widest text-amber-500/80 mb-6 font-bold">Динамика рейтинга
-                    (последние партии)</h2>
-                <div className="h-64 w-full font-sans">
-                    {chartData.length > 1 ? (
-                        <ResponsiveContainer width="100%" height="100%">
-                            <LineChart data={chartData}>
-                                <CartesianGrid strokeDasharray="3 3" stroke="#5C3A21" vertical={false}/>
-                                <XAxis dataKey="date" stroke="#8B5A2B" tick={{fill: '#D0A972', fontSize: 12}} dy={10}/>
-                                <YAxis domain={['dataMin - 30', 'dataMax + 30']} stroke="#8B5A2B"
-                                       tick={{fill: '#D0A972', fontSize: 12}} dx={-10}/>
-                                <Tooltip contentStyle={{
-                                    backgroundColor: '#1A120B',
-                                    borderColor: '#7A4B31',
-                                    color: '#F5DEB3',
-                                    borderRadius: '8px'
-                                }} itemStyle={{color: '#fbbf24', fontWeight: 'bold'}}/>
-                                <Line type="monotone" dataKey="rating" stroke="#fbbf24" strokeWidth={3}
-                                      dot={{r: 4, fill: '#1A120B', stroke: '#fbbf24', strokeWidth: 2}}
-                                      activeDot={{r: 6, fill: '#fbbf24'}}/>
-                            </LineChart>
-                        </ResponsiveContainer>
+                        <div
+                            className="h-16 overflow-y-auto bg-black/40 rounded p-2 text-xs space-y-1 font-sans border border-amber-950/50 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
+                            {chatMessages.length === 0 ? (
+                                <div className="h-full flex items-center justify-center text-xs text-boxwood/45 italic">
+                                    Сообщений пока нет. Поприветствуйте соперника!
+                                </div>
+                            ) : (
+                                chatMessages.map((msg, i) => (
+                                    <div key={i} className="leading-snug wrap-break-word">
+                                        <span className="font-bold text-amber-300 mr-1.5">{msg.sender}:</span>
+                                        <span className="text-boxwood-light">{msg.text}</span>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        <div className="flex flex-wrap gap-1">
+                            {QUICK_CHAT_PRESETS.map((preset) => (
+                                <button
+                                    key={preset}
+                                    type="button"
+                                    onClick={() => handleSendChatMessage(preset)}
+                                    className="px-2 py-0.5 rounded bg-black/40 hover:bg-amber-900/50 border border-amber-800/40 text-xs text-amber-200 transition cursor-pointer"
+                                >
+                                    {preset}
+                                </button>
+                            ))}
+                        </div>
+
+                        <form
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                handleSendChatMessage();
+                            }}
+                            className="flex gap-1.5"
+                        >
+                            <input
+                                type="text"
+                                maxLength={140}
+                                value={chatInput}
+                                onChange={(e) => setChatInput(e.target.value)}
+                                placeholder="Написать сообщение..."
+                                className="flex-1 bg-black/50 border border-amber-800/50 rounded px-2.5 py-1 text-xs text-amber-100 outline-none focus:border-amber-500 font-sans"
+                            />
+                            <button
+                                type="submit"
+                                className="px-3 py-1 bg-amber-700 hover:bg-amber-600 text-amber-100 rounded text-xs font-bold flex items-center justify-center transition cursor-pointer"
+                                title="Отправить"
+                            >
+                                <Send size={13}/>
+                            </button>
+                        </form>
+                    </div>
+                )}
+
+                <div className="shrink-0 flex flex-col gap-1.5">
+                    {gameId ? (
+                        <>
+                            <div className="grid grid-cols-2 gap-2">
+                                {history.length < 2 ? (
+                                    <button
+                                        type="button"
+                                        onClick={handleAbortGame}
+                                        disabled={!!gameOverResult}
+                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-amber-950/90 text-amber-200 text-xs sm:text-sm font-bold rounded-md hover:bg-amber-900 transition shadow border border-amber-700/60 disabled:opacity-40 cursor-pointer"
+                                    >
+                                        <X size={15}/> Отменить игру
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={handleResign}
+                                        disabled={!!gameOverResult}
+                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/85 text-red-200 text-xs sm:text-sm font-bold rounded-md hover:bg-red-900 transition shadow border border-red-800/50 disabled:opacity-40 cursor-pointer"
+                                    >
+                                        <Flag size={15}/> Сдаться
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={handleOfferDraw}
+                                    disabled={!!gameOverResult || history.length < 2}
+                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
+                                >
+                                    <Handshake size={15}/> Ничья
+                                </button>
+                            </div>
+
+                            {gameOverResult && (
+                                <div className="flex flex-col gap-1.5">
+                                    {rematchStatus === 'offered_by_opponent' ? (
+                                        <div
+                                            className="p-2 rounded-md bg-emerald-950/90 border border-emerald-500/60 flex flex-col gap-1.5 text-xs text-emerald-100 text-center shadow">
+                                            <span
+                                                className="font-bold">Соперник предлагает реванш (со сменой цвета)!</span>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={handleAcceptRematch}
+                                                    className="py-1.5 px-3 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded transition shadow cursor-pointer"
+                                                >
+                                                    Принять реванш
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={handleDeclineRematch}
+                                                    className="py-1.5 px-3 bg-red-900/80 hover:bg-red-800 text-red-100 font-bold rounded transition cursor-pointer"
+                                                >
+                                                    Отклонить
+                                                </button>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <button
+                                                type="button"
+                                                disabled={rematchStatus === 'offered_by_me' || rematchStatus === 'declined'}
+                                                onClick={handleOfferRematch}
+                                                className="flex items-center justify-center gap-1.5 px-3 py-2 font-bold text-xs sm:text-sm rounded-md transition shadow bg-emerald-800 hover:bg-emerald-700 text-emerald-100 border border-emerald-500/50 disabled:opacity-50 cursor-pointer"
+                                            >
+                                                <RefreshCw size={15}
+                                                           className={rematchStatus === 'offered_by_me' ? 'animate-spin' : ''}/>
+                                                {rematchStatus === 'offered_by_me'
+                                                    ? 'Ждём ответа...'
+                                                    : rematchStatus === 'declined'
+                                                        ? 'Реванш отклонён'
+                                                        : 'Реванш'}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleResetSandbox}
+                                                className="flex items-center justify-center gap-1.5 px-3 py-2 font-bold text-xs sm:text-sm rounded-md transition shadow bg-boxwood text-acacia-dark border border-amber-700/50 hover:bg-boxwood-light cursor-pointer"
+                                            >
+                                                <RotateCcw size={15}/> В лобби
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </>
+                    ) : activeBot ? (
+                        <div className="flex flex-col gap-1.5">
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    disabled={history.length === 0 || isBotThinking || !!gameOverResult}
+                                    onClick={handleUndoSandboxMove}
+                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
+                                >
+                                    <Undo2 size={15}/> Вернуть ход
+                                </button>
+                                {!gameOverResult ? (
+                                    <button
+                                        type="button"
+                                        onClick={handleResign}
+                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/85 text-red-200 text-xs sm:text-sm font-bold rounded-md hover:bg-red-900 transition shadow border border-red-800/50 cursor-pointer"
+                                    >
+                                        <Flag size={15}/> Сдаться
+                                    </button>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={handleOfferRematch}
+                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-800 text-emerald-100 text-xs sm:text-sm font-bold rounded-md hover:bg-emerald-700 transition shadow border border-emerald-500/50 cursor-pointer"
+                                    >
+                                        <RefreshCw size={15}/> Реванш
+                                    </button>
+                                )}
+                            </div>
+
+                            {savedBotGameId && (
+                                <div className="grid grid-cols-2 gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => navigate(`/game/${savedBotGameId}`, {
+                                            state: {
+                                                game: {
+                                                    game_id: savedBotGameId,
+                                                    white_username: whitePlayer.username,
+                                                    white_rating: Number(whitePlayer.rating) || 1200,
+                                                    black_username: blackPlayer.username,
+                                                    black_rating: Number(blackPlayer.rating) || 1850,
+                                                    result: gameOverResult || '*',
+                                                    site: 'Michess Bot Arena',
+                                                    finished_at: new Date().toISOString()
+                                                }
+                                            }
+                                        })}
+                                        className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 text-xs font-bold rounded-md transition shadow border border-emerald-600/50 cursor-pointer"
+                                    >
+                                        <Eye size={14}/> Разбор партии
+                                    </button>
+                                    <a
+                                        href={`${API_BASE_URL}/api/v1/profile/games/${savedBotGameId}/pgn`}
+                                        download
+                                        className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#1A120B] hover:bg-black text-amber-400 text-xs font-bold rounded-md transition shadow border border-amber-800/60"
+                                    >
+                                        <Download size={14}/> Скачать PGN
+                                    </a>
+                                </div>
+                            )}
+                        </div>
                     ) : (
-                        <div className="h-full flex items-center justify-center text-boxwood/50">
-                            Недостаточно данных для графика
+                        <div className="grid grid-cols-2 gap-2">
+                            <button
+                                type="button"
+                                disabled={history.length === 0}
+                                onClick={handleUndoSandboxMove}
+                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
+                            >
+                                <Undo2 size={15}/> Отменить ход
+                            </button>
+                            <button
+                                type="button"
+                                disabled={history.length === 0}
+                                onClick={handleResetSandbox}
+                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-amber-300 text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
+                            >
+                                <RotateCcw size={15}/> Сбросить доску
+                            </button>
                         </div>
                     )}
                 </div>
+
             </div>
 
-            <div className="bg-acacia-dark border border-amber-900/40 rounded shadow-heavy overflow-hidden">
-                <div className="p-5 border-b border-amber-900/40 bg-black/20">
-                    <h2 className="text-sm uppercase tracking-widest text-amber-500/80 font-bold">История партий</h2>
-                </div>
-
-                <div className="overflow-x-auto">
-                    <table className="w-full text-left text-sm font-sans whitespace-nowrap">
-                        <thead className="bg-black/40 text-boxwood/60 uppercase text-xs tracking-wider">
-                        <tr>
-                            <th className="px-4 py-4 font-medium">Белые</th>
-                            <th className="px-4 py-4 font-medium">Черные</th>
-                            <th className="px-4 py-4 font-medium text-center">Результат</th>
-                            <th className="px-4 py-4 font-medium text-center">Дебют</th>
-                            <th className="px-4 py-4 font-medium text-center">Место</th>
-                            <th className="px-4 py-4 font-medium text-center">Дата</th>
-                            <th className="px-4 py-4 font-medium text-right">PGN</th>
-                        </tr>
-                        </thead>
-                        <tbody className="divide-y divide-amber-900/20 text-boxwood-light">
-                        {games.length === 0 ? (
-                            <tr>
-                                <td colSpan={7} className="px-6 py-8 text-center text-boxwood/50 font-serif">
-                                    Партий пока нет.
-                                </td>
-                            </tr>
-                        ) : (
-                            games.map((game) => {
-                                const isWhite = game.white_username === profile.username;
-                                let resultColor = 'text-gray-400';
-                                let resultText = 'Ничья';
-
-                                if (game.result === '1-0') {
-                                    resultColor = isWhite ? 'text-emerald-400' : 'text-red-400';
-                                    resultText = isWhite ? 'Победа' : 'Поражение';
-                                } else if (game.result === '0-1') {
-                                    resultColor = isWhite ? 'text-red-400' : 'text-emerald-400';
-                                    resultText = isWhite ? 'Поражение' : 'Победа';
-                                }
-
-                                return (
-                                    <tr
-                                        key={game.game_id}
-                                        onClick={() => navigate(`/game/${game.game_id}`, {state: {game}})}
-                                        className="hover:bg-black/30 transition group cursor-pointer"
-                                        title="Нажмите, чтобы просмотреть партию"
-                                    >
-                                        <td className="px-4 py-4">
-                                            <div className="flex items-center gap-2">
-                                                <span
-                                                    className="w-3 h-3 rounded-sm border border-gray-400 bg-white inline-block"></span>
-                                                <Link
-                                                    to={`/profile/${game.white_username}`}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    className={`font-bold hover:underline ${isWhite ? 'text-amber-300' : ''}`}
-                                                >
-                                                    {game.white_username}
-                                                </Link>
-                                                <span
-                                                    className="text-xs font-mono text-boxwood/50">({game.white_rating})</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <div className="flex items-center gap-2">
-                                                <span
-                                                    className="w-3 h-3 rounded-sm border border-gray-600 bg-black inline-block"></span>
-                                                <Link
-                                                    to={`/profile/${game.black_username}`}
-                                                    onClick={(e) => e.stopPropagation()}
-                                                    className={`font-bold hover:underline ${!isWhite ? 'text-amber-300' : ''}`}
-                                                >
-                                                    {game.black_username}
-                                                </Link>
-                                                <span
-                                                    className="text-xs font-mono text-boxwood/50">({game.black_rating})</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-4 text-center">
-                                            <div className={`font-bold font-serif ${resultColor}`}>
-                                                {resultText} <span
-                                                className="text-xs opacity-70 ml-1">({game.result})</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-4 text-center font-mono text-amber-500/80">
-                                            {game.eco || '—'}
-                                        </td>
-                                        <td className="px-4 py-4 text-center text-boxwood/70">
-                                            {game.site || '—'}
-                                        </td>
-                                        <td className="px-4 py-4 text-center text-boxwood/70 font-mono">
-                                            {displayDate(game)}
-                                        </td>
-                                        <td className="px-4 py-4 text-right">
-                                            <a
-                                                href={`${API_BASE_URL}/api/v1/profile/games/${game.game_id}/pgn`}
-                                                download
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black/30 hover:bg-amber-900/60 text-amber-400 rounded transition border border-amber-900/40 text-xs font-bold"
-                                                title="Скачать PGN"
-                                            >
-                                                <Download size={14}/>
-                                            </a>
-                                        </td>
-                                    </tr>
-                                );
-                            })
-                        )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
         </div>
     );
 }
 
 ========================================================================================
-FILE: frontend/src/config/api.ts
+FILE: frontend/src/components/chessboard/__tests__/boardUtils.test.ts
 ========================================================================================
-// --- FILE: frontend/src/config/api.ts ---
+// --- FILE: frontend/src/components/chessboard/__tests__/boardUtils.test.ts ---
 
-export const API_BASE_URL: string =
-    import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+import {describe, expect, it} from 'vitest';
+import {Chess} from 'chess.js';
+import {calculateMaterialBalance, cloneChessInstance, prevIndexHelper} from '../boardUtils';
+import {DEFAULT_DGT_OPTION, TIME_CONTROLS} from '../../../config/timeControls';
 
-export const WS_BASE_URL: string =
-    import.meta.env.VITE_WS_URL || 'ws://127.0.0.1:8000';
-
-========================================================================================
-FILE: frontend/src/config/boardAppearance.ts
-========================================================================================
-// --- FILE: frontend/src/config/boardAppearance.ts ---
-
-export interface BoardTheme {
-    id: string;
-    name: string;
-    light: string;
-    dark: string;
-    coordLight: string;
-    coordDark: string;
-    border: string;
-    useWoodGrain: boolean;
-    isDarkBoard?: boolean;
-}
-
-export interface PieceSetConfig {
-    id: string;
-    name: string;
-    shortName: string;
-    folder: string;
-    scalePercent: number;
-    description: string;
-}
-
-export const BOARD_THEMES: Record<string, BoardTheme> = {
-    walnut: {
-        id: 'walnut',
-        name: 'Орех',
-        light: '#DFC8A2',
-        dark: '#966C46',
-        coordLight: '#6E4B2A',
-        coordDark: '#F3E5AB',
-        border: '#2A1810',
-        useWoodGrain: true,
-        isDarkBoard: true
-    },
-    maple: {
-        id: 'maple',
-        name: 'Клён',
-        light: '#F0D9B5',
-        dark: '#B58863',
-        coordLight: '#8C6239',
-        coordDark: '#F0D9B5',
-        border: '#3D2314',
-        useWoodGrain: false,
-        isDarkBoard: false
-    },
-    tournament: {
-        id: 'tournament',
-        name: 'Турнирная',
-        light: '#EBECD0',
-        dark: '#739552',
-        coordLight: '#537133',
-        coordDark: '#EBECD0',
-        border: '#263318',
-        useWoodGrain: false,
-        isDarkBoard: false
-    },
-    slate: {
-        id: 'slate',
-        name: 'Графит',
-        light: '#DEE3E6',
-        dark: '#788A94',
-        coordLight: '#4E5D66',
-        coordDark: '#DEE3E6',
-        border: '#1F292E',
-        useWoodGrain: false,
-        isDarkBoard: true
-    },
-    sapphire: {
-        id: 'sapphire',
-        name: 'Сапфир',
-        light: '#ECEFF4',
-        dark: '#6E88AC',
-        coordLight: '#435B7D',
-        coordDark: '#ECEFF4',
-        border: '#233142',
-        useWoodGrain: false,
-        isDarkBoard: false
-    }
-};
-
-export const PIECE_SETS: Record<string, PieceSetConfig> = {
-    merida: {
-        id: 'merida',
-        name: 'Мерида (ChessBase)',
-        shortName: 'Мерида',
-        folder: 'merida',
-        scalePercent: 93,
-        description: 'Классические объёмные фигуры Fritz / ChessBase с широкой короной'
-    },
-    cardinal: {
-        id: 'cardinal',
-        name: 'Контур (Cardinal)',
-        shortName: 'Контур',
-        folder: 'cardinal',
-        scalePercent: 94,
-        description: 'Крупные контрастные фигуры с белой окантовкой чёрных фигур'
-    },
-    maestro: {
-        id: 'maestro',
-        name: 'Маэстро (Объёмный)',
-        shortName: 'Маэстро',
-        folder: 'maestro',
-        scalePercent: 93,
-        description: 'Выразительный комплект с глубокой прорисовкой деталей'
-    },
-    alpha: {
-        id: 'alpha',
-        name: 'Альфа (Книжный)',
-        shortName: 'Альфа',
-        folder: 'alpha',
-        scalePercent: 94,
-        description: 'Строгий классический диаграммный стиль с широким основанием'
-    },
-    cburnett: {
-        id: 'cburnett',
-        name: 'Стаунтон (Турнирный)',
-        shortName: 'Стаунтон',
-        folder: 'cburnett',
-        scalePercent: 92,
-        description: 'Чистый современный турнирный стандарт'
-    }
-};
-
-export function getSavedBoardThemeKey(): string {
-    if (typeof window !== 'undefined') {
-        const saved = localStorage.getItem('michess_board_theme');
-        if (saved && BOARD_THEMES[saved]) return saved;
-    }
-    return 'walnut';
-}
-
-export function getSavedPieceSetKey(): string {
-    if (typeof window !== 'undefined') {
-        const saved = localStorage.getItem('michess_piece_set');
-        if (saved && PIECE_SETS[saved]) return saved;
-    }
-    return 'merida';
-}
-
-export function getPieceSvgUrl(pieceSetKey: string, color: string, type: string): string {
-    const setConfig = PIECE_SETS[pieceSetKey] || PIECE_SETS.merida;
-    return `/assets/pieces/${setConfig.folder}/${color}${type.toUpperCase()}.svg`;
-}
-
-export function getHarmoniousPieceStyle(
-    pieceSetKey: string,
-    boardThemeKey: string,
-    pieceColor: string
-): { width: string; height: string; filter: string } {
-    const setConfig = PIECE_SETS[pieceSetKey] || PIECE_SETS.merida;
-    const theme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
-    const isWhite = pieceColor === 'w';
-    const size = `${setConfig.scalePercent}%`;
-
-    if (setConfig.id === 'cardinal') {
-        return {
-            width: size,
-            height: size,
-            filter: 'drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45))'
-        };
-    }
-
-    if (theme.id === 'walnut' || theme.id === 'maple') {
-        return {
-            width: size,
-            height: size,
-            filter: isWhite
-                ? 'sepia(0.08) brightness(1.01) drop-shadow(0 2px 2.5px rgba(0, 0, 0, 0.55))'
-                : 'drop-shadow(0 0 1px rgba(255, 248, 225, 0.55)) drop-shadow(0 2.5px 3px rgba(0, 0, 0, 0.6))'
-        };
-    }
-
-    return {
-        width: size,
-        height: size,
-        filter: isWhite
-            ? 'drop-shadow(0 2px 2.5px rgba(0, 0, 0, 0.5))'
-            : 'drop-shadow(0 0 1px rgba(255, 255, 255, 0.5)) drop-shadow(0 2.5px 3px rgba(0, 0, 0, 0.55))'
-    };
-}
-
-========================================================================================
-FILE: frontend/src/config/champions.ts
-========================================================================================
-// --- FILE: frontend/src/config/champions.ts ---
-
-import philidorAvatar from '../assets/champions/philidor.jpg';
-import labourdonnaisAvatar from '../assets/champions/labourdonnais.jpg';
-import stauntonAvatar from '../assets/champions/staunton.jpg';
-import anderssenAvatar from '../assets/champions/anderssen.jpg';
-import morphyAvatar from '../assets/champions/morphy.jpg';
-import paulsenAvatar from '../assets/champions/paulsen.jpg';
-import zukertortAvatar from '../assets/champions/zukertort.jpg';
-
-export type HistoricalBotId =
-    | 'philidor'
-    | 'labourdonnais'
-    | 'staunton'
-    | 'anderssen'
-    | 'morphy'
-    | 'paulsen'
-    | 'zukertort';
-
-export interface HistoricalBotProfile {
-    id: HistoricalBotId;
-    name: string;
-    shortName: string;
-    playerLabel: string;
-    title: string;
-    era: string;
-    rating: number;
-    motto: string;
-    avatar: string;
-    fallbackAvatar: string;
-}
-
-export const HISTORICAL_BOTS: Record<HistoricalBotId, HistoricalBotProfile> = {
-    philidor: {
-        id: 'philidor',
-        name: 'Франсуа-Андре Филидор',
-        shortName: 'Филидор',
-        playerLabel: 'Ф.-А. Филидор',
-        title: 'Мастер Просвещения',
-        era: '1749–1795',
-        rating: 1850,
-        motto: 'Пешки — душа шахмат: именно они определяют атаку и защиту.',
-        avatar: philidorAvatar,
-        fallbackAvatar: '/assets/champions/philidor.jpg'
-    },
-    labourdonnais: {
-        id: 'labourdonnais',
-        name: 'Луи-Шарль Лабурдонне',
-        shortName: 'Лабурдонне',
-        playerLabel: 'Л.-Ш. Лабурдонне',
-        title: 'Король Комбинаций',
-        era: '1795–1840',
-        rating: 1950,
-        motto: 'Инициатива, гамбит и стремительная атака на короля!',
-        avatar: labourdonnaisAvatar,
-        fallbackAvatar: '/assets/champions/labourdonnais.jpg'
-    },
-    staunton: {
-        id: 'staunton',
-        name: 'Говард Стаунтон',
-        shortName: 'Стаунтон',
-        playerLabel: 'Г. Стаунтон',
-        title: 'Глава Английской Школы',
-        era: '1810–1874',
-        rating: 2000,
-        motto: 'Фланговый зажим центра, прочная структура и классический расчёт.',
-        avatar: stauntonAvatar,
-        fallbackAvatar: '/assets/champions/staunton.jpg'
-    },
-    anderssen: {
-        id: 'anderssen',
-        name: 'Адольф Андерсен',
-        shortName: 'Андерсен',
-        playerLabel: 'А. Андерсен',
-        title: 'Маэстро Бессмертных Партий',
-        era: '1818–1879',
-        rating: 2100,
-        motto: 'Бриллиантовая жертва фигуры ради вскрытия линий и мата королю!',
-        avatar: anderssenAvatar,
-        fallbackAvatar: '/assets/champions/anderssen.jpg'
-    },
-    morphy: {
-        id: 'morphy',
-        name: 'Пол Чарльз Морфи',
-        shortName: 'Морфи',
-        playerLabel: 'Пол Морфи',
-        title: 'Гордость и печаль шахмат',
-        era: '1837–1884',
-        rating: 2150,
-        motto: 'Развивайте все фигуры с темпом и вскрывайте линии для атаки!',
-        avatar: morphyAvatar,
-        fallbackAvatar: '/assets/champions/morphy.jpg'
-    },
-    paulsen: {
-        id: 'paulsen',
-        name: 'Луи Паульсен',
-        shortName: 'Паульсен',
-        playerLabel: 'Л. Паульсен',
-        title: 'Мастер Защиты и Двух Слонов',
-        era: '1833–1891',
-        rating: 2080,
-        motto: 'Гибкая оборона, сила двух слонов и глубокие дебютные новинки.',
-        avatar: paulsenAvatar,
-        fallbackAvatar: '/assets/champions/paulsen.jpg'
-    },
-    zukertort: {
-        id: 'zukertort',
-        name: 'Иоганн Герман Цукерторт',
-        shortName: 'Цукерторт',
-        playerLabel: 'И. Цукерторт',
-        title: 'Триумфатор Лондона 1883',
-        era: '1842–1888',
-        rating: 2120,
-        motto: 'Универсальная гармония развития и сокрушительные комбинационные бури!',
-        avatar: zukertortAvatar,
-        fallbackAvatar: '/assets/champions/zukertort.jpg'
-    }
-};
-
-export const HISTORICAL_BOTS_LIST: HistoricalBotProfile[] = Object.values(HISTORICAL_BOTS);
-
-export const CHAMPIONS_LIST = [
-    {id: 'Steinitz', name: 'Вильгельм Стейниц', years: '1886–1894', img: '/assets/champions/Steinitz.jpg'},
-    {id: 'Lasker', name: 'Эмануил Ласкер', years: '1894–1921', img: '/assets/champions/Lasker.jpg'},
-    {id: 'Rubinstein', name: 'Акиба Рубинштейн', years: '1901–1932', img: '/assets/champions/Rubinstein.jpg'},
-    {id: 'Capablanca', name: 'Хосе Рауль Капабланка', years: '1921–1927', img: '/assets/champions/Capablanca.jpg'},
-    {id: 'Alekhine', name: 'Александр Алехин', years: '1927–1946', img: '/assets/champions/Alekhine.jpg'},
-    {id: 'Euwe', name: 'Макс Эйве', years: '1935–1937', img: '/assets/champions/Euwe.jpg'},
-    {id: 'Keres', name: 'Пауль Керес', years: '1935–1975', img: '/assets/champions/Keres.jpg'},
-    {id: 'Botvinnik', name: 'Михаил Ботвинник', years: '1948–1963', img: '/assets/champions/Botvinnik.jpg'},
-    {id: 'Geller', name: 'Ефим Геллер', years: '1949–1998', img: '/assets/champions/Geller.jpg'},
-    {id: 'Korchnoi', name: 'Виктор Корчной', years: '1952–2015', img: '/assets/champions/Korchnoi.jpg'},
-    {id: 'Smyslov', name: 'Василий Смыслов', years: '1957–1958', img: '/assets/champions/Smyslov.jpg'},
-    {id: 'Tal', name: 'Михаил Таль', years: '1960–1961', img: '/assets/champions/Tal.jpg'},
-    {id: 'Petrosian', name: 'Тигран Петросян', years: '1963–1969', img: '/assets/champions/Petrosian.jpg'},
-    {id: 'Spassky', name: 'Борис Спасский', years: '1969–1972', img: '/assets/champions/Spassky.jpg'},
-    {id: 'Fischer', name: 'Роберт Фишер', years: '1972–1975', img: '/assets/champions/Fischer.jpg'},
-    {id: 'Karpov', name: 'Анатолий Карпов', years: '1975–1985', img: '/assets/champions/Karpov.jpg'},
-    {id: 'Kasparov', name: 'Гарри Каспаров', years: '1985–2000', img: '/assets/champions/Kasparov.jpg'},
-    {id: 'Kramnik', name: 'Владимир Крамник', years: '2000–2007', img: '/assets/champions/Kramnik.jpg'},
-    {id: 'Anand', name: 'Вишванатан Ананд', years: '2007–2013', img: '/assets/champions/Anand.jpg'},
-    {id: 'Carlsen', name: 'Магнус Карлсен', years: '2013–2023', img: '/assets/champions/Carlsen.jpg'},
-    {id: 'Ding', name: 'Дин Лижэнь', years: '2023–н.в.', img: '/assets/champions/Ding.jpg'}
-];
-
-========================================================================================
-FILE: frontend/src/index.css
-========================================================================================
-/* --- FILE: frontend/src/index.css --- */
-
-@import "tailwindcss";
-
-@theme {
-    /* Светлые элементы интерфейса (Самшит индийский) */
-    --color-boxwood-light: #F5DEB3;
-    --color-boxwood: #E6C998;
-    --color-boxwood-dark: #D0A972;
-
-    /* Темные элементы интерфейса (Акация) */
-    --color-acacia-light: #7A4B31;
-    --color-acacia: #5C3A21;
-    --color-acacia-dark: #3D2314;
-
-    /* Клетки шахматной доски */
-    --color-board-light: #DFC8A2;
-    --color-board-dark: #966C46;
-
-    /* Фон и элементы интерфейса (Стол/Комната) */
-    --color-room-light: #4A3B32;
-    --color-room: #2C221C;
-    --color-room-dark: #1A120B;
-
-    --color-paper: #FDFBF7;
-
-    /* Универсальные читаемые шрифты */
-    --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    --font-serif: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Mono", Consolas, ui-monospace, monospace;
-
-    /* Тени */
-    --shadow-heavy: 0 15px 35px -5px rgba(0, 0, 0, 0.6), 0 10px 15px -5px rgba(0, 0, 0, 0.4);
-    --shadow-piece: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
-    --shadow-inner-board: inset 0 2px 6px 0 rgba(0, 0, 0, 0.35);
-
-    /* Текстуры */
-    --background-image-wood-texture: url('/assets/textures/wood-grain.png');
-}
-
-html, body {
-    margin: 0;
-    padding: 0;
-    background-color: var(--color-room);
-    color: var(--color-paper);
-    font-family: var(--font-sans);
-    font-size: 15px;
-    line-height: 1.45;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-}
-
-========================================================================================
-FILE: frontend/src/main.tsx
-========================================================================================
-// --- FILE: frontend/src/main.tsx ---
-
-import { StrictMode } from 'react'
-import { createRoot } from 'react-dom/client'
-import { BrowserRouter } from 'react-router-dom'
-import './index.css'
-import App from './App.tsx'
-
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <BrowserRouter>
-      <App />
-    </BrowserRouter>
-  </StrictMode>,
-)
-
-========================================================================================
-FILE: frontend/src/services/__tests__/gameSocket.test.ts
-========================================================================================
-// --- FILE: frontend/src/services/__tests__/gameSocket.test.ts ---
-
-import {describe, it, expect} from 'vitest';
-import {gameSocket} from '../gameSocket';
-import {API_BASE_URL, WS_BASE_URL} from '../../config/api';
-import {
-    BOARD_THEMES,
-    PIECE_SETS,
-    getPieceSvgUrl,
-    getHarmoniousPieceStyle
-} from '../../config/boardAppearance';
-
-describe('GameWebSocketService & API Config', () => {
-    it('should be defined', () => {
-        expect(gameSocket).toBeDefined();
+describe('calculateMaterialBalance', () => {
+    it('is even in the starting position', () => {
+        const balance = calculateMaterialBalance(new Chess().board());
+        expect(balance.whiteAdvantage).toBe(0);
+        expect(balance.blackAdvantage).toBe(0);
+        expect(balance.whiteCapturedSymbols).toEqual([]);
     });
 
-    it('should provide valid default API_BASE_URL and WS_BASE_URL', () => {
-        expect(API_BASE_URL).toMatch(/^https?:\/\//);
-        expect(WS_BASE_URL).toMatch(/^wss?:\/\//);
+    it('counts a captured piece for the capturing side', () => {
+        const game = new Chess();
+        ['e4', 'd5', 'exd5'].forEach((m) => game.move(m));
+        const balance = calculateMaterialBalance(game.board());
+        expect(balance.whiteAdvantage).toBe(1);
+        expect(balance.whiteCapturedSymbols).toEqual(['♟']);
     });
+});
 
-    it('should provide 5 piece sets and 5 board themes with harmonious styles', () => {
-        expect(Object.keys(PIECE_SETS).length).toBe(5);
-        expect(Object.keys(BOARD_THEMES).length).toBe(5);
+describe('cloneChessInstance', () => {
+    it('keeps move history and is independent of the source', () => {
+        const game = new Chess();
+        ['e4', 'e5', 'Nf3'].forEach((m) => game.move(m));
+        const copy = cloneChessInstance(game);
+        expect(copy.history()).toEqual(['e4', 'e5', 'Nf3']);
+        copy.move('Nc6');
+        expect(game.history()).toHaveLength(3);
+    });
+});
 
-        for (const setKey of Object.keys(PIECE_SETS)) {
-            expect(getPieceSvgUrl(setKey, 'w', 'q')).toContain(`/assets/pieces/${setKey}/wQ.svg`);
-            for (const themeKey of Object.keys(BOARD_THEMES)) {
-                const whiteStyle = getHarmoniousPieceStyle(setKey, themeKey, 'w');
-                const blackStyle = getHarmoniousPieceStyle(setKey, themeKey, 'b');
-                expect(whiteStyle.width).toMatch(/^\d+%$/);
-                expect(blackStyle.filter.length).toBeGreaterThan(5);
-            }
-        }
+describe('prevIndexHelper', () => {
+    it('maps the live view (-1) to the last move', () => {
+        expect(prevIndexHelper(-1, 10)).toBe(9);
+        expect(prevIndexHelper(4, 10)).toBe(4);
+    });
+});
+
+describe('time controls', () => {
+    it('provides 36 DGT 2500 programs with the default among them', () => {
+        const options = TIME_CONTROLS.flatMap((g) => g.options);
+        expect(options).toHaveLength(36);
+        expect(options).toContain(DEFAULT_DGT_OPTION);
     });
 });
 
 ========================================================================================
-FILE: frontend/src/services/gameSocket.ts
+FILE: frontend/src/components/chessboard/boardUtils.ts
 ========================================================================================
-// --- FILE: frontend/src/services/gameSocket.ts ---
+// --- FILE: frontend/src/components/chessboard/boardUtils.ts ---
+// Константы и чистые функции доски (вынесено из Chessboard.tsx).
 
-import {WS_BASE_URL} from '../config/api';
+import {Chess} from 'chess.js';
 
-type EventCallback = (data: any) => void;
+export const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+export const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
 
-class GameWebSocketService {
-    private ws: WebSocket | null = null;
-    private listeners: { [event: string]: EventCallback[] } = {};
+export const MIN_BOARD_SIZE = 280;
+export const MAX_BOARD_SIZE = 860;
 
-    connect(token: string) {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) return;
+export type PromotionPiece = 'q' | 'n' | 'r' | 'b';
 
-        const wsUrl = `${WS_BASE_URL}/api/v1/ws/matchmaking?token=${token}`;
-        this.ws = new WebSocket(wsUrl);
+export const PROMOTION_OPTIONS: Array<{ type: PromotionPiece; label: string }> = [
+    {type: 'q', label: 'Ферзь'},
+    {type: 'n', label: 'Конь'},
+    {type: 'r', label: 'Ладья'},
+    {type: 'b', label: 'Слон'}
+];
 
-        this.ws.onopen = () => {
-            console.log('🔗 WebSocket соединение установлено');
-        };
+export function getMaxViewportBoardSize(): number {
+    if (typeof window === 'undefined') return 560;
+    const availableHeight = window.innerHeight - 220;
+    const availableWidth = window.innerWidth >= 1280
+        ? window.innerWidth - 850
+        : window.innerWidth - 24;
+    const limit = Math.min(availableHeight, availableWidth, MAX_BOARD_SIZE);
+    return Math.max(MIN_BOARD_SIZE, Math.min(limit, window.innerWidth - 24));
+}
 
-        this.ws.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                console.log('📥 WS получено сообщение:', data);
-                const eventType = data.event;
-
-                if (this.listeners[eventType]) {
-                    this.listeners[eventType].forEach(cb => cb(data));
-                }
-                if (this.listeners['*']) {
-                    this.listeners['*'].forEach(cb => cb(data));
-                }
-            } catch (e) {
-                console.error('Ошибка парсинга JSON от WebSocket:', e);
-            }
-        };
-
-        this.ws.onclose = () => {
-            console.log('🔌 WebSocket соединение закрыто');
-        };
-
-        this.ws.onerror = (error) => {
-            console.error('❌ WebSocket ошибка:', error);
-        };
+export function getDefaultBoardSize(): number {
+    if (typeof window !== 'undefined') {
+        return getMaxViewportBoardSize();
     }
-
-    on(event: string, callback: EventCallback) {
-        if (!this.listeners[event]) {
-            this.listeners[event] = [];
-        }
-        this.listeners[event].push(callback);
-    }
-
-    off(event: string, callback: EventCallback) {
-        if (!this.listeners[event]) return;
-        this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
-    }
-
-    send(action: string, payload: any = {}) {
-        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this.ws.send(JSON.stringify({action, ...payload}));
-        } else {
-            console.error('Невозможно отправить сообщение: WebSocket не подключен');
-        }
-    }
-
-    disconnect() {
-        if (this.ws) {
-            this.ws.close();
-            this.ws = null;
-        }
-    }
+    return 540;
 }
 
-export const gameSocket = new GameWebSocketService();
-
-========================================================================================
-FILE: frontend/tailwind.config.js
-========================================================================================
-// --- FILE: frontend/tailwind.config.js ---
-
-/** @type {import('tailwindcss').Config} */
-export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
-  theme: {
-    extend: {
-      colors: {
-        // Светлые элементы интерфейса (Самшит индийский)
-        boxwood: {
-          light: '#F5DEB3',
-          DEFAULT: '#E6C998',
-          dark: '#D0A972',
-        },
-        // Темные элементы интерфейса (Акация)
-        acacia: {
-          light: '#7A4B31',
-          DEFAULT: '#5C3A21',
-          dark: '#3D2314',
-        },
-        // Сбалансированные цвета самой шахматной доски (средний контраст клеток)
-        board: {
-          light: '#DFC8A2',
-          dark: '#966C46',
-        },
-        // Фон и элементы интерфейса (Стол/Комната)
-        room: {
-          light: '#4A3B32',
-          DEFAULT: '#2C221C',
-          dark: '#1A120B',
-        },
-        paper: '#FDFBF7',
-      },
-      fontFamily: {
-        serif: ['"Playfair Display"', '"Merriweather"', 'Georgia', 'serif'],
-        sans: ['"Inter"', 'system-ui', 'sans-serif'],
-      },
-      boxShadow: {
-        'heavy': '0 15px 35px -5px rgba(0, 0, 0, 0.6), 0 10px 15px -5px rgba(0, 0, 0, 0.4)',
-        'piece': '0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3)',
-        'inner-board': 'inset 0 2px 6px 0 rgba(0, 0, 0, 0.35)',
-      },
-      backgroundImage: {
-        'wood-texture': "url('/assets/textures/wood-grain.png')",
-      }
-    },
-  },
-  plugins: [],
-}
-
-========================================================================================
-FILE: frontend/tsconfig.app.json
-========================================================================================
-{
-  "compilerOptions": {
-    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
-    "target": "es2023",
-    "lib": ["ES2023", "DOM"],
-    "module": "esnext",
-    "types": ["vite/client"],
-    "allowArbitraryExtensions": true,
-    "skipLibCheck": true,
-
-    /* Bundler mode */
-    "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
-    "moduleDetection": "force",
-    "noEmit": true,
-    "jsx": "react-jsx",
-
-    /* Linting */
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
-  },
-  "include": ["src"]
-}
-
-========================================================================================
-FILE: frontend/tsconfig.node.json
-========================================================================================
-{
-  "compilerOptions": {
-    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
-    "target": "es2023",
-    "lib": ["ES2023"],
-    "types": ["node"],
-    "skipLibCheck": true,
-
-    /* Bundler mode */
-    "module": "nodenext",
-    "allowImportingTsExtensions": true,
-    "verbatimModuleSyntax": true,
-    "moduleDetection": "force",
-    "noEmit": true,
-
-    /* Linting */
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true
-  },
-  "include": ["vite.config.ts"]
-}
-
-========================================================================================
-FILE: .gitignore
-========================================================================================
-# Python cache
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Virtual environments
-michess_env/
-venv/
-env/
-
-# IDE settings
-.idea/
-.vscode/
-
-# Environment variables and secrets
-.env
-.env.*
-
-# Logs and databases
-*.log
-*.sqlite3
-
-# OS generated files
-.DS_Store
-Thumbs.db
-
-# Seed data
-src/db/data/pgns/
-*.pgn
-
-# Engine binaries
-bin/
-*.exe
-
-node_modules/
-# Project snapshots
-project_snapshot*.txt
-data/pgns/
-
-========================================================================================
-FILE: make_snapshot.py
-========================================================================================
-#!/usr/bin/env python3
-# --- FILE: make_snapshot.py ---
-"""
-Create an LLM-ready multi-part text snapshot of the project.
-
-Run from the project root:
-    python make_snapshot.py
-    python make_snapshot.py --max-kb 80
-
-Each part is capped at 80 KiB by default so chat attachments are never
-truncated by upload limits.
-"""
-
-from __future__ import annotations
-
-import argparse
-import json
-import os
-import re
-import sys
-from pathlib import Path
-
-DEFAULT_MAX_KB = 80
-OUTPUT_DIR_NAME = "_project_snapshot"
-MAX_DATA_JSON_BYTES = 15 * 1024  # Сворачивать большие JSON-словари (например, книги дебютов > 15 КБ)
-
-EXCLUDED_DIRS = {
-    ".git", ".hg", ".svn",
-    ".idea", ".vscode",
-    "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache",
-    ".tox", ".nox",
-    ".venv", "venv", "env", "michess_env",
-    "node_modules", "bower_components",
-    "dist", "build", "target", "coverage", "htmlcov",
-    ".next", ".nuxt", ".cache",
-    "site-packages", "vendor",
-    "bin", "downloaded_pgns", "data",
-    OUTPUT_DIR_NAME,
-}
-
-EXCLUDED_FILES = {
-    "package-lock.json", "npm-shrinkwrap.json",
-    "yarn.lock", "pnpm-lock.yaml", "bun.lockb", "bun.lock",
-    ".env", ".env.local", ".env.development", ".env.production",
-    ".env.test", ".env.staging",
-    "id_rsa", "id_ed25519", "known_hosts",
-    "unreadable_files.txt",
-}
-
-EXCLUDED_SUFFIXES = {
-    ".pyc", ".pyo", ".pyd", ".so", ".dll", ".exe", ".bin",
-    ".db", ".sqlite", ".sqlite3",
-    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".ico", ".svg",
-    ".pdf", ".zip", ".7z", ".rar", ".tar", ".gz",
-    ".mp3", ".mp4", ".mov", ".avi", ".wav",
-    ".ttf", ".otf", ".woff", ".woff2",
-    ".class", ".jar", ".war", ".pgn",
-}
-
-TEXT_SUFFIXES = {
-    ".py", ".pyi",
-    ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs",
-    ".html", ".htm", ".css", ".scss", ".sass", ".less",
-    ".json", ".jsonc", ".yaml", ".yml", ".toml", ".ini", ".cfg",
-    ".md", ".rst", ".txt",
-    ".sql", ".sh", ".bash", ".zsh", ".ps1", ".bat", ".cmd",
-    ".Mako", ".mako",
-}
-
-TEXT_FILENAMES = {
-    "Dockerfile", "Makefile", "Procfile", "Justfile",
-    ".gitignore", ".dockerignore", ".editorconfig",
-    ".prettierrc", ".eslintrc", ".npmrc", "README",
-}
-
-SECRET_PATH_PARTS = {
-    "secrets", "secret", "credentials", "private",
-}
-
-PRIORITY_FILES = [
-    "ToDo.md",
-    "requirements.txt",
-    "pytest.ini",
-    "alembic.ini",
-    "docker-compose.yml",
-    ".github/workflows/ci.yml",
-    "frontend/package.json",
-    "frontend/vite.config.ts",
-    "frontend/tsconfig.json",
-]
-
-
-def is_text_candidate(path: Path, relative: str) -> bool:
-    name = path.name
-    name_lower = name.lower()
-    suffix = path.suffix.lower()
-    rel_parts = {part.lower() for part in Path(relative).parts}
-
-    if name in EXCLUDED_FILES:
-        return False
-    # Исключаем любые старые текстовые снэпшоты, чтобы они не попадали внутрь новых частей
-    if "snapshot" in name_lower and suffix == ".txt":
-        return False
-    if name_lower.endswith("_generated_book.json"):
-        return False
-    if suffix in EXCLUDED_SUFFIXES:
-        return False
-    if rel_parts & SECRET_PATH_PARTS:
-        return False
-    if re.search(r"(^|/)\.env(?:\.|$)", relative.replace("\\", "/"), re.I):
-        return False
-
-    if suffix in TEXT_SUFFIXES or name in TEXT_FILENAMES:
-        return True
-
-    if not suffix:
-        try:
-            sample = path.read_bytes()[:4096]
-        except OSError:
-            return False
-        return b"\x00" not in sample
-
-    return False
-
-
-def get_group_priority(relative_posix: str) -> tuple[int, str]:
-    """
-    Упорядочивает файлы по смысловым блокам:
-    0..N — приоритетные манифесты (ToDo.md, requirements.txt и т.д.)
-    100  — миграции БД (migrations/)
-    200  — исходный код бэкенда (src/)
-    300  — тесты бэкенда (tests/)
-    400  — скрипты (scripts/)
-    500  — исходный код фронтенда (frontend/)
-    600  — остальные файлы
-    """
-    lower = relative_posix.lower()
-    for idx, prio_name in enumerate(PRIORITY_FILES):
-        if lower == prio_name.lower():
-            return (idx, lower)
-
-    if lower.startswith("migrations/"):
-        return (100, lower)
-    if lower.startswith("src/"):
-        return (200, lower)
-    if lower.startswith("tests/"):
-        return (300, lower)
-    if lower.startswith("scripts/"):
-        return (400, lower)
-    if lower.startswith("frontend/"):
-        return (500, lower)
-    return (600, lower)
-
-
-def collect_files(root: Path) -> list[Path]:
-    files: list[Path] = []
-
-    for current, dirs, filenames in os.walk(root, topdown=True, followlinks=False):
-        current_path = Path(current)
-        dirs[:] = sorted(
-            d for d in dirs
-            if d not in EXCLUDED_DIRS
-            and not (current_path / d).is_symlink()
-        )
-
-        for filename in filenames:
-            path = current_path / filename
-            if path.is_symlink() or not path.is_file():
-                continue
-
-            relative = path.relative_to(root).as_posix()
-            if is_text_candidate(path, relative):
-                files.append(path)
-
-    return sorted(files, key=lambda p: get_group_priority(p.relative_to(root).as_posix()))
-
-
-def decode_file(path: Path) -> str:
-    raw = path.read_bytes()
-    for encoding in ("utf-8-sig", "utf-8", "cp1251"):
-        try:
-            return raw.decode(encoding)
-        except UnicodeDecodeError:
-            pass
-    return raw.decode("utf-8", errors="replace")
-
-
-def maybe_summarize_large_json(path: Path, relative: str, content: str, full_json: bool) -> str:
-    """
-    Если это большая JSON-книга дебютов (> 15 КБ), сворачивает её до первых 3 позиций
-    и общей сводки, чтобы не забивать контекст тысячами строк FEN.
-    """
-    if full_json or path.suffix.lower() != ".json":
-        return content
-
-    raw_size = len(content.encode("utf-8"))
-    if raw_size <= MAX_DATA_JSON_BYTES:
-        return content
-
-    try:
-        parsed = json.loads(content)
-        if isinstance(parsed, dict):
-            total_keys = len(parsed)
-            sample_items = list(parsed.items())[:3]
-            sample_dict = dict(sample_items)
-            sample_str = json.dumps(sample_dict, ensure_ascii=False, indent=2)
-            return (
-                f"// [AUTO-SUMMARY: Большой JSON-файл ({raw_size // 1024} KiB, {total_keys} ключей). "
-                f"Показаны первые 3 записи. Для полного вывода запустите с --full-json]\n"
-                f"{sample_str}\n"
-                f"// ... ещё {max(0, total_keys - 3)} записей скрыто ..."
-            )
-    except Exception:
-        pass
-
-    return content
-
-
-def make_file_blocks(
-        root: Path,
-        files: list[Path],
-        full_json: bool = False,
-) -> tuple[list[tuple[str, str]], list[str]]:
-    blocks: list[tuple[str, str]] = []
-    unreadable: list[str] = []
-
-    for path in files:
-        relative = path.relative_to(root).as_posix()
-        try:
-            content = decode_file(path)
-        except OSError as exc:
-            unreadable.append(f"{relative}: {exc}")
-            continue
-
-        content = content.replace("\r\n", "\n").replace("\r", "\n")
-        content = maybe_summarize_large_json(path, relative, content, full_json)
-
-        sep = "=" * 88
-        block = (
-            f"\n{sep}\n"
-            f"FILE: {relative}\n"
-            f"{sep}\n"
-            f"{content.rstrip()}\n"
-        )
-        blocks.append((relative, block))
-
-    return blocks, unreadable
-
-
-def split_oversized_block(relative: str, block: str, max_bytes: int) -> list[tuple[str, str]]:
-    """Делит один очень крупный файл по границам строк, если он сам превышает лимит части."""
-    if len(block.encode("utf-8")) <= max_bytes:
-        return [(relative, block)]
-
-    pieces: list[tuple[str, str]] = []
-    remaining = block
-    part_idx = 1
-
-    while remaining:
-        low, high = 1, len(remaining)
-        best = 1
-
-        while low <= high:
-            middle = (low + high) // 2
-            size = len(remaining[:middle].encode("utf-8"))
-            if size <= max_bytes:
-                best = middle
-                low = middle + 1
-            else:
-                high = middle - 1
-
-        if best < len(remaining):
-            newline = remaining.rfind("\n", 0, best)
-            if newline > best // 2:
-                best = newline + 1
-
-        chunk_text = remaining[:best]
-        label = f"{relative} (chunk {part_idx})"
-        pieces.append((label, chunk_text))
-        remaining = remaining[best:]
-        part_idx += 1
-
-    return pieces
-
-
-def pack_parts(
-        blocks: list[tuple[str, str]],
-        max_bytes: int,
-) -> list[tuple[list[str], str]]:
-    """Упаковывает блоки файлов в части так, чтобы каждая часть была строго <= max_bytes."""
-    chunks: list[tuple[str, str]] = []
-    for relative, block in blocks:
-        chunks.extend(split_oversized_block(relative, block, max_bytes))
-
-    parts: list[tuple[list[str], str]] = []
-    current_files: list[str] = []
-    current_texts: list[str] = []
-    current_size = 0
-
-    for label, chunk in chunks:
-        chunk_size = len(chunk.encode("utf-8"))
-        if current_texts and current_size + chunk_size > max_bytes:
-            parts.append((current_files, "".join(current_texts)))
-            current_files = []
-            current_texts = []
-            current_size = 0
-
-        current_files.append(label)
-        current_texts.append(chunk)
-        current_size += chunk_size
-
-    if current_texts:
-        parts.append((current_files, "".join(current_texts)))
-
-    return parts or [([], "[Подходящих текстовых файлов не найдено]\n")]
-
-
-def main() -> int:
-    parser = argparse.ArgumentParser(
-        description="Создать многочастный Snapshot проекта без обрезки в чате."
-    )
-    parser.add_argument(
-        "--root",
-        type=Path,
-        default=Path.cwd(),
-        help="Корень проекта (по умолчанию текущая папка).",
-    )
-    parser.add_argument(
-        "--max-kb",
-        type=float,
-        default=DEFAULT_MAX_KB,
-        help=f"Максимальный размер одной части в KiB (по умолчанию {DEFAULT_MAX_KB} KiB).",
-    )
-    parser.add_argument(
-        "--max-mb",
-        type=float,
-        default=None,
-        help="Альтернативный лимит в MiB (переопределяет --max-kb, если указан).",
-    )
-    parser.add_argument(
-        "--full-json",
-        action="store_true",
-        help="Не сворачивать большие JSON-книги дебютов.",
-    )
-    parser.add_argument(
-        "--output",
-        type=Path,
-        default=None,
-        help=f"Папка результата (по умолчанию ./{OUTPUT_DIR_NAME}).",
-    )
-    args = parser.parse_args()
-
-    root = args.root.expanduser().resolve()
-    if not root.is_dir():
-        print(f"Ошибка: папка не найдена: {root}", file=sys.stderr)
-        return 2
-
-    if args.max_mb is not None:
-        max_kb = args.max_mb * 1024.0
-    else:
-        max_kb = args.max_kb
-
-    if max_kb <= 10:
-        print("Ошибка: размер части должен быть больше 10 KiB.", file=sys.stderr)
-        return 2
-
-    output = (
-        args.output.expanduser().resolve()
-        if args.output
-        else root / OUTPUT_DIR_NAME
-    )
-    # Оставляем запас 3 KiB под шапку и футер части
-    max_bytes = max(8192, int(max_kb * 1024) - 3072)
-
-    files = collect_files(root)
-    blocks, unreadable = make_file_blocks(root, files, full_json=args.full_json)
-    parts = pack_parts(blocks, max_bytes)
-
-    output.mkdir(parents=True, exist_ok=True)
-
-    for old in output.glob("snapshot_[0-9][0-9][0-9].txt"):
-        old.unlink()
-
-    total_parts = len(parts)
-    index_lines = [
-        f"PROJECT: {root.name}",
-        f"ROOT: {root}",
-        f"FILES INCLUDED: {len(blocks)}",
-        f"PARTS: {total_parts} (target <= {max_kb:.0f} KiB per part)",
-        "",
-        "UPLOAD ALL PARTS IN NUMERICAL ORDER (snapshot_001.txt .. snapshot_00N.txt).",
-        "",
-        "TABLE OF CONTENTS BY PART:",
-    ]
-
-    print(f"Проект: {root}")
-    print(f"Текстовых файлов включено: {len(blocks)}")
-    print(f"Количество частей: {total_parts} (лимит ~{max_kb:.0f} KiB на файл)\n")
-
-    total_size = 0
-    dash_line = "-" * 88
-    for number, (part_files, content) in enumerate(parts, start=1):
-        filename = f"snapshot_{number:03d}.txt"
-        header = (
-            f"PROJECT SNAPSHOT — PART {number}/{total_parts}\n"
-            f"Project: {root.name}\n"
-            f"Files in this part ({len(part_files)}): {', '.join(part_files)}\n"
-            f"{dash_line}\n"
-        )
-        footer = (
-            f"\n{dash_line}\n"
-            f"END OF PART {number}/{total_parts}\n"
-        )
-        destination = output / filename
-        destination.write_text(header + content + footer, encoding="utf-8", newline="\n")
-        size = destination.stat().st_size
-        total_size += size
-
-        print(f"  [{number:02d}/{total_parts:02d}] {filename}: {size / 1024:.1f} KiB ({len(part_files)} файлов)")
-        index_lines.append(f"\n--- {filename} ({size / 1024:.1f} KiB) ---")
-        for pf in part_files:
-            index_lines.append(f"  - {pf}")
-
-    (output / "README.txt").write_text("\n".join(index_lines) + "\n", encoding="utf-8")
-
-    if unreadable:
-        report = output / "unreadable_files.txt"
-        report.write_text("\n".join(unreadable), encoding="utf-8")
-        print(f"\nНе удалось прочитать файлов: {len(unreadable)} (см. {report})")
-
-    print(f"\nГотово! Папка со снэпшотом: {output}")
-    print(f"Суммарный объём всех частей: {total_size / 1024:.1f} KiB")
-    return 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
-
-========================================================================================
-FILE: QUICKSTART.md
-========================================================================================
-<!-- --- FILE: QUICKSTART.md --- -->
-
-# Быстрый старт и восстановление michess на новом хосте
-
-## 1. Установка с нуля (Холодный старт на новом ПК)
-
-### Шаг 1. Клонирование и переменные окружения
-
-    git clone [https://github.com/TonkoshkuraMisha/michess.git](https://github.com/TonkoshkuraMisha/michess.git) michess
-    cd michess
-    git checkout dev
-
-    Copy-Item .env.example .env -ErrorAction SilentlyContinue
-    Copy-Item frontend/.env.example frontend/.env -ErrorAction SilentlyContinue
-
-### Шаг 2. Поднятие базы данных и Redis
-
-    docker compose up -d db redis
-    docker compose ps
-
-### Шаг 3. Настройка Python-окружения, миграций и движка Stockfish (Бэкенд)
-
-    python -m venv michess_env
-    .\michess_env\Scripts\Activate.ps1
-    python -m pip install --upgrade pip
-    pip install -r requirements.txt
-    python scripts/setup_stockfish.py
-    python scripts/download_champions.py
-    alembic upgrade head
-
-### Шаг 4. Установка пакетов Фронтенда
-
-    cd frontend
-    npm install
-    cd ..
-
----
-
-## 2. Ежедневный запуск
-
-### Вариант А — Автоматический (одной командой из корня на любом ПК)
-
-    .\start_dev.ps1
-
-Для остановки фоновых серверов:
-
-    Get-Job | Stop-Job; Get-Job | Remove-Job
-
-### Вариант Б — Ручной (в 3 терминалах)
-
-**Терминал 1 — Инфраструктура (Docker):**
-
-    docker compose up -d db redis
-
-**Терминал 2 — Бэкенд (FastAPI):**
-
-    .\michess_env\Scripts\Activate.ps1
-    alembic upgrade head
-    python -m uvicorn src.main:app --host 127.0.0.1 --port 8000 --reload
-
-**Терминал 3 — Фронтенд (Vite):**
-
-    cd frontend
-    npm run dev
-
-* **Фронтенд:** [http://127.0.0.1:3000](http://127.0.0.1:3000)
-* **Swagger API:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-
----
-
-## 3. Проверка здоровья проекта (Линтеры и Тесты)
-
-**Бэкенд:**
-
-    .\michess_env\Scripts\Activate.ps1
-    python -m flake8 src tests scripts --count --select=E9,F63,F7,F82 --show-source --statistics
-    python -m pytest -v
-
-**Фронтенд:**
-
-    cd frontend
-    npm run lint
-    npm run test
-    npm run build
-    cd ..
-
-========================================================================================
-FILE: README.md
-========================================================================================
-<!-- --- FILE: README.md --- -->
-
-# Michess ♟️ — Full-Stack Шахматная Платформа
-
-Веб-платформа для игры в шахматы в реальном времени (PvP), матчей против исторических шахматных мастеров (с аутентичными
-дебютными книгами и стилем игры на базе Stockfish 19), изучения архивов чемпионов мира и компьютерного разбора партий.
-
----
-
-## 🛠 Технологический стек
-
-### Бэкенд (Python 3.11+)
-
-* **Framework:** FastAPI (REST API + WebSockets)
-* **База данных:** PostgreSQL 16 (асинхронный `asyncpg` + SQLAlchemy 2.0)
-* **Кэш, очереди и Pub/Sub:** Redis 8 (менеджер WebSocket-сессий, очереди матчмейкинга `Sorted Sets`, приватные вызовы)
-* **Шахматное ядро и движок:** `python-chess` + Stockfish 19 UCI
-* **Миграции:** Alembic
-* **Тестирование и линтеры:** Pytest (`pytest-asyncio` + `fakeredis` + `aiosqlite`), Flake8
-
-### Фронтенд (React 19 + TypeScript)
-
-* **Сборка и стили:** Vite 6 + Tailwind CSS v4
-* **Шахматная логика и графики:** `chess.js`, `recharts`, `lucide-react`
-* **Тестирование и линтеры:** Vitest, Oxlint
-
----
-
-## 🚀 Ключевые возможности
-
-* **Асинхронный PvP-матчмейкинг:** Поиск соперника через Redis `Sorted Sets`, 36 программ шахматных часов FIDE DGT2500,
-  предходы (`Premoves`), превращение пешки, авто-отмена на 1-м ходу, мгновенные реванши со сменой цвета, приватные
-  вызовы по ссылке (`/challenge/:code`), режим зрителя (`Live`) и игровой чат.
-* **Исторические боты (7 персон):** Филидор, Лабурдонне, Стаунтон, Андерсен, Морфи, Паульсен, Цукерторт. Единый базовый
-  класс `HistoricalBot`, JSON-книги дебютов из реальных PGN-партий, тактический расчёт через Stockfish 19 с
-  индивидуальными стилевыми бонусами и имитацией человеческого времени раздумий.
-* **Студия разбора партий (`GameViewer`):** Экспресс-анализ всей партии движком Stockfish по кнопке (`Accuracy %`, поиск
-  зевков `??`, ошибок `?`, неточностей `?!`), вертикальная шкала оценки (`EvalBar`), интерактивный график перевеса
-  `Recharts` и рисование тактических стрелок правой кнопкой мыши.
-* **Архив Чемпионов мира:** Хронологическая база партий 21 чемпиона мира и претендентов с просмотром на доске и
-  скачиванием PGN.
-* **Античит-телеметрия:** Сбор детерминированных метрик каждого хода (`time_taken_ms`, `window_blurred_before_move`,
-  `is_premove`, `network_lag_ms`).
-
----
-
-## 📦 Быстрый старт (Разработка)
-
-Для запуска проекта на любом ПК с Windows и Docker Desktop выполните в корне проекта:
-
-    git clone [https://github.com/TonkoshkuraMisha/michess.git](https://github.com/TonkoshkuraMisha/michess.git) michess
-    cd michess
-    git checkout dev
-    .\start_dev.ps1
-
-Скрипт `start_dev.ps1` автоматически создаст `.env`, виртуальное окружение `michess_env`, скачает движок Stockfish 19 в
-папку `bin/`, установит пакеты фронтенда, поднимет контейнеры PostgreSQL и Redis, применит миграции Alembic и откроет
-приложение в браузере:
-
-* **Фронтенд:** [http://127.0.0.1:3000](http://127.0.0.1:3000)
-* **Swagger API:** [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
-
-Подробная инструкция по ручному запуску и проверке тестов приведена в файле `QUICKSTART.md`, а регламент работы с
-Git-ветками — в `WORKFLOW.md`.
-
-========================================================================================
-FILE: start_dev.ps1
-========================================================================================
-# --- FILE: start_dev.ps1 ---
-
-$ErrorActionPreference = "Continue"
-$root = $PSScriptRoot
-$pythonExe = Join-Path $root "michess_env\Scripts\python.exe"
-$frontendDir = Join-Path $root "frontend"
-$stockfishBin = Join-Path $root "bin\stockfish.exe"
-
-Write-Host "=== Запуск среды разработки Michess ===" -ForegroundColor Cyan
-
-# 1. Автосоздание .env файлов из шаблонов, если их ещё нет на этой машине
-if (-not (Test-Path (Join-Path $root ".env")) -and (Test-Path (Join-Path $root ".env.example")))
-{
-    Copy-Item (Join-Path $root ".env.example") (Join-Path $root ".env")
-    Write-Host "[+] Создан корневой .env из .env.example" -ForegroundColor Green
-}
-if (-not (Test-Path (Join-Path $frontendDir ".env")) -and (Test-Path (Join-Path $frontendDir ".env.example")))
-{
-    Copy-Item (Join-Path $frontendDir ".env.example") (Join-Path $frontendDir ".env")
-    Write-Host "[+] Создан frontend/.env из шаблона" -ForegroundColor Green
-}
-
-# 2. Остановка старых фоновых задач и освобождение портов 8000 и 3000
-Get-Job -Name "MichessBackend", "MichessFrontend" -ErrorAction SilentlyContinue | Stop-Job -PassThru | Remove-Job -Force -ErrorAction SilentlyContinue
-
-foreach ($port in @(8000, 3000))
-{
-    $conns = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
-    if ($conns)
-    {
-        $pids = $conns | Select-Object -ExpandProperty OwningProcess -Unique
-        foreach ($procId in $pids)
-        {
-            if ($procId -gt 0)
-            {
-                Write-Host "[*] Освобождаем порт $port (PID: $procId)..." -ForegroundColor DarkYellow
-                Stop-Process -Id $procId -Force -ErrorAction SilentlyContinue
+export const PIECE_VALUES: Record<string, number> = {p: 1, n: 3, b: 3, r: 5, q: 9, k: 0};
+
+export function calculateMaterialBalance(boardState: any[][]) {
+    const startCounts: Record<string, number> = {p: 8, n: 2, b: 2, r: 2, q: 1};
+    const currentWhite: Record<string, number> = {p: 0, n: 0, b: 0, r: 0, q: 0};
+    const currentBlack: Record<string, number> = {p: 0, n: 0, b: 0, r: 0, q: 0};
+
+    let whiteScore = 0;
+    let blackScore = 0;
+
+    for (const row of boardState) {
+        for (const cell of row) {
+            if (!cell) continue;
+            const val = PIECE_VALUES[cell.type] || 0;
+            if (cell.color === 'w') {
+                whiteScore += val;
+                if (currentWhite[cell.type] !== undefined) currentWhite[cell.type]++;
+            } else {
+                blackScore += val;
+                if (currentBlack[cell.type] !== undefined) currentBlack[cell.type]++;
             }
         }
     }
-}
 
-# 3. Автопроверка и создание виртуального окружения Python на любой машине
-if (-not (Test-Path $pythonExe))
-{
-    Write-Host "[*] Создаем виртуальное окружение Python (michess_env)..." -ForegroundColor Yellow
-    python -m venv (Join-Path $root "michess_env")
-    & $pythonExe -m pip install --upgrade pip
-    & $pythonExe -m pip install -r (Join-Path $root "requirements.txt")
-}
+    const whiteCapturedSymbols: string[] = [];
+    const blackCapturedSymbols: string[] = [];
+    const order = ['q', 'r', 'b', 'n', 'p'];
+    const glyphs: Record<string, string> = {q: '♛', r: '♜', b: '♝', n: '♞', p: '♟'};
 
-# 4. Автопроверка и скачивание движка Stockfish 19
-if (-not (Test-Path $stockfishBin))
-{
-    Write-Host "[*] Бинарник Stockfish не найден в bin/. Скачиваем..." -ForegroundColor Yellow
-    & $pythonExe (Join-Path $root "scripts\setup_stockfish.py")
-}
+    for (const t of order) {
+        const missingBlack = Math.max(0, startCounts[t] - currentBlack[t]);
+        for (let i = 0; i < missingBlack; i++) whiteCapturedSymbols.push(glyphs[t]);
 
-# 5. Автопроверка node_modules во фронтенде
-if (-not (Test-Path (Join-Path $frontendDir "node_modules")))
-{
-    Write-Host "[*] Устанавливаем npm-зависимости фронтенда..." -ForegroundColor Yellow
-    Set-Location $frontendDir
-    npm install
-    Set-Location $root
-}
-
-# 6. Поднятие базы данных и Redis через Docker
-Write-Host "[*] Проверяем Docker и контейнеры (PostgreSQL: 15432, Redis: 6379)..." -ForegroundColor Cyan
-docker compose up -d db redis
-if ($LASTEXITCODE -ne 0)
-{
-    Write-Host "[!] Внимание: Docker Desktop не запущен или недоступен!" -ForegroundColor Red
-}
-
-# 7. Применение миграций БД
-Write-Host "[*] Применяем миграции базы данных (Alembic)..." -ForegroundColor Cyan
-& $pythonExe -m alembic upgrade head
-
-# 8. Запуск серверов в фоновых задачах PowerShell (работает одинаково на ноутбуке и ПК)
-Write-Host "[+] Запуск FastAPI Backend (порт 8000)..." -ForegroundColor Green
-Start-Job -Name "MichessBackend" -ScriptBlock {
-    param($py, $r)
-    Set-Location $r
-    & $py -m uvicorn src.main:app --host 127.0.0.1 --port 8000 --reload
-} -ArgumentList $pythonExe, $root | Out-Null
-
-Write-Host "[+] Запуск Vite Frontend (порт 3000)..." -ForegroundColor Green
-Start-Job -Name "MichessFrontend" -ScriptBlock {
-    param($fe)
-    Set-Location $fe
-    npm run dev -- --host 127.0.0.1 --port 3000 --strictPort
-} -ArgumentList $frontendDir | Out-Null
-
-# 9. Ожидание фактического открытия порта 3000 перед запуском браузера
-$ready = $false
-for ($i = 0; $i -lt 30; $i++)
-{
-    if (Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue)
-    {
-        $ready = $true
-        break
+        const missingWhite = Math.max(0, startCounts[t] - currentWhite[t]);
+        for (let i = 0; i < missingWhite; i++) blackCapturedSymbols.push(glyphs[t]);
     }
-    Start-Sleep -Milliseconds 500
+
+    return {
+        whiteAdvantage: Math.max(0, whiteScore - blackScore),
+        blackAdvantage: Math.max(0, blackScore - whiteScore),
+        whiteCapturedSymbols,
+        blackCapturedSymbols
+    };
 }
 
-if ($ready)
-{
-    Write-Host "[+] Открываем браузер на [http://127.0.0.1:3000](http://127.0.0.1:3000) ..." -ForegroundColor Magenta
-Start-Process "http://127.0.0.1:3000"
-}
-else
-{
-    Write-Host "[!] Порт 3000 не ответил за 15 секунд. Проверьте лог: Receive-Job -Name MichessFrontend -Keep" -ForegroundColor Red
+export function cloneChessInstance(source: Chess): Chess {
+    const copy = new Chess();
+    const currentPgn = source.pgn();
+    if (currentPgn) {
+        copy.loadPgn(currentPgn);
+    } else {
+        copy.load(source.fen());
+    }
+    return copy;
 }
 
-Write-Host "========================================================" -ForegroundColor Green
-Write-Host " Все сервисы запущены! Локальный сервер работает." -ForegroundColor Green
-Write-Host " Фронтенд: [http://127.0.0.1:3000](http://127.0.0.1:3000)" -ForegroundColor Cyan
-Write-Host " API Docs: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)" -ForegroundColor Cyan
-Write-Host " Просмотр логов: Receive-Job -Name MichessBackend -Keep" -ForegroundColor Gray
-Write-Host " Для остановки:  Get-Job | Stop-Job; Get-Job | Remove-Job" -ForegroundColor Yellow
-Write-Host "========================================================" -ForegroundColor Green
+export function prevIndexHelper(viewIndex: number, historyLength: number): number {
+    return viewIndex === -1 ? historyLength - 1 : viewIndex;
+}
 
 ========================================================================================
-FILE: WORKFLOW.md
+FILE: frontend/src/components/chessboard/types.ts
 ========================================================================================
-<!-- --- FILE: WORKFLOW.md --- -->
+// --- FILE: frontend/src/components/chessboard/types.ts ---
+// Типы лобби, Live-партий и чата (вынесено из Chessboard.tsx).
 
-# Регламент разработки и Git-процессов (Michess Workflow)
+export interface LiveGameItem {
+    game_id: number;
+    white_username: string;
+    white_rating: number;
+    black_username: string;
+    black_rating: number;
+    base_time_ms: number;
+    increment_ms: number;
+    spectators_count: number;
+}
 
-Пошаговая шпаргалка для работы над каждой новой задачей в проекте.
+export interface ChatMessageItem {
+    sender: string;
+    text: string;
+    timestamp: number;
+}
 
----
+export const QUICK_CHAT_PRESETS = [
+    '👋 Удачи!',
+    '🤝 Спасибо за игру!',
+    '👏 Красивый ход!',
+    '⏱ Цейтнот!'
+];
 
-## 1. Схема веток проекта
-
-1. `master` — **Релизная ветка (Production).**
-    * Здесь лежит только проверенный и полностью рабочий код.
-    * Напрямую в `master` код никогда не пишем. Обновляем его только слиянием из `dev`.
-
-2. `dev` — **Основная ветка разработки (Integration).**
-    * База, в которую сливаются все готовые фичи и исправления.
-    * Все новые ветки создаются от `dev` и после завершения вливаются обратно в `dev`.
-
-3. Рабочие ветки (`feature/...`, `fix/...`, `chore/...`, `perf/...`) — **Ветки под конкретную задачу.**
-    * `feature/название` — новая функциональность или доработка UI (например, `feature/board-layout`);
-    * `fix/название` — исправление бага (например, `fix/timer-sync`);
-    * `chore/название` — настройка инфраструктуры, тестов, документации, CI/CD;
-    * `perf/название` — оптимизация производительности и SQL-запросов.
-
----
-
-## 2. Пошаговый алгоритм работы над новой фичей (От и До)
-
-### Шаг 1. Создание ветки перед началом работы
-
-Всегда начинай новую задачу в корневой папке проекта `michess` с переключения на `dev` и создания новой рабочей ветки:
-
-    git checkout dev
-    git pull origin dev
-    git checkout -b feature/название-задачи
-
-*(Если ты забыл создать ветку и уже начал менять файлы прямо в `dev` — просто выполни
-`git checkout -b feature/название-задачи`, и все незакоммиченные изменения автоматически переедут в новую ветку).*
-
----
-
-### Шаг 2. Написание кода и правило миграций БД (Alembic)
-
-ВАЖНОЕ ПРАВИЛО ПО БАЗЕ ДАННЫХ:
-
-* Если ты менял **только фронтенд** (`frontend/...`), стили, WebSocket-логику или сервисы Python без изменения таблиц
-  БД — **миграции Alembic делать НЕ НУЖНО**.
-* Миграция создается **ТОЛЬКО** тогда, когда ты изменил или добавил колонки/таблицы в папке `src/models/`. В этом случае
-  выполни:
-
-  alembic revision --autogenerate -m "описание_изменений_моделей"
-  alembic upgrade head
-
----
-
-### Шаг 3. Локальная проверка перед коммитом
-
-1. Если менялся Python-код (из корня проекта):
-
-   python -m flake8 src tests scripts --count --select=E9,F63,F7,F82 --show-source --statistics
-   python -m pytest -v
-
-2. Если менялся React/TypeScript-код (фронтенд):
-
-   cd frontend
-   npm run lint
-   npm run test
-   npm run build
-   cd ..
-
----
-
-### Шаг 4. Коммит изменений в рабочую ветку
-
-Убедись по `git status`, что в список не попали временные файлы, и зафиксируй изменения:
-
-    git status
-    git add .
-    git commit -m "feat: краткое описание сделанной задачи"
-
-Префиксы коммитов:
-
-* `feat:` — новая фича или улучшение интерфейса
-* `fix:` — исправление ошибки
-* `refactor:` — рефакторинг кода
-* `perf:` — ускорение работы и оптимизация запросов
-* `chore:` — инфраструктура, конфиги, зависимости
-* `docs:` — документация (`README.md`, `QUICKSTART.md`, `WORKFLOW.md`, `ToDo.md`)
-
----
-
-### Шаг 5. Слияние готовой задачи в `dev` и отправка на GitHub
-
-Когда задача проверена в браузере и тесты проходят:
-
-    git checkout dev
-    git merge --no-ff feature/название-задачи -m "Merge feature/название-задачи into dev"
-    git push origin dev
-    git branch -d feature/название-задачи
-
-После `git push origin dev` на GitHub во вкладке **Actions** автоматически запустится пайплайн `Michess CI`, который
-проверит бэкенд и фронтенд в облаке.
-
----
-
-### Шаг 6. Выпуск стабильного релиза в `master`
-
-Выполняется, когда в `dev` завершен логический этап (или спринт) и всё стабильно работает:
-
-    git checkout master
-    git pull origin master
-    git merge --no-ff dev -m "Release: merge stable dev into master"
-    git push origin master
-    git checkout dev
-
-*(Последняя команда `git checkout dev` обязательна, чтобы никогда не оставаться в ветке `master`).*
+export interface QueuePlayer {
+    user_id: number;
+    username: string;
+    rating: number;
+    base_time_ms: number;
+    increment_ms: number;
+}
 
 ----------------------------------------------------------------------------------------
-END OF PART 11/11
+END OF PART 11/14

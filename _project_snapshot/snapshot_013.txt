@@ -1,0 +1,1758 @@
+PROJECT SNAPSHOT — PART 13/14
+Project: michess
+Files in this part (14): frontend/src/components/Profile.tsx, frontend/src/config/api.ts, frontend/src/config/boardAppearance.ts, frontend/src/config/champions.ts, frontend/src/config/timeControls.ts, frontend/src/index.css, frontend/src/main.tsx, frontend/src/services/__tests__/gameSocket.test.ts, frontend/src/services/gameSocket.ts, frontend/src/services/soundEngine.ts, frontend/tailwind.config.js, frontend/tsconfig.app.json, frontend/tsconfig.node.json, .gitignore
+----------------------------------------------------------------------------------------
+
+========================================================================================
+FILE: frontend/src/components/Profile.tsx
+========================================================================================
+// --- FILE: frontend/src/components/Profile.tsx ---
+
+import {useState, useEffect} from 'react';
+import {useParams, Link, useNavigate} from 'react-router-dom';
+import {format, parseISO} from 'date-fns';
+import {ru} from 'date-fns/locale';
+import {
+    LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
+} from 'recharts';
+import {
+    Trophy,
+    Swords,
+    Calendar,
+    Download,
+    Crosshair,
+    Target
+} from 'lucide-react';
+import {API_BASE_URL} from '../config/api';
+
+interface UserProfile {
+    id: number;
+    username: string;
+    rating: number;
+    created_at: string;
+}
+
+interface GameData {
+    game_id: number;
+    white_username: string;
+    white_rating: number;
+    black_username: string;
+    black_rating: number;
+    status: string;
+    is_rated: boolean;
+    result: string;
+    pgn_date: string | null;
+    site: string | null;
+    eco: string | null;
+    finished_at: string | null;
+}
+
+const displayDate = (game: GameData) => {
+    if (game.pgn_date && !game.pgn_date.includes('????')) {
+        return game.pgn_date.replace(/\??/g, '').replace(/\.$/, '');
+    }
+    if (game.finished_at) {
+        return format(parseISO(game.finished_at), 'd MMM yyyy', {locale: ru});
+    }
+    return '—';
+};
+
+export default function Profile() {
+    const {targetUsername} = useParams<{ targetUsername: string }>();
+    const navigate = useNavigate();
+    const [profile, setProfile] = useState<UserProfile | null>(null);
+    const [games, setGames] = useState<GameData[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        const fetchProfileData = async () => {
+            setLoading(true);
+            setError(null);
+            try {
+                const profileRes = await fetch(`${API_BASE_URL}/api/v1/profile/${targetUsername}`);
+                if (!profileRes.ok) throw new Error('Пользователь не найден');
+                const profileData = await profileRes.json();
+                setProfile(profileData);
+
+                const gamesRes = await fetch(`${API_BASE_URL}/api/v1/profile/${targetUsername}/games?limit=30`);
+                if (gamesRes.ok) {
+                    const gamesData = await gamesRes.json();
+                    setGames(gamesData.items || []);
+                }
+            } catch (err: any) {
+                setError(err.message);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (targetUsername) {
+            fetchProfileData();
+        }
+    }, [targetUsername]);
+
+    if (loading) {
+        return (
+            <div className="flex flex-col items-center justify-center w-full h-full text-boxwood-light font-serif">
+                <div className="animate-spin text-amber-500 mb-4"><Swords size={40}/></div>
+                <div>Загрузка профиля...</div>
+            </div>
+        );
+    }
+
+    if (error || !profile) {
+        return (
+            <div className="bg-red-950/80 border border-red-800 p-6 rounded text-red-200 text-center font-serif">
+                <h2 className="text-xl font-bold mb-2">Ошибка</h2>
+                <p>{error || 'Не удалось загрузить профиль'}</p>
+                <Link to="/" className="mt-4 inline-block text-amber-400 hover:underline">На главную</Link>
+            </div>
+        );
+    }
+
+    let wins = 0, losses = 0, draws = 0;
+    let tempRating = profile.rating;
+
+    const chartDataReversed = games.map((game) => {
+        const isWhite = game.white_username === profile.username;
+        let delta = 0;
+
+        if (game.result === '1-0') {
+            if (isWhite) {
+                wins++;
+                delta = 15;
+            } else {
+                losses++;
+                delta = -15;
+            }
+        } else if (game.result === '0-1') {
+            if (isWhite) {
+                losses++;
+                delta = -15;
+            } else {
+                wins++;
+                delta = 15;
+            }
+        } else if (game.result === '1/2-1/2') {
+            draws++;
+        }
+
+        const pointRating = tempRating;
+        tempRating -= delta;
+
+        const chartDate = game.pgn_date ? game.pgn_date.split('.')[0] : (game.finished_at ? format(parseISO(game.finished_at), 'd MMM', {locale: ru}) : '');
+
+        return {
+            name: 'Партия',
+            rating: pointRating,
+            date: chartDate
+        };
+    });
+
+    const chartData = chartDataReversed.reverse();
+    const winRate = games.length > 0 ? Math.round((wins / games.length) * 100) : 0;
+
+    return (
+        <div className="w-full max-w-6xl flex flex-col gap-6 font-serif">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div
+                    className="bg-acacia-dark border border-amber-900/40 p-6 rounded shadow-heavy flex flex-col items-center justify-center text-center relative overflow-hidden">
+                    <img
+                        src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${profile.username}&backgroundColor=D0A972`}
+                        alt="Avatar Background"
+                        className="absolute top-0 right-0 w-48 h-48 opacity-10 pointer-events-none translate-x-10 -translate-y-10"
+                    />
+                    <img
+                        src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${profile.username}&backgroundColor=E6C998`}
+                        alt="Avatar"
+                        className="w-24 h-24 rounded-lg bg-black/40 shadow-inner border-2 border-amber-600/40 mb-3 z-10"
+                    />
+                    <h1 className="text-3xl font-bold text-amber-200 z-10">{profile.username}</h1>
+
+                    <div className="flex items-center gap-2 mt-3 text-boxwood-light/80 text-sm z-10">
+                        <Calendar size={16} className="text-amber-600"/>
+                        На сайте с {format(parseISO(profile.created_at), 'd MMMM yyyy', {locale: ru})}
+                    </div>
+                </div>
+
+                <div className="md:col-span-2 grid grid-cols-2 lg:grid-cols-4 gap-4">
+                    <div
+                        className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
+                        <div
+                            className="text-boxwood/60 text-xs uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                            <Trophy size={14}/> Рейтинг
+                        </div>
+                        <div className="text-4xl font-mono font-bold text-amber-400">{profile.rating}</div>
+                    </div>
+                    <div
+                        className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
+                        <div
+                            className="text-boxwood/60 text-xs uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                            <Swords size={14}/> Игр сыграно
+                        </div>
+                        <div className="text-4xl font-mono font-bold text-blue-400">{games.length}</div>
+                    </div>
+                    <div
+                        className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
+                        <div
+                            className="text-boxwood/60 text-xs uppercase tracking-widest mb-1 flex items-center gap-1.5">
+                            <Target size={14}/> Винрейт
+                        </div>
+                        <div className="text-4xl font-mono font-bold text-emerald-400">{winRate}%</div>
+                    </div>
+                    <div
+                        className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
+                        <div
+                            className="text-boxwood/60 text-[10px] xl:text-xs uppercase tracking-wider mb-1 flex items-center gap-1.5 whitespace-nowrap">
+                            <Crosshair size={14}/> WIN / DRAW / LOSE
+                        </div>
+                        <div className="text-2xl font-mono font-bold flex gap-2">
+                            <span className="text-emerald-400">{wins}</span>
+                            <span className="text-boxwood/40">/</span>
+                            <span className="text-gray-400">{draws}</span>
+                            <span className="text-boxwood/40">/</span>
+                            <span className="text-red-400">{losses}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div className="bg-acacia-dark border border-amber-900/40 p-5 rounded shadow-heavy">
+                <h2 className="text-sm uppercase tracking-widest text-amber-500/80 mb-6 font-bold">Динамика рейтинга
+                    (последние партии)</h2>
+                <div className="h-64 w-full font-sans">
+                    {chartData.length > 1 ? (
+                        <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={chartData}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#5C3A21" vertical={false}/>
+                                <XAxis dataKey="date" stroke="#8B5A2B" tick={{fill: '#D0A972', fontSize: 12}} dy={10}/>
+                                <YAxis domain={['dataMin - 30', 'dataMax + 30']} stroke="#8B5A2B"
+                                       tick={{fill: '#D0A972', fontSize: 12}} dx={-10}/>
+                                <Tooltip contentStyle={{
+                                    backgroundColor: '#1A120B',
+                                    borderColor: '#7A4B31',
+                                    color: '#F5DEB3',
+                                    borderRadius: '8px'
+                                }} itemStyle={{color: '#fbbf24', fontWeight: 'bold'}}/>
+                                <Line type="monotone" dataKey="rating" stroke="#fbbf24" strokeWidth={3}
+                                      dot={{r: 4, fill: '#1A120B', stroke: '#fbbf24', strokeWidth: 2}}
+                                      activeDot={{r: 6, fill: '#fbbf24'}}/>
+                            </LineChart>
+                        </ResponsiveContainer>
+                    ) : (
+                        <div className="h-full flex items-center justify-center text-boxwood/50">
+                            Недостаточно данных для графика
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            <div className="bg-acacia-dark border border-amber-900/40 rounded shadow-heavy overflow-hidden">
+                <div className="p-5 border-b border-amber-900/40 bg-black/20">
+                    <h2 className="text-sm uppercase tracking-widest text-amber-500/80 font-bold">История партий</h2>
+                </div>
+
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm font-sans whitespace-nowrap">
+                        <thead className="bg-black/40 text-boxwood/60 uppercase text-xs tracking-wider">
+                        <tr>
+                            <th className="px-4 py-4 font-medium">Белые</th>
+                            <th className="px-4 py-4 font-medium">Черные</th>
+                            <th className="px-4 py-4 font-medium text-center">Результат</th>
+                            <th className="px-4 py-4 font-medium text-center">Дебют</th>
+                            <th className="px-4 py-4 font-medium text-center">Место</th>
+                            <th className="px-4 py-4 font-medium text-center">Дата</th>
+                            <th className="px-4 py-4 font-medium text-right">PGN</th>
+                        </tr>
+                        </thead>
+                        <tbody className="divide-y divide-amber-900/20 text-boxwood-light">
+                        {games.length === 0 ? (
+                            <tr>
+                                <td colSpan={7} className="px-6 py-8 text-center text-boxwood/50 font-serif">
+                                    Партий пока нет.
+                                </td>
+                            </tr>
+                        ) : (
+                            games.map((game) => {
+                                const isWhite = game.white_username === profile.username;
+                                let resultColor = 'text-gray-400';
+                                let resultText = 'Ничья';
+
+                                if (game.result === '1-0') {
+                                    resultColor = isWhite ? 'text-emerald-400' : 'text-red-400';
+                                    resultText = isWhite ? 'Победа' : 'Поражение';
+                                } else if (game.result === '0-1') {
+                                    resultColor = isWhite ? 'text-red-400' : 'text-emerald-400';
+                                    resultText = isWhite ? 'Поражение' : 'Победа';
+                                }
+
+                                return (
+                                    <tr
+                                        key={game.game_id}
+                                        onClick={() => navigate(`/game/${game.game_id}`, {state: {game}})}
+                                        className="hover:bg-black/30 transition group cursor-pointer"
+                                        title="Нажмите, чтобы просмотреть партию"
+                                    >
+                                        <td className="px-4 py-4">
+                                            <div className="flex items-center gap-2">
+                                                <span
+                                                    className="w-3 h-3 rounded-sm border border-gray-400 bg-white inline-block"></span>
+                                                <Link
+                                                    to={`/profile/${game.white_username}`}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className={`font-bold hover:underline ${isWhite ? 'text-amber-300' : ''}`}
+                                                >
+                                                    {game.white_username}
+                                                </Link>
+                                                <span
+                                                    className="text-xs font-mono text-boxwood/50">({game.white_rating})</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-4">
+                                            <div className="flex items-center gap-2">
+                                                <span
+                                                    className="w-3 h-3 rounded-sm border border-gray-600 bg-black inline-block"></span>
+                                                <Link
+                                                    to={`/profile/${game.black_username}`}
+                                                    onClick={(e) => e.stopPropagation()}
+                                                    className={`font-bold hover:underline ${!isWhite ? 'text-amber-300' : ''}`}
+                                                >
+                                                    {game.black_username}
+                                                </Link>
+                                                <span
+                                                    className="text-xs font-mono text-boxwood/50">({game.black_rating})</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-4 text-center">
+                                            <div className={`font-bold font-serif ${resultColor}`}>
+                                                {resultText} <span
+                                                className="text-xs opacity-70 ml-1">({game.result})</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-4 py-4 text-center font-mono text-amber-500/80">
+                                            {game.eco || '—'}
+                                        </td>
+                                        <td className="px-4 py-4 text-center text-boxwood/70">
+                                            {game.site || '—'}
+                                        </td>
+                                        <td className="px-4 py-4 text-center text-boxwood/70 font-mono">
+                                            {displayDate(game)}
+                                        </td>
+                                        <td className="px-4 py-4 text-right">
+                                            <a
+                                                href={`${API_BASE_URL}/api/v1/profile/games/${game.game_id}/pgn`}
+                                                download
+                                                onClick={(e) => e.stopPropagation()}
+                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black/30 hover:bg-amber-900/60 text-amber-400 rounded transition border border-amber-900/40 text-xs font-bold"
+                                                title="Скачать PGN"
+                                            >
+                                                <Download size={14}/>
+                                            </a>
+                                        </td>
+                                    </tr>
+                                );
+                            })
+                        )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+========================================================================================
+FILE: frontend/src/config/api.ts
+========================================================================================
+// --- FILE: frontend/src/config/api.ts ---
+
+export const API_BASE_URL: string =
+    import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000';
+
+export const WS_BASE_URL: string =
+    import.meta.env.VITE_WS_URL || 'ws://127.0.0.1:8000';
+
+========================================================================================
+FILE: frontend/src/config/boardAppearance.ts
+========================================================================================
+// --- FILE: frontend/src/config/boardAppearance.ts ---
+
+export interface BoardTheme {
+    id: string;
+    name: string;
+    light: string;
+    dark: string;
+    coordLight: string;
+    coordDark: string;
+    border: string;
+    useWoodGrain: boolean;
+    isDarkBoard?: boolean;
+}
+
+export interface PieceSetConfig {
+    id: string;
+    name: string;
+    shortName: string;
+    folder: string;
+    scalePercent: number;
+    description: string;
+}
+
+export const BOARD_THEMES: Record<string, BoardTheme> = {
+    walnut: {
+        id: 'walnut',
+        name: 'Орех',
+        light: '#DFC8A2',
+        dark: '#966C46',
+        coordLight: '#6E4B2A',
+        coordDark: '#F3E5AB',
+        border: '#2A1810',
+        useWoodGrain: true,
+        isDarkBoard: true
+    },
+    maple: {
+        id: 'maple',
+        name: 'Клён',
+        light: '#F0D9B5',
+        dark: '#B58863',
+        coordLight: '#8C6239',
+        coordDark: '#F0D9B5',
+        border: '#3D2314',
+        useWoodGrain: false,
+        isDarkBoard: false
+    },
+    tournament: {
+        id: 'tournament',
+        name: 'Турнирная',
+        light: '#EBECD0',
+        dark: '#739552',
+        coordLight: '#537133',
+        coordDark: '#EBECD0',
+        border: '#263318',
+        useWoodGrain: false,
+        isDarkBoard: false
+    },
+    slate: {
+        id: 'slate',
+        name: 'Графит',
+        light: '#DEE3E6',
+        dark: '#788A94',
+        coordLight: '#4E5D66',
+        coordDark: '#DEE3E6',
+        border: '#1F292E',
+        useWoodGrain: false,
+        isDarkBoard: true
+    },
+    sapphire: {
+        id: 'sapphire',
+        name: 'Сапфир',
+        light: '#ECEFF4',
+        dark: '#6E88AC',
+        coordLight: '#435B7D',
+        coordDark: '#ECEFF4',
+        border: '#233142',
+        useWoodGrain: false,
+        isDarkBoard: false
+    }
+};
+
+export const PIECE_SETS: Record<string, PieceSetConfig> = {
+    merida: {
+        id: 'merida',
+        name: 'Мерида (ChessBase)',
+        shortName: 'Мерида',
+        folder: 'merida',
+        scalePercent: 93,
+        description: 'Классические объёмные фигуры Fritz / ChessBase с широкой короной'
+    },
+    cardinal: {
+        id: 'cardinal',
+        name: 'Контур (Cardinal)',
+        shortName: 'Контур',
+        folder: 'cardinal',
+        scalePercent: 94,
+        description: 'Крупные контрастные фигуры с белой окантовкой чёрных фигур'
+    },
+    maestro: {
+        id: 'maestro',
+        name: 'Маэстро (Объёмный)',
+        shortName: 'Маэстро',
+        folder: 'maestro',
+        scalePercent: 93,
+        description: 'Выразительный комплект с глубокой прорисовкой деталей'
+    },
+    alpha: {
+        id: 'alpha',
+        name: 'Альфа (Книжный)',
+        shortName: 'Альфа',
+        folder: 'alpha',
+        scalePercent: 94,
+        description: 'Строгий классический диаграммный стиль с широким основанием'
+    },
+    cburnett: {
+        id: 'cburnett',
+        name: 'Стаунтон (Турнирный)',
+        shortName: 'Стаунтон',
+        folder: 'cburnett',
+        scalePercent: 92,
+        description: 'Чистый современный турнирный стандарт'
+    }
+};
+
+export function getSavedBoardThemeKey(): string {
+    if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('michess_board_theme');
+        if (saved && BOARD_THEMES[saved]) return saved;
+    }
+    return 'walnut';
+}
+
+export function getSavedPieceSetKey(): string {
+    if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('michess_piece_set');
+        if (saved && PIECE_SETS[saved]) return saved;
+    }
+    return 'merida';
+}
+
+export function getPieceSvgUrl(pieceSetKey: string, color: string, type: string): string {
+    const setConfig = PIECE_SETS[pieceSetKey] || PIECE_SETS.merida;
+    return `/assets/pieces/${setConfig.folder}/${color}${type.toUpperCase()}.svg`;
+}
+
+export function getHarmoniousPieceStyle(
+    pieceSetKey: string,
+    boardThemeKey: string,
+    pieceColor: string
+): { width: string; height: string; filter: string } {
+    const setConfig = PIECE_SETS[pieceSetKey] || PIECE_SETS.merida;
+    const theme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
+    const isWhite = pieceColor === 'w';
+    const size = `${setConfig.scalePercent}%`;
+
+    if (setConfig.id === 'cardinal') {
+        return {
+            width: size,
+            height: size,
+            filter: 'drop-shadow(0 2px 3px rgba(0, 0, 0, 0.45))'
+        };
+    }
+
+    if (theme.id === 'walnut' || theme.id === 'maple') {
+        return {
+            width: size,
+            height: size,
+            filter: isWhite
+                ? 'sepia(0.08) brightness(1.01) drop-shadow(0 2px 2.5px rgba(0, 0, 0, 0.55))'
+                : 'drop-shadow(0 0 1px rgba(255, 248, 225, 0.55)) drop-shadow(0 2.5px 3px rgba(0, 0, 0, 0.6))'
+        };
+    }
+
+    return {
+        width: size,
+        height: size,
+        filter: isWhite
+            ? 'drop-shadow(0 2px 2.5px rgba(0, 0, 0, 0.5))'
+            : 'drop-shadow(0 0 1px rgba(255, 255, 255, 0.5)) drop-shadow(0 2.5px 3px rgba(0, 0, 0, 0.55))'
+    };
+}
+
+========================================================================================
+FILE: frontend/src/config/champions.ts
+========================================================================================
+// --- FILE: frontend/src/config/champions.ts ---
+
+import philidorAvatar from '../assets/champions/philidor.jpg';
+import labourdonnaisAvatar from '../assets/champions/labourdonnais.jpg';
+import stauntonAvatar from '../assets/champions/staunton.jpg';
+import anderssenAvatar from '../assets/champions/anderssen.jpg';
+import morphyAvatar from '../assets/champions/morphy.jpg';
+import paulsenAvatar from '../assets/champions/paulsen.jpg';
+import zukertortAvatar from '../assets/champions/zukertort.jpg';
+
+export type HistoricalBotId =
+    | 'philidor'
+    | 'labourdonnais'
+    | 'staunton'
+    | 'anderssen'
+    | 'morphy'
+    | 'paulsen'
+    | 'zukertort';
+
+export interface HistoricalBotProfile {
+    id: HistoricalBotId;
+    name: string;
+    shortName: string;
+    playerLabel: string;
+    title: string;
+    era: string;
+    rating: number;
+    motto: string;
+    avatar: string;
+    fallbackAvatar: string;
+}
+
+export const HISTORICAL_BOTS: Record<HistoricalBotId, HistoricalBotProfile> = {
+    philidor: {
+        id: 'philidor',
+        name: 'Франсуа-Андре Филидор',
+        shortName: 'Филидор',
+        playerLabel: 'Ф.-А. Филидор',
+        title: 'Мастер Просвещения',
+        era: '1749–1795',
+        rating: 1850,
+        motto: 'Пешки — душа шахмат: именно они определяют атаку и защиту.',
+        avatar: philidorAvatar,
+        fallbackAvatar: '/assets/champions/philidor.jpg'
+    },
+    labourdonnais: {
+        id: 'labourdonnais',
+        name: 'Луи-Шарль Лабурдонне',
+        shortName: 'Лабурдонне',
+        playerLabel: 'Л.-Ш. Лабурдонне',
+        title: 'Король Комбинаций',
+        era: '1795–1840',
+        rating: 1950,
+        motto: 'Инициатива, гамбит и стремительная атака на короля!',
+        avatar: labourdonnaisAvatar,
+        fallbackAvatar: '/assets/champions/labourdonnais.jpg'
+    },
+    staunton: {
+        id: 'staunton',
+        name: 'Говард Стаунтон',
+        shortName: 'Стаунтон',
+        playerLabel: 'Г. Стаунтон',
+        title: 'Глава Английской Школы',
+        era: '1810–1874',
+        rating: 2000,
+        motto: 'Фланговый зажим центра, прочная структура и классический расчёт.',
+        avatar: stauntonAvatar,
+        fallbackAvatar: '/assets/champions/staunton.jpg'
+    },
+    anderssen: {
+        id: 'anderssen',
+        name: 'Адольф Андерсен',
+        shortName: 'Андерсен',
+        playerLabel: 'А. Андерсен',
+        title: 'Маэстро Бессмертных Партий',
+        era: '1818–1879',
+        rating: 2100,
+        motto: 'Бриллиантовая жертва фигуры ради вскрытия линий и мата королю!',
+        avatar: anderssenAvatar,
+        fallbackAvatar: '/assets/champions/anderssen.jpg'
+    },
+    morphy: {
+        id: 'morphy',
+        name: 'Пол Чарльз Морфи',
+        shortName: 'Морфи',
+        playerLabel: 'Пол Морфи',
+        title: 'Гордость и печаль шахмат',
+        era: '1837–1884',
+        rating: 2150,
+        motto: 'Развивайте все фигуры с темпом и вскрывайте линии для атаки!',
+        avatar: morphyAvatar,
+        fallbackAvatar: '/assets/champions/morphy.jpg'
+    },
+    paulsen: {
+        id: 'paulsen',
+        name: 'Луи Паульсен',
+        shortName: 'Паульсен',
+        playerLabel: 'Л. Паульсен',
+        title: 'Мастер Защиты и Двух Слонов',
+        era: '1833–1891',
+        rating: 2080,
+        motto: 'Гибкая оборона, сила двух слонов и глубокие дебютные новинки.',
+        avatar: paulsenAvatar,
+        fallbackAvatar: '/assets/champions/paulsen.jpg'
+    },
+    zukertort: {
+        id: 'zukertort',
+        name: 'Иоганн Герман Цукерторт',
+        shortName: 'Цукерторт',
+        playerLabel: 'И. Цукерторт',
+        title: 'Триумфатор Лондона 1883',
+        era: '1842–1888',
+        rating: 2120,
+        motto: 'Универсальная гармония развития и сокрушительные комбинационные бури!',
+        avatar: zukertortAvatar,
+        fallbackAvatar: '/assets/champions/zukertort.jpg'
+    }
+};
+
+export const HISTORICAL_BOTS_LIST: HistoricalBotProfile[] = Object.values(HISTORICAL_BOTS);
+
+export const CHAMPIONS_LIST = [
+    {id: 'Steinitz', name: 'Вильгельм Стейниц', years: '1886–1894', img: '/assets/champions/Steinitz.jpg'},
+    {id: 'Lasker', name: 'Эмануил Ласкер', years: '1894–1921', img: '/assets/champions/Lasker.jpg'},
+    {id: 'Rubinstein', name: 'Акиба Рубинштейн', years: '1901–1932', img: '/assets/champions/Rubinstein.jpg'},
+    {id: 'Capablanca', name: 'Хосе Рауль Капабланка', years: '1921–1927', img: '/assets/champions/Capablanca.jpg'},
+    {id: 'Alekhine', name: 'Александр Алехин', years: '1927–1946', img: '/assets/champions/Alekhine.jpg'},
+    {id: 'Euwe', name: 'Макс Эйве', years: '1935–1937', img: '/assets/champions/Euwe.jpg'},
+    {id: 'Keres', name: 'Пауль Керес', years: '1935–1975', img: '/assets/champions/Keres.jpg'},
+    {id: 'Botvinnik', name: 'Михаил Ботвинник', years: '1948–1963', img: '/assets/champions/Botvinnik.jpg'},
+    {id: 'Geller', name: 'Ефим Геллер', years: '1949–1998', img: '/assets/champions/Geller.jpg'},
+    {id: 'Korchnoi', name: 'Виктор Корчной', years: '1952–2015', img: '/assets/champions/Korchnoi.jpg'},
+    {id: 'Smyslov', name: 'Василий Смыслов', years: '1957–1958', img: '/assets/champions/Smyslov.jpg'},
+    {id: 'Tal', name: 'Михаил Таль', years: '1960–1961', img: '/assets/champions/Tal.jpg'},
+    {id: 'Petrosian', name: 'Тигран Петросян', years: '1963–1969', img: '/assets/champions/Petrosian.jpg'},
+    {id: 'Spassky', name: 'Борис Спасский', years: '1969–1972', img: '/assets/champions/Spassky.jpg'},
+    {id: 'Fischer', name: 'Роберт Фишер', years: '1972–1975', img: '/assets/champions/Fischer.jpg'},
+    {id: 'Karpov', name: 'Анатолий Карпов', years: '1975–1985', img: '/assets/champions/Karpov.jpg'},
+    {id: 'Kasparov', name: 'Гарри Каспаров', years: '1985–2000', img: '/assets/champions/Kasparov.jpg'},
+    {id: 'Kramnik', name: 'Владимир Крамник', years: '2000–2007', img: '/assets/champions/Kramnik.jpg'},
+    {id: 'Anand', name: 'Вишванатан Ананд', years: '2007–2013', img: '/assets/champions/Anand.jpg'},
+    {id: 'Carlsen', name: 'Магнус Карлсен', years: '2013–2023', img: '/assets/champions/Carlsen.jpg'},
+    {id: 'Ding', name: 'Дин Лижэнь', years: '2023–н.в.', img: '/assets/champions/Ding.jpg'}
+];
+
+========================================================================================
+FILE: frontend/src/config/timeControls.ts
+========================================================================================
+// --- FILE: frontend/src/config/timeControls.ts ---
+// Программы шахматных часов DGT 2500 (вынесено из Chessboard.tsx).
+
+export type DgtTimingMode =
+    | 'time'
+    | 'fischer'
+    | 'delay'
+    | 'us_delay'
+    | 'byo_yomi'
+    | 'canadian_byo'
+    | 'scrabble'
+    | 'hourglass'
+    | 'gong'
+    | 'move_timer';
+
+export interface Dgt2500Option {
+    optionNumber: string;
+    mode: DgtTimingMode;
+    base: number;
+    blackBase?: number;
+    inc: number;
+    label: string;
+    details: string;
+    isManual?: boolean;
+    periods?: Array<{ moves?: number; extraMinutes: number; extraIncSeconds?: number }>;
+    incrementFromMove?: number;
+}
+
+export interface Dgt2500Group {
+    group: string;
+    options: Dgt2500Option[];
+}
+
+export const TIME_CONTROLS: Dgt2500Group[] = [
+    {
+        group: '01–08 • Time (Контроль времени и Гильотина)',
+        options: [
+            {
+                optionNumber: '01',
+                mode: 'time',
+                base: 5,
+                inc: 0,
+                label: '5 мин',
+                details: 'Блиц 5 минут до конца партии'
+            },
+            {
+                optionNumber: '02',
+                mode: 'time',
+                base: 25,
+                inc: 0,
+                label: '25 мин',
+                details: 'Рапид 25 минут до конца партии'
+            },
+            {
+                optionNumber: '03',
+                mode: 'time',
+                base: 60,
+                inc: 0,
+                label: '60 мин (1 час)',
+                details: 'Классика 60 минут до конца партии'
+            },
+            {
+                optionNumber: '04',
+                mode: 'time',
+                base: 120,
+                inc: 0,
+                label: '120 мин/40 + 30 мин',
+                details: '2 часа на 40 ходов + 30 мин до конца',
+                periods: [{moves: 40, extraMinutes: 30}]
+            },
+            {
+                optionNumber: '05',
+                mode: 'time',
+                base: 120,
+                inc: 0,
+                label: '120 мин/40 + 60 мин',
+                details: '2 часа на 40 ходов + 60 мин до конца',
+                periods: [{moves: 40, extraMinutes: 60}]
+            },
+            {
+                optionNumber: '06',
+                mode: 'time',
+                base: 120,
+                inc: 0,
+                label: '120м/40 + 60м/20 + 30м',
+                details: '2ч/40 ходов + 1ч/20 ходов + 30 мин до конца',
+                periods: [{moves: 40, extraMinutes: 60}, {moves: 60, extraMinutes: 30}]
+            },
+            {
+                optionNumber: '07',
+                mode: 'time',
+                base: 5,
+                blackBase: 4,
+                inc: 0,
+                label: '5 мин vs 4 мин (Armageddon)',
+                details: 'Армагеддон без добавления: 5 мин Белые / 4 мин Черные'
+            },
+            {
+                optionNumber: '08',
+                mode: 'time',
+                base: 10,
+                inc: 0,
+                isManual: true,
+                label: 'Ручная настройка (Time)',
+                details: 'Произвольное стартовое время без добавления'
+            }
+        ]
+    },
+    {
+        group: '09–21 • Fischer Bonus (Фишер с добавлением)',
+        options: [
+            {
+                optionNumber: '09',
+                mode: 'fischer',
+                base: 3,
+                inc: 2,
+                label: '3 мин + 2 сек/ход',
+                details: 'Стандартный блиц FIDE (3+2)'
+            },
+            {
+                optionNumber: '10',
+                mode: 'fischer',
+                base: 5,
+                inc: 3,
+                label: '5 мин + 3 сек/ход',
+                details: 'Блиц с добавлением Фишера (5+3)'
+            },
+            {
+                optionNumber: '11',
+                mode: 'fischer',
+                base: 10,
+                inc: 10,
+                label: '10 мин + 10 сек/ход',
+                details: 'Быстрые шахматы (10+10)'
+            },
+            {
+                optionNumber: '12',
+                mode: 'fischer',
+                base: 15,
+                inc: 5,
+                label: '15 мин + 5 сек/ход',
+                details: 'Рапид с добавлением (15+5)'
+            },
+            {
+                optionNumber: '13',
+                mode: 'fischer',
+                base: 15,
+                inc: 10,
+                label: '15 мин + 10 сек/ход',
+                details: 'Стандартный рапид FIDE (15+10)'
+            },
+            {
+                optionNumber: '14',
+                mode: 'fischer',
+                base: 25,
+                inc: 10,
+                label: '25 мин + 10 сек/ход',
+                details: 'Удлинённый рапид (25+10)'
+            },
+            {
+                optionNumber: '15',
+                mode: 'fischer',
+                base: 90,
+                inc: 30,
+                label: '90 мин + 30 сек/ход',
+                details: 'Стандартная классика (90+30 с 1-го хода)'
+            },
+            {
+                optionNumber: '16',
+                mode: 'fischer',
+                base: 90,
+                inc: 30,
+                label: '90м/40 + 30м + 30с/ход',
+                details: 'Турнирный FIDE: 90 мин/40 ходов + 30 мин до конца (+30с с 1-го хода)',
+                periods: [{moves: 40, extraMinutes: 30}]
+            },
+            {
+                optionNumber: '17',
+                mode: 'fischer',
+                base: 100,
+                inc: 30,
+                label: '100м/40 + 50м + 30с/ход',
+                details: '100 мин/40 ходов + 50 мин до конца (+30с с 1-го хода)',
+                periods: [{moves: 40, extraMinutes: 50}]
+            },
+            {
+                optionNumber: '18',
+                mode: 'fischer',
+                base: 100,
+                inc: 30,
+                label: '100м/40 + 50м/20 + 15м + 30с',
+                details: '100м/40 + 50м/20 + 15м до конца (+30с с 1-го хода)',
+                periods: [{moves: 40, extraMinutes: 50}, {moves: 60, extraMinutes: 15}]
+            },
+            {
+                optionNumber: '19',
+                mode: 'fischer',
+                base: 120,
+                inc: 0,
+                label: '120м/40 + 60м/20 + 15м (+30с с 61 х.)',
+                details: 'Классика с добавлением 30 сек/ход начиная с 61-го хода (#)',
+                periods: [{moves: 40, extraMinutes: 60}, {moves: 60, extraMinutes: 15, extraIncSeconds: 30}],
+                incrementFromMove: 61
+            },
+            {
+                optionNumber: '20',
+                mode: 'fischer',
+                base: 5,
+                blackBase: 4,
+                inc: 0,
+                label: '5м vs 4м (+2с с 61 х., Armageddon)',
+                details: 'Армагеддон FIDE: 5 мин vs 4 мин + 2 сек/ход с 61-го хода (#)',
+                periods: [{moves: 60, extraMinutes: 0, extraIncSeconds: 2}],
+                incrementFromMove: 61
+            },
+            {
+                optionNumber: '21',
+                mode: 'fischer',
+                base: 3,
+                inc: 2,
+                isManual: true,
+                label: 'Ручная настройка (Fischer)',
+                details: 'Произвольное время и бонус Фишера за каждый ход'
+            }
+        ]
+    },
+    {
+        group: '22–25 • Delay (Задержка Бронштейна и US Delay)',
+        options: [
+            {
+                optionNumber: '22',
+                mode: 'delay',
+                base: 90,
+                inc: 5,
+                label: '90 мин + 5 сек Delay (Bronstein)',
+                details: 'Задержка Бронштейна 5 сек на каждый ход'
+            },
+            {
+                optionNumber: '23',
+                mode: 'delay',
+                base: 5,
+                inc: 3,
+                isManual: true,
+                label: 'Ручная настройка (Bronstein Delay)',
+                details: 'Произвольное время с задержкой Бронштейна'
+            },
+            {
+                optionNumber: '24',
+                mode: 'us_delay',
+                base: 25,
+                inc: 5,
+                label: '25 мин + 5 сек US Delay',
+                details: 'Американская задержка (US Delay) 5 сек перед отсчётом'
+            },
+            {
+                optionNumber: '25',
+                mode: 'us_delay',
+                base: 5,
+                inc: 5,
+                isManual: true,
+                label: 'Ручная настройка (US Delay)',
+                details: 'Произвольное время с американской задержкой'
+            }
+        ]
+    },
+    {
+        group: '26–29 • Byo-Yomi (Японское и Канадское Бё-ёми)',
+        options: [
+            {
+                optionNumber: '26',
+                mode: 'byo_yomi',
+                base: 60,
+                inc: 20,
+                label: '60 мин + 3×20 сек Byo-Yomi',
+                details: 'Японское Бё-ёми: 60 мин + 3 периода по 20 сек'
+            },
+            {
+                optionNumber: '27',
+                mode: 'byo_yomi',
+                base: 30,
+                inc: 20,
+                isManual: true,
+                label: 'Ручная настройка (Byo-Yomi)',
+                details: 'Произвольная настройка японского Бё-ёми'
+            },
+            {
+                optionNumber: '28',
+                mode: 'canadian_byo',
+                base: 60,
+                inc: 0,
+                label: '60 мин + 5 мин Canadian Byo-Yomi',
+                details: 'Канадское Бё-ёми: 60 мин + 5 мин на серию ходов',
+                periods: [{extraMinutes: 5}]
+            },
+            {
+                optionNumber: '29',
+                mode: 'canadian_byo',
+                base: 30,
+                inc: 0,
+                isManual: true,
+                label: 'Ручная настройка (Canadian Byo-Yomi)',
+                details: 'Произвольная настройка канадского Бё-ёми'
+            }
+        ]
+    },
+    {
+        group: '30–36 • Специальные режимы (Scrabble, Hourglass, Gong, Move Timer)',
+        options: [
+            {
+                optionNumber: '30',
+                mode: 'scrabble',
+                base: 25,
+                inc: 0,
+                label: '25 мин + Upcount (Scrabble™)',
+                details: 'После достижения 0:00 таймер считает штрафное время вверх'
+            },
+            {
+                optionNumber: '31',
+                mode: 'scrabble',
+                base: 15,
+                inc: 0,
+                isManual: true,
+                label: 'Ручная настройка (Scrabble™)',
+                details: 'Произвольное время с отсчётом вверх после 0:00'
+            },
+            {
+                optionNumber: '32',
+                mode: 'hourglass',
+                base: 1,
+                inc: 0,
+                label: '1 мин (Hourglass / Песочные часы)',
+                details: 'Пока у одного игрока время убывает, у соперника оно прибавляется'
+            },
+            {
+                optionNumber: '33',
+                mode: 'hourglass',
+                base: 2,
+                inc: 0,
+                isManual: true,
+                label: 'Ручная настройка (Hourglass)',
+                details: 'Песочные часы с произвольным стартовым временем'
+            },
+            {
+                optionNumber: '34',
+                mode: 'gong',
+                base: 10 / 60,
+                inc: 0,
+                label: '10 сек на ход (Gong)',
+                details: 'Фиксированные 10 секунд на каждый ход со сбросом таймера'
+            },
+            {
+                optionNumber: '35',
+                mode: 'gong',
+                base: 15 / 60,
+                inc: 0,
+                isManual: true,
+                label: 'Ручная настройка (Gong)',
+                details: 'Произвольное фиксированное время на каждый ход (Гонг)'
+            },
+            {
+                optionNumber: '36',
+                mode: 'move_timer',
+                base: 30 / 60,
+                inc: 0,
+                isManual: true,
+                label: 'Ручная настройка (Move Timer)',
+                details: 'Таймер на ход со сбросом после каждого сделанного хода'
+            }
+        ]
+    }
+];
+
+export const ALL_DGT_OPTIONS: Dgt2500Option[] = TIME_CONTROLS.flatMap(g => g.options);
+export const DEFAULT_DGT_OPTION: Dgt2500Option = ALL_DGT_OPTIONS.find(o => o.optionNumber === '09') || ALL_DGT_OPTIONS[0];
+
+========================================================================================
+FILE: frontend/src/index.css
+========================================================================================
+/* --- FILE: frontend/src/index.css --- */
+
+@import "tailwindcss";
+
+@theme {
+    /* Светлые элементы интерфейса (Самшит индийский) */
+    --color-boxwood-light: #F5DEB3;
+    --color-boxwood: #E6C998;
+    --color-boxwood-dark: #D0A972;
+
+    /* Темные элементы интерфейса (Акация) */
+    --color-acacia-light: #7A4B31;
+    --color-acacia: #5C3A21;
+    --color-acacia-dark: #3D2314;
+
+    /* Клетки шахматной доски */
+    --color-board-light: #DFC8A2;
+    --color-board-dark: #966C46;
+
+    /* Фон и элементы интерфейса (Стол/Комната) */
+    --color-room-light: #4A3B32;
+    --color-room: #2C221C;
+    --color-room-dark: #1A120B;
+
+    --color-paper: #FDFBF7;
+
+    /* Универсальные читаемые шрифты */
+    --font-sans: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-serif: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --font-mono: "JetBrains Mono", "Fira Code", "Cascadia Mono", Consolas, ui-monospace, monospace;
+
+    /* Тени */
+    --shadow-heavy: 0 15px 35px -5px rgba(0, 0, 0, 0.6), 0 10px 15px -5px rgba(0, 0, 0, 0.4);
+    --shadow-piece: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3);
+    --shadow-inner-board: inset 0 2px 6px 0 rgba(0, 0, 0, 0.35);
+
+    /* Текстуры */
+    --background-image-wood-texture: url('/assets/textures/wood-grain.png');
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    background-color: var(--color-room);
+    color: var(--color-paper);
+    font-family: var(--font-sans);
+    font-size: 15px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+========================================================================================
+FILE: frontend/src/main.tsx
+========================================================================================
+// --- FILE: frontend/src/main.tsx ---
+
+import { StrictMode } from 'react'
+import { createRoot } from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
+import './index.css'
+import App from './App.tsx'
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <BrowserRouter>
+      <App />
+    </BrowserRouter>
+  </StrictMode>,
+)
+
+========================================================================================
+FILE: frontend/src/services/__tests__/gameSocket.test.ts
+========================================================================================
+// --- FILE: frontend/src/services/__tests__/gameSocket.test.ts ---
+
+import {describe, it, expect} from 'vitest';
+import {gameSocket} from '../gameSocket';
+import {soundEngine, resolveMoveSound} from '../soundEngine';
+import {API_BASE_URL, WS_BASE_URL} from '../../config/api';
+import {
+    BOARD_THEMES,
+    PIECE_SETS,
+    getPieceSvgUrl,
+    getHarmoniousPieceStyle
+} from '../../config/boardAppearance';
+import {MIN_BOARD_SIZE, getMaxViewportBoardSize} from '../../components/Chessboard';
+
+describe('GameWebSocketService, SoundEngine & API Config', () => {
+    it('should be defined and support listener registration without duplicates', () => {
+        expect(gameSocket).toBeDefined();
+        const noop = () => {
+        };
+        gameSocket.on('test_event', noop);
+        gameSocket.on('test_event', noop);
+        gameSocket.off('test_event', noop);
+    });
+
+    it('should classify chess SAN notation into accurate sound events', () => {
+        expect(resolveMoveSound('Nf3')).toBe('move');
+        expect(resolveMoveSound('exd5')).toBe('capture');
+        expect(resolveMoveSound('O-O')).toBe('castle');
+        expect(resolveMoveSound('O-O-O')).toBe('castle');
+        expect(resolveMoveSound('Qh4#')).toBe('check');
+        expect(resolveMoveSound('Bb5+')).toBe('check');
+        expect(resolveMoveSound('e8=Q')).toBe('promote');
+        expect(resolveMoveSound('a8=N+')).toBe('check');
+
+        const initialMute = soundEngine.isMuted();
+        expect(soundEngine.toggleMute()).toBe(!initialMute);
+        expect(soundEngine.toggleMute()).toBe(initialMute);
+    });
+
+    it('should provide valid default API_BASE_URL and WS_BASE_URL', () => {
+        expect(API_BASE_URL).toMatch(/^https?:\/\//);
+        expect(WS_BASE_URL).toMatch(/^wss?:\/\//);
+    });
+
+    it('should provide mobile-friendly board size bounds', () => {
+        expect(MIN_BOARD_SIZE).toBe(280);
+        expect(getMaxViewportBoardSize()).toBeGreaterThanOrEqual(MIN_BOARD_SIZE);
+    });
+
+    it('should provide 5 piece sets and 5 board themes with harmonious styles', () => {
+        expect(Object.keys(PIECE_SETS).length).toBe(5);
+        expect(Object.keys(BOARD_THEMES).length).toBe(5);
+
+        for (const setKey of Object.keys(PIECE_SETS)) {
+            expect(getPieceSvgUrl(setKey, 'w', 'q')).toContain(`/assets/pieces/${setKey}/wQ.svg`);
+            for (const themeKey of Object.keys(BOARD_THEMES)) {
+                const whiteStyle = getHarmoniousPieceStyle(setKey, themeKey, 'w');
+                const blackStyle = getHarmoniousPieceStyle(setKey, themeKey, 'b');
+                expect(whiteStyle.width).toMatch(/^\d+%$/);
+                expect(blackStyle.filter.length).toBeGreaterThan(5);
+            }
+        }
+    });
+});
+
+========================================================================================
+FILE: frontend/src/services/gameSocket.ts
+========================================================================================
+// --- FILE: frontend/src/services/gameSocket.ts ---
+
+import {WS_BASE_URL} from '../config/api';
+
+type EventCallback = (data: any) => void;
+
+class GameWebSocketService {
+    private ws: WebSocket | null = null;
+    private currentToken: string | null = null;
+    private listeners: { [event: string]: EventCallback[] } = {};
+    private pendingMessages: string[] = [];
+    private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+
+    connect(token: string) {
+        if (!token) return;
+
+        // Если токен сменился (выход и вход под другим игроком), переоткрываем соединение
+        if (this.ws && this.currentToken && this.currentToken !== token) {
+            try {
+                this.ws.close(1000);
+            } catch {
+                // ignore
+            }
+            this.ws = null;
+        }
+
+        this.currentToken = token;
+
+        if (this.ws && (this.ws.readyState === WebSocket.OPEN || this.ws.readyState === WebSocket.CONNECTING)) {
+            return;
+        }
+
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+
+        const wsUrl = `${WS_BASE_URL}/api/v1/ws/matchmaking?token=${encodeURIComponent(token)}`;
+        this.ws = new WebSocket(wsUrl);
+
+        this.ws.onopen = () => {
+            while (this.pendingMessages.length > 0 && this.ws && this.ws.readyState === WebSocket.OPEN) {
+                const msg = this.pendingMessages.shift();
+                if (msg) {
+                    this.ws.send(msg);
+                }
+            }
+        };
+
+        this.ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                const eventType = data.event;
+
+                if (this.listeners[eventType]) {
+                    this.listeners[eventType].forEach(cb => cb(data));
+                }
+                if (this.listeners['*']) {
+                    this.listeners['*'].forEach(cb => cb(data));
+                }
+            } catch (e) {
+                console.error('Ошибка парсинга JSON от WebSocket:', e);
+            }
+        };
+
+        this.ws.onclose = (event) => {
+            this.ws = null;
+            if (event.code === 1008) {
+                // Токен истёк или невалиден — очищаем его и уведомляем приложение
+                localStorage.removeItem('token');
+                window.dispatchEvent(new Event('michess-auth-expired'));
+                return;
+            }
+            if (this.currentToken && event.code !== 1000) {
+                this.reconnectTimer = setTimeout(() => {
+                    if (this.currentToken) {
+                        this.connect(this.currentToken);
+                    }
+                }, 1500);
+            }
+        };
+
+        this.ws.onerror = (error) => {
+            console.error('WebSocket ошибка:', error);
+        };
+    }
+
+    on(event: string, callback: EventCallback) {
+        if (!this.listeners[event]) {
+            this.listeners[event] = [];
+        }
+        if (!this.listeners[event].includes(callback)) {
+            this.listeners[event].push(callback);
+        }
+    }
+
+    off(event: string, callback: EventCallback) {
+        if (!this.listeners[event]) return;
+        this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
+    }
+
+    send(action: string, payload: any = {}) {
+        const serialized = JSON.stringify({action, ...payload});
+
+        if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            this.ws.send(serialized);
+            return;
+        }
+
+        const fallbackToken = this.currentToken || localStorage.getItem('token');
+        if (fallbackToken) {
+            this.pendingMessages.push(serialized);
+            this.connect(fallbackToken);
+        } else {
+            console.error('Невозможно отправить сообщение: пользователь не авторизован');
+        }
+    }
+
+    disconnect() {
+        this.currentToken = null;
+        this.pendingMessages = [];
+        if (this.reconnectTimer) {
+            clearTimeout(this.reconnectTimer);
+            this.reconnectTimer = null;
+        }
+        if (this.ws) {
+            try {
+                this.ws.close(1000);
+            } catch {
+                // ignore
+            }
+            this.ws = null;
+        }
+    }
+}
+
+export const gameSocket = new GameWebSocketService();
+
+========================================================================================
+FILE: frontend/src/services/soundEngine.ts
+========================================================================================
+// --- FILE: frontend/src/services/soundEngine.ts ---
+
+export type SoundEventType =
+    | 'move'
+    | 'capture'
+    | 'check'
+    | 'castle'
+    | 'promote'
+    | 'premove'
+    | 'illegal'
+    | 'start'
+    | 'victory'
+    | 'defeat'
+    | 'draw'
+    | 'offer'
+    | 'decline'
+    | 'chat'
+    | 'low_time';
+
+const MUTE_STORAGE_KEY = 'michess_sound_muted';
+
+class SoundEngine {
+    private ctx: AudioContext | null = null;
+    private muted: boolean = false;
+
+    constructor() {
+        if (typeof window !== 'undefined') {
+            this.muted = localStorage.getItem(MUTE_STORAGE_KEY) === 'true';
+        }
+    }
+
+    public isMuted(): boolean {
+        return this.muted;
+    }
+
+    public setMuted(mute: boolean): void {
+        this.muted = mute;
+        if (typeof window !== 'undefined') {
+            localStorage.setItem(MUTE_STORAGE_KEY, String(mute));
+        }
+    }
+
+    public toggleMute(): boolean {
+        this.setMuted(!this.muted);
+        return this.muted;
+    }
+
+    private getContext(): AudioContext | null {
+        if (typeof window === 'undefined') return null;
+        if (!this.ctx) {
+            const AudioCtx = window.AudioContext || (window as unknown as {
+                webkitAudioContext?: typeof AudioContext
+            }).webkitAudioContext;
+            if (AudioCtx) {
+                this.ctx = new AudioCtx();
+            }
+        }
+        if (this.ctx && this.ctx.state === 'suspended') {
+            this.ctx.resume().catch(() => {
+            });
+        }
+        return this.ctx;
+    }
+
+    private playTone(
+        freq: number,
+        durationSec: number,
+        delaySec: number = 0,
+        type: OscillatorType = 'sine',
+        peakGain: number = 0.14,
+        endFreq?: number
+    ): void {
+        const ctx = this.getContext();
+        if (!ctx) return;
+
+        const startTime = ctx.currentTime + delaySec;
+        const stopTime = startTime + durationSec;
+
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, startTime);
+        if (endFreq !== undefined) {
+            osc.frequency.exponentialRampToValueAtTime(Math.max(20, endFreq), stopTime);
+        }
+
+        gain.gain.setValueAtTime(0.0001, startTime);
+        gain.gain.linearRampToValueAtTime(peakGain, startTime + Math.min(0.015, durationSec * 0.2));
+        gain.gain.exponentialRampToValueAtTime(0.0001, stopTime);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(startTime);
+        osc.stop(stopTime + 0.01);
+    }
+
+    private playSample(file: string, volume: number = 0.75, fallbackFn?: () => void): void {
+        if (typeof window === 'undefined' || typeof Audio === 'undefined') {
+            fallbackFn?.();
+            return;
+        }
+        try {
+            const audio = new Audio(`/assets/sounds/${file}`);
+            audio.volume = volume;
+            audio.currentTime = 0;
+            audio.play().catch(() => {
+                fallbackFn?.();
+            });
+        } catch {
+            fallbackFn?.();
+        }
+    }
+
+    public play(event: SoundEventType): void {
+        if (this.muted) return;
+
+        switch (event) {
+            case 'move':
+                this.playSample('Move.mp3', 0.8, () => {
+                    this.playTone(170, 0.065, 0, 'triangle', 0.16, 85);
+                });
+                break;
+
+            case 'capture':
+                this.playSample('Capture.mp3', 0.85, () => {
+                    this.playTone(260, 0.075, 0, 'sawtooth', 0.15, 95);
+                });
+                break;
+
+            case 'castle':
+                this.playSample('Move.mp3', 0.75);
+                setTimeout(() => {
+                    if (!this.muted) {
+                        this.playSample('Move.mp3', 0.85, () => {
+                            this.playTone(190, 0.07, 0, 'triangle', 0.15, 100);
+                        });
+                    }
+                }, 95);
+                break;
+
+            case 'check':
+                this.playSample('Capture.mp3', 0.55);
+                this.playTone(587.33, 0.11, 0, 'triangle', 0.16);
+                this.playTone(880.0, 0.24, 0.08, 'sine', 0.18, 830.0);
+                break;
+
+            case 'promote':
+                this.playSample('Move.mp3', 0.65);
+                this.playTone(523.25, 0.10, 0, 'triangle', 0.14);
+                this.playTone(659.25, 0.10, 0.07, 'triangle', 0.15);
+                this.playTone(783.99, 0.12, 0.14, 'triangle', 0.16);
+                this.playTone(1046.5, 0.25, 0.21, 'sine', 0.18);
+                break;
+
+            case 'premove':
+                this.playTone(420, 0.045, 0, 'sine', 0.09, 310);
+                break;
+
+            case 'illegal':
+                this.playTone(155, 0.11, 0, 'sawtooth', 0.14, 115);
+                this.playTone(130, 0.14, 0.09, 'sawtooth', 0.14, 95);
+                break;
+
+            case 'start':
+                this.playSample('GenericNotify.mp3', 0.7);
+                this.playTone(440.0, 0.12, 0, 'triangle', 0.12);
+                this.playTone(554.37, 0.14, 0.09, 'triangle', 0.13);
+                this.playTone(659.25, 0.26, 0.18, 'sine', 0.15);
+                break;
+
+            case 'chat':
+                this.playTone(660, 0.07, 0, 'sine', 0.11);
+                this.playTone(880, 0.11, 0.06, 'sine', 0.12);
+                break;
+
+            case 'offer':
+                this.playTone(587.33, 0.14, 0, 'sine', 0.16);
+                this.playTone(783.99, 0.22, 0.12, 'sine', 0.16);
+                this.playTone(987.77, 0.28, 0.24, 'triangle', 0.14);
+                break;
+
+            case 'decline':
+                this.playTone(440.0, 0.12, 0, 'triangle', 0.13);
+                this.playTone(329.63, 0.22, 0.11, 'triangle', 0.13);
+                break;
+
+            case 'low_time':
+                this.playTone(880.0, 0.08, 0, 'square', 0.11);
+                this.playTone(880.0, 0.08, 0.12, 'square', 0.11);
+                this.playTone(1046.5, 0.14, 0.24, 'square', 0.13);
+                break;
+
+            case 'victory':
+                this.playTone(523.25, 0.12, 0, 'triangle', 0.16);
+                this.playTone(659.25, 0.12, 0.10, 'triangle', 0.16);
+                this.playTone(783.99, 0.14, 0.20, 'triangle', 0.17);
+                this.playTone(1046.5, 0.38, 0.30, 'sine', 0.20);
+                break;
+
+            case 'defeat':
+                this.playTone(392.0, 0.16, 0, 'triangle', 0.15);
+                this.playTone(349.23, 0.16, 0.14, 'triangle', 0.15);
+                this.playTone(311.13, 0.18, 0.28, 'triangle', 0.15);
+                this.playTone(261.63, 0.40, 0.42, 'sine', 0.17);
+                break;
+
+            case 'draw':
+                this.playTone(440.0, 0.16, 0, 'triangle', 0.14);
+                this.playTone(523.25, 0.16, 0.14, 'triangle', 0.14);
+                this.playTone(440.0, 0.30, 0.28, 'sine', 0.14);
+                break;
+        }
+    }
+}
+
+export const soundEngine = new SoundEngine();
+
+/**
+ * Определяет подходящий звуковой эффект хода по его нотации SAN.
+ */
+export function resolveMoveSound(san?: string | null): SoundEventType {
+    if (!san) return 'move';
+    if (san.includes('#') || san.includes('+')) return 'check';
+    if (san.includes('=')) return 'promote';
+    if (san.startsWith('O-O')) return 'castle';
+    if (san.includes('x')) return 'capture';
+    return 'move';
+}
+
+========================================================================================
+FILE: frontend/tailwind.config.js
+========================================================================================
+// --- FILE: frontend/tailwind.config.js ---
+
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  theme: {
+    extend: {
+      colors: {
+        // Светлые элементы интерфейса (Самшит индийский)
+        boxwood: {
+          light: '#F5DEB3',
+          DEFAULT: '#E6C998',
+          dark: '#D0A972',
+        },
+        // Темные элементы интерфейса (Акация)
+        acacia: {
+          light: '#7A4B31',
+          DEFAULT: '#5C3A21',
+          dark: '#3D2314',
+        },
+        // Сбалансированные цвета самой шахматной доски (средний контраст клеток)
+        board: {
+          light: '#DFC8A2',
+          dark: '#966C46',
+        },
+        // Фон и элементы интерфейса (Стол/Комната)
+        room: {
+          light: '#4A3B32',
+          DEFAULT: '#2C221C',
+          dark: '#1A120B',
+        },
+        paper: '#FDFBF7',
+      },
+      fontFamily: {
+        serif: ['"Playfair Display"', '"Merriweather"', 'Georgia', 'serif'],
+        sans: ['"Inter"', 'system-ui', 'sans-serif'],
+      },
+      boxShadow: {
+        'heavy': '0 15px 35px -5px rgba(0, 0, 0, 0.6), 0 10px 15px -5px rgba(0, 0, 0, 0.4)',
+        'piece': '0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3)',
+        'inner-board': 'inset 0 2px 6px 0 rgba(0, 0, 0, 0.35)',
+      },
+      backgroundImage: {
+        'wood-texture': "url('/assets/textures/wood-grain.png')",
+      }
+    },
+  },
+  plugins: [],
+}
+
+========================================================================================
+FILE: frontend/tsconfig.app.json
+========================================================================================
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.app.tsbuildinfo",
+    "target": "es2023",
+    "lib": ["ES2023", "DOM"],
+    "module": "esnext",
+    "types": ["vite/client"],
+    "allowArbitraryExtensions": true,
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+
+    /* Linting */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["src"]
+}
+
+========================================================================================
+FILE: frontend/tsconfig.node.json
+========================================================================================
+{
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
+    "target": "es2023",
+    "lib": ["ES2023"],
+    "types": ["node"],
+    "skipLibCheck": true,
+
+    /* Bundler mode */
+    "module": "nodenext",
+    "allowImportingTsExtensions": true,
+    "verbatimModuleSyntax": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+
+    /* Linting */
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true
+  },
+  "include": ["vite.config.ts"]
+}
+
+========================================================================================
+FILE: .gitignore
+========================================================================================
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+michess_env/
+venv/
+env/
+
+# IDE settings
+.idea/
+.vscode/
+
+# Environment variables and secrets
+.env
+.env.*
+
+# Logs and databases
+*.log
+*.sqlite3
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Seed data
+src/db/data/pgns/
+*.pgn
+
+# Engine binaries
+bin/
+*.exe
+
+node_modules/
+# Project snapshots
+project_snapshot*.txt
+data/pgns/
+
+----------------------------------------------------------------------------------------
+END OF PART 13/14

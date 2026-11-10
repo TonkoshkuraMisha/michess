@@ -1,6 +1,6 @@
-PROJECT SNAPSHOT — PART 3/11
+PROJECT SNAPSHOT — PART 3/14
 Project: michess
-Files in this part (18): src/services/analysis_service.py, src/services/anticheat.py, src/services/bots/__init__.py, src/services/bots/anderssen.py, src/services/bots/base.py, src/services/bots/books/anderssen.json, src/services/bots/books/labourdonnais.json, src/services/bots/books/morphy.json, src/services/bots/books/paulsen.json, src/services/bots/books/philidor.json, src/services/bots/books/staunton.json, src/services/bots/books/zukertort.json, src/services/bots/labourdonnais.py, src/services/bots/morphy.py, src/services/bots/paulsen.py, src/services/bots/philidor.py, src/services/bots/staunton.py, src/services/bots/zukertort.py
+Files in this part (17): src/services/analysis_service.py, src/services/anticheat.py, src/services/bots/__init__.py, src/services/bots/anderssen.py, src/services/bots/base.py, src/services/bots/books/anderssen.json, src/services/bots/books/labourdonnais.json, src/services/bots/books/morphy.json, src/services/bots/books/paulsen.json, src/services/bots/books/philidor.json, src/services/bots/books/staunton.json, src/services/bots/books/zukertort.json, src/services/bots/labourdonnais.py, src/services/bots/morphy.py, src/services/bots/paulsen.py, src/services/bots/philidor.py, src/services/bots/staunton.py
 ----------------------------------------------------------------------------------------
 
 ========================================================================================
@@ -9,6 +9,7 @@ FILE: src/services/analysis_service.py
 # --- FILE: src/services/analysis_service.py ---
 
 import asyncio
+import contextlib
 import io
 import json
 import logging
@@ -20,8 +21,9 @@ import chess.pgn
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models.game import Game
+from src.models.game import Game, GameStatus
 from src.services.bots.base import resolve_stockfish_path, static_board_eval_cp
+from src.services.engine_pool import EngineUnavailableError, get_engine_pool
 
 logger = logging.getLogger(__name__)
 
@@ -83,12 +85,15 @@ def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
     sf_path = resolve_stockfish_path()
     engine = None
     engine_label = "Static Fallback Evaluator"
+    engine_stack = contextlib.ExitStack()
 
     if sf_path and os.path.exists(sf_path):
+        # EngineBusyError намеренно не перехватывается: под нагрузкой лучше вернуть 503, чем
+        # закэшировать в БД анализ статическим оценщиком вместо Stockfish.
         try:
-            engine = chess.engine.SimpleEngine.popen_uci(sf_path)
+            engine = engine_stack.enter_context(get_engine_pool(sf_path).acquire())
             engine_label = engine.id.get("name", "Stockfish")
-        except Exception as exc:
+        except EngineUnavailableError as exc:
             logger.warning("Не удалось запустить Stockfish (%s), используем fallback: %s", sf_path, exc)
             engine = None
 
@@ -155,11 +160,7 @@ def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
             mates_white.append(mate_i)
             best_moves_uci.append(best_i)
     finally:
-        if engine is not None:
-            try:
-                engine.quit()
-            except Exception:
-                pass
+        engine_stack.close()  # возвращает движок в пул
 
     moves_report: list[dict] = []
     white_losses: list[int] = []
@@ -226,6 +227,25 @@ def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
     }
 
 
+class GameNotFinishedError(Exception):
+    """Анализ идущей партии запрещён: он работал бы как подсказка движка игрокам."""
+
+
+_FINISHED_STATUSES = (GameStatus.COMPLETED, GameStatus.ABORTED)
+
+
+def ensure_game_finished(game: Game) -> None:
+    if game.status not in _FINISHED_STATUSES:
+        raise GameNotFinishedError(f"Партия {game.id} ещё не завершена")
+
+
+def _count_mainline_plies(pgn_text: str) -> int:
+    pgn_game = chess.pgn.read_game(io.StringIO(pgn_text))
+    if pgn_game is None:
+        return -1
+    return sum(1 for _ in pgn_game.mainline_moves())
+
+
 class AnalysisService:
     async def analyze_position(self, db: AsyncSession, moves: list[str]) -> dict:
         board = chess.Board()
@@ -244,7 +264,7 @@ class AnalysisService:
 
         if sf_path and os.path.exists(sf_path) and not board.is_game_over():
             def _run_pos():
-                with chess.engine.SimpleEngine.popen_uci(sf_path) as eng:
+                with get_engine_pool(sf_path).acquire() as eng:
                     info = eng.analyse(board, chess.engine.Limit(depth=10, time=0.1))
                     if isinstance(info, list):
                         info = info[0]
@@ -254,8 +274,8 @@ class AnalysisService:
 
             try:
                 eval_cp, best_move = await asyncio.to_thread(_run_pos)
-            except Exception:
-                pass
+            except EngineUnavailableError as exc:
+                logger.warning("Stockfish недоступен, отдаём статическую оценку: %s", exc)
 
         return {
             "fen": board.fen(),
@@ -269,15 +289,22 @@ class AnalysisService:
         game = result.scalars().first()
         if not game or not game.pgn:
             raise LookupError(f"Партия {game_id} или её PGN не найдены")
+        ensure_game_finished(game)
 
         # Если анализ уже сохранён в БД и не запрошен пересчёт — отдаём мгновенно из кэша
         cached_raw = getattr(game, "analysis_json", None)
         if cached_raw and not force:
             try:
                 cached_data = json.loads(cached_raw)
-                if isinstance(cached_data, dict) and "moves" in cached_data:
+                if (
+                        isinstance(cached_data, dict)
+                        and "moves" in cached_data
+                        and len(cached_data["moves"]) == _count_mainline_plies(game.pgn)
+                ):
                     cached_data["game_id"] = game_id
                     return cached_data
+                # Кэш не соответствует итоговому PGN (например, сохранён по незавершённой партии
+                # до запрета анализа идущих игр) — пересчитываем.
             except Exception:
                 pass
 
@@ -316,6 +343,34 @@ logger = logging.getLogger(__name__)
 MIN_MOVES_FOR_ANALYSIS = 5
 OPENING_MOVE_CUTOFF = 8
 CHEATER_TRUST_THRESHOLD = 30
+EVALUATED_MARKER_TTL_S = 90 * 24 * 60 * 60
+
+
+def trusted_premove(client_flag, server_elapsed_ms: int) -> bool:
+    """
+    Премув исключает ход из анализа ритма, поэтому флаг клиента принимаем, только если сервер
+    сам видит почти мгновенный ход. Иначе читер мог бы пометить премувом все ходы.
+    """
+    from src.core.config import settings
+
+    return bool(client_flag) and int(server_elapsed_ms) <= settings.AC_PREMOVE_MAX_ELAPSED_MS
+
+
+async def _claim_first_evaluation(game_id: int) -> bool:
+    """
+    True, если партия оценивается впервые. Отметка хранится в Redis (SET NX), а не в памяти
+    процесса: после рестарта или на другом воркере штраф за ту же партию не начислится снова.
+    """
+    from src.db import redis as redis_module
+
+    try:
+        claimed = await redis_module.redis_client.set(
+            f"anticheat:evaluated:{int(game_id)}", "1", nx=True, ex=EVALUATED_MARKER_TTL_S,
+        )
+        return bool(claimed)
+    except Exception as exc:
+        logger.warning("Anti-cheat idempotency marker unavailable for game %s: %s", game_id, exc)
+        return False  # без отметки не штрафуем: повторный штраф хуже пропущенного
 
 
 def calculate_blur_ratio(moves: list[Move]) -> float:
@@ -369,24 +424,30 @@ def compute_telemetry_penalty(moves: list[Move]) -> dict:
     blur_ratio = calculate_blur_ratio(moves)
     timing_cv, mean_time_ms = calculate_timing_cv(moves)
 
-    penalty = 0
-
-    if blur_ratio >= 0.75:
-        penalty += 45
-    elif blur_ratio >= 0.50:
-        penalty += 25
-    elif blur_ratio >= 0.35:
-        penalty += 12
-
+    # Основной сигнал — ритм ходов, который измеряет сервер (time_taken_ms — серверное время
+    # между ходами). Потеря фокуса окна сообщается клиентом и подделывается в обе стороны,
+    # поэтому сама по себе не штрафует (иначе страдают честные игроки со вторым монитором)
+    # и лишь усиливает штраф, когда серверный ритм уже похож на движок.
+    timing_penalty = 0
     is_engine_pacing = 1500.0 <= mean_time_ms <= 15000.0
     if is_engine_pacing:
         if timing_cv <= 0.12:
-            penalty += 40
+            timing_penalty = 40
         elif timing_cv <= 0.22:
-            penalty += 22
+            timing_penalty = 22
 
-    if blur_ratio >= 0.65 and is_engine_pacing and timing_cv <= 0.20:
-        penalty += 15
+    blur_penalty = 0
+    if timing_penalty > 0:
+        if blur_ratio >= 0.75:
+            blur_penalty = 45
+        elif blur_ratio >= 0.50:
+            blur_penalty = 25
+        elif blur_ratio >= 0.35:
+            blur_penalty = 12
+        if blur_ratio >= 0.65 and timing_cv <= 0.20:
+            blur_penalty += 15
+
+    penalty = timing_penalty + blur_penalty
 
     return {
         "penalty": penalty,
@@ -396,10 +457,11 @@ def compute_telemetry_penalty(moves: list[Move]) -> dict:
     }
 
 
-async def evaluate_game_telemetry(db: AsyncSession, game_id: int) -> dict[int, dict]:
+async def evaluate_game_telemetry(db: AsyncSession, game_id: int, force: bool = False) -> dict[int, dict]:
     """
     Анализирует телеметрию завершённой партии для обоих игроков,
     снижает user.trust_factor при аномалиях и выставляет is_cheater = True при trust_factor < 30.
+    Идемпотентна по game_id (повторный вызов для той же партии не штрафует игрока дважды).
     """
     game = await db.get(Game, game_id)
     if not game:
@@ -412,6 +474,8 @@ async def evaluate_game_telemetry(db: AsyncSession, game_id: int) -> dict[int, d
     if not all_moves:
         return {}
 
+    already_evaluated = not force and not await _claim_first_evaluation(game_id)
+
     moves_by_player: dict[int, list[Move]] = {
         game.white_player_id: [],
         game.black_player_id: [],
@@ -423,7 +487,7 @@ async def evaluate_game_telemetry(db: AsyncSession, game_id: int) -> dict[int, d
 
     for player_id, player_moves in moves_by_player.items():
         metrics = compute_telemetry_penalty(player_moves)
-        penalty = metrics["penalty"]
+        penalty = 0 if already_evaluated else metrics["penalty"]
 
         user = await db.get(User, player_id)
         if not user:
@@ -603,11 +667,11 @@ import logging
 import os
 import random
 import shutil
-import sys
-import time
 from pathlib import Path
 import chess
 import chess.engine
+
+from src.services.engine_pool import get_engine_pool
 
 logger = logging.getLogger(__name__)
 
@@ -709,14 +773,11 @@ def _simulate_human_thinking_time(
         is_book_move: bool,
         bot_time_left_ms: int = 180000,
         base_time_ms: int = 180000,
-) -> None:
+) -> float:
     """
-    Имитирует человеческое время раздумий шахматиста.
-    При запуске тестов (pytest) задержка автоматически отключается.
+    Вычисляет рекомендуемое человеческое время раздумий шахматиста (в секундах)
+    без блокировки рабочих потоков сервера через time.sleep().
     """
-    if "pytest" in sys.modules or os.environ.get("PYTEST_CURRENT_TEST"):
-        return
-
     piece_count = len(board.piece_map())
     move_number = board.fullmove_number
 
@@ -724,30 +785,23 @@ def _simulate_human_thinking_time(
     is_endgame = piece_count <= 12
 
     if is_opening:
-        base_delay = random.uniform(0.8, 1.8) if is_book_move else random.uniform(3.5, 8.0)
+        base_delay = random.uniform(0.4, 0.9) if is_book_move else random.uniform(1.2, 2.8)
     elif is_endgame:
-        base_delay = random.uniform(0.8, 2.0) if piece_count <= 6 else random.uniform(4.0, 12.0)
+        base_delay = random.uniform(0.4, 1.0) if piece_count <= 6 else random.uniform(1.2, 2.6)
     else:
         legal_moves_count = board.legal_moves.count()
         complexity_mult = 0.7 + (min(legal_moves_count, 45) / 45.0) * 0.8
-        base_delay = random.uniform(4.0, 14.0) * complexity_mult
-        if random.random() < 0.08 and base_time_ms > 60000:
-            base_delay = random.uniform(18.0, 35.0)
+        base_delay = random.uniform(1.2, 3.0) * complexity_mult
 
-    control_scale_factor = max(0.3, min(3.0, base_time_ms / 300000.0))
-    if base_time_ms > 600000:
-        control_scale_factor = 1.5 + (base_time_ms / 1800000.0) * 1.5
-
+    control_scale_factor = max(0.3, min(1.5, base_time_ms / 300000.0))
     adjusted_delay = base_delay * control_scale_factor
 
     if bot_time_left_ms < 30000:
-        time_ratio = bot_time_left_ms / 30000.0
-        adjusted_delay = max(0.5, adjusted_delay * time_ratio)
+        time_ratio = max(0.15, bot_time_left_ms / 30000.0)
+        adjusted_delay = max(0.25, adjusted_delay * time_ratio)
 
-    noise = random.gauss(0, 0.3) * adjusted_delay
-    final_thinking_time = max(0.6, adjusted_delay + noise)
-    max_allowed = max(0.5, (bot_time_left_ms - 2000) / 1000.0)
-    time.sleep(min(final_thinking_time, max_allowed))
+    max_allowed = max(0.25, (bot_time_left_ms - 2000) / 1000.0)
+    return round(min(adjusted_delay, max_allowed), 3)
 
 
 def static_board_eval_cp(board: chess.Board, perspective: chess.Color) -> float:
@@ -789,18 +843,14 @@ def analyse_with_stockfish(
         return {}
 
     scores: dict[chess.Move, float] = {}
-    try:
-        with chess.engine.SimpleEngine.popen_uci(engine_path) as engine:
-            options: dict[str, int | bool] = {"Skill Level": skill_level}
-            if uci_elo is not None:
-                if "UCI_LimitStrength" in engine.options:
-                    options["UCI_LimitStrength"] = True
-                if "UCI_Elo" in engine.options:
-                    min_elo = getattr(engine.options["UCI_Elo"], "min", 1320) or 1320
-                    max_elo = getattr(engine.options["UCI_Elo"], "max", 3190) or 3190
-                    options["UCI_Elo"] = max(min_elo, min(max_elo, uci_elo))
-            engine.configure(options)
+    options: dict[str, int | bool] = {"Skill Level": skill_level}
+    if uci_elo is not None:
+        options["UCI_LimitStrength"] = True
+        options["UCI_Elo"] = uci_elo
 
+    try:
+        # Пул сам приводит UCI_Elo / Skill Level к допустимому диапазону движка.
+        with get_engine_pool(engine_path).acquire(options) as engine:
             infos = engine.analyse(
                 board,
                 chess.engine.Limit(depth=depth, time=time_limit),
@@ -958,7 +1008,14 @@ class HistoricalBot:
         board.push(best_move)
 
         engine_backend = "stockfish" if used_stockfish else "fallback_minimax"
-        logger.info("Bot %s move %s via %s [%s] (engine=%s)", self.bot_id, san, self.engine_source_name, engine_backend, engine_path)
+        logger.info(
+            "Bot %s move %s via %s [%s] (engine=%s)",
+            self.bot_id,
+            san,
+            self.engine_source_name,
+            engine_backend,
+            engine_path,
+        )
         return {
             "uci": best_move.uci(),
             "san": san,
@@ -1878,96 +1935,5 @@ class StauntonBot(HistoricalBot):
 
 staunton_bot = StauntonBot()
 
-========================================================================================
-FILE: src/services/bots/zukertort.py
-========================================================================================
-# --- FILE: src/services/bots/zukertort.py ---
-
-import chess
-from src.services.bots.base import (
-    CENTER_SQUARES,
-    EXTENDED_CENTER,
-    HistoricalBot,
-    load_bot_opening_book,
-)
-
-ZUKERTORT_BLUNDER_GUARD_CP = 140.0
-
-DEFAULT_ZUKERTORT_BOOK: dict[str, list[tuple[str, int, str]]] = {
-    "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
-        ("e2e4", 72, "Открытая игра с последующим комбинационным штурмом."),
-        ("g1f3", 16, "Дебют Цукерторта (1. Nf3!) — гибкое развитие с сохранением выбора плана в центре!"),
-        ("d2d4", 12, "Закрытое начало с переходом в систему Цукерторта (d4, Nf3, e3, Bd3, b3)."),
-    ],
-    "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -": [
-        ("e7e5", 75, "Классический открытый бой 1...e5."),
-        ("c7c5", 15, "Сицилианская защита."),
-        ("e7e6", 10, "Французская защита."),
-    ],
-}
-
-ZUKERTORT_OPENING_BOOK = load_bot_opening_book("zukertort", DEFAULT_ZUKERTORT_BOOK)
-
-
-def evaluate_zukertort_style_bonus(board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-    piece = board_before.piece_at(move.from_square)
-    if not piece:
-        return 0.0, None
-
-    bonus = 0.0
-    note = None
-
-    if board_before.is_castling(move):
-        bonus += 40.0
-        note = "Рокировка! Завершаем развитие и готовим тактический прорыв."
-
-    if piece.piece_type in {chess.KNIGHT, chess.BISHOP} and board_before.fullmove_number <= 14:
-        back_rank = 0 if board_before.turn == chess.WHITE else 7
-        if chess.square_rank(move.from_square) == back_rank:
-            bonus += 28.0
-            note = "Гибкое развитие фигур по системе Цукерторта."
-        if move.to_square in EXTENDED_CENTER:
-            bonus += 18.0
-
-    if move.to_square in CENTER_SQUARES:
-        bonus += 22.0
-        if not note:
-            note = "Энергичный захват ключевых центральных полей!"
-
-    if board_before.gives_check(move):
-        bonus += 26.0
-        note = "Шах! Переходим к решительной комбинационной атаке в стиле Лондонского турнира 1883 года!"
-    elif board_before.is_capture(move):
-        bonus += 16.0
-
-    return bonus, note
-
-
-class ZukertortBot(HistoricalBot):
-    """Иоганн Цукерторт (~1840 UCI Эло, depth=6, skill=8)."""
-
-    bot_id = "zukertort"
-    engine_source_name = "zukertort_style_engine"
-    default_comment = "Тонкий стратегический манёвр с подготовкой комбинационного взрыва в стиле Цукерторта!"
-    blunder_guard_cp = ZUKERTORT_BLUNDER_GUARD_CP
-    jitter_range = 8.0
-    multipv = 8
-    opening_book = ZUKERTORT_OPENING_BOOK
-
-    def __init__(
-            self,
-            stockfish_path: str | None = None,
-            skill_level: int = 8,
-            uci_elo: int = 1840,
-            search_depth: int = 6,
-    ):
-        super().__init__(stockfish_path, skill_level, uci_elo, search_depth)
-
-    def evaluate_style_bonus(self, board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-        return evaluate_zukertort_style_bonus(board_before, move)
-
-
-zukertort_bot = ZukertortBot()
-
 ----------------------------------------------------------------------------------------
-END OF PART 3/11
+END OF PART 3/14

@@ -1,2031 +1,1477 @@
-PROJECT SNAPSHOT — PART 7/11
+PROJECT SNAPSHOT — PART 7/14
 Project: michess
-Files in this part (1): frontend/src/components/Chessboard.tsx (chunk 1)
+Files in this part (12): scripts/build_opening_books.py, scripts/chessgames_downloader.py, scripts/download_champions.py, scripts/setup_piece_sets.py, scripts/setup_stockfish.py, frontend/.gitignore, frontend/.oxlintrc.json, frontend/index.html, frontend/postcss.config.js, frontend/README.md, frontend/src/App.tsx, frontend/src/components/AuthModal.tsx
 ----------------------------------------------------------------------------------------
 
 ========================================================================================
-FILE: frontend/src/components/Chessboard.tsx
+FILE: scripts/build_opening_books.py
 ========================================================================================
-// --- FILE: frontend/src/components/Chessboard.tsx ---
+# --- FILE: scripts/build_opening_books.py ---
 
-import {useState, useEffect, useRef, useCallback} from 'react';
-import {useNavigate, useParams} from 'react-router-dom';
-import {Chess} from 'chess.js';
-import {
-    ChevronFirst,
-    ChevronLeft,
-    ChevronRight,
-    ChevronLast,
-    Users,
-    Sword,
-    Flag,
-    Handshake,
-    Loader2,
-    Play,
-    RotateCcw,
-    Clock,
-    ChevronDown,
-    ChevronUp,
-    Palette,
-    RefreshCw,
-    ListOrdered,
-    Undo2,
-    Bot,
-    MessageSquareQuote,
-    Download,
-    Eye,
-    Sliders,
-    Zap,
-    X,
-    Link2,
-    Copy,
-    Check,
-    Send,
-    MessageSquare,
-    Radio
-} from 'lucide-react';
-import {gameSocket} from '../services/gameSocket';
-import {API_BASE_URL} from '../config/api';
-import {
-    BOARD_THEMES,
-    PIECE_SETS,
-    getSavedBoardThemeKey,
-    getSavedPieceSetKey,
-    getPieceSvgUrl,
-    getHarmoniousPieceStyle
-} from '../config/boardAppearance';
-import type {BoardTheme} from '../config/boardAppearance';
-import {HISTORICAL_BOTS, HISTORICAL_BOTS_LIST} from '../config/champions';
-import type {HistoricalBotId, HistoricalBotProfile} from '../config/champions';
+import json
+import shutil
+import sys
+from pathlib import Path
+import chess
+import chess.pgn
 
-const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
+# Жёсткая привязка к корню проекта (независимо от Working Directory в PyCharm)
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-export const MIN_BOARD_SIZE = 340;
-export const MAX_BOARD_SIZE = 860;
+BOOKS_DIR = PROJECT_ROOT / "src" / "services" / "bots" / "books"
+MAX_BOOK_PLY = 16
 
-export type PromotionPiece = 'q' | 'n' | 'r' | 'b';
-
-const PROMOTION_OPTIONS: Array<{ type: PromotionPiece; label: string }> = [
-    {type: 'q', label: 'Ферзь'},
-    {type: 'n', label: 'Конь'},
-    {type: 'r', label: 'Ладья'},
-    {type: 'b', label: 'Слон'}
-];
-
-export function getMaxViewportBoardSize(): number {
-    if (typeof window === 'undefined') return 560;
-    // 220px резервируется под шапку сайта (56px), отступы main (20px) и две плашки игроков с таймерами (144px)
-    const availableHeight = window.innerHeight - 220;
-    const availableWidth = window.innerWidth >= 1280
-        ? window.innerWidth - 850
-        : window.innerWidth - 28;
-    const limit = Math.min(availableHeight, availableWidth, MAX_BOARD_SIZE);
-    return Math.max(MIN_BOARD_SIZE, limit);
+BOT_BOOK_CONFIG = {
+    "philidor": {
+        "identifiers": ("philidor", "филидор"),
+        "surname_filter": "philidor",
+        "exclude": (),
+        "comment_tpl": "Исторический выбор Филидора (встречалось в партиях: {count} раз(а)).",
+    },
+    "labourdonnais": {
+        "identifiers": ("bourdonnais", "labourdonnais", "лабурдонне"),
+        "surname_filter": "bourdonnais",
+        "exclude": (),
+        "comment_tpl": "Любимый ход Лабурдонне в атаке (встречалось в партиях: {count} раз(а)).",
+    },
+    "staunton": {
+        "identifiers": ("staunton", "стаунтон"),
+        "surname_filter": "staunton",
+        "exclude": (),
+        "comment_tpl": "Классический выбор Стаунтона (встречалось в партиях: {count} раз(а)).",
+    },
+    "anderssen": {
+        "identifiers": ("anderssen", "андерсен"),
+        "surname_filter": "anderssen",
+        "exclude": (),
+        "comment_tpl": "Бриллиантовый гамбит Андерсена (встречалось в партиях: {count} раз(а)).",
+    },
+    "morphy": {
+        "identifiers": ("morphy", "морфи"),
+        "surname_filter": "morphy",
+        "exclude": ("alonzo", "ernest"),
+        "comment_tpl": "Исторический ход Пола Морфи (встречалось в партиях: {count} раз(а)).",
+    },
+    "paulsen": {
+        "identifiers": ("paulsen", "паульсен"),
+        "surname_filter": "paulsen",
+        "exclude": ("wilfried",),
+        "comment_tpl": "Глубокая новинка Паульсена (встречалось в партиях: {count} раз(а)).",
+    },
+    "zukertort": {
+        "identifiers": ("zukertort", "цукерторт"),
+        "surname_filter": "zukertort",
+        "exclude": (),
+        "comment_tpl": "Универсальный дебютный выбор Цукерторта (встречалось в партиях: {count} раз(а)).",
+    },
 }
 
-export function getDefaultBoardSize(): number {
-    if (typeof window !== 'undefined') {
-        return getMaxViewportBoardSize();
+
+def cleanup_misplaced_artifacts() -> None:
+    """
+    Удаляет ошибочно созданную папку scripts/src (возникшую из-за запуска с CWD=scripts/)
+    и переносит все *_generated_book.json из корня в src/services/bots/books/.
+    """
+    BOOKS_DIR.mkdir(parents=True, exist_ok=True)
+
+    accidental_scripts_src = PROJECT_ROOT / "scripts" / "src"
+    if accidental_scripts_src.exists():
+        for stray_json in accidental_scripts_src.rglob("*.json"):
+            target = BOOKS_DIR / stray_json.name
+            if not target.exists():
+                shutil.move(str(stray_json), str(target))
+        shutil.rmtree(accidental_scripts_src, ignore_errors=True)
+        print(f"[+] Очищена лишняя вложенная папка: {accidental_scripts_src}")
+
+    for bot_id in BOT_BOOK_CONFIG:
+        legacy_root_json = PROJECT_ROOT / f"{bot_id}_generated_book.json"
+        target_json = BOOKS_DIR / f"{bot_id}.json"
+        if legacy_root_json.exists():
+            if not target_json.exists() or legacy_root_json.stat().st_size > target_json.stat().st_size:
+                shutil.move(str(legacy_root_json), str(target_json))
+                print(f"[+] Перенесена книга из корня: {legacy_root_json.name} -> {target_json}")
+            else:
+                legacy_root_json.unlink()
+
+
+def matches_player(header_name: str, surname: str, exclude: tuple[str, ...]) -> bool:
+    name_lower = (header_name or "").lower()
+    if any(ex in name_lower for ex in exclude):
+        return False
+    return surname in name_lower
+
+
+def process_pgn_stream(pgn_stream, surname: str, exclude: tuple[str, ...], book_additions: dict) -> int:
+    games_processed = 0
+    while True:
+        try:
+            game = chess.pgn.read_game(pgn_stream)
+            if game is None:
+                break
+
+            is_w = matches_player(game.headers.get("White", ""), surname, exclude)
+            is_b = matches_player(game.headers.get("Black", ""), surname, exclude)
+            track_both = not (is_w or is_b)
+
+            board = game.board()
+            ply = 0
+            for move in game.mainline_moves():
+                if ply >= MAX_BOOK_PLY:
+                    break
+                uci = move.uci()
+                if uci == "0000" or not bool(move):
+                    break
+
+                white_turn = board.turn == chess.WHITE
+                if track_both or (white_turn and is_w) or (not white_turn and is_b):
+                    parts = board.fen().split(" ")
+                    fen_key = f"{parts[0]} {parts[1]} {parts[2]} -"
+                    book_additions.setdefault(fen_key, {})
+                    book_additions[fen_key][uci] = book_additions[fen_key].get(uci, 0) + 1
+
+                try:
+                    board.push(move)
+                except ValueError:
+                    break
+                ply += 1
+
+            games_processed += 1
+        except Exception:
+            continue
+    return games_processed
+
+
+def find_pgn_files_for_bot(identifiers: tuple[str, ...]) -> list[Path]:
+    """Ищет PGN-файлы чемпиона во всех возможных директориях проекта."""
+    search_dirs = [
+        PROJECT_ROOT / "data",
+        PROJECT_ROOT / "downloaded_pgns",
+        PROJECT_ROOT / "src" / "db" / "data",
+        PROJECT_ROOT,
+    ]
+    found: list[Path] = []
+    seen: set[Path] = set()
+
+    for directory in search_dirs:
+        if not directory.exists():
+            continue
+        iterator = directory.glob("*.pgn") if directory == PROJECT_ROOT else directory.rglob("*.pgn")
+        for pgn_path in iterator:
+            resolved = pgn_path.resolve()
+            if resolved in seen or not resolved.is_file():
+                continue
+            path_lower = str(resolved).lower()
+            if any(ident in path_lower for ident in identifiers):
+                seen.add(resolved)
+                found.append(resolved)
+
+    # Если есть как объединённый файл (*_all_*.pgn), так и мелкие файлы из папки —
+    # отдаём приоритет объединённому файлу, чтобы не считать одни и те же партии дважды
+    combined = [p for p in found if "all" in p.name.lower() or "все партии" in p.name.lower()]
+    if combined:
+        return [max(combined, key=lambda p: p.stat().st_size)]
+    return found
+
+
+def build_book_for_bot(bot_id: str) -> None:
+    cfg = BOT_BOOK_CONFIG[bot_id]
+    target_json = BOOKS_DIR / f"{bot_id}.json"
+
+    existing_book: dict = {}
+    if target_json.exists():
+        try:
+            with open(target_json, "r", encoding="utf-8") as f:
+                loaded = json.load(f)
+                if isinstance(loaded, dict):
+                    existing_book = loaded
+        except Exception:
+            existing_book = {}
+
+    matched_files = find_pgn_files_for_bot(cfg["identifiers"])
+    book_additions: dict[str, dict[str, int]] = {}
+    total_games = 0
+
+    for filepath in matched_files:
+        with open(filepath, "r", encoding="utf-8", errors="ignore") as f:
+            total_games += process_pgn_stream(f, cfg["surname_filter"], cfg["exclude"], book_additions)
+
+    if total_games > 0:
+        formatted_book: dict[str, list] = dict(existing_book)
+        for fen, moves_dict in book_additions.items():
+            sorted_moves = sorted(moves_dict.items(), key=lambda x: x[1], reverse=True)
+            total_count = sum(moves_dict.values())
+            formatted_book[fen] = [
+                [
+                    uci,
+                    max(int((count / total_count) * 100), 1),
+                    cfg["comment_tpl"].format(count=count),
+                ]
+                for uci, count in sorted_moves
+            ]
+
+        with open(target_json, "w", encoding="utf-8") as out_f:
+            json.dump(formatted_book, out_f, ensure_ascii=False, indent=2)
+        print(
+            f"[+] {bot_id:13s}: спарсено партий из PGN: {total_games:4d} | "
+            f"Позиций в книге: {len(formatted_book):4d} -> {target_json.relative_to(PROJECT_ROOT)}"
+        )
+        return
+
+    # Если сырых PGN-файлов нет, но JSON-книга уже перенесена и лежит в src/services/bots/books/
+    if existing_book:
+        print(
+            f"[+] {bot_id:13s}: книга активна и проверена | "
+            f"Позиций в книге: {len(existing_book):4d} -> {target_json.relative_to(PROJECT_ROOT)}"
+        )
+        return
+
+    # Если нет ни PGN, ни JSON-книги — инициализируем JSON-файл базовым репертуаром из модуля бота
+    try:
+        module = __import__(f"src.services.bots.{bot_id}", fromlist=["*"])
+        default_attr = f"DEFAULT_{bot_id.upper()}_BOOK"
+        fallback_data = getattr(module, default_attr, {})
+        if fallback_data:
+            serializable = {
+                fen: [[m[0], int(m[1]), str(m[2])] for m in moves]
+                for fen, moves in fallback_data.items()
+            }
+            with open(target_json, "w", encoding="utf-8") as out_f:
+                json.dump(serializable, out_f, ensure_ascii=False, indent=2)
+            print(
+                f"[~] {bot_id:13s}: создана базовая книга | "
+                f"Позиций в книге: {len(serializable):4d} -> {target_json.relative_to(PROJECT_ROOT)}"
+            )
+            return
+    except Exception as exc:
+        print(f"[!] Ошибка инициализации базовой книги для {bot_id}: {exc}")
+
+
+def main() -> None:
+    print(f"=== Сборка и проверка дебютных книг (Корень: {PROJECT_ROOT}) ===")
+    cleanup_misplaced_artifacts()
+    for b_id in BOT_BOOK_CONFIG:
+        build_book_for_bot(b_id)
+    print("=== Все дебютные книги готовы! ===")
+
+
+if __name__ == "__main__":
+    main()
+
+========================================================================================
+FILE: scripts/chessgames_downloader.py
+========================================================================================
+# --- FILE: scripts/chessgames_downloader.py ---
+
+import argparse
+import asyncio
+import re
+import sys
+from pathlib import Path
+import httpx
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from scripts.build_opening_books import build_book_for_bot  # noqa: E402
+
+BASE_URL = "https://www.chessgames.com"
+DATA_PGNS_DIR = PROJECT_ROOT / "data" / "pgns"
+
+PLAYERS_CONFIG = {
+    "staunton": {"pid": 19077, "pages": 25, "name": "Howard Staunton"},
+    "anderssen": {"pid": 10342, "pages": 34, "name": "Adolf Anderssen"},
+    "morphy": {"pid": 16002, "pages": 19, "name": "Paul Morphy"},
+    "paulsen": {"pid": 10343, "pages": 22, "name": "Louis Paulsen"},
+    "zukertort": {"pid": 10427, "pages": 25, "name": "Johannes Zukertort"},
+}
+
+TABLE_GAME_REGEX = re.compile(
+    r'\d+\.(?:&nbsp;|\xa0|\s)*<a[^>]*href="/perl/chessgame\?gid=(\d+)"',
+    re.IGNORECASE,
+)
+PAGINATION_INFO_REGEX = re.compile(
+    r"page\s+\d+\s+of\s+(\d+)\s*;\s*games\s+\d+-\d+\s+of\s+(\d+)",
+    re.IGNORECASE,
+)
+
+
+async def fetch_gids_from_page(
+        client: httpx.AsyncClient, pid: int, page: int
+) -> tuple[list[str], int | None, int | None]:
+    url = (
+        f"{BASE_URL}/perl/chessplayer?pid={pid}"
+        if page == 1
+        else f"{BASE_URL}/perl/chess.pl?page={page}&pid={pid}"
+    )
+
+    for attempt in range(1, 7):
+        try:
+            response = await client.get(url)
+            if response.status_code in (429, 403, 503):
+                wait_sec = 10 * attempt
+                print(f"[!] Лимит ({response.status_code}) на стр. {page}, пауза {wait_sec} сек...")
+                await asyncio.sleep(wait_sec)
+                continue
+
+            response.raise_for_status()
+            gids = list(dict.fromkeys(TABLE_GAME_REGEX.findall(response.text)))
+
+            detected_pages, detected_total = None, None
+            match = PAGINATION_INFO_REGEX.search(response.text)
+            if match:
+                detected_pages, detected_total = int(match.group(1)), int(match.group(2))
+
+            if not gids:
+                wait_sec = 8 * attempt
+                print(f"[!] Стр. {page} вернула 0 партий (попытка {attempt}/6), пауза {wait_sec} сек...")
+                await asyncio.sleep(wait_sec)
+                continue
+
+            return gids, detected_pages, detected_total
+        except httpx.HTTPError as exc:
+            wait_sec = 4 * attempt
+            print(f"[!] Ошибка сети на стр. {page} (попытка {attempt}): {exc}")
+            await asyncio.sleep(wait_sec)
+
+    return [], None, None
+
+
+async def download_pgn(
+        client: httpx.AsyncClient,
+        player_key: str,
+        player_dir: Path,
+        gid: str,
+        semaphore: asyncio.Semaphore,
+        index: int,
+        total: int,
+) -> tuple[int, str, str]:
+    file_path = player_dir / f"{index:03d}_{player_key}_{gid}.pgn"
+    if file_path.exists():
+        cached = file_path.read_text(encoding="utf-8", errors="ignore").strip()
+        if "[Event " in cached:
+            return index, gid, cached
+
+    url = f"{BASE_URL}/njs/api/game/downloadPGN/{gid}"
+    async with semaphore:
+        for attempt in range(1, 7):
+            try:
+                resp = await client.get(url)
+                text = resp.text.strip()
+                if resp.status_code == 200 and "[Event " in text:
+                    file_path.write_text(text + "\n", encoding="utf-8")
+                    if index % 25 == 0 or index == total:
+                        print(f"[{index:03d}/{total}] Скачано (gid={gid})...")
+                    await asyncio.sleep(0.35)
+                    return index, gid, text
+                await asyncio.sleep(15 * attempt)
+            except httpx.RequestError:
+                await asyncio.sleep(3 * attempt)
+
+    return index, gid, ""
+
+
+async def download_player_games(player_key: str) -> None:
+    cfg = PLAYERS_CONFIG[player_key]
+    pid = cfg["pid"]
+    total_pages = cfg["pages"]
+    player_dir = DATA_PGNS_DIR / f"{player_key}_pgns"
+    player_dir.mkdir(parents=True, exist_ok=True)
+    combined_file = DATA_PGNS_DIR / f"{player_key}_all_games.pgn"
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0.0.0 Safari/537.36",
+        "Referer": f"{BASE_URL}/perl/chessplayer?pid={pid}",
     }
-    return 540;
+    semaphore = asyncio.Semaphore(3)
+
+    async with httpx.AsyncClient(headers=headers, timeout=25.0, follow_redirects=True) as client:
+        print(f"=== Скачивание базы: {cfg['name']} (pid={pid}) ===")
+        all_gids: list[str] = []
+        page = 1
+        while page <= total_pages:
+            gids, det_pages, det_total = await fetch_gids_from_page(client, pid, page)
+            if det_pages:
+                total_pages = det_pages
+            for gid in gids:
+                if gid not in all_gids:
+                    all_gids.append(gid)
+            total_info = f"/{det_total}" if det_total else ""
+            print(
+                f"[Страница {page:02d}/{total_pages:02d}] Найдено: {len(gids)} | Всего ID: {len(all_gids)}{total_info}")
+            page += 1
+            await asyncio.sleep(0.35)
+
+        if not all_gids:
+            print(f"[-] Партии для {player_key} не найдены.")
+            return
+
+        tasks = [
+            download_pgn(client, player_key, player_dir, gid, semaphore, idx, len(all_gids))
+            for idx, gid in enumerate(all_gids, start=1)
+        ]
+        results = await asyncio.gather(*tasks)
+        results.sort(key=lambda x: x[0])
+        valid_pgns = [pgn for _, _, pgn in results if pgn]
+
+        combined_file.write_text("\n\n".join(valid_pgns) + "\n", encoding="utf-8")
+        print(f"[+] Сохранено {len(valid_pgns)} партий в {combined_file}")
+
+    build_book_for_bot(player_key)
+
+
+async def main() -> None:
+    parser = argparse.ArgumentParser(description="Единый загрузчик PGN исторических чемпионов с Chessgames.")
+    parser.add_argument(
+        "player",
+        nargs="?",
+        default="zukertort",
+        choices=list(PLAYERS_CONFIG.keys()),
+        help="Ключ шахматиста (по умолчанию: zukertort)",
+    )
+    parser.add_argument("--all", action="store_true", help="Скачать партии всех шахматистов")
+    args = parser.parse_args()
+
+    if args.all:
+        for key in PLAYERS_CONFIG:
+            await download_player_games(key)
+    else:
+        await download_player_games(args.player)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
+
+========================================================================================
+FILE: scripts/download_champions.py
+========================================================================================
+# --- FILE: scripts/download_champions.py ---
+
+import os
+import shutil
+import subprocess
+import time
+from pathlib import Path
+import requests
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PUBLIC_CHAMPIONS_DIR = PROJECT_ROOT / "frontend" / "public" / "assets" / "champions"
+SRC_CHAMPIONS_DIR = PROJECT_ROOT / "frontend" / "src" / "assets" / "champions"
+
+PUBLIC_CHAMPIONS_DIR.mkdir(parents=True, exist_ok=True)
+SRC_CHAMPIONS_DIR.mkdir(parents=True, exist_ok=True)
+
+champions = {
+    "Steinitz": "Стейниц, Вильгельм",
+    "Lasker": "Ласкер, Эмануил",
+    "Rubinstein": "Рубинштейн, Акиба Кивелевич",
+    "Capablanca": "Капабланка, Хосе Рауль",
+    "Alekhine": "Алехин, Александр Александрович",
+    "Euwe": "Эйве, Макс",
+    "Keres": "Керес, Пауль Петрович",
+    "Botvinnik": "Ботвинник, Михаил Моисеевич",
+    "Geller": "Геллер, Ефим Петрович",
+    "Korchnoi": "Корчной, Виктор Львович",
+    "Smyslov": "Смыслов, Василий Васильевич",
+    "Tal": "Таль, Михаил Нехемьевич",
+    "Petrosian": "Петросян, Тигран Вартанович",
+    "Spassky": "Спасский, Борис Васильевич",
+    "Fischer": "Фишер, Роберт Джеймс",
+    "Karpov": "Анатолий Карпов",
+    "Kasparov": "Каспаров, Гарри Кимович",
+    "Kramnik": "Крамник, Владимир Борисович",
+    "Anand": "Ананд, Вишванатан",
+    "Carlsen": "Карлсен, Магнус",
+    "Ding": "Дин Лижэнь",
 }
 
-interface LiveGameItem {
-    game_id: number;
-    white_username: string;
-    white_rating: number;
-    black_username: string;
-    black_rating: number;
-    base_time_ms: number;
-    increment_ms: number;
-    spectators_count: number;
+
+def sync_historical_portraits() -> None:
+    """Синхронизирует портреты между frontend/src/assets/champions и frontend/public/assets/champions."""
+    copied = 0
+    for src_img in SRC_CHAMPIONS_DIR.glob("*.*"):
+        if src_img.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
+            dst = PUBLIC_CHAMPIONS_DIR / src_img.name
+            if not dst.exists() or src_img.stat().st_size != dst.stat().st_size:
+                shutil.copy2(src_img, dst)
+                copied += 1
+
+    for pub_img in PUBLIC_CHAMPIONS_DIR.glob("*.*"):
+        if pub_img.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
+            dst = SRC_CHAMPIONS_DIR / pub_img.name
+            if not dst.exists():
+                shutil.copy2(pub_img, dst)
+                copied += 1
+
+    print(f"[+] Синхронизировано портретов между src/assets и public/assets: {copied}")
+
+
+def main() -> None:
+    sync_historical_portraits()
+
+    api_url = "https://ru.wikipedia.org/w/api.php"
+    headers = {"User-Agent": "MiChess/1.0 (chess application; python-requests)"}
+    session = requests.Session()
+    session.headers.update(headers)
+
+    print("Проверка и докачка портретов чемпионов...\n")
+
+    for champ_id, wiki_title in champions.items():
+        save_path = PUBLIC_CHAMPIONS_DIR / f"{champ_id}.jpg"
+        if save_path.exists() and save_path.stat().st_size > 0:
+            print(f"[~] {champ_id}.jpg уже существует, пропускаем.")
+            continue
+
+        params = {
+            "action": "query",
+            "titles": wiki_title,
+            "prop": "pageimages",
+            "piprop": "thumbnail",
+            "pithumbsize": "500",
+            "format": "json",
+            "formatversion": "2",
+        }
+
+        for attempt in range(3):
+            try:
+                response = session.get(api_url, params=params, timeout=15)
+                if response.status_code == 429:
+                    time.sleep(15)
+                    continue
+                if response.status_code != 200:
+                    break
+
+                pages = response.json().get("query", {}).get("pages", [])
+                if not pages or not pages[0].get("thumbnail"):
+                    break
+
+                img_url = pages[0]["thumbnail"]["source"].split("?")[0]
+                cmd = [
+                    "curl", "-sS", "-L",
+                    "-A", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0.0.0 Safari/537.36",
+                    "-e", "https://ru.wikipedia.org/",
+                    "--fail", img_url, "-o", str(save_path),
+                ]
+                result = subprocess.run(cmd, capture_output=True)
+                if result.returncode == 0 and save_path.exists() and save_path.stat().st_size > 0:
+                    print(f"[+] {champ_id}.jpg успешно скачан!")
+                    break
+            except Exception as exc:
+                print(f"[-] Ошибка для {champ_id}: {exc}")
+                break
+        time.sleep(2)
+
+    sync_historical_portraits()
+    print("\nГотово! Все портреты синхронизированы.")
+
+
+if __name__ == "__main__":
+    main()
+
+========================================================================================
+FILE: scripts/setup_piece_sets.py
+========================================================================================
+# --- FILE: scripts/setup_piece_sets.py ---
+
+import shutil
+import urllib.request
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PIECES_ROOT = PROJECT_ROOT / "frontend" / "public" / "assets" / "pieces"
+
+PIECE_CODES = ["wP", "wN", "wB", "wR", "wQ", "wK", "bP", "bN", "bB", "bR", "bQ", "bK"]
+
+REMOTE_SETS = {
+    "merida": "https://raw.githubusercontent.com/lichess-org/lila/master/public/piece/merida/{code}.svg",
+    "alpha": "https://raw.githubusercontent.com/lichess-org/lila/master/public/piece/alpha/{code}.svg",
+    "cburnett": "https://raw.githubusercontent.com/lichess-org/lila/master/public/piece/cburnett/{code}.svg",
+    "maestro": "https://raw.githubusercontent.com/lichess-org/lila/master/public/piece/maestro/{code}.svg",
 }
 
-interface ChatMessageItem {
-    sender: string;
-    text: string;
-    timestamp: number;
+
+def make_cardinal_outlined_svg(base_svg: str, code: str) -> str:
+    is_black = code.startswith("b")
+    halo_color = "#FFFFFF" if is_black else "#111827"
+    filter_id = f"cardinal_halo_{code}"
+
+    halo_def = (
+        f'<defs><filter id="{filter_id}" x="-12%" y="-12%" width="124%" height="124%">'
+        f'<feMorphology in="SourceAlpha" operator="dilate" radius="1.15" result="dilated"/>'
+        f'<feFlood flood-color="{halo_color}" flood-opacity="0.98" result="flood"/>'
+        f'<feComposite in="flood" in2="dilated" operator="in" result="outline"/>'
+        f'<feMerge><feMergeNode in="outline"/><feMergeNode in="SourceGraphic"/></feMerge>'
+        f'</filter></defs>'
+    )
+
+    idx = base_svg.find(">")
+    if idx == -1 or "</svg>" not in base_svg:
+        return base_svg
+
+    header = base_svg[: idx + 1]
+    body = base_svg[idx + 1:].replace("</svg>", "")
+    return f'{header}{halo_def}<g filter="url(#{filter_id})">{body}</g></svg>\n'
+
+
+def backup_existing_classic_pieces() -> None:
+    classic_dir = PIECES_ROOT / "classic"
+    classic_dir.mkdir(parents=True, exist_ok=True)
+    for code in PIECE_CODES:
+        root_svg = PIECES_ROOT / f"{code}.svg"
+        target_svg = classic_dir / f"{code}.svg"
+        if root_svg.exists() and not target_svg.exists():
+            shutil.copy2(root_svg, target_svg)
+
+
+def download_svg(url: str) -> str | None:
+    req = urllib.request.Request(
+        url,
+        headers={"User-Agent": "Michess-PieceSetup/1.0"},
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            if resp.status == 200:
+                text = resp.read().decode("utf-8", errors="ignore")
+                if "<svg" in text:
+                    return text
+    except Exception as exc:
+        print(f"[!] Предупреждение при загрузке {url}: {exc}")
+    return None
+
+
+def setup_all_piece_sets() -> None:
+    PIECES_ROOT.mkdir(parents=True, exist_ok=True)
+    backup_existing_classic_pieces()
+    classic_dir = PIECES_ROOT / "classic"
+
+    for set_name, url_tpl in REMOTE_SETS.items():
+        set_dir = PIECES_ROOT / set_name
+        set_dir.mkdir(parents=True, exist_ok=True)
+        downloaded_count = 0
+
+        for code in PIECE_CODES:
+            target_file = set_dir / f"{code}.svg"
+            if target_file.exists() and target_file.stat().st_size > 200:
+                downloaded_count += 1
+                continue
+
+            svg_content = download_svg(url_tpl.format(code=code))
+            if svg_content:
+                target_file.write_text(svg_content, encoding="utf-8")
+                downloaded_count += 1
+            elif (classic_dir / f"{code}.svg").exists():
+                shutil.copy2(classic_dir / f"{code}.svg", target_file)
+
+        print(f"[+] Набор '{set_name:8s}' готов ({downloaded_count}/12 фигур) -> {set_dir.relative_to(PROJECT_ROOT)}")
+
+    cardinal_dir = PIECES_ROOT / "cardinal"
+    cardinal_dir.mkdir(parents=True, exist_ok=True)
+    merida_dir = PIECES_ROOT / "merida"
+
+    for code in PIECE_CODES:
+        src_file = merida_dir / f"{code}.svg"
+        if not src_file.exists():
+            src_file = classic_dir / f"{code}.svg"
+        if src_file.exists():
+            raw_svg = src_file.read_text(encoding="utf-8")
+            outlined_svg = make_cardinal_outlined_svg(raw_svg, code)
+            (cardinal_dir / f"{code}.svg").write_text(outlined_svg, encoding="utf-8")
+
+    print(f"[+] Набор 'cardinal' готов (12/12 фигур) -> {cardinal_dir.relative_to(PROJECT_ROOT)}")
+
+    for code in PIECE_CODES:
+        merida_svg = merida_dir / f"{code}.svg"
+        if merida_svg.exists():
+            shutil.copy2(merida_svg, PIECES_ROOT / f"{code}.svg")
+
+    print("[+] Все 5 комплектов шахматных фигур (60 SVG-файлов) успешно установлены!")
+
+
+if __name__ == "__main__":
+    setup_all_piece_sets()
+
+========================================================================================
+FILE: scripts/setup_stockfish.py
+========================================================================================
+# --- FILE: setup_stockfish.py ---
+
+import io
+import os
+import platform
+import shutil
+import stat
+import tarfile
+import zipfile
+import requests
+import chess.engine
+
+GITHUB_RELEASE_API = "https://api.github.com/repos/official-stockfish/Stockfish/releases/latest"
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+BIN_DIR = os.path.join(PROJECT_ROOT, "bin")
+
+
+def get_target_asset_url(assets: list[dict]) -> tuple[str, str]:
+    """Подбирает оптимальный бинарник Stockfish под текущую ОС (включая universal-сборки SF 19+)."""
+    sys_name = platform.system().lower()
+
+    if sys_name == "windows":
+        preferred = [
+            "windows-x86-64-universal.zip",
+            "windows-x86-64-avx2.zip",
+            "windows-x86-64-sse41-popcnt.zip",
+            "windows-x86-64.zip",
+        ]
+    elif sys_name == "linux":
+        preferred = [
+            "linux-x86-64-universal.tar.gz",
+            "linux-x86-64-universal.tar",
+            "ubuntu-x86-64-avx2.tar",
+            "ubuntu-x86-64-sse41-popcnt.tar",
+            "ubuntu-x86-64.tar",
+        ]
+    else:
+        preferred = [
+            "macos-universal.tar.gz",
+            "macos-m1-apple-silicon.tar",
+            "macos-x86-64-avx2.tar",
+        ]
+
+    for suffix in preferred:
+        for asset in assets:
+            name = asset.get("name", "")
+            if suffix in name:
+                return name, asset["browser_download_url"]
+
+    # Fallback: любой x86-64 архив под нужную ОС
+    for asset in assets:
+        name = asset.get("name", "").lower()
+        if sys_name == "windows" and "windows" in name and "x86-64" in name and name.endswith(".zip"):
+            return asset["name"], asset["browser_download_url"]
+        if sys_name == "linux" and ("linux" in name or "ubuntu" in name) and "x86-64" in name:
+            return asset["name"], asset["browser_download_url"]
+
+    available = [a.get("name", "") for a in assets]
+    raise RuntimeError(f"Не найден подходящий архив Stockfish для ОС '{sys_name}'. Доступные: {available}")
+
+
+def download_and_install_stockfish() -> str:
+    os.makedirs(BIN_DIR, exist_ok=True)
+    is_windows = platform.system().lower() == "windows"
+    target_filename = "stockfish.exe" if is_windows else "stockfish"
+    target_path = os.path.join(BIN_DIR, target_filename)
+
+    if os.path.exists(target_path) and os.path.getsize(target_path) > 1_000_000:
+        print(f"[~] Бинарник Stockfish уже установлен: {target_path}")
+        return target_path
+
+    print("[1/3] Запрашиваем последний релиз Stockfish с GitHub...")
+    headers = {"User-Agent": "Michess-Setup/1.0"}
+    resp = requests.get(GITHUB_RELEASE_API, headers=headers, timeout=20)
+    resp.raise_for_status()
+    release_data = resp.json()
+    tag_name = release_data.get("tag_name", "latest")
+
+    asset_name, download_url = get_target_asset_url(release_data.get("assets", []))
+    print(f"[2/3] Скачиваем {asset_name} (версия {tag_name})...")
+
+    archive_resp = requests.get(download_url, headers=headers, stream=True, timeout=180)
+    archive_resp.raise_for_status()
+    archive_bytes = io.BytesIO(archive_resp.content)
+
+    print(f"[3/3] Распаковываем движок в {target_path}...")
+    extracted = False
+
+    if asset_name.endswith(".zip"):
+        with zipfile.ZipFile(archive_bytes) as zf:
+            # Берём самый крупный .exe файл со словом stockfish (илиavx2/universal), игнорируя мелкие обёртки
+            exe_members = [
+                m for m in zf.infolist()
+                if not m.is_dir() and m.filename.lower().endswith(".exe") and "stockfish" in m.filename.lower()
+            ]
+            exe_members.sort(key=lambda m: m.file_size, reverse=True)
+            if exe_members:
+                best_member = exe_members[0]
+                with zf.open(best_member) as src, open(target_path, "wb") as dst:
+                    shutil.copyfileobj(src, dst)
+                extracted = True
+    elif asset_name.endswith((".tar", ".tar.gz", ".tgz")):
+        with tarfile.open(fileobj=archive_bytes, mode="r:*") as tf:
+            bin_members = [
+                m for m in tf.getmembers()
+                if m.isfile()
+                   and "stockfish" in os.path.basename(m.name).lower()
+                   and not m.name.lower().endswith((".txt", ".md", ".1", ".cpp", ".h", ".sh"))
+            ]
+            bin_members.sort(key=lambda m: m.size, reverse=True)
+            if bin_members:
+                src = tf.extractfile(bin_members[0])
+                if src:
+                    with src, open(target_path, "wb") as dst:
+                        shutil.copyfileobj(src, dst)
+                    os.chmod(target_path, os.stat(target_path).st_mode | stat.S_IEXEC)
+                    extracted = True
+
+    if not extracted:
+        raise RuntimeError("Не удалось найти исполняемый файл Stockfish внутри архива.")
+
+    with chess.engine.SimpleEngine.popen_uci(target_path) as engine:
+        engine_name = engine.id.get("name", "Stockfish")
+        print(f"[+] Успешно! Движок готов к работе: {engine_name} -> {target_path}")
+
+    return target_path
+
+
+if __name__ == "__main__":
+    download_and_install_stockfish()
+
+========================================================================================
+FILE: frontend/.gitignore
+========================================================================================
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+node_modules
+dist
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+project_snapshot.txt
+
+========================================================================================
+FILE: frontend/.oxlintrc.json
+========================================================================================
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "oxc"],
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/only-export-components": ["warn", { "allowConstantExport": true }]
+  }
 }
 
-const QUICK_CHAT_PRESETS = [
-    '👋 Удачи!',
-    '🤝 Спасибо за игру!',
-    '👏 Красивый ход!',
-    '⏱ Цейтнот!'
-];
+========================================================================================
+FILE: frontend/index.html
+========================================================================================
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Эта строка запрещает браузеру передавать Referer и обходит блокировку Википедии -->
+    <meta name="referrer" content="no-referrer" />
+    <title>michess</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
 
-interface QueuePlayer {
-    user_id: number;
+========================================================================================
+FILE: frontend/postcss.config.js
+========================================================================================
+// --- FILE: frontend/postcss.config.js ---
+
+export default {
+    plugins: {},
+}
+
+========================================================================================
+FILE: frontend/README.md
+========================================================================================
+# React + TypeScript + Vite
+
+This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+
+Currently, two official plugins are available:
+
+- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
+- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+
+## React Compiler
+
+The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+
+## Expanding the Oxlint configuration
+
+If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+
+```json
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["react", "typescript", "oxc"],
+  "options": {
+    "typeAware": true
+  },
+  "rules": {
+    "react/rules-of-hooks": "error",
+    "react/only-export-components": ["warn", { "allowConstantExport": true }]
+  }
+}
+```
+
+See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+
+========================================================================================
+FILE: frontend/src/App.tsx
+========================================================================================
+// --- FILE: frontend/src/App.tsx ---
+
+import {useState, useRef, useEffect} from 'react';
+import {Routes, Route, useNavigate, Link, useLocation} from 'react-router-dom';
+import Chessboard from './components/Chessboard';
+import AuthModal from './components/AuthModal';
+import Profile from './components/Profile';
+import GameViewer from './components/GameViewer';
+import ChampionGames from './components/ChampionGames';
+import Leaderboard from './components/Leaderboard';
+import {CHAMPIONS_LIST} from './config/champions';
+import {API_BASE_URL} from './config/api';
+import {gameSocket} from './services/gameSocket';
+
+import {
+    Search,
+    Bell,
+    Swords,
+    BookOpen,
+    Eye,
+    Cpu,
+    Wrench,
+    LogOut,
+    User,
+    Mail,
+    Settings,
+    LogIn,
+    Crown,
+    ChevronDown,
+    Trophy
+} from 'lucide-react';
+
+interface UserProfile {
+    id: number;
     username: string;
     rating: number;
-    base_time_ms: number;
-    increment_ms: number;
+    is_cheater: boolean;
 }
 
-export {BOARD_THEMES, HISTORICAL_BOTS};
-export type {BoardTheme, HistoricalBotId, HistoricalBotProfile};
+export default function App() {
+    const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
+    const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
-export type DgtTimingMode =
-    | 'time'
-    | 'fischer'
-    | 'delay'
-    | 'us_delay'
-    | 'byo_yomi'
-    | 'canadian_byo'
-    | 'scrabble'
-    | 'hourglass'
-    | 'gong'
-    | 'move_timer';
+    const [isProfileOpen, setIsProfileOpen] = useState(false);
+    const [isChampionsMenuOpen, setIsChampionsMenuOpen] = useState(false);
 
-export interface Dgt2500Option {
-    optionNumber: string;
-    mode: DgtTimingMode;
-    base: number;
-    blackBase?: number;
-    inc: number;
-    label: string;
-    details: string;
-    isManual?: boolean;
-    periods?: Array<{ moves?: number; extraMinutes: number; extraIncSeconds?: number }>;
-    incrementFromMove?: number;
-}
+    const [showAuthModal, setShowAuthModal] = useState(false);
+    const [serverPing, setServerPing] = useState<number | null>(null);
 
-export interface Dgt2500Group {
-    group: string;
-    options: Dgt2500Option[];
-}
-
-export const TIME_CONTROLS: Dgt2500Group[] = [
-    {
-        group: '01–08 • Time (Контроль времени и Гильотина)',
-        options: [
-            {
-                optionNumber: '01',
-                mode: 'time',
-                base: 5,
-                inc: 0,
-                label: '5 мин',
-                details: 'Блиц 5 минут до конца партии'
-            },
-            {
-                optionNumber: '02',
-                mode: 'time',
-                base: 25,
-                inc: 0,
-                label: '25 мин',
-                details: 'Рапид 25 минут до конца партии'
-            },
-            {
-                optionNumber: '03',
-                mode: 'time',
-                base: 60,
-                inc: 0,
-                label: '60 мин (1 час)',
-                details: 'Классика 60 минут до конца партии'
-            },
-            {
-                optionNumber: '04',
-                mode: 'time',
-                base: 120,
-                inc: 0,
-                label: '120 мин/40 + 30 мин',
-                details: '2 часа на 40 ходов + 30 мин до конца',
-                periods: [{moves: 40, extraMinutes: 30}]
-            },
-            {
-                optionNumber: '05',
-                mode: 'time',
-                base: 120,
-                inc: 0,
-                label: '120 мин/40 + 60 мин',
-                details: '2 часа на 40 ходов + 60 мин до конца',
-                periods: [{moves: 40, extraMinutes: 60}]
-            },
-            {
-                optionNumber: '06',
-                mode: 'time',
-                base: 120,
-                inc: 0,
-                label: '120м/40 + 60м/20 + 30м',
-                details: '2ч/40 ходов + 1ч/20 ходов + 30 мин до конца',
-                periods: [{moves: 40, extraMinutes: 60}, {moves: 60, extraMinutes: 30}]
-            },
-            {
-                optionNumber: '07',
-                mode: 'time',
-                base: 5,
-                blackBase: 4,
-                inc: 0,
-                label: '5 мин vs 4 мин (Armageddon)',
-                details: 'Армагеддон без добавления: 5 мин Белые / 4 мин Черные'
-            },
-            {
-                optionNumber: '08',
-                mode: 'time',
-                base: 10,
-                inc: 0,
-                isManual: true,
-                label: 'Ручная настройка (Time)',
-                details: 'Произвольное стартовое время без добавления'
-            }
-        ]
-    },
-    {
-        group: '09–21 • Fischer Bonus (Фишер с добавлением)',
-        options: [
-            {
-                optionNumber: '09',
-                mode: 'fischer',
-                base: 3,
-                inc: 2,
-                label: '3 мин + 2 сек/ход',
-                details: 'Стандартный блиц FIDE (3+2)'
-            },
-            {
-                optionNumber: '10',
-                mode: 'fischer',
-                base: 5,
-                inc: 3,
-                label: '5 мин + 3 сек/ход',
-                details: 'Блиц с добавлением Фишера (5+3)'
-            },
-            {
-                optionNumber: '11',
-                mode: 'fischer',
-                base: 10,
-                inc: 10,
-                label: '10 мин + 10 сек/ход',
-                details: 'Быстрые шахматы (10+10)'
-            },
-            {
-                optionNumber: '12',
-                mode: 'fischer',
-                base: 15,
-                inc: 5,
-                label: '15 мин + 5 сек/ход',
-                details: 'Рапид с добавлением (15+5)'
-            },
-            {
-                optionNumber: '13',
-                mode: 'fischer',
-                base: 15,
-                inc: 10,
-                label: '15 мин + 10 сек/ход',
-                details: 'Стандартный рапид FIDE (15+10)'
-            },
-            {
-                optionNumber: '14',
-                mode: 'fischer',
-                base: 25,
-                inc: 10,
-                label: '25 мин + 10 сек/ход',
-                details: 'Удлинённый рапид (25+10)'
-            },
-            {
-                optionNumber: '15',
-                mode: 'fischer',
-                base: 90,
-                inc: 30,
-                label: '90 мин + 30 сек/ход',
-                details: 'Стандартная классика (90+30 с 1-го хода)'
-            },
-            {
-                optionNumber: '16',
-                mode: 'fischer',
-                base: 90,
-                inc: 30,
-                label: '90м/40 + 30м + 30с/ход',
-                details: 'Турнирный FIDE: 90 мин/40 ходов + 30 мин до конца (+30с с 1-го хода)',
-                periods: [{moves: 40, extraMinutes: 30}]
-            },
-            {
-                optionNumber: '17',
-                mode: 'fischer',
-                base: 100,
-                inc: 30,
-                label: '100м/40 + 50м + 30с/ход',
-                details: '100 мин/40 ходов + 50 мин до конца (+30с с 1-го хода)',
-                periods: [{moves: 40, extraMinutes: 50}]
-            },
-            {
-                optionNumber: '18',
-                mode: 'fischer',
-                base: 100,
-                inc: 30,
-                label: '100м/40 + 50м/20 + 15м + 30с',
-                details: '100м/40 + 50м/20 + 15м до конца (+30с с 1-го хода)',
-                periods: [{moves: 40, extraMinutes: 50}, {moves: 60, extraMinutes: 15}]
-            },
-            {
-                optionNumber: '19',
-                mode: 'fischer',
-                base: 120,
-                inc: 0,
-                label: '120м/40 + 60м/20 + 15м (+30с с 61 х.)',
-                details: 'Классика с добавлением 30 сек/ход начиная с 61-го хода (#)',
-                periods: [{moves: 40, extraMinutes: 60}, {moves: 60, extraMinutes: 15, extraIncSeconds: 30}],
-                incrementFromMove: 61
-            },
-            {
-                optionNumber: '20',
-                mode: 'fischer',
-                base: 5,
-                blackBase: 4,
-                inc: 0,
-                label: '5м vs 4м (+2с с 61 х., Armageddon)',
-                details: 'Армагеддон FIDE: 5 мин vs 4 мин + 2 сек/ход с 61-го хода (#)',
-                periods: [{moves: 60, extraMinutes: 0, extraIncSeconds: 2}],
-                incrementFromMove: 61
-            },
-            {
-                optionNumber: '21',
-                mode: 'fischer',
-                base: 3,
-                inc: 2,
-                isManual: true,
-                label: 'Ручная настройка (Fischer)',
-                details: 'Произвольное время и бонус Фишера за каждый ход'
-            }
-        ]
-    },
-    {
-        group: '22–25 • Delay (Задержка Бронштейна и US Delay)',
-        options: [
-            {
-                optionNumber: '22',
-                mode: 'delay',
-                base: 90,
-                inc: 5,
-                label: '90 мин + 5 сек Delay (Bronstein)',
-                details: 'Задержка Бронштейна 5 сек на каждый ход'
-            },
-            {
-                optionNumber: '23',
-                mode: 'delay',
-                base: 5,
-                inc: 3,
-                isManual: true,
-                label: 'Ручная настройка (Bronstein Delay)',
-                details: 'Произвольное время с задержкой Бронштейна'
-            },
-            {
-                optionNumber: '24',
-                mode: 'us_delay',
-                base: 25,
-                inc: 5,
-                label: '25 мин + 5 сек US Delay',
-                details: 'Американская задержка (US Delay) 5 сек перед отсчётом'
-            },
-            {
-                optionNumber: '25',
-                mode: 'us_delay',
-                base: 5,
-                inc: 5,
-                isManual: true,
-                label: 'Ручная настройка (US Delay)',
-                details: 'Произвольное время с американской задержкой'
-            }
-        ]
-    },
-    {
-        group: '26–29 • Byo-Yomi (Японское и Канадское Бё-ёми)',
-        options: [
-            {
-                optionNumber: '26',
-                mode: 'byo_yomi',
-                base: 60,
-                inc: 20,
-                label: '60 мин + 3×20 сек Byo-Yomi',
-                details: 'Японское Бё-ёми: 60 мин + 3 периода по 20 сек'
-            },
-            {
-                optionNumber: '27',
-                mode: 'byo_yomi',
-                base: 30,
-                inc: 20,
-                isManual: true,
-                label: 'Ручная настройка (Byo-Yomi)',
-                details: 'Произвольная настройка японского Бё-ёми'
-            },
-            {
-                optionNumber: '28',
-                mode: 'canadian_byo',
-                base: 60,
-                inc: 0,
-                label: '60 мин + 5 мин Canadian Byo-Yomi',
-                details: 'Канадское Бё-ёми: 60 мин + 5 мин на серию ходов',
-                periods: [{extraMinutes: 5}]
-            },
-            {
-                optionNumber: '29',
-                mode: 'canadian_byo',
-                base: 30,
-                inc: 0,
-                isManual: true,
-                label: 'Ручная настройка (Canadian Byo-Yomi)',
-                details: 'Произвольная настройка канадского Бё-ёми'
-            }
-        ]
-    },
-    {
-        group: '30–36 • Специальные режимы (Scrabble, Hourglass, Gong, Move Timer)',
-        options: [
-            {
-                optionNumber: '30',
-                mode: 'scrabble',
-                base: 25,
-                inc: 0,
-                label: '25 мин + Upcount (Scrabble™)',
-                details: 'После достижения 0:00 таймер считает штрафное время вверх'
-            },
-            {
-                optionNumber: '31',
-                mode: 'scrabble',
-                base: 15,
-                inc: 0,
-                isManual: true,
-                label: 'Ручная настройка (Scrabble™)',
-                details: 'Произвольное время с отсчётом вверх после 0:00'
-            },
-            {
-                optionNumber: '32',
-                mode: 'hourglass',
-                base: 1,
-                inc: 0,
-                label: '1 мин (Hourglass / Песочные часы)',
-                details: 'Пока у одного игрока время убывает, у соперника оно прибавляется'
-            },
-            {
-                optionNumber: '33',
-                mode: 'hourglass',
-                base: 2,
-                inc: 0,
-                isManual: true,
-                label: 'Ручная настройка (Hourglass)',
-                details: 'Песочные часы с произвольным стартовым временем'
-            },
-            {
-                optionNumber: '34',
-                mode: 'gong',
-                base: 10 / 60,
-                inc: 0,
-                label: '10 сек на ход (Gong)',
-                details: 'Фиксированные 10 секунд на каждый ход со сбросом таймера'
-            },
-            {
-                optionNumber: '35',
-                mode: 'gong',
-                base: 15 / 60,
-                inc: 0,
-                isManual: true,
-                label: 'Ручная настройка (Gong)',
-                details: 'Произвольное фиксированное время на каждый ход (Гонг)'
-            },
-            {
-                optionNumber: '36',
-                mode: 'move_timer',
-                base: 30 / 60,
-                inc: 0,
-                isManual: true,
-                label: 'Ручная настройка (Move Timer)',
-                details: 'Таймер на ход со сбросом после каждого сделанного хода'
-            }
-        ]
-    }
-];
-
-const ALL_DGT_OPTIONS: Dgt2500Option[] = TIME_CONTROLS.flatMap(g => g.options);
-const DEFAULT_DGT_OPTION: Dgt2500Option = ALL_DGT_OPTIONS.find(o => o.optionNumber === '09') || ALL_DGT_OPTIONS[0];
-
-const PIECE_VALUES: Record<string, number> = {
-    p: 1,
-    n: 3,
-    b: 3,
-    r: 5,
-    q: 9,
-    k: 0
-};
-
-function calculateMaterialBalance(boardState: any[][]) {
-    const startCounts: Record<string, number> = {p: 8, n: 2, b: 2, r: 2, q: 1};
-    const currentWhite: Record<string, number> = {p: 0, n: 0, b: 0, r: 0, q: 0};
-    const currentBlack: Record<string, number> = {p: 0, n: 0, b: 0, r: 0, q: 0};
-
-    let whiteScore = 0;
-    let blackScore = 0;
-
-    for (const row of boardState) {
-        for (const cell of row) {
-            if (!cell) continue;
-            const val = PIECE_VALUES[cell.type] || 0;
-            if (cell.color === 'w') {
-                whiteScore += val;
-                if (currentWhite[cell.type] !== undefined) currentWhite[cell.type]++;
-            } else {
-                blackScore += val;
-                if (currentBlack[cell.type] !== undefined) currentBlack[cell.type]++;
-            }
-        }
-    }
-
-    const whiteCapturedSymbols: string[] = [];
-    const blackCapturedSymbols: string[] = [];
-    const order = ['q', 'r', 'b', 'n', 'p'];
-    const glyphs: Record<string, string> = {q: '♛', r: '♜', b: '♝', n: '♞', p: '♟'};
-
-    for (const t of order) {
-        const missingBlack = Math.max(0, startCounts[t] - currentBlack[t]);
-        for (let i = 0; i < missingBlack; i++) whiteCapturedSymbols.push(glyphs[t]);
-
-        const missingWhite = Math.max(0, startCounts[t] - currentWhite[t]);
-        for (let i = 0; i < missingWhite; i++) blackCapturedSymbols.push(glyphs[t]);
-    }
-
-    return {
-        whiteAdvantage: Math.max(0, whiteScore - blackScore),
-        blackAdvantage: Math.max(0, blackScore - whiteScore),
-        whiteCapturedSymbols,
-        blackCapturedSymbols
-    };
-}
-
-function cloneChessInstance(source: Chess): Chess {
-    const copy = new Chess();
-    const currentPgn = source.pgn();
-    if (currentPgn) {
-        copy.loadPgn(currentPgn);
-    } else {
-        copy.load(source.fen());
-    }
-    return copy;
-}
-
-export default function Chessboard() {
+    const dropdownRef = useRef<HTMLDivElement>(null);
+    const championsMenuRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
-    const {inviteCode} = useParams<{ inviteCode?: string }>();
+    const location = useLocation();
 
-    // Режимы левой панели и выпадающие меню
-    const [leftSectionTab, setLeftSectionTab] = useState<'bots' | 'lobby'>('bots');
-    const [lobbyTab, setLobbyTab] = useState<'lobby' | 'live'>('lobby');
-    const [showInvitePanel, setShowInvitePanel] = useState(false);
-    const [showAppearanceDropdown, setShowAppearanceDropdown] = useState(false);
-    const appearanceDropdownRef = useRef<HTMLDivElement>(null);
-
-    const [liveGames, setLiveGames] = useState<LiveGameItem[]>([]);
-    const [spectatingGameId, setSpectatingGameId] = useState<number | null>(null);
-    const [inviteColorPref, setInviteColorPref] = useState<'white' | 'black' | 'random'>('random');
-    const [createdInviteCode, setCreatedInviteCode] = useState<string | null>(null);
-    const [inviteCopied, setInviteCopied] = useState(false);
-    const [chatMessages, setChatMessages] = useState<ChatMessageItem[]>([]);
-    const [chatInput, setChatInput] = useState('');
-
-    const [game, setGame] = useState(new Chess());
-    const [history, setHistory] = useState<any[]>([]);
-    const [viewIndex, setViewIndex] = useState<number>(-1);
-    const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
-    const [isManualFlip, setIsManualFlip] = useState<boolean>(false);
-
-    const [pendingPromotion, setPendingPromotion] = useState<{
-        from: string;
-        to: string;
-        color: 'w' | 'b';
-        isPremove?: boolean;
-    } | null>(null);
-
-    const [premove, setPremove] = useState<{
-        from: string;
-        to: string;
-        promotion?: PromotionPiece;
-    } | null>(null);
-
-    const [boardThemeKey, setBoardThemeKey] = useState<string>(() => getSavedBoardThemeKey());
-    const [pieceSetKey, setPieceSetKey] = useState<string>(() => getSavedPieceSetKey());
-
-    const [gameId, setGameId] = useState<number | null>(null);
-    const [myColor, setMyColor] = useState<'white' | 'black'>('white');
-    const [isSearching, setIsSearching] = useState(false);
-    const [queuePlayers, setQueuePlayers] = useState<QueuePlayer[]>([]);
-    const [currentUserId, setCurrentUserId] = useState<number | null>(null);
-    const [currentUsername, setCurrentUsername] = useState<string>('Вы');
-    const [currentUserRating, setCurrentUserRating] = useState<number>(1200);
-    const [stateVersion, setStateVersion] = useState(0);
-
-    const [selectedBotId, setSelectedBotId] = useState<HistoricalBotId>('philidor');
-    const [activeBot, setActiveBot] = useState<HistoricalBotId | null>(null);
-    const [botComment, setBotComment] = useState<string | null>(null);
-    const [isBotThinking, setIsBotThinking] = useState<boolean>(false);
-    const [savedBotGameId, setSavedBotGameId] = useState<number | null>(null);
-
-    const [selectedTimeControl, setSelectedTimeControl] = useState<Dgt2500Option>(DEFAULT_DGT_OPTION);
-    const [manualBaseMinutes, setManualBaseMinutes] = useState<number>(5);
-    const [manualIncSeconds, setManualIncSeconds] = useState<number>(3);
-    const [isTimeDropdownOpen, setIsTimeDropdownOpen] = useState(false);
-    const timeDropdownRef = useRef<HTMLDivElement>(null);
-    const boardContainerRef = useRef<HTMLDivElement>(null);
-    const notationScrollRef = useRef<HTMLDivElement>(null);
-
-    const [whitePlayer, setWhitePlayer] = useState({username: 'Белые', rating: '1200'});
-    const [blackPlayer, setBlackPlayer] = useState({username: 'Черные', rating: '1200'});
-    const [ratingInfo, setRatingInfo] = useState<{
-        white_delta?: number;
-        black_delta?: number;
-        white_new_rating?: number;
-        black_new_rating?: number;
-    } | null>(null);
-
-    const moveStartTime = useRef<number>(Date.now());
-    const botGameSavedRef = useRef<boolean>(false);
-    const appliedPeriodsRef = useRef<{ white: Set<number>; black: Set<number> }>({
-        white: new Set(),
-        black: new Set()
-    });
-
-    const [dragState, setDragState] = useState<{
-        from: string;
-        piece: { type: string; color: string };
-        x: number;
-        y: number;
-    } | null>(null);
-
-    // Размер доски строго ограничивается доступной высотой экрана, чтобы нижний таймер всегда был виден
-    const [boardSize, setBoardSize] = useState<number>(() => {
-        const maxFit = getMaxViewportBoardSize();
-        const savedSize = localStorage.getItem('michess_board_size');
-        if (savedSize) {
-            const parsed = Number(savedSize);
-            if (!Number.isNaN(parsed) && parsed >= MIN_BOARD_SIZE) {
-                return Math.min(parsed, maxFit);
-            }
-        }
-        return maxFit;
-    });
-    const [isResizing, setIsResizing] = useState(false);
-    const resizeStartRef = useRef<{ startX: number; startY: number; startSize: number } | null>(null);
+    const isSingleScreenRoute =
+        location.pathname === '/' ||
+        location.pathname.startsWith('/challenge/') ||
+        location.pathname.startsWith('/game/');
 
     useEffect(() => {
-        const handleWindowResize = () => {
-            const maxFit = getMaxViewportBoardSize();
-            setBoardSize(prev => Math.min(prev, maxFit));
-        };
-        window.addEventListener('resize', handleWindowResize);
-        return () => window.removeEventListener('resize', handleWindowResize);
-    }, []);
-
-    const [whiteTimeMs, setWhiteTimeMs] = useState(180000);
-    const [blackTimeMs, setBlackTimeMs] = useState(180000);
-
-    const [sessionStats, setSessionStats] = useState({wins: 0, losses: 0, draws: 0});
-    const [gameOverResult, setGameOverResult] = useState<string | null>(null);
-    const [drawOfferStatus, setDrawOfferStatus] = useState<string | null>(null);
-    const [rematchStatus, setRematchStatus] = useState<'none' | 'offered_by_me' | 'offered_by_opponent' | 'declined'>('none');
-
-    const activeTheme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
-    const activePieceSet = PIECE_SETS[pieceSetKey] || PIECE_SETS.merida;
-    const selectedBotProfile = HISTORICAL_BOTS[selectedBotId];
-    const activeBotProfile = activeBot ? HISTORICAL_BOTS[activeBot] : null;
-
-    const effectiveWhiteBaseMinutes = selectedTimeControl.isManual ? manualBaseMinutes : selectedTimeControl.base;
-    const effectiveBlackBaseMinutes = selectedTimeControl.isManual
-        ? manualBaseMinutes
-        : (selectedTimeControl.blackBase ?? selectedTimeControl.base);
-    const effectiveIncSeconds = selectedTimeControl.isManual ? manualIncSeconds : selectedTimeControl.inc;
-
-    const isBoardFlipped = (myColor === 'black') !== isManualFlip;
-
-    const playAudio = useCallback((type: 'move' | 'capture' | 'start') => {
-        const file = type === 'capture' ? 'Capture.mp3' : type === 'start' ? 'GenericNotify.mp3' : 'Move.mp3';
-        const audio = new Audio(`/assets/sounds/${file}`);
-        audio.currentTime = 0;
-        audio.play().catch(() => {
-        });
-    }, []);
-
-    const updateSessionStats = useCallback((result: string) => {
-        if (!result || result === '*') return;
-        setSessionStats(prev => {
-            if (result === '1/2-1/2' || result.includes('draw')) {
-                return {...prev, draws: prev.draws + 1};
+        const syncTokenFromStorage = () => {
+            const current = localStorage.getItem('token');
+            setToken(current);
+            if (!current) {
+                setUserProfile(null);
+                gameSocket.disconnect();
             }
-            const whiteWon = result === '1-0' || result === 'white_won_on_time';
-            const userIsWhite = myColor === 'white';
-            if ((whiteWon && userIsWhite) || (!whiteWon && !userIsWhite)) {
-                return {...prev, wins: prev.wins + 1};
-            } else {
-                return {...prev, losses: prev.losses + 1};
-            }
-        });
-    }, [myColor]);
-
-    const saveBotGameToDatabase = useCallback(async (
-        botId: HistoricalBotId,
-        playerColor: 'white' | 'black',
-        result: string,
-        completedGame: Chess
-    ) => {
-        if (botGameSavedRef.current) return;
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        const verboseMoves = completedGame.history({verbose: true});
-        if (verboseMoves.length === 0) return;
-
-        botGameSavedRef.current = true;
-        const movesUci = verboseMoves.map((m: any) => `${m.from}${m.to}${m.promotion || ''}`);
-
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/bots/save-game`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    bot_id: botId,
-                    player_color: playerColor,
-                    result,
-                    moves_uci: movesUci,
-                    base_time_ms: Math.round(effectiveWhiteBaseMinutes * 60 * 1000),
-                    increment_ms: Math.round(effectiveIncSeconds * 1000)
-                })
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data.game_id) {
-                    setSavedBotGameId(data.game_id);
-                }
-            }
-        } catch (err) {
-            console.error('Ошибка сохранения партии с ботом в БД:', err);
-        }
-    }, [effectiveWhiteBaseMinutes, effectiveIncSeconds]);
-
-    const applyDgtClockAfterMove = useCallback((
-        moverColor: 'white' | 'black',
-        elapsedMs: number,
-        totalHalfMovesAfter: number
-    ) => {
-        const mode = selectedTimeControl.mode;
-        const baseMs = Math.round(
-            (moverColor === 'white' ? effectiveWhiteBaseMinutes : effectiveBlackBaseMinutes) * 60 * 1000
-        );
-        const completedMovesForSide = Math.ceil(totalHalfMovesAfter / 2);
-
-        let incSeconds = effectiveIncSeconds;
-        if (selectedTimeControl.incrementFromMove) {
-            if (completedMovesForSide >= selectedTimeControl.incrementFromMove) {
-                const extraInc = selectedTimeControl.periods?.find(p => p.extraIncSeconds)?.extraIncSeconds;
-                incSeconds = extraInc ?? effectiveIncSeconds;
-            } else {
-                incSeconds = 0;
-            }
-        }
-        const incMs = Math.round(incSeconds * 1000);
-
-        let periodExtraMs = 0;
-        if (selectedTimeControl.periods) {
-            selectedTimeControl.periods.forEach((period, idx) => {
-                if (
-                    period.moves &&
-                    completedMovesForSide >= period.moves &&
-                    !appliedPeriodsRef.current[moverColor].has(idx)
-                ) {
-                    appliedPeriodsRef.current[moverColor].add(idx);
-                    periodExtraMs += Math.round(period.extraMinutes * 60 * 1000);
-                }
-            });
-        }
-
-        const updateTimer = (prevMs: number) => {
-            if (mode === 'gong' || mode === 'move_timer') {
-                return baseMs;
-            }
-            if (mode === 'delay' || mode === 'us_delay') {
-                return prevMs + Math.min(elapsedMs, incMs) + periodExtraMs;
-            }
-            if (mode === 'fischer' || mode === 'byo_yomi') {
-                return prevMs + incMs + periodExtraMs;
-            }
-            return prevMs + periodExtraMs;
         };
 
-        if (moverColor === 'white') {
-            setWhiteTimeMs(updateTimer);
-        } else {
-            setBlackTimeMs(updateTimer);
-        }
-    }, [selectedTimeControl, effectiveWhiteBaseMinutes, effectiveBlackBaseMinutes, effectiveIncSeconds]);
-
-    const handleThemeChange = (themeId: string) => {
-        setBoardThemeKey(themeId);
-        localStorage.setItem('michess_board_theme', themeId);
-    };
-
-    const handlePieceSetChange = (setId: string) => {
-        setPieceSetKey(setId);
-        localStorage.setItem('michess_piece_set', setId);
-    };
-
-    const startHistoricalBotGame = (botId: HistoricalBotId, colorPref: 'white' | 'black' | 'random' = 'random') => {
-        if (isSearching) {
-            setIsSearching(false);
-            gameSocket.send('leave_queue', {});
-        }
-
-        const chosenColor: 'white' | 'black' =
-            colorPref === 'random'
-                ? (Math.random() < 0.5 ? 'white' : 'black')
-                : colorPref;
-
-        const whiteStartMs = Math.round(effectiveWhiteBaseMinutes * 60 * 1000);
-        const blackStartMs = Math.round(effectiveBlackBaseMinutes * 60 * 1000);
-        const freshGame = new Chess();
-        const botInfo = HISTORICAL_BOTS[botId];
-
-        botGameSavedRef.current = false;
-        appliedPeriodsRef.current = {white: new Set(), black: new Set()};
-        setSavedBotGameId(null);
-        setGameId(null);
-        setSelectedBotId(botId);
-        setActiveBot(botId);
-        setLeftSectionTab('bots');
-        setMyColor(chosenColor);
-        setIsManualFlip(false);
-        setGame(freshGame);
-        setHistory([]);
-        setViewIndex(-1);
-        setSelectedSquare(null);
-        setPendingPromotion(null);
-        setPremove(null);
-        setGameOverResult(null);
-        setRatingInfo(null);
-        setDrawOfferStatus(null);
-        setRematchStatus('none');
-        setWhiteTimeMs(whiteStartMs);
-        setBlackTimeMs(blackStartMs);
-        moveStartTime.current = Date.now();
-
-        if (chosenColor === 'white') {
-            setWhitePlayer({username: currentUsername, rating: String(currentUserRating)});
-            setBlackPlayer({username: botInfo.playerLabel, rating: String(botInfo.rating)});
-        } else {
-            setWhitePlayer({username: botInfo.playerLabel, rating: String(botInfo.rating)});
-            setBlackPlayer({username: currentUsername, rating: String(currentUserRating)});
-        }
-
-        setBotComment(`«${botInfo.motto}»`);
-        playAudio('start');
-    };
+        window.addEventListener('storage', syncTokenFromStorage);
+        window.addEventListener('michess-auth-expired', syncTokenFromStorage);
+        return () => {
+            window.removeEventListener('storage', syncTokenFromStorage);
+            window.removeEventListener('michess-auth-expired', syncTokenFromStorage);
+        };
+    }, []);
 
     useEffect(() => {
-        if (!activeBot || gameOverResult || game.isGameOver()) return;
+        if (!token) {
+            setUserProfile(null);
+            gameSocket.disconnect();
+            return;
+        }
 
-        const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
-        if (currentTurnColor === myColor) return;
+        fetch(`${API_BASE_URL}/api/v1/profile/me`, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'accept': 'application/json'
+            }
+        })
+            .then(res => {
+                if (!res.ok) throw new Error('Unauthorized');
+                return res.json();
+            })
+            .then(data => setUserProfile(data))
+            .catch(() => {
+                localStorage.removeItem('token');
+                gameSocket.disconnect();
+                setToken(null);
+                setUserProfile(null);
+            });
+    }, [token]);
 
-        let isCancelled = false;
-        let delayTimer: ReturnType<typeof setTimeout> | null = null;
-        setIsBotThinking(true);
-        const botName = HISTORICAL_BOTS[activeBot].shortName;
-        const requestStartedAt = Date.now();
-
-        (async () => {
+    useEffect(() => {
+        if (!isProfileOpen) return;
+        const measurePing = async () => {
+            const start = Date.now();
             try {
-                const response = await fetch(`${API_BASE_URL}/api/v1/bots/move`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        bot_id: activeBot,
-                        fen: game.fen()
-                    })
-                });
-
-                if (!response.ok || isCancelled) {
-                    if (!isCancelled) setIsBotThinking(false);
-                    return;
-                }
-                const data = await response.json();
-                if (isCancelled) return;
-
-                const targetThinkMs = typeof data.thinking_time_ms === 'number' ? data.thinking_time_ms : 600;
-                const networkElapsed = Date.now() - requestStartedAt;
-                const remainingDelay = Math.max(80, targetThinkMs - networkElapsed);
-
-                delayTimer = setTimeout(() => {
-                    if (isCancelled) return;
-
-                    const from = data.uci.slice(0, 2);
-                    const to = data.uci.slice(2, 4);
-                    const promotion = data.uci.length > 4 ? data.uci.slice(4, 5) : 'q';
-
-                    const nextGame = cloneChessInstance(game);
-                    const moveObj = nextGame.move({from, to, promotion});
-
-                    if (moveObj) {
-                        const elapsed = Date.now() - moveStartTime.current;
-                        const newHistory = nextGame.history({verbose: true});
-                        const botColor: 'white' | 'black' = myColor === 'white' ? 'black' : 'white';
-
-                        applyDgtClockAfterMove(botColor, elapsed, newHistory.length);
-                        setGame(nextGame);
-                        setHistory(newHistory);
-                        setViewIndex(-1);
-                        setBotComment(data.comment);
-                        moveStartTime.current = Date.now();
-
-                        playAudio(moveObj.san.includes('x') ? 'capture' : 'move');
-
-                        if (nextGame.isGameOver()) {
-                            let result = '1/2-1/2';
-                            if (nextGame.isCheckmate()) {
-                                result = nextGame.turn() === 'w' ? '0-1' : '1-0';
-                            }
-                            setPremove(null);
-                            setGameOverResult(result);
-                            setDrawOfferStatus(`Партия против ${botName} окончена и сохранена в архив (${result}).`);
-                            updateSessionStats(result);
-                            playAudio('start');
-                            saveBotGameToDatabase(activeBot, myColor, result, nextGame);
-                        }
-                    }
-                    setIsBotThinking(false);
-                }, remainingDelay);
-            } catch (err) {
-                console.error('Ошибка получения хода бота:', err);
-                if (!isCancelled) {
-                    setIsBotThinking(false);
-                }
+                await fetch(`${API_BASE_URL}/health`);
+                setServerPing(Date.now() - start);
+            } catch {
+                setServerPing(-1);
             }
-        })();
-
-        return () => {
-            isCancelled = true;
-            if (delayTimer) clearTimeout(delayTimer);
         };
-    }, [activeBot, game, myColor, gameOverResult, playAudio, updateSessionStats, saveBotGameToDatabase, applyDgtClockAfterMove]);
+        measurePing();
+        const interval = setInterval(measurePing, 3000);
+        return () => clearInterval(interval);
+    }, [isProfileOpen]);
 
-    useEffect(() => {
-        if (!isResizing) return;
-
-        const prevCursor = document.body.style.cursor;
-        const prevUserSelect = document.body.style.userSelect;
-        document.body.style.cursor = 'nwse-resize';
-        document.body.style.userSelect = 'none';
-
-        const handleResizeMove = (e: MouseEvent) => {
-            if (!resizeStartRef.current) return;
-            const {startX, startY, startSize} = resizeStartRef.current;
-            const deltaX = e.clientX - startX;
-            const deltaY = e.clientY - startY;
-            const delta = Math.round((deltaX + deltaY) / 2);
-
-            const dynamicMax = getMaxViewportBoardSize();
-            const nextSize = Math.min(Math.max(startSize + delta, MIN_BOARD_SIZE), dynamicMax);
-            setBoardSize(nextSize);
-            localStorage.setItem('michess_board_size', String(nextSize));
-        };
-
-        const handleResizeEnd = () => {
-            setIsResizing(false);
-            resizeStartRef.current = null;
-        };
-
-        window.addEventListener('mousemove', handleResizeMove);
-        window.addEventListener('mouseup', handleResizeEnd);
-
-        return () => {
-            document.body.style.cursor = prevCursor;
-            document.body.style.userSelect = prevUserSelect;
-            window.removeEventListener('mousemove', handleResizeMove);
-            window.removeEventListener('mouseup', handleResizeEnd);
-        };
-    }, [isResizing]);
-
-    const handleResizeMouseDown = (e: React.MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        resizeStartRef.current = {
-            startX: e.clientX,
-            startY: e.clientY,
-            startSize: boardSize
-        };
-        setIsResizing(true);
+    const handleLogout = () => {
+        localStorage.removeItem('token');
+        gameSocket.disconnect();
+        setToken(null);
+        setUserProfile(null);
+        setIsProfileOpen(false);
+        navigate('/');
     };
-
-    const handleResizeDoubleClick = (e: React.MouseEvent) => {
-        e.preventDefault();
-        e.stopPropagation();
-        const defaultSize = getDefaultBoardSize();
-        setBoardSize(defaultSize);
-        localStorage.setItem('michess_board_size', String(defaultSize));
-    };
-
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                setPendingPromotion(null);
-                setPremove(null);
-                setSelectedSquare(null);
-                setShowAppearanceDropdown(false);
-                return;
-            }
-            if (history.length === 0) return;
-            if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-
-            if (e.key === 'ArrowLeft') {
-                e.preventDefault();
-                setViewIndex(prev => {
-                    const current = prev === -1 ? history.length - 1 : prev;
-                    return current <= 0 ? -2 : current - 1;
-                });
-            } else if (e.key === 'ArrowRight') {
-                e.preventDefault();
-                setViewIndex(prev => {
-                    if (prev === -1) return -1;
-                    if (prev === -2) return history.length > 1 ? 0 : -1;
-                    return prev + 1 >= history.length - 1 ? -1 : prev + 1;
-                });
-            } else if (e.key === 'ArrowUp') {
-                e.preventDefault();
-                setViewIndex(-2);
-            } else if (e.key === 'ArrowDown') {
-                e.preventDefault();
-                setViewIndex(-1);
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [history.length]);
-
-    useEffect(() => {
-        if (notationScrollRef.current) {
-            const activeEl = notationScrollRef.current.querySelector('.active-move-btn');
-            if (activeEl) {
-                activeEl.scrollIntoView({behavior: 'smooth', block: 'nearest'});
-            } else if (viewIndex === -1) {
-                notationScrollRef.current.scrollTop = notationScrollRef.current.scrollHeight;
-            }
-        }
-    }, [history.length, viewIndex]);
 
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
-            if (timeDropdownRef.current && !timeDropdownRef.current.contains(event.target as Node)) {
-                setIsTimeDropdownOpen(false);
+            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+                setIsProfileOpen(false);
             }
-            if (appearanceDropdownRef.current && !appearanceDropdownRef.current.contains(event.target as Node)) {
-                setShowAppearanceDropdown(false);
+            if (championsMenuRef.current && !championsMenuRef.current.contains(event.target as Node)) {
+                setIsChampionsMenuOpen(false);
             }
         };
-
-        if (isTimeDropdownOpen || showAppearanceDropdown) {
-            document.addEventListener('mousedown', handleClickOutside);
-        }
+        document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, [isTimeDropdownOpen, showAppearanceDropdown]);
-
-    useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        fetch(`${API_BASE_URL}/api/v1/profile/me`, {
-            headers: {'Authorization': `Bearer ${token}`}
-        })
-            .then(res => res.ok ? res.json() : null)
-            .then(data => {
-                if (data) {
-                    setCurrentUserId(data.id);
-                    if (data.username) setCurrentUsername(data.username);
-                    if (data.rating) setCurrentUserRating(data.rating);
-                }
-            })
-            .catch(() => {
-            });
     }, []);
 
-    useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (!token) return;
+    const username = userProfile?.username || 'Гость';
+    const userRating = userProfile?.rating || 1200;
 
-        gameSocket.connect(token);
+    return (
+        <div
+            className={`w-full flex flex-col bg-room text-paper font-sans select-none ${
+                isSingleScreenRoute ? 'min-h-dvh xl:h-dvh xl:overflow-hidden' : 'min-h-dvh'
+            }`}
+        >
+            <header
+                className="h-14 shrink-0 bg-acacia-dark border-b-2 border-amber-900/60 px-5 flex items-center justify-between shadow-heavy relative z-30">
+                <div className="flex items-center gap-7">
+                    <Link to="/" className="flex items-center gap-2.5 cursor-pointer group outline-none">
+                        <div
+                            className="w-9 h-9 rounded-md bg-boxwood flex items-center justify-center shadow-inner border border-amber-600/40 text-acacia-dark font-bold text-xl">
+                            ♞
+                        </div>
+                        <span
+                            className="text-2xl font-extrabold tracking-wide text-boxwood-light group-hover:text-white transition">
+                            michess
+                        </span>
+                    </Link>
 
-        const handleMatchFound = (data: any) => {
-            setIsSearching(false);
-            setSpectatingGameId(null);
-            setCreatedInviteCode(null);
-            setShowInvitePanel(false);
-            setChatMessages([]);
-            setActiveBot(null);
-            setBotComment(null);
-            setSavedBotGameId(null);
-            botGameSavedRef.current = false;
-            appliedPeriodsRef.current = {white: new Set(), black: new Set()};
-            setGameId(data.game_id);
-            setMyColor(data.color);
-            setIsManualFlip(false);
-            setRatingInfo(null);
-            setStateVersion(data.state_version || 0);
+                    <nav className="hidden md:flex items-center gap-6 text-[15px] font-semibold text-boxwood/90">
+                        <Link
+                            to="/"
+                            className={`flex items-center gap-2 transition ${
+                                location.pathname === '/' ? 'text-amber-300' : 'hover:text-amber-300'
+                            }`}
+                        >
+                            <Swords size={17}/> Игра
+                        </Link>
 
-            const initialWhiteTime = data.white_time_ms !== undefined ? data.white_time_ms : (data.base_time_ms || 180000);
-            const initialBlackTime = data.black_time_ms !== undefined ? data.black_time_ms : (data.base_time_ms || 180000);
-            setWhiteTimeMs(initialWhiteTime);
-            setBlackTimeMs(initialBlackTime);
+                        <Link
+                            to="/leaderboard"
+                            className={`flex items-center gap-2 transition ${
+                                location.pathname === '/leaderboard' ? 'text-amber-300' : 'hover:text-amber-300'
+                            }`}
+                        >
+                            <Trophy size={17}/> Лидеры
+                        </Link>
 
-            if (data.white_username) {
-                setWhitePlayer({username: data.white_username, rating: String(data.white_rating || '1200')});
-            }
-            if (data.black_username) {
-                setBlackPlayer({username: data.black_username, rating: String(data.black_rating || '1200')});
-            }
+                        <div className="relative" ref={championsMenuRef}>
+                            <button
+                                onClick={() => setIsChampionsMenuOpen(!isChampionsMenuOpen)}
+                                className={`flex items-center gap-2 transition outline-none cursor-pointer ${
+                                    isChampionsMenuOpen || location.pathname.startsWith('/champions')
+                                        ? 'text-amber-300'
+                                        : 'hover:text-amber-300'
+                                }`}
+                            >
+                                <Crown size={17}/> Легенды шахмат
+                                <ChevronDown
+                                    size={15}
+                                    className={`transition-transform ${isChampionsMenuOpen ? 'rotate-180' : ''}`}
+                                />
+                            </button>
 
-            const restoredGame = new Chess();
-            if (data.pgn) {
-                try {
-                    restoredGame.loadPgn(data.pgn);
-                } catch {
-                    if (data.fen) restoredGame.load(data.fen);
-                }
-            } else if (data.fen) {
-                restoredGame.load(data.fen);
-            }
+                            {isChampionsMenuOpen && (
+                                <div
+                                    className="absolute top-full left-0 mt-3 w-80 bg-[#261C14] border-2 border-amber-900/80 rounded-lg shadow-2xl z-50 max-h-[75vh] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
+                                    {CHAMPIONS_LIST.map(champ => (
+                                        <Link
+                                            key={champ.id}
+                                            to={`/champions/${encodeURIComponent(champ.id)}`}
+                                            onClick={() => setIsChampionsMenuOpen(false)}
+                                            className="flex items-center gap-3.5 px-4 py-2.5 hover:bg-black/40 transition border-b border-amber-900/30 last:border-b-0 group outline-none"
+                                        >
+                                            <img
+                                                src={champ.img}
+                                                alt={champ.name}
+                                                referrerPolicy="no-referrer"
+                                                className="w-11 h-11 object-cover rounded-md shadow border border-amber-900/50 group-hover:border-amber-500/60 transition shrink-0"
+                                            />
+                                            <div className="flex flex-col min-w-0">
+                                                <span
+                                                    className="font-bold text-amber-200 text-[15px] group-hover:text-white transition truncate">
+                                                    {champ.name}
+                                                </span>
+                                                <span
+                                                    className="text-xs text-boxwood/70 font-mono group-hover:text-amber-400 transition">
+                                                    Чемпион • {champ.years}
+                                                </span>
+                                            </div>
+                                        </Link>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
 
-            setGame(restoredGame);
-            setHistory(restoredGame.history({verbose: true}));
-            setViewIndex(-1);
-            setSelectedSquare(null);
-            setPendingPromotion(null);
-            setPremove(null);
-            setGameOverResult(null);
-            setRematchStatus('none');
-            setDrawOfferStatus('Партия началась!');
-            playAudio('start');
-            setTimeout(() => setDrawOfferStatus(null), 3000);
-        };
+                        <button className="flex items-center gap-2 hover:text-amber-300 transition cursor-pointer">
+                            <BookOpen size={17}/> Задачи
+                        </button>
+                        <button className="flex items-center gap-2 hover:text-amber-300 transition cursor-pointer">
+                            <Cpu size={17}/> Обучение
+                        </button>
+                        <button className="flex items-center gap-2 hover:text-amber-300 transition cursor-pointer">
+                            <Eye size={17}/> Просмотр
+                        </button>
+                        <button className="flex items-center gap-2 hover:text-amber-300 transition cursor-pointer">
+                            <Wrench size={17}/> Инструменты
+                        </button>
+                    </nav>
+                </div>
 
-        const handleMoveMade = (data: any) => {
-            setGame(prev => {
-                if (data.fen && prev.fen() === data.fen) {
-                    return prev;
-                }
+                <div className="flex items-center gap-3 text-boxwood-light relative" ref={dropdownRef}>
+                    <Link
+                        to="/leaderboard"
+                        className="md:hidden p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300"
+                        title="Таблица лидеров"
+                    >
+                        <Trophy size={19}/>
+                    </Link>
+                    <button
+                        className="p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300 cursor-pointer"
+                        title="Поиск партии"
+                    >
+                        <Search size={19}/>
+                    </button>
+                    <button
+                        className="p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300 cursor-pointer"
+                        title="Уведомления"
+                    >
+                        <Bell size={19}/>
+                    </button>
 
-                const nextGame = cloneChessInstance(prev);
-                let applied = false;
+                    {token && userProfile ? (
+                        <>
+                            <div
+                                onClick={() => setIsProfileOpen(!isProfileOpen)}
+                                className="flex items-center gap-2.5 pl-3 border-l border-amber-900/50 cursor-pointer hover:opacity-90 transition select-none py-1 px-2.5 rounded-md hover:bg-black/25"
+                            >
+                                <img
+                                    src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${username}&backgroundColor=D0A972`}
+                                    alt="Avatar"
+                                    className="w-8 h-8 rounded bg-black/40 border border-amber-900/50 shadow"
+                                />
+                                <div className="flex flex-col items-start hidden sm:flex">
+                                    <span className="font-bold text-sm text-amber-200 leading-tight">{username}</span>
+                                    <span
+                                        className="text-xs text-amber-400 font-mono font-semibold">({userRating})</span>
+                                </div>
+                                <span className="text-xs text-amber-400 ml-0.5">▼</span>
+                            </div>
 
-                if (data.pgn) {
-                    try {
-                        const pgnGame = new Chess();
-                        pgnGame.loadPgn(data.pgn);
-                        setHistory(pgnGame.history({verbose: true}));
-                        applied = true;
-                        const isCapture = data.san && data.san.includes('x');
-                        playAudio(isCapture ? 'capture' : 'move');
-                        return pgnGame;
-                    } catch {
-                        applied = false;
-                    }
-                }
+                            {isProfileOpen && (
+                                <div
+                                    className="absolute right-0 top-12 w-64 bg-[#261C14] border-2 border-amber-900/80 rounded-lg shadow-2xl py-2 z-50 text-boxwood-light">
+                                    <div className="px-4 py-2.5 border-b border-amber-900/40 flex items-center gap-3">
+                                        <img
+                                            src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${username}&backgroundColor=D0A972`}
+                                            alt="Avatar"
+                                            className="w-10 h-10 rounded bg-black/40 border border-amber-900/50 shadow"
+                                        />
+                                        <div>
+                                            <div className="font-bold text-base text-amber-200">{username}</div>
+                                            <div
+                                                className="text-xs text-amber-400 font-mono">Рейтинг: {userRating}</div>
+                                            <div className="text-xs text-emerald-400 flex items-center gap-1.5 mt-0.5">
+                                                <span
+                                                    className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
+                                                В сети
+                                            </div>
+                                        </div>
+                                    </div>
 
-                if (!applied) {
-                    try {
-                        if (data.san) {
-                            nextGame.move(data.san);
-                        } else if (data.move) {
-                            const from = data.move.slice(0, 2);
-                            const to = data.move.slice(2, 4);
-                            const promotion = data.move.length > 4 ? data.move.slice(4, 5) : 'q';
-                            nextGame.move({from, to, promotion});
-                        }
-                    } catch {
-                        if (data.fen) nextGame.load(data.fen);
-                    }
-                }
+                                    <div className="py-1 border-b border-amber-900/40 text-sm font-medium">
+                                        <button
+                                            onClick={() => {
+                                                setIsProfileOpen(false);
+                                                navigate(`/profile/${username}`);
+                                            }}
+                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
+                                        >
+                                            <User size={16} className="text-amber-500"/> Профиль
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setIsProfileOpen(false);
+                                                navigate('/leaderboard');
+                                            }}
+                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
+                                        >
+                                            <Trophy size={16} className="text-amber-500"/> Таблица лидеров
+                                        </button>
+                                        <button
+                                            onClick={() => setIsProfileOpen(false)}
+                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
+                                        >
+                                            <Mail size={16} className="text-amber-500"/> Входящие
+                                        </button>
+                                        <button
+                                            onClick={() => setIsProfileOpen(false)}
+                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
+                                        >
+                                            <Settings size={16} className="text-amber-500"/> Настройки
+                                        </button>
+                                        <button
+                                            onClick={handleLogout}
+                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-red-950/40 transition text-red-300 hover:text-red-200 cursor-pointer"
+                                        >
+                                            <LogOut size={16} className="text-red-400"/> Выйти
+                                        </button>
+                                    </div>
 
-                setHistory(nextGame.history({verbose: true}));
-                const isCapture = data.san && data.san.includes('x');
-                playAudio(isCapture ? 'capture' : 'move');
-                return nextGame;
-            });
+                                    <div
+                                        className="px-4 py-2 text-xs font-mono text-boxwood/70 flex justify-between items-center bg-black/20">
+                                        <span>ПИНГ {serverPing !== null ? (serverPing === -1 ? 'ОШИБКА' : `${serverPing} ms`) : '...'}</span>
+                                        <span className="text-emerald-400 font-bold">● СЕРВЕР</span>
+                                    </div>
+                                </div>
+                            )}
+                        </>
+                    ) : (
+                        <button
+                            onClick={() => setShowAuthModal(true)}
+                            className="flex items-center gap-2 px-4 py-1.5 bg-boxwood text-acacia-dark font-bold text-sm rounded-md hover:bg-boxwood-light transition shadow border border-amber-600/40 cursor-pointer"
+                        >
+                            <LogIn size={16}/> Войти
+                        </button>
+                    )}
+                </div>
+            </header>
 
-            setViewIndex(-1);
-            if (data.state_version !== undefined) {
-                setStateVersion(data.state_version);
-            }
-            if (data.white_time_ms !== undefined) setWhiteTimeMs(data.white_time_ms);
-            if (data.black_time_ms !== undefined) setBlackTimeMs(data.black_time_ms);
-            moveStartTime.current = Date.now();
+            <main
+                className={`flex-1 flex justify-center w-full ${
+                    isSingleScreenRoute
+                        ? 'items-stretch p-2 sm:p-3 xl:overflow-hidden'
+                        : 'items-start p-4 sm:p-6 overflow-y-auto'
+                }`}
+            >
+                <Routes>
+                    <Route path="/" element={<Chessboard key={token ? token : 'guest'}/>}/>
+                    <Route path="/challenge/:inviteCode" element={<Chessboard key={token ? token : 'guest'}/>}/>
+                    <Route path="/leaderboard" element={<Leaderboard/>}/>
+                    <Route path="/profile/:targetUsername" element={<Profile/>}/>
+                    <Route path="/game/:gameId" element={<GameViewer/>}/>
+                    <Route path="/champions/:championId" element={<ChampionGames/>}/>
+                </Routes>
+            </main>
 
-            if (data.game_over) {
-                setPremove(null);
-                setPendingPromotion(null);
-                setGameOverResult(data.result);
-                setRatingInfo(data);
-                playAudio('start');
-                updateSessionStats(data.result);
-            }
-        };
+            {showAuthModal && (
+                <AuthModal
+                    onSuccess={(newToken) => {
+                        setToken(newToken);
+                        setShowAuthModal(false);
+                    }}
+                />
+            )}
+        </div>
+    );
+}
 
-        const handleGameOver = (data: any) => {
-            setPremove(null);
-            setPendingPromotion(null);
-            setGameOverResult(prev => {
-                if (!prev) {
-                    playAudio('start');
-                    updateSessionStats(data.result);
-                }
-                return data.result;
-            });
-            setRatingInfo(data);
-            if (data.white_time_ms !== undefined) setWhiteTimeMs(data.white_time_ms);
-            if (data.black_time_ms !== undefined) setBlackTimeMs(data.black_time_ms);
-            if (data.reason === 'aborted' || data.result === '*') {
-                setDrawOfferStatus('Партия отменена на 1-м ходу (рейтинг не изменён).');
-            } else if (data.result) {
-                setDrawOfferStatus(`Партия окончена. Результат: ${data.result}`);
-            }
-        };
+========================================================================================
+FILE: frontend/src/components/AuthModal.tsx
+========================================================================================
+// --- FILE: frontend/src/components/AuthModal.tsx ---
 
-        const handleDrawOffered = () => {
-            setDrawOfferStatus('Соперник предлагает ничью.');
-        };
+import {useState} from 'react';
+import {LogIn, UserPlus} from 'lucide-react';
+import {API_BASE_URL} from '../config/api';
 
-        const handleDrawDeclined = () => {
-            setDrawOfferStatus('Предложение ничьей отклонено.');
-            setTimeout(() => setDrawOfferStatus(null), 3000);
-        };
+interface AuthModalProps {
+    onSuccess: (token: string) => void;
+}
 
-        const handleRematchOffered = () => {
-            setRematchStatus('offered_by_opponent');
-        };
+export default function AuthModal({onSuccess}: AuthModalProps) {
+    const [isLogin, setIsLogin] = useState(true);
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
 
-        const handleRematchDeclined = () => {
-            setRematchStatus('declined');
-        };
-
-        const handleInviteCreated = (data: any) => {
-            if (data.code) {
-                setCreatedInviteCode(data.code);
-                const url = `${window.location.origin}/challenge/${data.code}`;
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(url).catch(() => {
-                    });
-                }
-                setInviteCopied(true);
-                setTimeout(() => setInviteCopied(false), 3000);
-            }
-        };
-
-        const handleSpectateStarted = (data: any) => {
-            setIsSearching(false);
-            setActiveBot(null);
-            setGameId(null);
-            setSpectatingGameId(data.game_id);
-            setWhitePlayer({username: data.white_username || 'Белые', rating: String(data.white_rating || 1200)});
-            setBlackPlayer({username: data.black_username || 'Черные', rating: String(data.black_rating || 1200)});
-            setWhiteTimeMs(data.white_time_ms ?? data.base_time_ms ?? 180000);
-            setBlackTimeMs(data.black_time_ms ?? data.base_time_ms ?? 180000);
-
-            const restored = new Chess();
-            if (data.pgn) {
-                try {
-                    restored.loadPgn(data.pgn);
-                } catch {
-                    if (data.fen) restored.load(data.fen);
-                }
-            } else if (data.fen) {
-                restored.load(data.fen);
-            }
-            setGame(restored);
-            setHistory(restored.history({verbose: true}));
-            setViewIndex(-1);
-            setGameOverResult(null);
-            setChatMessages([]);
-            setDrawOfferStatus(`Режим зрителя: ${data.white_username} vs ${data.black_username}`);
-        };
-
-        const handleChatMessage = (data: any) => {
-            if (data.text && data.sender) {
-                setChatMessages(prev => [...prev.slice(-49), {
-                    sender: data.sender,
-                    text: data.text,
-                    timestamp: data.timestamp || Date.now()
-                }]);
-            }
-        };
-
-        const handleServerError = (data: any) => {
-            console.warn('Сервер отклонил действие:', data);
-            setPremove(null);
-            if (data.pgn || data.fen) {
-                const syncedGame = new Chess();
-                if (data.pgn) {
-                    try {
-                        syncedGame.loadPgn(data.pgn);
-                    } catch {
-                        if (data.fen) syncedGame.load(data.fen);
-                    }
-                } else if (data.fen) {
-                    syncedGame.load(data.fen);
-                }
-                setGame(syncedGame);
-                setHistory(syncedGame.history({verbose: true}));
-            }
-            if (data.state_version !== undefined) {
-                setStateVersion(data.state_version);
-            }
-        };
-
-        gameSocket.on('match_found', handleMatchFound);
-        gameSocket.on('move_made', handleMoveMade);
-        gameSocket.on('game_over', handleGameOver);
-        gameSocket.on('draw_offered', handleDrawOffered);
-        gameSocket.on('draw_declined', handleDrawDeclined);
-        gameSocket.on('rematch_offered', handleRematchOffered);
-        gameSocket.on('rematch_declined', handleRematchDeclined);
-        gameSocket.on('invite_created', handleInviteCreated);
-        gameSocket.on('spectate_started', handleSpectateStarted);
-        gameSocket.on('chat_message', handleChatMessage);
-        gameSocket.on('error', handleServerError);
-
-        return () => {
-            gameSocket.off('match_found', handleMatchFound);
-            gameSocket.off('move_made', handleMoveMade);
-            gameSocket.off('game_over', handleGameOver);
-            gameSocket.off('draw_offered', handleDrawOffered);
-            gameSocket.off('draw_declined', handleDrawDeclined);
-            gameSocket.off('rematch_offered', handleRematchOffered);
-            gameSocket.off('rematch_declined', handleRematchDeclined);
-            gameSocket.off('invite_created', handleInviteCreated);
-            gameSocket.off('spectate_started', handleSpectateStarted);
-            gameSocket.off('chat_message', handleChatMessage);
-            gameSocket.off('error', handleServerError);
-        };
-    }, [myColor, playAudio, updateSessionStats]);
-
-    useEffect(() => {
-        if (!inviteCode || !localStorage.getItem('token')) return;
-        const timer = setTimeout(() => {
-            gameSocket.send('accept_invite', {code: inviteCode});
-            navigate('/', {replace: true});
-        }, 450);
-        return () => clearTimeout(timer);
-    }, [inviteCode, navigate]);
-
-    useEffect(() => {
-        let interval: any;
-        if (!gameId) {
-            const fetchLobbyAndLive = async () => {
-                try {
-                    const [qRes, liveRes] = await Promise.all([
-                        fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/queue`),
-                        fetch(`${API_BASE_URL}/api/v1/profile/games/live`)
-                    ]);
-                    if (qRes.ok) {
-                        setQueuePlayers(await qRes.json());
-                    }
-                    if (liveRes.ok) {
-                        setLiveGames(await liveRes.json());
-                    }
-                } catch (e) {
-                    console.error('Failed to fetch lobby/live data', e);
-                }
-            };
-            fetchLobbyAndLive();
-            interval = setInterval(fetchLobbyAndLive, 2000);
-        } else {
-            setQueuePlayers([]);
-        }
-        return () => clearInterval(interval);
-    }, [gameId]);
-
-    const currentTurnChar = game.turn();
-
-    useEffect(() => {
-        if ((!gameId && !activeBot && !spectatingGameId) || gameOverResult) return;
-
-        let lastTick = Date.now();
-        const currentTurnColor = currentTurnChar === 'w' ? 'white' : 'black';
-        const isHourglass = !gameId && selectedTimeControl.mode === 'hourglass';
-        const isScrabble = !gameId && selectedTimeControl.mode === 'scrabble';
-
-        const interval = setInterval(() => {
-            const now = Date.now();
-            const delta = now - lastTick;
-            lastTick = now;
-
-            if (currentTurnColor === 'white') {
-                setWhiteTimeMs(prev => isScrabble ? prev - delta : Math.max(0, prev - delta));
-                if (isHourglass) {
-                    setBlackTimeMs(prev => prev + delta);
-                }
-            } else {
-                setBlackTimeMs(prev => isScrabble ? prev - delta : Math.max(0, prev - delta));
-                if (isHourglass) {
-                    setWhiteTimeMs(prev => prev + delta);
-                }
-            }
-        }, 50);
-
-        return () => clearInterval(interval);
-    }, [gameId, activeBot, spectatingGameId, gameOverResult, currentTurnChar, selectedTimeControl.mode]);
-
-    useEffect(() => {
-        if (!activeBot || gameOverResult || selectedTimeControl.mode === 'scrabble') return;
-
-        if (whiteTimeMs <= 0 || blackTimeMs <= 0) {
-            const flagWinner = whiteTimeMs <= 0 ? '0-1' : '1-0';
-            const botName = HISTORICAL_BOTS[activeBot].shortName;
-            setPremove(null);
-            setPendingPromotion(null);
-            setGameOverResult(flagWinner);
-            setDrawOfferStatus(`Флажок упал! Партия против ${botName} завершена по времени (${flagWinner}).`);
-            updateSessionStats(flagWinner);
-            playAudio('start');
-            saveBotGameToDatabase(activeBot, myColor, flagWinner, game);
-        }
-    }, [whiteTimeMs, blackTimeMs, activeBot, gameOverResult, selectedTimeControl.mode, myColor, game, playAudio, updateSessionStats, saveBotGameToDatabase]);
-
-    const executeMove = useCallback((
-        from: string,
-        to: string,
-        explicitPromotion?: PromotionPiece,
-        isPremoveMove: boolean = false
-    ): boolean => {
-        if (gameOverResult || viewIndex !== -1 || spectatingGameId) return false;
-
-        const piece = game.get(from as any);
-        const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
-
-        if (!piece || piece.color !== (game.turn() === 'w' ? 'w' : 'b') || ((gameId || activeBot || spectatingGameId) && currentTurnColor !== myColor)) {
-            setSelectedSquare(null);
-            return false;
-        }
-
-        const targetRank = to[1];
-        const isPawnPromotion =
-            piece.type === 'p' &&
-            ((piece.color === 'w' && targetRank === '8') || (piece.color === 'b' && targetRank === '1'));
-
-        if (isPawnPromotion && !explicitPromotion && !isPremoveMove) {
-            try {
-                const probeGame = cloneChessInstance(game);
-                const testMove = probeGame.move({from, to, promotion: 'q'});
-                if (testMove) {
-                    setPendingPromotion({
-                        from,
-                        to,
-                        color: piece.color as 'w' | 'b',
-                        isPremove: false
-                    });
-                    setSelectedSquare(null);
-                    setDragState(null);
-                    return true;
-                }
-            } catch {
-                setSelectedSquare(null);
-                setDragState(null);
-                return false;
-            }
-        }
-
-        const chosenPromotion: PromotionPiece = explicitPromotion || 'q';
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
 
         try {
-            const nextGame = cloneChessInstance(game);
-            const move = nextGame.move({
-                from,
-                to,
-                ...(isPawnPromotion ? {promotion: chosenPromotion} : {})
-            });
+            if (isLogin) {
+                // Логин (OAuth2 form URL encoded)
+                const formData = new URLSearchParams();
+                formData.append('username', username);
+                formData.append('password', password);
 
-            if (move) {
-                const timeTaken = isPremoveMove ? 0 : Math.max(0, Date.now() - moveStartTime.current);
-                const uciMove = (move as any).uci || `${move.from}${move.to}${move.promotion || ''}`;
-                const newHistory = nextGame.history({verbose: true});
+                const res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: formData,
+                });
 
-                if (activeBot) {
-                    applyDgtClockAfterMove(myColor, timeTaken, newHistory.length);
-                }
-
-                setPendingPromotion(null);
-                setGame(nextGame);
-                setHistory(newHistory);
-                setViewIndex(-1);
-                playAudio(move.san.includes('x') ? 'capture' : 'move');
-                moveStartTime.current = Date.now();
-
-                if (gameId) {
-                    const commandId = typeof crypto !== 'undefined' && crypto.randomUUID
-                        ? crypto.randomUUID()
-                        : Math.random().toString(36).substring(2, 15) + Date.now().toString(36);
-
-                    gameSocket.send('make_move', {
-                        game_id: gameId,
-                        move: uciMove,
-                        command_id: commandId,
-                        state_version: stateVersion,
-                        time_taken_ms: timeTaken,
-                        window_blurred: document.hidden,
-                        is_premove: isPremoveMove
-                    });
-                } else if (activeBot && nextGame.isGameOver()) {
-                    let result = '1/2-1/2';
-                    if (nextGame.isCheckmate()) {
-                        result = nextGame.turn() === 'w' ? '0-1' : '1-0';
-                    }
-                    const botName = HISTORICAL_BOTS[activeBot].shortName;
-                    setGameOverResult(result);
-                    setDrawOfferStatus(`Партия против ${botName} окончена и сохранена в архив (${result}).`);
-                    updateSessionStats(result);
-                    playAudio('start');
-                    saveBotGameToDatabase(activeBot, myColor, result, nextGame);
-                }
-                setSelectedSquare(null);
-                setDragState(null);
-                return true;
-            }
-        } catch {
-            setSelectedSquare(null);
-        }
-        setDragState(null);
-        return false;
-    }, [game, gameId, activeBot, spectatingGameId, myColor, stateVersion, viewIndex, gameOverResult, playAudio, updateSessionStats, saveBotGameToDatabase, applyDgtClockAfterMove]);
-
-    const scheduleOrPromotePremove = useCallback((from: string, to: string, explicitPromotion?: PromotionPiece) => {
-        if (from === to) return;
-        const piece = game.get(from as any);
-        const myColorChar = myColor === 'white' ? 'w' : 'b';
-        if (!piece || piece.color !== myColorChar) {
-            setSelectedSquare(null);
-            return;
-        }
-
-        const targetRank = to[1];
-        const isPawnPromotion =
-            piece.type === 'p' &&
-            ((piece.color === 'w' && targetRank === '8') || (piece.color === 'b' && targetRank === '1'));
-
-        if (isPawnPromotion && !explicitPromotion) {
-            setPendingPromotion({
-                from,
-                to,
-                color: myColorChar,
-                isPremove: true
-            });
-            setSelectedSquare(null);
-            setDragState(null);
-            return;
-        }
-
-        setPremove({
-            from,
-            to,
-            promotion: isPawnPromotion ? (explicitPromotion || 'q') : undefined
-        });
-        setPendingPromotion(null);
-        setSelectedSquare(null);
-        setDragState(null);
-    }, [game, myColor]);
-
-    useEffect(() => {
-        if (!premove || gameOverResult || viewIndex !== -1) return;
-        if (!gameId && !activeBot) return;
-
-        const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
-        if (currentTurnColor !== myColor) return;
-
-        const currentPremove = premove;
-        setPremove(null);
-        executeMove(currentPremove.from, currentPremove.to, currentPremove.promotion || 'q', true);
-    }, [game, premove, gameId, activeBot, myColor, gameOverResult, viewIndex, executeMove]);
-
-    useEffect(() => {
-        const handleMouseMove = (e: MouseEvent) => {
-            if (!dragState) return;
-            setDragState(prev => prev ? {...prev, x: e.clientX, y: e.clientY} : null);
-        };
-
-        const handleMouseUp = (e: MouseEvent) => {
-            if (!dragState) return;
-
-            let targetSquare: string | null = null;
-
-            const elements = document.elementsFromPoint(e.clientX, e.clientY);
-            const squareEl = Array.from(elements || []).find(el => el.hasAttribute('data-square'));
-            if (squareEl) {
-                targetSquare = squareEl.getAttribute('data-square');
-            }
-
-            if (!targetSquare && boardContainerRef.current) {
-                const rect = boardContainerRef.current.getBoundingClientRect();
-                const padding = 12;
-                const innerLeft = rect.left + padding;
-                const innerTop = rect.top + padding;
-                const innerWidth = rect.width - padding * 2;
-                const innerHeight = rect.height - padding * 2;
-
-                const x = e.clientX - innerLeft;
-                const y = e.clientY - innerTop;
-
-                if (x >= 0 && x <= innerWidth && y >= 0 && y <= innerHeight) {
-                    const fileIdx = Math.floor((x / innerWidth) * 8);
-                    const rankIdx = Math.floor((y / innerHeight) * 8);
-
-                    const files = isBoardFlipped ? [...FILES].reverse() : FILES;
-                    const ranks = isBoardFlipped
-                        ? ['1', '2', '3', '4', '5', '6', '7', '8']
-                        : ['8', '7', '6', '5', '4', '3', '2', '1'];
-
-                    if (files[fileIdx] && ranks[rankIdx]) {
-                        targetSquare = `${files[fileIdx]}${ranks[rankIdx]}`;
-                    }
-                }
-            }
-
-            if (targetSquare && targetSquare !== dragState.from) {
-                const turnColor = game.turn() === 'w' ? 'white' : 'black';
-                if ((gameId || activeBot || spectatingGameId) && turnColor !== myColor) {
-                    scheduleOrPromotePremove(dragState.from, targetSquare);
-                } else {
-                    executeMove(dragState.from, targetSquare);
-                }
-            }
-
-            setDragState(null);
-        };
-
-        if (dragState) {
-            window.addEventListener('mousemove', handleMouseMove);
-            window.addEventListener('mouseup', handleMouseUp);
-        }
-
-        return () => {
-            window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', handleMouseUp);
-        };
-    }, [dragState, isBoardFlipped, game, gameId, activeBot, spectatingGameId, myColor, executeMove, scheduleOrPromotePremove]);
-
-    const formatTime = (ms: number) => {
-        const isOvertimeUpcount = ms < 0 && selectedTimeControl.mode === 'scrabble';
-        const totalMs = isOvertimeUpcount ? Math.abs(ms) : Math.max(0, ms);
-        const totalSecs = Math.floor(totalMs / 1000);
-        const hours = Math.floor(totalSecs / 3600);
-        const mins = Math.floor((totalSecs % 3600) / 60);
-        const secs = totalSecs % 60;
-        const prefix = isOvertimeUpcount ? '+' : '';
-
-        if (hours > 0) {
-            return `${prefix}${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-        }
-
-        if (!isOvertimeUpcount && totalMs < 30000 && totalMs > 0) {
-            const tenths = Math.floor((totalMs % 1000) / 100);
-            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${tenths}`;
-        }
-
-        return `${prefix}${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    };
-
-    const startMatchmaking = () => {
-        setGameId(null);
-        setActiveBot(null);
-        setBotComment(null);
-        setSavedBotGameId(null);
-        botGameSavedRef.current = false;
-        appliedPeriodsRef.current = {white: new Set(), black: new Set()};
-        setPendingPromotion(null);
-        setPremove(null);
-        setGameOverResult(null);
-        setRatingInfo(null);
-        setIsSearching(true);
-        setLeftSectionTab('lobby');
-        setLobbyTab('lobby');
-        setIsTimeDropdownOpen(false);
-        setDrawOfferStatus(`Вы опубликовали вызов в лобби (Опция DGT #${selectedTimeControl.optionNumber})...`);
-
-        gameSocket.send('join_queue', {
-            base_time_ms: Math.round(effectiveWhiteBaseMinutes * 60 * 1000),
-            increment_ms: Math.round(effectiveIncSeconds * 1000)
-        });
-    };
-
-    const cancelMatchmaking = () => {
-        setIsSearching(false);
-        setDrawOfferStatus(null);
-        gameSocket.send('leave_queue', {});
-    };
-
-    const acceptChallenge = (targetUserId: number) => {
-        setActiveBot(null);
-        setBotComment(null);
-        setSavedBotGameId(null);
-        setPendingPromotion(null);
-        setPremove(null);
-        botGameSavedRef.current = false;
-        gameSocket.send('accept_challenge', {target_user_id: targetUserId});
-    };
-
-    const handleCreatePrivateInvite = () => {
-        gameSocket.send('create_invite', {
-            base_time_ms: Math.round(effectiveWhiteBaseMinutes * 60 * 1000),
-            increment_ms: Math.round(effectiveIncSeconds * 1000),
-            color_pref: inviteColorPref
-        });
-    };
-
-    const handleCopyInviteLink = () => {
-        if (!createdInviteCode) return;
-        const url = `${window.location.origin}/challenge/${createdInviteCode}`;
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(url).catch(() => {
-            });
-        }
-        setInviteCopied(true);
-        setTimeout(() => setInviteCopied(false), 2500);
-    };
-
-    const handleSpectateGame = (targetGameId: number) => {
-        gameSocket.send('spectate_game', {game_id: targetGameId});
-    };
-
-    const handleLeaveSpectate = () => {
-        if (spectatingGameId) {
-            gameSocket.send('leave_spectate', {game_id: spectatingGameId});
-        }
-        setSpectatingGameId(null);
-        handleResetSandbox();
-    };
-
-    const handleSendChatMessage = (textToSend?: string) => {
-        const activeGid = gameId || spectatingGameId;
-        const finalMsg = (textToSend ?? chatInput).trim();
-        if (!activeGid || !finalMsg) return;
-        gameSocket.send('chat_message', {
-            game_id: activeGid,
-            text: finalMsg.slice(0, 140)
-        });
-        if (!textToSend) setChatInput('');
-    };
-
-    const handleAbortGame = () => {
-        if ((!gameId && !activeBot) || gameOverResult || history.length >= 2) return;
-        setPendingPromotion(null);
-        setPremove(null);
-        if (gameId) {
-            gameSocket.send('abort_game', {game_id: gameId});
-        } else if (activeBot) {
-            setGameOverResult('*');
-            setDrawOfferStatus('Партия отменена без изменения счёта.');
-        }
-    };
-
-    const handleOfferRematch = () => {
-        if (gameId && gameOverResult) {
-            gameSocket.send('offer_rematch', {game_id: gameId});
-            setRematchStatus('offered_by_me');
-        } else if (activeBot && gameOverResult) {
-            const nextColor = myColor === 'white' ? 'black' : 'white';
-            startHistoricalBotGame(activeBot, nextColor);
-        }
-    };
-
-    const handleAcceptRematch = () => {
-        if (!gameId) return;
-        gameSocket.send('accept_rematch', {game_id: gameId});
-    };
-
-    const handleDeclineRematch = () => {
-        if (!gameId) return;
-        gameSocket.send('decline_rematch', {game_id: gameId});
-        setRematchStatus('none');
-    };
-
-    const handleResign = () => {
-        if ((!gameId && !activeBot) || gameOverResult) return;
-        if (window.confirm('Вы действительно хотите сдаться?')) {
-            setPendingPromotion(null);
-            setPremove(null);
-            if (gameId) {
-                gameSocket.send('resign', {game_id: gameId});
-            } else if (activeBot) {
-                const res = myColor === 'white' ? '0-1' : '1-0';
-                const botName = HISTORICAL_BOTS[activeBot].shortName;
-                setGameOverResult(res);
-                setDrawOfferStatus(`Вы сдались. Победа ${botName} (${res}).`);
-                updateSessionStats(res);
-                playAudio('start');
-                saveBotGameToDatabase(activeBot, myColor, res, game);
-            }
-        }
-    };
-
-    const handleOfferDraw = () => {
-        if (!gameId || gameOverResult) return;
-        gameSocket.send('offer_draw', {game_id: gameId});
-        setDrawOfferStatus('Вы предложили ничью...');
-    };
-
-    const acceptDraw = () => {
-        if (!gameId) return;
-        gameSocket.send('accept_draw', {game_id: gameId});
-        setDrawOfferStatus(null);
-    };
-
-    const declineDraw = () => {
-        if (!gameId) return;
-        gameSocket.send('decline_draw', {game_id: gameId});
-        setDrawOfferStatus(null);
-    };
-
-    const handleResetSandbox = () => {
-        if (gameId && !gameOverResult) return;
-        setGameId(null);
-        setActiveBot(null);
-        setBotComment(null);
-        setSavedBotGameId(null);
-        botGameSavedRef.current = false;
-        appliedPeriodsRef.current = {white: new Set(), black: new Set()};
-        setIsBotThinking(false);
-        setGameOverResult(null);
-        setRatingInfo(null);
-        setDrawOfferStatus(null);
-        setSelectedSquare(null);
-        setPendingPromotion(null);
-        setPremove(null);
-        setViewIndex(-1);
-        setGame(new Chess());
-        setHistory([]);
-    };
-
-    const handleUndoSandboxMove = () => {
-        if (gameId || history.length === 0 || isBotThinking || !!gameOverResult) return;
-        const nextGame = cloneChessInstance(game);
-        nextGame.undo();
-        if (activeBot && nextGame.history().length > 0) {
-            const turnAfterFirstUndo = nextGame.turn() === 'w' ? 'white' : 'black';
-            if (turnAfterFirstUndo !== myColor) {
-                nextGame.undo();
-            }
-        }
-        setGame(nextGame);
-        setHistory(nextGame.history({verbose: true}));
-        setGameOverResult(null);
-        setDrawOfferStatus(null);
-        setPendingPromotion(null);
-        setPremove(null);
-        setViewIndex(-1);
-        setSelectedSquare(null);
-    };
-
-    const handlePromotionSelect = (pieceType: PromotionPiece) => {
-        if (!pendingPromotion) return;
-        const {from, to, isPremove} = pendingPromotion;
-        setPendingPromotion(null);
-        if (isPremove) {
-            scheduleOrPromotePremove(from, to, pieceType);
-        } else {
-            executeMove(from, to, pieceType, false);
-        }
-    };
-
-    const handleSquareClick = (squareId: string) => {
-        if (viewIndex !== -1 || gameOverResult || spectatingGameId) return;
-
-        if (pendingPromotion) {
-            setPendingPromotion(null);
-            return;
-        }
-
-        const turnChar = game.turn();
-        const currentTurnColor = turnChar === 'w' ? 'white' : 'black';
-        const myColorChar = myColor === 'white' ? 'w' : 'b';
-        const isOpponentTurn = (gameId || activeBot || spectatingGameId) && currentTurnColor !== myColor;
-
-        if (isOpponentTurn) {
-            if (selectedSquare) {
-                if (selectedSquare === squareId) {
-                    setSelectedSquare(null);
-                } else {
-                    const pieceOnTarget = game.get(squareId as any);
-                    if (pieceOnTarget && pieceOnTarget.color === myColorChar) {
-                        setSelectedSquare(squareId);
-                    } else {
-                        scheduleOrPromotePremove(selectedSquare, squareId);
-                    }
-                }
+                if (!res.ok) throw new Error('Неверное имя пользователя или пароль');
+                const data = await res.json();
+                localStorage.setItem('token', data.access_token);
+                onSuccess(data.access_token);
             } else {
-                const piece = game.get(squareId as any);
-                if (piece && piece.color === myColorChar) {
-                    setSelectedSquare(squareId);
-                } else if (premove) {
-                    setPremove(null);
-                }
-            }
-            return;
-        }
+                // Регистрация
+                const res = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({username, password}),
+                });
 
-        if (selectedSquare) {
-            if (selectedSquare === squareId) {
-                setSelectedSquare(null);
-            } else {
-                const pieceOnTarget = game.get(squareId as any);
-                if (pieceOnTarget && pieceOnTarget.color === turnChar && ((!gameId && !activeBot) || currentTurnColor === myColor)) {
-                    setSelectedSquare(squareId);
-                } else {
-                    executeMove(selectedSquare, squareId);
+                if (!res.ok) {
+                    const errData = await res.json();
+                    throw new Error(errData.detail || 'Ошибка регистрации');
                 }
+
+                // Автоматический вход после успешной регистрации
+                setIsLogin(true);
+                setError('Регистрация успешна! Теперь войдите в систему.');
             }
-        } else {
-            const piece = game.get(squareId as any);
-            if (piece && piece.color === turnChar && ((!gameId && !activeBot) || currentTurnColor === myColor)) {
-                setSelectedSquare(squareId);
-            }
+        } catch (err: any) {
+            setError(err.message || 'Произошла ошибка');
+        } finally {
+            setLoading(false);
         }
     };
 
-    const currentGame = viewIndex === -1 ? game : (() => {
-        const tg = new Chess();
-        const limit = viewIndex === -2 ? -1 : viewIndex;
-        for (let i = 0; i <= limit; i++) {
-            if (history[i]) tg.move(history[i]);
-        }
-        return tg;
-    })();
-    const boardState = currentGame.board();
-    const material = calculateMaterialBalance(boardState);
+    return (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+            <div
+                className="bg-[#261C14] border-2 border-amber-900/80 rounded-lg p-6 w-full max-w-md shadow-heavy text-boxwood-light font-serif">
 
-    const activeMoveIndex = viewIndex === -1 ? history.length - 1 : viewIndex;
-    const lastMove = activeMoveIndex >= 0 ? history[activeMoveIndex] : null;
+                <div className="flex justify-center mb-4">
+                    <div
+                        className="w-12 h-12 rounded bg-boxwood flex items-center justify-center text-acacia-dark font-bold text-2xl shadow-inner border border-amber-600/40">
+                        ♞
+                    </div>
+                </div>
 
-    const legalTargetSquares = new Set<string>();
-    if (selectedSquare && viewIndex === -1 && !gameOverResult) {
-        const currentTurnColor = currentGame.turn() === 'w' ? 'white' : 'black';
-        const isMyTurnNow = (!gameId && !activeBot) || currentTurnColor === myColor;
-        if (isMyTurnNow) {
-            try {
-                const movesForSquare = currentGame.moves({square: selectedSquare as any, verbose: true});
-                movesForSquare.forEach((m: any) => legalTargetSquares.add(m.to));
-            } catch {
-                // Игнорируем некорректный квадрат
-            }
-        }
-    }
+                <h2 className="text-2xl font-bold text-center text-amber-200 mb-1">
+                    {isLogin ? 'Вход в michess' : 'Регистрация аккаунта'}
+                </h2>
+                <p className="text-xs text-center text-boxwood/70 mb-6">
+                    {isLogin ? 'Введите свои учетные данные для игры' : 'Создайте новый аккаунт для старта'}
+                </p>
 
-    const displayedRanks = isBoardFlipped ? ['1', '2', '3', '4', '5', '6', '7', '8'] : ['8', '7', '6', '5', '4', '3', '2', '1'];
-    const displayedFiles = isBoardFlipped ? [...FILES].reverse() : FILES;
+                {error && (
+                    <div
+                        className={`p-3 mb-4 rounded text-xs text-center border ${error.includes('успешна') ? 'bg-emerald-950/60 border-emerald-600/50 text-emerald-200' : 'bg-red-950/80 border-red-800/50 text-red-200'}`}>
+                        {error}
+                    </div>
+                )}
 
-    const topIsWhite = isBoardFlipped;
-    const topPlayerInfo = topIsWhite ? whitePlayer : blackPlayer;
-    const bottomPlayerInfo = topIsWhite ? blackPlayer : whitePlayer;
-    const topPlayerTime = topIsWhite ? whiteTimeMs : blackTimeMs;
-    const bottomPlayerTime = topIsWhite ? blackTimeMs : whiteTimeMs;
-    const topIdlePreviewMs = Math.round((topIsWhite ? effectiveWhiteBaseMinutes : effectiveBlackBaseMinutes) * 60 * 1000);
-    const bottomIdlePreviewMs = Math.round((!topIsWhite ? effectiveWhiteBaseMinutes : effectiveBlackBaseMinutes) * 60 * 1000);
-    const topCaptured = topIsWhite ? material.whiteCapturedSymbols : material.blackCapturedSymbols;
-    const bottomCaptured = topIsWhite ? material.blackCapturedSymbols : material.whiteCapturedSymbols;
-    const topAdvantage = topIsWhite ? material.whiteAdvantage : material.blackAdvantage;
-    const bottomAdvantage = topIsWhite ? material.blackAdvantage : material.whiteAdvantage;
+                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+                    <div>
+                        <label className="block text-xs text-boxwood/80 mb-1">Имя пользователя (Логин)</label>
+                        <input
+                            type="text"
+                            required
+                            value={username}
+                            onChange={(e) => setUsername(e.target.value)}
+                            className="w-full px-3 py-2 bg-black/40 border border-amber-900/60 rounded text-amber-100 text-sm focus:outline-none focus:border-amber-600"
+                            placeholder="например, string1"
+                        />
+                    </div>
 
-    const isBotOnTop = !!activeBotProfile && ((topIsWhite && myColor === 'black') || (!topIsWhite && myColor === 'white'));
-    const isBotOnBottom = !!activeBotProfile && !isBotOnTop;
+                    <div>
+                        <label className="block text-xs text-boxwood/80 mb-1">Пароль</label>
+                        <input
+                            type="password"
+                            required
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            className="w-full px-3 py-2 bg-black/40 border border-amber-900/60 rounded text-amber-100 text-sm focus:outline-none focus:border-amber-600"
+                            placeholder="••••••••"
+                        />
+                    </div>
 
-    const movePairs = history.reduce((acc: Array<{
-        moveNumber: number;
-        whiteSan: string;
-        whiteIdx: number;
-        blackSan?: string;
-        blackIdx?: number;
-    }>, move: any, idx: number) => {
-        if (idx % 2 === 0) {
-            acc.push({
-                moveNumber: Math.floor(idx / 2) + 1,
-                whiteSan: move.san,
-                whiteIdx: idx
-            });
-        } else {
-            acc[acc.length - 1].blackSan = move.san;
-            acc[acc.length - 1].blackIdx = idx;
-        }
-        return acc;
-    }, []);
+                    <button
+                        type="submit"
+                        disabled={loading}
+                        className="mt-2 flex items-center justify-center gap-2 py-2.5 bg-boxwood text-acacia-dark font-bold rounded hover:bg-boxwood-light transition shadow border border-amber-600/40 disabled:opacity-50"
+                    >
+                        {isLogin ? <LogIn size={18}/> : <UserPlus size={18}/>}
+                        {loading ? 'Загрузка...' : (isLogin ? 'Войти' : 'Зарегистрироваться')}
+                    </button>
+                </form>
 
-    const handleSelectMoveFromList = (targetIdx: number) => {
-        setSelectedSquare(null);
-        if (targetIdx >= history.length - 1) {
-            setViewIndex(-1);
-        } else {
-            setViewIndex(targetIdx);
-        }
-    };
+                <div className="mt-4 text-center text-xs">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setIsLogin(!isLogin);
+                            setError('');
+                        }}
+                        className="text-amber-400 hover:underline"
+                    >
+                        {isLogin ? 'Нет аккаунта? Зарегистрируйтесь' : 'Уже есть аккаунт? Войдите'}
+                    </button>
+                </div>
 
-    const renderPieceSvg = (piece: { type: string; color: string }) => {
-        const styleProps = getHarmoniousPieceStyle(pieceSetKey, boardThemeKey, piece.color);
-        return (
-            <div className="relative w-full h-full pointer-events-none flex items-center justify-center">
-                <img
-                    src={getPieceSvgUrl(pieceSetKey, piece.color, piece.type)}
-                    className="object-contain select-none transition-transform duration-75"
+            </div>
+        </div>
+    );
+}
 
 ----------------------------------------------------------------------------------------
-END OF PART 7/11
+END OF PART 7/14

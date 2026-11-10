@@ -1,871 +1,1810 @@
-PROJECT SNAPSHOT — PART 6/11
+PROJECT SNAPSHOT — PART 6/14
 Project: michess
-Files in this part (3): frontend/src/App.tsx, frontend/src/components/AuthModal.tsx, frontend/src/components/ChampionGames.tsx
+Files in this part (16): tests/test_disconnect_clock.py, tests/test_engine_endpoints.py, tests/test_game_end_atomicity.py, tests/test_game_engine.py, tests/test_game_state.py, tests/test_labourdonnais_bot.py, tests/test_matchmaking_rules.py, tests/test_morphy_bot.py, tests/test_multiworker.py, tests/test_paulsen_bot.py, tests/test_philidor_bot.py, tests/test_staunton_bot.py, tests/test_stockfish_engine.py, tests/test_websockets_flow.py, tests/test_worker_tasks.py, tests/test_zukertort_bot.py
 ----------------------------------------------------------------------------------------
 
 ========================================================================================
-FILE: frontend/src/App.tsx
+FILE: tests/test_disconnect_clock.py
 ========================================================================================
-// --- FILE: frontend/src/App.tsx ---
+# --- FILE: tests/test_disconnect_clock.py ---
+"""
+Разрыв соединения: часы при переподключении, флаг и брошенная партия у отключённого игрока,
+несколько вкладок одного пользователя и гонка «перезагрузка страницы».
+"""
 
-import {useState, useRef, useEffect} from 'react';
-import {Routes, Route, useNavigate, Link, useLocation} from 'react-router-dom';
-import Chessboard from './components/Chessboard';
-import AuthModal from './components/AuthModal';
-import Profile from './components/Profile';
-import GameViewer from './components/GameViewer';
-import ChampionGames from './components/ChampionGames';
-import Leaderboard from './components/Leaderboard';
-import {CHAMPIONS_LIST} from './config/champions';
-import {API_BASE_URL} from './config/api';
+import time
 
-import {
-    Search,
-    Bell,
-    Swords,
-    BookOpen,
-    Eye,
-    Cpu,
-    Wrench,
-    LogOut,
-    User,
-    Mail,
-    Settings,
-    LogIn,
-    Crown,
-    ChevronDown,
-    Trophy
-} from 'lucide-react';
+from src.services.connection_manager import ConnectionManager
+from src.services.game_state import ABANDON_TIMEOUT_MS, evaluate_clock_expiry, state_manager
 
-interface UserProfile {
-    id: number;
-    username: string;
-    rating: number;
-    is_cheater: boolean;
-    trust_factor: number;
-}
 
-export default function App() {
-    const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
-    const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+class DummyManager:
+    def __init__(self):
+        self.sent: list[tuple[int, dict]] = []
 
-    const [isProfileOpen, setIsProfileOpen] = useState(false);
-    const [isChampionsMenuOpen, setIsChampionsMenuOpen] = useState(false);
+    async def send_personal_message(self, message: dict, user_id: int):
+        self.sent.append((user_id, message))
 
-    const [showAuthModal, setShowAuthModal] = useState(false);
-    const [serverPing, setServerPing] = useState<number | null>(null);
 
-    const dropdownRef = useRef<HTMLDivElement>(null);
-    const championsMenuRef = useRef<HTMLDivElement>(null);
-    const navigate = useNavigate();
-    const location = useLocation();
+class DummySocket:
+    async def accept(self):
+        pass
 
-    const isSingleScreenRoute =
-        location.pathname === '/' ||
-        location.pathname.startsWith('/challenge/') ||
-        location.pathname.startsWith('/game/');
+    async def send_text(self, text: str):
+        pass
 
-    useEffect(() => {
-        if (!token) {
-            setUserProfile(null);
-            return;
+
+def _state(now: int, **overrides) -> dict:
+    state = {
+        "white_id": 1, "black_id": 2, "turn": "white",
+        "white_time_ms": 60000, "black_time_ms": 60000, "last_move_at": now,
+        "white_disconnected": "false", "black_disconnected": "false",
+        "white_disconnect_started_at": 0, "black_disconnect_started_at": 0,
+    }
+    state.update(overrides)
+    return state
+
+
+async def test_reconnect_during_opponent_turn_does_not_give_opponent_time():
+    """Раньше last_move_at сдвигался на время офлайна, и часы соперника стояли всё это время."""
+    await state_manager.initialize_game(game_id=31, white_id=10, black_id=20, base_time_ms=60000, increment_ms=0)
+    now = int(time.time() * 1000)
+    # Ход белых; чёрные отключились 20 секунд назад.
+    await state_manager.update_game_state(31, {
+        "last_move_at": now - 30000,
+        "black_disconnected": "true",
+        "black_disconnect_started_at": now - 20000,
+    })
+
+    await state_manager.handle_player_reconnect(20, DummyManager())
+
+    state = await state_manager.get_game_state(31)
+    assert state["black_disconnected"] == "false"
+    assert state["last_move_at"] == now - 30000
+    assert state["white_time_ms"] == 60000
+
+
+def test_disconnected_player_flags_counting_time_before_disconnect():
+    """Время между последним ходом и разрывом тоже идёт в зачёт (раньше терялось)."""
+    now = int(time.time() * 1000)
+    state = _state(
+        now,
+        white_time_ms=8000, last_move_at=now - 10000,
+        white_disconnected="true", white_disconnect_started_at=now - 3000,
+    )
+    assert evaluate_clock_expiry(state, now) == ("0-1", 2, "timeout")
+
+
+def test_abandon_timer_ignores_stopped_clock_on_opponent_turn():
+    """
+    Если сейчас ход соперника, часы отключённого стоят: при 5 секундах на часах он не должен
+    проигрывать через 5 секунд офлайна — только по общему таймеру брошенной партии.
+    """
+    now = int(time.time() * 1000)
+    state = _state(now, black_time_ms=5000, black_disconnected="true", black_disconnect_started_at=now - 10000)
+    assert evaluate_clock_expiry(state, now) is None
+
+    abandoned = {**state, "black_disconnect_started_at": now - ABANDON_TIMEOUT_MS}
+    assert evaluate_clock_expiry(abandoned, now) == ("1-0", 1, "abandoned")
+
+
+async def test_opponent_gets_wait_limited_by_live_clock():
+    await state_manager.initialize_game(game_id=32, white_id=10, black_id=20, base_time_ms=60000, increment_ms=0)
+    now = int(time.time() * 1000)
+    await state_manager.update_game_state(32, {"last_move_at": now - 50000})
+
+    manager = DummyManager()
+    await state_manager.handle_player_disconnect(10, manager)
+
+    (recipient, message), = manager.sent
+    assert recipient == 20
+    assert 9000 <= message["max_wait_ms"] <= 10000
+
+
+async def test_disconnect_flag_not_written_after_game_finished():
+    """Флаг отключения не пишется в партию, которая уже не идёт."""
+    await state_manager.initialize_game(game_id=33, white_id=10, black_id=20, base_time_ms=60000, increment_ms=0)
+    await state_manager.update_game_state(33, {"status": "completed"})
+
+    await state_manager.handle_player_disconnect(10, DummyManager())
+
+    state = await state_manager.redis.hgetall("game:33:state")
+    assert state.get("white_disconnected") == "false"
+
+
+class _NoDbSession:
+    """Сессия-заглушка: тест проверяет жизненный цикл соединений, БД ему не нужна.
+    (Настоящая сессия из event loop TestClient ломает общее SQLite-соединение тестов.)"""
+
+    async def get(self, *args, **kwargs):
+        return None
+
+
+async def test_closing_one_tab_keeps_player_online(client, monkeypatch):
+    from src.api.deps import get_current_user_ws
+    from src.db.session import get_db
+    from src.main import app
+    from src.models.user import User
+
+    player = User(id=501, username="multitab", rating=1500)
+
+    async def _user():
+        return player
+
+    async def _db():
+        yield _NoDbSession()
+
+    monkeypatch.setitem(app.dependency_overrides, get_current_user_ws, _user)
+    monkeypatch.setitem(app.dependency_overrides, get_db, _db)
+
+    await state_manager.initialize_game(game_id=34, white_id=501, black_id=502, base_time_ms=60000, increment_ms=0)
+    url = "/api/v1/ws/matchmaking?token=unused"
+
+    with client.websocket_connect(url) as tab2:
+        with client.websocket_connect(url):
+            pass  # первая вкладка закрыта
+
+        state = await state_manager.get_game_state(34)
+        assert state["white_disconnected"] == "false"
+        tab2.send_json({"action": "leave_queue"})
+        assert any(tab2.receive_json()["event"] == "queue_left" for _ in range(5))
+
+    state = await state_manager.get_game_state(34)
+    assert state["white_disconnected"] == "true"  # закрыта последняя вкладка
+
+
+async def test_reload_race_does_not_leave_player_marked_disconnected(monkeypatch):
+    """
+    Перезагрузка страницы: новая вкладка подключается (и выполняет handle_player_reconnect,
+    который ничего не делает), пока старая ещё обрабатывает разрыв и только потом ставит флаг.
+    """
+    await state_manager.initialize_game(game_id=35, white_id=10, black_id=20, base_time_ms=60000, increment_ms=0)
+    cm = ConnectionManager()
+    old_tab, new_tab = DummySocket(), DummySocket()
+    await cm.connect(old_tab, user_id=10)
+
+    original_disconnect_handler = state_manager.handle_player_disconnect
+
+    async def reconnect_then_mark(user_id, manager):
+        await cm.connect(new_tab, user_id=10)  # новая вкладка успела подключиться
+        await original_disconnect_handler(user_id, manager)
+
+    monkeypatch.setattr(state_manager, "handle_player_disconnect", reconnect_then_mark)
+    await cm.disconnect(10, old_tab)
+
+    state = await state_manager.get_game_state(35)
+    assert state["white_disconnected"] == "false"
+    assert cm._has_open_sockets(10)
+
+========================================================================================
+FILE: tests/test_engine_endpoints.py
+========================================================================================
+# --- FILE: tests/test_engine_endpoints.py ---
+"""
+Защита эндпоинтов, нагружающих Stockfish: запрет анализа идущих партий, лимиты частоты,
+503 при занятом пуле и сам пул долгоживущих движков.
+"""
+
+import json
+import threading
+
+import chess
+import chess.engine
+import pytest
+
+from src.api import analysis as analysis_api
+from src.core.config import settings
+from src.models.game import Game, GameStatus
+from src.models.user import User
+from src.services.bots.base import resolve_stockfish_path
+from src.services.engine_pool import EngineBusyError, EnginePool
+
+SF_PATH = resolve_stockfish_path()
+needs_stockfish = pytest.mark.skipif(SF_PATH is None, reason="Stockfish binary not available")
+
+FOUR_PLY_PGN = '[Event "t"]\n[Result "*"]\n\n1. e4 e5 2. Nf3 Nc6 *'
+
+
+async def _make_game(db_session, status: GameStatus, pgn: str = FOUR_PLY_PGN, analysis_json: str | None = None):
+    white = User(username=f"w_{status.name}", hashed_password="pw", rating=1500)
+    black = User(username=f"b_{status.name}", hashed_password="pw", rating=1500)
+    db_session.add_all([white, black])
+    await db_session.commit()
+    game = Game(
+        white_player_id=white.id,
+        black_player_id=black.id,
+        status=status,
+        base_time_ms=180000,
+        increment_ms=0,
+        is_rated=True,
+        pgn=pgn,
+        analysis_json=analysis_json,
+    )
+    db_session.add(game)
+    await db_session.commit()
+    return game
+
+
+# --- Анализ идущих партий ---------------------------------------------------------------
+
+async def test_analysis_of_in_progress_game_is_forbidden(client, db_session):
+    game = await _make_game(db_session, GameStatus.IN_PROGRESS)
+
+    post = client.post(f"/api/v1/analysis/game/{game.id}")
+    get = client.get(f"/api/v1/analysis/game/{game.id}")
+
+    assert post.status_code == 409
+    assert get.status_code == 409
+    assert not analysis_api._ANALYSIS_LOCKS  # лок по партии освобождён и удалён
+
+
+async def test_cached_analysis_of_finished_game_is_available(client, db_session):
+    game = await _make_game(db_session, GameStatus.COMPLETED)
+    assert client.get(f"/api/v1/analysis/game/{game.id}").status_code == 200
+
+
+@needs_stockfish
+async def test_stale_cache_is_recomputed(client, db_session):
+    """Кэш, посчитанный по неполной партии (например, во время игры), не отдаётся как итоговый."""
+    stale = {"engine": "x", "white": {}, "black": {}, "moves": [{"ply": 1}, {"ply": 2}]}
+    game = await _make_game(db_session, GameStatus.COMPLETED, analysis_json=json.dumps(stale))
+
+    res = client.post(f"/api/v1/analysis/game/{game.id}")
+    assert res.status_code == 200
+    assert len(res.json()["moves"]) == 4
+
+
+# --- Лимиты частоты ---------------------------------------------------------------------
+
+def test_rate_limit_returns_429_with_retry_after(client, monkeypatch):
+    monkeypatch.setattr(settings, "RATE_LIMIT_POSITION_ANALYSIS", 2)
+
+    codes = [client.post("/api/v1/analysis/position", json={"moves": []}).status_code for _ in range(3)]
+
+    assert codes[:2] == [200, 200]
+    assert codes[2] == 429
+    limited = client.post("/api/v1/analysis/position", json={"moves": []})
+    assert int(limited.headers["Retry-After"]) >= 1
+
+
+def test_rate_limit_is_per_user_when_token_present(client, monkeypatch, token_user_1, token_user_2):
+    monkeypatch.setattr(settings, "RATE_LIMIT_POSITION_ANALYSIS", 1)
+    url = "/api/v1/analysis/position"
+
+    assert client.post(url, json={"moves": []}).status_code == 200  # гость (IP)
+    assert client.post(url, json={"moves": []}).status_code == 429
+    for token in (token_user_1, token_user_2):
+        res = client.post(url, json={"moves": []}, headers={"Authorization": f"Bearer {token}"})
+        assert res.status_code == 200
+
+
+def test_engine_busy_maps_to_503(client, monkeypatch):
+    async def _busy(*args, **kwargs):
+        raise EngineBusyError("busy")
+
+    monkeypatch.setattr(analysis_api.analysis_service, "analyze_position", _busy)
+    res = client.post("/api/v1/analysis/position", json={"moves": []})
+    assert res.status_code == 503
+    assert "Retry-After" in res.headers
+
+
+def test_bot_list_does_not_leak_engine_path(client):
+    body = client.get("/api/v1/bots/list").json()
+    assert "stockfish_path" not in body
+
+
+# --- Пул движков ------------------------------------------------------------------------
+
+class _FakeEngine:
+    def __init__(self):
+        self.options = {
+            "Skill Level": chess.engine.Option("Skill Level", "spin", 20, 0, 20, []),
+            "UCI_LimitStrength": chess.engine.Option("UCI_LimitStrength", "check", False, None, None, []),
+            "UCI_Elo": chess.engine.Option("UCI_Elo", "spin", 1320, 1320, 3190, []),
+        }
+        self.configured: dict = {}
+
+    def configure(self, options: dict):
+        self.configured = dict(options)
+
+
+def test_pool_resets_and_clamps_options():
+    engine = _FakeEngine()
+    EnginePool._configure(engine, {"Skill Level": 3, "UCI_LimitStrength": True, "UCI_Elo": 900, "Unknown": 1})
+    assert engine.configured == {"Skill Level": 3, "UCI_LimitStrength": True, "UCI_Elo": 1320}
+
+    # Следующий вызов без опций возвращает полную силу — настройки бота не «протекают».
+    EnginePool._configure(engine, {})
+    assert engine.configured == {"Skill Level": 20, "UCI_LimitStrength": False}
+
+
+@needs_stockfish
+def test_pool_reuses_process_and_limits_concurrency():
+    pool = EnginePool(SF_PATH, size=1, acquire_timeout_s=0.2)
+    try:
+        with pool.acquire() as first:
+            pass
+        with pool.acquire() as second:
+            assert second is first  # процесс переиспользован, а не запущен заново
+
+            errors = []
+
+            def _try_acquire():
+                try:
+                    with pool.acquire():
+                        pass
+                except EngineBusyError as exc:
+                    errors.append(exc)
+
+            t = threading.Thread(target=_try_acquire)
+            t.start()
+            t.join()
+            assert len(errors) == 1
+    finally:
+        pool.close()
+
+
+@needs_stockfish
+def test_pool_replaces_dead_engine():
+    pool = EnginePool(SF_PATH, size=1, acquire_timeout_s=1.0)
+    try:
+        with pool.acquire() as engine:
+            engine.quit()  # процесс завершился, а вызывающий код ошибку «проглотил»
+        with pool.acquire() as fresh:
+            assert fresh is not engine
+            info = fresh.analyse(chess.Board(), chess.engine.Limit(depth=1))
+            assert "score" in info
+    finally:
+        pool.close()
+
+========================================================================================
+FILE: tests/test_game_end_atomicity.py
+========================================================================================
+# --- FILE: tests/test_game_end_atomicity.py ---
+"""
+Атомарность завершения партии: из конкурентных претендентов (сдача, ничья, флаг, отмена)
+партию завершает ровно один, а рейтинг начисляется ровно один раз.
+"""
+
+import asyncio
+import time
+
+import fakeredis.aioredis
+import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker
+
+from src.models.game import Game, GameStatus
+from src.models.user import User
+from src.services.game_state import ABANDON_TIMEOUT_MS, evaluate_clock_expiry, state_manager
+
+
+@pytest.fixture
+def real_redis(monkeypatch):
+    """fakeredis с настоящей семантикой WATCH/MULTI (самодельный мок её не эмулирует)."""
+    client = fakeredis.aioredis.FakeRedis(decode_responses=True)
+    monkeypatch.setattr(state_manager, "redis", client)
+    return client
+
+
+async def _make_game(db_session, *, rated: bool = True) -> tuple[Game, User, User]:
+    white = User(username="w_atomic", hashed_password="pw", rating=1500)
+    black = User(username="b_atomic", hashed_password="pw", rating=1500)
+    db_session.add_all([white, black])
+    await db_session.commit()
+    game = Game(
+        white_player_id=white.id,
+        black_player_id=black.id,
+        status=GameStatus.IN_PROGRESS,
+        base_time_ms=180000,
+        increment_ms=0,
+        is_rated=rated,
+    )
+    db_session.add(game)
+    await db_session.commit()
+    await state_manager.initialize_game(game.id, white.id, black.id, 180000, 0)
+    return game, white, black
+
+
+async def test_concurrent_claims_have_single_winner(real_redis, db_session):
+    game, _, _ = await _make_game(db_session)
+
+    claims = await asyncio.gather(
+        state_manager.claim_game_end(game.id, "0-1", "resignation"),
+        state_manager.claim_game_end(game.id, "1-0", "resignation"),
+        state_manager.claim_game_end(game.id, "1/2-1/2", "agreement"),
+        state_manager.claim_game_end(game.id, "0-1", "timeout"),
+        state_manager.claim_game_end(game.id, "*", "aborted", status="aborted"),
+    )
+
+    assert sum(c is not None for c in claims) == 1
+    state = await real_redis.hgetall(f"game:{game.id}:state")
+    assert state["status"] in ("completed", "aborted")
+
+
+async def test_claim_guard_is_rechecked(real_redis, db_session):
+    game, _, _ = await _make_game(db_session)
+
+    assert await state_manager.claim_game_end(game.id, "1/2-1/2", "agreement", guard=lambda s: False) is None
+    state = await real_redis.hgetall(f"game:{game.id}:state")
+    assert state["status"] == "in_progress"
+
+
+async def test_flag_inside_move_blocks_second_finisher(real_redis, db_session):
+    """Флаг при попытке хода сразу фиксируется в Redis: цикл таймаутов и сдача уже не завершат партию."""
+    game, white, _ = await _make_game(db_session)
+    await state_manager.update_game_state(game.id, {"last_move_at": int(time.time() * 1000) - 200_000})
+
+    res = await state_manager.process_atomic_move(game.id, white.id, "cmd-1", "e2e4")
+    assert res["status"] == "game_over"
+    assert res["termination"] == "timeout"
+
+    state = await real_redis.hgetall(f"game:{game.id}:state")
+    assert state["status"] == "completed"
+    assert await state_manager.claim_game_end(game.id, "0-1", "timeout") is None
+
+
+async def test_finish_game_with_stale_session_does_not_double_rate(real_redis, db_session):
+    """
+    Сессия WS-обработчика долгоживущая (expire_on_commit=False) и может держать устаревший
+    объект Game со статусом IN_PROGRESS. finish_game обязан перечитать строку из БД.
+    """
+    game, white, black = await _make_game(db_session)
+    # Фабрика на том же тестовом движке (импортировать conftest напрямую нельзя: это создаст его копию).
+    TestSessionLocal = async_sessionmaker(db_session.bind, expire_on_commit=False)
+
+    async with TestSessionLocal() as stale_session:
+        stale_game = await stale_session.get(Game, game.id)
+        assert stale_game.status == GameStatus.IN_PROGRESS  # объект закэширован в identity map
+
+        async with TestSessionLocal() as other_session:
+            first = await state_manager.finish_game(other_session, game.id, "1-0", termination="resignation")
+        assert first["white_delta"] > 0
+
+        second = await state_manager.finish_game(stale_session, game.id, "1-0", termination="resignation")
+        assert second["white_delta"] == first["white_delta"]
+
+    async with TestSessionLocal() as check:
+        w = await check.get(User, white.id)
+        b = await check.get(User, black.id)
+        assert w.rating == 1500 + first["white_delta"]
+        assert b.rating == 1500 + first["black_delta"]
+
+
+def test_evaluate_clock_expiry():
+    now = int(time.time() * 1000)
+    base = {
+        "white_id": 1, "black_id": 2, "turn": "white",
+        "white_time_ms": 1000, "black_time_ms": 5000, "last_move_at": now - 500,
+        "white_disconnected": "false", "black_disconnected": "false",
+        "white_disconnect_started_at": 0, "black_disconnect_started_at": 0,
+    }
+    assert evaluate_clock_expiry(base, now) is None
+    assert evaluate_clock_expiry({**base, "last_move_at": now - 1500}, now) == ("0-1", 2, "timeout")
+    abandoned = {**base, "black_disconnected": "true", "black_disconnect_started_at": now - ABANDON_TIMEOUT_MS}
+    assert evaluate_clock_expiry(abandoned, now) == ("1-0", 1, "abandoned")
+
+========================================================================================
+FILE: tests/test_game_engine.py
+========================================================================================
+# --- FILE: tests/test_game_engine.py ---
+
+from src.services.game_engine import engine
+
+STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+
+
+def test_process_valid_move():
+    is_valid, data = engine.process_move(STARTING_FEN, "e2e4")
+
+    assert is_valid is True
+    assert data is not None
+    assert data["san"] == "e4"
+    assert data["uci"] == "e2e4"
+    assert "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR" in data["new_fen"]
+    assert data["result"] is None
+    assert data["is_game_over"] is False
+
+
+def test_process_illegal_move():
+    is_valid, data = engine.process_move(STARTING_FEN, "e2e5")
+
+    assert is_valid is False
+    assert data is None
+
+
+def test_checkmate_detection():
+    # Позиция за шаг до детского мата (ход белых: Qf7#)
+    fen = "r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5Q2/PPPP1PPP/RNB1K1NR w KQkq - 4 3"
+    is_valid, data = engine.process_move(fen, "f3f7")
+
+    assert is_valid is True
+    assert data["is_game_over"] is True
+    assert data["result"] == "1-0"
+    assert data["termination"] == "checkmate"
+
+
+def test_underpromotion_to_knight_and_rook():
+    """Проверка превращения пешки в коня (a7a8n) и ладью (a7a8r) с корректной записью SAN."""
+    promotion_fen = "4k3/P7/8/8/8/8/8/4K3 w - - 0 1"
+
+    is_valid_n, res_knight = engine.process_move(promotion_fen, "a7a8n")
+    assert is_valid_n is True
+    assert res_knight["uci"] == "a7a8n"
+    assert res_knight["san"].startswith("a8=N")
+
+    is_valid_r, res_rook = engine.process_move(promotion_fen, "a7a8r")
+    assert is_valid_r is True
+    assert res_rook["uci"] == "a7a8r"
+    assert res_rook["san"].startswith("a8=R")
+
+
+def _play(moves: list[str]) -> list[dict]:
+    """Проигрывает ходы через engine.process_move, передавая FEN и PGN, как это делает сервер."""
+    fen, pgn, results = STARTING_FEN, "", []
+    for mv in moves:
+        is_valid, data = engine.process_move(fen, mv, pgn)
+        assert is_valid, f"move {mv} rejected"
+        fen, pgn = data["new_fen"], data["new_pgn"]
+        results.append(data)
+    return results
+
+
+def test_threefold_repetition_ends_game():
+    """Третье повторение позиции завершает партию ничьей (раньше не детектировалось: доска строилась из FEN)."""
+    dance = ["g1f3", "g8f6", "f3g1", "f6g8"]
+    results = _play(dance * 2)
+
+    assert all(not r["is_game_over"] for r in results[:-1])
+    last = results[-1]
+    assert last["is_game_over"] is True
+    assert last["termination"] == "repetition"
+    assert last["result"] == "1/2-1/2"
+
+
+def test_repetition_not_ended_when_only_reachable():
+    """Позиция, из которой повторение лишь достижимо следующим ходом, партию не завершает."""
+    results = _play(["g1f3", "g8f6", "f3g1", "f6g8", "g1f3", "g8f6", "f3g1"])
+    assert results[-1]["is_game_over"] is False
+
+
+def test_inconsistent_pgn_falls_back_to_fen():
+    """Если PGN не соответствует FEN, ход валидируется по FEN, как раньше."""
+    is_valid, data = engine.process_move(STARTING_FEN, "e2e4", "1. d4 d5")
+    assert is_valid is True
+    assert data["san"] == "e4"
+
+========================================================================================
+FILE: tests/test_game_state.py
+========================================================================================
+# --- FILE: tests/test_game_state.py ---
+
+import pytest
+import time
+from src.services.game_state import state_manager
+
+
+class DummyManager:
+    """Заглушка WebSocket-менеджера для изоляции тестов логики состояний."""
+    async def send_personal_message(self, message: dict, user_id: int):
+        pass
+
+
+@pytest.mark.asyncio
+async def test_game_state_initialization():
+    await state_manager.initialize_game(
+        game_id=1, white_id=10, black_id=20, base_time_ms=180000, increment_ms=0
+    )
+    state = await state_manager.get_game_state(1)
+
+    assert state is not None
+    assert state["white_id"] == 10
+    assert state["black_id"] == 20
+    assert state["white_time_ms"] == 180000
+    assert state["status"] == "in_progress"
+
+
+@pytest.mark.asyncio
+async def test_disconnect_and_reconnect_keeps_clock_running():
+    """
+    Разрыв соединения не останавливает и не сдвигает часы: после переподключения остаток
+    белых равен base - (now - last_move_at), а last_move_at и сохранённое время не меняются.
+    """
+    from src.services.game_state import live_clock_ms
+
+    await state_manager.initialize_game(
+        game_id=2, white_id=10, black_id=20, base_time_ms=180000, increment_ms=0
+    )
+    now_ms = int(time.time() * 1000)
+    # Ход белых идёт 5 секунд, из них 3 секунды белые были офлайн.
+    await state_manager.update_game_state(2, {"last_move_at": now_ms - 5000})
+
+    dummy_manager = DummyManager()
+    await state_manager.handle_player_disconnect(10, dummy_manager)
+    state_after_dc = await state_manager.get_game_state(2)
+    assert state_after_dc["white_disconnected"] == "true"
+    await state_manager.update_game_state(2, {"white_disconnect_started_at": now_ms - 3000})
+
+    await state_manager.handle_player_reconnect(10, dummy_manager)
+
+    state = await state_manager.get_game_state(2)
+    assert state["white_disconnected"] == "false"
+    assert state["white_time_ms"] == 180000
+    assert state["last_move_at"] == now_ms - 5000
+    assert 174000 <= live_clock_ms(state, "white", int(time.time() * 1000)) <= 175000
+
+
+@pytest.mark.asyncio
+async def test_abort_game_without_rating_change(db_session):
+    """Проверяет, что отмена партии на 1-м ходу (до 2 полуходов) не меняет рейтинг и ставит статус ABORTED."""
+    from src.models.user import User
+    from src.models.game import Game, GameStatus
+    from src.services.game_state import state_manager
+
+    u1 = User(username="abort_white_player", hashed_password="pw", rating=1500)
+    u2 = User(username="abort_black_player", hashed_password="pw", rating=1500)
+    db_session.add_all([u1, u2])
+    await db_session.commit()
+    await db_session.refresh(u1)
+    await db_session.refresh(u2)
+
+    game = Game(
+        white_player_id=u1.id,
+        black_player_id=u2.id,
+        status=GameStatus.IN_PROGRESS,
+        base_time_ms=180000,
+        increment_ms=2000,
+        is_rated=True,
+    )
+    db_session.add(game)
+    await db_session.commit()
+    await db_session.refresh(game)
+
+    await state_manager.redis.hset(f"game:{game.id}:state", mapping={
+        "white_id": str(u1.id),
+        "black_id": str(u2.id),
+        "status": "in_progress",
+        "state_version": "1",
+        "last_move_at": "1000",
+    })
+
+    res = await state_manager.abort_game(db_session, game.id)
+    assert res["status"] == "aborted"
+    assert res["result"] == "*"
+    assert res["white_delta"] == 0
+    assert res["black_delta"] == 0
+
+    await db_session.refresh(u1)
+    await db_session.refresh(u2)
+    await db_session.refresh(game)
+    assert u1.rating == 1500
+    assert u2.rating == 1500
+    assert game.status == GameStatus.ABORTED
+
+
+@pytest.mark.asyncio
+async def test_private_invite_create_and_redeem():
+    """Проверяет создание приватного вызова по ссылке в Redis и его одноразовое погашение."""
+    from src.services.matchmaker import matchmaker
+
+    invite = await matchmaker.create_private_invite(
+        user_id=101,
+        username="teacher_misha",
+        rating=2050,
+        base_time_ms=600000,
+        increment_ms=5000,
+        color_pref="white",
+    )
+    code = invite["code"]
+    assert len(code) >= 6
+
+    # Создатель не может принять собственный вызов
+    self_accept = await matchmaker.accept_private_invite(code, acceptor_id=101)
+    assert self_accept is None
+
+    # Второй игрок успешно принимает вызов
+    redeemed = await matchmaker.accept_private_invite(code, acceptor_id=202)
+    assert redeemed is not None
+    assert redeemed["white_id"] == 101
+    assert redeemed["black_id"] == 202
+    assert redeemed["base_time_ms"] == 600000
+    assert redeemed["increment_ms"] == 5000
+
+    # Повторное погашение того же кода невозможно
+    second_try = await matchmaker.accept_private_invite(code, acceptor_id=303)
+    assert second_try is None
+
+========================================================================================
+FILE: tests/test_labourdonnais_bot.py
+========================================================================================
+# --- FILE: tests/test_labourdonnais_bot.py ---
+
+import chess
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+from src.main import app
+from src.services.bots.labourdonnais import (
+    LABOURDONNAIS_OPENING_BOOK,
+    LabourdonnaisBot,
+    evaluate_labourdonnais_style_bonus,
+)
+from src.services.bots.philidor import normalize_fen_key
+
+
+def test_labourdonnais_opening_repertoire_branches():
+    """Проверяем, что в книге Лабурдонне сохранены все стартовые ветки (e4, d4, f4)."""
+    bot = LabourdonnaisBot(stockfish_path=None)
+    board = chess.Board()
+    start_key = normalize_fen_key(board)
+    expected_book_moves = {item[0] for item in LABOURDONNAIS_OPENING_BOOK[start_key]}
+
+    assert {"e2e4", "d2d4", "f2f4"}.issubset(expected_book_moves)
+
+    result = bot.choose_move(board.fen())
+    assert result["uci"] in expected_book_moves
+    assert result["source"] == "opening_book"
+
+
+def test_labourdonnais_plays_evans_gambit_or_italian_from_book():
+    """Проверяем, что в итальянской позиции Лабурдонне выбирает гамбит Эванса (b2b4) или c2c3."""
+    bot = LabourdonnaisBot(stockfish_path=None)
+    board = chess.Board()
+    for san in ["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5"]:
+        board.push_san(san)
+
+    result = bot.choose_move(board.fen())
+    assert result["uci"] in {"b2b4", "c2c3"}
+    assert result["source"] == "opening_book"
+
+
+def test_labourdonnais_style_rewards_castling_and_development():
+    """Проверяем, что атакующий фильтр Лабурдонне поощряет рокировку и вывод фигур в центр."""
+    board = chess.Board("r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4")
+
+    castle_bonus, _ = evaluate_labourdonnais_style_bonus(board, chess.Move.from_uci("e1g1"))
+    nc3_bonus, _ = evaluate_labourdonnais_style_bonus(board, chess.Move.from_uci("b1c3"))
+    passive_h3_bonus, _ = evaluate_labourdonnais_style_bonus(board, chess.Move.from_uci("h2h3"))
+
+    assert castle_bonus > passive_h3_bonus
+    assert nc3_bonus > passive_h3_bonus
+
+
+def test_labourdonnais_middlegame_move_generation():
+    """Проверяем генерацию хода Лабурдонне в миттельшпиле вне дебютной книги."""
+    bot = LabourdonnaisBot(stockfish_path=None)
+    board = chess.Board("r1bq1rk1/ppp2ppp/2np1n2/2b1p3/2B1P3/2PP1N2/PP3PPP/RNBQ1RK1 w - - 3 7")
+
+    result = bot.choose_move(board.fen())
+    assert chess.Move.from_uci(result["uci"]) in board.legal_moves
+    assert result["source"] == "labourdonnais_style_engine"
+
+
+@pytest.mark.asyncio
+async def test_labourdonnais_api_move_endpoint():
+    """Проверяем REST-эндпоинт /api/v1/bots/move для игры с Лабурдонне."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        list_resp = await client.get("/api/v1/bots/list")
+        assert list_resp.status_code == 200
+        bot_ids = [b["id"] for b in list_resp.json()["bots"]]
+        assert "labourdonnais" in bot_ids
+
+        start_key = normalize_fen_key(chess.Board())
+        labourdonnais_start_moves = {item[0] for item in LABOURDONNAIS_OPENING_BOOK[start_key]}
+
+        move_resp = await client.post(
+            "/api/v1/bots/move",
+            json={
+                "bot_id": "labourdonnais",
+                "fen": chess.STARTING_FEN,
+            },
+        )
+        assert move_resp.status_code == 200
+        data = move_resp.json()
+        assert data["bot_id"] == "labourdonnais"
+        assert data["uci"] in labourdonnais_start_moves
+        assert data["source"] == "opening_book"
+
+========================================================================================
+FILE: tests/test_matchmaking_rules.py
+========================================================================================
+# --- FILE: tests/test_matchmaking_rules.py ---
+"""
+Матчмейкинг: свежий рейтинг из БД, диапазон рейтинга, запрет второй партии одновременно.
+"""
+
+import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker
+
+from src.core.config import settings
+from src.models.game import Game
+from src.models.user import User
+from src.services.game_state import state_manager
+from src.services.matchmaker import MatchmakingError, matchmaker
+
+
+async def _users(db_session, *ratings: int) -> list[User]:
+    users = [User(username=f"mm_{i}_{r}", hashed_password="pw", rating=r) for i, r in enumerate(ratings)]
+    db_session.add_all(users)
+    await db_session.commit()
+    return users
+
+
+async def _in_queue(uid: int) -> bool:
+    return bool(await matchmaker.redis.hgetall(f"queue:prefs:{uid}"))
+
+
+# --- Свежий рейтинг ---------------------------------------------------------------------
+
+async def test_stale_session_sees_fresh_rating(db_session):
+    """Долгоживущая WS-сессия держит старый объект пользователя; рейтинг перечитывается из БД."""
+    from src.api.websockets import _fresh_current_user
+
+    (user,) = await _users(db_session, 1500)
+
+    other = async_sessionmaker(db_session.bind, expire_on_commit=False)
+    async with other() as session:
+        (await session.get(User, user.id)).rating = 1700
+        await session.commit()
+
+    assert user.rating == 1500  # объект в identity map WS-сессии устарел
+    assert (await _fresh_current_user(db_session, user)).rating == 1700
+
+
+async def test_game_record_uses_fresh_ratings(db_session):
+    white, black = await _users(db_session, 1500, 1600)
+    other = async_sessionmaker(db_session.bind, expire_on_commit=False)
+    async with other() as session:
+        (await session.get(User, white.id)).rating = 1555
+        await session.commit()
+
+    started = await matchmaker.start_pvp_game(white.id, black.id, 180000, 0, db=db_session)
+
+    game = await db_session.get(Game, started["game_id"])
+    assert started["white_rating"] == 1555
+    assert game.white_initial_rating == 1555
+
+
+# --- Диапазон рейтинга ------------------------------------------------------------------
+
+async def test_auto_match_respects_both_rating_windows(db_session):
+    a, b, c = await _users(db_session, 1200, 1800, 1250)
+
+    assert await matchmaker.join_queue(a.id, "a", 1200, 180000, 0, 1100, 1300, db=db_session) is None
+    # b без ограничений, но a его не принимает (1800 вне 1100–1300).
+    assert await matchmaker.join_queue(b.id, "b", 1800, 180000, 0, db=db_session) is None
+    assert await _in_queue(a.id) and await _in_queue(b.id)
+
+    game_id = await matchmaker.join_queue(c.id, "c", 1250, 180000, 0, 1000, 1500, db=db_session)
+    assert game_id is not None
+    state = await state_manager.get_game_state(game_id)
+    assert {int(state["white_id"]), int(state["black_id"])} == {a.id, c.id}
+    assert await _in_queue(b.id)
+
+
+async def test_auto_match_prefers_closest_rating(db_session):
+    a, d, e = await _users(db_session, 1200, 1400, 1380)
+    # a и d друг другу не подходят (d не принимает 1200), а e (1380) подходит обоим.
+    await matchmaker.join_queue(a.id, "a", 1200, 180000, 0, 1100, 1400, db=db_session)
+    assert await matchmaker.join_queue(d.id, "d", 1400, 180000, 0, 1350, 1450, db=db_session) is None
+
+    game_id = await matchmaker.join_queue(e.id, "e", 1380, 180000, 0, db=db_session)
+
+    state = await state_manager.get_game_state(game_id)
+    assert {int(state["white_id"]), int(state["black_id"])} == {d.id, e.id}
+
+
+async def test_manual_accept_outside_challenge_range_is_rejected(db_session):
+    a, b = await _users(db_session, 1200, 1900)
+    await matchmaker.join_queue(a.id, "a", 1200, 180000, 0, 1100, 1300, db=db_session)
+
+    with pytest.raises(MatchmakingError) as err:
+        await matchmaker.accept_challenge(a.id, b.id, None, db=db_session)
+
+    assert err.value.code == "rating_out_of_range"
+    assert await _in_queue(a.id)  # вызов остался в лобби
+
+
+async def test_default_rating_window_from_settings(db_session, monkeypatch):
+    monkeypatch.setattr(settings, "MATCHMAKING_DEFAULT_RATING_RANGE", 100)
+    (a,) = await _users(db_session, 1500)
+
+    await matchmaker.join_queue(a.id, "a", 1500, 180000, 0, db=db_session)
+
+    prefs = await matchmaker.redis.hgetall(f"queue:prefs:{a.id}")
+    assert (int(prefs["min_rating"]), int(prefs["max_rating"])) == (1400, 1600)
+
+
+async def test_invalid_time_control_is_rejected(db_session):
+    (a,) = await _users(db_session, 1500)
+    with pytest.raises(MatchmakingError) as err:
+        await matchmaker.join_queue(a.id, "a", 1500, -5, 0, db=db_session)
+    assert err.value.code == "invalid_time_control"
+
+
+# --- Уже в партии -----------------------------------------------------------------------
+
+async def test_player_in_game_cannot_join_or_accept(db_session):
+    a, b, c = await _users(db_session, 1500, 1500, 1500)
+    await matchmaker.start_pvp_game(a.id, b.id, 180000, 0, db=db_session)
+    await matchmaker.join_queue(c.id, "c", 1500, 180000, 0, db=db_session)
+
+    with pytest.raises(MatchmakingError) as join_err:
+        await matchmaker.join_queue(a.id, "a", 1500, 180000, 0, db=db_session)
+    with pytest.raises(MatchmakingError) as accept_err:
+        await matchmaker.accept_challenge(c.id, a.id, None, db=db_session)
+
+    assert join_err.value.code == "self_in_game"
+    assert accept_err.value.code == "self_in_game"
+    assert await _in_queue(c.id)
+
+
+async def test_challenge_of_busy_player_is_removed(db_session):
+    a, b, c = await _users(db_session, 1500, 1500, 1500)
+    await matchmaker.join_queue(a.id, "a", 1500, 180000, 0, db=db_session)
+    # a начал партию по приглашению, а его вызов остался бы в лобби.
+    await state_manager.initialize_game(4242, a.id, b.id, 180000, 0)
+
+    with pytest.raises(MatchmakingError) as err:
+        await matchmaker.accept_challenge(a.id, c.id, None, db=db_session)
+
+    assert err.value.code == "opponent_in_game"
+    assert not await _in_queue(a.id)
+
+
+async def test_starting_game_removes_both_players_from_lobby(db_session):
+    a, b = await _users(db_session, 1500, 1500)
+    await matchmaker.join_queue(a.id, "a", 1500, 300000, 0, db=db_session)  # другой контроль — не сведутся
+    await matchmaker.join_queue(b.id, "b", 1500, 180000, 0, db=db_session)
+
+    await matchmaker.start_pvp_game(a.id, b.id, 600000, 0, db=db_session)
+
+    assert not await _in_queue(a.id) and not await _in_queue(b.id)
+
+
+async def test_invite_is_kept_when_creator_is_busy(db_session):
+    creator, acceptor, other = await _users(db_session, 1500, 1500, 1500)
+    invite = await matchmaker.create_private_invite(creator.id, "creator", 1500, 180000, 0)
+    await state_manager.initialize_game(4343, creator.id, other.id, 180000, 0)
+
+    with pytest.raises(MatchmakingError) as err:
+        await matchmaker.start_game_from_invite(invite["code"], acceptor.id, db=db_session)
+
+    assert err.value.code == "opponent_in_game"
+    assert await matchmaker.get_private_invite(invite["code"]) is not None
+
+
+async def test_finished_game_does_not_block_new_one(db_session):
+    a, b = await _users(db_session, 1500, 1500)
+    await state_manager.initialize_game(4444, a.id, b.id, 180000, 0)
+    await state_manager.update_game_state(4444, {"status": "completed"})
+
+    started = await matchmaker.start_pvp_game(a.id, b.id, 180000, 0, db=db_session)
+    assert started["game_id"]
+
+
+async def test_http_join_while_in_game_returns_active_game(client, db_session, test_user_1, test_user_2, token_user_1):
+    """Фронтенд шлёт join и по WS, и по HTTP: проигравший гонку HTTP-запрос отдаёт начатую партию."""
+    started = await matchmaker.start_pvp_game(test_user_1.id, test_user_2.id, 180000, 0, db=db_session)
+
+    res = client.post(
+        "/api/v1/profile/matchmaking/join",
+        json={"base_time_ms": 180000, "increment_ms": 0},
+        headers={"Authorization": f"Bearer {token_user_1}"},
+    )
+
+    assert res.status_code == 200
+    assert res.json()["game_id"] == started["game_id"]
+
+========================================================================================
+FILE: tests/test_morphy_bot.py
+========================================================================================
+# --- FILE: tests/test_morphy_bot.py ---
+
+import chess
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+from src.main import app
+from src.services.bots.morphy import (
+    MORPHY_OPENING_BOOK,
+    MorphyBot,
+    evaluate_morphy_style_bonus,
+)
+from src.services.bots.philidor import normalize_fen_key
+
+
+def test_morphy_opening_repertoire_branches():
+    """Проверяем, что в дебютной книге Морфи есть стартовые ходы и они выбираются из книги."""
+    bot = MorphyBot(stockfish_path=None)
+    board = chess.Board()
+    start_key = normalize_fen_key(board)
+    expected_book_moves = {item[0] for item in MORPHY_OPENING_BOOK[start_key]}
+
+    assert "e2e4" in expected_book_moves
+
+    result = bot.choose_move(board.fen())
+    assert result["uci"] in expected_book_moves
+    assert result["source"] == "opening_book"
+
+
+def test_morphy_plays_active_openings_from_book():
+    """Проверяем, что в итальянской позиции Морфи выбирает ход из своей дебютной книги."""
+    bot = MorphyBot(stockfish_path=None)
+    board = chess.Board()
+    for san in ["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5"]:
+        board.push_san(san)
+
+    fen_key = normalize_fen_key(board)
+    expected_moves = {item[0] for item in MORPHY_OPENING_BOOK[fen_key]}
+
+    result = bot.choose_move(board.fen())
+    assert result["uci"] in expected_moves
+    assert result["source"] == "opening_book"
+
+
+def test_morphy_style_rewards_castling_and_open_files():
+    """Проверяем, что стилевой фильтр Морфи поощряет рокировку, развитие и выход ладьи на центральную линию."""
+    board = chess.Board("r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4")
+
+    castle_bonus, _ = evaluate_morphy_style_bonus(board, chess.Move.from_uci("e1g1"))
+    nc3_bonus, _ = evaluate_morphy_style_bonus(board, chess.Move.from_uci("b1c3"))
+    passive_h3_bonus, _ = evaluate_morphy_style_bonus(board, chess.Move.from_uci("h2h3"))
+
+    assert castle_bonus > passive_h3_bonus
+    assert nc3_bonus > passive_h3_bonus
+
+
+def test_morphy_middlegame_move_generation():
+    """Проверяем генерацию хода Морфи в миттельшпиле вне дебютной книги (и мат в 1 ход 17. Rd8# из Оперной партии)."""
+    bot = MorphyBot(stockfish_path=None)
+    # Точный финал Оперной партии Морфи (Париж, 1858) после 16. Qb8+! Nxb8 — ход 17. Rd8#
+    opera_board = chess.Board("1n2kb1r/p4ppp/4q3/4p1B1/4P3/8/PPP2PPP/2KR4 w k - 0 17")
+
+    result = bot.choose_move(opera_board.fen())
+    assert result["uci"] == "d1d8"
+    assert result["san"] == "Rd8#"
+    assert result["source"] == "morphy_style_engine"
+
+
+@pytest.mark.asyncio
+async def test_morphy_api_move_endpoint():
+    """Проверяем REST-эндпоинты /api/v1/bots/list и /api/v1/bots/move для игры с Полом Морфи."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        list_resp = await client.get("/api/v1/bots/list")
+        assert list_resp.status_code == 200
+        bot_ids = [b["id"] for b in list_resp.json()["bots"]]
+        assert "morphy" in bot_ids
+
+        start_key = normalize_fen_key(chess.Board())
+        morphy_start_moves = {item[0] for item in MORPHY_OPENING_BOOK[start_key]}
+
+        move_resp = await client.post(
+            "/api/v1/bots/move",
+            json={
+                "bot_id": "morphy",
+                "fen": chess.STARTING_FEN,
+            },
+        )
+        assert move_resp.status_code == 200
+        data = move_resp.json()
+        assert data["bot_id"] == "morphy"
+        assert data["uci"] in morphy_start_moves
+        assert data["source"] == "opening_book"
+
+========================================================================================
+FILE: tests/test_multiworker.py
+========================================================================================
+# --- FILE: tests/test_multiworker.py ---
+"""
+Несколько воркеров и вкладок: присутствие, доставка сообщений и зрители через Redis,
+лидерство цикла таймаутов, атомарное принятие вызова. Плюс флаг по правилу ФИДЕ 6.9.
+"""
+
+import asyncio
+import json
+import time
+
+import fakeredis
+import fakeredis.aioredis
+import pytest
+
+from src.services import game_state as game_state_module
+from src.services.connection_manager import ConnectionManager
+from src.services.game_state import FLAG_DRAW_TERMINATION, evaluate_clock_expiry, flag_outcome, state_manager
+
+
+class RecordingSocket:
+    def __init__(self):
+        self.received: list[dict] = []
+
+    async def accept(self):
+        pass
+
+    async def send_text(self, text: str):
+        self.received.append(json.loads(text))
+
+
+# --- Флаг по правилу ФИДЕ 6.9 -----------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "fen, flagged, expected",
+    [
+        # У чёрных (победителя по флагу) только конь против голого короля — мат невозможен.
+        ("8/8/8/4k3/8/8/2n5/K7 w - - 0 60", "white", ("1/2-1/2", FLAG_DRAW_TERMINATION)),
+        # Голый король у победителя.
+        ("8/8/8/4k3/8/8/2q5/K7 b - - 0 60", "black", ("1/2-1/2", FLAG_DRAW_TERMINATION)),
+        # Ладья у победителя — обычное поражение по времени.
+        ("8/8/8/4k3/8/8/2r5/K7 w - - 0 60", "white", ("0-1", "timeout")),
+        # Конь против ладьи: кооперативный мат существует, значит, победа.
+        ("8/8/8/4k3/8/8/2n5/KR6 w - - 0 60", "white", ("0-1", "timeout")),
+        # Одноцветные слоны у обоих: мат невозможен.
+        ("8/8/8/4k3/2b5/8/8/K2B4 w - - 0 60", "white", ("1/2-1/2", FLAG_DRAW_TERMINATION)),
+    ],
+)
+def test_flag_outcome_follows_fide(fen, flagged, expected):
+    assert flag_outcome(fen, flagged) == expected
+
+
+def test_clock_expiry_draw_has_no_winner():
+    now = int(time.time() * 1000)
+    state = {
+        "white_id": 1, "black_id": 2, "turn": "white", "board_fen": "8/8/8/4k3/8/8/2n5/K7 w - - 0 60",
+        "white_time_ms": 1000, "black_time_ms": 5000, "last_move_at": now - 2000,
+        "white_disconnected": "false", "black_disconnected": "false",
+    }
+    assert evaluate_clock_expiry(state, now) == ("1/2-1/2", None, FLAG_DRAW_TERMINATION)
+
+
+async def test_flag_during_move_attempt_is_draw_vs_insufficient_material():
+    await state_manager.initialize_game(game_id=41, white_id=10, black_id=20, base_time_ms=60000, increment_ms=0)
+    await state_manager.update_game_state(41, {
+        "board_fen": "8/8/8/4k3/8/8/2n5/K7 w - - 0 60",
+        "last_move_at": int(time.time() * 1000) - 70000,
+    })
+
+    res = await state_manager.process_atomic_move(41, 10, "cmd-flag", "a1b1")
+
+    assert res["status"] == "game_over"
+    assert res["result"] == "1/2-1/2"
+    assert res["termination"] == FLAG_DRAW_TERMINATION
+
+
+# --- Два воркера на общем Redis ---------------------------------------------------------
+
+@pytest.fixture
+def shared_redis(monkeypatch):
+    server = fakeredis.FakeServer()
+    client = fakeredis.aioredis.FakeRedis(server=server, decode_responses=True)
+    monkeypatch.setattr(state_manager, "redis", client)
+    monkeypatch.setattr("src.db.redis.redis_client", client)
+    return client
+
+
+def _worker(client, worker_id: str) -> ConnectionManager:
+    cm = ConnectionManager()
+    cm.worker_id = worker_id
+    cm.redis = client
+    cm.pubsub = client.pubsub()
+    return cm
+
+
+async def _stop(*managers: ConnectionManager):
+    for cm in managers:
+        for task in (cm._listener_task, cm._heartbeat_task):
+            if task is not None:
+                task.cancel()
+        await asyncio.gather(
+            *(t for t in (cm._listener_task, cm._heartbeat_task) if t is not None), return_exceptions=True,
+        )
+        await cm.pubsub.aclose()
+
+
+async def _wait_for(predicate, timeout_s: float = 3.0):
+    deadline = time.monotonic() + timeout_s
+    while time.monotonic() < deadline:
+        if predicate():
+            return True
+        await asyncio.sleep(0.02)
+    return False
+
+
+async def test_tab_on_other_worker_keeps_player_online(shared_redis):
+    worker_a, worker_b = _worker(shared_redis, "A"), _worker(shared_redis, "B")
+    try:
+        await state_manager.initialize_game(game_id=42, white_id=10, black_id=20, base_time_ms=60000, increment_ms=0)
+        tab_a, tab_b = RecordingSocket(), RecordingSocket()
+        await worker_a.connect(tab_a, user_id=10)
+        await worker_b.connect(tab_b, user_id=10)
+
+        await worker_a.disconnect(10, tab_a)
+        state = await state_manager.get_game_state(42)
+        assert state["white_disconnected"] == "false"
+
+        await worker_b.disconnect(10, tab_b)
+        state = await state_manager.get_game_state(42)
+        assert state["white_disconnected"] == "true"
+    finally:
+        await _stop(worker_a, worker_b)
+
+
+async def test_message_reaches_tabs_on_all_workers_without_duplicates(shared_redis):
+    worker_a, worker_b = _worker(shared_redis, "A"), _worker(shared_redis, "B")
+    try:
+        tab_a, tab_b = RecordingSocket(), RecordingSocket()
+        await worker_a.connect(tab_a, user_id=77)
+        await worker_b.connect(tab_b, user_id=77)
+
+        await worker_a.send_personal_message({"event": "move_made", "san": "e4"}, 77)
+
+        assert await _wait_for(lambda: tab_b.received)
+        await asyncio.sleep(0.2)  # даём шанс прийти дублю, если он есть
+        assert [m["san"] for m in tab_a.received] == ["e4"]
+        assert [m["san"] for m in tab_b.received] == ["e4"]
+    finally:
+        await _stop(worker_a, worker_b)
+
+
+async def test_stale_presence_of_crashed_worker_expires(shared_redis):
+    worker = _worker(shared_redis, "A")
+    try:
+        await shared_redis.zadd("presence:user:88", {"conn-from-dead-worker": int(time.time() * 1000) - 60_000})
+        assert await worker.is_user_online(88) is False
+    finally:
+        await _stop(worker)
+
+
+async def test_spectators_are_shared_between_workers():
+    worker_a, worker_b = ConnectionManager(), ConnectionManager()
+
+    await worker_a.add_spectator(500, 33)
+    assert await worker_b.get_spectator_ids(500) == {33}
+
+    await worker_b.add_spectator(501, 33)  # перешёл смотреть другую партию
+    assert await worker_a.get_spectator_ids(500) == set()
+    assert await worker_a.get_spectator_ids(501) == {33}
+
+    await worker_a.remove_user_from_all_spectating(33)
+    assert await worker_b.get_spectator_ids(501) == set()
+
+
+async def test_only_one_worker_runs_timeouts_loop(monkeypatch):
+    monkeypatch.setattr(game_state_module, "WORKER_ID", "A")
+    assert await state_manager._hold_timeouts_leadership() is True
+    assert await state_manager._hold_timeouts_leadership() is True  # лидер продлевает
+
+    monkeypatch.setattr(game_state_module, "WORKER_ID", "B")
+    assert await state_manager._hold_timeouts_leadership() is False
+
+    await state_manager.redis.delete(game_state_module.TIMEOUTS_LEADER_KEY)  # лидер упал, TTL истёк
+    assert await state_manager._hold_timeouts_leadership() is True
+
+
+async def test_challenge_accepted_once_across_workers(monkeypatch):
+    from src.services.matchmaker import MatchmakingError, matchmaker
+
+    created: list[tuple[int, int]] = []
+
+    async def fake_create(session, c_id, a_id, base_time, inc_time, now_ms):
+        created.append((c_id, a_id))
+        return {
+            "game_id": 900 + len(created), "white_id": c_id, "black_id": a_id,
+            "white_username": "c", "white_rating": 1500, "black_username": "a", "black_rating": 1500,
         }
 
-        fetch(`${API_BASE_URL}/api/v1/profile/me`, {
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'accept': 'application/json'
-            }
-        })
-            .then(res => {
-                if (!res.ok) throw new Error('Unauthorized');
-                return res.json();
-            })
-            .then(data => setUserProfile(data))
-            .catch(() => {
-                localStorage.removeItem('token');
-                setToken(null);
-                setUserProfile(null);
-            });
-    }, [token]);
+    class _Silent:
+        async def send_personal_message(self, message, user_id):
+            pass
 
-    useEffect(() => {
-        if (!isProfileOpen) return;
-        const measurePing = async () => {
-            const start = Date.now();
-            try {
-                await fetch(`${API_BASE_URL}/health`);
-                setServerPing(Date.now() - start);
-            } catch {
-                setServerPing(-1);
-            }
-        };
-        measurePing();
-        const interval = setInterval(measurePing, 3000);
-        return () => clearInterval(interval);
-    }, [isProfileOpen]);
+    async def fake_rating(session, user_id):
+        return 1500
 
-    const handleLogout = () => {
-        localStorage.removeItem('token');
-        setToken(null);
-        setUserProfile(null);
-        setIsProfileOpen(false);
-        navigate('/');
-    };
+    monkeypatch.setattr(matchmaker, "_create_match_record", fake_create)
+    monkeypatch.setattr(matchmaker, "_fresh_rating", fake_rating)
+    await matchmaker.join_queue(1, "challenger", 1500, 180000, 0, 0, 3000)
 
-    useEffect(() => {
-        const handleClickOutside = (event: MouseEvent) => {
-            if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-                setIsProfileOpen(false);
-            }
-            if (championsMenuRef.current && !championsMenuRef.current.contains(event.target as Node)) {
-                setIsChampionsMenuOpen(false);
-            }
-        };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
-    }, []);
+    results = await asyncio.gather(
+        matchmaker.accept_challenge(1, 2, _Silent(), state_manager, db=object()),
+        matchmaker.accept_challenge(1, 3, _Silent(), state_manager, db=object()),
+        return_exceptions=True,
+    )
 
-    const username = userProfile?.username || 'Гость';
-    const userRating = userProfile?.rating || 1200;
-
-    return (
-        <div
-            className={`w-full flex flex-col bg-room text-paper font-sans select-none ${
-                isSingleScreenRoute ? 'min-h-dvh xl:h-dvh xl:overflow-hidden' : 'min-h-dvh'
-            }`}
-        >
-            <header
-                className="h-14 shrink-0 bg-acacia-dark border-b-2 border-amber-900/60 px-5 flex items-center justify-between shadow-heavy relative z-30">
-                <div className="flex items-center gap-7">
-                    <Link to="/" className="flex items-center gap-2.5 cursor-pointer group outline-none">
-                        <div
-                            className="w-9 h-9 rounded-md bg-boxwood flex items-center justify-center shadow-inner border border-amber-600/40 text-acacia-dark font-bold text-xl">
-                            ♞
-                        </div>
-                        <span
-                            className="text-2xl font-extrabold tracking-wide text-boxwood-light group-hover:text-white transition">
-                            michess
-                        </span>
-                    </Link>
-
-                    <nav className="hidden md:flex items-center gap-6 text-[15px] font-semibold text-boxwood/90">
-                        <Link
-                            to="/"
-                            className={`flex items-center gap-2 transition ${
-                                location.pathname === '/' ? 'text-amber-300' : 'hover:text-amber-300'
-                            }`}
-                        >
-                            <Swords size={17}/> Игра
-                        </Link>
-
-                        <Link
-                            to="/leaderboard"
-                            className={`flex items-center gap-2 transition ${
-                                location.pathname === '/leaderboard' ? 'text-amber-300' : 'hover:text-amber-300'
-                            }`}
-                        >
-                            <Trophy size={17}/> Лидеры
-                        </Link>
-
-                        {/* Выпадающее меню легенд */}
-                        <div className="relative" ref={championsMenuRef}>
-                            <button
-                                onClick={() => setIsChampionsMenuOpen(!isChampionsMenuOpen)}
-                                className={`flex items-center gap-2 transition outline-none cursor-pointer ${
-                                    isChampionsMenuOpen || location.pathname.startsWith('/champions')
-                                        ? 'text-amber-300'
-                                        : 'hover:text-amber-300'
-                                }`}
-                            >
-                                <Crown size={17}/> Легенды шахмат
-                                <ChevronDown
-                                    size={15}
-                                    className={`transition-transform ${isChampionsMenuOpen ? 'rotate-180' : ''}`}
-                                />
-                            </button>
-
-                            {isChampionsMenuOpen && (
-                                <div
-                                    className="absolute top-full left-0 mt-3 w-80 bg-[#261C14] border-2 border-amber-900/80 rounded-lg shadow-2xl z-50 max-h-[75vh] overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
-                                    {CHAMPIONS_LIST.map(champ => (
-                                        <Link
-                                            key={champ.id}
-                                            to={`/champions/${encodeURIComponent(champ.id)}`}
-                                            onClick={() => setIsChampionsMenuOpen(false)}
-                                            className="flex items-center gap-3.5 px-4 py-2.5 hover:bg-black/40 transition border-b border-amber-900/30 last:border-b-0 group outline-none"
-                                        >
-                                            <img
-                                                src={champ.img}
-                                                alt={champ.name}
-                                                referrerPolicy="no-referrer"
-                                                className="w-11 h-11 object-cover rounded-md shadow border border-amber-900/50 group-hover:border-amber-500/60 transition shrink-0"
-                                            />
-                                            <div className="flex flex-col min-w-0">
-                                                <span
-                                                    className="font-bold text-amber-200 text-[15px] group-hover:text-white transition truncate">
-                                                    {champ.name}
-                                                </span>
-                                                <span
-                                                    className="text-xs text-boxwood/70 font-mono group-hover:text-amber-400 transition">
-                                                    Чемпион • {champ.years}
-                                                </span>
-                                            </div>
-                                        </Link>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-
-                        <button className="flex items-center gap-2 hover:text-amber-300 transition cursor-pointer">
-                            <BookOpen size={17}/> Задачи
-                        </button>
-                        <button className="flex items-center gap-2 hover:text-amber-300 transition cursor-pointer">
-                            <Cpu size={17}/> Обучение
-                        </button>
-                        <button className="flex items-center gap-2 hover:text-amber-300 transition cursor-pointer">
-                            <Eye size={17}/> Просмотр
-                        </button>
-                        <button className="flex items-center gap-2 hover:text-amber-300 transition cursor-pointer">
-                            <Wrench size={17}/> Инструменты
-                        </button>
-                    </nav>
-                </div>
-
-                <div className="flex items-center gap-3 text-boxwood-light relative" ref={dropdownRef}>
-                    <Link
-                        to="/leaderboard"
-                        className="md:hidden p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300"
-                        title="Таблица лидеров"
-                    >
-                        <Trophy size={19}/>
-                    </Link>
-                    <button
-                        className="p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300 cursor-pointer"
-                        title="Поиск партии"
-                    >
-                        <Search size={19}/>
-                    </button>
-                    <button
-                        className="p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300 cursor-pointer"
-                        title="Уведомления"
-                    >
-                        <Bell size={19}/>
-                    </button>
-
-                    {token && userProfile ? (
-                        <>
-                            <div
-                                onClick={() => setIsProfileOpen(!isProfileOpen)}
-                                className="flex items-center gap-2.5 pl-3 border-l border-amber-900/50 cursor-pointer hover:opacity-90 transition select-none py-1 px-2.5 rounded-md hover:bg-black/25"
-                            >
-                                <img
-                                    src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${username}&backgroundColor=D0A972`}
-                                    alt="Avatar"
-                                    className="w-8 h-8 rounded bg-black/40 border border-amber-900/50 shadow"
-                                />
-                                <div className="flex flex-col items-start hidden sm:flex">
-                                    <span className="font-bold text-sm text-amber-200 leading-tight">{username}</span>
-                                    <span
-                                        className="text-xs text-amber-400 font-mono font-semibold">({userRating})</span>
-                                </div>
-                                <span className="text-xs text-amber-400 ml-0.5">▼</span>
-                            </div>
-
-                            {isProfileOpen && (
-                                <div
-                                    className="absolute right-0 top-12 w-64 bg-[#261C14] border-2 border-amber-900/80 rounded-lg shadow-2xl py-2 z-50 text-boxwood-light">
-                                    <div className="px-4 py-2.5 border-b border-amber-900/40 flex items-center gap-3">
-                                        <img
-                                            src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${username}&backgroundColor=D0A972`}
-                                            alt="Avatar"
-                                            className="w-10 h-10 rounded bg-black/40 border border-amber-900/50 shadow"
-                                        />
-                                        <div>
-                                            <div className="font-bold text-base text-amber-200">{username}</div>
-                                            <div
-                                                className="text-xs text-amber-400 font-mono">Рейтинг: {userRating}</div>
-                                            <div className="text-xs text-emerald-400 flex items-center gap-1.5 mt-0.5">
-                                                <span
-                                                    className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
-                                                В сети
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="py-1 border-b border-amber-900/40 text-sm font-medium">
-                                        <button
-                                            onClick={() => {
-                                                setIsProfileOpen(false);
-                                                navigate(`/profile/${username}`);
-                                            }}
-                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
-                                        >
-                                            <User size={16} className="text-amber-500"/> Профиль
-                                        </button>
-                                        <button
-                                            onClick={() => {
-                                                setIsProfileOpen(false);
-                                                navigate('/leaderboard');
-                                            }}
-                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
-                                        >
-                                            <Trophy size={16} className="text-amber-500"/> Таблица лидеров
-                                        </button>
-                                        <button
-                                            onClick={() => setIsProfileOpen(false)}
-                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
-                                        >
-                                            <Mail size={16} className="text-amber-500"/> Входящие
-                                        </button>
-                                        <button
-                                            onClick={() => setIsProfileOpen(false)}
-                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
-                                        >
-                                            <Settings size={16} className="text-amber-500"/> Настройки
-                                        </button>
-                                        <button
-                                            onClick={handleLogout}
-                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-red-950/40 transition text-red-300 hover:text-red-200 cursor-pointer"
-                                        >
-                                            <LogOut size={16} className="text-red-400"/> Выйти
-                                        </button>
-                                    </div>
-
-                                    <div
-                                        className="px-4 py-2 text-xs font-mono text-boxwood/70 flex justify-between items-center bg-black/20">
-                                        <span>ПИНГ {serverPing !== null ? (serverPing === -1 ? 'ОШИБКА' : `${serverPing} ms`) : '...'}</span>
-                                        <span className="text-emerald-400 font-bold">● СЕРВЕР</span>
-                                    </div>
-                                </div>
-                            )}
-                        </>
-                    ) : (
-                        <button
-                            onClick={() => setShowAuthModal(true)}
-                            className="flex items-center gap-2 px-4 py-1.5 bg-boxwood text-acacia-dark font-bold text-sm rounded-md hover:bg-boxwood-light transition shadow border border-amber-600/40 cursor-pointer"
-                        >
-                            <LogIn size={16}/> Войти
-                        </button>
-                    )}
-                </div>
-            </header>
-
-            <main
-                className={`flex-1 flex justify-center w-full ${
-                    isSingleScreenRoute
-                        ? 'items-stretch p-2 sm:p-3 xl:overflow-hidden'
-                        : 'items-start p-4 sm:p-6 overflow-y-auto'
-                }`}
-            >
-                <Routes>
-                    <Route path="/" element={<Chessboard key={token ? token : 'guest'}/>}/>
-                    <Route path="/challenge/:inviteCode" element={<Chessboard key={token ? token : 'guest'}/>}/>
-                    <Route path="/leaderboard" element={<Leaderboard/>}/>
-                    <Route path="/profile/:targetUsername" element={<Profile/>}/>
-                    <Route path="/game/:gameId" element={<GameViewer/>}/>
-                    <Route path="/champions/:championId" element={<ChampionGames/>}/>
-                </Routes>
-            </main>
-
-            {showAuthModal && (
-                <AuthModal
-                    onSuccess={(newToken) => {
-                        setToken(newToken);
-                        setShowAuthModal(false);
-                    }}
-                />
-            )}
-        </div>
-    );
-}
+    assert len(created) == 1
+    assert sum(isinstance(r, int) for r in results) == 1
+    assert all(isinstance(r, (int, MatchmakingError)) for r in results)
 
 ========================================================================================
-FILE: frontend/src/components/AuthModal.tsx
+FILE: tests/test_paulsen_bot.py
 ========================================================================================
-// --- FILE: frontend/src/components/AuthModal.tsx ---
+# --- FILE: tests/test_paulsen_bot.py ---
 
-import {useState} from 'react';
-import {LogIn, UserPlus} from 'lucide-react';
-import {API_BASE_URL} from '../config/api';
+import chess
+import pytest
+from httpx import ASGITransport, AsyncClient
 
-interface AuthModalProps {
-    onSuccess: (token: string) => void;
-}
+from src.main import app
+from src.services.bots.paulsen import (
+    PAULSEN_OPENING_BOOK,
+    PaulsenBot,
+    evaluate_paulsen_style_bonus,
+)
+from src.services.bots.philidor import normalize_fen_key
 
-export default function AuthModal({onSuccess}: AuthModalProps) {
-    const [isLogin, setIsLogin] = useState(true);
-    const [username, setUsername] = useState('');
-    const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        setError('');
-        setLoading(true);
+def test_paulsen_opening_repertoire():
+    """Проверяем, что Паульсен выбирает ход из своей дебютной книги."""
+    bot = PaulsenBot(stockfish_path=None)
+    board = chess.Board()
+    start_key = normalize_fen_key(board)
+    expected_moves = {item[0] for item in PAULSEN_OPENING_BOOK[start_key]}
 
-        try {
-            if (isLogin) {
-                // Логин (OAuth2 form URL encoded)
-                const formData = new URLSearchParams();
-                formData.append('username', username);
-                formData.append('password', password);
+    result = bot.choose_move(board.fen())
+    assert result["uci"] in expected_moves
+    assert result["source"] == "opening_book"
 
-                const res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                    body: formData,
-                });
 
-                if (!res.ok) throw new Error('Неверное имя пользователя или пароль');
-                const data = await res.json();
-                localStorage.setItem('token', data.access_token);
-                onSuccess(data.access_token);
-            } else {
-                // Регистрация
-                const res = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({username, password}),
-                });
+def test_paulsen_style_rewards_flexible_pawn_shield_and_bishops():
+    """Проверяем, что стилевой фильтр Паульсена поощряет сицилианские построения (c5/e6/a6) и фианкетто слона."""
+    board = chess.Board("rnbqkbnr/pp1ppppp/8/2p5/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq - 1 2")
 
-                if (!res.ok) {
-                    const errData = await res.json();
-                    throw new Error(errData.detail || 'Ошибка регистрации');
-                }
+    e6_bonus, _ = evaluate_paulsen_style_bonus(board, chess.Move.from_uci("e7e6"))
+    h6_bonus, _ = evaluate_paulsen_style_bonus(board, chess.Move.from_uci("h7h6"))
+    assert e6_bonus > h6_bonus
 
-                // Автоматический вход после успешной регистрации
-                setIsLogin(true);
-                setError('Регистрация успешна! Теперь войдите в систему.');
-            }
-        } catch (err: any) {
-            setError(err.message || 'Произошла ошибка');
-        } finally {
-            setLoading(false);
-        }
-    };
 
-    return (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-            <div
-                className="bg-[#261C14] border-2 border-amber-900/80 rounded-lg p-6 w-full max-w-md shadow-heavy text-boxwood-light font-serif">
+def test_paulsen_middlegame_move_generation():
+    """Проверяем генерацию хода Паульсена в миттельшпиле вне книги."""
+    bot = PaulsenBot(stockfish_path=None)
+    board = chess.Board("r1bq1rk1/1p2bppp/p1nppn2/8/3NP3/2N1B3/PPPQBPPP/2KR3R b - - 3 10")
 
-                <div className="flex justify-center mb-4">
-                    <div
-                        className="w-12 h-12 rounded bg-boxwood flex items-center justify-center text-acacia-dark font-bold text-2xl shadow-inner border border-amber-600/40">
-                        ♞
-                    </div>
-                </div>
+    result = bot.choose_move(board.fen())
+    assert chess.Move.from_uci(result["uci"]) in board.legal_moves
+    assert result["source"] == "paulsen_style_engine"
 
-                <h2 className="text-2xl font-bold text-center text-amber-200 mb-1">
-                    {isLogin ? 'Вход в michess' : 'Регистрация аккаунта'}
-                </h2>
-                <p className="text-xs text-center text-boxwood/70 mb-6">
-                    {isLogin ? 'Введите свои учетные данные для игры' : 'Создайте новый аккаунт для старта'}
-                </p>
 
-                {error && (
-                    <div
-                        className={`p-3 mb-4 rounded text-xs text-center border ${error.includes('успешна') ? 'bg-emerald-950/60 border-emerald-600/50 text-emerald-200' : 'bg-red-950/80 border-red-800/50 text-red-200'}`}>
-                        {error}
-                    </div>
-                )}
+@pytest.mark.asyncio
+async def test_paulsen_api_move_endpoint():
+    """Проверяем REST-эндпоинты /api/v1/bots/list и /api/v1/bots/move для игры с Паульсеном."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        list_resp = await client.get("/api/v1/bots/list")
+        assert list_resp.status_code == 200
+        bot_ids = [b["id"] for b in list_resp.json()["bots"]]
+        assert "paulsen" in bot_ids
 
-                <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-                    <div>
-                        <label className="block text-xs text-boxwood/80 mb-1">Имя пользователя (Логин)</label>
-                        <input
-                            type="text"
-                            required
-                            value={username}
-                            onChange={(e) => setUsername(e.target.value)}
-                            className="w-full px-3 py-2 bg-black/40 border border-amber-900/60 rounded text-amber-100 text-sm focus:outline-none focus:border-amber-600"
-                            placeholder="например, string1"
-                        />
-                    </div>
-
-                    <div>
-                        <label className="block text-xs text-boxwood/80 mb-1">Пароль</label>
-                        <input
-                            type="password"
-                            required
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className="w-full px-3 py-2 bg-black/40 border border-amber-900/60 rounded text-amber-100 text-sm focus:outline-none focus:border-amber-600"
-                            placeholder="••••••••"
-                        />
-                    </div>
-
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="mt-2 flex items-center justify-center gap-2 py-2.5 bg-boxwood text-acacia-dark font-bold rounded hover:bg-boxwood-light transition shadow border border-amber-600/40 disabled:opacity-50"
-                    >
-                        {isLogin ? <LogIn size={18}/> : <UserPlus size={18}/>}
-                        {loading ? 'Загрузка...' : (isLogin ? 'Войти' : 'Зарегистрироваться')}
-                    </button>
-                </form>
-
-                <div className="mt-4 text-center text-xs">
-                    <button
-                        type="button"
-                        onClick={() => {
-                            setIsLogin(!isLogin);
-                            setError('');
-                        }}
-                        className="text-amber-400 hover:underline"
-                    >
-                        {isLogin ? 'Нет аккаунта? Зарегистрируйтесь' : 'Уже есть аккаунт? Войдите'}
-                    </button>
-                </div>
-
-            </div>
-        </div>
-    );
-}
+        move_resp = await client.post(
+            "/api/v1/bots/move",
+            json={"bot_id": "paulsen", "fen": chess.STARTING_FEN},
+        )
+        assert move_resp.status_code == 200
+        data = move_resp.json()
+        assert data["bot_id"] == "paulsen"
+        assert data["source"] == "opening_book"
 
 ========================================================================================
-FILE: frontend/src/components/ChampionGames.tsx
+FILE: tests/test_philidor_bot.py
 ========================================================================================
-// --- FILE: frontend/src/components/ChampionGames.tsx ---
+# --- FILE: tests/test_philidor_bot.py ---
 
-import {useState, useEffect} from 'react';
-import {useParams, Link, useNavigate} from 'react-router-dom';
-import {format, parseISO} from 'date-fns';
-import {ru} from 'date-fns/locale';
-import {
-    Swords, Download, ArrowLeft, Crown,
-    ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
-} from 'lucide-react';
-import {CHAMPIONS_LIST} from '../config/champions';
-import {API_BASE_URL} from '../config/api';
+import chess
+import pytest
+from httpx import ASGITransport, AsyncClient
 
-interface GameData {
-    game_id: number;
-    white_username: string;
-    white_rating: number;
-    black_username: string;
-    black_rating: number;
-    status: string;
-    is_rated: boolean;
-    result: string;
-    pgn_date: string | null;
-    site: string | null;
-    eco: string | null;
-    finished_at: string | null;
-}
+from src.main import app
+from src.services.bots.philidor import (
+    PHILIDOR_OPENING_BOOK,
+    PhilidorBot,
+    evaluate_philidor_style_bonus,
+    normalize_fen_key,
+)
 
-const displayDate = (game: GameData) => {
-    if (game.pgn_date && !game.pgn_date.includes('????')) {
-        // Очищаем дату от неизвестных месяцев/дней: "1860.??.??" -> "1860"
-        return game.pgn_date.replace(/\??/g, '').replace(/\.$/, '');
-    }
-    if (game.finished_at) {
-        return format(parseISO(game.finished_at), 'd MMM yyyy', {locale: ru});
-    }
-    return '—';
-};
 
-export default function ChampionGames() {
-    const {championId} = useParams<{ championId: string }>();
-    const navigate = useNavigate();
+def test_philidor_plays_philidor_defense_as_black():
+    """Проверяем, что на 1. e4 e5 2. Nf3 Филидор всегда отвечает своей защитой 2... d6."""
+    bot = PhilidorBot(stockfish_path=None)
+    board = chess.Board()
+    for san in ["e4", "e5", "Nf3"]:
+        board.push_san(san)
 
-    const [games, setGames] = useState<GameData[]>([]);
-    const [totalGames, setTotalGames] = useState<number>(0);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    result = bot.choose_move(board.fen())
+    assert result["uci"] == "d7d6"
+    assert result["source"] == "opening_book"
 
-    const [page, setPage] = useState(1);
-    const [limit, setLimit] = useState(25);
 
-    const champion = CHAMPIONS_LIST.find(c => c.id === championId);
+def test_philidor_dislikes_blocking_c_pawn_with_knight():
+    """Проверяем, что стилевой фильтр штрафует ход Nc3 при пешке на c2 и поощряет c2-c3."""
+    board = chess.Board()
+    for san in ["e4", "e5", "Bc4", "Bc5"]:
+        board.push_san(san)
 
-    useEffect(() => {
-        const fetchGames = async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                const offset = (page - 1) * limit;
-                const res = await fetch(`${API_BASE_URL}/api/v1/profile/${championId}/games?limit=${limit}&offset=${offset}&sort=asc`);
+    c3_bonus, _ = evaluate_philidor_style_bonus(board, chess.Move.from_uci("c2c3"))
+    nc3_bonus, _ = evaluate_philidor_style_bonus(board, chess.Move.from_uci("b1c3"))
 
-                if (!res.ok) {
-                    const errData = await res.json();
-                    throw new Error(errData.detail || 'Не удалось загрузить партии из базы данных');
-                }
+    assert c3_bonus > 0
+    assert nc3_bonus < 0
+    assert c3_bonus > nc3_bonus
 
-                const data = await res.json();
-                setTotalGames(data.total || 0);
-                setGames(data.items || []);
 
-            } catch (err: any) {
-                setError(err.message);
-            } finally {
-                setLoading(false);
-            }
-        };
+def test_philidor_middlegame_move_generation():
+    """Проверяем генерацию хода Филидора в миттельшпиле вне дебютной книги."""
+    bot = PhilidorBot(stockfish_path=None)
+    board = chess.Board("r1bqk2r/ppp2ppp/2np1n2/2b1p3/2B1P3/2PP1N2/PP3PPP/RNBQK2R w KQkq - 1 6")
 
-        if (championId) fetchGames();
-    }, [championId, page, limit]);
+    result = bot.choose_move(board.fen())
+    assert chess.Move.from_uci(result["uci"]) in board.legal_moves
+    assert result["source"] == "philidor_style_engine_deep"
 
-    if (!champion) {
-        return (
-            <div className="bg-red-950/80 border border-red-800 p-6 rounded text-red-200 text-center font-serif">
-                <h2 className="text-xl font-bold mb-2">Ошибка</h2>
-                <p>Игрок с идентификатором {championId} не найден в конфигурации.</p>
-                <Link to="/" className="mt-4 inline-block text-amber-400 hover:underline">На главную</Link>
-            </div>
-        );
+
+@pytest.mark.asyncio
+async def test_philidor_api_move_endpoint():
+    """Проверяем REST-эндпоинт /api/v1/bots/move для игры с Филидором."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        list_resp = await client.get("/api/v1/bots/list")
+        assert list_resp.status_code == 200
+        bot_ids = [b["id"] for b in list_resp.json()["bots"]]
+        assert "philidor" in bot_ids
+
+        start_key = normalize_fen_key(chess.Board())
+        philidor_start_moves = {item[0] for item in PHILIDOR_OPENING_BOOK[start_key]}
+
+        move_resp = await client.post(
+            "/api/v1/bots/move",
+            json={
+                "bot_id": "philidor",
+                "fen": chess.STARTING_FEN,
+            },
+        )
+        assert move_resp.status_code == 200
+        data = move_resp.json()
+        assert data["bot_id"] == "philidor"
+        assert data["uci"] in philidor_start_moves
+        assert data["source"] == "opening_book"
+
+========================================================================================
+FILE: tests/test_staunton_bot.py
+========================================================================================
+# --- FILE: tests/test_staunton_bot.py ---
+
+import chess
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+from src.main import app
+from src.services.bots.philidor import normalize_fen_key
+from src.services.bots.staunton import (
+    STAUNTON_OPENING_BOOK,
+    StauntonBot,
+    evaluate_staunton_style_bonus,
+)
+
+
+def test_staunton_opening_book_initial_move():
+    """Проверяем, что Стаунтон выбирает дебютный ход из своей книги."""
+    bot = StauntonBot(stockfish_path=None)
+    board = chess.Board()
+    start_key = normalize_fen_key(board)
+    expected_moves = {item[0] for item in STAUNTON_OPENING_BOOK[start_key]}
+
+    result = bot.choose_move(board.fen())
+    assert result["uci"] in expected_moves
+    assert result["source"] == "opening_book"
+
+
+def test_staunton_style_rewards_c4_and_castling():
+    """Проверяем, что позиционный фильтр Стаунтона поощряет английское начало (c2-c4) и рокировку."""
+    start_board = chess.Board()
+    c4_bonus, _ = evaluate_staunton_style_bonus(start_board, chess.Move.from_uci("c2c4"))
+    h3_bonus, _ = evaluate_staunton_style_bonus(start_board, chess.Move.from_uci("h2h3"))
+    assert c4_bonus > h3_bonus
+
+    castle_board = chess.Board("r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4")
+    castle_bonus, _ = evaluate_staunton_style_bonus(castle_board, chess.Move.from_uci("e1g1"))
+    assert castle_bonus > h3_bonus
+
+
+def test_staunton_middlegame_move_generation():
+    """Проверяем генерацию хода Стаунтона вне дебютной книги."""
+    bot = StauntonBot(stockfish_path=None)
+    board = chess.Board("r1bq1rk1/pp2ppbp/2np1np1/8/2PPP3/2N2N2/PP2BPPP/R1BQ1RK1 w - - 3 8")
+
+    result = bot.choose_move(board.fen())
+    assert chess.Move.from_uci(result["uci"]) in board.legal_moves
+    assert result["source"] == "staunton_style_engine"
+
+
+@pytest.mark.asyncio
+async def test_staunton_api_move_endpoint():
+    """Проверяем REST-эндпоинты /api/v1/bots/list и /api/v1/bots/move для игры со Стаунтоном."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        list_resp = await client.get("/api/v1/bots/list")
+        assert list_resp.status_code == 200
+        bot_ids = [b["id"] for b in list_resp.json()["bots"]]
+        assert "staunton" in bot_ids
+
+        move_resp = await client.post(
+            "/api/v1/bots/move",
+            json={"bot_id": "staunton", "fen": chess.STARTING_FEN},
+        )
+        assert move_resp.status_code == 200
+        data = move_resp.json()
+        assert data["bot_id"] == "staunton"
+        assert data["source"] == "opening_book"
+
+========================================================================================
+FILE: tests/test_stockfish_engine.py
+========================================================================================
+# --- FILE: tests/test_stockfish_engine.py ---
+
+import chess
+from src.services.bots.base import analyse_with_stockfish, resolve_stockfish_path
+from src.services.bots import BOT_INSTANCES
+
+
+def test_stockfish_binary_exists_and_works():
+    sf_path = resolve_stockfish_path()
+    assert sf_path is not None, "Бинарник Stockfish не найден ни в bin/, ни в системном PATH"
+
+    board = chess.Board()
+    scores = analyse_with_stockfish(board, sf_path, skill_level=5, uci_elo=1800, depth=4, multipv=3)
+    assert len(scores) > 0, "Stockfish должен возвращать оценки кандидатов для стартовой позиции"
+
+    for bot_id, bot in BOT_INSTANCES.items():
+        assert bot._get_active_engine_path() is not None, f"У бота {bot_id} не подключен путь к Stockfish"
+
+========================================================================================
+FILE: tests/test_websockets_flow.py
+========================================================================================
+# --- FILE: tests/test_websockets_flow.py ---
+
+import json
+import pytest
+from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
+from src.main import app
+
+
+def test_websocket_unauthorized_access(client: TestClient):
+    try:
+        with client.websocket_connect("/api/v1/ws/matchmaking?token=invalid_token") as websocket:
+            pass
+    except WebSocketDisconnect as e:
+        # 1008 Policy Violation / закрытие из-за неверного токена — ожидаемое поведение
+        assert e.code == 1008
+
+
+@pytest.mark.asyncio
+async def test_premove_telemetry_saved_and_bot_thinking_time():
+    """Проверяет сохранение флага is_premove=True в Redis-телеметрии и расчёт времени хода бота."""
+    import chess
+    from src.services.game_state import state_manager
+    from src.api.bots import calculate_authentic_thinking_time_ms
+
+    game_id = 999123
+    await state_manager.redis.delete(f"game:{game_id}:moves")
+
+    await state_manager.save_move_telemetry(game_id, {
+        "player_id": 1,
+        "move_number": 1,
+        "notation": "g1f3",
+        "san": "Nf3",
+        "fen_after": chess.Board().fen(),
+        "time_taken_ms": 0,
+        "window_blurred_before_move": False,
+        "is_premove": True,
+        "network_lag_ms": 5,
+    })
+
+    raw_moves = await state_manager.redis.lrange(f"game:{game_id}:moves", 0, -1)
+    assert len(raw_moves) == 1
+    saved = json.loads(raw_moves[0])
+    assert saved["is_premove"] is True
+    assert saved["time_taken_ms"] == 0
+
+    # Проверка тайминга: Морфи из книги думает быстрее, чем Паульсен в расчёте
+    board = chess.Board()
+    morphy_book_ms = calculate_authentic_thinking_time_ms("morphy", board, "e2e4", "book")
+    paulsen_engine_ms = calculate_authentic_thinking_time_ms("paulsen", board, "e2e4", "engine")
+    assert 200 <= morphy_book_ms < paulsen_engine_ms <= 3000
+
+
+@pytest.mark.asyncio
+async def test_rematch_swaps_colors(db_session):
+    """Проверяет, что при принятии реванша создаётся новая партия со сменой цветов (white_id <-> black_id)."""
+    from src.models.user import User
+    from src.api.websockets import create_rematch_game
+    from src.services.game_state import state_manager
+
+    p1 = User(username="rematch_p1", hashed_password="pw", rating=1600)
+    p2 = User(username="rematch_p2", hashed_password="pw", rating=1650)
+    db_session.add_all([p1, p2])
+    await db_session.commit()
+    await db_session.refresh(p1)
+    await db_session.refresh(p2)
+
+    prev_state = {
+        "white_id": str(p1.id),
+        "black_id": str(p2.id),
+        "base_time_ms": "300000",
+        "increment_ms": "3000",
     }
 
-    const totalPages = Math.max(1, Math.ceil(totalGames / limit));
+    rematch_info = await create_rematch_game(db_session, prev_state)
+    assert rematch_info["white_id"] == p2.id
+    assert rematch_info["black_id"] == p1.id
+    assert rematch_info["base_time_ms"] == 300000
+    assert rematch_info["increment_ms"] == 3000
 
-    const getVisiblePages = () => {
-        const pages = [];
-        let start = Math.max(1, page - 2);
-        let end = Math.min(totalPages, page + 2);
+    new_state = await state_manager.get_game_state(rematch_info["game_id"])
+    assert int(new_state["white_id"]) == p2.id
+    assert int(new_state["black_id"]) == p1.id
 
-        if (page <= 3) end = Math.min(5, totalPages);
-        if (page >= totalPages - 2) start = Math.max(1, totalPages - 4);
 
-        for (let i = start; i <= end; i++) {
-            pages.push(i);
-        }
-        return pages;
-    };
+@pytest.mark.asyncio
+async def test_spectator_receives_live_moves_and_chat():
+    """Проверяет подписку зрителей на партию и рассылку ходов и сообщений чата."""
+    from src.services.connection_manager import manager
+    from src.api.websockets import broadcast_to_game_participants_and_spectators
 
-    return (
-        <div className="w-full max-w-6xl flex flex-col gap-6 font-serif">
+    received: dict[int, list[dict]] = {}
 
-            <div
-                className="bg-acacia-dark border border-amber-900/40 p-6 rounded shadow-heavy flex items-center gap-6 relative overflow-hidden">
-                <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
-                    <Crown size={180}/>
-                </div>
+    async def fake_send(message: dict, user_id: int):
+        received.setdefault(user_id, []).append(message)
 
-                <img
-                    src={champion.img}
-                    alt={champion.name}
-                    referrerPolicy="no-referrer"
-                    className="w-32 h-32 object-cover rounded-lg bg-black/40 shadow-inner border-2 border-amber-600/40 z-10"
-                />
+    orig_send = manager.send_personal_message
+    manager.send_personal_message = fake_send
+    try:
+        game_id = 777001
+        white_id, black_id, spectator_id = 11, 22, 33
+        await manager.add_spectator(game_id, spectator_id)
 
-                <div className="flex flex-col z-10">
-                    <div
-                        className="text-amber-600 text-sm font-bold uppercase tracking-widest mb-1 flex items-center gap-2">
-                        <Crown size={16}/> Исторический архив
-                    </div>
-                    <h1 className="text-4xl font-bold text-amber-200 mb-2">{champion.name}</h1>
-                    <div className="text-boxwood-light/80">
-                        Эпоха: <span className="font-mono text-amber-400 font-bold ml-1">{champion.years}</span>
-                    </div>
-                    <div className="text-boxwood-light/80 mt-1">
-                        Партий в базе: <span className="font-mono text-amber-400 font-bold ml-1">{totalGames}</span>
-                    </div>
-                </div>
-            </div>
+        move_event = {"event": "move_made", "game_id": game_id, "san": "e4"}
+        await broadcast_to_game_participants_and_spectators(game_id, white_id, black_id, move_event)
 
-            {error && (
-                <div className="bg-red-950/80 border border-red-800 p-6 rounded text-red-200 text-center shadow-heavy">
-                    <h2 className="text-xl font-bold mb-2">Ошибка загрузки</h2>
-                    <p>{error}</p>
-                </div>
-            )}
+        assert received[white_id][0]["san"] == "e4"
+        assert received[black_id][0]["san"] == "e4"
+        assert received[spectator_id][0]["san"] == "e4"
 
-            <div className="bg-acacia-dark border border-amber-900/40 rounded shadow-heavy flex flex-col min-h-[500px]">
-                <div className="p-5 border-b border-amber-900/40 bg-black/20 flex items-center gap-4">
-                    <button
-                        onClick={() => window.history.back()}
-                        className="p-1.5 bg-black/20 hover:bg-black/40 rounded transition border border-amber-900/50"
-                        title="Назад"
-                    >
-                        <ArrowLeft size={16} className="text-amber-500"/>
-                    </button>
-                    <h2 className="text-sm uppercase tracking-widest text-amber-500/80 font-bold">
-                        Хронология игр (От самых ранних к поздним)
-                    </h2>
-                </div>
+        chat_event = {"event": "chat_message", "game_id": game_id, "sender": "Spectator", "text": "👏 Красивый ход!"}
+        await broadcast_to_game_participants_and_spectators(game_id, white_id, black_id, chat_event)
+        assert received[spectator_id][1]["event"] == "chat_message"
+        assert received[white_id][1]["text"] == "👏 Красивый ход!"
 
-                <div className="flex-1 overflow-x-auto relative">
-                    {loading && (
-                        <div
-                            className="absolute inset-0 z-20 bg-acacia-dark/80 backdrop-blur-sm flex flex-col items-center justify-center text-amber-500">
-                            <Swords size={40} className="animate-spin mb-4"/>
-                            <span className="font-bold">Загрузка архивов...</span>
-                        </div>
-                    )}
+        await manager.remove_spectator(game_id, spectator_id)
+    finally:
+        manager.send_personal_message = orig_send
 
-                    <table className="w-full text-left text-sm font-sans whitespace-nowrap">
-                        <thead
-                            className="bg-[#1A120B] text-boxwood/60 uppercase text-xs tracking-wider sticky top-0 z-10 border-b border-amber-900/50 shadow">
-                        <tr>
-                            <th className="px-4 py-4 font-medium">№</th>
-                            <th className="px-4 py-4 font-medium">Белые</th>
-                            <th className="px-4 py-4 font-medium">Черные</th>
-                            <th className="px-4 py-4 font-medium text-center">Результат</th>
-                            <th className="px-4 py-4 font-medium text-center">Дебют</th>
-                            <th className="px-4 py-4 font-medium text-center">Место</th>
-                            <th className="px-4 py-4 font-medium text-center">Дата</th>
-                            <th className="px-4 py-4 font-medium text-right">PGN</th>
-                        </tr>
-                        </thead>
-                        <tbody className="divide-y divide-amber-900/20 text-boxwood-light">
-                        {games.length === 0 && !loading ? (
-                            <tr>
-                                <td colSpan={8} className="px-6 py-12 text-center text-boxwood/50 font-serif text-lg">
-                                    В архиве нет записей для этой страницы.
-                                </td>
-                            </tr>
-                        ) : (
-                            games.map((game, index) => {
-                                const isWhite = game.white_username.includes(champion.id);
-                                let resultColor = 'text-gray-400';
-                                let resultText = 'Ничья';
+========================================================================================
+FILE: tests/test_worker_tasks.py
+========================================================================================
+# --- FILE: tests/test_worker_tasks.py ---
+"""
+Celery-задача анализа: каждая задача идёт в собственном asyncio.run, поэтому глобальный
+пул соединений использовать нельзя — со второй задачи он ломался («different loop»).
+"""
 
-                                if (game.result === '1-0') {
-                                    resultColor = isWhite ? 'text-emerald-400' : 'text-red-400';
-                                    resultText = isWhite ? 'Победа' : 'Поражение';
-                                } else if (game.result === '0-1') {
-                                    resultColor = isWhite ? 'text-red-400' : 'text-emerald-400';
-                                    resultText = isWhite ? 'Поражение' : 'Победа';
-                                }
+import asyncio
+import json
 
-                                const absoluteIndex = (page - 1) * limit + index + 1;
+import pytest
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-                                return (
-                                    <tr
-                                        key={game.game_id}
-                                        onClick={() => navigate(`/game/${game.game_id}`, {state: {game}})}
-                                        className="hover:bg-black/30 transition group cursor-pointer"
-                                    >
-                                        <td className="px-4 py-4 font-mono text-boxwood/40">
-                                            {absoluteIndex}
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <div className="flex items-center gap-2">
-                                                <span
-                                                    className="w-3 h-3 rounded-sm border border-gray-400 bg-white inline-block"></span>
-                                                <span className={`font-bold ${isWhite ? 'text-amber-300' : ''}`}>
-                            {game.white_username}
-                          </span>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-4">
-                                            <div className="flex items-center gap-2">
-                                                <span
-                                                    className="w-3 h-3 rounded-sm border border-gray-600 bg-black inline-block"></span>
-                                                <span className={`font-bold ${!isWhite ? 'text-amber-300' : ''}`}>
-                            {game.black_username}
-                          </span>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-4 text-center">
-                                            <div className={`font-bold font-serif ${resultColor}`}>
-                                                {resultText} <span
-                                                className="text-xs opacity-70 ml-1">({game.result})</span>
-                                            </div>
-                                        </td>
-                                        <td className="px-4 py-4 text-center font-mono text-amber-500/80">
-                                            {game.eco || '—'}
-                                        </td>
-                                        <td className="px-4 py-4 text-center text-boxwood/70">
-                                            {game.site || '—'}
-                                        </td>
-                                        <td className="px-4 py-4 text-center text-boxwood/70 font-mono">
-                                            {displayDate(game)}
-                                        </td>
-                                        <td className="px-4 py-4 text-right">
-                                            <a
-                                                href={`${API_BASE_URL}/api/v1/profile/games/${game.game_id}/pgn`}
-                                                download
-                                                onClick={(e) => e.stopPropagation()}
-                                                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black/30 hover:bg-amber-900/60 text-amber-400 rounded transition border border-amber-900/40 text-xs font-bold"
-                                                title="Скачать PGN"
-                                            >
-                                                <Download size={14}/>
-                                            </a>
-                                        </td>
-                                    </tr>
-                                )
-                            })
-                        )}
-                        </tbody>
-                    </table>
-                </div>
+from src.models.base import Base
+from src.models.game import Game, GameStatus
+from src.models.user import User
+from src.services.bots.base import resolve_stockfish_path
+from src.worker import tasks
 
-                {/* Панель пагинации */}
-                {totalGames > 0 && (
-                    <div
-                        className="bg-[#1A120B] p-4 border-t border-amber-900/50 flex flex-col sm:flex-row justify-between items-center gap-4">
-                        <div className="flex items-center gap-3 text-boxwood/60 text-sm">
-                            <span className="hidden sm:inline">Показывать по:</span>
-                            <select
-                                value={limit}
-                                onChange={(e) => {
-                                    setLimit(Number(e.target.value));
-                                    setPage(1);
-                                }}
-                                className="bg-black/40 border border-amber-900/50 rounded px-2 py-1 text-amber-200 outline-none cursor-pointer focus:border-amber-600"
-                            >
-                                <option value="25">25</option>
-                                <option value="50">50</option>
-                            </select>
-                            <span className="font-mono bg-black/30 px-2 py-1 rounded">Всего: {totalGames}</span>
-                        </div>
+PGN = '[Event "t"]\n[Result "1-0"]\n\n1. e4 e5 2. Qh5 Nc6 3. Bc4 Nf6 4. Qxf7# 1-0'
 
-                        <div className="flex items-center gap-1.5">
-                            <button
-                                onClick={() => setPage(1)}
-                                disabled={page === 1}
-                                className="p-1.5 rounded bg-black/40 hover:bg-amber-900/60 disabled:opacity-30 disabled:cursor-not-allowed text-amber-500 transition border border-transparent hover:border-amber-900/50"
-                            >
-                                <ChevronsLeft size={18}/>
-                            </button>
-                            <button
-                                onClick={() => setPage(p => Math.max(1, p - 1))}
-                                disabled={page === 1}
-                                className="p-1.5 rounded bg-black/40 hover:bg-amber-900/60 disabled:opacity-30 disabled:cursor-not-allowed text-amber-500 transition border border-transparent hover:border-amber-900/50"
-                            >
-                                <ChevronLeft size={18}/>
-                            </button>
 
-                            <div className="flex items-center gap-1 mx-2">
-                                {getVisiblePages().map(p => (
-                                    <button
-                                        key={p}
-                                        onClick={() => setPage(p)}
-                                        className={`w-8 h-8 rounded text-sm font-bold font-mono transition flex items-center justify-center ${
-                                            page === p
-                                                ? 'bg-amber-600 text-white shadow shadow-amber-600/20'
-                                                : 'bg-black/40 text-amber-500 hover:bg-amber-900/60 border border-transparent hover:border-amber-900/50'
-                                        }`}
-                                    >
-                                        {p}
-                                    </button>
-                                ))}
-                            </div>
+async def _prepare_db(url: str) -> list[int]:
+    engine = create_async_engine(url)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    session_factory = async_sessionmaker(engine, expire_on_commit=False)
+    async with session_factory() as db:
+        white = User(username="worker_w", hashed_password="pw", rating=1500)
+        black = User(username="worker_b", hashed_password="pw", rating=1500)
+        db.add_all([white, black])
+        await db.commit()
+        games = [
+            Game(white_player_id=white.id, black_player_id=black.id, status=GameStatus.COMPLETED,
+                 base_time_ms=180000, increment_ms=0, is_rated=True, pgn=PGN)
+            for _ in range(2)
+        ]
+        db.add_all(games)
+        await db.commit()
+        ids = [g.id for g in games]
+    await engine.dispose()
+    return ids
 
-                            <button
-                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                                disabled={page === totalPages}
-                                className="p-1.5 rounded bg-black/40 hover:bg-amber-900/60 disabled:opacity-30 disabled:cursor-not-allowed text-amber-500 transition border border-transparent hover:border-amber-900/50"
-                            >
-                                <ChevronRight size={18}/>
-                            </button>
-                            <button
-                                onClick={() => setPage(totalPages)}
-                                disabled={page === totalPages}
-                                className="p-1.5 rounded bg-black/40 hover:bg-amber-900/60 disabled:opacity-30 disabled:cursor-not-allowed text-amber-500 transition border border-transparent hover:border-amber-900/50"
-                            >
-                                <ChevronsRight size={18}/>
-                            </button>
-                        </div>
-                    </div>
-                )}
-            </div>
-        </div>
-    );
-}
+
+async def _cached_analysis(url: str, game_id: int) -> str | None:
+    engine = create_async_engine(url)
+    async with async_sessionmaker(engine)() as db:
+        game = await db.get(Game, game_id)
+        value = game.analysis_json
+    await engine.dispose()
+    return value
+
+
+@pytest.mark.skipif(resolve_stockfish_path() is None, reason="Stockfish binary not available")
+def test_consecutive_tasks_each_in_own_event_loop(tmp_path, monkeypatch):
+    url = f"sqlite+aiosqlite:///{(tmp_path / 'worker.db').as_posix()}"
+    game_ids = asyncio.run(_prepare_db(url))
+    monkeypatch.setattr(tasks, "_task_database_url", lambda: url)
+
+    for game_id in game_ids:  # две задачи подряд — как в живом воркере
+        report = tasks.analyze_game_task(game_id)
+        assert report.get("status") != "error"
+        assert len(report["moves"]) == 7
+
+    for game_id in game_ids:
+        assert json.loads(asyncio.run(_cached_analysis(url, game_id)))["moves"]
+
+========================================================================================
+FILE: tests/test_zukertort_bot.py
+========================================================================================
+# --- FILE: tests/test_zukertort_bot.py ---
+
+import chess
+import pytest
+from httpx import ASGITransport, AsyncClient
+
+from src.main import app
+from src.services.bots.philidor import normalize_fen_key
+from src.services.bots.zukertort import (
+    ZUKERTORT_OPENING_BOOK,
+    ZukertortBot,
+    evaluate_zukertort_style_bonus,
+)
+
+
+def test_zukertort_opening_repertoire():
+    """Проверяем, что Цукерторт делает ход из дебютной книги."""
+    bot = ZukertortBot(stockfish_path=None)
+    board = chess.Board()
+    start_key = normalize_fen_key(board)
+    expected_moves = {item[0] for item in ZUKERTORT_OPENING_BOOK[start_key]}
+
+    result = bot.choose_move(board.fen())
+    assert result["uci"] in expected_moves
+    assert result["source"] == "opening_book"
+
+
+def test_zukertort_style_rewards_development_and_castling():
+    """Проверяем, что стилевой фильтр Цукерторта поощряет развитие лёгких фигур и рокировку."""
+    board = chess.Board("r1bqk2r/pppp1ppp/2n2n2/2b1p3/2B1P3/5N2/PPPP1PPP/RNBQK2R w KQkq - 4 4")
+
+    castle_bonus, _ = evaluate_zukertort_style_bonus(board, chess.Move.from_uci("e1g1"))
+    nc3_bonus, _ = evaluate_zukertort_style_bonus(board, chess.Move.from_uci("b1c3"))
+    h3_bonus, _ = evaluate_zukertort_style_bonus(board, chess.Move.from_uci("h2h3"))
+
+    assert castle_bonus > h3_bonus
+    assert nc3_bonus > h3_bonus
+
+
+@pytest.mark.asyncio
+async def test_zukertort_api_move_endpoint():
+    """Проверяем REST-эндпоинты /api/v1/bots/list и /api/v1/bots/move для игры с Цукертортом."""
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        list_resp = await client.get("/api/v1/bots/list")
+        assert list_resp.status_code == 200
+        bot_ids = [b["id"] for b in list_resp.json()["bots"]]
+        assert "zukertort" in bot_ids
+
+        move_resp = await client.post(
+            "/api/v1/bots/move",
+            json={"bot_id": "zukertort", "fen": chess.STARTING_FEN},
+        )
+        assert move_resp.status_code == 200
+        data = move_resp.json()
+        assert data["bot_id"] == "zukertort"
+        assert data["source"] == "opening_book"
 
 ----------------------------------------------------------------------------------------
-END OF PART 6/11
+END OF PART 6/14
