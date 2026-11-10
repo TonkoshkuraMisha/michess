@@ -7,6 +7,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db.session import get_db
+from src.services.anticheat import trusted_premove
 from src.services.connection_manager import manager
 from src.services.game_state import state_manager
 from src.api.deps import get_current_user_ws
@@ -523,7 +524,7 @@ async def matchmaking_endpoint(
                             "fen_after": move_data.get("new_fen", ""),
                             "time_taken_ms": server_elapsed_ms,
                             "window_blurred_before_move": bool(data.get("window_blurred", False)),
-                            "is_premove": bool(data.get("is_premove", False)),
+                            "is_premove": trusted_premove(data.get("is_premove", False), server_elapsed_ms),
                             "network_lag_ms": network_lag_ms
                         })
 

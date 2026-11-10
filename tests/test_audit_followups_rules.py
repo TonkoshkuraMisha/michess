@@ -161,3 +161,41 @@ async def test_only_players_can_write_to_game_chat(client, monkeypatch):
     with client.websocket_connect("/api/v1/ws/matchmaking?token=unused") as ws:
         ws.send_json({"action": "chat_message", "game_id": 61, "text": "удачи!"})
         assert _receive_event(ws, "chat_message")["text"] == "удачи!"
+
+
+# --- Античит ----------------------------------------------------------------------------
+
+class _FakeMove:
+    def __init__(self, n: int, ms: int, blurred: bool, premove: bool = False):
+        self.move_number, self.time_taken_ms = n, ms
+        self.window_blurred_before_move, self.is_premove = blurred, premove
+
+
+def test_blur_alone_does_not_penalize():
+    """Второй монитор: фокус теряется постоянно, но ритм ходов человеческий — штрафа нет."""
+    from src.services.anticheat import compute_telemetry_penalty
+
+    human_times = [1200, 9500, 3100, 22000, 4800, 2600, 15000, 7000, 1800, 11000, 5200, 3900]
+    moves = [_FakeMove(i + 1, t, blurred=True) for i, t in enumerate(human_times)]
+    assert compute_telemetry_penalty(moves)["penalty"] == 0
+
+
+def test_blur_aggravates_engine_like_timing():
+    from src.services.anticheat import compute_telemetry_penalty
+
+    focused = [_FakeMove(i + 1, 4500 + (i % 2) * 100, blurred=False) for i in range(12)]
+    blurred = [_FakeMove(i + 1, 4500 + (i % 2) * 100, blurred=True) for i in range(12)]
+    assert 0 < compute_telemetry_penalty(focused)["penalty"] < compute_telemetry_penalty(blurred)["penalty"]
+
+
+def test_premove_flag_requires_near_instant_server_timing():
+    from src.services.anticheat import trusted_premove
+
+    assert trusted_premove(True, 120) is True
+    assert trusted_premove(True, 4500) is False  # «премув» через 4.5 с — подделка
+    assert trusted_premove(False, 50) is False
+
+
+def test_public_profile_hides_fair_play_data(client, test_user_1):
+    body = client.get(f"/api/v1/profile/{test_user_1.username}").json()
+    assert "trust_factor" not in body and "is_cheater" not in body

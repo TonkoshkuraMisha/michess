@@ -91,8 +91,9 @@ async def get_my_profile(current_user: User = Depends(get_current_user)):
         "id": current_user.id,
         "username": current_user.username,
         "rating": current_user.rating,
+        # Свой флаг игрок видит; числовой фактор доверия не отдаём, чтобы им нельзя было
+        # калибровать обход античита.
         "is_cheater": current_user.is_cheater,
-        "trust_factor": current_user.trust_factor,
         "created_at": current_user.created_at,
     }
 
@@ -292,8 +293,6 @@ async def get_user_profile(username: str, db: AsyncSession = Depends(get_db)):
         "id": user.id,
         "username": user.username,
         "rating": user.rating,
-        "is_cheater": user.is_cheater,
-        "trust_factor": user.trust_factor,
         "created_at": user.created_at,
     }
 
