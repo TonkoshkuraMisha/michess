@@ -1,5 +1,6 @@
 # --- FILE: src/api/websockets.py ---
 
+import json
 import time
 import logging
 import uuid
@@ -9,6 +10,7 @@ from typing import Awaitable, Callable
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from src.api.rate_limit import try_consume
 from src.db.session import get_session_factory
 from src.services.anticheat import trusted_premove
 from src.services.connection_manager import manager
@@ -342,7 +344,14 @@ async def _resign(ctx: ActionContext, data: dict) -> None:
 @action("offer_draw")
 async def _offer_draw(ctx: ActionContext, data: dict) -> None:
     game = await _participant_game(ctx, data, in_progress=True)
-    await state_manager.update_game_state(game.game_id, {"draw_offer": str(ctx.user.id)})
+    # Одно предложение на позицию: повторное (или после отказа) — только после следующего хода.
+    # Иначе предложения ничьей превращаются в способ дёргать соперника в цейтноте.
+    version = str(game.state.get("state_version", 0))
+    offered_key = f"draw_offered_at_{ctx.user.id}"
+    if str(game.state.get(offered_key, "")) == version:
+        await ctx.error("Ничью можно предложить один раз за ход", code="draw_offer_too_soon")
+        return
+    await state_manager.update_game_state(game.game_id, {"draw_offer": str(ctx.user.id), offered_key: version})
     await manager.send_personal_message(
         {"event": "draw_offered", "game_id": game.game_id, "player_id": ctx.user.id},
         game.opponent_of(ctx.user.id),
@@ -539,6 +548,101 @@ async def _dispatch_action(
             await ctx.error("Internal server error processing action")
 
 
+# --- Ограничение частоты сообщений ------------------------------------------------------
+#
+# Лимиты считаются на пользователя (все его вкладки и воркеры вместе) в Redis, по группам
+# действий: (сообщений, окно в секундах). Ходы ограничены щедро — пуля с премувами не должна
+# упираться в лимит, — а чат и предложения строго, чтобы их нельзя было использовать для спама.
+
+WS_MAX_MESSAGE_CHARS = 4096
+WS_RATE_LIMITS: dict[str, tuple[int, int]] = {
+    "moves": (60, 10),
+    "chat": (5, 10),
+    "offers": (6, 60),
+    "lobby": (20, 10),
+    "other": (30, 10),
+}
+_ACTION_GROUPS = {
+    "make_move": "moves",
+    "chat_message": "chat",
+    "offer_draw": "offers", "offer_rematch": "offers",
+    "join_queue": "lobby", "leave_queue": "lobby", "accept_challenge": "lobby",
+    "create_invite": "lobby", "accept_invite": "lobby",
+}
+# Соединение, которое продолжает слать сообщения сверх лимита, закрывается: столько
+# отклонённых сообщений за WS_STRIKE_WINDOW_S честный клиент не набирает.
+WS_MAX_STRIKES = 30
+WS_STRIKE_WINDOW_S = 10.0
+WS_CLOSE_POLICY_VIOLATION = 1008
+
+
+class _StrikeCounter:
+    def __init__(self):
+        self._times: list[float] = []
+
+    def add(self) -> int:
+        now = time.monotonic()
+        self._times = [t for t in self._times if now - t < WS_STRIKE_WINDOW_S]
+        self._times.append(now)
+        return len(self._times)
+
+
+async def _within_rate_limit(user_id: int, action_name: str) -> bool:
+    group = _ACTION_GROUPS.get(action_name, "other")
+    limit, window_s = WS_RATE_LIMITS[group]
+    return await try_consume(f"ws:{group}", f"user:{user_id}", limit, window_s)
+
+
+async def _reject_rate_limited(user: User, action_name: str, data: dict) -> None:
+    payload = {
+        "event": "error",
+        "code": "rate_limited",
+        "action": action_name,
+        "message": "Слишком много действий подряд, подождите немного",
+    }
+    if action_name == "make_move" and data.get("game_id"):
+        # Клиент уже показал ход на доске — возвращаем ему актуальную позицию.
+        try:
+            state = await state_manager.get_game_state(int(data["game_id"]))
+        except (TypeError, ValueError):
+            state = None
+        if state:
+            payload.update(
+                fen=state.get("board_fen"), pgn=state.get("pgn", ""),
+                state_version=int(state.get("state_version", 0)),
+            )
+    await manager.send_personal_message(payload, user.id)
+
+
+async def _handle_message(
+        session_factory: async_sessionmaker[AsyncSession], user: User, raw: str,
+) -> bool:
+    """Разбирает и выполняет одно сообщение. False — сообщение отклонено (засчитывается в флуд)."""
+    if len(raw) > WS_MAX_MESSAGE_CHARS:
+        await manager.send_personal_message(
+            {"event": "error", "code": "message_too_large", "message": "Слишком длинное сообщение"}, user.id,
+        )
+        return False
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        return False  # мусор: ответа не шлём, но засчитываем
+    if not isinstance(data, dict):
+        return False
+
+    action_name = data.get("action")
+    handler = ACTION_HANDLERS.get(action_name)
+    if handler is None:
+        return True  # неизвестное действие (например, от более новой версии клиента) — пропускаем
+
+    if not await _within_rate_limit(user.id, action_name):
+        await _reject_rate_limited(user, action_name, data)
+        return False
+
+    await _dispatch_action(session_factory, user, action_name, handler, data)
+    return True
+
+
 @router.websocket("/matchmaking")
 async def matchmaking_endpoint(
         websocket: WebSocket,
@@ -546,6 +650,7 @@ async def matchmaking_endpoint(
         session_factory: async_sessionmaker[AsyncSession] = Depends(get_session_factory),
 ):
     await manager.connect(websocket, current_user.id)
+    strikes = _StrikeCounter()
     try:
         await manager.send_personal_message(
             {"event": "connected", "message": f"Welcome, {current_user.username}!"}, current_user.id,
@@ -554,18 +659,17 @@ async def matchmaking_endpoint(
             await _send_active_game_snapshot_if_exists(db, current_user)
 
         while True:
-            data = await websocket.receive_json()
-            if not isinstance(data, dict):
-                continue
-            action_name = data.get("action")
-            handler = ACTION_HANDLERS.get(action_name)
-            if handler is None:
-                continue
-            await _dispatch_action(session_factory, current_user, action_name, handler, data)
+            raw = await websocket.receive_text()
+            accepted = await _handle_message(session_factory, current_user, raw)
+            if not accepted and strikes.add() >= WS_MAX_STRIKES:
+                logger.warning("Closing WebSocket of user %s: message flood", current_user.id)
+                await websocket.close(code=WS_CLOSE_POLICY_VIOLATION)
+                break
 
     except WebSocketDisconnect:
-        # Закрываем только это соединение: другие вкладки пользователя остаются онлайн.
-        await manager.disconnect(current_user.id, websocket)
+        pass
     except Exception:
         logger.exception("WebSocket unexpected error for user %s", current_user.id)
+    finally:
+        # Закрываем только это соединение: другие вкладки пользователя остаются онлайн.
         await manager.disconnect(current_user.id, websocket)
