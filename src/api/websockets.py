@@ -153,8 +153,7 @@ async def broadcast_to_game_participants_and_spectators(
     """Отправляет событие обоим игрокам и всем зрителям, наблюдающим за партией."""
     await manager.send_personal_message(payload, white_id)
     await manager.send_personal_message(payload, black_id)
-    if hasattr(manager, "broadcast_to_spectators"):
-        await manager.broadcast_to_spectators(game_id, payload)
+    await manager.broadcast_to_spectators(game_id, payload)
 
 
 @router.websocket("/matchmaking")
@@ -285,10 +284,7 @@ async def matchmaking_endpoint(
                         )
                         continue
 
-                    if hasattr(manager, "remove_user_from_all_spectating"):
-                        manager.remove_user_from_all_spectating(current_user.id)
-                    if hasattr(manager, "add_spectator"):
-                        manager.add_spectator(gid, current_user.id)
+                    await manager.add_spectator(gid, current_user.id)
 
                     white_id = int(state["white_id"])
                     black_id = int(state["black_id"])
@@ -314,10 +310,10 @@ async def matchmaking_endpoint(
 
                 elif action == "leave_spectate":
                     game_id = data.get("game_id")
-                    if game_id and hasattr(manager, "remove_spectator"):
-                        manager.remove_spectator(int(game_id), current_user.id)
-                    elif hasattr(manager, "remove_user_from_all_spectating"):
-                        manager.remove_user_from_all_spectating(current_user.id)
+                    if game_id:
+                        await manager.remove_spectator(int(game_id), current_user.id)
+                    else:
+                        await manager.remove_user_from_all_spectating(current_user.id)
                     await manager.send_personal_message({"event": "spectate_left"}, current_user.id)
 
                 elif action == "chat_message":
@@ -711,11 +707,8 @@ async def matchmaking_endpoint(
                 )
 
     except WebSocketDisconnect:
-        if hasattr(manager, "remove_user_from_all_spectating"):
-            manager.remove_user_from_all_spectating(current_user.id)
-        await manager.disconnect(current_user.id)
-    except Exception as e:
-        logger.error("WebSocket unexpected error for user %s: %s", current_user.id, e)
-        if hasattr(manager, "remove_user_from_all_spectating"):
-            manager.remove_user_from_all_spectating(current_user.id)
-        await manager.disconnect(current_user.id)
+        # Закрываем только это соединение: другие вкладки пользователя остаются онлайн.
+        await manager.disconnect(current_user.id, websocket)
+    except Exception:
+        logger.exception("WebSocket unexpected error for user %s", current_user.id)
+        await manager.disconnect(current_user.id, websocket)

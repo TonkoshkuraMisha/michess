@@ -1,6 +1,5 @@
 # --- FILE: src/services/matchmaker.py ---
 
-import asyncio
 import json
 import logging
 import random
@@ -15,8 +14,8 @@ from src.models.user import User
 
 logger = logging.getLogger(__name__)
 
-_INVITE_REDEEM_LOCK = asyncio.Lock()
-_CHALLENGE_ACCEPT_LOCK = asyncio.Lock()
+# Атомарность между воркерами обеспечивает Redis: вызов и приглашение «захватывает» тот,
+# чей DELETE ключа вернул 1. Блокировки asyncio.Lock работали только внутри одного процесса.
 
 
 class Matchmaker:
@@ -170,17 +169,23 @@ class Matchmaker:
         if c_id == a_id:
             return None
 
-        async with _CHALLENGE_ACCEPT_LOCK:
-            p1_prefs = await self.redis.hgetall(f"queue:prefs:{c_id}")
-            if not p1_prefs:
-                logger.warning("Challenge from %s no longer active", c_id)
-                return None
+        prefs_key = f"queue:prefs:{c_id}"
+        p1_prefs = await self.redis.hgetall(prefs_key)
+        if not p1_prefs:
+            logger.warning("Challenge from %s no longer active", c_id)
+            return None
 
-            base_time = int(p1_prefs.get("base_time_ms", 180000))
-            inc_time = int(p1_prefs.get("increment_ms", 0))
+        # Захват вызова: удалить ключ сможет только один из конкурирующих принимающих
+        # (на любом воркере), остальные получат 0 и не создадут вторую партию.
+        if not await self.redis.delete(prefs_key):
+            logger.info("Challenge from %s was taken by another player", c_id)
+            return None
 
-            await self.leave_queue(c_id)
-            await self.leave_queue(a_id)
+        base_time = int(p1_prefs.get("base_time_ms", 180000))
+        inc_time = int(p1_prefs.get("increment_ms", 0))
+
+        await self.leave_queue(c_id)
+        await self.leave_queue(a_id)
 
         now_ms = int(time.time() * 1000)
 
@@ -276,19 +281,17 @@ class Matchmaker:
         redis_conn = getattr(self, "redis", None) or state_manager.redis
         key = f"invite:{code}"
 
-        async with _INVITE_REDEEM_LOCK:
-            raw = await redis_conn.get(key)
-            if not raw:
-                return None
+        raw = await redis_conn.get(key)
+        if not raw:
+            return None
 
-            invite = json.loads(raw)
-            creator_id = int(invite["creator_id"])
-            if creator_id == int(acceptor_id):
-                return None
+        invite = json.loads(raw)
+        creator_id = int(invite["creator_id"])
+        if creator_id == int(acceptor_id):
+            return None
 
-            deleted = await redis_conn.delete(key)
-            if not deleted:
-                return None
+        if not await redis_conn.delete(key):
+            return None  # приглашение уже принял кто-то другой
 
         color_pref = invite.get("color_pref", "random")
         if color_pref == "white":

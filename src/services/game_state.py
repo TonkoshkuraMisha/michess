@@ -11,6 +11,7 @@ from sqlalchemy import select, or_
 from sqlalchemy.sql import func
 from redis.exceptions import WatchError
 
+from src.core.instance import WORKER_ID
 from src.db.redis import redis_client
 from src.db.session import AsyncSessionLocal
 from src.models.game import Game, GameStatus
@@ -64,6 +65,9 @@ _INT_STATE_KEYS = (
 
 ABANDON_TIMEOUT_MS = 3 * 60 * 1000
 
+TIMEOUTS_LEADER_KEY = "timeouts:leader"
+TIMEOUTS_LEADER_TTL_MS = 3000
+
 
 def _coerce_state(raw: dict) -> dict:
     """Приводит числовые поля сырого Redis-хэша к int (возвращает новый словарь)."""
@@ -77,31 +81,78 @@ def _coerce_state(raw: dict) -> dict:
     return state
 
 
-def evaluate_clock_expiry(state: dict, now_ms: int) -> tuple[str, int, str] | None:
+def side_to_move(state: dict) -> str:
+    return "white" if state.get("turn", "white") in ("white", "w") else "black"
+
+
+def live_clock_ms(state: dict, color: str, now_ms: int) -> int:
+    """
+    Фактический остаток времени игрока. Часы идут только у стороны, которая ходит, и всегда
+    отсчитываются от last_move_at — разрыв соединения на них никак не влияет.
+    """
+    stored = int(state[f"{color}_time_ms"])
+    if color != side_to_move(state):
+        return stored
+    return stored - max(0, now_ms - int(state["last_move_at"]))
+
+
+def abandon_wait_ms(state: dict, color: str, now_ms: int) -> int:
+    """Сколько ещё отключённый игрок может отсутствовать до поражения (для отсчёта у соперника)."""
+    wait = ABANDON_TIMEOUT_MS
+    if color == side_to_move(state):
+        wait = min(wait, max(0, live_clock_ms(state, color, now_ms)))
+    return wait
+
+
+FLAG_DRAW_TERMINATION = "timeout_vs_insufficient_material"
+
+
+def flag_outcome(board_fen: str | None, flagged_color: str) -> tuple[str, str]:
+    """
+    Итог партии, когда у flagged_color кончилось время (правило ФИДЕ 6.9).
+
+    Поражение, если только у соперника нет материала, которым мат невозможен никакой
+    последовательностью легальных ходов, — тогда ничья. has_insufficient_material учитывает
+    только материал (и цвета полей слонов) и гарантированно не объявит ничью там, где мат
+    возможен: например, конь против ладьи — победа (кооперативный мат существует).
+    Возвращает (result, termination).
+    """
+    winner = chess.BLACK if flagged_color == "white" else chess.WHITE
+    try:
+        board = chess.Board(board_fen or STARTING_FEN)
+    except ValueError:
+        board = None
+    if board is not None and board.has_insufficient_material(winner):
+        return "1/2-1/2", FLAG_DRAW_TERMINATION
+    return ("0-1" if flagged_color == "white" else "1-0"), "timeout"
+
+
+def evaluate_clock_expiry(state: dict, now_ms: int) -> tuple[str, int | None, str] | None:
     """
     Чистая проверка флага / брошенной партии по состоянию (уже приведённому _coerce_state).
     Возвращает (result, winner_id, reason) или None, если партия продолжается.
+
+    1. Флаг: у стороны, которая ходит, кончилось время — независимо от того, подключена ли она.
+    2. Брошенная партия: игрок отключён дольше ABANDON_TIMEOUT_MS (его часы при этом могут
+       и не идти, если сейчас ход соперника).
     """
     white_id, black_id = int(state["white_id"]), int(state["black_id"])
-    turn = state.get("turn", "white")
+
+    mover = side_to_move(state)
+    if live_clock_ms(state, mover, now_ms) <= 0:
+        result, termination = flag_outcome(state.get("board_fen"), mover)
+        if result == "1/2-1/2":
+            return result, None, termination
+        return result, (black_id if mover == "white" else white_id), termination
 
     for color in ("white", "black"):
-        if state.get(f"{color}_disconnected") == "true":
-            offline_duration = now_ms - int(state.get(f"{color}_disconnect_started_at") or now_ms)
-            remaining_time = int(state[f"{color}_time_ms"])
-            current_player_time = remaining_time - offline_duration if turn == color else remaining_time
-            if current_player_time <= 0 or offline_duration >= min(remaining_time, ABANDON_TIMEOUT_MS):
-                if color == "white":
-                    return "0-1", black_id, "abandoned"
-                return "1-0", white_id, "abandoned"
-
-    elapsed = now_ms - int(state["last_move_at"])
-    if turn in ("white", "w") and state.get("white_disconnected") != "true":
-        if int(state["white_time_ms"]) - elapsed <= 0:
-            return "0-1", black_id, "timeout"
-    elif turn in ("black", "b") and state.get("black_disconnected") != "true":
-        if int(state["black_time_ms"]) - elapsed <= 0:
-            return "1-0", white_id, "timeout"
+        if state.get(f"{color}_disconnected") != "true":
+            continue
+        started_at = int(state.get(f"{color}_disconnect_started_at") or 0)
+        if started_at > 0 and now_ms - started_at >= ABANDON_TIMEOUT_MS:
+            if color == "white":
+                return "0-1", black_id, "abandoned"
+            return "1-0", white_id, "abandoned"
     return None
 
 
@@ -327,14 +378,16 @@ class GameStateManager:
                     if remaining_after_move <= 0:
                         # Флаг упал до хода: завершаем партию в той же транзакции, чтобы
                         # check_timeouts_loop или другой обработчик не завершили её повторно.
-                        flag_result = "0-1" if is_white_turn else "1-0"
+                        flag_result, flag_termination = flag_outcome(
+                            state.get("board_fen"), "white" if is_white_turn else "black",
+                        )
                         final_white = 0 if is_white_turn else white_time
                         final_black = black_time if is_white_turn else 0
                         pipe.multi()
                         pipe.hset(game_key, mapping={
                             "status": "completed",
                             "result": flag_result,
-                            "termination": "timeout",
+                            "termination": flag_termination,
                             "white_time_ms": str(final_white),
                             "black_time_ms": str(final_black),
                         })
@@ -343,7 +396,7 @@ class GameStateManager:
                         return {
                             "status": "game_over",
                             "result": flag_result,
-                            "termination": "timeout",
+                            "termination": flag_termination,
                             "white_id": white_id,
                             "black_id": black_id,
                             "white_time_ms": final_white,
@@ -629,15 +682,19 @@ class GameStateManager:
         opponent_id = black_id if color == "white" else white_id
 
         now_ms = int(time.time() * 1000)
-        await self.update_game_state(game_id, {
+        fresh = await self._update_if_in_progress(game_id, {
             f"{color}_disconnected": "true",
             f"{color}_disconnect_started_at": str(now_ms),
         })
+        if fresh is None:
+            return
 
-        remaining_time = state["white_time_ms"] if color == "white" else state["black_time_ms"]
-        max_wait_ms = min(remaining_time, 3 * 60 * 1000)
         await manager.send_personal_message(
-            {"event": "opponent_disconnected", "game_id": game_id, "max_wait_ms": max_wait_ms},
+            {
+                "event": "opponent_disconnected",
+                "game_id": game_id,
+                "max_wait_ms": abandon_wait_ms(fresh, color, now_ms),
+            },
             opponent_id,
         )
 
@@ -655,22 +712,65 @@ class GameStateManager:
         opponent_id = black_id if color == "white" else white_id
 
         if state.get(f"{color}_disconnected") == "true":
-            now_ms = int(time.time() * 1000)
-            offline_duration = now_ms - state.get(f"{color}_disconnect_started_at", now_ms)
-            updates = {f"{color}_disconnected": "false", f"{color}_disconnect_started_at": "0"}
+            # Часы не трогаем: они и так шли от last_move_at, пока игрок был офлайн.
+            # Раньше здесь сдвигался last_move_at, и если был ход соперника, его часы
+            # фактически стояли всё время отключения.
+            fresh = await self._update_if_in_progress(game_id, {
+                f"{color}_disconnected": "false",
+                f"{color}_disconnect_started_at": "0",
+            })
+            if fresh is not None:
+                await manager.send_personal_message(
+                    {"event": "opponent_reconnected", "game_id": game_id}, opponent_id,
+                )
 
-            turn = state.get("turn", "white")
-            if turn == color:
-                time_key = f"{color}_time_ms"
-                updates[time_key] = str(max(0, state[time_key] - offline_duration))
-            updates["last_move_at"] = str(state["last_move_at"] + offline_duration)
+    async def _update_if_in_progress(self, game_id: int, updates: dict) -> dict | None:
+        """
+        Атомарно (WATCH/MULTI) обновляет поля партии, только пока она in_progress.
+        Обычный hset после clear_game_state воссоздал бы «огрызок» хэша без white_id и т.п.
+        Возвращает состояние до обновления или None, если партия уже не идёт.
+        """
+        game_key = self._get_key(game_id)
+        async with self.redis.pipeline(transaction=True) as pipe:
+            while True:
+                try:
+                    await pipe.watch(game_key)
+                    raw = await pipe.hgetall(game_key)
+                    if not raw or raw.get("status") != "in_progress":
+                        await pipe.unwatch()
+                        return None
+                    pipe.multi()
+                    pipe.hset(game_key, mapping={k: str(v) for k, v in updates.items()})
+                    await pipe.execute()
+                    return _coerce_state(raw)
+                except WatchError:
+                    continue
 
-            await self.update_game_state(game_id, updates)
-            await manager.send_personal_message({"event": "opponent_reconnected", "game_id": game_id}, opponent_id)
+    async def _hold_timeouts_leadership(self) -> bool:
+        """
+        Цикл таймаутов выполняет только один воркер (лидер). Лидерство — ключ с TTL; лидер
+        продлевает его каждую итерацию, при падении лидера ключ истекает и его берёт другой.
+        Даже если на мгновение лидеров окажется двое, двойного завершения партии не будет:
+        оно защищено claim_game_end.
+        """
+        try:
+            if await self.redis.set(TIMEOUTS_LEADER_KEY, WORKER_ID, nx=True, px=TIMEOUTS_LEADER_TTL_MS):
+                return True
+            if await self.redis.get(TIMEOUTS_LEADER_KEY) == WORKER_ID:
+                await self.redis.pexpire(TIMEOUTS_LEADER_KEY, TIMEOUTS_LEADER_TTL_MS)
+                return True
+            return False
+        except Exception as exc:
+            logger.warning("Timeouts leadership check failed, running loop anyway: %s", exc)
+            return True
 
     async def check_timeouts_loop(self, manager):
         while True:
             try:
+                if not await self._hold_timeouts_leadership():
+                    await asyncio.sleep(0.5)
+                    continue
+
                 active_game_ids = list(await self.redis.smembers("active_games"))
                 now_ms = int(time.time() * 1000)
 

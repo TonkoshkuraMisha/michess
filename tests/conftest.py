@@ -156,9 +156,32 @@ class MockAsyncRedis:
     async def smembers(self, name):
         return self.sets.get(name, set())
 
-    async def set(self, name, value, ex=None):
+    async def set(self, name, value, ex=None, px=None, nx=False):
+        if nx and name in self.kv:
+            return None
         self.kv[name] = str(value)
         return True
+
+    async def pexpire(self, name, time):
+        return name in self.kv
+
+    async def expire(self, name, time):
+        return any(name in c for c in (self.store, self.sets, self.lists, self.kv, self.zsets))
+
+    async def publish(self, channel, message):
+        self.published = getattr(self, "published", [])
+        self.published.append((channel, message))
+        return 0
+
+    async def zcard(self, name):
+        return len(self.zsets.get(name, {}))
+
+    async def zremrangebyscore(self, name, min_score, max_score):
+        zset = self.zsets.get(name, {})
+        doomed = [k for k, v in zset.items() if float(min_score) <= v <= float(max_score)]
+        for k in doomed:
+            del zset[k]
+        return len(doomed)
 
     async def get(self, name):
         return self.kv.get(name)

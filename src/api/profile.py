@@ -242,7 +242,7 @@ async def get_live_games(db: AsyncSession = Depends(get_db)):
         black_id = int(state["black_id"])
         white_user = users_map.get(white_id)
         black_user = users_map.get(black_id)
-        spectators_set = getattr(manager, "game_spectators", {}).get(gid, set())
+        spectators_set = await manager.get_spectator_ids(gid)
 
         live_list.append({
             "game_id": gid,
