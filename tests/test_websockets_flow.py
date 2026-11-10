@@ -99,7 +99,7 @@ async def test_spectator_receives_live_moves_and_chat():
     try:
         game_id = 777001
         white_id, black_id, spectator_id = 11, 22, 33
-        manager.add_spectator(game_id, spectator_id)
+        await manager.add_spectator(game_id, spectator_id)
 
         move_event = {"event": "move_made", "game_id": game_id, "san": "e4"}
         await broadcast_to_game_participants_and_spectators(game_id, white_id, black_id, move_event)
@@ -113,6 +113,6 @@ async def test_spectator_receives_live_moves_and_chat():
         assert received[spectator_id][1]["event"] == "chat_message"
         assert received[white_id][1]["text"] == "👏 Красивый ход!"
 
-        manager.remove_spectator(game_id, spectator_id)
+        await manager.remove_spectator(game_id, spectator_id)
     finally:
         manager.send_personal_message = orig_send

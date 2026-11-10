@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 
 from src.models.game import Game, GameStatus
 from src.models.user import User
-from src.services.game_state import state_manager, evaluate_clock_expiry
+from src.services.game_state import ABANDON_TIMEOUT_MS, evaluate_clock_expiry, state_manager
 
 
 @pytest.fixture
@@ -118,5 +118,5 @@ def test_evaluate_clock_expiry():
     }
     assert evaluate_clock_expiry(base, now) is None
     assert evaluate_clock_expiry({**base, "last_move_at": now - 1500}, now) == ("0-1", 2, "timeout")
-    abandoned = {**base, "black_disconnected": "true", "black_disconnect_started_at": now - 6000}
+    abandoned = {**base, "black_disconnected": "true", "black_disconnect_started_at": now - ABANDON_TIMEOUT_MS}
     assert evaluate_clock_expiry(abandoned, now) == ("1-0", 1, "abandoned")
