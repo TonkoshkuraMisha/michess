@@ -21,6 +21,19 @@ jobs:
         image: redis:8.0-M02-alpine
         ports:
           - 6379:6379
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: ci_user
+          POSTGRES_PASSWORD: ci_password
+          POSTGRES_DB: ci_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci_user -d ci_db"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
 
     steps:
       - name: Checkout repository
@@ -60,6 +73,9 @@ jobs:
           POSTGRES_SERVER: localhost
           POSTGRES_PORT: 5432
           POSTGRES_DB: ci_db
+          # Гонки на настоящих PostgreSQL и Redis (tests/integration): FOR UPDATE, WATCH/MULTI.
+          TEST_DATABASE_URL: postgresql+asyncpg://ci_user:ci_password@localhost:5432/ci_db
+          TEST_REDIS_URL: redis://localhost:6379/15
         run: |
           python -m pytest -v
 
