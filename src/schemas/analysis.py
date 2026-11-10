@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field
 
 
 class PositionAnalysisRequest(BaseModel):
-    moves: list[str] = Field(default_factory=list, description="Список ходов в формате SAN или UCI")
+    moves: list[str] = Field(default_factory=list, max_length=1000, description="Список ходов в формате SAN или UCI")
 
 
 class MoveEvaluationItem(BaseModel):

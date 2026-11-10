@@ -997,14 +997,27 @@ export default function Chessboard() {
 
         (async () => {
             try {
-                const response = await fetch(`${API_BASE_URL}/api/v1/bots/move`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        bot_id: activeBot,
-                        fen: game.fen()
-                    })
-                });
+                const authToken = localStorage.getItem('token');
+                const headers: Record<string, string> = {'Content-Type': 'application/json'};
+                // С токеном лимит запросов считается на пользователя, а не на общий IP.
+                if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
+
+                let response: Response | null = null;
+                // 429 (лимит) и 503 (пул движков занят) — временные: ждём Retry-After и повторяем.
+                for (let attempt = 0; attempt < 4 && !isCancelled; attempt++) {
+                    response = await fetch(`${API_BASE_URL}/api/v1/bots/move`, {
+                        method: 'POST',
+                        headers,
+                        body: JSON.stringify({
+                            bot_id: activeBot,
+                            fen: game.fen()
+                        })
+                    });
+                    if (response.status !== 429 && response.status !== 503) break;
+                    const retryAfterS = Number(response.headers.get('Retry-After')) || 2;
+                    await new Promise((resolve) => setTimeout(resolve, Math.min(retryAfterS, 10) * 1000));
+                }
+                if (!response) return;
 
                 if (!response.ok || isCancelled) {
                     if (!isCancelled) setIsBotThinking(false);

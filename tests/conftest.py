@@ -160,6 +160,14 @@ class MockAsyncRedis:
     async def get(self, name):
         return self.kv.get(name)
 
+    async def incr(self, name, amount=1):
+        value = int(self.kv.get(name, 0)) + amount
+        self.kv[name] = str(value)
+        return value
+
+    async def expire(self, name, time):
+        return name in self.kv
+
     async def rpush(self, name, *values):
         if name not in self.lists:
             self.lists[name] = []

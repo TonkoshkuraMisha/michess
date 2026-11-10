@@ -11,6 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api import deps
+from src.api.rate_limit import rate_limit
 from src.db import session as db_session
 from src.models.game import Game
 from src.models.user import User
@@ -125,7 +126,7 @@ BOT_TEMPO_MULTIPLIER = {
 
 class BotMoveRequest(BaseModel):
     bot_id: str = Field(default="philidor", description="ID исторического бота")
-    fen: str = Field(..., description="Текущая позиция на доске в формате FEN")
+    fen: str = Field(..., max_length=100, description="Текущая позиция на доске в формате FEN")
 
 
 class BotMoveResponse(BaseModel):
@@ -142,7 +143,7 @@ class BotGameSaveRequest(BaseModel):
     bot_id: str = Field(..., description="ID исторического бота")
     player_color: str = Field(..., description="Цвет игрока ('white' или 'black')")
     result: str = Field(..., description="Результат партии ('1-0', '0-1', '1/2-1/2')")
-    moves_uci: list[str] = Field(default_factory=list, description="Список сделанных ходов в формате UCI")
+    moves_uci: list[str] = Field(default_factory=list, max_length=1000, description="Список сделанных ходов в формате UCI")
     base_time_ms: int = Field(default=180000, description="Базовый контроль времени в мс")
     increment_ms: int = Field(default=0, description="Добавление времени на ход в мс")
 
@@ -362,15 +363,17 @@ def _prepare_game_kwargs(
 @router.get("/list")
 async def get_available_bots():
     """Возвращает список доступных исторических ботов и статус движка Stockfish."""
-    sf_path = resolve_stockfish_path()
     return {
         "bots": AVAILABLE_BOTS,
-        "stockfish_active": bool(sf_path),
-        "stockfish_path": sf_path,
+        "stockfish_active": bool(resolve_stockfish_path()),
     }
 
 
-@router.post("/move", response_model=BotMoveResponse)
+@router.post(
+    "/move",
+    response_model=BotMoveResponse,
+    dependencies=[Depends(rate_limit("bot_move", "RATE_LIMIT_BOT_MOVE"))],
+)
 async def get_bot_move(payload: BotMoveRequest):
     """Принимает FEN позиции и возвращает ответный ход выбранного исторического бота."""
     bot = BOT_INSTANCES.get(payload.bot_id)

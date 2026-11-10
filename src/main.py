@@ -16,6 +16,7 @@ from src.api.analysis import router as analysis_router
 from src.db.redis import redis_client
 from src.services.game_state import state_manager
 from src.services.connection_manager import manager
+from src.services.engine_pool import close_all_engine_pools
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,6 +40,7 @@ async def lifespan(app: FastAPI):
         pass
 
     logger.info("Shutting down %s...", settings.PROJECT_NAME)
+    await asyncio.to_thread(close_all_engine_pools)
     await redis_client.aclose()
 
 
