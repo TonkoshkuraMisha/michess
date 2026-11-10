@@ -5,6 +5,7 @@
 потерявшая состояние в Redis, — восстановлена.
 """
 
+import asyncio
 import time
 
 import fakeredis.aioredis
@@ -69,7 +70,8 @@ def _after_grace() -> int:
     return int(time.time() * 1000) + RECONCILE_GRACE_MS + 1
 
 
-async def test_claim_registers_pending_finish_and_finish_game_clears_it(real_redis, session_factory, db_session):
+async def test_claim_registers_pending_finish_and_finish_game_clears_it(
+        real_redis, session_factory, db_session, no_celery_publish):
     game, _, _ = await _make_game(db_session)
 
     await state_manager.claim_game_end(game.id, "0-1", "resignation")
@@ -78,6 +80,13 @@ async def test_claim_registers_pending_finish_and_finish_game_clears_it(real_red
     async with session_factory() as db:
         await state_manager.finish_game(db, game.id, "0-1", termination="resignation")
     assert await real_redis.zscore(PENDING_FINISH_KEY, str(game.id)) is None
+
+    # Фоновый анализ ставится в очередь, не задерживая finish_game.
+    for _ in range(50):
+        if no_celery_publish:
+            break
+        await asyncio.sleep(0.01)
+    assert no_celery_publish == [game.id]
 
 
 async def test_move_ending_the_game_registers_pending_finish(real_redis, session_factory, db_session):

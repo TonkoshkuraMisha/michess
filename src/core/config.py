@@ -54,6 +54,12 @@ class Settings(BaseSettings):
     # Matchmaking: rating window (±N) used when the client sends no explicit range; 0 = unrestricted
     MATCHMAKING_DEFAULT_RATING_RANGE: int = 0
 
+    # Celery publishing from the API process: short timeouts, no publish retries, and a pause
+    # after a broker failure so a dead broker cannot stall the event loop or pile up threads
+    CELERY_PUBLISH_TIMEOUT_S: float = 3.0
+    CELERY_BROKER_CONNECT_TIMEOUT_S: float = 1.0
+    CELERY_BROKER_COOLDOWN_S: float = 30.0
+
     # Stockfish engine pool
     ENGINE_POOL_SIZE: int = 2
     ENGINE_ACQUIRE_TIMEOUT_S: float = 10.0

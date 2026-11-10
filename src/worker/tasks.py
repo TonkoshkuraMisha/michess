@@ -3,13 +3,16 @@
 import asyncio
 import logging
 
-from celery import shared_task
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from src.core.config import settings
 from src.services.analysis_service import analysis_service
 from src.services.engine_pool import EngineBusyError
+# Задача привязана к нашему приложению Celery явно. С @shared_task API-процесс, где celery_app
+# никто не импортировал, публиковал через приложение по умолчанию — в amqp://localhost:5672
+# вместо брокера Redis, и фоновый анализ до воркера не доходил.
+from src.worker.celery_app import celery_app
 
 logger = logging.getLogger(__name__)
 
@@ -38,7 +41,10 @@ async def _prewarm_game_analysis_async(game_id: int) -> dict:
         await engine.dispose()
 
 
-@shared_task(name="analyze_game", bind=True, max_retries=5)
+# ignore_result: результат пишется в БД (Game.analysis_json), а бэкенд результатов при публикации
+# подписывается на ответ — при недоступном Redis это ~64 с переподключений, после которых
+# бэкенд ломается до перезапуска процесса («The Celery application must be restarted»).
+@celery_app.task(name="analyze_game", bind=True, max_retries=5, ignore_result=True)
 def analyze_game_task(self, game_id: int):
     """Синхронная обёртка Celery для фонового анализа завершённой партии."""
     try:

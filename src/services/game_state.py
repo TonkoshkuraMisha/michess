@@ -18,7 +18,7 @@ from src.models.game import Game, GameStatus
 from src.models.move import Move
 from src.models.user import User
 from src.services.rating import elo_calculator
-from src.worker.tasks import analyze_game_task
+from src.services.task_dispatch import schedule_game_analysis_in_background
 from src.services.anticheat import evaluate_game_telemetry
 from src.services.game_engine import (  # noqa: F401  (flag_outcome реэкспортируется для тестов)
     FLAG_DRAW_TERMINATION, STARTING_FEN, engine, flag_outcome, side_has_mating_material,
@@ -701,10 +701,8 @@ class GameStateManager:
 
         await self.clear_game_state(game_id)
 
-        try:
-            analyze_game_task.delay(game_id)
-        except Exception as e:
-            logger.error("Could not schedule Celery analysis task for game %s: %s", game_id, e)
+        # Не ждём брокер: публикация идёт в потоке, итог партии рассылается сразу.
+        schedule_game_analysis_in_background(game_id)
 
         return {
             "white_delta": delta_w,

@@ -261,6 +261,18 @@ def override_redis(monkeypatch):
     monkeypatch.setattr(manager, "pubsub", mock_redis.pubsub())
 
 
+@pytest.fixture(autouse=True)
+def no_celery_publish(monkeypatch):
+    """Тесты не публикуют задачи в брокер: список опубликованных id партий — для проверок."""
+    from src.services import task_dispatch
+
+    published: list[int] = []
+    monkeypatch.setattr(task_dispatch, "_publish_analysis", published.append)
+    task_dispatch.reset_broker_cooldown()
+    yield published
+    task_dispatch.reset_broker_cooldown()
+
+
 async def override_get_db():
     async with TestSessionLocal() as session:
         yield session
