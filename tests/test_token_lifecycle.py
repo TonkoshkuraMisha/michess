@@ -53,6 +53,9 @@ class _NoDbFactory:
     async def __aexit__(self, *exc):
         return False
 
+    def in_transaction(self):
+        return False
+
     async def get(self, model, pk):
         return self.user if self.user is not None and self.user.id == pk else None
 
