@@ -4,10 +4,10 @@ import {useState, useEffect, useRef, useCallback} from 'react';
 import {useNavigate, useParams} from 'react-router-dom';
 import {Chess} from 'chess.js';
 import {
-    ChevronFirst, ChevronLeft, ChevronRight, ChevronLast, Users, Sword, Flag,
-    Handshake, Loader2, Play, RotateCcw, Clock, ChevronDown, ChevronUp, Palette,
-    RefreshCw, ListOrdered, Undo2, Bot, MessageSquareQuote, Download, Eye,
-    Sliders, Zap, X, Link2, Copy, Check, Send, MessageSquare, Radio, Volume2, VolumeX
+    Users, Sword,
+    Loader2, Play, Clock, ChevronDown, ChevronUp, Palette,
+    RefreshCw, ListOrdered, Bot, MessageSquareQuote, Eye,
+    Sliders, Zap, X, Link2, Copy, Check, Radio, Volume2, VolumeX
 } from 'lucide-react';
 import {gameSocket} from '../services/gameSocket';
 import {soundEngine, resolveMoveSound} from '../services/soundEngine';
@@ -27,12 +27,21 @@ import type {HistoricalBotId, HistoricalBotProfile} from '../config/champions';
 import {DEFAULT_TIME_CONTROL, TIME_CONTROLS} from '../config/timeControls';
 import type {TimeControlOption, TimeControlGroup} from '../config/timeControls';
 import {
-    FILES, RANKS, MIN_BOARD_SIZE, MAX_BOARD_SIZE, PROMOTION_OPTIONS,
+    FILES, RANKS, MIN_BOARD_SIZE, MAX_BOARD_SIZE,
     getMaxViewportBoardSize, getDefaultBoardSize, calculateMaterialBalance, cloneChessInstance, prevIndexHelper
 } from './chessboard/boardUtils';
 import type {PromotionPiece} from './chessboard/boardUtils';
-import {GAME_ACTION_ERROR_CODES, QUICK_CHAT_PRESETS} from './chessboard/types';
-import type {LiveGameItem, ChatMessageItem, QueuePlayer} from './chessboard/types';
+import type {PendingPromotion} from './chessboard/types';
+import {useClock} from './chessboard/hooks/useClock';
+import {usePremoves} from './chessboard/hooks/usePremoves';
+import {useBotGame} from './chessboard/hooks/useBotGame';
+import {useGameSocket} from './chessboard/hooks/useGameSocket';
+import {PromotionDialog} from './chessboard/PromotionDialog';
+import {MoveList} from './chessboard/MoveList';
+import {BoardNavigationControls} from './chessboard/BoardNavigationControls';
+import {GameChatPanel} from './chessboard/GameChatPanel';
+import {PlayerInfoBar} from './chessboard/PlayerInfoBar';
+import {GameControlsPanel} from './chessboard/GameControlsPanel';
 
 export {MIN_BOARD_SIZE, MAX_BOARD_SIZE, getMaxViewportBoardSize, getDefaultBoardSize, TIME_CONTROLS};
 export type {PromotionPiece, TimeControlOption, TimeControlGroup};
@@ -51,13 +60,8 @@ export default function Chessboard() {
     const [isSoundMuted, setIsSoundMuted] = useState<boolean>(() => soundEngine.isMuted());
     const appearanceDropdownRef = useRef<HTMLDivElement>(null);
 
-    const [liveGames, setLiveGames] = useState<LiveGameItem[]>([]);
     const [spectatingGameId, setSpectatingGameId] = useState<number | null>(null);
     const [inviteColorPref, setInviteColorPref] = useState<'white' | 'black' | 'random'>('random');
-    const [createdInviteCode, setCreatedInviteCode] = useState<string | null>(null);
-    const [inviteCopied, setInviteCopied] = useState(false);
-    const [chatMessages, setChatMessages] = useState<ChatMessageItem[]>([]);
-    const [chatInput, setChatInput] = useState('');
 
     const [game, setGame] = useState(new Chess());
     const [history, setHistory] = useState<any[]>([]);
@@ -65,18 +69,7 @@ export default function Chessboard() {
     const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
     const [isManualFlip, setIsManualFlip] = useState<boolean>(false);
 
-    const [pendingPromotion, setPendingPromotion] = useState<{
-        from: string;
-        to: string;
-        color: 'w' | 'b';
-        isPremove?: boolean;
-    } | null>(null);
-
-    const [premove, setPremove] = useState<{
-        from: string;
-        to: string;
-        promotion?: PromotionPiece;
-    } | null>(null);
+    const [pendingPromotion, setPendingPromotion] = useState<PendingPromotion | null>(null);
 
     const [boardThemeKey, setBoardThemeKey] = useState<string>(() => getSavedBoardThemeKey());
     const [pieceSetKey, setPieceSetKey] = useState<string>(() => getSavedPieceSetKey());
@@ -86,7 +79,6 @@ export default function Chessboard() {
     const [myColor, setMyColor] = useState<'white' | 'black'>('white');
     const myColorRef = useRef<'white' | 'black'>('white');
     const [isSearching, setIsSearching] = useState(false);
-    const [queuePlayers, setQueuePlayers] = useState<QueuePlayer[]>([]);
     const [currentUserId, setCurrentUserId] = useState<number | null>(null);
     const [currentUsername, setCurrentUsername] = useState<string>('Вы');
     const currentUsernameRef = useRef<string>('Вы');
@@ -94,11 +86,9 @@ export default function Chessboard() {
     const [stateVersion, setStateVersion] = useState(0);
     const stateVersionRef = useRef<number>(0);
 
-    const [selectedBotId, setSelectedBotId] = useState<HistoricalBotId>('philidor');
+    // activeBot живёт здесь (не внутри useBotGame), потому что useClock использует его
+    // для isTicking/isParticipant и должен вызываться раньше useBotGame.
     const [activeBot, setActiveBot] = useState<HistoricalBotId | null>(null);
-    const [botComment, setBotComment] = useState<string | null>(null);
-    const [isBotThinking, setIsBotThinking] = useState<boolean>(false);
-    const [savedBotGameId, setSavedBotGameId] = useState<number | null>(null);
 
     const [selectedTimeControl, setSelectedTimeControl] = useState<TimeControlOption>(DEFAULT_TIME_CONTROL);
     const [manualBaseMinutes, setManualBaseMinutes] = useState<number>(5);
@@ -118,8 +108,6 @@ export default function Chessboard() {
     } | null>(null);
 
     const moveStartTime = useRef<number>(Date.now());
-    const botGameSavedRef = useRef<boolean>(false);
-    const lowTimeWarnedRef = useRef<boolean>(false);
 
     const [dragState, setDragState] = useState<{
         from: string;
@@ -151,9 +139,6 @@ export default function Chessboard() {
         return () => window.removeEventListener('resize', handleWindowResize);
     }, []);
 
-    const [whiteTimeMs, setWhiteTimeMs] = useState(180000);
-    const [blackTimeMs, setBlackTimeMs] = useState(180000);
-
     const [sessionStats, setSessionStats] = useState({wins: 0, losses: 0, draws: 0});
     const [gameOverResult, setGameOverResult] = useState<string | null>(null);
     const gameOverResultRef = useRef<string | null>(null);
@@ -165,7 +150,6 @@ export default function Chessboard() {
 
     const activeTheme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
     const activePieceSet = PIECE_SETS[pieceSetKey] || PIECE_SETS.merida;
-    const selectedBotProfile = HISTORICAL_BOTS[selectedBotId];
     const activeBotProfile = activeBot ? HISTORICAL_BOTS[activeBot] : null;
 
     const effectiveWhiteBaseMinutes = selectedTimeControl.isManual ? manualBaseMinutes : selectedTimeControl.base;
@@ -177,6 +161,16 @@ export default function Chessboard() {
     const playAudio = useCallback((type: SoundEventType) => {
         soundEngine.play(type);
     }, []);
+
+    const {
+        whiteTimeMs, setWhiteTimeMs, blackTimeMs, setBlackTimeMs, resetLowTimeWarning, applyIncrement,
+    } = useClock({
+        isTicking: Boolean(gameId || activeBot || spectatingGameId) && !gameOverResult,
+        isParticipant: Boolean(gameId || activeBot) && !gameOverResult,
+        currentTurn: game.turn() === 'w' ? 'white' : 'black',
+        myColor,
+        onLowTime: () => playAudio('low_time'),
+    });
 
     const playOutcomeSound = useCallback((result: string, playerColor: 'white' | 'black' = myColorRef.current) => {
         if (!result || result === '*') {
@@ -216,190 +210,45 @@ export default function Chessboard() {
         });
     }, []);
 
-    const applyMatchFoundSnapshot = useCallback((data: any) => {
-        if (!data || !data.game_id) return;
-        const incomingGid = Number(data.game_id);
-        const assignedColor: 'white' | 'black' = data.color === 'black' ? 'black' : 'white';
-        const ver = Number(data.state_version || 0);
-        const isNewMatch = gameIdRef.current !== incomingGid;
+    // usePremoves владеет setPremove, но вызывается позже (ему нужен executeMove, а тот —
+    // значения из useBotGame). Безопасно: тело замыкания читает setPremove лениво, уже
+    // после того как usePremoves успеет отработать в этом же рендере.
+    const clearPremove = useCallback(() => setPremove(null), []);
 
-        setIsSearching(false);
-        setSpectatingGameId(null);
-        setCreatedInviteCode(null);
-        setShowInvitePanel(false);
-        setActiveBot(null);
-        setBotComment(null);
-        setSavedBotGameId(null);
-        botGameSavedRef.current = false;
+    const {
+        selectedBotId, setSelectedBotId, botComment, isBotThinking, savedBotGameId,
+        startHistoricalBotGame, saveBotGameToDatabase, exitBotGame,
+    } = useBotGame({
+        game, myColor, gameOverResult, whiteTimeMs, blackTimeMs, isSearching, setIsSearching,
+        activeBot, setActiveBot,
+        effectiveWhiteBaseMinutes, effectiveBlackBaseMinutes, effectiveIncSeconds,
+        currentUsername, currentUserRating,
+        setGame, setHistory, setViewIndex, setSelectedSquare, setMyColor, setIsManualFlip, setPendingPromotion,
+        clearPremove, setGameOverResult, setRatingInfo, setDrawOfferStatus, setRematchStatus,
+        setWhiteTimeMs, setBlackTimeMs, resetLowTimeWarning, applyIncrement,
+        moveStartTime, myColorRef, gameIdRef, setGameId, setLeftSectionTab, setWhitePlayer, setBlackPlayer,
+        playAudio, playOutcomeSound, updateSessionStats,
+    });
 
-        if (isNewMatch) {
-            lowTimeWarnedRef.current = false;
-            setChatMessages([]);
-            setIsManualFlip(false);
-            setRatingInfo(null);
-            setGameOverResult(null);
-            setRematchStatus('none');
-            setSelectedSquare(null);
-            setPendingPromotion(null);
-            setPremove(null);
-        }
+    const selectedBotProfile = HISTORICAL_BOTS[selectedBotId];
 
-        gameIdRef.current = incomingGid;
-        setGameId(incomingGid);
-        myColorRef.current = assignedColor;
-        setMyColor(assignedColor);
-        setStateVersion(ver);
-        stateVersionRef.current = ver;
-
-        const initialWhiteTime = data.white_time_ms !== undefined ? Number(data.white_time_ms) : Number(data.base_time_ms || 180000);
-        const initialBlackTime = data.black_time_ms !== undefined ? Number(data.black_time_ms) : Number(data.base_time_ms || 180000);
-        setWhiteTimeMs(initialWhiteTime);
-        setBlackTimeMs(initialBlackTime);
-
-        if (data.white_username) {
-            setWhitePlayer({username: data.white_username, rating: String(data.white_rating || '1200')});
-        }
-        if (data.black_username) {
-            setBlackPlayer({username: data.black_username, rating: String(data.black_rating || '1200')});
-        }
-
-        const restoredGame = new Chess();
-        if (data.pgn) {
-            try {
-                restoredGame.loadPgn(data.pgn);
-            } catch {
-                if (data.fen) restoredGame.load(data.fen);
-            }
-        } else if (data.fen) {
-            restoredGame.load(data.fen);
-        }
-
-        setGame(restoredGame);
-        setHistory(restoredGame.history({verbose: true}));
-        setViewIndex(-1);
-        moveStartTime.current = Date.now();
-
-        if (isNewMatch) {
-            setDrawOfferStatus(`Партия началась! Вы играете ${assignedColor === 'white' ? 'Белыми' : 'Чёрными'}.`);
-            playAudio('start');
-            setTimeout(() => setDrawOfferStatus(null), 3000);
-        }
-    }, [playAudio]);
-
-    const applyMoveMadeSnapshot = useCallback((data: any) => {
-        if (data.state_version !== undefined) {
-            const ver = Number(data.state_version);
-            setStateVersion(ver);
-            stateVersionRef.current = ver;
-        }
-        if (data.white_time_ms !== undefined) setWhiteTimeMs(Number(data.white_time_ms));
-        if (data.black_time_ms !== undefined) setBlackTimeMs(Number(data.black_time_ms));
-        moveStartTime.current = Date.now();
-
-        const nextGame = new Chess();
-        let loaded = false;
-
-        if (data.pgn) {
-            try {
-                nextGame.loadPgn(data.pgn);
-                loaded = true;
-            } catch {
-                loaded = false;
-            }
-        }
-
-        if (!loaded && data.fen) {
-            try {
-                nextGame.load(data.fen);
-                loaded = true;
-            } catch {
-                loaded = false;
-            }
-        }
-
-        if (loaded) {
-            const newHistory = nextGame.history({verbose: true});
-            const lastSan = data.san || (newHistory.length > 0 ? newHistory[newHistory.length - 1].san : '');
-            setGame(nextGame);
-            setHistory(newHistory);
-            setViewIndex(-1);
-            // На завершающем ходу играет только исход (victory/defeat/draw) — звук самого
-            // хода (например, «шах» на мате) был бы лишним дублем перед фанфарой.
-            if (!data.game_over) {
-                playAudio(resolveMoveSound(lastSan));
-            }
-        }
-
-        if (data.game_over) {
-            setPremove(null);
-            setPendingPromotion(null);
-            setGameOverResult(data.result);
-            setRatingInfo(data);
-            playOutcomeSound(data.result);
-            updateSessionStats(data.result);
-        }
-    }, [playAudio, playOutcomeSound, updateSessionStats]);
-
-    const saveBotGameToDatabase = useCallback(async (
-        botId: HistoricalBotId,
-        playerColor: 'white' | 'black',
-        result: string,
-        completedGame: Chess,
-        termination?: 'resignation' | 'timeout'
-    ) => {
-        if (botGameSavedRef.current) return;
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        const verboseMoves = completedGame.history({verbose: true});
-        if (verboseMoves.length === 0) return;
-
-        botGameSavedRef.current = true;
-        const movesUci = verboseMoves.map((m: any) => `${m.from}${m.to}${m.promotion || ''}`);
-
-        try {
-            const response = await fetch(`${API_BASE_URL}/api/v1/bots/save-game`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    bot_id: botId,
-                    player_color: playerColor,
-                    result,
-                    // Для позиции, не завершённой на доске, сервер требует причину окончания.
-                    termination: termination ?? null,
-                    moves_uci: movesUci,
-                    base_time_ms: Math.round(effectiveWhiteBaseMinutes * 60 * 1000),
-                    increment_ms: Math.round(effectiveIncSeconds * 1000)
-                })
-            });
-
-            if (response.ok) {
-                const data = await response.json();
-                if (data.game_id) {
-                    setSavedBotGameId(data.game_id);
-                }
-                // Итог определяет сервер: например, флаг при недостатке материала у соперника — ничья.
-                if (data.result && data.result !== result) {
-                    setGameOverResult(data.result);
-                    setDrawOfferStatus(`Итог по правилам ФИДЕ: ${data.result}`);
-                }
-            }
-        } catch (err) {
-            console.error('Ошибка сохранения партии с ботом в БД:', err);
-        }
-    }, [effectiveWhiteBaseMinutes, effectiveIncSeconds]);
-
-    const applyIncrementAfterMove = useCallback((moverColor: 'white' | 'black') => {
-        const incMs = Math.round(effectiveIncSeconds * 1000);
-        if (moverColor === 'white') {
-            setWhiteTimeMs(prev => prev + incMs);
-        } else {
-            setBlackTimeMs(prev => prev + incMs);
-        }
-    }, [effectiveIncSeconds]);
+    const {
+        chatMessages, chatInput, setChatInput, liveGames, queuePlayers, createdInviteCode, inviteCopied,
+        startMatchmaking, cancelMatchmaking, acceptChallenge,
+        handleCreatePrivateInvite, handleCopyInviteLink, handleSpectateGame, handleSendChatMessage,
+        handleAcceptRematch, handleDeclineRematch, handleOfferDraw, acceptDraw, declineDraw,
+    } = useGameSocket({
+        gameId, gameIdRef, myColorRef, spectatingGameId, stateVersionRef,
+        gameOverResult, gameOverResultRef, activeBot, currentUsernameRef, inviteCode, navigate,
+        effectiveWhiteBaseMinutes, effectiveIncSeconds, selectedTimeControlLabel: selectedTimeControl.label,
+        inviteColorPref,
+        setGame, setHistory, setViewIndex, setGameId, setMyColor, setSpectatingGameId, setActiveBot,
+        setStateVersion, setWhitePlayer, setBlackPlayer, setRatingInfo, setGameOverResult,
+        setDrawOfferStatus, setRematchStatus, setIsSearching, setIsManualFlip, setSelectedSquare,
+        setPendingPromotion, clearPremove, setWhiteTimeMs, setBlackTimeMs, setLeftSectionTab,
+        setLobbyTab, setIsTimeDropdownOpen, setShowInvitePanel, moveStartTime, resetLowTimeWarning,
+        exitBotGame, playAudio, playOutcomeSound, updateSessionStats,
+    });
 
     const handleThemeChange = (themeId: string) => {
         setBoardThemeKey(themeId);
@@ -410,162 +259,6 @@ export default function Chessboard() {
         setPieceSetKey(setId);
         localStorage.setItem('michess_piece_set', setId);
     };
-
-    const startHistoricalBotGame = (botId: HistoricalBotId, colorPref: 'white' | 'black' | 'random' = 'random') => {
-        if (isSearching) {
-            setIsSearching(false);
-            gameSocket.send('leave_queue', {});
-        }
-
-        const chosenColor: 'white' | 'black' =
-            colorPref === 'random'
-                ? (Math.random() < 0.5 ? 'white' : 'black')
-                : colorPref;
-
-        const whiteStartMs = Math.round(effectiveWhiteBaseMinutes * 60 * 1000);
-        const blackStartMs = Math.round(effectiveBlackBaseMinutes * 60 * 1000);
-        const freshGame = new Chess();
-        const botInfo = HISTORICAL_BOTS[botId];
-
-        botGameSavedRef.current = false;
-        lowTimeWarnedRef.current = false;
-        setSavedBotGameId(null);
-        gameIdRef.current = null;
-        setGameId(null);
-        setSelectedBotId(botId);
-        setActiveBot(botId);
-        setLeftSectionTab('bots');
-        myColorRef.current = chosenColor;
-        setMyColor(chosenColor);
-        setIsManualFlip(false);
-        setGame(freshGame);
-        setHistory([]);
-        setViewIndex(-1);
-        setSelectedSquare(null);
-        setPendingPromotion(null);
-        setPremove(null);
-        setGameOverResult(null);
-        setRatingInfo(null);
-        setDrawOfferStatus(null);
-        setRematchStatus('none');
-        setWhiteTimeMs(whiteStartMs);
-        setBlackTimeMs(blackStartMs);
-        moveStartTime.current = Date.now();
-
-        if (chosenColor === 'white') {
-            setWhitePlayer({username: currentUsername, rating: String(currentUserRating)});
-            setBlackPlayer({username: botInfo.playerLabel, rating: String(botInfo.rating)});
-        } else {
-            setWhitePlayer({username: botInfo.playerLabel, rating: String(botInfo.rating)});
-            setBlackPlayer({username: currentUsername, rating: String(currentUserRating)});
-        }
-
-        setBotComment(`«${botInfo.motto}»`);
-        playAudio('start');
-    };
-
-    useEffect(() => {
-        if (!activeBot || gameOverResult || game.isGameOver()) return;
-
-        const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
-        if (currentTurnColor === myColor) return;
-
-        let isCancelled = false;
-        let delayTimer: ReturnType<typeof setTimeout> | null = null;
-        setIsBotThinking(true);
-        const botName = HISTORICAL_BOTS[activeBot].shortName;
-        const requestStartedAt = Date.now();
-
-        (async () => {
-            try {
-                const authToken = localStorage.getItem('token');
-                const headers: Record<string, string> = {'Content-Type': 'application/json'};
-                // С токеном лимит запросов считается на пользователя, а не на общий IP.
-                if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
-
-                let response: Response | null = null;
-                // 429 (лимит) и 503 (пул движков занят) — временные: ждём Retry-After и повторяем.
-                for (let attempt = 0; attempt < 4 && !isCancelled; attempt++) {
-                    response = await fetch(`${API_BASE_URL}/api/v1/bots/move`, {
-                        method: 'POST',
-                        headers,
-                        body: JSON.stringify({
-                            bot_id: activeBot,
-                            fen: game.fen()
-                        })
-                    });
-                    if (response.status !== 429 && response.status !== 503) break;
-                    const retryAfterS = Number(response.headers.get('Retry-After')) || 2;
-                    await new Promise((resolve) => setTimeout(resolve, Math.min(retryAfterS, 10) * 1000));
-                }
-                if (!response) return;
-
-                if (!response.ok || isCancelled) {
-                    if (!isCancelled) setIsBotThinking(false);
-                    return;
-                }
-                const data = await response.json();
-                if (isCancelled) return;
-
-                const targetThinkMs = typeof data.thinking_time_ms === 'number' ? data.thinking_time_ms : 600;
-                const networkElapsed = Date.now() - requestStartedAt;
-                const remainingDelay = Math.max(80, targetThinkMs - networkElapsed);
-
-                delayTimer = setTimeout(() => {
-                    if (isCancelled) return;
-
-                    const from = data.uci.slice(0, 2);
-                    const to = data.uci.slice(2, 4);
-                    const promotion = data.uci.length > 4 ? data.uci.slice(4, 5) : 'q';
-
-                    const nextGame = cloneChessInstance(game);
-                    const moveObj = nextGame.move({from, to, promotion});
-
-                    if (moveObj) {
-                        const newHistory = nextGame.history({verbose: true});
-                        const botColor: 'white' | 'black' = myColor === 'white' ? 'black' : 'white';
-
-                        applyIncrementAfterMove(botColor);
-                        setGame(nextGame);
-                        setHistory(newHistory);
-                        setViewIndex(-1);
-                        setBotComment(data.comment);
-                        moveStartTime.current = Date.now();
-
-                        // На завершающем ходу играет только исход (победа/поражение/ничья) —
-                        // звук самого хода («шах» и т.п.) был бы лишним дублем перед ним.
-                        if (!nextGame.isGameOver()) {
-                            playAudio(resolveMoveSound(moveObj.san));
-                        }
-
-                        if (nextGame.isGameOver()) {
-                            let result = '1/2-1/2';
-                            if (nextGame.isCheckmate()) {
-                                result = nextGame.turn() === 'w' ? '0-1' : '1-0';
-                            }
-                            setPremove(null);
-                            setGameOverResult(result);
-                            setDrawOfferStatus(`Партия против ${botName} окончена и сохранена в архив (${result}).`);
-                            updateSessionStats(result);
-                            playOutcomeSound(result, myColor);
-                            saveBotGameToDatabase(activeBot, myColor, result, nextGame);
-                        }
-                    }
-                    setIsBotThinking(false);
-                }, remainingDelay);
-            } catch (err) {
-                console.error('Ошибка получения хода бота:', err);
-                if (!isCancelled) {
-                    setIsBotThinking(false);
-                }
-            }
-        })();
-
-        return () => {
-            isCancelled = true;
-            if (delayTimer) clearTimeout(delayTimer);
-        };
-    }, [activeBot, game, myColor, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyIncrementAfterMove]);
 
     useEffect(() => {
         if (!isResizing) return;
@@ -732,282 +425,6 @@ export default function Chessboard() {
             });
     }, []);
 
-    useEffect(() => {
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        gameSocket.connect(token);
-
-        const handleMatchFound = (data: any) => {
-            applyMatchFoundSnapshot(data);
-        };
-
-        const handleMoveMade = (data: any) => {
-            applyMoveMadeSnapshot(data);
-        };
-
-        const handleGameOver = (data: any) => {
-            setPremove(null);
-            setPendingPromotion(null);
-            // Партия могла уже быть завершена сообщением move_made (оно приходит первым на том же
-            // соединении) — тогда исход уже озвучен и статистика уже обновлена, повторять не нужно.
-            if (!gameOverResultRef.current) {
-                playOutcomeSound(data.result);
-                updateSessionStats(data.result);
-            }
-            setGameOverResult(data.result);
-            setRatingInfo(data);
-            if (data.white_time_ms !== undefined) setWhiteTimeMs(data.white_time_ms);
-            if (data.black_time_ms !== undefined) setBlackTimeMs(data.black_time_ms);
-            if (data.reason === 'aborted' || data.result === '*') {
-                setDrawOfferStatus('Партия отменена на 1-м ходу (рейтинг не изменён).');
-            } else if (data.result) {
-                setDrawOfferStatus(`Партия окончена. Результат: ${data.result}`);
-            }
-        };
-
-        const handleDrawOffered = () => {
-            setDrawOfferStatus('Соперник предлагает ничью.');
-            playAudio('offer');
-        };
-
-        const handleDrawDeclined = () => {
-            setDrawOfferStatus('Предложение ничьей отклонено.');
-            playAudio('decline');
-            setTimeout(() => setDrawOfferStatus(null), 3000);
-        };
-
-        const handleRematchOffered = () => {
-            setRematchStatus('offered_by_opponent');
-            playAudio('offer');
-        };
-
-        const handleRematchDeclined = () => {
-            setRematchStatus('declined');
-            playAudio('decline');
-        };
-
-        const handleInviteCreated = (data: any) => {
-            if (data.code) {
-                setCreatedInviteCode(data.code);
-                const url = `${window.location.origin}/challenge/${data.code}`;
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(url).catch(() => {
-                    });
-                }
-                setInviteCopied(true);
-                playAudio('offer');
-                setTimeout(() => setInviteCopied(false), 3000);
-            }
-        };
-
-        const handleSpectateStarted = (data: any) => {
-            setIsSearching(false);
-            setActiveBot(null);
-            gameIdRef.current = null;
-            setGameId(null);
-            setSpectatingGameId(data.game_id);
-            setWhitePlayer({username: data.white_username || 'Белые', rating: String(data.white_rating || 1200)});
-            setBlackPlayer({username: data.black_username || 'Черные', rating: String(data.black_rating || 1200)});
-            setWhiteTimeMs(data.white_time_ms ?? data.base_time_ms ?? 180000);
-            setBlackTimeMs(data.black_time_ms ?? data.base_time_ms ?? 180000);
-
-            const restored = new Chess();
-            if (data.pgn) {
-                try {
-                    restored.loadPgn(data.pgn);
-                } catch {
-                    if (data.fen) restored.load(data.fen);
-                }
-            } else if (data.fen) {
-                restored.load(data.fen);
-            }
-            setGame(restored);
-            setHistory(restored.history({verbose: true}));
-            setViewIndex(-1);
-            setGameOverResult(null);
-            setChatMessages([]);
-            setDrawOfferStatus(`Режим зрителя: ${data.white_username} vs ${data.black_username}`);
-            playAudio('start');
-        };
-
-        const handleChatMessage = (data: any) => {
-            if (data.text && data.sender) {
-                setChatMessages(prev => [...prev.slice(-49), {
-                    sender: data.sender,
-                    text: data.text,
-                    timestamp: data.timestamp || Date.now()
-                }]);
-                if (data.sender !== currentUsernameRef.current) {
-                    playAudio('chat');
-                }
-            }
-        };
-
-        const handleServerError = (data: any) => {
-            console.warn('Сервер отклонил действие:', data);
-            if (data.code) {
-                if (data.message) setDrawOfferStatus(data.message);
-                // Отказ матчмейкинга (уже в партии, вне диапазона рейтинга, вызов неактуален...)
-                // выводит из режима поиска; ограничения чата, предложений и частоты — нет.
-                if (!GAME_ACTION_ERROR_CODES.has(data.code)) setIsSearching(false);
-                // Ход, отклонённый по лимиту частоты, приходит с актуальной позицией —
-                // её нужно вернуть на доску (ниже). Остальные отказы позицию не трогают.
-                if (!data.fen && !data.pgn) return;
-            }
-            setPremove(null);
-            playAudio('illegal');
-            if (data.pgn || data.fen) {
-                const syncedGame = new Chess();
-                if (data.pgn) {
-                    try {
-                        syncedGame.loadPgn(data.pgn);
-                    } catch {
-                        if (data.fen) syncedGame.load(data.fen);
-                    }
-                } else if (data.fen) {
-                    syncedGame.load(data.fen);
-                }
-                setGame(syncedGame);
-                setHistory(syncedGame.history({verbose: true}));
-            }
-            if (data.state_version !== undefined) {
-                const ver = Number(data.state_version);
-                setStateVersion(ver);
-                stateVersionRef.current = ver;
-            }
-        };
-
-        gameSocket.on('match_found', handleMatchFound);
-        gameSocket.on('move_made', handleMoveMade);
-        gameSocket.on('game_over', handleGameOver);
-        gameSocket.on('draw_offered', handleDrawOffered);
-        gameSocket.on('draw_declined', handleDrawDeclined);
-        gameSocket.on('rematch_offered', handleRematchOffered);
-        gameSocket.on('rematch_declined', handleRematchDeclined);
-        gameSocket.on('invite_created', handleInviteCreated);
-        gameSocket.on('spectate_started', handleSpectateStarted);
-        gameSocket.on('chat_message', handleChatMessage);
-        gameSocket.on('error', handleServerError);
-
-        return () => {
-            gameSocket.off('match_found', handleMatchFound);
-            gameSocket.off('move_made', handleMoveMade);
-            gameSocket.off('game_over', handleGameOver);
-            gameSocket.off('draw_offered', handleDrawOffered);
-            gameSocket.off('draw_declined', handleDrawDeclined);
-            gameSocket.off('rematch_offered', handleRematchOffered);
-            gameSocket.off('rematch_declined', handleRematchDeclined);
-            gameSocket.off('invite_created', handleInviteCreated);
-            gameSocket.off('spectate_started', handleSpectateStarted);
-            gameSocket.off('chat_message', handleChatMessage);
-            gameSocket.off('error', handleServerError);
-        };
-    }, [applyMatchFoundSnapshot, applyMoveMadeSnapshot, playAudio, playOutcomeSound, updateSessionStats]);
-
-    useEffect(() => {
-        if (!inviteCode || !localStorage.getItem('token')) return;
-        const timer = setTimeout(() => {
-            gameSocket.send('accept_invite', {code: inviteCode});
-            navigate('/', {replace: true});
-        }, 450);
-        return () => clearTimeout(timer);
-    }, [inviteCode, navigate]);
-
-    useEffect(() => {
-        const syncLobbyAndActiveGame = async () => {
-            const token = localStorage.getItem('token');
-            try {
-                if (token && !activeBot && !spectatingGameId) {
-                    const activeRes = await fetch(`${API_BASE_URL}/api/v1/profile/games/my-active`, {
-                        headers: {'Authorization': `Bearer ${token}`}
-                    });
-                    if (activeRes.ok) {
-                        const activeData = await activeRes.json();
-                        if (activeData && activeData.active && activeData.game_id) {
-                            if (gameIdRef.current !== Number(activeData.game_id)) {
-                                applyMatchFoundSnapshot(activeData);
-                                return;
-                            } else if (Number(activeData.state_version || 0) > stateVersionRef.current) {
-                                applyMoveMadeSnapshot(activeData);
-                            }
-                        }
-                    }
-                }
-
-                if (!gameIdRef.current) {
-                    const [qRes, liveRes] = await Promise.all([
-                        fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/queue`),
-                        fetch(`${API_BASE_URL}/api/v1/profile/games/live`)
-                    ]);
-                    if (qRes.ok) {
-                        setQueuePlayers(await qRes.json());
-                    }
-                    if (liveRes.ok) {
-                        setLiveGames(await liveRes.json());
-                    }
-                } else {
-                    setQueuePlayers([]);
-                }
-            } catch (e) {
-                console.error('Failed to sync lobby/active game data', e);
-            }
-        };
-
-        syncLobbyAndActiveGame();
-        const interval = setInterval(syncLobbyAndActiveGame, 1500);
-        return () => clearInterval(interval);
-    }, [activeBot, spectatingGameId, applyMatchFoundSnapshot, applyMoveMadeSnapshot]);
-
-    const currentTurnChar = game.turn();
-
-    useEffect(() => {
-        if ((!gameId && !activeBot && !spectatingGameId) || gameOverResult) return;
-
-        let lastTick = Date.now();
-        const currentTurnColor = currentTurnChar === 'w' ? 'white' : 'black';
-
-        const interval = setInterval(() => {
-            const now = Date.now();
-            const delta = now - lastTick;
-            lastTick = now;
-
-            if (currentTurnColor === 'white') {
-                setWhiteTimeMs(prev => Math.max(0, prev - delta));
-            } else {
-                setBlackTimeMs(prev => Math.max(0, prev - delta));
-            }
-        }, 50);
-
-        return () => clearInterval(interval);
-    }, [gameId, activeBot, spectatingGameId, gameOverResult, currentTurnChar]);
-
-    // Звуковое предупреждение о цейтноте (< 10 секунд на часах игрока)
-    useEffect(() => {
-        if ((!gameId && !activeBot) || gameOverResult || lowTimeWarnedRef.current) return;
-        const myRemainingMs = myColor === 'white' ? whiteTimeMs : blackTimeMs;
-        if (myRemainingMs > 0 && myRemainingMs <= 10000) {
-            lowTimeWarnedRef.current = true;
-            playAudio('low_time');
-        }
-    }, [whiteTimeMs, blackTimeMs, gameId, activeBot, gameOverResult, myColor, playAudio]);
-
-    useEffect(() => {
-        if (!activeBot || gameOverResult) return;
-
-        if (whiteTimeMs <= 0 || blackTimeMs <= 0) {
-            const flagWinner = whiteTimeMs <= 0 ? '0-1' : '1-0';
-            const botName = HISTORICAL_BOTS[activeBot].shortName;
-            setPremove(null);
-            setPendingPromotion(null);
-            setGameOverResult(flagWinner);
-            setDrawOfferStatus(`Флажок упал! Партия против ${botName} завершена по времени (${flagWinner}).`);
-            updateSessionStats(flagWinner);
-            playOutcomeSound(flagWinner, myColor);
-            saveBotGameToDatabase(activeBot, myColor, flagWinner, game, 'timeout');
-        }
-    }, [whiteTimeMs, blackTimeMs, activeBot, gameOverResult, myColor, game, playOutcomeSound, updateSessionStats, saveBotGameToDatabase]);
-
     const executeMove = useCallback((
         from: string,
         to: string,
@@ -1067,7 +484,7 @@ export default function Chessboard() {
                 const newHistory = nextGame.history({verbose: true});
 
                 if (activeBot) {
-                    applyIncrementAfterMove(myColor);
+                    applyIncrement(myColor, effectiveIncSeconds);
                 }
 
                 setPendingPromotion(null);
@@ -1118,56 +535,23 @@ export default function Chessboard() {
         }
         setDragState(null);
         return false;
-    }, [game, gameId, activeBot, spectatingGameId, myColor, stateVersion, viewIndex, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyIncrementAfterMove]);
+    }, [game, gameId, activeBot, spectatingGameId, myColor, stateVersion, viewIndex, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyIncrement, effectiveIncSeconds]);
 
-    const scheduleOrPromotePremove = useCallback((from: string, to: string, explicitPromotion?: PromotionPiece) => {
-        if (from === to) return;
-        const piece = game.get(from as any);
-        const myColorChar = myColor === 'white' ? 'w' : 'b';
-        if (!piece || piece.color !== myColorChar) {
-            setSelectedSquare(null);
-            return;
-        }
-
-        const targetRank = to[1];
-        const isPawnPromotion =
-            piece.type === 'p' &&
-            ((piece.color === 'w' && targetRank === '8') || (piece.color === 'b' && targetRank === '1'));
-
-        if (isPawnPromotion && !explicitPromotion) {
-            setPendingPromotion({
-                from,
-                to,
-                color: myColorChar,
-                isPremove: true
-            });
+    const {premove, setPremove, scheduleOrPromotePremove} = usePremoves({
+        game,
+        myColor,
+        gameOverResult,
+        viewIndex,
+        isOpponentControlled: Boolean(gameId || activeBot),
+        executeMove,
+        playAudio,
+        clearSelection: useCallback(() => {
             setSelectedSquare(null);
             setDragState(null);
-            return;
-        }
-
-        setPremove({
-            from,
-            to,
-            promotion: isPawnPromotion ? (explicitPromotion || 'q') : undefined
-        });
-        playAudio('premove');
-        setPendingPromotion(null);
-        setSelectedSquare(null);
-        setDragState(null);
-    }, [game, myColor, playAudio]);
-
-    useEffect(() => {
-        if (!premove || gameOverResult || viewIndex !== -1) return;
-        if (!gameId && !activeBot) return;
-
-        const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
-        if (currentTurnColor !== myColor) return;
-
-        const currentPremove = premove;
-        setPremove(null);
-        executeMove(currentPremove.from, currentPremove.to, currentPremove.promotion || 'q', true);
-    }, [game, premove, gameId, activeBot, myColor, gameOverResult, viewIndex, executeMove]);
+            setPendingPromotion(null);
+        }, []),
+        openPromotionDialog: useCallback((p) => setPendingPromotion(p), []),
+    });
 
     useEffect(() => {
         const handlePointerMove = (e: PointerEvent) => {
@@ -1237,160 +621,12 @@ export default function Chessboard() {
         };
     }, [dragState, isBoardFlipped, game, gameId, activeBot, spectatingGameId, myColor, executeMove, scheduleOrPromotePremove]);
 
-    const formatTime = (ms: number) => {
-        const totalMs = Math.max(0, ms);
-        const totalSecs = Math.floor(totalMs / 1000);
-        const hours = Math.floor(totalSecs / 3600);
-        const mins = Math.floor((totalSecs % 3600) / 60);
-        const secs = totalSecs % 60;
-
-        if (hours > 0) {
-            return `${hours}:${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-        }
-
-        if (totalMs < 30000 && totalMs > 0) {
-            const tenths = Math.floor((totalMs % 1000) / 100);
-            return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}.${tenths}`;
-        }
-
-        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-    };
-
-    const startMatchmaking = async () => {
-        gameIdRef.current = null;
-        setGameId(null);
-        setActiveBot(null);
-        setBotComment(null);
-        setSavedBotGameId(null);
-        botGameSavedRef.current = false;
-        lowTimeWarnedRef.current = false;
-        setPendingPromotion(null);
-        setPremove(null);
-        setGameOverResult(null);
-        setRatingInfo(null);
-        setIsSearching(true);
-        setLeftSectionTab('lobby');
-        setLobbyTab('lobby');
-        setIsTimeDropdownOpen(false);
-        setDrawOfferStatus(`Вы опубликовали вызов в лобби (${selectedTimeControl.label})...`);
-
-        const baseMs = Math.round(effectiveWhiteBaseMinutes * 60 * 1000);
-        const incMs = Math.round(effectiveIncSeconds * 1000);
-
-        gameSocket.send('join_queue', {
-            base_time_ms: baseMs,
-            increment_ms: incMs
-        });
-
-        const token = localStorage.getItem('token');
-        if (token) {
-            try {
-                const res = await fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/join`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify({base_time_ms: baseMs, increment_ms: incMs})
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    if (data && data.active && data.game_id) {
-                        applyMatchFoundSnapshot(data);
-                    }
-                }
-            } catch {
-                // Игнорируем ошибку, если сработал WebSocket
-            }
-        }
-    };
-
-    const cancelMatchmaking = async () => {
-        setIsSearching(false);
-        setDrawOfferStatus(null);
-        gameSocket.send('leave_queue', {});
-        const token = localStorage.getItem('token');
-        if (token) {
-            fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/leave`, {
-                method: 'POST',
-                headers: {'Authorization': `Bearer ${token}`}
-            }).catch(() => {
-            });
-        }
-    };
-
-    const acceptChallenge = async (targetUserId: number) => {
-        setActiveBot(null);
-        setBotComment(null);
-        setSavedBotGameId(null);
-        setPendingPromotion(null);
-        setPremove(null);
-        botGameSavedRef.current = false;
-
-        gameSocket.send('accept_challenge', {target_user_id: targetUserId});
-
-        const token = localStorage.getItem('token');
-        if (!token) return;
-
-        try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/accept/${targetUserId}`, {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Accept': 'application/json'
-                }
-            });
-            if (res.ok) {
-                const data = await res.json();
-                if (data && data.game_id) {
-                    applyMatchFoundSnapshot(data);
-                }
-            }
-        } catch (err) {
-            console.error('Ошибка при принятии вызова по HTTP:', err);
-        }
-    };
-
-    const handleCreatePrivateInvite = () => {
-        gameSocket.send('create_invite', {
-            base_time_ms: Math.round(effectiveWhiteBaseMinutes * 60 * 1000),
-            increment_ms: Math.round(effectiveIncSeconds * 1000),
-            color_pref: inviteColorPref
-        });
-    };
-
-    const handleCopyInviteLink = () => {
-        if (!createdInviteCode) return;
-        const url = `${window.location.origin}/challenge/${createdInviteCode}`;
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(url).catch(() => {
-            });
-        }
-        setInviteCopied(true);
-        setTimeout(() => setInviteCopied(false), 2500);
-    };
-
-    const handleSpectateGame = (targetGameId: number) => {
-        gameSocket.send('spectate_game', {game_id: targetGameId});
-    };
-
     const handleLeaveSpectate = () => {
         if (spectatingGameId) {
             gameSocket.send('leave_spectate', {game_id: spectatingGameId});
         }
         setSpectatingGameId(null);
         handleResetSandbox();
-    };
-
-    const handleSendChatMessage = (textToSend?: string) => {
-        const activeGid = gameId || spectatingGameId;
-        const finalMsg = (textToSend ?? chatInput).trim();
-        if (!activeGid || !finalMsg) return;
-        gameSocket.send('chat_message', {
-            game_id: activeGid,
-            text: finalMsg.slice(0, 140)
-        });
-        if (!textToSend) setChatInput('');
     };
 
     const handleAbortGame = () => {
@@ -1417,18 +653,6 @@ export default function Chessboard() {
         }
     };
 
-    const handleAcceptRematch = () => {
-        if (!gameId) return;
-        gameSocket.send('accept_rematch', {game_id: gameId});
-    };
-
-    const handleDeclineRematch = () => {
-        if (!gameId) return;
-        gameSocket.send('decline_rematch', {game_id: gameId});
-        setRematchStatus('none');
-        playAudio('decline');
-    };
-
     const handleResign = () => {
         if ((!gameId && !activeBot) || gameOverResult) return;
         if (window.confirm('Вы действительно хотите сдаться?')) {
@@ -1448,36 +672,12 @@ export default function Chessboard() {
         }
     };
 
-    const handleOfferDraw = () => {
-        if (!gameId || gameOverResult) return;
-        gameSocket.send('offer_draw', {game_id: gameId});
-        setDrawOfferStatus('Вы предложили ничью...');
-        playAudio('premove');
-    };
-
-    const acceptDraw = () => {
-        if (!gameId) return;
-        gameSocket.send('accept_draw', {game_id: gameId});
-        setDrawOfferStatus(null);
-    };
-
-    const declineDraw = () => {
-        if (!gameId) return;
-        gameSocket.send('decline_draw', {game_id: gameId});
-        setDrawOfferStatus(null);
-        playAudio('decline');
-    };
-
     const handleResetSandbox = () => {
         if (gameId && !gameOverResult) return;
         gameIdRef.current = null;
         setGameId(null);
-        setActiveBot(null);
-        setBotComment(null);
-        setSavedBotGameId(null);
-        botGameSavedRef.current = false;
-        lowTimeWarnedRef.current = false;
-        setIsBotThinking(false);
+        exitBotGame();
+        resetLowTimeWarning();
         setGameOverResult(null);
         setRatingInfo(null);
         setDrawOfferStatus(null);
@@ -1655,6 +855,44 @@ export default function Chessboard() {
             setViewIndex(-1);
         } else {
             setViewIndex(targetIdx);
+        }
+    };
+
+    const handleNavigateFirst = () => {
+        setViewIndex(-2);
+        playAudio('move');
+    };
+
+    const handleNavigateBack = () => {
+        if (history.length === 0) return;
+        const current = viewIndex === -1 ? history.length - 1 : prevIndexHelper(viewIndex, history.length);
+        const nextIdx = current <= 0 ? -2 : current - 1;
+        setViewIndex(nextIdx);
+        if (nextIdx >= 0 && history[nextIdx]) {
+            playAudio(resolveMoveSound(history[nextIdx].san));
+        } else {
+            playAudio('move');
+        }
+    };
+
+    const handleNavigateForward = () => {
+        let nextIdx = -1;
+        if (viewIndex === -2 && history.length > 0) {
+            nextIdx = history.length === 1 ? -1 : 0;
+        } else if (viewIndex !== -1 && viewIndex < history.length - 2) {
+            nextIdx = viewIndex + 1;
+        }
+        setViewIndex(nextIdx);
+        const targetMove = nextIdx === -1 ? history[history.length - 1] : history[nextIdx];
+        if (targetMove) {
+            playAudio(resolveMoveSound(targetMove.san));
+        }
+    };
+
+    const handleNavigateLast = () => {
+        setViewIndex(-1);
+        if (history.length > 0) {
+            playAudio(resolveMoveSound(history[history.length - 1].san));
         }
     };
 
@@ -2217,66 +1455,21 @@ export default function Chessboard() {
             {/* ЦЕНТРАЛЬНАЯ КОЛОНКА: ИГРОКИ И ШАХМАТНАЯ ДОСКА */}
             <div className="xl:h-full flex flex-col items-center justify-center gap-2 order-1 xl:order-2 shrink-0">
 
-                <div
-                    style={{width: `${responsiveBoardPx}px`}}
-                    className={`bg-acacia-dark px-3 py-1.5 rounded-lg shadow-heavy border-2 border-amber-900/50 flex justify-between items-center text-boxwood-light shrink-0 ${isResizing ? 'transition-none' : 'transition-colors'}`}
-                >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                        {isBotOnTop && activeBotProfile ? (
-                            <img
-                                src={activeBotProfile.avatar}
-                                alt={activeBotProfile.name}
-                                onError={(e) => {
-                                    const img = e.target as HTMLImageElement;
-                                    if (!img.src.endsWith(activeBotProfile.fallbackAvatar)) {
-                                        img.src = activeBotProfile.fallbackAvatar;
-                                    }
-                                }}
-                                className="w-9 h-9 rounded-md object-cover border-2 border-amber-500/70 shrink-0 shadow"
-                            />
-                        ) : (
-                            <div
-                                className={`w-9 h-9 rounded-md flex items-center justify-center border border-amber-600/30 font-bold text-lg shrink-0 ${
-                                    topIsWhite ? 'bg-boxwood text-acacia-dark' : 'bg-acacia text-amber-200'
-                                }`}
-                            >
-                                {topIsWhite ? '♙' : '♟'}
-                            </div>
-                        )}
-                        <div className="min-w-0">
-                            <div className="font-bold text-sm sm:text-base flex items-center gap-2 leading-tight">
-                                <span className="truncate">
-                                    {(gameId || activeBot || spectatingGameId) ? topPlayerInfo.username : (topIsWhite ? 'Белые (Разбор)' : 'Чёрные (Разбор)')}
-                                </span>
-                                {(gameId || activeBot || spectatingGameId) && (
-                                    <span
-                                        className="text-xs px-1.5 py-0.5 rounded bg-black/45 text-amber-400 border border-amber-600/25 flex items-center gap-1 font-mono">
-                                        {topPlayerInfo.rating}
-                                        {ratingInfo && (
-                                            <span
-                                                className={topIsWhite ? (Number(ratingInfo.white_delta) >= 0 ? 'text-emerald-400' : 'text-red-400') : (Number(ratingInfo.black_delta) >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-                                                ({topIsWhite ? (Number(ratingInfo.white_delta) >= 0 ? `+${ratingInfo.white_delta}` : ratingInfo.white_delta) : (Number(ratingInfo.black_delta) >= 0 ? `+${ratingInfo.black_delta}` : ratingInfo.black_delta)})
-                                            </span>
-                                        )}
-                                    </span>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-1.5 text-xs text-amber-200/90 min-h-[16px]">
-                                <span className="tracking-tight truncate">{topCaptured.join('')}</span>
-                                {topAdvantage > 0 && (
-                                    <span
-                                        className="text-[11px] font-mono font-bold px-1.5 rounded bg-amber-900/60 text-amber-300">
-                                        +{topAdvantage}
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                    <div
-                        className="bg-[#1A120B] px-3.5 py-1 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-xl sm:text-2xl font-bold tracking-wider text-amber-400 min-w-[116px] sm:min-w-[124px] text-center">
-                        {(gameId || activeBot || spectatingGameId) ? formatTime(topPlayerTime) : formatTime(topIdlePreviewMs)}
-                    </div>
-                </div>
+                <PlayerInfoBar
+                    boardWidthPx={responsiveBoardPx}
+                    isResizing={isResizing}
+                    botProfile={isBotOnTop ? activeBotProfile : null}
+                    isWhiteSide={topIsWhite}
+                    idleLabel={topIsWhite ? 'Белые (Разбор)' : 'Чёрные (Разбор)'}
+                    showGameInfo={Boolean(gameId || activeBot || spectatingGameId)}
+                    playerInfo={topPlayerInfo}
+                    hasRatingInfo={!!ratingInfo}
+                    ratingDelta={ratingInfo ? (topIsWhite ? ratingInfo.white_delta : ratingInfo.black_delta) : undefined}
+                    capturedSymbols={topCaptured}
+                    advantage={topAdvantage}
+                    timeMs={topPlayerTime}
+                    idlePreviewMs={topIdlePreviewMs}
+                />
 
                 {/* ШАХМАТНАЯ ДОСКА С ПОДДЕРЖКОЙ TOUCH / POINTER EVENTS */}
                 <div
@@ -2303,64 +1496,16 @@ export default function Chessboard() {
                         />
                     )}
 
-                    {pendingPromotion && (() => {
-                        const fileIdx = displayedFiles.indexOf(pendingPromotion.to[0]);
-                        const rankIdx = displayedRanks.indexOf(pendingPromotion.to[1]);
-                        const openDownwards = rankIdx <= 3;
-                        const clampedLeftPercent = Math.min(Math.max((fileIdx + 0.5) * 12.5, 22), 78);
-
-                        return (
-                            <div
-                                className="absolute inset-0 z-50 bg-black/55 backdrop-blur-[1px] flex items-center justify-center rounded-[2px]"
-                                onClick={() => setPendingPromotion(null)}
-                            >
-                                <div
-                                    style={{
-                                        left: `${clampedLeftPercent}%`,
-                                        top: openDownwards ? '6%' : 'auto',
-                                        bottom: openDownwards ? 'auto' : '6%',
-                                        transform: 'translateX(-50%)'
-                                    }}
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="absolute bg-[#1A120B] border-2 border-amber-500 rounded-lg p-3 shadow-2xl flex flex-col items-center gap-2.5"
-                                >
-                                    <div className="flex items-center justify-between w-full gap-3 px-1">
-                                        <span className="text-xs font-bold uppercase tracking-wider text-amber-300">
-                                            Превращение пешки ({pendingPromotion.to})
-                                        </span>
-                                        <button
-                                            type="button"
-                                            onClick={() => setPendingPromotion(null)}
-                                            className="text-boxwood/60 hover:text-amber-300 transition cursor-pointer"
-                                            title="Отмена (Esc)"
-                                        >
-                                            <X size={15}/>
-                                        </button>
-                                    </div>
-                                    <div className="grid grid-cols-4 gap-2">
-                                        {PROMOTION_OPTIONS.map((opt) => (
-                                            <button
-                                                key={opt.type}
-                                                type="button"
-                                                onClick={() => handlePromotionSelect(opt.type)}
-                                                className="w-16 h-18 rounded-md bg-acacia-dark hover:bg-amber-800/70 border border-amber-600/50 hover:border-amber-300 transition flex flex-col items-center justify-between py-2 px-1 shadow cursor-pointer group"
-                                                title={opt.label}
-                                            >
-                                                <div
-                                                    className="w-10 h-10 flex items-center justify-center overflow-hidden shrink-0">
-                                                    {renderPieceSvg({type: opt.type, color: pendingPromotion.color})}
-                                                </div>
-                                                <span
-                                                    className="text-xs font-bold text-amber-200 group-hover:text-white leading-none">
-                                                    {opt.label}
-                                                </span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            </div>
-                        );
-                    })()}
+                    {pendingPromotion && (
+                        <PromotionDialog
+                            pendingPromotion={pendingPromotion}
+                            displayedFiles={displayedFiles}
+                            displayedRanks={displayedRanks}
+                            renderPieceSvg={renderPieceSvg}
+                            onSelect={handlePromotionSelect}
+                            onCancel={() => setPendingPromotion(null)}
+                        />
+                    )}
 
                     <div
                         className="grid grid-cols-8 grid-rows-8 w-full h-full border border-black/60 relative z-10 shadow-inner-board rounded-[2px] overflow-hidden">
@@ -2513,66 +1658,21 @@ export default function Chessboard() {
                     </div>
                 </div>
 
-                <div
-                    style={{width: `${responsiveBoardPx}px`}}
-                    className={`bg-acacia-dark px-3 py-1.5 rounded-lg shadow-heavy border-2 border-amber-900/50 flex justify-between items-center text-boxwood-light shrink-0 ${isResizing ? 'transition-none' : 'transition-colors'}`}
-                >
-                    <div className="flex items-center gap-2.5 min-w-0">
-                        {isBotOnBottom && activeBotProfile ? (
-                            <img
-                                src={activeBotProfile.avatar}
-                                alt={activeBotProfile.name}
-                                onError={(e) => {
-                                    const img = e.target as HTMLImageElement;
-                                    if (!img.src.endsWith(activeBotProfile.fallbackAvatar)) {
-                                        img.src = activeBotProfile.fallbackAvatar;
-                                    }
-                                }}
-                                className="w-9 h-9 rounded-md object-cover border-2 border-amber-500/70 shrink-0 shadow"
-                            />
-                        ) : (
-                            <div
-                                className={`w-9 h-9 rounded-md flex items-center justify-center border border-amber-600/30 font-bold text-lg shrink-0 ${
-                                    !topIsWhite ? 'bg-boxwood text-acacia-dark' : 'bg-acacia text-amber-200'
-                                }`}
-                            >
-                                {!topIsWhite ? '♙' : '♟'}
-                            </div>
-                        )}
-                        <div className="min-w-0">
-                            <div className="font-bold text-sm sm:text-base flex items-center gap-2 leading-tight">
-                                <span className="truncate">
-                                    {(gameId || activeBot || spectatingGameId) ? bottomPlayerInfo.username : (!topIsWhite ? 'Вы (Белые)' : 'Вы (Чёрные)')}
-                                </span>
-                                {(gameId || activeBot || spectatingGameId) && (
-                                    <span
-                                        className="text-xs px-1.5 py-0.5 rounded bg-black/45 text-amber-400 border border-amber-600/25 flex items-center gap-1 font-mono">
-                                        {bottomPlayerInfo.rating}
-                                        {ratingInfo && (
-                                            <span
-                                                className={!topIsWhite ? (Number(ratingInfo.white_delta) >= 0 ? 'text-emerald-400' : 'text-red-400') : (Number(ratingInfo.black_delta) >= 0 ? 'text-emerald-400' : 'text-red-400')}>
-                                                ({!topIsWhite ? (Number(ratingInfo.white_delta) >= 0 ? `+${ratingInfo.white_delta}` : ratingInfo.white_delta) : (Number(ratingInfo.black_delta) >= 0 ? `+${ratingInfo.black_delta}` : ratingInfo.black_delta)})
-                                            </span>
-                                        )}
-                                    </span>
-                                )}
-                            </div>
-                            <div className="flex items-center gap-1.5 text-xs text-amber-200/90 min-h-[16px]">
-                                <span className="tracking-tight truncate">{bottomCaptured.join('')}</span>
-                                {bottomAdvantage > 0 && (
-                                    <span
-                                        className="text-[11px] font-mono font-bold px-1.5 rounded bg-amber-900/60 text-amber-300">
-                                        +{bottomAdvantage}
-                                    </span>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                    <div
-                        className="bg-[#1A120B] px-3.5 py-1 rounded-md border-2 border-amber-700/50 shadow-inner font-mono text-xl sm:text-2xl font-bold tracking-wider text-amber-400 min-w-[116px] sm:min-w-[124px] text-center">
-                        {(gameId || activeBot || spectatingGameId) ? formatTime(bottomPlayerTime) : formatTime(bottomIdlePreviewMs)}
-                    </div>
-                </div>
+                <PlayerInfoBar
+                    boardWidthPx={responsiveBoardPx}
+                    isResizing={isResizing}
+                    botProfile={isBotOnBottom ? activeBotProfile : null}
+                    isWhiteSide={!topIsWhite}
+                    idleLabel={!topIsWhite ? 'Вы (Белые)' : 'Вы (Чёрные)'}
+                    showGameInfo={Boolean(gameId || activeBot || spectatingGameId)}
+                    playerInfo={bottomPlayerInfo}
+                    hasRatingInfo={!!ratingInfo}
+                    ratingDelta={ratingInfo ? (!topIsWhite ? ratingInfo.white_delta : ratingInfo.black_delta) : undefined}
+                    capturedSymbols={bottomCaptured}
+                    advantage={bottomAdvantage}
+                    timeMs={bottomPlayerTime}
+                    idlePreviewMs={bottomIdlePreviewMs}
+                />
 
             </div>
 
@@ -2802,434 +1902,57 @@ export default function Chessboard() {
                     </div>
                 )}
 
-                <div
-                    className="flex-1 min-h-0 flex flex-col bg-[#1A120B]/90 rounded-md border border-amber-900/50 overflow-hidden shadow-inner">
-                    <div
-                        className="grid grid-cols-[44px_1fr_1fr] px-3 py-1.5 bg-black/55 border-b border-amber-900/40 text-xs uppercase tracking-wider text-boxwood/65 font-bold shrink-0">
-                        <span>№</span>
-                        <span>Белые</span>
-                        <span>Чёрные</span>
-                    </div>
+                <MoveList
+                    movePairs={movePairs}
+                    activeMoveIndex={activeMoveIndex}
+                    viewIndex={viewIndex}
+                    historyLength={history.length}
+                    hasActiveSession={Boolean(gameId || activeBot || spectatingGameId)}
+                    scrollRef={notationScrollRef}
+                    onSelectMove={handleSelectMoveFromList}
+                    onReturnToLive={() => setViewIndex(-1)}
+                />
 
-                    <div
-                        ref={notationScrollRef}
-                        className="flex-1 min-h-0 overflow-y-auto divide-y divide-amber-900/15 font-mono text-sm [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-amber-900/50"
-                    >
-                        {movePairs.length === 0 ? (
-                            <div
-                                className="h-full flex flex-col items-center justify-center p-6 text-center text-boxwood/50 font-sans text-sm gap-1.5">
-                                <span className="font-semibold">Ходов пока нет</span>
-                                <span className="text-xs text-boxwood/40">
-                                    {(gameId || activeBot || spectatingGameId)
-                                        ? 'Сделайте первый ход на доске.'
-                                        : 'Двигайте фигуры для анализа или выберите соперника слева.'}
-                                </span>
-                            </div>
-                        ) : (
-                            movePairs.map((pair) => {
-                                const isWhiteActive = activeMoveIndex === pair.whiteIdx;
-                                const isBlackActive = pair.blackIdx !== undefined && activeMoveIndex === pair.blackIdx;
-
-                                return (
-                                    <div
-                                        key={pair.moveNumber}
-                                        className="grid grid-cols-[44px_1fr_1fr] items-center px-2.5 py-1 hover:bg-white/5 transition-colors"
-                                    >
-                                        <span className="text-xs text-amber-500/70 font-bold pl-1 select-none">
-                                            {pair.moveNumber}.
-                                        </span>
-
-                                        <button
-                                            type="button"
-                                            onClick={() => handleSelectMoveFromList(pair.whiteIdx)}
-                                            className={`text-left px-2 py-0.5 rounded text-sm font-bold transition truncate cursor-pointer ${
-                                                isWhiteActive
-                                                    ? 'active-move-btn bg-amber-600/40 text-amber-200 border border-amber-500/50 shadow-sm'
-                                                    : 'text-boxwood-light hover:bg-amber-900/30 hover:text-white'
-                                            }`}
-                                        >
-                                            {pair.whiteSan}
-                                        </button>
-
-                                        {pair.blackSan !== undefined && pair.blackIdx !== undefined ? (
-                                            <button
-                                                type="button"
-                                                onClick={() => handleSelectMoveFromList(pair.blackIdx!)}
-                                                className={`text-left px-2 py-0.5 rounded text-sm font-bold transition truncate cursor-pointer ${
-                                                    isBlackActive
-                                                        ? 'active-move-btn bg-amber-600/40 text-amber-200 border border-amber-500/50 shadow-sm'
-                                                        : 'text-boxwood-light hover:bg-amber-900/30 hover:text-white'
-                                                }`}
-                                            >
-                                                {pair.blackSan}
-                                            </button>
-                                        ) : (
-                                            <span/>
-                                        )}
-                                    </div>
-                                );
-                            })
-                        )}
-                    </div>
-
-                    {viewIndex !== -1 && history.length > 0 && (
-                        <button
-                            type="button"
-                            onClick={() => setViewIndex(-1)}
-                            className="w-full py-1.5 px-3 bg-amber-700/40 hover:bg-amber-700/60 border-t border-amber-500/40 text-amber-200 text-xs font-bold text-center transition shrink-0 cursor-pointer"
-                        >
-                            Просмотр истории
-                            ({viewIndex === -2 ? 'Начало' : `полуход ${viewIndex + 1} из ${history.length}`}) —
-                            Вернуться к игре
-                        </button>
-                    )}
-                </div>
-
-                <div
-                    className="bg-acacia-dark p-2 rounded-md border border-amber-900/40 flex items-center justify-between shrink-0">
-                    <span className="text-xs font-semibold text-boxwood/80 pl-1">Навигация:</span>
-                    <div className="flex gap-1.5">
-                        <button
-                            type="button"
-                            disabled={history.length === 0 || viewIndex === -2}
-                            onClick={() => {
-                                setViewIndex(-2);
-                                playAudio('move');
-                            }}
-                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
-                            title="В начало партии (Стрелка вверх)"
-                        >
-                            <ChevronFirst size={16}/>
-                        </button>
-                        <button
-                            type="button"
-                            disabled={history.length === 0 || viewIndex === -2}
-                            onClick={() => {
-                                if (history.length > 0) {
-                                    const current = viewIndex === -1 ? history.length - 1 : prevIndexHelper(viewIndex, history.length);
-                                    const nextIdx = current <= 0 ? -2 : current - 1;
-                                    setViewIndex(nextIdx);
-                                    if (nextIdx >= 0 && history[nextIdx]) {
-                                        playAudio(resolveMoveSound(history[nextIdx].san));
-                                    } else {
-                                        playAudio('move');
-                                    }
-                                }
-                            }}
-                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
-                            title="Ход назад (Стрелка влево)"
-                        >
-                            <ChevronLeft size={16}/>
-                        </button>
-                        <button
-                            type="button"
-                            disabled={history.length === 0 || viewIndex === -1}
-                            onClick={() => {
-                                let nextIdx = -1;
-                                if (viewIndex === -2 && history.length > 0) {
-                                    nextIdx = history.length === 1 ? -1 : 0;
-                                } else if (viewIndex !== -1 && viewIndex < history.length - 2) {
-                                    nextIdx = viewIndex + 1;
-                                }
-                                setViewIndex(nextIdx);
-                                const targetMove = nextIdx === -1 ? history[history.length - 1] : history[nextIdx];
-                                if (targetMove) {
-                                    playAudio(resolveMoveSound(targetMove.san));
-                                }
-                            }}
-                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
-                            title="Ход вперед (Стрелка вправо)"
-                        >
-                            <ChevronRight size={16}/>
-                        </button>
-                        <button
-                            type="button"
-                            disabled={history.length === 0 || viewIndex === -1}
-                            onClick={() => {
-                                setViewIndex(-1);
-                                if (history.length > 0) {
-                                    playAudio(resolveMoveSound(history[history.length - 1].san));
-                                }
-                            }}
-                            className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
-                            title="К последнему ходу (Стрелка вниз)"
-                        >
-                            <ChevronLast size={16}/>
-                        </button>
-                    </div>
-                </div>
+                <BoardNavigationControls
+                    historyLength={history.length}
+                    viewIndex={viewIndex}
+                    onFirst={handleNavigateFirst}
+                    onBack={handleNavigateBack}
+                    onForward={handleNavigateForward}
+                    onLast={handleNavigateLast}
+                />
 
                 {(gameId || spectatingGameId) && (
-                    <div
-                        className="bg-acacia-dark p-2 rounded-md border border-amber-900/50 flex flex-col gap-1.5 shrink-0">
-                        <div
-                            className="flex items-center justify-between text-xs uppercase tracking-wider text-amber-400 font-bold">
-                            <span className="flex items-center gap-1.5">
-                                <MessageSquare size={13}/> Игровой чат
-                            </span>
-                            {spectatingGameId && (
-                                <button
-                                    type="button"
-                                    onClick={handleLeaveSpectate}
-                                    className="text-rose-300 hover:text-rose-200 underline text-xs font-sans cursor-pointer"
-                                >
-                                    Выйти из просмотра
-                                </button>
-                            )}
-                        </div>
-
-                        <div
-                            className="h-16 overflow-y-auto bg-black/40 rounded p-2 text-xs space-y-1 font-sans border border-amber-950/50 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
-                            {chatMessages.length === 0 ? (
-                                <div className="h-full flex items-center justify-center text-xs text-boxwood/45 italic">
-                                    Сообщений пока нет. Поприветствуйте соперника!
-                                </div>
-                            ) : (
-                                chatMessages.map((msg, i) => (
-                                    <div key={i} className="leading-snug wrap-break-word">
-                                        <span className="font-bold text-amber-300 mr-1.5">{msg.sender}:</span>
-                                        <span className="text-boxwood-light">{msg.text}</span>
-                                    </div>
-                                ))
-                            )}
-                        </div>
-
-                        <div className="flex flex-wrap gap-1">
-                            {QUICK_CHAT_PRESETS.map((preset) => (
-                                <button
-                                    key={preset}
-                                    type="button"
-                                    onClick={() => handleSendChatMessage(preset)}
-                                    className="px-2 py-0.5 rounded bg-black/40 hover:bg-amber-900/50 border border-amber-800/40 text-xs text-amber-200 transition cursor-pointer"
-                                >
-                                    {preset}
-                                </button>
-                            ))}
-                        </div>
-
-                        <form
-                            onSubmit={(e) => {
-                                e.preventDefault();
-                                handleSendChatMessage();
-                            }}
-                            className="flex gap-1.5"
-                        >
-                            <input
-                                type="text"
-                                maxLength={140}
-                                value={chatInput}
-                                onChange={(e) => setChatInput(e.target.value)}
-                                placeholder="Написать сообщение..."
-                                className="flex-1 bg-black/50 border border-amber-800/50 rounded px-2.5 py-1 text-xs text-amber-100 outline-none focus:border-amber-500 font-sans"
-                            />
-                            <button
-                                type="submit"
-                                className="px-3 py-1 bg-amber-700 hover:bg-amber-600 text-amber-100 rounded text-xs font-bold flex items-center justify-center transition cursor-pointer"
-                                title="Отправить"
-                            >
-                                <Send size={13}/>
-                            </button>
-                        </form>
-                    </div>
+                    <GameChatPanel
+                        messages={chatMessages}
+                        chatInput={chatInput}
+                        onChatInputChange={setChatInput}
+                        onSendMessage={handleSendChatMessage}
+                        isSpectator={!!spectatingGameId}
+                        onLeaveSpectate={handleLeaveSpectate}
+                    />
                 )}
 
-                <div className="shrink-0 flex flex-col gap-1.5">
-                    {gameId ? (
-                        <>
-                            <div className="grid grid-cols-2 gap-2">
-                                {history.length < 2 ? (
-                                    <button
-                                        type="button"
-                                        onClick={handleAbortGame}
-                                        disabled={!!gameOverResult}
-                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-amber-950/90 text-amber-200 text-xs sm:text-sm font-bold rounded-md hover:bg-amber-900 transition shadow border border-amber-700/60 disabled:opacity-40 cursor-pointer"
-                                    >
-                                        <X size={15}/> Отменить игру
-                                    </button>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        onClick={handleResign}
-                                        disabled={!!gameOverResult}
-                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/85 text-red-200 text-xs sm:text-sm font-bold rounded-md hover:bg-red-900 transition shadow border border-red-800/50 disabled:opacity-40 cursor-pointer"
-                                    >
-                                        <Flag size={15}/> Сдаться
-                                    </button>
-                                )}
-                                <button
-                                    type="button"
-                                    onClick={handleOfferDraw}
-                                    disabled={!!gameOverResult || history.length < 2}
-                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
-                                >
-                                    <Handshake size={15}/> Ничья
-                                </button>
-                            </div>
-
-                            {gameOverResult && (
-                                <div className="flex flex-col gap-1.5">
-                                    {rematchStatus === 'offered_by_opponent' ? (
-                                        <div
-                                            className="p-2 rounded-md bg-emerald-950/90 border border-emerald-500/60 flex flex-col gap-1.5 text-xs text-emerald-100 text-center shadow">
-                                            <span
-                                                className="font-bold">Соперник предлагает реванш (со сменой цвета)!</span>
-                                            <div className="grid grid-cols-2 gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={handleAcceptRematch}
-                                                    className="py-1.5 px-3 bg-emerald-700 hover:bg-emerald-600 text-white font-bold rounded transition shadow cursor-pointer"
-                                                >
-                                                    Принять реванш
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={handleDeclineRematch}
-                                                    className="py-1.5 px-3 bg-red-900/80 hover:bg-red-800 text-red-100 font-bold rounded transition cursor-pointer"
-                                                >
-                                                    Отклонить
-                                                </button>
-                                            </div>
-                                        </div>
-                                    ) : (
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <button
-                                                type="button"
-                                                disabled={rematchStatus === 'offered_by_me' || rematchStatus === 'declined'}
-                                                onClick={handleOfferRematch}
-                                                className="flex items-center justify-center gap-1.5 px-3 py-2 font-bold text-xs sm:text-sm rounded-md transition shadow bg-emerald-800 hover:bg-emerald-700 text-emerald-100 border border-emerald-500/50 disabled:opacity-50 cursor-pointer"
-                                            >
-                                                <RefreshCw size={15}
-                                                           className={rematchStatus === 'offered_by_me' ? 'animate-spin' : ''}/>
-                                                {rematchStatus === 'offered_by_me'
-                                                    ? 'Ждём ответа...'
-                                                    : rematchStatus === 'declined'
-                                                        ? 'Реванш отклонён'
-                                                        : 'Реванш'}
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={handleResetSandbox}
-                                                className="flex items-center justify-center gap-1.5 px-3 py-2 font-bold text-xs sm:text-sm rounded-md transition shadow bg-boxwood text-acacia-dark border border-amber-700/50 hover:bg-boxwood-light cursor-pointer"
-                                            >
-                                                <RotateCcw size={15}/> В лобби
-                                            </button>
-                                        </div>
-                                    )}
-
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => navigate(`/game/${gameId}`, {
-                                                state: {
-                                                    game: {
-                                                        game_id: gameId,
-                                                        white_username: whitePlayer.username,
-                                                        white_rating: Number(whitePlayer.rating) || 1200,
-                                                        black_username: blackPlayer.username,
-                                                        black_rating: Number(blackPlayer.rating) || 1200,
-                                                        result: gameOverResult || '*',
-                                                        finished_at: new Date().toISOString()
-                                                    }
-                                                }
-                                            })}
-                                            className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 text-xs font-bold rounded-md transition shadow border border-emerald-600/50 cursor-pointer"
-                                        >
-                                            <Eye size={14}/> Разбор партии
-                                        </button>
-                                        <a
-                                            href={`${API_BASE_URL}/api/v1/profile/games/${gameId}/pgn`}
-                                            download
-                                            className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#1A120B] hover:bg-black text-amber-400 text-xs font-bold rounded-md transition shadow border border-amber-800/60"
-                                        >
-                                            <Download size={14}/> Скачать PGN
-                                        </a>
-                                    </div>
-                                </div>
-                            )}
-                        </>
-                    ) : activeBot ? (
-                        <div className="flex flex-col gap-1.5">
-                            <div className="grid grid-cols-2 gap-2">
-                                <button
-                                    type="button"
-                                    disabled={history.length === 0 || isBotThinking || !!gameOverResult}
-                                    onClick={handleUndoSandboxMove}
-                                    className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
-                                >
-                                    <Undo2 size={15}/> Вернуть ход
-                                </button>
-                                {!gameOverResult ? (
-                                    <button
-                                        type="button"
-                                        onClick={handleResign}
-                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-red-950/85 text-red-200 text-xs sm:text-sm font-bold rounded-md hover:bg-red-900 transition shadow border border-red-800/50 cursor-pointer"
-                                    >
-                                        <Flag size={15}/> Сдаться
-                                    </button>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        onClick={handleOfferRematch}
-                                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-emerald-800 text-emerald-100 text-xs sm:text-sm font-bold rounded-md hover:bg-emerald-700 transition shadow border border-emerald-500/50 cursor-pointer"
-                                    >
-                                        <RefreshCw size={15}/> Реванш
-                                    </button>
-                                )}
-                            </div>
-
-                            {savedBotGameId && (
-                                <div className="grid grid-cols-2 gap-2">
-                                    <button
-                                        type="button"
-                                        onClick={() => navigate(`/game/${savedBotGameId}`, {
-                                            state: {
-                                                game: {
-                                                    game_id: savedBotGameId,
-                                                    white_username: whitePlayer.username,
-                                                    white_rating: Number(whitePlayer.rating) || 1200,
-                                                    black_username: blackPlayer.username,
-                                                    black_rating: Number(blackPlayer.rating) || 1850,
-                                                    result: gameOverResult || '*',
-                                                    site: 'Michess Bot Arena',
-                                                    finished_at: new Date().toISOString()
-                                                }
-                                            }
-                                        })}
-                                        className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 text-xs font-bold rounded-md transition shadow border border-emerald-600/50 cursor-pointer"
-                                    >
-                                        <Eye size={14}/> Разбор партии
-                                    </button>
-                                    <a
-                                        href={`${API_BASE_URL}/api/v1/profile/games/${savedBotGameId}/pgn`}
-                                        download
-                                        className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-[#1A120B] hover:bg-black text-amber-400 text-xs font-bold rounded-md transition shadow border border-amber-800/60"
-                                    >
-                                        <Download size={14}/> Скачать PGN
-                                    </a>
-                                </div>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="grid grid-cols-2 gap-2">
-                            <button
-                                type="button"
-                                disabled={history.length === 0}
-                                onClick={handleUndoSandboxMove}
-                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
-                            >
-                                <Undo2 size={15}/> Отменить ход
-                            </button>
-                            <button
-                                type="button"
-                                disabled={history.length === 0}
-                                onClick={handleResetSandbox}
-                                className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-amber-300 text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
-                            >
-                                <RotateCcw size={15}/> Сбросить доску
-                            </button>
-                        </div>
-                    )}
-                </div>
+                <GameControlsPanel
+                    mode={gameId ? 'pvp' : activeBot ? 'bot' : 'sandbox'}
+                    gameId={gameId}
+                    savedBotGameId={savedBotGameId}
+                    historyLength={history.length}
+                    gameOverResult={gameOverResult}
+                    rematchStatus={rematchStatus}
+                    isBotThinking={isBotThinking}
+                    whitePlayer={whitePlayer}
+                    blackPlayer={blackPlayer}
+                    navigate={navigate}
+                    onAbortGame={handleAbortGame}
+                    onResign={handleResign}
+                    onOfferDraw={handleOfferDraw}
+                    onAcceptRematch={handleAcceptRematch}
+                    onDeclineRematch={handleDeclineRematch}
+                    onOfferRematch={handleOfferRematch}
+                    onResetSandbox={handleResetSandbox}
+                    onUndoSandboxMove={handleUndoSandboxMove}
+                />
 
             </div>
 

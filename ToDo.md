@@ -258,10 +258,23 @@
   и повторное применение (починены сломанные downgrade двух старых миграций); покрытие 80,6%, порог 78%;
   тестовые пакеты вынесены в `requirements-dev.txt`, flake8 удалён.
 
-### - [ ] Таск 7.13. Декомпозиция `Chessboard.tsx` с UI-тестами (`refactor/chessboard-split`)
+### - [x] Таск 7.13. Декомпозиция `Chessboard.tsx` с UI-тестами (`refactor/chessboard-split`)
 
 * Сначала тесты (React Testing Library): ход, премув, флаг, сдача, реванш.
 * Затем хуки `useGameSocket`, `useClock`, `useBotGame`, `usePremoves` и подкомпоненты; позже — `GameViewer.tsx`.
+* Сделано: `Chessboard.tsx` сокращён с 3239 до 1962 строк (−39%). 6 поведенческих тестов
+  (`Chessboard.test.tsx`, Vitest + RTL + jsdom, мок `gameSocket`/`soundEngine`) написаны ДО
+  декомпозиции и проходят без изменений после каждого шага. Выделены хуки `useClock`,
+  `usePremoves`, `useBotGame`, `useGameSocket` (`components/chessboard/hooks/`) и
+  презентационные подкомпоненты `PromotionDialog`, `MoveList`, `BoardNavigationControls`,
+  `GameChatPanel`, `PlayerInfoBar` (объединил два почти идентичных блока верх/низ в один),
+  `GameControlsPanel` (3 режима: pvp/bot/sandbox). `activeBot` и премув-клиринг оставлены
+  раздельно из-за циклической зависимости вызова хуков (`useClock` нужен `activeBot` раньше,
+  чем успевает отработать `useBotGame`); крупные куски состояния (`game`, `gameId`, `myColor`
+  и т.п.) остались в самом компоненте, так как разделяются между `useBotGame`/`useGameSocket`/
+  `executeMove` без единого владельца. `TimeControlPicker`, `AppearancePickerDropdown`,
+  `HistoricalBotsPanel`, `LobbyPanel`, `GameHallHeader` и декомпозиция `GameViewer.tsx` —
+  отложены на будущий заход. После каждого шага: `tsc --noEmit`, lint, `vitest run`, `build` — чисто.
 
 ### - [x] Таск 7.14. Релиз
 
