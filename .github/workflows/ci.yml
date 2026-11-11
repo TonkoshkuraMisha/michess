@@ -198,6 +198,13 @@ jobs:
           grep -Eq "users=[1-9][0-9]* " verify.log
           ls -l backups/
 
+      # Небольшая нагрузка через nginx (20 одновременных партий): регрессия, ломающая игру под
+      # параллельной нагрузкой или резко замедляющая ход, роняет сборку. Клиент — внутри контейнера api:
+      # там уже есть websockets, httpx и chess. Полный прогон — DEPLOY.md, раздел 7.
+      - name: WebSocket load test (small)
+        run: |
+          docker compose -f docker-compose.prod.yml exec -T api sh -c             "python -m scripts.loadtest.seed_users --count 40 > /tmp/tokens.json &&              python scripts/loadtest/ws_load.py --base-url http://web --tokens /tmp/tokens.json                --games 20 --moves 20 --think-min 0.1 --think-max 0.3 --max-p95-ms 1000"
+
       - name: Logs on failure
         if: failure()
         run: docker compose -f docker-compose.prod.yml logs --no-color --tail=200
