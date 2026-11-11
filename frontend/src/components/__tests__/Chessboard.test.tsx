@@ -174,3 +174,80 @@ describe('реванш', () => {
         expect(screen.getByRole('button', {name: /Сдаться/})).toBeInTheDocument();
     });
 });
+
+describe('сбой связи с сервером в партии с ботом', () => {
+    function stubBotFetch(moveReplies: Array<() => Promise<Response>>) {
+        const base = mockFetchRouter({
+            '/profile/me': () => ({id: 1, username: 'TestPlayer', blitz_rating: 1500}),
+            '/profile/matchmaking/queue': () => [],
+            '/profile/games/live': () => [],
+            '/profile/games/my-active': () => ({active: false}),
+            '/bots/save-game': () => ({game_id: 999, status: 'finished', result: '1-0'}),
+        });
+        const moveCalls: number[] = [];
+        vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request) => {
+            if (input.toString().includes('/bots/move')) {
+                moveCalls.push(Date.now());
+                const reply = moveReplies[Math.min(moveCalls.length - 1, moveReplies.length - 1)];
+                return reply();
+            }
+            return base(input);
+        }));
+        return moveCalls;
+    }
+
+    const okMove = () => Promise.resolve({
+        ok: true, status: 200, headers: new Headers(),
+        json: async () => ({...BOT_MOVE_DEFAULT, uci: 'e2e4', san: 'e4', thinking_time_ms: 10}),
+    } as unknown as Response);
+
+    async function startAsBlack() {
+        renderChessboard();
+        const startButton = await screen.findByRole('button', {name: /Чёрными/});
+        await act(async () => {
+            fireEvent.click(startButton);
+        });
+    }
+
+    it('бот повторяет запрос после сетевой ошибки и 500 и всё-таки ходит', async () => {
+        const moveCalls = stubBotFetch([
+            () => Promise.reject(new TypeError('Failed to fetch')),
+            () => Promise.resolve({ok: false, status: 500, headers: new Headers(), json: async () => ({})} as unknown as Response),
+            okMove,
+        ]);
+        await startAsBlack();
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(4000);
+        });
+
+        expect(moveCalls).toHaveLength(3);
+        await waitFor(() => expect(screen.getByText('e4')).toBeInTheDocument());
+    });
+
+    it('при долгом сбое бот сообщает, что ждёт связи, а не молчит', async () => {
+        stubBotFetch([() => Promise.reject(new TypeError('Failed to fetch'))]);
+        await startAsBlack();
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(4000);
+        });
+
+        expect(screen.getByText(/Нет связи с сервером/)).toBeInTheDocument();
+    });
+
+    it('постоянная ошибка (4xx) показывается, бот не повторяет запрос бесконечно', async () => {
+        const moveCalls = stubBotFetch([() => Promise.resolve({
+            ok: false, status: 400, headers: new Headers(),
+            json: async () => ({detail: 'Некорректная позиция'}),
+        } as unknown as Response)]);
+        await startAsBlack();
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(4000);
+        });
+
+        expect(moveCalls).toHaveLength(1);
+        expect(screen.getByText(/Бот не смог сделать ход: Некорректная позиция/)).toBeInTheDocument();
+    });
+});
