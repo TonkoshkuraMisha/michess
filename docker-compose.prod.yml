@@ -87,6 +87,27 @@ services:
       redis:
         condition: service_healthy
 
+  # Резервные копии БД: pg_dump сразу при старте и затем каждые BACKUP_INTERVAL_HOURS часов
+  # в папку хоста BACKUP_DIR; копии старше BACKUP_KEEP_DAYS дней удаляются (DEPLOY.md, раздел 5).
+  backup:
+    image: postgres:16-alpine
+    entrypoint: ["sh", "/usr/local/bin/pg_backup.sh"]
+    command: ["loop"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      PGHOST: db
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    volumes:
+      - ./scripts/backup/pg_backup.sh:/usr/local/bin/pg_backup.sh:ro
+      - ${BACKUP_DIR:-./backups}:/backups
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
   web:
     build: ./frontend
     image: michess-web:latest

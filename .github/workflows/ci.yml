@@ -181,6 +181,17 @@ jobs:
             "from src.services.bots.base import resolve_stockfish_path as r; assert r(), 'no stockfish'; print(r())"
           docker compose -f docker-compose.prod.yml ps worker | grep -q "Up"
 
+      # Сервис backup снимает БД при старте; снимок по запросу и его восстановление во временную
+      # базу должны проходить — иначе о сломанных бэкапах узнали бы только в день аварии.
+      - name: Database backup and restore check
+        run: |
+          set -e
+          docker compose -f docker-compose.prod.yml ps backup | grep -q "Up"
+          docker compose -f docker-compose.prod.yml run --rm backup once
+          docker compose -f docker-compose.prod.yml run --rm backup verify | tee verify.log
+          grep -Eq "users=[1-9][0-9]* " verify.log
+          ls -l backups/
+
       - name: Logs on failure
         if: failure()
         run: docker compose -f docker-compose.prod.yml logs --no-color --tail=200
