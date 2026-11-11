@@ -25,8 +25,14 @@ def real_redis(monkeypatch):
 
 
 async def _make_game(db_session, *, rated: bool = True) -> tuple[Game, User, User]:
-    white = User(username="w_atomic", hashed_password="pw", rating=1500)
-    black = User(username="b_atomic", hashed_password="pw", rating=1500)
+    white = User(
+        username="w_atomic", hashed_password="pw", bullet_rating=1500,
+        blitz_rating=1500, rapid_rating=1500, classical_rating=1500
+    )
+    black = User(
+        username="b_atomic", hashed_password="pw", bullet_rating=1500,
+        blitz_rating=1500, rapid_rating=1500, classical_rating=1500
+    )
     db_session.add_all([white, black])
     await db_session.commit()
     game = Game(
@@ -104,8 +110,8 @@ async def test_finish_game_with_stale_session_does_not_double_rate(real_redis, d
     async with TestSessionLocal() as check:
         w = await check.get(User, white.id)
         b = await check.get(User, black.id)
-        assert w.rating == 1500 + first["white_delta"]
-        assert b.rating == 1500 + first["black_delta"]
+        assert w.blitz_rating == 1500 + first["white_delta"]
+        assert b.blitz_rating == 1500 + first["black_delta"]
 
 
 def test_evaluate_clock_expiry():

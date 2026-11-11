@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker
 from src.models.game import Game, GameStatus
 from src.models.user import User
 from src.services import game_state as game_state_module
-from src.services.game_state import PENDING_FINISH_KEY, RECONCILE_GRACE_MS, state_manager
+from src.services.game_state import GAME_DEADLINES_KEY, PENDING_FINISH_KEY, RECONCILE_GRACE_MS, state_manager
 
 
 class DummyManager:
@@ -46,8 +46,14 @@ def session_factory(db_session, monkeypatch):
 
 
 async def _make_game(db_session, *, init_redis: bool = True) -> tuple[Game, User, User]:
-    white = User(username="w_reconcile", hashed_password="pw", rating=1500)
-    black = User(username="b_reconcile", hashed_password="pw", rating=1500)
+    white = User(
+        username="w_reconcile", hashed_password="pw", bullet_rating=1500,
+        blitz_rating=1500, rapid_rating=1500, classical_rating=1500
+    )
+    black = User(
+        username="b_reconcile", hashed_password="pw", bullet_rating=1500,
+        blitz_rating=1500, rapid_rating=1500, classical_rating=1500
+    )
     db_session.add_all([white, black])
     await db_session.commit()
     game = Game(
@@ -117,7 +123,7 @@ async def test_game_claimed_but_never_written_is_finished_after_grace(real_redis
     assert db_game.status == GameStatus.COMPLETED
     assert (db_game.result, db_game.termination) == ("0-1", "resignation")
     async with session_factory() as db:
-        assert (await db.get(User, black.id)).rating > 1500  # рейтинг начислен
+        assert (await db.get(User, black.id)).blitz_rating > 1500  # рейтинг начислен
 
     assert await real_redis.zscore(PENDING_FINISH_KEY, str(game.id)) is None
     assert not await real_redis.hgetall(f"game:{game.id}:state")
@@ -184,6 +190,21 @@ async def test_in_progress_game_missing_from_active_set_is_readded(real_redis, s
 
     assert report["restored"] == [game.id]
     assert str(game.id) in await real_redis.smembers("active_games")
+
+
+async def test_in_progress_game_without_deadline_gets_one_backfilled(real_redis, session_factory, db_session):
+    """
+    Партия in_progress, но без записи в GAME_DEADLINES_KEY (деплой этой схемы на уже идущие
+    партии, либо дедлайн потерялся по другой причине) — сверка должна его восстановить,
+    иначе флаг у неё не сработает, пока не случится следующий ход/дисконнект.
+    """
+    game, _, _ = await _make_game(db_session)
+    await real_redis.zrem(GAME_DEADLINES_KEY, str(game.id))
+    assert await real_redis.zscore(GAME_DEADLINES_KEY, str(game.id)) is None
+
+    await state_manager.reconcile_unfinished_games(_after_grace())
+
+    assert await real_redis.zscore(GAME_DEADLINES_KEY, str(game.id)) is not None
 
 
 async def test_move_telemetry_survives_until_result_is_committed(real_redis, session_factory, db_session):

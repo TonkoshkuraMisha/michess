@@ -33,7 +33,10 @@ import {
 interface UserProfile {
     id: number;
     username: string;
-    rating: number;
+    bullet_rating: number;
+    blitz_rating: number;
+    rapid_rating: number;
+    classical_rating: number;
     is_cheater: boolean;
 }
 
@@ -155,7 +158,9 @@ export default function App() {
     }, []);
 
     const username = userProfile?.username || 'Гость';
-    const userRating = userProfile?.rating || 1200;
+    // Блиц — заголовочный рейтинг в компактной навигации (как на chess.com/lichess.org);
+    // полный разбор по пуле/блицу/рапиду/классике — на странице профиля.
+    const userRating = userProfile?.blitz_rating || 1200;
 
     return (
         <div

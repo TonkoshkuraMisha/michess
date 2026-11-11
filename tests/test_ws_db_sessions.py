@@ -60,7 +60,10 @@ async def _make_users(url: str, count: int) -> list[tuple[int, str]]:
         await conn.run_sync(Base.metadata.create_all)
     async with async_sessionmaker(setup_engine, expire_on_commit=False)() as db:
         names = [f"pool_user_{i}" for i in range(count)]
-        users = [User(username=name, hashed_password="pw", rating=1500) for name in names]
+        users = [User(
+            username=name, hashed_password="pw", bullet_rating=1500,
+            blitz_rating=1500, rapid_rating=1500, classical_rating=1500
+        ) for name in names]
         db.add_all(users)
         await db.commit()
         created = [(u.id, u.username) for u in users]
@@ -140,11 +143,14 @@ async def test_each_action_gets_its_own_closed_session(action_name):
             self.closed = True
             return False
 
+        def in_transaction(self):
+            return False
+
         async def get(self, *args, **kwargs):
             return None
 
     await state_manager.initialize_game(game_id=78, white_id=1, black_id=2, base_time_ms=60000, increment_ms=0)
-    user = User(id=3, username="tracker", rating=1500)
+    user = User(id=3, username="tracker", bullet_rating=1500, blitz_rating=1500, rapid_rating=1500, classical_rating=1500)
     for _ in range(2):
         await _dispatch_action(
             TrackingSession, user, action_name, ACTION_HANDLERS[action_name], {"game_id": 78},

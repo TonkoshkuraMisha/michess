@@ -61,8 +61,14 @@ async def test_rematch_swaps_colors(db_session):
     from src.models.user import User
     from src.services.game_state import state_manager
 
-    p1 = User(username="rematch_p1", hashed_password="pw", rating=1600)
-    p2 = User(username="rematch_p2", hashed_password="pw", rating=1650)
+    p1 = User(
+        username="rematch_p1", hashed_password="pw", bullet_rating=1600,
+        blitz_rating=1600, rapid_rating=1600, classical_rating=1600
+    )
+    p2 = User(
+        username="rematch_p2", hashed_password="pw", bullet_rating=1650,
+        blitz_rating=1650, rapid_rating=1650, classical_rating=1650
+    )
     db_session.add_all([p1, p2])
     await db_session.commit()
     await db_session.refresh(p1)

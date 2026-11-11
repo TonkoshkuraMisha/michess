@@ -25,6 +25,13 @@ export const QUICK_CHAT_PRESETS = [
     '⏱ Цейтнот!'
 ];
 
+export interface PendingPromotion {
+    from: string;
+    to: string;
+    color: 'w' | 'b';
+    isPremove?: boolean;
+}
+
 export interface QueuePlayer {
     user_id: number;
     username: string;

@@ -29,8 +29,14 @@ def test_opening_book_source_recognized_in_thinking_time():
 @pytest.mark.asyncio
 async def test_anticheat_idempotency_prevents_double_penalty(db_session):
     """Повторный вызов evaluate_game_telemetry для одной и той же партии не штрафует игрока дважды."""
-    u1 = User(username="moderate_blur_user", hashed_password="pw", rating=1500, trust_factor=100, is_cheater=False)
-    u2 = User(username="clean_opp", hashed_password="pw", rating=1500, trust_factor=100, is_cheater=False)
+    u1 = User(
+        username="moderate_blur_user", hashed_password="pw", bullet_rating=1500, blitz_rating=1500,
+        rapid_rating=1500, classical_rating=1500, trust_factor=100, is_cheater=False
+    )
+    u2 = User(
+        username="clean_opp", hashed_password="pw", bullet_rating=1500, blitz_rating=1500,
+        rapid_rating=1500, classical_rating=1500, trust_factor=100, is_cheater=False
+    )
     db_session.add_all([u1, u2])
     await db_session.commit()
     await db_session.refresh(u1)
@@ -78,8 +84,14 @@ async def test_anticheat_idempotency_prevents_double_penalty(db_session):
 @pytest.mark.asyncio
 async def test_fide_dynamic_k_factor_for_new_player(db_session):
     """Новый игрок (< 30 партий) получает K=40 (+20 при победе над равным соперником)."""
-    newbie = User(username="newbie_k40", hashed_password="pw", rating=1200)
-    opponent = User(username="opp_k40", hashed_password="pw", rating=1200)
+    newbie = User(
+        username="newbie_k40", hashed_password="pw", bullet_rating=1200,
+        blitz_rating=1200, rapid_rating=1200, classical_rating=1200
+    )
+    opponent = User(
+        username="opp_k40", hashed_password="pw", bullet_rating=1200,
+        blitz_rating=1200, rapid_rating=1200, classical_rating=1200
+    )
     db_session.add_all([newbie, opponent])
     await db_session.commit()
     await db_session.refresh(newbie)
@@ -135,8 +147,14 @@ async def test_http_matchmaking_join_accept_and_active_game_sync(db_session):
     2. Игрок ps2 принимает вызов (/matchmaking/accept/{ps1.id}).
     3. Оба игрока получают активную партию через /games/my-active с противоположными цветами ('white' и 'black').
     """
-    ps1 = User(username="ps1_test", hashed_password="pw", rating=1200)
-    ps2 = User(username="ps2_test", hashed_password="pw", rating=1200)
+    ps1 = User(
+        username="ps1_test", hashed_password="pw", bullet_rating=1200,
+        blitz_rating=1200, rapid_rating=1200, classical_rating=1200
+    )
+    ps2 = User(
+        username="ps2_test", hashed_password="pw", bullet_rating=1200,
+        blitz_rating=1200, rapid_rating=1200, classical_rating=1200
+    )
     db_session.add_all([ps1, ps2])
     await db_session.commit()
     await db_session.refresh(ps1)

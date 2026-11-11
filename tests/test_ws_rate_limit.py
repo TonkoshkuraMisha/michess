@@ -25,6 +25,9 @@ class _NoDbSession:
     async def __aexit__(self, *exc):
         return False
 
+    def in_transaction(self):
+        return False
+
     async def get(self, *args, **kwargs):
         return None
 
@@ -66,7 +69,9 @@ async def _run(user: User, messages: list, *, close: bool = True) -> QueueSocket
 
 
 def _user(user_id: int) -> User:
-    return User(id=user_id, username=f"u{user_id}", rating=1500)
+    return User(
+        id=user_id, username=f"u{user_id}", bullet_rating=1500, blitz_rating=1500, rapid_rating=1500, classical_rating=1500
+    )
 
 
 @pytest.fixture

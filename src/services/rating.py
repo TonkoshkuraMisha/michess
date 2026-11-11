@@ -1,3 +1,23 @@
+from src.models.user import RatingCategory
+
+# Категория по оценке длительности партии (база + 40 ходов на добавление за ход) — та же
+# эвристика, что использует lichess.org для разделения пули/блица/рапида/классики.
+_BLITZ_THRESHOLD_S = 180
+_RAPID_THRESHOLD_S = 480
+_CLASSICAL_THRESHOLD_S = 1500
+
+
+def classify_time_control(base_time_ms: int, increment_ms: int) -> RatingCategory:
+    estimated_s = base_time_ms / 1000 + 40 * (increment_ms / 1000)
+    if estimated_s < _BLITZ_THRESHOLD_S:
+        return "bullet"
+    if estimated_s < _RAPID_THRESHOLD_S:
+        return "blitz"
+    if estimated_s < _CLASSICAL_THRESHOLD_S:
+        return "rapid"
+    return "classical"
+
+
 class FideEloSystem:
     """
     Система подсчета рейтинга по стандартам ФИДЕ.

@@ -80,6 +80,9 @@ class MockPipeline:
     def zadd(self, name, mapping):
         self.commands.append(("zadd", name, mapping))
 
+    def zrem(self, name, *values):
+        self.commands.append(("zrem", name, values))
+
     async def execute(self):
         for cmd in self.commands:
             if cmd[0] == "hset":
@@ -91,6 +94,8 @@ class MockPipeline:
                 await self.redis.sadd(cmd[1], *cmd[2])
             elif cmd[0] == "zadd":
                 await self.redis.zadd(cmd[1], cmd[2])
+            elif cmd[0] == "zrem":
+                await self.redis.zrem(cmd[1], *cmd[2])
         self.commands = []
 
     async def sismember(self, name, value):
@@ -159,6 +164,9 @@ class MockAsyncRedis:
 
     async def smembers(self, name):
         return self.sets.get(name, set())
+
+    async def sismember(self, name, value):
+        return str(value) in self.sets.get(name, set())
 
     async def set(self, name, value, ex=None, px=None, nx=False):
         if nx and name in self.kv:
@@ -241,6 +249,9 @@ class MockAsyncRedis:
         items = sorted((v, k) for k, v in zset.items() if float(min_score) <= v <= float(max_score))
         return [k for _, k in items]
 
+    async def zscore(self, name, value):
+        return self.zsets.get(name, {}).get(str(value))
+
     async def zrem(self, name, *values):
         if name not in self.zsets:
             return 0
@@ -280,6 +291,18 @@ def no_celery_publish(monkeypatch):
     task_dispatch.reset_broker_cooldown()
 
 
+@pytest.fixture
+def freeze_rate_limit_window(monkeypatch):
+    """
+    Фиксирует время для расчёта окна в rate_limit.py (кратно RATE_LIMIT_WINDOW_S от начала
+    эпохи): несколько запросов подряд в тесте должны попасть в одно и то же окно независимо от
+    реальной скорости выполнения — иначе тест изредка падает, если окно сменится между запросами.
+    """
+    from src.api import rate_limit as rate_limit_module
+
+    monkeypatch.setattr(rate_limit_module.time, "time", lambda: 1_700_000_000.0)
+
+
 async def override_get_db():
     async with TestSessionLocal() as session:
         yield session
@@ -302,7 +325,10 @@ def client():
 
 @pytest.fixture
 async def test_user_1(db_session):
-    user = User(username="player1", hashed_password="fakehash", rating=1200)
+    user = User(
+        username="player1", hashed_password="fakehash", bullet_rating=1200,
+        blitz_rating=1200, rapid_rating=1200, classical_rating=1200
+    )
     db_session.add(user)
     await db_session.commit()
     await db_session.refresh(user)
@@ -311,7 +337,10 @@ async def test_user_1(db_session):
 
 @pytest.fixture
 async def test_user_2(db_session):
-    user = User(username="player2", hashed_password="fakehash", rating=1200)
+    user = User(
+        username="player2", hashed_password="fakehash", bullet_rating=1200,
+        blitz_rating=1200, rapid_rating=1200, classical_rating=1200
+    )
     db_session.add(user)
     await db_session.commit()
     await db_session.refresh(user)

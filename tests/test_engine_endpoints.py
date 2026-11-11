@@ -25,8 +25,14 @@ FOUR_PLY_PGN = '[Event "t"]\n[Result "*"]\n\n1. e4 e5 2. Nf3 Nc6 *'
 
 
 async def _make_game(db_session, status: GameStatus, pgn: str = FOUR_PLY_PGN, analysis_json: str | None = None):
-    white = User(username=f"w_{status.name}", hashed_password="pw", rating=1500)
-    black = User(username=f"b_{status.name}", hashed_password="pw", rating=1500)
+    white = User(
+        username=f"w_{status.name}", hashed_password="pw", bullet_rating=1500,
+        blitz_rating=1500, rapid_rating=1500, classical_rating=1500
+    )
+    black = User(
+        username=f"b_{status.name}", hashed_password="pw", bullet_rating=1500,
+        blitz_rating=1500, rapid_rating=1500, classical_rating=1500
+    )
     db_session.add_all([white, black])
     await db_session.commit()
     game = Game(
@@ -75,7 +81,7 @@ async def test_stale_cache_is_recomputed(client, db_session):
 
 # --- Лимиты частоты ---------------------------------------------------------------------
 
-def test_rate_limit_returns_429_with_retry_after(client, monkeypatch):
+def test_rate_limit_returns_429_with_retry_after(client, monkeypatch, freeze_rate_limit_window):
     monkeypatch.setattr(settings, "RATE_LIMIT_POSITION_ANALYSIS", 2)
 
     codes = [client.post("/api/v1/analysis/position", json={"moves": []}).status_code for _ in range(3)]
@@ -86,7 +92,7 @@ def test_rate_limit_returns_429_with_retry_after(client, monkeypatch):
     assert int(limited.headers["Retry-After"]) >= 1
 
 
-def test_rate_limit_is_per_user_when_token_present(client, monkeypatch, token_user_1, token_user_2):
+def test_rate_limit_is_per_user_when_token_present(client, monkeypatch, token_user_1, token_user_2, freeze_rate_limit_window):
     monkeypatch.setattr(settings, "RATE_LIMIT_POSITION_ANALYSIS", 1)
     url = "/api/v1/analysis/position"
 

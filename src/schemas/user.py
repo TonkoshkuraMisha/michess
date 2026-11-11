@@ -47,7 +47,10 @@ class UserResponse(BaseModel):
     """Schema for outgoing user data (password and anti-cheat internals excluded)."""
     id: int
     username: str
-    rating: int
+    bullet_rating: int
+    blitz_rating: int
+    rapid_rating: int
+    classical_rating: int
     is_cheater: bool
     created_at: datetime
 

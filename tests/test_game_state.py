@@ -64,8 +64,14 @@ async def test_abort_game_without_rating_change(db_session):
     from src.models.user import User
     from src.services.game_state import state_manager
 
-    u1 = User(username="abort_white_player", hashed_password="pw", rating=1500)
-    u2 = User(username="abort_black_player", hashed_password="pw", rating=1500)
+    u1 = User(
+        username="abort_white_player", hashed_password="pw", bullet_rating=1500,
+        blitz_rating=1500, rapid_rating=1500, classical_rating=1500
+    )
+    u2 = User(
+        username="abort_black_player", hashed_password="pw", bullet_rating=1500,
+        blitz_rating=1500, rapid_rating=1500, classical_rating=1500
+    )
     db_session.add_all([u1, u2])
     await db_session.commit()
     await db_session.refresh(u1)
@@ -100,8 +106,8 @@ async def test_abort_game_without_rating_change(db_session):
     await db_session.refresh(u1)
     await db_session.refresh(u2)
     await db_session.refresh(game)
-    assert u1.rating == 1500
-    assert u2.rating == 1500
+    assert u1.blitz_rating == 1500
+    assert u2.blitz_rating == 1500
     assert game.status == GameStatus.ABORTED
 
 

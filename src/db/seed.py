@@ -219,9 +219,15 @@ async def ensure_champion_seeded(db: AsyncSession, username_or_id: str) -> User 
             champ_user = User(
                 username=canonical_name,
                 hashed_password="!historical_archive_no_login!",
-                rating=meta["rating"],
+                # Фиксированный исторический рейтинг — одинаковый во всех категориях,
+                # архивные партии никогда не рейтингуются и не играются заново.
+                bullet_rating=meta["rating"],
+                blitz_rating=meta["rating"],
+                rapid_rating=meta["rating"],
+                classical_rating=meta["rating"],
                 is_cheater=False,
                 trust_factor=100,
+                is_bot=True,
             )
             db.add(champ_user)
             await db.flush()
@@ -267,9 +273,13 @@ async def ensure_champion_seeded(db: AsyncSession, username_or_id: str) -> User 
                     new_opponents[opp_name] = User(
                         username=opp_name,
                         hashed_password="!historical_archive_no_login!",
-                        rating=opp_rating,
+                        bullet_rating=opp_rating,
+                        blitz_rating=opp_rating,
+                        rapid_rating=opp_rating,
+                        classical_rating=opp_rating,
                         is_cheater=False,
                         trust_factor=100,
+                        is_bot=True,
                     )
 
             parsed_entries.append((w_name, b_name, meta_fields, raw_pgn))

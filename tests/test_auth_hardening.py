@@ -99,7 +99,7 @@ def test_unknown_user_still_runs_password_check(client, monkeypatch):
     assert checked == [auth_module._DUMMY_PASSWORD_HASH]
 
 
-def test_failed_logins_lock_the_account_temporarily(client, monkeypatch):
+def test_failed_logins_lock_the_account_temporarily(client, monkeypatch, freeze_rate_limit_window):
     monkeypatch.setattr(settings, "RATE_LIMIT_LOGIN_FAILURES_PER_ACCOUNT", 3)
     assert _register(client, "victim").status_code == 201
     assert _register(client, "bystander").status_code == 201
@@ -122,14 +122,14 @@ def test_successful_logins_do_not_count_as_failures(client, monkeypatch):
         assert _login(client, "regular").status_code == 200
 
 
-def test_login_attempts_are_limited_per_ip(client, monkeypatch):
+def test_login_attempts_are_limited_per_ip(client, monkeypatch, freeze_rate_limit_window):
     monkeypatch.setattr(settings, "RATE_LIMIT_LOGIN_PER_IP", 3)
     for i in range(3):
         assert _login(client, f"spray_{i}", "guess").status_code == 401
     assert _login(client, "spray_4", "guess").status_code == 429
 
 
-def test_registrations_are_limited_per_ip(client, monkeypatch):
+def test_registrations_are_limited_per_ip(client, monkeypatch, freeze_rate_limit_window):
     monkeypatch.setattr(settings, "RATE_LIMIT_REGISTER_PER_IP", 2)
     assert _register(client, "first_one").status_code == 201
     assert _register(client, "second_one").status_code == 201

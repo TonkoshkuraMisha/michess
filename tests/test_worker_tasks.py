@@ -25,8 +25,14 @@ async def _prepare_db(url: str) -> list[int]:
         await conn.run_sync(Base.metadata.create_all)
     session_factory = async_sessionmaker(engine, expire_on_commit=False)
     async with session_factory() as db:
-        white = User(username="worker_w", hashed_password="pw", rating=1500)
-        black = User(username="worker_b", hashed_password="pw", rating=1500)
+        white = User(
+            username="worker_w", hashed_password="pw", bullet_rating=1500,
+            blitz_rating=1500, rapid_rating=1500, classical_rating=1500
+        )
+        black = User(
+            username="worker_b", hashed_password="pw", bullet_rating=1500,
+            blitz_rating=1500, rapid_rating=1500, classical_rating=1500
+        )
         db.add_all([white, black])
         await db.commit()
         games = [

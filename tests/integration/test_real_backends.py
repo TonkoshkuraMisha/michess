@@ -66,7 +66,13 @@ async def real_redis(monkeypatch):
 
 async def _create_users(pg, *ratings: int) -> list[int]:
     async with pg() as db:
-        users = [User(username=f"it_{i}_{r}", hashed_password="pw", rating=r) for i, r in enumerate(ratings)]
+        users = [
+            User(
+                username=f"it_{i}_{r}", hashed_password="pw",
+                bullet_rating=r, blitz_rating=r, rapid_rating=r, classical_rating=r,
+            )
+            for i, r in enumerate(ratings)
+        ]
         db.add_all(users)
         await db.commit()
         return [u.id for u in users]
@@ -91,8 +97,9 @@ async def _finish(pg, game_id: int, result: str) -> dict:
 
 
 async def _rating(pg, user_id: int) -> int:
+    # Все партии в этом файле создаются с base_time_ms=180000/increment_ms=0 — это блиц.
     async with pg() as db:
-        return (await db.get(User, user_id)).rating
+        return (await db.get(User, user_id)).blitz_rating
 
 
 async def test_concurrent_finish_applies_rating_once(pg, real_redis):

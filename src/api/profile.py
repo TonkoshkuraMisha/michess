@@ -14,7 +14,8 @@ from src.api.deps import get_current_user
 from src.db.seed import ensure_champion_seeded, extract_pgn_metadata, get_champion_meta
 from src.db.session import get_db
 from src.models.game import Game, GameStatus
-from src.models.user import User
+from src.models.user import RatingCategory, User
+from src.services.rating import classify_time_control
 
 router = APIRouter(prefix="/profile", tags=["Profile & Games"])
 
@@ -57,6 +58,7 @@ async def _build_active_game_payload(db: AsyncSession, game_id: int, user_id: in
 
     white_user = await db.get(User, white_id)
     black_user = await db.get(User, black_id)
+    category = classify_time_control(int(state.get("base_time_ms", 180000)), int(state.get("increment_ms", 0)))
 
     now_ms = int(time.time() * 1000)
     elapsed = max(0, now_ms - int(state.get("last_move_at", now_ms)))
@@ -74,9 +76,9 @@ async def _build_active_game_payload(db: AsyncSession, game_id: int, user_id: in
         "color": "white" if int(user_id) == white_id else "black",
         "opponent_id": black_id if int(user_id) == white_id else white_id,
         "white_username": white_user.username if white_user else "Белые",
-        "white_rating": white_user.rating if white_user else 1200,
+        "white_rating": white_user.rating_for(category) if white_user else 1200,
         "black_username": black_user.username if black_user else "Черные",
-        "black_rating": black_user.rating if black_user else 1200,
+        "black_rating": black_user.rating_for(category) if black_user else 1200,
         "base_time_ms": int(state.get("base_time_ms", 180000)),
         "increment_ms": int(state.get("increment_ms", 0)),
         "white_time_ms": white_time,
@@ -92,7 +94,10 @@ async def get_my_profile(current_user: User = Depends(get_current_user)):
     return {
         "id": current_user.id,
         "username": current_user.username,
-        "rating": current_user.rating,
+        "bullet_rating": current_user.bullet_rating,
+        "blitz_rating": current_user.blitz_rating,
+        "rapid_rating": current_user.rapid_rating,
+        "classical_rating": current_user.classical_rating,
         # Свой флаг игрок видит; числовой фактор доверия не отдаём, чтобы им нельзя было
         # калибровать обход античита.
         "is_cheater": current_user.is_cheater,
@@ -100,17 +105,32 @@ async def get_my_profile(current_user: User = Depends(get_current_user)):
     }
 
 
+_LEADERBOARD_RATING_COLUMN: dict[RatingCategory, Any] = {
+    "bullet": User.bullet_rating,
+    "blitz": User.blitz_rating,
+    "rapid": User.rapid_rating,
+    "classical": User.classical_rating,
+}
+
+
 @router.get("/leaderboard")
 async def get_leaderboard(
+        category: RatingCategory = Query("blitz", description="Категория контроля времени"),
         limit: int = Query(50, ge=1, le=100, description="Количество игроков в топе"),
         db: AsyncSession = Depends(get_db),
 ):
-    query = select(User).where(User.is_cheater == False).order_by(desc(User.rating)).limit(limit)  # noqa: E712
+    rating_column = _LEADERBOARD_RATING_COLUMN[category]
+    query = (
+        select(User)
+        .where(User.is_cheater == False, User.is_bot == False)  # noqa: E712
+        .order_by(desc(rating_column))
+        .limit(limit)
+    )
     result = await db.execute(query)
     top_users = result.scalars().all()
 
     return [
-        {"rank": index + 1, "username": user.username, "rating": user.rating}
+        {"rank": index + 1, "username": user.username, "rating": user.rating_for(category)}
         for index, user in enumerate(top_users)
     ]
 
@@ -155,7 +175,7 @@ async def join_matchmaking_http(
         matched_gid = await matchmaker.join_queue(
             user_id=current_user.id,
             username=current_user.username,
-            rating=current_user.rating,
+            rating=current_user.rating_for(classify_time_control(req.base_time_ms, req.increment_ms)),
             base_time_ms=req.base_time_ms,
             increment_ms=req.increment_ms,
             min_rating=req.min_rating,
@@ -266,15 +286,16 @@ async def get_live_games(db: AsyncSession = Depends(get_db)):
         white_user = users_map.get(white_id)
         black_user = users_map.get(black_id)
         spectators_set = await manager.get_spectator_ids(gid)
+        category = classify_time_control(int(state.get("base_time_ms", 180000)), int(state.get("increment_ms", 0)))
 
         live_list.append({
             "game_id": gid,
             "white_id": white_id,
             "black_id": black_id,
             "white_username": white_user.username if white_user else "Белые",
-            "white_rating": white_user.rating if white_user else 1200,
+            "white_rating": white_user.rating_for(category) if white_user else 1200,
             "black_username": black_user.username if black_user else "Черные",
-            "black_rating": black_user.rating if black_user else 1200,
+            "black_rating": black_user.rating_for(category) if black_user else 1200,
             "base_time_ms": int(state.get("base_time_ms", 180000)),
             "increment_ms": int(state.get("increment_ms", 0)),
             "state_version": int(state.get("state_version", 0)),
@@ -294,7 +315,10 @@ async def get_user_profile(username: str, db: AsyncSession = Depends(get_db)):
     return {
         "id": user.id,
         "username": user.username,
-        "rating": user.rating,
+        "bullet_rating": user.bullet_rating,
+        "blitz_rating": user.blitz_rating,
+        "rapid_rating": user.rapid_rating,
+        "classical_rating": user.classical_rating,
         "created_at": user.created_at,
     }
 
@@ -355,10 +379,18 @@ async def get_user_games(
             Game.eco,
             Game.finished_at,
             Game.pgn,
+            Game.base_time_ms,
+            Game.increment_ms,
             WhiteUser.username,
-            WhiteUser.rating,
+            WhiteUser.bullet_rating,
+            WhiteUser.blitz_rating,
+            WhiteUser.rapid_rating,
+            WhiteUser.classical_rating,
             BlackUser.username,
-            BlackUser.rating,
+            BlackUser.bullet_rating,
+            BlackUser.blitz_rating,
+            BlackUser.rapid_rating,
+            BlackUser.classical_rating,
         )
         .join(WhiteUser, Game.white_player_id == WhiteUser.id)
         .join(BlackUser, Game.black_player_id == BlackUser.id)
@@ -381,11 +413,24 @@ async def get_user_games(
             eco,
             finished_at,
             pgn_text,
+            base_time_ms,
+            increment_ms,
             w_name,
-            w_rating,
+            w_bullet,
+            w_blitz,
+            w_rapid,
+            w_classical,
             b_name,
-            b_rating,
+            b_bullet,
+            b_blitz,
+            b_rapid,
+            b_classical,
     ) in rows:
+        # Текущий рейтинг соперника в категории именно этой партии (пуля/блиц/рапид/классика),
+        # а не общий — отдельных «общих» рейтингов в системе больше нет.
+        category = classify_time_control(base_time_ms, increment_ms)
+        w_rating = {"bullet": w_bullet, "blitz": w_blitz, "rapid": w_rapid, "classical": w_classical}[category]
+        b_rating = {"bullet": b_bullet, "blitz": b_blitz, "rapid": b_rapid, "classical": b_classical}[category]
         if (not pgn_date or not site or not eco or not result_val or result_val == "*") and pgn_text:
             fallback_meta = extract_pgn_metadata(pgn_text, fallback_result=result_val or "*")
             result_val = result_val if (result_val and result_val != "*") else fallback_meta["result"]

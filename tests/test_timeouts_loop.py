@@ -8,6 +8,7 @@ import pytest
 
 from src.services import game_state as game_state_module
 from src.services.game_state import (
+    GAME_DEADLINES_KEY,
     TIMEOUT_RETRY_BASE_MS,
     TIMEOUT_RETRY_MAX_MS,
     state_manager,
@@ -56,11 +57,15 @@ async def _flagged_game(game_id: int, white_id: int, black_id: int) -> None:
     await state_manager.update_game_state(game_id, {
         "state_version": "4", "white_time_ms": "1000", "last_move_at": str(NOW - 5000),
     })
+    # update_game_state не трогает дедлайн (производственный код меняет им только draw/rematch
+    # offer) — тест правит время вручную, поэтому сам переставляет дедлайн на реальный флаг.
+    await state_manager.redis.zadd(GAME_DEADLINES_KEY, {str(game_id): NOW - 4000})
 
 
 async def _broken_game(game_id: int) -> None:
     await state_manager.initialize_game(game_id, 1, 2, base_time_ms=60000, increment_ms=0)
     await state_manager.update_game_state(game_id, {"state_version": "4", "white_id": "broken"})
+    await state_manager.redis.zadd(GAME_DEADLINES_KEY, {str(game_id): NOW})
 
 
 async def test_broken_game_does_not_block_flags_in_other_games(finished):
@@ -111,12 +116,12 @@ async def test_broken_game_stays_active_for_later_retries(finished):
 
 
 async def test_malformed_active_game_id_is_removed(finished):
-    await state_manager.redis.sadd("active_games", "not-a-number")
+    await state_manager.redis.zadd(GAME_DEADLINES_KEY, {"not-a-number": NOW})
     await _flagged_game(96, 30, 40)
 
     await state_manager.check_timeouts_once(DummyManager(), now_ms=NOW)
 
-    assert "not-a-number" not in await state_manager.redis.smembers("active_games")
+    assert "not-a-number" not in await state_manager.redis.zrangebyscore(GAME_DEADLINES_KEY, "-inf", "+inf")
     assert finished == [(96, "0-1", "timeout")]
 
 
@@ -124,3 +129,20 @@ async def test_failure_counters_of_finished_games_are_dropped(finished):
     state_manager._timeout_failures[97] = (3, NOW + 5000)  # партии 97 среди активных уже нет
     await state_manager.check_timeouts_once(DummyManager(), now_ms=NOW)
     assert 97 not in state_manager._timeout_failures
+
+
+async def test_games_far_from_deadline_are_not_touched(finished):
+    """
+    Партия с дедлайном далеко в будущем не должна обрабатываться — в этом и смысл перехода
+    с полного перебора active_games на ZRANGEBYSCORE по GAME_DEADLINES_KEY. Состояние этой
+    партии «битое» (упало бы при реальной попытке проверки) — если цикл её тронет, тест
+    это заметит по счётчику сбоев.
+    """
+    await state_manager.initialize_game(98, 1, 2, base_time_ms=600000, increment_ms=0)
+    await state_manager.update_game_state(98, {"white_id": "broken"})
+    await state_manager.redis.zadd(GAME_DEADLINES_KEY, {"98": NOW + 600000})
+
+    await state_manager.check_timeouts_once(DummyManager(), now_ms=NOW)
+
+    assert finished == []
+    assert 98 not in state_manager._timeout_failures
