@@ -67,7 +67,7 @@ export function PlayerInfoBar({
                             <span
                                 className="text-xs px-1.5 py-0.5 rounded bg-black/45 text-amber-400 border border-amber-600/25 flex items-center gap-1 font-mono">
                                 {playerInfo.rating}
-                                {hasRatingInfo && (
+                                {hasRatingInfo && typeof ratingDelta === 'number' && (
                                     <span className={Number(ratingDelta) >= 0 ? 'text-emerald-400' : 'text-red-400'}>
                                         ({Number(ratingDelta) >= 0 ? `+${ratingDelta}` : ratingDelta})
                                     </span>

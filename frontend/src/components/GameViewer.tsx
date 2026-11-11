@@ -449,7 +449,7 @@ export default function GameViewer() {
     let displayDate = 'Архивная партия';
     const rawDate = gameDataFromState?.pgn_date || pgnHeaders.Date;
     if (rawDate && !rawDate.includes('????')) {
-        displayDate = rawDate.replace(/\??/g, '').replace(/\.$/, '');
+        displayDate = rawDate.replace(/\?/g, '').replace(/\.+$/, '');
     } else if (gameDataFromState?.finished_at) {
         displayDate = format(parseISO(gameDataFromState.finished_at), 'd MMM yyyy', {locale: ru});
     }
@@ -580,7 +580,7 @@ export default function GameViewer() {
                                 {TopIcon}
                             </div>
                             <div className="font-bold text-base flex items-center gap-2 truncate">
-                                <Link to={`/profile/${topName}`} className="hover:underline text-amber-200 truncate">
+                                <Link to={`/profile/${encodeURIComponent(topName)}`} className="hover:underline text-amber-200 truncate">
                                     {topName}
                                 </Link>
                                 <span
@@ -765,7 +765,7 @@ export default function GameViewer() {
                                 {BottomIcon}
                             </div>
                             <div className="font-bold text-base flex items-center gap-2 truncate">
-                                <Link to={`/profile/${bottomName}`} className="hover:underline text-amber-200 truncate">
+                                <Link to={`/profile/${encodeURIComponent(bottomName)}`} className="hover:underline text-amber-200 truncate">
                                     {bottomName}
                                 </Link>
                                 <span

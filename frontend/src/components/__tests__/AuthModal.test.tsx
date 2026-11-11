@@ -129,3 +129,18 @@ describe('AuthModal: регистрация', () => {
         expect(screen.getByText('Вход в michess')).toBeInTheDocument();
     });
 });
+
+describe('AuthModal: закрытие', () => {
+    it('закрывается по Esc, крестику и клику по затемнению, но не по клику внутри окна', () => {
+        const onClose = vi.fn();
+        const {container} = render(<AuthModal onSuccess={vi.fn()} onClose={onClose}/>);
+
+        fireEvent.mouseDown(screen.getByPlaceholderText('например, string1'));
+        expect(onClose).not.toHaveBeenCalled();
+
+        fireEvent.keyDown(window, {key: 'Escape'});
+        fireEvent.click(screen.getByRole('button', {name: 'Закрыть'}));
+        fireEvent.mouseDown(container.firstChild as Element);
+        expect(onClose).toHaveBeenCalledTimes(3);
+    });
+});

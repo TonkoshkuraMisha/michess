@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import {CHAMPIONS_LIST} from '../config/champions';
 import {API_BASE_URL} from '../config/api';
+import {readErrorDetail} from '../services/apiErrors';
 
 interface GameData {
     game_id: number;
@@ -29,7 +30,7 @@ interface GameData {
 const displayDate = (game: GameData) => {
     if (game.pgn_date && !game.pgn_date.includes('????')) {
         // Очищаем дату от неизвестных месяцев/дней: "1860.??.??" -> "1860"
-        return game.pgn_date.replace(/\??/g, '').replace(/\.$/, '');
+        return game.pgn_date.replace(/\?/g, '').replace(/\.+$/, '');
     }
     if (game.finished_at) {
         return format(parseISO(game.finished_at), 'd MMM yyyy', {locale: ru});
@@ -57,11 +58,10 @@ export default function ChampionGames() {
             setError(null);
             try {
                 const offset = (page - 1) * limit;
-                const res = await fetch(`${API_BASE_URL}/api/v1/profile/${championId}/games?limit=${limit}&offset=${offset}&sort=asc`);
+                const res = await fetch(`${API_BASE_URL}/api/v1/profile/${encodeURIComponent(championId ?? '')}/games?limit=${limit}&offset=${offset}&sort=asc`);
 
                 if (!res.ok) {
-                    const errData = await res.json();
-                    throw new Error(errData.detail || 'Не удалось загрузить партии из базы данных');
+                    throw new Error(await readErrorDetail(res, 'Не удалось загрузить партии из базы данных'));
                 }
 
                 const data = await res.json();

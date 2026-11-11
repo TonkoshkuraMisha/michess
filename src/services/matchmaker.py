@@ -333,8 +333,12 @@ class Matchmaker:
             players: tuple[int, int],
     ) -> dict | None:
         """Общая часть старта: снять обоих с очереди, создать запись, Redis-состояние, оповестить."""
+        from src.services.connection_manager import manager as ws_manager
         for uid in players:
             await self.leave_queue(uid)
+            # Игрок мог смотреть чужую партию: иначе её ходы продолжали бы приходить ему
+            # во время собственной игры.
+            await ws_manager.remove_user_from_all_spectating(uid)
 
         created = await create(session, int(time.time() * 1000))
         if not created:

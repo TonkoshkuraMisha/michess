@@ -43,6 +43,7 @@ interface UserProfile {
 export default function App() {
     const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+    const [profileRetry, setProfileRetry] = useState(0);
 
     const [isProfileOpen, setIsProfileOpen] = useState(false);
     const [isChampionsMenuOpen, setIsChampionsMenuOpen] = useState(false);
@@ -85,6 +86,9 @@ export default function App() {
             return;
         }
 
+        let cancelled = false;
+        let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
         fetch(`${API_BASE_URL}/api/v1/profile/me`, {
             headers: {
                 'Authorization': `Bearer ${token}`,
@@ -92,17 +96,31 @@ export default function App() {
             }
         })
             .then(res => {
-                if (!res.ok) throw new Error('Unauthorized');
+                if (res.status === 401) {
+                    // Только отказ в авторизации означает, что токен недействителен. Сетевая
+                    // ошибка или 5xx (например, сервер перезапускается) — не повод разлогинивать.
+                    localStorage.removeItem('token');
+                    gameSocket.disconnect();
+                    setToken(null);
+                    setUserProfile(null);
+                    return null;
+                }
+                if (!res.ok) throw new Error(`profile/me: HTTP ${res.status}`);
                 return res.json();
             })
-            .then(data => setUserProfile(data))
+            .then(data => {
+                if (!cancelled && data) setUserProfile(data);
+            })
             .catch(() => {
-                localStorage.removeItem('token');
-                gameSocket.disconnect();
-                setToken(null);
-                setUserProfile(null);
+                // Профиль не загрузился — пробуем ещё раз, сессию не трогаем.
+                if (!cancelled) retryTimer = setTimeout(() => setProfileRetry(n => n + 1), 3000);
             });
-    }, [token]);
+
+        return () => {
+            cancelled = true;
+            if (retryTimer) clearTimeout(retryTimer);
+        };
+    }, [token, profileRetry]);
 
     useEffect(() => {
         if (!isProfileOpen) return;
@@ -292,7 +310,7 @@ export default function App() {
                                 className="flex items-center gap-2.5 pl-3 border-l border-amber-900/50 cursor-pointer hover:opacity-90 transition select-none py-1 px-2.5 rounded-md hover:bg-black/25"
                             >
                                 <img
-                                    src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${username}&backgroundColor=D0A972`}
+                                    src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${encodeURIComponent(username)}&backgroundColor=D0A972`}
                                     alt="Avatar"
                                     className="w-8 h-8 rounded bg-black/40 border border-amber-900/50 shadow"
                                 />
@@ -309,7 +327,7 @@ export default function App() {
                                     className="absolute right-0 top-12 w-64 bg-[#261C14] border-2 border-amber-900/80 rounded-lg shadow-2xl py-2 z-50 text-boxwood-light">
                                     <div className="px-4 py-2.5 border-b border-amber-900/40 flex items-center gap-3">
                                         <img
-                                            src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${username}&backgroundColor=D0A972`}
+                                            src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${encodeURIComponent(username)}&backgroundColor=D0A972`}
                                             alt="Avatar"
                                             className="w-10 h-10 rounded bg-black/40 border border-amber-900/50 shadow"
                                         />
@@ -329,7 +347,7 @@ export default function App() {
                                         <button
                                             onClick={() => {
                                                 setIsProfileOpen(false);
-                                                navigate(`/profile/${username}`);
+                                                navigate(`/profile/${encodeURIComponent(username)}`);
                                             }}
                                             className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
                                         >
@@ -413,6 +431,7 @@ export default function App() {
                         setToken(newToken);
                         setShowAuthModal(false);
                     }}
+                    onClose={() => setShowAuthModal(false)}
                 />
             )}
         </div>

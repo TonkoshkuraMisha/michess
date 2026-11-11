@@ -18,7 +18,7 @@ from src.db.session import get_session_factory
 from src.models.user import User
 from src.services.anticheat import trusted_premove
 from src.services.connection_manager import manager
-from src.services.game_state import state_manager
+from src.services.game_state import pending_draw_offer, state_manager
 from src.services.matchmaker import MatchmakingError, matchmaker
 from src.services.rating import classify_time_control
 
@@ -73,6 +73,8 @@ async def _send_active_game_snapshot_if_exists(db: AsyncSession, user: User):
         "fen": state.get("board_fen"),
         "pgn": state.get("pgn", ""),
         "state_version": int(state.get("state_version", 0)),
+        # Предложение ничьей, сделанное до переподключения, иначе пропадало бы с экрана.
+        "draw_offer_from": pending_draw_offer(state),
     }
     await manager.send_personal_message(payload, user.id)
 
@@ -163,11 +165,21 @@ class GameRef:
         await broadcast_to_game_participants_and_spectators(self.game_id, self.white_id, self.black_id, payload)
 
 
-def _required_game_id(data: dict) -> int:
-    game_id = data.get("game_id")
-    if not game_id:
+def _int_field(data: dict, key: str, default: int | None = None) -> int:
+    """Целое поле сообщения; мусор вместо числа — не «внутренняя ошибка», а игнорируемый ввод."""
+    value = data.get(key, default)
+    if value is None or isinstance(value, bool):
         raise _Ignore
-    return int(game_id)
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        raise _Ignore from None
+
+
+def _required_game_id(data: dict) -> int:
+    if not data.get("game_id"):
+        raise _Ignore
+    return _int_field(data, "game_id")
 
 
 async def _load_game(data: dict) -> GameRef:
@@ -208,8 +220,8 @@ def action(name: str):
 @action("join_queue")
 async def _join_queue(ctx: ActionContext, data: dict) -> None:
     fresh_user = await _fresh_current_user(ctx.db, ctx.user)
-    base_time_ms = int(data.get("base_time_ms", 180000))
-    increment_ms = int(data.get("increment_ms", 0))
+    base_time_ms = _int_field(data, "base_time_ms", 180000)
+    increment_ms = _int_field(data, "increment_ms", 0)
     category = classify_time_control(base_time_ms, increment_ms)
     matched_game_id = await matchmaker.join_queue(
         fresh_user.id, fresh_user.username, fresh_user.rating_for(category),
@@ -231,17 +243,16 @@ async def _leave_queue(ctx: ActionContext, data: dict) -> None:
 
 @action("accept_challenge")
 async def _accept_challenge(ctx: ActionContext, data: dict) -> None:
-    target_user_id = data.get("target_user_id")
-    if not target_user_id:
+    if not data.get("target_user_id"):
         raise _Ignore
-    await matchmaker.accept_challenge(int(target_user_id), ctx.user.id, manager, state_manager, db=ctx.db)
+    await matchmaker.accept_challenge(_int_field(data, "target_user_id"), ctx.user.id, manager, state_manager, db=ctx.db)
 
 
 @action("create_invite")
 async def _create_invite(ctx: ActionContext, data: dict) -> None:
     fresh_user = await _fresh_current_user(ctx.db, ctx.user)
-    base_time_ms = int(data.get("base_time_ms", 180000))
-    increment_ms = int(data.get("increment_ms", 2000))
+    base_time_ms = _int_field(data, "base_time_ms", 180000)
+    increment_ms = _int_field(data, "increment_ms", 2000)
     invite_data = await matchmaker.create_private_invite(
         user_id=fresh_user.id,
         username=fresh_user.username,
@@ -267,7 +278,7 @@ async def _accept_invite(ctx: ActionContext, data: dict) -> None:
 async def _spectate_game(ctx: ActionContext, data: dict) -> None:
     game = await _load_game(data)
     if game.state.get("status") != "in_progress":
-        await ctx.error("Партия уже завершена или не найдена")
+        await ctx.error("Партия уже завершена или не найдена", code="spectate_unavailable")
         return
 
     await manager.add_spectator(game.game_id, ctx.user.id)
@@ -297,9 +308,8 @@ async def _spectate_game(ctx: ActionContext, data: dict) -> None:
 
 @action("leave_spectate")
 async def _leave_spectate(ctx: ActionContext, data: dict) -> None:
-    game_id = data.get("game_id")
-    if game_id:
-        await manager.remove_spectator(int(game_id), ctx.user.id)
+    if data.get("game_id"):
+        await manager.remove_spectator(_int_field(data, "game_id"), ctx.user.id)
     else:
         await manager.remove_user_from_all_spectating(ctx.user.id)
     await ctx.send({"event": "spectate_left"})
@@ -377,7 +387,12 @@ async def _offer_draw(ctx: ActionContext, data: dict) -> None:
     if str(game.state.get(offered_key, "")) == version:
         await ctx.error("Ничью можно предложить один раз за ход", code="draw_offer_too_soon")
         return
-    await state_manager.update_game_state(game.game_id, {"draw_offer": str(ctx.user.id), offered_key: version})
+    # Атомарно и только пока партия идёт: обычный hset после завершения воссоздал бы
+    # в Redis «огрызок» состояния без игроков.
+    if await state_manager.update_if_in_progress(
+            game.game_id, {"draw_offer": str(ctx.user.id), offered_key: version},
+    ) is None:
+        raise _Ignore
     await manager.send_personal_message(
         {"event": "draw_offered", "game_id": game.game_id, "player_id": ctx.user.id},
         game.opponent_of(ctx.user.id),
@@ -413,7 +428,10 @@ async def _accept_draw(ctx: ActionContext, data: dict) -> None:
 @action("decline_draw")
 async def _decline_draw(ctx: ActionContext, data: dict) -> None:
     game = await _participant_game(ctx, data, in_progress=True)
-    await state_manager.update_game_state(game.game_id, {"draw_offer": ""})
+    if pending_draw_offer(game.state) in (None, ctx.user.id):
+        raise _Ignore  # отклонять нечего: предложения нет или оно своё
+    if await state_manager.update_if_in_progress(game.game_id, {"draw_offer": ""}) is None:
+        raise _Ignore
     await manager.send_personal_message(
         {"event": "draw_declined", "game_id": game.game_id, "player_id": ctx.user.id},
         game.opponent_of(ctx.user.id),
@@ -475,20 +493,62 @@ def _move_payload(ctx: ActionContext, gid: int, command_id: str, res: dict, move
     }
 
 
+async def _record_applied_move(
+        ctx: ActionContext, gid: int, data: dict, res: dict, move_data: dict, move_str: str,
+) -> None:
+    """
+    Телеметрия и копия состояния в БД для уже применённого хода.
+
+    Ход к этому моменту зафиксирован в Redis и отменить его нельзя, поэтому сбой здесь не должен
+    мешать рассылке move_made: иначе соперник не узнал бы о ходе, а сходивший получил бы
+    «внутреннюю ошибку» при том, что ход засчитан.
+    """
+    server_elapsed_ms = res.get("elapsed_ms", 0)
+    try:
+        client_time_ms = int(data.get("time_taken_ms", server_elapsed_ms))
+    except (TypeError, ValueError):
+        client_time_ms = server_elapsed_ms
+    try:
+        await state_manager.save_move_telemetry(gid, {
+            "player_id": ctx.user.id,
+            "move_number": move_data.get("fullmove_number", 1),
+            "notation": move_data.get("uci", move_str),
+            "san": move_data.get("san", move_str),
+            "fen_after": move_data.get("new_fen", ""),
+            "time_taken_ms": server_elapsed_ms,
+            "window_blurred_before_move": bool(data.get("window_blurred", False)),
+            "is_premove": trusted_premove(data.get("is_premove", False), server_elapsed_ms),
+            "network_lag_ms": max(0, server_elapsed_ms - client_time_ms),
+        })
+    except Exception:
+        logger.exception("Could not save move telemetry for game %s", gid)
+    try:
+        await state_manager.sync_authoritative_state_to_db(ctx.db, gid, res)
+    except Exception:
+        logger.exception("Could not sync game %s to the database after a move", gid)
+        try:
+            await ctx.db.rollback()
+        except Exception:
+            logger.debug("Rollback after failed sync of game %s also failed", gid)
+
+
 @action("make_move")
 async def _make_move(ctx: ActionContext, data: dict) -> None:
     move_str = data.get("move")
-    if not move_str:
+    if not move_str or not isinstance(move_str, str) or len(move_str) > 10:
         raise _Ignore
     gid = _required_game_id(data)
-    command_id = data.get("command_id") or uuid.uuid4().hex
+    command_id = str(data.get("command_id") or uuid.uuid4().hex)[:64]
+    expected_version = data.get("state_version")
+    if isinstance(expected_version, bool) or not isinstance(expected_version, int):
+        expected_version = None
 
     res = await state_manager.process_atomic_move(
         game_id=gid,
         user_id=ctx.user.id,
         command_id=command_id,
         move_str=move_str,
-        expected_version=data.get("state_version"),
+        expected_version=expected_version,
     )
     if res["status"] == "ignored":
         return
@@ -502,20 +562,7 @@ async def _make_move(ctx: ActionContext, data: dict) -> None:
     move_data: dict = res.get("move_data") or {}
 
     if move_data:
-        server_elapsed_ms = res.get("elapsed_ms", 0)
-        client_time_ms = data.get("time_taken_ms", server_elapsed_ms)
-        await state_manager.save_move_telemetry(gid, {
-            "player_id": ctx.user.id,
-            "move_number": move_data.get("fullmove_number", 1),
-            "notation": move_data.get("uci", move_str),
-            "san": move_data.get("san", move_str),
-            "fen_after": move_data.get("new_fen", ""),
-            "time_taken_ms": server_elapsed_ms,
-            "window_blurred_before_move": bool(data.get("window_blurred", False)),
-            "is_premove": trusted_premove(data.get("is_premove", False), server_elapsed_ms),
-            "network_lag_ms": max(0, server_elapsed_ms - int(client_time_ms)),
-        })
-        await state_manager.sync_authoritative_state_to_db(ctx.db, gid, res)
+        await _record_applied_move(ctx, gid, data, res, move_data, move_str)
 
     if res["status"] == "success":
         await game.broadcast(_move_payload(ctx, gid, command_id, res, move_data, game_over=False))
@@ -523,10 +570,17 @@ async def _make_move(ctx: ActionContext, data: dict) -> None:
 
     # game_over: мат/пат/ничья по правилам — или флаг, обнаруженный при попытке хода.
     game_result, termination = res["result"], res["termination"]
-    rating_updates = await state_manager.finish_game(
-        ctx.db, gid, game_result, termination=termination,
-        final_pgn=move_data["new_pgn"] if move_data else None,
-    )
+    try:
+        rating_updates = await state_manager.finish_game(
+            ctx.db, gid, game_result, termination=termination,
+            final_pgn=move_data["new_pgn"] if move_data else None,
+        )
+    except Exception:
+        # Итог допишет сверка (reconcile_unfinished_games) и сама разошлёт game_over, но
+        # последний ход уже сделан — соперник должен увидеть его сейчас, а не «зависшую» доску.
+        if move_data:
+            await game.broadcast(_move_payload(ctx, gid, command_id, res, move_data, game_over=False))
+        raise
     if move_data:
         await game.broadcast({
             **_move_payload(ctx, gid, command_id, res, move_data, game_over=True),
@@ -607,6 +661,9 @@ _ACTION_GROUPS = {
 WS_MAX_STRIKES = 30
 WS_STRIKE_WINDOW_S = 10.0
 WS_CLOSE_POLICY_VIOLATION = 1008
+# Флуд закрывается кодом 1013 (try again later), а не 1008: 1008 клиент понимает как
+# «сессия отозвана» и разлогинивает игрока, хотя его токен в порядке.
+WS_CLOSE_FLOOD = 1013
 
 
 class _StrikeCounter:
@@ -698,7 +755,7 @@ async def matchmaking_endpoint(
             accepted = await _handle_message(session_factory, current_user, raw)
             if not accepted and strikes.add() >= WS_MAX_STRIKES:
                 logger.warning("Closing WebSocket of user %s: message flood", current_user.id)
-                await websocket.close(code=WS_CLOSE_POLICY_VIOLATION)
+                await websocket.close(code=WS_CLOSE_FLOOD)
                 break
 
     except WebSocketDisconnect:

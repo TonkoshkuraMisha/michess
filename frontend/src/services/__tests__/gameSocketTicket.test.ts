@@ -97,4 +97,25 @@ describe('gameSocket: подключение по одноразовому ти�
 
         expect(FakeWebSocket.instances).toHaveLength(0);
     });
+
+    it('закрытие старого сокета после смены токена не трогает новое соединение', async () => {
+        vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ok: true, status: 200, json: async () => ({ticket: 't'})}));
+
+        gameSocket.connect('jwt.secret.token');
+        await flush();
+        gameSocket.connect('another.user.token');
+        await flush();
+        expect(FakeWebSocket.instances).toHaveLength(2);
+        const [oldSocket, newSocket] = FakeWebSocket.instances;
+        newSocket.readyState = FakeWebSocket.OPEN;
+        const sendSpy = vi.spyOn(newSocket, 'send');
+
+        // Событие закрытия старого сокета приходит с опозданием — в том числе с кодом 1008.
+        oldSocket.onclose?.({code: 1008});
+
+        expect(events).not.toContain('michess-auth-expired');
+        gameSocket.send('leave_queue');
+        expect(sendSpy).toHaveBeenCalledOnce();           // ушло в действующий сокет,
+        expect(FakeWebSocket.instances).toHaveLength(2);  // а не открыло третье соединение
+    });
 });

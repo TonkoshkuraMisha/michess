@@ -39,7 +39,9 @@ export function GameChatPanel({
                 className="h-16 overflow-y-auto bg-black/40 rounded p-2 text-xs space-y-1 font-sans border border-amber-950/50 [&::-webkit-scrollbar]:w-1 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
                 {messages.length === 0 ? (
                     <div className="h-full flex items-center justify-center text-xs text-boxwood/45 italic">
-                        Сообщений пока нет. Поприветствуйте соперника!
+                        {isSpectator
+                            ? 'Сообщений пока нет.'
+                            : 'Сообщений пока нет. Поприветствуйте соперника!'}
                     </div>
                 ) : (
                     messages.map((msg, i) => (
@@ -51,7 +53,12 @@ export function GameChatPanel({
                 )}
             </div>
 
-            <div className="flex flex-wrap gap-1">
+            {/* Писать в чат партии могут только игроки (сервер отклоняет сообщения зрителей). */}
+            {isSpectator && (
+                <div className="text-xs text-boxwood/60 italic">Зрители могут только читать чат.</div>
+            )}
+
+            {!isSpectator && <div className="flex flex-wrap gap-1">
                 {QUICK_CHAT_PRESETS.map((preset) => (
                     <button
                         key={preset}
@@ -62,9 +69,9 @@ export function GameChatPanel({
                         {preset}
                     </button>
                 ))}
-            </div>
+            </div>}
 
-            <form
+            {!isSpectator && <form
                 onSubmit={(e) => {
                     e.preventDefault();
                     onSendMessage();
@@ -86,7 +93,7 @@ export function GameChatPanel({
                 >
                     <Send size={13}/>
                 </button>
-            </form>
+            </form>}
         </div>
     );
 }
