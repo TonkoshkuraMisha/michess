@@ -157,7 +157,7 @@ async def test_unknown_ticket_is_rejected():
     assert exc_info.value.code == 1008
 
 
-def test_ws_ticket_issuance_is_rate_limited(client, monkeypatch):
+def test_ws_ticket_issuance_is_rate_limited(client, monkeypatch, freeze_rate_limit_window):
     monkeypatch.setattr(settings, "RATE_LIMIT_WS_TICKETS", 2)
     token = _register_and_login(client)
     codes = [client.post("/api/v1/auth/ws-ticket", headers=_auth(token)).status_code for _ in range(3)]

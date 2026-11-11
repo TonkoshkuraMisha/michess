@@ -291,6 +291,18 @@ def no_celery_publish(monkeypatch):
     task_dispatch.reset_broker_cooldown()
 
 
+@pytest.fixture
+def freeze_rate_limit_window(monkeypatch):
+    """
+    Фиксирует время для расчёта окна в rate_limit.py (кратно RATE_LIMIT_WINDOW_S от начала
+    эпохи): несколько запросов подряд в тесте должны попасть в одно и то же окно независимо от
+    реальной скорости выполнения — иначе тест изредка падает, если окно сменится между запросами.
+    """
+    from src.api import rate_limit as rate_limit_module
+
+    monkeypatch.setattr(rate_limit_module.time, "time", lambda: 1_700_000_000.0)
+
+
 async def override_get_db():
     async with TestSessionLocal() as session:
         yield session

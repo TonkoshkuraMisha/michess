@@ -81,7 +81,7 @@ async def test_stale_cache_is_recomputed(client, db_session):
 
 # --- Лимиты частоты ---------------------------------------------------------------------
 
-def test_rate_limit_returns_429_with_retry_after(client, monkeypatch):
+def test_rate_limit_returns_429_with_retry_after(client, monkeypatch, freeze_rate_limit_window):
     monkeypatch.setattr(settings, "RATE_LIMIT_POSITION_ANALYSIS", 2)
 
     codes = [client.post("/api/v1/analysis/position", json={"moves": []}).status_code for _ in range(3)]
@@ -92,7 +92,7 @@ def test_rate_limit_returns_429_with_retry_after(client, monkeypatch):
     assert int(limited.headers["Retry-After"]) >= 1
 
 
-def test_rate_limit_is_per_user_when_token_present(client, monkeypatch, token_user_1, token_user_2):
+def test_rate_limit_is_per_user_when_token_present(client, monkeypatch, token_user_1, token_user_2, freeze_rate_limit_window):
     monkeypatch.setattr(settings, "RATE_LIMIT_POSITION_ANALYSIS", 1)
     url = "/api/v1/analysis/position"
 
