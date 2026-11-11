@@ -15,6 +15,7 @@ from src.db.seed import ensure_champion_seeded, extract_pgn_metadata, get_champi
 from src.db.session import get_db
 from src.models.game import Game, GameStatus
 from src.models.user import RatingCategory, User
+from src.schemas.user import username_key
 from src.services.rating import classify_time_control
 
 router = APIRouter(prefix="/profile", tags=["Profile & Games"])
@@ -39,7 +40,18 @@ async def _resolve_user(db: AsyncSession, username: str) -> User | None:
     if user:
         return user
 
-    result = await db.execute(select(User).where(User.username.ilike(f"%{username}%")))
+    # Без учёта регистра (/profile/Alice для alice) — только точное совпадение имени. Поиск по
+    # подстроке (ILIKE '%name%') открывал по несуществующему или опечатанному имени профиль и
+    # партии постороннего игрока, а "%" и "_" в адресе совпадали с кем угодно.
+    result = await db.execute(select(User).where(User.username_key == username_key(username)))
+    user = result.scalars().first()
+    if user:
+        return user
+
+    # Архивные игроки и боты без username_key.
+    result = await db.execute(
+        select(User).where(func.lower(User.username) == username.lower()).order_by(User.id).limit(1)
+    )
     return result.scalars().first()
 
 

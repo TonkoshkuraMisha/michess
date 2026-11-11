@@ -72,12 +72,12 @@ export default function Profile() {
             setLoading(true);
             setError(null);
             try {
-                const profileRes = await fetch(`${API_BASE_URL}/api/v1/profile/${targetUsername}`);
+                const profileRes = await fetch(`${API_BASE_URL}/api/v1/profile/${encodeURIComponent(targetUsername ?? '')}`);
                 if (!profileRes.ok) throw new Error('Пользователь не найден');
                 const profileData = await profileRes.json();
                 setProfile(profileData);
 
-                const gamesRes = await fetch(`${API_BASE_URL}/api/v1/profile/${targetUsername}/games?limit=30`);
+                const gamesRes = await fetch(`${API_BASE_URL}/api/v1/profile/${encodeURIComponent(targetUsername ?? '')}/games?limit=30`);
                 if (gamesRes.ok) {
                     const gamesData = await gamesRes.json();
                     setGames(gamesData.items || []);
@@ -310,7 +310,7 @@ export default function Profile() {
                                                 <span
                                                     className="w-3 h-3 rounded-sm border border-gray-400 bg-white inline-block"></span>
                                                 <Link
-                                                    to={`/profile/${game.white_username}`}
+                                                    to={`/profile/${encodeURIComponent(game.white_username)}`}
                                                     onClick={(e) => e.stopPropagation()}
                                                     className={`font-bold hover:underline ${isWhite ? 'text-amber-300' : ''}`}
                                                 >
@@ -325,7 +325,7 @@ export default function Profile() {
                                                 <span
                                                     className="w-3 h-3 rounded-sm border border-gray-600 bg-black inline-block"></span>
                                                 <Link
-                                                    to={`/profile/${game.black_username}`}
+                                                    to={`/profile/${encodeURIComponent(game.black_username)}`}
                                                     onClick={(e) => e.stopPropagation()}
                                                     className={`font-bold hover:underline ${!isWhite ? 'text-amber-300' : ''}`}
                                                 >

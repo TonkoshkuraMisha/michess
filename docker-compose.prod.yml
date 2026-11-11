@@ -65,6 +65,11 @@ services:
       REDIS_PORT: "6379"
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
       FORWARDED_ALLOW_IPS: "*"
+      # Метрики Prometheus суммируются по всем процессам uvicorn через файлы в этом каталоге.
+      # tmpfs очищается при каждом старте контейнера — значения умерших процессов не копятся.
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
+    tmpfs:
+      - /tmp/prometheus:mode=1777
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -81,11 +86,35 @@ services:
   worker:
     <<: *backend
     command: ["celery", "-A", "src.worker.celery_app", "worker", "--loglevel=INFO", "--concurrency=${CELERY_CONCURRENCY:-2}"]
+    # Stockfish занимает все доступные ядра; без предела анализ партий отбирает CPU у API, и при
+    # массовом завершении партий p95 задержки хода вырастал с ~70 до ~230 мс (scripts/loadtest).
+    cpus: ${WORKER_CPUS:-1.0}
     depends_on:
       migrate:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+
+  # Резервные копии БД: pg_dump сразу при старте и затем каждые BACKUP_INTERVAL_HOURS часов
+  # в папку хоста BACKUP_DIR; копии старше BACKUP_KEEP_DAYS дней удаляются (DEPLOY.md, раздел 5).
+  backup:
+    image: postgres:16-alpine
+    entrypoint: ["sh", "/usr/local/bin/pg_backup.sh"]
+    command: ["loop"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      PGHOST: db
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-24}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    volumes:
+      - ./scripts/backup/pg_backup.sh:/usr/local/bin/pg_backup.sh:ro
+      - ${BACKUP_DIR:-./backups}:/backups
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
 
   web:
     build: ./frontend

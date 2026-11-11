@@ -16,6 +16,7 @@ from src.api.auth import router as auth_router
 from src.api.profile import router as profile_router
 from src.api.websockets import router as ws_router
 from src.core.config import settings
+from src.core.observability import http_metrics_middleware, init_sentry, metrics_response
 from src.db import redis as redis_module
 from src.db.session import AsyncSessionLocal
 from src.services.connection_manager import manager
@@ -27,6 +28,8 @@ logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+init_sentry("api")
 
 HEALTH_CHECK_TIMEOUT_S = 2.0
 
@@ -70,6 +73,8 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    app.middleware("http")(http_metrics_middleware)
+
     app.include_router(auth_router, prefix=settings.API_V1_STR)
     app.include_router(ws_router, prefix=settings.API_V1_STR)
     app.include_router(profile_router, prefix=settings.API_V1_STR)
@@ -111,6 +116,11 @@ async def health_check():
         status_code=200 if healthy else 503,
         content={"status": "healthy" if healthy else "degraded", "version": settings.VERSION, "checks": checks},
     )
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics():
+    """Метрики Prometheus. Наружу через nginx не публикуется — только внутри сети compose."""
+    return metrics_response()
 
 
 if __name__ == "__main__":

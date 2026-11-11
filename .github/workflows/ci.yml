@@ -127,8 +127,9 @@ jobs:
       - name: Run linter (oxlint)
         run: npm run lint
 
-      - name: Run unit tests (vitest)
-        run: npm run test
+      # Пороги покрытия — frontend/vite.config.ts (test.coverage.thresholds).
+      - name: Run unit tests with coverage (vitest)
+        run: npm run test:coverage
 
       - name: Build production bundle
         run: npm run build
@@ -180,6 +181,56 @@ jobs:
           docker compose -f docker-compose.prod.yml exec -T api python -c \
             "from src.services.bots.base import resolve_stockfish_path as r; assert r(), 'no stockfish'; print(r())"
           docker compose -f docker-compose.prod.yml ps worker | grep -q "Up"
+          # Метрики: внутри сети compose отдаются (сумма по процессам uvicorn), снаружи через nginx — нет.
+          docker compose -f docker-compose.prod.yml exec -T api python -c "import urllib.request as u; b = u.urlopen('http://127.0.0.1:8000/metrics').read().decode(); assert 'route=\"/api/v1/auth/login\"' in b, b[:3000]"
+          if curl -fsS http://localhost:8080/metrics | grep -q "michess_"; then
+            echo "/metrics is exposed through nginx"; exit 1
+          fi
+
+      # Сервис backup снимает БД при старте; снимок по запросу и его восстановление во временную
+      # базу должны проходить — иначе о сломанных бэкапах узнали бы только в день аварии.
+      - name: Database backup and restore check
+        run: |
+          set -e
+          docker compose -f docker-compose.prod.yml ps backup | grep -q "Up"
+          docker compose -f docker-compose.prod.yml run --rm --no-deps backup once
+          docker compose -f docker-compose.prod.yml run --rm --no-deps backup verify | tee verify.log
+          grep -Eq "users=[1-9][0-9]* " verify.log
+          ls -l backups/
+
+      # E2E (Playwright, frontend/e2e): два браузера — регистрация, вызов по ссылке, мат, реванш.
+      - name: Set up Node.js for E2E
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: E2E tests (Playwright)
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: http://localhost:8080
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 7
+
+      # Небольшая нагрузка через nginx (20 одновременных партий): регрессия, ломающая игру под
+      # параллельной нагрузкой или резко замедляющая ход, роняет сборку. Клиент — внутри контейнера api:
+      # там уже есть websockets, httpx и chess. Полный прогон — DEPLOY.md, раздел 7.
+      - name: WebSocket load test (small)
+        run: |
+          docker compose -f docker-compose.prod.yml exec -T api sh -c             "python -m scripts.loadtest.seed_users --count 40 > /tmp/tokens.json &&              python scripts/loadtest/ws_load.py --base-url http://web --tokens /tmp/tokens.json                --games 20 --moves 20 --think-min 0.1 --think-max 0.3 --max-p95-ms 1000"
 
       - name: Logs on failure
         if: failure()
