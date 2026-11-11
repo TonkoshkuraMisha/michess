@@ -198,6 +198,33 @@ jobs:
           grep -Eq "users=[1-9][0-9]* " verify.log
           ls -l backups/
 
+      # E2E (Playwright, frontend/e2e): два браузера — регистрация, вызов по ссылке, мат, реванш.
+      - name: Set up Node.js for E2E
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: E2E tests (Playwright)
+        working-directory: frontend
+        env:
+          E2E_BASE_URL: http://localhost:8080
+        run: |
+          npm ci
+          npx playwright install --with-deps chromium
+          npm run test:e2e
+
+      - name: Upload Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 7
+
       # Небольшая нагрузка через nginx (20 одновременных партий): регрессия, ломающая игру под
       # параллельной нагрузкой или резко замедляющая ход, роняет сборку. Клиент — внутри контейнера api:
       # там уже есть websockets, httpx и chess. Полный прогон — DEPLOY.md, раздел 7.
