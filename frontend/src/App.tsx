@@ -9,22 +9,16 @@ import GameViewer from './components/GameViewer';
 import ChampionGames from './components/ChampionGames';
 import Leaderboard from './components/Leaderboard';
 import About from './components/About';
+import Settings from './components/Settings';
 import {CHAMPIONS_LIST} from './config/champions';
 import {API_BASE_URL} from './config/api';
 import {gameSocket} from './services/gameSocket';
 
 import {
-    Search,
-    Bell,
     Swords,
-    BookOpen,
-    Eye,
-    Cpu,
-    Wrench,
     LogOut,
     User,
-    Mail,
-    Settings,
+    Settings as SettingsIcon,
     LogIn,
     Crown,
     ChevronDown,
@@ -269,18 +263,6 @@ export default function App() {
                             )}
                         </div>
 
-                        <button className="flex items-center gap-2 hover:text-amber-300 transition cursor-pointer">
-                            <BookOpen size={17}/> Задачи
-                        </button>
-                        <button className="flex items-center gap-2 hover:text-amber-300 transition cursor-pointer">
-                            <Cpu size={17}/> Обучение
-                        </button>
-                        <button className="flex items-center gap-2 hover:text-amber-300 transition cursor-pointer">
-                            <Eye size={17}/> Просмотр
-                        </button>
-                        <button className="flex items-center gap-2 hover:text-amber-300 transition cursor-pointer">
-                            <Wrench size={17}/> Инструменты
-                        </button>
                     </nav>
                 </div>
 
@@ -299,18 +281,15 @@ export default function App() {
                     >
                         <Scale size={19}/>
                     </Link>
-                    <button
-                        className="p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300 cursor-pointer"
-                        title="Поиск партии"
-                    >
-                        <Search size={19}/>
-                    </button>
-                    <button
-                        className="p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300 cursor-pointer"
-                        title="Уведомления"
-                    >
-                        <Bell size={19}/>
-                    </button>
+                    {!(token && userProfile) && (
+                        <Link
+                            to="/settings"
+                            className="p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300"
+                            title="Настройки"
+                        >
+                            <SettingsIcon size={19}/>
+                        </Link>
+                    )}
 
                     {token && userProfile ? (
                         <>
@@ -372,16 +351,13 @@ export default function App() {
                                             <Trophy size={16} className="text-amber-500"/> Таблица лидеров
                                         </button>
                                         <button
-                                            onClick={() => setIsProfileOpen(false)}
+                                            onClick={() => {
+                                                setIsProfileOpen(false);
+                                                navigate('/settings');
+                                            }}
                                             className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
                                         >
-                                            <Mail size={16} className="text-amber-500"/> Входящие
-                                        </button>
-                                        <button
-                                            onClick={() => setIsProfileOpen(false)}
-                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
-                                        >
-                                            <Settings size={16} className="text-amber-500"/> Настройки
+                                            <SettingsIcon size={16} className="text-amber-500"/> Настройки
                                         </button>
                                         <button
                                             onClick={handleLogout}
@@ -432,6 +408,17 @@ export default function App() {
                     <Route path="/game/:gameId" element={<GameViewer/>}/>
                     <Route path="/champions/:championId" element={<ChampionGames/>}/>
                     <Route path="/about" element={<About/>}/>
+                    <Route
+                        path="/settings"
+                        element={
+                            <Settings
+                                token={token}
+                                username={userProfile?.username ?? null}
+                                onTokenChange={setToken}
+                                onLogoutEverywhere={handleLogoutEverywhere}
+                            />
+                        }
+                    />
                 </Routes>
             </main>
 
