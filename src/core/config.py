@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     REDIS_CONNECT_TIMEOUT_S: float = 1.0
     REDIS_SOCKET_TIMEOUT_S: float = 1.0
+    # Повторы команды без паузы; худшее ожидание при сбое — (1 + REDIS_RETRIES) таймаута.
+    REDIS_RETRIES: int = 1
 
     # Security (JWT)
     SECRET_KEY: str
