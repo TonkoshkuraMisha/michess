@@ -143,6 +143,9 @@ async def test_each_action_gets_its_own_closed_session(action_name):
             self.closed = True
             return False
 
+        def in_transaction(self):
+            return False
+
         async def get(self, *args, **kwargs):
             return None
 

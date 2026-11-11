@@ -114,6 +114,9 @@ class _NoDbSession:
     async def __aexit__(self, *exc):
         return False
 
+    def in_transaction(self):
+        return False
+
     async def get(self, *args, **kwargs):
         return None
 

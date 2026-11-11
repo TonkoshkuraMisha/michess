@@ -128,7 +128,21 @@ class ActionContext:
     db: AsyncSession
 
     async def send(self, payload: dict) -> None:
+        await self.release_db()
         await manager.send_personal_message(payload, self.user.id)
+
+    async def release_db(self) -> None:
+        """
+        Завершает транзакцию сессии и возвращает соединение в пул до сетевого ввода-вывода.
+
+        Любое чтение открывает транзакцию, которая держит соединение пула до конца действия, —
+        в том числе пока ответ уходит медленному клиенту. Записи в сервисах (finish_game,
+        abort_game, ...) коммитятся сами, поэтому здесь закрывается только транзакция чтения;
+        expire_on_commit=False оставляет уже загруженные объекты доступными. Если сессии
+        понадобится снова, она откроет новую транзакцию сама.
+        """
+        if self.db.in_transaction():
+            await self.db.commit()
 
     async def error(self, message: str, **extra) -> None:
         await self.send({"event": "error", "message": message, **extra})
