@@ -135,6 +135,8 @@ async def evaluate_game_telemetry(db: AsyncSession, game_id: int, force: bool = 
     снижает user.trust_factor при аномалиях и выставляет is_cheater = True при trust_factor < 30.
     Идемпотентна по game_id (повторный вызов для той же партии не штрафует игрока дважды).
     """
+    from src.api.fair_play import engine_requests_during_game
+
     game = await db.get(Game, game_id)
     if not game:
         return {}
@@ -179,8 +181,18 @@ async def evaluate_game_telemetry(db: AsyncSession, game_id: int, force: bool = 
                     metrics["timing_cv"],
                 )
 
+        # Запросы движка другим аккаунтом с адреса игрока во время партии: только сигнал для
+        # разбора — в одной сети могут быть разные люди, поэтому штрафа за него нет.
+        engine_requests = await engine_requests_during_game(game_id, player_id)
+        if engine_requests and not already_evaluated:
+            logger.warning(
+                "Fair Play signal: %s engine request(s) from the address of user %s (id=%s) during game %s",
+                engine_requests, user.username, user.id, game_id,
+            )
+
         report[player_id] = {
             **metrics,
+            "engine_requests_same_ip": engine_requests,
             "trust_factor": user.trust_factor,
             "is_cheater": user.is_cheater,
         }

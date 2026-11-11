@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api import deps
+from src.api.fair_play import forbid_engine_help_during_game
 from src.api.rate_limit import rate_limit
 from src.db import session as db_session
 from src.models.game import Game, GameStatus
@@ -398,7 +399,11 @@ async def get_available_bots():
 @router.post(
     "/move",
     response_model=BotMoveResponse,
-    dependencies=[Depends(rate_limit("bot_move", "RATE_LIMIT_BOT_MOVE"))],
+    # Ход бота на произвольной позиции — та же подсказка движка, что и анализ.
+    dependencies=[
+        Depends(rate_limit("bot_move", "RATE_LIMIT_BOT_MOVE")),
+        Depends(forbid_engine_help_during_game),
+    ],
 )
 async def get_bot_move(payload: BotMoveRequest):
     """Принимает FEN позиции и возвращает ответный ход выбранного исторического бота."""

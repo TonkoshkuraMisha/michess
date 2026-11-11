@@ -103,17 +103,20 @@ async def record_attempt(scope: str, identity: str, window_s: int) -> None:
         logger.warning("Rate limiter unavailable for %s: %s", scope, exc)
 
 
-def rate_limit(scope: str, limit_setting: str):
+def rate_limit(scope: str, limit_setting: str, guest_limit_setting: str | None = None):
     """
     Фабрика зависимости FastAPI для эндпоинтов движка. limit_setting — имя поля Settings
     с лимитом на окно, читается при каждом запросе (удобно переопределять в тестах и через .env).
+    guest_limit_setting — отдельный (более жёсткий) лимит для запросов без токена.
     """
 
     async def _dependency(request: Request) -> None:
+        identity = _client_identity(request)
+        setting = guest_limit_setting if guest_limit_setting and identity.startswith("ip:") else limit_setting
         await enforce_rate_limit(
             scope,
-            _client_identity(request),
-            int(getattr(settings, limit_setting)),
+            identity,
+            int(getattr(settings, setting)),
             int(settings.RATE_LIMIT_WINDOW_S),
             "Слишком много запросов к движку, попробуйте чуть позже",
         )
