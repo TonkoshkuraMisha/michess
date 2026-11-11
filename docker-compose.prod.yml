@@ -65,6 +65,11 @@ services:
       REDIS_PORT: "6379"
       WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
       FORWARDED_ALLOW_IPS: "*"
+      # Метрики Prometheus суммируются по всем процессам uvicorn через файлы в этом каталоге.
+      # tmpfs очищается при каждом старте контейнера — значения умерших процессов не копятся.
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
+    tmpfs:
+      - /tmp/prometheus:mode=1777
     depends_on:
       migrate:
         condition: service_completed_successfully

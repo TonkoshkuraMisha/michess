@@ -180,6 +180,11 @@ jobs:
           docker compose -f docker-compose.prod.yml exec -T api python -c \
             "from src.services.bots.base import resolve_stockfish_path as r; assert r(), 'no stockfish'; print(r())"
           docker compose -f docker-compose.prod.yml ps worker | grep -q "Up"
+          # Метрики: внутри сети compose отдаются (сумма по процессам uvicorn), снаружи через nginx — нет.
+          docker compose -f docker-compose.prod.yml exec -T api python -c "import urllib.request as u; b = u.urlopen('http://127.0.0.1:8000/metrics').read().decode(); assert 'route=\"/api/v1/auth/login\"' in b, b[:3000]"
+          if curl -fsS http://localhost:8080/metrics | grep -q "michess_"; then
+            echo "/metrics is exposed through nginx"; exit 1
+          fi
 
       # Сервис backup снимает БД при старте; снимок по запросу и его восстановление во временную
       # базу должны проходить — иначе о сломанных бэкапах узнали бы только в день аварии.
@@ -187,8 +192,8 @@ jobs:
         run: |
           set -e
           docker compose -f docker-compose.prod.yml ps backup | grep -q "Up"
-          docker compose -f docker-compose.prod.yml run --rm backup once
-          docker compose -f docker-compose.prod.yml run --rm backup verify | tee verify.log
+          docker compose -f docker-compose.prod.yml run --rm --no-deps backup once
+          docker compose -f docker-compose.prod.yml run --rm --no-deps backup verify | tee verify.log
           grep -Eq "users=[1-9][0-9]* " verify.log
           ls -l backups/
 

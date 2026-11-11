@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.api.deps import get_current_user_ws
 from src.api.rate_limit import try_consume
+from src.core import observability as obs
 from src.db.session import get_session_factory
 from src.models.user import User
 from src.services.anticheat import trusted_premove
@@ -560,17 +561,24 @@ async def _dispatch_action(
     всё WebSocket-соединение держала бы транзакцию открытой, пока игрок подключён: при паре
     десятков игроков в лобби пул бы кончился и все запросы к БД вставали бы по таймауту.
     """
+    start = time.perf_counter()
+    outcome = obs.OUTCOME_OK
     async with session_factory() as db:
         ctx = ActionContext(user=user, db=db)
         try:
             await handler(ctx, data)
         except _Ignore:
-            pass
+            outcome = obs.OUTCOME_IGNORED
         except MatchmakingError as mm_err:
+            outcome = obs.OUTCOME_REJECTED
             await ctx.error(mm_err.message, code=mm_err.code)
         except Exception:
+            outcome = obs.OUTCOME_ERROR
             logger.exception("Error processing WS action '%s' for user %s", action_name, user.id)
             await ctx.error("Internal server error processing action")
+    # action_name — ключ из ACTION_HANDLERS, то есть конечный набор значений метки.
+    obs.WS_ACTIONS.labels(action_name, outcome).inc()
+    obs.WS_ACTION_SECONDS.labels(action_name).observe(time.perf_counter() - start)
 
 
 # --- Ограничение частоты сообщений ------------------------------------------------------
@@ -661,6 +669,7 @@ async def _handle_message(
         return True  # неизвестное действие (например, от более новой версии клиента) — пропускаем
 
     if not await _within_rate_limit(user.id, action_name):
+        obs.WS_ACTIONS.labels(action_name, obs.OUTCOME_RATE_LIMITED).inc()
         await _reject_rate_limited(user, action_name, data)
         return False
 
@@ -675,6 +684,7 @@ async def matchmaking_endpoint(
         session_factory: async_sessionmaker[AsyncSession] = Depends(get_session_factory),
 ):
     await manager.connect(websocket, current_user.id)
+    obs.WS_CONNECTIONS.inc()
     strikes = _StrikeCounter()
     try:
         await manager.send_personal_message(
@@ -696,5 +706,6 @@ async def matchmaking_endpoint(
     except Exception:
         logger.exception("WebSocket unexpected error for user %s", current_user.id)
     finally:
+        obs.WS_CONNECTIONS.dec()
         # Закрываем только это соединение: другие вкладки пользователя остаются онлайн.
         await manager.disconnect(current_user.id, websocket)

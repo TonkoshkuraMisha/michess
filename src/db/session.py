@@ -1,6 +1,7 @@
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.core.config import settings
+from src.core.observability import instrument_engine
 
 # Create asynchronous engine using configuration URL
 engine = create_async_engine(
@@ -12,6 +13,7 @@ engine = create_async_engine(
     pool_timeout=settings.DB_POOL_TIMEOUT_S,
     pool_pre_ping=True,
 )
+instrument_engine(engine)
 
 # Create asynchronous session factory
 AsyncSessionLocal = async_sessionmaker(

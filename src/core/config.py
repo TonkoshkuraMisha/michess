@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     Uses Pydantic for environment variable validation.
     """
     PROJECT_NAME: str = "Michess API"
-    VERSION: str = "1.0.0"
+    VERSION: str = "1.1.0"
     API_V1_STR: str = "/api/v1"
 
     # "production" включает строгие проверки при старте (SECRET_KEY) и прячет /docs.
@@ -74,6 +74,11 @@ class Settings(BaseSettings):
     CELERY_PUBLISH_TIMEOUT_S: float = 3.0
     CELERY_BROKER_CONNECT_TIMEOUT_S: float = 1.0
     CELERY_BROKER_COOLDOWN_S: float = 30.0
+
+    # Наблюдаемость (src/core/observability.py): Sentry выключен, пока SENTRY_DSN пуст.
+    # Доля запросов с трассировкой производительности: 0 — только ошибки.
+    SENTRY_DSN: str = ""
+    SENTRY_TRACES_SAMPLE_RATE: float = 0.0
 
     # Stockfish engine pool
     ENGINE_POOL_SIZE: int = 2

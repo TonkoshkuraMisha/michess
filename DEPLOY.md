@@ -69,10 +69,10 @@ nginx в образе `web` слушает только HTTP. TLS заверша
 на том же диске не переживёт потерю диска или сервера.
 
     # снимок прямо сейчас (например, перед обновлением с миграциями)
-    docker compose -f docker-compose.prod.yml run --rm backup once
+    docker compose -f docker-compose.prod.yml run --rm --no-deps backup once
 
     # проверка: последний снимок восстанавливается во временную базу и читается
-    docker compose -f docker-compose.prod.yml run --rm backup verify
+    docker compose -f docker-compose.prod.yml run --rm --no-deps backup verify
 
 Проверяйте восстановление регулярно (хотя бы раз в неделю, например cron-задачей с `verify`):
 снимок, который не восстанавливается, обнаружится только в день аварии.
@@ -80,14 +80,45 @@ nginx в образе `web` слушает только HTTP. TLS заверша
 ### Восстановление
 
     docker compose -f docker-compose.prod.yml stop api worker
-    docker compose -f docker-compose.prod.yml run --rm backup restore michess_20261111_094729.dump
+    docker compose -f docker-compose.prod.yml run --rm --no-deps backup restore michess_20261111_094729.dump
     docker compose -f docker-compose.prod.yml up -d
 
 `restore` заменяет содержимое рабочей базы одной транзакцией (при ошибке база остаётся как
 была). Если снимок сделан на более старой версии схемы, сервис `migrate` догонит её при `up`.
 Состояние идущих партий хранится в Redis (AOF) и снимком БД не покрывается.
 
-## 6. Что важно знать
+## 6. Мониторинг
+
+**Ошибки — Sentry.** Задайте в `.env` `SENTRY_DSN` (проект Python в Sentry или совместимом
+GlitchTip) и перезапустите `api` и `worker`. В Sentry уходят необработанные исключения и всё, что
+логируется как ошибка: сбои WS-действий, цикла таймаутов, фонового анализа. Cookie, заголовки
+авторизации и IP не отправляются. `SENTRY_TRACES_SAMPLE_RATE` (например, `0.05`) включает
+выборочную трассировку производительности.
+
+**Метрики — Prometheus.** API отдаёт `GET /metrics` (сумма по всем процессам uvicorn). Наружу
+путь не опубликован — nginx проксирует только `/api/` и `/health`; Prometheus должен быть в сети
+compose (или опубликуйте порт `api` только на внутренний интерфейс):
+
+    scrape_configs:
+      - job_name: michess
+        static_configs:
+          - targets: ["api:8000"]
+
+| Метрика                                    | Что показывает                                              |
+|--------------------------------------------|-------------------------------------------------------------|
+| `michess_ws_connections`                   | открытые WebSocket-соединения                               |
+| `michess_ws_actions_total{action,outcome}` | WS-действия: `ok`, `ignored`, `rejected`, `error`, `rate_limited` |
+| `michess_ws_action_seconds{action}`        | время обработки; `action="make_move"` — задержка хода       |
+| `michess_db_pool_checked_out`              | занятые соединения пула БД (предел — `DB_POOL_SIZE + DB_MAX_OVERFLOW` на процесс) |
+| `michess_http_requests_total`, `michess_http_request_seconds` | HTTP по шаблону маршрута и статусу    |
+| `michess_games_finished_total{termination}`| завершённые партии                                          |
+| `michess_timeout_check_failures_total`     | сбои проверки флагов и неявок (должен быть около нуля)      |
+
+Стоит настроить оповещения: p95 `michess_ws_action_seconds{action="make_move"}` выше 0,5 с,
+рост `michess_ws_actions_total{outcome="error"}` и `michess_timeout_check_failures_total`,
+`michess_db_pool_checked_out` у предела пула, `/health` с кодом 503.
+
+## 7. Что важно знать
 
 - **Наружу открыт только `web`.** API доверяет `X-Forwarded-For` от любого адреса внутренней
   сети compose (`FORWARDED_ALLOW_IPS=*`) — это безопасно, пока порт `api` не опубликован.
