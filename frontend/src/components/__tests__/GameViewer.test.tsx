@@ -1,0 +1,210 @@
+// Студия разбора партии: загрузка PGN, навигация по ходам (кнопки и клавиатура), переворот
+// доски, кэшированный и запрошенный анализ движком, ошибки загрузки и анализа.
+
+import {fireEvent, render, screen, waitFor} from '@testing-library/react';
+import {MemoryRouter, Route, Routes} from 'react-router-dom';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
+import GameViewer from '../GameViewer';
+
+vi.mock('../../services/soundEngine', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('../../services/soundEngine')>();
+    return {
+        ...actual,
+        soundEngine: {play: vi.fn(), isMuted: vi.fn(() => true), toggleMute: vi.fn(() => false)},
+    };
+});
+
+const FOOLS_MATE_PGN = [
+    '[Event "Casual"]',
+    '[Site "Michess"]',
+    '[Date "2026.11.01"]',
+    '[White "alice"]',
+    '[Black "bob"]',
+    '[WhiteElo "1500"]',
+    '[BlackElo "1480"]',
+    '[Result "0-1"]',
+    '',
+    '1. f3 e5 2. g4 Qh4# 0-1',
+].join('\n');
+
+const sideStats = (accuracy: number) => ({
+    accuracy, best: 1, good: 0, inaccuracies: 0, mistakes: 1, blunders: 1, avg_cp_loss: 120,
+});
+
+const ANALYSIS = {
+    game_id: 42,
+    engine: 'Stockfish',
+    white: sideStats(31.4),
+    black: sideStats(97.2),
+    moves: ['f3', 'e5', 'g4', 'Qh4#'].map((san, i) => ({
+        ply: i + 1, move_number: Math.floor(i / 2) + 1, color: i % 2 ? 'black' : 'white', san, uci: '',
+        eval_cp: -50 * i, eval_display: (-0.5 * i).toFixed(1), mate: null, best_move_uci: null,
+        cp_loss: 0, classification: 'best', symbol: '',
+    })),
+};
+
+type Reply = { ok: boolean; status?: number; body?: unknown; text?: string };
+
+function stubApi({pgn, cached, analyze}: { pgn: Reply; cached?: Reply; analyze?: Reply }) {
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = input.toString();
+        let reply: Reply = {ok: false, status: 404, body: {}};
+        if (url.endsWith('/pgn')) reply = pgn;
+        else if (url.includes('/analysis/game/')) reply = (init?.method === 'POST' ? analyze : cached) ?? reply;
+        return {
+            ok: reply.ok,
+            status: reply.status ?? (reply.ok ? 200 : 500),
+            json: async () => reply.body,
+            text: async () => reply.text ?? '',
+        } as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+}
+
+const pieceOn = (square: string) =>
+    document.querySelector(`[data-square="${square}"] img`)?.getAttribute('alt') ?? null;
+
+function renderViewer() {
+    return render(
+        <MemoryRouter initialEntries={['/game/42']}>
+            <Routes>
+                <Route path="/game/:gameId" element={<GameViewer/>}/>
+            </Routes>
+        </MemoryRouter>,
+    );
+}
+
+beforeEach(() => {
+    localStorage.clear();
+    vi.stubGlobal('ResizeObserver', class {
+        observe() {
+        }
+
+        unobserve() {
+        }
+
+        disconnect() {
+        }
+    });
+});
+
+afterEach(() => {
+    vi.unstubAllGlobals();
+});
+
+describe('GameViewer', () => {
+    it('показывает игроков из PGN и финальную позицию', async () => {
+        stubApi({pgn: {ok: true, text: FOOLS_MATE_PGN}});
+        renderViewer();
+
+        expect((await screen.findAllByText('alice')).length).toBeGreaterThan(0);
+        expect(screen.getAllByText('bob').length).toBeGreaterThan(0);
+        expect(pieceOn('h4')).toBe('b q');
+        expect(pieceOn('d8')).toBeNull();
+        expect(screen.getByRole('button', {name: 'Компьютерный анализ'})).toBeInTheDocument();
+    });
+
+    it('кнопки навигации: начало, вперёд, назад, конец', async () => {
+        stubApi({pgn: {ok: true, text: FOOLS_MATE_PGN}});
+        renderViewer();
+        await waitFor(() => expect(pieceOn('h4')).toBe('b q'));
+
+        fireEvent.click(screen.getByTitle('Начало партии'));
+        expect(pieceOn('d8')).toBe('b q');
+        expect(pieceOn('f2')).toBe('w p');
+
+        fireEvent.click(screen.getByTitle('Ход вперед'));
+        expect(pieceOn('f3')).toBe('w p');
+        expect(pieceOn('f2')).toBeNull();
+
+        fireEvent.click(screen.getByTitle('Конец партии'));
+        fireEvent.click(screen.getByTitle('Ход назад'));
+        expect(pieceOn('d8')).toBe('b q');
+        expect(pieceOn('g4')).toBe('w p');
+    });
+
+    it('стрелки клавиатуры листают ходы', async () => {
+        stubApi({pgn: {ok: true, text: FOOLS_MATE_PGN}});
+        renderViewer();
+        await waitFor(() => expect(pieceOn('h4')).toBe('b q'));
+
+        fireEvent.keyDown(window, {key: 'ArrowUp'});
+        expect(pieceOn('f2')).toBe('w p');
+        fireEvent.keyDown(window, {key: 'ArrowRight'});
+        fireEvent.keyDown(window, {key: 'ArrowRight'});
+        expect(pieceOn('e5')).toBe('b p');
+        fireEvent.keyDown(window, {key: 'ArrowLeft'});
+        expect(pieceOn('e5')).toBeNull();
+        fireEvent.keyDown(window, {key: 'ArrowDown'});
+        expect(pieceOn('h4')).toBe('b q');
+    });
+
+    it('переворот доски меняет порядок клеток', async () => {
+        stubApi({pgn: {ok: true, text: FOOLS_MATE_PGN}});
+        renderViewer();
+        await waitFor(() => expect(pieceOn('h4')).toBe('b q'));
+
+        const firstSquare = () => document.querySelector('[data-square]')?.getAttribute('data-square');
+        expect(firstSquare()).toBe('a8');
+        fireEvent.click(screen.getByTitle('Перевернуть доску'));
+        expect(firstSquare()).toBe('h1');
+    });
+
+    it('кэшированный анализ показывается сразу, без запуска движка', async () => {
+        const fetchMock = stubApi({pgn: {ok: true, text: FOOLS_MATE_PGN}, cached: {ok: true, body: ANALYSIS}});
+        renderViewer();
+
+        expect((await screen.findAllByText(/31\.4%/)).length).toBeGreaterThan(0);
+        expect(screen.getAllByText(/97\.2%/).length).toBeGreaterThan(0);
+        expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+    });
+
+    it('кнопка анализа запускает движок с токеном и показывает точность', async () => {
+        localStorage.setItem('token', 'jwt-abc');
+        const fetchMock = stubApi({
+            pgn: {ok: true, text: FOOLS_MATE_PGN},
+            cached: {ok: false, status: 404, body: {detail: 'Not analysed'}},
+            analyze: {ok: true, body: ANALYSIS},
+        });
+        renderViewer();
+
+        fireEvent.click(await screen.findByRole('button', {name: 'Компьютерный анализ'}));
+
+        expect((await screen.findAllByText(/31\.4%/)).length).toBeGreaterThan(0);
+        const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST');
+        expect(post?.[0]).toMatch(/\/api\/v1\/analysis\/game\/42$/);
+        expect(post?.[1]?.headers).toEqual({Authorization: 'Bearer jwt-abc'});
+    });
+
+    it('ошибка анализа показывается текстом сервера', async () => {
+        stubApi({
+            pgn: {ok: true, text: FOOLS_MATE_PGN},
+            analyze: {ok: false, status: 429, body: {detail: 'Слишком много запросов к движку'}},
+        });
+        renderViewer();
+
+        fireEvent.click(await screen.findByRole('button', {name: 'Компьютерный анализ'}));
+
+        expect(await screen.findByText('Слишком много запросов к движку')).toBeInTheDocument();
+    });
+
+    it('ошибка валидации (detail — список) не роняет страницу', async () => {
+        stubApi({
+            pgn: {ok: true, text: FOOLS_MATE_PGN},
+            analyze: {ok: false, status: 422, body: {detail: [{loc: ['path', 'game_id'], msg: 'Input should be a valid integer'}]}},
+        });
+        renderViewer();
+
+        fireEvent.click(await screen.findByRole('button', {name: 'Компьютерный анализ'}));
+
+        expect(await screen.findByText('Input should be a valid integer')).toBeInTheDocument();
+    });
+
+    it('недоступный PGN — сообщение об ошибке', async () => {
+        stubApi({pgn: {ok: false, status: 404}});
+        renderViewer();
+
+        expect(await screen.findByText('Не удалось загрузить данные партии')).toBeInTheDocument();
+    });
+});

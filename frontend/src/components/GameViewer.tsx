@@ -19,6 +19,7 @@ import {
     getDefaultBoardSize
 } from './Chessboard';
 import {API_BASE_URL} from '../config/api';
+import {readErrorDetail} from '../services/apiErrors';
 import {soundEngine, resolveMoveSound} from '../services/soundEngine';
 import type {SoundEventType} from '../services/soundEngine';
 import {
@@ -306,8 +307,8 @@ export default function GameViewer() {
                 headers: authToken ? {'Authorization': `Bearer ${authToken}`} : undefined,
             });
             if (!res.ok) {
-                const errData = await res.json().catch(() => ({}));
-                setAnalysisError(errData.detail || 'Ошибка при анализе партии');
+                // detail бывает списком ошибок валидации — без разбора React упал бы на рендере объекта.
+                setAnalysisError(await readErrorDetail(res, 'Ошибка при анализе партии'));
                 return;
             }
             const data: FullGameAnalysisReport = await res.json();
@@ -630,6 +631,7 @@ export default function GameViewer() {
                                     return (
                                         <div
                                             key={squareId}
+                                            data-square={squareId}
                                             onMouseDown={(e) => handleSquareMouseDown(e, squareId)}
                                             onMouseUp={(e) => handleSquareMouseUp(e, squareId)}
                                             style={{
