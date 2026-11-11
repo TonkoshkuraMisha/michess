@@ -127,8 +127,9 @@ jobs:
       - name: Run linter (oxlint)
         run: npm run lint
 
-      - name: Run unit tests (vitest)
-        run: npm run test
+      # Пороги покрытия — frontend/vite.config.ts (test.coverage.thresholds).
+      - name: Run unit tests with coverage (vitest)
+        run: npm run test:coverage
 
       - name: Build production bundle
         run: npm run build

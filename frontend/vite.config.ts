@@ -16,5 +16,19 @@ export default defineConfig({
     test: {
         environment: 'jsdom',
         setupFiles: ['./src/test/setup.ts'],
+        // npm run test:coverage (в CI): покрытие считается по всему src/, а не только по файлам,
+        // которые импортируют тесты, — иначе непокрытые компоненты не попали бы в отчёт вовсе.
+        coverage: {
+            provider: 'v8',
+            include: ['src/**/*.{ts,tsx}'],
+            exclude: ['src/**/__tests__/**', 'src/test/**', 'src/main.tsx', 'src/**/*.d.ts'],
+            reporter: ['text-summary', 'text'],
+            thresholds: {
+                statements: 45,
+                branches: 68,
+                functions: 44,
+                lines: 45,
+            },
+        },
     },
 })
