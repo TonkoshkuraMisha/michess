@@ -49,4 +49,5 @@ export const GAME_ACTION_ERROR_CODES: ReadonlySet<string> = new Set([
     'message_too_large',
     'draw_offer_too_soon',
     'chat_forbidden',
+    'spectate_unavailable',
 ]);

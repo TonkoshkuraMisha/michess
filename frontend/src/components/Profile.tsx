@@ -51,7 +51,7 @@ interface GameData {
 
 const displayDate = (game: GameData) => {
     if (game.pgn_date && !game.pgn_date.includes('????')) {
-        return game.pgn_date.replace(/\??/g, '').replace(/\.$/, '');
+        return game.pgn_date.replace(/\?/g, '').replace(/\.+$/, '');
     }
     if (game.finished_at) {
         return format(parseISO(game.finished_at), 'd MMM yyyy', {locale: ru});
@@ -163,12 +163,12 @@ export default function Profile() {
                 <div
                     className="bg-acacia-dark border border-amber-900/40 p-6 rounded shadow-heavy flex flex-col items-center justify-center text-center relative overflow-hidden">
                     <img
-                        src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${profile.username}&backgroundColor=D0A972`}
+                        src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${encodeURIComponent(profile.username)}&backgroundColor=D0A972`}
                         alt="Avatar Background"
                         className="absolute top-0 right-0 w-48 h-48 opacity-10 pointer-events-none translate-x-10 -translate-y-10"
                     />
                     <img
-                        src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${profile.username}&backgroundColor=E6C998`}
+                        src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${encodeURIComponent(profile.username)}&backgroundColor=E6C998`}
                         alt="Avatar"
                         className="w-24 h-24 rounded-lg bg-black/40 shadow-inner border-2 border-amber-600/40 mb-3 z-10"
                     />

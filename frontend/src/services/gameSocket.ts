@@ -85,18 +85,25 @@ class GameWebSocketService {
         this.connecting = false;
 
         const wsUrl = `${WS_BASE_URL}/api/v1/ws/matchmaking?ticket=${encodeURIComponent(ticket)}`;
-        this.ws = new WebSocket(wsUrl);
+        // Обработчики привязаны к своему сокету: закрытый ранее сокет (смена токена, повторное
+        // подключение) сообщает о закрытии с задержкой, и без проверки его onclose обнулял бы
+        // ссылку на уже новый сокет — тот оставался бы жить, а следующий send() открывал
+        // второе соединение, и каждое событие приходило бы дважды.
+        const socket = new WebSocket(wsUrl);
+        this.ws = socket;
 
-        this.ws.onopen = () => {
-            while (this.pendingMessages.length > 0 && this.ws && this.ws.readyState === WebSocket.OPEN) {
+        socket.onopen = () => {
+            if (this.ws !== socket) return;
+            while (this.pendingMessages.length > 0 && socket.readyState === WebSocket.OPEN) {
                 const msg = this.pendingMessages.shift();
                 if (msg) {
-                    this.ws.send(msg);
+                    socket.send(msg);
                 }
             }
         };
 
-        this.ws.onmessage = (event) => {
+        socket.onmessage = (event) => {
+            if (this.ws !== socket) return;
             try {
                 const data = JSON.parse(event.data);
                 const eventType = data.event;
@@ -112,7 +119,8 @@ class GameWebSocketService {
             }
         };
 
-        this.ws.onclose = (event) => {
+        socket.onclose = (event) => {
+            if (this.ws !== socket) return;
             this.ws = null;
             if (event.code === 1008) {
                 // Тикет недействителен или токены отозваны (смена пароля, выход на всех устройствах)
@@ -124,7 +132,7 @@ class GameWebSocketService {
             }
         };
 
-        this.ws.onerror = (error) => {
+        socket.onerror = (error) => {
             console.error('WebSocket ошибка:', error);
         };
     }

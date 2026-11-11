@@ -57,7 +57,7 @@ async def _resolve_user(db: AsyncSession, username: str) -> User | None:
 
 async def _build_active_game_payload(db: AsyncSession, game_id: int, user_id: int) -> dict | None:
     """Формирует полный слепок активной партии для игрока (цвет, часы, FEN, PGN, версия стейта)."""
-    from src.services.game_state import state_manager
+    from src.services.game_state import pending_draw_offer, state_manager
 
     state = await state_manager.get_game_state(game_id)
     if not state or state.get("status") != "in_progress":
@@ -98,6 +98,7 @@ async def _build_active_game_payload(db: AsyncSession, game_id: int, user_id: in
         "fen": state.get("board_fen"),
         "pgn": state.get("pgn", ""),
         "state_version": int(state.get("state_version", 0)),
+        "draw_offer_from": pending_draw_offer(state),
     }
 
 
@@ -468,6 +469,25 @@ async def get_user_games(
     return {
         "total": total_count,
         "items": items,
+    }
+
+
+@router.get("/games/{game_id}/summary")
+async def get_game_summary(game_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Статус и итог партии. Нужен клиенту, который пропустил game_over (обрыв WebSocket в момент
+    завершения): по этому ответу он завершает партию у себя, а не остаётся в «вечной» игре.
+    """
+    game = await db.get(Game, game_id)
+    if not game:
+        raise HTTPException(status_code=404, detail="Game not found")
+    return {
+        "game_id": game.id,
+        "status": game.status.value,
+        "result": game.result,
+        "termination": game.termination,
+        "white_delta": game.white_rating_delta,
+        "black_delta": game.black_rating_delta,
     }
 
 

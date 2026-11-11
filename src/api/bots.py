@@ -165,8 +165,9 @@ class BotGameSaveRequest(BaseModel):
         description="Для незавершённой на доске позиции: 'resignation' (игрок сдался) или 'timeout' (упал флаг)",
     )
     moves_uci: list[str] = Field(default_factory=list, max_length=1000, description="Список сделанных ходов в формате UCI")
-    base_time_ms: int = Field(default=180000, description="Базовый контроль времени в мс")
-    increment_ms: int = Field(default=0, description="Добавление времени на ход в мс")
+    # Границы — чтобы значение из запроса поместилось в INTEGER-колонку и не давало 500.
+    base_time_ms: int = Field(default=180000, ge=1000, le=86_400_000, description="Базовый контроль времени в мс")
+    increment_ms: int = Field(default=0, ge=0, le=3_600_000, description="Добавление времени на ход в мс")
 
 
 class BotGameSaveResponse(BaseModel):
@@ -409,6 +410,11 @@ async def get_bot_move(payload: BotMoveRequest):
         board = chess.Board(payload.fen)
     except ValueError:
         raise HTTPException(status_code=400, detail="Некорректный формат FEN") from None
+
+    # chess.Board принимает и невозможные позиции (без короля, короли рядом, под шахом сторона,
+    # которая только что ходила) — движок на них может упасть и выбыть из пула.
+    if not board.is_valid():
+        raise HTTPException(status_code=400, detail="Некорректная позиция")
 
     if board.is_game_over():
         raise HTTPException(status_code=400, detail="Партия уже завершена")

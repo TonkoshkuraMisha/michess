@@ -245,7 +245,7 @@ export default function Chessboard() {
         inviteColorPref,
         setGame, setHistory, setViewIndex, setGameId, setMyColor, setSpectatingGameId, setActiveBot,
         setStateVersion, setWhitePlayer, setBlackPlayer, setRatingInfo, setGameOverResult,
-        setDrawOfferStatus, setRematchStatus, setIsSearching, setIsManualFlip, setSelectedSquare,
+        setDrawOfferStatus, setRematchStatus, isSearching, setIsSearching, setIsManualFlip, setSelectedSquare,
         setPendingPromotion, clearPremove, setWhiteTimeMs, setBlackTimeMs, setLeftSectionTab,
         setLobbyTab, setIsTimeDropdownOpen, setShowInvitePanel, moveStartTime, resetLowTimeWarning,
         exitBotGame, playAudio, playOutcomeSound, updateSessionStats,
@@ -680,6 +680,12 @@ export default function Chessboard() {
 
     const handleResetSandbox = () => {
         if (gameId && !gameOverResult) return;
+        if (gameId && (rematchStatus === 'offered_by_me' || rematchStatus === 'offered_by_opponent')) {
+            // Уходя с завершённой партии, снимаем висящее предложение реванша: иначе соперник мог
+            // бы принять его позже и втянуть игрока в партию, которую тот уже не ждёт.
+            gameSocket.send('decline_rematch', {game_id: gameId});
+        }
+        setRematchStatus('none');
         gameIdRef.current = null;
         setGameId(null);
         exitBotGame();
@@ -696,7 +702,7 @@ export default function Chessboard() {
     };
 
     const handleUndoSandboxMove = () => {
-        if (gameId || history.length === 0 || isBotThinking || !!gameOverResult) return;
+        if (gameId || spectatingGameId || history.length === 0 || isBotThinking || !!gameOverResult) return;
         const nextGame = cloneChessInstance(game);
         nextGame.undo();
         if (activeBot && nextGame.history().length > 0) {
@@ -980,7 +986,7 @@ export default function Chessboard() {
                             }
                             setIsTimeDropdownOpen(false);
                         }}
-                        disabled={isSearching || !!gameId}
+                        disabled={isSearching || !!gameId || (!!activeBot && !gameOverResult)}
                         dropdownRef={timeDropdownRef}
                     />
 
@@ -1177,6 +1183,8 @@ export default function Chessboard() {
                                             <div
                                                 onPointerDown={(e) => {
                                                     if ((e.pointerType === 'mouse' && e.button !== 0) || viewIndex !== -1 || gameOverResult) return;
+                                                    // Зритель фигуры не двигает (и не ставит «премувы» на чужой доске).
+                                                    if (spectatingGameId) return;
                                                     const turnChar = currentGame.turn();
                                                     const myColorChar = myColor === 'white' ? 'w' : 'b';
 
@@ -1199,8 +1207,8 @@ export default function Chessboard() {
                                                     });
                                                 }}
                                                 className={`relative w-full h-full p-[1.5%] z-20 transition-transform duration-75 ${
-                                                    viewIndex === -1 && !gameOverResult && (
-                                                        (gameId || activeBot || spectatingGameId)
+                                                    viewIndex === -1 && !gameOverResult && !spectatingGameId && (
+                                                        (gameId || activeBot)
                                                             ? piece.color === (myColor === 'white' ? 'w' : 'b')
                                                             : piece.color === currentGame.turn()
                                                     )
@@ -1398,7 +1406,9 @@ export default function Chessboard() {
                     />
                 )}
 
-                <GameControlsPanel
+                {/* Зрителю кнопки песочницы не показываем: «отменить ход» и «сбросить доску»
+                    портили бы чужую партию на его экране. Выход — в панели чата. */}
+                {!spectatingGameId && <GameControlsPanel
                     mode={gameId ? 'pvp' : activeBot ? 'bot' : 'sandbox'}
                     gameId={gameId}
                     savedBotGameId={savedBotGameId}
@@ -1417,7 +1427,7 @@ export default function Chessboard() {
                     onOfferRematch={handleOfferRematch}
                     onResetSandbox={handleResetSandbox}
                     onUndoSandboxMove={handleUndoSandboxMove}
-                />
+                />}
 
             </div>
 

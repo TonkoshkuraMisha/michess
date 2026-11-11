@@ -134,7 +134,8 @@ export function GameControlsPanel({
                             </div>
                         )}
 
-                        <div className="grid grid-cols-2 gap-2">
+                        {/* У отменённой партии нет ни ходов, ни PGN — разбирать и скачивать нечего. */}
+                        {gameOverResult !== '*' && <div className="grid grid-cols-2 gap-2">
                             <button
                                 type="button"
                                 onClick={() => gameId && navigateToReview(gameId)}
@@ -149,7 +150,7 @@ export function GameControlsPanel({
                             >
                                 <Download size={14}/> Скачать PGN
                             </a>
-                        </div>
+                        </div>}
                     </div>
                 )}
             </div>
