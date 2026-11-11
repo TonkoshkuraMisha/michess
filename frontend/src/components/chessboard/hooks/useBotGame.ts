@@ -10,6 +10,21 @@ import {HISTORICAL_BOTS} from '../../../config/champions';
 import type {HistoricalBotId} from '../../../config/champions';
 import {cloneChessInstance} from '../boardUtils';
 import type {PendingPromotion} from '../types';
+import {readErrorDetail} from '../../../services/apiErrors';
+
+const BOT_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000];
+
+/** 4xx, кроме 408/429, — ошибка запроса (позиция, бот): повтор того же запроса не поможет. */
+export function isPermanentBotError(status: number): boolean {
+    return status >= 400 && status < 500 && status !== 408 && status !== 429;
+}
+
+/** Пауза перед повтором хода бота: Retry-After сервера (не больше 10 с) или 1 → 2 → 4 → 8 с. */
+export function botRetryDelayMs(attempt: number, response: Response | null): number {
+    const retryAfterS = Number(response?.headers.get('Retry-After'));
+    if (retryAfterS > 0) return Math.min(retryAfterS, 10) * 1000;
+    return BOT_RETRY_DELAYS_MS[Math.min(attempt, BOT_RETRY_DELAYS_MS.length - 1)];
+}
 
 export interface UseBotGameOptions {
     game: Chess;
@@ -216,25 +231,37 @@ export function useBotGame({
                 // С токеном лимит запросов считается на пользователя, а не на общий IP.
                 if (authToken) headers['Authorization'] = `Bearer ${authToken}`;
 
+                // Временные сбои — сеть, перезапуск сервера (деплой), 5xx, 429 (лимит), 503 (пул
+                // движков занят) — повторяем, пока партия идёт. Раньше после сетевой ошибки или 500
+                // бот молча переставал ходить и проигрывал по времени.
                 let response: Response | null = null;
-                // 429 (лимит) и 503 (пул движков занят) — временные: ждём Retry-After и повторяем.
-                for (let attempt = 0; attempt < 4 && !isCancelled; attempt++) {
-                    response = await fetch(`${API_BASE_URL}/api/v1/bots/move`, {
-                        method: 'POST',
-                        headers,
-                        body: JSON.stringify({
-                            bot_id: activeBot,
-                            fen: game.fen()
-                        })
-                    });
-                    if (response.status !== 429 && response.status !== 503) break;
-                    const retryAfterS = Number(response.headers.get('Retry-After')) || 2;
-                    await new Promise((resolve) => setTimeout(resolve, Math.min(retryAfterS, 10) * 1000));
-                }
-                if (!response) return;
+                for (let attempt = 0; !isCancelled; attempt++) {
+                    try {
+                        response = await fetch(`${API_BASE_URL}/api/v1/bots/move`, {
+                            method: 'POST',
+                            headers,
+                            body: JSON.stringify({
+                                bot_id: activeBot,
+                                fen: game.fen()
+                            })
+                        });
+                    } catch {
+                        response = null;
+                    }
+                    if (response?.ok) break;
+                    if (response && isPermanentBotError(response.status)) break;
 
-                if (!response.ok || isCancelled) {
-                    if (!isCancelled) setIsBotThinking(false);
+                    if (attempt === 1 && !isCancelled) {
+                        setBotComment('Нет связи с сервером — ход бота будет сделан, как только связь восстановится…');
+                    }
+                    await new Promise((resolve) => setTimeout(resolve, botRetryDelayMs(attempt, response)));
+                }
+                if (isCancelled || !response) return;
+
+                if (!response.ok) {
+                    // Постоянная ошибка (некорректная позиция, неизвестный бот): повтор не поможет.
+                    setBotComment(`Бот не смог сделать ход: ${await readErrorDetail(response, `ошибка ${response.status}`)}`);
+                    setIsBotThinking(false);
                     return;
                 }
                 const data = await response.json();

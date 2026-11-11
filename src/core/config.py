@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     Uses Pydantic for environment variable validation.
     """
     PROJECT_NAME: str = "Michess API"
-    VERSION: str = "1.2.0"
+    VERSION: str = "1.2.1"
     API_V1_STR: str = "/api/v1"
 
     # "production" включает строгие проверки при старте (SECRET_KEY) и прячет /docs.
@@ -50,6 +50,8 @@ class Settings(BaseSettings):
     REDIS_PORT: int = 6379
     REDIS_CONNECT_TIMEOUT_S: float = 1.0
     REDIS_SOCKET_TIMEOUT_S: float = 1.0
+    # Повторы команды без паузы; худшее ожидание при сбое — (1 + REDIS_RETRIES) таймаута.
+    REDIS_RETRIES: int = 1
 
     # Security (JWT)
     SECRET_KEY: str
