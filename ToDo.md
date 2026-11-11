@@ -339,7 +339,15 @@
 
 ### Приоритет 2 — тесты
 
-### - [ ] Таск 8.7. Покрытие фронтенда (`@vitest/coverage-v8`, порог) и тесты `GameViewer`, `Profile`, `Leaderboard`
+### - [ ] Таск 8.7. Покрытие фронтенда (`test/frontend-coverage`)
+
+* Сделано: `@vitest/coverage-v8`, `npm run test:coverage` в CI с порогами (`vite.config.ts`), покрытие
+  считается по всему `src/`. Тесты `Leaderboard` (6), `Profile` (8), `AuthModal` (7) — все три ~100%.
+  Покрытие 37,6% → 47,3%. Исправлено: `Profile.tsx` подставлял имя в URL API и ссылки без
+  `encodeURIComponent` (архивные имена с `?`, `#`, `/` уходили не туда).
+* Осталось: `GameViewer.tsx` (1 171 строка, 0%), `App.tsx`, `ChampionGames.tsx`.
+* Замечено: график рейтинга в профиле условный — строится от блиц-рейтинга с ±15 за партию, без учёта
+  категории партии и реальных изменений рейтинга (`white_rating_delta`/`black_rating_delta` в БД есть).
 
 ### - [x] Таск 8.8. Тесты `src/api/profile.py` и честный замер покрытия (`fix/profile-api`)
 
