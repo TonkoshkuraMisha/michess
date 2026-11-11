@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, WebSocket, WebSocketDisconnect
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.api.deps import get_current_user_ws
+from src.api.fair_play import remember_player_ip
 from src.api.rate_limit import try_consume
 from src.core import observability as obs
 from src.db.session import get_session_factory
@@ -741,6 +742,10 @@ async def matchmaking_endpoint(
         session_factory: async_sessionmaker[AsyncSession] = Depends(get_session_factory),
 ):
     await manager.connect(websocket, current_user.id)
+    # Адрес игрока нужен правилу честной игры: запрос движка без токена с этого же адреса
+    # во время его партии отклоняется.
+    ws_client = getattr(websocket, "client", None)
+    await remember_player_ip(current_user.id, ws_client.host if ws_client else None)
     obs.WS_CONNECTIONS.inc()
     strikes = _StrikeCounter()
     try:

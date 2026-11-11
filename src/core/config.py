@@ -90,6 +90,8 @@ class Settings(BaseSettings):
     RATE_LIMIT_WINDOW_S: int = 60
     RATE_LIMIT_BOT_MOVE: int = 90
     RATE_LIMIT_POSITION_ANALYSIS: int = 30
+    # Без входа анализ позиции доступен, но реже: гостя нельзя связать с идущей партией
+    RATE_LIMIT_POSITION_ANALYSIS_GUEST: int = 10
     RATE_LIMIT_GAME_ANALYSIS: int = 6
 
     # Authentication: attempts per IP, failed logins per account, registrations per IP
