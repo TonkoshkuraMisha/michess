@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.sql import func
 
 from src.core.instance import WORKER_ID
+from src.core.observability import GAMES_FINISHED, TIMEOUT_CHECK_FAILURES, bounded_label
 from src.db.redis import redis_client
 from src.db.session import AsyncSessionLocal
 from src.models.game import Game, GameStatus
@@ -728,6 +729,7 @@ class GameStateManager:
 
         await db.commit()
         await self._mark_finished_in_db(game_id)
+        GAMES_FINISHED.labels(bounded_label(termination)).inc()
 
         if db_game.is_rated:
             try:
@@ -909,6 +911,7 @@ class GameStateManager:
         await self.reconcile_unfinished_games(now_ms, manager=manager)
 
     def _record_timeout_failure(self, game_id: int, now_ms: int) -> None:
+        TIMEOUT_CHECK_FAILURES.inc()
         count = self._timeout_failures.get(game_id, (0, 0))[0] + 1
         delay_ms = min(TIMEOUT_RETRY_MAX_MS, TIMEOUT_RETRY_BASE_MS * 2 ** (count - 1))
         self._timeout_failures[game_id] = (count, now_ms + delay_ms)

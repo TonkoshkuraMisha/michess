@@ -1,6 +1,9 @@
 from celery import Celery
 
 from src.core.config import settings
+from src.core.observability import init_sentry
+
+init_sentry("worker")
 
 celery_app = Celery(
     "michess_worker",
