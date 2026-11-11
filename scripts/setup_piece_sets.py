@@ -1,6 +1,17 @@
 # --- FILE: scripts/setup_piece_sets.py ---
+"""
+Скачивает наборы фигур в frontend/public/assets/pieces.
 
-import shutil
+Источник — репозиторий lichess (lila), но берутся только наборы, которые его COPYING.md относит
+к свободным и которые можно использовать в любом проекте, включая коммерческий. Наборы с
+условием «некоммерческое использование» (CC BY-NC-SA, «free for personal non commercial use»)
+и наборы без указанной лицензии сюда не добавляются.
+
+Добавляя набор: сверить лицензию в https://github.com/lichess-org/lila/blob/master/COPYING.md,
+вписать его в PIECE_SETS ниже, в frontend/src/config/boardAppearance.ts и в ATTRIBUTION.md —
+tests/test_assets_licensing.py проверяет, что все три списка совпадают.
+"""
+
 import urllib.request
 from pathlib import Path
 
@@ -9,18 +20,29 @@ PIECES_ROOT = PROJECT_ROOT / "frontend" / "public" / "assets" / "pieces"
 
 PIECE_CODES = ["wP", "wN", "wB", "wR", "wQ", "wK", "bP", "bN", "bB", "bR", "bQ", "bK"]
 
-REMOTE_SETS = {
-    "merida": "https://raw.githubusercontent.com/lichess-org/lila/master/public/piece/merida/{code}.svg",
-    "alpha": "https://raw.githubusercontent.com/lichess-org/lila/master/public/piece/alpha/{code}.svg",
-    "cburnett": "https://raw.githubusercontent.com/lichess-org/lila/master/public/piece/cburnett/{code}.svg",
-    "maestro": "https://raw.githubusercontent.com/lichess-org/lila/master/public/piece/maestro/{code}.svg",
+LILA_PIECE_URL = "https://raw.githubusercontent.com/lichess-org/lila/master/public/piece/{name}/{code}.svg"
+
+# Папка набора -> (автор, лицензия). Единственный источник правды о том, что лежит в pieces/.
+PIECE_SETS: dict[str, tuple[str, str]] = {
+    "merida": ("Armando Hernandez Marroquin", "GPL-2.0-or-later"),
+    "cburnett": ("Colin M.L. Burnett", "GPL-2.0-or-later"),
+    "chessnut": ("Alexis Luengas", "Apache-2.0"),
+    "fantasy": ("Maurizio Monge", "MIT"),
+    "rhosgfx": ("RhosGFX", "CC0-1.0"),
+}
+
+# Собственная производная от merida (белая/тёмная окантовка) — наследует её лицензию.
+OUTLINE_SET = "outline"
+OUTLINE_SOURCE = "merida"
+DERIVED_SETS: dict[str, tuple[str, str]] = {
+    OUTLINE_SET: ("michess, на основе Merida (Armando Hernandez Marroquin)", "GPL-2.0-or-later"),
 }
 
 
-def make_cardinal_outlined_svg(base_svg: str, code: str) -> str:
+def make_outlined_svg(base_svg: str, code: str) -> str:
     is_black = code.startswith("b")
     halo_color = "#FFFFFF" if is_black else "#111827"
-    filter_id = f"cardinal_halo_{code}"
+    filter_id = f"outline_halo_{code}"
 
     halo_def = (
         f'<defs><filter id="{filter_id}" x="-12%" y="-12%" width="124%" height="124%">'
@@ -40,21 +62,8 @@ def make_cardinal_outlined_svg(base_svg: str, code: str) -> str:
     return f'{header}{halo_def}<g filter="url(#{filter_id})">{body}</g></svg>\n'
 
 
-def backup_existing_classic_pieces() -> None:
-    classic_dir = PIECES_ROOT / "classic"
-    classic_dir.mkdir(parents=True, exist_ok=True)
-    for code in PIECE_CODES:
-        root_svg = PIECES_ROOT / f"{code}.svg"
-        target_svg = classic_dir / f"{code}.svg"
-        if root_svg.exists() and not target_svg.exists():
-            shutil.copy2(root_svg, target_svg)
-
-
 def download_svg(url: str) -> str | None:
-    req = urllib.request.Request(
-        url,
-        headers={"User-Agent": "Michess-PieceSetup/1.0"},
-    )
+    req = urllib.request.Request(url, headers={"User-Agent": "piece-set-setup/1.0"})
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             if resp.status == 200:
@@ -62,56 +71,36 @@ def download_svg(url: str) -> str | None:
                 if "<svg" in text:
                     return text
     except Exception as exc:
-        print(f"[!] Предупреждение при загрузке {url}: {exc}")
+        print(f"[!] Не удалось загрузить {url}: {exc}")
     return None
 
 
 def setup_all_piece_sets() -> None:
     PIECES_ROOT.mkdir(parents=True, exist_ok=True)
-    backup_existing_classic_pieces()
-    classic_dir = PIECES_ROOT / "classic"
 
-    for set_name, url_tpl in REMOTE_SETS.items():
+    for set_name in PIECE_SETS:
         set_dir = PIECES_ROOT / set_name
         set_dir.mkdir(parents=True, exist_ok=True)
-        downloaded_count = 0
-
+        ready = 0
         for code in PIECE_CODES:
             target_file = set_dir / f"{code}.svg"
             if target_file.exists() and target_file.stat().st_size > 200:
-                downloaded_count += 1
+                ready += 1
                 continue
-
-            svg_content = download_svg(url_tpl.format(code=code))
+            svg_content = download_svg(LILA_PIECE_URL.format(name=set_name, code=code))
             if svg_content:
                 target_file.write_text(svg_content, encoding="utf-8")
-                downloaded_count += 1
-            elif (classic_dir / f"{code}.svg").exists():
-                shutil.copy2(classic_dir / f"{code}.svg", target_file)
+                ready += 1
+        print(f"[+] Набор '{set_name}' готов ({ready}/12 фигур)")
 
-        print(f"[+] Набор '{set_name:8s}' готов ({downloaded_count}/12 фигур) -> {set_dir.relative_to(PROJECT_ROOT)}")
-
-    cardinal_dir = PIECES_ROOT / "cardinal"
-    cardinal_dir.mkdir(parents=True, exist_ok=True)
-    merida_dir = PIECES_ROOT / "merida"
-
+    outline_dir = PIECES_ROOT / OUTLINE_SET
+    outline_dir.mkdir(parents=True, exist_ok=True)
     for code in PIECE_CODES:
-        src_file = merida_dir / f"{code}.svg"
-        if not src_file.exists():
-            src_file = classic_dir / f"{code}.svg"
+        src_file = PIECES_ROOT / OUTLINE_SOURCE / f"{code}.svg"
         if src_file.exists():
-            raw_svg = src_file.read_text(encoding="utf-8")
-            outlined_svg = make_cardinal_outlined_svg(raw_svg, code)
-            (cardinal_dir / f"{code}.svg").write_text(outlined_svg, encoding="utf-8")
-
-    print(f"[+] Набор 'cardinal' готов (12/12 фигур) -> {cardinal_dir.relative_to(PROJECT_ROOT)}")
-
-    for code in PIECE_CODES:
-        merida_svg = merida_dir / f"{code}.svg"
-        if merida_svg.exists():
-            shutil.copy2(merida_svg, PIECES_ROOT / f"{code}.svg")
-
-    print("[+] Все 5 комплектов шахматных фигур (60 SVG-файлов) успешно установлены!")
+            outlined = make_outlined_svg(src_file.read_text(encoding="utf-8"), code)
+            (outline_dir / f"{code}.svg").write_text(outlined, encoding="utf-8")
+    print(f"[+] Набор '{OUTLINE_SET}' собран из '{OUTLINE_SOURCE}'")
 
 
 if __name__ == "__main__":

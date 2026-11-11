@@ -96,21 +96,44 @@ class SoundEngine {
         osc.stop(stopTime + 0.01);
     }
 
-    private playSample(file: string, volume: number = 0.75, fallbackFn?: () => void): void {
-        if (typeof window === 'undefined' || typeof Audio === 'undefined') {
-            fallbackFn?.();
-            return;
+    /**
+     * Стук фигуры о доску: короткий всплеск шума через полосовой фильтр. Звуки синтезируются
+     * целиком — готовых записей в проекте нет (см. ATTRIBUTION.md), поэтому нет и вопросов
+     * о лицензии на них.
+     */
+    private playKnock(volume: number = 0.5, centerFreq: number = 950, delaySec: number = 0): void {
+        const ctx = this.getContext();
+        if (!ctx) return;
+
+        const durationSec = 0.07;
+        const frameCount = Math.max(1, Math.floor(ctx.sampleRate * durationSec));
+        const buffer = ctx.createBuffer(1, frameCount, ctx.sampleRate);
+        const samples = buffer.getChannelData(0);
+        for (let i = 0; i < frameCount; i++) {
+            // Шум с быстрым спадом: резкая атака и короткий «деревянный» хвост.
+            samples[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / frameCount, 3);
         }
-        try {
-            const audio = new Audio(`/assets/sounds/${file}`);
-            audio.volume = volume;
-            audio.currentTime = 0;
-            audio.play().catch(() => {
-                fallbackFn?.();
-            });
-        } catch {
-            fallbackFn?.();
-        }
+
+        const startTime = ctx.currentTime + delaySec;
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+
+        const filter = ctx.createBiquadFilter();
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(centerFreq, startTime);
+        filter.Q.setValueAtTime(1.4, startTime);
+
+        const gain = ctx.createGain();
+        gain.gain.setValueAtTime(volume, startTime);
+        gain.gain.exponentialRampToValueAtTime(0.0001, startTime + durationSec);
+
+        source.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+        source.start(startTime);
+
+        // Низкий «корпус» удара — без него стук звучит как щелчок.
+        this.playTone(centerFreq / 5.5, 0.06, delaySec, 'triangle', volume * 0.3, centerFreq / 11);
     }
 
     public play(event: SoundEventType): void {
@@ -118,36 +141,28 @@ class SoundEngine {
 
         switch (event) {
             case 'move':
-                this.playSample('Move.mp3', 0.8, () => {
-                    this.playTone(170, 0.065, 0, 'triangle', 0.16, 85);
-                });
+                this.playKnock(0.5, 950);
                 break;
 
             case 'capture':
-                this.playSample('Capture.mp3', 0.85, () => {
-                    this.playTone(260, 0.075, 0, 'sawtooth', 0.15, 95);
-                });
+                // Взятие: два удара подряд — фигура снята, фигура поставлена.
+                this.playKnock(0.55, 1500);
+                this.playKnock(0.6, 800, 0.045);
                 break;
 
             case 'castle':
-                this.playSample('Move.mp3', 0.75);
-                setTimeout(() => {
-                    if (!this.muted) {
-                        this.playSample('Move.mp3', 0.85, () => {
-                            this.playTone(190, 0.07, 0, 'triangle', 0.15, 100);
-                        });
-                    }
-                }, 95);
+                this.playKnock(0.45, 950);
+                this.playKnock(0.5, 850, 0.095);
                 break;
 
             case 'check':
-                this.playSample('Capture.mp3', 0.55);
+                this.playKnock(0.4, 1100);
                 this.playTone(587.33, 0.11, 0, 'triangle', 0.16);
                 this.playTone(880.0, 0.24, 0.08, 'sine', 0.18, 830.0);
                 break;
 
             case 'promote':
-                this.playSample('Move.mp3', 0.65);
+                this.playKnock(0.4, 950);
                 this.playTone(523.25, 0.10, 0, 'triangle', 0.14);
                 this.playTone(659.25, 0.10, 0.07, 'triangle', 0.15);
                 this.playTone(783.99, 0.12, 0.14, 'triangle', 0.16);
@@ -164,7 +179,6 @@ class SoundEngine {
                 break;
 
             case 'start':
-                this.playSample('GenericNotify.mp3', 0.7);
                 this.playTone(440.0, 0.12, 0, 'triangle', 0.12);
                 this.playTone(554.37, 0.14, 0.09, 'triangle', 0.13);
                 this.playTone(659.25, 0.26, 0.18, 'sine', 0.15);
