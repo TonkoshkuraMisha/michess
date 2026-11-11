@@ -27,3 +27,4 @@ _project_snapshot
 make_snapshot.py
 *.log
 *.sqlite3
+backups
