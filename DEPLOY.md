@@ -69,10 +69,10 @@ nginx в образе `web` слушает только HTTP. TLS заверша
 на том же диске не переживёт потерю диска или сервера.
 
     # снимок прямо сейчас (например, перед обновлением с миграциями)
-    docker compose -f docker-compose.prod.yml run --rm backup once
+    docker compose -f docker-compose.prod.yml run --rm --no-deps backup once
 
     # проверка: последний снимок восстанавливается во временную базу и читается
-    docker compose -f docker-compose.prod.yml run --rm backup verify
+    docker compose -f docker-compose.prod.yml run --rm --no-deps backup verify
 
 Проверяйте восстановление регулярно (хотя бы раз в неделю, например cron-задачей с `verify`):
 снимок, который не восстанавливается, обнаружится только в день аварии.
@@ -80,7 +80,7 @@ nginx в образе `web` слушает только HTTP. TLS заверша
 ### Восстановление
 
     docker compose -f docker-compose.prod.yml stop api worker
-    docker compose -f docker-compose.prod.yml run --rm backup restore michess_20261111_094729.dump
+    docker compose -f docker-compose.prod.yml run --rm --no-deps backup restore michess_20261111_094729.dump
     docker compose -f docker-compose.prod.yml up -d
 
 `restore` заменяет содержимое рабочей базы одной транзакцией (при ошибке база остаётся как
