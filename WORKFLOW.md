@@ -57,8 +57,18 @@
 
 1. Если менялся Python-код (из корня проекта):
 
-   python -m flake8 src tests scripts --count --select=E9,F63,F7,F82 --show-source --statistics
-   python -m pytest -v
+   pip install -r requirements-dev.txt   # один раз: ruff, mypy, pytest-cov
+   ruff check .                          # линтер (правила — pyproject.toml), любое замечание роняет CI
+   mypy                                  # проверка типов src/
+   python -m pytest --cov                # тесты и покрытие (порог — pyproject.toml)
+
+   Интеграционные тесты (`tests/integration`) запускаются только при заданных `TEST_DATABASE_URL` и
+   `TEST_REDIS_URL` и **удаляют все таблицы** в указанной базе — используйте отдельную базу, не рабочую:
+
+   docker exec michess-db-1 psql -U michess_user -d michess_db -c "CREATE DATABASE michess_test"
+   $env:TEST_DATABASE_URL = "postgresql+asyncpg://michess_user:michess_password@localhost:15432/michess_test"
+   $env:TEST_REDIS_URL = "redis://localhost:6379/15"
+   python -m pytest tests/integration
 
 2. Если менялся React/TypeScript-код (фронтенд):
 
