@@ -3,12 +3,7 @@
 import {useState, useEffect, useRef, useCallback} from 'react';
 import {useNavigate, useParams} from 'react-router-dom';
 import {Chess} from 'chess.js';
-import {
-    Users, Sword,
-    Loader2, Play, Clock, ChevronDown, ChevronUp, Palette,
-    RefreshCw, ListOrdered, Bot, MessageSquareQuote, Eye,
-    Sliders, Zap, X, Link2, Copy, Check, Radio, Volume2, VolumeX
-} from 'lucide-react';
+import {ListOrdered, Bot, Zap, Radio} from 'lucide-react';
 import {gameSocket} from '../services/gameSocket';
 import {soundEngine, resolveMoveSound} from '../services/soundEngine';
 import type {SoundEventType} from '../services/soundEngine';
@@ -22,7 +17,7 @@ import {
     getHarmoniousPieceStyle
 } from '../config/boardAppearance';
 import type {BoardTheme} from '../config/boardAppearance';
-import {HISTORICAL_BOTS, HISTORICAL_BOTS_LIST} from '../config/champions';
+import {HISTORICAL_BOTS} from '../config/champions';
 import type {HistoricalBotId, HistoricalBotProfile} from '../config/champions';
 import {DEFAULT_TIME_CONTROL, TIME_CONTROLS} from '../config/timeControls';
 import type {TimeControlOption, TimeControlGroup} from '../config/timeControls';
@@ -42,6 +37,12 @@ import {BoardNavigationControls} from './chessboard/BoardNavigationControls';
 import {GameChatPanel} from './chessboard/GameChatPanel';
 import {PlayerInfoBar} from './chessboard/PlayerInfoBar';
 import {GameControlsPanel} from './chessboard/GameControlsPanel';
+import {GameHallHeader} from './chessboard/GameHallHeader';
+import {TimeControlPicker} from './chessboard/TimeControlPicker';
+import {MatchmakingPanel} from './chessboard/MatchmakingPanel';
+import {HistoricalBotsPanel} from './chessboard/HistoricalBotsPanel';
+import {LobbyPanel} from './chessboard/LobbyPanel';
+import {AppearancePickerDropdown} from './chessboard/AppearancePickerDropdown';
 
 export {MIN_BOARD_SIZE, MAX_BOARD_SIZE, getMaxViewportBoardSize, getDefaultBoardSize, TIME_CONTROLS};
 export type {PromotionPiece, TimeControlOption, TimeControlGroup};
@@ -258,6 +259,11 @@ export default function Chessboard() {
     const handlePieceSetChange = (setId: string) => {
         setPieceSetKey(setId);
         localStorage.setItem('michess_piece_set', setId);
+    };
+
+    const handleBoardSizeChange = (size: number) => {
+        setBoardSize(size);
+        localStorage.setItem('michess_board_size', String(size));
     };
 
     useEffect(() => {
@@ -949,239 +955,50 @@ export default function Chessboard() {
             <div
                 className="w-full xl:w-[400px] 2xl:w-[440px] xl:h-full bg-acacia p-3 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-2 text-boxwood-light order-2 xl:order-1 shrink-0 xl:overflow-hidden">
 
-                <div className="border-b border-acacia-light pb-2 flex justify-between items-center shrink-0">
-                    <div className="flex items-center gap-2">
-                        <div className="p-1.5 bg-acacia-dark rounded-md border border-amber-600/30 text-amber-400">
-                            <Sword size={16}/>
-                        </div>
-                        <div>
-                            <div className="text-[11px] tracking-wider uppercase text-boxwood/75 font-bold">
-                                Игровой зал
-                            </div>
-                            <div className="text-xs font-bold flex items-center gap-1.5 font-mono">
-                                <span className="text-boxwood/80 font-sans">Счёт сессии:</span>
-                                <span className="text-emerald-400">+{sessionStats.wins}</span>
-                                <span className="text-red-400">-{sessionStats.losses}</span>
-                                <span className="text-gray-300">={sessionStats.draws}</span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center gap-1.5">
-                        <button
-                            type="button"
-                            onClick={handleToggleSound}
-                            className={`p-1.5 rounded-md border transition cursor-pointer shadow-sm ${
-                                isSoundMuted
-                                    ? 'bg-red-950/60 border-red-800/60 text-red-300 hover:bg-red-900/60'
-                                    : 'bg-acacia-dark hover:bg-black/50 border-amber-800/50 text-amber-300'
-                            }`}
-                            title={isSoundMuted ? 'Включить звук' : 'Выключить звук'}
-                        >
-                            {isSoundMuted ? <VolumeX size={15}/> : <Volume2 size={15}/>}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => setIsManualFlip(prev => !prev)}
-                            className="px-2.5 py-1 rounded-md bg-acacia-dark hover:bg-black/50 border border-amber-800/50 text-xs font-bold text-amber-200 flex items-center gap-1.5 transition cursor-pointer shadow-sm"
-                            title="Перевернуть доску"
-                        >
-                            <RefreshCw size={13} className="text-amber-400"/> Перевернуть
-                        </button>
-                    </div>
-                </div>
+                <GameHallHeader
+                    sessionStats={sessionStats}
+                    isSoundMuted={isSoundMuted}
+                    onToggleSound={handleToggleSound}
+                    onFlipBoard={() => setIsManualFlip(prev => !prev)}
+                />
 
                 <div
                     className="bg-acacia-dark p-2.5 rounded-md border border-amber-900/50 flex flex-col gap-2 shadow-inner shrink-0">
-                    <div className="flex items-center justify-between">
-                        <label
-                            className="text-xs uppercase tracking-wider text-boxwood/85 flex items-center gap-1.5 font-bold">
-                            <Clock className="text-amber-500" size={13}/> Контроль времени
-                        </label>
-                        <span
-                            className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-900/45 text-amber-300 border border-amber-600/30">
-                            {TIME_CONTROLS.find(g => g.category === selectedTimeControl.category)?.title}
-                        </span>
-                    </div>
+                    <TimeControlPicker
+                        selectedTimeControl={selectedTimeControl}
+                        manualBaseMinutes={manualBaseMinutes}
+                        manualIncSeconds={manualIncSeconds}
+                        onManualBaseMinutesChange={setManualBaseMinutes}
+                        onManualIncSecondsChange={setManualIncSeconds}
+                        isOpen={isTimeDropdownOpen}
+                        onToggleOpen={() => setIsTimeDropdownOpen(!isTimeDropdownOpen)}
+                        onSelect={(opt) => {
+                            setSelectedTimeControl(opt);
+                            if (opt.isManual) {
+                                setManualBaseMinutes(Math.max(1, Math.round(opt.base)));
+                                setManualIncSeconds(opt.inc);
+                            }
+                            setIsTimeDropdownOpen(false);
+                        }}
+                        disabled={isSearching || !!gameId}
+                        dropdownRef={timeDropdownRef}
+                    />
 
-                    <div className="relative w-full" ref={timeDropdownRef}>
-                        <button
-                            type="button"
-                            disabled={isSearching || !!gameId}
-                            onClick={() => setIsTimeDropdownOpen(!isTimeDropdownOpen)}
-                            className="w-full bg-black/45 border border-amber-700/50 hover:bg-black/65 disabled:opacity-50 transition text-amber-200 rounded-md px-2.5 py-1.5 text-xs sm:text-sm font-bold outline-none cursor-pointer flex justify-between items-center shadow-inner gap-2"
-                        >
-                            <span className="truncate">
-                                {selectedTimeControl.label}
-                                {selectedTimeControl.isManual ? ` (${manualBaseMinutes}м + ${manualIncSeconds}с)` : ''}
-                            </span>
-                            {isTimeDropdownOpen ? <ChevronUp className="text-amber-400 shrink-0" size={15}/> :
-                                <ChevronDown className="text-amber-400 shrink-0" size={15}/>}
-                        </button>
-
-                        {isTimeDropdownOpen && (
-                            <div
-                                className="absolute z-50 w-full top-full mt-1 bg-[#1A120B] border-2 border-amber-700/60 rounded-md shadow-2xl max-h-72 overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-black/20 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
-                                {TIME_CONTROLS.map((group) => (
-                                    <div key={group.category}>
-                                        <div
-                                            className="px-3 py-1.5 text-xs uppercase tracking-wider text-amber-400 bg-black/90 font-bold sticky top-0 z-10 border-b border-t border-amber-900/40 first:border-t-0">
-                                            {group.title}
-                                        </div>
-                                        {group.options.map((opt) => {
-                                            const isSelected = selectedTimeControl.id === opt.id;
-                                            return (
-                                                <button
-                                                    key={opt.id}
-                                                    type="button"
-                                                    className={`w-full text-left px-3 py-2 text-xs sm:text-sm transition flex justify-between items-start gap-2 border-b border-amber-950/30 cursor-pointer ${
-                                                        isSelected
-                                                            ? 'bg-amber-900/45 text-amber-300 font-bold'
-                                                            : 'text-amber-100/90 hover:bg-amber-900/25 hover:text-amber-200'
-                                                    }`}
-                                                    onClick={() => {
-                                                        setSelectedTimeControl(opt);
-                                                        if (opt.isManual) {
-                                                            setManualBaseMinutes(Math.max(1, Math.round(opt.base)));
-                                                            setManualIncSeconds(opt.inc);
-                                                        }
-                                                        setIsTimeDropdownOpen(false);
-                                                    }}
-                                                >
-                                                    <div className="min-w-0">
-                                                        <span className="truncate font-bold">{opt.label}</span>
-                                                        <div className="text-xs text-boxwood/70 mt-0.5 leading-snug">
-                                                            {opt.details}
-                                                        </div>
-                                                    </div>
-                                                    {isSelected && <div
-                                                        className="w-2 h-2 rounded-full bg-amber-500 shrink-0 mt-1.5"/>}
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                ))}
-                            </div>
-                        )}
-                    </div>
-
-                    {selectedTimeControl.isManual && (
-                        <div
-                            className="p-2 rounded bg-black/40 border border-amber-700/40 flex flex-col gap-1.5 text-xs">
-                            <div
-                                className="text-[11px] uppercase tracking-wider text-amber-400 font-bold flex items-center gap-1.5">
-                                <Sliders size={12}/> Ручная настройка времени
-                            </div>
-                            <div className="grid grid-cols-2 gap-2">
-                                <label className="flex flex-col gap-0.5 text-xs text-boxwood/85">
-                                    <span>Время (мин):</span>
-                                    <input
-                                        type="number"
-                                        min={1}
-                                        max={240}
-                                        value={manualBaseMinutes}
-                                        onChange={(e) => setManualBaseMinutes(Math.max(1, Math.min(240, Number(e.target.value) || 1)))}
-                                        className="bg-black/60 border border-amber-700/50 rounded px-2 py-1 text-amber-200 font-mono text-xs outline-none"
-                                    />
-                                </label>
-                                <label className="flex flex-col gap-0.5 text-xs text-boxwood/85">
-                                    <span>Бонус / Delay (сек):</span>
-                                    <input
-                                        type="number"
-                                        min={0}
-                                        max={180}
-                                        value={manualIncSeconds}
-                                        onChange={(e) => setManualIncSeconds(Math.max(0, Math.min(180, Number(e.target.value) || 0)))}
-                                        className="bg-black/60 border border-amber-700/50 rounded px-2 py-1 text-amber-200 font-mono text-xs outline-none"
-                                    />
-                                </label>
-                            </div>
-                        </div>
-                    )}
-
-                    {!gameId ? (
-                        <div className="grid grid-cols-[1fr_auto] gap-2">
-                            <button
-                                onClick={isSearching ? cancelMatchmaking : startMatchmaking}
-                                className={`flex items-center justify-center gap-2 px-3 py-1.5 font-bold text-xs sm:text-sm rounded-md transition shadow border cursor-pointer ${
-                                    isSearching
-                                        ? 'bg-red-900/85 text-red-100 border-red-700 hover:bg-red-900'
-                                        : 'bg-boxwood text-acacia-dark border-amber-700/50 hover:bg-boxwood-light'
-                                }`}
-                            >
-                                {isSearching ? <Loader2 className="animate-spin" size={15}/> : <Users size={15}/>}
-                                {isSearching ? 'Отменить поиск' : 'Найти соперника'}
-                            </button>
-
-                            <button
-                                type="button"
-                                onClick={() => setShowInvitePanel(prev => !prev)}
-                                className={`px-2.5 py-1.5 rounded-md border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow ${
-                                    showInvitePanel
-                                        ? 'bg-amber-700 text-white border-amber-400'
-                                        : 'bg-black/45 hover:bg-black/65 text-amber-200 border-amber-700/50'
-                                }`}
-                                title="Создать ссылку для игры с другом"
-                            >
-                                <Link2 size={14}/> С другом
-                            </button>
-                        </div>
-                    ) : (
-                        <div
-                            className="text-center py-1.5 px-3 rounded bg-emerald-950/60 border border-emerald-700/50 text-emerald-300 text-xs sm:text-sm font-bold">
-                            {gameOverResult ? `Партия завершена (${gameOverResult})` : 'Идет рейтинговая партия'}
-                        </div>
-                    )}
-
-                    {showInvitePanel && !gameId && (
-                        <div className="p-2 rounded bg-black/45 border border-amber-700/40 flex flex-col gap-1.5">
-                            <div className="flex items-center justify-between text-xs font-bold text-amber-200">
-                                <span>Цвет в партии с другом:</span>
-                                <div
-                                    className="flex items-center gap-1 bg-black/50 p-0.5 rounded border border-amber-900/50">
-                                    {(['white', 'random', 'black'] as const).map(c => (
-                                        <button
-                                            key={c}
-                                            type="button"
-                                            onClick={() => setInviteColorPref(c)}
-                                            className={`px-2 py-0.5 rounded text-xs font-bold transition cursor-pointer ${
-                                                inviteColorPref === c ? 'bg-amber-700 text-white' : 'text-boxwood/70 hover:text-amber-200'
-                                            }`}
-                                        >
-                                            {c === 'white' ? '♔ Белые' : c === 'black' ? '♚ Чёрные' : '🎲 Случайно'}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-
-                            {!createdInviteCode ? (
-                                <button
-                                    type="button"
-                                    onClick={handleCreatePrivateInvite}
-                                    className="w-full py-1.5 px-3 rounded bg-amber-800/70 hover:bg-amber-700 text-amber-100 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow"
-                                >
-                                    <Link2 size={13}/> Сгенерировать и скопировать ссылку
-                                </button>
-                            ) : (
-                                <div className="flex items-center gap-1.5">
-                                    <input
-                                        type="text"
-                                        readOnly
-                                        value={`${window.location.origin}/challenge/${createdInviteCode}`}
-                                        className="flex-1 bg-black/60 border border-amber-700/50 rounded px-2 py-1 text-xs font-mono text-amber-200 outline-none"
-                                    />
-                                    <button
-                                        type="button"
-                                        onClick={handleCopyInviteLink}
-                                        className="px-2.5 py-1 rounded bg-emerald-800 hover:bg-emerald-700 text-emerald-100 text-xs font-bold flex items-center gap-1 shrink-0 cursor-pointer"
-                                    >
-                                        {inviteCopied ? <Check size={13}/> : <Copy size={13}/>}
-                                        {inviteCopied ? 'Скопировано' : 'Копия'}
-                                    </button>
-                                </div>
-                            )}
-                        </div>
-                    )}
+                    <MatchmakingPanel
+                        gameId={gameId}
+                        gameOverResult={gameOverResult}
+                        isSearching={isSearching}
+                        onStartMatchmaking={startMatchmaking}
+                        onCancelMatchmaking={cancelMatchmaking}
+                        showInvitePanel={showInvitePanel}
+                        onToggleInvitePanel={() => setShowInvitePanel(prev => !prev)}
+                        inviteColorPref={inviteColorPref}
+                        onInviteColorPrefChange={setInviteColorPref}
+                        createdInviteCode={createdInviteCode}
+                        inviteCopied={inviteCopied}
+                        onCreatePrivateInvite={handleCreatePrivateInvite}
+                        onCopyInviteLink={handleCopyInviteLink}
+                    />
                 </div>
 
                 <div
@@ -1216,239 +1033,30 @@ export default function Chessboard() {
                 </div>
 
                 {leftSectionTab === 'bots' ? (
-                    <div
-                        className="flex-1 min-h-0 bg-acacia-dark p-2.5 rounded-md border border-amber-700/40 flex flex-col justify-between gap-2 shadow-inner overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
-                        <div className="grid grid-cols-2 gap-1.5">
-                            {HISTORICAL_BOTS_LIST.map((botItem) => {
-                                const isSelected = selectedBotId === botItem.id;
-                                return (
-                                    <button
-                                        key={botItem.id}
-                                        type="button"
-                                        onClick={() => setSelectedBotId(botItem.id)}
-                                        className={`p-1.5 rounded-md text-left transition cursor-pointer flex items-center gap-2 border ${
-                                            isSelected
-                                                ? 'bg-amber-800/80 text-white border-amber-400 shadow'
-                                                : 'bg-black/35 text-boxwood/85 border-amber-900/40 hover:border-amber-600/50 hover:bg-black/55'
-                                        }`}
-                                    >
-                                        <img
-                                            src={botItem.avatar}
-                                            alt={botItem.shortName}
-                                            onError={(e) => {
-                                                const img = e.target as HTMLImageElement;
-                                                if (!img.src.endsWith(botItem.fallbackAvatar)) {
-                                                    img.src = botItem.fallbackAvatar;
-                                                }
-                                            }}
-                                            className={`w-8 h-8 rounded-full object-cover shrink-0 border ${
-                                                isSelected ? 'border-amber-300' : 'border-amber-700/60'
-                                            }`}
-                                        />
-                                        <div className="min-w-0 flex-1">
-                                            <div className="text-xs font-bold truncate leading-tight">
-                                                {botItem.shortName}
-                                            </div>
-                                            <div className="text-[11px] font-mono text-amber-300/90">
-                                                Эло {botItem.rating}
-                                            </div>
-                                        </div>
-                                    </button>
-                                );
-                            })}
-                        </div>
-
-                        <div className="p-2.5 rounded-md bg-black/40 border border-amber-800/50 flex flex-col gap-2">
-                            <div className="flex items-center gap-2.5">
-                                <img
-                                    src={selectedBotProfile.avatar}
-                                    alt={selectedBotProfile.name}
-                                    onError={(e) => {
-                                        const img = e.target as HTMLImageElement;
-                                        if (!img.src.endsWith(selectedBotProfile.fallbackAvatar)) {
-                                            img.src = selectedBotProfile.fallbackAvatar;
-                                        }
-                                    }}
-                                    className="w-12 h-12 rounded-lg object-cover border-2 border-amber-500/80 shadow-md shrink-0"
-                                />
-                                <div className="min-w-0 flex-1">
-                                    <div className="flex items-center justify-between gap-1">
-                                        <span className="text-sm font-bold text-amber-200 truncate">
-                                            {selectedBotProfile.name}
-                                        </span>
-                                        {activeBot === selectedBotProfile.id && !gameOverResult && (
-                                            <span
-                                                className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-600/50 shrink-0">
-                                                В игре
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="text-xs text-amber-400 font-semibold">
-                                        {selectedBotProfile.title}
-                                    </div>
-                                    <div className="text-[11px] text-boxwood/75 font-mono">
-                                        Годы: {selectedBotProfile.era} • Рейтинг ~{selectedBotProfile.rating}
-                                    </div>
-                                </div>
-                            </div>
-
-                            <p className="text-xs italic text-boxwood/90 leading-snug bg-black/30 p-2 rounded border border-amber-900/30">
-                                «{selectedBotProfile.motto}»
-                            </p>
-
-                            <div className="grid grid-cols-3 gap-1.5">
-                                <button
-                                    type="button"
-                                    disabled={!!gameId && !gameOverResult}
-                                    onClick={() => startHistoricalBotGame(selectedBotId, 'white')}
-                                    className="py-1.5 px-2 text-xs font-bold rounded-md bg-boxwood text-acacia-dark hover:bg-boxwood-light disabled:opacity-40 transition cursor-pointer shadow"
-                                >
-                                    ♔ Белыми
-                                </button>
-                                <button
-                                    type="button"
-                                    disabled={!!gameId && !gameOverResult}
-                                    onClick={() => startHistoricalBotGame(selectedBotId, 'random')}
-                                    className="py-1.5 px-2 text-xs font-bold rounded-md bg-amber-700 text-white border border-amber-500/50 hover:bg-amber-600 disabled:opacity-40 transition cursor-pointer shadow"
-                                >
-                                    🎲 Случайно
-                                </button>
-                                <button
-                                    type="button"
-                                    disabled={!!gameId && !gameOverResult}
-                                    onClick={() => startHistoricalBotGame(selectedBotId, 'black')}
-                                    className="py-1.5 px-2 text-xs font-bold rounded-md bg-black/70 text-amber-200 border border-amber-700/60 hover:bg-black disabled:opacity-40 transition cursor-pointer shadow"
-                                >
-                                    ♚ Чёрными
-                                </button>
-                            </div>
-                        </div>
-
-                        {activeBotProfile && (
-                            <div
-                                className="p-2 rounded-md bg-black/55 border border-amber-600/40 text-xs text-amber-100">
-                                <div
-                                    className="font-bold text-amber-400 mb-0.5 flex items-center justify-between text-xs">
-                                    <span className="flex items-center gap-1.5">
-                                        <MessageSquareQuote size={13}/> Мысль ({activeBotProfile.shortName}):
-                                    </span>
-                                    {isBotThinking && (
-                                        <span className="animate-pulse text-amber-300 font-mono text-[11px]">
-                                            обдумывает ход...
-                                        </span>
-                                    )}
-                                </div>
-                                <div className="text-xs text-boxwood-light leading-snug">
-                                    {botComment || 'Посмотрим, как развернётся борьба за центр.'}
-                                </div>
-                            </div>
-                        )}
-                    </div>
+                    <HistoricalBotsPanel
+                        selectedBotId={selectedBotId}
+                        onSelectBot={setSelectedBotId}
+                        selectedBotProfile={selectedBotProfile}
+                        activeBot={activeBot}
+                        activeBotProfile={activeBotProfile}
+                        gameId={gameId}
+                        gameOverResult={gameOverResult}
+                        isBotThinking={isBotThinking}
+                        botComment={botComment}
+                        onStartBotGame={startHistoricalBotGame}
+                    />
                 ) : (
-                    <div
-                        className="flex-1 min-h-0 bg-acacia-dark rounded-md border border-amber-900/50 p-2.5 flex flex-col shadow-inner">
-                        <div
-                            className="grid grid-cols-2 gap-1.5 p-1 bg-black/40 rounded border border-amber-900/40 mb-2 shrink-0">
-                            <button
-                                type="button"
-                                onClick={() => setLobbyTab('lobby')}
-                                className={`py-1.5 px-2 rounded text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                                    lobbyTab === 'lobby'
-                                        ? 'bg-amber-700 text-amber-100 shadow'
-                                        : 'text-boxwood/70 hover:text-amber-200'
-                                }`}
-                            >
-                                <span>Вызовы в лобби</span>
-                                <span
-                                    className="text-xs font-mono px-1.5 rounded bg-black/40">{filteredQueue.length}</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setLobbyTab('live')}
-                                className={`py-1.5 px-2 rounded text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                                    lobbyTab === 'live'
-                                        ? 'bg-amber-700 text-amber-100 shadow'
-                                        : 'text-boxwood/70 hover:text-amber-200'
-                                }`}
-                            >
-                                <Radio size={13}
-                                       className={liveGames.length > 0 ? 'text-emerald-400 animate-pulse' : ''}/>
-                                <span>Идут сейчас (Live)</span>
-                                <span className="text-xs font-mono px-1.5 rounded bg-black/40">{liveGames.length}</span>
-                            </button>
-                        </div>
-
-                        <div
-                            className="flex-1 min-h-0 overflow-y-auto space-y-2 text-sm [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
-                            {lobbyTab === 'lobby' ? (
-                                filteredQueue.length === 0 ? (
-                                    <div
-                                        className="h-full flex flex-col items-center justify-center p-4 text-boxwood/60 text-center text-xs sm:text-sm">
-                                        <span>
-                                            {isSearching
-                                                ? 'Вы в очереди. Ожидание соперников...'
-                                                : 'В лобби пока нет открытых вызовов. Нажмите «Найти соперника» выше.'}
-                                        </span>
-                                    </div>
-                                ) : (
-                                    filteredQueue.map((p) => (
-                                        <div
-                                            key={p.user_id}
-                                            className="p-2.5 bg-black/45 rounded-md border border-amber-600/30 flex justify-between items-center hover:border-amber-500/60 transition"
-                                        >
-                                            <div>
-                                                <span className="text-amber-300 font-bold text-sm">{p.username}</span>
-                                                <div className="text-xs text-boxwood/75 font-mono">
-                                                    Рейтинг: {p.rating} • {Math.round(p.base_time_ms / 60000)}+{(p.increment_ms || 0) / 1000}
-                                                </div>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                disabled={!!gameId && !gameOverResult}
-                                                onClick={() => acceptChallenge(p.user_id)}
-                                                className="px-3 py-1.5 bg-emerald-800 hover:bg-emerald-700 disabled:opacity-40 text-emerald-100 rounded text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer"
-                                            >
-                                                <Play size={13}/> Принять
-                                            </button>
-                                        </div>
-                                    ))
-                                )
-                            ) : (
-                                liveGames.length === 0 ? (
-                                    <div
-                                        className="h-full flex flex-col items-center justify-center p-4 text-boxwood/60 text-center text-xs sm:text-sm">
-                                        <span>Сейчас нет активных PvP-партий.</span>
-                                    </div>
-                                ) : (
-                                    liveGames.map((lg) => (
-                                        <div
-                                            key={lg.game_id}
-                                            className="p-2.5 bg-black/45 rounded-md border border-amber-600/30 flex justify-between items-center hover:border-amber-500/60 transition gap-2"
-                                        >
-                                            <div className="min-w-0">
-                                                <div className="text-amber-200 font-bold truncate text-sm">
-                                                    {lg.white_username} <span
-                                                    className="text-boxwood/50">vs</span> {lg.black_username}
-                                                </div>
-                                                <div className="text-xs text-boxwood/75 font-mono">
-                                                    {Math.round(lg.base_time_ms / 60000)}+{(lg.increment_ms || 0) / 1000} •
-                                                    👁 {lg.spectators_count}
-                                                </div>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                disabled={!!gameId && !gameOverResult}
-                                                onClick={() => handleSpectateGame(lg.game_id)}
-                                                className="px-3 py-1.5 bg-amber-800 hover:bg-amber-700 disabled:opacity-40 text-amber-100 rounded text-xs font-bold transition flex items-center gap-1.5 shrink-0 shadow cursor-pointer"
-                                            >
-                                                <Eye size={13}/> Смотреть
-                                            </button>
-                                        </div>
-                                    ))
-                                )
-                            )}
-                        </div>
-                    </div>
+                    <LobbyPanel
+                        lobbyTab={lobbyTab}
+                        onLobbyTabChange={setLobbyTab}
+                        queuePlayers={filteredQueue}
+                        liveGames={liveGames}
+                        isSearching={isSearching}
+                        gameId={gameId}
+                        gameOverResult={gameOverResult}
+                        onAcceptChallenge={acceptChallenge}
+                        onSpectateGame={handleSpectateGame}
+                    />
                 )}
             </div>
 
@@ -1697,163 +1305,20 @@ export default function Chessboard() {
                     </div>
 
                     <div className="flex items-center gap-1.5 shrink-0">
-                        <div className="relative">
-                            <button
-                                type="button"
-                                onClick={() => setShowAppearanceDropdown(prev => !prev)}
-                                className={`px-2.5 py-1 rounded-md border text-xs font-bold flex items-center gap-1.5 transition cursor-pointer shadow-sm ${
-                                    showAppearanceDropdown
-                                        ? 'bg-amber-700 text-white border-amber-400'
-                                        : 'bg-acacia-dark hover:bg-black/45 text-amber-200 border-amber-800/50'
-                                }`}
-                                title="Выбрать комплект фигур, тему и размер доски"
-                            >
-                                <span
-                                    className="w-5 h-5 rounded-xs flex items-center justify-center border border-black/50 shrink-0"
-                                    style={{backgroundColor: activeTheme.dark}}
-                                >
-                                    <img
-                                        src={getPieceSvgUrl(pieceSetKey, 'w', 'N')}
-                                        alt=""
-                                        className="w-4 h-4 object-contain"
-                                    />
-                                </span>
-                                <span
-                                    className="hidden sm:inline">{activePieceSet.shortName} • {activeTheme.name}</span>
-                                <span className="sm:hidden">Вид</span>
-                                {showAppearanceDropdown ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
-                            </button>
-
-                            {showAppearanceDropdown && (
-                                <div
-                                    className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-[#261C14] border-2 border-amber-600/80 rounded-lg shadow-2xl z-50 p-3.5 flex flex-col gap-3 text-boxwood-light">
-                                    <div
-                                        className="flex justify-between items-center border-b border-amber-900/50 pb-2">
-                                        <span className="font-bold text-amber-200 text-sm flex items-center gap-1.5">
-                                            <Palette size={15} className="text-amber-400"/> Оформление фигур и доски
-                                        </span>
-                                        <button
-                                            type="button"
-                                            onClick={() => setShowAppearanceDropdown(false)}
-                                            className="text-boxwood/60 hover:text-white cursor-pointer"
-                                        >
-                                            <X size={15}/>
-                                        </button>
-                                    </div>
-
-                                    <div className="flex flex-col gap-1.5">
-                                        <div className="flex justify-between items-center text-xs">
-                                            <span className="font-bold text-boxwood/90">♟ Комплект фигур:</span>
-                                            <span className="text-amber-400 font-bold">{activePieceSet.name}</span>
-                                        </div>
-                                        <div className="grid grid-cols-5 gap-1.5">
-                                            {Object.values(PIECE_SETS).map((pset) => {
-                                                const isCurrent = pset.id === activePieceSet.id;
-                                                return (
-                                                    <button
-                                                        key={pset.id}
-                                                        type="button"
-                                                        onClick={() => handlePieceSetChange(pset.id)}
-                                                        title={pset.description}
-                                                        className={`flex flex-col items-center gap-1 p-1.5 rounded-md border text-xs font-bold transition cursor-pointer ${
-                                                            isCurrent
-                                                                ? 'bg-amber-900/60 border-amber-400 text-amber-200 shadow'
-                                                                : 'bg-black/35 border-amber-900/40 text-boxwood/75 hover:bg-black/55 hover:text-amber-200'
-                                                        }`}
-                                                    >
-                                                        <div
-                                                            className="w-10 h-9 rounded flex items-center justify-center border border-black/50 shadow-inner"
-                                                            style={{
-                                                                background: `linear-gradient(90deg, ${activeTheme.dark} 50%, ${activeTheme.light} 50%)`
-                                                            }}
-                                                        >
-                                                            <img
-                                                                src={getPieceSvgUrl(pset.id, 'w', 'N')}
-                                                                alt={pset.shortName}
-                                                                className="w-5 h-5 object-contain"
-                                                            />
-                                                            <img
-                                                                src={getPieceSvgUrl(pset.id, 'b', 'Q')}
-                                                                alt=""
-                                                                className="w-5 h-5 object-contain"
-                                                            />
-                                                        </div>
-                                                        <span className="truncate w-full text-center text-[11px]">
-                                                            {pset.shortName}
-                                                        </span>
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-
-                                    <div className="flex flex-col gap-1.5 pt-2 border-t border-amber-900/40">
-                                        <div className="flex justify-between items-center text-xs">
-                                            <span className="font-bold text-boxwood/90">🎨 Поверхность доски:</span>
-                                            <span className="text-amber-400 font-bold">{activeTheme.name}</span>
-                                        </div>
-                                        <div className="grid grid-cols-5 gap-1.5">
-                                            {Object.values(BOARD_THEMES).map((theme) => {
-                                                const isCurrent = theme.id === activeTheme.id;
-                                                return (
-                                                    <button
-                                                        key={theme.id}
-                                                        type="button"
-                                                        onClick={() => handleThemeChange(theme.id)}
-                                                        className={`flex flex-col items-center gap-1 p-1.5 rounded-md border text-xs font-bold transition cursor-pointer ${
-                                                            isCurrent
-                                                                ? 'bg-amber-900/60 border-amber-400 text-amber-200 shadow'
-                                                                : 'bg-black/35 border-amber-900/40 text-boxwood/75 hover:bg-black/55 hover:text-amber-200'
-                                                        }`}
-                                                    >
-                                                        <div
-                                                            className="w-8 h-8 rounded-xs overflow-hidden grid grid-cols-2 grid-rows-2 border-2 shadow-sm"
-                                                            style={{borderColor: theme.border}}
-                                                        >
-                                                            <div style={{backgroundColor: theme.light}}/>
-                                                            <div style={{backgroundColor: theme.dark}}/>
-                                                            <div style={{backgroundColor: theme.dark}}/>
-                                                            <div style={{backgroundColor: theme.light}}/>
-                                                        </div>
-                                                        <span className="truncate w-full text-center text-[11px]">
-                                                            {theme.name}
-                                                        </span>
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-
-                                    <div
-                                        className="flex items-center justify-between gap-2 pt-2 border-t border-amber-900/40 text-xs">
-                                        <span className="text-boxwood/80 font-bold">Размер: {responsiveBoardPx}px</span>
-                                        <input
-                                            type="range"
-                                            min={MIN_BOARD_SIZE}
-                                            max={getMaxViewportBoardSize()}
-                                            value={boardSize}
-                                            onChange={(e) => {
-                                                const val = Number(e.target.value);
-                                                setBoardSize(val);
-                                                localStorage.setItem('michess_board_size', String(val));
-                                            }}
-                                            className="flex-1 accent-amber-500 cursor-pointer"
-                                        />
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                const fit = getMaxViewportBoardSize();
-                                                setBoardSize(fit);
-                                                localStorage.setItem('michess_board_size', String(fit));
-                                            }}
-                                            className="px-2 py-1 rounded bg-black/45 hover:bg-amber-800/60 border border-amber-700/50 text-amber-200 font-bold cursor-pointer"
-                                        >
-                                            Авто
-                                        </button>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
+                        <AppearancePickerDropdown
+                            isOpen={showAppearanceDropdown}
+                            onToggleOpen={() => setShowAppearanceDropdown(prev => !prev)}
+                            onClose={() => setShowAppearanceDropdown(false)}
+                            activeTheme={activeTheme}
+                            pieceSetKey={pieceSetKey}
+                            activePieceSetName={activePieceSet.name}
+                            activePieceSetShortName={activePieceSet.shortName}
+                            onPieceSetChange={handlePieceSetChange}
+                            onThemeChange={handleThemeChange}
+                            boardSize={boardSize}
+                            responsiveBoardPx={responsiveBoardPx}
+                            onBoardSizeChange={handleBoardSizeChange}
+                        />
 
                         <span
                             className="px-2 py-1 rounded-md bg-acacia-dark border border-amber-700/40 font-mono text-xs text-amber-400 font-bold">

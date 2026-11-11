@@ -272,9 +272,12 @@
   раздельно из-за циклической зависимости вызова хуков (`useClock` нужен `activeBot` раньше,
   чем успевает отработать `useBotGame`); крупные куски состояния (`game`, `gameId`, `myColor`
   и т.п.) остались в самом компоненте, так как разделяются между `useBotGame`/`useGameSocket`/
-  `executeMove` без единого владельца. `TimeControlPicker`, `AppearancePickerDropdown`,
-  `HistoricalBotsPanel`, `LobbyPanel`, `GameHallHeader` и декомпозиция `GameViewer.tsx` —
-  отложены на будущий заход. После каждого шага: `tsc --noEmit`, lint, `vitest run`, `build` — чисто.
+  `executeMove` без единого владельца. Следом выделены оставшиеся презентационные компоненты:
+  `GameHallHeader`, `TimeControlPicker`, `MatchmakingPanel` (поиск соперника и инвайт другу —
+  естественно отделился от самого выбора контроля времени), `HistoricalBotsPanel`, `LobbyPanel`,
+  `AppearancePickerDropdown`. Итог: `Chessboard.tsx` — 1427 строк (было 3239, −56%). Декомпозиция
+  `GameViewer.tsx` остаётся отложенной на будущий заход. После каждого шага: `tsc --noEmit`,
+  lint, `vitest run`, `build` — чисто.
 
 ### - [x] Таск 7.14. Релиз
 
