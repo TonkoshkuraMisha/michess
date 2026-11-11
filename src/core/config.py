@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     Uses Pydantic for environment variable validation.
     """
     PROJECT_NAME: str = "Michess API"
-    VERSION: str = "1.2.0"
+    VERSION: str = "1.2.1"
     API_V1_STR: str = "/api/v1"
 
     # "production" включает строгие проверки при старте (SECRET_KEY) и прячет /docs.
