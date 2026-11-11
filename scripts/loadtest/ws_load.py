@@ -42,6 +42,9 @@ class Stats:
     games_finished: int = 0
     moves: int = 0
     move_latency_ms: list[float] = field(default_factory=list)
+    # (секунда от старта прогона, задержка) — где во времени копятся медленные ходы.
+    timeline: list[tuple[float, float]] = field(default_factory=list)
+    started_at: float = field(default_factory=time.perf_counter)
     errors: Counter = field(default_factory=Counter)
 
 
@@ -145,7 +148,9 @@ async def play_pair(
             )
             if made.get("event") == "error":
                 raise RuntimeError(f"move rejected: {made.get('message')}")
-            stats.move_latency_ms.append((time.perf_counter() - sent) * 1000)
+            latency_ms = (time.perf_counter() - sent) * 1000
+            stats.move_latency_ms.append(latency_ms)
+            stats.timeline.append((sent - stats.started_at, latency_ms))
             stats.moves += 1
             board.push(move)
             version = int(made["state_version"])
@@ -202,6 +207,15 @@ async def run(args: argparse.Namespace, players: list[dict]) -> int:
             f"p50 {percentile(lat, 50):.0f}  p95 {p95:.0f}  p99 {percentile(lat, 99):.0f}  "
             f"max {max(lat):.0f}  mean {statistics.fmean(lat):.0f}"
         )
+    if stats.timeline:
+        print("latency by run time (10 s windows):  window  moves  p50  p95  max")
+        windows: dict[int, list[float]] = {}
+        for at_s, ms in stats.timeline:
+            windows.setdefault(int(at_s // 10), []).append(ms)
+        for w in sorted(windows):
+            vals = windows[w]
+            print(f"                    {w * 10:4d}-{w * 10 + 10:<4d} {len(vals):6d} {percentile(vals, 50):4.0f} "
+                  f"{percentile(vals, 95):4.0f} {max(vals):4.0f}")
     if stats.errors:
         print("errors:")
         for kind, count in stats.errors.most_common():
