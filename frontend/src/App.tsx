@@ -8,6 +8,7 @@ import Profile from './components/Profile';
 import GameViewer from './components/GameViewer';
 import ChampionGames from './components/ChampionGames';
 import Leaderboard from './components/Leaderboard';
+import About from './components/About';
 import {CHAMPIONS_LIST} from './config/champions';
 import {API_BASE_URL} from './config/api';
 import {gameSocket} from './services/gameSocket';
@@ -27,7 +28,8 @@ import {
     LogIn,
     Crown,
     ChevronDown,
-    Trophy
+    Trophy,
+    Scale
 } from 'lucide-react';
 
 interface UserProfile {
@@ -290,6 +292,13 @@ export default function App() {
                     >
                         <Trophy size={19}/>
                     </Link>
+                    <Link
+                        to="/about"
+                        className="p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300"
+                        title="О проекте и лицензиях"
+                    >
+                        <Scale size={19}/>
+                    </Link>
                     <button
                         className="p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300 cursor-pointer"
                         title="Поиск партии"
@@ -422,6 +431,7 @@ export default function App() {
                     <Route path="/profile/:targetUsername" element={<Profile/>}/>
                     <Route path="/game/:gameId" element={<GameViewer/>}/>
                     <Route path="/champions/:championId" element={<ChampionGames/>}/>
+                    <Route path="/about" element={<About/>}/>
                 </Routes>
             </main>
 

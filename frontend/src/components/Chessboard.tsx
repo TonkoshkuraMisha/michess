@@ -1106,7 +1106,7 @@ export default function Chessboard() {
                     {activeTheme.useWoodGrain && (
                         <div
                             className="absolute inset-0 opacity-25 mix-blend-multiply pointer-events-none"
-                            style={{backgroundImage: "url('/assets/textures/wood-grain.png')"}}
+                            style={{backgroundImage: "url('/assets/textures/wood-grain.svg')"}}
                         />
                     )}
 
@@ -1151,7 +1151,7 @@ export default function Chessboard() {
                                         {activeTheme.useWoodGrain && (
                                             <div
                                                 className="absolute inset-0 opacity-15 mix-blend-multiply pointer-events-none"
-                                                style={{backgroundImage: "url('/assets/textures/wood-grain.png')"}}
+                                                style={{backgroundImage: "url('/assets/textures/wood-grain.svg')"}}
                                             />
                                         )}
 

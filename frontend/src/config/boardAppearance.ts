@@ -19,6 +19,9 @@ export interface PieceSetConfig {
     folder: string;
     scalePercent: number;
     description: string;
+    /** Автор и лицензия набора — показываются на странице «О проекте» (см. ATTRIBUTION.md). */
+    author: string;
+    license: string;
 }
 
 export const BOARD_THEMES: Record<string, BoardTheme> = {
@@ -79,38 +82,28 @@ export const BOARD_THEMES: Record<string, BoardTheme> = {
     }
 };
 
+// Только наборы со свободной лицензией, допускающей любое использование. Список должен совпадать
+// с scripts/setup_piece_sets.py и ATTRIBUTION.md — это проверяет tests/test_assets_licensing.py.
 export const PIECE_SETS: Record<string, PieceSetConfig> = {
     merida: {
         id: 'merida',
-        name: 'Мерида (ChessBase)',
+        name: 'Мерида (Классика)',
         shortName: 'Мерида',
         folder: 'merida',
         scalePercent: 93,
-        description: 'Классические объёмные фигуры Fritz / ChessBase с широкой короной'
+        description: 'Классические книжные фигуры с широкой короной',
+        author: 'Armando Hernandez Marroquin',
+        license: 'GPL-2.0-or-later'
     },
-    cardinal: {
-        id: 'cardinal',
-        name: 'Контур (Cardinal)',
+    outline: {
+        id: 'outline',
+        name: 'Контур',
         shortName: 'Контур',
-        folder: 'cardinal',
+        folder: 'outline',
         scalePercent: 94,
-        description: 'Крупные контрастные фигуры с белой окантовкой чёрных фигур'
-    },
-    maestro: {
-        id: 'maestro',
-        name: 'Маэстро (Объёмный)',
-        shortName: 'Маэстро',
-        folder: 'maestro',
-        scalePercent: 93,
-        description: 'Выразительный комплект с глубокой прорисовкой деталей'
-    },
-    alpha: {
-        id: 'alpha',
-        name: 'Альфа (Книжный)',
-        shortName: 'Альфа',
-        folder: 'alpha',
-        scalePercent: 94,
-        description: 'Строгий классический диаграммный стиль с широким основанием'
+        description: 'Мерида с контрастной окантовкой — хорошо читается на тёмных досках',
+        author: 'michess, на основе Merida (Armando Hernandez Marroquin)',
+        license: 'GPL-2.0-or-later'
     },
     cburnett: {
         id: 'cburnett',
@@ -118,8 +111,47 @@ export const PIECE_SETS: Record<string, PieceSetConfig> = {
         shortName: 'Стаунтон',
         folder: 'cburnett',
         scalePercent: 92,
-        description: 'Чистый современный турнирный стандарт'
+        description: 'Чистый современный турнирный стандарт',
+        author: 'Colin M.L. Burnett',
+        license: 'GPL-2.0-or-later'
+    },
+    chessnut: {
+        id: 'chessnut',
+        name: 'Орех (Плоский)',
+        shortName: 'Орех',
+        folder: 'chessnut',
+        scalePercent: 92,
+        description: 'Плоские современные фигуры с мягкими формами',
+        author: 'Alexis Luengas',
+        license: 'Apache-2.0'
+    },
+    fantasy: {
+        id: 'fantasy',
+        name: 'Фэнтези (Объёмный)',
+        shortName: 'Фэнтези',
+        folder: 'fantasy',
+        scalePercent: 93,
+        description: 'Объёмные фигуры с подробной прорисовкой',
+        author: 'Maurizio Monge',
+        license: 'MIT'
+    },
+    rhosgfx: {
+        id: 'rhosgfx',
+        name: 'Графика (Минимализм)',
+        shortName: 'Графика',
+        folder: 'rhosgfx',
+        scalePercent: 92,
+        description: 'Лаконичные геометричные фигуры',
+        author: 'RhosGFX',
+        license: 'CC0-1.0'
     }
+};
+
+/** Наборы, убранные из-за лицензии, — сохранённый выбор игрока переводится на близкий свободный. */
+const RETIRED_PIECE_SETS: Record<string, string> = {
+    cardinal: 'outline',
+    maestro: 'fantasy',
+    alpha: 'merida'
 };
 
 export function getSavedBoardThemeKey(): string {
@@ -134,6 +166,7 @@ export function getSavedPieceSetKey(): string {
     if (typeof window !== 'undefined') {
         const saved = localStorage.getItem('michess_piece_set');
         if (saved && PIECE_SETS[saved]) return saved;
+        if (saved && RETIRED_PIECE_SETS[saved]) return RETIRED_PIECE_SETS[saved];
     }
     return 'merida';
 }
@@ -153,7 +186,7 @@ export function getHarmoniousPieceStyle(
     const isWhite = pieceColor === 'w';
     const size = `${setConfig.scalePercent}%`;
 
-    if (setConfig.id === 'cardinal') {
+    if (setConfig.id === 'outline') {
         return {
             width: size,
             height: size,
