@@ -55,11 +55,14 @@ no_implicit_optional = true
 [tool.coverage.run]
 source = ["src"]
 omit = ["src/db/seed.py"]  # загрузка архивов партий из сети, в тестах не запускается
+# SQLAlchemy asyncio выполняет запросы в greenlet: без greenlet-трассировки код эндпоинтов после
+# первого await к БД считался непокрытым, и покрытие API-слоя занижалось на 20–30 п.п.
+concurrency = ["thread", "greenlet"]
 
 [tool.coverage.report]
-# Текущий уровень ~80%; порог чуть ниже, чтобы мелкие колебания не роняли CI,
-# но заметное падение покрытия (код без тестов) — роняло.
-fail_under = 78
+# Текущий уровень ~84% (с greenlet-трассировкой); порог чуть ниже, чтобы мелкие колебания
+# не роняли CI, но заметное падение покрытия (код без тестов) — роняло.
+fail_under = 82
 show_missing = false
 skip_covered = true
 precision = 1
