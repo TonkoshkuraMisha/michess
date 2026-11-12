@@ -27,6 +27,8 @@ export interface GameControlsPanelProps {
     onOfferRematch: () => void;
     onResetSandbox: () => void;
     onUndoSandboxMove: () => void;
+    /** Партия клубной лестницы: возврат хода запрещён. */
+    undoLocked?: boolean;
     /** На свободной доске стоит позиция, загруженная из FEN (сброс доступен и без ходов). */
     hasCustomPosition?: boolean;
     /** Ставит на свободную доску позицию из FEN; возвращает текст ошибки или null. */
@@ -40,7 +42,7 @@ export interface GameControlsPanelProps {
 export function GameControlsPanel({
     mode, gameId, savedBotGameId, historyLength, gameOverResult, rematchStatus, isBotThinking,
     whitePlayer, blackPlayer, navigate, onAbortGame, onResign, onOfferDraw, onAcceptRematch,
-    onDeclineRematch, onOfferRematch, onResetSandbox, onUndoSandboxMove, hasCustomPosition = false, onLoadFen,
+    onDeclineRematch, onOfferRematch, onResetSandbox, onUndoSandboxMove, undoLocked = false, hasCustomPosition = false, onLoadFen,
 }: GameControlsPanelProps) {
     const [fenInput, setFenInput] = useState('');
     const [fenError, setFenError] = useState<string | null>(null);
@@ -180,7 +182,8 @@ export function GameControlsPanel({
                     <div className="grid grid-cols-2 gap-2">
                         <button
                             type="button"
-                            disabled={historyLength === 0 || isBotThinking || !!gameOverResult}
+                            disabled={historyLength === 0 || isBotThinking || !!gameOverResult || undoLocked}
+                            title={undoLocked ? 'В партии лестницы ходы не возвращаются' : undefined}
                             onClick={onUndoSandboxMove}
                             className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-boxwood-light text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
                         >

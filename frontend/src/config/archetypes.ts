@@ -1,81 +1,13 @@
 // --- FILE: frontend/src/config/archetypes.ts ---
 
 /**
- * Готовые архетипы мастерской соперников: вымышленные персонажи с короткими биографиями — не
- * реальные люди и не герои чужих программ. Это стартовые точки для конструктора: игрок может
- * сыграть с архетипом как есть или взять его за основу своего соперника.
- *
- * Рейтинг — целевая сила (target_elo), а не измеренная: калибровка матчами ботов — таск 10.4.
+ * Соперник из мастерской на доске: профиль, радар стиля и пояснение силы. Сами архетипы
+ * (вымышленные персонажи) живут на сервере — src/services/bots/archetypes.py, — фронтенд получает
+ * их вместе с измеренной силой через GET /bots/catalog (services/botCatalog.ts).
  */
 
 import type {PersonalityConfig} from '../services/personalities';
-import {DEFAULT_CONFIG} from '../services/personalities';
 import type {HistoricalBotProfile} from './champions';
-
-export interface Archetype {
-    name: string;
-    bio: string;
-    config: PersonalityConfig;
-}
-
-const cfg = (overrides: Partial<PersonalityConfig>): PersonalityConfig => ({
-    ...DEFAULT_CONFIG,
-    ...overrides,
-    piece_values: {...DEFAULT_CONFIG.piece_values, ...(overrides.piece_values ?? {})},
-});
-
-export const ARCHETYPES: Archetype[] = [
-    {
-        name: 'Торопыга',
-        bio: 'Выводит ферзя на третьем ходу и ищет мат в два хода. Иногда находит.',
-        config: cfg({aggression: 70, king_safety: 30, mobility: 60, randomness: 80, blunder_guard_cp: 320, target_elo: 700}),
-    },
-    {
-        name: 'Тихоня',
-        bio: 'Никуда не спешит, размены любит больше атак и ждёт, пока соперник ошибётся сам.',
-        config: cfg({aggression: -70, king_safety: 160, randomness: 40, blunder_guard_cp: 220, target_elo: 900}),
-    },
-    {
-        name: 'Пешечник',
-        bio: 'Считает каждую пешку и строит цепи, о которые разбиваются любые наскоки.',
-        config: cfg({pawn_structure: 200, center_control: 140, piece_values: {pawn: 1.4, knight: 3, bishop: 3, rook: 5, queen: 9}, target_elo: 1100}),
-    },
-    {
-        name: 'Кавалерист',
-        bio: 'Обожает коней и не меняет их даже на слонов: «конь на краю — и тот полезен».',
-        config: cfg({mobility: 160, piece_values: {pawn: 1, knight: 4, bishop: 2.6, rook: 5, queen: 9}, aggression: 30, target_elo: 1250}),
-    },
-    {
-        name: 'Центровик',
-        bio: 'Весь дебют — борьба за четыре центральных поля, а потом посмотрим.',
-        config: cfg({center_control: 200, mobility: 120, randomness: 15, target_elo: 1400}),
-    },
-    {
-        name: 'Крепость',
-        bio: 'Рокируется при первой возможности и не трогает пешки перед королём.',
-        config: cfg({aggression: -60, king_safety: 200, pawn_structure: 140, randomness: 10, target_elo: 1550}),
-    },
-    {
-        name: 'Авантюрист',
-        bio: 'Жертвует фигуру «на интуицию» и верит, что инициатива дороже материала.',
-        config: cfg({aggression: 95, king_safety: 60, randomness: 60, blunder_guard_cp: 260, target_elo: 1650}),
-    },
-    {
-        name: 'Стратег',
-        bio: 'Медленно улучшает позицию фигур и душит соперника нехваткой пространства.',
-        config: cfg({aggression: -30, center_control: 150, pawn_structure: 160, randomness: 10, blunder_guard_cp: 90, target_elo: 1800}),
-    },
-    {
-        name: 'Охотник',
-        bio: 'Ведёт все фигуры к чужому королю, о своём вспоминает в последний момент.',
-        config: cfg({aggression: 100, king_safety: 50, mobility: 150, blunder_guard_cp: 180, target_elo: 2000}),
-    },
-    {
-        name: 'Комбинатор',
-        bio: 'Видит удары на несколько ходов вперёд и почти не ошибается в расчёте.',
-        config: cfg({aggression: 80, mobility: 160, randomness: 10, blunder_guard_cp: 150, target_elo: 2200}),
-    },
-];
 
 /** Соперник из мастерской в партии: имя, конфиг и (если сохранён на сервере) его id. */
 export interface CustomOpponent {

@@ -19,13 +19,15 @@ export interface HistoricalBotsPanelProps {
     canStartFromPosition: boolean;
     startFromPosition: boolean;
     onStartFromPositionChange: (value: boolean) => void;
+    /** Измеренная сила (GET /bots/catalog): id бота → рейтинг; без калибровки — заявленный. */
+    measured?: Record<string, number>;
 }
 
 /** Выбор исторического бота, карточка с его девизом/рейтингом и кнопками старта партии. */
 export function HistoricalBotsPanel({
     selectedBotId, onSelectBot, selectedBotProfile, activeBot, activeBotProfile, gameId,
     gameOverResult, isBotThinking, botComment, onStartBotGame,
-    canStartFromPosition, startFromPosition, onStartFromPositionChange,
+    canStartFromPosition, startFromPosition, onStartFromPositionChange, measured = {},
 }: HistoricalBotsPanelProps) {
     return (
         <div
@@ -62,7 +64,7 @@ export function HistoricalBotsPanel({
                                     {botItem.shortName}
                                 </div>
                                 <div className="text-[11px] font-mono text-amber-300/90">
-                                    Эло {botItem.rating}
+                                    Эло {measured[botItem.id] ?? botItem.rating}{measured[botItem.id] ? ' изм.' : ''}
                                 </div>
                             </div>
                         </button>
@@ -99,7 +101,8 @@ export function HistoricalBotsPanel({
                             {selectedBotProfile.title}
                         </div>
                         <div className="text-[11px] text-boxwood/75 font-mono">
-                            Годы: {selectedBotProfile.era} • Рейтинг ~{selectedBotProfile.rating}
+                            Годы: {selectedBotProfile.era} • Рейтинг ~{measured[selectedBotProfile.id] ?? selectedBotProfile.rating}
+                            {measured[selectedBotProfile.id] ? ' (измерен)' : ''}
                         </div>
                     </div>
                 </div>

@@ -3,7 +3,7 @@
 import {act, fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {PersonalityWorkshop} from '../PersonalityWorkshop';
-import {ARCHETYPES} from '../../../config/archetypes';
+import {resetBotCatalogCache} from '../../../services/botCatalog';
 import {DEFAULT_CONFIG, readGuestPersonalities} from '../../../services/personalities';
 
 function renderWorkshop(token: string | null, onPlay = vi.fn()) {
@@ -22,8 +22,34 @@ function renderWorkshop(token: string | null, onPlay = vi.fn()) {
 
 const slider = (label: string) => screen.getByRole('slider', {name: label}) as HTMLInputElement;
 
+const archetype = (name: string, target_elo: number, extra: Record<string, unknown> = {}) => ({
+    name, bio: `Биография: ${name}`, config: {...DEFAULT_CONFIG, target_elo, ...extra},
+    declared_rating: target_elo, rating: target_elo, measured: false, games: 0, ci95: null,
+});
+
+const CATALOG = {
+    calibration: {date: '2026-11-12', games: 680},
+    historical: [],
+    archetypes: [
+        {...archetype('Торопыга', 700, {aggression: 70}), rating: 640, measured: true, games: 40, ci95: 90},
+        archetype('Комбинатор', 2200),
+    ],
+};
+
+/** fetch: каталог — всегда; остальное — по переданному обработчику. */
+function stubFetch(other?: (url: string, init?: RequestInit) => unknown) {
+    const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+        const url = input.toString();
+        const body = url.endsWith('/bots/catalog') ? CATALOG : other?.(url, init);
+        return {ok: true, status: 200, json: async () => body} as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    return fetchMock;
+}
+
 beforeEach(() => {
     localStorage.clear();
+    resetBotCatalogCache();
     vi.stubGlobal('ResizeObserver', class {
         observe() {
         }
@@ -39,18 +65,17 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('гость', () => {
-    it('десять архетипов с вымышленными именами и разной силой', () => {
+    it('архетипы приходят с сервера, измеренная сила помечена', async () => {
+        stubFetch();
         renderWorkshop(null);
-        expect(ARCHETYPES).toHaveLength(10);
-        const elos = ARCHETYPES.map((a) => a.config.target_elo);
-        expect(Math.min(...elos)).toBeLessThanOrEqual(700);
-        expect(Math.max(...elos)).toBeGreaterThanOrEqual(2200);
-        for (const a of ARCHETYPES) expect(screen.getByRole('button', {name: new RegExp(a.name)})).toBeInTheDocument();
+        expect(await screen.findByRole('button', {name: /Торопыга 640 \(изм\.\)/})).toBeInTheDocument();
+        expect(screen.getByRole('button', {name: /Комбинатор 2200$/})).toBeInTheDocument();
     });
 
-    it('архетип заполняет конструктор, слабый — с пояснением про намеренные ошибки', () => {
+    it('архетип заполняет конструктор, слабый — с пояснением про намеренные ошибки', async () => {
+        stubFetch();
         renderWorkshop(null);
-        fireEvent.click(screen.getByRole('button', {name: /Торопыга/}));
+        fireEvent.click(await screen.findByRole('button', {name: /Торопыга/}));
 
         expect((screen.getByPlaceholderText(/Гамбитёр/) as HTMLInputElement).value).toBe('Торопыга');
         expect(slider('Сила (Эло)').value).toBe('700');
@@ -58,12 +83,14 @@ describe('гость', () => {
     });
 
     it('ползунок меняет значение и пояснение силы', () => {
+        stubFetch();
         renderWorkshop(null);
         fireEvent.change(slider('Сила (Эло)'), {target: {value: '2000'}});
         expect(screen.getByTestId('strength-note').textContent).toMatch(/~2000.*ошибок «нарочно» нет/);
     });
 
     it('сохранение — в браузере, соперник появляется в списке', async () => {
+        stubFetch();
         renderWorkshop(null);
         fireEvent.change(screen.getByPlaceholderText(/Гамбитёр/), {target: {value: 'Гамбитёр'}});
         fireEvent.change(slider('Агрессия'), {target: {value: '80'}});
@@ -75,20 +102,23 @@ describe('гость', () => {
     });
 
     it('без имени не сохраняет', async () => {
+        stubFetch();
         renderWorkshop(null);
         await act(async () => fireEvent.click(screen.getByRole('button', {name: /Сохранить соперника/})));
         expect(screen.getByRole('alert').textContent).toMatch(/имя/);
         expect(readGuestPersonalities()).toEqual([]);
     });
 
-    it('«Сыграть» отдаёт имя и конфиг из конструктора', () => {
+    it('«Сыграть» отдаёт имя и конфиг из конструктора', async () => {
+        stubFetch();
         const onPlay = renderWorkshop(null);
-        fireEvent.click(screen.getByRole('button', {name: /Комбинатор/}));
+        fireEvent.click(await screen.findByRole('button', {name: /Комбинатор/}));
         fireEvent.click(screen.getByRole('button', {name: /Чёрными/}));
 
         const [opponent, color] = onPlay.mock.calls[0];
         expect(color).toBe('black');
         expect(opponent.name).toBe('Комбинатор');
+        expect(opponent.bio).toBe('Биография: Комбинатор');
         expect(opponent.config.target_elo).toBe(2200);
         expect(opponent.personalityId).toBeUndefined();
     });
@@ -101,13 +131,9 @@ describe('вошедший игрок', () => {
     };
 
     function stubServer() {
-        const fetchMock = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
-            const method = init?.method ?? 'GET';
-            const body = method === 'GET' ? [saved] : {...saved, ...JSON.parse(String(init?.body ?? '{}'))};
-            return {ok: true, status: 200, json: async () => body} as Response;
-        });
-        vi.stubGlobal('fetch', fetchMock);
-        return fetchMock;
+        return stubFetch((_url, init) => ((init?.method ?? 'GET') === 'GET'
+            ? [saved]
+            : {...saved, ...JSON.parse(String(init?.body ?? '{}'))}));
     }
 
     it('список приходит с сервера; неизменённый соперник играет по своему id', async () => {

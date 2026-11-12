@@ -9,6 +9,8 @@ import {MemoryRouter} from 'react-router-dom';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import Chessboard from '../Chessboard';
 import {mockFetchRouter} from '../../test/mocks';
+import {DEFAULT_CONFIG} from '../../services/personalities';
+import {resetBotCatalogCache} from '../../services/botCatalog';
 
 vi.mock('../../services/gameSocket', () => ({
     gameSocket: {
@@ -71,6 +73,7 @@ async function startBotGame(color: 'white' | 'black', botReply: Partial<typeof B
 }
 
 beforeEach(() => {
+    resetBotCatalogCache();
     localStorage.setItem('token', 'test-token');
     vi.useFakeTimers({shouldAdvanceTime: true});
 });
@@ -349,6 +352,13 @@ describe('мастерская соперников', () => {
             '/profile/games/live': () => [],
             '/profile/games/my-active': () => ({active: false}),
             '/bots/personalities': () => [],
+            '/bots/catalog': () => ({
+                calibration: null, historical: [],
+                archetypes: [{
+                    name: 'Торопыга', bio: 'Спешит.', config: {...DEFAULT_CONFIG, target_elo: 700},
+                    declared_rating: 700, rating: 700, measured: false, games: 0, ci95: null,
+                }],
+            }),
             '/bots/custom-move': () => ({...BOT_MOVE_DEFAULT, uci: 'e2e4', san: 'e4', comment: 'Шах! Атакуем короля.'}),
             '/bots/save-game': () => ({game_id: 1000, status: 'finished', result: '1-0'}),
         });
@@ -377,5 +387,58 @@ describe('мастерская соперников', () => {
         const saveCall = (fetchMock.mock.calls as unknown as [string, RequestInit][]).find(([url]) => String(url).includes('/bots/save-game'));
         const saveBody = JSON.parse(String(saveCall?.[1].body));
         expect(saveBody).toMatchObject({bot_id: 'custom', personality_name: 'Торопыга', player_color: 'black'});
+    });
+});
+
+describe('клубная лестница', () => {
+    it('партия лестницы: соперник от сервера, без возврата хода, итог в статусе', async () => {
+        vi.spyOn(window, 'confirm').mockReturnValue(true);
+        const ladderState = {
+            rating: 1000, games: 0, step: 0, total: 2, active_opponent: null,
+            rungs: [
+                {key: 'morphy', kind: 'historical', name: 'Морфи', rating: 2050, measured: true, status: 'current'},
+                {key: 'paulsen', kind: 'historical', name: 'Паульсен', rating: 2100, measured: false, status: 'locked'},
+            ],
+        };
+        const fetchMock = mockFetchRouter({
+            '/profile/me': () => ({id: 1, username: 'TestPlayer', blitz_rating: 1500}),
+            '/profile/matchmaking/queue': () => [],
+            '/profile/games/live': () => [],
+            '/profile/games/my-active': () => ({active: false}),
+            '/bots/catalog': () => ({calibration: null, historical: [], archetypes: []}),
+            '/bots/ladder/start': () => ({
+                opponent: {key: 'morphy', kind: 'historical', name: 'Морфи', rating: 2050, bot_id: 'morphy', bio: null, config: null},
+                color: 'white', step: 0, forfeited: null,
+            }),
+            '/bots/ladder': () => ladderState,
+            '/bots/move': () => BOT_MOVE_DEFAULT,
+            '/bots/save-game': () => ({
+                game_id: 1001, status: 'finished', result: '0-1',
+                ladder: {counted: true, reason: null, delta: -6, rating: 994, step: 0, promoted: false, opponent: 'Морфи'},
+            }),
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        renderChessboard();
+
+        fireEvent.click(await screen.findByRole('tab', {name: 'Лестница'}));
+        const white = await screen.findByRole('button', {name: /Белыми/});
+        await act(async () => {
+            fireEvent.click(white);
+        });
+
+        clickSquare('e2');
+        clickSquare('e4');
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(200);
+        });
+        expect(screen.getByRole('button', {name: /Вернуть ход/})).toBeDisabled();
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', {name: /Сдаться/}));
+        });
+        const saveCall = (fetchMock.mock.calls as unknown as [string, RequestInit][])
+            .find(([url]) => String(url).includes('/bots/save-game'));
+        expect(JSON.parse(String(saveCall?.[1].body))).toMatchObject({bot_id: 'morphy', ladder: true, player_color: 'white'});
+        expect(await screen.findByText('Лестница: рейтинг 994 (-6).')).toBeInTheDocument();
     });
 });

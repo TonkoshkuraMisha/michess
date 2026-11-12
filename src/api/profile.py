@@ -17,6 +17,7 @@ from src.db.session import get_db
 from src.models.game import Game, GameStatus
 from src.models.user import RatingCategory, User
 from src.schemas.user import username_key
+from src.services.ladder import rungs as ladder_rungs
 from src.services.rating import ESTIMATED_MOVES, category_duration_bounds_ms, classify_time_control
 
 router = APIRouter(prefix="/profile", tags=["Profile & Games"])
@@ -338,6 +339,13 @@ async def get_user_profile(username: str, db: AsyncSession = Depends(get_db)):
         "rapid_rating": user.rapid_rating,
         "classical_rating": user.classical_rating,
         "created_at": user.created_at,
+        # Клубная лестница — отдельно от рейтинга партий между людьми (src/services/ladder.py).
+        "ladder": {
+            "rating": user.ladder_rating,
+            "games": user.ladder_games,
+            "step": user.ladder_step,
+            "total": len(ladder_rungs()),
+        },
     }
 
 
