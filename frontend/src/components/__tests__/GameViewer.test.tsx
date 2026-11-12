@@ -1,10 +1,11 @@
 // Студия разбора партии: загрузка PGN, навигация по ходам (кнопки и клавиатура), переворот
 // доски, кэшированный и запрошенный анализ движком, ошибки загрузки и анализа.
 
-import {fireEvent, render, screen, waitFor} from '@testing-library/react';
+import {act, fireEvent, render, screen, waitFor} from '@testing-library/react';
 import {MemoryRouter, Route, Routes} from 'react-router-dom';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import GameViewer from '../GameViewer';
+import {setLanguage} from '../../i18n';
 
 vi.mock('../../services/soundEngine', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../../services/soundEngine')>();
@@ -185,6 +186,49 @@ describe('GameViewer', () => {
         expect((await screen.findAllByText(/31\.4%/)).length).toBeGreaterThan(0);
         expect(screen.getAllByText(/97\.2%/).length).toBeGreaterThan(0);
         expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+    });
+
+    it('комментарий наставника к ходу: текст, стрелки, подсветка и переключатель стрелок', async () => {
+        const moves = ANALYSIS.moves.map((m) => ({...m}));
+        moves[2] = {
+            ...moves[2], classification: 'Blunder', cp_loss: 900,
+            coach: {
+                comment: [
+                    {key: 'coach.verdict.blunder.v1', params: {move: 'g4'}},
+                    {key: 'coach.threat.mate_in.v1', params: {n: 1, move: '♛h4#'}},
+                    {key: 'coach.best.generic.v1', params: {move: '♘c3'}},
+                    {key: 'coach.from.the.future.v9', params: {}},  // незнакомый ключ пропускается
+                ],
+                arrows: [{from: 'd8', to: 'h4', kind: 'threat'}, {from: 'b1', to: 'c3', kind: 'best'},
+                         {from: 'z9', to: 'h4', kind: 'threat'}],
+                highlights: [{square: 'e1', kind: 'target'}],
+            },
+        } as never;
+        moves[3] = {...moves[3], coach: {comment: [{key: 'coach.good.checkmate.v1', params: {move: '♛h4#'}}]}} as never;
+        stubApi({pgn: {ok: true, text: FOOLS_MATE_PGN}, cached: {ok: true, body: {...ANALYSIS, moves}}});
+        renderViewer();
+
+        // Конец партии — мат.
+        expect(await screen.findByTestId('coach-comment')).toHaveTextContent('♛h4# — мат!');
+        fireEvent.click(screen.getByTitle('Ход назад'));
+        const comment = await screen.findByText(
+            'g4 — грубая ошибка! Теперь у соперника мат в 1 х.: ♛h4#. Сильнее было ♘c3.',
+        );
+        expect(comment).toBeInTheDocument();
+        expect(screen.getAllByTestId('coach-arrow-threat')).toHaveLength(1);  // стрелка с полем «z9» отброшена
+        expect(screen.getAllByTestId('coach-arrow-best')).toHaveLength(1);
+        expect(screen.getAllByTestId('coach-target')).toHaveLength(1);
+
+        fireEvent.click(screen.getByRole('checkbox', {name: 'Стрелки наставника'}));
+        expect(screen.queryByTestId('coach-arrow-threat')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('coach-target')).not.toBeInTheDocument();
+
+        act(() => setLanguage('uk', {persist: false}));
+        expect(screen.getByText('g4 — груба помилка! Тепер у суперника мат у 1 х.: ♛h4#. Сильніше було ♘c3.'))
+            .toBeInTheDocument();
+
+        fireEvent.click(screen.getByTitle('Початок партії'));
+        expect(screen.queryByTestId('coach-comment')).not.toBeInTheDocument();
     });
 
     it('кнопка анализа запускает движок с токеном и показывает точность', async () => {

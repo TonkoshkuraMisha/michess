@@ -13,12 +13,13 @@ from src.api.rate_limit import rate_limit
 from src.core.errors import ApiError, DomainValueError
 from src.db.session import get_db
 from src.models.game import Game
-from src.schemas.analysis import FullGameAnalysisResponse, PositionAnalysisRequest
+from src.schemas.analysis import AdviceRequest, AdviceResponse, FullGameAnalysisResponse, PositionAnalysisRequest
 from src.services.analysis_service import (
     GameDataNotFoundError,
     GameNotFinishedError,
     analysis_service,
     ensure_game_finished,
+    is_current_analysis,
 )
 from src.services.engine_pool import EngineBusyError
 from src.services.game_engine import InvalidStartPositionError
@@ -73,6 +74,29 @@ async def analyze_game_position(
         raise _engine_busy() from None
 
 
+@router.post(
+    "/advice",
+    response_model=AdviceResponse,
+    dependencies=[
+        Depends(rate_limit("analysis_advice", "RATE_LIMIT_ADVICE", "RATE_LIMIT_ADVICE_GUEST")),
+        Depends(forbid_engine_help_during_game),
+        Depends(note_ladder_analysis),
+    ],
+)
+async def get_position_advice(request: AdviceRequest):
+    """
+    Совет наставника по позиции (таск 11.2): угроза соперника, своя возможность, идея лучшего хода и стрелки.
+    Это подсказка движка: недоступна во время партии с человеком, в партии лестницы делает её незасчитанной.
+    Текст собирает клиент по ключам каталога coach.
+    """
+    try:
+        return await analysis_service.advise(request.fen)
+    except DomainValueError as exc:
+        raise exc.to_http(400) from exc
+    except EngineBusyError:
+        raise _engine_busy() from None
+
+
 @router.get("/game/{game_id}", response_model=FullGameAnalysisResponse | None)
 async def get_cached_game_analysis(
         game_id: int,
@@ -90,10 +114,13 @@ async def get_cached_game_analysis(
         return None
     try:
         data = json.loads(game.analysis_json)
-        data["game_id"] = game_id
-        return data
-    except Exception:
+    except ValueError:
         return None
+    # Разбор старого формата (без комментариев наставника) не отдаём: клиент предложит пересчитать.
+    if not game.pgn or not is_current_analysis(data, game.pgn):
+        return None
+    data["game_id"] = game_id
+    return data
 
 
 @router.post(

@@ -93,6 +93,9 @@ class Settings(BaseSettings):
     # Без входа анализ позиции доступен, но реже: гостя нельзя связать с идущей партией
     RATE_LIMIT_POSITION_ANALYSIS_GUEST: int = 10
     RATE_LIMIT_GAME_ANALYSIS: int = 6
+    # Совет наставника по позиции (POST /analysis/advice) — свой лимит: это тоже работа движка
+    RATE_LIMIT_ADVICE: int = 20
+    RATE_LIMIT_ADVICE_GUEST: int = 6
 
     # Authentication: attempts per IP, failed logins per account, registrations per IP
     RATE_LIMIT_LOGIN_PER_IP: int = 20

@@ -564,6 +564,9 @@ export const en = {
         moveForward: 'Move forward',
         gameEnd: 'End of the game',
         downloadPgnFile: 'Download the PGN file',
+        coachTitle: 'Coach’s comment',
+        coachArrows: 'Coach’s arrows',
+        coachLegend: 'Green — the best move, red — the threat, blue — the idea.',
     },
     leaderboard: {
         loadFailed: 'Could not load the leaderboard',
@@ -868,6 +871,182 @@ export const en = {
         combinator: {
             name: 'Combinator',
             bio: 'Sees blows several moves ahead and almost never miscalculates.',
+        },
+    },
+    // Наставник (src/services/coach.py): фигуры и поля приходят фигурной нотацией («♘f7»), поэтому
+    // фразы не склоняют названия фигур. У каждого шаблона две формулировки (v1, v2).
+    coach: {
+        verdict: {
+            inaccuracy: {
+                v1: '{move} is an inaccuracy.',
+                v2: '{move} is not the most precise move.',
+            },
+            mistake: {
+                v1: '{move} is a mistake.',
+                v2: '{move} noticeably worsens the position.',
+            },
+            blunder: {
+                v1: '{move} is a blunder!',
+                v2: '{move} is a serious mistake that turns the game.',
+            },
+        },
+        threat: {
+            mate_in: {
+                v1: 'Now the opponent has mate in {n}: {move}.',
+                v2: 'This allows mate in {n}, starting with {move}.',
+            },
+            mate_threat: {
+                v1: 'The opponent threatens mate: {piece} to {square}.',
+                v2: 'Watch out: {piece} threatens mate on {square}.',
+            },
+            hanging: {
+                v1: '{piece} can be taken with a gain of material.',
+                v2: 'The opponent wins material by taking {piece}.',
+            },
+            fork: {
+                v1: 'Fork: {attacker} attacks {target1} and {target2} at once.',
+                v2: '{attacker} hits both {target1} and {target2} — one of the two will fall.',
+            },
+            skewer: {
+                v1: 'Skewer: {attacker} hits {front}, and {behind} stands behind it.',
+                v2: 'Skewer by {attacker}: once {front} moves away, {behind} is under attack.',
+            },
+            pin_absolute: {
+                v1: 'Pin: {attacker} pins {front} — the king {behind} stands behind it.',
+                v2: '{front} cannot move: {attacker} pins it to {behind}.',
+            },
+            pin_relative: {
+                v1: 'Pin: {attacker} pins {front} against {behind}.',
+                v2: 'Pin: if {front} moves, {attacker} takes {behind}.',
+            },
+            trapped: {
+                v1: '{piece} is trapped: it has nowhere to go.',
+                v2: 'A trap for {piece}: every escape square is covered.',
+            },
+            overloaded: {
+                v1: 'Overload: only {defender} defends both {target1} and {target2}.',
+                v2: '{defender} cannot protect {target1} and {target2} at the same time.',
+            },
+            back_rank: {
+                v1: 'Weak back rank: {king} has no escape square, and a check on {square} is dangerous.',
+                v2: 'Back-rank danger: a heavy piece can check {king} from {square}.',
+            },
+        },
+        missed: {
+            mate_in: {
+                v1: 'There was mate in {n}: {move}.',
+                v2: 'Missed: {move} mates in {n}.',
+            },
+            hanging: {
+                v1: '{piece} could have been taken with a gain of material.',
+                v2: 'Missed chance to take {piece}.',
+            },
+        },
+        best: {
+            mate: {
+                v1: '{move} would have been checkmate!',
+                v2: 'Mate was possible: {move}.',
+            },
+            fork: {
+                v1: 'Stronger was {move} with a fork: {attacker} attacks {target1} and {target2}.',
+                v2: '{move} would have won material: {attacker} hits both {target1} and {target2}.',
+            },
+            skewer: {
+                v1: 'Stronger was {move}: a skewer — {attacker} hits {front}, with {behind} behind it.',
+                v2: '{move} would have won material with a skewer on {front} and {behind}.',
+            },
+            pin_absolute: {
+                v1: 'Stronger was {move}: {attacker} pins {front} to {behind}.',
+                v2: '{move} would have created a pin: {front} could not move.',
+            },
+            pin_relative: {
+                v1: 'Stronger was {move}: {attacker} pins {front} against {behind}.',
+                v2: '{move} would have created a pin: if {front} moves, {attacker} takes {behind}.',
+            },
+            discovered_attack: {
+                v1: 'Stronger was {move} with a discovered attack: {attacker} hits {target}.',
+                v2: '{move} would have opened a line for {attacker} — {target} under attack.',
+            },
+            discovered_check: {
+                v1: 'Stronger was {move} with a discovered check from {attacker}.',
+                v2: '{move} would have given a discovered check.',
+            },
+            double_check: {
+                v1: 'Stronger was {move} — a double check!',
+                v2: '{move} would have given a double check: the king would have to move.',
+            },
+            mate_threat: {
+                v1: 'Stronger was {move}, threatening mate: {piece} to {square}.',
+                v2: '{move} would have created a mate threat on {square}.',
+            },
+            trapped: {
+                v1: 'Stronger was {move}: {piece} is trapped.',
+                v2: '{move} would have caught {piece} — no escape squares left.',
+            },
+            capture: {
+                v1: 'Stronger was {move}, taking {piece}.',
+                v2: 'The engine prefers {move}, capturing {piece}.',
+            },
+            generic: {
+                v1: 'Stronger was {move}.',
+                v2: 'The engine prefers {move}.',
+            },
+        },
+        good: {
+            checkmate: {
+                v1: '{move} — checkmate!',
+                v2: 'Mate! {move} ends the game.',
+            },
+            fork: {
+                v1: 'Fork! {attacker} attacks {target1} and {target2}.',
+                v2: 'A strong double attack: {attacker} hits {target1} and {target2}.',
+            },
+            skewer: {
+                v1: 'Skewer! {attacker} hits {front}, and {behind} is next.',
+                v2: 'A skewer: once {front} moves, {attacker} takes {behind}.',
+            },
+            pin_absolute: {
+                v1: 'Pin! {front} cannot move: {behind} stands behind it.',
+                v2: '{attacker} pins {front} to the king.',
+            },
+            pin_relative: {
+                v1: 'Pin! If {front} moves, {attacker} takes {behind}.',
+                v2: '{attacker} pins {front} against {behind}.',
+            },
+            discovered_attack: {
+                v1: 'Discovered attack: the move opens a line, and {attacker} hits {target}.',
+                v2: 'The move uncovers {attacker} — {target} is under attack.',
+            },
+            discovered_check: {
+                v1: 'Discovered check from {attacker}!',
+                v2: 'The move uncovers a check from {attacker}.',
+            },
+            double_check: {
+                v1: 'Double check with {move}! The king has to move.',
+                v2: '{move} — a double check: neither a block nor a capture helps.',
+            },
+            mate_threat: {
+                v1: 'Threatening mate: {piece} to {square}.',
+                v2: 'Now there is a mate threat on {square}.',
+            },
+            trapped: {
+                v1: '{piece} is trapped: it has nowhere to go.',
+                v2: 'The trap closes around {piece}.',
+            },
+        },
+        advice: {
+            chance_mate: {
+                v1: 'You have mate in {n}: {move}!',
+                v2: 'Look for mate: {move} mates in {n}.',
+            },
+            chance_capture: {
+                v1: '{piece} can be taken with a gain of material.',
+                v2: 'Look closely: {piece} lacks protection.',
+            },
+            quiet: {
+                v1: 'No direct threats. Improve your least active piece.',
+                v2: 'The position is calm: think about a plan and your worst-placed piece.',
+            },
         },
     },
 };

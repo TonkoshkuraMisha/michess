@@ -11,6 +11,32 @@ class PositionAnalysisRequest(BaseModel):
     )
 
 
+class CoachSentence(BaseModel):
+    """Предложение наставника: ключ шаблона каталога coach на клиенте и параметры (фигуры — фигурной нотацией)."""
+    key: str
+    params: dict[str, str | int] = Field(default_factory=dict)
+
+
+class CoachArrow(BaseModel):
+    """Стрелка на доске: best — лучший ход, threat — угроза соперника, idea — тактика лучшего/сделанного хода."""
+    from_: str = Field(alias="from")
+    to: str
+    kind: str
+
+    model_config = {"populate_by_name": True, "serialize_by_alias": True}
+
+
+class CoachHighlight(BaseModel):
+    square: str
+    kind: str
+
+
+class CoachComment(BaseModel):
+    comment: list[CoachSentence]
+    arrows: list[CoachArrow] = Field(default_factory=list)
+    highlights: list[CoachHighlight] = Field(default_factory=list)
+
+
 class MoveEvaluationItem(BaseModel):
     ply: int
     move_number: int
@@ -24,6 +50,7 @@ class MoveEvaluationItem(BaseModel):
     cp_loss: int
     classification: str
     symbol: str
+    coach: CoachComment | None = None
 
 
 class SideSummaryStats(BaseModel):
@@ -36,8 +63,19 @@ class SideSummaryStats(BaseModel):
     avg_cp_loss: float
 
 
+class AdviceRequest(BaseModel):
+    fen: str = Field(..., max_length=100, description="Позиция, по которой нужен совет (ходит сторона игрока)")
+
+
+class AdviceResponse(CoachComment):
+    fen: str
+    best_move_uci: str | None = None
+    eval_cp: int | None = Field(default=None, description="Оценка с точки зрения белых; None — движок недоступен")
+
+
 class FullGameAnalysisResponse(BaseModel):
     game_id: int
+    format_version: int
     engine: str
     white: SideSummaryStats
     black: SideSummaryStats
