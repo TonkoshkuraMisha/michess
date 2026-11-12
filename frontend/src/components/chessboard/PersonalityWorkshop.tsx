@@ -3,7 +3,7 @@
 import {useCallback, useEffect, useMemo, useState} from 'react';
 import {PolarAngleAxis, PolarGrid, Radar, RadarChart} from 'recharts';
 import {Pencil, Save, Trash2} from 'lucide-react';
-import {ARCHETYPES, strengthNote, styleRadar} from '../../config/archetypes';
+import {strengthNote, styleRadar} from '../../config/archetypes';
 import type {CustomOpponent} from '../../config/archetypes';
 import {
     DEFAULT_CONFIG,
@@ -16,6 +16,8 @@ import {
     updatePersonality,
 } from '../../services/personalities';
 import type {Personality, PersonalityConfig} from '../../services/personalities';
+import {fetchBotCatalog, strengthLabel} from '../../services/botCatalog';
+import type {CatalogArchetype} from '../../services/botCatalog';
 
 type SliderKey = 'aggression' | 'center_control' | 'mobility' | 'king_safety' | 'pawn_structure'
     | 'randomness' | 'blunder_guard_cp' | 'target_elo';
@@ -81,6 +83,17 @@ export function PersonalityWorkshop({
     const [error, setError] = useState<string | null>(null);
     const [notice, setNotice] = useState<string | null>(null);
     const [busy, setBusy] = useState(false);
+    const [archetypes, setArchetypes] = useState<CatalogArchetype[]>([]);
+
+    useEffect(() => {
+        let alive = true;
+        fetchBotCatalog()
+            .then((catalog) => alive && setArchetypes(catalog.archetypes))
+            .catch(() => alive && setArchetypes([]));
+        return () => {
+            alive = false;
+        };
+    }, []);
 
     const reload = useCallback(async () => {
         setError(null);
@@ -190,8 +203,9 @@ export function PersonalityWorkshop({
 
             <section>
                 <h3 className="font-bold text-amber-300 mb-1">Архетипы</h3>
+                {archetypes.length === 0 && <p className="text-boxwood/70">Архетипы загружаются с сервера…</p>}
                 <div className="flex flex-wrap gap-1">
-                    {ARCHETYPES.map((a) => (
+                    {archetypes.map((a) => (
                         <button key={a.name} type="button" title={a.bio}
                                 onClick={() => pick(a.name, a.config, null, a.bio)}
                                 className={`px-2 py-0.5 rounded border cursor-pointer ${
@@ -199,7 +213,7 @@ export function PersonalityWorkshop({
                                         ? 'bg-amber-800 border-amber-400 text-white'
                                         : 'bg-black/35 border-amber-900/40 hover:border-amber-600/60'
                                 }`}>
-                            {a.name} <span className="font-mono text-amber-300/80">{a.config.target_elo}</span>
+                            {a.name} <span className="font-mono text-amber-300/80">{strengthLabel(a)}</span>
                         </button>
                     ))}
                 </div>

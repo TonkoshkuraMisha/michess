@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.fair_play import forbid_engine_help_during_game
+from src.api.ladder import note_ladder_analysis
 from src.api.rate_limit import rate_limit
 from src.db.session import get_db
 from src.models.game import Game
@@ -51,6 +52,7 @@ def _engine_busy() -> HTTPException:
             "analysis_position", "RATE_LIMIT_POSITION_ANALYSIS", "RATE_LIMIT_POSITION_ANALYSIS_GUEST",
         )),
         Depends(forbid_engine_help_during_game),
+        Depends(note_ladder_analysis),
     ],
 )
 async def analyze_game_position(

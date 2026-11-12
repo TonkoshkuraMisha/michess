@@ -25,6 +25,8 @@ interface UserProfile {
     rapid_rating: number;
     classical_rating: number;
     created_at: string;
+    /** Клубная лестница: отдельный рейтинг партий с ботами без подсказок и возвратов хода. */
+    ladder?: { rating: number; games: number; step: number; total: number };
 }
 
 const RATING_CATEGORIES: Array<{ key: 'bullet_rating' | 'blitz_rating' | 'rapid_rating' | 'classical_rating'; label: string }> = [
@@ -323,6 +325,20 @@ export default function Profile() {
                 </div>
 
                 <div className="md:col-span-2 flex flex-col gap-4">
+                    {profile.ladder && profile.ladder.games > 0 && (
+                        <div className="bg-[#1A120B] border border-amber-900/60 px-3 py-2.5 rounded shadow-inner flex items-center justify-between gap-3"
+                             data-testid="profile-ladder">
+                            <div className="text-boxwood/70 text-xs uppercase tracking-widest">Клубная лестница</div>
+                            <div className="flex-1 h-1.5 rounded bg-black/50 overflow-hidden">
+                                <div className="h-full bg-amber-500"
+                                     style={{width: `${Math.round((Math.min(profile.ladder.step, profile.ladder.total) / profile.ladder.total) * 100)}%`}}/>
+                            </div>
+                            <div className="font-mono text-amber-300 text-sm">
+                                {Math.min(profile.ladder.step, profile.ladder.total)}/{profile.ladder.total}
+                            </div>
+                            <div className="text-xl font-mono font-bold text-amber-400">{profile.ladder.rating}</div>
+                        </div>
+                    )}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         {RATING_CATEGORIES.map(({key, label}) => (
                             <div

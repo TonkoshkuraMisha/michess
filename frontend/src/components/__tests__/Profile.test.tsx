@@ -150,6 +150,22 @@ describe('Profile', () => {
         expect(screen.getByText(/Недостаточно рейтинговых партий в этой категории/)).toBeInTheDocument();
     });
 
+    it('клубная лестница видна, когда в ней сыграны партии', async () => {
+        stubFetch({profile: {ok: true, body: {...PROFILE, ladder: {rating: 1088, games: 4, step: 3, total: 17}}}});
+        renderProfile();
+        const card = await screen.findByTestId('profile-ladder');
+        expect(card).toHaveTextContent('Клубная лестница');
+        expect(card).toHaveTextContent('3/17');
+        expect(card).toHaveTextContent('1088');
+    });
+
+    it('без партий лестницы карточки нет', async () => {
+        stubFetch({profile: {ok: true, body: {...PROFILE, ladder: {rating: 1000, games: 0, step: 0, total: 17}}}});
+        renderProfile();
+        await screen.findByText('Alice');
+        expect(screen.queryByTestId('profile-ladder')).toBeNull();
+    });
+
     it('считает победы, ничьи и поражения с точки зрения владельца профиля', async () => {
         stubFetch({
             profile: {ok: true, body: PROFILE},

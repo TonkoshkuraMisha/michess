@@ -77,6 +77,28 @@ export interface UseBotGameOptions {
     updateSessionStats: (result: string) => void;
 }
 
+/** Итог партии клубной лестницы — ответ сервера на сохранение. */
+export interface LadderOutcome {
+    counted: boolean;
+    reason: string | null;
+    delta: number;
+    rating: number;
+    step: number;
+    promoted: boolean;
+    opponent: string;
+}
+
+export interface BotGameStartOptions {
+    /** Партия клубной лестницы: без возврата ходов, итог меняет рейтинг лестницы. */
+    ladder?: boolean;
+}
+
+export function ladderOutcomeMessage(outcome: LadderOutcome): string {
+    if (!outcome.counted) return `Партия не засчитана в лестницу: ${outcome.reason}.`;
+    const delta = outcome.delta > 0 ? `+${outcome.delta}` : String(outcome.delta);
+    return `Лестница: рейтинг ${outcome.rating} (${delta})${outcome.promoted ? ' — открыт следующий соперник!' : '.'}`;
+}
+
 export interface UseBotGameResult {
     selectedBotId: HistoricalBotId;
     setSelectedBotId: (id: HistoricalBotId) => void;
@@ -86,11 +108,17 @@ export interface UseBotGameResult {
     /** startFen — начать партию с этой позиции вместо обычной расстановки. */
     startHistoricalBotGame: (
         botId: BotOpponentId, colorPref?: 'white' | 'black' | 'random', startFen?: string | null,
+        options?: BotGameStartOptions,
     ) => void;
     /** Партия с соперником из мастерской (персоналия с ползунками). */
     startCustomBotGame: (
         opponent: CustomOpponent, colorPref?: 'white' | 'black' | 'random', startFen?: string | null,
+        options?: BotGameStartOptions,
     ) => void;
+    /** Идёт (или только что сыграна) партия клубной лестницы. */
+    isLadderGame: boolean;
+    /** Итог последней сохранённой партии лестницы (для обновления панели лестницы). */
+    ladderOutcome: LadderOutcome | null;
     /** Профиль бота для доски и панели — исторического или собранного в мастерской. */
     botProfileFor: (id: BotOpponentId) => HistoricalBotProfile;
     saveBotGameToDatabase: (
@@ -127,6 +155,9 @@ export function useBotGame({
     // Соперник из мастерской текущей (или последней) партии — ref, чтобы ход, сохранение и
     // реванш читали его без лишних зависимостей эффектов.
     const customOpponentRef = useRef<CustomOpponent | null>(null);
+    const ladderRef = useRef<boolean>(false);
+    const [isLadderGame, setIsLadderGame] = useState<boolean>(false);
+    const [ladderOutcome, setLadderOutcome] = useState<LadderOutcome | null>(null);
 
     const botProfileFor = useCallback((id: BotOpponentId): HistoricalBotProfile => {
         if (id === 'custom') {
@@ -157,6 +188,7 @@ export function useBotGame({
                 headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`},
                 body: JSON.stringify({
                     bot_id: botId, player_color: playerColor, result,
+                    ladder: ladderRef.current,
                     // Соперник из мастерской: сохранённый — по id, несохранённый — по имени.
                     ...(botId === 'custom' && customOpponentRef.current
                         ? (customOpponentRef.current.personalityId
@@ -177,6 +209,10 @@ export function useBotGame({
                     setGameOverResult(data.result);
                     setDrawOfferStatus(`Итог по правилам ФИДЕ: ${data.result}`);
                 }
+                if (data.ladder) {
+                    setLadderOutcome(data.ladder);
+                    setDrawOfferStatus(ladderOutcomeMessage(data.ladder));
+                }
             }
         } catch (err) {
             console.error('Ошибка сохранения партии с ботом в БД:', err);
@@ -187,7 +223,10 @@ export function useBotGame({
         botId: BotOpponentId,
         colorPref: 'white' | 'black' | 'random' = 'random',
         startFen: string | null = null,
+        options: BotGameStartOptions = {},
     ) => {
+        ladderRef.current = Boolean(options.ladder);
+        setIsLadderGame(Boolean(options.ladder));
         if (isSearching) {
             setIsSearching(false);
             gameSocket.send('leave_queue', {});
@@ -250,9 +289,10 @@ export function useBotGame({
         opponent: CustomOpponent,
         colorPref: 'white' | 'black' | 'random' = 'random',
         startFen: string | null = null,
+        options: BotGameStartOptions = {},
     ) => {
         customOpponentRef.current = opponent;
-        startHistoricalBotGame('custom', colorPref, startFen);
+        startHistoricalBotGame('custom', colorPref, startFen, options);
     }, [startHistoricalBotGame]);
 
     // Ход бота: запрашивает /bots/move, ждёт имитацию обдумывания, применяет ход.
@@ -391,6 +431,8 @@ export function useBotGame({
     }, [whiteTimeMs, blackTimeMs, activeBot, gameOverResult, myColor, game, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, clearPremove, setPendingPromotion, setGameOverResult, setDrawOfferStatus, botProfileFor]);
 
     const exitBotGame = useCallback(() => {
+        ladderRef.current = false;
+        setIsLadderGame(false);
         setActiveBot(null);
         setBotComment(null);
         setIsBotThinking(false);
@@ -401,5 +443,6 @@ export function useBotGame({
     return {
         selectedBotId, setSelectedBotId, botComment, isBotThinking, savedBotGameId,
         startHistoricalBotGame, startCustomBotGame, botProfileFor, saveBotGameToDatabase, exitBotGame,
+        isLadderGame, ladderOutcome,
     };
 }

@@ -12,13 +12,16 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api import deps
-from src.api.fair_play import forbid_engine_help_during_game
+from src.api.fair_play import _optional_user_id, forbid_engine_help_during_game
 from src.api.personalities import get_owned_personality, personality_config, validate_personality_name
 from src.api.rate_limit import rate_limit
 from src.db import session as db_session
 from src.models.game import Game, GameStatus
 from src.models.user import User
+from src.services import ladder as ladder_service
+from src.services.bots import calibration as bot_calibration
 from src.services.bots.anderssen import anderssen_bot
+from src.services.bots.archetypes import ARCHETYPES
 from src.services.bots.labourdonnais import labourdonnais_bot
 from src.services.bots.morphy import morphy_bot
 from src.services.bots.paulsen import paulsen_bot
@@ -189,6 +192,7 @@ class BotGameSaveRequest(BaseModel):
         default=None, min_length=3, max_length=30,
         description="Для bot_id='custom' без сохранения: имя соперника из конструктора",
     )
+    ladder: bool = Field(default=False, description="Партия клубной лестницы (открыта POST /bots/ladder/start)")
     player_color: str = Field(..., description="Цвет игрока ('white' или 'black')")
     result: str = Field(..., description="Результат партии ('1-0', '0-1', '1/2-1/2')")
     termination: str | None = Field(
@@ -209,6 +213,7 @@ class BotGameSaveResponse(BaseModel):
     game_id: int
     status: str
     result: str
+    ladder: ladder_service.LadderOutcome | None = None
 
 
 def calculate_authentic_thinking_time_ms(
@@ -451,6 +456,27 @@ def _playable_board(fen: str) -> chess.Board:
     return board
 
 
+@router.get("/catalog")
+async def get_bot_catalog():
+    """
+    Сила ботов и архетипы мастерской: заявленный рейтинг и измеренный матчами с якорями Stockfish
+    (scripts/calibrate_bots.py), если калибровка уже была.
+    """
+    def strength(key: str, declared: int) -> dict:
+        s = bot_calibration.strength_of(key, declared)
+        return {"declared_rating": declared, "rating": s.rating, "measured": s.measured,
+                "games": s.games, "ci95": s.ci95}
+
+    return {
+        "calibration": bot_calibration.load_calibration().get("meta"),
+        "historical": [{"id": b["id"], **strength(str(b["id"]), int(str(b["rating"])))} for b in AVAILABLE_BOTS],
+        "archetypes": [
+            {"name": a.name, "bio": a.bio, "config": a.config.model_dump(), **strength(a.key, a.config.target_elo)}
+            for a in ARCHETYPES
+        ],
+    }
+
+
 @router.get("/list")
 async def get_available_bots():
     """Возвращает список доступных исторических ботов и статус движка Stockfish."""
@@ -469,13 +495,14 @@ async def get_available_bots():
         Depends(forbid_engine_help_during_game),
     ],
 )
-async def get_bot_move(payload: BotMoveRequest):
+async def get_bot_move(payload: BotMoveRequest, request: Request, db: AsyncSession = Depends(get_db)):
     """Принимает FEN позиции и возвращает ответный ход выбранного исторического бота."""
     bot = BOT_INSTANCES.get(payload.bot_id)
     if bot is None:
         raise HTTPException(status_code=404, detail=f"Бот '{payload.bot_id}' не найден")
 
     board = _playable_board(payload.fen)
+    await ladder_service.note_bot_move_request(await _optional_user_id(request, db), board, payload.bot_id)
     result = await asyncio.to_thread(bot.choose_move, payload.fen)
     thinking_time_ms = calculate_authentic_thinking_time_ms(
         bot_id=payload.bot_id,
@@ -514,6 +541,10 @@ async def get_custom_bot_move(
         owner = await _bearer_user(request, db)
         config = personality_config(await get_owned_personality(db, owner.id, payload.personality_id))
     bot = PersonalityBot(config or BotPersonalityConfig())
+    await ladder_service.note_bot_move_request(
+        await _optional_user_id(request, db), board,
+        ladder_service.opponent_key("custom", None if payload.personality_id is not None else bot.config),
+    )
     result = await asyncio.to_thread(bot.choose_move, payload.fen)
     return BotMoveResponse(
         bot_id=bot.bot_id,
@@ -535,6 +566,22 @@ async def _bearer_user(request: Request, db: AsyncSession) -> User:
     if user is None:
         raise HTTPException(status_code=401, detail="Войдите, чтобы играть с сохранённым соперником")
     return user
+
+
+async def _ladder_game_for_save(
+        user: User, payload: BotGameSaveRequest,
+) -> tuple[ladder_service.LadderSession, int, ladder_service.Rung]:
+    """Открытая партия лестницы, которой соответствует сохраняемая партия, или 409."""
+    session = await ladder_service.get_session(user.id)
+    found = ladder_service.find_rung(session.rung_key) if session else None
+    if session is None or found is None:
+        raise HTTPException(status_code=409, detail="Партия лестницы не начата или устарела")
+    _, rung = found
+    expected = (rung.key, None) if rung.kind == "historical" else (CUSTOM_BOT_ID, rung.name)
+    actual = (payload.bot_id, payload.personality_name if payload.bot_id == CUSTOM_BOT_ID else None)
+    if actual != expected or payload.player_color != session.color:
+        raise HTTPException(status_code=409, detail="Партия не совпадает с открытой партией лестницы")
+    return session, *found
 
 
 async def _resolve_personality_for_save(
@@ -564,6 +611,7 @@ async def save_bot_game(
     if payload.bot_id != CUSTOM_BOT_ID and payload.bot_id not in BOT_METADATA:
         raise HTTPException(status_code=404, detail=f"Бот '{payload.bot_id}' не найден")
     personality_name, personality_elo = await _resolve_personality_for_save(db, current_user, payload)
+    ladder_game = await _ladder_game_for_save(current_user, payload) if payload.ladder else None
 
     if payload.player_color not in ("white", "black"):
         raise HTTPException(status_code=400, detail="Некорректный цвет игрока")
@@ -622,11 +670,21 @@ async def save_bot_game(
 
     new_game = Game(**game_kwargs, personality_name=personality_name)
     db.add(new_game)
+    ladder_outcome = None
+    if ladder_game is not None:
+        session, rung_index, rung = ladder_game
+        player_score = {"1-0": 1.0, "0-1": 0.0}.get(result, 0.5)
+        if payload.player_color == "black" and result != "1/2-1/2":
+            player_score = 1.0 - player_score
+        ladder_outcome = ladder_service.apply_result(current_user, rung_index, rung, player_score, session.assisted)
     await db.commit()
     await db.refresh(new_game)
+    if ladder_game is not None:
+        await ladder_service.clear_session(current_user.id)
 
     return BotGameSaveResponse(
         game_id=new_game.id,
         status="finished",
         result=result,
+        ladder=ladder_outcome,
     )

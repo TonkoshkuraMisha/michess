@@ -46,6 +46,12 @@ class User(Base):
     rapid_games_played: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     classical_games_played: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
 
+    # Клубная лестница (таск 10.4): отдельный рейтинг в партиях с ботами без подсказок движка и
+    # возвратов хода, и ступень — индекс следующего соперника на лестнице (src/services/ladder.py).
+    ladder_rating: Mapped[int] = mapped_column(Integer, default=1000, server_default="1000", nullable=False)
+    ladder_games: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    ladder_step: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+
     # Исторический бот (играбельный AI) или архивный исторический игрок (партии из PGN,
     # посмотреть — нельзя сыграть) — не реальный зарегистрированный игрок, вне таблицы лидеров.
     is_bot: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
