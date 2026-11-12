@@ -144,3 +144,14 @@ describe('AuthModal: закрытие', () => {
         expect(onClose).toHaveBeenCalledTimes(3);
     });
 });
+
+describe('AuthModal: доступность', () => {
+    it('окно — модальный диалог с заголовком, меняющимся по режиму', () => {
+        render(<AuthModal onSuccess={vi.fn()}/>);
+        const dialog = screen.getByRole('dialog', {name: 'Вход в michess'});
+        expect(dialog).toHaveAttribute('aria-modal', 'true');
+
+        fireEvent.click(screen.getByRole('button', {name: 'Нет аккаунта? Зарегистрируйтесь'}));
+        expect(screen.getByRole('dialog', {name: 'Регистрация аккаунта'})).toBeInTheDocument();
+    });
+});
