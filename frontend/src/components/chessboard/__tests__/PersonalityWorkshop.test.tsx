@@ -22,8 +22,9 @@ function renderWorkshop(token: string | null, onPlay = vi.fn()) {
 
 const slider = (label: string) => screen.getByRole('slider', {name: label}) as HTMLInputElement;
 
-const archetype = (name: string, target_elo: number, extra: Record<string, unknown> = {}) => ({
-    name, bio: `Биография: ${name}`, config: {...DEFAULT_CONFIG, target_elo, ...extra},
+// Сервер присылает только id архетипа; имя и описание — из каталога на языке игрока.
+const archetype = (id: string, target_elo: number, extra: Record<string, unknown> = {}) => ({
+    id, config: {...DEFAULT_CONFIG, target_elo, ...extra},
     declared_rating: target_elo, rating: target_elo, measured: false, games: 0, ci95: null,
 });
 
@@ -31,8 +32,9 @@ const CATALOG = {
     calibration: {date: '2026-11-12', games: 680},
     historical: [],
     archetypes: [
-        {...archetype('Торопыга', 700, {aggression: 70}), rating: 640, measured: true, games: 40, ci95: 90},
-        archetype('Комбинатор', 2200),
+        {...archetype('rusher', 700, {aggression: 70}), rating: 640, measured: true, games: 40, ci95: 90},
+        archetype('combinator', 2200),
+        archetype('archetype_from_the_future', 1500),  // клиент его ещё не знает — не показывается
     ],
 };
 
@@ -118,7 +120,8 @@ describe('гость', () => {
         const [opponent, color] = onPlay.mock.calls[0];
         expect(color).toBe('black');
         expect(opponent.name).toBe('Комбинатор');
-        expect(opponent.bio).toBe('Биография: Комбинатор');
+        expect(opponent.bio).toBe('Видит удары на несколько ходов вперёд и почти не ошибается в расчёте.');
+        expect(opponent.archetypeId).toBe('combinator');  // архетип без изменений — в архив ключом
         expect(opponent.config.target_elo).toBe(2200);
         expect(opponent.personalityId).toBeUndefined();
     });

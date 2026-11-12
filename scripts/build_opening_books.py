@@ -21,43 +21,36 @@ BOT_BOOK_CONFIG = {
         "identifiers": ("philidor", "филидор"),
         "surname_filter": "philidor",
         "exclude": (),
-        "comment_tpl": "Исторический выбор Филидора (встречалось в партиях: {count} раз(а)).",
     },
     "labourdonnais": {
         "identifiers": ("bourdonnais", "labourdonnais", "лабурдонне"),
         "surname_filter": "bourdonnais",
         "exclude": (),
-        "comment_tpl": "Любимый ход Лабурдонне в атаке (встречалось в партиях: {count} раз(а)).",
     },
     "staunton": {
         "identifiers": ("staunton", "стаунтон"),
         "surname_filter": "staunton",
         "exclude": (),
-        "comment_tpl": "Классический выбор Стаунтона (встречалось в партиях: {count} раз(а)).",
     },
     "anderssen": {
         "identifiers": ("anderssen", "андерсен"),
         "surname_filter": "anderssen",
         "exclude": (),
-        "comment_tpl": "Бриллиантовый гамбит Андерсена (встречалось в партиях: {count} раз(а)).",
     },
     "morphy": {
         "identifiers": ("morphy", "морфи"),
         "surname_filter": "morphy",
         "exclude": ("alonzo", "ernest"),
-        "comment_tpl": "Исторический ход Пола Морфи (встречалось в партиях: {count} раз(а)).",
     },
     "paulsen": {
         "identifiers": ("paulsen", "паульсен"),
         "surname_filter": "paulsen",
         "exclude": ("wilfried",),
-        "comment_tpl": "Глубокая новинка Паульсена (встречалось в партиях: {count} раз(а)).",
     },
     "zukertort": {
         "identifiers": ("zukertort", "цукерторт"),
         "surname_filter": "zukertort",
         "exclude": (),
-        "comment_tpl": "Универсальный дебютный выбор Цукерторта (встречалось в партиях: {count} раз(а)).",
     },
 }
 
@@ -199,7 +192,9 @@ def build_book_for_bot(bot_id: str) -> None:
                 [
                     uci,
                     max(int((count / total_count) * 100), 1),
-                    cfg["comment_tpl"].format(count=count),
+                    # Число партий архива с этим ходом; фразу бота на языке игрока собирает клиент
+                    # (каталог botComments.book.<бот>).
+                    count,
                 ]
                 for uci, count in sorted_moves
             ]

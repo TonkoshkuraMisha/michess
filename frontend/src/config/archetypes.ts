@@ -9,6 +9,8 @@
 import {t} from '../i18n';
 import type {PersonalityConfig} from '../services/personalities';
 import type {HistoricalBotProfile} from './champions';
+import {hasMessage} from '../i18n';
+import type {Messages} from '../i18n';
 
 /** Соперник из мастерской в партии: имя, конфиг и (если сохранён на сервере) его id. */
 export interface CustomOpponent {
@@ -16,6 +18,26 @@ export interface CustomOpponent {
     config: PersonalityConfig;
     personalityId?: number;
     bio?: string;
+    /**
+     * Архетип мастерской без изменений (в том числе соперник лестницы): имя и описание берутся из каталога на
+     * языке игрока, а в архив партия уходит с ключом «archetype:<id>».
+     */
+    archetypeId?: ArchetypeId;
+}
+
+/** id архетипа мастерской — ключ раздела archetypes в каталогах (тот же список, что на сервере). */
+export type ArchetypeId = keyof Messages['archetypes'];
+
+/** Проверка id, пришедшего с сервера: неизвестный архетип (сервер новее клиента) не показывается. */
+export function isArchetypeId(value: unknown): value is ArchetypeId {
+    return typeof value === 'string' && hasMessage(`archetypes.${value}.name`);
+}
+
+/** Ключ архетипа в архиве партий (games.personality_name) — тот же, что на сервере. */
+export const ARCHETYPE_PREFIX = 'archetype:';
+
+export function archetypeKey(id: ArchetypeId): string {
+    return `${ARCHETYPE_PREFIX}${id}`;
 }
 
 // Аватар соперника из мастерской — силуэт коня (своё изображение, без внешних файлов).
@@ -26,11 +48,18 @@ const WORKSHOP_AVATAR = `data:image/svg+xml;utf8,${encodeURIComponent(
 
 /** Профиль для доски и панели — в том же виде, что у исторических ботов. */
 export function customBotProfile(opponent: CustomOpponent): HistoricalBotProfile {
+    const name = () => (opponent.archetypeId ? t(`archetypes.${opponent.archetypeId}.name`) : opponent.name);
     return {
         id: 'custom',
-        name: opponent.name,
-        shortName: opponent.name,
-        playerLabel: opponent.name,
+        get name() {
+            return name();
+        },
+        get shortName() {
+            return name();
+        },
+        get playerLabel() {
+            return name();
+        },
         get title() {
             return t('bots.workshopTitle');
         },
@@ -39,6 +68,7 @@ export function customBotProfile(opponent: CustomOpponent): HistoricalBotProfile
         },
         rating: opponent.config.target_elo,
         get motto() {
+            if (opponent.archetypeId) return t(`archetypes.${opponent.archetypeId}.bio`);
             return opponent.bio || t('bots.workshopMotto');
         },
         avatar: WORKSHOP_AVATAR,

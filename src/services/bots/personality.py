@@ -20,7 +20,7 @@ from dataclasses import dataclass
 import chess
 from pydantic import BaseModel, ConfigDict, Field
 
-from src.services.bots.base import HistoricalBot
+from src.services.bots.base import BookEntry, HistoricalBot
 from src.services.bots.style import (
     ALWAYS,
     CAPTURE,
@@ -215,23 +215,23 @@ def build_style(config: BotPersonalityConfig) -> Style:
     a = config.aggression / 100.0
     if a > 0:
         rules += [
-            Rule(CHECK, 40.0 * a, "Шах! Атакуем короля, не давая передышки."),
-            Rule(SACRIFICE, 45.0 * a, "Жертва ради инициативы!"),
-            Rule(CAPTURE & ~SACRIFICE, 12.0 * a, "Вскрываем позицию разменом."),
-            Rule(NEAR_ENEMY_KING & ~piece(chess.KING), 15.0 * a, "Фигуры стягиваются к королю соперника."),
+            Rule(CHECK, 40.0 * a, "personality.check"),
+            Rule(SACRIFICE, 45.0 * a, "personality.sacrifice"),
+            Rule(CAPTURE & ~SACRIFICE, 12.0 * a, "personality.openByTrade"),
+            Rule(NEAR_ENEMY_KING & ~piece(chess.KING), 15.0 * a, "personality.kingHunt"),
         ]
     elif a < 0:
         calm = -a
         rules += [
-            Rule(QUIET, _scaled(calm, _prophylaxis), "Профилактика: отнимаем у соперника активные ходы."),
+            Rule(QUIET, _scaled(calm, _prophylaxis), "personality.prophylaxis"),
             Rule(CHECK | CAPTURE, -10.0 * calm),
         ]
 
     center = config.center_control / 100.0
     if center:
         rules += [
-            Rule(to(CENTER_SQUARES), 22.0 * center, "Борьба за центр."),
-            Rule(to(EXTENDED_CENTER) & ~to(CENTER_SQUARES), 10.0 * center, "Расширяем влияние в центре."),
+            Rule(to(CENTER_SQUARES), 22.0 * center, "personality.center"),
+            Rule(to(EXTENDED_CENTER) & ~to(CENTER_SQUARES), 10.0 * center, "personality.centerSpace"),
         ]
 
     mobility = config.mobility / 100.0
@@ -239,35 +239,35 @@ def build_style(config: BotPersonalityConfig) -> Style:
         rules += [
             Rule(
                 piece(*MINOR_PIECES) & by_move(15) & FROM_BACK_RANK, 25.0 * mobility,
-                "Развиваем фигуры — каждый темп на счету.",
+                "personality.develop",
             ),
-            Rule(ALWAYS, _scaled(1.5 * mobility, _mobility_gain), "Активизируем фигуры."),
+            Rule(ALWAYS, _scaled(1.5 * mobility, _mobility_gain), "personality.activate"),
         ]
 
     king = config.king_safety / 100.0
     if king:
         rules += [
-            Rule(CASTLING, 40.0 * king, "Рокировка: король в безопасности."),
+            Rule(CASTLING, 40.0 * king, "personality.castle"),
             Rule(piece(chess.KING) & ~CASTLING & QUEENS_ON, -25.0 * king),
             Rule(SHELTER_PAWN_PUSH & QUEENS_ON, -15.0 * king),
         ]
 
     pawns = config.pawn_structure / 100.0
     if pawns:
-        rules.append(Rule(ALWAYS, _scaled(pawns, pawn_structure_delta), "Укрепляем пешечную структуру."))
+        rules.append(Rule(ALWAYS, _scaled(pawns, pawn_structure_delta), "personality.pawns"))
 
     if not config.piece_values.is_standard():
-        rules.append(Rule(ALWAYS, _material_perception(config.piece_values), "Размен по моей шкале ценностей."))
+        rules.append(Rule(ALWAYS, _material_perception(config.piece_values), "personality.trade"))
 
     return Style("personality", *rules, note_by_weight=True)
 
 
 def default_comment_for(config: BotPersonalityConfig) -> str:
     if config.aggression >= 30:
-        return "Ищу атаку."
+        return "personality.seekAttack"
     if config.aggression <= -30:
-        return "Спокойно укрепляю позицию."
-    return "Играю по позиции."
+        return "personality.calm"
+    return "personality.positional"
 
 
 class PersonalityBot(HistoricalBot):
@@ -276,7 +276,7 @@ class PersonalityBot(HistoricalBot):
     bot_id = "custom"
     engine_source_name = "personality_engine"
     multipv = 8
-    opening_book: dict[str, list[tuple[str, int, str]]] = {}
+    opening_book: dict[str, list[BookEntry]] = {}
 
     def __init__(self, config: BotPersonalityConfig, stockfish_path: str | None = None):
         self.config = config

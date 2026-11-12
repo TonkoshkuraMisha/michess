@@ -21,7 +21,7 @@ router = APIRouter()
 class RungOut(BaseModel):
     key: str
     kind: str
-    name: str
+    id: str
     rating: int
     measured: bool
     status: Literal["beaten", "current", "locked"]
@@ -41,12 +41,12 @@ class LadderStartRequest(BaseModel):
 
 
 class LadderOpponent(BaseModel):
+    """Соперник ступени: имя и описание на языке игрока клиент берёт из каталога по id."""
     key: str
     kind: str
-    name: str
+    id: str
     rating: int
     bot_id: str | None = None
-    bio: str | None = None
     config: BotPersonalityConfig | None = None
 
 
@@ -67,7 +67,7 @@ def _state(user: User, active: str | None) -> LadderState:
         total=len(items),
         rungs=[
             RungOut(
-                key=r.key, kind=r.kind, name=r.name, rating=r.rating, measured=r.measured,
+                key=r.key, kind=r.kind, id=r.id, rating=r.rating, measured=r.measured,
                 status="beaten" if i < user.ladder_step else "current" if i == step else "locked",
             )
             for i, r in enumerate(items)
@@ -106,9 +106,8 @@ async def start_ladder_game(
     archetype = ladder.archetype_for(rung)
     return LadderStartResponse(
         opponent=LadderOpponent(
-            key=rung.key, kind=rung.kind, name=rung.name, rating=rung.rating,
+            key=rung.key, kind=rung.kind, id=rung.id, rating=rung.rating,
             bot_id=rung.key if rung.kind == "historical" else None,
-            bio=archetype.bio if archetype else None,
             config=archetype.config if archetype else None,
         ),
         color=color,

@@ -355,11 +355,13 @@ describe('мастерская соперников', () => {
             '/bots/catalog': () => ({
                 calibration: null, historical: [],
                 archetypes: [{
-                    name: 'Торопыга', bio: 'Спешит.', config: {...DEFAULT_CONFIG, target_elo: 700},
+                    id: 'rusher', config: {...DEFAULT_CONFIG, target_elo: 700},
                     declared_rating: 700, rating: 700, measured: false, games: 0, ci95: null,
                 }],
             }),
-            '/bots/custom-move': () => ({...BOT_MOVE_DEFAULT, uci: 'e2e4', san: 'e4', comment: 'Шах! Атакуем короля.'}),
+            '/bots/custom-move': () => ({
+                ...BOT_MOVE_DEFAULT, uci: 'e2e4', san: 'e4', comment: {key: 'personality.develop', params: {}},
+            }),
             '/bots/save-game': () => ({game_id: 1000, status: 'finished', result: '1-0'}),
         });
         vi.stubGlobal('fetch', fetchMock);
@@ -380,13 +382,15 @@ describe('мастерская соперников', () => {
         expect(moveBody.bot_id).toBeUndefined();
         await waitFor(() => expect(screen.getByText('e4')).toBeInTheDocument());
         expect(screen.getAllByText('Торопыга').length).toBeGreaterThan(0);
+        // Реплика бота пришла ключом и показана из каталога.
+        expect(screen.getByText('Развиваем фигуры — каждый темп на счету.')).toBeInTheDocument();
 
         await act(async () => {
             fireEvent.click(screen.getByRole('button', {name: /Сдаться/}));
         });
         const saveCall = (fetchMock.mock.calls as unknown as [string, RequestInit][]).find(([url]) => String(url).includes('/bots/save-game'));
         const saveBody = JSON.parse(String(saveCall?.[1].body));
-        expect(saveBody).toMatchObject({bot_id: 'custom', personality_name: 'Торопыга', player_color: 'black'});
+        expect(saveBody).toMatchObject({bot_id: 'custom', personality_name: 'archetype:rusher', player_color: 'black'});
     });
 });
 
@@ -396,8 +400,8 @@ describe('клубная лестница', () => {
         const ladderState = {
             rating: 1000, games: 0, step: 0, total: 2, active_opponent: null,
             rungs: [
-                {key: 'morphy', kind: 'historical', name: 'Морфи', rating: 2050, measured: true, status: 'current'},
-                {key: 'paulsen', kind: 'historical', name: 'Паульсен', rating: 2100, measured: false, status: 'locked'},
+                {key: 'morphy', kind: 'historical', id: 'morphy', rating: 2050, measured: true, status: 'current'},
+                {key: 'paulsen', kind: 'historical', id: 'paulsen', rating: 2100, measured: false, status: 'locked'},
             ],
         };
         const fetchMock = mockFetchRouter({
@@ -407,7 +411,7 @@ describe('клубная лестница', () => {
             '/profile/games/my-active': () => ({active: false}),
             '/bots/catalog': () => ({calibration: null, historical: [], archetypes: []}),
             '/bots/ladder/start': () => ({
-                opponent: {key: 'morphy', kind: 'historical', name: 'Морфи', rating: 2050, bot_id: 'morphy', bio: null, config: null},
+                opponent: {key: 'morphy', kind: 'historical', id: 'morphy', rating: 2050, bot_id: 'morphy', config: null},
                 color: 'white', step: 0, forfeited: null,
             }),
             '/bots/ladder': () => ladderState,

@@ -56,15 +56,28 @@ def resolve_stockfish_path(custom_path: str | None = None) -> str | None:
     return None
 
 
+# Ход дебютной книги: (UCI, вес, заметка). Заметка — ключ фирменной реплики бота (ручные линии в коде)
+# или число партий архива с этим ходом (книги из src/services/bots/books/*.json).
+BookEntry = tuple[str, int, str | int]
+
+
+def bot_comment(key: str, **params: int | str) -> dict:
+    """
+    Реплика бота для клиента: ключ каталога botComments и параметры — текст на трёх языках
+    собирает клиент (frontend/src/i18n/messages/*.ts). Сервер русских фраз не отдаёт.
+    """
+    return {"key": key, "params": params}
+
+
 def load_bot_opening_book(
         bot_id: str,
-        fallback_book: dict[str, list[tuple[str, int, str]]] | None = None,
-) -> dict[str, list[tuple[str, int, str]]]:
+        fallback_book: dict[str, list[BookEntry]] | None = None,
+) -> dict[str, list[BookEntry]]:
     """
     Загружает дебютную книгу бота из src/services/bots/books/{bot_id}.json
     и аккуратно объединяет её с фирменными дебютными линиями fallback_book.
     """
-    book: dict[str, list[tuple[str, int, str]]] = {}
+    book: dict[str, list[BookEntry]] = {}
     if fallback_book:
         for k, v in fallback_book.items():
             book[k] = list(v)
@@ -81,8 +94,8 @@ def load_bot_opening_book(
                     data = json.load(f)
                 if isinstance(data, dict) and data:
                     for fen_key, moves in data.items():
-                        parsed_moves = [
-                            (str(m[0]), int(m[1]), str(m[2]))
+                        parsed_moves: list[BookEntry] = [
+                            (str(m[0]), int(m[1]), int(m[2]))
                             for m in moves
                             if len(m) >= 3 and str(m[0]) != "0000"
                         ]
@@ -237,12 +250,12 @@ class HistoricalBot:
 
     bot_id: str = "base"
     engine_source_name: str = "historical_style_engine"
-    default_comment: str = "Классический позиционный ход."
+    default_comment: str = "common.positional"
     blunder_guard_cp: float = 130.0
     jitter_range: float = 8.0
     multipv: int = 6
     time_limit: float = 0.25
-    opening_book: dict[str, list[tuple[str, int, str]]] = {}
+    opening_book: dict[str, list[BookEntry]] = {}
     style: Style = Style("neutral")
     default_skill_level: int = 7
     default_uci_elo: int = 1850
@@ -272,7 +285,13 @@ class HistoricalBot:
     def evaluate_style_bonus(self, board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
         return self.style.evaluate(board_before, move)
 
-    def _book_move(self, board: chess.Board) -> tuple[chess.Move, str] | None:
+    def _book_note(self, note: str | int) -> dict:
+        """Реплика к ходу книги: фирменная фраза по ключу или «ход из партий архива» с их числом."""
+        if isinstance(note, int):
+            return bot_comment(f"book.{self.bot_id}", games=note)
+        return bot_comment(note)
+
+    def _book_move(self, board: chess.Board) -> tuple[chess.Move, dict] | None:
         candidates = self.opening_book.get(normalize_fen_key(board))
         if not candidates:
             return None
@@ -291,7 +310,7 @@ class HistoricalBot:
             return None
         moves, weights, comments = zip(*valid_book_moves, strict=True)
         idx = random.choices(range(len(moves)), weights=weights, k=1)[0]
-        return moves[idx], comments[idx]
+        return moves[idx], self._book_note(comments[idx])
 
     def _candidate_scores(self, board: chess.Board) -> tuple[dict[chess.Move, float], bool, str | None]:
         """Оценки кандидатов (сантипешки за ходящую сторону), был ли это движок, и путь к нему."""
@@ -335,8 +354,8 @@ class HistoricalBot:
             best_move = next(iter(board.legal_moves))
         return best_move, best_comment
 
-    def _comment_for(self, board: chess.Board, move: chess.Move, note: str | None) -> str:
-        return note or self.default_comment
+    def _comment_for(self, board: chess.Board, move: chess.Move, note: str | None) -> dict:
+        return bot_comment(note or self.default_comment)
 
     def choose_move(self, fen: str) -> dict:
         board = chess.Board(fen)

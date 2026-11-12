@@ -10,14 +10,14 @@ import {makeI18n} from '../../../i18n';
 const STATE = {
     rating: 1032, games: 3, step: 1, total: 3, active_opponent: null,
     rungs: [
-        {key: 'archetype:Торопыга', kind: 'archetype', name: 'Торопыга', rating: 640, measured: true, status: 'beaten'},
-        {key: 'archetype:Тихоня', kind: 'archetype', name: 'Тихоня', rating: 900, measured: false, status: 'current'},
-        {key: 'morphy', kind: 'historical', name: 'Морфи', rating: 2050, measured: true, status: 'locked'},
+        {key: 'archetype:rusher', kind: 'archetype', id: 'rusher', rating: 640, measured: true, status: 'beaten'},
+        {key: 'archetype:quiet', kind: 'archetype', id: 'quiet', rating: 900, measured: false, status: 'current'},
+        {key: 'morphy', kind: 'historical', id: 'morphy', rating: 2050, measured: true, status: 'locked'},
     ],
 };
 
 const START = {
-    opponent: {key: 'archetype:Тихоня', kind: 'archetype', name: 'Тихоня', rating: 900, bot_id: null, bio: 'Тихий.', config: {}},
+    opponent: {key: 'archetype:quiet', kind: 'archetype', id: 'quiet', rating: 900, bot_id: null, config: {}},
     color: 'black', step: 1, forfeited: null,
 };
 
@@ -69,7 +69,7 @@ describe('LadderPanel', () => {
 });
 
 describe('итог партии лестницы', () => {
-    const base = {delta: 0, rating: 1000, step: 0, promoted: false, opponent: 'Тихоня'};
+    const base = {delta: 0, rating: 1000, step: 0, promoted: false, opponent: 'archetype:quiet'};
 
     const promoted = {...base, counted: true, reason: null, delta: 18, rating: 1018, promoted: true};
 
@@ -88,7 +88,7 @@ describe('итог партии лестницы', () => {
     });
 
     it('незасчитанная партия называет причину', () => {
-        expect(renderStatus(ladderOutcomeMessage({...base, counted: false, reason: 'в партии был возврат хода'}), makeI18n('ru').t))
+        expect(renderStatus(ladderOutcomeMessage({...base, counted: false, reason: 'takeback'}), makeI18n('ru').t))
             .toBe('Партия не засчитана в лестницу: в партии был возврат хода.');
     });
 });

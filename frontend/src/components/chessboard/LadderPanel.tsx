@@ -9,11 +9,13 @@ import type {LadderOutcome} from './hooks/useBotGame';
 import {useI18n} from '../../i18n';
 import {renderUiMessage} from '../../i18n';
 import type {UiMessage} from '../../i18n';
+import {ladderOpponentName} from '../../config/players';
 
 interface Rung {
     key: string;
     kind: 'historical' | 'archetype';
-    name: string;
+    /** id бота или архетипа — имя на языке игрока берётся из каталога. */
+    id: string;
     rating: number;
     measured: boolean;
     status: 'beaten' | 'current' | 'locked';
@@ -31,10 +33,9 @@ interface LadderState {
 export interface LadderOpponent {
     key: string;
     kind: 'historical' | 'archetype';
-    name: string;
+    id: string;
     rating: number;
     bot_id: string | null;
-    bio: string | null;
     config: PersonalityConfig | null;
 }
 
@@ -124,7 +125,7 @@ export function LadderPanel({playDisabled, onStart, lastOutcome}: LadderPanelPro
                     {current && (
                         <div className="p-2 rounded-md bg-black/40 border border-amber-600/50 flex flex-col gap-1.5">
                             <div className="flex items-center justify-between">
-                                <span className="font-bold text-amber-200">{t('ladder.next', {name: current.name})}</span>
+                                <span className="font-bold text-amber-200">{t('ladder.next', {name: ladderOpponentName(current.kind, current.id, t)})}</span>
                                 <span className="font-mono text-amber-300">
                                     {current.measured ? t('common.measuredShort', {rating: current.rating}) : current.rating}
                                 </span>
@@ -150,7 +151,7 @@ export function LadderPanel({playDisabled, onStart, lastOutcome}: LadderPanelPro
                                 {r.status === 'beaten' ? <CheckCircle2 size={12} className="text-emerald-400" aria-label={t('ladder.beaten')}/>
                                     : r.status === 'current' ? <Swords size={12} className="text-amber-300" aria-label={t('ladder.current')}/>
                                         : <Lock size={12} className="text-boxwood/40" aria-label={t('ladder.locked')}/>}
-                                <span className="flex-1 truncate">{r.name}</span>
+                                <span className="flex-1 truncate">{ladderOpponentName(r.kind, r.id, t)}</span>
                                 <span className="font-mono">{r.rating}</span>
                             </li>
                         ))}

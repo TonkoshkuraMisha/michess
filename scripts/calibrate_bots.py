@@ -89,11 +89,11 @@ def _engine(name: str, options: dict) -> chess.engine.SimpleEngine:
 
 def _bot(key: str):
     from src.services.bots import BOT_INSTANCES
-    from src.services.bots.archetypes import ARCHETYPES_BY_NAME
+    from src.services.bots.archetypes import ARCHETYPES_BY_KEY
     from src.services.bots.personality import PersonalityBot
 
     if key.startswith("archetype:"):
-        return PersonalityBot(ARCHETYPES_BY_NAME[key.split(":", 1)[1]].config)
+        return PersonalityBot(ARCHETYPES_BY_KEY[key].config)
     return BOT_INSTANCES[key]
 
 
@@ -209,7 +209,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--rounds", type=int, default=1, help="Партий каждой пары за каждый цвет")
     parser.add_argument("--workers", type=int, default=3)
-    parser.add_argument("--only", nargs="*", help="Калибровать только этих (id или archetype:<имя>)")
+    parser.add_argument("--only", nargs="*", help="Калибровать только этих (id или archetype:<id>)")
     parser.add_argument("--out", type=Path, default=OUT)
     parser.add_argument("--from-log", type=Path, help="Пересчитать рейтинги по логу прошлого прогона, без партий")
     args = parser.parse_args()

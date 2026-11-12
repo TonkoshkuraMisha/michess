@@ -31,6 +31,7 @@ import {
 } from '../config/boardAppearance';
 import {renderUiMessage, uiMessage, useI18n} from '../i18n';
 import type {UiMessage} from '../i18n';
+import {displayPlayerName} from '../config/players';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
@@ -446,9 +447,10 @@ export default function GameViewer() {
         );
     };
 
-    const whiteName = gameDataFromState?.white_username || pgnHeaders.White || t('common.white');
+    // Имена ботов и архетипов из архива — на языке игрока; заголовки PGN — как записаны.
+    const whiteName = displayPlayerName(gameDataFromState?.white_username, t) || pgnHeaders.White || t('common.white');
     const whiteRating = gameDataFromState?.white_rating || pgnHeaders.WhiteElo || '?';
-    const blackName = gameDataFromState?.black_username || pgnHeaders.Black || t('common.black');
+    const blackName = displayPlayerName(gameDataFromState?.black_username, t) || pgnHeaders.Black || t('common.black');
     const blackRating = gameDataFromState?.black_rating || pgnHeaders.BlackElo || '?';
     const resultStr = gameDataFromState?.result || pgnHeaders.Result || '*';
 

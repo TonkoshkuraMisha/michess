@@ -8,12 +8,12 @@ import type {SoundEventType} from '../../../services/soundEngine';
 import {API_BASE_URL} from '../../../config/api';
 import {HISTORICAL_BOTS} from '../../../config/champions';
 import type {BotOpponentId, HistoricalBotId, HistoricalBotProfile} from '../../../config/champions';
-import {customBotProfile} from '../../../config/archetypes';
+import {archetypeKey, customBotProfile} from '../../../config/archetypes';
 import type {CustomOpponent} from '../../../config/archetypes';
 import {cloneChessInstance, customStartFen} from '../boardUtils';
 import type {PendingPromotion} from '../types';
 import {readApiError} from '../../../services/apiErrors';
-import {t} from '../../../i18n';
+import {hasMessage, t, uiMessage} from '../../../i18n';
 import type {MessageKey} from '../../../i18n';
 import {messageParam, status} from '../status';
 import type {GameStatus, StatusParam} from '../status';
@@ -99,9 +99,29 @@ export interface BotGameStartOptions {
 
 /** Итог партии лестницы для строки статуса; reason пока приходит с сервера текстом (до таска 11.0c). */
 export function ladderOutcomeMessage(outcome: LadderOutcome): GameStatus & { key: MessageKey } {
-    if (!outcome.counted) return {key: 'ladder.notCounted', params: {reason: outcome.reason ?? ''}};
+    if (!outcome.counted) {
+        // Причина — код сервера (ladder.reasons); незнакомая (устаревший ответ) — как есть.
+        const reasonKey = `ladder.reasons.${outcome.reason ?? ''}`;
+        const reason = hasMessage(reasonKey) ? messageParam(reasonKey) : (outcome.reason ?? '');
+        return {key: 'ladder.notCounted', params: {reason}};
+    }
     const delta = outcome.delta > 0 ? `+${outcome.delta}` : String(outcome.delta);
     return {key: outcome.promoted ? 'ladder.resultPromoted' : 'ladder.result', params: {rating: outcome.rating, delta}};
+}
+
+/** Реплика бота к ходу: ключ каталога botComments и параметры; незнакомый ключ — без реплики. */
+export function botCommentMessage(comment: unknown): GameStatus | null {
+    if (!comment || typeof comment !== 'object') return null;
+    const {key, params} = comment as { key?: unknown; params?: unknown };
+    const messageKey = `botComments.${String(key)}`;
+    if (typeof key !== 'string' || !hasMessage(messageKey)) return null;
+    const safeParams: Record<string, string | number> = {};
+    if (params && typeof params === 'object') {
+        for (const [name, value] of Object.entries(params as Record<string, unknown>)) {
+            if (typeof value === 'string' || typeof value === 'number') safeParams[name] = value;
+        }
+    }
+    return uiMessage(messageKey, safeParams);
 }
 
 export interface UseBotGameResult {
@@ -177,7 +197,11 @@ export function useBotGame({
     }, []);
 
     const botNameParam = useCallback((id: BotOpponentId): StatusParam => {
-        if (id === 'custom') return customOpponentRef.current?.name || messageParam('workshop.defaultName');
+        if (id === 'custom') {
+            const opponent = customOpponentRef.current;
+            if (opponent?.archetypeId) return messageParam(`archetypes.${opponent.archetypeId}.name`);
+            return opponent?.name || messageParam('workshop.defaultName');
+        }
         return messageParam(`bots.profiles.${id}.shortName`);
     }, []);
 
@@ -206,7 +230,10 @@ export function useBotGame({
                     ...(botId === 'custom' && customOpponentRef.current
                         ? (customOpponentRef.current.personalityId
                             ? {personality_id: customOpponentRef.current.personalityId}
-                            : {personality_name: customOpponentRef.current.name})
+                            // Архетип без изменений — ключом: в архиве его имя будет на языке игрока.
+                            : {personality_name: customOpponentRef.current.archetypeId
+                                ? archetypeKey(customOpponentRef.current.archetypeId)
+                                : customOpponentRef.current.name})
                         : {}),
                     termination: termination ?? null, moves_uci: movesUci,
                     // Партия с произвольной позиции: сервер проверяет ходы от неё же.
@@ -391,7 +418,7 @@ export function useBotGame({
                         setGame(nextGame);
                         setHistory(newHistory);
                         setViewIndex(-1);
-                        setBotComment(data.comment ? {text: String(data.comment)} : null);
+                        setBotComment(botCommentMessage(data.comment));
                         moveStartTime.current = Date.now();
 
                         // На завершающем ходу играет только исход (победа/поражение/ничья) —

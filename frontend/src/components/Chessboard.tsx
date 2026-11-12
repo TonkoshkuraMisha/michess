@@ -50,6 +50,7 @@ import {hasStatusKey, renderStatus, status} from './chessboard/status';
 import type {GameStatus} from './chessboard/status';
 import {useI18n} from '../i18n';
 import {fetchBotCatalog} from '../services/botCatalog';
+import {isArchetypeId} from '../config/archetypes';
 import type {CustomOpponent} from '../config/archetypes';
 import {LobbyPanel} from './chessboard/LobbyPanel';
 import {AppearancePickerDropdown} from './chessboard/AppearancePickerDropdown';
@@ -898,9 +899,11 @@ export default function Chessboard() {
     const handleLadderStart = ({opponent, color, forfeited}: LadderStart) => {
         if (opponent.kind === 'historical' && opponent.bot_id) {
             startHistoricalBotGame(opponent.bot_id as HistoricalBotId, color, null, {ladder: true});
-        } else if (opponent.config) {
+        } else if (opponent.config && isArchetypeId(opponent.id)) {
+            // Соперник лестницы — архетип: имя и описание на языке игрока, в архив — ключом архетипа.
             startCustomBotGame(
-                {name: opponent.name, config: opponent.config, bio: opponent.bio ?? undefined}, color, null, {ladder: true},
+                {name: t(`archetypes.${opponent.id}.name`), config: opponent.config, archetypeId: opponent.id},
+                color, null, {ladder: true},
             );
         }
         if (forfeited) setDrawOfferStatus(status('ladder.forfeited', {message: ladderOutcomeMessage(forfeited)}));

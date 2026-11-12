@@ -172,7 +172,7 @@ def test_piece_values_shift_exchange_preference():
 def test_comment_explains_the_chosen_move(engine_lines):
     engine_lines(THREAT_FEN, {"Rh8+": 0})
     result = PersonalityBot(BotPersonalityConfig(aggression=100, **ONLY_AGGRESSION)).choose_move(THREAT_FEN)
-    assert "Шах" in result["comment"]
+    assert result["comment"] == {"key": "personality.check", "params": {}}
     assert result["source"] == "personality_engine"
 
 

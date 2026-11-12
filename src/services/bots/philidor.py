@@ -4,6 +4,7 @@ import chess
 
 from src.services.bots.base import (
     PIECE_VALUES,
+    BookEntry,
     HistoricalBot,
     _simulate_human_thinking_time,
     analyse_with_stockfish,
@@ -31,32 +32,32 @@ from src.services.bots.style import (
 PHILIDOR_BLUNDER_GUARD_CP = 120.0
 BLUNDER_GUARD_MARGIN_CP = PHILIDOR_BLUNDER_GUARD_CP
 
-DEFAULT_PHILIDOR_BOOK: dict[str, list[tuple[str, int, str]]] = {
+DEFAULT_PHILIDOR_BOOK: dict[str, list[BookEntry]] = {
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
-        ("e2e4", 92, "Пешка короля открывает путь слону и занимает центр (11 партий)."),
-        ("d2d4", 8, "Атака ферзевой пешкой с последующим c2-c4."),
+        ("e2e4", 92, "philidor.bookE4"),
+        ("d2d4", 8, "philidor.bookD4"),
     ],
     "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -": [
-        ("e7e5", 72, "Встретим пешку соперника в центре: e7-e5 (8 партий)."),
-        ("c7c5", 18, "Асимметричный фланговый ответ c7-c5 (3 партии)."),
-        ("e7e6", 10, "Сдержанное построение e7-e6, готовя удар d7-d5."),
+        ("e7e5", 72, "philidor.bookE5"),
+        ("c7c5", 18, "philidor.bookC5"),
+        ("e7e6", 10, "philidor.bookE6"),
     ],
     "rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq -": [
-        ("d7d6", 100, "Моя фирменная защита (d7-d6)! Белые напрасно вывели коня на f3, заперев свою пешку f2."),
+        ("d7d6", 100, "philidor.bookDefense"),
     ],
     "rnbqkbnr/ppp2ppp/3p4/4p3/3PP3/5N2/PPP2PPP/RNBQKB1R b KQkq -": [
-        ("f7f5", 65, "Контрудар f7-f5! Как я писал в «Анализе шахматной игры», перехватим инициативу пешками."),
-        ("e5d4", 35, "Разменяем центральную пешку, удерживая прочный редут на d6."),
+        ("f7f5", 65, "philidor.bookF5"),
+        ("e5d4", 35, "philidor.bookExd4"),
     ],
     "r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/8/PPPP1PPP/RNBQK1NR w KQkq -": [
-        ("c2c3", 100, "Сначала c2-c3! Конь никогда не должен становиться впереди пешки c."),
+        ("c2c3", 100, "philidor.bookC3"),
     ],
 }
 
 PHILIDOR_OPENING_BOOK = load_bot_opening_book("philidor", DEFAULT_PHILIDOR_BOOK)
 # Гарантируем, что классическая защита Филидора 1.e4 e5 2.Nf3 d6 всегда имеет приоритет
 PHILIDOR_OPENING_BOOK["rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq -"] = [
-    ("d7d6", 100, "Моя фирменная защита (d7-d6)! Белые напрасно вывели коня на f3, заперев свою пешку f2."),
+    ("d7d6", 100, "philidor.bookDefense"),
 ]
 
 
@@ -69,11 +70,11 @@ PHILIDOR_STYLE = Style(
         piece(chess.PAWN),
         Rule(ALWAYS, 14.0),
         FirstOf(
-            Rule(to(CENTER_SQUARES), 35.0, "Пешки — душа шахмат! Мощный удар в центр доски."),
-            Rule(to(EXTENDED_CENTER), 22.0, "Занимаем пространство пешечной фалангой."),
+            Rule(to(CENTER_SQUARES), 35.0, "philidor.pawnCenter"),
+            Rule(to(EXTENDED_CENTER), 22.0, "philidor.pawnSpace"),
             Rule(
                 to({chess.C3, chess.C6, chess.D3, chess.D6}), 16.0,
-                "Подготавливаем продвижение центральной пешки по методу Филидора.",
+                "philidor.pawnPrepare",
             ),
         ),
     ),
@@ -98,7 +99,7 @@ class PhilidorBot(HistoricalBot):
 
     bot_id = "philidor"
     engine_source_name = "philidor_style_engine_deep"
-    default_comment = "Пешки — душа шахмат. Строим несокрушимую пешечную цепь."
+    default_comment = "philidor.default"
     blunder_guard_cp = PHILIDOR_BLUNDER_GUARD_CP
     jitter_range = 8.0
     multipv = 6
