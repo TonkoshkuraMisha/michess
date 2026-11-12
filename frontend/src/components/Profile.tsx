@@ -75,6 +75,84 @@ interface RatingPoint {
 
 const GAMES_PAGE_SIZE = 30;
 
+/** Точка графика рейтинга: рейтинг после партии, изменение за неё и ссылка на партию. */
+export interface RatingChartPoint {
+    game_id: number;
+    rating: number;
+    delta: number;
+    /** Подпись оси: день партии. */
+    date: string;
+    /** Подсказка: дата и время завершения партии. */
+    fullDate: string;
+}
+
+export function toRatingChartPoint(point: RatingPoint): RatingChartPoint {
+    const finished = parseISO(point.finished_at);
+    return {
+        game_id: point.game_id,
+        rating: point.rating,
+        delta: point.delta,
+        date: format(finished, 'd MMM', {locale: ru}),
+        fullDate: format(finished, 'd MMMM yyyy, HH:mm', {locale: ru}),
+    };
+}
+
+/** «+12», «-8», «0»: изменение рейтинга со знаком. */
+export function formatRatingDelta(delta: number): string {
+    if (delta > 0) return `+${delta}`;
+    if (delta < 0) return `${delta}`;
+    return '0';
+}
+
+/** Подсказка графика: когда сыграна партия, рейтинг после неё и изменение за неё. */
+export function RatingTooltip({active, payload}: {
+    active?: boolean;
+    payload?: Array<{ payload: RatingChartPoint }>;
+}) {
+    const point = active ? payload?.[0]?.payload : undefined;
+    if (!point) return null;
+    const deltaColor = point.delta > 0 ? 'text-emerald-400' : point.delta < 0 ? 'text-red-400' : 'text-boxwood/60';
+    return (
+        <div className="bg-[#1A120B] border border-[#7A4B31] rounded-lg px-3 py-2 text-sm font-sans shadow-heavy">
+            <div className="text-boxwood/70 text-xs">{point.fullDate}</div>
+            <div className="font-bold text-amber-400 font-mono">
+                {point.rating} <span className={deltaColor}>({formatRatingDelta(point.delta)})</span>
+            </div>
+            <div className="text-[11px] text-boxwood/50 mt-0.5">Нажмите, чтобы открыть партию</div>
+        </div>
+    );
+}
+
+/**
+ * Точка графика, по которой можно открыть партию. Recharts передаёт в свой элемент точки
+ * координаты и данные точки (payload).
+ */
+export function RatingDot({cx, cy, payload, r = 4, active = false, onSelect}: {
+    cx?: number;
+    cy?: number;
+    payload?: RatingChartPoint;
+    r?: number;
+    active?: boolean;
+    onSelect: (gameId: number) => void;
+}) {
+    if (cx === undefined || cy === undefined || !payload) return null;
+    return (
+        <circle
+            cx={cx}
+            cy={cy}
+            r={r}
+            fill={active ? '#fbbf24' : '#1A120B'}
+            stroke="#fbbf24"
+            strokeWidth={2}
+            style={{cursor: 'pointer'}}
+            role="link"
+            aria-label={`Партия от ${payload.fullDate}: рейтинг ${payload.rating}`}
+            data-game-id={payload.game_id}
+            onClick={() => onSelect(payload.game_id)}
+        />
+    );
+}
+
 /** Категория с наибольшим числом рейтинговых партий — её график показываем первым. */
 function mostPlayedCategory(stats: PlayerStats | null): RatingCategoryKey {
     let best: RatingCategoryKey = 'blitz';
@@ -216,11 +294,8 @@ export default function Profile() {
     const losses = stats?.losses ?? 0;
     const winRate = totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
 
-    const chartData = ratingPoints.map((point) => ({
-        rating: point.rating,
-        delta: point.delta,
-        date: format(parseISO(point.finished_at), 'd MMM', {locale: ru}),
-    }));
+    const chartData = ratingPoints.map(toRatingChartPoint);
+    const openGame = (gameId: number) => navigate(`/game/${gameId}`);
     const chartCategoryLabel = CHART_CATEGORIES.find((c) => c.key === chartCategory)?.label ?? '';
     const totalPages = Math.max(1, Math.ceil(gamesTotal / GAMES_PAGE_SIZE));
 
@@ -327,15 +402,11 @@ export default function Profile() {
                                 <XAxis dataKey="date" stroke="#8B5A2B" tick={{fill: '#D0A972', fontSize: 12}} dy={10}/>
                                 <YAxis domain={['dataMin - 30', 'dataMax + 30']} stroke="#8B5A2B"
                                        tick={{fill: '#D0A972', fontSize: 12}} dx={-10}/>
-                                <Tooltip contentStyle={{
-                                    backgroundColor: '#1A120B',
-                                    borderColor: '#7A4B31',
-                                    color: '#F5DEB3',
-                                    borderRadius: '8px'
-                                }} itemStyle={{color: '#fbbf24', fontWeight: 'bold'}}/>
+                                <Tooltip content={<RatingTooltip/>}/>
                                 <Line type="monotone" dataKey="rating" stroke="#fbbf24" strokeWidth={3}
-                                      dot={{r: 4, fill: '#1A120B', stroke: '#fbbf24', strokeWidth: 2}}
-                                      activeDot={{r: 6, fill: '#fbbf24'}}/>
+                                      isAnimationActive={false}
+                                      dot={<RatingDot r={4} onSelect={openGame}/>}
+                                      activeDot={<RatingDot r={6} active onSelect={openGame}/>}/>
                             </LineChart>
                         </ResponsiveContainer>
                     ) : (

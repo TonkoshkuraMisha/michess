@@ -4,7 +4,22 @@
 import {fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import {MemoryRouter, Route, Routes, useLocation, useParams} from 'react-router-dom';
 import {afterEach, beforeAll, describe, expect, it, vi} from 'vitest';
-import Profile from '../Profile';
+import {cloneElement, type ReactElement} from 'react';
+import Profile, {RatingDot, RatingTooltip, formatRatingDelta, toRatingChartPoint} from '../Profile';
+
+// В jsdom у контейнера нулевой размер, и recharts не рисует график. Отдаём графику фиксированный
+// размер — тогда точки появляются в DOM и по ним можно кликнуть.
+vi.mock('recharts', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('recharts')>();
+    return {
+        ...actual,
+        ResponsiveContainer: ({children}: { children: ReactElement }) => (
+            <div style={{width: 800, height: 300}}>
+                {cloneElement(children as ReactElement<{ width: number; height: number }>, {width: 800, height: 300})}
+            </div>
+        ),
+    };
+});
 
 const PROFILE = {
     id: 7,
@@ -296,3 +311,58 @@ describe('Profile: итоги и история рейтинга', () => {
         expect(screen.queryByText(/Стр\./)).not.toBeInTheDocument();
     });
 });
+
+describe('Profile: график рейтинга', () => {
+    it('точка графика хранит партию, дату и время и изменение рейтинга', () => {
+        const point = toRatingChartPoint({
+            game_id: 12, finished_at: '2026-11-01T12:30:00Z', rating: 1512, delta: 12,
+        });
+
+        expect(point).toMatchObject({game_id: 12, rating: 1512, delta: 12, date: '1 нояб.'});
+        expect(point.fullDate).toMatch(/^1 ноября 2026, \d{2}:\d{2}$/);
+    });
+
+    it.each([[12, '+12'], [-10, '-10'], [0, '0']])('изменение %d показывается как %s', (delta, text) => {
+        expect(formatRatingDelta(delta)).toBe(text);
+    });
+
+    it('подсказка показывает дату, рейтинг и изменение за партию', () => {
+        const point = {game_id: 3, rating: 1490, delta: -10, date: '2 нояб.', fullDate: '2 ноября 2026, 18:05'};
+        render(<RatingTooltip active payload={[{payload: point}]}/>);
+
+        expect(screen.getByText('2 ноября 2026, 18:05')).toBeInTheDocument();
+        expect(screen.getByText(/1490/).textContent).toBe('1490 (-10)');
+    });
+
+    it('без активной точки подсказки нет', () => {
+        const {container} = render(<RatingTooltip active={false} payload={[]}/>);
+        expect(container).toBeEmptyDOMElement();
+    });
+
+    it('клик по точке сообщает id партии', () => {
+        const onSelect = vi.fn();
+        const point = {game_id: 42, rating: 1500, delta: 8, date: '1 нояб.', fullDate: '1 ноября 2026, 12:00'};
+        render(<svg><RatingDot cx={10} cy={20} payload={point} onSelect={onSelect}/></svg>);
+
+        fireEvent.click(screen.getByRole('link', {name: /рейтинг 1500/}));
+        expect(onSelect).toHaveBeenCalledWith(42);
+    });
+
+    it('клик по точке на странице профиля открывает разбор этой партии', async () => {
+        stubFetch({
+            profile: {ok: true, body: PROFILE},
+            stats: {ok: true, body: stats({rated_games: {bullet: 0, blitz: 2, rapid: 0, classical: 0}})},
+            history: () => ({ok: true, body: {points: [point(1, 1510, 10), point(2, 1502, -8)]}}),
+        });
+        renderProfile();
+
+        const dots = await screen.findAllByRole('link', {name: /^Партия от /});
+        expect(dots).toHaveLength(2);
+        expect(dots[1]).toHaveAccessibleName(/рейтинг 1502/);
+
+        fireEvent.click(dots[1]);
+
+        expect(await screen.findByText(/^Партия 2/)).toBeInTheDocument();
+    });
+});
+
