@@ -6,13 +6,14 @@ from datetime import UTC, datetime
 
 import chess
 import chess.pgn
-from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, Depends, HTTPException, Request
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api import deps
 from src.api.fair_play import forbid_engine_help_during_game
+from src.api.personalities import get_owned_personality, personality_config, validate_personality_name
 from src.api.rate_limit import rate_limit
 from src.db import session as db_session
 from src.models.game import Game, GameStatus
@@ -123,9 +124,16 @@ BOT_METADATA = {b["id"]: b for b in AVAILABLE_BOTS}
 BOT_PASSWORD_MARKER = "!historical_bot_no_login!"
 
 
+# Общий бот-пользователь для партий с персоналиями из мастерской: в базе соперник — он,
+# а в PGN и архиве показывается имя персоналии (games.personality_name).
+CUSTOM_BOT_ID = "custom"
+CUSTOM_BOT_USERNAME = "Соперник-из-мастерской"
+CUSTOM_BOT_RATING = 1500
+
+
 def reserved_bot_usernames() -> set[str]:
     """Имена (и id) ботов, которые нельзя занять при регистрации (сравнение без регистра)."""
-    names: set[str] = set()
+    names: set[str] = {CUSTOM_BOT_USERNAME.casefold()}
     for bot in AVAILABLE_BOTS:
         for value in (bot["id"], bot["name"], bot["full_name"]):
             names.add(str(value).strip().casefold())
@@ -159,14 +167,28 @@ class BotMoveResponse(BaseModel):
 
 
 class CustomBotMoveRequest(BaseModel):
-    config: BotPersonalityConfig = Field(
-        default_factory=BotPersonalityConfig, description="Характер соперника (ползунки, веса фигур, сила)",
+    config: BotPersonalityConfig | None = Field(
+        default=None, description="Характер соперника (ползунки, веса фигур, сила); по умолчанию — сбалансированный",
+    )
+    personality_id: int | None = Field(
+        default=None, description="Сохранённая персоналия игрока (нужен вход) — вместо config",
     )
     fen: str = Field(..., max_length=100, description="Текущая позиция на доске в формате FEN")
 
+    @model_validator(mode="after")
+    def _config_or_saved(self) -> "CustomBotMoveRequest":
+        if self.config is not None and self.personality_id is not None:
+            raise ValueError("Укажите либо config, либо personality_id")
+        return self
+
 
 class BotGameSaveRequest(BaseModel):
-    bot_id: str = Field(..., description="ID исторического бота")
+    bot_id: str = Field(..., description="ID исторического бота или 'custom' — персоналия из мастерской")
+    personality_id: int | None = Field(default=None, description="Для bot_id='custom': сохранённая персоналия")
+    personality_name: str | None = Field(
+        default=None, min_length=3, max_length=30,
+        description="Для bot_id='custom' без сохранения: имя соперника из конструктора",
+    )
     player_color: str = Field(..., description="Цвет игрока ('white' или 'black')")
     result: str = Field(..., description="Результат партии ('1-0', '0-1', '1/2-1/2')")
     termination: str | None = Field(
@@ -347,8 +369,11 @@ def _build_pgn_string(
 
 
 async def _get_or_create_bot_user(db: AsyncSession, bot_id: str) -> User:
-    """Находит или создаёт запись исторического бота в таблице пользователей."""
-    meta = BOT_METADATA[bot_id]
+    """Находит или создаёт запись бота в таблице пользователей (исторического или общего для персоналий)."""
+    meta = (
+        {"name": CUSTOM_BOT_USERNAME, "rating": CUSTOM_BOT_RATING}
+        if bot_id == CUSTOM_BOT_ID else BOT_METADATA[bot_id]
+    )
     bot_username = meta["name"]
 
     stmt = select(User).where(User.username == bot_username)
@@ -479,10 +504,16 @@ async def get_bot_move(payload: BotMoveRequest):
         Depends(forbid_engine_help_during_game),
     ],
 )
-async def get_custom_bot_move(payload: CustomBotMoveRequest):
+async def get_custom_bot_move(
+        payload: CustomBotMoveRequest, request: Request, db: AsyncSession = Depends(get_db),
+):
     """Ход соперника, собранного из ползунков характера (src/services/bots/personality.py)."""
     board = _playable_board(payload.fen)
-    bot = PersonalityBot(payload.config)
+    config = payload.config
+    if payload.personality_id is not None:
+        owner = await _bearer_user(request, db)
+        config = personality_config(await get_owned_personality(db, owner.id, payload.personality_id))
+    bot = PersonalityBot(config or BotPersonalityConfig())
     result = await asyncio.to_thread(bot.choose_move, payload.fen)
     return BotMoveResponse(
         bot_id=bot.bot_id,
@@ -497,15 +528,42 @@ async def get_custom_bot_move(payload: CustomBotMoveRequest):
     )
 
 
+async def _bearer_user(request: Request, db: AsyncSession) -> User:
+    """Пользователь по заголовку Authorization или 401 — для сохранённых персоналий."""
+    scheme, _, token = request.headers.get("authorization", "").partition(" ")
+    user = await deps.user_from_token(db, token) if scheme.lower() == "bearer" and token else None
+    if user is None:
+        raise HTTPException(status_code=401, detail="Войдите, чтобы играть с сохранённым соперником")
+    return user
+
+
+async def _resolve_personality_for_save(
+        db: AsyncSession, user: User, payload: BotGameSaveRequest,
+) -> tuple[str | None, int | None]:
+    """(имя персоналии, её целевой рейтинг) для партии с ботом 'custom'; для исторических — (None, None)."""
+    if payload.bot_id != CUSTOM_BOT_ID:
+        return None, None
+    if payload.personality_id is not None:
+        personality = await get_owned_personality(db, user.id, payload.personality_id)
+        return personality.name, personality_config(personality).target_elo
+    if payload.personality_name is None:
+        raise HTTPException(status_code=400, detail="Для соперника из мастерской нужен personality_id или имя")
+    try:
+        return validate_personality_name(payload.personality_name), None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
+
+
 @router.post("/save-game", response_model=BotGameSaveResponse)
 async def save_bot_game(
         payload: BotGameSaveRequest,
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user),
 ):
-    """Сохраняет завершённую партию против исторического бота в базу данных."""
-    if payload.bot_id not in BOT_METADATA:
+    """Сохраняет завершённую партию против исторического бота или персоналии из мастерской."""
+    if payload.bot_id != CUSTOM_BOT_ID and payload.bot_id not in BOT_METADATA:
         raise HTTPException(status_code=404, detail=f"Бот '{payload.bot_id}' не найден")
+    personality_name, personality_elo = await _resolve_personality_for_save(db, current_user, payload)
 
     if payload.player_color not in ("white", "black"):
         raise HTTPException(status_code=400, detail="Некорректный цвет игрока")
@@ -533,13 +591,21 @@ async def save_bot_game(
         white_user, black_user = bot_user, current_user
 
     category = classify_time_control(payload.base_time_ms, payload.increment_ms)
+
+    def _pgn_player(user: User) -> tuple[str, int]:
+        # Соперник-персоналия в PGN — под своим именем и с целевой силой из конфига.
+        if personality_name and user.id == bot_user.id:
+            return personality_name, personality_elo or user.rating_for(category)
+        return user.username, user.rating_for(category)
+
+    (white_name, white_elo), (black_name, black_elo) = _pgn_player(white_user), _pgn_player(black_user)
     try:
         pgn_text, final_fen = _build_pgn_string(
             moves_uci=payload.moves_uci,
-            white_name=white_user.username,
-            white_elo=white_user.rating_for(category),
-            black_name=black_user.username,
-            black_elo=black_user.rating_for(category),
+            white_name=white_name,
+            white_elo=white_elo,
+            black_name=black_name,
+            black_elo=black_elo,
             result=payload.result,
             start_fen=payload.start_fen,
         )
@@ -554,7 +620,7 @@ async def save_bot_game(
         payload=payload,
     )
 
-    new_game = Game(**game_kwargs)
+    new_game = Game(**game_kwargs, personality_name=personality_name)
     db.add(new_game)
     await db.commit()
     await db.refresh(new_game)

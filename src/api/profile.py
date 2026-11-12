@@ -10,6 +10,7 @@ from sqlalchemy import and_, asc, case, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
+from src.api.bots import CUSTOM_BOT_USERNAME
 from src.api.deps import get_current_user
 from src.db.seed import ensure_champion_seeded, extract_pgn_metadata, get_champion_meta
 from src.db.session import get_db
@@ -495,6 +496,7 @@ async def get_user_games(
             Game.pgn,
             Game.base_time_ms,
             Game.increment_ms,
+            Game.personality_name,
             WhiteUser.username,
             WhiteUser.bullet_rating,
             WhiteUser.blitz_rating,
@@ -529,6 +531,7 @@ async def get_user_games(
             pgn_text,
             base_time_ms,
             increment_ms,
+            personality_name,
             w_name,
             w_bullet,
             w_blitz,
@@ -551,6 +554,11 @@ async def get_user_games(
             pgn_date = pgn_date or fallback_meta["pgn_date"]
             site = site or fallback_meta["site"]
             eco = eco or fallback_meta["eco"]
+
+        # Соперник из мастерской хранится как общий бот — в архиве показываем имя персоналии.
+        if personality_name:
+            w_name = personality_name if w_name == CUSTOM_BOT_USERNAME else w_name
+            b_name = personality_name if b_name == CUSTOM_BOT_USERNAME else b_name
 
         items.append({
             "game_id": game_id,

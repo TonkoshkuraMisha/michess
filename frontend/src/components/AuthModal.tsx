@@ -4,6 +4,7 @@ import {useEffect, useState} from 'react';
 import {LogIn, UserPlus, X} from 'lucide-react';
 import {API_BASE_URL} from '../config/api';
 import {readErrorDetail} from '../services/apiErrors';
+import {offerGuestPersonalityTransfer} from '../services/personalities';
 
 interface AuthModalProps {
     onSuccess: (token: string) => void;
@@ -55,6 +56,14 @@ export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
                 const data = await res.json();
                 localStorage.setItem('token', data.access_token);
                 onSuccess(data.access_token);
+                // Соперники, собранные гостем в этом браузере, — предложить перенести в профиль.
+                offerGuestPersonalityTransfer(data.access_token)
+                    .then((result) => {
+                        if (result?.skipped.length) {
+                            window.alert(`Не перенесены: ${result.skipped.map((s) => `${s.name} — ${s.reason}`).join('; ')}`);
+                        }
+                    })
+                    .catch((err: Error) => window.alert(err.message));
             } else {
                 // Регистрация
                 const res = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
