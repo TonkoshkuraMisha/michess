@@ -14,7 +14,7 @@ import type {SoundEventType} from '../../../services/soundEngine';
 import {API_BASE_URL} from '../../../config/api';
 import {GAME_ACTION_ERROR_CODES} from '../types';
 import type {LiveGameItem, ChatMessageItem, QueuePlayer, PendingPromotion} from '../types';
-import type {HistoricalBotId} from '../../../config/champions';
+import type {BotOpponentId} from '../../../config/champions';
 
 const DRAW_OFFER_INCOMING = 'Соперник предлагает ничью.';
 const DRAW_OFFER_OUTGOING = 'Вы предложили ничью...';
@@ -54,7 +54,7 @@ export interface UseGameSocketOptions {
     stateVersionRef: React.MutableRefObject<number>;
     gameOverResult: string | null;
     gameOverResultRef: React.MutableRefObject<string | null>;
-    activeBot: HistoricalBotId | null;
+    activeBot: BotOpponentId | null;
     currentUsernameRef: React.MutableRefObject<string>;
     inviteCode: string | undefined;
     navigate: NavigateFunction;
@@ -73,7 +73,7 @@ export interface UseGameSocketOptions {
     setGameId: (id: number | null) => void;
     setMyColor: (c: 'white' | 'black') => void;
     setSpectatingGameId: (id: number | null) => void;
-    setActiveBot: (id: HistoricalBotId | null) => void;
+    setActiveBot: (id: BotOpponentId | null) => void;
     setStateVersion: (v: number) => void;
     setWhitePlayer: (p: { username: string; rating: string }) => void;
     setBlackPlayer: (p: { username: string; rating: string }) => void;
