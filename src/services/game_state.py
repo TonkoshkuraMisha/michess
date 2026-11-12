@@ -105,6 +105,11 @@ def _coerce_state(raw: dict) -> dict:
     return state
 
 
+def is_rated_state(state: dict) -> bool:
+    """Рейтинговая ли партия. У состояний, созданных до появления товарищеских партий, поля нет — они рейтинговые."""
+    return str(state.get("is_rated", "1")) != "0"
+
+
 def pending_draw_offer(state: dict) -> int | None:
     """id игрока, чьё предложение ничьей сейчас в силе, или None."""
     offer = str(state.get("draw_offer") or "")
@@ -223,11 +228,15 @@ class GameStateManager:
     def _get_key(self, game_id: int) -> str:
         return f"game:{game_id}:state"
 
-    async def initialize_game(self, game_id: int, white_id: int, black_id: int, base_time_ms: int, increment_ms: int):
+    async def initialize_game(
+            self, game_id: int, white_id: int, black_id: int, base_time_ms: int, increment_ms: int,
+            is_rated: bool = True,
+    ):
         now_ms = int(time.time() * 1000)
         state = {
             "white_id": str(white_id),
             "black_id": str(black_id),
+            "is_rated": "1" if is_rated else "0",
             "board_fen": STARTING_FEN,
             "pgn": "",
             "state_version": "0",
@@ -353,6 +362,7 @@ class GameStateManager:
                 state = {
                     "white_id": str(db_game.white_player_id),
                     "black_id": str(db_game.black_player_id),
+                    "is_rated": "1" if db_game.is_rated else "0",
                     "board_fen": db_game.board_fen or STARTING_FEN,
                     "pgn": db_game.pgn or "",
                     "state_version": str(db_game.state_version or 0),

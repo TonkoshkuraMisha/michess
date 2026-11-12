@@ -188,7 +188,7 @@ async def test_challenge_accepted_once_across_workers(monkeypatch):
 
     created: list[tuple[int, int]] = []
 
-    async def fake_create(session, c_id, a_id, base_time, inc_time, now_ms):
+    async def fake_create(session, c_id, a_id, base_time, inc_time, now_ms, is_rated=True):
         created.append((c_id, a_id))
         return {
             "game_id": 900 + len(created), "white_id": c_id, "black_id": a_id,

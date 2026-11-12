@@ -63,6 +63,9 @@ export default function Chessboard() {
 
     const [spectatingGameId, setSpectatingGameId] = useState<number | null>(null);
     const [inviteColorPref, setInviteColorPref] = useState<'white' | 'black' | 'random'>('random');
+    // Тип новых партий (вызов в лобби и приглашение по ссылке) и тип партии, идущей на доске.
+    const [ratedChoice, setRatedChoice] = useState<boolean>(true);
+    const [isRatedGame, setIsRatedGame] = useState<boolean>(true);
 
     const [game, setGame] = useState(new Chess());
     const [history, setHistory] = useState<any[]>([]);
@@ -242,7 +245,7 @@ export default function Chessboard() {
         gameId, gameIdRef, myColorRef, spectatingGameId, stateVersionRef,
         gameOverResult, gameOverResultRef, activeBot, currentUsernameRef, inviteCode, navigate,
         effectiveWhiteBaseMinutes, effectiveIncSeconds, selectedTimeControlLabel: selectedTimeControl.label,
-        inviteColorPref,
+        inviteColorPref, ratedChoice, setIsRatedGame,
         setGame, setHistory, setViewIndex, setGameId, setMyColor, setSpectatingGameId, setActiveBot,
         setStateVersion, setWhitePlayer, setBlackPlayer, setRatingInfo, setGameOverResult,
         setDrawOfferStatus, setRematchStatus, isSearching, setIsSearching, setIsManualFlip, setSelectedSquare,
@@ -993,6 +996,9 @@ export default function Chessboard() {
                     <MatchmakingPanel
                         gameId={gameId}
                         gameOverResult={gameOverResult}
+                        isRatedGame={isRatedGame}
+                        ratedChoice={ratedChoice}
+                        onRatedChoiceChange={setRatedChoice}
                         isSearching={isSearching}
                         onStartMatchmaking={startMatchmaking}
                         onCancelMatchmaking={cancelMatchmaking}
@@ -1077,7 +1083,7 @@ export default function Chessboard() {
                     idleLabel={topIsWhite ? 'Белые (Разбор)' : 'Чёрные (Разбор)'}
                     showGameInfo={Boolean(gameId || activeBot || spectatingGameId)}
                     playerInfo={topPlayerInfo}
-                    hasRatingInfo={!!ratingInfo}
+                    hasRatingInfo={!!ratingInfo && isRatedGame}
                     ratingDelta={ratingInfo ? (topIsWhite ? ratingInfo.white_delta : ratingInfo.black_delta) : undefined}
                     capturedSymbols={topCaptured}
                     advantage={topAdvantage}
@@ -1282,7 +1288,7 @@ export default function Chessboard() {
                     idleLabel={!topIsWhite ? 'Вы (Белые)' : 'Вы (Чёрные)'}
                     showGameInfo={Boolean(gameId || activeBot || spectatingGameId)}
                     playerInfo={bottomPlayerInfo}
-                    hasRatingInfo={!!ratingInfo}
+                    hasRatingInfo={!!ratingInfo && isRatedGame}
                     ratingDelta={ratingInfo ? (!topIsWhite ? ratingInfo.white_delta : ratingInfo.black_delta) : undefined}
                     capturedSymbols={bottomCaptured}
                     advantage={bottomAdvantage}

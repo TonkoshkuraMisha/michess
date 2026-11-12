@@ -62,6 +62,10 @@ export interface UseGameSocketOptions {
     effectiveIncSeconds: number;
     selectedTimeControlLabel: string;
     inviteColorPref: 'white' | 'black' | 'random';
+    /** Тип новых партий, выбранный игроком: рейтинговая или товарищеская. */
+    ratedChoice: boolean;
+    /** Тип партии, которая сейчас на доске (приходит с сервера). */
+    setIsRatedGame: (rated: boolean) => void;
 
     setGame: (g: Chess) => void;
     setHistory: (h: any[]) => void;
@@ -126,6 +130,7 @@ export function useGameSocket({
     gameId, gameIdRef, myColorRef, spectatingGameId, stateVersionRef,
     gameOverResult, gameOverResultRef, activeBot, currentUsernameRef, inviteCode, navigate,
     effectiveWhiteBaseMinutes, effectiveIncSeconds, selectedTimeControlLabel, inviteColorPref,
+    ratedChoice, setIsRatedGame,
     setGame, setHistory, setViewIndex, setGameId, setMyColor, setSpectatingGameId,
     setStateVersion, setWhitePlayer, setBlackPlayer, setRatingInfo, setGameOverResult,
     setDrawOfferStatus, setRematchStatus, isSearching, setIsSearching, setIsManualFlip, setSelectedSquare,
@@ -150,8 +155,13 @@ export function useGameSocket({
         isSearchingRef.current = isSearching;
     }, [isSearching]);
     // Параметры текущего поиска — чтобы вернуть вызов в лобби после переподключения WebSocket.
-    const searchParamsRef = useRef<{ base_time_ms: number; increment_ms: number } | null>(null);
+    const searchParamsRef = useRef<{ base_time_ms: number; increment_ms: number; rated: boolean } | null>(null);
     const missingActivePollsRef = useRef(0);
+
+    // Ссылка-приглашение создаётся под конкретный тип партии — после смены типа она уже не та.
+    useEffect(() => {
+        setCreatedInviteCode(null);
+    }, [ratedChoice]);
 
     /**
      * Событие относится к партии, которая сейчас на доске (своей или просматриваемой).
@@ -227,6 +237,7 @@ export function useGameSocket({
 
         gameIdRef.current = incomingGid;
         setGameId(incomingGid);
+        setIsRatedGame(data.is_rated !== false);
         myColorRef.current = assignedColor;
         setMyColor(assignedColor);
         setStateVersion(ver);
@@ -419,6 +430,7 @@ export function useGameSocket({
             setGameId(null);
             spectatingRef.current = Number(data.game_id);
             setSpectatingGameId(Number(data.game_id));
+            setIsRatedGame(data.is_rated !== false);
             // Зритель всегда смотрит со стороны белых и не наследует состояние прошлой партии.
             myColorRef.current = 'white';
             setMyColor('white');
@@ -645,15 +657,18 @@ export function useGameSocket({
         setLeftSectionTab('lobby');
         setLobbyTab('lobby');
         setIsTimeDropdownOpen(false);
-        setDrawOfferStatus(`Вы опубликовали вызов в лобби (${selectedTimeControlLabel})...`);
+        setDrawOfferStatus(
+            `Вы опубликовали ${ratedChoice ? 'рейтинговый' : 'товарищеский'} вызов в лобби (${selectedTimeControlLabel})...`,
+        );
 
         const baseMs = Math.round(effectiveWhiteBaseMinutes * 60 * 1000);
         const incMs = Math.round(effectiveIncSeconds * 1000);
 
-        searchParamsRef.current = {base_time_ms: baseMs, increment_ms: incMs};
+        searchParamsRef.current = {base_time_ms: baseMs, increment_ms: incMs, rated: ratedChoice};
         gameSocket.send('join_queue', {
             base_time_ms: baseMs,
-            increment_ms: incMs
+            increment_ms: incMs,
+            rated: ratedChoice
         });
 
         const token = localStorage.getItem('token');
@@ -665,7 +680,7 @@ export function useGameSocket({
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     },
-                    body: JSON.stringify({base_time_ms: baseMs, increment_ms: incMs})
+                    body: JSON.stringify({base_time_ms: baseMs, increment_ms: incMs, rated: ratedChoice})
                 });
                 if (res.ok) {
                     const data = await res.json();
@@ -682,7 +697,7 @@ export function useGameSocket({
         setGameOverResult, setRatingInfo, setIsSearching, setLeftSectionTab, setLobbyTab,
         setIsTimeDropdownOpen, setDrawOfferStatus, selectedTimeControlLabel, effectiveWhiteBaseMinutes,
         effectiveIncSeconds, applyMatchFoundSnapshot, gameOverResultRef, setSpectatingGameId, setGame,
-        setHistory, setViewIndex,
+        setHistory, setViewIndex, ratedChoice,
     ]);
 
     const cancelMatchmaking = useCallback(async () => {
@@ -734,9 +749,10 @@ export function useGameSocket({
         gameSocket.send('create_invite', {
             base_time_ms: Math.round(effectiveWhiteBaseMinutes * 60 * 1000),
             increment_ms: Math.round(effectiveIncSeconds * 1000),
-            color_pref: inviteColorPref
+            color_pref: inviteColorPref,
+            rated: ratedChoice
         });
-    }, [effectiveWhiteBaseMinutes, effectiveIncSeconds, inviteColorPref]);
+    }, [effectiveWhiteBaseMinutes, effectiveIncSeconds, inviteColorPref, ratedChoice]);
 
     const handleCopyInviteLink = useCallback(() => {
         if (!createdInviteCode) return;
