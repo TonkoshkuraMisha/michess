@@ -17,8 +17,11 @@ export type HistoricalBotId =
     | 'paulsen'
     | 'zukertort';
 
+/** Исторический бот или соперник из мастерской (персоналия с ползунками). */
+export type BotOpponentId = HistoricalBotId | 'custom';
+
 export interface HistoricalBotProfile {
-    id: HistoricalBotId;
+    id: BotOpponentId;
     name: string;
     shortName: string;
     playerLabel: string;
@@ -117,7 +120,8 @@ export const HISTORICAL_BOTS: Record<HistoricalBotId, HistoricalBotProfile> = {
     }
 };
 
-export const HISTORICAL_BOTS_LIST: HistoricalBotProfile[] = Object.values(HISTORICAL_BOTS);
+export const HISTORICAL_BOTS_LIST: (HistoricalBotProfile & {id: HistoricalBotId})[] =
+    Object.values(HISTORICAL_BOTS) as (HistoricalBotProfile & {id: HistoricalBotId})[];
 
 export const CHAMPIONS_LIST = [
     {id: 'Steinitz', name: 'Вильгельм Стейниц', years: '1886–1894', img: '/assets/champions/Steinitz.jpg'},

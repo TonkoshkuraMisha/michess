@@ -18,7 +18,7 @@ import {
 } from '../config/boardAppearance';
 import type {BoardTheme} from '../config/boardAppearance';
 import {HISTORICAL_BOTS} from '../config/champions';
-import type {HistoricalBotId, HistoricalBotProfile} from '../config/champions';
+import type {BotOpponentId, HistoricalBotId, HistoricalBotProfile} from '../config/champions';
 import {DEFAULT_TIME_CONTROL, TIME_CONTROLS} from '../config/timeControls';
 import type {TimeControlOption, TimeControlGroup} from '../config/timeControls';
 import {
@@ -42,6 +42,8 @@ import {GameHallHeader} from './chessboard/GameHallHeader';
 import {TimeControlPicker} from './chessboard/TimeControlPicker';
 import {MatchmakingPanel} from './chessboard/MatchmakingPanel';
 import {HistoricalBotsPanel} from './chessboard/HistoricalBotsPanel';
+import {PersonalityWorkshop} from './chessboard/PersonalityWorkshop';
+import type {CustomOpponent} from '../config/archetypes';
 import {LobbyPanel} from './chessboard/LobbyPanel';
 import {AppearancePickerDropdown} from './chessboard/AppearancePickerDropdown';
 
@@ -95,7 +97,9 @@ export default function Chessboard() {
 
     // activeBot живёт здесь (не внутри useBotGame), потому что useClock использует его
     // для isTicking/isParticipant и должен вызываться раньше useBotGame.
-    const [activeBot, setActiveBot] = useState<HistoricalBotId | null>(null);
+    const [activeBot, setActiveBot] = useState<BotOpponentId | null>(null);
+    // Вкладка ботов: исторические мастера или мастерская соперников.
+    const [botsView, setBotsView] = useState<'historical' | 'workshop'>('historical');
 
     const [selectedTimeControl, setSelectedTimeControl] = useState<TimeControlOption>(DEFAULT_TIME_CONTROL);
     const [manualBaseMinutes, setManualBaseMinutes] = useState<number>(5);
@@ -157,7 +161,6 @@ export default function Chessboard() {
 
     const activeTheme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
     const activePieceSet = PIECE_SETS[pieceSetKey] || PIECE_SETS.merida;
-    const activeBotProfile = activeBot ? HISTORICAL_BOTS[activeBot] : null;
 
     const effectiveWhiteBaseMinutes = selectedTimeControl.isManual ? manualBaseMinutes : selectedTimeControl.base;
     const effectiveBlackBaseMinutes = effectiveWhiteBaseMinutes;
@@ -224,7 +227,7 @@ export default function Chessboard() {
 
     const {
         selectedBotId, setSelectedBotId, botComment, isBotThinking, savedBotGameId,
-        startHistoricalBotGame, saveBotGameToDatabase, exitBotGame,
+        startHistoricalBotGame, startCustomBotGame, botProfileFor, saveBotGameToDatabase, exitBotGame,
     } = useBotGame({
         game, myColor, gameOverResult, whiteTimeMs, blackTimeMs, isSearching, setIsSearching,
         activeBot, setActiveBot,
@@ -238,6 +241,7 @@ export default function Chessboard() {
     });
 
     const selectedBotProfile = HISTORICAL_BOTS[selectedBotId];
+    const activeBotProfile = activeBot ? botProfileFor(activeBot) : null;
 
     const {
         chatMessages, chatInput, setChatInput, liveGames, queuePlayers, createdInviteCode, inviteCopied,
@@ -531,7 +535,7 @@ export default function Chessboard() {
                     if (nextGame.isCheckmate()) {
                         result = nextGame.turn() === 'w' ? '0-1' : '1-0';
                     }
-                    const botName = HISTORICAL_BOTS[activeBot].shortName;
+                    const botName = botProfileFor(activeBot).shortName;
                     setGameOverResult(result);
                     setDrawOfferStatus(`Партия против ${botName} окончена и сохранена в архив (${result}).`);
                     updateSessionStats(result);
@@ -675,7 +679,7 @@ export default function Chessboard() {
                 gameSocket.send('resign', {game_id: gameId});
             } else if (activeBot) {
                 const res = myColor === 'white' ? '0-1' : '1-0';
-                const botName = HISTORICAL_BOTS[activeBot].shortName;
+                const botName = botProfileFor(activeBot).shortName;
                 setGameOverResult(res);
                 setDrawOfferStatus(`Вы сдались. Победа ${botName} (${res}).`);
                 updateSessionStats(res);
@@ -856,6 +860,10 @@ export default function Chessboard() {
 
     const handleStartBotGame = (botId: HistoricalBotId, colorPref: 'white' | 'black' | 'random') => {
         startHistoricalBotGame(botId, colorPref, canStartFromPosition && startFromPosition ? sandboxFen : null);
+    };
+
+    const handleStartCustomGame = (opponent: CustomOpponent, colorPref: 'white' | 'black' | 'random') => {
+        startCustomBotGame(opponent, colorPref, canStartFromPosition && startFromPosition ? sandboxFen : null);
     };
 
     const handleLoadFen = (fen: string): string | null => {
@@ -1062,6 +1070,39 @@ export default function Chessboard() {
                 </div>
 
                 {leftSectionTab === 'bots' ? (
+                    <div className="flex-1 min-h-0 flex flex-col gap-1.5">
+                    <div className="grid grid-cols-2 gap-1 text-xs font-bold" role="tablist">
+                        {(['historical', 'workshop'] as const).map((view) => (
+                            <button key={view} type="button" role="tab" aria-selected={botsView === view}
+                                    onClick={() => setBotsView(view)}
+                                    className={`py-1 rounded border cursor-pointer ${botsView === view
+                                        ? 'bg-amber-800 text-white border-amber-400'
+                                        : 'bg-black/35 text-boxwood/85 border-amber-900/40 hover:border-amber-600/50'}`}>
+                                {view === 'historical' ? 'Исторические' : 'Мастерская'}
+                            </button>
+                        ))}
+                    </div>
+                    {botsView === 'workshop' ? (
+                        <div className="flex-1 min-h-0 bg-acacia-dark p-2.5 rounded-md border border-amber-700/40 overflow-y-auto flex flex-col gap-2">
+                            {activeBot === 'custom' && activeBotProfile && (
+                                <div className="p-2 rounded-md bg-black/55 border border-amber-600/40 text-xs text-amber-100">
+                                    <div className="font-bold text-amber-400 mb-0.5 flex justify-between">
+                                        <span>Мысль ({activeBotProfile.shortName}):</span>
+                                        {isBotThinking && <span className="animate-pulse text-amber-300 font-mono text-[11px]">обдумывает ход...</span>}
+                                    </div>
+                                    <div className="text-boxwood-light leading-snug">{botComment || activeBotProfile.motto}</div>
+                                </div>
+                            )}
+                            <PersonalityWorkshop
+                                token={localStorage.getItem('token')}
+                                playDisabled={!!gameId && !gameOverResult}
+                                onPlay={(opponent: CustomOpponent, colorPref) => handleStartCustomGame(opponent, colorPref)}
+                                canStartFromPosition={canStartFromPosition}
+                                startFromPosition={startFromPosition}
+                                onStartFromPositionChange={setStartFromPosition}
+                            />
+                        </div>
+                    ) : (
                     <HistoricalBotsPanel
                         selectedBotId={selectedBotId}
                         onSelectBot={setSelectedBotId}
@@ -1077,6 +1118,8 @@ export default function Chessboard() {
                         startFromPosition={startFromPosition}
                         onStartFromPositionChange={setStartFromPosition}
                     />
+                    )}
+                    </div>
                 ) : (
                     <LobbyPanel
                         lobbyTab={lobbyTab}

@@ -7,7 +7,9 @@ import {resolveMoveSound} from '../../../services/soundEngine';
 import type {SoundEventType} from '../../../services/soundEngine';
 import {API_BASE_URL} from '../../../config/api';
 import {HISTORICAL_BOTS} from '../../../config/champions';
-import type {HistoricalBotId} from '../../../config/champions';
+import type {BotOpponentId, HistoricalBotId, HistoricalBotProfile} from '../../../config/champions';
+import {customBotProfile} from '../../../config/archetypes';
+import type {CustomOpponent} from '../../../config/archetypes';
 import {cloneChessInstance, customStartFen} from '../boardUtils';
 import type {PendingPromotion} from '../types';
 import {readErrorDetail} from '../../../services/apiErrors';
@@ -39,8 +41,8 @@ export interface UseBotGameOptions {
      * про активную партию с ботом ещё до того, как этот хук успевает вызваться (useClock
      * вызывается раньше, чтобы отдать resetLowTimeWarning/applyIncrement сюда же).
      */
-    activeBot: HistoricalBotId | null;
-    setActiveBot: (id: HistoricalBotId | null) => void;
+    activeBot: BotOpponentId | null;
+    setActiveBot: (id: BotOpponentId | null) => void;
     effectiveWhiteBaseMinutes: number;
     effectiveBlackBaseMinutes: number;
     effectiveIncSeconds: number;
@@ -83,10 +85,16 @@ export interface UseBotGameResult {
     savedBotGameId: number | null;
     /** startFen — начать партию с этой позиции вместо обычной расстановки. */
     startHistoricalBotGame: (
-        botId: HistoricalBotId, colorPref?: 'white' | 'black' | 'random', startFen?: string | null,
+        botId: BotOpponentId, colorPref?: 'white' | 'black' | 'random', startFen?: string | null,
     ) => void;
+    /** Партия с соперником из мастерской (персоналия с ползунками). */
+    startCustomBotGame: (
+        opponent: CustomOpponent, colorPref?: 'white' | 'black' | 'random', startFen?: string | null,
+    ) => void;
+    /** Профиль бота для доски и панели — исторического или собранного в мастерской. */
+    botProfileFor: (id: BotOpponentId) => HistoricalBotProfile;
     saveBotGameToDatabase: (
-        botId: HistoricalBotId,
+        botId: BotOpponentId,
         playerColor: 'white' | 'black',
         result: string,
         completedGame: Chess,
@@ -116,9 +124,21 @@ export function useBotGame({
     const [isBotThinking, setIsBotThinking] = useState<boolean>(false);
     const [savedBotGameId, setSavedBotGameId] = useState<number | null>(null);
     const botGameSavedRef = useRef<boolean>(false);
+    // Соперник из мастерской текущей (или последней) партии — ref, чтобы ход, сохранение и
+    // реванш читали его без лишних зависимостей эффектов.
+    const customOpponentRef = useRef<CustomOpponent | null>(null);
+
+    const botProfileFor = useCallback((id: BotOpponentId): HistoricalBotProfile => {
+        if (id === 'custom') {
+            return customBotProfile(customOpponentRef.current ?? {
+                name: 'Соперник', config: {} as CustomOpponent['config'],
+            });
+        }
+        return HISTORICAL_BOTS[id];
+    }, []);
 
     const saveBotGameToDatabase = useCallback(async (
-        botId: HistoricalBotId,
+        botId: BotOpponentId,
         playerColor: 'white' | 'black',
         result: string,
         completedGame: Chess,
@@ -137,6 +157,12 @@ export function useBotGame({
                 headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`},
                 body: JSON.stringify({
                     bot_id: botId, player_color: playerColor, result,
+                    // Соперник из мастерской: сохранённый — по id, несохранённый — по имени.
+                    ...(botId === 'custom' && customOpponentRef.current
+                        ? (customOpponentRef.current.personalityId
+                            ? {personality_id: customOpponentRef.current.personalityId}
+                            : {personality_name: customOpponentRef.current.name})
+                        : {}),
                     termination: termination ?? null, moves_uci: movesUci,
                     // Партия с произвольной позиции: сервер проверяет ходы от неё же.
                     start_fen: customStartFen(completedGame),
@@ -158,7 +184,7 @@ export function useBotGame({
     }, [effectiveWhiteBaseMinutes, effectiveIncSeconds, setGameOverResult, setDrawOfferStatus]);
 
     const startHistoricalBotGame = useCallback((
-        botId: HistoricalBotId,
+        botId: BotOpponentId,
         colorPref: 'white' | 'black' | 'random' = 'random',
         startFen: string | null = null,
     ) => {
@@ -175,14 +201,14 @@ export function useBotGame({
         const whiteStartMs = Math.round(effectiveWhiteBaseMinutes * 60 * 1000);
         const blackStartMs = Math.round(effectiveBlackBaseMinutes * 60 * 1000);
         const freshGame = startFen ? new Chess(startFen) : new Chess();
-        const botInfo = HISTORICAL_BOTS[botId];
+        const botInfo = botProfileFor(botId);
 
         botGameSavedRef.current = false;
         resetLowTimeWarning();
         setSavedBotGameId(null);
         gameIdRef.current = null;
         setGameId(null);
-        setSelectedBotId(botId);
+        if (botId !== 'custom') setSelectedBotId(botId);
         setActiveBot(botId);
         setLeftSectionTab('bots');
         myColorRef.current = chosenColor;
@@ -217,8 +243,17 @@ export function useBotGame({
         gameIdRef, setGameId, setActiveBot, setLeftSectionTab, myColorRef, setMyColor, setIsManualFlip, setGame,
         setHistory, setViewIndex, setSelectedSquare, setPendingPromotion, clearPremove, setGameOverResult,
         setRatingInfo, setDrawOfferStatus, setRematchStatus, setWhiteTimeMs, setBlackTimeMs, moveStartTime,
-        currentUsername, currentUserRating, setWhitePlayer, setBlackPlayer, playAudio,
+        currentUsername, currentUserRating, setWhitePlayer, setBlackPlayer, playAudio, botProfileFor,
     ]);
+
+    const startCustomBotGame = useCallback((
+        opponent: CustomOpponent,
+        colorPref: 'white' | 'black' | 'random' = 'random',
+        startFen: string | null = null,
+    ) => {
+        customOpponentRef.current = opponent;
+        startHistoricalBotGame('custom', colorPref, startFen);
+    }, [startHistoricalBotGame]);
 
     // Ход бота: запрашивает /bots/move, ждёт имитацию обдумывания, применяет ход.
     useEffect(() => {
@@ -230,8 +265,13 @@ export function useBotGame({
         let isCancelled = false;
         let delayTimer: ReturnType<typeof setTimeout> | null = null;
         setIsBotThinking(true);
-        const botName = HISTORICAL_BOTS[activeBot].shortName;
+        const botName = botProfileFor(activeBot).shortName;
         const requestStartedAt = Date.now();
+        const custom = activeBot === 'custom' ? customOpponentRef.current : null;
+        const moveUrl = custom ? `${API_BASE_URL}/api/v1/bots/custom-move` : `${API_BASE_URL}/api/v1/bots/move`;
+        const moveBody = (fen: string) => (custom
+            ? (custom.personalityId ? {fen, personality_id: custom.personalityId} : {fen, config: custom.config})
+            : {bot_id: activeBot, fen});
 
         (async () => {
             try {
@@ -246,13 +286,10 @@ export function useBotGame({
                 let response: Response | null = null;
                 for (let attempt = 0; !isCancelled; attempt++) {
                     try {
-                        response = await fetch(`${API_BASE_URL}/api/v1/bots/move`, {
+                        response = await fetch(moveUrl, {
                             method: 'POST',
                             headers,
-                            body: JSON.stringify({
-                                bot_id: activeBot,
-                                fen: game.fen()
-                            })
+                            body: JSON.stringify(moveBody(game.fen())),
                         });
                     } catch {
                         response = null;
@@ -334,7 +371,7 @@ export function useBotGame({
             isCancelled = true;
             if (delayTimer) clearTimeout(delayTimer);
         };
-    }, [activeBot, game, myColor, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyIncrement, effectiveIncSeconds, setGame, setHistory, setViewIndex, clearPremove, setGameOverResult, setDrawOfferStatus, moveStartTime]);
+    }, [activeBot, game, myColor, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyIncrement, effectiveIncSeconds, setGame, setHistory, setViewIndex, clearPremove, setGameOverResult, setDrawOfferStatus, moveStartTime, botProfileFor]);
 
     // Поражение по флагу в партии с ботом.
     useEffect(() => {
@@ -342,7 +379,7 @@ export function useBotGame({
 
         if (whiteTimeMs <= 0 || blackTimeMs <= 0) {
             const flagWinner = whiteTimeMs <= 0 ? '0-1' : '1-0';
-            const botName = HISTORICAL_BOTS[activeBot].shortName;
+            const botName = botProfileFor(activeBot).shortName;
             clearPremove();
             setPendingPromotion(null);
             setGameOverResult(flagWinner);
@@ -351,7 +388,7 @@ export function useBotGame({
             playOutcomeSound(flagWinner, myColor);
             saveBotGameToDatabase(activeBot, myColor, flagWinner, game, 'timeout');
         }
-    }, [whiteTimeMs, blackTimeMs, activeBot, gameOverResult, myColor, game, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, clearPremove, setPendingPromotion, setGameOverResult, setDrawOfferStatus]);
+    }, [whiteTimeMs, blackTimeMs, activeBot, gameOverResult, myColor, game, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, clearPremove, setPendingPromotion, setGameOverResult, setDrawOfferStatus, botProfileFor]);
 
     const exitBotGame = useCallback(() => {
         setActiveBot(null);
@@ -363,6 +400,6 @@ export function useBotGame({
 
     return {
         selectedBotId, setSelectedBotId, botComment, isBotThinking, savedBotGameId,
-        startHistoricalBotGame, saveBotGameToDatabase, exitBotGame,
+        startHistoricalBotGame, startCustomBotGame, botProfileFor, saveBotGameToDatabase, exitBotGame,
     };
 }

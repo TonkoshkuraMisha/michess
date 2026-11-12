@@ -2,13 +2,13 @@
 
 import {MessageSquareQuote} from 'lucide-react';
 import {HISTORICAL_BOTS_LIST} from '../../config/champions';
-import type {HistoricalBotId, HistoricalBotProfile} from '../../config/champions';
+import type {BotOpponentId, HistoricalBotId, HistoricalBotProfile} from '../../config/champions';
 
 export interface HistoricalBotsPanelProps {
     selectedBotId: HistoricalBotId;
     onSelectBot: (id: HistoricalBotId) => void;
     selectedBotProfile: HistoricalBotProfile;
-    activeBot: HistoricalBotId | null;
+    activeBot: BotOpponentId | null;
     activeBotProfile: HistoricalBotProfile | null;
     gameId: number | null;
     gameOverResult: string | null;

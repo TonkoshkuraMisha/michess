@@ -311,7 +311,7 @@ describe('партия с ботом с произвольной позиции'
         await waitFor(() => {
             expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/bots/save-game'))).toBe(true);
         });
-        const saveCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/bots/save-game'))!;
+        const saveCall = (fetchMock.mock.calls as unknown as [string, RequestInit][]).find(([url]) => String(url).includes('/bots/save-game'))!;
         const body = JSON.parse((saveCall as unknown as [string, RequestInit])[1].body as string);
         expect(body).toMatchObject({start_fen: KQ_VS_K, moves_uci: ['h7a7'], result: '1-0'});
         // Журнал нумерует ход по позиции: 57-й, а не первый.
@@ -337,5 +337,45 @@ describe('партия с ботом с произвольной позиции'
         renderChessboard();
         await screen.findByRole('button', {name: /Белыми/});
         expect(screen.queryByLabelText('Начать с позиции на доске')).not.toBeInTheDocument();
+    });
+});
+
+describe('мастерская соперников', () => {
+    it('партия с архетипом: ходы через /custom-move с конфигом, сохранение как bot_id custom', async () => {
+        vi.spyOn(window, 'confirm').mockReturnValue(true);
+        const fetchMock = mockFetchRouter({
+            '/profile/me': () => ({id: 1, username: 'TestPlayer', blitz_rating: 1500}),
+            '/profile/matchmaking/queue': () => [],
+            '/profile/games/live': () => [],
+            '/profile/games/my-active': () => ({active: false}),
+            '/bots/personalities': () => [],
+            '/bots/custom-move': () => ({...BOT_MOVE_DEFAULT, uci: 'e2e4', san: 'e4', comment: 'Шах! Атакуем короля.'}),
+            '/bots/save-game': () => ({game_id: 1000, status: 'finished', result: '1-0'}),
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        renderChessboard();
+
+        fireEvent.click(await screen.findByRole('tab', {name: 'Мастерская'}));
+        fireEvent.click(await screen.findByRole('button', {name: /Торопыга/}));
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', {name: /Чёрными/}));
+        });
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(200);
+        });
+
+        const moveCall = (fetchMock.mock.calls as unknown as [string, RequestInit][]).find(([url]) => String(url).includes('/bots/custom-move'));
+        const moveBody = JSON.parse(String(moveCall?.[1].body));
+        expect(moveBody.config.target_elo).toBe(700);
+        expect(moveBody.bot_id).toBeUndefined();
+        await waitFor(() => expect(screen.getByText('e4')).toBeInTheDocument());
+        expect(screen.getAllByText('Торопыга').length).toBeGreaterThan(0);
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', {name: /Сдаться/}));
+        });
+        const saveCall = (fetchMock.mock.calls as unknown as [string, RequestInit][]).find(([url]) => String(url).includes('/bots/save-game'));
+        const saveBody = JSON.parse(String(saveCall?.[1].body));
+        expect(saveBody).toMatchObject({bot_id: 'custom', personality_name: 'Торопыга', player_color: 'black'});
     });
 });
