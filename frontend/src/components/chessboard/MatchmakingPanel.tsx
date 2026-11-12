@@ -5,6 +5,11 @@ import {Loader2, Users, Link2, Check, Copy} from 'lucide-react';
 export interface MatchmakingPanelProps {
     gameId: number | null;
     gameOverResult: string | null;
+    /** Тип партии, которая сейчас на доске. */
+    isRatedGame: boolean;
+    /** Тип новых партий: вызов в лобби и приглашение по ссылке. */
+    ratedChoice: boolean;
+    onRatedChoiceChange: (rated: boolean) => void;
     isSearching: boolean;
     onStartMatchmaking: () => void;
     onCancelMatchmaking: () => void;
@@ -20,12 +25,39 @@ export interface MatchmakingPanelProps {
 
 /** Поиск соперника в рейтинговом лобби (или отмена), плюс создание ссылки для игры с другом. */
 export function MatchmakingPanel({
-    gameId, gameOverResult, isSearching, onStartMatchmaking, onCancelMatchmaking,
+    gameId, gameOverResult, isRatedGame, ratedChoice, onRatedChoiceChange,
+    isSearching, onStartMatchmaking, onCancelMatchmaking,
     showInvitePanel, onToggleInvitePanel, inviteColorPref, onInviteColorPrefChange,
     createdInviteCode, inviteCopied, onCreatePrivateInvite, onCopyInviteLink,
 }: MatchmakingPanelProps) {
     return (
         <>
+            {!gameId && (
+                <div
+                    role="radiogroup"
+                    aria-label="Тип партии"
+                    className="grid grid-cols-2 gap-1 p-0.5 bg-black/45 rounded border border-amber-900/50"
+                >
+                    {([[true, 'Рейтинговая', 'Результат меняет рейтинг'],
+                        [false, 'Товарищеская', 'Без изменения рейтинга']] as const).map(([rated, label, hint]) => (
+                        <button
+                            key={label}
+                            type="button"
+                            role="radio"
+                            aria-checked={ratedChoice === rated}
+                            title={hint}
+                            disabled={isSearching}
+                            onClick={() => onRatedChoiceChange(rated)}
+                            className={`py-1 px-2 rounded text-xs font-bold transition cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 ${
+                                ratedChoice === rated ? 'bg-amber-700 text-white' : 'text-boxwood/70 hover:text-amber-200'
+                            }`}
+                        >
+                            {label}
+                        </button>
+                    ))}
+                </div>
+            )}
+
             {!gameId ? (
                 <div className="grid grid-cols-[1fr_auto] gap-2">
                     <button
@@ -55,7 +87,9 @@ export function MatchmakingPanel({
                 </div>
             ) : (
                 <div className="text-center py-1.5 px-3 rounded bg-emerald-950/60 border border-emerald-700/50 text-emerald-300 text-xs sm:text-sm font-bold">
-                    {gameOverResult ? `Партия завершена (${gameOverResult})` : 'Идет рейтинговая партия'}
+                    {gameOverResult
+                        ? `Партия завершена (${gameOverResult})`
+                        : isRatedGame ? 'Идет рейтинговая партия' : 'Идёт товарищеская партия'}
                 </div>
             )}
 

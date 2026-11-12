@@ -5,7 +5,7 @@
 // (партия с ботом использует те же game/history/gameOverResult/... поля), и порядок вызова
 // хуков не позволяет кому-то одному быть единственным владельцем без цикла зависимостей.
 
-import {useCallback, useEffect, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import type {NavigateFunction} from 'react-router-dom';
 import {Chess} from 'chess.js';
 import {gameSocket} from '../../../services/gameSocket';
@@ -15,6 +15,36 @@ import {API_BASE_URL} from '../../../config/api';
 import {GAME_ACTION_ERROR_CODES} from '../types';
 import type {LiveGameItem, ChatMessageItem, QueuePlayer, PendingPromotion} from '../types';
 import type {HistoricalBotId} from '../../../config/champions';
+
+const DRAW_OFFER_INCOMING = 'Соперник предлагает ничью.';
+const DRAW_OFFER_OUTGOING = 'Вы предложили ничью...';
+const DRAW_DECLINED = 'Предложение ничьей отклонено.';
+
+/** Сколько опросов подряд сервер должен ответить «активной партии нет», чтобы считать её завершённой. */
+const MISSING_GAME_POLLS = 2;
+
+const GAME_OVER_REASONS: Record<string, string> = {
+    checkmate: 'мат',
+    stalemate: 'пат',
+    timeout: 'истекло время',
+    resignation: 'сдача',
+    agreement: 'по соглашению',
+    draw_agreement: 'по соглашению',
+    repetition: 'троекратное повторение',
+    '50_move_rule': 'правило 50 ходов',
+    insufficient_material: 'недостаточно материала',
+    timeout_vs_insufficient_material: 'время истекло, но поставить мат нечем',
+    abandoned: 'игрок покинул партию',
+    abandoned_vs_insufficient_material: 'игрок покинул партию, поставить мат нечем',
+};
+
+/** Текст итога партии: «Партия окончена. Результат: 1-0 (мат)». */
+export function describeGameOver(result: string | null | undefined, reason?: string | null): string | null {
+    if (reason === 'aborted' || result === '*') return 'Партия отменена на 1-м ходу (рейтинг не изменён).';
+    if (!result) return null;
+    const reasonText = reason ? GAME_OVER_REASONS[reason] : undefined;
+    return `Партия окончена. Результат: ${result}${reasonText ? ` (${reasonText})` : ''}`;
+}
 
 export interface UseGameSocketOptions {
     gameId: number | null;
@@ -32,6 +62,10 @@ export interface UseGameSocketOptions {
     effectiveIncSeconds: number;
     selectedTimeControlLabel: string;
     inviteColorPref: 'white' | 'black' | 'random';
+    /** Тип новых партий, выбранный игроком: рейтинговая или товарищеская. */
+    ratedChoice: boolean;
+    /** Тип партии, которая сейчас на доске (приходит с сервера). */
+    setIsRatedGame: (rated: boolean) => void;
 
     setGame: (g: Chess) => void;
     setHistory: (h: any[]) => void;
@@ -45,8 +79,9 @@ export interface UseGameSocketOptions {
     setBlackPlayer: (p: { username: string; rating: string }) => void;
     setRatingInfo: (r: any) => void;
     setGameOverResult: (r: string | null) => void;
-    setDrawOfferStatus: (s: string | null) => void;
+    setDrawOfferStatus: React.Dispatch<React.SetStateAction<string | null>>;
     setRematchStatus: (s: 'none' | 'offered_by_me' | 'offered_by_opponent' | 'declined') => void;
+    isSearching: boolean;
     setIsSearching: (v: boolean) => void;
     setIsManualFlip: (v: boolean) => void;
     setSelectedSquare: (s: string | null) => void;
@@ -95,9 +130,10 @@ export function useGameSocket({
     gameId, gameIdRef, myColorRef, spectatingGameId, stateVersionRef,
     gameOverResult, gameOverResultRef, activeBot, currentUsernameRef, inviteCode, navigate,
     effectiveWhiteBaseMinutes, effectiveIncSeconds, selectedTimeControlLabel, inviteColorPref,
-    setGame, setHistory, setViewIndex, setGameId, setMyColor, setSpectatingGameId, setActiveBot,
+    ratedChoice, setIsRatedGame,
+    setGame, setHistory, setViewIndex, setGameId, setMyColor, setSpectatingGameId,
     setStateVersion, setWhitePlayer, setBlackPlayer, setRatingInfo, setGameOverResult,
-    setDrawOfferStatus, setRematchStatus, setIsSearching, setIsManualFlip, setSelectedSquare,
+    setDrawOfferStatus, setRematchStatus, isSearching, setIsSearching, setIsManualFlip, setSelectedSquare,
     setPendingPromotion, clearPremove, setWhiteTimeMs, setBlackTimeMs, setLeftSectionTab,
     setLobbyTab, setIsTimeDropdownOpen, setShowInvitePanel, moveStartTime, resetLowTimeWarning,
     exitBotGame, playAudio, playOutcomeSound, updateSessionStats,
@@ -109,12 +145,76 @@ export function useGameSocket({
     const [createdInviteCode, setCreatedInviteCode] = useState<string | null>(null);
     const [inviteCopied, setInviteCopied] = useState(false);
 
+    // Обработчики WebSocket живут дольше одного рендера, поэтому актуальные значения читают из ref.
+    const spectatingRef = useRef<number | null>(spectatingGameId);
+    useEffect(() => {
+        spectatingRef.current = spectatingGameId;
+    }, [spectatingGameId]);
+    const isSearchingRef = useRef(isSearching);
+    useEffect(() => {
+        isSearchingRef.current = isSearching;
+    }, [isSearching]);
+    // Параметры текущего поиска — чтобы вернуть вызов в лобби после переподключения WebSocket.
+    const searchParamsRef = useRef<{ base_time_ms: number; increment_ms: number; rated: boolean } | null>(null);
+    const missingActivePollsRef = useRef(0);
+
+    // Ссылка-приглашение создаётся под конкретный тип партии — после смены типа она уже не та.
+    useEffect(() => {
+        setCreatedInviteCode(null);
+    }, [ratedChoice]);
+
+    /**
+     * Событие относится к партии, которая сейчас на доске (своей или просматриваемой).
+     * Без этой проверки запоздавший game_over прошлой партии завершал бы новую (реванш),
+     * а ходы партии, которую игрок смотрел до начала своей, ложились бы на его доску.
+     */
+    const isCurrentGameEvent = useCallback((data: any): boolean => {
+        if (data?.game_id === undefined || data?.game_id === null) return true;
+        const gid = Number(data.game_id);
+        return gid === gameIdRef.current || gid === spectatingRef.current;
+    }, [gameIdRef]);
+
+    const isOwnGameEvent = useCallback((data: any): boolean => {
+        if (gameIdRef.current === null) return false;
+        if (data?.game_id === undefined || data?.game_id === null) return true;
+        return Number(data.game_id) === gameIdRef.current;
+    }, [gameIdRef]);
+
+    /** Завершает партию на экране: итог, звук и статистика — один раз на партию. */
+    const concludeGame = useCallback((data: any) => {
+        clearPremove();
+        setPendingPromotion(null);
+        // Итог мог уже прийти (move_made с game_over, затем game_over): не озвучиваем и не
+        // считаем его второй раз. Ref обновляем сразу — эффект в компоненте сработает позже.
+        const alreadyOver = Boolean(gameOverResultRef.current);
+        gameOverResultRef.current = data.result;
+        setGameOverResult(data.result);
+        setRatingInfo(data);
+        if (alreadyOver) return;
+        if (gameIdRef.current !== null) {
+            playOutcomeSound(data.result);
+            updateSessionStats(data.result);
+        } else {
+            // Зритель: чужая партия не идёт в его статистику и не звучит как победа/поражение.
+            playAudio('draw');
+        }
+    }, [clearPremove, setPendingPromotion, gameOverResultRef, setGameOverResult, setRatingInfo, gameIdRef,
+        playOutcomeSound, updateSessionStats, playAudio]);
+
     const applyMatchFoundSnapshot = useCallback((data: any) => {
         if (!data || !data.game_id) return;
         const incomingGid = Number(data.game_id);
         const assignedColor: 'white' | 'black' = data.color === 'black' ? 'black' : 'white';
         const ver = Number(data.state_version || 0);
         const isNewMatch = gameIdRef.current !== incomingGid;
+
+        if (spectatingRef.current) {
+            gameSocket.send('leave_spectate', {game_id: spectatingRef.current});
+            spectatingRef.current = null;
+        }
+        searchParamsRef.current = null;
+        isSearchingRef.current = false;
+        missingActivePollsRef.current = 0;
 
         setIsSearching(false);
         setSpectatingGameId(null);
@@ -127,6 +227,7 @@ export function useGameSocket({
             setChatMessages([]);
             setIsManualFlip(false);
             setRatingInfo(null);
+            gameOverResultRef.current = null;
             setGameOverResult(null);
             setRematchStatus('none');
             setSelectedSquare(null);
@@ -136,6 +237,7 @@ export function useGameSocket({
 
         gameIdRef.current = incomingGid;
         setGameId(incomingGid);
+        setIsRatedGame(data.is_rated !== false);
         myColorRef.current = assignedColor;
         setMyColor(assignedColor);
         setStateVersion(ver);
@@ -169,10 +271,20 @@ export function useGameSocket({
         setViewIndex(-1);
         moveStartTime.current = Date.now();
 
+        // Предложение ничьей, сделанное до перезагрузки страницы или обрыва связи, ещё в силе.
+        const hasIncomingDrawOffer = data.draw_offer_from !== undefined && data.draw_offer_from !== null
+            && Number(data.draw_offer_from) === Number(data.opponent_id);
+
         if (isNewMatch) {
-            setDrawOfferStatus(`Партия началась! Вы играете ${assignedColor === 'white' ? 'Белыми' : 'Чёрными'}.`);
+            const startMessage = `Партия началась! Вы играете ${assignedColor === 'white' ? 'Белыми' : 'Чёрными'}.`;
+            setDrawOfferStatus(hasIncomingDrawOffer ? DRAW_OFFER_INCOMING : startMessage);
             playAudio('start');
-            setTimeout(() => setDrawOfferStatus(null), 3000);
+            // Убираем только своё сообщение: за 3 с на его месте мог появиться другой статус.
+            setTimeout(() => setDrawOfferStatus(prev => (prev === startMessage ? null : prev)), 3000);
+        } else if (hasIncomingDrawOffer) {
+            setDrawOfferStatus(DRAW_OFFER_INCOMING);
+        } else {
+            setDrawOfferStatus(prev => (prev === DRAW_OFFER_INCOMING ? null : prev));
         }
     }, [playAudio]);
 
@@ -218,17 +330,22 @@ export function useGameSocket({
             if (!data.game_over) {
                 playAudio(resolveMoveSound(lastSan));
             }
+
+            // Ход отвечает на предложение ничьей отказом (сервер его снимает): ход того, кому
+            // предложили. Свой ход предложившего предложение не отменяет.
+            const moverColor = nextGame.turn() === 'w' ? 'black' : 'white';
+            const moverIsMe = moverColor === myColorRef.current;
+            setDrawOfferStatus(prev => {
+                if (prev === DRAW_OFFER_INCOMING && moverIsMe) return null;
+                if (prev === DRAW_OFFER_OUTGOING && !moverIsMe) return null;
+                return prev;
+            });
         }
 
         if (data.game_over) {
-            clearPremove();
-            setPendingPromotion(null);
-            setGameOverResult(data.result);
-            setRatingInfo(data);
-            playOutcomeSound(data.result);
-            updateSessionStats(data.result);
+            concludeGame(data);
         }
-    }, [playAudio, playOutcomeSound, updateSessionStats]);
+    }, [playAudio, concludeGame]);
 
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -241,48 +358,51 @@ export function useGameSocket({
         };
 
         const handleMoveMade = (data: any) => {
+            if (!isCurrentGameEvent(data)) return;
             applyMoveMadeSnapshot(data);
         };
 
         const handleGameOver = (data: any) => {
-            clearPremove();
-            setPendingPromotion(null);
-            // Партия могла уже быть завершена сообщением move_made (оно приходит первым на том же
-            // соединении) — тогда исход уже озвучен и статистика уже обновлена, повторять не нужно.
-            if (!gameOverResultRef.current) {
-                playOutcomeSound(data.result);
-                updateSessionStats(data.result);
-            }
-            setGameOverResult(data.result);
-            setRatingInfo(data);
+            if (!isCurrentGameEvent(data)) return;
+            concludeGame(data);
             if (data.white_time_ms !== undefined) setWhiteTimeMs(data.white_time_ms);
             if (data.black_time_ms !== undefined) setBlackTimeMs(data.black_time_ms);
-            if (data.reason === 'aborted' || data.result === '*') {
-                setDrawOfferStatus('Партия отменена на 1-м ходу (рейтинг не изменён).');
-            } else if (data.result) {
-                setDrawOfferStatus(`Партия окончена. Результат: ${data.result}`);
-            }
+            const summary = describeGameOver(data.result, data.reason);
+            if (summary) setDrawOfferStatus(summary);
         };
 
-        const handleDrawOffered = () => {
-            setDrawOfferStatus('Соперник предлагает ничью.');
+        const handleDrawOffered = (data: any) => {
+            if (!isOwnGameEvent(data) || gameOverResultRef.current) return;
+            setDrawOfferStatus(DRAW_OFFER_INCOMING);
             playAudio('offer');
         };
 
-        const handleDrawDeclined = () => {
-            setDrawOfferStatus('Предложение ничьей отклонено.');
+        const handleDrawDeclined = (data: any) => {
+            if (!isOwnGameEvent(data) || gameOverResultRef.current) return;
+            setDrawOfferStatus(DRAW_DECLINED);
             playAudio('decline');
-            setTimeout(() => setDrawOfferStatus(null), 3000);
+            setTimeout(() => setDrawOfferStatus(prev => (prev === DRAW_DECLINED ? null : prev)), 3000);
         };
 
-        const handleRematchOffered = () => {
+        const handleRematchOffered = (data: any) => {
+            if (!isOwnGameEvent(data)) return;
             setRematchStatus('offered_by_opponent');
             playAudio('offer');
         };
 
-        const handleRematchDeclined = () => {
+        const handleRematchDeclined = (data: any) => {
+            if (!isOwnGameEvent(data)) return;
             setRematchStatus('declined');
             playAudio('decline');
+        };
+
+        // Сервер шлёт connected при каждом (пере)подключении. При обрыве он снимает вызов игрока
+        // из лобби, а экран продолжал бы показывать «поиск» — возвращаем вызов на место.
+        const handleConnected = () => {
+            const params = searchParamsRef.current;
+            if (params && isSearchingRef.current && !gameIdRef.current) {
+                gameSocket.send('join_queue', params);
+            }
         };
 
         const handleInviteCreated = (data: any) => {
@@ -300,11 +420,26 @@ export function useGameSocket({
         };
 
         const handleSpectateStarted = (data: any) => {
-            setIsSearching(false);
-            setActiveBot(null);
+            if (gameIdRef.current && !gameOverResultRef.current) {
+                // Пока шёл ответ, началась собственная партия — зрителем не становимся.
+                gameSocket.send('leave_spectate', {game_id: data.game_id});
+                return;
+            }
+            exitBotGame();
             gameIdRef.current = null;
             setGameId(null);
-            setSpectatingGameId(data.game_id);
+            spectatingRef.current = Number(data.game_id);
+            setSpectatingGameId(Number(data.game_id));
+            setIsRatedGame(data.is_rated !== false);
+            // Зритель всегда смотрит со стороны белых и не наследует состояние прошлой партии.
+            myColorRef.current = 'white';
+            setMyColor('white');
+            setIsManualFlip(false);
+            setRatingInfo(null);
+            setRematchStatus('none');
+            setSelectedSquare(null);
+            setPendingPromotion(null);
+            clearPremove();
             setWhitePlayer({username: data.white_username || 'Белые', rating: String(data.white_rating || 1200)});
             setBlackPlayer({username: data.black_username || 'Черные', rating: String(data.black_rating || 1200)});
             setWhiteTimeMs(data.white_time_ms ?? data.base_time_ms ?? 180000);
@@ -323,6 +458,7 @@ export function useGameSocket({
             setGame(restored);
             setHistory(restored.history({verbose: true}));
             setViewIndex(-1);
+            gameOverResultRef.current = null;
             setGameOverResult(null);
             setChatMessages([]);
             setDrawOfferStatus(`Режим зрителя: ${data.white_username} vs ${data.black_username}`);
@@ -330,6 +466,7 @@ export function useGameSocket({
         };
 
         const handleChatMessage = (data: any) => {
+            if (!isCurrentGameEvent(data)) return;
             if (data.text && data.sender) {
                 setChatMessages(prev => [...prev.slice(-49), {
                     sender: data.sender,
@@ -344,11 +481,17 @@ export function useGameSocket({
 
         const handleServerError = (data: any) => {
             console.warn('Сервер отклонил действие:', data);
+            // Действие продублировано (WS + HTTP, повтор после переподключения), и партия уже
+            // началась по первому из запросов — «вы уже играете» здесь не ошибка.
+            if (data.code === 'self_in_game' && gameIdRef.current && !gameOverResultRef.current) return;
             if (data.code) {
                 if (data.message) setDrawOfferStatus(data.message);
                 // Отказ матчмейкинга (уже в партии, вне диапазона рейтинга, вызов неактуален...)
                 // выводит из режима поиска; ограничения чата, предложений и частоты — нет.
-                if (!GAME_ACTION_ERROR_CODES.has(data.code)) setIsSearching(false);
+                if (!GAME_ACTION_ERROR_CODES.has(data.code)) {
+                    searchParamsRef.current = null;
+                    setIsSearching(false);
+                }
                 // Ход, отклонённый по лимиту частоты, приходит с актуальной позицией —
                 // её нужно вернуть на доску (ниже). Остальные отказы позицию не трогают.
                 if (!data.fen && !data.pgn) return;
@@ -376,6 +519,7 @@ export function useGameSocket({
             }
         };
 
+        gameSocket.on('connected', handleConnected);
         gameSocket.on('match_found', handleMatchFound);
         gameSocket.on('move_made', handleMoveMade);
         gameSocket.on('game_over', handleGameOver);
@@ -389,6 +533,7 @@ export function useGameSocket({
         gameSocket.on('error', handleServerError);
 
         return () => {
+            gameSocket.off('connected', handleConnected);
             gameSocket.off('match_found', handleMatchFound);
             gameSocket.off('move_made', handleMoveMade);
             gameSocket.off('game_over', handleGameOver);
@@ -401,7 +546,8 @@ export function useGameSocket({
             gameSocket.off('chat_message', handleChatMessage);
             gameSocket.off('error', handleServerError);
         };
-    }, [applyMatchFoundSnapshot, applyMoveMadeSnapshot, playAudio, playOutcomeSound, updateSessionStats]);
+    }, [applyMatchFoundSnapshot, applyMoveMadeSnapshot, concludeGame, isCurrentGameEvent, isOwnGameEvent,
+        exitBotGame, playAudio]);
 
     useEffect(() => {
         if (!inviteCode || !localStorage.getItem('token')) return;
@@ -411,6 +557,23 @@ export function useGameSocket({
         }, 450);
         return () => clearTimeout(timer);
     }, [inviteCode, navigate]);
+
+    /**
+     * Партия завершилась на сервере, а game_over до клиента не дошёл: берём итог по HTTP.
+     * Пока итог не записан в БД (status IN_PROGRESS), ничего не делаем — спросим ещё раз.
+     */
+    const concludeMissedGame = useCallback(async (missedGameId: number) => {
+        const res = await fetch(`${API_BASE_URL}/api/v1/profile/games/${missedGameId}/summary`);
+        if (!res.ok) return;
+        const summary = await res.json();
+        if (summary.status !== 'COMPLETED' && summary.status !== 'ABORTED') return;
+        if (gameIdRef.current !== missedGameId || gameOverResultRef.current) return;
+
+        missingActivePollsRef.current = 0;
+        const result: string = summary.status === 'ABORTED' ? '*' : (summary.result || '*');
+        concludeGame({...summary, result});
+        setDrawOfferStatus(describeGameOver(result, summary.termination));
+    }, [gameIdRef, gameOverResultRef, concludeGame, setDrawOfferStatus]);
 
     useEffect(() => {
         const syncLobbyAndActiveGame = async () => {
@@ -423,17 +586,30 @@ export function useGameSocket({
                     if (activeRes.ok) {
                         const activeData = await activeRes.json();
                         if (activeData && activeData.active && activeData.game_id) {
+                            missingActivePollsRef.current = 0;
                             if (gameIdRef.current !== Number(activeData.game_id)) {
                                 applyMatchFoundSnapshot(activeData);
                                 return;
                             } else if (Number(activeData.state_version || 0) > stateVersionRef.current) {
                                 applyMoveMadeSnapshot(activeData);
                             }
+                        } else if (gameIdRef.current && !gameOverResultRef.current) {
+                            // На экране партия идёт, а сервер её активной уже не считает: game_over
+                            // потерялся (обрыв WebSocket в момент завершения). Два ответа подряд —
+                            // чтобы не спутать с запросом, отправленным до старта партии.
+                            missingActivePollsRef.current += 1;
+                            if (missingActivePollsRef.current >= MISSING_GAME_POLLS) {
+                                await concludeMissedGame(gameIdRef.current);
+                            }
+                        } else {
+                            missingActivePollsRef.current = 0;
                         }
                     }
                 }
 
-                if (!gameIdRef.current) {
+                // Лобби нужно и после завершения партии: её итог ещё на доске, но игрок уже
+                // выбирает следующего соперника.
+                if (!gameIdRef.current || gameOverResultRef.current) {
                     const [qRes, liveRes] = await Promise.all([
                         fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/queue`),
                         fetch(`${API_BASE_URL}/api/v1/profile/games/live`)
@@ -455,29 +631,44 @@ export function useGameSocket({
         syncLobbyAndActiveGame();
         const interval = setInterval(syncLobbyAndActiveGame, 1500);
         return () => clearInterval(interval);
-    }, [activeBot, spectatingGameId, applyMatchFoundSnapshot, applyMoveMadeSnapshot]);
+    }, [activeBot, spectatingGameId, applyMatchFoundSnapshot, applyMoveMadeSnapshot, concludeMissedGame]);
 
     const startMatchmaking = useCallback(async () => {
+        if (spectatingRef.current) {
+            // Поиск соперника завершает просмотр чужой партии: доска нужна для своей.
+            gameSocket.send('leave_spectate', {game_id: spectatingRef.current});
+            spectatingRef.current = null;
+            setSpectatingGameId(null);
+            setGame(new Chess());
+            setHistory([]);
+            setViewIndex(-1);
+        }
         gameIdRef.current = null;
         setGameId(null);
         exitBotGame();
         resetLowTimeWarning();
         setPendingPromotion(null);
         clearPremove();
+        gameOverResultRef.current = null;
         setGameOverResult(null);
         setRatingInfo(null);
+        isSearchingRef.current = true;
         setIsSearching(true);
         setLeftSectionTab('lobby');
         setLobbyTab('lobby');
         setIsTimeDropdownOpen(false);
-        setDrawOfferStatus(`Вы опубликовали вызов в лобби (${selectedTimeControlLabel})...`);
+        setDrawOfferStatus(
+            `Вы опубликовали ${ratedChoice ? 'рейтинговый' : 'товарищеский'} вызов в лобби (${selectedTimeControlLabel})...`,
+        );
 
         const baseMs = Math.round(effectiveWhiteBaseMinutes * 60 * 1000);
         const incMs = Math.round(effectiveIncSeconds * 1000);
 
+        searchParamsRef.current = {base_time_ms: baseMs, increment_ms: incMs, rated: ratedChoice};
         gameSocket.send('join_queue', {
             base_time_ms: baseMs,
-            increment_ms: incMs
+            increment_ms: incMs,
+            rated: ratedChoice
         });
 
         const token = localStorage.getItem('token');
@@ -489,7 +680,7 @@ export function useGameSocket({
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${token}`
                     },
-                    body: JSON.stringify({base_time_ms: baseMs, increment_ms: incMs})
+                    body: JSON.stringify({base_time_ms: baseMs, increment_ms: incMs, rated: ratedChoice})
                 });
                 if (res.ok) {
                     const data = await res.json();
@@ -505,10 +696,13 @@ export function useGameSocket({
         gameIdRef, setGameId, exitBotGame, resetLowTimeWarning, setPendingPromotion, clearPremove,
         setGameOverResult, setRatingInfo, setIsSearching, setLeftSectionTab, setLobbyTab,
         setIsTimeDropdownOpen, setDrawOfferStatus, selectedTimeControlLabel, effectiveWhiteBaseMinutes,
-        effectiveIncSeconds, applyMatchFoundSnapshot,
+        effectiveIncSeconds, applyMatchFoundSnapshot, gameOverResultRef, setSpectatingGameId, setGame,
+        setHistory, setViewIndex, ratedChoice,
     ]);
 
     const cancelMatchmaking = useCallback(async () => {
+        searchParamsRef.current = null;
+        isSearchingRef.current = false;
         setIsSearching(false);
         setDrawOfferStatus(null);
         gameSocket.send('leave_queue', {});
@@ -555,9 +749,10 @@ export function useGameSocket({
         gameSocket.send('create_invite', {
             base_time_ms: Math.round(effectiveWhiteBaseMinutes * 60 * 1000),
             increment_ms: Math.round(effectiveIncSeconds * 1000),
-            color_pref: inviteColorPref
+            color_pref: inviteColorPref,
+            rated: ratedChoice
         });
-    }, [effectiveWhiteBaseMinutes, effectiveIncSeconds, inviteColorPref]);
+    }, [effectiveWhiteBaseMinutes, effectiveIncSeconds, inviteColorPref, ratedChoice]);
 
     const handleCopyInviteLink = useCallback(() => {
         if (!createdInviteCode) return;
@@ -600,7 +795,7 @@ export function useGameSocket({
     const handleOfferDraw = useCallback(() => {
         if (!gameId || gameOverResult) return;
         gameSocket.send('offer_draw', {game_id: gameId});
-        setDrawOfferStatus('Вы предложили ничью...');
+        setDrawOfferStatus(DRAW_OFFER_OUTGOING);
         playAudio('premove');
     }, [gameId, gameOverResult, setDrawOfferStatus, playAudio]);
 

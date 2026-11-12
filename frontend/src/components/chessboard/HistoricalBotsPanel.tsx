@@ -15,12 +15,17 @@ export interface HistoricalBotsPanelProps {
     isBotThinking: boolean;
     botComment: string | null;
     onStartBotGame: (botId: HistoricalBotId, colorPref: 'white' | 'black' | 'random') => void;
+    /** На свободной доске стоит своя позиция — партию с ботом можно начать с неё. */
+    canStartFromPosition: boolean;
+    startFromPosition: boolean;
+    onStartFromPositionChange: (value: boolean) => void;
 }
 
 /** Выбор исторического бота, карточка с его девизом/рейтингом и кнопками старта партии. */
 export function HistoricalBotsPanel({
     selectedBotId, onSelectBot, selectedBotProfile, activeBot, activeBotProfile, gameId,
     gameOverResult, isBotThinking, botComment, onStartBotGame,
+    canStartFromPosition, startFromPosition, onStartFromPositionChange,
 }: HistoricalBotsPanelProps) {
     return (
         <div
@@ -102,6 +107,18 @@ export function HistoricalBotsPanel({
                 <p className="text-xs italic text-boxwood/90 leading-snug bg-black/30 p-2 rounded border border-amber-900/30">
                     «{selectedBotProfile.motto}»
                 </p>
+
+                {canStartFromPosition && (
+                    <label className="flex items-center gap-2 text-xs text-amber-200 cursor-pointer select-none">
+                        <input
+                            type="checkbox"
+                            checked={startFromPosition}
+                            onChange={(e) => onStartFromPositionChange(e.target.checked)}
+                            className="accent-amber-600"
+                        />
+                        Начать с позиции на доске
+                    </label>
+                )}
 
                 <div className="grid grid-cols-3 gap-1.5">
                     <button

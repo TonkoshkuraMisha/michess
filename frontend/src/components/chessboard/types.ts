@@ -10,6 +10,8 @@ export interface LiveGameItem {
     base_time_ms: number;
     increment_ms: number;
     spectators_count: number;
+    /** false — товарищеская партия (без рейтинга). */
+    is_rated?: boolean;
 }
 
 export interface ChatMessageItem {
@@ -38,6 +40,8 @@ export interface QueuePlayer {
     rating: number;
     base_time_ms: number;
     increment_ms: number;
+    /** false — вызов на товарищескую партию. */
+    rated?: boolean;
 }
 
 /**
@@ -49,4 +53,5 @@ export const GAME_ACTION_ERROR_CODES: ReadonlySet<string> = new Set([
     'message_too_large',
     'draw_offer_too_soon',
     'chat_forbidden',
+    'spectate_unavailable',
 ]);

@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import {CHAMPIONS_LIST} from '../config/champions';
 import {API_BASE_URL} from '../config/api';
+import {readErrorDetail} from '../services/apiErrors';
 
 interface GameData {
     game_id: number;
@@ -26,10 +27,19 @@ interface GameData {
     finished_at: string | null;
 }
 
+/**
+ * Играет ли чемпион за эту сторону: фамилия совпадает с одним из слов имени без учёта регистра
+ * («Tal, Mikhail», «TAL, M.»). Поиск подстроки не годится: «tal» нашёлся бы и в «Vitaly».
+ */
+export function isChampionName(username: string, championId: string): boolean {
+    const surname = championId.toLowerCase();
+    return username.toLowerCase().split(/[^\p{L}]+/u).includes(surname);
+}
+
 const displayDate = (game: GameData) => {
     if (game.pgn_date && !game.pgn_date.includes('????')) {
         // Очищаем дату от неизвестных месяцев/дней: "1860.??.??" -> "1860"
-        return game.pgn_date.replace(/\??/g, '').replace(/\.$/, '');
+        return game.pgn_date.replace(/\?/g, '').replace(/\.+$/, '');
     }
     if (game.finished_at) {
         return format(parseISO(game.finished_at), 'd MMM yyyy', {locale: ru});
@@ -57,11 +67,10 @@ export default function ChampionGames() {
             setError(null);
             try {
                 const offset = (page - 1) * limit;
-                const res = await fetch(`${API_BASE_URL}/api/v1/profile/${championId}/games?limit=${limit}&offset=${offset}&sort=asc`);
+                const res = await fetch(`${API_BASE_URL}/api/v1/profile/${encodeURIComponent(championId ?? '')}/games?limit=${limit}&offset=${offset}&sort=asc`);
 
                 if (!res.ok) {
-                    const errData = await res.json();
-                    throw new Error(errData.detail || 'Не удалось загрузить партии из базы данных');
+                    throw new Error(await readErrorDetail(res, 'Не удалось загрузить партии из базы данных'));
                 }
 
                 const data = await res.json();
@@ -188,7 +197,7 @@ export default function ChampionGames() {
                             </tr>
                         ) : (
                             games.map((game, index) => {
-                                const isWhite = game.white_username.includes(champion.id);
+                                const isWhite = isChampionName(game.white_username, champion.id);
                                 let resultColor = 'text-gray-400';
                                 let resultText = 'Ничья';
 
@@ -270,6 +279,7 @@ export default function ChampionGames() {
                         <div className="flex items-center gap-3 text-boxwood/60 text-sm">
                             <span className="hidden sm:inline">Показывать по:</span>
                             <select
+                                aria-label="Партий на странице"
                                 value={limit}
                                 onChange={(e) => {
                                     setLimit(Number(e.target.value));
@@ -287,6 +297,8 @@ export default function ChampionGames() {
                             <button
                                 onClick={() => setPage(1)}
                                 disabled={page === 1}
+                                aria-label="В начало"
+                                title="В начало"
                                 className="p-1.5 rounded bg-black/40 hover:bg-amber-900/60 disabled:opacity-30 disabled:cursor-not-allowed text-amber-500 transition border border-transparent hover:border-amber-900/50"
                             >
                                 <ChevronsLeft size={18}/>
@@ -294,6 +306,8 @@ export default function ChampionGames() {
                             <button
                                 onClick={() => setPage(p => Math.max(1, p - 1))}
                                 disabled={page === 1}
+                                aria-label="Предыдущая страница"
+                                title="Предыдущая страница"
                                 className="p-1.5 rounded bg-black/40 hover:bg-amber-900/60 disabled:opacity-30 disabled:cursor-not-allowed text-amber-500 transition border border-transparent hover:border-amber-900/50"
                             >
                                 <ChevronLeft size={18}/>
@@ -304,6 +318,7 @@ export default function ChampionGames() {
                                     <button
                                         key={p}
                                         onClick={() => setPage(p)}
+                                        aria-current={page === p ? 'page' : undefined}
                                         className={`w-8 h-8 rounded text-sm font-bold font-mono transition flex items-center justify-center ${
                                             page === p
                                                 ? 'bg-amber-600 text-white shadow shadow-amber-600/20'
@@ -318,6 +333,8 @@ export default function ChampionGames() {
                             <button
                                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                                 disabled={page === totalPages}
+                                aria-label="Следующая страница"
+                                title="Следующая страница"
                                 className="p-1.5 rounded bg-black/40 hover:bg-amber-900/60 disabled:opacity-30 disabled:cursor-not-allowed text-amber-500 transition border border-transparent hover:border-amber-900/50"
                             >
                                 <ChevronRight size={18}/>
@@ -325,6 +342,8 @@ export default function ChampionGames() {
                             <button
                                 onClick={() => setPage(totalPages)}
                                 disabled={page === totalPages}
+                                aria-label="В конец"
+                                title="В конец"
                                 className="p-1.5 rounded bg-black/40 hover:bg-amber-900/60 disabled:opacity-30 disabled:cursor-not-allowed text-amber-500 transition border border-transparent hover:border-amber-900/50"
                             >
                                 <ChevronsRight size={18}/>

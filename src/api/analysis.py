@@ -7,12 +7,14 @@ from contextlib import asynccontextmanager
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.fair_play import forbid_engine_help_during_game
 from src.api.rate_limit import rate_limit
 from src.db.session import get_db
 from src.models.game import Game
 from src.schemas.analysis import FullGameAnalysisResponse, PositionAnalysisRequest
 from src.services.analysis_service import GameNotFinishedError, analysis_service, ensure_game_finished
 from src.services.engine_pool import EngineBusyError
+from src.services.game_engine import InvalidStartPositionError
 
 router = APIRouter(prefix="/analysis", tags=["Game Analysis"])
 
@@ -44,15 +46,25 @@ def _engine_busy() -> HTTPException:
 
 @router.post(
     "/position",
-    dependencies=[Depends(rate_limit("analysis_position", "RATE_LIMIT_POSITION_ANALYSIS"))],
+    dependencies=[
+        Depends(rate_limit(
+            "analysis_position", "RATE_LIMIT_POSITION_ANALYSIS", "RATE_LIMIT_POSITION_ANALYSIS_GUEST",
+        )),
+        Depends(forbid_engine_help_during_game),
+    ],
 )
 async def analyze_game_position(
         request: PositionAnalysisRequest,
         db: AsyncSession = Depends(get_db),
 ):
-    """Возвращает оценку позиции Stockfish для заданного массива ходов."""
+    """
+    Возвращает оценку позиции Stockfish для заданного массива ходов.
+    Недоступно, пока у запрашивающего идёт рейтинговая партия (см. src/api/fair_play.py).
+    """
     try:
-        return await analysis_service.analyze_position(db, request.moves)
+        return await analysis_service.analyze_position(db, request.moves, request.start_fen)
+    except InvalidStartPositionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except EngineBusyError:
         raise _engine_busy() from None
 

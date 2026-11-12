@@ -44,7 +44,7 @@ export default {
         'inner-board': 'inset 0 2px 6px 0 rgba(0, 0, 0, 0.35)',
       },
       backgroundImage: {
-        'wood-texture': "url('/assets/textures/wood-grain.png')",
+        'wood-texture': "url('/assets/textures/wood-grain.svg')",
       }
     },
   },

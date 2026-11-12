@@ -74,6 +74,15 @@ def validate_time_control(base_time_ms, increment_ms) -> tuple[int, int]:
     return base_ms, inc_ms
 
 
+def _queue_name(base_ms, inc_ms, rated: bool) -> str:
+    """Рейтинговые и товарищеские вызовы лежат в разных очередях и между собой не сводятся."""
+    return f"queue:{base_ms}:{inc_ms}" if rated else f"queue:{base_ms}:{inc_ms}:casual"
+
+
+def _prefs_rated(prefs: dict) -> bool:
+    return str(prefs.get("rated", "1")) != "0"
+
+
 def _ratings_compatible(rating_a: int, window_a: tuple[int, int], rating_b: int, window_b: tuple[int, int]) -> bool:
     return window_a[0] <= rating_b <= window_a[1] and window_b[0] <= rating_a <= window_b[1]
 
@@ -145,6 +154,7 @@ class Matchmaker:
             min_rating: int | None = None,
             max_rating: int | None = None,
             db: AsyncSession | None = None,
+            rated: bool = True,
     ):
         """
         Сразу сводит с подходящим вызовом из лобби (ближайшим по рейтингу, с взаимно
@@ -155,7 +165,7 @@ class Matchmaker:
         rating = int(rating)
         base_ms, inc_ms = validate_time_control(base_time_ms, increment_ms)
         window = normalize_rating_window(min_rating, max_rating, rating)
-        queue_name = f"queue:{base_ms}:{inc_ms}"
+        queue_name = _queue_name(base_ms, inc_ms, rated)
 
         await self._ensure_not_in_game(uid, is_self=True)
 
@@ -194,15 +204,21 @@ class Matchmaker:
             "max_rating": str(window[1]),
             "base_time_ms": str(base_ms),
             "increment_ms": str(inc_ms),
+            "rated": "1" if rated else "0",
         })
-        logger.info("User %s (%s) published challenge in lobby (%s+%s)", uid, username, base_ms, inc_ms)
+        logger.info(
+            "User %s (%s) published %s challenge in lobby (%s+%s)",
+            uid, username, "rated" if rated else "casual", base_ms, inc_ms,
+        )
         return None
 
     async def leave_queue(self, user_id: int):
         uid = int(user_id)
         prefs = await self.redis.hgetall(f"queue:prefs:{uid}")
         if prefs:
-            queue_name = f"queue:{prefs.get('base_time_ms', 180000)}:{prefs.get('increment_ms', 0)}"
+            queue_name = _queue_name(
+                prefs.get("base_time_ms", 180000), prefs.get("increment_ms", 0), _prefs_rated(prefs),
+            )
             await self.redis.zrem(queue_name, str(uid))
             await self.redis.delete(f"queue:prefs:{uid}")
 
@@ -232,6 +248,7 @@ class Matchmaker:
                         "max_rating": int(prefs.get("max_rating", UNBOUNDED_MAX_RATING)),
                         "base_time_ms": int(prefs.get("base_time_ms", 180000)),
                         "increment_ms": int(prefs.get("increment_ms", 0)),
+                        "rated": _prefs_rated(prefs),
                     })
         return players
 
@@ -245,6 +262,7 @@ class Matchmaker:
             base_time: int,
             inc_time: int,
             now_ms: int,
+            is_rated: bool = True,
     ) -> dict | None:
         white_user = await self._fresh_user(session, white_id)
         black_user = await self._fresh_user(session, black_id)
@@ -261,7 +279,7 @@ class Matchmaker:
             base_time_ms=base_time,
             increment_ms=inc_time,
             status=GameStatus.IN_PROGRESS,
-            is_rated=True,
+            is_rated=is_rated,
             state_version=0,
             turn="w",
             board_fen=chess.STARTING_FEN,
@@ -283,6 +301,7 @@ class Matchmaker:
             "white_rating": white_rating,
             "black_username": black_user.username,
             "black_rating": black_rating,
+            "is_rated": is_rated,
         }
 
     async def _create_match_record(
@@ -293,10 +312,11 @@ class Matchmaker:
             base_time: int,
             inc_time: int,
             now_ms: int,
+            is_rated: bool = True,
     ) -> dict | None:
         """Партия из лобби: цвета случайные."""
         white_id, black_id = (c_id, a_id) if random.random() > 0.5 else (a_id, c_id)
-        return await self._create_game_record(session, white_id, black_id, base_time, inc_time, now_ms)
+        return await self._create_game_record(session, white_id, black_id, base_time, inc_time, now_ms, is_rated)
 
     async def _notify_match_found(self, connection_manager, created: dict, base_time: int, inc_time: int) -> None:
         if connection_manager is None:
@@ -308,6 +328,7 @@ class Matchmaker:
             "white_rating": created["white_rating"],
             "black_username": created["black_username"],
             "black_rating": created["black_rating"],
+            "is_rated": created.get("is_rated", True),
             "base_time_ms": base_time,
             "increment_ms": inc_time,
             "white_time_ms": base_time,
@@ -333,8 +354,12 @@ class Matchmaker:
             players: tuple[int, int],
     ) -> dict | None:
         """Общая часть старта: снять обоих с очереди, создать запись, Redis-состояние, оповестить."""
+        from src.services.connection_manager import manager as ws_manager
         for uid in players:
             await self.leave_queue(uid)
+            # Игрок мог смотреть чужую партию: иначе её ходы продолжали бы приходить ему
+            # во время собственной игры.
+            await ws_manager.remove_user_from_all_spectating(uid)
 
         created = await create(session, int(time.time() * 1000))
         if not created:
@@ -346,6 +371,7 @@ class Matchmaker:
             black_id=created["black_id"],
             base_time_ms=base_time,
             increment_ms=inc_time,
+            is_rated=created.get("is_rated", True),
         )
         await self._notify_match_found(connection_manager, created, base_time, inc_time)
         logger.info(
@@ -363,9 +389,10 @@ class Matchmaker:
             connection_manager=None,
             db: AsyncSession | None = None,
             initiator_id: int | None = None,
+            is_rated: bool = True,
     ) -> dict:
         """
-        Стартует рейтинговую партию с заданными цветами (приглашение, реванш).
+        Стартует партию с заданными цветами (приглашение, реванш).
         initiator_id — кто инициировал старт (для текста ошибки «вы уже играете»).
         """
         white_id, black_id = int(white_id), int(black_id)
@@ -382,7 +409,9 @@ class Matchmaker:
             async with self._session(db) as session:
                 started = await self._start_reserved_game(
                     session,
-                    lambda s, now_ms: self._create_game_record(s, white_id, black_id, base_ms, inc_ms, now_ms),
+                    lambda s, now_ms: self._create_game_record(
+                        s, white_id, black_id, base_ms, inc_ms, now_ms, is_rated,
+                    ),
                     base_ms, inc_ms, connection_manager, (white_id, black_id),
                 )
             if not started:
@@ -424,6 +453,7 @@ class Matchmaker:
 
             base_time = int(prefs.get("base_time_ms", 180000))
             inc_time = int(prefs.get("increment_ms", 0))
+            is_rated = _prefs_rated(prefs)
             category = classify_time_control(base_time, inc_time)
 
             async with self._session(db) as session:
@@ -444,7 +474,9 @@ class Matchmaker:
 
                 started = await self._start_reserved_game(
                     session,
-                    lambda s, now_ms: self._create_match_record(s, c_id, a_id, base_time, inc_time, now_ms),
+                    lambda s, now_ms: self._create_match_record(
+                        s, c_id, a_id, base_time, inc_time, now_ms, is_rated,
+                    ),
                     base_time, inc_time, connection_manager, (c_id, a_id),
                 )
             if not started:
@@ -463,6 +495,7 @@ class Matchmaker:
             base_time_ms: int = 180000,
             increment_ms: int = 2000,
             color_pref: str = "random",
+            rated: bool = True,
     ) -> dict:
         await self._ensure_not_in_game(user_id, is_self=True)
         base_ms, inc_ms = validate_time_control(base_time_ms, increment_ms)
@@ -479,6 +512,7 @@ class Matchmaker:
             "base_time_ms": base_ms,
             "increment_ms": inc_ms,
             "color_pref": color_pref,
+            "rated": bool(rated),
         }
         await self.redis.set(f"invite:{code}", json.dumps(payload), ex=INVITE_TTL_S)
         return payload
@@ -524,6 +558,7 @@ class Matchmaker:
             "black_id": black_id,
             "base_time_ms": int(invite.get("base_time_ms", 180000)),
             "increment_ms": int(invite.get("increment_ms", 0)),
+            "rated": bool(invite.get("rated", True)),
             "_raw": raw,
         }
 
@@ -549,6 +584,7 @@ class Matchmaker:
                 accepted["white_id"], accepted["black_id"],
                 accepted["base_time_ms"], accepted["increment_ms"],
                 connection_manager=connection_manager, db=db, initiator_id=acceptor_id,
+                is_rated=accepted["rated"],
             )
         except MatchmakingError:
             await self.redis.set(f"invite:{code}", accepted["_raw"], ex=INVITE_TTL_S)

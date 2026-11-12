@@ -127,7 +127,7 @@ async def test_garbage_does_not_break_the_connection():
 async def test_flooding_connection_is_closed(monkeypatch):
     monkeypatch.setattr(ws_module, "WS_MAX_STRIKES", 5)
     socket = await _run(_user(905), ["garbage"] * 5, close=False)  # эндпоинт завершается сам
-    assert socket.closed_with == ws_module.WS_CLOSE_POLICY_VIOLATION
+    assert socket.closed_with == ws_module.WS_CLOSE_FLOOD
 
 
 async def test_draw_can_be_offered_once_per_move(game):

@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.game import Game, GameStatus
 from src.services.bots.base import resolve_stockfish_path, static_board_eval_cp
 from src.services.engine_pool import EngineUnavailableError, get_engine_pool
+from src.services.game_engine import board_from_start_fen
 
 logger = logging.getLogger(__name__)
 
@@ -142,9 +143,13 @@ def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
         san_list: list[str] = []
         uci_list: list[str] = []
         colors: list[str] = []
+        move_numbers: list[int] = []
 
         for mv in mainline_moves:
             colors.append("white" if board.turn == chess.WHITE else "black")
+            # Номер хода берём с доски: партия с произвольной позиции может начинаться
+            # не с первого хода и с хода чёрных.
+            move_numbers.append(board.fullmove_number)
             san_list.append(board.san(mv))
             uci_list.append(mv.uci())
             board.push(mv)
@@ -187,7 +192,7 @@ def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
 
         moves_report.append({
             "ply": idx + 1,
-            "move_number": (idx // 2) + 1,
+            "move_number": move_numbers[idx],
             "color": mover_color,
             "san": san_list[idx],
             "uci": uci_played,
@@ -240,8 +245,8 @@ def _count_mainline_plies(pgn_text: str) -> int:
 
 
 class AnalysisService:
-    async def analyze_position(self, db: AsyncSession, moves: list[str]) -> dict:
-        board = chess.Board()
+    async def analyze_position(self, db: AsyncSession, moves: list[str], start_fen: str | None = None) -> dict:
+        board = board_from_start_fen(start_fen)  # InvalidStartPositionError для невозможной позиции
         for move_str in moves:
             try:
                 board.push_san(move_str)

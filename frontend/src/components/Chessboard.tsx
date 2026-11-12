@@ -23,7 +23,8 @@ import {DEFAULT_TIME_CONTROL, TIME_CONTROLS} from '../config/timeControls';
 import type {TimeControlOption, TimeControlGroup} from '../config/timeControls';
 import {
     FILES, RANKS, MIN_BOARD_SIZE, MAX_BOARD_SIZE,
-    getMaxViewportBoardSize, getDefaultBoardSize, calculateMaterialBalance, cloneChessInstance, prevIndexHelper
+    getMaxViewportBoardSize, getDefaultBoardSize, calculateMaterialBalance, cloneChessInstance, prevIndexHelper,
+    customStartFen, pairHalfMoves, validateFen, STANDARD_START_FEN
 } from './chessboard/boardUtils';
 import type {PromotionPiece} from './chessboard/boardUtils';
 import type {PendingPromotion} from './chessboard/types';
@@ -63,6 +64,11 @@ export default function Chessboard() {
 
     const [spectatingGameId, setSpectatingGameId] = useState<number | null>(null);
     const [inviteColorPref, setInviteColorPref] = useState<'white' | 'black' | 'random'>('random');
+    // Тип новых партий (вызов в лобби и приглашение по ссылке) и тип партии, идущей на доске.
+    const [ratedChoice, setRatedChoice] = useState<boolean>(true);
+    const [isRatedGame, setIsRatedGame] = useState<boolean>(true);
+    // Партию с ботом можно начать с позиции, стоящей на свободной доске.
+    const [startFromPosition, setStartFromPosition] = useState<boolean>(false);
 
     const [game, setGame] = useState(new Chess());
     const [history, setHistory] = useState<any[]>([]);
@@ -242,10 +248,10 @@ export default function Chessboard() {
         gameId, gameIdRef, myColorRef, spectatingGameId, stateVersionRef,
         gameOverResult, gameOverResultRef, activeBot, currentUsernameRef, inviteCode, navigate,
         effectiveWhiteBaseMinutes, effectiveIncSeconds, selectedTimeControlLabel: selectedTimeControl.label,
-        inviteColorPref,
+        inviteColorPref, ratedChoice, setIsRatedGame,
         setGame, setHistory, setViewIndex, setGameId, setMyColor, setSpectatingGameId, setActiveBot,
         setStateVersion, setWhitePlayer, setBlackPlayer, setRatingInfo, setGameOverResult,
-        setDrawOfferStatus, setRematchStatus, setIsSearching, setIsManualFlip, setSelectedSquare,
+        setDrawOfferStatus, setRematchStatus, isSearching, setIsSearching, setIsManualFlip, setSelectedSquare,
         setPendingPromotion, clearPremove, setWhiteTimeMs, setBlackTimeMs, setLeftSectionTab,
         setLobbyTab, setIsTimeDropdownOpen, setShowInvitePanel, moveStartTime, resetLowTimeWarning,
         exitBotGame, playAudio, playOutcomeSound, updateSessionStats,
@@ -655,7 +661,8 @@ export default function Chessboard() {
             playAudio('premove');
         } else if (activeBot && gameOverResult) {
             const nextColor = myColor === 'white' ? 'black' : 'white';
-            startHistoricalBotGame(activeBot, nextColor);
+            // Реванш — с той же начальной позиции, что и сыгранная партия.
+            startHistoricalBotGame(activeBot, nextColor, startFen);
         }
     };
 
@@ -680,6 +687,12 @@ export default function Chessboard() {
 
     const handleResetSandbox = () => {
         if (gameId && !gameOverResult) return;
+        if (gameId && (rematchStatus === 'offered_by_me' || rematchStatus === 'offered_by_opponent')) {
+            // Уходя с завершённой партии, снимаем висящее предложение реванша: иначе соперник мог
+            // бы принять его позже и втянуть игрока в партию, которую тот уже не ждёт.
+            gameSocket.send('decline_rematch', {game_id: gameId});
+        }
+        setRematchStatus('none');
         gameIdRef.current = null;
         setGameId(null);
         exitBotGame();
@@ -696,7 +709,7 @@ export default function Chessboard() {
     };
 
     const handleUndoSandboxMove = () => {
-        if (gameId || history.length === 0 || isBotThinking || !!gameOverResult) return;
+        if (gameId || spectatingGameId || history.length === 0 || isBotThinking || !!gameOverResult) return;
         const nextGame = cloneChessInstance(game);
         nextGame.undo();
         if (activeBot && nextGame.history().length > 0) {
@@ -782,8 +795,11 @@ export default function Chessboard() {
         }
     };
 
+    // Начальная позиция партии на доске: null — обычная расстановка.
+    const startFen = customStartFen(game);
+
     const currentGame = viewIndex === -1 ? game : (() => {
-        const tg = new Chess();
+        const tg = startFen ? new Chess(startFen) : new Chess();
         const limit = viewIndex === -2 ? -1 : viewIndex;
         for (let i = 0; i <= limit; i++) {
             if (history[i]) tg.move(history[i]);
@@ -820,33 +836,43 @@ export default function Chessboard() {
     const bottomPlayerTime = topIsWhite ? blackTimeMs : whiteTimeMs;
     const topIdlePreviewMs = Math.round((topIsWhite ? effectiveWhiteBaseMinutes : effectiveBlackBaseMinutes) * 60 * 1000);
     const bottomIdlePreviewMs = Math.round((!topIsWhite ? effectiveWhiteBaseMinutes : effectiveBlackBaseMinutes) * 60 * 1000);
-    const topCaptured = topIsWhite ? material.whiteCapturedSymbols : material.blackCapturedSymbols;
-    const bottomCaptured = topIsWhite ? material.blackCapturedSymbols : material.whiteCapturedSymbols;
+    // «Взятые фигуры» считаются от полного комплекта — для партии с произвольной позиции это
+    // был бы почти весь комплект с первого хода. Показываем только перевес в материале.
+    const showCaptured = startFen === null;
+    const topCaptured = !showCaptured ? [] : topIsWhite ? material.whiteCapturedSymbols : material.blackCapturedSymbols;
+    const bottomCaptured = !showCaptured ? [] : topIsWhite ? material.blackCapturedSymbols : material.whiteCapturedSymbols;
     const topAdvantage = topIsWhite ? material.whiteAdvantage : material.blackAdvantage;
     const bottomAdvantage = topIsWhite ? material.blackAdvantage : material.whiteAdvantage;
 
     const isBotOnTop = !!activeBotProfile && ((topIsWhite && myColor === 'black') || (!topIsWhite && myColor === 'white'));
     const isBotOnBottom = !!activeBotProfile && !isBotOnTop;
 
-    const movePairs = history.reduce((acc: Array<{
-        moveNumber: number;
-        whiteSan: string;
-        whiteIdx: number;
-        blackSan?: string;
-        blackIdx?: number;
-    }>, move: any, idx: number) => {
-        if (idx % 2 === 0) {
-            acc.push({
-                moveNumber: Math.floor(idx / 2) + 1,
-                whiteSan: move.san,
-                whiteIdx: idx
-            });
-        } else {
-            acc[acc.length - 1].blackSan = move.san;
-            acc[acc.length - 1].blackIdx = idx;
-        }
-        return acc;
-    }, []);
+    const movePairs = pairHalfMoves(history, startFen);
+
+    // Свободная доска с позицией, отличной от начальной и не финальной, — с неё можно играть с ботом.
+    const isSandbox = !gameId && !activeBot && !spectatingGameId;
+    const sandboxFen = game.fen();
+    const canStartFromPosition = isSandbox && sandboxFen !== STANDARD_START_FEN && !game.isGameOver();
+
+    const handleStartBotGame = (botId: HistoricalBotId, colorPref: 'white' | 'black' | 'random') => {
+        startHistoricalBotGame(botId, colorPref, canStartFromPosition && startFromPosition ? sandboxFen : null);
+    };
+
+    const handleLoadFen = (fen: string): string | null => {
+        const error = validateFen(fen);
+        if (error) return error;
+        setGame(new Chess(fen.trim()));
+        setHistory([]);
+        setViewIndex(-1);
+        setSelectedSquare(null);
+        setPendingPromotion(null);
+        setPremove(null);
+        setGameOverResult(null);
+        setDrawOfferStatus(null);
+        setStartFromPosition(true);
+        playAudio('move');
+        return null;
+    };
 
     const handleSelectMoveFromList = (targetIdx: number) => {
         setSelectedSquare(null);
@@ -980,13 +1006,16 @@ export default function Chessboard() {
                             }
                             setIsTimeDropdownOpen(false);
                         }}
-                        disabled={isSearching || !!gameId}
+                        disabled={isSearching || !!gameId || (!!activeBot && !gameOverResult)}
                         dropdownRef={timeDropdownRef}
                     />
 
                     <MatchmakingPanel
                         gameId={gameId}
                         gameOverResult={gameOverResult}
+                        isRatedGame={isRatedGame}
+                        ratedChoice={ratedChoice}
+                        onRatedChoiceChange={setRatedChoice}
                         isSearching={isSearching}
                         onStartMatchmaking={startMatchmaking}
                         onCancelMatchmaking={cancelMatchmaking}
@@ -1043,7 +1072,10 @@ export default function Chessboard() {
                         gameOverResult={gameOverResult}
                         isBotThinking={isBotThinking}
                         botComment={botComment}
-                        onStartBotGame={startHistoricalBotGame}
+                        onStartBotGame={handleStartBotGame}
+                        canStartFromPosition={canStartFromPosition}
+                        startFromPosition={startFromPosition}
+                        onStartFromPositionChange={setStartFromPosition}
                     />
                 ) : (
                     <LobbyPanel
@@ -1071,7 +1103,7 @@ export default function Chessboard() {
                     idleLabel={topIsWhite ? 'Белые (Разбор)' : 'Чёрные (Разбор)'}
                     showGameInfo={Boolean(gameId || activeBot || spectatingGameId)}
                     playerInfo={topPlayerInfo}
-                    hasRatingInfo={!!ratingInfo}
+                    hasRatingInfo={!!ratingInfo && isRatedGame}
                     ratingDelta={ratingInfo ? (topIsWhite ? ratingInfo.white_delta : ratingInfo.black_delta) : undefined}
                     capturedSymbols={topCaptured}
                     advantage={topAdvantage}
@@ -1100,7 +1132,7 @@ export default function Chessboard() {
                     {activeTheme.useWoodGrain && (
                         <div
                             className="absolute inset-0 opacity-25 mix-blend-multiply pointer-events-none"
-                            style={{backgroundImage: "url('/assets/textures/wood-grain.png')"}}
+                            style={{backgroundImage: "url('/assets/textures/wood-grain.svg')"}}
                         />
                     )}
 
@@ -1145,7 +1177,7 @@ export default function Chessboard() {
                                         {activeTheme.useWoodGrain && (
                                             <div
                                                 className="absolute inset-0 opacity-15 mix-blend-multiply pointer-events-none"
-                                                style={{backgroundImage: "url('/assets/textures/wood-grain.png')"}}
+                                                style={{backgroundImage: "url('/assets/textures/wood-grain.svg')"}}
                                             />
                                         )}
 
@@ -1177,6 +1209,8 @@ export default function Chessboard() {
                                             <div
                                                 onPointerDown={(e) => {
                                                     if ((e.pointerType === 'mouse' && e.button !== 0) || viewIndex !== -1 || gameOverResult) return;
+                                                    // Зритель фигуры не двигает (и не ставит «премувы» на чужой доске).
+                                                    if (spectatingGameId) return;
                                                     const turnChar = currentGame.turn();
                                                     const myColorChar = myColor === 'white' ? 'w' : 'b';
 
@@ -1199,8 +1233,8 @@ export default function Chessboard() {
                                                     });
                                                 }}
                                                 className={`relative w-full h-full p-[1.5%] z-20 transition-transform duration-75 ${
-                                                    viewIndex === -1 && !gameOverResult && (
-                                                        (gameId || activeBot || spectatingGameId)
+                                                    viewIndex === -1 && !gameOverResult && !spectatingGameId && (
+                                                        (gameId || activeBot)
                                                             ? piece.color === (myColor === 'white' ? 'w' : 'b')
                                                             : piece.color === currentGame.turn()
                                                     )
@@ -1274,7 +1308,7 @@ export default function Chessboard() {
                     idleLabel={!topIsWhite ? 'Вы (Белые)' : 'Вы (Чёрные)'}
                     showGameInfo={Boolean(gameId || activeBot || spectatingGameId)}
                     playerInfo={bottomPlayerInfo}
-                    hasRatingInfo={!!ratingInfo}
+                    hasRatingInfo={!!ratingInfo && isRatedGame}
                     ratingDelta={ratingInfo ? (!topIsWhite ? ratingInfo.white_delta : ratingInfo.black_delta) : undefined}
                     capturedSymbols={bottomCaptured}
                     advantage={bottomAdvantage}
@@ -1398,7 +1432,9 @@ export default function Chessboard() {
                     />
                 )}
 
-                <GameControlsPanel
+                {/* Зрителю кнопки песочницы не показываем: «отменить ход» и «сбросить доску»
+                    портили бы чужую партию на его экране. Выход — в панели чата. */}
+                {!spectatingGameId && <GameControlsPanel
                     mode={gameId ? 'pvp' : activeBot ? 'bot' : 'sandbox'}
                     gameId={gameId}
                     savedBotGameId={savedBotGameId}
@@ -1417,7 +1453,9 @@ export default function Chessboard() {
                     onOfferRematch={handleOfferRematch}
                     onResetSandbox={handleResetSandbox}
                     onUndoSandboxMove={handleUndoSandboxMove}
-                />
+                    hasCustomPosition={isSandbox && startFen !== null}
+                    onLoadFen={handleLoadFen}
+                />}
 
             </div>
 

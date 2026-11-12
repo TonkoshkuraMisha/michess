@@ -1,20 +1,31 @@
 // --- FILE: frontend/src/components/AuthModal.tsx ---
 
-import {useState} from 'react';
-import {LogIn, UserPlus} from 'lucide-react';
+import {useEffect, useState} from 'react';
+import {LogIn, UserPlus, X} from 'lucide-react';
 import {API_BASE_URL} from '../config/api';
 import {readErrorDetail} from '../services/apiErrors';
 
 interface AuthModalProps {
     onSuccess: (token: string) => void;
+    /** Закрытие без входа: крестик, клик по затемнению или Esc. */
+    onClose?: () => void;
 }
 
-export default function AuthModal({onSuccess}: AuthModalProps) {
+export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
     const [isLogin, setIsLogin] = useState(true);
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+
+    useEffect(() => {
+        if (!onClose) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') onClose();
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [onClose]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -68,9 +79,31 @@ export default function AuthModal({onSuccess}: AuthModalProps) {
     };
 
     return (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div
+            className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+            onMouseDown={(e) => {
+                // Только клик по самому затемнению: выделение текста в поле, законченное за
+                // пределами окна, закрывать его не должно.
+                if (e.target === e.currentTarget) onClose?.();
+            }}
+        >
             <div
-                className="bg-[#261C14] border-2 border-amber-900/80 rounded-lg p-6 w-full max-w-md shadow-heavy text-boxwood-light font-serif">
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="auth-modal-title"
+                className="relative bg-[#261C14] border-2 border-amber-900/80 rounded-lg p-6 w-full max-w-md shadow-heavy text-boxwood-light font-serif">
+
+                {onClose && (
+                    <button
+                        type="button"
+                        onClick={onClose}
+                        title="Закрыть (Esc)"
+                        aria-label="Закрыть"
+                        className="absolute top-3 right-3 p-1 rounded text-boxwood/70 hover:text-amber-200 hover:bg-black/30 transition cursor-pointer"
+                    >
+                        <X size={18}/>
+                    </button>
+                )}
 
                 <div className="flex justify-center mb-4">
                     <div
@@ -79,7 +112,7 @@ export default function AuthModal({onSuccess}: AuthModalProps) {
                     </div>
                 </div>
 
-                <h2 className="text-2xl font-bold text-center text-amber-200 mb-1">
+                <h2 id="auth-modal-title" className="text-2xl font-bold text-center text-amber-200 mb-1">
                     {isLogin ? 'Вход в michess' : 'Регистрация аккаунта'}
                 </h2>
                 <p className="text-xs text-center text-boxwood/70 mb-6">

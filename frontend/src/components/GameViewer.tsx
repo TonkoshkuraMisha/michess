@@ -21,6 +21,7 @@ import {
 import {API_BASE_URL} from '../config/api';
 import {readErrorDetail} from '../services/apiErrors';
 import {soundEngine, resolveMoveSound} from '../services/soundEngine';
+import {customStartFen, pairHalfMoves} from './chessboard/boardUtils';
 import type {SoundEventType} from '../services/soundEngine';
 import {
     PIECE_SETS,
@@ -125,6 +126,9 @@ export default function GameViewer() {
 
     const [history, setHistory] = useState<any[]>([]);
     const [pgnHeaders, setPgnHeaders] = useState<Record<string, string>>({});
+    // Партия могла начаться не с обычной расстановки (заголовок FEN в PGN) — тогда позиции
+    // восстанавливаются от неё.
+    const [startFen, setStartFen] = useState<string | null>(null);
     const [viewIndex, setViewIndex] = useState<number>(-1);
     const [isFlipped, setIsFlipped] = useState(false);
     const [showAppearancePanel, setShowAppearancePanel] = useState(false);
@@ -274,6 +278,7 @@ export default function GameViewer() {
 
                 const newHistory = newGame.history({verbose: true});
                 setPgnHeaders(newGame.header());
+                setStartFen(customStartFen(newGame));
                 setHistory(newHistory);
                 // По умолчанию показываем финальную позицию партии, а не начальную —
                 // это разбор только что сыгранной (или архивной) партии, а не пустая доска.
@@ -372,12 +377,12 @@ export default function GameViewer() {
     }, [viewIndex]);
 
     const currentGame = useMemo(() => {
-        const cg = new Chess();
+        const cg = startFen ? new Chess(startFen) : new Chess();
         for (let i = 0; i <= viewIndex; i++) {
             if (history[i]) cg.move(history[i]);
         }
         return cg;
-    }, [history, viewIndex]);
+    }, [history, viewIndex, startFen]);
 
     const boardState = currentGame.board();
 
@@ -449,7 +454,7 @@ export default function GameViewer() {
     let displayDate = 'Архивная партия';
     const rawDate = gameDataFromState?.pgn_date || pgnHeaders.Date;
     if (rawDate && !rawDate.includes('????')) {
-        displayDate = rawDate.replace(/\??/g, '').replace(/\.$/, '');
+        displayDate = rawDate.replace(/\?/g, '').replace(/\.+$/, '');
     } else if (gameDataFromState?.finished_at) {
         displayDate = format(parseISO(gameDataFromState.finished_at), 'd MMM yyyy', {locale: ru});
     }
@@ -525,15 +530,13 @@ export default function GameViewer() {
         );
     }
 
-    const movePairs = history.reduce((acc: any[], move: any, index: number) => {
-        if (index % 2 === 0) {
-            acc.push({white: move.san, black: '', whiteIndex: index, blackIndex: -1});
-        } else {
-            acc[acc.length - 1].black = move.san;
-            acc[acc.length - 1].blackIndex = index;
-        }
-        return acc;
-    }, []);
+    const movePairs = pairHalfMoves(history, startFen).map((pair) => ({
+        moveNumber: pair.moveNumber,
+        white: pair.whiteSan ?? '…',
+        black: pair.blackSan ?? '',
+        whiteIndex: pair.whiteIdx,
+        blackIndex: pair.blackIdx ?? -1,
+    }));
 
     const responsiveBoardPx = typeof window !== 'undefined' ? Math.min(boardSize, window.innerWidth - 56) : boardSize;
 
@@ -580,7 +583,7 @@ export default function GameViewer() {
                                 {TopIcon}
                             </div>
                             <div className="font-bold text-base flex items-center gap-2 truncate">
-                                <Link to={`/profile/${topName}`} className="hover:underline text-amber-200 truncate">
+                                <Link to={`/profile/${encodeURIComponent(topName)}`} className="hover:underline text-amber-200 truncate">
                                     {topName}
                                 </Link>
                                 <span
@@ -610,7 +613,7 @@ export default function GameViewer() {
                         {activeTheme.useWoodGrain && (
                             <div
                                 className="absolute inset-0 opacity-25 mix-blend-multiply pointer-events-none"
-                                style={{backgroundImage: "url('/assets/textures/wood-grain.png')"}}
+                                style={{backgroundImage: "url('/assets/textures/wood-grain.svg')"}}
                             />
                         )}
 
@@ -642,7 +645,7 @@ export default function GameViewer() {
                                             {activeTheme.useWoodGrain && (
                                                 <div
                                                     className="absolute inset-0 opacity-15 mix-blend-multiply pointer-events-none"
-                                                    style={{backgroundImage: "url('/assets/textures/wood-grain.png')"}}
+                                                    style={{backgroundImage: "url('/assets/textures/wood-grain.svg')"}}
                                                 />
                                             )}
 
@@ -765,7 +768,7 @@ export default function GameViewer() {
                                 {BottomIcon}
                             </div>
                             <div className="font-bold text-base flex items-center gap-2 truncate">
-                                <Link to={`/profile/${bottomName}`} className="hover:underline text-amber-200 truncate">
+                                <Link to={`/profile/${encodeURIComponent(bottomName)}`} className="hover:underline text-amber-200 truncate">
                                     {bottomName}
                                 </Link>
                                 <span
@@ -1027,7 +1030,7 @@ export default function GameViewer() {
                             return (
                                 <div key={idx}
                                      className="grid grid-cols-[44px_1fr_1fr] items-center px-2 py-1 hover:bg-white/5 rounded">
-                                    <span className="text-xs text-amber-500/70 font-bold">{idx + 1}.</span>
+                                    <span className="text-xs text-amber-500/70 font-bold">{pair.moveNumber}.</span>
 
                                     <button
                                         onClick={() => {

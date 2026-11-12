@@ -1,6 +1,7 @@
 // --- FILE: frontend/src/components/chessboard/GameControlsPanel.tsx ---
 
-import {Flag, Handshake, X, RefreshCw, RotateCcw, Undo2, Eye, Download} from 'lucide-react';
+import {useState} from 'react';
+import {Flag, Handshake, X, RefreshCw, RotateCcw, Undo2, Eye, Download, Grid3x3} from 'lucide-react';
 import type {NavigateFunction} from 'react-router-dom';
 import {API_BASE_URL} from '../../config/api';
 
@@ -26,6 +27,10 @@ export interface GameControlsPanelProps {
     onOfferRematch: () => void;
     onResetSandbox: () => void;
     onUndoSandboxMove: () => void;
+    /** На свободной доске стоит позиция, загруженная из FEN (сброс доступен и без ходов). */
+    hasCustomPosition?: boolean;
+    /** Ставит на свободную доску позицию из FEN; возвращает текст ошибки или null. */
+    onLoadFen?: (fen: string) => string | null;
 }
 
 /**
@@ -35,8 +40,19 @@ export interface GameControlsPanelProps {
 export function GameControlsPanel({
     mode, gameId, savedBotGameId, historyLength, gameOverResult, rematchStatus, isBotThinking,
     whitePlayer, blackPlayer, navigate, onAbortGame, onResign, onOfferDraw, onAcceptRematch,
-    onDeclineRematch, onOfferRematch, onResetSandbox, onUndoSandboxMove,
+    onDeclineRematch, onOfferRematch, onResetSandbox, onUndoSandboxMove, hasCustomPosition = false, onLoadFen,
 }: GameControlsPanelProps) {
+    const [fenInput, setFenInput] = useState('');
+    const [fenError, setFenError] = useState<string | null>(null);
+
+    const submitFen = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!onLoadFen || !fenInput.trim()) return;
+        const error = onLoadFen(fenInput);
+        setFenError(error);
+        if (!error) setFenInput('');
+    };
+
     const navigateToReview = (reviewGameId: number, site?: string, blackRatingFallback = 1200) => navigate(`/game/${reviewGameId}`, {
         state: {
             game: {
@@ -134,7 +150,8 @@ export function GameControlsPanel({
                             </div>
                         )}
 
-                        <div className="grid grid-cols-2 gap-2">
+                        {/* У отменённой партии нет ни ходов, ни PGN — разбирать и скачивать нечего. */}
+                        {gameOverResult !== '*' && <div className="grid grid-cols-2 gap-2">
                             <button
                                 type="button"
                                 onClick={() => gameId && navigateToReview(gameId)}
@@ -149,7 +166,7 @@ export function GameControlsPanel({
                             >
                                 <Download size={14}/> Скачать PGN
                             </a>
-                        </div>
+                        </div>}
                     </div>
                 )}
             </div>
@@ -213,6 +230,34 @@ export function GameControlsPanel({
 
     return (
         <div className="shrink-0 flex flex-col gap-1.5">
+            {onLoadFen && (
+                <form onSubmit={submitFen} className="flex flex-col gap-1">
+                    <div className="flex gap-1.5">
+                        <input
+                            type="text"
+                            value={fenInput}
+                            onChange={(e) => {
+                                setFenInput(e.target.value);
+                                setFenError(null);
+                            }}
+                            maxLength={100}
+                            spellCheck={false}
+                            aria-label="Позиция в записи FEN"
+                            placeholder="Позиция (FEN)"
+                            className="flex-1 min-w-0 px-2 py-1.5 rounded bg-black/40 border border-amber-900/60 text-boxwood-light text-xs font-mono outline-none focus:border-amber-500"
+                        />
+                        <button
+                            type="submit"
+                            disabled={!fenInput.trim()}
+                            title="Поставить позицию на доску"
+                            className="px-2.5 py-1.5 rounded border border-amber-700/50 bg-black/45 text-amber-200 text-xs font-bold hover:bg-black/65 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1.5 shrink-0"
+                        >
+                            <Grid3x3 size={13}/> Поставить
+                        </button>
+                    </div>
+                    {fenError && <div role="alert" className="text-xs text-red-300">{fenError}</div>}
+                </form>
+            )}
             <div className="grid grid-cols-2 gap-2">
                 <button
                     type="button"
@@ -224,7 +269,7 @@ export function GameControlsPanel({
                 </button>
                 <button
                     type="button"
-                    disabled={historyLength === 0}
+                    disabled={historyLength === 0 && !hasCustomPosition}
                     onClick={onResetSandbox}
                     className="flex items-center justify-center gap-1.5 px-3 py-2 bg-acacia-dark text-amber-300 text-xs sm:text-sm font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
                 >

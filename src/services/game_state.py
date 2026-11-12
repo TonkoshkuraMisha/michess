@@ -72,6 +72,7 @@ _INT_STATE_KEYS = (
     "state_version",
 )
 
+FINISHED_STATE_TTL_S = 6 * 60 * 60
 ABANDON_TIMEOUT_MS = 3 * 60 * 1000
 ABANDON_DRAW_TERMINATION = "abandoned_vs_insufficient_material"
 
@@ -102,6 +103,32 @@ def _coerce_state(raw: dict) -> dict:
     if not state.get("board_fen"):
         state["board_fen"] = STARTING_FEN
     return state
+
+
+def is_rated_state(state: dict) -> bool:
+    """Рейтинговая ли партия. У состояний, созданных до появления товарищеских партий, поля нет — они рейтинговые."""
+    return str(state.get("is_rated", "1")) != "0"
+
+
+def pending_draw_offer(state: dict) -> int | None:
+    """id игрока, чьё предложение ничьей сейчас в силе, или None."""
+    offer = str(state.get("draw_offer") or "")
+    return int(offer) if offer.isdigit() else None
+
+
+def _move_rejection(reason: str, raw_state: dict) -> dict:
+    """
+    Отказ в ходе вместе с актуальной позицией. Клиент показывает свой ход сразу, не дожидаясь
+    сервера, — без позиции в ответе отклонённый ход так и оставался бы у него на доске.
+    """
+    version = str(raw_state.get("state_version", 0))
+    return {
+        "status": "error",
+        "reason": reason,
+        "state_version": int(version) if version.isdigit() else 0,
+        "fen": raw_state.get("board_fen") or STARTING_FEN,
+        "pgn": raw_state.get("pgn", ""),
+    }
 
 
 def side_to_move(state: dict) -> str:
@@ -201,11 +228,15 @@ class GameStateManager:
     def _get_key(self, game_id: int) -> str:
         return f"game:{game_id}:state"
 
-    async def initialize_game(self, game_id: int, white_id: int, black_id: int, base_time_ms: int, increment_ms: int):
+    async def initialize_game(
+            self, game_id: int, white_id: int, black_id: int, base_time_ms: int, increment_ms: int,
+            is_rated: bool = True,
+    ):
         now_ms = int(time.time() * 1000)
         state = {
             "white_id": str(white_id),
             "black_id": str(black_id),
+            "is_rated": "1" if is_rated else "0",
             "board_fen": STARTING_FEN,
             "pgn": "",
             "state_version": "0",
@@ -331,6 +362,7 @@ class GameStateManager:
                 state = {
                     "white_id": str(db_game.white_player_id),
                     "black_id": str(db_game.black_player_id),
+                    "is_rated": "1" if db_game.is_rated else "0",
                     "board_fen": db_game.board_fen or STARTING_FEN,
                     "pgn": db_game.pgn or "",
                     "state_version": str(db_game.state_version or 0),
@@ -347,6 +379,10 @@ class GameStateManager:
                     "black_disconnect_started_at": "0",
                 }
                 await self.redis.hset(self._get_key(game_id), mapping=state)
+                if status_str != "in_progress":
+                    # Завершённую партию восстанавливают ради реванша и чата после игры —
+                    # без срока жизни такие хэши копились бы в Redis бесконечно.
+                    await self.redis.expire(self._get_key(game_id), FINISHED_STATE_TTL_S)
                 if status_str == "in_progress":
                     await self.redis.sadd("active_games", str(game_id))
                     await self.redis.zadd(GAME_DEADLINES_KEY, {str(game_id): next_timeout_deadline_ms(state)})
@@ -417,13 +453,7 @@ class GameStateManager:
                     current_version = int(state.get("state_version", 0))
                     if expected_version is not None and int(expected_version) != current_version:
                         await pipe.unwatch()
-                        return {
-                            "status": "error",
-                            "reason": "version_mismatch",
-                            "state_version": current_version,
-                            "fen": state.get("board_fen", STARTING_FEN),
-                            "pgn": state.get("pgn", ""),
-                        }
+                        return _move_rejection("version_mismatch", state)
 
                     turn = state.get("turn", "white")
                     white_id = int(state["white_id"])
@@ -434,7 +464,10 @@ class GameStateManager:
 
                     if user_id != expected_player_id:
                         await pipe.unwatch()
-                        return {"status": "error", "reason": "not_your_turn"}
+                        if user_id not in (white_id, black_id):
+                            # Посторонним (зрителям) позицию в ответе не возвращаем.
+                            return {"status": "error", "reason": "not_your_turn"}
+                        return _move_rejection("not_your_turn", state)
 
                     now_ms = int(time.time() * 1000)
                     last_move_at = int(state["last_move_at"])
@@ -490,7 +523,7 @@ class GameStateManager:
                     is_valid, move_data = engine.process_move(current_fen, move_str, current_pgn)
                     if not is_valid or not move_data:
                         await pipe.unwatch()
-                        return {"status": "error", "reason": "illegal_move"}
+                        return _move_rejection("illegal_move", state)
 
                     new_version = current_version + 1
                     new_turn = "black" if is_white_turn else "white"
@@ -804,6 +837,10 @@ class GameStateManager:
                 await manager.send_personal_message(
                     {"event": "opponent_reconnected", "game_id": game_id}, opponent_id,
                 )
+
+    async def update_if_in_progress(self, game_id: int, updates: dict) -> dict | None:
+        """Обновляет поля идущей партии; None, если она уже завершена (см. _update_if_in_progress)."""
+        return await self._update_if_in_progress(game_id, updates)
 
     async def _update_if_in_progress(self, game_id: int, updates: dict) -> dict | None:
         """

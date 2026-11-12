@@ -16,7 +16,7 @@ class Settings(BaseSettings):
     Uses Pydantic for environment variable validation.
     """
     PROJECT_NAME: str = "Michess API"
-    VERSION: str = "1.2.1"
+    VERSION: str = "1.2.2"
     API_V1_STR: str = "/api/v1"
 
     # "production" включает строгие проверки при старте (SECRET_KEY) и прячет /docs.
@@ -90,6 +90,8 @@ class Settings(BaseSettings):
     RATE_LIMIT_WINDOW_S: int = 60
     RATE_LIMIT_BOT_MOVE: int = 90
     RATE_LIMIT_POSITION_ANALYSIS: int = 30
+    # Без входа анализ позиции доступен, но реже: гостя нельзя связать с идущей партией
+    RATE_LIMIT_POSITION_ANALYSIS_GUEST: int = 10
     RATE_LIMIT_GAME_ANALYSIS: int = 6
 
     # Authentication: attempts per IP, failed logins per account, registrations per IP

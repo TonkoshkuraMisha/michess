@@ -1,7 +1,26 @@
 # --- FILE: scripts/download_champions.py ---
+"""
+Портреты шахматистов из Викисклада — только со свободной лицензией и с записью об авторе.
 
+Для каждого игрока берётся заглавное изображение его статьи в русской Википедии, но лишь если
+файл лежит на Викискладе под лицензией, разрешающей использование в любом проекте (общественное
+достояние, CC0, CC BY, CC BY-SA). Файлы, загруженные в Википедию локально («добросовестное
+использование»), и лицензии с условиями NC/ND пропускаются: у такого игрока портрета нет, а
+интерфейс показывает инициалы.
+
+Рядом с портретами пишется манифест frontend/src/config/portraitCredits.json: файл, автор,
+лицензия, ссылка на источник. Из него строятся страница «О проекте» и раздел ATTRIBUTION.md;
+tests/test_assets_licensing.py проверяет, что у каждого портрета в репозитории есть запись.
+
+Запуск:  python scripts/download_champions.py            # докачать недостающее
+         python scripts/download_champions.py --force    # перекачать всё заново
+"""
+
+import io
+import json
+import re
 import shutil
-import subprocess
+import sys
 import time
 from pathlib import Path
 
@@ -10,11 +29,21 @@ import requests
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 PUBLIC_CHAMPIONS_DIR = PROJECT_ROOT / "frontend" / "public" / "assets" / "champions"
 SRC_CHAMPIONS_DIR = PROJECT_ROOT / "frontend" / "src" / "assets" / "champions"
+CREDITS_PATH = PROJECT_ROOT / "frontend" / "src" / "config" / "portraitCredits.json"
 
-PUBLIC_CHAMPIONS_DIR.mkdir(parents=True, exist_ok=True)
-SRC_CHAMPIONS_DIR.mkdir(parents=True, exist_ok=True)
+WIKIPEDIA_API = "https://ru.wikipedia.org/w/api.php"
+COMMONS_API = "https://commons.wikimedia.org/w/api.php"
+THUMB_WIDTH = 500
 
-champions = {
+# id файла портрета -> название статьи в русской Википедии
+PLAYERS: dict[str, str] = {
+    "philidor": "Филидор, Франсуа-Андре Даникан",
+    "labourdonnais": "Лабурдонне, Луи Шарль де",
+    "staunton": "Стаунтон, Говард",
+    "anderssen": "Андерсен, Адольф",
+    "morphy": "Морфи, Пол",
+    "paulsen": "Паульсен, Луи",
+    "zukertort": "Цукерторт, Иоганн",
     "Steinitz": "Стейниц, Вильгельм",
     "Lasker": "Ласкер, Эмануил",
     "Rubinstein": "Рубинштейн, Акиба Кивелевич",
@@ -38,85 +67,156 @@ champions = {
     "Ding": "Дин Лижэнь",
 }
 
-
-def sync_historical_portraits() -> None:
-    """Синхронизирует портреты между frontend/src/assets/champions и frontend/public/assets/champions."""
-    copied = 0
-    for src_img in SRC_CHAMPIONS_DIR.glob("*.*"):
-        if src_img.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
-            dst = PUBLIC_CHAMPIONS_DIR / src_img.name
-            if not dst.exists() or src_img.stat().st_size != dst.stat().st_size:
-                shutil.copy2(src_img, dst)
-                copied += 1
-
-    for pub_img in PUBLIC_CHAMPIONS_DIR.glob("*.*"):
-        if pub_img.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp"):
-            dst = SRC_CHAMPIONS_DIR / pub_img.name
-            if not dst.exists():
-                shutil.copy2(pub_img, dst)
-                copied += 1
-
-    print(f"[+] Синхронизировано портретов между src/assets и public/assets: {copied}")
+_TAG_RE = re.compile(r"<[^>]+>")
 
 
-def main() -> None:
-    sync_historical_portraits()
+def is_free_license(short_name: str) -> bool:
+    """Лицензия разрешает использование в любом проекте, включая коммерческий, и изменение."""
+    name = short_name.strip().lower()
+    tokens = set(re.split(r"[\s-]+", name))
+    if not name or tokens & {"nc", "nd"}:
+        return False
+    return name.startswith(("public domain", "pd", "cc0", "cc by", "cc-by", "no restrictions"))
 
-    api_url = "https://ru.wikipedia.org/w/api.php"
-    headers = {"User-Agent": "MiChess/1.0 (chess application; python-requests)"}
+
+JPEG_MAGIC = bytes.fromhex("ffd8")
+
+
+def as_jpeg(content: bytes) -> bytes:
+    """
+    Портреты хранятся как .jpg, а Викисклад отдаёт уменьшенную копию в формате оригинала
+    (у PNG — PNG). Файл с расширением .jpg и содержимым PNG браузеры показывают, но это ломает
+    всё, что доверяет расширению. Перекодируем; прозрачный фон заменяется белым.
+    """
+    if content.startswith(JPEG_MAGIC):
+        return content
+    from PIL import Image  # нужен только для не-JPEG оригиналов: pip install -r requirements-dev.txt
+
+    image = Image.open(io.BytesIO(content)).convert("RGBA")
+    background = Image.new("RGB", image.size, (255, 255, 255))
+    background.paste(image, mask=image.getchannel("A"))
+    buffer = io.BytesIO()
+    background.save(buffer, format="JPEG", quality=90)
+    return buffer.getvalue()
+
+
+def _clean(html_text: str) -> str:
+    text = _TAG_RE.sub("", html_text or "").replace("&amp;", "&").replace("\n", " ").strip()
+    # Викисклад дублирует «Unknown author» в видимой и скрытой разметке.
+    text = text.replace("Unknown authorUnknown author", "Unknown author").replace("AnonymousUnknown author", "Unknown author")
+    return re.sub(r"\s+", " ", text).rstrip("] ").strip() or "Unknown author"
+
+
+def _get_json(session: requests.Session, url: str, params: dict) -> dict:
+    last_status = 0
+    for _attempt in range(5):
+        response = session.get(url, params=params, timeout=30)
+        last_status = response.status_code
+        if response.status_code == 200:
+            return response.json()
+        time.sleep(10)  # 429 — подождать и повторить
+    raise RuntimeError(f"{url}: HTTP {last_status}")
+
+
+def find_lead_images(session: requests.Session) -> dict[str, dict]:
+    """id игрока -> {file, thumb} заглавного изображения статьи (один запрос на всех)."""
+    data = _get_json(session, WIKIPEDIA_API, {
+        "action": "query", "titles": "|".join(PLAYERS.values()), "prop": "pageimages",
+        "piprop": "name|thumbnail", "pithumbsize": str(THUMB_WIDTH), "pilimit": "50",
+        "redirects": "1", "format": "json", "formatversion": "2",
+    })["query"]
+    renamed = {item["from"]: item["to"] for item in data.get("normalized", [])}
+    renamed.update({item["from"]: item["to"] for item in data.get("redirects", [])})
+    pages = {page["title"]: page for page in data["pages"]}
+
+    found: dict[str, dict] = {}
+    for player_id, title in PLAYERS.items():
+        resolved = renamed.get(title, title)
+        resolved = renamed.get(resolved, resolved)
+        page = pages.get(resolved, {})
+        if page.get("pageimage") and page.get("thumbnail"):
+            found[player_id] = {"file": page["pageimage"], "thumb": page["thumbnail"]["source"]}
+    return found
+
+
+def fetch_commons_metadata(session: requests.Session, file_names: list[str]) -> dict[str, dict]:
+    """Имя файла -> {license, license_url, author, source_url}. Файлов не с Викисклада в ответе нет."""
+    data = _get_json(session, COMMONS_API, {
+        "action": "query", "titles": "|".join(f"File:{name}" for name in file_names), "prop": "imageinfo",
+        "iiprop": "extmetadata|url", "format": "json", "formatversion": "2",
+    })["query"]
+    original = {item["to"]: item["from"] for item in data.get("normalized", [])}
+
+    metadata: dict[str, dict] = {}
+    for page in data["pages"]:
+        if "imageinfo" not in page:
+            continue
+        info = page["imageinfo"][0]
+        ext = info.get("extmetadata", {})
+        name = original.get(page["title"], page["title"]).removeprefix("File:")
+        metadata[name] = {
+            "license": _clean(ext.get("LicenseShortName", {}).get("value", "")),
+            "license_url": ext.get("LicenseUrl", {}).get("value", ""),
+            "author": _clean(ext.get("Artist", {}).get("value", "")),
+            "source_url": info.get("descriptionurl", ""),
+        }
+    return metadata
+
+
+def main(force: bool = False) -> int:
+    PUBLIC_CHAMPIONS_DIR.mkdir(parents=True, exist_ok=True)
+    SRC_CHAMPIONS_DIR.mkdir(parents=True, exist_ok=True)
+    credits: dict[str, dict] = {}
+    if CREDITS_PATH.exists() and not force:
+        credits = json.loads(CREDITS_PATH.read_text(encoding="utf-8"))
+
     session = requests.Session()
-    session.headers.update(headers)
+    session.headers["User-Agent"] = "portrait-downloader/2.0 (python-requests)"
 
-    print("Проверка и докачка портретов чемпионов...\n")
+    images = find_lead_images(session)
+    time.sleep(2)
+    metadata = fetch_commons_metadata(session, [item["file"] for item in images.values()])
 
-    for champ_id, wiki_title in champions.items():
-        save_path = PUBLIC_CHAMPIONS_DIR / f"{champ_id}.jpg"
-        if save_path.exists() and save_path.stat().st_size > 0:
-            print(f"[~] {champ_id}.jpg уже существует, пропускаем.")
+    for player_id in PLAYERS:
+        target = PUBLIC_CHAMPIONS_DIR / f"{player_id}.jpg"
+        if player_id in credits and target.exists() and not force:
+            print(f"[~] {player_id}: уже есть")
             continue
 
-        params = {
-            "action": "query",
-            "titles": wiki_title,
-            "prop": "pageimages",
-            "piprop": "thumbnail",
-            "pithumbsize": "500",
-            "format": "json",
-            "formatversion": "2",
-        }
+        image = images.get(player_id)
+        meta = metadata.get(image["file"]) if image else None
+        if not image or not meta or not is_free_license(meta["license"]):
+            reason = "нет изображения" if not image else "не на Викискладе" if not meta else meta["license"]
+            print(f"[-] {player_id}: пропущен ({reason}) — в интерфейсе будут инициалы")
+            target.unlink(missing_ok=True)
+            credits.pop(player_id, None)
+            continue
 
-        for _attempt in range(3):
-            try:
-                response = session.get(api_url, params=params, timeout=15)
-                if response.status_code == 429:
-                    time.sleep(15)
-                    continue
-                if response.status_code != 200:
-                    break
+        time.sleep(1.5)
+        response = session.get(image["thumb"], timeout=30)
+        if response.status_code != 200 or not response.content:
+            print(f"[!] {player_id}: не скачался (HTTP {response.status_code})")
+            continue
+        target.write_bytes(as_jpeg(response.content))
+        credits[player_id] = {"file": image["file"], **meta}
+        print(f"[+] {player_id}: {meta['license']} — {meta['author']}")
 
-                pages = response.json().get("query", {}).get("pages", [])
-                if not pages or not pages[0].get("thumbnail"):
-                    break
+    for extra in PUBLIC_CHAMPIONS_DIR.glob("*.jpg"):
+        if extra.stem not in credits:
+            print(f"[!] {extra.name}: нет записи об источнике — удалён")
+            extra.unlink()
 
-                img_url = pages[0]["thumbnail"]["source"].split("?")[0]
-                cmd = [
-                    "curl", "-sS", "-L",
-                    "-A", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/131.0.0.0 Safari/537.36",
-                    "-e", "https://ru.wikipedia.org/",
-                    "--fail", img_url, "-o", str(save_path),
-                ]
-                result = subprocess.run(cmd, capture_output=True)
-                if result.returncode == 0 and save_path.exists() and save_path.stat().st_size > 0:
-                    print(f"[+] {champ_id}.jpg успешно скачан!")
-                    break
-            except Exception as exc:
-                print(f"[-] Ошибка для {champ_id}: {exc}")
-                break
-        time.sleep(2)
+    # Портреты ботов импортируются сборщиком из src/assets, остальные раздаются из public.
+    shutil.rmtree(SRC_CHAMPIONS_DIR)
+    SRC_CHAMPIONS_DIR.mkdir(parents=True)
+    for portrait in PUBLIC_CHAMPIONS_DIR.glob("*.jpg"):
+        shutil.copy2(portrait, SRC_CHAMPIONS_DIR / portrait.name)
 
-    sync_historical_portraits()
-    print("\nГотово! Все портреты синхронизированы.")
+    ordered = {player_id: credits[player_id] for player_id in PLAYERS if player_id in credits}
+    CREDITS_PATH.write_text(json.dumps(ordered, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    print(f"\nГотово: {len(ordered)} из {len(PLAYERS)} портретов, манифест — {CREDITS_PATH.relative_to(PROJECT_ROOT)}")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main(force="--force" in sys.argv))
