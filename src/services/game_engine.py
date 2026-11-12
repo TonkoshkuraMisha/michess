@@ -9,6 +9,34 @@ logger = logging.getLogger(__name__)
 STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
 
+class InvalidStartPositionError(ValueError):
+    """Начальная позиция не разбирается или невозможна по правилам."""
+
+
+def board_from_start_fen(start_fen: str | None) -> chess.Board:
+    """
+    Доска для партии или анализа с заданной начальной позиции (None — обычная расстановка).
+
+    Проверяется не только синтаксис FEN, но и сама позиция: chess.Board принимает и невозможные
+    (без короля, короли рядом, под шахом сторона, которая только что ходила) — движок на таких
+    может упасть, а «партия» из них не имеет смысла.
+    """
+    if start_fen is None or not start_fen.strip() or start_fen.strip() == STARTING_FEN:
+        return chess.Board()
+    try:
+        board = chess.Board(start_fen.strip())
+    except ValueError:
+        raise InvalidStartPositionError("Некорректный формат FEN начальной позиции") from None
+    if not board.is_valid():
+        raise InvalidStartPositionError("Начальная позиция невозможна по правилам шахмат")
+    return board
+
+
+def is_standard_start(board: chess.Board) -> bool:
+    """Партия начата с обычной расстановки (у доски нет ходов и позиция стартовая)."""
+    return board.root().fen() == STARTING_FEN
+
+
 def restore_board(fen: str, pgn_movetext: str = "") -> chess.Board:
     """
     Восстанавливает доску вместе с историей ходов.

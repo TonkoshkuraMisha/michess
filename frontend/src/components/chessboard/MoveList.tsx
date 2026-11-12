@@ -2,13 +2,9 @@
 
 import type {RefObject} from 'react';
 
-export interface MovePair {
-    moveNumber: number;
-    whiteSan: string;
-    whiteIdx: number;
-    blackSan?: string;
-    blackIdx?: number;
-}
+import type {HalfMovePair} from './boardUtils';
+
+export type MovePair = HalfMovePair;
 
 export interface MoveListProps {
     movePairs: MovePair[];
@@ -66,17 +62,22 @@ export function MoveList({
                                     {pair.moveNumber}.
                                 </span>
 
-                                <button
-                                    type="button"
-                                    onClick={() => onSelectMove(pair.whiteIdx)}
-                                    className={`text-left px-2 py-0.5 rounded text-sm font-bold transition truncate cursor-pointer ${
-                                        isWhiteActive
-                                            ? 'active-move-btn bg-amber-600/40 text-amber-200 border border-amber-500/50 shadow-sm'
-                                            : 'text-boxwood-light hover:bg-amber-900/30 hover:text-white'
-                                    }`}
-                                >
-                                    {pair.whiteSan}
-                                </button>
+                                {pair.whiteSan === undefined ? (
+                                    // Партия начата с хода чёрных — у первой пары хода белых нет.
+                                    <span className="text-boxwood/40 pl-2 select-none">…</span>
+                                ) : (
+                                    <button
+                                        type="button"
+                                        onClick={() => onSelectMove(pair.whiteIdx)}
+                                        className={`text-left px-2 py-0.5 rounded text-sm font-bold transition truncate cursor-pointer ${
+                                            isWhiteActive
+                                                ? 'active-move-btn bg-amber-600/40 text-amber-200 border border-amber-500/50 shadow-sm'
+                                                : 'text-boxwood-light hover:bg-amber-900/30 hover:text-white'
+                                        }`}
+                                    >
+                                        {pair.whiteSan}
+                                    </button>
+                                )}
 
                                 {pair.blackSan !== undefined && pair.blackIdx !== undefined ? (
                                     <button

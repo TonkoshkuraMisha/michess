@@ -23,7 +23,8 @@ import {DEFAULT_TIME_CONTROL, TIME_CONTROLS} from '../config/timeControls';
 import type {TimeControlOption, TimeControlGroup} from '../config/timeControls';
 import {
     FILES, RANKS, MIN_BOARD_SIZE, MAX_BOARD_SIZE,
-    getMaxViewportBoardSize, getDefaultBoardSize, calculateMaterialBalance, cloneChessInstance, prevIndexHelper
+    getMaxViewportBoardSize, getDefaultBoardSize, calculateMaterialBalance, cloneChessInstance, prevIndexHelper,
+    customStartFen, pairHalfMoves, validateFen, STANDARD_START_FEN
 } from './chessboard/boardUtils';
 import type {PromotionPiece} from './chessboard/boardUtils';
 import type {PendingPromotion} from './chessboard/types';
@@ -66,6 +67,8 @@ export default function Chessboard() {
     // Тип новых партий (вызов в лобби и приглашение по ссылке) и тип партии, идущей на доске.
     const [ratedChoice, setRatedChoice] = useState<boolean>(true);
     const [isRatedGame, setIsRatedGame] = useState<boolean>(true);
+    // Партию с ботом можно начать с позиции, стоящей на свободной доске.
+    const [startFromPosition, setStartFromPosition] = useState<boolean>(false);
 
     const [game, setGame] = useState(new Chess());
     const [history, setHistory] = useState<any[]>([]);
@@ -658,7 +661,8 @@ export default function Chessboard() {
             playAudio('premove');
         } else if (activeBot && gameOverResult) {
             const nextColor = myColor === 'white' ? 'black' : 'white';
-            startHistoricalBotGame(activeBot, nextColor);
+            // Реванш — с той же начальной позиции, что и сыгранная партия.
+            startHistoricalBotGame(activeBot, nextColor, startFen);
         }
     };
 
@@ -791,8 +795,11 @@ export default function Chessboard() {
         }
     };
 
+    // Начальная позиция партии на доске: null — обычная расстановка.
+    const startFen = customStartFen(game);
+
     const currentGame = viewIndex === -1 ? game : (() => {
-        const tg = new Chess();
+        const tg = startFen ? new Chess(startFen) : new Chess();
         const limit = viewIndex === -2 ? -1 : viewIndex;
         for (let i = 0; i <= limit; i++) {
             if (history[i]) tg.move(history[i]);
@@ -829,33 +836,43 @@ export default function Chessboard() {
     const bottomPlayerTime = topIsWhite ? blackTimeMs : whiteTimeMs;
     const topIdlePreviewMs = Math.round((topIsWhite ? effectiveWhiteBaseMinutes : effectiveBlackBaseMinutes) * 60 * 1000);
     const bottomIdlePreviewMs = Math.round((!topIsWhite ? effectiveWhiteBaseMinutes : effectiveBlackBaseMinutes) * 60 * 1000);
-    const topCaptured = topIsWhite ? material.whiteCapturedSymbols : material.blackCapturedSymbols;
-    const bottomCaptured = topIsWhite ? material.blackCapturedSymbols : material.whiteCapturedSymbols;
+    // «Взятые фигуры» считаются от полного комплекта — для партии с произвольной позиции это
+    // был бы почти весь комплект с первого хода. Показываем только перевес в материале.
+    const showCaptured = startFen === null;
+    const topCaptured = !showCaptured ? [] : topIsWhite ? material.whiteCapturedSymbols : material.blackCapturedSymbols;
+    const bottomCaptured = !showCaptured ? [] : topIsWhite ? material.blackCapturedSymbols : material.whiteCapturedSymbols;
     const topAdvantage = topIsWhite ? material.whiteAdvantage : material.blackAdvantage;
     const bottomAdvantage = topIsWhite ? material.blackAdvantage : material.whiteAdvantage;
 
     const isBotOnTop = !!activeBotProfile && ((topIsWhite && myColor === 'black') || (!topIsWhite && myColor === 'white'));
     const isBotOnBottom = !!activeBotProfile && !isBotOnTop;
 
-    const movePairs = history.reduce((acc: Array<{
-        moveNumber: number;
-        whiteSan: string;
-        whiteIdx: number;
-        blackSan?: string;
-        blackIdx?: number;
-    }>, move: any, idx: number) => {
-        if (idx % 2 === 0) {
-            acc.push({
-                moveNumber: Math.floor(idx / 2) + 1,
-                whiteSan: move.san,
-                whiteIdx: idx
-            });
-        } else {
-            acc[acc.length - 1].blackSan = move.san;
-            acc[acc.length - 1].blackIdx = idx;
-        }
-        return acc;
-    }, []);
+    const movePairs = pairHalfMoves(history, startFen);
+
+    // Свободная доска с позицией, отличной от начальной и не финальной, — с неё можно играть с ботом.
+    const isSandbox = !gameId && !activeBot && !spectatingGameId;
+    const sandboxFen = game.fen();
+    const canStartFromPosition = isSandbox && sandboxFen !== STANDARD_START_FEN && !game.isGameOver();
+
+    const handleStartBotGame = (botId: HistoricalBotId, colorPref: 'white' | 'black' | 'random') => {
+        startHistoricalBotGame(botId, colorPref, canStartFromPosition && startFromPosition ? sandboxFen : null);
+    };
+
+    const handleLoadFen = (fen: string): string | null => {
+        const error = validateFen(fen);
+        if (error) return error;
+        setGame(new Chess(fen.trim()));
+        setHistory([]);
+        setViewIndex(-1);
+        setSelectedSquare(null);
+        setPendingPromotion(null);
+        setPremove(null);
+        setGameOverResult(null);
+        setDrawOfferStatus(null);
+        setStartFromPosition(true);
+        playAudio('move');
+        return null;
+    };
 
     const handleSelectMoveFromList = (targetIdx: number) => {
         setSelectedSquare(null);
@@ -1055,7 +1072,10 @@ export default function Chessboard() {
                         gameOverResult={gameOverResult}
                         isBotThinking={isBotThinking}
                         botComment={botComment}
-                        onStartBotGame={startHistoricalBotGame}
+                        onStartBotGame={handleStartBotGame}
+                        canStartFromPosition={canStartFromPosition}
+                        startFromPosition={startFromPosition}
+                        onStartFromPositionChange={setStartFromPosition}
                     />
                 ) : (
                     <LobbyPanel
@@ -1433,6 +1453,8 @@ export default function Chessboard() {
                     onOfferRematch={handleOfferRematch}
                     onResetSandbox={handleResetSandbox}
                     onUndoSandboxMove={handleUndoSandboxMove}
+                    hasCustomPosition={isSandbox && startFen !== null}
+                    onLoadFen={handleLoadFen}
                 />}
 
             </div>

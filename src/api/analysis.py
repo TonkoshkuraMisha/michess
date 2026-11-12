@@ -14,6 +14,7 @@ from src.models.game import Game
 from src.schemas.analysis import FullGameAnalysisResponse, PositionAnalysisRequest
 from src.services.analysis_service import GameNotFinishedError, analysis_service, ensure_game_finished
 from src.services.engine_pool import EngineBusyError
+from src.services.game_engine import InvalidStartPositionError
 
 router = APIRouter(prefix="/analysis", tags=["Game Analysis"])
 
@@ -61,7 +62,9 @@ async def analyze_game_position(
     Недоступно, пока у запрашивающего идёт рейтинговая партия (см. src/api/fair_play.py).
     """
     try:
-        return await analysis_service.analyze_position(db, request.moves)
+        return await analysis_service.analyze_position(db, request.moves, request.start_fen)
+    except InvalidStartPositionError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except EngineBusyError:
         raise _engine_busy() from None
 

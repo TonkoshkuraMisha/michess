@@ -208,3 +208,34 @@ describe('GameViewer', () => {
         expect(await screen.findByText('Не удалось загрузить данные партии')).toBeInTheDocument();
     });
 });
+
+describe('GameViewer: партия с произвольной позиции', () => {
+    const FROM_POSITION_PGN = [
+        '[Event "Historical Bot Match"]',
+        '[White "Alice"]',
+        '[Black "Bot"]',
+        '[Result "1/2-1/2"]',
+        '[SetUp "1"]',
+        '[FEN "6k1/5ppp/8/8/8/8/5PPP/3R2K1 b - - 0 40"]',
+        '',
+        '40... Kf8 41. Rd8+ Ke7 1/2-1/2',
+    ].join('\n');
+
+    it('позиции восстанавливаются от начальной позиции партии, ходы нумеруются по ней', async () => {
+        stubApi({pgn: {ok: true, text: FROM_POSITION_PGN}});
+        renderViewer();
+
+        // Финальная позиция: король на e7, ладья на d8 — а не обычная расстановка с этими ходами.
+        await waitFor(() => expect(pieceOn('e7')).toBe('b k'));
+        expect(pieceOn('d8')).toBe('w r');
+        expect(pieceOn('e2')).toBeNull();
+        expect(screen.getByText('40.')).toBeInTheDocument();
+        expect(screen.getByText('41.')).toBeInTheDocument();
+        expect(screen.getByText('…')).toBeInTheDocument();  // у 40-го хода нет хода белых
+
+        // В начало партии — на доске позиция из FEN.
+        fireEvent.keyDown(window, {key: 'ArrowUp'});
+        await waitFor(() => expect(pieceOn('g8')).toBe('b k'));
+        expect(pieceOn('d1')).toBe('w r');
+    });
+});
