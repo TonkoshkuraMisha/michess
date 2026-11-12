@@ -163,7 +163,9 @@ async def test_ws_messages_carry_the_type(db_session):
     assert snapshot["game_id"] == game_id and snapshot["is_rated"] is False
 
 
-async def test_http_join_and_live_list_report_the_type(client, db_session, test_user_1, test_user_2, token_user_1, token_user_2):
+async def test_http_join_and_live_list_report_the_type(
+        client, db_session, test_user_1, test_user_2, token_user_1, token_user_2,
+):
     first = client.post(
         f"{API}/matchmaking/join", json={"base_time_ms": 180000, "increment_ms": 0, "rated": False},
         headers={"Authorization": f"Bearer {token_user_1}"},
