@@ -8,7 +8,7 @@ import type {SoundEventType} from '../../../services/soundEngine';
 import {API_BASE_URL} from '../../../config/api';
 import {HISTORICAL_BOTS} from '../../../config/champions';
 import type {HistoricalBotId} from '../../../config/champions';
-import {cloneChessInstance} from '../boardUtils';
+import {cloneChessInstance, customStartFen} from '../boardUtils';
 import type {PendingPromotion} from '../types';
 import {readErrorDetail} from '../../../services/apiErrors';
 
@@ -81,7 +81,10 @@ export interface UseBotGameResult {
     botComment: string | null;
     isBotThinking: boolean;
     savedBotGameId: number | null;
-    startHistoricalBotGame: (botId: HistoricalBotId, colorPref?: 'white' | 'black' | 'random') => void;
+    /** startFen — начать партию с этой позиции вместо обычной расстановки. */
+    startHistoricalBotGame: (
+        botId: HistoricalBotId, colorPref?: 'white' | 'black' | 'random', startFen?: string | null,
+    ) => void;
     saveBotGameToDatabase: (
         botId: HistoricalBotId,
         playerColor: 'white' | 'black',
@@ -135,6 +138,8 @@ export function useBotGame({
                 body: JSON.stringify({
                     bot_id: botId, player_color: playerColor, result,
                     termination: termination ?? null, moves_uci: movesUci,
+                    // Партия с произвольной позиции: сервер проверяет ходы от неё же.
+                    start_fen: customStartFen(completedGame),
                     base_time_ms: Math.round(effectiveWhiteBaseMinutes * 60 * 1000),
                     increment_ms: Math.round(effectiveIncSeconds * 1000)
                 })
@@ -152,7 +157,11 @@ export function useBotGame({
         }
     }, [effectiveWhiteBaseMinutes, effectiveIncSeconds, setGameOverResult, setDrawOfferStatus]);
 
-    const startHistoricalBotGame = useCallback((botId: HistoricalBotId, colorPref: 'white' | 'black' | 'random' = 'random') => {
+    const startHistoricalBotGame = useCallback((
+        botId: HistoricalBotId,
+        colorPref: 'white' | 'black' | 'random' = 'random',
+        startFen: string | null = null,
+    ) => {
         if (isSearching) {
             setIsSearching(false);
             gameSocket.send('leave_queue', {});
@@ -165,7 +174,7 @@ export function useBotGame({
 
         const whiteStartMs = Math.round(effectiveWhiteBaseMinutes * 60 * 1000);
         const blackStartMs = Math.round(effectiveBlackBaseMinutes * 60 * 1000);
-        const freshGame = new Chess();
+        const freshGame = startFen ? new Chess(startFen) : new Chess();
         const botInfo = HISTORICAL_BOTS[botId];
 
         botGameSavedRef.current = false;

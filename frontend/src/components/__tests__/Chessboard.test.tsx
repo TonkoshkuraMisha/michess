@@ -251,3 +251,91 @@ describe('сбой связи с сервером в партии с ботом'
         expect(screen.getByText(/Бот не смог сделать ход: Некорректная позиция/)).toBeInTheDocument();
     });
 });
+
+describe('партия с ботом с произвольной позиции', () => {
+    const KQ_VS_K = 'k7/7Q/1K6/8/8/8/8/8 w - - 0 57';
+
+    function stubBotApi() {
+        const fetchMock = mockFetchRouter({
+            '/profile/me': () => ({id: 1, username: 'TestPlayer', blitz_rating: 1500}),
+            '/profile/matchmaking/queue': () => [],
+            '/profile/games/live': () => [],
+            '/profile/games/my-active': () => ({active: false}),
+            '/bots/move': () => BOT_MOVE_DEFAULT,
+            '/bots/save-game': () => ({game_id: 999, status: 'finished', result: '1-0'}),
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        return fetchMock;
+    }
+
+    async function loadFen(fen: string) {
+        fireEvent.change(await screen.findByLabelText('Позиция в записи FEN'), {target: {value: fen}});
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', {name: /Поставить/}));
+        });
+    }
+
+    it('позиция из FEN ставится на свободную доску, некорректная — отклоняется', async () => {
+        stubBotApi();
+        renderChessboard();
+
+        await loadFen('совсем не fen');
+        expect(screen.getByRole('alert')).toHaveTextContent('Некорректная позиция');
+
+        await loadFen(KQ_VS_K);
+        expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+        expect(squareEl('h7').querySelector('img')?.getAttribute('alt')).toBe('wq');
+        expect(squareEl('e2').querySelector('img')).toBeNull();
+        // Сброс возвращает обычную расстановку даже без сделанных ходов.
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', {name: /Сбросить доску/}));
+        });
+        expect(squareEl('e2').querySelector('img')?.getAttribute('alt')).toBe('wp');
+    });
+
+    it('партия с ботом начинается с позиции на доске и сохраняется вместе с ней', async () => {
+        const fetchMock = stubBotApi();
+        renderChessboard();
+        await loadFen(KQ_VS_K);
+
+        expect(screen.getByLabelText('Начать с позиции на доске')).toBeChecked();
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', {name: /Белыми/}));
+        });
+        expect(squareEl('h7').querySelector('img')?.getAttribute('alt')).toBe('wq');
+
+        // Qa7# — мат; партия уходит на сервер с начальной позицией.
+        clickSquare('h7');
+        clickSquare('a7');
+
+        await waitFor(() => {
+            expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/bots/save-game'))).toBe(true);
+        });
+        const saveCall = fetchMock.mock.calls.find(([url]) => String(url).includes('/bots/save-game'))!;
+        const body = JSON.parse((saveCall as unknown as [string, RequestInit])[1].body as string);
+        expect(body).toMatchObject({start_fen: KQ_VS_K, moves_uci: ['h7a7'], result: '1-0'});
+        // Журнал нумерует ход по позиции: 57-й, а не первый.
+        expect(screen.getByText('57.')).toBeInTheDocument();
+    });
+
+    it('без галочки партия начинается с обычной расстановки', async () => {
+        const fetchMock = stubBotApi();
+        renderChessboard();
+        await loadFen(KQ_VS_K);
+        fireEvent.click(screen.getByLabelText('Начать с позиции на доске'));
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', {name: /Белыми/}));
+        });
+
+        expect(squareEl('e2').querySelector('img')?.getAttribute('alt')).toBe('wp');
+        expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/bots/save-game'))).toBe(false);
+    });
+
+    it('на обычной расстановке выбора «с позиции» нет', async () => {
+        stubBotApi();
+        renderChessboard();
+        await screen.findByRole('button', {name: /Белыми/});
+        expect(screen.queryByLabelText('Начать с позиции на доске')).not.toBeInTheDocument();
+    });
+});

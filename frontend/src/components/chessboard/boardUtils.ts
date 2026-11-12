@@ -91,6 +91,59 @@ export function cloneChessInstance(source: Chess): Chess {
     return copy;
 }
 
+export const STANDARD_START_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+
+/** Начальная позиция партии, если она не обычная расстановка (из заголовка FEN в PGN), иначе null. */
+export function customStartFen(source: Chess): string | null {
+    const fen = source.header().FEN;
+    return fen && fen !== STANDARD_START_FEN ? fen : null;
+}
+
+/** Проверяет FEN теми же правилами, что и доска; возвращает текст ошибки или null. */
+export function validateFen(fen: string): string | null {
+    try {
+        const probe = new Chess(fen.trim());
+        if (probe.isGameOver()) return 'В этой позиции партия уже окончена';
+        return null;
+    } catch {
+        return 'Некорректная позиция: проверьте запись FEN';
+    }
+}
+
+export interface HalfMovePair {
+    moveNumber: number;
+    /** undefined и whiteIdx === -1 — партия начата с хода чёрных, у первой пары нет хода белых. */
+    whiteSan?: string;
+    whiteIdx: number;
+    blackSan?: string;
+    blackIdx?: number;
+}
+
+/**
+ * Раскладывает полуходы по парам «белые / чёрные». Партия с произвольной позиции может
+ * начинаться с хода чёрных и не с первого хода — номер и сторона берутся из её FEN.
+ */
+export function pairHalfMoves(history: Array<{ san: string }>, startFen?: string | null): HalfMovePair[] {
+    const fenParts = (startFen ?? '').trim().split(/\s+/);
+    const blackStarts = fenParts[1] === 'b';
+    const firstMoveNumber = Number(fenParts[5]) > 0 ? Number(fenParts[5]) : 1;
+
+    const pairs: HalfMovePair[] = [];
+    history.forEach((move, idx) => {
+        const ply = idx + (blackStarts ? 1 : 0);
+        const moveNumber = firstMoveNumber + Math.floor(ply / 2);
+        if (ply % 2 === 0) {
+            pairs.push({moveNumber, whiteSan: move.san, whiteIdx: idx});
+        } else if (pairs.length === 0) {
+            pairs.push({moveNumber, whiteIdx: -1, blackSan: move.san, blackIdx: idx});
+        } else {
+            pairs[pairs.length - 1].blackSan = move.san;
+            pairs[pairs.length - 1].blackIdx = idx;
+        }
+    });
+    return pairs;
+}
+
 export function prevIndexHelper(viewIndex: number, historyLength: number): number {
     return viewIndex === -1 ? historyLength - 1 : viewIndex;
 }

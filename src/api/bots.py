@@ -24,7 +24,7 @@ from src.services.bots.paulsen import paulsen_bot
 from src.services.bots.philidor import philidor_bot, resolve_stockfish_path
 from src.services.bots.staunton import staunton_bot
 from src.services.bots.zukertort import zukertort_bot
-from src.services.game_engine import flag_outcome, terminal_outcome
+from src.services.game_engine import board_from_start_fen, flag_outcome, is_standard_start, terminal_outcome
 from src.services.rating import classify_time_control
 
 router = APIRouter()
@@ -166,6 +166,10 @@ class BotGameSaveRequest(BaseModel):
         description="Для незавершённой на доске позиции: 'resignation' (игрок сдался) или 'timeout' (упал флаг)",
     )
     moves_uci: list[str] = Field(default_factory=list, max_length=1000, description="Список сделанных ходов в формате UCI")
+    start_fen: str | None = Field(
+        default=None, max_length=120,
+        description="Начальная позиция партии (FEN), если она начата не с обычной расстановки",
+    )
     # Границы — чтобы значение из запроса поместилось в INTEGER-колонку и не давало 500.
     base_time_ms: int = Field(default=180000, ge=1000, le=86_400_000, description="Базовый контроль времени в мс")
     increment_ms: int = Field(default=0, ge=0, le=3_600_000, description="Добавление времени на ход в мс")
@@ -250,9 +254,12 @@ def _detect_eco_code(moves_uci: list[str]) -> str:
     return "A00"
 
 
-def _replay_moves(moves_uci: list[str]) -> chess.Board:
-    """Переигрывает ходы с историей (нужна для правил повторения); ValueError при нелегальном ходе."""
-    board = chess.Board()
+def _replay_moves(moves_uci: list[str], start_fen: str | None = None) -> chess.Board:
+    """
+    Переигрывает ходы с историей (нужна для правил повторения) от обычной расстановки или
+    от start_fen; ValueError при нелегальном ходе или невозможной начальной позиции.
+    """
+    board = board_from_start_fen(start_fen)
     for uci_str in moves_uci:
         try:
             move = chess.Move.from_uci(uci_str)
@@ -298,10 +305,15 @@ def _build_pgn_string(
         black_name: str,
         black_elo: int,
         result: str,
+        start_fen: str | None = None,
 ) -> tuple[str, str]:
     """Строит валидный PGN-документ с заголовками и возвращает (pgn_text, final_fen)."""
-    board = chess.Board()
+    board = board_from_start_fen(start_fen)
+    custom_start = not is_standard_start(board)
     pgn_game = chess.pgn.Game()
+    if custom_start:
+        # Заголовки SetUp/FEN — стандартный способ записать партию не с начальной расстановки.
+        pgn_game.setup(board)
     pgn_game.headers["Event"] = "Historical Bot Match"
     pgn_game.headers["Site"] = "Michess Bot Arena"
     pgn_game.headers["Date"] = datetime.now(UTC).strftime("%Y.%m.%d")
@@ -311,7 +323,8 @@ def _build_pgn_string(
     pgn_game.headers["Result"] = result
     pgn_game.headers["WhiteElo"] = str(white_elo)
     pgn_game.headers["BlackElo"] = str(black_elo)
-    pgn_game.headers["ECO"] = _detect_eco_code(moves_uci)
+    if not custom_start:
+        pgn_game.headers["ECO"] = _detect_eco_code(moves_uci)
 
     node: chess.pgn.GameNode = pgn_game
     for uci_str in moves_uci:
@@ -383,7 +396,8 @@ def _prepare_game_kwargs(
         "finished_at": now_utc,
         "pgn_date": now_utc.strftime("%Y.%m.%d"),
         "site": "Michess Bot Arena",
-        "eco": _detect_eco_code(payload.moves_uci),
+        # У партии с произвольной позиции дебюта нет.
+        "eco": None if payload.start_fen else _detect_eco_code(payload.moves_uci),
     }
 
 
@@ -463,11 +477,13 @@ async def save_bot_game(
         raise HTTPException(status_code=400, detail="Список ходов пуст")
 
     try:
-        final_board = _replay_moves(payload.moves_uci)
+        final_board = _replay_moves(payload.moves_uci, payload.start_fen)
         result, termination = resolve_bot_game_outcome(final_board, payload)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    payload = payload.model_copy(update={"result": result, "termination": termination})
+    # Обычная расстановка, присланная как FEN, — это не «своя позиция».
+    start_fen = None if is_standard_start(final_board) else final_board.root().fen()
+    payload = payload.model_copy(update={"result": result, "termination": termination, "start_fen": start_fen})
 
     bot_user = await _get_or_create_bot_user(db, payload.bot_id)
 
@@ -485,6 +501,7 @@ async def save_bot_game(
             black_name=black_user.username,
             black_elo=black_user.rating_for(category),
             result=payload.result,
+            start_fen=payload.start_fen,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
