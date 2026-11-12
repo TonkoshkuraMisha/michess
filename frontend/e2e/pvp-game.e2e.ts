@@ -25,8 +25,10 @@ async function newPlayer(browser: Browser, username: string): Promise<Page> {
     await expect(page.getByText('Регистрация успешна! Теперь войдите в систему.')).toBeVisible();
 
     // После регистрации форма переключилась на вход с теми же полями.
-    await page.locator('form').getByRole('button', {name: 'Войти'}).click();
-    await expect(page.locator('form')).toHaveCount(0);
+    // Ищем именно окно входа: на главной странице есть и другие формы (ввод позиции FEN).
+    const authDialog = page.getByRole('dialog', {name: /Вход в michess/});
+    await authDialog.getByRole('button', {name: 'Войти'}).click();
+    await expect(authDialog).toHaveCount(0);
     await expect(page.getByText(username).first()).toBeVisible();
     return page;
 }

@@ -88,6 +88,9 @@ export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
             }}
         >
             <div
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="auth-modal-title"
                 className="relative bg-[#261C14] border-2 border-amber-900/80 rounded-lg p-6 w-full max-w-md shadow-heavy text-boxwood-light font-serif">
 
                 {onClose && (
@@ -109,7 +112,7 @@ export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
                     </div>
                 </div>
 
-                <h2 className="text-2xl font-bold text-center text-amber-200 mb-1">
+                <h2 id="auth-modal-title" className="text-2xl font-bold text-center text-amber-200 mb-1">
                     {isLogin ? 'Вход в michess' : 'Регистрация аккаунта'}
                 </h2>
                 <p className="text-xs text-center text-boxwood/70 mb-6">
