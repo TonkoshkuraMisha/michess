@@ -49,6 +49,46 @@ interface GameData {
     finished_at: string | null;
 }
 
+type RatingCategoryKey = 'bullet' | 'blitz' | 'rapid' | 'classical';
+
+const CHART_CATEGORIES: Array<{ key: RatingCategoryKey; label: string }> = [
+    {key: 'bullet', label: 'Пуля'},
+    {key: 'blitz', label: 'Блиц'},
+    {key: 'rapid', label: 'Рапид'},
+    {key: 'classical', label: 'Классика'},
+];
+
+interface PlayerStats {
+    total: number;
+    wins: number;
+    draws: number;
+    losses: number;
+    rated_games: Record<RatingCategoryKey, number>;
+}
+
+interface RatingPoint {
+    game_id: number;
+    finished_at: string;
+    rating: number;
+    delta: number;
+}
+
+const GAMES_PAGE_SIZE = 30;
+
+/** Категория с наибольшим числом рейтинговых партий — её график показываем первым. */
+function mostPlayedCategory(stats: PlayerStats | null): RatingCategoryKey {
+    let best: RatingCategoryKey = 'blitz';
+    let bestCount = 0;
+    for (const {key} of CHART_CATEGORIES) {
+        const count = stats?.rated_games?.[key] ?? 0;
+        if (count > bestCount) {
+            best = key;
+            bestCount = count;
+        }
+    }
+    return best;
+}
+
 const displayDate = (game: GameData) => {
     if (game.pgn_date && !game.pgn_date.includes('????')) {
         return game.pgn_date.replace(/\?/g, '').replace(/\.+$/, '');
@@ -64,35 +104,92 @@ export default function Profile() {
     const navigate = useNavigate();
     const [profile, setProfile] = useState<UserProfile | null>(null);
     const [games, setGames] = useState<GameData[]>([]);
+    const [gamesTotal, setGamesTotal] = useState(0);
+    const [gamesPage, setGamesPage] = useState(0);
+    const [stats, setStats] = useState<PlayerStats | null>(null);
+    const [chartCategory, setChartCategory] = useState<RatingCategoryKey>('blitz');
+    const [ratingPoints, setRatingPoints] = useState<RatingPoint[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    const profileApi = `${API_BASE_URL}/api/v1/profile/${encodeURIComponent(targetUsername ?? '')}`;
+
+    // Профиль и итоги — один раз на игрока.
     useEffect(() => {
+        if (!targetUsername) return;
+        let cancelled = false;
+
         const fetchProfileData = async () => {
             setLoading(true);
             setError(null);
+            setGamesPage(0);
+            setStats(null);
+            setRatingPoints([]);
             try {
-                const profileRes = await fetch(`${API_BASE_URL}/api/v1/profile/${encodeURIComponent(targetUsername ?? '')}`);
+                const profileRes = await fetch(profileApi);
                 if (!profileRes.ok) throw new Error('Пользователь не найден');
                 const profileData = await profileRes.json();
+                if (cancelled) return;
                 setProfile(profileData);
 
-                const gamesRes = await fetch(`${API_BASE_URL}/api/v1/profile/${encodeURIComponent(targetUsername ?? '')}/games?limit=30`);
-                if (gamesRes.ok) {
-                    const gamesData = await gamesRes.json();
-                    setGames(gamesData.items || []);
+                // Итоги считаются на сервере по всем партиям, а не по загруженной странице.
+                const statsRes = await fetch(`${profileApi}/stats`).catch(() => null);
+                const statsData: PlayerStats | null = statsRes?.ok ? await statsRes.json() : null;
+                if (cancelled) return;
+                if (statsData && typeof statsData.total === 'number') {
+                    setStats(statsData);
+                    setChartCategory(mostPlayedCategory(statsData));
+                } else {
+                    setChartCategory('blitz');
                 }
             } catch (err: any) {
-                setError(err.message);
+                if (!cancelled) setError(err.message);
             } finally {
-                setLoading(false);
+                if (!cancelled) setLoading(false);
             }
         };
 
-        if (targetUsername) {
-            fetchProfileData();
-        }
-    }, [targetUsername]);
+        fetchProfileData();
+        return () => {
+            cancelled = true;
+        };
+    }, [targetUsername, profileApi]);
+
+    // Страница истории партий.
+    useEffect(() => {
+        if (!targetUsername) return;
+        let cancelled = false;
+        fetch(`${profileApi}/games?limit=${GAMES_PAGE_SIZE}&offset=${gamesPage * GAMES_PAGE_SIZE}`)
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+                if (cancelled) return;
+                setGames(data?.items || []);
+                setGamesTotal(typeof data?.total === 'number' ? data.total : (data?.items?.length ?? 0));
+            })
+            .catch(() => {
+                if (!cancelled) setGames([]);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [targetUsername, profileApi, gamesPage]);
+
+    // История рейтинга выбранной категории — сохранённые сервером значения после каждой партии.
+    useEffect(() => {
+        if (!targetUsername) return;
+        let cancelled = false;
+        fetch(`${profileApi}/rating-history?category=${chartCategory}`)
+            .then((res) => (res.ok ? res.json() : null))
+            .then((data) => {
+                if (!cancelled) setRatingPoints(Array.isArray(data?.points) ? data.points : []);
+            })
+            .catch(() => {
+                if (!cancelled) setRatingPoints([]);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [targetUsername, profileApi, chartCategory]);
 
     if (loading) {
         return (
@@ -113,49 +210,19 @@ export default function Profile() {
         );
     }
 
-    let wins = 0, losses = 0, draws = 0;
-    // Блиц — база для приблизительного графика ниже; у каждой партии своя категория,
-    // а список игр здесь общий для всех контролей времени.
-    let tempRating = profile.blitz_rating;
+    const totalGames = stats?.total ?? gamesTotal;
+    const wins = stats?.wins ?? 0;
+    const draws = stats?.draws ?? 0;
+    const losses = stats?.losses ?? 0;
+    const winRate = totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
 
-    const chartDataReversed = games.map((game) => {
-        const isWhite = game.white_username === profile.username;
-        let delta = 0;
-
-        if (game.result === '1-0') {
-            if (isWhite) {
-                wins++;
-                delta = 15;
-            } else {
-                losses++;
-                delta = -15;
-            }
-        } else if (game.result === '0-1') {
-            if (isWhite) {
-                losses++;
-                delta = -15;
-            } else {
-                wins++;
-                delta = 15;
-            }
-        } else if (game.result === '1/2-1/2') {
-            draws++;
-        }
-
-        const pointRating = tempRating;
-        tempRating -= delta;
-
-        const chartDate = game.pgn_date ? game.pgn_date.split('.')[0] : (game.finished_at ? format(parseISO(game.finished_at), 'd MMM', {locale: ru}) : '');
-
-        return {
-            name: 'Партия',
-            rating: pointRating,
-            date: chartDate
-        };
-    });
-
-    const chartData = chartDataReversed.reverse();
-    const winRate = games.length > 0 ? Math.round((wins / games.length) * 100) : 0;
+    const chartData = ratingPoints.map((point) => ({
+        rating: point.rating,
+        delta: point.delta,
+        date: format(parseISO(point.finished_at), 'd MMM', {locale: ru}),
+    }));
+    const chartCategoryLabel = CHART_CATEGORIES.find((c) => c.key === chartCategory)?.label ?? '';
+    const totalPages = Math.max(1, Math.ceil(gamesTotal / GAMES_PAGE_SIZE));
 
     return (
         <div className="w-full max-w-6xl flex flex-col gap-6 font-serif">
@@ -201,7 +268,7 @@ export default function Profile() {
                                 className="text-boxwood/60 text-xs uppercase tracking-widest mb-1 flex items-center gap-1.5">
                                 <Swords size={14}/> Игр сыграно
                             </div>
-                            <div className="text-4xl font-mono font-bold text-blue-400">{games.length}</div>
+                            <div className="text-4xl font-mono font-bold text-blue-400">{totalGames}</div>
                         </div>
                         <div
                             className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
@@ -230,8 +297,28 @@ export default function Profile() {
             </div>
 
             <div className="bg-acacia-dark border border-amber-900/40 p-5 rounded shadow-heavy">
-                <h2 className="text-sm uppercase tracking-widest text-amber-500/80 mb-6 font-bold">Динамика рейтинга
-                    (последние партии)</h2>
+                <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
+                    <h2 className="text-sm uppercase tracking-widest text-amber-500/80 font-bold">
+                        Динамика рейтинга — {chartCategoryLabel.toLowerCase()}
+                    </h2>
+                    <div className="flex gap-1 p-0.5 bg-black/40 rounded border border-amber-900/40 font-sans">
+                        {CHART_CATEGORIES.map(({key, label}) => (
+                            <button
+                                key={key}
+                                type="button"
+                                aria-pressed={chartCategory === key}
+                                onClick={() => setChartCategory(key)}
+                                className={`px-3 py-1 rounded text-xs font-bold transition cursor-pointer ${
+                                    chartCategory === key
+                                        ? 'bg-amber-700 text-white'
+                                        : 'text-boxwood/70 hover:text-amber-200'
+                                }`}
+                            >
+                                {label}
+                            </button>
+                        ))}
+                    </div>
+                </div>
                 <div className="h-64 w-full font-sans">
                     {chartData.length > 1 ? (
                         <ResponsiveContainer width="100%" height="100%">
@@ -253,7 +340,7 @@ export default function Profile() {
                         </ResponsiveContainer>
                     ) : (
                         <div className="h-full flex items-center justify-center text-boxwood/50">
-                            Недостаточно данных для графика
+                            Недостаточно рейтинговых партий в этой категории для графика
                         </div>
                     )}
                 </div>
@@ -368,6 +455,30 @@ export default function Profile() {
                         </tbody>
                     </table>
                 </div>
+
+                {gamesTotal > GAMES_PAGE_SIZE && (
+                    <div className="flex items-center justify-between gap-3 px-5 py-3 border-t border-amber-900/40 bg-black/20 font-sans text-sm">
+                        <button
+                            type="button"
+                            disabled={gamesPage === 0}
+                            onClick={() => setGamesPage((page) => Math.max(0, page - 1))}
+                            className="px-3 py-1.5 rounded border border-amber-900/60 bg-black/35 text-amber-200 hover:border-amber-600/60 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                            ← Новее
+                        </button>
+                        <span className="text-boxwood/70 font-mono">
+                            Стр. {gamesPage + 1} из {totalPages} · всего {gamesTotal}
+                        </span>
+                        <button
+                            type="button"
+                            disabled={gamesPage + 1 >= totalPages}
+                            onClick={() => setGamesPage((page) => page + 1)}
+                            className="px-3 py-1.5 rounded border border-amber-900/60 bg-black/35 text-amber-200 hover:border-amber-600/60 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                            Старее →
+                        </button>
+                    </div>
+                )}
             </div>
         </div>
     );
