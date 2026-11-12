@@ -62,6 +62,9 @@ class Game(Base):
     eco: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
 
     analysis_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Имя персоналии из мастерской соперников: в базе соперник — общий бот-пользователь,
+    # в архиве и PGN показывается имя, которое дал ему игрок.
+    personality_name: Mapped[str | None] = mapped_column(String(30), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
