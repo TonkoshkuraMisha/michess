@@ -97,3 +97,24 @@ def test_no_recorded_audio_or_unlisted_textures():
 ])
 def test_free_license_filter(license_name, is_free):
     assert portrait_script.is_free_license(license_name) is is_free
+
+
+def test_portraits_are_real_jpeg_files():
+    """Расширение совпадает с содержимым: Викисклад отдаёт PNG для PNG-оригиналов, скрипт перекодирует."""
+    for portrait in (ASSETS / "champions").iterdir():
+        assert portrait.read_bytes().startswith(portrait_script.JPEG_MAGIC), portrait.name
+
+
+def test_non_jpeg_download_is_converted():
+    from io import BytesIO
+
+    from PIL import Image
+
+    png = BytesIO()
+    Image.new("RGBA", (4, 4), (10, 20, 30, 0)).save(png, format="PNG")
+
+    converted = portrait_script.as_jpeg(png.getvalue())
+
+    assert converted.startswith(portrait_script.JPEG_MAGIC)
+    assert Image.open(BytesIO(converted)).getpixel((0, 0)) == (255, 255, 255)  # прозрачность -> белый фон
+    assert portrait_script.as_jpeg(converted) is converted  # JPEG не трогаем

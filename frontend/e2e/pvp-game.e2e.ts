@@ -72,15 +72,21 @@ async function startFriendGame(creator: Page, acceptor: Page, color: 'white' | '
 test.describe.serial('PvP в двух браузерах', () => {
     let alice: Page;
     let bob: Page;
+    let aliceName: string;
+    let bobName: string;
+    let carol: Page | undefined;
 
     test.beforeAll(async ({browser}) => {
-        alice = await newPlayer(browser, uniqueName('e2e_a'));
-        bob = await newPlayer(browser, uniqueName('e2e_b'));
+        aliceName = uniqueName('e2e_a');
+        bobName = uniqueName('e2e_b');
+        alice = await newPlayer(browser, aliceName);
+        bob = await newPlayer(browser, bobName);
     });
 
     test.afterAll(async () => {
         await alice?.context().close();
         await bob?.context().close();
+        await carol?.context().close();
     });
 
     test('вызов по ссылке, мат, итог у обоих и реванш со сменой цвета', async () => {
@@ -130,5 +136,49 @@ test.describe.serial('PvP в двух браузерах', () => {
         await move(bob, alice, 'e7', 'e5');
         await resign(alice);
         await expect(bob.getByText('Партия завершена (0-1)')).toBeVisible();
+    });
+
+    test('зритель видит партию из списка Live, не может вмешаться и получает её итог', async ({browser}) => {
+        // Третий игрок регистрируется только здесь (регистрация ограничена по числу аккаунтов с IP)
+        // и до начала партии: на первый ход у игроков 30 секунд, иначе партия отменяется.
+        carol = await newPlayer(browser, uniqueName('e2e_c'));
+        const spectator = carol;
+
+        await startFriendGame(alice, bob, 'white');
+        await move(alice, bob, 'e2', 'e4');
+        await move(bob, alice, 'e7', 'e5');
+
+        await spectator.getByRole('button', {name: /Лобби \/ Live/}).click();
+        await spectator.getByRole('button', {name: /Идут сейчас \(Live\)/}).click();
+        // Строка партии — самый внутренний блок, в котором есть и имена игроков, и кнопка.
+        const watchButton = spectator.getByRole('button', {name: 'Смотреть'});
+        const liveGame = spectator.locator('div')
+            .filter({hasText: `${aliceName} vs ${bobName}`})
+            .filter({has: watchButton})
+            .last();
+        await liveGame.getByRole('button', {name: 'Смотреть'}).click();
+
+        // Зритель получает позицию с уже сделанными ходами и видит следующие.
+        await expect(spectator.getByText(`Режим зрителя: ${aliceName} vs ${bobName}`)).toBeVisible();
+        await expect(pieceOn(spectator, 'e4')).toHaveCount(1);
+        await expect(pieceOn(spectator, 'e5')).toHaveCount(1);
+        await move(alice, bob, 'g1', 'f3');
+        await expect(pieceOn(spectator, 'f3')).toHaveCount(1);
+        await expect(pieceOn(spectator, 'g1')).toHaveCount(0);
+
+        // Вмешаться нельзя: ни ходом, ни сообщением в чат.
+        await expect(spectator.getByText('Зрители могут только читать чат.')).toBeVisible();
+        await expect(spectator.getByPlaceholder('Написать сообщение...')).toHaveCount(0);
+        await square(spectator, 'd2').dragTo(square(spectator, 'd4'));
+        for (const page of [spectator, alice, bob]) {
+            await expect(pieceOn(page, 'd2')).toHaveCount(1);
+            await expect(pieceOn(page, 'd4')).toHaveCount(0);
+        }
+
+        await resign(alice);
+        await expect(spectator.getByText('Партия окончена. Результат: 0-1 (сдача)')).toBeVisible();
+
+        await spectator.getByRole('button', {name: 'Выйти из просмотра'}).click();
+        await expect(spectator.getByText('Свободная доска / Анализ')).toBeVisible();
     });
 });

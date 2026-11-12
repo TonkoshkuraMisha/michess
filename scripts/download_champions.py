@@ -16,6 +16,7 @@ tests/test_assets_licensing.py проверяет, что у каждого по
          python scripts/download_champions.py --force    # перекачать всё заново
 """
 
+import io
 import json
 import re
 import shutil
@@ -76,6 +77,27 @@ def is_free_license(short_name: str) -> bool:
     if not name or tokens & {"nc", "nd"}:
         return False
     return name.startswith(("public domain", "pd", "cc0", "cc by", "cc-by", "no restrictions"))
+
+
+JPEG_MAGIC = bytes.fromhex("ffd8")
+
+
+def as_jpeg(content: bytes) -> bytes:
+    """
+    Портреты хранятся как .jpg, а Викисклад отдаёт уменьшенную копию в формате оригинала
+    (у PNG — PNG). Файл с расширением .jpg и содержимым PNG браузеры показывают, но это ломает
+    всё, что доверяет расширению. Перекодируем; прозрачный фон заменяется белым.
+    """
+    if content.startswith(JPEG_MAGIC):
+        return content
+    from PIL import Image  # нужен только для не-JPEG оригиналов: pip install -r requirements-dev.txt
+
+    image = Image.open(io.BytesIO(content)).convert("RGBA")
+    background = Image.new("RGB", image.size, (255, 255, 255))
+    background.paste(image, mask=image.getchannel("A"))
+    buffer = io.BytesIO()
+    background.save(buffer, format="JPEG", quality=90)
+    return buffer.getvalue()
 
 
 def _clean(html_text: str) -> str:
@@ -175,7 +197,7 @@ def main(force: bool = False) -> int:
         if response.status_code != 200 or not response.content:
             print(f"[!] {player_id}: не скачался (HTTP {response.status_code})")
             continue
-        target.write_bytes(response.content)
+        target.write_bytes(as_jpeg(response.content))
         credits[player_id] = {"file": image["file"], **meta}
         print(f"[+] {player_id}: {meta['license']} — {meta['author']}")
 

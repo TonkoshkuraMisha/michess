@@ -147,6 +147,9 @@ jobs:
           sed -i '/^SECRET_KEY=/d; /^ENVIRONMENT=/d; /^HTTP_PORT=/d' .env
           echo "SECRET_KEY=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')" >> .env
           echo "HTTP_PORT=8080" >> .env
+          # E2E регистрирует трёх игроков, а при повторе упавшего сценария — ещё столько же:
+          # лимит «5 регистраций в час с IP» на одноразовом стенде только мешает.
+          echo "RATE_LIMIT_REGISTER_PER_IP=50" >> .env
 
       - name: Validate compose file
         run: docker compose -f docker-compose.prod.yml config --quiet
