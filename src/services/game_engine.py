@@ -1,8 +1,10 @@
 # --- FILE: src/services/game_engine.py ---
 
+import io
 import logging
 
 import chess
+import chess.pgn
 
 logger = logging.getLogger(__name__)
 
@@ -32,26 +34,48 @@ def board_from_start_fen(start_fen: str | None) -> chess.Board:
     return board
 
 
+def validate_start_fen(start_fen: str | None) -> str:
+    """
+    Каноническая запись начальной позиции: STARTING_FEN для пустого значения, иначе FEN после
+    проверки. InvalidStartPositionError (это ValueError) — для неразборчивой или невозможной позиции.
+    """
+    return board_from_start_fen(start_fen).fen()
+
+
 def is_standard_start(board: chess.Board) -> bool:
     """Партия начата с обычной расстановки (у доски нет ходов и позиция стартовая)."""
     return board.root().fen() == STARTING_FEN
 
 
-def restore_board(fen: str, pgn_movetext: str = "") -> chess.Board:
+def _replay_pgn_document(pgn_text: str) -> chess.Board | None:
+    """Доска в конце PGN-документа с заголовками (в том числе SetUp/FEN) — с историей ходов."""
+    game = chess.pgn.read_game(io.StringIO(pgn_text))
+    if game is None or game.errors:
+        return None
+    return game.end().board()
+
+
+def restore_board(fen: str, pgn_movetext: str = "", start_fen: str | None = None) -> chess.Board:
     """
     Восстанавливает доску вместе с историей ходов.
 
     История нужна для правил повторения позиции (троекратное / пятикратное), которые
     невозможно проверить по одному FEN. Ходы переигрываются из PGN-строки партии
-    («1. e4 e5 2. Nf3 ...») от стартовой позиции. Если PGN пуст, повреждён или не
-    приводит к переданному FEN, используется доска из FEN без истории.
+    («1. e4 e5 2. Nf3 ...») от начальной позиции: обычной расстановки или start_fen. Полный
+    PGN-документ с заголовком FEN разбирается целиком — начальная позиция берётся из него.
+    Если PGN пуст, повреждён или не приводит к переданному FEN, используется доска из FEN без истории.
     """
     safe_fen = fen.strip() if fen and fen.strip() else STARTING_FEN
     movetext = (pgn_movetext or "").strip()
 
-    if movetext:
-        board = chess.Board()
+    if movetext and "[FEN " in movetext:
+        replayed = _replay_pgn_document(movetext)
+        if replayed is not None and replayed.fen() == safe_fen:
+            return replayed
+        logger.warning("PGN document does not lead to the stored FEN, falling back to FEN-only board")
+    elif movetext:
         try:
+            board = board_from_start_fen(start_fen)
             for token in movetext.split():
                 # Номера ходов («12.», «12...») и результат («1-0») начинаются с цифры, SAN — никогда.
                 if token[0].isdigit() or token == "*":

@@ -10,13 +10,15 @@ import chess
 import chess.pgn
 import pytest
 
-from src.models.game import Game
+from src.models.game import Game, GameStatus
 from src.services.analysis_service import _evaluate_board_sequence_sync
 from src.services.game_engine import (
     STARTING_FEN,
     InvalidStartPositionError,
     board_from_start_fen,
     is_standard_start,
+    restore_board,
+    validate_start_fen,
 )
 
 API = "/api/v1"
@@ -144,3 +146,121 @@ def test_full_game_analysis_numbers_moves_from_the_board(monkeypatch):
         (40, "black", "Kf8"), (41, "white", "Rd8+"), (41, "black", "Ke7"),
     ]
     assert [m["ply"] for m in report["moves"]] == [1, 2, 3]
+
+
+# --- validate_start_fen и restore_board -------------------------------------------------------
+
+
+def test_validate_start_fen_returns_canonical_fen():
+    assert validate_start_fen(None) == STARTING_FEN
+    assert validate_start_fen("  ") == STARTING_FEN
+    assert validate_start_fen(f"  {BLACK_TO_MOVE}  ") == BLACK_TO_MOVE
+    with pytest.raises(ValueError):
+        validate_start_fen("kK6/8/8/8/8/8/8/8 w - - 0 1")
+
+
+def _board_after(start_fen: str, *sans: str) -> chess.Board:
+    board = chess.Board(start_fen)
+    for san in sans:
+        board.push_san(san)
+    return board
+
+
+def test_restore_board_replays_movetext_from_the_start_position():
+    final = _board_after(BLACK_TO_MOVE, "Kf8", "Rd8+")
+
+    board = restore_board(final.fen(), "40... Kf8 41. Rd8+", start_fen=BLACK_TO_MOVE)
+
+    assert board.fen() == final.fen()
+    assert len(board.move_stack) == 2  # история есть — нужна правилам повторения
+
+
+def test_restore_board_reads_a_pgn_document_with_setup_headers():
+    final = _board_after(BLACK_TO_MOVE, "Kf8", "Rd8+")
+    document = "\n".join(['[SetUp "1"]', f'[FEN "{BLACK_TO_MOVE}"]', "", "40... Kf8 41. Rd8+ *"])
+
+    board = restore_board(final.fen(), document)
+
+    assert board.fen() == final.fen() and len(board.move_stack) == 2
+    assert board.root().fen() == BLACK_TO_MOVE
+
+
+def test_restore_board_falls_back_to_the_fen_when_history_does_not_fit():
+    final = _board_after(BLACK_TO_MOVE, "Kf8")
+    # Без start_fen ходы переигрываются от обычной расстановки — Kf8 там невозможен.
+    board = restore_board(final.fen(), "40... Kf8")
+    assert board.fen() == final.fen() and board.move_stack == []
+
+
+# --- итог партии с ботом с произвольной позиции ----------------------------------------------
+
+# Ферзь против голого короля: после тихого хода Qh6 партия продолжается.
+QUIET_MOVE = ["h7h6"]
+
+
+async def test_resignation_from_a_position(client, db_session, token_user_1):
+    response = _save(client, token_user_1, moves_uci=QUIET_MOVE, start_fen=KQ_VS_K,
+                     termination="resignation", result="0-1")
+
+    assert response.status_code == 200 and response.json()["result"] == "0-1"
+    game = await db_session.get(Game, response.json()["game_id"])
+    assert game.termination == "resignation" and game.is_rated is False
+    assert game.eco is None and f'[FEN "{KQ_VS_K}"]' in game.pgn
+
+
+async def test_flag_against_a_bare_king_is_a_draw(client, db_session, token_user_1):
+    """У белых упал флаг, но у чёрных один король — мат невозможен, значит ничья (ФИДЕ 6.9)."""
+    response = _save(client, token_user_1, moves_uci=QUIET_MOVE, start_fen=KQ_VS_K,
+                     termination="timeout", result="0-1")
+
+    assert response.status_code == 200 and response.json()["result"] == "1/2-1/2"
+    game = await db_session.get(Game, response.json()["game_id"])
+    assert game.termination == "timeout_vs_insufficient_material" and game.is_rated is False
+
+
+def test_position_analysis_from_a_black_to_move_position(client):
+    response = client.post(
+        f"{API}/analysis/position", json={"moves": ["Kf8", "Rd8+", "Ke7"], "start_fen": BLACK_TO_MOVE},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["fen"] == _board_after(BLACK_TO_MOVE, "Kf8", "Rd8+", "Ke7").fen()
+
+
+def test_too_long_start_fen_is_rejected_by_the_schema(client):
+    response = client.post(f"{API}/analysis/position", json={"moves": [], "start_fen": "8/" * 61})
+    assert response.status_code == 422
+
+
+# --- полный разбор партии с произвольной позиции ----------------------------------------------
+
+
+async def test_full_game_analysis_endpoint_numbers_moves_from_the_position(client, db_session, monkeypatch):
+    """Партия с хода чёрных на 25-м ходу: первый полуход — 25-й ход чёрных, точность считается."""
+    from src.models.user import User
+
+    monkeypatch.setattr("src.services.analysis_service.resolve_stockfish_path", lambda: None)
+    start = "6k1/5ppp/8/8/8/8/5PPP/3R2K1 b - - 0 25"
+    white, black = User(username="pos_white", hashed_password="x"), User(username="pos_black", hashed_password="x")
+    db_session.add_all([white, black])
+    await db_session.commit()
+    game = Game(
+        white_player_id=white.id, black_player_id=black.id, status=GameStatus.COMPLETED, result="1/2-1/2",
+        is_rated=False,
+        pgn="\n".join(['[Result "1/2-1/2"]', '[SetUp "1"]', f'[FEN "{start}"]', "", "25... Kf8 26. Rd8+ Ke7 1/2-1/2"]),
+    )
+    db_session.add(game)
+    await db_session.commit()
+
+    response = client.post(f"{API}/analysis/game/{game.id}")
+
+    assert response.status_code == 200
+    report = response.json()
+    assert [(m["move_number"], m["color"], m["san"]) for m in report["moves"]] == [
+        (25, "black", "Kf8"), (26, "white", "Rd8+"), (26, "black", "Ke7"),
+    ]
+    for side in ("white", "black"):
+        assert 0 <= report[side]["accuracy"] <= 100
+    white_moves = report["white"]
+    assert sum(white_moves[key] for key in ("best", "good", "inaccuracies", "mistakes", "blunders")) == 1
+

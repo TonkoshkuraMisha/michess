@@ -167,7 +167,7 @@ class BotGameSaveRequest(BaseModel):
     )
     moves_uci: list[str] = Field(default_factory=list, max_length=1000, description="Список сделанных ходов в формате UCI")
     start_fen: str | None = Field(
-        default=None, max_length=100,
+        default=None, max_length=120,
         description="Начальная позиция партии (FEN), если она начата не с обычной расстановки",
     )
     # Границы — чтобы значение из запроса поместилось в INTEGER-колонку и не давало 500.
