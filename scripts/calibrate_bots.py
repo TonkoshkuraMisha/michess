@@ -19,7 +19,9 @@
 import argparse
 import json
 import math
+import os
 import random
+import re
 import sys
 import time
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -148,6 +150,20 @@ def schedule(declared: dict[str, int], rounds: int, only: set[str] | None) -> li
     return specs
 
 
+SCORES = {"1-0": 1.0, "0-1": 0.0, "1/2-1/2": 0.5}
+_LOG_LINE = re.compile(r"^\[\d+/\d+\] (\S+) — (\S+): (1-0|0-1|1/2-1/2) ")
+
+
+def games_from_log(path: Path) -> list[tuple[str, str, float]]:
+    """Партии из вывода прошлого прогона: «[n/N] белые — чёрные: результат (… пл.)»."""
+    games = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        match = _LOG_LINE.match(line)
+        if match:
+            games.append((match.group(1), match.group(2), SCORES[match.group(3)]))
+    return games
+
+
 def expected(ra: float, rb: float) -> float:
     return 1.0 / (1.0 + 10 ** ((rb - ra) / 400.0))
 
@@ -195,21 +211,26 @@ def main() -> None:
     parser.add_argument("--workers", type=int, default=3)
     parser.add_argument("--only", nargs="*", help="Калибровать только этих (id или archetype:<имя>)")
     parser.add_argument("--out", type=Path, default=OUT)
+    parser.add_argument("--from-log", type=Path, help="Пересчитать рейтинги по логу прошлого прогона, без партий")
     args = parser.parse_args()
 
     random.seed(20261112)
     declared = declared_ratings()
-    specs = schedule(declared, args.rounds, set(args.only) if args.only else None)
-    print(f"{len(specs)} партий, {args.workers} процесса", flush=True)
 
     started = time.monotonic()
-    games: list[tuple[str, str, float]] = []
-    with ProcessPoolExecutor(max_workers=args.workers) as pool:
+    pool = None
+    if args.from_log:
+        games = games_from_log(args.from_log)
+        print(f"{len(games)} партий из {args.from_log}", flush=True)
+    else:
+        specs = schedule(declared, args.rounds, set(args.only) if args.only else None)
+        print(f"{len(specs)} партий, {args.workers} процесса", flush=True)
+        games = []
+        pool = ProcessPoolExecutor(max_workers=args.workers)
         futures = [pool.submit(play_game, spec) for spec in specs]
         for done, future in enumerate(as_completed(futures), 1):
             spec, result, plies = future.result()
-            score = {"1-0": 1.0, "0-1": 0.0}.get(result, 0.5)
-            games.append((spec.white, spec.black, score))
+            games.append((spec.white, spec.black, SCORES[result]))
             print(f"[{done}/{len(specs)}] {spec.white} — {spec.black}: {result} ({plies} пл.)", flush=True)
 
     fitted = fit(games, declared)
@@ -230,7 +251,15 @@ def main() -> None:
     args.out.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     for key, entry in sorted(fitted.items(), key=lambda kv: kv[1]["rating"]):
         print(f"{key:28} {entry['rating']:5} ±{entry['ci95']}  (заявлено {entry['declared']}, "
-              f"{entry['score']}/{entry['games']})")
+              f"{entry['score']}/{entry['games']})", flush=True)
+
+    if pool is not None:
+        # Работники держат открытые процессы Stockfish (и их потоки) — штатный shutdown пула ждал бы
+        # их вечно. Результат уже записан, поэтому работников просто завершаем.
+        for process in list(getattr(pool, "_processes", {}).values()):
+            process.terminate()
+        pool.shutdown(wait=False, cancel_futures=True)
+        os._exit(0)
 
 
 if __name__ == "__main__":
