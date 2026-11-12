@@ -65,6 +65,13 @@ function stubApi({pgn, cached, analyze}: { pgn: Reply; cached?: Reply; analyze?:
 const pieceOn = (square: string) =>
     document.querySelector(`[data-square="${square}"] img`)?.getAttribute('alt') ?? null;
 
+/**
+ * Позиция на доске после действия. Ждём, а не проверяем сразу: под нагрузкой (CI, замер покрытия) рендер
+ * может отстать от клика, и мгновенная проверка изредка падала, хотя компонент работал верно.
+ */
+const expectPiece = (square: string, piece: string | null) =>
+    waitFor(() => expect(pieceOn(square)).toBe(piece));
+
 function renderViewer() {
     return render(
         <MemoryRouter initialEntries={['/game/42']}>
@@ -111,17 +118,18 @@ describe('GameViewer', () => {
         await waitFor(() => expect(pieceOn('h4')).toBe('b q'));
 
         fireEvent.click(screen.getByTitle('Начало партии'));
-        expect(pieceOn('d8')).toBe('b q');
-        expect(pieceOn('f2')).toBe('w p');
+        await expectPiece('d8', 'b q');
+        await expectPiece('f2', 'w p');
 
         fireEvent.click(screen.getByTitle('Ход вперед'));
-        expect(pieceOn('f3')).toBe('w p');
-        expect(pieceOn('f2')).toBeNull();
+        await expectPiece('f3', 'w p');
+        await expectPiece('f2', null);
 
         fireEvent.click(screen.getByTitle('Конец партии'));
+        await expectPiece('h4', 'b q');
         fireEvent.click(screen.getByTitle('Ход назад'));
-        expect(pieceOn('d8')).toBe('b q');
-        expect(pieceOn('g4')).toBe('w p');
+        await expectPiece('d8', 'b q');
+        await expectPiece('g4', 'w p');
     });
 
     it('стрелки клавиатуры листают ходы', async () => {
@@ -130,14 +138,15 @@ describe('GameViewer', () => {
         await waitFor(() => expect(pieceOn('h4')).toBe('b q'));
 
         fireEvent.keyDown(window, {key: 'ArrowUp'});
-        expect(pieceOn('f2')).toBe('w p');
+        await expectPiece('f2', 'w p');
         fireEvent.keyDown(window, {key: 'ArrowRight'});
+        await expectPiece('f3', 'w p');
         fireEvent.keyDown(window, {key: 'ArrowRight'});
-        expect(pieceOn('e5')).toBe('b p');
+        await expectPiece('e5', 'b p');
         fireEvent.keyDown(window, {key: 'ArrowLeft'});
-        expect(pieceOn('e5')).toBeNull();
+        await expectPiece('e5', null);
         fireEvent.keyDown(window, {key: 'ArrowDown'});
-        expect(pieceOn('h4')).toBe('b q');
+        await expectPiece('h4', 'b q');
     });
 
     it('переворот доски меняет порядок клеток', async () => {
