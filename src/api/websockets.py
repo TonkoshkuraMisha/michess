@@ -19,7 +19,7 @@ from src.db.session import get_session_factory
 from src.models.user import User
 from src.services.anticheat import trusted_premove
 from src.services.connection_manager import manager
-from src.services.game_state import pending_draw_offer, state_manager
+from src.services.game_state import is_rated_state, pending_draw_offer, state_manager
 from src.services.matchmaker import MatchmakingError, matchmaker
 from src.services.rating import classify_time_control
 
@@ -67,6 +67,7 @@ async def _send_active_game_snapshot_if_exists(db: AsyncSession, user: User):
         "white_rating": white_user.rating_for(category) if white_user else 1200,
         "black_username": black_user.username if black_user else "Черные",
         "black_rating": black_user.rating_for(category) if black_user else 1200,
+        "is_rated": is_rated_state(state),
         "base_time_ms": int(state.get("base_time_ms", 180000)),
         "increment_ms": int(state.get("increment_ms", 0)),
         "white_time_ms": white_time,
@@ -82,7 +83,8 @@ async def _send_active_game_snapshot_if_exists(db: AsyncSession, user: User):
 
 async def create_rematch_game(db: AsyncSession, prev_state: dict, connection_manager=None) -> dict:
     """
-    Создаёт партию-реванш со сменой цветов (white_id <-> black_id) и тем же контролем времени.
+    Создаёт партию-реванш со сменой цветов (white_id <-> black_id), с тем же контролем времени
+    и того же типа (рейтинговая / товарищеская).
     Проверки занятости игроков и старт партии — в matchmaker.start_pvp_game.
     """
     return await matchmaker.start_pvp_game(
@@ -92,6 +94,7 @@ async def create_rematch_game(db: AsyncSession, prev_state: dict, connection_man
         increment_ms=int(prev_state.get("increment_ms", 0)),
         connection_manager=connection_manager,
         db=db,
+        is_rated=is_rated_state(prev_state),
     )
 
 
@@ -177,6 +180,11 @@ def _int_field(data: dict, key: str, default: int | None = None) -> int:
         raise _Ignore from None
 
 
+def _rated_flag(data: dict) -> bool:
+    """Тип партии из сообщения: товарищеская — только при явном rated: false."""
+    return data.get("rated") is not False
+
+
 def _required_game_id(data: dict) -> int:
     if not data.get("game_id"):
         raise _Ignore
@@ -231,6 +239,7 @@ async def _join_queue(ctx: ActionContext, data: dict) -> None:
         min_rating=data.get("min_rating"),
         max_rating=data.get("max_rating"),
         db=ctx.db,
+        rated=_rated_flag(data),
     )
     if matched_game_id is None:
         await ctx.send({"event": "queue_joined"})
@@ -261,6 +270,7 @@ async def _create_invite(ctx: ActionContext, data: dict) -> None:
         base_time_ms=base_time_ms,
         increment_ms=increment_ms,
         color_pref=str(data.get("color_pref", "random")),
+        rated=_rated_flag(data),
     )
     await ctx.send({"event": "invite_created", **invite_data})
 
@@ -297,6 +307,7 @@ async def _spectate_game(ctx: ActionContext, data: dict) -> None:
         "white_rating": white_user.rating_for(category) if white_user else 1200,
         "black_username": black_user.username if black_user else "Черные",
         "black_rating": black_user.rating_for(category) if black_user else 1200,
+        "is_rated": is_rated_state(game.state),
         "base_time_ms": int(game.state.get("base_time_ms", 180000)),
         "increment_ms": int(game.state.get("increment_ms", 0)),
         "white_time_ms": white_time,

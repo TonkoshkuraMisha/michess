@@ -71,6 +71,11 @@ export function LobbyPanel({
                                     <span className="text-amber-300 font-bold text-sm">{p.username}</span>
                                     <div className="text-xs text-boxwood/75 font-mono">
                                         Рейтинг: {p.rating} • {Math.round(p.base_time_ms / 60000)}+{(p.increment_ms || 0) / 1000}
+                                        {p.rated === false && (
+                                            <span className="ml-1.5 px-1.5 rounded bg-sky-900/60 text-sky-200 font-sans">
+                                                товарищеская
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                                 <button
@@ -102,6 +107,11 @@ export function LobbyPanel({
                                     <div className="text-xs text-boxwood/75 font-mono">
                                         {Math.round(lg.base_time_ms / 60000)}+{(lg.increment_ms || 0) / 1000} •
                                         👁 {lg.spectators_count}
+                                        {lg.is_rated === false && (
+                                            <span className="ml-1.5 px-1.5 rounded bg-sky-900/60 text-sky-200 font-sans">
+                                                товарищеская
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                                 <button

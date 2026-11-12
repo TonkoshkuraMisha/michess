@@ -26,6 +26,7 @@ class QueueJoinRequest(BaseModel):
     increment_ms: int = 0
     min_rating: int | None = None
     max_rating: int | None = None
+    rated: bool = True
 
 
 async def _resolve_user(db: AsyncSession, username: str) -> User | None:
@@ -57,7 +58,7 @@ async def _resolve_user(db: AsyncSession, username: str) -> User | None:
 
 async def _build_active_game_payload(db: AsyncSession, game_id: int, user_id: int) -> dict | None:
     """Формирует полный слепок активной партии для игрока (цвет, часы, FEN, PGN, версия стейта)."""
-    from src.services.game_state import pending_draw_offer, state_manager
+    from src.services.game_state import is_rated_state, pending_draw_offer, state_manager
 
     state = await state_manager.get_game_state(game_id)
     if not state or state.get("status") != "in_progress":
@@ -91,6 +92,7 @@ async def _build_active_game_payload(db: AsyncSession, game_id: int, user_id: in
         "white_rating": white_user.rating_for(category) if white_user else 1200,
         "black_username": black_user.username if black_user else "Черные",
         "black_rating": black_user.rating_for(category) if black_user else 1200,
+        "is_rated": is_rated_state(state),
         "base_time_ms": int(state.get("base_time_ms", 180000)),
         "increment_ms": int(state.get("increment_ms", 0)),
         "white_time_ms": white_time,
@@ -194,6 +196,7 @@ async def join_matchmaking_http(
             min_rating=req.min_rating,
             max_rating=req.max_rating,
             db=db,
+            rated=req.rated,
         )
     except MatchmakingError as err:
         # Фронтенд дублирует действие по WS и HTTP: если WS уже стартовал партию, отдаём её.
@@ -262,7 +265,7 @@ async def accept_challenge_http(
 async def get_live_games(db: AsyncSession = Depends(get_db)):
     """Возвращает список активных партий, идущих прямо сейчас (для вкладки Live и режима зрителя)."""
     from src.services.connection_manager import manager
-    from src.services.game_state import state_manager
+    from src.services.game_state import is_rated_state, state_manager
 
     game_ids = await state_manager.redis.smembers("active_games")
     if not game_ids:
@@ -309,6 +312,7 @@ async def get_live_games(db: AsyncSession = Depends(get_db)):
             "white_rating": white_user.rating_for(category) if white_user else 1200,
             "black_username": black_user.username if black_user else "Черные",
             "black_rating": black_user.rating_for(category) if black_user else 1200,
+            "is_rated": is_rated_state(state),
             "base_time_ms": int(state.get("base_time_ms", 180000)),
             "increment_ms": int(state.get("increment_ms", 0)),
             "state_version": int(state.get("state_version", 0)),

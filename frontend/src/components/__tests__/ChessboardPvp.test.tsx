@@ -250,3 +250,77 @@ describe('реванш', () => {
         expect(sendMock).toHaveBeenCalledWith('decline_rematch', {game_id: 5});
     });
 });
+
+describe('товарищеские партии', () => {
+    it('выбранный тип уходит на сервер по WebSocket и HTTP и возвращается после переподключения', async () => {
+        renderBoard();
+        await act(async () => {
+            fireEvent.click(await screen.findByRole('radio', {name: 'Товарищеская'}));
+        });
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', {name: /Найти соперника/}));
+        });
+
+        const joins = () => sendMock.mock.calls.filter(([action]) => action === 'join_queue');
+        expect(joins()[0][1]).toMatchObject({rated: false});
+        const fetchMock = fetch as unknown as Mock;
+        const httpJoin = fetchMock.mock.calls.find(([url]) => String(url).includes('/matchmaking/join'));
+        expect(JSON.parse(httpJoin![1].body)).toMatchObject({rated: false});
+        expect(screen.getByText(/товарищеский вызов/)).toBeInTheDocument();
+        // Пока идёт поиск, тип поменять нельзя — вызов уже опубликован.
+        expect(screen.getByRole('radio', {name: 'Рейтинговая'})).toBeDisabled();
+
+        await emitAct('connected', {event: 'connected'});
+        expect(joins()[1][1]).toMatchObject({rated: false});
+    });
+
+    it('приглашение по ссылке создаётся выбранного типа', async () => {
+        renderBoard();
+        await act(async () => {
+            fireEvent.click(await screen.findByRole('radio', {name: 'Товарищеская'}));
+            fireEvent.click(screen.getByRole('button', {name: /С другом/}));
+        });
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', {name: /Сгенерировать и скопировать ссылку/}));
+        });
+
+        expect(sendMock).toHaveBeenCalledWith('create_invite', expect.objectContaining({rated: false}));
+    });
+
+    it('тип идущей партии берётся из снимка сервера, изменение рейтинга не показывается', async () => {
+        const casual = {...MATCH, is_rated: false};
+        renderBoard({'/profile/games/my-active': () => ({...casual, active: true})});
+        await emitAct('match_found', casual);
+
+        expect(screen.getByText('Идёт товарищеская партия')).toBeInTheDocument();
+
+        await emitAct('game_over', {game_id: 5, result: '1-0', reason: 'resignation', white_delta: 0, black_delta: 0});
+        expect(screen.queryByText('(+0)')).not.toBeInTheDocument();
+    });
+
+    it('рейтинговая партия показывает изменение рейтинга', async () => {
+        renderBoard({'/profile/games/my-active': () => ({...MATCH, active: true})});
+        await emitAct('match_found', MATCH);
+        expect(screen.getByText('Идет рейтинговая партия')).toBeInTheDocument();
+
+        await emitAct('game_over', {game_id: 5, result: '1-0', reason: 'resignation', white_delta: 8, black_delta: -8});
+        expect(screen.getByText('(+8)')).toBeInTheDocument();
+    });
+
+    it('товарищеский вызов помечен в лобби', async () => {
+        renderBoard({
+            '/profile/matchmaking/queue': () => [
+                {user_id: 7, username: 'Friendly', rating: 1500, base_time_ms: 180000, increment_ms: 0, rated: false},
+                {user_id: 8, username: 'Serious', rating: 1500, base_time_ms: 180000, increment_ms: 0, rated: true},
+            ],
+        });
+        await act(async () => {
+            fireEvent.click(await screen.findByRole('button', {name: /Лобби \/ Live/}));
+        });
+
+        const friendly = (await screen.findByText('Friendly')).closest('div')!.parentElement!;
+        expect(friendly.textContent).toContain('товарищеская');
+        const serious = screen.getByText('Serious').closest('div')!.parentElement!;
+        expect(serious.textContent).not.toContain('товарищеская');
+    });
+});

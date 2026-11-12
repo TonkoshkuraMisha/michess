@@ -280,6 +280,18 @@ def override_redis(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def service_sessions_use_test_db(monkeypatch):
+    """
+    Сервисы, которые сами открывают сессию (восстановление состояния партии из БД, цикл таймаутов,
+    матчмейкер без переданной сессии), берут фабрику из своего модуля, а не через зависимости
+    FastAPI. Без подмены они ходили бы в базу из .env — тесты читали бы настоящую базу разработчика
+    и зависели от её содержимого.
+    """
+    monkeypatch.setattr("src.services.game_state.AsyncSessionLocal", TestSessionLocal)
+    monkeypatch.setattr("src.services.matchmaker.AsyncSessionLocal", TestSessionLocal)
+
+
+@pytest.fixture(autouse=True)
 def no_celery_publish(monkeypatch):
     """Тесты не публикуют задачи в брокер: список опубликованных id партий — для проверок."""
     from src.services import task_dispatch
