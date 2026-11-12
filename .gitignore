@@ -48,3 +48,6 @@ htmlcov/
 
 # Резервные копии БД (docker-compose.prod.yml, сервис backup)
 backups/
+
+# Конфиг MCP, который PyCharm генерирует на каждом хосте (порт свой)
+.mcp.json
