@@ -286,7 +286,10 @@ export default function GameViewer() {
 
                 if (cachedAnalysisRes && cachedAnalysisRes.ok) {
                     const cachedData = await cachedAnalysisRes.json().catch(() => null);
-                    if (cachedData && Array.isArray(cachedData.moves)) {
+                    // Пустой отчёт по партии с ходами — не анализ, а сбой разбора PGN на сервере:
+                    // показывать «100 %» без графика нельзя, пусть игрок запустит анализ заново.
+                    if (cachedData && Array.isArray(cachedData.moves)
+                        && (cachedData.moves.length > 0 || newHistory.length === 0)) {
                         setAnalysisReport(cachedData);
                     }
                 }
@@ -317,6 +320,10 @@ export default function GameViewer() {
                 return;
             }
             const data: FullGameAnalysisReport = await res.json();
+            if (!Array.isArray(data.moves) || (data.moves.length === 0 && history.length > 0)) {
+                setAnalysisError('Сервер вернул пустой анализ: ходы партии не распознаны. Сообщите о партии разработчику.');
+                return;
+            }
             setAnalysisReport(data);
             playAudio('start');
         } catch (err: any) {

@@ -2,6 +2,7 @@
 
 import io
 import logging
+import re
 
 import chess
 import chess.pgn
@@ -47,9 +48,39 @@ def is_standard_start(board: chess.Board) -> bool:
     return board.root().fen() == STARTING_FEN
 
 
+_LINE_BREAK_RE = re.compile(r"\r+\n|\r")
+
+
+def normalize_pgn_text(pgn_text: str) -> str:
+    """
+    Одна партия в каноническом виде: заголовки подряд, одна пустая строка, ходы без пустых строк.
+
+    По стандарту PGN пустая строка завершает партию. Файлы, сохранённые на Windows в текстовом режиме
+    поверх уже виндовых переводов строк, получают «\\r\\r\\n» — после разбора это пустая строка после
+    каждой строки, и python-chess видит партию из одного заголовка без ходов (анализ «на 100 %» пустой
+    партии). Фронтенд (chess.js) к таким строкам терпим, поэтому партия при этом выглядела нормальной.
+    """
+    lines = [line.strip() for line in _LINE_BREAK_RE.sub("\n", pgn_text.lstrip("﻿")).split("\n")]
+    headers: list[str] = []
+    i = 0
+    while i < len(lines) and (not lines[i] or lines[i].startswith("[")):
+        if lines[i]:
+            headers.append(lines[i])
+        i += 1
+    movetext = "\n".join(line for line in lines[i:] if line)
+    if not headers:
+        return movetext
+    return "\n".join(headers) + "\n\n" + movetext + "\n"
+
+
+def read_pgn_game(pgn_text: str) -> chess.pgn.Game | None:
+    """chess.pgn.read_game для одной сохранённой партии, устойчивый к лишним пустым строкам."""
+    return chess.pgn.read_game(io.StringIO(normalize_pgn_text(pgn_text)))
+
+
 def _replay_pgn_document(pgn_text: str) -> chess.Board | None:
     """Доска в конце PGN-документа с заголовками (в том числе SetUp/FEN) — с историей ходов."""
-    game = chess.pgn.read_game(io.StringIO(pgn_text))
+    game = read_pgn_game(pgn_text)
     if game is None or game.errors:
         return None
     return game.end().board()

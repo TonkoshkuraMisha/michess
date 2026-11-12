@@ -2,7 +2,6 @@
 
 import asyncio
 import contextlib
-import io
 import json
 import logging
 import math
@@ -17,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.game import Game, GameStatus
 from src.services.bots.base import resolve_stockfish_path, static_board_eval_cp
 from src.services.engine_pool import EngineUnavailableError, get_engine_pool
-from src.services.game_engine import board_from_start_fen
+from src.services.game_engine import board_from_start_fen, read_pgn_game
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +68,7 @@ def format_eval_display(eval_white_cp: int, mate_white: int | None = None) -> st
 
 def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
     """Синхронный проход по всем позициям партии со Stockfish или статическим fallback-оценщиком."""
-    pgn_game = chess.pgn.read_game(io.StringIO(pgn_text))
+    pgn_game = read_pgn_game(pgn_text)
     if pgn_game is None:
         raise ValueError("Не удалось распарсить PGN партии")
 
@@ -238,7 +237,7 @@ def ensure_game_finished(game: Game) -> None:
 
 
 def _count_mainline_plies(pgn_text: str) -> int:
-    pgn_game = chess.pgn.read_game(io.StringIO(pgn_text))
+    pgn_game = read_pgn_game(pgn_text)
     if pgn_game is None:
         return -1
     return sum(1 for _ in pgn_game.mainline_moves())
