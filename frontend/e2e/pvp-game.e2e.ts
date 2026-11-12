@@ -139,22 +139,32 @@ test.describe.serial('PvP в двух браузерах', () => {
     });
 
     test('зритель видит партию из списка Live, не может вмешаться и получает её итог', async ({browser}) => {
-        await startFriendGame(alice, bob, 'white');
-        await move(alice, bob, 'e2', 'e4');
-
-        // Третий игрок регистрируется только здесь: регистрация ограничена по числу аккаунтов с IP.
+        // Третий игрок регистрируется только здесь (регистрация ограничена по числу аккаунтов с IP)
+        // и до начала партии: на первый ход у игроков 30 секунд, иначе партия отменяется.
         carol = await newPlayer(browser, uniqueName('e2e_c'));
         const spectator = carol;
+
+        await startFriendGame(alice, bob, 'white');
+        await move(alice, bob, 'e2', 'e4');
+        await move(bob, alice, 'e7', 'e5');
+
         await spectator.getByRole('button', {name: /Лобби \/ Live/}).click();
         await spectator.getByRole('button', {name: /Идут сейчас \(Live\)/}).click();
-        const liveGame = spectator.locator('div', {hasText: `${aliceName} vs ${bobName}`}).last();
+        // Строка партии — самый внутренний блок, в котором есть и имена игроков, и кнопка.
+        const watchButton = spectator.getByRole('button', {name: 'Смотреть'});
+        const liveGame = spectator.locator('div')
+            .filter({hasText: `${aliceName} vs ${bobName}`})
+            .filter({has: watchButton})
+            .last();
         await liveGame.getByRole('button', {name: 'Смотреть'}).click();
 
-        // Зритель получает позицию с уже сделанным ходом и видит следующие ходы.
+        // Зритель получает позицию с уже сделанными ходами и видит следующие.
         await expect(spectator.getByText(`Режим зрителя: ${aliceName} vs ${bobName}`)).toBeVisible();
         await expect(pieceOn(spectator, 'e4')).toHaveCount(1);
-        await move(bob, alice, 'e7', 'e5');
         await expect(pieceOn(spectator, 'e5')).toHaveCount(1);
+        await move(alice, bob, 'g1', 'f3');
+        await expect(pieceOn(spectator, 'f3')).toHaveCount(1);
+        await expect(pieceOn(spectator, 'g1')).toHaveCount(0);
 
         // Вмешаться нельзя: ни ходом, ни сообщением в чат.
         await expect(spectator.getByText('Зрители могут только читать чат.')).toBeVisible();
