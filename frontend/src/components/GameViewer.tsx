@@ -333,6 +333,12 @@ export default function GameViewer() {
         }
     };
 
+    // Обработчик клавиш висит на window и переживает рендеры. Историю и текущий ход он читает через ref,
+    // обновляемый на каждом рендере, а не из замыкания эффекта: эффект перерегистрируется только после
+    // отрисовки, и нажатие сразу после загрузки партии видело пустую историю и молча терялось.
+    const navigationRef = useRef({history, viewIndex});
+    navigationRef.current = {history, viewIndex};
+
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
@@ -344,35 +350,35 @@ export default function GameViewer() {
             // setViewIndex принимает готовое значение, а не функцию-обновитель: React StrictMode
             // в разработке вызывает такую функцию дважды, и звук из побочного эффекта внутри неё
             // проигрывался бы два раза подряд (рассинхронизированно, по разным тикам Audio).
-            // Текущий viewIndex читаем из замыкания — он в зависимостях эффекта.
+            const {history: moves, viewIndex: current} = navigationRef.current;
             if (e.key === 'ArrowLeft') {
                 e.preventDefault();
-                const nextIdx = Math.max(-1, viewIndex - 1);
-                if (nextIdx === viewIndex) return;
+                const nextIdx = Math.max(-1, current - 1);
+                if (nextIdx === current) return;
                 setViewIndex(nextIdx);
-                playAudio(nextIdx >= 0 ? resolveMoveSound(history[nextIdx].san) : 'move');
+                playAudio(nextIdx >= 0 ? resolveMoveSound(moves[nextIdx].san) : 'move');
             } else if (e.key === 'ArrowRight') {
                 e.preventDefault();
-                const nextIdx = Math.min(history.length - 1, viewIndex + 1);
-                if (nextIdx === viewIndex) return;
+                const nextIdx = Math.min(moves.length - 1, current + 1);
+                if (nextIdx === current) return;
                 setViewIndex(nextIdx);
-                playAudio(resolveMoveSound(history[nextIdx].san));
+                playAudio(resolveMoveSound(moves[nextIdx].san));
             } else if (e.key === 'ArrowUp') {
                 e.preventDefault();
-                if (viewIndex === -1) return;
+                if (current === -1) return;
                 setViewIndex(-1);
                 playAudio('move');
             } else if (e.key === 'ArrowDown') {
                 e.preventDefault();
-                const lastIdx = history.length - 1;
-                if (viewIndex === lastIdx) return;
+                const lastIdx = moves.length - 1;
+                if (current === lastIdx) return;
                 setViewIndex(lastIdx);
-                if (lastIdx >= 0) playAudio(resolveMoveSound(history[lastIdx].san));
+                if (lastIdx >= 0) playAudio(resolveMoveSound(moves[lastIdx].san));
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [history, playAudio, viewIndex]);
+    }, [playAudio]);
 
     useEffect(() => {
         if (notationScrollRef.current) {

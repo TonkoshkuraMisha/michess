@@ -348,6 +348,12 @@ export default function Chessboard() {
         localStorage.setItem('michess_board_size', String(defaultSize));
     };
 
+    // Обработчик клавиш висит на window: историю и текущий ход читает через ref, обновляемый на каждом
+    // рендере. Из замыкания эффекта (он перерегистрируется только после отрисовки) нажатие сразу после
+    // хода видело прежнюю позицию — та же гонка, что была в GameViewer.
+    const navigationRef = useRef({history, viewIndex});
+    navigationRef.current = {history, viewIndex};
+
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
@@ -357,13 +363,14 @@ export default function Chessboard() {
                 setShowAppearanceDropdown(false);
                 return;
             }
+            const {history, viewIndex} = navigationRef.current;
             if (history.length === 0) return;
             if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
 
             // setViewIndex принимает только готовое значение, а не функцию-обновитель: React
             // StrictMode в разработке вызывает такую функцию дважды, и звук из побочного эффекта
             // внутри неё проигрывался бы два раза подряд (рассинхронизированно, по разным тикам
-            // Audio). Текущий viewIndex читаем из замыкания — он в зависимостях эффекта.
+            // Audio).
             if (e.key === 'ArrowLeft') {
                 e.preventDefault();
                 const current = viewIndex === -1 ? history.length - 1 : prevIndexHelper(viewIndex, history.length);
@@ -401,7 +408,7 @@ export default function Chessboard() {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [history, playAudio, viewIndex]);
+    }, [playAudio]);
 
     useEffect(() => {
         if (notationScrollRef.current) {
