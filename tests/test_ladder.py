@@ -29,11 +29,11 @@ def no_engine(monkeypatch):
 
 @pytest.fixture
 def fake_calibration(monkeypatch):
-    """Измеренная сила: «Торопыга» самый слабый, Морфи — сильнее заявленного."""
+    """Измеренная сила: «Торопыга» (rusher) самый слабый, Морфи — сильнее заявленного."""
     data = {
         "meta": {"date": "2026-11-12", "games": 10},
         "players": {
-            "archetype:Торопыга": {"rating": 650, "games": 40, "ci95": 90},
+            "archetype:rusher": {"rating": 650, "games": 40, "ci95": 90},
             "morphy": {"rating": 2050, "games": 40, "ci95": 80},
         },
     }
@@ -71,7 +71,7 @@ def save(client, token, opponent: dict, moves: list[str], color: str, result: st
     if opponent["kind"] == "historical":
         body["bot_id"] = opponent["bot_id"]
     else:
-        body.update(bot_id="custom", personality_name=opponent["name"])
+        body.update(bot_id="custom", personality_name=opponent["key"])
     return client.post(f"{API}/save-game", headers=auth(token), json=body)
 
 
@@ -81,7 +81,7 @@ def test_rungs_are_ordered_by_measured_strength(fake_calibration):
     items = ladder.rungs()
     assert len(items) == 7 + len(ARCHETYPES)
     assert [r.rating for r in items] == sorted(r.rating for r in items)
-    assert items[0].key == "archetype:Торопыга" and items[0].measured and items[0].rating == 650
+    assert items[0].key == "archetype:rusher" and items[0].measured and items[0].rating == 650
     morphy = next(r for r in items if r.key == "morphy")
     assert morphy.rating == 2050 and morphy.measured
     assert not next(r for r in items if r.key == "philidor").measured
@@ -90,7 +90,7 @@ def test_rungs_are_ordered_by_measured_strength(fake_calibration):
 def test_catalog_lists_archetypes_with_configs(client, fake_calibration):
     body = client.get(f"{API}/catalog").json()
     assert len(body["archetypes"]) == len(ARCHETYPES)
-    first = next(a for a in body["archetypes"] if a["name"] == "Торопыга")
+    first = next(a for a in body["archetypes"] if a["id"] == "rusher")
     assert first["measured"] and first["rating"] == 650 and first["declared_rating"] == 700
     assert first["config"]["target_elo"] == 700
     assert {h["id"] for h in body["historical"]} >= {"morphy", "philidor"}
@@ -110,7 +110,7 @@ def test_new_player_starts_at_the_bottom(client, token_user_1, fake_calibration)
 def test_clean_win_raises_rating_and_unlocks_next_rung(client, token_user_1, fake_calibration):
     start = client.post(f"{API}/ladder/start", headers=auth(token_user_1), json={"color": "white"}).json()
     opponent = start["opponent"]
-    assert opponent["name"] == "Торопыга" and opponent["kind"] == "archetype" and start["color"] == "white"
+    assert opponent["id"] == "rusher" and opponent["kind"] == "archetype" and start["color"] == "white"
 
     play_ladder_moves(client, token_user_1, opponent, SCHOLARS_MATE, "white")
     saved = save(client, token_user_1, opponent, SCHOLARS_MATE, "white", "1-0")
@@ -143,7 +143,7 @@ def test_engine_hint_for_players_side_voids_the_game(client, token_user_1, fake_
     play_ladder_moves(client, token_user_1, start["opponent"], SCHOLARS_MATE, "white")
 
     outcome = save(client, token_user_1, start["opponent"], SCHOLARS_MATE, "white", "1-0").json()["ladder"]
-    assert not outcome["counted"] and "подсказал" in outcome["reason"]
+    assert not outcome["counted"] and outcome["reason"] == "engine_hint"
     assert client.get(f"{API}/ladder", headers=auth(token_user_1)).json()["rating"] == 1000
 
 
@@ -152,7 +152,7 @@ def test_position_analysis_voids_the_game(client, token_user_1, fake_calibration
     client.post("/api/v1/analysis/position", headers=auth(token_user_1), json={"moves": ["e2e4"]})
     play_ladder_moves(client, token_user_1, start["opponent"], SCHOLARS_MATE, "white")
     outcome = save(client, token_user_1, start["opponent"], SCHOLARS_MATE, "white", "1-0").json()["ladder"]
-    assert not outcome["counted"] and "анализ" in outcome["reason"]
+    assert not outcome["counted"] and outcome["reason"] == "engine_analysis"
 
 
 def test_takeback_voids_the_game(client, token_user_1, fake_calibration):
@@ -162,7 +162,7 @@ def test_takeback_voids_the_game(client, token_user_1, fake_calibration):
     # Возврат хода: соперника снова спрашивают о позиции, которую он уже прошёл.
     play_ladder_moves(client, token_user_1, opponent, SCHOLARS_MATE, "white")
     outcome = save(client, token_user_1, opponent, SCHOLARS_MATE, "white", "1-0").json()["ladder"]
-    assert not outcome["counted"] and "возврат" in outcome["reason"]
+    assert not outcome["counted"] and outcome["reason"] == "takeback"
 
 
 def test_retried_request_for_the_same_position_is_not_a_takeback(client, token_user_1, fake_calibration):
@@ -181,7 +181,7 @@ def test_weakened_opponent_voids_the_game(client, token_user_1, fake_calibration
     weakened = {**start["opponent"], "config": {**start["opponent"]["config"], "target_elo": 600}}
     play_ladder_moves(client, token_user_1, weakened, SCHOLARS_MATE, "white")
     outcome = save(client, token_user_1, start["opponent"], SCHOLARS_MATE, "white", "1-0").json()["ladder"]
-    assert not outcome["counted"] and "другой бот" in outcome["reason"]
+    assert not outcome["counted"] and outcome["reason"] == "opponent_swapped"
 
 
 def test_save_must_match_the_open_ladder_game(client, token_user_1, fake_calibration):

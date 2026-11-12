@@ -4,7 +4,7 @@ import {useCallback, useEffect, useState} from 'react';
 import {PolarAngleAxis, PolarGrid, Radar, RadarChart} from 'recharts';
 import {Pencil, Save, Trash2} from 'lucide-react';
 import {strengthNote, styleRadar} from '../../config/archetypes';
-import type {CustomOpponent} from '../../config/archetypes';
+import type {ArchetypeId, CustomOpponent} from '../../config/archetypes';
 import {
     DEFAULT_CONFIG,
     createPersonality,
@@ -79,6 +79,8 @@ interface Draft {
     bio?: string;
     /** id сохранённой персоналии, которую редактируем (null — новая). */
     savedId: number | string | null;
+    /** Черновик начат с архетипа: пока имя и ползунки не тронуты, играем именно этим архетипом. */
+    archetypeId?: ArchetypeId;
 }
 
 const emptyDraft = (): Draft => ({name: '', config: {...DEFAULT_CONFIG}, savedId: null});
@@ -127,8 +129,10 @@ export function PersonalityWorkshop({
     const setValue = (key: SliderKey, value: number) =>
         setDraft((d) => ({...d, config: {...d.config, [key]: value}}));
 
-    const pick = (name: string, config: PersonalityConfig, savedId: Draft['savedId'], bio?: string) => {
-        setDraft({name, config: {...config, piece_values: {...config.piece_values}}, savedId, bio});
+    const pick = (
+        name: string, config: PersonalityConfig, savedId: Draft['savedId'], bio?: string, archetypeId?: ArchetypeId,
+    ) => {
+        setDraft({name, config: {...config, piece_values: {...config.piece_values}}, savedId, bio, archetypeId});
         setError(null);
         setNotice(null);
     };
@@ -178,10 +182,15 @@ export function PersonalityWorkshop({
     const play = (colorPref: 'white' | 'black' | 'random') => {
         const name = draft.name.trim() || t('workshop.defaultName');
         const savedOnServer = token && typeof draft.savedId === 'number';
+        const archetype = archetypes.find((a) => a.id === draft.archetypeId);
+        const pristineArchetype = archetype && draft.savedId === null
+            && name === t(`archetypes.${archetype.id}.name`)
+            && JSON.stringify(draft.config) === JSON.stringify(archetype.config);
         onPlay({
             name,
             config: draft.config,
             bio: draft.bio,
+            ...(pristineArchetype ? {archetypeId: archetype.id} : {}),
             // Сохранённый на сервере соперник играет по своему id — но только если конфиг не меняли.
             personalityId: savedOnServer && isUnchanged(mine, draft) ? (draft.savedId as number) : undefined,
         }, colorPref);
@@ -220,14 +229,16 @@ export function PersonalityWorkshop({
                 {archetypes.length === 0 && <p className="text-boxwood/70">{t('workshop.archetypesLoading')}</p>}
                 <div className="flex flex-wrap gap-1">
                     {archetypes.map((a) => (
-                        <button key={a.name} type="button" title={a.bio}
-                                onClick={() => pick(a.name, a.config, null, a.bio)}
+                        <button key={a.id} type="button" title={t(`archetypes.${a.id}.bio`)}
+                                onClick={() => pick(
+                                    t(`archetypes.${a.id}.name`), a.config, null, t(`archetypes.${a.id}.bio`), a.id,
+                                )}
                                 className={`px-2 py-0.5 rounded border cursor-pointer ${
-                                    draft.name === a.name && draft.savedId === null
+                                    draft.archetypeId === a.id && draft.savedId === null
                                         ? 'bg-amber-800 border-amber-400 text-white'
                                         : 'bg-black/35 border-amber-900/40 hover:border-amber-600/60'
                                 }`}>
-                            {a.name} <span className="font-mono text-amber-300/80">{strengthLabel(a)}</span>
+                            {t(`archetypes.${a.id}.name`)} <span className="font-mono text-amber-300/80">{strengthLabel(a)}</span>
                         </button>
                     ))}
                 </div>
@@ -241,7 +252,11 @@ export function PersonalityWorkshop({
                            placeholder={t('workshop.namePlaceholder')}
                            className="px-2 py-1 rounded bg-black/50 border border-amber-800/60 text-boxwood-light"/>
                 </label>
-                {draft.bio && <p className="italic text-boxwood/80">{draft.bio}</p>}
+                {(draft.archetypeId || draft.bio) && (
+                    <p className="italic text-boxwood/80">
+                        {draft.archetypeId ? t(`archetypes.${draft.archetypeId}.bio`) : draft.bio}
+                    </p>
+                )}
 
                 <div className="flex justify-center" aria-label={t('workshop.radar.label')}>
                     <RadarChart width={220} height={150} data={radar} outerRadius={50}>

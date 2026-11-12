@@ -22,7 +22,7 @@ import chess
 
 from src.db import redis as redis_module
 from src.models.user import User
-from src.services.bots.archetypes import ARCHETYPES, ARCHETYPES_BY_NAME
+from src.services.bots.archetypes import ARCHETYPES, ARCHETYPES_BY_ID
 from src.services.bots.calibration import strength_of
 from src.services.bots.personality import BotPersonalityConfig
 
@@ -34,9 +34,9 @@ K_NEW_GAMES = 10
 
 @dataclass(frozen=True)
 class Rung:
-    key: str  # "morphy" или "archetype:Торопыга"
+    key: str  # "morphy" или "archetype:rusher"
     kind: str  # "historical" | "archetype"
-    name: str
+    id: str  # id бота или архетипа: имя на языке игрока клиент берёт из каталога
     rating: int
     measured: bool
 
@@ -55,13 +55,13 @@ def rungs() -> list[Rung]:
     from src.api.bots import AVAILABLE_BOTS
 
     items = [
-        Rung(str(b["id"]), "historical", str(b["name"]), *_strength(str(b["id"]), int(str(b["rating"]))))
+        Rung(str(b["id"]), "historical", str(b["id"]), *_strength(str(b["id"]), int(str(b["rating"]))))
         for b in AVAILABLE_BOTS
     ]
     items += [
-        Rung(a.key, "archetype", a.name, *_strength(a.key, a.config.target_elo)) for a in ARCHETYPES
+        Rung(a.key, "archetype", a.id, *_strength(a.key, a.config.target_elo)) for a in ARCHETYPES
     ]
-    return sorted(items, key=lambda r: (r.rating, r.name))
+    return sorted(items, key=lambda r: (r.rating, r.key))
 
 
 def _strength(key: str, declared: int) -> tuple[int, bool]:
@@ -122,7 +122,7 @@ async def note_analysis(user_id: int | None) -> None:
         return
     session = await get_session(user_id)
     if session is not None:
-        await _mark(user_id, session, "во время партии запрашивался анализ позиции")
+        await _mark(user_id, session, "engine_analysis")
 
 
 async def note_bot_move_request(user_id: int | None, board: chess.Board, requested_key: str) -> None:
@@ -134,13 +134,13 @@ async def note_bot_move_request(user_id: int | None, board: chess.Board, request
         return
     player_to_move = (board.turn == chess.WHITE) == (session.color == "white")
     if player_to_move:
-        await _mark(user_id, session, "движок подсказал ход за вашу сторону")
+        await _mark(user_id, session, "engine_hint")
     elif requested_key != session.rung_key:
-        await _mark(user_id, session, "ходы соперника делал другой бот")
+        await _mark(user_id, session, "opponent_swapped")
     elif board.ply() == session.max_ply and board.fen() == session.last_fen:
         return  # повтор того же запроса (ретрай после сбоя связи, двойной эффект React) — не возврат
     elif board.ply() <= session.max_ply:
-        await _mark(user_id, session, "в партии был возврат хода")
+        await _mark(user_id, session, "takeback")
     else:
         session.max_ply = board.ply()
         session.last_fen = board.fen()
@@ -151,21 +151,25 @@ def expected_score(rating: int, opponent: int) -> float:
     return 1.0 / (1.0 + 10 ** ((opponent - rating) / 400.0))
 
 
+# Почему партия не засчитана в лестницу: коды, текст на языке игрока — в каталоге клиента (ladder.reasons).
+LADDER_REASONS = ("engine_analysis", "engine_hint", "opponent_swapped", "takeback")
+
+
 @dataclass
 class LadderOutcome:
     counted: bool
-    reason: str | None
+    reason: str | None  # один из LADDER_REASONS
     delta: int
     rating: int
     step: int
     promoted: bool
-    opponent: str
+    opponent: str  # ключ ступени: «morphy» или «archetype:rusher»
 
 
 def apply_result(user: User, rung_index: int, rung: Rung, score: float, assisted: str | None) -> LadderOutcome:
     """Меняет рейтинг и ступень игрока (без commit). score — очки игрока: 1, ½ или 0."""
     if assisted:
-        return LadderOutcome(False, assisted, 0, user.ladder_rating, user.ladder_step, False, rung.name)
+        return LadderOutcome(False, assisted, 0, user.ladder_rating, user.ladder_step, False, rung.key)
     k = K_NEW if user.ladder_games < K_NEW_GAMES else K_ESTABLISHED
     delta = round(k * (score - expected_score(user.ladder_rating, rung.rating)))
     user.ladder_rating = max(100, user.ladder_rating + delta)
@@ -173,7 +177,7 @@ def apply_result(user: User, rung_index: int, rung: Rung, score: float, assisted
     promoted = score == 1.0 and rung_index == user.ladder_step and rung_index < len(rungs()) - 1
     if promoted:
         user.ladder_step += 1
-    return LadderOutcome(True, None, delta, user.ladder_rating, user.ladder_step, promoted, rung.name)
+    return LadderOutcome(True, None, delta, user.ladder_rating, user.ladder_step, promoted, rung.key)
 
 
 def find_rung(key: str) -> tuple[int, Rung] | None:
@@ -184,4 +188,4 @@ def find_rung(key: str) -> tuple[int, Rung] | None:
 
 
 def archetype_for(rung: Rung):
-    return ARCHETYPES_BY_NAME[rung.name] if rung.kind == "archetype" else None
+    return ARCHETYPES_BY_ID[rung.id] if rung.kind == "archetype" else None

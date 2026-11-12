@@ -10,6 +10,8 @@ import {API_BASE_URL} from '../config/api';
 import type {PersonalityConfig} from './personalities';
 import {t, uiMessage} from '../i18n';
 import {UiError} from './apiErrors';
+import {isArchetypeId} from '../config/archetypes';
+import type {ArchetypeId} from '../config/archetypes';
 
 export interface BotStrength {
     declared_rating: number;
@@ -19,9 +21,9 @@ export interface BotStrength {
     ci95: number | null;
 }
 
+/** Архетип мастерской: имя и описание на языке игрока — в каталоге (archetypes.<id>). */
 export interface CatalogArchetype extends BotStrength {
-    name: string;
-    bio: string;
+    id: ArchetypeId;
     config: PersonalityConfig;
 }
 
@@ -40,6 +42,11 @@ export function fetchBotCatalog(): Promise<BotCatalog> {
                 if (!res.ok) throw new UiError(uiMessage('workshop.catalogUnavailable'));
                 return res.json() as Promise<BotCatalog>;
             })
+            .then((catalog) => ({
+                ...catalog,
+                // Архетип, которого клиент ещё не знает (сервер обновился раньше), не показываем без имени.
+                archetypes: catalog.archetypes.filter((a) => isArchetypeId(a.id)),
+            }))
             .catch((err) => {
                 cached = null; // следующая попытка — снова в сеть
                 throw err;

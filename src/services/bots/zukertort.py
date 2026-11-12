@@ -1,7 +1,7 @@
 # --- FILE: src/services/bots/zukertort.py ---
 
 
-from src.services.bots.base import HistoricalBot, load_bot_opening_book
+from src.services.bots.base import BookEntry, HistoricalBot, load_bot_opening_book
 from src.services.bots.style import (
     CAPTURE,
     CASTLING,
@@ -22,16 +22,16 @@ from src.services.bots.style import (
 
 ZUKERTORT_BLUNDER_GUARD_CP = 140.0
 
-DEFAULT_ZUKERTORT_BOOK: dict[str, list[tuple[str, int, str]]] = {
+DEFAULT_ZUKERTORT_BOOK: dict[str, list[BookEntry]] = {
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
-        ("e2e4", 72, "Открытая игра с последующим комбинационным штурмом."),
-        ("g1f3", 16, "Дебют Цукерторта (1. Nf3!) — гибкое развитие с сохранением выбора плана в центре!"),
-        ("d2d4", 12, "Закрытое начало с переходом в систему Цукерторта (d4, Nf3, e3, Bd3, b3)."),
+        ("e2e4", 72, "zukertort.bookE4"),
+        ("g1f3", 16, "zukertort.bookNf3"),
+        ("d2d4", 12, "zukertort.bookD4"),
     ],
     "rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq -": [
-        ("e7e5", 75, "Классический открытый бой 1...e5."),
-        ("c7c5", 15, "Сицилианская защита."),
-        ("e7e6", 10, "Французская защита."),
+        ("e7e5", 75, "zukertort.bookE5"),
+        ("c7c5", 15, "zukertort.bookSicilian"),
+        ("e7e6", 10, "zukertort.bookFrench"),
     ],
 }
 
@@ -40,17 +40,17 @@ ZUKERTORT_OPENING_BOOK = load_bot_opening_book("zukertort", DEFAULT_ZUKERTORT_BO
 
 ZUKERTORT_STYLE = Style(
     "zukertort",
-    Rule(CASTLING, 40.0, "Рокировка! Завершаем развитие и готовим тактический прорыв."),
+    Rule(CASTLING, 40.0, "zukertort.castle"),
     Group(
         piece(*MINOR_PIECES) & by_move(14),
-        Rule(FROM_BACK_RANK, 28.0, "Гибкое развитие фигур по системе Цукерторта."),
+        Rule(FROM_BACK_RANK, 28.0, "zukertort.develop"),
         Rule(to(EXTENDED_CENTER), 18.0),
     ),
-    Rule(to(CENTER_SQUARES), 22.0, "Энергичный захват ключевых центральных полей!", Note.FILL),
+    Rule(to(CENTER_SQUARES), 22.0, "zukertort.center", Note.FILL),
     FirstOf(
         Rule(
             CHECK, 26.0,
-            "Шах! Переходим к решительной комбинационной атаке в стиле Лондонского турнира 1883 года!",
+            "zukertort.check",
         ),
         Rule(CAPTURE, 16.0),
     ),
@@ -63,7 +63,7 @@ class ZukertortBot(HistoricalBot):
 
     bot_id = "zukertort"
     engine_source_name = "zukertort_style_engine"
-    default_comment = "Тонкий стратегический манёвр с подготовкой комбинационного взрыва в стиле Цукерторта!"
+    default_comment = "zukertort.default"
     blunder_guard_cp = ZUKERTORT_BLUNDER_GUARD_CP
     jitter_range = 8.0
     multipv = 8

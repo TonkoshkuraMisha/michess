@@ -141,7 +141,7 @@ async def test_save_game_marks_bot_account_as_is_bot(client, db_session, token_u
         headers={"Authorization": f"Bearer {token_user_1}"},
     )
     assert res.status_code == 200
-    bot_user = (await db_session.execute(select(User).where(User.username == "Пол Морфи"))).scalar_one()
+    bot_user = (await db_session.execute(select(User).where(User.username == "morphy"))).scalar_one()
     assert bot_user.is_bot is True
 
 

@@ -23,7 +23,7 @@ from src.models.user import User
 from src.services import ladder as ladder_service
 from src.services.bots import calibration as bot_calibration
 from src.services.bots.anderssen import anderssen_bot
-from src.services.bots.archetypes import ARCHETYPES
+from src.services.bots.archetypes import ARCHETYPES, ARCHETYPES_BY_ID, ARCHETYPES_BY_KEY
 from src.services.bots.labourdonnais import labourdonnais_bot
 from src.services.bots.morphy import morphy_bot
 from src.services.bots.paulsen import paulsen_bot
@@ -39,75 +39,57 @@ router = APIRouter()
 get_db = getattr(deps, "get_db", None) or getattr(db_session, "get_db", None)
 get_current_user = getattr(deps, "get_current_user", None)
 
+# Исторические боты. Имя, титул и девиз на языке игрока — в каталогах клиента (bots.profiles.<id>);
+# здесь — данные: id (он же имя бота-пользователя в базе), имя для PGN (латиница, как в архивах партий),
+# годы, заявленная сила, портрет.
 AVAILABLE_BOTS = [
     {
         "id": "philidor",
-        "name": "Ф.-А. Филидор",
-        "full_name": "Франсуа-Андре Филидор",
+        "pgn_name": "Philidor, François-André",
         "era": "1749–1795",
-        "title": "Мастер Просвещения",
         "rating": 1850,
-        "motto": "Пешки — душа шахмат: именно они определяют атаку и защиту.",
         "avatar": "/assets/champions/philidor.jpg",
     },
     {
         "id": "labourdonnais",
-        "name": "Л.-Ш. Лабурдонне",
-        "full_name": "Луи-Шарль Лабурдонне",
+        "pgn_name": "La Bourdonnais, Louis-Charles",
         "era": "1795–1840",
-        "title": "Король Комбинаций",
         "rating": 1950,
-        "motto": "Инициатива, гамбит и стремительная атака на короля!",
         "avatar": "/assets/champions/labourdonnais.jpg",
     },
     {
         "id": "staunton",
-        "name": "Г. Стаунтон",
-        "full_name": "Говард Стаунтон",
+        "pgn_name": "Staunton, Howard",
         "era": "1810–1874",
-        "title": "Основатель Английской Школы",
         "rating": 2000,
-        "motto": "Фланговый зажим центра, прочная структура и классический расчёт.",
         "avatar": "/assets/champions/staunton.jpg",
     },
     {
         "id": "anderssen",
-        "name": "А. Андерсен",
-        "full_name": "Адольф Андерсен",
+        "pgn_name": "Anderssen, Adolf",
         "era": "1818–1879",
-        "title": "Маэстро Бессмертных Партий",
         "rating": 2100,
-        "motto": "Бриллиантовая жертва фигуры ради вскрытия линий и мата королю!",
         "avatar": "/assets/champions/anderssen.jpg",
     },
     {
         "id": "morphy",
-        "name": "Пол Морфи",
-        "full_name": "Пол Чарльз Морфи",
+        "pgn_name": "Morphy, Paul",
         "era": "1837–1884",
-        "title": "Гордость и печаль шахмат",
         "rating": 2150,
-        "motto": "Развивайте все фигуры с темпом и вскрывайте линии для атаки!",
         "avatar": "/assets/champions/morphy.jpg",
     },
     {
         "id": "paulsen",
-        "name": "Л. Паульсен",
-        "full_name": "Луи Паульсен",
+        "pgn_name": "Paulsen, Louis",
         "era": "1833–1891",
-        "title": "Гений Защиты и Двух Слонов",
         "rating": 2080,
-        "motto": "Гибкая оборона, сила двух слонов и глубокие дебютные новинки.",
         "avatar": "/assets/champions/paulsen.jpg",
     },
     {
         "id": "zukertort",
-        "name": "И. Цукерторт",
-        "full_name": "Иоганн Герман Цукерторт",
+        "pgn_name": "Zukertort, Johannes",
         "era": "1842–1888",
-        "title": "Триумфатор Лондона 1883",
         "rating": 2120,
-        "motto": "Универсальная гармония развития и сокрушительные комбинационные бури!",
         "avatar": "/assets/champions/zukertort.jpg",
     },
 ]
@@ -132,7 +114,7 @@ BOT_PASSWORD_MARKER = "!historical_bot_no_login!"
 # Общий бот-пользователь для партий с персоналиями из мастерской: в базе соперник — он,
 # а в PGN и архиве показывается имя персоналии (games.personality_name).
 CUSTOM_BOT_ID = "custom"
-CUSTOM_BOT_USERNAME = "Соперник-из-мастерской"
+CUSTOM_BOT_USERNAME = "workshop_opponent"
 CUSTOM_BOT_RATING = 1500
 
 
@@ -140,8 +122,10 @@ def reserved_bot_usernames() -> set[str]:
     """Имена (и id) ботов, которые нельзя занять при регистрации (сравнение без регистра)."""
     names: set[str] = {CUSTOM_BOT_USERNAME.casefold()}
     for bot in AVAILABLE_BOTS:
-        for value in (bot["id"], bot["name"], bot["full_name"]):
-            names.add(str(value).strip().casefold())
+        names.add(str(bot["id"]).casefold())
+    # Имена-ключи архетипов в архиве («archetype:rusher») правила имён и так не пропускают (двоеточие),
+    # а сами id архетипов занимать нельзя, чтобы игрок не выдавал себя за соперника из лестницы.
+    names.update(archetype_id.casefold() for archetype_id in ARCHETYPES_BY_ID)
     return names
 
 
@@ -161,13 +145,19 @@ class BotMoveRequest(BaseModel):
     fen: str = Field(..., max_length=100, description="Текущая позиция на доске в формате FEN")
 
 
+class BotComment(BaseModel):
+    """Реплика бота: ключ каталога botComments на клиенте и параметры (текст на языке игрока — там)."""
+    key: str
+    params: dict[str, int | str] = Field(default_factory=dict)
+
+
 class BotMoveResponse(BaseModel):
     bot_id: str
     uci: str
     san: str
     fen_after: str
     source: str
-    comment: str
+    comment: BotComment
     thinking_time_ms: int = Field(default=650, description="Рекомендуемое время размышления бота в мс")
 
 
@@ -377,11 +367,10 @@ def _build_pgn_string(
 
 async def _get_or_create_bot_user(db: AsyncSession, bot_id: str) -> User:
     """Находит или создаёт запись бота в таблице пользователей (исторического или общего для персоналий)."""
-    meta = (
-        {"name": CUSTOM_BOT_USERNAME, "rating": CUSTOM_BOT_RATING}
-        if bot_id == CUSTOM_BOT_ID else BOT_METADATA[bot_id]
-    )
-    bot_username = meta["name"]
+    if bot_id == CUSTOM_BOT_ID:
+        bot_username, bot_rating = CUSTOM_BOT_USERNAME, CUSTOM_BOT_RATING
+    else:
+        bot_username, bot_rating = bot_id, int(str(BOT_METADATA[bot_id]["rating"]))
 
     stmt = select(User).where(User.username == bot_username)
     res = await db.execute(stmt)
@@ -391,7 +380,7 @@ async def _get_or_create_bot_user(db: AsyncSession, bot_id: str) -> User:
             return bot_user
         # Имя занято человеком (до запрета регистрации имён ботов) — не приписываем ему
         # партии бота, а заводим бота под служебным именем.
-        bot_username = f"{bot_username} [бот]"
+        bot_username = f"{bot_username}_bot"
         res = await db.execute(select(User).where(User.username == bot_username))
         bot_user = res.scalar_one_or_none()
         if bot_user is not None:
@@ -402,10 +391,10 @@ async def _get_or_create_bot_user(db: AsyncSession, bot_id: str) -> User:
         hashed_password=BOT_PASSWORD_MARKER,
         # Фиксированная «историческая сила» бота — одинаковая во всех категориях: партии
         # с ботом не рейтинговые (is_rated=False), это чисто отображаемое значение.
-        bullet_rating=meta["rating"],
-        blitz_rating=meta["rating"],
-        rapid_rating=meta["rating"],
-        classical_rating=meta["rating"],
+        bullet_rating=bot_rating,
+        blitz_rating=bot_rating,
+        rapid_rating=bot_rating,
+        classical_rating=bot_rating,
         is_bot=True,
     )
     db.add(bot_user)
@@ -473,7 +462,7 @@ async def get_bot_catalog():
         "calibration": bot_calibration.load_calibration().get("meta"),
         "historical": [{"id": b["id"], **strength(str(b["id"]), int(str(b["rating"])))} for b in AVAILABLE_BOTS],
         "archetypes": [
-            {"name": a.name, "bio": a.bio, "config": a.config.model_dump(), **strength(a.key, a.config.target_elo)}
+            {"id": a.id, "config": a.config.model_dump(), **strength(a.key, a.config.target_elo)}
             for a in ARCHETYPES
         ],
     }
@@ -579,7 +568,7 @@ async def _ladder_game_for_save(
     if session is None or found is None:
         raise ApiError(409, "ladder_game_missing")
     _, rung = found
-    expected = (rung.key, None) if rung.kind == "historical" else (CUSTOM_BOT_ID, rung.name)
+    expected = (rung.key, None) if rung.kind == "historical" else (CUSTOM_BOT_ID, rung.key)
     actual = (payload.bot_id, payload.personality_name if payload.bot_id == CUSTOM_BOT_ID else None)
     if actual != expected or payload.player_color != session.color:
         raise ApiError(409, "ladder_game_mismatch")
@@ -597,6 +586,11 @@ async def _resolve_personality_for_save(
         return personality.name, personality_config(personality).target_elo
     if payload.personality_name is None:
         raise ApiError(400, "custom_opponent_missing")
+    # Архетип мастерской (в том числе соперник лестницы) — по ключу «archetype:<id>»: в архиве его имя
+    # покажется на языке игрока.
+    archetype = ARCHETYPES_BY_KEY.get(payload.personality_name)
+    if archetype is not None:
+        return archetype.key, archetype.config.target_elo
     try:
         return validate_personality_name(payload.personality_name), None
     except PydanticCustomError as exc:
@@ -643,9 +637,14 @@ async def save_bot_game(
     category = classify_time_control(payload.base_time_ms, payload.increment_ms)
 
     def _pgn_player(user: User) -> tuple[str, int]:
-        # Соперник-персоналия в PGN — под своим именем и с целевой силой из конфига.
-        if personality_name and user.id == bot_user.id:
-            return personality_name, personality_elo or user.rating_for(category)
+        if user.id == bot_user.id:
+            # Соперник-персоналия — под своим именем (архетип — под английским именем) и с целевой силой.
+            if personality_name:
+                archetype = ARCHETYPES_BY_KEY.get(personality_name)
+                name = archetype.pgn_name if archetype else personality_name
+                return name, personality_elo or user.rating_for(category)
+            # Исторический бот — под именем для PGN, как партии мастеров в архиве.
+            return str(BOT_METADATA[payload.bot_id]["pgn_name"]), user.rating_for(category)
         return user.username, user.rating_for(category)
 
     (white_name, white_elo), (black_name, black_elo) = _pgn_player(white_user), _pgn_player(black_user)
