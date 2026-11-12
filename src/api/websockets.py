@@ -15,6 +15,7 @@ from src.api.deps import get_current_user_ws
 from src.api.fair_play import remember_player_ip
 from src.api.rate_limit import try_consume
 from src.core import observability as obs
+from src.core.errors import error_payload
 from src.db.session import get_session_factory
 from src.models.user import User
 from src.services.anticheat import trusted_premove
@@ -63,9 +64,9 @@ async def _send_active_game_snapshot_if_exists(db: AsyncSession, user: User):
         "game_id": game_id,
         "color": "white" if user.id == white_id else "black",
         "opponent_id": black_id if user.id == white_id else white_id,
-        "white_username": white_user.username if white_user else "Белые",
+        "white_username": white_user.username if white_user else "",
         "white_rating": white_user.rating_for(category) if white_user else 1200,
-        "black_username": black_user.username if black_user else "Черные",
+        "black_username": black_user.username if black_user else "",
         "black_rating": black_user.rating_for(category) if black_user else 1200,
         "is_rated": is_rated_state(state),
         "base_time_ms": int(state.get("base_time_ms", 180000)),
@@ -151,8 +152,19 @@ class ActionContext:
         if self.db.in_transaction():
             await self.db.commit()
 
-    async def error(self, message: str, **extra) -> None:
-        await self.send({"event": "error", "message": message, **extra})
+    async def error(self, code: str, **params) -> None:
+        """Отказ действия: код из реестра src/core/errors.py и параметры — текст соберёт клиент."""
+        await self.send({"event": "error", **error_payload(code, **params)})
+
+    async def reject_move(self, res: dict) -> None:
+        """
+        Отказ в ходе (illegal_move, not_your_turn, version_mismatch, game_inactive) вместе с
+        актуальной позицией: клиент возвращает её на доску. Текста игроку не показывается.
+        """
+        await self.send({
+            "event": "error", "reason": res["reason"], "message": res["reason"],
+            "fen": res.get("fen"), "pgn": res.get("pgn"), "state_version": res.get("state_version"),
+        })
 
 
 @dataclass
@@ -289,7 +301,7 @@ async def _accept_invite(ctx: ActionContext, data: dict) -> None:
 async def _spectate_game(ctx: ActionContext, data: dict) -> None:
     game = await _load_game(data)
     if game.state.get("status") != "in_progress":
-        await ctx.error("Партия уже завершена или не найдена", code="spectate_unavailable")
+        await ctx.error("spectate_unavailable")
         return
 
     await manager.add_spectator(game.game_id, ctx.user.id)
@@ -303,9 +315,9 @@ async def _spectate_game(ctx: ActionContext, data: dict) -> None:
     await ctx.send({
         "event": "spectate_started",
         "game_id": game.game_id,
-        "white_username": white_user.username if white_user else "Белые",
+        "white_username": white_user.username if white_user else "",
         "white_rating": white_user.rating_for(category) if white_user else 1200,
-        "black_username": black_user.username if black_user else "Черные",
+        "black_username": black_user.username if black_user else "",
         "black_rating": black_user.rating_for(category) if black_user else 1200,
         "is_rated": is_rated_state(game.state),
         "base_time_ms": int(game.state.get("base_time_ms", 180000)),
@@ -346,7 +358,7 @@ async def _chat_message(ctx: ActionContext, data: dict) -> None:
     if ctx.user.id not in (game.white_id, game.black_id):
         # Писать в чат партии могут только игроки: зрители (и кто угодно, знающий id партии)
         # не должны спамить или подсказывать ходы.
-        await ctx.error("Писать в чат партии могут только её участники", code="chat_forbidden")
+        await ctx.error("chat_forbidden")
         return
 
     await game.broadcast({
@@ -367,7 +379,7 @@ async def _abort_game(ctx: ActionContext, data: dict) -> None:
     game = await _participant_game(ctx, data, in_progress=True)
     abort_res = await state_manager.abort_game(ctx.db, game.game_id)
     if abort_res.get("status") == "error":
-        await ctx.error(abort_res.get("reason", "Cannot abort game"))
+        await ctx.error(abort_res.get("code", "game_not_in_progress"))
         return
 
     await game.broadcast({
@@ -408,7 +420,7 @@ async def _offer_draw(ctx: ActionContext, data: dict) -> None:
     version = str(game.state.get("state_version", 0))
     offered_key = f"draw_offered_at_{ctx.user.id}"
     if str(game.state.get(offered_key, "")) == version:
-        await ctx.error("Ничью можно предложить один раз за ход", code="draw_offer_too_soon")
+        await ctx.error("draw_offer_too_soon")
         return
     # Атомарно и только пока партия идёт: обычный hset после завершения воссоздал бы
     # в Redis «огрызок» состояния без игроков.
@@ -427,7 +439,7 @@ async def _accept_draw(ctx: ActionContext, data: dict) -> None:
     game = await _participant_game(ctx, data, in_progress=True)
     draw_offer = str(game.state.get("draw_offer") or "")
     if not draw_offer.isdigit() or int(draw_offer) == ctx.user.id:
-        await ctx.error("No active draw offer to accept")
+        await ctx.error("no_draw_offer")
         return
 
     def _draw_offer_still_valid(fresh: dict, acceptor_id: int = ctx.user.id) -> bool:
@@ -478,7 +490,7 @@ async def _accept_rematch(ctx: ActionContext, data: dict) -> None:
     game = await _participant_game(ctx, data, in_progress=False)
     rematch_offer = str(game.state.get("rematch_offer") or "")
     if not rematch_offer.isdigit() or int(rematch_offer) == ctx.user.id:
-        await ctx.error("No active rematch offer to accept")
+        await ctx.error("no_rematch_offer")
         return
 
     # Оповещение обоих игроков — внутри start_pvp_game. Если кто-то уже начал другую партию,
@@ -576,9 +588,7 @@ async def _make_move(ctx: ActionContext, data: dict) -> None:
     if res["status"] == "ignored":
         return
     if res["status"] == "error":
-        await ctx.error(
-            res["reason"], fen=res.get("fen"), pgn=res.get("pgn"), state_version=res.get("state_version"),
-        )
+        await ctx.reject_move(res)
         return
 
     game = GameRef(gid, {}, res["white_id"], res["black_id"])
@@ -648,11 +658,11 @@ async def _dispatch_action(
             outcome = obs.OUTCOME_IGNORED
         except MatchmakingError as mm_err:
             outcome = obs.OUTCOME_REJECTED
-            await ctx.error(mm_err.message, code=mm_err.code)
+            await ctx.error(mm_err.code, **mm_err.params)
         except Exception:
             outcome = obs.OUTCOME_ERROR
             logger.exception("Error processing WS action '%s' for user %s", action_name, user.id)
-            await ctx.error("Internal server error processing action")
+            await ctx.error("internal_error")
     # action_name — ключ из ACTION_HANDLERS, то есть конечный набор значений метки.
     obs.WS_ACTIONS.labels(action_name, outcome).inc()
     obs.WS_ACTION_SECONDS.labels(action_name).observe(time.perf_counter() - start)
@@ -707,12 +717,7 @@ async def _within_rate_limit(user_id: int, action_name: str) -> bool:
 
 
 async def _reject_rate_limited(user: User, action_name: str, data: dict) -> None:
-    payload: dict[str, Any] = {
-        "event": "error",
-        "code": "rate_limited",
-        "action": action_name,
-        "message": "Слишком много действий подряд, подождите немного",
-    }
+    payload: dict[str, Any] = {"event": "error", "action": action_name, **error_payload("rate_limited")}
     if action_name == "make_move" and data.get("game_id"):
         # Клиент уже показал ход на доске — возвращаем ему актуальную позицию.
         try:
@@ -733,7 +738,7 @@ async def _handle_message(
     """Разбирает и выполняет одно сообщение. False — сообщение отклонено (засчитывается в флуд)."""
     if len(raw) > WS_MAX_MESSAGE_CHARS:
         await manager.send_personal_message(
-            {"event": "error", "code": "message_too_large", "message": "Слишком длинное сообщение"}, user.id,
+            {"event": "error", **error_payload("message_too_large")}, user.id,
         )
         return False
     try:

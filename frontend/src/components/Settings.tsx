@@ -12,11 +12,12 @@ import {
     getSavedBoardThemeKey,
     getSavedPieceSetKey,
 } from '../config/boardAppearance';
-import {readErrorDetail} from '../services/apiErrors';
+import {readApiErrorOr} from '../services/apiErrors';
 import {gameSocket} from '../services/gameSocket';
 import {soundEngine} from '../services/soundEngine';
 import {useI18n} from '../i18n';
-import type {MessageKey, Params} from '../i18n';
+import {renderUiMessage} from '../i18n';
+import type {UiMessage} from '../i18n';
 import LanguageSwitcher from './LanguageSwitcher';
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -40,9 +41,6 @@ const optionClass = (active: boolean) =>
             : 'bg-black/35 border-amber-900/40 text-boxwood/85 hover:border-amber-600/60'
     }`;
 
-/** Ошибка смены пароля: ключ каталога (переводится при показе) или текст ответа сервера. */
-type PasswordError = { key: MessageKey; params?: Params } | { text: string };
-
 export default function Settings({token, username, onTokenChange, onLogoutEverywhere}: SettingsProps) {
     const {t} = useI18n();
     const [boardThemeKey, setBoardThemeKey] = useState(() => getSavedBoardThemeKey());
@@ -52,7 +50,7 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [repeatPassword, setRepeatPassword] = useState('');
-    const [passwordError, setPasswordError] = useState<PasswordError | null>(null);
+    const [passwordError, setPasswordError] = useState<UiMessage | null>(null);
     const [passwordSaved, setPasswordSaved] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
@@ -99,8 +97,7 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                 body: JSON.stringify({current_password: currentPassword, new_password: newPassword}),
             });
             if (!res.ok) {
-                const detail = await readErrorDetail(res, '');
-                setPasswordError(detail ? {text: detail} : {key: 'settings.passwordChangeFailed'});
+                setPasswordError(await readApiErrorOr(res, 'settings.passwordChangeFailed'));
                 return;
             }
             const data = await res.json();
@@ -261,7 +258,7 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                             {passwordError && (
                                 <div role="alert"
                                      className="text-sm text-red-200 bg-red-950/70 border border-red-800 rounded px-3 py-2">
-                                    {'text' in passwordError ? passwordError.text : t(passwordError.key, passwordError.params)}
+                                    {renderUiMessage(passwordError, t)}
                                 </div>
                             )}
                             {passwordSaved && (

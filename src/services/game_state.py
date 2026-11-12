@@ -1017,11 +1017,11 @@ class GameStateManager:
         """
         state = await self.get_game_state(game_id)
         if not state or state.get("status") != "in_progress":
-            return {"status": "error", "reason": "Game is not in progress"}
+            return {"status": "error", "reason": "Game is not in progress", "code": "game_not_in_progress"}
 
         state_version = int(state.get("state_version", 0))
         if state_version >= 2:
-            return {"status": "error", "reason": "Cannot abort game after move 1"}
+            return {"status": "error", "reason": "Cannot abort game after move 1", "code": "abort_too_late"}
 
         white_id = int(state["white_id"])
         black_id = int(state["black_id"])
@@ -1035,7 +1035,7 @@ class GameStateManager:
             game_id, "*", "aborted", status="aborted", guard=_abort_allowed,
         )
         if not claimed:
-            return {"status": "error", "reason": "Game is not in progress"}
+            return {"status": "error", "reason": "Game is not in progress", "code": "game_not_in_progress"}
 
         await self.redis.srem("active_games", str(game_id))
         await self.redis.delete(f"user:{white_id}:current_game")

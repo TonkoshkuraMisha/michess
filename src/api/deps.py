@@ -1,8 +1,9 @@
-from fastapi import Depends, HTTPException, Query, WebSocketException, status
+from fastapi import Depends, Query, WebSocketException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from src.core.config import settings
+from src.core.errors import ApiError
 from src.core.security import InvalidTokenError, decode_user_token
 from src.db import redis as redis_module
 from src.db.session import get_db, get_session_factory
@@ -38,11 +39,7 @@ async def get_current_user(
     """
     user = await user_from_token(db, token)
     if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Could not validate credentials",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise ApiError(status.HTTP_401_UNAUTHORIZED, "not_authenticated", headers={"WWW-Authenticate": "Bearer"})
     return user
 
 

@@ -161,3 +161,22 @@ async def test_unknown_chat_preset_is_ignored(game, preset):
     socket = await _run(_user(901), [{"action": "chat_message", "game_id": game, "preset": preset}])
     assert socket.events("chat_message") == []
 
+
+
+async def test_ws_error_is_a_code_with_params_and_english_message(game):
+    """Отказ действия — код из реестра: текст на языке игрока соберёт клиент."""
+    socket = await _run(_user(950), [{"action": "chat_message", "game_id": game, "text": "привет"}])
+    (error,) = socket.events("error")
+    assert error == {
+        "event": "error", "code": "chat_forbidden", "params": {},
+        "message": "Only the players of the game can write in its chat",
+    }
+
+
+async def test_rejected_move_has_no_code_but_returns_the_position(game):
+    """Отказ в ходе — без кода (клиент не показывает текст), но с позицией для синхронизации доски."""
+    socket = await _run(_user(902), [{"action": "make_move", "game_id": game, "move": "e7e5", "state_version": 0}])
+    (error,) = socket.events("error")
+    assert "code" not in error
+    assert error["reason"] == "not_your_turn"
+    assert error["state_version"] == 0 and error["fen"]

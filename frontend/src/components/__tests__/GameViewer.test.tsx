@@ -219,13 +219,16 @@ describe('GameViewer', () => {
     it('ошибка валидации (detail — список) не роняет страницу', async () => {
         stubApi({
             pgn: {ok: true, text: FOOLS_MATE_PGN},
-            analyze: {ok: false, status: 422, body: {detail: [{loc: ['path', 'game_id'], msg: 'Input should be a valid integer'}]}},
+            analyze: {
+                ok: false, status: 422,
+                body: {detail: [{type: 'int_parsing', loc: ['path', 'game_id'], msg: 'Input should be a valid integer', params: {}}]},
+            },
         });
         renderViewer();
 
         fireEvent.click(await screen.findByRole('button', {name: 'Компьютерный анализ'}));
 
-        expect(await screen.findByText('Input should be a valid integer')).toBeInTheDocument();
+        expect(await screen.findByText('game_id: некорректное значение')).toBeInTheDocument();
     });
 
     it('пустой анализ партии с ходами — понятная ошибка вместо «100 %» без графика', async () => {

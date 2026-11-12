@@ -3,19 +3,14 @@
 import {useEffect, useState} from 'react';
 import {LogIn, UserPlus, X} from 'lucide-react';
 import {API_BASE_URL} from '../config/api';
-import {readErrorDetail} from '../services/apiErrors';
+import {UiError, errorMessage, readApiErrorOr, serverErrorMessage} from '../services/apiErrors';
 import {offerGuestPersonalityTransfer} from '../services/personalities';
 import {useI18n} from '../i18n';
-import type {MessageKey} from '../i18n';
+import {renderUiMessage, uiMessage} from '../i18n';
+import type {UiMessage} from '../i18n';
 
-/** Сообщение под заголовком: ключ каталога (переводится при показе) или текст ответа сервера. */
-type Feedback = { tone: 'error' | 'success' } & ({ key: MessageKey } | { text: string });
-
-class FeedbackError extends Error {
-    constructor(readonly feedback: Feedback) {
-        super('text' in feedback ? feedback.text : feedback.key);
-    }
-}
+/** Сообщение под заголовком: ошибка (ответ сервера по коду или своя) или успех регистрации. */
+type Feedback = { tone: 'error' | 'success'; message: UiMessage };
 
 interface AuthModalProps {
     onSuccess: (token: string) => void;
@@ -60,13 +55,9 @@ export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
 
                 if (!res.ok) {
                     // 429 — превышен лимит попыток: показываем, сколько ждать, а не «неверный пароль».
-                    if (res.status === 429) {
-                        const detail = await readErrorDetail(res, '');
-                        throw new FeedbackError(detail
-                            ? {tone: 'error', text: detail}
-                            : {tone: 'error', key: 'auth.tooManyAttempts'});
-                    }
-                    throw new FeedbackError({tone: 'error', key: 'auth.wrongCredentials'});
+                    throw new UiError(await readApiErrorOr(
+                        res, res.status === 429 ? 'auth.tooManyAttempts' : 'auth.wrongCredentials',
+                    ));
                 }
                 const data = await res.json();
                 localStorage.setItem('token', data.access_token);
@@ -76,12 +67,17 @@ export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
                     .then((result) => {
                         if (result?.skipped.length) {
                             const list = result.skipped
-                                .map((s) => t('auth.importSkippedItem', {name: s.name, reason: s.reason}))
+                                .map((s) => t('auth.importSkippedItem', {
+                                    name: s.name,
+                                    reason: renderUiMessage(
+                                        serverErrorMessage(s.reason, s.params) ?? {text: s.reason}, t,
+                                    ),
+                                }))
                                 .join('; ');
                             window.alert(t('auth.importSkipped', {list}));
                         }
                     })
-                    .catch((err: Error) => window.alert(err.message));
+                    .catch((err) => window.alert(renderUiMessage(errorMessage(err, 'workshop.importFailed'), t)));
             } else {
                 // Регистрация
                 const res = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
@@ -91,19 +87,15 @@ export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
                 });
 
                 if (!res.ok) {
-                    const detail = await readErrorDetail(res, '');
-                    throw new FeedbackError(detail
-                        ? {tone: 'error', text: detail}
-                        : {tone: 'error', key: 'auth.registrationFailed'});
+                    throw new UiError(await readApiErrorOr(res, 'auth.registrationFailed'));
                 }
 
                 // Автоматический вход после успешной регистрации
                 setIsLogin(true);
-                setFeedback({tone: 'success', key: 'auth.registered'});
+                setFeedback({tone: 'success', message: uiMessage('auth.registered')});
             }
         } catch (err) {
-            if (err instanceof FeedbackError) setFeedback(err.feedback);
-            else setFeedback({tone: 'error', key: 'common.noConnection'});
+            setFeedback({tone: 'error', message: errorMessage(err, 'common.noConnection')});
         } finally {
             setLoading(false);
         }
@@ -154,7 +146,7 @@ export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
                     <div
                         role={feedback.tone === 'error' ? 'alert' : 'status'}
                         className={`p-3 mb-4 rounded text-xs text-center border ${feedback.tone === 'success' ? 'bg-emerald-950/60 border-emerald-600/50 text-emerald-200' : 'bg-red-950/80 border-red-800/50 text-red-200'}`}>
-                        {'text' in feedback ? feedback.text : t(feedback.key)}
+                        {renderUiMessage(feedback.message, t)}
                     </div>
                 )}
 

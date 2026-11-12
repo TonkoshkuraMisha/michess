@@ -3,7 +3,7 @@
 import time
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from sqlalchemy import and_, asc, case, desc, func, or_, select
@@ -12,6 +12,7 @@ from sqlalchemy.orm import aliased
 
 from src.api.bots import CUSTOM_BOT_USERNAME
 from src.api.deps import get_current_user
+from src.core.errors import ApiError
 from src.db.seed import ensure_champion_seeded, extract_pgn_metadata, get_champion_meta
 from src.db.session import get_db
 from src.models.game import Game, GameStatus
@@ -90,9 +91,9 @@ async def _build_active_game_payload(db: AsyncSession, game_id: int, user_id: in
         "game_id": int(game_id),
         "color": "white" if int(user_id) == white_id else "black",
         "opponent_id": black_id if int(user_id) == white_id else white_id,
-        "white_username": white_user.username if white_user else "Белые",
+        "white_username": white_user.username if white_user else "",
         "white_rating": white_user.rating_for(category) if white_user else 1200,
-        "black_username": black_user.username if black_user else "Черные",
+        "black_username": black_user.username if black_user else "",
         "black_rating": black_user.rating_for(category) if black_user else 1200,
         "is_rated": is_rated_state(state),
         "base_time_ms": int(state.get("base_time_ms", 180000)),
@@ -205,7 +206,7 @@ async def join_matchmaking_http(
         payload = await _active_game_payload_or_none(db, current_user.id) if err.code == "self_in_game" else None
         if payload:
             return payload
-        raise HTTPException(status_code=409, detail=err.message) from err
+        raise err.to_http(409) from err
     if matched_gid is not None:
         payload = await _build_active_game_payload(db, int(matched_gid), current_user.id)
         if payload:
@@ -236,7 +237,7 @@ async def accept_challenge_http(
     from src.services.matchmaker import MatchmakingError, matchmaker
 
     if int(target_user_id) == current_user.id:
-        raise HTTPException(status_code=400, detail="Нельзя принять собственный вызов")
+        raise ApiError(400, "own_challenge")
 
     try:
         game_id = await matchmaker.accept_challenge(
@@ -254,11 +255,11 @@ async def accept_challenge_http(
             if payload:
                 return payload
         status_code = 404 if err.code == "challenge_gone" else 409
-        raise HTTPException(status_code=status_code, detail=err.message) from err
+        raise err.to_http(status_code) from err
 
     payload = await _build_active_game_payload(db, int(game_id), current_user.id)
     if not payload:
-        raise HTTPException(status_code=404, detail="Не удалось инициализировать состояние партии")
+        raise ApiError(404, "game_init_failed")
 
     return payload
 
@@ -310,9 +311,9 @@ async def get_live_games(db: AsyncSession = Depends(get_db)):
             "game_id": gid,
             "white_id": white_id,
             "black_id": black_id,
-            "white_username": white_user.username if white_user else "Белые",
+            "white_username": white_user.username if white_user else "",
             "white_rating": white_user.rating_for(category) if white_user else 1200,
-            "black_username": black_user.username if black_user else "Черные",
+            "black_username": black_user.username if black_user else "",
             "black_rating": black_user.rating_for(category) if black_user else 1200,
             "is_rated": is_rated_state(state),
             "base_time_ms": int(state.get("base_time_ms", 180000)),
@@ -329,7 +330,7 @@ async def get_live_games(db: AsyncSession = Depends(get_db)):
 async def get_user_profile(username: str, db: AsyncSession = Depends(get_db)):
     user = await _resolve_user(db, username)
     if not user:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise ApiError(404, "user_not_found", username=username)
 
     return {
         "id": user.id,
@@ -367,7 +368,7 @@ async def get_user_stats(username: str, db: AsyncSession = Depends(get_db)):
     """
     user = await _resolve_user(db, username)
     if not user:
-        raise HTTPException(status_code=404, detail=f"User {username} not found")
+        raise ApiError(404, "user_not_found", username=username)
 
     is_white = Game.white_player_id == user.id
     won = or_(and_(is_white, Game.result == "1-0"), and_(~is_white, Game.result == "0-1"))
@@ -405,7 +406,7 @@ async def get_rating_history(
     """
     user = await _resolve_user(db, username)
     if not user:
-        raise HTTPException(status_code=404, detail=f"User {username} not found")
+        raise ApiError(404, "user_not_found", username=username)
 
     estimated_ms = Game.base_time_ms + ESTIMATED_MOVES * Game.increment_ms
     lower, upper = category_duration_bounds_ms(category)
@@ -461,7 +462,7 @@ async def get_user_games(
 ):
     user = await _resolve_user(db, username)
     if not user:
-        raise HTTPException(status_code=404, detail=f"User {username} not found")
+        raise ApiError(404, "user_not_found", username=username)
 
     WhiteUser = aliased(User)
     BlackUser = aliased(User)
@@ -597,7 +598,7 @@ async def get_game_summary(game_id: int, db: AsyncSession = Depends(get_db)):
     """
     game = await db.get(Game, game_id)
     if not game:
-        raise HTTPException(status_code=404, detail="Game not found")
+        raise ApiError(404, "game_not_found", game_id=game_id)
     return {
         "game_id": game.id,
         "status": game.status.value,
@@ -612,7 +613,7 @@ async def get_game_summary(game_id: int, db: AsyncSession = Depends(get_db)):
 async def download_pgn(game_id: int, db: AsyncSession = Depends(get_db)):
     game = await db.get(Game, game_id)
     if not game or not game.pgn:
-        raise HTTPException(status_code=404, detail="Game or PGN not found")
+        raise ApiError(404, "pgn_not_found", game_id=game_id)
 
     headers = {"Content-Disposition": f"attachment; filename=michess_game_{game_id}.pgn"}
     return PlainTextResponse(content=game.pgn, media_type="application/x-chess-pgn", headers=headers)

@@ -10,10 +10,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.fair_play import forbid_engine_help_during_game
 from src.api.ladder import note_ladder_analysis
 from src.api.rate_limit import rate_limit
+from src.core.errors import ApiError, DomainValueError
 from src.db.session import get_db
 from src.models.game import Game
 from src.schemas.analysis import FullGameAnalysisResponse, PositionAnalysisRequest
-from src.services.analysis_service import GameNotFinishedError, analysis_service, ensure_game_finished
+from src.services.analysis_service import (
+    GameDataNotFoundError,
+    GameNotFinishedError,
+    analysis_service,
+    ensure_game_finished,
+)
 from src.services.engine_pool import EngineBusyError
 from src.services.game_engine import InvalidStartPositionError
 
@@ -38,11 +44,7 @@ async def _game_analysis_lock(game_id: int):
 
 
 def _engine_busy() -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-        detail="Движок сейчас занят, повторите запрос через несколько секунд",
-        headers={"Retry-After": "5"},
-    )
+    return ApiError(status.HTTP_503_SERVICE_UNAVAILABLE, "engine_busy", headers={"Retry-After": "5"})
 
 
 @router.post(
@@ -66,7 +68,7 @@ async def analyze_game_position(
     try:
         return await analysis_service.analyze_position(db, request.moves, request.start_fen)
     except InvalidStartPositionError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise exc.to_http(400) from exc
     except EngineBusyError:
         raise _engine_busy() from None
 
@@ -79,11 +81,11 @@ async def get_cached_game_analysis(
     """Возвращает уже сохранённый компьютерный анализ завершённой партии из БД, если он есть."""
     game = await db.get(Game, game_id)
     if not game:
-        raise HTTPException(status_code=404, detail=f"Партия {game_id} не найдена")
+        raise ApiError(404, "game_not_found", game_id=game_id)
     try:
         ensure_game_finished(game)
     except GameNotFinishedError as exc:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+        raise exc.to_http(status.HTTP_409_CONFLICT) from exc
     if not game.analysis_json:
         return None
     try:
@@ -112,11 +114,11 @@ async def analyze_full_game_endpoint(
     async with _game_analysis_lock(game_id):
         try:
             return await analysis_service.analyze_full_game(db, game_id, force=force)
-        except LookupError as exc:
-            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except GameDataNotFoundError as exc:
+            raise exc.to_http(404) from exc
         except GameNotFinishedError as exc:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+            raise exc.to_http(status.HTTP_409_CONFLICT) from exc
         except EngineBusyError:
             raise _engine_busy() from None
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except DomainValueError as exc:
+            raise exc.to_http(400) from exc

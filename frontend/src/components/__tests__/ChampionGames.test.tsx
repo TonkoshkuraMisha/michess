@@ -210,10 +210,13 @@ describe('ChampionGames', () => {
     });
 
     it('ошибка валидации со списком detail не роняет страницу', async () => {
-        stubGames(() => ({ok: false, status: 422, body: {detail: [{msg: 'Value error, limit too large'}]}}));
+        stubGames(() => ({
+            ok: false, status: 422,
+            body: {detail: [{type: 'less_than_equal', loc: ['query', 'limit'], msg: '…', params: {le: 100}}]},
+        }));
         renderChampion();
 
-        expect(await screen.findByText('limit too large')).toBeInTheDocument();
+        expect(await screen.findByText('limit: должно быть не больше 100')).toBeInTheDocument();
     });
 
     it('ответ без тела — текст по умолчанию', async () => {

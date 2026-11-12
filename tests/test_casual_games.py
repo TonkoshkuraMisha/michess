@@ -6,7 +6,6 @@
 
 import pytest
 
-from src.api import fair_play
 from src.api.websockets import create_rematch_game
 from src.models.game import Game, GameStatus
 from src.models.user import User
@@ -189,4 +188,4 @@ async def test_engine_help_is_closed_in_casual_games_too(client, db_session, tes
         "/api/v1/analysis/position", json={"moves": ["e4"]}, headers={"Authorization": f"Bearer {token_user_1}"},
     )
     assert response.status_code == 409
-    assert response.json()["detail"] == fair_play.IN_GAME_DETAIL
+    assert response.json()["detail"]["code"] == "engine_locked_in_game"

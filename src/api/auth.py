@@ -1,6 +1,6 @@
 import secrets
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.deps import WS_TICKET_PREFIX, get_current_user
 from src.api.rate_limit import client_ip, enforce_rate_limit, ensure_below_limit, record_attempt
 from src.core.config import settings
+from src.core.errors import ApiError
 from src.core.security import create_user_token, get_password_hash, verify_password
 from src.db import redis as redis_module
 from src.db.session import get_db
@@ -25,9 +26,6 @@ RESERVED_USERNAMES = frozenset({
     "admin", "administrator", "moderator", "support", "system", "root",
     "michess", "bot", "guest", "anonymous", "null", "undefined",
 })
-
-DUPLICATE_USERNAME_DETAIL = "Username already registered."
-LOGIN_FAILED_DETAIL = "Incorrect username or password"
 
 # Хэш для сравнения, когда пользователя нет: ответ занимает столько же времени, что и при
 # неверном пароле, и по времени нельзя узнать, существует ли аккаунт.
@@ -54,14 +52,11 @@ async def register_user(user_in: UserCreate, request: Request, db: AsyncSession 
     await enforce_rate_limit(
         "register", f"ip:{client_ip(request)}",
         settings.RATE_LIMIT_REGISTER_PER_IP, settings.RATE_LIMIT_REGISTER_WINDOW_S,
-        "Слишком много регистраций с этого адреса, попробуйте позже",
+        "too_many_registrations",
     )
 
     if _is_reserved(user_in.username):
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Это имя зарезервировано за историческим ботом или служебной страницей."
-        )
+        raise ApiError(status.HTTP_400_BAD_REQUEST, "username_reserved")
 
     key = username_key(user_in.username)
     # username_key есть у аккаунтов с паролем; архивные игроки из PGN и боты его не имеют,
@@ -71,7 +66,7 @@ async def register_user(user_in: UserCreate, request: Request, db: AsyncSession 
         func.lower(User.username) == user_in.username.lower(),
     )))
     if result.first() is not None:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=DUPLICATE_USERNAME_DETAIL)
+        raise ApiError(status.HTTP_400_BAD_REQUEST, "username_taken")
 
     new_user = User(
         username=user_in.username,
@@ -84,7 +79,7 @@ async def register_user(user_in: UserCreate, request: Request, db: AsyncSession 
     except IntegrityError:
         # Параллельная регистрация того же имени (в другом регистре) — уникальный индекс в БД.
         await db.rollback()
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=DUPLICATE_USERNAME_DETAIL) from None
+        raise ApiError(status.HTTP_400_BAD_REQUEST, "username_taken") from None
     await db.refresh(new_user)
 
     return new_user
@@ -115,13 +110,13 @@ async def login(
     await enforce_rate_limit(
         "login", f"ip:{client_ip(request)}",
         settings.RATE_LIMIT_LOGIN_PER_IP, settings.RATE_LIMIT_LOGIN_WINDOW_S,
-        "Слишком много попыток входа, попробуйте через минуту",
+        "too_many_login_attempts",
     )
     account = f"account:{username_key(form_data.username)}"
     await ensure_below_limit(
         "login_failures", account,
         settings.RATE_LIMIT_LOGIN_FAILURES_PER_ACCOUNT, settings.RATE_LIMIT_LOGIN_FAILURES_WINDOW_S,
-        "Слишком много неудачных попыток входа в этот аккаунт, попробуйте позже",
+        "account_login_locked",
     )
 
     user = await _find_login_user(db, form_data.username)
@@ -129,11 +124,7 @@ async def login(
 
     if user is None or not password_ok:
         await record_attempt("login_failures", account, settings.RATE_LIMIT_LOGIN_FAILURES_WINDOW_S)
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail=LOGIN_FAILED_DETAIL,
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise ApiError(status.HTTP_401_UNAUTHORIZED, "login_failed", headers={"WWW-Authenticate": "Bearer"})
 
     access_token = create_user_token(user)
 
@@ -151,7 +142,7 @@ async def issue_ws_ticket(current_user: User = Depends(get_current_user)):
     """
     await enforce_rate_limit(
         "ws_ticket", f"user:{current_user.id}", settings.RATE_LIMIT_WS_TICKETS, 60,
-        "Слишком частые переподключения, попробуйте через минуту",
+        "too_many_reconnects",
     )
     ticket = secrets.token_urlsafe(32)
     await redis_module.redis_client.set(
@@ -196,11 +187,11 @@ async def change_password(
     await ensure_below_limit(
         "login_failures", account,
         settings.RATE_LIMIT_LOGIN_FAILURES_PER_ACCOUNT, settings.RATE_LIMIT_LOGIN_FAILURES_WINDOW_S,
-        "Слишком много неудачных попыток, попробуйте позже",
+        "too_many_password_attempts",
     )
     if not verify_password(payload.current_password, current_user.hashed_password):
         await record_attempt("login_failures", account, settings.RATE_LIMIT_LOGIN_FAILURES_WINDOW_S)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Текущий пароль указан неверно")
+        raise ApiError(status.HTTP_400_BAD_REQUEST, "wrong_current_password")
 
     current_user.hashed_password = get_password_hash(payload.new_password)
     await _revoke_all_tokens(db, current_user)

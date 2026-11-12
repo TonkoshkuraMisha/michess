@@ -72,7 +72,7 @@ def test_metrics_scrapes_are_not_counted(client):
 @pytest.mark.parametrize("raised, outcome", [
     (None, obs.OUTCOME_OK),
     (ws_module._Ignore(), obs.OUTCOME_IGNORED),
-    (MatchmakingError("busy", "Соперник занят"), obs.OUTCOME_REJECTED),
+    (MatchmakingError("opponent_in_game"), obs.OUTCOME_REJECTED),
     (RuntimeError("boom"), obs.OUTCOME_ERROR),
 ])
 async def test_ws_action_outcome_and_duration_are_recorded(silent_send, raised, outcome):

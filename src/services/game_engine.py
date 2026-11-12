@@ -7,12 +7,14 @@ import re
 import chess
 import chess.pgn
 
+from src.core.errors import DomainValueError
+
 logger = logging.getLogger(__name__)
 
 STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
 
-class InvalidStartPositionError(ValueError):
+class InvalidStartPositionError(DomainValueError):
     """Начальная позиция не разбирается или невозможна по правилам."""
 
 
@@ -29,9 +31,9 @@ def board_from_start_fen(start_fen: str | None) -> chess.Board:
     try:
         board = chess.Board(start_fen.strip())
     except ValueError:
-        raise InvalidStartPositionError("Некорректный формат FEN начальной позиции") from None
+        raise InvalidStartPositionError("invalid_fen") from None
     if not board.is_valid():
-        raise InvalidStartPositionError("Начальная позиция невозможна по правилам шахмат")
+        raise InvalidStartPositionError("invalid_position")
     return board
 
 

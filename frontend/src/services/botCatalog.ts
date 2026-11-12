@@ -8,7 +8,8 @@
 
 import {API_BASE_URL} from '../config/api';
 import type {PersonalityConfig} from './personalities';
-import {t} from '../i18n';
+import {t, uiMessage} from '../i18n';
+import {UiError} from './apiErrors';
 
 export interface BotStrength {
     declared_rating: number;
@@ -36,7 +37,7 @@ export function fetchBotCatalog(): Promise<BotCatalog> {
     if (!cached) {
         cached = fetch(`${API_BASE_URL}/api/v1/bots/catalog`)
             .then((res) => {
-                if (!res.ok) throw new Error(t('workshop.catalogUnavailable'));
+                if (!res.ok) throw new UiError(uiMessage('workshop.catalogUnavailable'));
                 return res.json() as Promise<BotCatalog>;
             })
             .catch((err) => {
