@@ -139,14 +139,6 @@ export const TIME_CONTROLS: TimeControlGroup[] = [
                 details: 'Стандартный рапид FIDE (15+10)'
             },
             {
-                id: 'rapid-30+0',
-                category: 'rapid',
-                base: 30,
-                inc: 0,
-                label: '30 мин',
-                details: 'Долгий рапид без добавления'
-            },
-            {
                 id: 'rapid-manual',
                 category: 'rapid',
                 base: 15,
@@ -161,6 +153,16 @@ export const TIME_CONTROLS: TimeControlGroup[] = [
         category: 'classical',
         title: 'Классика',
         options: [
+            {
+                // 30 минут без добавления — уже классика: сервер (classify_time_control) относит партию
+                // к категории по оценке «база + 40 × добавление», порог классики — 25 минут.
+                id: 'classical-30+0',
+                category: 'classical',
+                base: 30,
+                inc: 0,
+                label: '30 мин',
+                details: 'Партия на полчаса без добавления'
+            },
             {
                 id: 'classical-30+20',
                 category: 'classical',

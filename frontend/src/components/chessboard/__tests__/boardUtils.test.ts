@@ -106,3 +106,22 @@ describe('партия с произвольной начальной позиц
         ]);
     });
 });
+
+describe('контроль времени: группа совпадает с категорией рейтинга на сервере', () => {
+    // То же правило, что src/services/rating.py: оценка длительности — база + 40 ходов × добавление.
+    const serverCategory = (baseMinutes: number, incSeconds: number) => {
+        const estimatedSeconds = baseMinutes * 60 + 40 * incSeconds;
+        if (estimatedSeconds < 180) return 'bullet';
+        if (estimatedSeconds < 480) return 'blitz';
+        if (estimatedSeconds < 1500) return 'rapid';
+        return 'classical';
+    };
+
+    it.each(TIME_CONTROLS.flatMap((group) => group.options.map((option) => [option.id, group.category, option] as const)))(
+        '%s лежит в группе той категории, в которой изменится рейтинг',
+        (_id, groupCategory, option) => {
+            expect(option.category).toBe(groupCategory);
+            expect(serverCategory(option.base, option.inc)).toBe(groupCategory);
+        },
+    );
+});
