@@ -6,6 +6,7 @@
  * их вместе с измеренной силой через GET /bots/catalog (services/botCatalog.ts).
  */
 
+import {t} from '../i18n';
 import type {PersonalityConfig} from '../services/personalities';
 import type {HistoricalBotProfile} from './champions';
 
@@ -30,10 +31,16 @@ export function customBotProfile(opponent: CustomOpponent): HistoricalBotProfile
         name: opponent.name,
         shortName: opponent.name,
         playerLabel: opponent.name,
-        title: 'Соперник из мастерской',
-        era: 'Собран игроком',
+        get title() {
+            return t('bots.workshopTitle');
+        },
+        get era() {
+            return t('bots.workshopEra');
+        },
         rating: opponent.config.target_elo,
-        motto: opponent.bio || 'Сыграем — и посмотрим, чей характер сильнее.',
+        get motto() {
+            return opponent.bio || t('bots.workshopMotto');
+        },
         avatar: WORKSHOP_AVATAR,
         fallbackAvatar: WORKSHOP_AVATAR,
     };
@@ -43,18 +50,25 @@ export function customBotProfile(opponent: CustomOpponent): HistoricalBotProfile
  * Наглядная сводка ползунков для радара (0..100). Это иллюстрация характера, а не измерение силы:
  * измеренная сила — таск 10.4.
  */
-export function styleRadar(config: PersonalityConfig): { axis: string; value: number }[] {
+export type RadarAxis = 'attack' | 'defense' | 'tactics' | 'position' | 'endgame';
+
+export function styleRadar(config: PersonalityConfig): { key: RadarAxis; axis: string; value: number }[] {
     const clamp = (v: number) => Math.round(Math.max(0, Math.min(100, v)));
     const attack = (config.aggression + 100) / 2;
     const precision = 100 - Math.min(config.blunder_guard_cp, 400) / 4;
     const strength = ((config.target_elo - 600) / 2200) * 100;
-    return [
-        {axis: 'Атака', value: clamp(attack * 0.7 + config.mobility * 0.15)},
-        {axis: 'Защита', value: clamp((100 - attack) * 0.5 + config.king_safety * 0.25)},
-        {axis: 'Тактика', value: clamp(attack * 0.3 + precision * 0.3 + strength * 0.4 - config.randomness * 0.2)},
-        {axis: 'Позиция', value: clamp(config.center_control * 0.25 + config.pawn_structure * 0.25)},
-        {axis: 'Эндшпиль', value: clamp(config.pawn_structure * 0.2 + strength * 0.6)},
-    ];
+    const values: Record<RadarAxis, number> = {
+        attack: clamp(attack * 0.7 + config.mobility * 0.15),
+        defense: clamp((100 - attack) * 0.5 + config.king_safety * 0.25),
+        tactics: clamp(attack * 0.3 + precision * 0.3 + strength * 0.4 - config.randomness * 0.2),
+        position: clamp(config.center_control * 0.25 + config.pawn_structure * 0.25),
+        endgame: clamp(config.pawn_structure * 0.2 + strength * 0.6),
+    };
+    return (Object.keys(values) as RadarAxis[]).map((key) => ({
+        key,
+        axis: t(`workshop.radar.${key}`),
+        value: values[key],
+    }));
 }
 
 const STOCKFISH_MIN_ELO = 1320;
@@ -64,7 +78,7 @@ export function strengthNote(config: PersonalityConfig): string {
     const elo = config.target_elo;
     if (elo < STOCKFISH_MIN_ELO) {
         const errors = Math.round((0.5 * (STOCKFISH_MIN_ELO - elo) / (STOCKFISH_MIN_ELO - 600)) * 100);
-        return `Целевая сила ~${elo}. Движок слабее 1320 не играет, поэтому примерно в ${errors}% ходов соперник намеренно выберет ход похуже.`;
+        return t('workshop.strengthWithErrors', {elo, errors});
     }
-    return `Целевая сила ~${elo}: движок ограничен этим рейтингом, ошибок «нарочно» нет.`;
+    return t('workshop.strengthExact', {elo});
 }

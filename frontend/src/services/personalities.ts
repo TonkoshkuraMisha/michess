@@ -11,6 +11,7 @@
 
 import {API_BASE_URL} from '../config/api';
 import {readErrorDetail} from './apiErrors';
+import {t, tp} from '../i18n';
 
 export interface PieceValues {
     pawn: number;
@@ -90,12 +91,12 @@ function writeGuestPersonalities(items: Personality[]): void {
 export function saveGuestPersonality(draft: PersonalityDraft, id?: string): Personality {
     const items = readGuestPersonalities();
     if (items.some((p) => p.id !== id && sameName(p.name, draft.name))) {
-        throw new Error('Соперник с таким именем уже есть');
+        throw new Error(t('workshop.duplicateName'));
     }
     const now = new Date().toISOString();
     const existing = id ? items.find((p) => p.id === id) : undefined;
     if (!existing && items.length >= MAX_PERSONALITIES) {
-        throw new Error(`Не больше ${MAX_PERSONALITIES} соперников в мастерской — удалите лишних`);
+        throw new Error(t('workshop.tooMany', {max: MAX_PERSONALITIES}));
     }
     const saved: Personality = existing
         ? {...existing, ...draft, updated_at: now}
@@ -122,16 +123,16 @@ async function request<T>(token: string, url: string, init: RequestInit, fallbac
 }
 
 export const listPersonalities = (token: string) =>
-    request<Personality[]>(token, BASE, {method: 'GET'}, 'Не удалось загрузить соперников');
+    request<Personality[]>(token, BASE, {method: 'GET'}, t('workshop.loadFailed'));
 
 export const createPersonality = (token: string, draft: PersonalityDraft) =>
-    request<Personality>(token, BASE, {method: 'POST', body: JSON.stringify(draft)}, 'Не удалось сохранить соперника');
+    request<Personality>(token, BASE, {method: 'POST', body: JSON.stringify(draft)}, t('workshop.saveFailed'));
 
 export const updatePersonality = (token: string, id: number, draft: Partial<PersonalityDraft>) =>
-    request<Personality>(token, `${BASE}/${id}`, {method: 'PUT', body: JSON.stringify(draft)}, 'Не удалось сохранить соперника');
+    request<Personality>(token, `${BASE}/${id}`, {method: 'PUT', body: JSON.stringify(draft)}, t('workshop.saveFailed'));
 
 export const deletePersonality = (token: string, id: number) =>
-    request<void>(token, `${BASE}/${id}`, {method: 'DELETE'}, 'Не удалось удалить соперника');
+    request<void>(token, `${BASE}/${id}`, {method: 'DELETE'}, t('workshop.deleteFailed'));
 
 /** Переносит гостевые персоналии в профиль; в браузере остаются только непоместившиеся. */
 export async function importGuestPersonalities(token: string): Promise<ImportResult> {
@@ -140,7 +141,7 @@ export async function importGuestPersonalities(token: string): Promise<ImportRes
     const result = await request<ImportResult>(token, `${BASE}/import`, {
         method: 'POST',
         body: JSON.stringify({items: guests.map(({name, config}) => ({name, config}))}),
-    }, 'Не удалось перенести соперников');
+    }, t('workshop.importFailed'));
     const moved = new Set(result.created.map((p) => p.name.toLocaleLowerCase()));
     writeGuestPersonalities(guests.filter((p) => !moved.has(p.name.toLocaleLowerCase())));
     return result;
@@ -155,7 +156,7 @@ export async function offerGuestPersonalityTransfer(
     confirm: (message: string) => boolean = (message) => window.confirm(message),
 ): Promise<ImportResult | null> {
     const count = readGuestPersonalities().length;
-    if (!count || !confirm(`В этом браузере сохранено соперников из мастерской: ${count}. Перенести их в профиль?`)) {
+    if (!count || !confirm(tp('auth.importConfirm', count))) {
         return null;
     }
     return importGuestPersonalities(token);

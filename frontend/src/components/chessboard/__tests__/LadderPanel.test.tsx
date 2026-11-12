@@ -4,6 +4,8 @@ import {act, fireEvent, render, screen} from '@testing-library/react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {LadderPanel} from '../LadderPanel';
 import {ladderOutcomeMessage} from '../hooks/useBotGame';
+import {renderStatus} from '../status';
+import {makeI18n} from '../../../i18n';
 
 const STATE = {
     rating: 1032, games: 3, step: 1, total: 3, active_opponent: null,
@@ -69,13 +71,24 @@ describe('LadderPanel', () => {
 describe('итог партии лестницы', () => {
     const base = {delta: 0, rating: 1000, step: 0, promoted: false, opponent: 'Тихоня'};
 
+    const promoted = {...base, counted: true, reason: null, delta: 18, rating: 1018, promoted: true};
+
     it('засчитанная победа', () => {
-        expect(ladderOutcomeMessage({...base, counted: true, reason: null, delta: 18, rating: 1018, promoted: true}))
+        expect(renderStatus(ladderOutcomeMessage(promoted), makeI18n('ru').t))
             .toBe('Лестница: рейтинг 1018 (+18) — открыт следующий соперник!');
     });
 
+    it('итог на всех трёх языках', () => {
+        expect(renderStatus(ladderOutcomeMessage(promoted), makeI18n('en').t))
+            .toBe('Ladder: rating 1018 (+18) — the next opponent is unlocked!');
+        expect(renderStatus(ladderOutcomeMessage(promoted), makeI18n('uk').t))
+            .toBe('Драбина: рейтинг 1018 (+18) — відкрито наступного суперника!');
+        expect(renderStatus(ladderOutcomeMessage({...promoted, delta: -7, rating: 993, promoted: false}), makeI18n('en').t))
+            .toBe('Ladder: rating 993 (-7).');
+    });
+
     it('незасчитанная партия называет причину', () => {
-        expect(ladderOutcomeMessage({...base, counted: false, reason: 'в партии был возврат хода'}))
+        expect(renderStatus(ladderOutcomeMessage({...base, counted: false, reason: 'в партии был возврат хода'}), makeI18n('ru').t))
             .toBe('Партия не засчитана в лестницу: в партии был возврат хода.');
     });
 });

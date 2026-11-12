@@ -4,7 +4,7 @@
 // минимальные заглушки один раз здесь, а не в каждом тестовом файле.
 
 import '@testing-library/jest-dom/vitest';
-import {afterEach} from 'vitest';
+import {afterEach, beforeEach} from 'vitest';
 import {cleanup, configure} from '@testing-library/react';
 
 // Ожидания (findBy*, waitFor) по умолчанию сдаются через 1 с. Когда все файлы тестов идут параллельно
@@ -12,6 +12,14 @@ import {cleanup, configure} from '@testing-library/react';
 // recharts) изредка не успевали отрисоваться, и тест падал при рабочем коде. Ожидание завершается сразу,
 // как только условие выполнено, поэтому запас времени не замедляет зелёные тесты.
 configure({asyncUtilTimeout: 5000});
+
+import {setLanguage} from '../i18n';
+
+// Тесты компонентов написаны против русского интерфейса: язык задаётся явно, а не берётся из jsdom
+// (там en-US). Отдельные тесты переключают язык сами — тогда проверяется и английский, и украинский.
+beforeEach(() => {
+    setLanguage('ru', {persist: false});
+});
 
 afterEach(() => {
     cleanup();

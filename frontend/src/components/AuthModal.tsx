@@ -5,6 +5,17 @@ import {LogIn, UserPlus, X} from 'lucide-react';
 import {API_BASE_URL} from '../config/api';
 import {readErrorDetail} from '../services/apiErrors';
 import {offerGuestPersonalityTransfer} from '../services/personalities';
+import {useI18n} from '../i18n';
+import type {MessageKey} from '../i18n';
+
+/** Сообщение под заголовком: ключ каталога (переводится при показе) или текст ответа сервера. */
+type Feedback = { tone: 'error' | 'success' } & ({ key: MessageKey } | { text: string });
+
+class FeedbackError extends Error {
+    constructor(readonly feedback: Feedback) {
+        super('text' in feedback ? feedback.text : feedback.key);
+    }
+}
 
 interface AuthModalProps {
     onSuccess: (token: string) => void;
@@ -13,10 +24,11 @@ interface AuthModalProps {
 }
 
 export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
+    const {t} = useI18n();
     const [isLogin, setIsLogin] = useState(true);
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
+    const [feedback, setFeedback] = useState<Feedback | null>(null);
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
@@ -30,7 +42,7 @@ export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setError('');
+        setFeedback(null);
         setLoading(true);
 
         try {
@@ -49,9 +61,12 @@ export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
                 if (!res.ok) {
                     // 429 — превышен лимит попыток: показываем, сколько ждать, а не «неверный пароль».
                     if (res.status === 429) {
-                        throw new Error(await readErrorDetail(res, 'Слишком много попыток входа, попробуйте позже'));
+                        const detail = await readErrorDetail(res, '');
+                        throw new FeedbackError(detail
+                            ? {tone: 'error', text: detail}
+                            : {tone: 'error', key: 'auth.tooManyAttempts'});
                     }
-                    throw new Error('Неверное имя пользователя или пароль');
+                    throw new FeedbackError({tone: 'error', key: 'auth.wrongCredentials'});
                 }
                 const data = await res.json();
                 localStorage.setItem('token', data.access_token);
@@ -60,7 +75,10 @@ export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
                 offerGuestPersonalityTransfer(data.access_token)
                     .then((result) => {
                         if (result?.skipped.length) {
-                            window.alert(`Не перенесены: ${result.skipped.map((s) => `${s.name} — ${s.reason}`).join('; ')}`);
+                            const list = result.skipped
+                                .map((s) => t('auth.importSkippedItem', {name: s.name, reason: s.reason}))
+                                .join('; ');
+                            window.alert(t('auth.importSkipped', {list}));
                         }
                     })
                     .catch((err: Error) => window.alert(err.message));
@@ -73,15 +91,19 @@ export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
                 });
 
                 if (!res.ok) {
-                    throw new Error(await readErrorDetail(res, 'Ошибка регистрации'));
+                    const detail = await readErrorDetail(res, '');
+                    throw new FeedbackError(detail
+                        ? {tone: 'error', text: detail}
+                        : {tone: 'error', key: 'auth.registrationFailed'});
                 }
 
                 // Автоматический вход после успешной регистрации
                 setIsLogin(true);
-                setError('Регистрация успешна! Теперь войдите в систему.');
+                setFeedback({tone: 'success', key: 'auth.registered'});
             }
-        } catch (err: any) {
-            setError(err.message || 'Произошла ошибка');
+        } catch (err) {
+            if (err instanceof FeedbackError) setFeedback(err.feedback);
+            else setFeedback({tone: 'error', key: 'common.noConnection'});
         } finally {
             setLoading(false);
         }
@@ -106,8 +128,8 @@ export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
                     <button
                         type="button"
                         onClick={onClose}
-                        title="Закрыть (Esc)"
-                        aria-label="Закрыть"
+                        title={t('common.closeEsc')}
+                        aria-label={t('common.close')}
                         className="absolute top-3 right-3 p-1 rounded text-boxwood/70 hover:text-amber-200 hover:bg-black/30 transition cursor-pointer"
                     >
                         <X size={18}/>
@@ -122,35 +144,40 @@ export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
                 </div>
 
                 <h2 id="auth-modal-title" className="text-2xl font-bold text-center text-amber-200 mb-1">
-                    {isLogin ? 'Вход в michess' : 'Регистрация аккаунта'}
+                    {t(isLogin ? 'auth.loginTitle' : 'auth.registerTitle')}
                 </h2>
                 <p className="text-xs text-center text-boxwood/70 mb-6">
-                    {isLogin ? 'Введите свои учетные данные для игры' : 'Создайте новый аккаунт для старта'}
+                    {t(isLogin ? 'auth.loginSubtitle' : 'auth.registerSubtitle')}
                 </p>
 
-                {error && (
+                {feedback && (
                     <div
-                        className={`p-3 mb-4 rounded text-xs text-center border ${error.includes('успешна') ? 'bg-emerald-950/60 border-emerald-600/50 text-emerald-200' : 'bg-red-950/80 border-red-800/50 text-red-200'}`}>
-                        {error}
+                        role={feedback.tone === 'error' ? 'alert' : 'status'}
+                        className={`p-3 mb-4 rounded text-xs text-center border ${feedback.tone === 'success' ? 'bg-emerald-950/60 border-emerald-600/50 text-emerald-200' : 'bg-red-950/80 border-red-800/50 text-red-200'}`}>
+                        {'text' in feedback ? feedback.text : t(feedback.key)}
                     </div>
                 )}
 
                 <form onSubmit={handleSubmit} className="flex flex-col gap-4">
                     <div>
-                        <label className="block text-xs text-boxwood/80 mb-1">Имя пользователя (Логин)</label>
+                        <label htmlFor="auth-username" className="block text-xs text-boxwood/80 mb-1">{t('auth.username')}</label>
                         <input
+                            id="auth-username"
+                            autoComplete="username"
                             type="text"
                             required
                             value={username}
                             onChange={(e) => setUsername(e.target.value)}
                             className="w-full px-3 py-2 bg-black/40 border border-amber-900/60 rounded text-amber-100 text-sm focus:outline-none focus:border-amber-600"
-                            placeholder="например, string1"
+                            placeholder={t('auth.usernamePlaceholder')}
                         />
                     </div>
 
                     <div>
-                        <label className="block text-xs text-boxwood/80 mb-1">Пароль</label>
+                        <label htmlFor="auth-password" className="block text-xs text-boxwood/80 mb-1">{t('auth.password')}</label>
                         <input
+                            id="auth-password"
+                            autoComplete={isLogin ? 'current-password' : 'new-password'}
                             type="password"
                             required
                             value={password}
@@ -166,7 +193,7 @@ export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
                         className="mt-2 flex items-center justify-center gap-2 py-2.5 bg-boxwood text-acacia-dark font-bold rounded hover:bg-boxwood-light transition shadow border border-amber-600/40 disabled:opacity-50"
                     >
                         {isLogin ? <LogIn size={18}/> : <UserPlus size={18}/>}
-                        {loading ? 'Загрузка...' : (isLogin ? 'Войти' : 'Зарегистрироваться')}
+                        {loading ? t('auth.loading') : t(isLogin ? 'auth.submitLogin' : 'auth.submitRegister')}
                     </button>
                 </form>
 
@@ -175,11 +202,11 @@ export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
                         type="button"
                         onClick={() => {
                             setIsLogin(!isLogin);
-                            setError('');
+                            setFeedback(null);
                         }}
                         className="text-amber-400 hover:underline"
                     >
-                        {isLogin ? 'Нет аккаунта? Зарегистрируйтесь' : 'Уже есть аккаунт? Войдите'}
+                        {t(isLogin ? 'auth.toRegister' : 'auth.toLogin')}
                     </button>
                 </div>
 

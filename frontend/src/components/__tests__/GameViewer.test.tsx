@@ -121,7 +121,7 @@ describe('GameViewer', () => {
         await expectPiece('d8', 'b q');
         await expectPiece('f2', 'w p');
 
-        fireEvent.click(screen.getByTitle('Ход вперед'));
+        fireEvent.click(screen.getByTitle('Ход вперёд'));
         await expectPiece('f3', 'w p');
         await expectPiece('f2', null);
 

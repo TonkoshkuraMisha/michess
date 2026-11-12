@@ -3,6 +3,7 @@
 import type {RefObject} from 'react';
 
 import type {HalfMovePair} from './boardUtils';
+import {useI18n} from '../../i18n';
 
 export type MovePair = HalfMovePair;
 
@@ -24,14 +25,15 @@ export function MoveList({
     movePairs, activeMoveIndex, viewIndex, historyLength, hasActiveSession, scrollRef,
     onSelectMove, onReturnToLive,
 }: MoveListProps) {
+    const {t} = useI18n();
     return (
         <div
             className="flex-1 min-h-0 flex flex-col bg-[#1A120B]/90 rounded-md border border-amber-900/50 overflow-hidden shadow-inner">
             <div
                 className="grid grid-cols-[44px_1fr_1fr] px-3 py-1.5 bg-black/55 border-b border-amber-900/40 text-xs uppercase tracking-wider text-boxwood/65 font-bold shrink-0">
-                <span>№</span>
-                <span>Белые</span>
-                <span>Чёрные</span>
+                <span>{t('board.moveNumber')}</span>
+                <span>{t('common.white')}</span>
+                <span>{t('common.black')}</span>
             </div>
 
             <div
@@ -41,11 +43,11 @@ export function MoveList({
                 {movePairs.length === 0 ? (
                     <div
                         className="h-full flex flex-col items-center justify-center p-6 text-center text-boxwood/50 font-sans text-sm gap-1.5">
-                        <span className="font-semibold">Ходов пока нет</span>
+                        <span className="font-semibold">{t('board.noMoves')}</span>
                         <span className="text-xs text-boxwood/40">
                             {hasActiveSession
-                                ? 'Сделайте первый ход на доске.'
-                                : 'Двигайте фигуры для анализа или выберите соперника слева.'}
+                                ? t('board.firstMoveHint')
+                                : t('board.sandboxHint')}
                         </span>
                     </div>
                 ) : (
@@ -106,9 +108,11 @@ export function MoveList({
                     onClick={onReturnToLive}
                     className="w-full py-1.5 px-3 bg-amber-700/40 hover:bg-amber-700/60 border-t border-amber-500/40 text-amber-200 text-xs font-bold text-center transition shrink-0 cursor-pointer"
                 >
-                    Просмотр истории
-                    ({viewIndex === -2 ? 'Начало' : `полуход ${viewIndex + 1} из ${historyLength}`}) —
-                    Вернуться к игре
+                    {t('board.historyView', {
+                        position: viewIndex === -2
+                            ? t('board.historyStart')
+                            : t('board.historyPly', {ply: viewIndex + 1, total: historyLength}),
+                    })}
                 </button>
             )}
         </div>

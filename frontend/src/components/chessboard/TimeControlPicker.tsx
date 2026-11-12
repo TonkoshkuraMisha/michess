@@ -4,6 +4,7 @@ import type {RefObject} from 'react';
 import {Clock, ChevronDown, ChevronUp, Sliders} from 'lucide-react';
 import {TIME_CONTROLS} from '../../config/timeControls';
 import type {TimeControlOption} from '../../config/timeControls';
+import {useI18n} from '../../i18n';
 
 export interface TimeControlPickerProps {
     selectedTimeControl: TimeControlOption;
@@ -24,11 +25,12 @@ export function TimeControlPicker({
     selectedTimeControl, manualBaseMinutes, manualIncSeconds, onManualBaseMinutesChange,
     onManualIncSecondsChange, isOpen, onToggleOpen, onSelect, disabled, dropdownRef,
 }: TimeControlPickerProps) {
+    const {t} = useI18n();
     return (
         <>
             <div className="flex items-center justify-between">
                 <label className="text-xs uppercase tracking-wider text-boxwood/85 flex items-center gap-1.5 font-bold">
-                    <Clock className="text-amber-500" size={13}/> Контроль времени
+                    <Clock className="text-amber-500" size={13}/> {t('timeControl.title')}
                 </label>
                 <span
                     className="text-[11px] font-mono font-bold px-1.5 py-0.5 rounded bg-amber-900/45 text-amber-300 border border-amber-600/30">
@@ -45,7 +47,7 @@ export function TimeControlPicker({
                 >
                     <span className="truncate">
                         {selectedTimeControl.label}
-                        {selectedTimeControl.isManual ? ` (${manualBaseMinutes}м + ${manualIncSeconds}с)` : ''}
+                        {selectedTimeControl.isManual ? t('timeControl.manualSummary', {base: manualBaseMinutes, inc: manualIncSeconds}) : ''}
                     </span>
                     {isOpen ? <ChevronUp className="text-amber-400 shrink-0" size={15}/> :
                         <ChevronDown className="text-amber-400 shrink-0" size={15}/>}
@@ -92,11 +94,11 @@ export function TimeControlPicker({
             {selectedTimeControl.isManual && (
                 <div className="p-2 rounded bg-black/40 border border-amber-700/40 flex flex-col gap-1.5 text-xs">
                     <div className="text-[11px] uppercase tracking-wider text-amber-400 font-bold flex items-center gap-1.5">
-                        <Sliders size={12}/> Ручная настройка времени
+                        <Sliders size={12}/> {t('timeControl.manualTitle')}
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                         <label className="flex flex-col gap-0.5 text-xs text-boxwood/85">
-                            <span>Время (мин):</span>
+                            <span>{t('timeControl.baseMinutes')}</span>
                             <input
                                 type="number"
                                 min={1}
@@ -107,7 +109,7 @@ export function TimeControlPicker({
                             />
                         </label>
                         <label className="flex flex-col gap-0.5 text-xs text-boxwood/85">
-                            <span>Бонус / Delay (сек):</span>
+                            <span>{t('timeControl.increment')}</span>
                             <input
                                 type="number"
                                 min={0}

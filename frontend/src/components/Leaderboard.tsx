@@ -4,6 +4,7 @@ import {useState, useEffect} from 'react';
 import {Link, useNavigate} from 'react-router-dom';
 import {Trophy, Medal, Crown, ArrowLeft, Swords, User} from 'lucide-react';
 import {API_BASE_URL} from '../config/api';
+import {useI18n} from '../i18n';
 
 interface LeaderboardEntry {
     rank: number;
@@ -13,19 +14,15 @@ interface LeaderboardEntry {
 
 type RatingCategory = 'bullet' | 'blitz' | 'rapid' | 'classical';
 
-const CATEGORY_TABS: Array<{ key: RatingCategory; label: string }> = [
-    {key: 'bullet', label: 'Пуля'},
-    {key: 'blitz', label: 'Блиц'},
-    {key: 'rapid', label: 'Рапид'},
-    {key: 'classical', label: 'Классика'},
-];
+const CATEGORY_TABS: RatingCategory[] = ['bullet', 'blitz', 'rapid', 'classical'];
 
 export default function Leaderboard() {
+    const {t} = useI18n();
     const navigate = useNavigate();
     const [category, setCategory] = useState<RatingCategory>('blitz');
     const [players, setPlayers] = useState<LeaderboardEntry[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<'leaderboard.loadFailed' | 'common.networkError' | null>(null);
 
     useEffect(() => {
         const fetchLeaderboard = async () => {
@@ -34,12 +31,13 @@ export default function Leaderboard() {
             try {
                 const res = await fetch(`${API_BASE_URL}/api/v1/profile/leaderboard?limit=50&category=${category}`);
                 if (!res.ok) {
-                    throw new Error('Не удалось загрузить таблицу лидеров');
+                    setError('leaderboard.loadFailed');
+                    return;
                 }
                 const data = await res.json();
                 setPlayers(Array.isArray(data) ? data : []);
-            } catch (err: any) {
-                setError(err.message || 'Ошибка сети');
+            } catch {
+                setError('common.networkError');
             } finally {
                 setLoading(false);
             }
@@ -91,13 +89,13 @@ export default function Leaderboard() {
                     </div>
                     <div>
                         <div className="text-amber-500 text-xs font-bold uppercase tracking-widest mb-1">
-                            Рейтинговый зачёт Fair Play
+                            {t('leaderboard.badge')}
                         </div>
                         <h1 className="text-2xl sm:text-3xl font-bold text-amber-200">
-                            Таблица лидеров Michess
+                            {t('leaderboard.title')}
                         </h1>
                         <p className="text-xs sm:text-sm text-boxwood/75 mt-0.5">
-                            Топ-50 лучших игроков по рейтингу Эло — {CATEGORY_TABS.find(t => t.key === category)?.label.toLowerCase()}
+                            {t('leaderboard.subtitle', {category: t(`ratingCategoryInline.${category}`)})}
                         </p>
                     </div>
                 </div>
@@ -106,29 +104,29 @@ export default function Leaderboard() {
                     onClick={() => navigate('/')}
                     className="px-3.5 py-2 bg-black/35 hover:bg-black/55 text-amber-300 rounded-md border border-amber-800/50 text-xs sm:text-sm font-bold flex items-center gap-2 transition cursor-pointer z-10 shrink-0"
                 >
-                    <ArrowLeft size={16}/> На доску
+                    <ArrowLeft size={16}/> {t('leaderboard.toBoard')}
                 </button>
             </div>
 
             {error && (
                 <div className="bg-red-950/80 border border-red-800 p-5 rounded text-red-200 text-center">
-                    {error}
+                    {t(error)}
                 </div>
             )}
 
             <div className="flex gap-2">
                 {CATEGORY_TABS.map((tab) => (
                     <button
-                        key={tab.key}
+                        key={tab}
                         type="button"
-                        onClick={() => setCategory(tab.key)}
+                        onClick={() => setCategory(tab)}
                         className={`flex-1 px-3.5 py-2.5 rounded-md border text-sm font-bold transition cursor-pointer ${
-                            category === tab.key
+                            category === tab
                                 ? 'bg-amber-700 text-white border-amber-400'
                                 : 'bg-acacia-dark hover:bg-black/45 text-amber-200 border-amber-800/50'
                         }`}
                     >
-                        {tab.label}
+                        {t(`ratingCategory.${tab}`)}
                     </button>
                 ))}
             </div>
@@ -138,7 +136,7 @@ export default function Leaderboard() {
                 {loading ? (
                     <div className="py-20 flex flex-col items-center justify-center text-amber-500">
                         <Swords size={38} className="animate-spin mb-3"/>
-                        <span className="font-bold">Загрузка рейтинга...</span>
+                        <span className="font-bold">{t('leaderboard.loading')}</span>
                     </div>
                 ) : (
                     <div className="overflow-x-auto">
@@ -146,10 +144,10 @@ export default function Leaderboard() {
                             <thead
                                 className="bg-[#1A120B] text-boxwood/60 uppercase text-xs tracking-wider border-b border-amber-900/50">
                             <tr>
-                                <th className="px-5 py-4 font-medium w-20">Место</th>
-                                <th className="px-5 py-4 font-medium">Игрок</th>
-                                <th className="px-5 py-4 font-medium text-right">Рейтинг Эло</th>
-                                <th className="px-5 py-4 font-medium text-right">Профиль</th>
+                                <th className="px-5 py-4 font-medium w-20">{t('leaderboard.place')}</th>
+                                <th className="px-5 py-4 font-medium">{t('leaderboard.player')}</th>
+                                <th className="px-5 py-4 font-medium text-right">{t('leaderboard.elo')}</th>
+                                <th className="px-5 py-4 font-medium text-right">{t('leaderboard.profile')}</th>
                             </tr>
                             </thead>
                             <tbody className="divide-y divide-amber-900/20 text-boxwood-light">
@@ -157,7 +155,7 @@ export default function Leaderboard() {
                                 <tr>
                                     <td colSpan={4}
                                         className="px-6 py-12 text-center text-boxwood/50 font-serif text-base">
-                                        Список лидеров пока пуст.
+                                        {t('leaderboard.empty')}
                                     </td>
                                 </tr>
                             ) : (
@@ -195,7 +193,7 @@ export default function Leaderboard() {
                                                 onClick={(e) => e.stopPropagation()}
                                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black/30 hover:bg-amber-900/60 text-amber-300 rounded border border-amber-900/40 text-xs font-bold transition"
                                             >
-                                                <User size={14}/> Открыть
+                                                <User size={14}/> {t('leaderboard.open')}
                                             </Link>
                                         </td>
                                     </tr>

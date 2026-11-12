@@ -3,7 +3,6 @@
 import {useState, useEffect} from 'react';
 import {useParams, Link, useNavigate} from 'react-router-dom';
 import {format, parseISO} from 'date-fns';
-import {ru} from 'date-fns/locale';
 import {
     Swords, Download, ArrowLeft, Crown,
     ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
@@ -11,6 +10,9 @@ import {
 import {CHAMPIONS_LIST} from '../config/champions';
 import {API_BASE_URL} from '../config/api';
 import {readErrorDetail} from '../services/apiErrors';
+import type {Locale} from 'date-fns';
+import {renderUiMessage, serverOr, uiMessage, useI18n} from '../i18n';
+import type {UiMessage} from '../i18n';
 
 interface GameData {
     game_id: number;
@@ -36,25 +38,26 @@ export function isChampionName(username: string, championId: string): boolean {
     return username.toLowerCase().split(/[^\p{L}]+/u).includes(surname);
 }
 
-const displayDate = (game: GameData) => {
+const displayDate = (game: GameData, locale: Locale) => {
     if (game.pgn_date && !game.pgn_date.includes('????')) {
         // Очищаем дату от неизвестных месяцев/дней: "1860.??.??" -> "1860"
         return game.pgn_date.replace(/\?/g, '').replace(/\.+$/, '');
     }
     if (game.finished_at) {
-        return format(parseISO(game.finished_at), 'd MMM yyyy', {locale: ru});
+        return format(parseISO(game.finished_at), 'd MMM yyyy', {locale});
     }
     return '—';
 };
 
 export default function ChampionGames() {
+    const {t, dateLocale} = useI18n();
     const {championId} = useParams<{ championId: string }>();
     const navigate = useNavigate();
 
     const [games, setGames] = useState<GameData[]>([]);
     const [totalGames, setTotalGames] = useState<number>(0);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<UiMessage | null>(null);
 
     const [page, setPage] = useState(1);
     const [limit, setLimit] = useState(25);
@@ -70,15 +73,16 @@ export default function ChampionGames() {
                 const res = await fetch(`${API_BASE_URL}/api/v1/profile/${encodeURIComponent(championId ?? '')}/games?limit=${limit}&offset=${offset}&sort=asc`);
 
                 if (!res.ok) {
-                    throw new Error(await readErrorDetail(res, 'Не удалось загрузить партии из базы данных'));
+                    setError(serverOr(await readErrorDetail(res, ''), 'championGames.loadFailed'));
+                    return;
                 }
 
                 const data = await res.json();
                 setTotalGames(data.total || 0);
                 setGames(data.items || []);
 
-            } catch (err: any) {
-                setError(err.message);
+            } catch {
+                setError(uiMessage('common.networkError'));
             } finally {
                 setLoading(false);
             }
@@ -90,9 +94,9 @@ export default function ChampionGames() {
     if (!champion) {
         return (
             <div className="bg-red-950/80 border border-red-800 p-6 rounded text-red-200 text-center font-serif">
-                <h2 className="text-xl font-bold mb-2">Ошибка</h2>
-                <p>Игрок с идентификатором {championId} не найден в конфигурации.</p>
-                <Link to="/" className="mt-4 inline-block text-amber-400 hover:underline">На главную</Link>
+                <h2 className="text-xl font-bold mb-2">{t('common.error')}</h2>
+                <p>{t('championGames.unknownChampion', {id: championId ?? ''})}</p>
+                <Link to="/" className="mt-4 inline-block text-amber-400 hover:underline">{t('common.home')}</Link>
             </div>
         );
     }
@@ -132,22 +136,22 @@ export default function ChampionGames() {
                 <div className="flex flex-col z-10">
                     <div
                         className="text-amber-600 text-sm font-bold uppercase tracking-widest mb-1 flex items-center gap-2">
-                        <Crown size={16}/> Исторический архив
+                        <Crown size={16}/> {t('championGames.archive')}
                     </div>
                     <h1 className="text-4xl font-bold text-amber-200 mb-2">{champion.name}</h1>
                     <div className="text-boxwood-light/80">
-                        Эпоха: <span className="font-mono text-amber-400 font-bold ml-1">{champion.years}</span>
+                        {t('championGames.era')} <span className="font-mono text-amber-400 font-bold ml-1">{champion.years}</span>
                     </div>
                     <div className="text-boxwood-light/80 mt-1">
-                        Партий в базе: <span className="font-mono text-amber-400 font-bold ml-1">{totalGames}</span>
+                        {t('championGames.gamesInDatabase')} <span className="font-mono text-amber-400 font-bold ml-1">{totalGames}</span>
                     </div>
                 </div>
             </div>
 
             {error && (
                 <div className="bg-red-950/80 border border-red-800 p-6 rounded text-red-200 text-center shadow-heavy">
-                    <h2 className="text-xl font-bold mb-2">Ошибка загрузки</h2>
-                    <p>{error}</p>
+                    <h2 className="text-xl font-bold mb-2">{t('common.loadingError')}</h2>
+                    <p>{renderUiMessage(error, t)}</p>
                 </div>
             )}
 
@@ -156,12 +160,13 @@ export default function ChampionGames() {
                     <button
                         onClick={() => window.history.back()}
                         className="p-1.5 bg-black/20 hover:bg-black/40 rounded transition border border-amber-900/50"
-                        title="Назад"
+                        title={t('common.back')}
+                        aria-label={t('common.back')}
                     >
                         <ArrowLeft size={16} className="text-amber-500"/>
                     </button>
                     <h2 className="text-sm uppercase tracking-widest text-amber-500/80 font-bold">
-                        Хронология игр (От самых ранних к поздним)
+                        {t('championGames.chronology')}
                     </h2>
                 </div>
 
@@ -170,7 +175,7 @@ export default function ChampionGames() {
                         <div
                             className="absolute inset-0 z-20 bg-acacia-dark/80 backdrop-blur-sm flex flex-col items-center justify-center text-amber-500">
                             <Swords size={40} className="animate-spin mb-4"/>
-                            <span className="font-bold">Загрузка архивов...</span>
+                            <span className="font-bold">{t('championGames.loading')}</span>
                         </div>
                     )}
 
@@ -178,13 +183,13 @@ export default function ChampionGames() {
                         <thead
                             className="bg-[#1A120B] text-boxwood/60 uppercase text-xs tracking-wider sticky top-0 z-10 border-b border-amber-900/50 shadow">
                         <tr>
-                            <th className="px-4 py-4 font-medium">№</th>
-                            <th className="px-4 py-4 font-medium">Белые</th>
-                            <th className="px-4 py-4 font-medium">Черные</th>
-                            <th className="px-4 py-4 font-medium text-center">Результат</th>
-                            <th className="px-4 py-4 font-medium text-center">Дебют</th>
-                            <th className="px-4 py-4 font-medium text-center">Место</th>
-                            <th className="px-4 py-4 font-medium text-center">Дата</th>
+                            <th className="px-4 py-4 font-medium">{t('board.moveNumber')}</th>
+                            <th className="px-4 py-4 font-medium">{t('common.white')}</th>
+                            <th className="px-4 py-4 font-medium">{t('common.black')}</th>
+                            <th className="px-4 py-4 font-medium text-center">{t('common.result')}</th>
+                            <th className="px-4 py-4 font-medium text-center">{t('common.opening')}</th>
+                            <th className="px-4 py-4 font-medium text-center">{t('common.site')}</th>
+                            <th className="px-4 py-4 font-medium text-center">{t('common.date')}</th>
                             <th className="px-4 py-4 font-medium text-right">PGN</th>
                         </tr>
                         </thead>
@@ -192,21 +197,21 @@ export default function ChampionGames() {
                         {games.length === 0 && !loading ? (
                             <tr>
                                 <td colSpan={8} className="px-6 py-12 text-center text-boxwood/50 font-serif text-lg">
-                                    В архиве нет записей для этой страницы.
+                                    {t('championGames.empty')}
                                 </td>
                             </tr>
                         ) : (
                             games.map((game, index) => {
                                 const isWhite = isChampionName(game.white_username, champion.id);
                                 let resultColor = 'text-gray-400';
-                                let resultText = 'Ничья';
+                                let resultText = t('common.draw');
 
                                 if (game.result === '1-0') {
                                     resultColor = isWhite ? 'text-emerald-400' : 'text-red-400';
-                                    resultText = isWhite ? 'Победа' : 'Поражение';
+                                    resultText = t(isWhite ? 'common.win' : 'common.loss');
                                 } else if (game.result === '0-1') {
                                     resultColor = isWhite ? 'text-red-400' : 'text-emerald-400';
-                                    resultText = isWhite ? 'Поражение' : 'Победа';
+                                    resultText = t(isWhite ? 'common.loss' : 'common.win');
                                 }
 
                                 const absoluteIndex = (page - 1) * limit + index + 1;
@@ -251,7 +256,7 @@ export default function ChampionGames() {
                                             {game.site || '—'}
                                         </td>
                                         <td className="px-4 py-4 text-center text-boxwood/70 font-mono">
-                                            {displayDate(game)}
+                                            {displayDate(game, dateLocale)}
                                         </td>
                                         <td className="px-4 py-4 text-right">
                                             <a
@@ -259,7 +264,8 @@ export default function ChampionGames() {
                                                 download
                                                 onClick={(e) => e.stopPropagation()}
                                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black/30 hover:bg-amber-900/60 text-amber-400 rounded transition border border-amber-900/40 text-xs font-bold"
-                                                title="Скачать PGN"
+                                                title={t('common.downloadPgn')}
+                                                aria-label={t('common.downloadPgn')}
                                             >
                                                 <Download size={14}/>
                                             </a>
@@ -277,9 +283,9 @@ export default function ChampionGames() {
                     <div
                         className="bg-[#1A120B] p-4 border-t border-amber-900/50 flex flex-col sm:flex-row justify-between items-center gap-4">
                         <div className="flex items-center gap-3 text-boxwood/60 text-sm">
-                            <span className="hidden sm:inline">Показывать по:</span>
+                            <span className="hidden sm:inline">{t('championGames.perPage')}</span>
                             <select
-                                aria-label="Партий на странице"
+                                aria-label={t('championGames.perPageLabel')}
                                 value={limit}
                                 onChange={(e) => {
                                     setLimit(Number(e.target.value));
@@ -290,15 +296,15 @@ export default function ChampionGames() {
                                 <option value="25">25</option>
                                 <option value="50">50</option>
                             </select>
-                            <span className="font-mono bg-black/30 px-2 py-1 rounded">Всего: {totalGames}</span>
+                            <span className="font-mono bg-black/30 px-2 py-1 rounded">{t('championGames.total', {total: totalGames})}</span>
                         </div>
 
                         <div className="flex items-center gap-1.5">
                             <button
                                 onClick={() => setPage(1)}
                                 disabled={page === 1}
-                                aria-label="В начало"
-                                title="В начало"
+                                aria-label={t('championGames.firstPage')}
+                                title={t('championGames.firstPage')}
                                 className="p-1.5 rounded bg-black/40 hover:bg-amber-900/60 disabled:opacity-30 disabled:cursor-not-allowed text-amber-500 transition border border-transparent hover:border-amber-900/50"
                             >
                                 <ChevronsLeft size={18}/>
@@ -306,8 +312,8 @@ export default function ChampionGames() {
                             <button
                                 onClick={() => setPage(p => Math.max(1, p - 1))}
                                 disabled={page === 1}
-                                aria-label="Предыдущая страница"
-                                title="Предыдущая страница"
+                                aria-label={t('championGames.previousPage')}
+                                title={t('championGames.previousPage')}
                                 className="p-1.5 rounded bg-black/40 hover:bg-amber-900/60 disabled:opacity-30 disabled:cursor-not-allowed text-amber-500 transition border border-transparent hover:border-amber-900/50"
                             >
                                 <ChevronLeft size={18}/>
@@ -333,8 +339,8 @@ export default function ChampionGames() {
                             <button
                                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                                 disabled={page === totalPages}
-                                aria-label="Следующая страница"
-                                title="Следующая страница"
+                                aria-label={t('championGames.nextPage')}
+                                title={t('championGames.nextPage')}
                                 className="p-1.5 rounded bg-black/40 hover:bg-amber-900/60 disabled:opacity-30 disabled:cursor-not-allowed text-amber-500 transition border border-transparent hover:border-amber-900/50"
                             >
                                 <ChevronRight size={18}/>
@@ -342,8 +348,8 @@ export default function ChampionGames() {
                             <button
                                 onClick={() => setPage(totalPages)}
                                 disabled={page === totalPages}
-                                aria-label="В конец"
-                                title="В конец"
+                                aria-label={t('championGames.lastPage')}
+                                title={t('championGames.lastPage')}
                                 className="p-1.5 rounded bg-black/40 hover:bg-amber-900/60 disabled:opacity-30 disabled:cursor-not-allowed text-amber-500 transition border border-transparent hover:border-amber-900/50"
                             >
                                 <ChevronsRight size={18}/>

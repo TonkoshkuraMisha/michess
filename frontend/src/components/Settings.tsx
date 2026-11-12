@@ -3,7 +3,7 @@
 
 import {useState} from 'react';
 import {Link} from 'react-router-dom';
-import {ArrowLeft, Check, KeyRound, LogOut, Palette, Settings as SettingsIcon, Volume2, VolumeX} from 'lucide-react';
+import {ArrowLeft, Check, KeyRound, Languages, LogOut, Palette, Settings as SettingsIcon, Volume2, VolumeX} from 'lucide-react';
 import {API_BASE_URL} from '../config/api';
 import {
     BOARD_THEMES,
@@ -15,6 +15,9 @@ import {
 import {readErrorDetail} from '../services/apiErrors';
 import {gameSocket} from '../services/gameSocket';
 import {soundEngine} from '../services/soundEngine';
+import {useI18n} from '../i18n';
+import type {MessageKey, Params} from '../i18n';
+import LanguageSwitcher from './LanguageSwitcher';
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -37,7 +40,11 @@ const optionClass = (active: boolean) =>
             : 'bg-black/35 border-amber-900/40 text-boxwood/85 hover:border-amber-600/60'
     }`;
 
+/** Ошибка смены пароля: ключ каталога (переводится при показе) или текст ответа сервера. */
+type PasswordError = { key: MessageKey; params?: Params } | { text: string };
+
 export default function Settings({token, username, onTokenChange, onLogoutEverywhere}: SettingsProps) {
+    const {t} = useI18n();
     const [boardThemeKey, setBoardThemeKey] = useState(() => getSavedBoardThemeKey());
     const [pieceSetKey, setPieceSetKey] = useState(() => getSavedPieceSetKey());
     const [isMuted, setIsMuted] = useState(() => soundEngine.isMuted());
@@ -45,7 +52,7 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
     const [repeatPassword, setRepeatPassword] = useState('');
-    const [passwordError, setPasswordError] = useState('');
+    const [passwordError, setPasswordError] = useState<PasswordError | null>(null);
     const [passwordSaved, setPasswordSaved] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
 
@@ -70,16 +77,16 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
         e.preventDefault();
         setPasswordSaved(false);
         if (newPassword.length < MIN_PASSWORD_LENGTH) {
-            setPasswordError(`Новый пароль должен быть не короче ${MIN_PASSWORD_LENGTH} символов`);
+            setPasswordError({key: 'settings.passwordTooShort', params: {min: MIN_PASSWORD_LENGTH}});
             return;
         }
         if (newPassword !== repeatPassword) {
-            setPasswordError('Новый пароль и его повтор не совпадают');
+            setPasswordError({key: 'settings.passwordsDiffer'});
             return;
         }
         if (!token) return;
 
-        setPasswordError('');
+        setPasswordError(null);
         setIsSaving(true);
         // Смена пароля отзывает все токены, и сервер закрывает WebSocket с кодом «сессия отозвана»
         // раньше, чем придёт ответ с новым токеном. Отключаемся сами, иначе это закрытие
@@ -92,7 +99,8 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                 body: JSON.stringify({current_password: currentPassword, new_password: newPassword}),
             });
             if (!res.ok) {
-                setPasswordError(await readErrorDetail(res, 'Не удалось сменить пароль'));
+                const detail = await readErrorDetail(res, '');
+                setPasswordError(detail ? {text: detail} : {key: 'settings.passwordChangeFailed'});
                 return;
             }
             const data = await res.json();
@@ -103,7 +111,7 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
             setRepeatPassword('');
             setPasswordSaved(true);
         } catch {
-            setPasswordError('Нет связи с сервером, попробуйте ещё раз');
+            setPasswordError({key: 'common.noConnection'});
         } finally {
             setIsSaving(false);
         }
@@ -118,21 +126,21 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                         <SettingsIcon size={26}/>
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold text-amber-200">Настройки</h1>
+                        <h1 className="text-2xl font-bold text-amber-200">{t('settings.title')}</h1>
                         <p className="text-sm text-boxwood/75">
-                            {username ? `Аккаунт ${username}` : 'Оформление сохраняется в этом браузере'}
+                            {username ? t('settings.account', {username}) : t('settings.guestNote')}
                         </p>
                     </div>
                 </div>
                 <Link to="/" className="text-amber-400 hover:underline flex items-center gap-1.5 text-sm shrink-0">
-                    <ArrowLeft size={15}/> К игре
+                    <ArrowLeft size={15}/> {t('common.backToGame')}
                 </Link>
             </div>
 
             <section className={sectionClass}>
-                <h2 className={headingClass}><Palette size={18} className="text-amber-400"/> Доска и фигуры</h2>
+                <h2 className={headingClass}><Palette size={18} className="text-amber-400"/> {t('settings.boardAndPieces')}</h2>
 
-                <div className="text-xs uppercase tracking-wider text-boxwood/65 font-bold mb-1.5">Доска</div>
+                <div className="text-xs uppercase tracking-wider text-boxwood/65 font-bold mb-1.5">{t('settings.board')}</div>
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
                     {Object.values(BOARD_THEMES).map((theme) => (
                         <button
@@ -153,7 +161,7 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                     ))}
                 </div>
 
-                <div className="text-xs uppercase tracking-wider text-boxwood/65 font-bold mb-1.5">Фигуры</div>
+                <div className="text-xs uppercase tracking-wider text-boxwood/65 font-bold mb-1.5">{t('settings.pieces')}</div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                     {Object.values(PIECE_SETS).map((set) => (
                         <button
@@ -177,9 +185,14 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
             </section>
 
             <section className={sectionClass}>
+                <h2 className={headingClass}><Languages size={18} className="text-amber-400"/> {t('settings.language')}</h2>
+                <LanguageSwitcher/>
+            </section>
+
+            <section className={sectionClass}>
                 <h2 className={headingClass}>
                     {isMuted ? <VolumeX size={18} className="text-amber-400"/> : <Volume2 size={18} className="text-amber-400"/>}
-                    Звук
+                    {t('settings.sound')}
                 </h2>
                 <div className="flex flex-wrap items-center gap-3">
                     <button
@@ -193,7 +206,7 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                                 : 'bg-emerald-900/60 border-emerald-600/70 text-emerald-100 hover:bg-emerald-900/80'
                         }`}
                     >
-                        {isMuted ? 'Звук выключен' : 'Звук включён'}
+                        {t(isMuted ? 'settings.soundOff' : 'settings.soundOn')}
                     </button>
                     <button
                         type="button"
@@ -201,7 +214,7 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                         onClick={() => soundEngine.play('capture')}
                         className="px-3 py-2 rounded-md border border-amber-900/60 bg-black/35 text-sm text-amber-200 hover:border-amber-600/60 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                     >
-                        Проверить
+                        {t('settings.soundTest')}
                     </button>
                 </div>
             </section>
@@ -209,10 +222,10 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
             {token ? (
                 <>
                     <section className={sectionClass}>
-                        <h2 className={headingClass}><KeyRound size={18} className="text-amber-400"/> Пароль</h2>
+                        <h2 className={headingClass}><KeyRound size={18} className="text-amber-400"/> {t('settings.password')}</h2>
                         <form onSubmit={handleChangePassword} className="flex flex-col gap-3 max-w-md">
                             <label className="text-xs text-boxwood/80 flex flex-col gap-1">
-                                Текущий пароль
+                                {t('settings.currentPassword')}
                                 <input
                                     type="password"
                                     required
@@ -223,7 +236,7 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                                 />
                             </label>
                             <label className="text-xs text-boxwood/80 flex flex-col gap-1">
-                                Новый пароль (не короче {MIN_PASSWORD_LENGTH} символов)
+                                {t('settings.newPassword', {min: MIN_PASSWORD_LENGTH})}
                                 <input
                                     type="password"
                                     required
@@ -234,7 +247,7 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                                 />
                             </label>
                             <label className="text-xs text-boxwood/80 flex flex-col gap-1">
-                                Новый пароль ещё раз
+                                {t('settings.repeatPassword')}
                                 <input
                                     type="password"
                                     required
@@ -248,13 +261,13 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                             {passwordError && (
                                 <div role="alert"
                                      className="text-sm text-red-200 bg-red-950/70 border border-red-800 rounded px-3 py-2">
-                                    {passwordError}
+                                    {'text' in passwordError ? passwordError.text : t(passwordError.key, passwordError.params)}
                                 </div>
                             )}
                             {passwordSaved && (
                                 <div role="status"
                                      className="text-sm text-emerald-200 bg-emerald-950/60 border border-emerald-700 rounded px-3 py-2 flex items-center gap-2">
-                                    <Check size={15}/> Пароль изменён. На других устройствах нужно войти заново.
+                                    <Check size={15}/> {t('settings.passwordChanged')}
                                 </div>
                             )}
 
@@ -263,33 +276,32 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                                 disabled={isSaving}
                                 className="self-start px-4 py-2 rounded-md bg-boxwood text-acacia-dark font-bold text-sm border border-amber-700/50 hover:bg-boxwood-light transition cursor-pointer disabled:opacity-60"
                             >
-                                {isSaving ? 'Сохранение...' : 'Сменить пароль'}
+                                {t(isSaving ? 'settings.saving' : 'settings.changePassword')}
                             </button>
                         </form>
                         <p className="text-xs text-boxwood/60 mt-3 max-w-md">
-                            Смена пароля завершает все остальные сессии. Если сейчас идёт партия, сначала доиграйте
-                            её: соединение с сервером на время смены пароля разрывается.
+                            {t('settings.passwordNote')}
                         </p>
                     </section>
 
                     <section className={sectionClass}>
-                        <h2 className={headingClass}><LogOut size={18} className="text-red-400"/> Сессии</h2>
+                        <h2 className={headingClass}><LogOut size={18} className="text-red-400"/> {t('settings.sessions')}</h2>
                         <p className="text-sm text-boxwood/80 mb-3 max-w-xl">
-                            Завершает вход на всех устройствах и во всех вкладках, включая эту.
+                            {t('settings.sessionsNote')}
                         </p>
                         <button
                             type="button"
                             onClick={() => void onLogoutEverywhere()}
                             className="px-4 py-2 rounded-md bg-red-950/60 border border-red-800 text-red-200 text-sm font-bold hover:bg-red-900/60 transition cursor-pointer"
                         >
-                            Выйти на всех устройствах
+                            {t('settings.logoutEverywhere')}
                         </button>
                     </section>
                 </>
             ) : (
                 <section className={sectionClass}>
                     <p className="text-sm text-boxwood/80">
-                        Войдите в аккаунт, чтобы сменить пароль или завершить сессии на других устройствах.
+                        {t('settings.loginToManage')}
                     </p>
                 </section>
             )}

@@ -327,10 +327,20 @@ async def _leave_spectate(ctx: ActionContext, data: dict) -> None:
     await ctx.send({"event": "spectate_left"})
 
 
+# Быстрые фразы чата пересылаются кодом, а не текстом: каждый участник видит фразу на своём языке
+# (тексты — в каталогах клиента). Неизвестный код игнорируется, как пустое сообщение.
+CHAT_PRESETS = frozenset({"good_luck", "thanks", "nice_move", "time_trouble"})
+
+
 @action("chat_message")
 async def _chat_message(ctx: ActionContext, data: dict) -> None:
+    preset = data.get("preset")
     raw_text = str(data.get("text", "")).strip()
-    if not raw_text:
+    if preset is not None:
+        if preset not in CHAT_PRESETS:
+            raise _Ignore
+        raw_text = ""
+    elif not raw_text:
         raise _Ignore
     game = await _load_game(data)
     if ctx.user.id not in (game.white_id, game.black_id):
@@ -345,6 +355,7 @@ async def _chat_message(ctx: ActionContext, data: dict) -> None:
         "sender_id": ctx.user.id,
         "sender": ctx.user.username,
         "text": raw_text[:140],
+        **({"preset": preset} if preset is not None else {}),
         "timestamp": int(time.time() * 1000),
     })
 

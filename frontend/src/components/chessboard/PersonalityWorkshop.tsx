@@ -1,6 +1,6 @@
 // --- FILE: frontend/src/components/chessboard/PersonalityWorkshop.tsx ---
 
-import {useCallback, useEffect, useMemo, useState} from 'react';
+import {useCallback, useEffect, useState} from 'react';
 import {PolarAngleAxis, PolarGrid, Radar, RadarChart} from 'recharts';
 import {Pencil, Save, Trash2} from 'lucide-react';
 import {strengthNote, styleRadar} from '../../config/archetypes';
@@ -18,37 +18,46 @@ import {
 import type {Personality, PersonalityConfig} from '../../services/personalities';
 import {fetchBotCatalog, strengthLabel} from '../../services/botCatalog';
 import type {CatalogArchetype} from '../../services/botCatalog';
+import {useI18n} from '../../i18n';
+import {t as translate} from '../../i18n';
 
 type SliderKey = 'aggression' | 'center_control' | 'mobility' | 'king_safety' | 'pawn_structure'
     | 'randomness' | 'blunder_guard_cp' | 'target_elo';
 
 interface SliderSpec {
     key: SliderKey;
-    label: string;
+    readonly label: string;
     min: number;
     max: number;
     step: number;
-    hint: string;
+    readonly hint: string;
 }
 
 /** Ползунки с подписью «что это меняет». Границы — как в BotPersonalityConfig на сервере. */
+function slider(key: SliderKey, min: number, max: number, step: number): SliderSpec {
+    return {
+        key,
+        min,
+        max,
+        step,
+        get label() {
+            return translate(`workshop.sliders.${key}.label`);
+        },
+        get hint() {
+            return translate(`workshop.sliders.${key}.hint`);
+        },
+    };
+}
+
 export const SLIDERS: SliderSpec[] = [
-    {key: 'aggression', label: 'Агрессия', min: -100, max: 100, step: 5,
-        hint: 'Плюс — шахи, жертвы, игра против короля. Минус — профилактика и тихие ходы.'},
-    {key: 'center_control', label: 'Центр', min: 0, max: 200, step: 10,
-        hint: 'Насколько важно занимать и держать центральные поля.'},
-    {key: 'mobility', label: 'Подвижность', min: 0, max: 200, step: 10,
-        hint: 'Быстрое развитие и активные фигуры.'},
-    {key: 'king_safety', label: 'Безопасность короля', min: 0, max: 200, step: 10,
-        hint: 'Ранняя рокировка, пешки перед королём не двигаются.'},
-    {key: 'pawn_structure', label: 'Пешечная структура', min: 0, max: 200, step: 10,
-        hint: 'Цепи и фаланги пешек, без сдвоенных пешек.'},
-    {key: 'randomness', label: 'Непредсказуемость', min: 0, max: 100, step: 5,
-        hint: 'Разброс выбора между почти равными ходами.'},
-    {key: 'blunder_guard_cp', label: 'Свобода выбора (сп)', min: 0, max: 400, step: 10,
-        hint: 'Насколько ход может уступать лучшему по оценке движка ради стиля. 0 — всегда лучший ход.'},
-    {key: 'target_elo', label: 'Сила (Эло)', min: 600, max: 2800, step: 50,
-        hint: 'Целевой рейтинг: ограничивает движок; ниже 1320 — намеренные ошибки.'},
+    slider('aggression', -100, 100, 5),
+    slider('center_control', 0, 200, 10),
+    slider('mobility', 0, 200, 10),
+    slider('king_safety', 0, 200, 10),
+    slider('pawn_structure', 0, 200, 10),
+    slider('randomness', 0, 100, 5),
+    slider('blunder_guard_cp', 0, 400, 10),
+    slider('target_elo', 600, 2800, 50),
 ];
 
 export interface PersonalityWorkshopProps {
@@ -78,10 +87,11 @@ const emptyDraft = (): Draft => ({name: '', config: {...DEFAULT_CONFIG}, savedId
 export function PersonalityWorkshop({
     token, playDisabled, onPlay, canStartFromPosition, startFromPosition, onStartFromPositionChange,
 }: PersonalityWorkshopProps) {
+    const {t} = useI18n();
     const [mine, setMine] = useState<Personality[]>([]);
     const [draft, setDraft] = useState<Draft>(emptyDraft);
     const [error, setError] = useState<string | null>(null);
-    const [notice, setNotice] = useState<string | null>(null);
+    const [notice, setNotice] = useState<'workshop.savedProfile' | 'workshop.savedBrowser' | null>(null);
     const [busy, setBusy] = useState(false);
     const [archetypes, setArchetypes] = useState<CatalogArchetype[]>([]);
 
@@ -108,7 +118,8 @@ export function PersonalityWorkshop({
         reload();
     }, [reload]);
 
-    const radar = useMemo(() => styleRadar(draft.config), [draft.config]);
+    // Без мемоизации: подписи осей зависят от языка, а расчёт копеечный.
+    const radar = styleRadar(draft.config);
 
     const setValue = (key: SliderKey, value: number) =>
         setDraft((d) => ({...d, config: {...d.config, [key]: value}}));
@@ -122,7 +133,7 @@ export function PersonalityWorkshop({
     const save = async () => {
         const name = draft.name.trim();
         if (!name) {
-            setError('Дайте сопернику имя');
+            setError(t('workshop.nameRequired'));
             return;
         }
         setBusy(true);
@@ -140,7 +151,7 @@ export function PersonalityWorkshop({
                 );
             }
             setDraft((d) => ({...d, name: saved.name, savedId: saved.id}));
-            setNotice(token ? 'Сохранено в профиле' : 'Сохранено в этом браузере — войдите, чтобы перенести в профиль');
+            setNotice(token ? 'workshop.savedProfile' : 'workshop.savedBrowser');
             await reload();
         } catch (err) {
             setError((err as Error).message);
@@ -150,7 +161,7 @@ export function PersonalityWorkshop({
     };
 
     const remove = async (p: Personality) => {
-        if (!window.confirm(`Удалить соперника «${p.name}»?`)) return;
+        if (!window.confirm(t('workshop.deleteConfirm', {name: p.name}))) return;
         try {
             if (token && typeof p.id === 'number') await deletePersonality(token, p.id);
             else deleteGuestPersonality(String(p.id));
@@ -162,7 +173,7 @@ export function PersonalityWorkshop({
     };
 
     const play = (colorPref: 'white' | 'black' | 'random') => {
-        const name = draft.name.trim() || 'Соперник';
+        const name = draft.name.trim() || t('workshop.defaultName');
         const savedOnServer = token && typeof draft.savedId === 'number';
         onPlay({
             name,
@@ -176,21 +187,21 @@ export function PersonalityWorkshop({
     return (
         <div className="flex flex-col gap-2 text-xs text-boxwood" data-testid="personality-workshop">
             <section>
-                <h3 className="font-bold text-amber-300 mb-1">Мои соперники</h3>
+                <h3 className="font-bold text-amber-300 mb-1">{t('workshop.myOpponents')}</h3>
                 {mine.length === 0 ? (
-                    <p className="text-boxwood/70">Пока никого — соберите соперника ниже или начните с архетипа.</p>
+                    <p className="text-boxwood/70">{t('workshop.noOpponents')}</p>
                 ) : (
                     <ul className="flex flex-col gap-1">
                         {mine.map((p) => (
                             <li key={p.id} className="flex items-center gap-1.5 bg-black/35 rounded px-2 py-1 border border-amber-900/40">
                                 <span className="font-bold truncate flex-1">{p.name}</span>
                                 <span className="font-mono text-amber-300/90">~{p.config.target_elo}</span>
-                                <button type="button" title={`Изменить ${p.name}`} aria-label={`Изменить ${p.name}`}
+                                <button type="button" title={t('workshop.edit', {name: p.name})} aria-label={t('workshop.edit', {name: p.name})}
                                         onClick={() => pick(p.name, p.config, p.id)}
                                         className="p-1 rounded hover:bg-amber-900/50 cursor-pointer">
                                     <Pencil size={12}/>
                                 </button>
-                                <button type="button" title={`Удалить ${p.name}`} aria-label={`Удалить ${p.name}`}
+                                <button type="button" title={t('workshop.delete', {name: p.name})} aria-label={t('workshop.delete', {name: p.name})}
                                         onClick={() => remove(p)}
                                         className="p-1 rounded hover:bg-red-900/50 cursor-pointer">
                                     <Trash2 size={12}/>
@@ -202,8 +213,8 @@ export function PersonalityWorkshop({
             </section>
 
             <section>
-                <h3 className="font-bold text-amber-300 mb-1">Архетипы</h3>
-                {archetypes.length === 0 && <p className="text-boxwood/70">Архетипы загружаются с сервера…</p>}
+                <h3 className="font-bold text-amber-300 mb-1">{t('workshop.archetypes')}</h3>
+                {archetypes.length === 0 && <p className="text-boxwood/70">{t('workshop.archetypesLoading')}</p>}
                 <div className="flex flex-wrap gap-1">
                     {archetypes.map((a) => (
                         <button key={a.name} type="button" title={a.bio}
@@ -221,15 +232,15 @@ export function PersonalityWorkshop({
 
             <section className="flex flex-col gap-1.5 p-2 rounded-md bg-black/40 border border-amber-800/50">
                 <label className="flex flex-col gap-0.5">
-                    <span className="text-amber-200 font-semibold">Имя соперника</span>
+                    <span className="text-amber-200 font-semibold">{t('workshop.opponentName')}</span>
                     <input value={draft.name} maxLength={30}
                            onChange={(e) => setDraft((d) => ({...d, name: e.target.value}))}
-                           placeholder="Например, Гамбитёр"
+                           placeholder={t('workshop.namePlaceholder')}
                            className="px-2 py-1 rounded bg-black/50 border border-amber-800/60 text-boxwood-light"/>
                 </label>
                 {draft.bio && <p className="italic text-boxwood/80">{draft.bio}</p>}
 
-                <div className="flex justify-center" aria-label="Радар стиля">
+                <div className="flex justify-center" aria-label={t('workshop.radar.label')}>
                     <RadarChart width={220} height={150} data={radar} outerRadius={50}>
                         <PolarGrid stroke="#78350f"/>
                         <PolarAngleAxis dataKey="axis" tick={{fill: '#e7c38b', fontSize: 10}}/>
@@ -254,16 +265,15 @@ export function PersonalityWorkshop({
 
                 <p className="text-amber-200/90" data-testid="strength-note">{strengthNote(draft.config)}</p>
                 <p className="text-[10px] text-boxwood/60 leading-tight">
-                    Ходы оценивает Stockfish; характер выбирает среди хороших ходов, но не меняет их оценку.
-                    Радар — наглядная сводка ползунков, а не измеренная сила.
+                    {t('workshop.engineNote')}
                 </p>
 
                 {error && <p role="alert" className="text-red-300">{error}</p>}
-                {notice && !error && <p className="text-emerald-300">{notice}</p>}
+                {notice && !error && <p className="text-emerald-300">{t(notice)}</p>}
 
                 <button type="button" onClick={save} disabled={busy}
                         className="flex items-center justify-center gap-1 py-1 rounded bg-amber-900/70 border border-amber-600/50 hover:bg-amber-800 disabled:opacity-40 cursor-pointer">
-                    <Save size={12}/> Сохранить соперника
+                    <Save size={12}/> {t('workshop.save')}
                 </button>
 
                 {canStartFromPosition && (
@@ -271,22 +281,22 @@ export function PersonalityWorkshop({
                         <input type="checkbox" checked={startFromPosition}
                                onChange={(e) => onStartFromPositionChange(e.target.checked)}
                                className="accent-amber-600"/>
-                        Начать с позиции на доске
+                        {t('common.startFromPosition')}
                     </label>
                 )}
 
                 <div className="grid grid-cols-3 gap-1.5">
                     <button type="button" disabled={playDisabled} onClick={() => play('white')}
                             className="py-1.5 font-bold rounded-md bg-boxwood text-acacia-dark hover:bg-boxwood-light disabled:opacity-40 cursor-pointer">
-                        ♔ Белыми
+                        {t('common.playAsWhite')}
                     </button>
                     <button type="button" disabled={playDisabled} onClick={() => play('random')}
                             className="py-1.5 font-bold rounded-md bg-amber-700 text-white hover:bg-amber-600 disabled:opacity-40 cursor-pointer">
-                        🎲 Случайно
+                        {t('common.playRandom')}
                     </button>
                     <button type="button" disabled={playDisabled} onClick={() => play('black')}
                             className="py-1.5 font-bold rounded-md bg-black/70 text-amber-200 border border-amber-700/60 hover:bg-black disabled:opacity-40 cursor-pointer">
-                        ♚ Чёрными
+                        {t('common.playAsBlack')}
                     </button>
                 </div>
             </section>

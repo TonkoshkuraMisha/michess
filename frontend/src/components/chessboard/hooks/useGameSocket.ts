@@ -13,38 +13,18 @@ import {resolveMoveSound} from '../../../services/soundEngine';
 import type {SoundEventType} from '../../../services/soundEngine';
 import {API_BASE_URL} from '../../../config/api';
 import {GAME_ACTION_ERROR_CODES} from '../types';
-import type {LiveGameItem, ChatMessageItem, QueuePlayer, PendingPromotion} from '../types';
+import {isChatPreset} from '../types';
+import type {LiveGameItem, ChatMessageItem, QueuePlayer, PendingPromotion, ChatPresetId} from '../types';
 import type {BotOpponentId} from '../../../config/champions';
+import {describeGameOver, hasStatusKey, messageParam, status} from '../status';
+import type {GameStatus} from '../status';
 
-const DRAW_OFFER_INCOMING = 'Соперник предлагает ничью.';
-const DRAW_OFFER_OUTGOING = 'Вы предложили ничью...';
-const DRAW_DECLINED = 'Предложение ничьей отклонено.';
+const DRAW_OFFER_INCOMING = status('status.drawOffered');
+const DRAW_OFFER_OUTGOING = status('status.drawOfferSent');
+const DRAW_DECLINED = status('status.drawDeclined');
 
 /** Сколько опросов подряд сервер должен ответить «активной партии нет», чтобы считать её завершённой. */
 const MISSING_GAME_POLLS = 2;
-
-const GAME_OVER_REASONS: Record<string, string> = {
-    checkmate: 'мат',
-    stalemate: 'пат',
-    timeout: 'истекло время',
-    resignation: 'сдача',
-    agreement: 'по соглашению',
-    draw_agreement: 'по соглашению',
-    repetition: 'троекратное повторение',
-    '50_move_rule': 'правило 50 ходов',
-    insufficient_material: 'недостаточно материала',
-    timeout_vs_insufficient_material: 'время истекло, но поставить мат нечем',
-    abandoned: 'игрок покинул партию',
-    abandoned_vs_insufficient_material: 'игрок покинул партию, поставить мат нечем',
-};
-
-/** Текст итога партии: «Партия окончена. Результат: 1-0 (мат)». */
-export function describeGameOver(result: string | null | undefined, reason?: string | null): string | null {
-    if (reason === 'aborted' || result === '*') return 'Партия отменена на 1-м ходу (рейтинг не изменён).';
-    if (!result) return null;
-    const reasonText = reason ? GAME_OVER_REASONS[reason] : undefined;
-    return `Партия окончена. Результат: ${result}${reasonText ? ` (${reasonText})` : ''}`;
-}
 
 export interface UseGameSocketOptions {
     gameId: number | null;
@@ -60,7 +40,6 @@ export interface UseGameSocketOptions {
     navigate: NavigateFunction;
     effectiveWhiteBaseMinutes: number;
     effectiveIncSeconds: number;
-    selectedTimeControlLabel: string;
     inviteColorPref: 'white' | 'black' | 'random';
     /** Тип новых партий, выбранный игроком: рейтинговая или товарищеская. */
     ratedChoice: boolean;
@@ -79,7 +58,7 @@ export interface UseGameSocketOptions {
     setBlackPlayer: (p: { username: string; rating: string }) => void;
     setRatingInfo: (r: any) => void;
     setGameOverResult: (r: string | null) => void;
-    setDrawOfferStatus: React.Dispatch<React.SetStateAction<string | null>>;
+    setDrawOfferStatus: React.Dispatch<React.SetStateAction<GameStatus | null>>;
     setRematchStatus: (s: 'none' | 'offered_by_me' | 'offered_by_opponent' | 'declined') => void;
     isSearching: boolean;
     setIsSearching: (v: boolean) => void;
@@ -118,7 +97,8 @@ export interface UseGameSocketResult {
     handleCreatePrivateInvite: () => void;
     handleCopyInviteLink: () => void;
     handleSpectateGame: (targetGameId: number) => void;
-    handleSendChatMessage: (textToSend?: string) => void;
+    handleSendChatMessage: () => void;
+    handleSendChatPreset: (preset: ChatPresetId) => void;
     handleAcceptRematch: () => void;
     handleDeclineRematch: () => void;
     handleOfferDraw: () => void;
@@ -129,7 +109,7 @@ export interface UseGameSocketResult {
 export function useGameSocket({
     gameId, gameIdRef, myColorRef, spectatingGameId, stateVersionRef,
     gameOverResult, gameOverResultRef, activeBot, currentUsernameRef, inviteCode, navigate,
-    effectiveWhiteBaseMinutes, effectiveIncSeconds, selectedTimeControlLabel, inviteColorPref,
+    effectiveWhiteBaseMinutes, effectiveIncSeconds, inviteColorPref,
     ratedChoice, setIsRatedGame,
     setGame, setHistory, setViewIndex, setGameId, setMyColor, setSpectatingGameId,
     setStateVersion, setWhitePlayer, setBlackPlayer, setRatingInfo, setGameOverResult,
@@ -276,7 +256,7 @@ export function useGameSocket({
             && Number(data.draw_offer_from) === Number(data.opponent_id);
 
         if (isNewMatch) {
-            const startMessage = `Партия началась! Вы играете ${assignedColor === 'white' ? 'Белыми' : 'Чёрными'}.`;
+            const startMessage = status(assignedColor === 'white' ? 'status.gameStartedWhite' : 'status.gameStartedBlack');
             setDrawOfferStatus(hasIncomingDrawOffer ? DRAW_OFFER_INCOMING : startMessage);
             playAudio('start');
             // Убираем только своё сообщение: за 3 с на его месте мог появиться другой статус.
@@ -284,7 +264,7 @@ export function useGameSocket({
         } else if (hasIncomingDrawOffer) {
             setDrawOfferStatus(DRAW_OFFER_INCOMING);
         } else {
-            setDrawOfferStatus(prev => (prev === DRAW_OFFER_INCOMING ? null : prev));
+            setDrawOfferStatus(prev => (hasStatusKey(prev, 'status.drawOffered') ? null : prev));
         }
     }, [playAudio]);
 
@@ -336,8 +316,8 @@ export function useGameSocket({
             const moverColor = nextGame.turn() === 'w' ? 'black' : 'white';
             const moverIsMe = moverColor === myColorRef.current;
             setDrawOfferStatus(prev => {
-                if (prev === DRAW_OFFER_INCOMING && moverIsMe) return null;
-                if (prev === DRAW_OFFER_OUTGOING && !moverIsMe) return null;
+                if (hasStatusKey(prev, 'status.drawOffered') && moverIsMe) return null;
+                if (hasStatusKey(prev, 'status.drawOfferSent') && !moverIsMe) return null;
                 return prev;
             });
         }
@@ -381,7 +361,7 @@ export function useGameSocket({
             if (!isOwnGameEvent(data) || gameOverResultRef.current) return;
             setDrawOfferStatus(DRAW_DECLINED);
             playAudio('decline');
-            setTimeout(() => setDrawOfferStatus(prev => (prev === DRAW_DECLINED ? null : prev)), 3000);
+            setTimeout(() => setDrawOfferStatus(prev => (hasStatusKey(prev, 'status.drawDeclined') ? null : prev)), 3000);
         };
 
         const handleRematchOffered = (data: any) => {
@@ -440,8 +420,8 @@ export function useGameSocket({
             setSelectedSquare(null);
             setPendingPromotion(null);
             clearPremove();
-            setWhitePlayer({username: data.white_username || 'Белые', rating: String(data.white_rating || 1200)});
-            setBlackPlayer({username: data.black_username || 'Черные', rating: String(data.black_rating || 1200)});
+            setWhitePlayer({username: data.white_username || '', rating: String(data.white_rating || 1200)});
+            setBlackPlayer({username: data.black_username || '', rating: String(data.black_rating || 1200)});
             setWhiteTimeMs(data.white_time_ms ?? data.base_time_ms ?? 180000);
             setBlackTimeMs(data.black_time_ms ?? data.base_time_ms ?? 180000);
 
@@ -461,16 +441,21 @@ export function useGameSocket({
             gameOverResultRef.current = null;
             setGameOverResult(null);
             setChatMessages([]);
-            setDrawOfferStatus(`Режим зрителя: ${data.white_username} vs ${data.black_username}`);
+            setDrawOfferStatus(status('status.spectating', {
+                white: data.white_username || messageParam('common.white'),
+                black: data.black_username || messageParam('common.black'),
+            }));
             playAudio('start');
         };
 
         const handleChatMessage = (data: any) => {
             if (!isCurrentGameEvent(data)) return;
-            if (data.text && data.sender) {
+            const preset = isChatPreset(data.preset) ? data.preset : undefined;
+            if ((data.text || preset) && data.sender) {
                 setChatMessages(prev => [...prev.slice(-49), {
                     sender: data.sender,
-                    text: data.text,
+                    text: preset ? '' : data.text,
+                    ...(preset ? {preset} : {}),
                     timestamp: data.timestamp || Date.now()
                 }]);
                 if (data.sender !== currentUsernameRef.current) {
@@ -480,12 +465,12 @@ export function useGameSocket({
         };
 
         const handleServerError = (data: any) => {
-            console.warn('Сервер отклонил действие:', data);
+            console.warn('Server rejected the action:', data);
             // Действие продублировано (WS + HTTP, повтор после переподключения), и партия уже
             // началась по первому из запросов — «вы уже играете» здесь не ошибка.
             if (data.code === 'self_in_game' && gameIdRef.current && !gameOverResultRef.current) return;
             if (data.code) {
-                if (data.message) setDrawOfferStatus(data.message);
+                if (data.message) setDrawOfferStatus({text: String(data.message)});
                 // Отказ матчмейкинга (уже в партии, вне диапазона рейтинга, вызов неактуален...)
                 // выводит из режима поиска; ограничения чата, предложений и частоты — нет.
                 if (!GAME_ACTION_ERROR_CODES.has(data.code)) {
@@ -657,9 +642,11 @@ export function useGameSocket({
         setLeftSectionTab('lobby');
         setLobbyTab('lobby');
         setIsTimeDropdownOpen(false);
-        setDrawOfferStatus(
-            `Вы опубликовали ${ratedChoice ? 'рейтинговый' : 'товарищеский'} вызов в лобби (${selectedTimeControlLabel})...`,
-        );
+        setDrawOfferStatus(status(ratedChoice ? 'status.challengePublishedRated' : 'status.challengePublishedCasual', {
+            timeControl: effectiveIncSeconds > 0
+                ? messageParam('timeControl.minutesIncrement', {base: effectiveWhiteBaseMinutes, inc: effectiveIncSeconds})
+                : messageParam('timeControl.minutes', {base: effectiveWhiteBaseMinutes}),
+        }));
 
         const baseMs = Math.round(effectiveWhiteBaseMinutes * 60 * 1000);
         const incMs = Math.round(effectiveIncSeconds * 1000);
@@ -695,7 +682,7 @@ export function useGameSocket({
     }, [
         gameIdRef, setGameId, exitBotGame, resetLowTimeWarning, setPendingPromotion, clearPremove,
         setGameOverResult, setRatingInfo, setIsSearching, setLeftSectionTab, setLobbyTab,
-        setIsTimeDropdownOpen, setDrawOfferStatus, selectedTimeControlLabel, effectiveWhiteBaseMinutes,
+        setIsTimeDropdownOpen, setDrawOfferStatus, effectiveWhiteBaseMinutes,
         effectiveIncSeconds, applyMatchFoundSnapshot, gameOverResultRef, setSpectatingGameId, setGame,
         setHistory, setViewIndex, ratedChoice,
     ]);
@@ -741,7 +728,7 @@ export function useGameSocket({
                 }
             }
         } catch (err) {
-            console.error('Ошибка при принятии вызова по HTTP:', err);
+            console.error('Failed to accept the challenge over HTTP:', err);
         }
     }, [exitBotGame, setPendingPromotion, clearPremove, applyMatchFoundSnapshot]);
 
@@ -769,16 +756,23 @@ export function useGameSocket({
         gameSocket.send('spectate_game', {game_id: targetGameId});
     }, []);
 
-    const handleSendChatMessage = useCallback((textToSend?: string) => {
+    const handleSendChatMessage = useCallback(() => {
         const activeGid = gameId || spectatingGameId;
-        const finalMsg = (textToSend ?? chatInput).trim();
+        const finalMsg = chatInput.trim();
         if (!activeGid || !finalMsg) return;
         gameSocket.send('chat_message', {
             game_id: activeGid,
             text: finalMsg.slice(0, 140)
         });
-        if (!textToSend) setChatInput('');
+        setChatInput('');
     }, [gameId, spectatingGameId, chatInput]);
+
+    /** Быстрая фраза уходит кодом: каждый участник увидит её на своём языке. */
+    const handleSendChatPreset = useCallback((preset: ChatPresetId) => {
+        const activeGid = gameId || spectatingGameId;
+        if (!activeGid) return;
+        gameSocket.send('chat_message', {game_id: activeGid, preset});
+    }, [gameId, spectatingGameId]);
 
     const handleAcceptRematch = useCallback(() => {
         if (!gameId) return;
@@ -815,7 +809,7 @@ export function useGameSocket({
     return {
         chatMessages, chatInput, setChatInput, liveGames, queuePlayers, createdInviteCode, inviteCopied,
         applyMatchFoundSnapshot, applyMoveMadeSnapshot, startMatchmaking, cancelMatchmaking, acceptChallenge,
-        handleCreatePrivateInvite, handleCopyInviteLink, handleSpectateGame, handleSendChatMessage,
+        handleCreatePrivateInvite, handleCopyInviteLink, handleSpectateGame, handleSendChatMessage, handleSendChatPreset,
         handleAcceptRematch, handleDeclineRematch, handleOfferDraw, acceptDraw, declineDraw,
     };
 }

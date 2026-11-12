@@ -75,7 +75,8 @@ describe('AuthModal: вход', () => {
 
         fillAndSubmit('alice', 'secret-pass', /Войти/);
 
-        expect(await screen.findByText('Failed to fetch')).toBeInTheDocument();
+        // Текст исключения браузера («Failed to fetch») не показываем — он не на языке игрока.
+        expect(await screen.findByText('Нет связи с сервером, попробуйте ещё раз')).toBeInTheDocument();
     });
 });
 

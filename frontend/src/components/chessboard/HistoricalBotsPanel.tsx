@@ -3,6 +3,7 @@
 import {MessageSquareQuote} from 'lucide-react';
 import {HISTORICAL_BOTS_LIST} from '../../config/champions';
 import type {BotOpponentId, HistoricalBotId, HistoricalBotProfile} from '../../config/champions';
+import {useI18n} from '../../i18n';
 
 export interface HistoricalBotsPanelProps {
     selectedBotId: HistoricalBotId;
@@ -29,6 +30,7 @@ export function HistoricalBotsPanel({
     gameOverResult, isBotThinking, botComment, onStartBotGame,
     canStartFromPosition, startFromPosition, onStartFromPositionChange, measured = {},
 }: HistoricalBotsPanelProps) {
+    const {t} = useI18n();
     return (
         <div
             className="flex-1 min-h-0 bg-acacia-dark p-2.5 rounded-md border border-amber-700/40 flex flex-col justify-between gap-2 shadow-inner overflow-y-auto [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
@@ -64,7 +66,7 @@ export function HistoricalBotsPanel({
                                     {botItem.shortName}
                                 </div>
                                 <div className="text-[11px] font-mono text-amber-300/90">
-                                    Эло {measured[botItem.id] ?? botItem.rating}{measured[botItem.id] ? ' изм.' : ''}
+                                    {t('bots.eloShort', {rating: measured[botItem.id] ?? botItem.rating})}{measured[botItem.id] ? t('bots.measuredMark') : ''}
                                 </div>
                             </div>
                         </button>
@@ -93,7 +95,7 @@ export function HistoricalBotsPanel({
                             {activeBot === selectedBotProfile.id && !gameOverResult && (
                                 <span
                                     className="text-[11px] font-bold px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-600/50 shrink-0">
-                                    В игре
+                                    {t('bots.inGame')}
                                 </span>
                             )}
                         </div>
@@ -101,14 +103,17 @@ export function HistoricalBotsPanel({
                             {selectedBotProfile.title}
                         </div>
                         <div className="text-[11px] text-boxwood/75 font-mono">
-                            Годы: {selectedBotProfile.era} • Рейтинг ~{measured[selectedBotProfile.id] ?? selectedBotProfile.rating}
-                            {measured[selectedBotProfile.id] ? ' (измерен)' : ''}
+                            {t('bots.eraAndRating', {
+                                era: selectedBotProfile.era,
+                                rating: measured[selectedBotProfile.id] ?? selectedBotProfile.rating,
+                            })}
+                            {measured[selectedBotProfile.id] ? t('bots.ratingMeasured') : ''}
                         </div>
                     </div>
                 </div>
 
                 <p className="text-xs italic text-boxwood/90 leading-snug bg-black/30 p-2 rounded border border-amber-900/30">
-                    «{selectedBotProfile.motto}»
+                    {t('bots.quote', {text: selectedBotProfile.motto})}
                 </p>
 
                 {canStartFromPosition && (
@@ -119,7 +124,7 @@ export function HistoricalBotsPanel({
                             onChange={(e) => onStartFromPositionChange(e.target.checked)}
                             className="accent-amber-600"
                         />
-                        Начать с позиции на доске
+                        {t('common.startFromPosition')}
                     </label>
                 )}
 
@@ -130,7 +135,7 @@ export function HistoricalBotsPanel({
                         onClick={() => onStartBotGame(selectedBotId, 'white')}
                         className="py-1.5 px-2 text-xs font-bold rounded-md bg-boxwood text-acacia-dark hover:bg-boxwood-light disabled:opacity-40 transition cursor-pointer shadow"
                     >
-                        ♔ Белыми
+                        {t('common.playAsWhite')}
                     </button>
                     <button
                         type="button"
@@ -138,7 +143,7 @@ export function HistoricalBotsPanel({
                         onClick={() => onStartBotGame(selectedBotId, 'random')}
                         className="py-1.5 px-2 text-xs font-bold rounded-md bg-amber-700 text-white border border-amber-500/50 hover:bg-amber-600 disabled:opacity-40 transition cursor-pointer shadow"
                     >
-                        🎲 Случайно
+                        {t('common.playRandom')}
                     </button>
                     <button
                         type="button"
@@ -146,7 +151,7 @@ export function HistoricalBotsPanel({
                         onClick={() => onStartBotGame(selectedBotId, 'black')}
                         className="py-1.5 px-2 text-xs font-bold rounded-md bg-black/70 text-amber-200 border border-amber-700/60 hover:bg-black disabled:opacity-40 transition cursor-pointer shadow"
                     >
-                        ♚ Чёрными
+                        {t('common.playAsBlack')}
                     </button>
                 </div>
             </div>
@@ -155,16 +160,16 @@ export function HistoricalBotsPanel({
                 <div className="p-2 rounded-md bg-black/55 border border-amber-600/40 text-xs text-amber-100">
                     <div className="font-bold text-amber-400 mb-0.5 flex items-center justify-between text-xs">
                         <span className="flex items-center gap-1.5">
-                            <MessageSquareQuote size={13}/> Мысль ({activeBotProfile.shortName}):
+                            <MessageSquareQuote size={13}/> {t('bots.thought', {name: activeBotProfile.shortName})}
                         </span>
                         {isBotThinking && (
                             <span className="animate-pulse text-amber-300 font-mono text-[11px]">
-                                обдумывает ход...
+                                {t('bots.thinking')}
                             </span>
                         )}
                     </div>
                     <div className="text-xs text-boxwood-light leading-snug">
-                        {botComment || 'Посмотрим, как развернётся борьба за центр.'}
+                        {botComment || t('bots.defaultThought')}
                     </div>
                 </div>
             )}

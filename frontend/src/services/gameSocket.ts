@@ -20,8 +20,8 @@ async function fetchWsTicket(token: string): Promise<string> {
         method: 'POST',
         headers: {Authorization: `Bearer ${token}`},
     });
-    if (res.status === 401) throw new AuthExpiredError('Сессия истекла');
-    if (res.status === 429) throw new RateLimitedError('Слишком частые переподключения');
+    if (res.status === 401) throw new AuthExpiredError('Session expired');
+    if (res.status === 429) throw new RateLimitedError('Too many reconnects');
     if (!res.ok) throw new Error(`ws-ticket: HTTP ${res.status}`);
     const data = await res.json();
     return data.ticket;
@@ -75,7 +75,7 @@ class GameWebSocketService {
             if (err instanceof AuthExpiredError) {
                 this.handleAuthExpired();
             } else {
-                console.warn('Не удалось получить тикет WebSocket:', err);
+                console.warn('Failed to get a WebSocket ticket:', err);
                 this.scheduleReconnect(err instanceof RateLimitedError ? RATE_LIMITED_RECONNECT_DELAY_MS : RECONNECT_DELAY_MS);
             }
             return;
@@ -115,7 +115,7 @@ class GameWebSocketService {
                     this.listeners['*'].forEach(cb => cb(data));
                 }
             } catch (e) {
-                console.error('Ошибка парсинга JSON от WebSocket:', e);
+                console.error('Failed to parse WebSocket JSON:', e);
             }
         };
 
@@ -133,7 +133,7 @@ class GameWebSocketService {
         };
 
         socket.onerror = (error) => {
-            console.error('WebSocket ошибка:', error);
+            console.error('WebSocket error:', error);
         };
     }
 
@@ -193,7 +193,7 @@ class GameWebSocketService {
             this.pendingMessages.push(serialized);
             this.connect(fallbackToken);
         } else {
-            console.error('Невозможно отправить сообщение: пользователь не авторизован');
+            console.error('Cannot send a message: the user is not logged in');
         }
     }
 

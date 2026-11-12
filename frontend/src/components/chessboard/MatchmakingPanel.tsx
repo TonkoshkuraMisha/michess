@@ -1,6 +1,7 @@
 // --- FILE: frontend/src/components/chessboard/MatchmakingPanel.tsx ---
 
 import {Loader2, Users, Link2, Check, Copy} from 'lucide-react';
+import {useI18n} from '../../i18n';
 
 export interface MatchmakingPanelProps {
     gameId: number | null;
@@ -30,18 +31,19 @@ export function MatchmakingPanel({
     showInvitePanel, onToggleInvitePanel, inviteColorPref, onInviteColorPrefChange,
     createdInviteCode, inviteCopied, onCreatePrivateInvite, onCopyInviteLink,
 }: MatchmakingPanelProps) {
+    const {t} = useI18n();
     return (
         <>
             {!gameId && (
                 <div
                     role="radiogroup"
-                    aria-label="Тип партии"
+                    aria-label={t('matchmaking.gameType')}
                     className="grid grid-cols-2 gap-1 p-0.5 bg-black/45 rounded border border-amber-900/50"
                 >
-                    {([[true, 'Рейтинговая', 'Результат меняет рейтинг'],
-                        [false, 'Товарищеская', 'Без изменения рейтинга']] as const).map(([rated, label, hint]) => (
+                    {([[true, t('common.rated'), t('matchmaking.ratedHint')],
+                        [false, t('common.casual'), t('matchmaking.casualHint')]] as const).map(([rated, label, hint]) => (
                         <button
-                            key={label}
+                            key={String(rated)}
                             type="button"
                             role="radio"
                             aria-checked={ratedChoice === rated}
@@ -69,7 +71,7 @@ export function MatchmakingPanel({
                         }`}
                     >
                         {isSearching ? <Loader2 className="animate-spin" size={15}/> : <Users size={15}/>}
-                        {isSearching ? 'Отменить поиск' : 'Найти соперника'}
+                        {t(isSearching ? 'matchmaking.cancelSearch' : 'matchmaking.findOpponent')}
                     </button>
 
                     <button
@@ -80,23 +82,23 @@ export function MatchmakingPanel({
                                 ? 'bg-amber-700 text-white border-amber-400'
                                 : 'bg-black/45 hover:bg-black/65 text-amber-200 border-amber-700/50'
                         }`}
-                        title="Создать ссылку для игры с другом"
+                        title={t('matchmaking.withFriendHint')}
                     >
-                        <Link2 size={14}/> С другом
+                        <Link2 size={14}/> {t('matchmaking.withFriend')}
                     </button>
                 </div>
             ) : (
                 <div className="text-center py-1.5 px-3 rounded bg-emerald-950/60 border border-emerald-700/50 text-emerald-300 text-xs sm:text-sm font-bold">
                     {gameOverResult
-                        ? `Партия завершена (${gameOverResult})`
-                        : isRatedGame ? 'Идет рейтинговая партия' : 'Идёт товарищеская партия'}
+                        ? t('matchmaking.gameFinished', {result: gameOverResult})
+                        : t(isRatedGame ? 'matchmaking.ratedInProgress' : 'matchmaking.casualInProgress')}
                 </div>
             )}
 
             {showInvitePanel && !gameId && (
                 <div className="p-2 rounded bg-black/45 border border-amber-700/40 flex flex-col gap-1.5">
                     <div className="flex items-center justify-between text-xs font-bold text-amber-200">
-                        <span>Цвет в партии с другом:</span>
+                        <span>{t('matchmaking.friendColor')}</span>
                         <div className="flex items-center gap-1 bg-black/50 p-0.5 rounded border border-amber-900/50">
                             {(['white', 'random', 'black'] as const).map(c => (
                                 <button
@@ -107,7 +109,7 @@ export function MatchmakingPanel({
                                         inviteColorPref === c ? 'bg-amber-700 text-white' : 'text-boxwood/70 hover:text-amber-200'
                                     }`}
                                 >
-                                    {c === 'white' ? '♔ Белые' : c === 'black' ? '♚ Чёрные' : '🎲 Случайно'}
+                                    {t(c === 'white' ? 'matchmaking.colorWhite' : c === 'black' ? 'matchmaking.colorBlack' : 'matchmaking.colorRandom')}
                                 </button>
                             ))}
                         </div>
@@ -119,7 +121,7 @@ export function MatchmakingPanel({
                             onClick={onCreatePrivateInvite}
                             className="w-full py-1.5 px-3 rounded bg-amber-800/70 hover:bg-amber-700 text-amber-100 text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer shadow"
                         >
-                            <Link2 size={13}/> Сгенерировать и скопировать ссылку
+                            <Link2 size={13}/> {t('matchmaking.createLink')}
                         </button>
                     ) : (
                         <div className="flex items-center gap-1.5">
@@ -135,7 +137,7 @@ export function MatchmakingPanel({
                                 className="px-2.5 py-1 rounded bg-emerald-800 hover:bg-emerald-700 text-emerald-100 text-xs font-bold flex items-center gap-1 shrink-0 cursor-pointer"
                             >
                                 {inviteCopied ? <Check size={13}/> : <Copy size={13}/>}
-                                {inviteCopied ? 'Скопировано' : 'Копия'}
+                                {t(inviteCopied ? 'matchmaking.copied' : 'matchmaking.copy')}
                             </button>
                         </div>
                     )}

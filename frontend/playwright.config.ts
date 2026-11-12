@@ -23,6 +23,8 @@ export default defineConfig({
         trace: 'retain-on-failure',
         screenshot: 'only-on-failure',
         viewport: {width: 1400, height: 900},
+        // Сценарии написаны против русского интерфейса; язык берётся из языка браузера.
+        locale: 'ru-RU',
         permissions: ['clipboard-read', 'clipboard-write'],
     },
     projects: [{name: 'chromium', use: {...devices['Desktop Chrome'], viewport: {width: 1400, height: 900}}}],

@@ -46,6 +46,9 @@ import {PersonalityWorkshop} from './chessboard/PersonalityWorkshop';
 import {LadderPanel} from './chessboard/LadderPanel';
 import type {LadderStart} from './chessboard/LadderPanel';
 import {ladderOutcomeMessage} from './chessboard/hooks/useBotGame';
+import {hasStatusKey, renderStatus, status} from './chessboard/status';
+import type {GameStatus} from './chessboard/status';
+import {useI18n} from '../i18n';
 import {fetchBotCatalog} from '../services/botCatalog';
 import type {CustomOpponent} from '../config/archetypes';
 import {LobbyPanel} from './chessboard/LobbyPanel';
@@ -58,6 +61,7 @@ export {BOARD_THEMES, HISTORICAL_BOTS};
 export type {BoardTheme, HistoricalBotId, HistoricalBotProfile};
 
 export default function Chessboard() {
+    const {t} = useI18n();
     const navigate = useNavigate();
     const {inviteCode} = useParams<{ inviteCode?: string }>();
 
@@ -93,8 +97,8 @@ export default function Chessboard() {
     const myColorRef = useRef<'white' | 'black'>('white');
     const [isSearching, setIsSearching] = useState(false);
     const [currentUserId, setCurrentUserId] = useState<number | null>(null);
-    const [currentUsername, setCurrentUsername] = useState<string>('Вы');
-    const currentUsernameRef = useRef<string>('Вы');
+    const [currentUsername, setCurrentUsername] = useState<string>('');
+    const currentUsernameRef = useRef<string>('');
     const [currentUserRating, setCurrentUserRating] = useState<number>(1200);
     const [stateVersion, setStateVersion] = useState(0);
     const stateVersionRef = useRef<number>(0);
@@ -122,8 +126,11 @@ export default function Chessboard() {
     const boardContainerRef = useRef<HTMLDivElement>(null);
     const notationScrollRef = useRef<HTMLDivElement>(null);
 
-    const [whitePlayer, setWhitePlayer] = useState({username: 'Белые', rating: '1200'});
-    const [blackPlayer, setBlackPlayer] = useState({username: 'Черные', rating: '1200'});
+    // Пустое имя — игрок неизвестен: на экране вместо него «Белые»/«Чёрные» на текущем языке.
+    const [whitePlayer, setWhitePlayer] = useState({username: '', rating: '1200'});
+    const [blackPlayer, setBlackPlayer] = useState({username: '', rating: '1200'});
+    const shownWhitePlayer = {...whitePlayer, username: whitePlayer.username || t('common.white')};
+    const shownBlackPlayer = {...blackPlayer, username: blackPlayer.username || t('common.black')};
     const [ratingInfo, setRatingInfo] = useState<{
         white_delta?: number;
         black_delta?: number;
@@ -169,7 +176,7 @@ export default function Chessboard() {
     useEffect(() => {
         gameOverResultRef.current = gameOverResult;
     }, [gameOverResult]);
-    const [drawOfferStatus, setDrawOfferStatus] = useState<string | null>(null);
+    const [drawOfferStatus, setDrawOfferStatus] = useState<GameStatus | null>(null);
     const [rematchStatus, setRematchStatus] = useState<'none' | 'offered_by_me' | 'offered_by_opponent' | 'declined'>('none');
 
     const activeTheme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
@@ -240,7 +247,7 @@ export default function Chessboard() {
 
     const {
         selectedBotId, setSelectedBotId, botComment, isBotThinking, savedBotGameId,
-        startHistoricalBotGame, startCustomBotGame, botProfileFor, saveBotGameToDatabase, exitBotGame,
+        startHistoricalBotGame, startCustomBotGame, botProfileFor, botNameParam, saveBotGameToDatabase, exitBotGame,
         isLadderGame, ladderOutcome,
     } = useBotGame({
         game, myColor, gameOverResult, whiteTimeMs, blackTimeMs, isSearching, setIsSearching,
@@ -260,12 +267,12 @@ export default function Chessboard() {
     const {
         chatMessages, chatInput, setChatInput, liveGames, queuePlayers, createdInviteCode, inviteCopied,
         startMatchmaking, cancelMatchmaking, acceptChallenge,
-        handleCreatePrivateInvite, handleCopyInviteLink, handleSpectateGame, handleSendChatMessage,
+        handleCreatePrivateInvite, handleCopyInviteLink, handleSpectateGame, handleSendChatMessage, handleSendChatPreset,
         handleAcceptRematch, handleDeclineRematch, handleOfferDraw, acceptDraw, declineDraw,
     } = useGameSocket({
         gameId, gameIdRef, myColorRef, spectatingGameId, stateVersionRef,
         gameOverResult, gameOverResultRef, activeBot, currentUsernameRef, inviteCode, navigate,
-        effectiveWhiteBaseMinutes, effectiveIncSeconds, selectedTimeControlLabel: selectedTimeControl.label,
+        effectiveWhiteBaseMinutes, effectiveIncSeconds,
         inviteColorPref, ratedChoice, setIsRatedGame,
         setGame, setHistory, setViewIndex, setGameId, setMyColor, setSpectatingGameId, setActiveBot,
         setStateVersion, setWhitePlayer, setBlackPlayer, setRatingInfo, setGameOverResult,
@@ -556,9 +563,8 @@ export default function Chessboard() {
                     if (nextGame.isCheckmate()) {
                         result = nextGame.turn() === 'w' ? '0-1' : '1-0';
                     }
-                    const botName = botProfileFor(activeBot).shortName;
                     setGameOverResult(result);
-                    setDrawOfferStatus(`Партия против ${botName} окончена и сохранена в архив (${result}).`);
+                    setDrawOfferStatus(status('status.botGameOver', {bot: botNameParam(activeBot), result}));
                     updateSessionStats(result);
                     playOutcomeSound(result, myColor);
                     saveBotGameToDatabase(activeBot, myColor, result, nextGame);
@@ -674,7 +680,7 @@ export default function Chessboard() {
             gameSocket.send('abort_game', {game_id: gameId});
         } else if (activeBot) {
             setGameOverResult('*');
-            setDrawOfferStatus('Партия отменена без изменения счёта.');
+            setDrawOfferStatus(status('status.botAborted'));
             playAudio('decline');
         }
     };
@@ -693,16 +699,15 @@ export default function Chessboard() {
 
     const handleResign = () => {
         if ((!gameId && !activeBot) || gameOverResult) return;
-        if (window.confirm('Вы действительно хотите сдаться?')) {
+        if (window.confirm(t('controls.resignConfirm'))) {
             setPendingPromotion(null);
             setPremove(null);
             if (gameId) {
                 gameSocket.send('resign', {game_id: gameId});
             } else if (activeBot) {
                 const res = myColor === 'white' ? '0-1' : '1-0';
-                const botName = botProfileFor(activeBot).shortName;
                 setGameOverResult(res);
-                setDrawOfferStatus(`Вы сдались. Победа ${botName} (${res}).`);
+                setDrawOfferStatus(status('status.resigned', {bot: botNameParam(activeBot), result: res}));
                 updateSessionStats(res);
                 playOutcomeSound(res, myColor);
                 saveBotGameToDatabase(activeBot, myColor, res, game, 'resignation');
@@ -857,8 +862,8 @@ export default function Chessboard() {
     const displayedFiles = isBoardFlipped ? [...FILES].reverse() : FILES;
 
     const topIsWhite = isBoardFlipped;
-    const topPlayerInfo = topIsWhite ? whitePlayer : blackPlayer;
-    const bottomPlayerInfo = topIsWhite ? blackPlayer : whitePlayer;
+    const topPlayerInfo = topIsWhite ? shownWhitePlayer : shownBlackPlayer;
+    const bottomPlayerInfo = topIsWhite ? shownBlackPlayer : shownWhitePlayer;
     const topPlayerTime = topIsWhite ? whiteTimeMs : blackTimeMs;
     const bottomPlayerTime = topIsWhite ? blackTimeMs : whiteTimeMs;
     const topIdlePreviewMs = Math.round((topIsWhite ? effectiveWhiteBaseMinutes : effectiveBlackBaseMinutes) * 60 * 1000);
@@ -898,7 +903,7 @@ export default function Chessboard() {
                 {name: opponent.name, config: opponent.config, bio: opponent.bio ?? undefined}, color, null, {ladder: true},
             );
         }
-        if (forfeited) setDrawOfferStatus(`Брошенная партия лестницы: ${ladderOutcomeMessage(forfeited)}`);
+        if (forfeited) setDrawOfferStatus(status('ladder.forfeited', {message: ladderOutcomeMessage(forfeited)}));
     };
 
     const handleLoadFen = (fen: string): string | null => {
@@ -990,9 +995,9 @@ export default function Chessboard() {
         return (
             <div
                 className="my-auto flex flex-col items-center justify-center p-8 bg-acacia rounded-lg shadow-heavy border-4 border-acacia-dark text-boxwood-light text-center">
-                <div className="text-2xl font-bold mb-2">Требуется авторизация</div>
+                <div className="text-2xl font-bold mb-2">{t('hall.authRequired')}</div>
                 <p className="text-base text-boxwood/85 mb-2">
-                    Пожалуйста, войдите в систему в правом верхнем углу, чтобы начать игру.
+                    {t('hall.authRequiredText')}
                 </p>
             </div>
         );
@@ -1084,7 +1089,7 @@ export default function Chessboard() {
                                 : 'text-boxwood/75 hover:text-amber-200 hover:bg-white/5'
                         }`}
                     >
-                        <Bot size={15}/> Исторические боты
+                        <Bot size={15}/> {t('hall.tabBots')}
                     </button>
                     <button
                         type="button"
@@ -1097,7 +1102,7 @@ export default function Chessboard() {
                     >
                         <Radio size={14}
                                className={filteredQueue.length + liveGames.length > 0 ? 'text-emerald-400 animate-pulse' : ''}/>
-                        <span>Лобби / Live</span>
+                        <span>{t('hall.tabLobby')}</span>
                         <span className="text-xs font-mono px-1.5 py-0.2 rounded bg-black/40 text-amber-300">
                             {filteredQueue.length + liveGames.length}
                         </span>
@@ -1113,7 +1118,7 @@ export default function Chessboard() {
                                     className={`py-1 rounded border cursor-pointer ${botsView === view
                                         ? 'bg-amber-800 text-white border-amber-400'
                                         : 'bg-black/35 text-boxwood/85 border-amber-900/40 hover:border-amber-600/50'}`}>
-                                {view === 'historical' ? 'Исторические' : view === 'workshop' ? 'Мастерская' : 'Лестница'}
+                                {t(view === 'historical' ? 'hall.viewHistorical' : view === 'workshop' ? 'hall.viewWorkshop' : 'hall.viewLadder')}
                             </button>
                         ))}
                     </div>
@@ -1122,10 +1127,10 @@ export default function Chessboard() {
                             {activeBotProfile && (activeBot === 'custom' || isLadderGame) && (
                                 <div className="p-2 rounded-md bg-black/55 border border-amber-600/40 text-xs text-amber-100">
                                     <div className="font-bold text-amber-400 mb-0.5 flex justify-between">
-                                        <span>Мысль ({activeBotProfile.shortName}):</span>
-                                        {isBotThinking && <span className="animate-pulse text-amber-300 font-mono text-[11px]">обдумывает ход...</span>}
+                                        <span>{t('bots.thought', {name: activeBotProfile.shortName})}</span>
+                                        {isBotThinking && <span className="animate-pulse text-amber-300 font-mono text-[11px]">{t('bots.thinking')}</span>}
                                     </div>
-                                    <div className="text-boxwood-light leading-snug">{botComment || activeBotProfile.motto}</div>
+                                    <div className="text-boxwood-light leading-snug">{botComment ? renderStatus(botComment, t) : activeBotProfile.motto}</div>
                                 </div>
                             )}
                             {botsView === 'ladder' ? (
@@ -1155,7 +1160,7 @@ export default function Chessboard() {
                         gameId={gameId}
                         gameOverResult={gameOverResult}
                         isBotThinking={isBotThinking}
-                        botComment={botComment}
+                        botComment={botComment ? renderStatus(botComment, t) : null}
                         onStartBotGame={handleStartBotGame}
                         canStartFromPosition={canStartFromPosition}
                         startFromPosition={startFromPosition}
@@ -1187,7 +1192,7 @@ export default function Chessboard() {
                     isResizing={isResizing}
                     botProfile={isBotOnTop ? activeBotProfile : null}
                     isWhiteSide={topIsWhite}
-                    idleLabel={topIsWhite ? 'Белые (Разбор)' : 'Чёрные (Разбор)'}
+                    idleLabel={t(topIsWhite ? 'board.idleWhite' : 'board.idleBlack')}
                     showGameInfo={Boolean(gameId || activeBot || spectatingGameId)}
                     playerInfo={topPlayerInfo}
                     hasRatingInfo={!!ratingInfo && isRatedGame}
@@ -1365,7 +1370,7 @@ export default function Chessboard() {
                     <div
                         onPointerDown={handleResizePointerDown}
                         onDoubleClick={handleResizeDoubleClick}
-                        title="Потяните, чтобы изменить размер доски (двойной клик — авторазмер под экран)"
+                        title={t('hall.resizeHint')}
                         className={`absolute bottom-0 right-0 w-6 h-6 z-40 cursor-nwse-resize flex items-end justify-end p-0.5 rounded-tl transition-opacity ${
                             isResizing
                                 ? 'opacity-100 text-amber-400'
@@ -1392,7 +1397,7 @@ export default function Chessboard() {
                     isResizing={isResizing}
                     botProfile={isBotOnBottom ? activeBotProfile : null}
                     isWhiteSide={!topIsWhite}
-                    idleLabel={!topIsWhite ? 'Вы (Белые)' : 'Вы (Чёрные)'}
+                    idleLabel={t(!topIsWhite ? 'board.youWhite' : 'board.youBlack')}
                     showGameInfo={Boolean(gameId || activeBot || spectatingGameId)}
                     playerInfo={bottomPlayerInfo}
                     hasRatingInfo={!!ratingInfo && isRatedGame}
@@ -1416,12 +1421,12 @@ export default function Chessboard() {
                     <div className="min-w-0">
                         <div
                             className="text-xs tracking-wider uppercase text-boxwood/75 font-bold flex items-center gap-1.5">
-                            <ListOrdered className="text-amber-400" size={15}/> Журнал ходов
+                            <ListOrdered className="text-amber-400" size={15}/> {t('board.moveLog')}
                         </div>
                         <div className="text-xs sm:text-sm font-bold text-amber-200 mt-0.5 truncate">
                             {(gameId || activeBot || spectatingGameId)
-                                ? `${whitePlayer.username} vs ${blackPlayer.username}`
-                                : 'Свободная доска / Анализ'}
+                                ? t('board.versus', {white: shownWhitePlayer.username, black: shownBlackPlayer.username})
+                                : t('board.freeBoard')}
                         </div>
                     </div>
 
@@ -1443,7 +1448,7 @@ export default function Chessboard() {
 
                         <span
                             className="px-2 py-1 rounded-md bg-acacia-dark border border-amber-700/40 font-mono text-xs text-amber-400 font-bold">
-                            {gameOverResult || (history.length > 0 ? `${Math.ceil(history.length / 2)} х.` : 'Старт')}
+                            {gameOverResult || (history.length > 0 ? t('board.movesShort', {count: Math.ceil(history.length / 2)}) : t('board.start'))}
                         </span>
                     </div>
                 </div>
@@ -1453,14 +1458,20 @@ export default function Chessboard() {
                         className="bg-rose-950/90 px-3 py-1.5 rounded-md border border-rose-500/60 text-xs text-rose-100 flex items-center justify-between shadow shrink-0">
                         <span className="flex items-center gap-1.5 font-bold font-mono">
                             <Zap size={14} className="text-rose-400"/>
-                            Предход: {premove.from} → {premove.to}{premove.promotion ? `=${premove.promotion.toUpperCase()}` : ''}
+                            {t('controls.premove', {
+                                from: premove.from,
+                                to: premove.to,
+                                promotion: premove.promotion
+                                    ? t('controls.premovePromotion', {piece: premove.promotion.toUpperCase()})
+                                    : '',
+                            })}
                         </span>
                         <button
                             type="button"
                             onClick={() => setPremove(null)}
                             className="px-2 py-0.5 bg-black/40 hover:bg-black/70 rounded text-xs font-sans text-rose-200 transition cursor-pointer"
                         >
-                            Отмена
+                            {t('common.cancel')}
                         </button>
                     </div>
                 )}
@@ -1468,20 +1479,20 @@ export default function Chessboard() {
                 {drawOfferStatus && (
                     <div
                         className="bg-amber-950/90 p-2 rounded-md border border-amber-600/50 text-xs text-amber-200 text-center flex flex-col gap-1.5 shrink-0">
-                        <span>{drawOfferStatus}</span>
-                        {drawOfferStatus.includes('предлагает ничью') && (
+                        <span>{renderStatus(drawOfferStatus, t)}</span>
+                        {hasStatusKey(drawOfferStatus, 'status.drawOffered') && (
                             <div className="flex justify-center gap-2">
                                 <button
                                     onClick={acceptDraw}
                                     className="px-3 py-1 bg-emerald-800 hover:bg-emerald-700 text-white rounded text-xs font-bold cursor-pointer"
                                 >
-                                    Принять
+                                    {t('common.accept')}
                                 </button>
                                 <button
                                     onClick={declineDraw}
                                     className="px-3 py-1 bg-red-800 hover:bg-red-700 text-white rounded text-xs font-bold cursor-pointer"
                                 >
-                                    Отклонить
+                                    {t('common.decline')}
                                 </button>
                             </div>
                         )}
@@ -1514,6 +1525,7 @@ export default function Chessboard() {
                         chatInput={chatInput}
                         onChatInputChange={setChatInput}
                         onSendMessage={handleSendChatMessage}
+                        onSendPreset={handleSendChatPreset}
                         isSpectator={!!spectatingGameId}
                         onLeaveSpectate={handleLeaveSpectate}
                     />
@@ -1529,8 +1541,8 @@ export default function Chessboard() {
                     gameOverResult={gameOverResult}
                     rematchStatus={rematchStatus}
                     isBotThinking={isBotThinking}
-                    whitePlayer={whitePlayer}
-                    blackPlayer={blackPlayer}
+                    whitePlayer={shownWhitePlayer}
+                    blackPlayer={shownBlackPlayer}
                     navigate={navigate}
                     onAbortGame={handleAbortGame}
                     onResign={handleResign}

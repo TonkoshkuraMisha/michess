@@ -4,6 +4,7 @@ import {Palette, ChevronDown, ChevronUp, X} from 'lucide-react';
 import {BOARD_THEMES, PIECE_SETS, getPieceSvgUrl} from '../../config/boardAppearance';
 import type {BoardTheme} from '../../config/boardAppearance';
 import {MIN_BOARD_SIZE, getMaxViewportBoardSize} from './boardUtils';
+import {useI18n} from '../../i18n';
 
 export interface AppearancePickerDropdownProps {
     isOpen: boolean;
@@ -26,6 +27,7 @@ export function AppearancePickerDropdown({
     activePieceSetShortName, onPieceSetChange, onThemeChange, boardSize, responsiveBoardPx,
     onBoardSizeChange,
 }: AppearancePickerDropdownProps) {
+    const {t} = useI18n();
     return (
         <div className="relative">
             <button
@@ -36,7 +38,7 @@ export function AppearancePickerDropdown({
                         ? 'bg-amber-700 text-white border-amber-400'
                         : 'bg-acacia-dark hover:bg-black/45 text-amber-200 border-amber-800/50'
                 }`}
-                title="Выбрать комплект фигур, тему и размер доски"
+                title={t('board.appearance')}
             >
                 <span
                     className="w-5 h-5 rounded-xs flex items-center justify-center border border-black/50 shrink-0"
@@ -45,7 +47,7 @@ export function AppearancePickerDropdown({
                     <img src={getPieceSvgUrl(pieceSetKey, 'w', 'N')} alt="" className="w-4 h-4 object-contain"/>
                 </span>
                 <span className="hidden sm:inline">{activePieceSetShortName} • {activeTheme.name}</span>
-                <span className="sm:hidden">Вид</span>
+                <span className="sm:hidden">{t('board.appearanceShort')}</span>
                 {isOpen ? <ChevronUp size={13}/> : <ChevronDown size={13}/>}
             </button>
 
@@ -54,7 +56,7 @@ export function AppearancePickerDropdown({
                     className="absolute right-0 top-full mt-2 w-80 sm:w-96 bg-[#261C14] border-2 border-amber-600/80 rounded-lg shadow-2xl z-50 p-3.5 flex flex-col gap-3 text-boxwood-light">
                     <div className="flex justify-between items-center border-b border-amber-900/50 pb-2">
                         <span className="font-bold text-amber-200 text-sm flex items-center gap-1.5">
-                            <Palette size={15} className="text-amber-400"/> Оформление фигур и доски
+                            <Palette size={15} className="text-amber-400"/> {t('board.appearanceTitle')}
                         </span>
                         <button
                             type="button"
@@ -67,7 +69,7 @@ export function AppearancePickerDropdown({
 
                     <div className="flex flex-col gap-1.5">
                         <div className="flex justify-between items-center text-xs">
-                            <span className="font-bold text-boxwood/90">♟ Комплект фигур:</span>
+                            <span className="font-bold text-boxwood/90">{t('board.pieceSet')}</span>
                             <span className="text-amber-400 font-bold">{activePieceSetName}</span>
                         </div>
                         <div className="grid grid-cols-5 gap-1.5">
@@ -109,7 +111,7 @@ export function AppearancePickerDropdown({
 
                     <div className="flex flex-col gap-1.5 pt-2 border-t border-amber-900/40">
                         <div className="flex justify-between items-center text-xs">
-                            <span className="font-bold text-boxwood/90">🎨 Поверхность доски:</span>
+                            <span className="font-bold text-boxwood/90">{t('board.boardSurface')}</span>
                             <span className="text-amber-400 font-bold">{activeTheme.name}</span>
                         </div>
                         <div className="grid grid-cols-5 gap-1.5">
@@ -145,7 +147,7 @@ export function AppearancePickerDropdown({
                     </div>
 
                     <div className="flex items-center justify-between gap-2 pt-2 border-t border-amber-900/40 text-xs">
-                        <span className="text-boxwood/80 font-bold">Размер: {responsiveBoardPx}px</span>
+                        <span className="text-boxwood/80 font-bold">{t('board.size', {px: responsiveBoardPx})}</span>
                         <input
                             type="range"
                             min={MIN_BOARD_SIZE}
@@ -159,7 +161,7 @@ export function AppearancePickerDropdown({
                             onClick={() => onBoardSizeChange(getMaxViewportBoardSize())}
                             className="px-2 py-1 rounded bg-black/45 hover:bg-amber-800/60 border border-amber-700/50 text-amber-200 font-bold cursor-pointer"
                         >
-                            Авто
+                            {t('board.autoSize')}
                         </button>
                     </div>
                 </div>

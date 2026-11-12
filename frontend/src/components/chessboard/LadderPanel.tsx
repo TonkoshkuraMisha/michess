@@ -6,6 +6,7 @@ import {API_BASE_URL} from '../../config/api';
 import {readErrorDetail} from '../../services/apiErrors';
 import type {PersonalityConfig} from '../../services/personalities';
 import type {LadderOutcome} from './hooks/useBotGame';
+import {useI18n} from '../../i18n';
 
 interface Rung {
     key: string;
@@ -54,6 +55,7 @@ export interface LadderPanelProps {
  * соперники от слабого к сильному. Партию открывает сервер — он же проверяет её честность.
  */
 export function LadderPanel({playDisabled, onStart, lastOutcome}: LadderPanelProps) {
+    const {t} = useI18n();
     const [state, setState] = useState<LadderState | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [starting, setStarting] = useState(false);
@@ -64,7 +66,7 @@ export function LadderPanel({playDisabled, onStart, lastOutcome}: LadderPanelPro
         if (!token) return;
         try {
             const res = await fetch(`${API_BASE_URL}/api/v1/bots/ladder`, {headers: {Authorization: `Bearer ${token}`}});
-            if (!res.ok) throw new Error(await readErrorDetail(res, 'Не удалось загрузить лестницу'));
+            if (!res.ok) throw new Error(await readErrorDetail(res, t('ladder.loadFailed')));
             setState(await res.json());
             setError(null);
         } catch (err) {
@@ -85,7 +87,7 @@ export function LadderPanel({playDisabled, onStart, lastOutcome}: LadderPanelPro
                 headers: {Authorization: `Bearer ${token}`, 'Content-Type': 'application/json'},
                 body: JSON.stringify({color}),
             });
-            if (!res.ok) throw new Error(await readErrorDetail(res, 'Не удалось начать партию'));
+            if (!res.ok) throw new Error(await readErrorDetail(res, t('ladder.startFailed')));
             onStart(await res.json());
             await load();
         } catch (err) {
@@ -100,14 +102,13 @@ export function LadderPanel({playDisabled, onStart, lastOutcome}: LadderPanelPro
     return (
         <div className="flex flex-col gap-2 text-xs text-boxwood" data-testid="ladder-panel">
             <p className="text-boxwood/80 leading-snug">
-                Отдельный рейтинг партий с ботами — без подсказок движка и возвратов хода. Победа над
-                текущим соперником открывает следующего.
+                {t('ladder.intro')}
             </p>
             {error && <p role="alert" className="text-red-300">{error}</p>}
             {state && (
                 <>
                     <div className="flex items-center justify-between p-2 rounded-md bg-black/40 border border-amber-800/50">
-                        <span>Рейтинг лестницы</span>
+                        <span>{t('ladder.rating')}</span>
                         <span className="font-mono text-base text-amber-300" data-testid="ladder-rating">{state.rating}</span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -121,9 +122,9 @@ export function LadderPanel({playDisabled, onStart, lastOutcome}: LadderPanelPro
                     {current && (
                         <div className="p-2 rounded-md bg-black/40 border border-amber-600/50 flex flex-col gap-1.5">
                             <div className="flex items-center justify-between">
-                                <span className="font-bold text-amber-200">Следующий: {current.name}</span>
+                                <span className="font-bold text-amber-200">{t('ladder.next', {name: current.name})}</span>
                                 <span className="font-mono text-amber-300">
-                                    {current.rating}{current.measured ? ' (изм.)' : ''}
+                                    {current.measured ? t('common.measuredShort', {rating: current.rating}) : current.rating}
                                 </span>
                             </div>
                             <div className="grid grid-cols-3 gap-1.5">
@@ -131,7 +132,7 @@ export function LadderPanel({playDisabled, onStart, lastOutcome}: LadderPanelPro
                                     <button key={color} type="button" disabled={playDisabled || starting}
                                             onClick={() => start(color)}
                                             className="py-1.5 font-bold rounded-md bg-amber-700 text-white hover:bg-amber-600 disabled:opacity-40 cursor-pointer">
-                                        {color === 'white' ? '♔ Белыми' : color === 'black' ? '♚ Чёрными' : '🎲 Случайно'}
+                                        {t(color === 'white' ? 'common.playAsWhite' : color === 'black' ? 'common.playAsBlack' : 'common.playRandom')}
                                     </button>
                                 ))}
                             </div>
@@ -144,9 +145,9 @@ export function LadderPanel({playDisabled, onStart, lastOutcome}: LadderPanelPro
                                 className={`flex items-center gap-1.5 px-2 py-0.5 rounded ${
                                     r.status === 'current' ? 'bg-amber-900/50 text-amber-100' : 'text-boxwood/80'}`}>
                                 <span className="w-4 text-right font-mono text-boxwood/50">{i + 1}</span>
-                                {r.status === 'beaten' ? <CheckCircle2 size={12} className="text-emerald-400" aria-label="пройден"/>
-                                    : r.status === 'current' ? <Swords size={12} className="text-amber-300" aria-label="текущий"/>
-                                        : <Lock size={12} className="text-boxwood/40" aria-label="закрыт"/>}
+                                {r.status === 'beaten' ? <CheckCircle2 size={12} className="text-emerald-400" aria-label={t('ladder.beaten')}/>
+                                    : r.status === 'current' ? <Swords size={12} className="text-amber-300" aria-label={t('ladder.current')}/>
+                                        : <Lock size={12} className="text-boxwood/40" aria-label={t('ladder.locked')}/>}
                                 <span className="flex-1 truncate">{r.name}</span>
                                 <span className="font-mono">{r.rating}</span>
                             </li>
