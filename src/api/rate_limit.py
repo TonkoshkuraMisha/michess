@@ -14,6 +14,7 @@ import jwt
 from fastapi import HTTPException, Request, status
 
 from src.core.config import settings
+from src.core.errors import ApiError
 from src.db import redis as redis_module
 
 logger = logging.getLogger(__name__)
@@ -43,11 +44,11 @@ def _window(window_s: int) -> tuple[int, int]:
     return now // window_s, max(1, window_s - now % window_s)
 
 
-def _too_many(detail: str, retry_after: int) -> HTTPException:
-    return HTTPException(
-        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-        detail=detail,
-        headers={"Retry-After": str(retry_after)},
+def _too_many(code: str, retry_after: int) -> HTTPException:
+    """429 с кодом ошибки; через сколько секунд повторить — и в заголовке, и в параметрах для текста."""
+    return ApiError(
+        status.HTTP_429_TOO_MANY_REQUESTS, code,
+        headers={"Retry-After": str(retry_after)}, retry_after=retry_after,
     )
 
 
@@ -72,13 +73,13 @@ async def try_consume(scope: str, identity: str, limit: int, window_s: int) -> b
     return count <= limit
 
 
-async def enforce_rate_limit(scope: str, identity: str, limit: int, window_s: int, detail: str) -> None:
+async def enforce_rate_limit(scope: str, identity: str, limit: int, window_s: int, code: str) -> None:
     """Как try_consume, но для HTTP: бросает 429 с Retry-After."""
     if not await try_consume(scope, identity, limit, window_s):
-        raise _too_many(detail, _window(window_s)[1])
+        raise _too_many(code, _window(window_s)[1])
 
 
-async def ensure_below_limit(scope: str, identity: str, limit: int, window_s: int, detail: str) -> None:
+async def ensure_below_limit(scope: str, identity: str, limit: int, window_s: int, code: str) -> None:
     """Проверяет счётчик, не увеличивая его (например, неудачных входов): 429, если лимит исчерпан."""
     if limit <= 0:
         return
@@ -89,7 +90,7 @@ async def ensure_below_limit(scope: str, identity: str, limit: int, window_s: in
         logger.warning("Rate limiter unavailable for %s: %s", scope, exc)
         return
     if count >= limit:
-        raise _too_many(detail, retry_after)
+        raise _too_many(code, retry_after)
 
 
 async def record_attempt(scope: str, identity: str, window_s: int) -> None:
@@ -118,7 +119,7 @@ def rate_limit(scope: str, limit_setting: str, guest_limit_setting: str | None =
             identity,
             int(getattr(settings, setting)),
             int(settings.RATE_LIMIT_WINDOW_S),
-            "Слишком много запросов к движку, попробуйте чуть позже",
+            "engine_rate_limited",
         )
 
     return _dependency

@@ -58,4 +58,8 @@ export const GAME_ACTION_ERROR_CODES: ReadonlySet<string> = new Set([
     'draw_offer_too_soon',
     'chat_forbidden',
     'spectate_unavailable',
+    'game_not_in_progress',
+    'abort_too_late',
+    'no_draw_offer',
+    'no_rematch_offer',
 ]);

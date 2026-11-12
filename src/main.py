@@ -5,7 +5,8 @@ import logging
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
@@ -16,6 +17,7 @@ from src.api.auth import router as auth_router
 from src.api.profile import router as profile_router
 from src.api.websockets import router as ws_router
 from src.core.config import settings
+from src.core.errors import validation_error_items
 from src.core.observability import http_metrics_middleware, init_sentry, metrics_response
 from src.db import redis as redis_module
 from src.db.session import AsyncSessionLocal
@@ -74,6 +76,12 @@ def create_app() -> FastAPI:
     )
 
     app.middleware("http")(http_metrics_middleware)
+
+    @app.exception_handler(RequestValidationError)
+    async def _validation_error(_request: Request, exc: RequestValidationError) -> JSONResponse:
+        # Без эха присланных значений (в ответе оказывался бы, например, пароль) и с параметрами
+        # проверки, из которых клиент соберёт текст на языке игрока.
+        return JSONResponse(status_code=422, content={"detail": validation_error_items(exc.errors())})
 
     app.include_router(auth_router, prefix=settings.API_V1_STR)
     app.include_router(ws_router, prefix=settings.API_V1_STR)

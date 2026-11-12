@@ -12,7 +12,7 @@ import {customBotProfile} from '../../../config/archetypes';
 import type {CustomOpponent} from '../../../config/archetypes';
 import {cloneChessInstance, customStartFen} from '../boardUtils';
 import type {PendingPromotion} from '../types';
-import {readErrorDetail} from '../../../services/apiErrors';
+import {readApiError} from '../../../services/apiErrors';
 import {t} from '../../../i18n';
 import type {MessageKey} from '../../../i18n';
 import {messageParam, status} from '../status';
@@ -359,9 +359,9 @@ export function useBotGame({
 
                 if (!response.ok) {
                     // Постоянная ошибка (некорректная позиция, неизвестный бот): повтор не поможет.
-                    const detail = await readErrorDetail(response, '');
+                    const detail = await readApiError(response);
                     setBotComment(status('bots.moveFailed', {
-                        detail: detail || messageParam('bots.moveFailedStatus', {status: response.status}),
+                        detail: detail ?? messageParam('bots.moveFailedStatus', {status: response.status}),
                     }));
                     setIsBotThinking(false);
                     return;

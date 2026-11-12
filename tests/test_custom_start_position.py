@@ -84,13 +84,13 @@ async def test_moves_are_validated_from_the_given_position(client, token_user_1)
     # e2e4 легален в обычной расстановке, но не в позиции «король и ферзь против короля».
     response = _save(client, token_user_1, moves_uci=["e2e4"], start_fen=KQ_VS_K, termination="resignation")
     assert response.status_code == 400
-    assert "Нелегальный ход" in response.json()["detail"]
+    assert response.json()["detail"]["code"] == "illegal_history_move"
 
 
 async def test_impossible_start_position_is_a_400(client, token_user_1):
     response = _save(client, token_user_1, moves_uci=["a1a2"], start_fen="kK6/8/8/8/8/8/8/8 w - - 0 1")
     assert response.status_code == 400
-    assert "невозможна" in response.json()["detail"]
+    assert response.json()["detail"]["code"] == "invalid_position"
 
 
 async def test_standard_fen_is_not_treated_as_a_custom_position(client, db_session, token_user_1):

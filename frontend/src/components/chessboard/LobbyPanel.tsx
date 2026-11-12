@@ -21,7 +21,7 @@ export function LobbyPanel({
     lobbyTab, onLobbyTabChange, queuePlayers, liveGames, isSearching, gameId, gameOverResult,
     onAcceptChallenge, onSpectateGame,
 }: LobbyPanelProps) {
-    const {t} = useI18n();
+    const {t, rich} = useI18n();
     return (
         <div className="flex-1 min-h-0 bg-acacia-dark rounded-md border border-amber-900/50 p-2.5 flex flex-col shadow-inner">
             <div className="grid grid-cols-2 gap-1.5 p-1 bg-black/40 rounded border border-amber-900/40 mb-2 shrink-0">
@@ -70,7 +70,7 @@ export function LobbyPanel({
                                 className="p-2.5 bg-black/45 rounded-md border border-amber-600/30 flex justify-between items-center hover:border-amber-500/60 transition"
                             >
                                 <div>
-                                    <span className="text-amber-300 font-bold text-sm">{p.username}</span>
+                                    <span className="text-amber-300 font-bold text-sm">{p.username || t('lobby.unknownPlayer')}</span>
                                     <div className="text-xs text-boxwood/75 font-mono">
                                         {t('lobby.challengeLine', {
                                             rating: p.rating,
@@ -107,8 +107,11 @@ export function LobbyPanel({
                                 className="p-2.5 bg-black/45 rounded-md border border-amber-600/30 flex justify-between items-center hover:border-amber-500/60 transition gap-2"
                             >
                                 <div className="min-w-0">
-                                    <div className="text-amber-200 font-bold truncate text-sm">
-                                        {lg.white_username} <span className="text-boxwood/50">vs</span> {lg.black_username}
+                                    <div className="text-boxwood/50 font-bold truncate text-sm">
+                                        {rich('board.versus', {
+                                            white: <span key="white" className="text-amber-200">{lg.white_username || t('common.white')}</span>,
+                                            black: <span key="black" className="text-amber-200">{lg.black_username || t('common.black')}</span>,
+                                        })}
                                     </div>
                                     <div className="text-xs text-boxwood/75 font-mono">
                                         {Math.round(lg.base_time_ms / 60000)}+{(lg.increment_ms || 0) / 1000} •

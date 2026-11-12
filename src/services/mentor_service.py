@@ -604,7 +604,7 @@ def analyze_move(board_before: chess.Board, move: chess.Move) -> MoveFacts:
     после хода не стало.
     """
     if move not in board_before.legal_moves:
-        raise ValueError(f"Нелегальный ход {move.uci()} в позиции {board_before.fen()}")
+        raise ValueError(f"Illegal move {move.uci()} in position {board_before.fen()}")
     mover = board_before.turn
     before = {motif.key: motif for motif in detect_motifs(board_before)}
     board_after = board_before.copy(stack=False)

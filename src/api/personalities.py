@@ -10,13 +10,14 @@
 на самом деле собрал игрок.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, Response, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.deps import get_current_user
+from src.core.errors import ApiError, validation_error
 from src.db.session import get_db
 from src.models.personality import BotPersonality
 from src.models.user import User
@@ -26,10 +27,6 @@ from src.services.bots.personality import BotPersonalityConfig
 router = APIRouter()
 
 MAX_PERSONALITIES_PER_USER = 20
-LIMIT_DETAIL = f"Не больше {MAX_PERSONALITIES_PER_USER} соперников в мастерской — удалите лишних"
-DUPLICATE_DETAIL = "Соперник с таким именем уже есть"
-RESERVED_DETAIL = "Это имя занято историческим ботом или чемпионом"
-NOT_FOUND_DETAIL = "Соперник не найден"
 
 
 def is_reserved_personality_name(name: str) -> bool:
@@ -41,7 +38,7 @@ def is_reserved_personality_name(name: str) -> bool:
 def validate_personality_name(value: str) -> str:
     value = validate_username(value.strip())
     if is_reserved_personality_name(value):
-        raise ValueError(RESERVED_DETAIL)
+        raise validation_error("personality_name_reserved")
     return value
 
 
@@ -75,8 +72,10 @@ class PersonalityImport(BaseModel):
 
 
 class SkippedPersonality(BaseModel):
+    """Не перенесённая персоналия: причина — код ошибки из реестра src/core/errors.py и его параметры."""
     name: str
     reason: str
+    params: dict[str, int | str] = Field(default_factory=dict)
 
 
 class PersonalityImportResult(BaseModel):
@@ -113,7 +112,7 @@ async def get_owned_personality(db: AsyncSession, owner_id: int, personality_id:
     """Персоналия владельца или 404 (чужая неотличима от несуществующей)."""
     personality = await db.get(BotPersonality, personality_id)
     if personality is None or personality.owner_id != owner_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=NOT_FOUND_DETAIL)
+        raise ApiError(status.HTTP_404_NOT_FOUND, "personality_not_found")
     return personality
 
 
@@ -143,16 +142,16 @@ async def create_personality(
         payload: PersonalityIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
     if await _count(db, user.id) >= MAX_PERSONALITIES_PER_USER:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=LIMIT_DETAIL)
+        raise ApiError(status.HTTP_409_CONFLICT, "personality_limit", max=MAX_PERSONALITIES_PER_USER)
     if await _name_taken(db, user.id, payload.name):
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=DUPLICATE_DETAIL)
+        raise ApiError(status.HTTP_409_CONFLICT, "personality_duplicate")
     personality = _new(user.id, payload)
     db.add(personality)
     try:
         await db.commit()
     except IntegrityError:  # гонка двух одинаковых запросов
         await db.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=DUPLICATE_DETAIL) from None
+        raise ApiError(status.HTTP_409_CONFLICT, "personality_duplicate") from None
     await db.refresh(personality)
     return _out(personality)
 
@@ -172,10 +171,12 @@ async def import_personalities(
     for item in payload.items:
         key = username_key(item.name)
         if key in seen or await _name_taken(db, user.id, item.name):
-            skipped.append(SkippedPersonality(name=item.name, reason=DUPLICATE_DETAIL))
+            skipped.append(SkippedPersonality(name=item.name, reason="personality_duplicate"))
             continue
         if len(created) >= free:
-            skipped.append(SkippedPersonality(name=item.name, reason=LIMIT_DETAIL))
+            skipped.append(SkippedPersonality(
+                name=item.name, reason="personality_limit", params={"max": MAX_PERSONALITIES_PER_USER},
+            ))
             continue
         seen.add(key)
         personality = _new(user.id, item)
@@ -197,7 +198,7 @@ async def update_personality(
     personality = await get_owned_personality(db, user.id, personality_id)
     if payload.name is not None:
         if await _name_taken(db, user.id, payload.name, except_id=personality.id):
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=DUPLICATE_DETAIL)
+            raise ApiError(status.HTTP_409_CONFLICT, "personality_duplicate")
         personality.name = payload.name
         personality.name_key = username_key(payload.name)
     if payload.config is not None:
@@ -206,7 +207,7 @@ async def update_personality(
         await db.commit()
     except IntegrityError:
         await db.rollback()
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=DUPLICATE_DETAIL) from None
+        raise ApiError(status.HTTP_409_CONFLICT, "personality_duplicate") from None
     await db.refresh(personality)
     return _out(personality)
 

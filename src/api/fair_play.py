@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.deps import user_from_token
 from src.api.rate_limit import client_ip
+from src.core.errors import ApiError
 from src.db import redis as redis_module
 from src.db.session import get_db
 
@@ -34,10 +35,6 @@ logger = logging.getLogger(__name__)
 PLAYER_IP_TTL_S = 12 * 60 * 60
 ENGINE_SIGNAL_TTL_S = 24 * 60 * 60
 
-IN_GAME_DETAIL = "Во время рейтинговой партии анализ и подсказки движка недоступны"
-GUEST_IN_GAME_DETAIL = (
-    "С этого адреса сейчас идёт рейтинговая партия — войдите в аккаунт, чтобы пользоваться движком"
-)
 
 
 def _ip_players_key(ip: str) -> str:
@@ -103,7 +100,7 @@ async def forbid_engine_help_during_game(request: Request, db: AsyncSession = De
         requester_id = await _optional_user_id(request, db)
 
         if requester_id is not None and await active_rated_game_id(requester_id) is not None:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=IN_GAME_DETAIL)
+            raise ApiError(status.HTTP_409_CONFLICT, "engine_locked_in_game")
 
         ip = client_ip(request)
         if ip == "unknown":
@@ -116,7 +113,7 @@ async def forbid_engine_help_during_game(request: Request, db: AsyncSession = De
             if game_id is None:
                 continue
             if requester_id is None:
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=GUEST_IN_GAME_DETAIL)
+                raise ApiError(status.HTTP_409_CONFLICT, "engine_locked_guest_ip")
             await _record_engine_signal(game_id, player_id, requester_id)
     except HTTPException:
         raise

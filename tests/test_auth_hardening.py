@@ -59,7 +59,7 @@ def test_valid_usernames_are_accepted(client, name):
 def test_reserved_usernames_are_rejected(client, name):
     res = _register(client, name)
     assert res.status_code == 400
-    assert "зарезервировано" in res.json()["detail"]
+    assert res.json()["detail"]["code"] == "username_reserved"
 
 
 @pytest.mark.parametrize("first, second", [("Misha", "misha"), ("Пётр", "пётр"), ("ёжик", "ЁЖИК")])
@@ -67,7 +67,7 @@ def test_usernames_are_unique_regardless_of_case(client, first, second):
     assert _register(client, first).status_code == 201
     res = _register(client, second)
     assert res.status_code == 400
-    assert res.json()["detail"] == auth_module.DUPLICATE_USERNAME_DETAIL
+    assert res.json()["detail"]["code"] == "username_taken"
 
 
 async def test_registered_user_gets_username_key(client, db_session):

@@ -37,7 +37,7 @@ async def test_player_in_rated_game_gets_no_position_analysis(client, rated_game
     response = client.post(POSITION_URL, json={"moves": ["e4"]}, headers=_auth(token_user_1))
 
     assert response.status_code == 409
-    assert response.json()["detail"] == fair_play.IN_GAME_DETAIL
+    assert response.json()["detail"]["code"] == "engine_locked_in_game"
 
 
 async def test_player_in_rated_game_cannot_ask_a_bot_for_a_move(client, rated_game, token_user_2):
@@ -66,7 +66,7 @@ async def test_dropping_the_token_does_not_bypass_the_ban(client, rated_game, te
     response = client.post(POSITION_URL, json={"moves": ["e4"]})
 
     assert response.status_code == 409
-    assert response.json()["detail"] == fair_play.GUEST_IN_GAME_DETAIL
+    assert response.json()["detail"]["code"] == "engine_locked_guest_ip"
 
 
 async def test_guest_from_an_idle_address_is_allowed(client, test_user_1):

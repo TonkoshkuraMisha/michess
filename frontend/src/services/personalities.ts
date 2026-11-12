@@ -10,8 +10,9 @@
  */
 
 import {API_BASE_URL} from '../config/api';
-import {readErrorDetail} from './apiErrors';
-import {t, tp} from '../i18n';
+import {UiError, readApiErrorOr} from './apiErrors';
+import {tp, uiMessage} from '../i18n';
+import type {MessageKey} from '../i18n';
 
 export interface PieceValues {
     pawn: number;
@@ -47,7 +48,8 @@ export interface Personality extends PersonalityDraft {
 
 export interface ImportResult {
     created: Personality[];
-    skipped: { name: string; reason: string }[];
+    /** reason — код ошибки сервера (serverErrors), params — его параметры. */
+    skipped: { name: string; reason: string; params?: Record<string, string | number> }[];
 }
 
 export const MAX_PERSONALITIES = 20;
@@ -91,12 +93,12 @@ function writeGuestPersonalities(items: Personality[]): void {
 export function saveGuestPersonality(draft: PersonalityDraft, id?: string): Personality {
     const items = readGuestPersonalities();
     if (items.some((p) => p.id !== id && sameName(p.name, draft.name))) {
-        throw new Error(t('workshop.duplicateName'));
+        throw new UiError(uiMessage('serverErrors.personality_duplicate'));
     }
     const now = new Date().toISOString();
     const existing = id ? items.find((p) => p.id === id) : undefined;
     if (!existing && items.length >= MAX_PERSONALITIES) {
-        throw new Error(t('workshop.tooMany', {max: MAX_PERSONALITIES}));
+        throw new UiError(uiMessage('serverErrors.personality_limit', {max: MAX_PERSONALITIES}));
     }
     const saved: Personality = existing
         ? {...existing, ...draft, updated_at: now}
@@ -113,26 +115,26 @@ export function deleteGuestPersonality(id: string): void {
 
 const BASE = `${API_BASE_URL}/api/v1/bots/personalities`;
 
-async function request<T>(token: string, url: string, init: RequestInit, fallback: string): Promise<T> {
+async function request<T>(token: string, url: string, init: RequestInit, fallback: MessageKey): Promise<T> {
     const res = await fetch(url, {
         ...init,
         headers: {Authorization: `Bearer ${token}`, ...(init.body ? {'Content-Type': 'application/json'} : {})},
     });
-    if (!res.ok) throw new Error(await readErrorDetail(res, fallback));
+    if (!res.ok) throw new UiError(await readApiErrorOr(res, fallback));
     return (res.status === 204 ? undefined : await res.json()) as T;
 }
 
 export const listPersonalities = (token: string) =>
-    request<Personality[]>(token, BASE, {method: 'GET'}, t('workshop.loadFailed'));
+    request<Personality[]>(token, BASE, {method: 'GET'}, 'workshop.loadFailed');
 
 export const createPersonality = (token: string, draft: PersonalityDraft) =>
-    request<Personality>(token, BASE, {method: 'POST', body: JSON.stringify(draft)}, t('workshop.saveFailed'));
+    request<Personality>(token, BASE, {method: 'POST', body: JSON.stringify(draft)}, 'workshop.saveFailed');
 
 export const updatePersonality = (token: string, id: number, draft: Partial<PersonalityDraft>) =>
-    request<Personality>(token, `${BASE}/${id}`, {method: 'PUT', body: JSON.stringify(draft)}, t('workshop.saveFailed'));
+    request<Personality>(token, `${BASE}/${id}`, {method: 'PUT', body: JSON.stringify(draft)}, 'workshop.saveFailed');
 
 export const deletePersonality = (token: string, id: number) =>
-    request<void>(token, `${BASE}/${id}`, {method: 'DELETE'}, t('workshop.deleteFailed'));
+    request<void>(token, `${BASE}/${id}`, {method: 'DELETE'}, 'workshop.deleteFailed');
 
 /** Переносит гостевые персоналии в профиль; в браузере остаются только непоместившиеся. */
 export async function importGuestPersonalities(token: string): Promise<ImportResult> {
@@ -141,7 +143,7 @@ export async function importGuestPersonalities(token: string): Promise<ImportRes
     const result = await request<ImportResult>(token, `${BASE}/import`, {
         method: 'POST',
         body: JSON.stringify({items: guests.map(({name, config}) => ({name, config}))}),
-    }, t('workshop.importFailed'));
+    }, 'workshop.importFailed');
     const moved = new Set(result.created.map((p) => p.name.toLocaleLowerCase()));
     writeGuestPersonalities(guests.filter((p) => !moved.has(p.name.toLocaleLowerCase())));
     return result;

@@ -1,43 +1,30 @@
 // --- FILE: frontend/src/components/chessboard/status.ts ---
 // Строка статуса партии («Соперник предлагает ничью», «Партия окончена…»). Хранится не готовым текстом,
-// а ключом каталога с параметрами; параметр сам может быть ключом (причина окончания, имя бота). Текст
-// собирается при показе, поэтому смена языка переводит и уже показанный статус, а логика («есть ли
-// предложение ничьей») не зависит от формулировок.
+// а сообщением каталога с параметрами (общий тип UiMessage из i18n); параметр сам может быть сообщением
+// (причина окончания, имя бота, ошибка сервера). Текст собирается при показе, поэтому смена языка переводит
+// и уже показанный статус, а логика («есть ли предложение ничьей») не зависит от формулировок.
 
-import type {I18n, MessageKey} from '../../i18n';
+import {renderUiMessage, uiMessage} from '../../i18n';
+import type {I18n, MessageKey, MessageParam, UiMessage} from '../../i18n';
 
-/** Параметр: готовое значение или сообщение каталога (с параметрами, в том числе вложенными). */
-export type StatusParam = string | number | { key: MessageKey; params?: Record<string, StatusParam> };
-
-export type GameStatus =
-    | { key: MessageKey; params?: Record<string, StatusParam> }
-    /** Текст, пришедший с сервера как есть (до таска 11.0b, где сервер отдаёт коды). */
-    | { text: string };
+export type GameStatus = UiMessage;
+export type StatusParam = MessageParam;
 
 export function status(key: MessageKey, params?: Record<string, StatusParam>): GameStatus {
-    return params ? {key, params} : {key};
+    return uiMessage(key, params);
 }
 
-/** Параметр-ключ: переводится при показе, на текущем языке. */
+/** Параметр-сообщение: переводится при показе, на текущем языке. */
 export function messageParam(key: MessageKey, params?: Record<string, StatusParam>): StatusParam {
-    return params ? {key, params} : {key};
+    return uiMessage(key, params);
 }
 
 export function hasStatusKey(value: GameStatus | null, key: MessageKey): boolean {
     return value !== null && 'key' in value && value.key === key;
 }
 
-function renderMessage(key: MessageKey, params: Record<string, StatusParam> | undefined, t: I18n['t']): string {
-    if (!params) return t(key);
-    const rendered: Record<string, string | number> = {};
-    for (const [name, param] of Object.entries(params)) {
-        rendered[name] = typeof param === 'object' ? renderMessage(param.key, param.params, t) : param;
-    }
-    return t(key, rendered);
-}
-
 export function renderStatus(value: GameStatus, t: I18n['t']): string {
-    return 'text' in value ? value.text : renderMessage(value.key, value.params, t);
+    return renderUiMessage(value, t);
 }
 
 const GAME_OVER_REASONS = new Set([

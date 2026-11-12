@@ -81,7 +81,8 @@ def test_limit_per_player(client, token_user_1):
         assert create(client, token_user_1, name=f"Bot_{i}").status_code == 201
     over = create(client, token_user_1, name="OneTooMany")
     assert over.status_code == 409
-    assert "20" in over.json()["detail"]
+    assert over.json()["detail"]["code"] == "personality_limit"
+    assert over.json()["detail"]["params"] == {"max": 20}
 
 
 @pytest.mark.parametrize("name", [
@@ -132,7 +133,7 @@ def test_import_respects_the_limit(client, token_user_1):
         {"name": "Last"}, {"name": "Overflow"},
     ]}).json()
     assert [p["name"] for p in body["created"]] == ["Last"]
-    assert body["skipped"][0]["name"] == "Overflow" and "20" in body["skipped"][0]["reason"]
+    assert body["skipped"][0] == {"name": "Overflow", "reason": "personality_limit", "params": {"max": 20}}
 
 
 def test_import_rejects_invalid_items_entirely(client, token_user_1):

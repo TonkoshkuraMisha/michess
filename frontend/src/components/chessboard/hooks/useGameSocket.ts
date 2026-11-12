@@ -18,6 +18,7 @@ import type {LiveGameItem, ChatMessageItem, QueuePlayer, PendingPromotion, ChatP
 import type {BotOpponentId} from '../../../config/champions';
 import {describeGameOver, hasStatusKey, messageParam, status} from '../status';
 import type {GameStatus} from '../status';
+import {serverErrorMessage} from '../../../services/apiErrors';
 
 const DRAW_OFFER_INCOMING = status('status.drawOffered');
 const DRAW_OFFER_OUTGOING = status('status.drawOfferSent');
@@ -470,7 +471,9 @@ export function useGameSocket({
             // началась по первому из запросов — «вы уже играете» здесь не ошибка.
             if (data.code === 'self_in_game' && gameIdRef.current && !gameOverResultRef.current) return;
             if (data.code) {
-                if (data.message) setDrawOfferStatus({text: String(data.message)});
+                // Текст — из каталога по коду; английский текст сервера — только для незнакомого кода.
+                const message = serverErrorMessage(data.code, data.params, data.message);
+                if (message) setDrawOfferStatus(message);
                 // Отказ матчмейкинга (уже в партии, вне диапазона рейтинга, вызов неактуален...)
                 // выводит из режима поиска; ограничения чата, предложений и частоты — нет.
                 if (!GAME_ACTION_ERROR_CODES.has(data.code)) {

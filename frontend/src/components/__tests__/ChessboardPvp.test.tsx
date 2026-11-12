@@ -8,6 +8,7 @@ import {afterEach, beforeEach, describe, expect, it, vi, type Mock} from 'vitest
 import Chessboard from '../Chessboard';
 import {gameSocket} from '../../services/gameSocket';
 import {emitSocketEvent, mockFetchRouter} from '../../test/mocks';
+import {setLanguage} from '../../i18n';
 
 vi.mock('../../services/gameSocket', () => ({
     gameSocket: {
@@ -197,6 +198,18 @@ describe('поиск соперника', () => {
         await emitAct('error', {event: 'error', code: 'self_in_game', message: 'Вы уже играете партию'});
 
         expect(screen.queryByText('Вы уже играете партию')).not.toBeInTheDocument();
+    });
+
+    it('отказ сервера с кодом показывается из каталога на языке игрока и переводится при смене языка', async () => {
+        renderBoard();
+        await emitAct('error', {
+            event: 'error', code: 'rating_out_of_range',
+            params: {rating: 1500, min: 1600, max: 1800}, message: 'Your rating 1500 is outside the challenge range (1600–1800)',
+        });
+        expect(screen.getByText('Ваш рейтинг 1500 вне диапазона вызова (1600–1800)')).toBeInTheDocument();
+
+        act(() => setLanguage('uk', {persist: false}));
+        expect(screen.getByText('Ваш рейтинг 1500 поза діапазоном виклику (1600–1800)')).toBeInTheDocument();
     });
 });
 

@@ -18,7 +18,7 @@ import {
     getDefaultBoardSize
 } from './Chessboard';
 import {API_BASE_URL} from '../config/api';
-import {readErrorDetail} from '../services/apiErrors';
+import {readApiErrorOr} from '../services/apiErrors';
 import {soundEngine, resolveMoveSound} from '../services/soundEngine';
 import {customStartFen, pairHalfMoves} from './chessboard/boardUtils';
 import type {SoundEventType} from '../services/soundEngine';
@@ -29,7 +29,7 @@ import {
     getPieceSvgUrl,
     getHarmoniousPieceStyle
 } from '../config/boardAppearance';
-import {renderUiMessage, serverOr, uiMessage, useI18n} from '../i18n';
+import {renderUiMessage, uiMessage, useI18n} from '../i18n';
 import type {UiMessage} from '../i18n';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
@@ -318,7 +318,7 @@ export default function GameViewer() {
             });
             if (!res.ok) {
                 // detail бывает списком ошибок валидации — без разбора React упал бы на рендере объекта.
-                setAnalysisError(serverOr(await readErrorDetail(res, ''), 'viewer.analysisFailed'));
+                setAnalysisError(await readApiErrorOr(res, 'viewer.analysisFailed'));
                 return;
             }
             const data: FullGameAnalysisReport = await res.json();

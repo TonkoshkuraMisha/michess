@@ -12,6 +12,7 @@ import {
     readGuestPersonalities,
     saveGuestPersonality,
 } from '../personalities';
+import {UiError} from '../apiErrors';
 
 const draft = (name: string, aggression = 0) => ({name, config: {...DEFAULT_CONFIG, aggression}});
 
@@ -28,6 +29,17 @@ function mockFetch(status: number, body: unknown) {
 beforeEach(() => localStorage.clear());
 afterEach(() => vi.unstubAllGlobals());
 
+/** Сообщение из UiError, брошенной функцией (гостевые ошибки — те же коды, что у сервера). */
+function thrownUi(fn: () => unknown) {
+    try {
+        fn();
+    } catch (err) {
+        if (err instanceof UiError) return err.ui;
+        throw err;
+    }
+    throw new Error('ничего не брошено');
+}
+
 describe('гостевые персоналии', () => {
     it('сохраняются, обновляются и удаляются в localStorage', () => {
         const created = saveGuestPersonality(draft('Гамбитёр', 80));
@@ -43,10 +55,12 @@ describe('гостевые персоналии', () => {
 
     it('имя уникально без учёта регистра, и действует лимит', () => {
         saveGuestPersonality(draft('Tactician'));
-        expect(() => saveGuestPersonality(draft('TACTICIAN'))).toThrow(/таким именем/);
+        expect(thrownUi(() => saveGuestPersonality(draft('TACTICIAN'))))
+            .toEqual({key: 'serverErrors.personality_duplicate'});
 
         for (let i = 1; i < MAX_PERSONALITIES; i++) saveGuestPersonality(draft(`Bot_${i}`));
-        expect(() => saveGuestPersonality(draft('Overflow'))).toThrow(/Не больше 20/);
+        expect(thrownUi(() => saveGuestPersonality(draft('Overflow'))))
+            .toEqual({key: 'serverErrors.personality_limit', params: {max: 20}});
     });
 
     it('испорченное хранилище не роняет страницу', () => {
@@ -61,7 +75,7 @@ describe('перенос в профиль', () => {
         saveGuestPersonality(draft('Existing'));
         const fetchMock = mockFetch(200, {
             created: [{id: 7, name: 'Fresh', config: DEFAULT_CONFIG, created_at: '', updated_at: ''}],
-            skipped: [{name: 'Existing', reason: 'Соперник с таким именем уже есть'}],
+            skipped: [{name: 'Existing', reason: 'personality_duplicate', params: {}}],
         });
 
         const result = await importGuestPersonalities('jwt');

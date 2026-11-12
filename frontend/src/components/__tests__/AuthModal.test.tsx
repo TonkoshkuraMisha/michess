@@ -4,6 +4,7 @@
 import {fireEvent, render, screen} from '@testing-library/react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import AuthModal from '../AuthModal';
+import {DEFAULT_CONFIG, GUEST_STORAGE_KEY} from '../../services/personalities';
 
 const response = (status: number, body: unknown = {}) =>
     ({ok: status < 400, status, json: async () => body}) as Response;
@@ -46,7 +47,7 @@ describe('AuthModal: вход', () => {
     });
 
     it('неверный пароль — понятная ошибка, токен не сохраняется', async () => {
-        stubFetch(response(401, {detail: 'Incorrect username or password'}));
+        stubFetch(response(401, {detail: {code: 'login_failed', params: {}, message: 'Incorrect username or password'}}));
         const onSuccess = vi.fn();
         render(<AuthModal onSuccess={onSuccess}/>);
 
@@ -58,13 +59,13 @@ describe('AuthModal: вход', () => {
         expect(screen.getByRole('button', {name: /Войти/})).not.toBeDisabled();
     });
 
-    it('лимит попыток — текст сервера, а не «неверный пароль»', async () => {
-        stubFetch(response(429, {detail: 'Слишком много попыток входа. Повторите через 60 с'}));
+    it('лимит попыток — сколько ждать, а не «неверный пароль»', async () => {
+        stubFetch(response(429, {detail: {code: 'too_many_login_attempts', params: {retry_after: 60}, message: '…'}}));
         render(<AuthModal onSuccess={vi.fn()}/>);
 
         fillAndSubmit('alice', 'secret-pass', /Войти/);
 
-        expect(await screen.findByText('Слишком много попыток входа. Повторите через 60 с')).toBeInTheDocument();
+        expect(await screen.findByText('Слишком много попыток входа — попробуйте через 60 с')).toBeInTheDocument();
     });
 
     it('сбой сети показывается пользователю', async () => {
@@ -77,6 +78,27 @@ describe('AuthModal: вход', () => {
 
         // Текст исключения браузера («Failed to fetch») не показываем — он не на языке игрока.
         expect(await screen.findByText('Нет связи с сервером, попробуйте ещё раз')).toBeInTheDocument();
+    });
+});
+
+describe('AuthModal: перенос гостевых соперников', () => {
+    it('причина отказа приходит кодом и показывается на языке игрока', async () => {
+        localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify([
+            {id: 'local-1', name: 'Overflow', config: DEFAULT_CONFIG, created_at: '', updated_at: ''},
+        ]));
+        vi.stubGlobal('confirm', vi.fn(() => true));
+        const alertMock = vi.fn();
+        vi.stubGlobal('alert', alertMock);
+        vi.stubGlobal('fetch', vi.fn(async (url: string) => (String(url).endsWith('/auth/login')
+            ? response(200, {access_token: 'jwt-1'})
+            : response(200, {created: [], skipped: [{name: 'Overflow', reason: 'personality_limit', params: {max: 20}}]}))));
+        render(<AuthModal onSuccess={vi.fn()}/>);
+
+        fillAndSubmit('alice', 'secret-pass', /Войти/);
+
+        await vi.waitFor(() => expect(alertMock).toHaveBeenCalledWith(
+            'Не перенесены: Overflow — Не больше 20 соперников в мастерской — удалите лишних',
+        ));
     });
 });
 
@@ -102,11 +124,11 @@ describe('AuthModal: регистрация', () => {
         expect(JSON.parse(String(init.body))).toEqual({username: 'alice', password: 'secret-pass'});
     });
 
-    it('ошибки валидации Pydantic показываются текстом, а не [object Object]', async () => {
+    it('ошибки проверки полей показываются по типу проверки, с названием поля', async () => {
         stubFetch(response(422, {
             detail: [
-                {loc: ['body', 'username'], msg: 'Value error, Имя занято служебным маршрутом', type: 'value_error'},
-                {loc: ['body', 'password'], msg: 'Пароль слишком короткий', type: 'value_error'},
+                {loc: ['body', 'username'], msg: 'String should have at least 3 characters', type: 'string_too_short', params: {min_length: 3}},
+                {loc: ['body', 'password'], msg: 'String should have at least 8 characters', type: 'string_too_short', params: {min_length: 8}},
             ],
         }));
         render(<AuthModal onSuccess={vi.fn()}/>);
@@ -114,7 +136,8 @@ describe('AuthModal: регистрация', () => {
 
         fillAndSubmit('me', '123', /Зарегистрироваться/);
 
-        expect(await screen.findByText('Имя занято служебным маршрутом; Пароль слишком короткий')).toBeInTheDocument();
+        // Показывается первая ошибка — на языке игрока и с названием поля.
+        expect(await screen.findByText('Имя пользователя: не короче 3 символов')).toBeInTheDocument();
     });
 
     it('переключение режима сбрасывает ошибку', async () => {

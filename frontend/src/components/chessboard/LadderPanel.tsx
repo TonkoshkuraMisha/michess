@@ -3,10 +3,12 @@
 import {useCallback, useEffect, useState} from 'react';
 import {CheckCircle2, Lock, Swords} from 'lucide-react';
 import {API_BASE_URL} from '../../config/api';
-import {readErrorDetail} from '../../services/apiErrors';
+import {UiError, errorMessage, readApiErrorOr} from '../../services/apiErrors';
 import type {PersonalityConfig} from '../../services/personalities';
 import type {LadderOutcome} from './hooks/useBotGame';
 import {useI18n} from '../../i18n';
+import {renderUiMessage} from '../../i18n';
+import type {UiMessage} from '../../i18n';
 
 interface Rung {
     key: string;
@@ -57,7 +59,7 @@ export interface LadderPanelProps {
 export function LadderPanel({playDisabled, onStart, lastOutcome}: LadderPanelProps) {
     const {t} = useI18n();
     const [state, setState] = useState<LadderState | null>(null);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<UiMessage | null>(null);
     const [starting, setStarting] = useState(false);
 
     const token = localStorage.getItem('token');
@@ -66,11 +68,11 @@ export function LadderPanel({playDisabled, onStart, lastOutcome}: LadderPanelPro
         if (!token) return;
         try {
             const res = await fetch(`${API_BASE_URL}/api/v1/bots/ladder`, {headers: {Authorization: `Bearer ${token}`}});
-            if (!res.ok) throw new Error(await readErrorDetail(res, t('ladder.loadFailed')));
+            if (!res.ok) throw new UiError(await readApiErrorOr(res, 'ladder.loadFailed'));
             setState(await res.json());
             setError(null);
         } catch (err) {
-            setError((err as Error).message);
+            setError(errorMessage(err, 'ladder.loadFailed'));
         }
     }, [token]);
 
@@ -87,11 +89,11 @@ export function LadderPanel({playDisabled, onStart, lastOutcome}: LadderPanelPro
                 headers: {Authorization: `Bearer ${token}`, 'Content-Type': 'application/json'},
                 body: JSON.stringify({color}),
             });
-            if (!res.ok) throw new Error(await readErrorDetail(res, t('ladder.startFailed')));
+            if (!res.ok) throw new UiError(await readApiErrorOr(res, 'ladder.startFailed'));
             onStart(await res.json());
             await load();
         } catch (err) {
-            setError((err as Error).message);
+            setError(errorMessage(err, 'ladder.startFailed'));
         } finally {
             setStarting(false);
         }
@@ -104,7 +106,7 @@ export function LadderPanel({playDisabled, onStart, lastOutcome}: LadderPanelPro
             <p className="text-boxwood/80 leading-snug">
                 {t('ladder.intro')}
             </p>
-            {error && <p role="alert" className="text-red-300">{error}</p>}
+            {error && <p role="alert" className="text-red-300">{renderUiMessage(error, t)}</p>}
             {state && (
                 <>
                     <div className="flex items-center justify-between p-2 rounded-md bg-black/40 border border-amber-800/50">

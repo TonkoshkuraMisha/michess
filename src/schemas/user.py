@@ -3,6 +3,8 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from src.core.errors import validation_error
+
 USERNAME_MIN_LENGTH = 3
 USERNAME_MAX_LENGTH = 30
 _USERNAME_RE = re.compile(r"[A-Za-z0-9А-Яа-яЁё_-]+")
@@ -21,11 +23,11 @@ def validate_username(value: str) -> str:
     управляющие символы, а запрет смешивать алфавиты — подделки вида «Мorphy» (кириллическая М).
     """
     if not _USERNAME_RE.fullmatch(value):
-        raise ValueError("Имя может содержать только буквы (латиница или кириллица), цифры, «_» и «-»")
+        raise validation_error("username_invalid_chars")
     if _LATIN_RE.search(value) and _CYRILLIC_RE.search(value):
-        raise ValueError("Имя не может смешивать латиницу и кириллицу")
+        raise validation_error("username_mixed_scripts")
     if not any(ch.isalpha() for ch in value):
-        raise ValueError("Имя должно содержать хотя бы одну букву")
+        raise validation_error("username_no_letters")
     return value
 
 

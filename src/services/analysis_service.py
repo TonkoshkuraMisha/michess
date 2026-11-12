@@ -13,6 +13,7 @@ import chess.pgn
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.errors import DomainError, DomainValueError
 from src.models.game import Game, GameStatus
 from src.services.bots.base import resolve_stockfish_path, static_board_eval_cp
 from src.services.engine_pool import EngineUnavailableError, get_engine_pool
@@ -70,7 +71,7 @@ def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
     """Синхронный проход по всем позициям партии со Stockfish или статическим fallback-оценщиком."""
     pgn_game = read_pgn_game(pgn_text)
     if pgn_game is None:
-        raise ValueError("Не удалось распарсить PGN партии")
+        raise DomainValueError("pgn_parse_failed")
 
     board = pgn_game.board()
     mainline_moves = list(pgn_game.mainline_moves())
@@ -224,8 +225,12 @@ def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
     }
 
 
-class GameNotFinishedError(Exception):
+class GameNotFinishedError(DomainError):
     """Анализ идущей партии запрещён: он работал бы как подсказка движка игрокам."""
+
+
+class GameDataNotFoundError(DomainError, LookupError):
+    """Партии или её PGN нет."""
 
 
 _FINISHED_STATUSES = (GameStatus.COMPLETED, GameStatus.ABORTED)
@@ -233,7 +238,7 @@ _FINISHED_STATUSES = (GameStatus.COMPLETED, GameStatus.ABORTED)
 
 def ensure_game_finished(game: Game) -> None:
     if game.status not in _FINISHED_STATUSES:
-        raise GameNotFinishedError(f"Партия {game.id} ещё не завершена")
+        raise GameNotFinishedError("game_not_finished", game_id=game.id)
 
 
 def _count_mainline_plies(pgn_text: str) -> int:
@@ -285,7 +290,7 @@ class AnalysisService:
         result = await db.execute(select(Game).where(Game.id == game_id))
         game = result.scalars().first()
         if not game or not game.pgn:
-            raise LookupError(f"Партия {game_id} или её PGN не найдены")
+            raise GameDataNotFoundError("pgn_not_found", game_id=game_id)
         ensure_game_finished(game)
 
         # Если анализ уже сохранён в БД и не запрошен пересчёт — отдаём мгновенно из кэша

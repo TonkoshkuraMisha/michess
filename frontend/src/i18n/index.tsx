@@ -148,20 +148,29 @@ export function useI18n(): I18n {
 }
 
 /**
- * Сообщение для показа: ключ каталога (переводится при каждом показе, то есть и после смены языка) или
- * текст, пришедший с сервера как есть (до таска 11.0b, где сервер начнёт отдавать коды).
+ * Сообщение для показа: ключ каталога с параметрами (переводится при каждом показе — значит, и после смены
+ * языка) или текст как есть (имя, присланное сервером, или текст ошибки, кода которой клиент ещё не знает).
+ * Параметр сам может быть сообщением: «Бот не смог сделать ход: {detail}», где detail — ошибка сервера.
  */
-export type UiMessage = { key: MessageKey; params?: Params } | { text: string };
+export type UiMessage = { key: MessageKey; params?: Record<string, MessageParam> } | { text: string };
 
-export function uiMessage(key: MessageKey, params?: Params): UiMessage {
+export type MessageParam = string | number | UiMessage;
+
+export function uiMessage(key: MessageKey, params?: Record<string, MessageParam>): UiMessage {
     return params ? {key, params} : {key};
 }
 
-/** Текст ответа сервера, если он есть, иначе сообщение каталога. */
-export function serverOr(detail: string, key: MessageKey, params?: Params): UiMessage {
-    return detail ? {text: detail} : uiMessage(key, params);
+/** Есть ли такой ключ-строка в каталоге (эталон — английский): для кодов, пришедших с сервера. */
+export function hasMessage(key: string): key is MessageKey {
+    return typeof lookup(CATALOGS.en, key) === 'string';
 }
 
 export function renderUiMessage(message: UiMessage, translateFn: I18n['t']): string {
-    return 'text' in message ? message.text : translateFn(message.key, message.params);
+    if ('text' in message) return message.text;
+    if (!message.params) return translateFn(message.key);
+    const rendered: Params = {};
+    for (const [name, param] of Object.entries(message.params)) {
+        rendered[name] = typeof param === 'object' ? renderUiMessage(param, translateFn) : param;
+    }
+    return translateFn(message.key, rendered);
 }

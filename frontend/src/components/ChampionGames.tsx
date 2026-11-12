@@ -9,9 +9,9 @@ import {
 } from 'lucide-react';
 import {CHAMPIONS_LIST} from '../config/champions';
 import {API_BASE_URL} from '../config/api';
-import {readErrorDetail} from '../services/apiErrors';
+import {readApiErrorOr} from '../services/apiErrors';
 import type {Locale} from 'date-fns';
-import {renderUiMessage, serverOr, uiMessage, useI18n} from '../i18n';
+import {renderUiMessage, uiMessage, useI18n} from '../i18n';
 import type {UiMessage} from '../i18n';
 
 interface GameData {
@@ -73,7 +73,7 @@ export default function ChampionGames() {
                 const res = await fetch(`${API_BASE_URL}/api/v1/profile/${encodeURIComponent(championId ?? '')}/games?limit=${limit}&offset=${offset}&sort=asc`);
 
                 if (!res.ok) {
-                    setError(serverOr(await readErrorDetail(res, ''), 'championGames.loadFailed'));
+                    setError(await readApiErrorOr(res, 'championGames.loadFailed'));
                     return;
                 }
 

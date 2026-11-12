@@ -20,6 +20,9 @@ import {fetchBotCatalog, strengthLabel} from '../../services/botCatalog';
 import type {CatalogArchetype} from '../../services/botCatalog';
 import {useI18n} from '../../i18n';
 import {t as translate} from '../../i18n';
+import {errorMessage} from '../../services/apiErrors';
+import {renderUiMessage, uiMessage} from '../../i18n';
+import type {UiMessage} from '../../i18n';
 
 type SliderKey = 'aggression' | 'center_control' | 'mobility' | 'king_safety' | 'pawn_structure'
     | 'randomness' | 'blunder_guard_cp' | 'target_elo';
@@ -90,7 +93,7 @@ export function PersonalityWorkshop({
     const {t} = useI18n();
     const [mine, setMine] = useState<Personality[]>([]);
     const [draft, setDraft] = useState<Draft>(emptyDraft);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<UiMessage | null>(null);
     const [notice, setNotice] = useState<'workshop.savedProfile' | 'workshop.savedBrowser' | null>(null);
     const [busy, setBusy] = useState(false);
     const [archetypes, setArchetypes] = useState<CatalogArchetype[]>([]);
@@ -110,7 +113,7 @@ export function PersonalityWorkshop({
         try {
             setMine(token ? await listPersonalities(token) : readGuestPersonalities());
         } catch (err) {
-            setError((err as Error).message);
+            setError(errorMessage(err, 'workshop.loadFailed'));
         }
     }, [token]);
 
@@ -133,7 +136,7 @@ export function PersonalityWorkshop({
     const save = async () => {
         const name = draft.name.trim();
         if (!name) {
-            setError(t('workshop.nameRequired'));
+            setError(uiMessage('workshop.nameRequired'));
             return;
         }
         setBusy(true);
@@ -154,7 +157,7 @@ export function PersonalityWorkshop({
             setNotice(token ? 'workshop.savedProfile' : 'workshop.savedBrowser');
             await reload();
         } catch (err) {
-            setError((err as Error).message);
+            setError(errorMessage(err, 'workshop.saveFailed'));
         } finally {
             setBusy(false);
         }
@@ -168,7 +171,7 @@ export function PersonalityWorkshop({
             if (draft.savedId === p.id) setDraft(emptyDraft());
             await reload();
         } catch (err) {
-            setError((err as Error).message);
+            setError(errorMessage(err, 'workshop.deleteFailed'));
         }
     };
 
@@ -268,7 +271,7 @@ export function PersonalityWorkshop({
                     {t('workshop.engineNote')}
                 </p>
 
-                {error && <p role="alert" className="text-red-300">{error}</p>}
+                {error && <p role="alert" className="text-red-300">{renderUiMessage(error, t)}</p>}
                 {notice && !error && <p className="text-emerald-300">{t(notice)}</p>}
 
                 <button type="button" onClick={save} disabled={busy}

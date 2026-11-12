@@ -27,6 +27,7 @@ import chess
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
+from src.core.errors import DomainError
 from src.db.session import AsyncSessionLocal
 from src.models.game import Game, GameStatus
 from src.models.user import RatingCategory, User
@@ -43,13 +44,8 @@ MAX_BASE_TIME_MS = 3 * 60 * 60 * 1000
 MAX_INCREMENT_MS = 180_000
 
 
-class MatchmakingError(Exception):
-    """Ожидаемый отказ матчмейкинга с кодом для клиента и сообщением для игрока."""
-
-    def __init__(self, code: str, message: str):
-        super().__init__(message)
-        self.code = code
-        self.message = message
+class MatchmakingError(DomainError):
+    """Ожидаемый отказ матчмейкинга: код из реестра src/core/errors.py и его параметры."""
 
 
 def default_rating_window(rating: int) -> tuple[int, int]:
@@ -70,7 +66,7 @@ def normalize_rating_window(min_rating, max_rating, rating: int) -> tuple[int, i
 def validate_time_control(base_time_ms, increment_ms) -> tuple[int, int]:
     base_ms, inc_ms = int(base_time_ms), int(increment_ms)
     if not MIN_BASE_TIME_MS <= base_ms <= MAX_BASE_TIME_MS or not 0 <= inc_ms <= MAX_INCREMENT_MS:
-        raise MatchmakingError("invalid_time_control", "Некорректный контроль времени")
+        raise MatchmakingError("invalid_time_control")
     return base_ms, inc_ms
 
 
@@ -121,8 +117,8 @@ class Matchmaker:
     async def _ensure_not_in_game(self, user_id: int, *, is_self: bool) -> None:
         if await self._state_manager.get_active_game_id(user_id) is not None:
             if is_self:
-                raise MatchmakingError("self_in_game", "Вы уже играете партию")
-            raise MatchmakingError("opponent_in_game", "Соперник уже играет другую партию")
+                raise MatchmakingError("self_in_game")
+            raise MatchmakingError("opponent_in_game")
 
     async def _reserve_players(self, *user_ids: int) -> str:
         """Резервирует игроков на время старта партии; при занятости кого-то — откат и ошибка."""
@@ -132,7 +128,7 @@ class Matchmaker:
             ok = await self.redis.set(f"matchmaking:reserve:{uid}", token, nx=True, px=RESERVATION_TTL_MS)
             if not ok:
                 await self._release_players(token, *reserved)
-                raise MatchmakingError("players_busy", "Игрок уже начинает другую партию, попробуйте ещё раз")
+                raise MatchmakingError("players_busy")
             reserved.append(uid)
         return token
 
@@ -242,7 +238,7 @@ class Matchmaker:
                     seen.add(uid)
                     players.append({
                         "user_id": int(prefs.get("user_id", uid)),
-                        "username": prefs.get("username", "Игрок"),
+                        "username": prefs.get("username", ""),
                         "rating": int(prefs.get("rating", 1200)),
                         "min_rating": int(prefs.get("min_rating", 0)),
                         "max_rating": int(prefs.get("max_rating", UNBOUNDED_MAX_RATING)),
@@ -397,7 +393,7 @@ class Matchmaker:
         """
         white_id, black_id = int(white_id), int(black_id)
         if white_id == black_id:
-            raise MatchmakingError("invalid", "Нельзя играть с самим собой")
+            raise MatchmakingError("self_play")
         base_ms, inc_ms = validate_time_control(base_time_ms, increment_ms)
 
         token = await self._reserve_players(white_id, black_id)
@@ -415,7 +411,7 @@ class Matchmaker:
                     base_ms, inc_ms, connection_manager, (white_id, black_id),
                 )
             if not started:
-                raise MatchmakingError("invalid", "Игрок не найден")
+                raise MatchmakingError("player_not_found")
             return started
         finally:
             await self._release_players(token, white_id, black_id)
@@ -436,7 +432,7 @@ class Matchmaker:
         c_id = int(challenger_id)
         a_id = int(acceptor_id)
         if c_id == a_id:
-            raise MatchmakingError("invalid", "Нельзя принять собственный вызов")
+            raise MatchmakingError("own_challenge")
 
         token = await self._reserve_players(c_id, a_id)
         try:
@@ -445,11 +441,11 @@ class Matchmaker:
             prefs_key = f"queue:prefs:{c_id}"
             prefs = await self.redis.hgetall(prefs_key)
             if not prefs:
-                raise MatchmakingError("challenge_gone", "Вызов уже неактивен или принят другим игроком")
+                raise MatchmakingError("challenge_gone")
 
             if await self._state_manager.get_active_game_id(c_id) is not None:
                 await self.leave_queue(c_id)  # вызов игрока, который уже играет, устарел
-                raise MatchmakingError("opponent_in_game", "Соперник уже играет другую партию")
+                raise MatchmakingError("opponent_in_game")
 
             base_time = int(prefs.get("base_time_ms", 180000))
             inc_time = int(prefs.get("increment_ms", 0))
@@ -459,18 +455,15 @@ class Matchmaker:
             async with self._session(db) as session:
                 acceptor_rating = await self._fresh_rating(session, a_id, category)
                 if acceptor_rating is None:
-                    raise MatchmakingError("invalid", "Игрок не найден")
+                    raise MatchmakingError("player_not_found")
                 lo = int(prefs.get("min_rating", 0))
                 hi = int(prefs.get("max_rating", UNBOUNDED_MAX_RATING))
                 if not lo <= acceptor_rating <= hi:
-                    raise MatchmakingError(
-                        "rating_out_of_range",
-                        f"Ваш рейтинг {acceptor_rating} вне диапазона вызова ({lo}–{hi})",
-                    )
+                    raise MatchmakingError("rating_out_of_range", rating=acceptor_rating, min=lo, max=hi)
 
                 # Захват вызова: удалить ключ сможет только один из конкурирующих принимающих.
                 if not await self.redis.delete(prefs_key):
-                    raise MatchmakingError("challenge_gone", "Вызов уже неактивен или принят другим игроком")
+                    raise MatchmakingError("challenge_gone")
 
                 started = await self._start_reserved_game(
                     session,
@@ -480,7 +473,7 @@ class Matchmaker:
                     base_time, inc_time, connection_manager, (c_id, a_id),
                 )
             if not started:
-                raise MatchmakingError("invalid", "Игрок не найден")
+                raise MatchmakingError("player_not_found")
             return started["game_id"]
         finally:
             await self._release_players(token, c_id, a_id)
@@ -490,7 +483,7 @@ class Matchmaker:
     async def create_private_invite(
             self,
             user_id: int,
-            username: str = "Игрок",
+            username: str = "",
             rating: int = 1200,
             base_time_ms: int = 180000,
             increment_ms: int = 2000,
@@ -577,7 +570,7 @@ class Matchmaker:
 
         accepted = await self.accept_private_invite(code, acceptor_id)
         if not accepted:
-            raise MatchmakingError("invite_invalid", "Приглашение недействительно или истекло")
+            raise MatchmakingError("invite_invalid")
 
         try:
             return await self.start_pvp_game(

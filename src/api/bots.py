@@ -6,8 +6,9 @@ from datetime import UTC, datetime
 
 import chess
 import chess.pgn
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field, model_validator
+from pydantic_core import PydanticCustomError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -15,6 +16,7 @@ from src.api import deps
 from src.api.fair_play import _optional_user_id, forbid_engine_help_during_game
 from src.api.personalities import get_owned_personality, personality_config, validate_personality_name
 from src.api.rate_limit import rate_limit
+from src.core.errors import ApiError, DomainValueError, validation_error
 from src.db import session as db_session
 from src.models.game import Game, GameStatus
 from src.models.user import User
@@ -181,7 +183,7 @@ class CustomBotMoveRequest(BaseModel):
     @model_validator(mode="after")
     def _config_or_saved(self) -> "CustomBotMoveRequest":
         if self.config is not None and self.personality_id is not None:
-            raise ValueError("Укажите либо config, либо personality_id")
+            raise validation_error("config_or_personality")
         return self
 
 
@@ -299,9 +301,9 @@ def _replay_moves(moves_uci: list[str], start_fen: str | None = None) -> chess.B
         try:
             move = chess.Move.from_uci(uci_str)
         except ValueError:
-            raise ValueError(f"Некорректный ход в истории: {uci_str}") from None
+            raise DomainValueError("invalid_history_move", move=uci_str) from None
         if move not in board.legal_moves:
-            raise ValueError(f"Нелегальный ход в истории: {uci_str}")
+            raise DomainValueError("illegal_history_move", move=uci_str)
         board.push(move)
     return board
 
@@ -328,9 +330,9 @@ def resolve_bot_game_outcome(board: chess.Board, payload: "BotGameSaveRequest") 
             return flag_outcome(board.fen(), "black")
         if payload.result == "0-1":
             return flag_outcome(board.fen(), "white")
-        raise ValueError("Для флага укажите, чья сторона победила по времени")
+        raise DomainValueError("flag_winner_required")
 
-    raise ValueError("Партия не завершена на доске: укажите termination ('resignation' или 'timeout')")
+    raise DomainValueError("termination_required")
 
 
 def _build_pgn_string(
@@ -365,7 +367,7 @@ def _build_pgn_string(
     for uci_str in moves_uci:
         move = chess.Move.from_uci(uci_str)
         if move not in board.legal_moves:
-            raise ValueError(f"Нелегальный ход в истории: {uci_str}")
+            raise DomainValueError("illegal_history_move", move=uci_str)
         board.push(move)
         node = node.add_variation(move)
 
@@ -444,15 +446,15 @@ def _playable_board(fen: str) -> chess.Board:
     try:
         board = chess.Board(fen)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Некорректный формат FEN") from None
+        raise ApiError(400, "invalid_fen") from None
 
     # chess.Board принимает и невозможные позиции (без короля, короли рядом, под шахом сторона,
     # которая только что ходила) — движок на них может упасть и выбыть из пула.
     if not board.is_valid():
-        raise HTTPException(status_code=400, detail="Некорректная позиция")
+        raise ApiError(400, "invalid_position")
 
     if board.is_game_over():
-        raise HTTPException(status_code=400, detail="Партия уже завершена")
+        raise ApiError(400, "game_already_over")
     return board
 
 
@@ -499,7 +501,7 @@ async def get_bot_move(payload: BotMoveRequest, request: Request, db: AsyncSessi
     """Принимает FEN позиции и возвращает ответный ход выбранного исторического бота."""
     bot = BOT_INSTANCES.get(payload.bot_id)
     if bot is None:
-        raise HTTPException(status_code=404, detail=f"Бот '{payload.bot_id}' не найден")
+        raise ApiError(404, "bot_not_found", bot_id=payload.bot_id)
 
     board = _playable_board(payload.fen)
     await ladder_service.note_bot_move_request(await _optional_user_id(request, db), board, payload.bot_id)
@@ -564,7 +566,7 @@ async def _bearer_user(request: Request, db: AsyncSession) -> User:
     scheme, _, token = request.headers.get("authorization", "").partition(" ")
     user = await deps.user_from_token(db, token) if scheme.lower() == "bearer" and token else None
     if user is None:
-        raise HTTPException(status_code=401, detail="Войдите, чтобы играть с сохранённым соперником")
+        raise ApiError(401, "login_required_for_personality")
     return user
 
 
@@ -575,12 +577,12 @@ async def _ladder_game_for_save(
     session = await ladder_service.get_session(user.id)
     found = ladder_service.find_rung(session.rung_key) if session else None
     if session is None or found is None:
-        raise HTTPException(status_code=409, detail="Партия лестницы не начата или устарела")
+        raise ApiError(409, "ladder_game_missing")
     _, rung = found
     expected = (rung.key, None) if rung.kind == "historical" else (CUSTOM_BOT_ID, rung.name)
     actual = (payload.bot_id, payload.personality_name if payload.bot_id == CUSTOM_BOT_ID else None)
     if actual != expected or payload.player_color != session.color:
-        raise HTTPException(status_code=409, detail="Партия не совпадает с открытой партией лестницы")
+        raise ApiError(409, "ladder_game_mismatch")
     return session, *found
 
 
@@ -594,11 +596,11 @@ async def _resolve_personality_for_save(
         personality = await get_owned_personality(db, user.id, payload.personality_id)
         return personality.name, personality_config(personality).target_elo
     if payload.personality_name is None:
-        raise HTTPException(status_code=400, detail="Для соперника из мастерской нужен personality_id или имя")
+        raise ApiError(400, "custom_opponent_missing")
     try:
         return validate_personality_name(payload.personality_name), None
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from None
+    except PydanticCustomError as exc:
+        raise ApiError(400, exc.type, **(exc.context or {})) from None
 
 
 @router.post("/save-game", response_model=BotGameSaveResponse)
@@ -609,24 +611,24 @@ async def save_bot_game(
 ):
     """Сохраняет завершённую партию против исторического бота или персоналии из мастерской."""
     if payload.bot_id != CUSTOM_BOT_ID and payload.bot_id not in BOT_METADATA:
-        raise HTTPException(status_code=404, detail=f"Бот '{payload.bot_id}' не найден")
+        raise ApiError(404, "bot_not_found", bot_id=payload.bot_id)
     personality_name, personality_elo = await _resolve_personality_for_save(db, current_user, payload)
     ladder_game = await _ladder_game_for_save(current_user, payload) if payload.ladder else None
 
     if payload.player_color not in ("white", "black"):
-        raise HTTPException(status_code=400, detail="Некорректный цвет игрока")
+        raise ApiError(400, "invalid_player_color")
 
     if payload.result not in ("1-0", "0-1", "1/2-1/2"):
-        raise HTTPException(status_code=400, detail="Некорректный результат партии")
+        raise ApiError(400, "invalid_result")
 
     if not payload.moves_uci:
-        raise HTTPException(status_code=400, detail="Список ходов пуст")
+        raise ApiError(400, "empty_moves")
 
     try:
         final_board = _replay_moves(payload.moves_uci, payload.start_fen)
         result, termination = resolve_bot_game_outcome(final_board, payload)
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except DomainValueError as exc:
+        raise exc.to_http(400) from exc
     # Обычная расстановка, присланная как FEN, — это не «своя позиция».
     start_fen = None if is_standard_start(final_board) else final_board.root().fen()
     payload = payload.model_copy(update={"result": result, "termination": termination, "start_fen": start_fen})
@@ -657,8 +659,8 @@ async def save_bot_game(
             result=payload.result,
             start_fen=payload.start_fen,
         )
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except DomainValueError as exc:
+        raise exc.to_http(400) from exc
 
     game_kwargs = _prepare_game_kwargs(
         white_id=white_user.id,
