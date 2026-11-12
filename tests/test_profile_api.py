@@ -262,3 +262,110 @@ async def test_http_accept_own_or_missing_challenge(client, test_user_1, token_u
 
     assert own.status_code == 400
     assert missing.status_code in (404, 409)
+
+
+# --- Итоги и история рейтинга -------------------------------------------------------------
+
+
+def _rated(white: User, black: User, result: str, day: int, deltas: tuple[int, int], **fields) -> Game:
+    """Рейтинговая блиц-партия с сохранёнными рейтингами до партии и изменениями."""
+    values = {
+        "result": result, "is_rated": True, "finished_at": datetime(2026, 11, day, tzinfo=UTC),
+        "white_initial_rating": 1500, "black_initial_rating": 1500,
+        "white_rating_delta": deltas[0], "black_rating_delta": deltas[1],
+    }
+    values.update(fields)
+    return _game(white, black, **values)
+
+
+async def test_stats_count_all_games_from_the_owner_side(client, db_session):
+    alice, bob = await _add(db_session, _user("Alice"), _user("Bob"))
+    await _add(
+        db_session,
+        _game(alice, bob, result="1-0"),          # победа белыми
+        _game(bob, alice, result="0-1"),          # победа чёрными
+        _game(bob, alice, result="1-0"),          # поражение
+        _game(alice, bob, result="1/2-1/2"),      # ничья
+        _game(alice, bob, result="1-0", status=GameStatus.ABORTED),   # не в истории
+        _game(alice, bob, result="1-0", pgn=None),                     # без записи ходов
+    )
+
+    body = client.get(f"{API}/Alice/stats").json()
+
+    assert (body["total"], body["wins"], body["draws"], body["losses"]) == (4, 2, 1, 1)
+    assert set(body["rated_games"]) == {"bullet", "blitz", "rapid", "classical"}
+    bob_stats = client.get(f"{API}/Bob/stats").json()
+    assert (bob_stats["wins"], bob_stats["losses"]) == (1, 2)
+    assert client.get(f"{API}/nobody/stats").status_code == 404
+
+
+async def test_stats_of_a_player_without_games(client, db_session):
+    await _add(db_session, _user("Newbie"))
+    body = client.get(f"{API}/Newbie/stats").json()
+    assert (body["total"], body["wins"], body["draws"], body["losses"]) == (0, 0, 0, 0)
+
+
+async def test_rating_history_uses_stored_ratings_in_chronological_order(client, db_session):
+    alice, bob = await _add(db_session, _user("Alice"), _user("Bob"))
+    await _add(
+        db_session,
+        _rated(alice, bob, "1-0", day=3, deltas=(8, -8), white_initial_rating=1512, black_initial_rating=1488),
+        _rated(alice, bob, "1-0", day=1, deltas=(12, -12)),
+        _rated(bob, alice, "1-0", day=2, deltas=(10, -10), white_initial_rating=1488, black_initial_rating=1512),
+    )
+
+    body = client.get(f"{API}/Alice/rating-history?category=blitz").json()
+
+    assert body["category"] == "blitz" and body["current_rating"] == 1500
+    assert [(p["rating"], p["delta"], p["color"]) for p in body["points"]] == [
+        (1512, 12, "white"), (1502, -10, "black"), (1520, 8, "white"),
+    ]
+    assert body["points"][0]["finished_at"].startswith("2026-11-01")
+
+
+async def test_rating_history_is_split_by_category_and_skips_unrated(client, db_session):
+    alice, bob = await _add(db_session, _user("Alice"), _user("Bob"))
+    await _add(
+        db_session,
+        _rated(alice, bob, "1-0", day=1, deltas=(9, -9)),                                       # блиц 3+0
+        _rated(alice, bob, "1-0", day=2, deltas=(7, -7), base_time_ms=60000),                    # пуля 1+0
+        _rated(alice, bob, "1-0", day=3, deltas=(5, -5), base_time_ms=120000, increment_ms=2000),  # 2+2 = блиц
+        _rated(alice, bob, "1-0", day=4, deltas=(0, 0), is_rated=False),                          # товарищеская
+        _rated(alice, bob, "1-0", day=5, deltas=(4, -4), base_time_ms=600000),                   # рапид 10+0
+    )
+
+    def deltas(category: str) -> list[int]:
+        return [p["delta"] for p in client.get(f"{API}/Alice/rating-history?category={category}").json()["points"]]
+
+    assert deltas("blitz") == [9, 5]
+    assert deltas("bullet") == [7]
+    assert deltas("rapid") == [4]
+    assert deltas("classical") == []
+
+
+async def test_rating_history_limit_keeps_the_latest_games(client, db_session):
+    alice, bob = await _add(db_session, _user("Alice"), _user("Bob"))
+    await _add(db_session, *[_rated(alice, bob, "1-0", day=day, deltas=(day, -day)) for day in range(1, 6)])
+
+    points = client.get(f"{API}/Alice/rating-history?limit=2").json()["points"]
+
+    assert [p["delta"] for p in points] == [4, 5]
+    assert client.get(f"{API}/Alice/rating-history?category=chess960").status_code == 422
+    assert client.get(f"{API}/nobody/rating-history").status_code == 404
+
+
+@pytest.mark.parametrize(("base_ms", "inc_ms"), [
+    (60000, 0), (179000, 0), (180000, 0), (120000, 2000), (479000, 0), (480000, 0), (300000, 5000),
+    (1499000, 0), (1500000, 0), (900000, 15000),
+])
+def test_sql_category_bounds_match_classification(base_ms, inc_ms):
+    """Границы для SQL-отбора и classify_time_control — одно правило, а не два похожих."""
+    from src.services.rating import ESTIMATED_MOVES, category_duration_bounds_ms, classify_time_control
+
+    estimated = base_ms + ESTIMATED_MOVES * inc_ms
+    matching = [
+        category for category in ("bullet", "blitz", "rapid", "classical")
+        if (category_duration_bounds_ms(category)[0] or 0) <= estimated
+        and (category_duration_bounds_ms(category)[1] is None or estimated < category_duration_bounds_ms(category)[1])
+    ]
+    assert matching == [classify_time_control(base_ms, inc_ms)]

@@ -6,7 +6,7 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
-from sqlalchemy import asc, case, desc, func, or_, select
+from sqlalchemy import and_, asc, case, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
 
@@ -16,7 +16,7 @@ from src.db.session import get_db
 from src.models.game import Game, GameStatus
 from src.models.user import RatingCategory, User
 from src.schemas.user import username_key
-from src.services.rating import classify_time_control
+from src.services.rating import ESTIMATED_MOVES, category_duration_bounds_ms, classify_time_control
 
 router = APIRouter(prefix="/profile", tags=["Profile & Games"])
 
@@ -340,6 +340,108 @@ async def get_user_profile(username: str, db: AsyncSession = Depends(get_db)):
     }
 
 
+def _archive_conditions(user_id: int) -> list:
+    """Партии игрока, которые показываются в истории: завершённые и с записью ходов."""
+    return [
+        or_(Game.white_player_id == user_id, Game.black_player_id == user_id),
+        Game.status == GameStatus.COMPLETED,
+        Game.pgn.is_not(None),
+        Game.pgn != "",
+    ]
+
+
+@router.get("/{username}/stats")
+async def get_user_stats(username: str, db: AsyncSession = Depends(get_db)):
+    """
+    Итоги по всем партиям игрока (тем же, что в истории): всего, победы, ничьи, поражения.
+    Считается одним запросом в БД — раньше страница профиля считала их по последним 30 партиям.
+    """
+    user = await _resolve_user(db, username)
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User {username} not found")
+
+    is_white = Game.white_player_id == user.id
+    won = or_(and_(is_white, Game.result == "1-0"), and_(~is_white, Game.result == "0-1"))
+    lost = or_(and_(is_white, Game.result == "0-1"), and_(~is_white, Game.result == "1-0"))
+    row = (await db.execute(
+        select(
+            func.count(Game.id),
+            func.coalesce(func.sum(case((won, 1), else_=0)), 0),
+            func.coalesce(func.sum(case((Game.result == "1/2-1/2", 1), else_=0)), 0),
+            func.coalesce(func.sum(case((lost, 1), else_=0)), 0),
+        ).where(*_archive_conditions(user.id))
+    )).one()
+
+    return {
+        "total": int(row[0]),
+        "wins": int(row[1]),
+        "draws": int(row[2]),
+        "losses": int(row[3]),
+        # Рейтинговых партий по категориям — по ним страница выбирает, какой график показать первым.
+        "rated_games": {category: user.games_played_for(category) for category in _LEADERBOARD_RATING_COLUMN},
+    }
+
+
+@router.get("/{username}/rating-history")
+async def get_rating_history(
+        username: str,
+        category: RatingCategory = Query("blitz", description="Категория контроля времени"),
+        limit: int = Query(200, ge=1, le=1000, description="Сколько последних партий вернуть"),
+        db: AsyncSession = Depends(get_db),
+):
+    """
+    Рейтинг игрока после каждой рейтинговой партии категории — в хронологическом порядке.
+    Берётся из сохранённых при завершении партии значений (рейтинг до партии + изменение),
+    а не восстанавливается приблизительно на клиенте.
+    """
+    user = await _resolve_user(db, username)
+    if not user:
+        raise HTTPException(status_code=404, detail=f"User {username} not found")
+
+    estimated_ms = Game.base_time_ms + ESTIMATED_MOVES * Game.increment_ms
+    lower, upper = category_duration_bounds_ms(category)
+    conditions = [
+        or_(Game.white_player_id == user.id, Game.black_player_id == user.id),
+        Game.status == GameStatus.COMPLETED,
+        Game.is_rated == True,  # noqa: E712
+        Game.finished_at.is_not(None),
+        Game.white_initial_rating.is_not(None),
+        Game.black_initial_rating.is_not(None),
+        Game.white_rating_delta.is_not(None),
+        Game.black_rating_delta.is_not(None),
+    ]
+    if lower is not None:
+        conditions.append(estimated_ms >= lower)
+    if upper is not None:
+        conditions.append(estimated_ms < upper)
+
+    rows = (await db.execute(
+        select(
+            Game.id, Game.finished_at, Game.white_player_id, Game.result,
+            Game.white_initial_rating, Game.white_rating_delta,
+            Game.black_initial_rating, Game.black_rating_delta,
+        )
+        .where(*conditions)
+        .order_by(desc(Game.finished_at), desc(Game.id))
+        .limit(limit)
+    )).all()
+
+    points = []
+    for game_id, finished_at, white_id, result, w_initial, w_delta, b_initial, b_delta in reversed(rows):
+        played_white = white_id == user.id
+        initial, delta = (w_initial, w_delta) if played_white else (b_initial, b_delta)
+        points.append({
+            "game_id": game_id,
+            "finished_at": finished_at.isoformat(),
+            "rating": initial + delta,
+            "delta": delta,
+            "color": "white" if played_white else "black",
+            "result": result,
+        })
+
+    return {"category": category, "current_rating": user.rating_for(category), "points": points}
+
+
 @router.get("/{username}/games")
 async def get_user_games(
         username: str,
@@ -355,12 +457,7 @@ async def get_user_games(
     WhiteUser = aliased(User)
     BlackUser = aliased(User)
 
-    conditions = [
-        or_(Game.white_player_id == user.id, Game.black_player_id == user.id),
-        Game.status == GameStatus.COMPLETED,
-        Game.pgn.is_not(None),
-        Game.pgn != "",
-    ]
+    conditions = _archive_conditions(user.id)
 
     count_query = select(func.count(Game.id)).where(*conditions)
     total_count = (await db.execute(count_query)).scalar() or 0

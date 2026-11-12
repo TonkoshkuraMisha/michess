@@ -5,10 +5,12 @@ from src.models.user import RatingCategory
 _BLITZ_THRESHOLD_S = 180
 _RAPID_THRESHOLD_S = 480
 _CLASSICAL_THRESHOLD_S = 1500
+# Сколько ходов закладывается в оценку длительности партии.
+ESTIMATED_MOVES = 40
 
 
 def classify_time_control(base_time_ms: int, increment_ms: int) -> RatingCategory:
-    estimated_s = base_time_ms / 1000 + 40 * (increment_ms / 1000)
+    estimated_s = base_time_ms / 1000 + ESTIMATED_MOVES * (increment_ms / 1000)
     if estimated_s < _BLITZ_THRESHOLD_S:
         return "bullet"
     if estimated_s < _RAPID_THRESHOLD_S:
@@ -16,6 +18,18 @@ def classify_time_control(base_time_ms: int, increment_ms: int) -> RatingCategor
     if estimated_s < _CLASSICAL_THRESHOLD_S:
         return "rapid"
     return "classical"
+
+
+def category_duration_bounds_ms(category: RatingCategory) -> tuple[int | None, int | None]:
+    """
+    Границы категории [нижняя, верхняя) по оценке длительности base_time_ms + 40 * increment_ms.
+    Нужны, чтобы отбирать партии категории в SQL тем же правилом, что и classify_time_control.
+    """
+    thresholds_ms = [_BLITZ_THRESHOLD_S * 1000, _RAPID_THRESHOLD_S * 1000, _CLASSICAL_THRESHOLD_S * 1000]
+    lower = [None, *thresholds_ms]
+    upper = [*thresholds_ms, None]
+    index = ("bullet", "blitz", "rapid", "classical").index(category)
+    return lower[index], upper[index]
 
 
 class FideEloSystem:
