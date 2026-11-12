@@ -149,6 +149,24 @@ describe('GameViewer', () => {
         await expectPiece('h4', 'b q');
     });
 
+    it('обработчик клавиш регистрируется один раз и видит загруженную партию без перерегистрации', async () => {
+        // Раньше обработчик перерегистрировался после каждого рендера и читал историю из замыкания:
+        // нажатие между отрисовкой загруженной партии и запуском эффекта видело пустую историю и терялось.
+        const addListener = vi.spyOn(window, 'addEventListener');
+        stubApi({pgn: {ok: true, text: FOOLS_MATE_PGN}});
+        renderViewer();
+        await waitFor(() => expect(pieceOn('h4')).toBe('b q'));
+
+        fireEvent.keyDown(window, {key: 'ArrowUp'});
+        await expectPiece('f2', 'w p');
+        fireEvent.keyDown(window, {key: 'ArrowRight'});
+        await expectPiece('f3', 'w p');
+
+        const keydownRegistrations = addListener.mock.calls.filter(([type]) => type === 'keydown');
+        expect(keydownRegistrations).toHaveLength(1);
+        addListener.mockRestore();
+    });
+
     it('переворот доски меняет порядок клеток', async () => {
         stubApi({pgn: {ok: true, text: FOOLS_MATE_PGN}});
         renderViewer();

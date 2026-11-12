@@ -22,6 +22,24 @@ if (!Element.prototype.scrollIntoView) {
     };
 }
 
+// recharts (ResponsiveContainer) подписывается на ResizeObserver в эффекте, которого в jsdom нет. Заглушка —
+// на весь прогон, а не в beforeEach теста: vi.unstubAllGlobals() в afterEach снимал её, и отложенный эффект
+// графика, срабатывающий под нагрузкой уже при размонтировании, падал с «ResizeObserver is not defined».
+if (!('ResizeObserver' in globalThis)) {
+    class ResizeObserverStub {
+        observe() {
+        }
+
+        unobserve() {
+        }
+
+        disconnect() {
+        }
+    }
+
+    (globalThis as unknown as { ResizeObserver: typeof ResizeObserverStub }).ResizeObserver = ResizeObserverStub;
+}
+
 if (!document.elementsFromPoint) {
     document.elementsFromPoint = () => [];
 }

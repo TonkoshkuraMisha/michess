@@ -442,3 +442,30 @@ describe('клубная лестница', () => {
         expect(await screen.findByText('Лестница: рейтинг 994 (-6).')).toBeInTheDocument();
     });
 });
+
+describe('клавиатура', () => {
+    it('стрелки листают ходы, обработчик регистрируется один раз', async () => {
+        const addListener = vi.spyOn(window, 'addEventListener');
+        vi.stubGlobal('fetch', mockFetchRouter({
+            '/profile/me': () => ({id: 1, username: 'TestPlayer', blitz_rating: 1500}),
+            '/profile/matchmaking/queue': () => [],
+            '/profile/games/live': () => [],
+            '/profile/games/my-active': () => ({active: false}),
+        }));
+        renderChessboard();
+        await screen.findByRole('button', {name: /Белыми/});
+
+        // Свободная доска: ход сразу после хода — стрелка должна видеть уже обновлённую историю.
+        clickSquare('e2');
+        clickSquare('e4');
+        fireEvent.keyDown(window, {key: 'ArrowLeft'});
+        await waitFor(() => expect(squareEl('e2').querySelector('img')?.getAttribute('alt')).toBe('wp'));
+        expect(squareEl('e4').querySelector('img')).toBeNull();
+
+        fireEvent.keyDown(window, {key: 'ArrowDown'});
+        await waitFor(() => expect(squareEl('e4').querySelector('img')?.getAttribute('alt')).toBe('wp'));
+
+        expect(addListener.mock.calls.filter(([type]) => type === 'keydown')).toHaveLength(1);
+        addListener.mockRestore();
+    });
+});
