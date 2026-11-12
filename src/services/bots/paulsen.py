@@ -2,11 +2,21 @@
 
 import chess
 
-from src.services.bots.base import (
+from src.services.bots.base import HistoricalBot, load_bot_opening_book
+from src.services.bots.style import (
+    CAPTURE,
+    CASTLING,
     CENTER_SQUARES,
+    CHECK,
     EXTENDED_CENTER,
-    HistoricalBot,
-    load_bot_opening_book,
+    FirstOf,
+    Group,
+    Note,
+    Rule,
+    Style,
+    by_move,
+    piece,
+    to,
 )
 
 PAULSEN_BLUNDER_GUARD_CP = 110.0
@@ -28,44 +38,36 @@ DEFAULT_PAULSEN_BOOK: dict[str, list[tuple[str, int, str]]] = {
 PAULSEN_OPENING_BOOK = load_bot_opening_book("paulsen", DEFAULT_PAULSEN_BOOK)
 
 
-def evaluate_paulsen_style_bonus(board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-    piece = board_before.piece_at(move.from_square)
-    if not piece:
-        return 0.0, None
-
-    bonus = 0.0
-    note = None
-
-    if board_before.is_castling(move):
-        bonus += 40.0
-        note = "Уводим короля в надёжное укрытие — фундамент глубокой защиты Паульсена."
-
-    if piece.piece_type == chess.PAWN and board_before.fullmove_number <= 14:
-        if move.to_square in {chess.C5, chess.E6, chess.D6, chess.A6, chess.B6, chess.G6}:
-            bonus += 24.0
-            note = "Выстраиваем гибкую и неуязвимую оборонительную структуру по системе Паульсена!"
-        elif move.to_square in CENTER_SQUARES:
-            bonus += 20.0
-            note = "Укрепляем центральные устои позиции."
-
-    if piece.piece_type == chess.BISHOP:
-        if move.to_square in {chess.G2, chess.B2, chess.G7, chess.B7, chess.E2, chess.E7}:
-            bonus += 26.0
-            note = "Развиваем слона на дальнобойную позицию — два слона определят исход борьбы!"
-        elif move.to_square in EXTENDED_CENTER:
-            bonus += 18.0
-
-    if piece.piece_type == chess.KNIGHT and move.to_square in EXTENDED_CENTER:
-        bonus += 16.0
-        if not note:
-            note = "Гармоничная централизация коня."
-
-    if board_before.gives_check(move):
-        bonus += 18.0
-    elif board_before.is_capture(move):
-        bonus += 14.0
-
-    return bonus, note
+PAULSEN_STYLE = Style(
+    "paulsen",
+    Rule(CASTLING, 40.0, "Уводим короля в надёжное укрытие — фундамент глубокой защиты Паульсена."),
+    Group(
+        piece(chess.PAWN) & by_move(14),
+        FirstOf(
+            Rule(
+                to({chess.C5, chess.E6, chess.D6, chess.A6, chess.B6, chess.G6}), 24.0,
+                "Выстраиваем гибкую и неуязвимую оборонительную структуру по системе Паульсена!",
+            ),
+            Rule(to(CENTER_SQUARES), 20.0, "Укрепляем центральные устои позиции."),
+        ),
+    ),
+    Group(
+        piece(chess.BISHOP),
+        FirstOf(
+            Rule(
+                to({chess.G2, chess.B2, chess.G7, chess.B7, chess.E2, chess.E7}), 26.0,
+                "Развиваем слона на дальнобойную позицию — два слона определят исход борьбы!",
+            ),
+            Rule(to(EXTENDED_CENTER), 18.0),
+        ),
+    ),
+    Rule(piece(chess.KNIGHT) & to(EXTENDED_CENTER), 16.0, "Гармоничная централизация коня.", Note.FILL),
+    FirstOf(
+        Rule(CHECK, 18.0),
+        Rule(CAPTURE, 14.0),
+    ),
+)
+evaluate_paulsen_style_bonus = PAULSEN_STYLE.evaluate
 
 
 class PaulsenBot(HistoricalBot):
@@ -78,18 +80,9 @@ class PaulsenBot(HistoricalBot):
     jitter_range = 6.0
     multipv = 6
     opening_book = PAULSEN_OPENING_BOOK
-
-    def __init__(
-            self,
-            stockfish_path: str | None = None,
-            skill_level: int = 8,
-            uci_elo: int = 1800,
-            search_depth: int = 6,
-    ):
-        super().__init__(stockfish_path, skill_level, uci_elo, search_depth)
-
-    def evaluate_style_bonus(self, board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-        return evaluate_paulsen_style_bonus(board_before, move)
+    style = PAULSEN_STYLE
+    default_skill_level = 8
+    default_uci_elo = 1800
 
 
 paulsen_bot = PaulsenBot()
