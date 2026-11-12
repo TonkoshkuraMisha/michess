@@ -597,16 +597,21 @@ def _discoveries(board_before: chess.Board, move: chess.Move, board_after: chess
     return found
 
 
-def analyze_move(board_before: chess.Board, move: chess.Move) -> MoveFacts:
+def analyze_move(
+        board_before: chess.Board, move: chess.Move, before_motifs: list[Motif] | None = None,
+) -> MoveFacts:
     """
     Что изменил ход: ``created`` — новые мотивы в пользу сходившего (в том числе вскрытия, которые видны
     только по самому ходу), ``allowed`` — новые мотивы в пользу соперника, ``resolved`` — мотивы, которых
-    после хода не стало.
+    после хода не стало. ``before_motifs`` — уже найденные мотивы позиции до хода (чтобы не искать их заново,
+    когда разбираются несколько ходов из одной позиции).
     """
     if move not in board_before.legal_moves:
         raise ValueError(f"Illegal move {move.uci()} in position {board_before.fen()}")
     mover = board_before.turn
-    before = {motif.key: motif for motif in detect_motifs(board_before)}
+    if before_motifs is None:
+        before_motifs = detect_motifs(board_before)
+    before = {motif.key: motif for motif in before_motifs}
     board_after = board_before.copy(stack=False)
     board_after.push(move)
     after_list = detect_motifs(board_after)

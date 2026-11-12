@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.errors import DomainError, DomainValueError
 from src.models.game import Game, GameStatus
 from src.services.bots.base import resolve_stockfish_path, static_board_eval_cp
+from src.services.coach import advice_for_position, comment_for_move
 from src.services.engine_pool import EngineUnavailableError, get_engine_pool
 from src.services.game_engine import board_from_start_fen, read_pgn_game
 
@@ -67,6 +68,24 @@ def format_eval_display(eval_white_cp: int, mate_white: int | None = None) -> st
     return f"{sign}{pawns:.1f}"
 
 
+# Версия формата analysis_json. 2 — у каждого хода есть комментарий наставника ("coach", таск 11.2). Кэш другой
+# версии считается устаревшим и пересчитывается при следующем запросе разбора.
+ANALYSIS_FORMAT_VERSION = 2
+
+
+def attach_coach_comments(start_board: chess.Board, moves_report: list[dict], best_moves_uci: list[str | None]) -> None:
+    """
+    Комментарии наставника к ходам разбора (на месте, в moves_report[i]["coach"]). best_moves_uci[i] — лучший ход
+    движка в позиции перед i-м ходом, best_moves_uci[i + 1] — лучший ответ соперника после него.
+    """
+    board = start_board.copy(stack=False)
+    for idx, item in enumerate(moves_report):
+        move = chess.Move.from_uci(item["uci"])
+        reply = best_moves_uci[idx + 1] if idx + 1 < len(best_moves_uci) else None
+        item["coach"] = comment_for_move(board, move, item["best_move_uci"], reply, item["classification"])
+        board.push(move)
+
+
 def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
     """Синхронный проход по всем позициям партии со Stockfish или статическим fallback-оценщиком."""
     pgn_game = read_pgn_game(pgn_text)
@@ -74,6 +93,7 @@ def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
         raise DomainValueError("pgn_parse_failed")
 
     board = pgn_game.board()
+    start_board = board.copy(stack=False)
     mainline_moves = list(pgn_game.mainline_moves())
 
     sf_path = resolve_stockfish_path()
@@ -217,7 +237,16 @@ def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
             "avg_cp_loss": avg_loss,
         }
 
+    # Наставник объясняет ходы только по оценке настоящего движка: «лучший ход» статического оценщика
+    # бывает плохим, и советовать по нему нельзя.
+    if engine is not None:
+        attach_coach_comments(start_board, moves_report, best_moves_uci)
+    else:
+        for item in moves_report:
+            item["coach"] = None
+
     return {
+        "format_version": ANALYSIS_FORMAT_VERSION,
         "engine": engine_label,
         "white": build_side_summary(white_losses, counts["white"]),
         "black": build_side_summary(black_losses, counts["black"]),
@@ -246,6 +275,16 @@ def _count_mainline_plies(pgn_text: str) -> int:
     if pgn_game is None:
         return -1
     return sum(1 for _ in pgn_game.mainline_moves())
+
+
+def is_current_analysis(data: object, pgn_text: str) -> bool:
+    """Кэш разбора годится: текущая версия формата и ходов столько же, сколько в итоговом PGN партии."""
+    return (
+        isinstance(data, dict)
+        and data.get("format_version") == ANALYSIS_FORMAT_VERSION
+        and isinstance(data.get("moves"), list)
+        and len(data["moves"]) == _count_mainline_plies(pgn_text)
+    )
 
 
 class AnalysisService:
@@ -286,6 +325,37 @@ class AnalysisService:
             "best_move": best_move,
         }
 
+    async def advise(self, fen: str) -> dict:
+        """
+        Совет наставника по позиции: что грозит стороне, которая ходит, что есть у неё самой и в чём идея лучшего
+        хода (src/services/coach.py). Лучший ход — только от Stockfish; без движка совет строится по фактам
+        детектора мотивов и лучший ход не называется.
+        """
+        board = board_from_start_fen(fen)  # invalid_fen / invalid_position
+        if board.is_game_over():
+            raise DomainValueError("game_already_over")
+
+        best_move: str | None = None
+        eval_cp: int | None = None
+        sf_path = resolve_stockfish_path()
+        if sf_path:
+            def _run() -> tuple[int, str | None]:
+                with get_engine_pool(sf_path).acquire() as eng:
+                    info = eng.analyse(board, chess.engine.Limit(depth=12, time=0.15))
+                    if isinstance(info, list):
+                        info = info[0]
+                    cp = info["score"].white().score(mate_score=10000) or 0
+                    pv = info.get("pv")
+                    return int(cp), (pv[0].uci() if pv else None)
+
+            try:
+                eval_cp, best_move = await asyncio.to_thread(_run)
+            except EngineUnavailableError as exc:
+                logger.warning("Stockfish недоступен, совет без движка: %s", exc)
+
+        return {"fen": board.fen(), "best_move_uci": best_move, "eval_cp": eval_cp,
+                **advice_for_position(board, best_move)}
+
     async def analyze_full_game(self, db: AsyncSession, game_id: int, force: bool = False) -> dict:
         result = await db.execute(select(Game).where(Game.id == game_id))
         game = result.scalars().first()
@@ -298,11 +368,7 @@ class AnalysisService:
         if cached_raw and not force:
             try:
                 cached_data = json.loads(cached_raw)
-                if (
-                        isinstance(cached_data, dict)
-                        and "moves" in cached_data
-                        and len(cached_data["moves"]) == _count_mainline_plies(game.pgn)
-                ):
+                if is_current_analysis(cached_data, game.pgn):
                     cached_data["game_id"] = game_id
                     return cached_data
                 # Кэш не соответствует итоговому PGN (например, сохранён по незавершённой партии

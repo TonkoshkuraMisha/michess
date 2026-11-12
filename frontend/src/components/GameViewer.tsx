@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import {
     ChevronFirst, ChevronLeft, ChevronRight, ChevronLast, ArrowLeft,
-    Download, Loader2, Sword, RefreshCw, Palette, Cpu, Sparkles, X, Volume2, VolumeX
+    Download, Loader2, Sword, RefreshCw, Palette, Cpu, Sparkles, X, Volume2, VolumeX, GraduationCap
 } from 'lucide-react';
 import {format, parseISO} from 'date-fns';
 import {
@@ -32,6 +32,8 @@ import {
 import {renderUiMessage, uiMessage, useI18n} from '../i18n';
 import type {UiMessage} from '../i18n';
 import {displayPlayerName} from '../config/players';
+import {coachArrows, coachHighlights, coachText} from '../services/coach';
+import type {CoachArrowKind, CoachComment} from '../services/coach';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
@@ -49,6 +51,8 @@ interface MoveEvaluationItem {
     cp_loss: number;
     classification: string;
     symbol: string;
+    /** Комментарий наставника (формат разбора 2+); null — сказать нечего или движок был недоступен. */
+    coach?: CoachComment | null;
 }
 
 interface SideSummaryStats {
@@ -68,6 +72,13 @@ interface FullGameAnalysisReport {
     black: SideSummaryStats;
     moves: MoveEvaluationItem[];
 }
+
+/** Цвета стрелок наставника: зелёная — лучший ход, красная — угроза соперника, синяя — идея. */
+const COACH_ARROW_COLORS: Record<CoachArrowKind, string> = {
+    best: 'rgba(16, 185, 129, 0.88)',
+    threat: 'rgba(244, 63, 94, 0.88)',
+    idea: 'rgba(56, 189, 248, 0.88)',
+};
 
 interface DrawnArrow {
     from: string;
@@ -420,6 +431,13 @@ export default function GameViewer() {
 
     const whiteBarPercent = evalCpToWhitePercentage(currentEval.cp);
 
+    // Наставник к текущему ходу: текст, стрелки (лучший ход, угроза, идея) и подсвеченные цели.
+    const [showCoachArrows, setShowCoachArrows] = useState(true);
+    const currentCoach = viewIndex >= 0 ? analysisReport?.moves[viewIndex]?.coach ?? null : null;
+    const currentCoachText = coachText(currentCoach, t);
+    const visibleCoachArrows = showCoachArrows ? coachArrows(currentCoach) : [];
+    const coachTargets = showCoachArrows ? coachHighlights(currentCoach) : new Set<string>();
+
     const chartData = useMemo(() => {
         if (!analysisReport) return [];
         return analysisReport.moves.map((m, idx) => ({
@@ -647,6 +665,7 @@ export default function GameViewer() {
                                     const lastMove = viewIndex >= 0 ? history[viewIndex] : null;
                                     const isLastMoveSquare = lastMove && (lastMove.from === squareId || lastMove.to === squareId);
                                     const isRightHighlighted = highlightedSquares.has(squareId);
+                                    const isCoachTarget = coachTargets.has(squareId);
 
                                     return (
                                         <div
@@ -669,6 +688,12 @@ export default function GameViewer() {
                                             {isLastMoveSquare && (
                                                 <div
                                                     className="absolute inset-0 bg-amber-300/40 z-10 pointer-events-none"/>
+                                            )}
+
+                                            {isCoachTarget && !isRightHighlighted && (
+                                                <div
+                                                    data-testid="coach-target"
+                                                    className="absolute inset-0 ring-[3px] ring-inset ring-rose-400/90 z-10 pointer-events-none"/>
                                             )}
 
                                             {isRightHighlighted && (
@@ -704,7 +729,7 @@ export default function GameViewer() {
                                 })
                             )}
 
-                            {arrows.length > 0 && (
+                            {(arrows.length > 0 || visibleCoachArrows.length > 0) && (
                                 <svg
                                     viewBox="0 0 100 100"
                                     className="absolute inset-0 w-full h-full z-30 pointer-events-none"
@@ -720,7 +745,32 @@ export default function GameViewer() {
                                         >
                                             <polygon points="0 0, 3.5 1.75, 0 3.5" fill="rgba(245, 158, 11, 0.88)"/>
                                         </marker>
+                                        {(Object.keys(COACH_ARROW_COLORS) as CoachArrowKind[]).map((kind) => (
+                                            <marker key={kind} id={`coach-arrowhead-${kind}`} markerWidth="3.5"
+                                                    markerHeight="3.5" refX="2.3" refY="1.75" orient="auto">
+                                                <polygon points="0 0, 3.5 1.75, 0 3.5" fill={COACH_ARROW_COLORS[kind]}/>
+                                            </marker>
+                                        ))}
                                     </defs>
+                                    {visibleCoachArrows.map((arr, idx) => {
+                                        const start = squareToSvgCoords(arr.from);
+                                        const end = squareToSvgCoords(arr.to);
+                                        if (!start || !end) return null;
+                                        return (
+                                            <line
+                                                key={`coach-${arr.kind}-${arr.from}-${arr.to}-${idx}`}
+                                                data-testid={`coach-arrow-${arr.kind}`}
+                                                x1={start.x}
+                                                y1={start.y}
+                                                x2={end.x}
+                                                y2={end.y}
+                                                stroke={COACH_ARROW_COLORS[arr.kind]}
+                                                strokeWidth="2.1"
+                                                strokeLinecap="round"
+                                                markerEnd={`url(#coach-arrowhead-${arr.kind})`}
+                                            />
+                                        );
+                                    })}
                                     {arrows.map((arr, idx) => {
                                         const start = squareToSvgCoords(arr.from);
                                         const end = squareToSvgCoords(arr.to);
@@ -1023,6 +1073,29 @@ export default function GameViewer() {
                             className="text-xs text-rose-300 bg-rose-950/60 border border-rose-700/50 rounded px-2.5 py-1.5">
                             {renderUiMessage(analysisError, t)}
                         </div>
+                    )}
+
+                    {currentCoachText && (
+                        <section
+                            aria-label={t('viewer.coachTitle')}
+                            data-testid="coach-comment"
+                            className="text-xs bg-black/35 border border-amber-800/50 rounded px-2.5 py-2 flex flex-col gap-1.5"
+                        >
+                            <div className="flex items-center justify-between gap-2">
+                                <span className="font-bold text-amber-300 flex items-center gap-1.5">
+                                    <GraduationCap size={14} className="text-amber-400"/> {t('viewer.coachTitle')}
+                                </span>
+                                {coachArrows(currentCoach).length > 0 && (
+                                    <label className="flex items-center gap-1 text-boxwood/75 cursor-pointer select-none"
+                                           title={t('viewer.coachLegend')}>
+                                        <input type="checkbox" checked={showCoachArrows} className="accent-amber-600"
+                                               onChange={(e) => setShowCoachArrows(e.target.checked)}/>
+                                        {t('viewer.coachArrows')}
+                                    </label>
+                                )}
+                            </div>
+                            <p className="text-boxwood-light leading-snug">{currentCoachText}</p>
+                        </section>
                     )}
                 </div>
 
