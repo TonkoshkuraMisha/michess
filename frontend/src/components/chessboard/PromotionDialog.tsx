@@ -4,6 +4,7 @@ import {X} from 'lucide-react';
 import {PROMOTION_OPTIONS} from './boardUtils';
 import type {PromotionPiece} from './boardUtils';
 import type {PendingPromotion} from './types';
+import {useI18n} from '../../i18n';
 
 export interface PromotionDialogProps {
     pendingPromotion: PendingPromotion;
@@ -19,6 +20,7 @@ export interface PromotionDialogProps {
 export function PromotionDialog({
     pendingPromotion, displayedFiles, displayedRanks, renderPieceSvg, onSelect, onCancel,
 }: PromotionDialogProps) {
+    const {t} = useI18n();
     const fileIdx = displayedFiles.indexOf(pendingPromotion.to[0]);
     const rankIdx = displayedRanks.indexOf(pendingPromotion.to[1]);
     const openDownwards = rankIdx <= 3;
@@ -41,13 +43,14 @@ export function PromotionDialog({
             >
                 <div className="flex items-center justify-between w-full gap-3 px-1">
                     <span className="text-xs font-bold uppercase tracking-wider text-amber-300">
-                        Превращение пешки ({pendingPromotion.to})
+                        {t('board.promotionTitle', {square: pendingPromotion.to})}
                     </span>
                     <button
                         type="button"
                         onClick={onCancel}
                         className="text-boxwood/60 hover:text-amber-300 transition cursor-pointer"
-                        title="Отмена (Esc)"
+                        title={t('common.cancelEsc')}
+                        aria-label={t('common.cancelEsc')}
                     >
                         <X size={15}/>
                     </button>

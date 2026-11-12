@@ -65,7 +65,7 @@ async function startFriendGame(creator: Page, acceptor: Page, color: 'white' | '
 
     await acceptor.goto(new URL(link).pathname);
     for (const page of [creator, acceptor]) {
-        await expect(page.getByText('Идет рейтинговая партия')).toBeVisible();
+        await expect(page.getByText('Идёт рейтинговая партия')).toBeVisible();
     }
     await expect(creator.getByText(`Вы играете ${color === 'white' ? 'Белыми' : 'Чёрными'}`)).toBeVisible();
     await expect(acceptor.getByText(`Вы играете ${color === 'white' ? 'Чёрными' : 'Белыми'}`)).toBeVisible();
@@ -110,9 +110,9 @@ test.describe.serial('PvP в двух браузерах', () => {
         await bob.getByRole('button', {name: 'Принять реванш'}).click();
 
         for (const page of [alice, bob]) {
-            await expect(page.getByText('Идет рейтинговая партия')).toBeVisible();
+            await expect(page.getByText('Идёт рейтинговая партия')).toBeVisible();
         }
-        await expect(bob.getByText('Вы играете Белыми')).toBeVisible();
+        await expect(bob.getByText('Вы играете белыми')).toBeVisible();
         await move(bob, alice, 'e2', 'e4');
         await move(alice, bob, 'e7', 'e5');
 
@@ -170,7 +170,7 @@ test.describe.serial('PvP в двух браузерах', () => {
 
         // Вмешаться нельзя: ни ходом, ни сообщением в чат.
         await expect(spectator.getByText('Зрители могут только читать чат.')).toBeVisible();
-        await expect(spectator.getByPlaceholder('Написать сообщение...')).toHaveCount(0);
+        await expect(spectator.getByPlaceholder('Написать сообщение…')).toHaveCount(0);
         await square(spectator, 'd2').dragTo(square(spectator, 'd4'));
         for (const page of [spectator, alice, bob]) {
             await expect(pieceOn(page, 'd2')).toHaveCount(1);

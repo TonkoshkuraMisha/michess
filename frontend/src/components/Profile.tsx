@@ -3,7 +3,6 @@
 import {useState, useEffect} from 'react';
 import {useParams, Link, useNavigate} from 'react-router-dom';
 import {format, parseISO} from 'date-fns';
-import {ru} from 'date-fns/locale';
 import {
     LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer
 } from 'recharts';
@@ -16,6 +15,9 @@ import {
     Target
 } from 'lucide-react';
 import {API_BASE_URL} from '../config/api';
+import type {Locale} from 'date-fns';
+import {getDateLocale, renderUiMessage, uiMessage, useI18n} from '../i18n';
+import type {UiMessage} from '../i18n';
 
 interface UserProfile {
     id: number;
@@ -29,11 +31,11 @@ interface UserProfile {
     ladder?: { rating: number; games: number; step: number; total: number };
 }
 
-const RATING_CATEGORIES: Array<{ key: 'bullet_rating' | 'blitz_rating' | 'rapid_rating' | 'classical_rating'; label: string }> = [
-    {key: 'bullet_rating', label: 'Пуля'},
-    {key: 'blitz_rating', label: 'Блиц'},
-    {key: 'rapid_rating', label: 'Рапид'},
-    {key: 'classical_rating', label: 'Классика'},
+const RATING_CATEGORIES: Array<{ key: 'bullet_rating' | 'blitz_rating' | 'rapid_rating' | 'classical_rating'; category: RatingCategoryKey }> = [
+    {key: 'bullet_rating', category: 'bullet'},
+    {key: 'blitz_rating', category: 'blitz'},
+    {key: 'rapid_rating', category: 'rapid'},
+    {key: 'classical_rating', category: 'classical'},
 ];
 
 interface GameData {
@@ -53,12 +55,7 @@ interface GameData {
 
 type RatingCategoryKey = 'bullet' | 'blitz' | 'rapid' | 'classical';
 
-const CHART_CATEGORIES: Array<{ key: RatingCategoryKey; label: string }> = [
-    {key: 'bullet', label: 'Пуля'},
-    {key: 'blitz', label: 'Блиц'},
-    {key: 'rapid', label: 'Рапид'},
-    {key: 'classical', label: 'Классика'},
-];
+const CHART_CATEGORIES: RatingCategoryKey[] = ['bullet', 'blitz', 'rapid', 'classical'];
 
 interface PlayerStats {
     total: number;
@@ -88,14 +85,14 @@ export interface RatingChartPoint {
     fullDate: string;
 }
 
-export function toRatingChartPoint(point: RatingPoint): RatingChartPoint {
+export function toRatingChartPoint(point: RatingPoint, locale: Locale = getDateLocale()): RatingChartPoint {
     const finished = parseISO(point.finished_at);
     return {
         game_id: point.game_id,
         rating: point.rating,
         delta: point.delta,
-        date: format(finished, 'd MMM', {locale: ru}),
-        fullDate: format(finished, 'd MMMM yyyy, HH:mm', {locale: ru}),
+        date: format(finished, 'd MMM', {locale}),
+        fullDate: format(finished, 'PPP, HH:mm', {locale}),
     };
 }
 
@@ -111,6 +108,7 @@ export function RatingTooltip({active, payload}: {
     active?: boolean;
     payload?: Array<{ payload: RatingChartPoint }>;
 }) {
+    const {t} = useI18n();
     const point = active ? payload?.[0]?.payload : undefined;
     if (!point) return null;
     const deltaColor = point.delta > 0 ? 'text-emerald-400' : point.delta < 0 ? 'text-red-400' : 'text-boxwood/60';
@@ -120,7 +118,7 @@ export function RatingTooltip({active, payload}: {
             <div className="font-bold text-amber-400 font-mono">
                 {point.rating} <span className={deltaColor}>({formatRatingDelta(point.delta)})</span>
             </div>
-            <div className="text-[11px] text-boxwood/50 mt-0.5">Нажмите, чтобы открыть партию</div>
+            <div className="text-[11px] text-boxwood/50 mt-0.5">{t('profile.chartOpenHint')}</div>
         </div>
     );
 }
@@ -137,6 +135,7 @@ export function RatingDot({cx, cy, payload, r = 4, active = false, onSelect}: {
     active?: boolean;
     onSelect: (gameId: number) => void;
 }) {
+    const {t} = useI18n();
     if (cx === undefined || cy === undefined || !payload) return null;
     return (
         <circle
@@ -148,7 +147,7 @@ export function RatingDot({cx, cy, payload, r = 4, active = false, onSelect}: {
             strokeWidth={2}
             style={{cursor: 'pointer'}}
             role="link"
-            aria-label={`Партия от ${payload.fullDate}: рейтинг ${payload.rating}`}
+            aria-label={t('profile.chartPoint', {date: payload.fullDate, rating: payload.rating})}
             data-game-id={payload.game_id}
             onClick={() => onSelect(payload.game_id)}
         />
@@ -159,7 +158,7 @@ export function RatingDot({cx, cy, payload, r = 4, active = false, onSelect}: {
 function mostPlayedCategory(stats: PlayerStats | null): RatingCategoryKey {
     let best: RatingCategoryKey = 'blitz';
     let bestCount = 0;
-    for (const {key} of CHART_CATEGORIES) {
+    for (const key of CHART_CATEGORIES) {
         const count = stats?.rated_games?.[key] ?? 0;
         if (count > bestCount) {
             best = key;
@@ -169,17 +168,18 @@ function mostPlayedCategory(stats: PlayerStats | null): RatingCategoryKey {
     return best;
 }
 
-const displayDate = (game: GameData) => {
+const displayDate = (game: GameData, locale: Locale) => {
     if (game.pgn_date && !game.pgn_date.includes('????')) {
         return game.pgn_date.replace(/\?/g, '').replace(/\.+$/, '');
     }
     if (game.finished_at) {
-        return format(parseISO(game.finished_at), 'd MMM yyyy', {locale: ru});
+        return format(parseISO(game.finished_at), 'd MMM yyyy', {locale});
     }
     return '—';
 };
 
 export default function Profile() {
+    const {t, dateLocale} = useI18n();
     const {targetUsername} = useParams<{ targetUsername: string }>();
     const navigate = useNavigate();
     const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -190,7 +190,7 @@ export default function Profile() {
     const [chartCategory, setChartCategory] = useState<RatingCategoryKey>('blitz');
     const [ratingPoints, setRatingPoints] = useState<RatingPoint[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<UiMessage | null>(null);
 
     const profileApi = `${API_BASE_URL}/api/v1/profile/${encodeURIComponent(targetUsername ?? '')}`;
 
@@ -207,7 +207,10 @@ export default function Profile() {
             setRatingPoints([]);
             try {
                 const profileRes = await fetch(profileApi);
-                if (!profileRes.ok) throw new Error('Пользователь не найден');
+                if (!profileRes.ok) {
+                    if (!cancelled) setError(uiMessage(profileRes.status === 404 ? 'profile.notFound' : 'profile.loadFailed'));
+                    return;
+                }
                 const profileData = await profileRes.json();
                 if (cancelled) return;
                 setProfile(profileData);
@@ -222,8 +225,8 @@ export default function Profile() {
                 } else {
                     setChartCategory('blitz');
                 }
-            } catch (err: any) {
-                if (!cancelled) setError(err.message);
+            } catch {
+                if (!cancelled) setError(uiMessage('common.networkError'));
             } finally {
                 if (!cancelled) setLoading(false);
             }
@@ -275,7 +278,7 @@ export default function Profile() {
         return (
             <div className="flex flex-col items-center justify-center w-full h-full text-boxwood-light font-serif">
                 <div className="animate-spin text-amber-500 mb-4"><Swords size={40}/></div>
-                <div>Загрузка профиля...</div>
+                <div>{t('profile.loading')}</div>
             </div>
         );
     }
@@ -283,9 +286,9 @@ export default function Profile() {
     if (error || !profile) {
         return (
             <div className="bg-red-950/80 border border-red-800 p-6 rounded text-red-200 text-center font-serif">
-                <h2 className="text-xl font-bold mb-2">Ошибка</h2>
-                <p>{error || 'Не удалось загрузить профиль'}</p>
-                <Link to="/" className="mt-4 inline-block text-amber-400 hover:underline">На главную</Link>
+                <h2 className="text-xl font-bold mb-2">{t('common.error')}</h2>
+                <p>{error ? renderUiMessage(error, t) : t('profile.loadFailed')}</p>
+                <Link to="/" className="mt-4 inline-block text-amber-400 hover:underline">{t('common.home')}</Link>
             </div>
         );
     }
@@ -296,9 +299,8 @@ export default function Profile() {
     const losses = stats?.losses ?? 0;
     const winRate = totalGames > 0 ? Math.round((wins / totalGames) * 100) : 0;
 
-    const chartData = ratingPoints.map(toRatingChartPoint);
+    const chartData = ratingPoints.map((point) => toRatingChartPoint(point, dateLocale));
     const openGame = (gameId: number) => navigate(`/game/${gameId}`);
-    const chartCategoryLabel = CHART_CATEGORIES.find((c) => c.key === chartCategory)?.label ?? '';
     const totalPages = Math.max(1, Math.ceil(gamesTotal / GAMES_PAGE_SIZE));
 
     return (
@@ -320,7 +322,7 @@ export default function Profile() {
 
                     <div className="flex items-center gap-2 mt-3 text-boxwood-light/80 text-sm z-10">
                         <Calendar size={16} className="text-amber-600"/>
-                        На сайте с {format(parseISO(profile.created_at), 'd MMMM yyyy', {locale: ru})}
+                        {t('profile.memberSince', {date: format(parseISO(profile.created_at), 'PPP', {locale: dateLocale})})}
                     </div>
                 </div>
 
@@ -328,25 +330,26 @@ export default function Profile() {
                     {profile.ladder && profile.ladder.games > 0 && (
                         <div className="bg-[#1A120B] border border-amber-900/60 px-3 py-2.5 rounded shadow-inner flex items-center justify-between gap-3"
                              data-testid="profile-ladder">
-                            <div className="text-boxwood/70 text-xs uppercase tracking-widest">Клубная лестница</div>
+                            <div className="text-boxwood/70 text-xs uppercase tracking-widest">{t('profile.ladder')}</div>
                             <div className="flex-1 h-1.5 rounded bg-black/50 overflow-hidden">
                                 <div className="h-full bg-amber-500"
                                      style={{width: `${Math.round((Math.min(profile.ladder.step, profile.ladder.total) / profile.ladder.total) * 100)}%`}}/>
                             </div>
-                            <div className="font-mono text-amber-300 text-sm">
+                            <div className="font-mono text-amber-300 text-sm"
+                                 title={t('profile.ladderStep', {step: Math.min(profile.ladder.step, profile.ladder.total), total: profile.ladder.total})}>
                                 {Math.min(profile.ladder.step, profile.ladder.total)}/{profile.ladder.total}
                             </div>
                             <div className="text-xl font-mono font-bold text-amber-400">{profile.ladder.rating}</div>
                         </div>
                     )}
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        {RATING_CATEGORIES.map(({key, label}) => (
+                        {RATING_CATEGORIES.map(({key, category}) => (
                             <div
                                 key={key}
                                 className="bg-[#1A120B] border border-amber-900/60 px-3 py-2.5 rounded shadow-inner flex flex-col items-center justify-center"
                             >
                                 <div className="text-boxwood/60 text-[11px] uppercase tracking-widest mb-0.5 flex items-center gap-1">
-                                    <Trophy size={11}/> {label}
+                                    <Trophy size={11}/> {t(`ratingCategory.${category}`)}
                                 </div>
                                 <div className="text-2xl font-mono font-bold text-amber-400">{profile[key]}</div>
                             </div>
@@ -357,7 +360,7 @@ export default function Profile() {
                             className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
                             <div
                                 className="text-boxwood/60 text-xs uppercase tracking-widest mb-1 flex items-center gap-1.5">
-                                <Swords size={14}/> Игр сыграно
+                                <Swords size={14}/> {t('profile.gamesPlayed')}
                             </div>
                             <div className="text-4xl font-mono font-bold text-blue-400">{totalGames}</div>
                         </div>
@@ -365,7 +368,7 @@ export default function Profile() {
                             className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
                             <div
                                 className="text-boxwood/60 text-xs uppercase tracking-widest mb-1 flex items-center gap-1.5">
-                                <Target size={14}/> Винрейт
+                                <Target size={14}/> {t('profile.winRate')}
                             </div>
                             <div className="text-4xl font-mono font-bold text-emerald-400">{winRate}%</div>
                         </div>
@@ -373,7 +376,7 @@ export default function Profile() {
                             className="bg-[#1A120B] border border-amber-900/60 p-5 rounded shadow-inner flex flex-col justify-center">
                             <div
                                 className="text-boxwood/60 text-[10px] xl:text-xs uppercase tracking-wider mb-1 flex items-center gap-1.5 whitespace-nowrap">
-                                <Crosshair size={14}/> WIN / DRAW / LOSE
+                                <Crosshair size={14}/> {t('profile.winDrawLoss')}
                             </div>
                             <div className="text-2xl font-mono font-bold flex gap-2">
                                 <span className="text-emerald-400">{wins}</span>
@@ -390,10 +393,10 @@ export default function Profile() {
             <div className="bg-acacia-dark border border-amber-900/40 p-5 rounded shadow-heavy">
                 <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
                     <h2 className="text-sm uppercase tracking-widest text-amber-500/80 font-bold">
-                        Динамика рейтинга — {chartCategoryLabel.toLowerCase()}
+                        {t('profile.ratingTrend', {category: t(`ratingCategoryInline.${chartCategory}`)})}
                     </h2>
                     <div className="flex gap-1 p-0.5 bg-black/40 rounded border border-amber-900/40 font-sans">
-                        {CHART_CATEGORIES.map(({key, label}) => (
+                        {CHART_CATEGORIES.map((key) => (
                             <button
                                 key={key}
                                 type="button"
@@ -405,7 +408,7 @@ export default function Profile() {
                                         : 'text-boxwood/70 hover:text-amber-200'
                                 }`}
                             >
-                                {label}
+                                {t(`ratingCategory.${key}`)}
                             </button>
                         ))}
                     </div>
@@ -427,7 +430,7 @@ export default function Profile() {
                         </ResponsiveContainer>
                     ) : (
                         <div className="h-full flex items-center justify-center text-boxwood/50">
-                            Недостаточно рейтинговых партий в этой категории для графика
+                            {t('profile.notEnoughGames')}
                         </div>
                     )}
                 </div>
@@ -435,19 +438,19 @@ export default function Profile() {
 
             <div className="bg-acacia-dark border border-amber-900/40 rounded shadow-heavy overflow-hidden">
                 <div className="p-5 border-b border-amber-900/40 bg-black/20">
-                    <h2 className="text-sm uppercase tracking-widest text-amber-500/80 font-bold">История партий</h2>
+                    <h2 className="text-sm uppercase tracking-widest text-amber-500/80 font-bold">{t('profile.gameHistory')}</h2>
                 </div>
 
                 <div className="overflow-x-auto">
                     <table className="w-full text-left text-sm font-sans whitespace-nowrap">
                         <thead className="bg-black/40 text-boxwood/60 uppercase text-xs tracking-wider">
                         <tr>
-                            <th className="px-4 py-4 font-medium">Белые</th>
-                            <th className="px-4 py-4 font-medium">Черные</th>
-                            <th className="px-4 py-4 font-medium text-center">Результат</th>
-                            <th className="px-4 py-4 font-medium text-center">Дебют</th>
-                            <th className="px-4 py-4 font-medium text-center">Место</th>
-                            <th className="px-4 py-4 font-medium text-center">Дата</th>
+                            <th className="px-4 py-4 font-medium">{t('common.white')}</th>
+                            <th className="px-4 py-4 font-medium">{t('common.black')}</th>
+                            <th className="px-4 py-4 font-medium text-center">{t('common.result')}</th>
+                            <th className="px-4 py-4 font-medium text-center">{t('common.opening')}</th>
+                            <th className="px-4 py-4 font-medium text-center">{t('common.site')}</th>
+                            <th className="px-4 py-4 font-medium text-center">{t('common.date')}</th>
                             <th className="px-4 py-4 font-medium text-right">PGN</th>
                         </tr>
                         </thead>
@@ -455,21 +458,21 @@ export default function Profile() {
                         {games.length === 0 ? (
                             <tr>
                                 <td colSpan={7} className="px-6 py-8 text-center text-boxwood/50 font-serif">
-                                    Партий пока нет.
+                                    {t('profile.noGames')}
                                 </td>
                             </tr>
                         ) : (
                             games.map((game) => {
                                 const isWhite = game.white_username === profile.username;
                                 let resultColor = 'text-gray-400';
-                                let resultText = 'Ничья';
+                                let resultText = t('common.draw');
 
                                 if (game.result === '1-0') {
                                     resultColor = isWhite ? 'text-emerald-400' : 'text-red-400';
-                                    resultText = isWhite ? 'Победа' : 'Поражение';
+                                    resultText = t(isWhite ? 'common.win' : 'common.loss');
                                 } else if (game.result === '0-1') {
                                     resultColor = isWhite ? 'text-red-400' : 'text-emerald-400';
-                                    resultText = isWhite ? 'Поражение' : 'Победа';
+                                    resultText = t(isWhite ? 'common.loss' : 'common.win');
                                 }
 
                                 return (
@@ -477,7 +480,7 @@ export default function Profile() {
                                         key={game.game_id}
                                         onClick={() => navigate(`/game/${game.game_id}`, {state: {game}})}
                                         className="hover:bg-black/30 transition group cursor-pointer"
-                                        title="Нажмите, чтобы просмотреть партию"
+                                        title={t('profile.openGameHint')}
                                     >
                                         <td className="px-4 py-4">
                                             <div className="flex items-center gap-2">
@@ -522,7 +525,7 @@ export default function Profile() {
                                             {game.site || '—'}
                                         </td>
                                         <td className="px-4 py-4 text-center text-boxwood/70 font-mono">
-                                            {displayDate(game)}
+                                            {displayDate(game, dateLocale)}
                                         </td>
                                         <td className="px-4 py-4 text-right">
                                             <a
@@ -530,7 +533,8 @@ export default function Profile() {
                                                 download
                                                 onClick={(e) => e.stopPropagation()}
                                                 className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-black/30 hover:bg-amber-900/60 text-amber-400 rounded transition border border-amber-900/40 text-xs font-bold"
-                                                title="Скачать PGN"
+                                                title={t('common.downloadPgn')}
+                                                aria-label={t('common.downloadPgn')}
                                             >
                                                 <Download size={14}/>
                                             </a>
@@ -551,10 +555,10 @@ export default function Profile() {
                             onClick={() => setGamesPage((page) => Math.max(0, page - 1))}
                             className="px-3 py-1.5 rounded border border-amber-900/60 bg-black/35 text-amber-200 hover:border-amber-600/60 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                            ← Новее
+                            {t('profile.newer')}
                         </button>
                         <span className="text-boxwood/70 font-mono">
-                            Стр. {gamesPage + 1} из {totalPages} · всего {gamesTotal}
+                            {t('profile.page', {page: gamesPage + 1, pages: totalPages, total: gamesTotal})}
                         </span>
                         <button
                             type="button"
@@ -562,7 +566,7 @@ export default function Profile() {
                             onClick={() => setGamesPage((page) => page + 1)}
                             className="px-3 py-1.5 rounded border border-amber-900/60 bg-black/35 text-amber-200 hover:border-amber-600/60 transition cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                         >
-                            Старее →
+                            {t('profile.older')}
                         </button>
                     </div>
                 )}

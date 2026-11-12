@@ -25,6 +25,8 @@ import {
     Trophy,
     Scale
 } from 'lucide-react';
+import {useI18n} from './i18n';
+import LanguageSwitcher from './components/LanguageSwitcher';
 
 interface UserProfile {
     id: number;
@@ -37,6 +39,7 @@ interface UserProfile {
 }
 
 export default function App() {
+    const {t} = useI18n();
     const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [profileRetry, setProfileRetry] = useState(0);
@@ -171,7 +174,7 @@ export default function App() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, []);
 
-    const username = userProfile?.username || 'Гость';
+    const username = userProfile?.username || t('nav.guest');
     // Блиц — заголовочный рейтинг в компактной навигации (как на chess.com/lichess.org);
     // полный разбор по пуле/блицу/рапиду/классике — на странице профиля.
     const userRating = userProfile?.blitz_rating || 1200;
@@ -203,7 +206,7 @@ export default function App() {
                                 location.pathname === '/' ? 'text-amber-300' : 'hover:text-amber-300'
                             }`}
                         >
-                            <Swords size={17}/> Игра
+                            <Swords size={17}/> {t('nav.play')}
                         </Link>
 
                         <Link
@@ -212,7 +215,7 @@ export default function App() {
                                 location.pathname === '/leaderboard' ? 'text-amber-300' : 'hover:text-amber-300'
                             }`}
                         >
-                            <Trophy size={17}/> Лидеры
+                            <Trophy size={17}/> {t('nav.leaderboard')}
                         </Link>
 
                         <div className="relative" ref={championsMenuRef}>
@@ -224,7 +227,7 @@ export default function App() {
                                         : 'hover:text-amber-300'
                                 }`}
                             >
-                                <Crown size={17}/> Легенды шахмат
+                                <Crown size={17}/> {t('nav.legends')}
                                 <ChevronDown
                                     size={15}
                                     className={`transition-transform ${isChampionsMenuOpen ? 'rotate-180' : ''}`}
@@ -254,7 +257,7 @@ export default function App() {
                                                 </span>
                                                 <span
                                                     className="text-xs text-boxwood/70 font-mono group-hover:text-amber-400 transition">
-                                                    Чемпион • {champ.years}
+                                                    {t(champ.worldChampion ? 'nav.worldChampionYears' : 'nav.careerYears', {years: champ.years})}
                                                 </span>
                                             </div>
                                         </Link>
@@ -267,17 +270,20 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center gap-3 text-boxwood-light relative" ref={dropdownRef}>
+                    <LanguageSwitcher compact/>
                     <Link
                         to="/leaderboard"
                         className="md:hidden p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300"
-                        title="Таблица лидеров"
+                        title={t('nav.leaderboardFull')}
+                        aria-label={t('nav.leaderboardFull')}
                     >
                         <Trophy size={19}/>
                     </Link>
                     <Link
                         to="/about"
                         className="p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300"
-                        title="О проекте и лицензиях"
+                        title={t('nav.about')}
+                        aria-label={t('nav.about')}
                     >
                         <Scale size={19}/>
                     </Link>
@@ -285,7 +291,8 @@ export default function App() {
                         <Link
                             to="/settings"
                             className="p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300"
-                            title="Настройки"
+                            title={t('nav.settings')}
+                            aria-label={t('nav.settings')}
                         >
                             <SettingsIcon size={19}/>
                         </Link>
@@ -322,11 +329,11 @@ export default function App() {
                                         <div>
                                             <div className="font-bold text-base text-amber-200">{username}</div>
                                             <div
-                                                className="text-xs text-amber-400 font-mono">Рейтинг: {userRating}</div>
+                                                className="text-xs text-amber-400 font-mono">{t('nav.rating', {rating: userRating})}</div>
                                             <div className="text-xs text-emerald-400 flex items-center gap-1.5 mt-0.5">
                                                 <span
                                                     className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
-                                                В сети
+                                                {t('nav.online')}
                                             </div>
                                         </div>
                                     </div>
@@ -339,7 +346,7 @@ export default function App() {
                                             }}
                                             className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
                                         >
-                                            <User size={16} className="text-amber-500"/> Профиль
+                                            <User size={16} className="text-amber-500"/> {t('nav.profile')}
                                         </button>
                                         <button
                                             onClick={() => {
@@ -348,7 +355,7 @@ export default function App() {
                                             }}
                                             className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
                                         >
-                                            <Trophy size={16} className="text-amber-500"/> Таблица лидеров
+                                            <Trophy size={16} className="text-amber-500"/> {t('nav.leaderboardFull')}
                                         </button>
                                         <button
                                             onClick={() => {
@@ -357,27 +364,30 @@ export default function App() {
                                             }}
                                             className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
                                         >
-                                            <SettingsIcon size={16} className="text-amber-500"/> Настройки
+                                            <SettingsIcon size={16} className="text-amber-500"/> {t('nav.settings')}
                                         </button>
                                         <button
                                             onClick={handleLogout}
                                             className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-red-950/40 transition text-red-300 hover:text-red-200 cursor-pointer"
                                         >
-                                            <LogOut size={16} className="text-red-400"/> Выйти
+                                            <LogOut size={16} className="text-red-400"/> {t('nav.logout')}
                                         </button>
                                         <button
                                             onClick={handleLogoutEverywhere}
-                                            title="Завершить сессии на всех устройствах и во всех вкладках"
+                                            title={t('nav.logoutEverywhereHint')}
                                             className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-red-950/40 transition text-red-300/80 hover:text-red-200 cursor-pointer text-sm"
                                         >
-                                            <LogOut size={16} className="text-red-500"/> Выйти на всех устройствах
+                                            <LogOut size={16} className="text-red-500"/> {t('nav.logoutEverywhere')}
                                         </button>
                                     </div>
 
                                     <div
                                         className="px-4 py-2 text-xs font-mono text-boxwood/70 flex justify-between items-center bg-black/20">
-                                        <span>ПИНГ {serverPing !== null ? (serverPing === -1 ? 'ОШИБКА' : `${serverPing} ms`) : '...'}</span>
-                                        <span className="text-emerald-400 font-bold">● СЕРВЕР</span>
+                                        <span>{t('nav.ping', {
+                                            value: serverPing === null ? '…'
+                                                : serverPing === -1 ? t('nav.pingError') : t('nav.pingMs', {ms: serverPing}),
+                                        })}</span>
+                                        <span className="text-emerald-400 font-bold">{t('nav.server')}</span>
                                     </div>
                                 </div>
                             )}
@@ -387,7 +397,7 @@ export default function App() {
                             onClick={() => setShowAuthModal(true)}
                             className="flex items-center gap-2 px-4 py-1.5 bg-boxwood text-acacia-dark font-bold text-sm rounded-md hover:bg-boxwood-light transition shadow border border-amber-600/40 cursor-pointer"
                         >
-                            <LogIn size={16}/> Войти
+                            <LogIn size={16}/> {t('nav.login')}
                         </button>
                     )}
                 </div>

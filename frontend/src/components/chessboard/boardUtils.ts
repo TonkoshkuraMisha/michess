@@ -2,6 +2,7 @@
 // Константы и чистые функции доски (вынесено из Chessboard.tsx).
 
 import {Chess} from 'chess.js';
+import {t} from '../../i18n';
 
 export const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 export const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
@@ -11,11 +12,20 @@ export const MAX_BOARD_SIZE = 860;
 
 export type PromotionPiece = 'q' | 'n' | 'r' | 'b';
 
-export const PROMOTION_OPTIONS: Array<{ type: PromotionPiece; label: string }> = [
-    {type: 'q', label: 'Ферзь'},
-    {type: 'n', label: 'Конь'},
-    {type: 'r', label: 'Ладья'},
-    {type: 'b', label: 'Слон'}
+function promotionOption(type: PromotionPiece): { type: PromotionPiece; readonly label: string } {
+    return {
+        type,
+        get label() {
+            return t(`board.pieces.${type}`);
+        },
+    };
+}
+
+export const PROMOTION_OPTIONS: Array<{ type: PromotionPiece; readonly label: string }> = [
+    promotionOption('q'),
+    promotionOption('n'),
+    promotionOption('r'),
+    promotionOption('b'),
 ];
 
 export function getMaxViewportBoardSize(): number {
@@ -103,10 +113,10 @@ export function customStartFen(source: Chess): string | null {
 export function validateFen(fen: string): string | null {
     try {
         const probe = new Chess(fen.trim());
-        if (probe.isGameOver()) return 'В этой позиции партия уже окончена';
+        if (probe.isGameOver()) return t('board.fenGameOver');
         return null;
     } catch {
-        return 'Некорректная позиция: проверьте запись FEN';
+        return t('board.fenInvalid');
     }
 }
 

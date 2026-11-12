@@ -8,6 +8,8 @@ import {ArrowLeft, Scale} from 'lucide-react';
 import {PIECE_SETS} from '../config/boardAppearance';
 import portraitCredits from '../config/portraitCredits.json';
 import {CHAMPIONS_LIST, HISTORICAL_BOTS_LIST} from '../config/champions';
+import {useI18n} from '../i18n';
+import type {MessageKey} from '../i18n';
 
 interface PortraitCredit {
     file: string;
@@ -19,13 +21,16 @@ interface PortraitCredit {
 
 const PORTRAITS = portraitCredits as Record<string, PortraitCredit>;
 
-const PLAYER_NAMES: Record<string, string> = {
-    ...Object.fromEntries(HISTORICAL_BOTS_LIST.map((bot) => [bot.id, bot.name])),
-    ...Object.fromEntries(CHAMPIONS_LIST.map((champ) => [champ.id, champ.name])),
-};
+/** Имя шахматиста на текущем языке (геттеры профилей читают каталог при обращении). */
+function playerName(id: string): string {
+    return HISTORICAL_BOTS_LIST.find((bot) => bot.id === id)?.name
+        ?? CHAMPIONS_LIST.find((champ) => champ.id === id)?.name
+        ?? id;
+}
 
-const LIBRARIES: Array<{ name: string; license: string; url: string }> = [
-    {name: 'Stockfish (шахматный движок)', license: 'GPL-3.0', url: 'https://github.com/official-stockfish/Stockfish'},
+/** name — собственное имя библиотеки; nameKey — подпись с пояснением, которая переводится. */
+const LIBRARIES: Array<{ name: string; nameKey?: MessageKey; license: string; url: string }> = [
+    {name: 'Stockfish', nameKey: 'about.stockfish', license: 'GPL-3.0', url: 'https://github.com/official-stockfish/Stockfish'},
     {name: 'python-chess', license: 'GPL-3.0', url: 'https://github.com/niklasf/python-chess'},
     {name: 'chess.js', license: 'BSD-2-Clause', url: 'https://github.com/jhlywa/chess.js'},
     {name: 'FastAPI', license: 'MIT', url: 'https://github.com/fastapi/fastapi'},
@@ -33,7 +38,7 @@ const LIBRARIES: Array<{ name: string; license: string; url: string }> = [
     {name: 'React', license: 'MIT', url: 'https://github.com/facebook/react'},
     {name: 'Tailwind CSS', license: 'MIT', url: 'https://github.com/tailwindlabs/tailwindcss'},
     {name: 'Recharts', license: 'MIT', url: 'https://github.com/recharts/recharts'},
-    {name: 'Lucide (иконки)', license: 'ISC', url: 'https://github.com/lucide-icons/lucide'},
+    {name: 'Lucide', nameKey: 'about.lucide', license: 'ISC', url: 'https://github.com/lucide-icons/lucide'},
     {name: 'date-fns', license: 'MIT', url: 'https://github.com/date-fns/date-fns'},
 ];
 
@@ -43,6 +48,7 @@ const linkClass = 'text-amber-400 hover:underline';
 const cellClass = 'py-1.5 pr-4 align-top';
 
 export default function About() {
+    const {t, rich} = useI18n();
     return (
         <div className="w-full max-w-4xl flex flex-col gap-5 text-boxwood-light select-text">
             <div className={`${sectionClass} flex items-center justify-between gap-4`}>
@@ -52,36 +58,35 @@ export default function About() {
                         <Scale size={26}/>
                     </div>
                     <div>
-                        <h1 className="text-2xl font-bold text-amber-200">О проекте и лицензиях</h1>
+                        <h1 className="text-2xl font-bold text-amber-200">{t('about.title')}</h1>
                         <p className="text-sm text-boxwood/75">
-                            Чужие работы, на которых построен michess, их авторы и условия использования.
+                            {t('about.subtitle')}
                         </p>
                     </div>
                 </div>
                 <Link to="/" className={`${linkClass} flex items-center gap-1.5 text-sm shrink-0`}>
-                    <ArrowLeft size={15}/> К игре
+                    <ArrowLeft size={15}/> {t('common.backToGame')}
                 </Link>
             </div>
 
             <section className={sectionClass}>
-                <h2 className={headingClass}>Шахматный движок</h2>
+                <h2 className={headingClass}>{t('about.engineTitle')}</h2>
                 <p className="text-sm leading-relaxed">
-                    Анализ партий и игра ботов работают на движке Stockfish. Он распространяется по лицензии
-                    GNU GPL версии 3; исходный код —{' '}
-                    <a className={linkClass} href="https://github.com/official-stockfish/Stockfish" target="_blank"
-                       rel="noreferrer">github.com/official-stockfish/Stockfish</a>. Движок запускается как
-                    отдельная программа и не изменён.
+                    {rich('about.engineText', {
+                        link: <a key="link" className={linkClass} href="https://github.com/official-stockfish/Stockfish"
+                                 target="_blank" rel="noreferrer">github.com/official-stockfish/Stockfish</a>,
+                    })}
                 </p>
             </section>
 
             <section className={sectionClass}>
-                <h2 className={headingClass}>Наборы фигур</h2>
+                <h2 className={headingClass}>{t('about.piecesTitle')}</h2>
                 <table className="w-full text-sm">
                     <thead>
                     <tr className="text-left text-boxwood/65 border-b border-amber-900/40">
-                        <th className={cellClass}>Набор</th>
-                        <th className={cellClass}>Автор</th>
-                        <th className={cellClass}>Лицензия</th>
+                        <th className={cellClass}>{t('about.pieceSet')}</th>
+                        <th className={cellClass}>{t('about.author')}</th>
+                        <th className={cellClass}>{t('about.license')}</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -95,22 +100,21 @@ export default function About() {
                     </tbody>
                 </table>
                 <p className="text-xs text-boxwood/65 mt-2">
-                    Файлы наборов взяты из репозитория lichess.org (lila), где указаны те же авторы и лицензии.
+                    {t('about.piecesNote')}
                 </p>
             </section>
 
             <section className={sectionClass}>
-                <h2 className={headingClass}>Портреты шахматистов</h2>
+                <h2 className={headingClass}>{t('about.portraitsTitle')}</h2>
                 <p className="text-xs text-boxwood/65 mb-2">
-                    Изображения с Викисклада, уменьшены до 500 пикселей по ширине. Работы под лицензиями
-                    CC BY-SA распространяются на тех же условиях.
+                    {t('about.portraitsNote')}
                 </p>
                 <table className="w-full text-sm">
                     <thead>
                     <tr className="text-left text-boxwood/65 border-b border-amber-900/40">
-                        <th className={cellClass}>Шахматист</th>
-                        <th className={cellClass}>Автор снимка</th>
-                        <th className={cellClass}>Лицензия</th>
+                        <th className={cellClass}>{t('about.chessPlayer')}</th>
+                        <th className={cellClass}>{t('about.photographer')}</th>
+                        <th className={cellClass}>{t('about.license')}</th>
                     </tr>
                     </thead>
                     <tbody>
@@ -118,7 +122,7 @@ export default function About() {
                         <tr key={id} className="border-b border-amber-900/20 last:border-b-0">
                             <td className={cellClass}>
                                 <a className={linkClass} href={credit.source_url} target="_blank" rel="noreferrer">
-                                    {PLAYER_NAMES[id] ?? id}
+                                    {playerName(id)}
                                 </a>
                             </td>
                             <td className={`${cellClass} wrap-break-word`}>{credit.author}</td>
@@ -135,34 +139,32 @@ export default function About() {
             </section>
 
             <section className={sectionClass}>
-                <h2 className={headingClass}>Звуки, текстуры и аватары</h2>
+                <h2 className={headingClass}>{t('about.mediaTitle')}</h2>
                 <ul className="text-sm leading-relaxed list-disc pl-5 space-y-1">
-                    <li>Звуки ходов и сигналов синтезируются в браузере — готовых записей в проекте нет.</li>
-                    <li>Текстура дерева на доске — собственная процедурная графика проекта.</li>
+                    <li>{t('about.sounds')}</li>
+                    <li>{t('about.texture')}</li>
                     <li>
-                        Аватары игроков рисует сервис{' '}
-                        <a className={linkClass} href="https://www.dicebear.com" target="_blank"
-                           rel="noreferrer">DiceBear</a>{' '}
-                        (стиль Bottts Neutral, автор исходного набора — Pablo Stanley). Для этого имя игрока
-                        передаётся на сервер DiceBear.
+                        {rich('about.avatars', {
+                            link: <a key="link" className={linkClass} href="https://www.dicebear.com" target="_blank"
+                                     rel="noreferrer">DiceBear</a>,
+                        })}
                     </li>
                 </ul>
             </section>
 
             <section className={sectionClass}>
-                <h2 className={headingClass}>Архив партий</h2>
+                <h2 className={headingClass}>{t('about.archiveTitle')}</h2>
                 <p className="text-sm leading-relaxed">
-                    Записи исторических партий — общеизвестные факты и не являются объектом авторского права.
-                    Тексты партий загружены из открытых коллекций PGN (pgnmentor.com).
+                    {t('about.archiveText')}
                 </p>
             </section>
 
             <section className={sectionClass}>
-                <h2 className={headingClass}>Программные библиотеки</h2>
+                <h2 className={headingClass}>{t('about.librariesTitle')}</h2>
                 <ul className="text-sm grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
                     {LIBRARIES.map((lib) => (
                         <li key={lib.name} className="flex justify-between gap-3">
-                            <a className={linkClass} href={lib.url} target="_blank" rel="noreferrer">{lib.name}</a>
+                            <a className={linkClass} href={lib.url} target="_blank" rel="noreferrer">{lib.nameKey ? t(lib.nameKey) : lib.name}</a>
                             <span className="font-mono text-xs text-boxwood/70">{lib.license}</span>
                         </li>
                     ))}

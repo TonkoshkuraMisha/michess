@@ -16,16 +16,20 @@ export interface LiveGameItem {
 
 export interface ChatMessageItem {
     sender: string;
+    /** Текст, набранный игроком; у быстрой фразы пуст — её текст берётся из каталога по коду. */
     text: string;
+    preset?: ChatPresetId;
     timestamp: number;
 }
 
-export const QUICK_CHAT_PRESETS = [
-    '👋 Удачи!',
-    '🤝 Спасибо за игру!',
-    '👏 Красивый ход!',
-    '⏱ Цейтнот!'
-];
+/** Коды быстрых фраз — тот же список, что CHAT_PRESETS на сервере (src/api/websockets.py). */
+export const QUICK_CHAT_PRESETS = ['good_luck', 'thanks', 'nice_move', 'time_trouble'] as const;
+
+export type ChatPresetId = typeof QUICK_CHAT_PRESETS[number];
+
+export function isChatPreset(value: unknown): value is ChatPresetId {
+    return typeof value === 'string' && (QUICK_CHAT_PRESETS as readonly string[]).includes(value);
+}
 
 export interface PendingPromotion {
     from: string;

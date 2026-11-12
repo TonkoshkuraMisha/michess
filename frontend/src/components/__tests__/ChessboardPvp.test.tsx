@@ -165,7 +165,7 @@ describe('потерянный game_over', () => {
         });
 
         expect(screen.queryByText(/Партия окончена/)).not.toBeInTheDocument();
-        expect(screen.getByText('Идет рейтинговая партия')).toBeInTheDocument();
+        expect(screen.getByText('Идёт рейтинговая партия')).toBeInTheDocument();
     });
 });
 
@@ -301,7 +301,7 @@ describe('товарищеские партии', () => {
     it('рейтинговая партия показывает изменение рейтинга', async () => {
         renderBoard({'/profile/games/my-active': () => ({...MATCH, active: true})});
         await emitAct('match_found', MATCH);
-        expect(screen.getByText('Идет рейтинговая партия')).toBeInTheDocument();
+        expect(screen.getByText('Идёт рейтинговая партия')).toBeInTheDocument();
 
         await emitAct('game_over', {game_id: 5, result: '1-0', reason: 'resignation', white_delta: 8, black_delta: -8});
         expect(screen.getByText('(+8)')).toBeInTheDocument();

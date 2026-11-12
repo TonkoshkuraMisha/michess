@@ -1,5 +1,7 @@
 // --- FILE: frontend/src/config/boardAppearance.ts ---
 
+import {t} from '../i18n';
+
 export interface BoardTheme {
     id: string;
     name: string;
@@ -27,7 +29,9 @@ export interface PieceSetConfig {
 export const BOARD_THEMES: Record<string, BoardTheme> = {
     walnut: {
         id: 'walnut',
-        name: 'Орех',
+        get name() {
+            return t('appearance.themes.walnut');
+        },
         light: '#DFC8A2',
         dark: '#966C46',
         coordLight: '#6E4B2A',
@@ -38,7 +42,9 @@ export const BOARD_THEMES: Record<string, BoardTheme> = {
     },
     maple: {
         id: 'maple',
-        name: 'Клён',
+        get name() {
+            return t('appearance.themes.maple');
+        },
         light: '#F0D9B5',
         dark: '#B58863',
         coordLight: '#8C6239',
@@ -49,7 +55,9 @@ export const BOARD_THEMES: Record<string, BoardTheme> = {
     },
     tournament: {
         id: 'tournament',
-        name: 'Турнирная',
+        get name() {
+            return t('appearance.themes.tournament');
+        },
         light: '#EBECD0',
         dark: '#739552',
         coordLight: '#537133',
@@ -60,7 +68,9 @@ export const BOARD_THEMES: Record<string, BoardTheme> = {
     },
     slate: {
         id: 'slate',
-        name: 'Графит',
+        get name() {
+            return t('appearance.themes.slate');
+        },
         light: '#DEE3E6',
         dark: '#788A94',
         coordLight: '#4E5D66',
@@ -71,7 +81,9 @@ export const BOARD_THEMES: Record<string, BoardTheme> = {
     },
     sapphire: {
         id: 'sapphire',
-        name: 'Сапфир',
+        get name() {
+            return t('appearance.themes.sapphire');
+        },
         light: '#ECEFF4',
         dark: '#6E88AC',
         coordLight: '#435B7D',
@@ -87,61 +99,99 @@ export const BOARD_THEMES: Record<string, BoardTheme> = {
 export const PIECE_SETS: Record<string, PieceSetConfig> = {
     merida: {
         id: 'merida',
-        name: 'Мерида (Классика)',
-        shortName: 'Мерида',
+        get name() {
+            return t('appearance.pieceSets.merida.name');
+        },
+        get shortName() {
+            return t('appearance.pieceSets.merida.shortName');
+        },
         folder: 'merida',
         scalePercent: 93,
-        description: 'Классические книжные фигуры с широкой короной',
+        get description() {
+            return t('appearance.pieceSets.merida.description');
+        },
         author: 'Armando Hernandez Marroquin',
         license: 'GPL-2.0-or-later'
     },
     outline: {
         id: 'outline',
-        name: 'Контур',
-        shortName: 'Контур',
+        get name() {
+            return t('appearance.pieceSets.outline.name');
+        },
+        get shortName() {
+            return t('appearance.pieceSets.outline.shortName');
+        },
         folder: 'outline',
         scalePercent: 94,
-        description: 'Мерида с контрастной окантовкой — хорошо читается на тёмных досках',
-        author: 'michess, на основе Merida (Armando Hernandez Marroquin)',
+        get description() {
+            return t('appearance.pieceSets.outline.description');
+        },
+        get author() {
+            return t('appearance.outlineAuthor');
+        },
         license: 'GPL-2.0-or-later'
     },
     cburnett: {
         id: 'cburnett',
-        name: 'Стаунтон (Турнирный)',
-        shortName: 'Стаунтон',
+        get name() {
+            return t('appearance.pieceSets.cburnett.name');
+        },
+        get shortName() {
+            return t('appearance.pieceSets.cburnett.shortName');
+        },
         folder: 'cburnett',
         scalePercent: 92,
-        description: 'Чистый современный турнирный стандарт',
+        get description() {
+            return t('appearance.pieceSets.cburnett.description');
+        },
         author: 'Colin M.L. Burnett',
         license: 'GPL-2.0-or-later'
     },
     chessnut: {
         id: 'chessnut',
-        name: 'Орех (Плоский)',
-        shortName: 'Орех',
+        get name() {
+            return t('appearance.pieceSets.chessnut.name');
+        },
+        get shortName() {
+            return t('appearance.pieceSets.chessnut.shortName');
+        },
         folder: 'chessnut',
         scalePercent: 92,
-        description: 'Плоские современные фигуры с мягкими формами',
+        get description() {
+            return t('appearance.pieceSets.chessnut.description');
+        },
         author: 'Alexis Luengas',
         license: 'Apache-2.0'
     },
     fantasy: {
         id: 'fantasy',
-        name: 'Фэнтези (Объёмный)',
-        shortName: 'Фэнтези',
+        get name() {
+            return t('appearance.pieceSets.fantasy.name');
+        },
+        get shortName() {
+            return t('appearance.pieceSets.fantasy.shortName');
+        },
         folder: 'fantasy',
         scalePercent: 93,
-        description: 'Объёмные фигуры с подробной прорисовкой',
+        get description() {
+            return t('appearance.pieceSets.fantasy.description');
+        },
         author: 'Maurizio Monge',
         license: 'MIT'
     },
     rhosgfx: {
         id: 'rhosgfx',
-        name: 'Графика (Минимализм)',
-        shortName: 'Графика',
+        get name() {
+            return t('appearance.pieceSets.rhosgfx.name');
+        },
+        get shortName() {
+            return t('appearance.pieceSets.rhosgfx.shortName');
+        },
         folder: 'rhosgfx',
         scalePercent: 92,
-        description: 'Лаконичные геометричные фигуры',
+        get description() {
+            return t('appearance.pieceSets.rhosgfx.description');
+        },
         author: 'RhosGFX',
         license: 'CC0-1.0'
     }

@@ -335,7 +335,7 @@ describe('Profile: график рейтинга', () => {
         });
 
         expect(point).toMatchObject({game_id: 12, rating: 1512, delta: 12, date: '1 нояб.'});
-        expect(point.fullDate).toMatch(/^1 ноября 2026, \d{2}:\d{2}$/);
+        expect(point.fullDate).toMatch(/^1 ноября 2026 г\., \d{2}:\d{2}$/);
     });
 
     it.each([[12, '+12'], [-10, '-10'], [0, '0']])('изменение %d показывается как %s', (delta, text) => {

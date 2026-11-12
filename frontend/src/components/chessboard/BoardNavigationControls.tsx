@@ -1,6 +1,7 @@
 // --- FILE: frontend/src/components/chessboard/BoardNavigationControls.tsx ---
 
 import {ChevronFirst, ChevronLeft, ChevronRight, ChevronLast} from 'lucide-react';
+import {useI18n} from '../../i18n';
 
 export interface BoardNavigationControlsProps {
     historyLength: number;
@@ -16,17 +17,18 @@ export interface BoardNavigationControlsProps {
 export function BoardNavigationControls({
     historyLength, viewIndex, onFirst, onBack, onForward, onLast,
 }: BoardNavigationControlsProps) {
+    const {t} = useI18n();
     return (
         <div
             className="bg-acacia-dark p-2 rounded-md border border-amber-900/40 flex items-center justify-between shrink-0">
-            <span className="text-xs font-semibold text-boxwood/80 pl-1">Навигация:</span>
+            <span className="text-xs font-semibold text-boxwood/80 pl-1">{t('board.navigation')}</span>
             <div className="flex gap-1.5">
                 <button
                     type="button"
                     disabled={historyLength === 0 || viewIndex === -2}
                     onClick={onFirst}
                     className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
-                    title="В начало партии (Стрелка вверх)"
+                    title={t('board.toStart')}
                 >
                     <ChevronFirst size={16}/>
                 </button>
@@ -35,7 +37,7 @@ export function BoardNavigationControls({
                     disabled={historyLength === 0 || viewIndex === -2}
                     onClick={onBack}
                     className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
-                    title="Ход назад (Стрелка влево)"
+                    title={t('board.back')}
                 >
                     <ChevronLeft size={16}/>
                 </button>
@@ -44,7 +46,7 @@ export function BoardNavigationControls({
                     disabled={historyLength === 0 || viewIndex === -1}
                     onClick={onForward}
                     className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
-                    title="Ход вперед (Стрелка вправо)"
+                    title={t('board.forward')}
                 >
                     <ChevronRight size={16}/>
                 </button>
@@ -53,7 +55,7 @@ export function BoardNavigationControls({
                     disabled={historyLength === 0 || viewIndex === -1}
                     onClick={onLast}
                     className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark disabled:opacity-30 transition cursor-pointer"
-                    title="К последнему ходу (Стрелка вниз)"
+                    title={t('board.toEnd')}
                 >
                     <ChevronLast size={16}/>
                 </button>

@@ -4,192 +4,97 @@
 // включая задержку Бронштейна/US Delay, бё-ёми, песочные часы, гонг, Scrabble) — но сервер
 // для сетевых партий понимает только простое время + добавление за ход (Fischer), так что
 // все эти экзотические режимы для онлайн-игры были чисто декоративными и только путали выбор.
+//
+// Подписи и описания — в каталогах сообщений (геттеры), здесь только числа.
+
+import {t} from '../i18n';
 
 export type TimeControlCategory = 'bullet' | 'blitz' | 'rapid' | 'classical';
 
+export type TimeControlId =
+    | 'bullet-1+0' | 'bullet-1+1' | 'bullet-2+1' | 'bullet-manual'
+    | 'blitz-3+0' | 'blitz-3+2' | 'blitz-5+0' | 'blitz-5+3' | 'blitz-manual'
+    | 'rapid-10+0' | 'rapid-10+5' | 'rapid-15+10' | 'rapid-manual'
+    | 'classical-30+0' | 'classical-30+20' | 'classical-60+30' | 'classical-manual';
+
 export interface TimeControlOption {
-    id: string;
+    id: TimeControlId;
     category: TimeControlCategory;
     base: number; // минут на старте
     inc: number; // секунд добавления за ход (Fischer); 0 — без добавления
-    label: string;
-    details: string;
+    readonly label: string;
+    readonly details: string;
     isManual?: boolean;
 }
 
 export interface TimeControlGroup {
     category: TimeControlCategory;
-    title: string;
+    readonly title: string;
     options: TimeControlOption[];
 }
 
+/** Подпись пресета: «3 мин + 2 сек/ход» на текущем языке. */
+export function timeControlLabel(base: number, inc: number): string {
+    return inc > 0 ? t('timeControl.minutesIncrement', {base, inc}) : t('timeControl.minutes', {base});
+}
+
+function option(category: TimeControlCategory, base: number, inc: number, manual = false): TimeControlOption {
+    const id = (manual ? `${category}-manual` : `${category}-${base}+${inc}`) as TimeControlId;
+    return {
+        id,
+        category,
+        base,
+        inc,
+        ...(manual ? {isManual: true} : {}),
+        get label() {
+            return manual
+                ? t('timeControl.manual', {category: t(`ratingCategory.${category}`)})
+                : timeControlLabel(base, inc);
+        },
+        get details() {
+            return t(`timeControl.details.${id}`);
+        },
+    };
+}
+
+function group(category: TimeControlCategory, options: TimeControlOption[]): TimeControlGroup {
+    return {
+        category,
+        options,
+        get title() {
+            return t(`ratingCategory.${category}`);
+        },
+    };
+}
+
 export const TIME_CONTROLS: TimeControlGroup[] = [
-    {
-        category: 'bullet',
-        title: 'Пуля',
-        options: [
-            {
-                id: 'bullet-1+0',
-                category: 'bullet',
-                base: 1,
-                inc: 0,
-                label: '1 мин',
-                details: 'Самый быстрый формат — чистая пуля без добавления'
-            },
-            {
-                id: 'bullet-1+1',
-                category: 'bullet',
-                base: 1,
-                inc: 1,
-                label: '1 мин + 1 сек/ход',
-                details: 'Популярная пуля с добавлением Фишера'
-            },
-            {
-                id: 'bullet-2+1',
-                category: 'bullet',
-                base: 2,
-                inc: 1,
-                label: '2 мин + 1 сек/ход',
-                details: 'Самая популярная пуля на lichess.org'
-            },
-            {
-                id: 'bullet-manual',
-                category: 'bullet',
-                base: 1,
-                inc: 0,
-                isManual: true,
-                label: 'Ручная настройка (Пуля)',
-                details: 'Своё время и добавление в диапазоне пули'
-            }
-        ]
-    },
-    {
-        category: 'blitz',
-        title: 'Блиц',
-        options: [
-            {
-                id: 'blitz-3+0',
-                category: 'blitz',
-                base: 3,
-                inc: 0,
-                label: '3 мин',
-                details: 'Классический быстрый блиц без добавления'
-            },
-            {
-                id: 'blitz-3+2',
-                category: 'blitz',
-                base: 3,
-                inc: 2,
-                label: '3 мин + 2 сек/ход',
-                details: 'Стандартный блиц FIDE (3+2)'
-            },
-            {
-                id: 'blitz-5+0',
-                category: 'blitz',
-                base: 5,
-                inc: 0,
-                label: '5 мин',
-                details: 'Самый популярный блиц на chess.com'
-            },
-            {
-                id: 'blitz-5+3',
-                category: 'blitz',
-                base: 5,
-                inc: 3,
-                label: '5 мин + 3 сек/ход',
-                details: 'Блиц с добавлением — популярный выбор на lichess.org'
-            },
-            {
-                id: 'blitz-manual',
-                category: 'blitz',
-                base: 5,
-                inc: 0,
-                isManual: true,
-                label: 'Ручная настройка (Блиц)',
-                details: 'Своё время и добавление в диапазоне блица'
-            }
-        ]
-    },
-    {
-        category: 'rapid',
-        title: 'Рапид',
-        options: [
-            {
-                id: 'rapid-10+0',
-                category: 'rapid',
-                base: 10,
-                inc: 0,
-                label: '10 мин',
-                details: 'Самый популярный рапид на chess.com'
-            },
-            {
-                id: 'rapid-10+5',
-                category: 'rapid',
-                base: 10,
-                inc: 5,
-                label: '10 мин + 5 сек/ход',
-                details: 'Рапид с добавлением — популярный выбор на lichess.org'
-            },
-            {
-                id: 'rapid-15+10',
-                category: 'rapid',
-                base: 15,
-                inc: 10,
-                label: '15 мин + 10 сек/ход',
-                details: 'Стандартный рапид FIDE (15+10)'
-            },
-            {
-                id: 'rapid-manual',
-                category: 'rapid',
-                base: 15,
-                inc: 10,
-                isManual: true,
-                label: 'Ручная настройка (Рапид)',
-                details: 'Своё время и добавление в диапазоне рапида'
-            }
-        ]
-    },
-    {
-        category: 'classical',
-        title: 'Классика',
-        options: [
-            {
-                // 30 минут без добавления — уже классика: сервер (classify_time_control) относит партию
-                // к категории по оценке «база + 40 × добавление», порог классики — 25 минут.
-                id: 'classical-30+0',
-                category: 'classical',
-                base: 30,
-                inc: 0,
-                label: '30 мин',
-                details: 'Партия на полчаса без добавления'
-            },
-            {
-                id: 'classical-30+20',
-                category: 'classical',
-                base: 30,
-                inc: 20,
-                label: '30 мин + 20 сек/ход',
-                details: 'Классика lichess.org — развёрнутая игра без цейтнота'
-            },
-            {
-                id: 'classical-60+30',
-                category: 'classical',
-                base: 60,
-                inc: 30,
-                label: '60 мин + 30 сек/ход',
-                details: 'Длинная классика, близкая к турнирному темпу'
-            },
-            {
-                id: 'classical-manual',
-                category: 'classical',
-                base: 60,
-                inc: 30,
-                isManual: true,
-                label: 'Ручная настройка (Классика)',
-                details: 'Своё время и добавление в диапазоне классики'
-            }
-        ]
-    }
+    group('bullet', [
+        option('bullet', 1, 0),
+        option('bullet', 1, 1),
+        option('bullet', 2, 1),
+        option('bullet', 1, 0, true),
+    ]),
+    group('blitz', [
+        option('blitz', 3, 0),
+        option('blitz', 3, 2),
+        option('blitz', 5, 0),
+        option('blitz', 5, 3),
+        option('blitz', 5, 0, true),
+    ]),
+    group('rapid', [
+        option('rapid', 10, 0),
+        option('rapid', 10, 5),
+        option('rapid', 15, 10),
+        option('rapid', 15, 10, true),
+    ]),
+    group('classical', [
+        // 30 минут без добавления — уже классика: сервер (classify_time_control) относит партию
+        // к категории по оценке «база + 40 × добавление», порог классики — 25 минут.
+        option('classical', 30, 0),
+        option('classical', 30, 20),
+        option('classical', 60, 30),
+        option('classical', 60, 30, true),
+    ]),
 ];
 
 export const ALL_TIME_CONTROLS: TimeControlOption[] = TIME_CONTROLS.flatMap(g => g.options);

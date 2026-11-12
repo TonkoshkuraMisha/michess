@@ -13,6 +13,10 @@ import type {CustomOpponent} from '../../../config/archetypes';
 import {cloneChessInstance, customStartFen} from '../boardUtils';
 import type {PendingPromotion} from '../types';
 import {readErrorDetail} from '../../../services/apiErrors';
+import {t} from '../../../i18n';
+import type {MessageKey} from '../../../i18n';
+import {messageParam, status} from '../status';
+import type {GameStatus, StatusParam} from '../status';
 
 const BOT_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000];
 
@@ -59,7 +63,7 @@ export interface UseBotGameOptions {
     clearPremove: () => void;
     setGameOverResult: (r: string | null) => void;
     setRatingInfo: (r: any) => void;
-    setDrawOfferStatus: (s: string | null) => void;
+    setDrawOfferStatus: (s: GameStatus | null) => void;
     setRematchStatus: (s: 'none' | 'offered_by_me' | 'offered_by_opponent' | 'declined') => void;
     setWhiteTimeMs: (ms: number) => void;
     setBlackTimeMs: (ms: number) => void;
@@ -93,16 +97,18 @@ export interface BotGameStartOptions {
     ladder?: boolean;
 }
 
-export function ladderOutcomeMessage(outcome: LadderOutcome): string {
-    if (!outcome.counted) return `Партия не засчитана в лестницу: ${outcome.reason}.`;
+/** Итог партии лестницы для строки статуса; reason пока приходит с сервера текстом (до таска 11.0c). */
+export function ladderOutcomeMessage(outcome: LadderOutcome): GameStatus & { key: MessageKey } {
+    if (!outcome.counted) return {key: 'ladder.notCounted', params: {reason: outcome.reason ?? ''}};
     const delta = outcome.delta > 0 ? `+${outcome.delta}` : String(outcome.delta);
-    return `Лестница: рейтинг ${outcome.rating} (${delta})${outcome.promoted ? ' — открыт следующий соперник!' : '.'}`;
+    return {key: outcome.promoted ? 'ladder.resultPromoted' : 'ladder.result', params: {rating: outcome.rating, delta}};
 }
 
 export interface UseBotGameResult {
     selectedBotId: HistoricalBotId;
     setSelectedBotId: (id: HistoricalBotId) => void;
-    botComment: string | null;
+    /** Реплика бота; null — показывается девиз соперника. */
+    botComment: GameStatus | null;
     isBotThinking: boolean;
     savedBotGameId: number | null;
     /** startFen — начать партию с этой позиции вместо обычной расстановки. */
@@ -121,6 +127,8 @@ export interface UseBotGameResult {
     ladderOutcome: LadderOutcome | null;
     /** Профиль бота для доски и панели — исторического или собранного в мастерской. */
     botProfileFor: (id: BotOpponentId) => HistoricalBotProfile;
+    /** Имя бота для строки статуса: переводится при показе (у соперника из мастерской — его имя). */
+    botNameParam: (id: BotOpponentId) => StatusParam;
     saveBotGameToDatabase: (
         botId: BotOpponentId,
         playerColor: 'white' | 'black',
@@ -148,7 +156,7 @@ export function useBotGame({
     playAudio, playOutcomeSound, updateSessionStats,
 }: UseBotGameOptions): UseBotGameResult {
     const [selectedBotId, setSelectedBotId] = useState<HistoricalBotId>('philidor');
-    const [botComment, setBotComment] = useState<string | null>(null);
+    const [botComment, setBotComment] = useState<GameStatus | null>(null);
     const [isBotThinking, setIsBotThinking] = useState<boolean>(false);
     const [savedBotGameId, setSavedBotGameId] = useState<number | null>(null);
     const botGameSavedRef = useRef<boolean>(false);
@@ -162,10 +170,15 @@ export function useBotGame({
     const botProfileFor = useCallback((id: BotOpponentId): HistoricalBotProfile => {
         if (id === 'custom') {
             return customBotProfile(customOpponentRef.current ?? {
-                name: 'Соперник', config: {} as CustomOpponent['config'],
+                name: t('workshop.defaultName'), config: {} as CustomOpponent['config'],
             });
         }
         return HISTORICAL_BOTS[id];
+    }, []);
+
+    const botNameParam = useCallback((id: BotOpponentId): StatusParam => {
+        if (id === 'custom') return customOpponentRef.current?.name || messageParam('workshop.defaultName');
+        return messageParam(`bots.profiles.${id}.shortName`);
     }, []);
 
     const saveBotGameToDatabase = useCallback(async (
@@ -207,7 +220,7 @@ export function useBotGame({
                 if (data.game_id) setSavedBotGameId(data.game_id);
                 if (data.result && data.result !== result) {
                     setGameOverResult(data.result);
-                    setDrawOfferStatus(`Итог по правилам ФИДЕ: ${data.result}`);
+                    setDrawOfferStatus(status('status.fideResult', {result: data.result}));
                 }
                 if (data.ladder) {
                     setLadderOutcome(data.ladder);
@@ -215,7 +228,7 @@ export function useBotGame({
                 }
             }
         } catch (err) {
-            console.error('Ошибка сохранения партии с ботом в БД:', err);
+            console.error('Failed to save the bot game:', err);
         }
     }, [effectiveWhiteBaseMinutes, effectiveIncSeconds, setGameOverResult, setDrawOfferStatus]);
 
@@ -275,7 +288,7 @@ export function useBotGame({
             setBlackPlayer({username: currentUsername, rating: String(currentUserRating)});
         }
 
-        setBotComment(`«${botInfo.motto}»`);
+        setBotComment(null);
         playAudio('start');
     }, [
         isSearching, setIsSearching, effectiveWhiteBaseMinutes, effectiveBlackBaseMinutes, resetLowTimeWarning,
@@ -305,7 +318,7 @@ export function useBotGame({
         let isCancelled = false;
         let delayTimer: ReturnType<typeof setTimeout> | null = null;
         setIsBotThinking(true);
-        const botName = botProfileFor(activeBot).shortName;
+        const botName = botNameParam(activeBot);
         const requestStartedAt = Date.now();
         const custom = activeBot === 'custom' ? customOpponentRef.current : null;
         const moveUrl = custom ? `${API_BASE_URL}/api/v1/bots/custom-move` : `${API_BASE_URL}/api/v1/bots/move`;
@@ -338,7 +351,7 @@ export function useBotGame({
                     if (response && isPermanentBotError(response.status)) break;
 
                     if (attempt === 1 && !isCancelled) {
-                        setBotComment('Нет связи с сервером — ход бота будет сделан, как только связь восстановится…');
+                        setBotComment(status('bots.noConnection'));
                     }
                     await new Promise((resolve) => setTimeout(resolve, botRetryDelayMs(attempt, response)));
                 }
@@ -346,7 +359,10 @@ export function useBotGame({
 
                 if (!response.ok) {
                     // Постоянная ошибка (некорректная позиция, неизвестный бот): повтор не поможет.
-                    setBotComment(`Бот не смог сделать ход: ${await readErrorDetail(response, `ошибка ${response.status}`)}`);
+                    const detail = await readErrorDetail(response, '');
+                    setBotComment(status('bots.moveFailed', {
+                        detail: detail || messageParam('bots.moveFailedStatus', {status: response.status}),
+                    }));
                     setIsBotThinking(false);
                     return;
                 }
@@ -375,7 +391,7 @@ export function useBotGame({
                         setGame(nextGame);
                         setHistory(newHistory);
                         setViewIndex(-1);
-                        setBotComment(data.comment);
+                        setBotComment(data.comment ? {text: String(data.comment)} : null);
                         moveStartTime.current = Date.now();
 
                         // На завершающем ходу играет только исход (победа/поражение/ничья) —
@@ -391,7 +407,7 @@ export function useBotGame({
                             }
                             clearPremove();
                             setGameOverResult(result);
-                            setDrawOfferStatus(`Партия против ${botName} окончена и сохранена в архив (${result}).`);
+                            setDrawOfferStatus(status('status.botGameOver', {bot: botName, result}));
                             updateSessionStats(result);
                             playOutcomeSound(result, myColor);
                             saveBotGameToDatabase(activeBot, myColor, result, nextGame);
@@ -400,7 +416,7 @@ export function useBotGame({
                     setIsBotThinking(false);
                 }, remainingDelay);
             } catch (err) {
-                console.error('Ошибка получения хода бота:', err);
+                console.error('Failed to get the bot move:', err);
                 if (!isCancelled) {
                     setIsBotThinking(false);
                 }
@@ -411,7 +427,7 @@ export function useBotGame({
             isCancelled = true;
             if (delayTimer) clearTimeout(delayTimer);
         };
-    }, [activeBot, game, myColor, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyIncrement, effectiveIncSeconds, setGame, setHistory, setViewIndex, clearPremove, setGameOverResult, setDrawOfferStatus, moveStartTime, botProfileFor]);
+    }, [activeBot, game, myColor, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyIncrement, effectiveIncSeconds, setGame, setHistory, setViewIndex, clearPremove, setGameOverResult, setDrawOfferStatus, moveStartTime, botNameParam]);
 
     // Поражение по флагу в партии с ботом.
     useEffect(() => {
@@ -419,16 +435,16 @@ export function useBotGame({
 
         if (whiteTimeMs <= 0 || blackTimeMs <= 0) {
             const flagWinner = whiteTimeMs <= 0 ? '0-1' : '1-0';
-            const botName = botProfileFor(activeBot).shortName;
+            const botName = botNameParam(activeBot);
             clearPremove();
             setPendingPromotion(null);
             setGameOverResult(flagWinner);
-            setDrawOfferStatus(`Флажок упал! Партия против ${botName} завершена по времени (${flagWinner}).`);
+            setDrawOfferStatus(status('status.botFlagFell', {bot: botName, result: flagWinner}));
             updateSessionStats(flagWinner);
             playOutcomeSound(flagWinner, myColor);
             saveBotGameToDatabase(activeBot, myColor, flagWinner, game, 'timeout');
         }
-    }, [whiteTimeMs, blackTimeMs, activeBot, gameOverResult, myColor, game, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, clearPremove, setPendingPromotion, setGameOverResult, setDrawOfferStatus, botProfileFor]);
+    }, [whiteTimeMs, blackTimeMs, activeBot, gameOverResult, myColor, game, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, clearPremove, setPendingPromotion, setGameOverResult, setDrawOfferStatus, botNameParam]);
 
     const exitBotGame = useCallback(() => {
         ladderRef.current = false;
@@ -442,7 +458,7 @@ export function useBotGame({
 
     return {
         selectedBotId, setSelectedBotId, botComment, isBotThinking, savedBotGameId,
-        startHistoricalBotGame, startCustomBotGame, botProfileFor, saveBotGameToDatabase, exitBotGame,
+        startHistoricalBotGame, startCustomBotGame, botProfileFor, botNameParam, saveBotGameToDatabase, exitBotGame,
         isLadderGame, ladderOutcome,
     };
 }

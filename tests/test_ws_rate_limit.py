@@ -146,3 +146,18 @@ async def test_draw_can_be_offered_once_per_move(game):
     assert not socket.events("error")
     state = await state_manager.get_game_state(game)
     assert state["draw_offer"] == "901"
+
+
+async def test_chat_preset_is_relayed_as_a_code(game):
+    """Быстрая фраза уходит кодом: каждый увидит её на своём языке."""
+    socket = await _run(_user(901), [{"action": "chat_message", "game_id": game, "preset": "good_luck"}])
+    (message,) = socket.events("chat_message")
+    assert message["preset"] == "good_luck" and message["text"] == ""
+
+
+@pytest.mark.parametrize("preset", ["unknown", "", 5, None])
+async def test_unknown_chat_preset_is_ignored(game, preset):
+    """Неизвестный код — не сообщение; None без текста — тоже пустое сообщение."""
+    socket = await _run(_user(901), [{"action": "chat_message", "game_id": game, "preset": preset}])
+    assert socket.events("chat_message") == []
+

@@ -11,7 +11,6 @@ import {
     Download, Loader2, Sword, RefreshCw, Palette, Cpu, Sparkles, X, Volume2, VolumeX
 } from 'lucide-react';
 import {format, parseISO} from 'date-fns';
-import {ru} from 'date-fns/locale';
 import {
     BOARD_THEMES,
     MIN_BOARD_SIZE,
@@ -30,6 +29,8 @@ import {
     getPieceSvgUrl,
     getHarmoniousPieceStyle
 } from '../config/boardAppearance';
+import {renderUiMessage, serverOr, uiMessage, useI18n} from '../i18n';
+import type {UiMessage} from '../i18n';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
@@ -120,6 +121,7 @@ function classificationBadgeClass(classification?: string): string {
 }
 
 export default function GameViewer() {
+    const {t, dateLocale} = useI18n();
     const {gameId} = useParams<{ gameId: string }>();
     const location = useLocation();
     const gameDataFromState = location.state?.game;
@@ -136,7 +138,7 @@ export default function GameViewer() {
 
     const [analysisReport, setAnalysisReport] = useState<FullGameAnalysisReport | null>(null);
     const [isAnalyzing, setIsAnalyzing] = useState(false);
-    const [analysisError, setAnalysisError] = useState<string | null>(null);
+    const [analysisError, setAnalysisError] = useState<UiMessage | null>(null);
 
     const [arrows, setArrows] = useState<DrawnArrow[]>([]);
     const [highlightedSquares, setHighlightedSquares] = useState<Set<string>>(new Set());
@@ -160,7 +162,7 @@ export default function GameViewer() {
     const resizeStartRef = useRef<{ startX: number; startY: number; startSize: number } | null>(null);
 
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
+    const [error, setError] = useState<UiMessage | null>(null);
 
     const notationScrollRef = useRef<HTMLDivElement>(null);
 
@@ -268,7 +270,7 @@ export default function GameViewer() {
                 ]);
 
                 if (!pgnRes.ok) {
-                    setError('Не удалось загрузить данные партии');
+                    setError(uiMessage('viewer.loadFailed'));
                     return;
                 }
 
@@ -293,8 +295,8 @@ export default function GameViewer() {
                         setAnalysisReport(cachedData);
                     }
                 }
-            } catch (err: any) {
-                setError(err.message);
+            } catch {
+                setError(uiMessage('viewer.loadFailed'));
             } finally {
                 setLoading(false);
             }
@@ -316,18 +318,18 @@ export default function GameViewer() {
             });
             if (!res.ok) {
                 // detail бывает списком ошибок валидации — без разбора React упал бы на рендере объекта.
-                setAnalysisError(await readErrorDetail(res, 'Ошибка при анализе партии'));
+                setAnalysisError(serverOr(await readErrorDetail(res, ''), 'viewer.analysisFailed'));
                 return;
             }
             const data: FullGameAnalysisReport = await res.json();
             if (!Array.isArray(data.moves) || (data.moves.length === 0 && history.length > 0)) {
-                setAnalysisError('Сервер вернул пустой анализ: ходы партии не распознаны. Сообщите о партии разработчику.');
+                setAnalysisError(uiMessage('viewer.analysisEmpty'));
                 return;
             }
             setAnalysisReport(data);
             playAudio('start');
-        } catch (err: any) {
-            setAnalysisError(err.message || 'Не удалось выполнить компьютерный анализ');
+        } catch {
+            setAnalysisError(uiMessage('viewer.analysisUnavailable'));
         } finally {
             setIsAnalyzing(false);
         }
@@ -444,9 +446,9 @@ export default function GameViewer() {
         );
     };
 
-    const whiteName = gameDataFromState?.white_username || pgnHeaders.White || 'Белые';
+    const whiteName = gameDataFromState?.white_username || pgnHeaders.White || t('common.white');
     const whiteRating = gameDataFromState?.white_rating || pgnHeaders.WhiteElo || '?';
-    const blackName = gameDataFromState?.black_username || pgnHeaders.Black || 'Чёрные';
+    const blackName = gameDataFromState?.black_username || pgnHeaders.Black || t('common.black');
     const blackRating = gameDataFromState?.black_rating || pgnHeaders.BlackElo || '?';
     const resultStr = gameDataFromState?.result || pgnHeaders.Result || '*';
 
@@ -464,12 +466,12 @@ export default function GameViewer() {
     const topIconBg = isFlipped ? 'bg-boxwood text-acacia-dark' : 'bg-acacia text-amber-200';
     const bottomIconBg = isFlipped ? 'bg-acacia text-amber-200' : 'bg-boxwood text-acacia-dark';
 
-    let displayDate = 'Архивная партия';
+    let displayDate = t('viewer.archivedGame');
     const rawDate = gameDataFromState?.pgn_date || pgnHeaders.Date;
     if (rawDate && !rawDate.includes('????')) {
         displayDate = rawDate.replace(/\?/g, '').replace(/\.+$/, '');
     } else if (gameDataFromState?.finished_at) {
-        displayDate = format(parseISO(gameDataFromState.finished_at), 'd MMM yyyy', {locale: ru});
+        displayDate = format(parseISO(gameDataFromState.finished_at), 'd MMM yyyy', {locale: dateLocale});
     }
 
     const squareToSvgCoords = (sq: string): { x: number; y: number } | null => {
@@ -523,7 +525,7 @@ export default function GameViewer() {
         return (
             <div className="my-auto flex flex-col items-center justify-center w-full text-boxwood-light">
                 <Loader2 className="animate-spin text-amber-500 mb-3" size={40}/>
-                <div className="text-base font-bold">Загрузка студии разбора...</div>
+                <div className="text-base font-bold">{t('viewer.loading')}</div>
             </div>
         );
     }
@@ -531,13 +533,13 @@ export default function GameViewer() {
     if (error) {
         return (
             <div className="my-auto bg-red-950/80 border border-red-800 p-6 rounded-lg text-red-200 text-center">
-                <h2 className="text-xl font-bold mb-2">Ошибка</h2>
-                <p>{error}</p>
+                <h2 className="text-xl font-bold mb-2">{t('common.error')}</h2>
+                <p>{renderUiMessage(error, t)}</p>
                 <button
                     onClick={() => window.history.back()}
                     className="mt-4 inline-block px-4 py-2 bg-black/40 rounded hover:bg-black/60 transition text-amber-400 border border-amber-900/50 cursor-pointer"
                 >
-                    Вернуться
+                    {t('viewer.backButton')}
                 </button>
             </div>
         );
@@ -564,7 +566,7 @@ export default function GameViewer() {
                     className={`w-6 sm:w-7 rounded-md overflow-hidden border-2 border-amber-950/90 shadow-heavy flex flex-col relative select-none shrink-0 ${
                         isFlipped ? 'flex-col-reverse' : 'flex-col'
                     }`}
-                    title={`Оценка позиции: ${currentEval.display}`}
+                    title={t('viewer.evaluation', {value: currentEval.display})}
                 >
                     <div
                         style={{height: `${100 - whiteBarPercent}%`}}
@@ -609,7 +611,7 @@ export default function GameViewer() {
                         {analysisReport && (
                             <div
                                 className="text-xs font-mono font-bold px-2.5 py-1 rounded bg-black/50 border border-amber-700/40 text-emerald-300">
-                                Точность: {isFlipped ? analysisReport.white.accuracy : analysisReport.black.accuracy}%
+                                {t('viewer.accuracy', {value: isFlipped ? analysisReport.white.accuracy : analysisReport.black.accuracy})}
                             </div>
                         )}
                     </div>
@@ -749,7 +751,7 @@ export default function GameViewer() {
                         <div
                             onPointerDown={handleResizePointerDown}
                             onDoubleClick={handleResizeDoubleClick}
-                            title="Потяните, чтобы изменить размер доски (двойной клик — сбросить)"
+                            title={t('viewer.resizeHint')}
                             className={`absolute bottom-0 right-0 w-6 h-6 z-40 cursor-nwse-resize flex items-end justify-end p-0.5 rounded-tl transition-opacity ${
                                 isResizing
                                     ? 'opacity-100 text-amber-400'
@@ -794,7 +796,7 @@ export default function GameViewer() {
                         {analysisReport && (
                             <div
                                 className="text-xs font-mono font-bold px-2.5 py-1 rounded bg-black/50 border border-amber-700/40 text-emerald-300">
-                                Точность: {isFlipped ? analysisReport.black.accuracy : analysisReport.white.accuracy}%
+                                {t('viewer.accuracy', {value: isFlipped ? analysisReport.black.accuracy : analysisReport.white.accuracy})}
                             </div>
                         )}
                     </div>
@@ -809,14 +811,15 @@ export default function GameViewer() {
                         <button
                             onClick={() => window.history.back()}
                             className="p-1.5 bg-black/25 hover:bg-black/45 rounded-md transition border border-amber-900/50 cursor-pointer shrink-0"
-                            title="Назад"
+                            title={t('common.back')}
+                            aria-label={t('common.back')}
                         >
                             <ArrowLeft size={16} className="text-amber-400"/>
                         </button>
                         <div className="min-w-0">
                             <div
                                 className="text-xs tracking-wider uppercase text-boxwood/75 font-bold flex items-center gap-1.5">
-                                <Sword size={13} className="text-amber-400"/> Студия разбора партии
+                                <Sword size={13} className="text-amber-400"/> {t('viewer.studio')}
                             </div>
                             <div className="text-xs text-amber-300 mt-0.5 font-mono truncate">
                                 {displayDate} {pgnHeaders.ECO ? `• ECO ${pgnHeaders.ECO}` : ''}
@@ -833,7 +836,7 @@ export default function GameViewer() {
                                     ? 'bg-red-950/60 border-red-800/60 text-red-300 hover:bg-red-900/60'
                                     : 'bg-acacia-dark hover:bg-black/45 border-amber-800/50 text-amber-300'
                             }`}
-                            title={isSoundMuted ? 'Включить звук' : 'Выключить звук'}
+                            title={t(isSoundMuted ? 'common.soundOn' : 'common.soundOff')}
                         >
                             {isSoundMuted ? <VolumeX size={15}/> : <Volume2 size={15}/>}
                         </button>
@@ -846,7 +849,7 @@ export default function GameViewer() {
                                     : 'bg-acacia-dark hover:bg-black/45 text-amber-200 border-amber-800/50'
                             }`}
                         >
-                            <Palette size={14} className="text-amber-400"/> Вид
+                            <Palette size={14} className="text-amber-400"/> {t('viewer.look')}
                         </button>
                         <span
                             className="bg-acacia-dark px-2.5 py-1 rounded-md border border-amber-700/50 text-amber-400 font-mono text-xs font-bold">
@@ -859,7 +862,7 @@ export default function GameViewer() {
                     <div
                         className="bg-acacia-dark p-3 rounded-md border border-amber-700/50 flex flex-col gap-2 shadow-lg shrink-0">
                         <div className="flex justify-between items-center text-xs text-boxwood/90">
-                            <span className="font-bold">♟ Фигуры: <span
+                            <span className="font-bold">{t('viewer.piecesLabel')} <span
                                 className="text-amber-400">{activePieceSet.name}</span></span>
                             <button
                                 type="button"
@@ -910,10 +913,10 @@ export default function GameViewer() {
                         <div className="flex items-center justify-between gap-3">
                             <div className="text-xs text-boxwood/85 leading-snug">
                                 <div className="font-bold text-amber-200 flex items-center gap-1.5">
-                                    <Cpu size={14} className="text-amber-400"/> Компьютерный разбор Stockfish
+                                    <Cpu size={14} className="text-amber-400"/> {t('viewer.engineTitle')}
                                 </div>
                                 <div className="text-boxwood/65 mt-0.5">
-                                    Точность игроков, поиск зевков (??) и интерактивный график перевеса
+                                    {t('viewer.engineSubtitle')}
                                 </div>
                             </div>
                             <button
@@ -923,7 +926,7 @@ export default function GameViewer() {
                                 className="px-3.5 py-2 rounded-md bg-boxwood hover:bg-boxwood-light disabled:opacity-50 text-acacia-dark font-bold text-xs flex items-center gap-1.5 shrink-0 shadow cursor-pointer transition"
                             >
                                 {isAnalyzing ? <Loader2 size={15} className="animate-spin"/> : <Sparkles size={15}/>}
-                                {isAnalyzing ? 'Анализ...' : 'Компьютерный анализ'}
+                                {t(isAnalyzing ? 'viewer.analyzing' : 'viewer.runAnalysis')}
                             </button>
                         </div>
                     ) : (
@@ -939,13 +942,13 @@ export default function GameViewer() {
                                     <div
                                         className="flex items-center justify-between text-[11px] font-mono text-boxwood/80">
                                         <span className="text-emerald-400"
-                                              title="Лучшие ходы">! {analysisReport.white.best}</span>
+                                              title={t('viewer.bestMoves')}>! {analysisReport.white.best}</span>
                                         <span className="text-sky-400"
-                                              title="Неточности">?! {analysisReport.white.inaccuracies}</span>
+                                              title={t('viewer.inaccuracies')}>?! {analysisReport.white.inaccuracies}</span>
                                         <span className="text-amber-400"
-                                              title="Ошибки">? {analysisReport.white.mistakes}</span>
+                                              title={t('viewer.mistakes')}>? {analysisReport.white.mistakes}</span>
                                         <span className="text-rose-400 font-bold"
-                                              title="Зевки">?? {analysisReport.white.blunders}</span>
+                                              title={t('viewer.blunders')}>?? {analysisReport.white.blunders}</span>
                                     </div>
                                 </div>
 
@@ -959,13 +962,13 @@ export default function GameViewer() {
                                     <div
                                         className="flex items-center justify-between text-[11px] font-mono text-boxwood/80">
                                         <span className="text-emerald-400"
-                                              title="Лучшие ходы">! {analysisReport.black.best}</span>
+                                              title={t('viewer.bestMoves')}>! {analysisReport.black.best}</span>
                                         <span className="text-sky-400"
-                                              title="Неточности">?! {analysisReport.black.inaccuracies}</span>
+                                              title={t('viewer.inaccuracies')}>?! {analysisReport.black.inaccuracies}</span>
                                         <span className="text-amber-400"
-                                              title="Ошибки">? {analysisReport.black.mistakes}</span>
+                                              title={t('viewer.mistakes')}>? {analysisReport.black.mistakes}</span>
                                         <span className="text-rose-400 font-bold"
-                                              title="Зевки">?? {analysisReport.black.blunders}</span>
+                                              title={t('viewer.blunders')}>?? {analysisReport.black.blunders}</span>
                                     </div>
                                 </div>
                             </div>
@@ -1016,7 +1019,7 @@ export default function GameViewer() {
                     {analysisError && (
                         <div
                             className="text-xs text-rose-300 bg-rose-950/60 border border-rose-700/50 rounded px-2.5 py-1.5">
-                            {analysisError}
+                            {renderUiMessage(analysisError, t)}
                         </div>
                     )}
                 </div>
@@ -1025,9 +1028,9 @@ export default function GameViewer() {
                     className="flex-1 min-h-0 flex flex-col bg-room-dark/90 rounded-md border border-amber-900/50 overflow-hidden shadow-inner">
                     <div
                         className="grid grid-cols-[44px_1fr_1fr] px-3 py-1.5 bg-black/55 border-b border-amber-900/40 text-xs uppercase tracking-wider text-boxwood/65 font-bold shrink-0">
-                        <span>№</span>
-                        <span>Белые</span>
-                        <span>Чёрные</span>
+                        <span>{t('board.moveNumber')}</span>
+                        <span>{t('common.white')}</span>
+                        <span>{t('common.black')}</span>
                     </div>
 
                     <div
@@ -1114,7 +1117,7 @@ export default function GameViewer() {
                     <div
                         className="flex justify-between items-center bg-acacia-dark p-2 rounded-md border border-amber-900/40">
                         <span className="text-xs font-semibold text-boxwood/80 pl-1">
-                            Управление (ПКМ по доске — стрелки):
+                            {t('viewer.controls')}
                         </span>
                         <div className="flex gap-1 items-center">
                             <button
@@ -1124,7 +1127,8 @@ export default function GameViewer() {
                                     playAudio('move');
                                 }}
                                 className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition cursor-pointer"
-                                title="Начало партии"
+                                title={t('viewer.gameStart')}
+                                aria-label={t('viewer.gameStart')}
                             >
                                 <ChevronFirst size={17}/>
                             </button>
@@ -1136,7 +1140,8 @@ export default function GameViewer() {
                                     playAudio(nextIdx >= 0 ? resolveMoveSound(history[nextIdx].san) : 'move');
                                 }}
                                 className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition cursor-pointer"
-                                title="Ход назад"
+                                title={t('viewer.moveBack')}
+                                aria-label={t('viewer.moveBack')}
                             >
                                 <ChevronLeft size={17}/>
                             </button>
@@ -1148,7 +1153,8 @@ export default function GameViewer() {
                                     playAudio(resolveMoveSound(history[nextIdx].san));
                                 }}
                                 className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition cursor-pointer"
-                                title="Ход вперед"
+                                title={t('viewer.moveForward')}
+                                aria-label={t('viewer.moveForward')}
                             >
                                 <ChevronRight size={17}/>
                             </button>
@@ -1160,7 +1166,8 @@ export default function GameViewer() {
                                     if (lastIdx >= 0) playAudio(resolveMoveSound(history[lastIdx].san));
                                 }}
                                 className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition cursor-pointer"
-                                title="Конец партии"
+                                title={t('viewer.gameEnd')}
+                                aria-label={t('viewer.gameEnd')}
                             >
                                 <ChevronLast size={17}/>
                             </button>
@@ -1168,7 +1175,8 @@ export default function GameViewer() {
                             <button
                                 onClick={() => setIsFlipped(!isFlipped)}
                                 className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition text-amber-400 cursor-pointer"
-                                title="Перевернуть доску"
+                                title={t('common.flipBoard')}
+                                aria-label={t('common.flipBoard')}
                             >
                                 <RefreshCw size={15}/>
                             </button>
@@ -1180,7 +1188,7 @@ export default function GameViewer() {
                         download
                         className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-room-dark text-amber-400 font-bold text-sm rounded-md hover:bg-black transition shadow border border-amber-800/60"
                     >
-                        <Download size={16}/> Скачать PGN файл
+                        <Download size={16}/> {t('viewer.downloadPgnFile')}
                     </a>
                 </div>
 

@@ -2,6 +2,7 @@
 
 import {Radio, Play, Eye} from 'lucide-react';
 import type {LiveGameItem, QueuePlayer} from './types';
+import {useI18n} from '../../i18n';
 
 export interface LobbyPanelProps {
     lobbyTab: 'lobby' | 'live';
@@ -20,6 +21,7 @@ export function LobbyPanel({
     lobbyTab, onLobbyTabChange, queuePlayers, liveGames, isSearching, gameId, gameOverResult,
     onAcceptChallenge, onSpectateGame,
 }: LobbyPanelProps) {
+    const {t} = useI18n();
     return (
         <div className="flex-1 min-h-0 bg-acacia-dark rounded-md border border-amber-900/50 p-2.5 flex flex-col shadow-inner">
             <div className="grid grid-cols-2 gap-1.5 p-1 bg-black/40 rounded border border-amber-900/40 mb-2 shrink-0">
@@ -32,7 +34,7 @@ export function LobbyPanel({
                             : 'text-boxwood/70 hover:text-amber-200'
                     }`}
                 >
-                    <span>Вызовы в лобби</span>
+                    <span>{t('lobby.challenges')}</span>
                     <span className="text-xs font-mono px-1.5 rounded bg-black/40">{queuePlayers.length}</span>
                 </button>
                 <button
@@ -45,7 +47,7 @@ export function LobbyPanel({
                     }`}
                 >
                     <Radio size={13} className={liveGames.length > 0 ? 'text-emerald-400 animate-pulse' : ''}/>
-                    <span>Идут сейчас (Live)</span>
+                    <span>{t('lobby.live')}</span>
                     <span className="text-xs font-mono px-1.5 rounded bg-black/40">{liveGames.length}</span>
                 </button>
             </div>
@@ -57,8 +59,8 @@ export function LobbyPanel({
                         <div className="h-full flex flex-col items-center justify-center p-4 text-boxwood/60 text-center text-xs sm:text-sm">
                             <span>
                                 {isSearching
-                                    ? 'Вы в очереди. Ожидание соперников...'
-                                    : 'В лобби пока нет открытых вызовов. Нажмите «Найти соперника» выше.'}
+                                    ? t('lobby.waiting')
+                                    : t('lobby.empty')}
                             </span>
                         </div>
                     ) : (
@@ -70,10 +72,14 @@ export function LobbyPanel({
                                 <div>
                                     <span className="text-amber-300 font-bold text-sm">{p.username}</span>
                                     <div className="text-xs text-boxwood/75 font-mono">
-                                        Рейтинг: {p.rating} • {Math.round(p.base_time_ms / 60000)}+{(p.increment_ms || 0) / 1000}
+                                        {t('lobby.challengeLine', {
+                                            rating: p.rating,
+                                            base: Math.round(p.base_time_ms / 60000),
+                                            inc: (p.increment_ms || 0) / 1000,
+                                        })}
                                         {p.rated === false && (
                                             <span className="ml-1.5 px-1.5 rounded bg-sky-900/60 text-sky-200 font-sans">
-                                                товарищеская
+                                                {t('lobby.casualBadge')}
                                             </span>
                                         )}
                                     </div>
@@ -84,7 +90,7 @@ export function LobbyPanel({
                                     onClick={() => onAcceptChallenge(p.user_id)}
                                     className="px-3 py-1.5 bg-emerald-800 hover:bg-emerald-700 disabled:opacity-40 text-emerald-100 rounded text-xs font-bold transition flex items-center gap-1.5 shadow cursor-pointer"
                                 >
-                                    <Play size={13}/> Принять
+                                    <Play size={13}/> {t('lobby.accept')}
                                 </button>
                             </div>
                         ))
@@ -92,7 +98,7 @@ export function LobbyPanel({
                 ) : (
                     liveGames.length === 0 ? (
                         <div className="h-full flex flex-col items-center justify-center p-4 text-boxwood/60 text-center text-xs sm:text-sm">
-                            <span>Сейчас нет активных PvP-партий.</span>
+                            <span>{t('lobby.noLiveGames')}</span>
                         </div>
                     ) : (
                         liveGames.map((lg) => (
@@ -109,7 +115,7 @@ export function LobbyPanel({
                                         👁 {lg.spectators_count}
                                         {lg.is_rated === false && (
                                             <span className="ml-1.5 px-1.5 rounded bg-sky-900/60 text-sky-200 font-sans">
-                                                товарищеская
+                                                {t('lobby.casualBadge')}
                                             </span>
                                         )}
                                     </div>
@@ -120,7 +126,7 @@ export function LobbyPanel({
                                     onClick={() => onSpectateGame(lg.game_id)}
                                     className="px-3 py-1.5 bg-amber-800 hover:bg-amber-700 disabled:opacity-40 text-amber-100 rounded text-xs font-bold transition flex items-center gap-1.5 shrink-0 shadow cursor-pointer"
                                 >
-                                    <Eye size={13}/> Смотреть
+                                    <Eye size={13}/> {t('lobby.watch')}
                                 </button>
                             </div>
                         ))

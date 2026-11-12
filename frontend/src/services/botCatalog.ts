@@ -8,6 +8,7 @@
 
 import {API_BASE_URL} from '../config/api';
 import type {PersonalityConfig} from './personalities';
+import {t} from '../i18n';
 
 export interface BotStrength {
     declared_rating: number;
@@ -35,7 +36,7 @@ export function fetchBotCatalog(): Promise<BotCatalog> {
     if (!cached) {
         cached = fetch(`${API_BASE_URL}/api/v1/bots/catalog`)
             .then((res) => {
-                if (!res.ok) throw new Error('Каталог ботов недоступен');
+                if (!res.ok) throw new Error(t('workshop.catalogUnavailable'));
                 return res.json() as Promise<BotCatalog>;
             })
             .catch((err) => {
@@ -53,5 +54,5 @@ export function resetBotCatalogCache(): void {
 
 /** «1720 (изм.)» — измеренная сила; иначе — заявленная. */
 export function strengthLabel(s: Pick<BotStrength, 'rating' | 'measured'>): string {
-    return s.measured ? `${s.rating} (изм.)` : String(s.rating);
+    return s.measured ? t('common.measuredShort', {rating: s.rating}) : String(s.rating);
 }
