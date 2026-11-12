@@ -1,12 +1,23 @@
 # --- FILE: src/services/bots/labourdonnais.py ---
 
-import chess
 
-from src.services.bots.base import (
+from src.services.bots.base import HistoricalBot, load_bot_opening_book
+from src.services.bots.style import (
+    CAPTURE,
+    CASTLING,
     CENTER_SQUARES,
+    CHECK,
     EXTENDED_CENTER,
-    HistoricalBot,
-    load_bot_opening_book,
+    FROM_BACK_RANK,
+    MINOR_PIECES,
+    FirstOf,
+    Group,
+    Note,
+    Rule,
+    Style,
+    by_move,
+    piece,
+    to,
 )
 
 LABOURDONNAIS_BLUNDER_GUARD_CP = 200.0
@@ -26,39 +37,24 @@ DEFAULT_LABOURDONNAIS_BOOK: dict[str, list[tuple[str, int, str]]] = {
 LABOURDONNAIS_OPENING_BOOK = load_bot_opening_book("labourdonnais", DEFAULT_LABOURDONNAIS_BOOK)
 
 
-def evaluate_labourdonnais_style_bonus(board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-    piece = board_before.piece_at(move.from_square)
-    if not piece:
-        return 0.0, None
-
-    bonus = 0.0
-    note = None
-
-    if board_before.is_castling(move):
-        bonus += 38.0
-        note = "Рокировка! Вводим ладью в бой и готовим решительный штурм."
-
-    if piece.piece_type in {chess.KNIGHT, chess.BISHOP} and board_before.fullmove_number <= 12:
-        back_rank = 0 if board_before.turn == chess.WHITE else 7
-        if chess.square_rank(move.from_square) == back_rank:
-            bonus += 25.0
-            note = "Быстро выводим фигуры в бой — каждый темп на счету!"
-        if move.to_square in EXTENDED_CENTER:
-            bonus += 18.0
-            note = "Фигуры устремляются в центр для комбинационной атаки!"
-
-    if move.to_square in CENTER_SQUARES:
-        bonus += 22.0
-        if not note:
-            note = "Захватываем инициативу в центре в духе французской романтической школы!"
-
-    if board_before.gives_check(move):
-        bonus += 24.0
-        note = "Шах! Не даём сопернику передышки!"
-    elif board_before.is_capture(move):
-        bonus += 14.0
-
-    return bonus, note
+LABOURDONNAIS_STYLE = Style(
+    "labourdonnais",
+    Rule(CASTLING, 38.0, "Рокировка! Вводим ладью в бой и готовим решительный штурм."),
+    Group(
+        piece(*MINOR_PIECES) & by_move(12),
+        Rule(FROM_BACK_RANK, 25.0, "Быстро выводим фигуры в бой — каждый темп на счету!"),
+        Rule(to(EXTENDED_CENTER), 18.0, "Фигуры устремляются в центр для комбинационной атаки!"),
+    ),
+    Rule(
+        to(CENTER_SQUARES), 22.0,
+        "Захватываем инициативу в центре в духе французской романтической школы!", Note.FILL,
+    ),
+    FirstOf(
+        Rule(CHECK, 24.0, "Шах! Не даём сопернику передышки!"),
+        Rule(CAPTURE, 14.0),
+    ),
+)
+evaluate_labourdonnais_style_bonus = LABOURDONNAIS_STYLE.evaluate
 
 
 class LabourdonnaisBot(HistoricalBot):
@@ -71,18 +67,10 @@ class LabourdonnaisBot(HistoricalBot):
     jitter_range = 12.0
     multipv = 8
     opening_book = LABOURDONNAIS_OPENING_BOOK
-
-    def __init__(
-            self,
-            stockfish_path: str | None = None,
-            skill_level: int = 5,
-            uci_elo: int = 1650,
-            search_depth: int = 5,
-    ):
-        super().__init__(stockfish_path, skill_level, uci_elo, search_depth)
-
-    def evaluate_style_bonus(self, board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-        return evaluate_labourdonnais_style_bonus(board_before, move)
+    style = LABOURDONNAIS_STYLE
+    default_skill_level = 5
+    default_uci_elo = 1650
+    default_search_depth = 5
 
 
 labourdonnais_bot = LabourdonnaisBot()

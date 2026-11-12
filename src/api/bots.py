@@ -21,6 +21,7 @@ from src.services.bots.anderssen import anderssen_bot
 from src.services.bots.labourdonnais import labourdonnais_bot
 from src.services.bots.morphy import morphy_bot
 from src.services.bots.paulsen import paulsen_bot
+from src.services.bots.personality import BotPersonalityConfig, PersonalityBot
 from src.services.bots.philidor import philidor_bot, resolve_stockfish_path
 from src.services.bots.staunton import staunton_bot
 from src.services.bots.zukertort import zukertort_bot
@@ -155,6 +156,13 @@ class BotMoveResponse(BaseModel):
     source: str
     comment: str
     thinking_time_ms: int = Field(default=650, description="Рекомендуемое время размышления бота в мс")
+
+
+class CustomBotMoveRequest(BaseModel):
+    config: BotPersonalityConfig = Field(
+        default_factory=BotPersonalityConfig, description="Характер соперника (ползунки, веса фигур, сила)",
+    )
+    fen: str = Field(..., max_length=100, description="Текущая позиция на доске в формате FEN")
 
 
 class BotGameSaveRequest(BaseModel):
@@ -401,6 +409,23 @@ def _prepare_game_kwargs(
     }
 
 
+def _playable_board(fen: str) -> chess.Board:
+    """Позиция, в которой боту есть что ходить; иначе 400."""
+    try:
+        board = chess.Board(fen)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Некорректный формат FEN") from None
+
+    # chess.Board принимает и невозможные позиции (без короля, короли рядом, под шахом сторона,
+    # которая только что ходила) — движок на них может упасть и выбыть из пула.
+    if not board.is_valid():
+        raise HTTPException(status_code=400, detail="Некорректная позиция")
+
+    if board.is_game_over():
+        raise HTTPException(status_code=400, detail="Партия уже завершена")
+    return board
+
+
 @router.get("/list")
 async def get_available_bots():
     """Возвращает список доступных исторических ботов и статус движка Stockfish."""
@@ -425,19 +450,7 @@ async def get_bot_move(payload: BotMoveRequest):
     if bot is None:
         raise HTTPException(status_code=404, detail=f"Бот '{payload.bot_id}' не найден")
 
-    try:
-        board = chess.Board(payload.fen)
-    except ValueError:
-        raise HTTPException(status_code=400, detail="Некорректный формат FEN") from None
-
-    # chess.Board принимает и невозможные позиции (без короля, короли рядом, под шахом сторона,
-    # которая только что ходила) — движок на них может упасть и выбыть из пула.
-    if not board.is_valid():
-        raise HTTPException(status_code=400, detail="Некорректная позиция")
-
-    if board.is_game_over():
-        raise HTTPException(status_code=400, detail="Партия уже завершена")
-
+    board = _playable_board(payload.fen)
     result = await asyncio.to_thread(bot.choose_move, payload.fen)
     thinking_time_ms = calculate_authentic_thinking_time_ms(
         bot_id=payload.bot_id,
@@ -454,6 +467,33 @@ async def get_bot_move(payload: BotMoveRequest):
         source=result["source"],
         comment=result["comment"],
         thinking_time_ms=thinking_time_ms,
+    )
+
+
+@router.post(
+    "/custom-move",
+    response_model=BotMoveResponse,
+    # Общий с /move лимит: та же нагрузка на Stockfish и та же подсказка движка.
+    dependencies=[
+        Depends(rate_limit("bot_move", "RATE_LIMIT_BOT_MOVE")),
+        Depends(forbid_engine_help_during_game),
+    ],
+)
+async def get_custom_bot_move(payload: CustomBotMoveRequest):
+    """Ход соперника, собранного из ползунков характера (src/services/bots/personality.py)."""
+    board = _playable_board(payload.fen)
+    bot = PersonalityBot(payload.config)
+    result = await asyncio.to_thread(bot.choose_move, payload.fen)
+    return BotMoveResponse(
+        bot_id=bot.bot_id,
+        uci=result["uci"],
+        san=result["san"],
+        fen_after=result["fen_after"],
+        source=result["source"],
+        comment=result["comment"],
+        thinking_time_ms=calculate_authentic_thinking_time_ms(
+            bot_id=bot.bot_id, board=board, uci_move=result["uci"], source=result["source"],
+        ),
     )
 
 

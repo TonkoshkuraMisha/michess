@@ -1,12 +1,23 @@
 # --- FILE: src/services/bots/zukertort.py ---
 
-import chess
 
-from src.services.bots.base import (
+from src.services.bots.base import HistoricalBot, load_bot_opening_book
+from src.services.bots.style import (
+    CAPTURE,
+    CASTLING,
     CENTER_SQUARES,
+    CHECK,
     EXTENDED_CENTER,
-    HistoricalBot,
-    load_bot_opening_book,
+    FROM_BACK_RANK,
+    MINOR_PIECES,
+    FirstOf,
+    Group,
+    Note,
+    Rule,
+    Style,
+    by_move,
+    piece,
+    to,
 )
 
 ZUKERTORT_BLUNDER_GUARD_CP = 140.0
@@ -27,38 +38,24 @@ DEFAULT_ZUKERTORT_BOOK: dict[str, list[tuple[str, int, str]]] = {
 ZUKERTORT_OPENING_BOOK = load_bot_opening_book("zukertort", DEFAULT_ZUKERTORT_BOOK)
 
 
-def evaluate_zukertort_style_bonus(board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-    piece = board_before.piece_at(move.from_square)
-    if not piece:
-        return 0.0, None
-
-    bonus = 0.0
-    note = None
-
-    if board_before.is_castling(move):
-        bonus += 40.0
-        note = "Рокировка! Завершаем развитие и готовим тактический прорыв."
-
-    if piece.piece_type in {chess.KNIGHT, chess.BISHOP} and board_before.fullmove_number <= 14:
-        back_rank = 0 if board_before.turn == chess.WHITE else 7
-        if chess.square_rank(move.from_square) == back_rank:
-            bonus += 28.0
-            note = "Гибкое развитие фигур по системе Цукерторта."
-        if move.to_square in EXTENDED_CENTER:
-            bonus += 18.0
-
-    if move.to_square in CENTER_SQUARES:
-        bonus += 22.0
-        if not note:
-            note = "Энергичный захват ключевых центральных полей!"
-
-    if board_before.gives_check(move):
-        bonus += 26.0
-        note = "Шах! Переходим к решительной комбинационной атаке в стиле Лондонского турнира 1883 года!"
-    elif board_before.is_capture(move):
-        bonus += 16.0
-
-    return bonus, note
+ZUKERTORT_STYLE = Style(
+    "zukertort",
+    Rule(CASTLING, 40.0, "Рокировка! Завершаем развитие и готовим тактический прорыв."),
+    Group(
+        piece(*MINOR_PIECES) & by_move(14),
+        Rule(FROM_BACK_RANK, 28.0, "Гибкое развитие фигур по системе Цукерторта."),
+        Rule(to(EXTENDED_CENTER), 18.0),
+    ),
+    Rule(to(CENTER_SQUARES), 22.0, "Энергичный захват ключевых центральных полей!", Note.FILL),
+    FirstOf(
+        Rule(
+            CHECK, 26.0,
+            "Шах! Переходим к решительной комбинационной атаке в стиле Лондонского турнира 1883 года!",
+        ),
+        Rule(CAPTURE, 16.0),
+    ),
+)
+evaluate_zukertort_style_bonus = ZUKERTORT_STYLE.evaluate
 
 
 class ZukertortBot(HistoricalBot):
@@ -71,18 +68,9 @@ class ZukertortBot(HistoricalBot):
     jitter_range = 8.0
     multipv = 8
     opening_book = ZUKERTORT_OPENING_BOOK
-
-    def __init__(
-            self,
-            stockfish_path: str | None = None,
-            skill_level: int = 8,
-            uci_elo: int = 1840,
-            search_depth: int = 6,
-    ):
-        super().__init__(stockfish_path, skill_level, uci_elo, search_depth)
-
-    def evaluate_style_bonus(self, board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-        return evaluate_zukertort_style_bonus(board_before, move)
+    style = ZUKERTORT_STYLE
+    default_skill_level = 8
+    default_uci_elo = 1840
 
 
 zukertort_bot = ZukertortBot()

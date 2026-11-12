@@ -3,8 +3,6 @@
 import chess
 
 from src.services.bots.base import (
-    CENTER_SQUARES,
-    EXTENDED_CENTER,
     PIECE_VALUES,
     HistoricalBot,
     _simulate_human_thinking_time,
@@ -13,6 +11,21 @@ from src.services.bots.base import (
     normalize_fen_key,
     resolve_stockfish_path,
     static_board_eval_cp,
+)
+from src.services.bots.style import (
+    ALWAYS,
+    CENTER_SQUARES,
+    EXTENDED_CENTER,
+    FirstOf,
+    Group,
+    Rule,
+    Style,
+    by_move,
+    pawn_structure_delta,
+    piece,
+    piece_on,
+    side,
+    to,
 )
 
 PHILIDOR_BLUNDER_GUARD_CP = 120.0
@@ -47,72 +60,37 @@ PHILIDOR_OPENING_BOOK["rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq 
 ]
 
 
-def _evaluate_pawn_structure(board: chess.Board, us: chess.Color) -> float:
-    our_pawns = board.pieces(chess.PAWN, us)
-    start_rank = 1 if us == chess.WHITE else 6
-    pawn_files = [chess.square_file(sq) for sq in our_pawns]
+WHITE_PAWN = chess.Piece(chess.PAWN, chess.WHITE)
+BLACK_PAWN = chess.Piece(chess.PAWN, chess.BLACK)
 
-    score = 0.0
-    for sq in our_pawns:
-        f = chess.square_file(sq)
-        r = chess.square_rank(sq)
-        if r != start_rank:
-            score += float(r if us == chess.WHITE else (7 - r)) * 3.0
-        if f < 7 and chess.square(f + 1, r) in our_pawns:
-            score += 15.0
-        support_rank = (r - 1) if us == chess.WHITE else (r + 1)
-        # Диапазон проверяется первым: для крайних горизонталей support_rank выходит за доску.
-        if 0 <= support_rank <= 7 and (
-                (f > 0 and chess.square(f - 1, support_rank) in our_pawns)
-                or (f < 7 and chess.square(f + 1, support_rank) in our_pawns)
-        ):
-            score += 10.0
-
-    doubled_pawns = len(pawn_files) - len(set(pawn_files))
-    score -= float(doubled_pawns) * 20.0
-    return score
-
-
-def evaluate_philidor_style_bonus(board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-    us = board_before.turn
-    piece = board_before.piece_at(move.from_square)
-    if not piece:
-        return 0.0, None
-
-    bonus = 0.0
-    note = None
-
-    if piece.piece_type == chess.PAWN:
-        bonus += 14.0
-        if move.to_square in CENTER_SQUARES:
-            bonus += 35.0
-            note = "Пешки — душа шахмат! Мощный удар в центр доски."
-        elif move.to_square in EXTENDED_CENTER:
-            bonus += 22.0
-            note = "Занимаем пространство пешечной фалангой."
-        elif move.to_square in {chess.C3, chess.C6, chess.D3, chess.D6}:
-            bonus += 16.0
-            note = "Подготавливаем продвижение центральной пешки по методу Филидора."
-
-    if piece.piece_type == chess.KNIGHT and board_before.fullmove_number <= 10:
-        if us == chess.WHITE:
-            if move.to_square == chess.C3 and board_before.piece_at(chess.C2) == chess.Piece(chess.PAWN, chess.WHITE):
-                bonus -= 55.0
-            if move.to_square == chess.F3 and board_before.piece_at(chess.F2) == chess.Piece(chess.PAWN, chess.WHITE):
-                bonus -= 45.0
-        else:
-            if move.to_square == chess.C6 and board_before.piece_at(chess.C7) == chess.Piece(chess.PAWN, chess.BLACK):
-                bonus -= 55.0
-            if move.to_square == chess.F6 and board_before.piece_at(chess.F7) == chess.Piece(chess.PAWN, chess.BLACK):
-                bonus -= 45.0
-
-    structure_before = _evaluate_pawn_structure(board_before, us)
-    board_after = board_before.copy()
-    board_after.push(move)
-    structure_after = _evaluate_pawn_structure(board_after, us)
-    bonus += structure_after - structure_before
-
-    return bonus, note
+PHILIDOR_STYLE = Style(
+    "philidor",
+    Group(
+        piece(chess.PAWN),
+        Rule(ALWAYS, 14.0),
+        FirstOf(
+            Rule(to(CENTER_SQUARES), 35.0, "Пешки — душа шахмат! Мощный удар в центр доски."),
+            Rule(to(EXTENDED_CENTER), 22.0, "Занимаем пространство пешечной фалангой."),
+            Rule(
+                to({chess.C3, chess.C6, chess.D3, chess.D6}), 16.0,
+                "Подготавливаем продвижение центральной пешки по методу Филидора.",
+            ),
+        ),
+    ),
+    # «Конь не должен становиться впереди пешки c»: штраф за Nc3/Nf3 (Nc6/Nf6), пока пешка не пошла.
+    Group(
+        piece(chess.KNIGHT) & by_move(10) & side(chess.WHITE),
+        Rule(to({chess.C3}) & piece_on(chess.C2, WHITE_PAWN), -55.0),
+        Rule(to({chess.F3}) & piece_on(chess.F2, WHITE_PAWN), -45.0),
+    ),
+    Group(
+        piece(chess.KNIGHT) & by_move(10) & side(chess.BLACK),
+        Rule(to({chess.C6}) & piece_on(chess.C7, BLACK_PAWN), -55.0),
+        Rule(to({chess.F6}) & piece_on(chess.F7, BLACK_PAWN), -45.0),
+    ),
+    Rule(ALWAYS, pawn_structure_delta),
+)
+evaluate_philidor_style_bonus = PHILIDOR_STYLE.evaluate
 
 
 class PhilidorBot(HistoricalBot):
@@ -125,18 +103,7 @@ class PhilidorBot(HistoricalBot):
     jitter_range = 8.0
     multipv = 6
     opening_book = PHILIDOR_OPENING_BOOK
-
-    def __init__(
-            self,
-            stockfish_path: str | None = None,
-            skill_level: int = 7,
-            uci_elo: int = 1850,
-            search_depth: int = 6,
-    ):
-        super().__init__(stockfish_path, skill_level, uci_elo, search_depth)
-
-    def evaluate_style_bonus(self, board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-        return evaluate_philidor_style_bonus(board_before, move)
+    style = PHILIDOR_STYLE
 
 
 philidor_bot = PhilidorBot()

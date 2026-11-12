@@ -10,6 +10,7 @@ from pathlib import Path
 import chess
 import chess.engine
 
+from src.services.bots.style import CENTER_SQUARES, EXTENDED_CENTER, Style
 from src.services.engine_pool import get_engine_pool
 
 logger = logging.getLogger(__name__)
@@ -17,12 +18,6 @@ logger = logging.getLogger(__name__)
 BOTS_DIR = Path(__file__).resolve().parent
 BOOKS_DIR = BOTS_DIR / "books"
 PROJECT_ROOT = BOTS_DIR.parent.parent.parent
-
-CENTER_SQUARES = {chess.D4, chess.E4, chess.D5, chess.E5}
-EXTENDED_CENTER = {
-    chess.C4, chess.D4, chess.E4, chess.F4,
-    chess.C5, chess.D5, chess.E5, chess.F5,
-}
 
 PIECE_VALUES = {
     chess.PAWN: 100,
@@ -168,6 +163,27 @@ def static_board_eval_cp(board: chess.Board, perspective: chess.Color) -> float:
     return score
 
 
+def fallback_scores(board: chess.Board) -> dict[chess.Move, float]:
+    """Статический анализатор без движка: каждый ход оценивается по худшему ответу соперника (2 полухода)."""
+    us = board.turn
+    scores: dict[chess.Move, float] = {}
+    for mv in board.legal_moves:
+        b1 = board.copy()
+        b1.push(mv)
+        if b1.is_checkmate():
+            scores[mv] = 100000.0
+            continue
+        worst_reply_score = 100000.0
+        for reply in b1.legal_moves:
+            b2 = b1.copy()
+            b2.push(reply)
+            s = static_board_eval_cp(b2, us)
+            if s < worst_reply_score:
+                worst_reply_score = s
+        scores[mv] = worst_reply_score if b1.legal_moves.count() > 0 else 0.0
+    return scores
+
+
 def analyse_with_stockfish(
         board: chess.Board,
         engine_path: str | None,
@@ -213,8 +229,10 @@ def analyse_with_stockfish(
 
 class HistoricalBot:
     """
-    Базовый класс исторической шахматной персоны.
-    Наследники задают только параметры силы, дебютную книгу и функцию стилевого бонуса.
+    Бот со стилем: дебютная книга, затем кандидаты Stockfish (MultiPV) или статического анализатора,
+    из которых стиль (src/services/bots/style.py) выбирает ход внутри окна blunder_guard_cp от лучшего.
+    Исторические боты задают только параметры силы, книгу и пресет стиля; персоналии с ползунками —
+    src/services/bots/personality.py.
     """
 
     bot_id: str = "base"
@@ -223,20 +241,25 @@ class HistoricalBot:
     blunder_guard_cp: float = 130.0
     jitter_range: float = 8.0
     multipv: int = 6
+    time_limit: float = 0.25
     opening_book: dict[str, list[tuple[str, int, str]]] = {}
+    style: Style = Style("neutral")
+    default_skill_level: int = 7
+    default_uci_elo: int = 1850
+    default_search_depth: int = 6
 
     def __init__(
             self,
             stockfish_path: str | None = None,
-            skill_level: int = 7,
-            uci_elo: int = 1850,
-            search_depth: int = 6,
+            skill_level: int | None = None,
+            uci_elo: int | None = None,
+            search_depth: int | None = None,
     ):
         self._explicit_stockfish_path = stockfish_path
         self.stockfish_path = resolve_stockfish_path(stockfish_path)
-        self.skill_level = skill_level
-        self.uci_elo = uci_elo
-        self.search_depth = search_depth
+        self.skill_level = self.default_skill_level if skill_level is None else skill_level
+        self.uci_elo: int | None = self.default_uci_elo if uci_elo is None else uci_elo
+        self.search_depth = self.default_search_depth if search_depth is None else search_depth
 
     def _get_active_engine_path(self) -> str | None:
         if self._explicit_stockfish_path is not None:
@@ -247,94 +270,62 @@ class HistoricalBot:
         return self.stockfish_path
 
     def evaluate_style_bonus(self, board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-        """Переопределяется в подклассах для придания уникального шахматного стиля."""
-        return 0.0, None
+        return self.style.evaluate(board_before, move)
 
-    def choose_move(self, fen: str) -> dict:
-        board = chess.Board(fen)
-        if board.is_game_over():
-            raise ValueError("Game is already over")
+    def _book_move(self, board: chess.Board) -> tuple[chess.Move, str] | None:
+        candidates = self.opening_book.get(normalize_fen_key(board))
+        if not candidates:
+            return None
+        valid_book_moves = []
+        for item in candidates:
+            uci_str, weight, comment = item[0], int(item[1]), item[2]
+            if uci_str == "0000":
+                continue
+            try:
+                move = chess.Move.from_uci(uci_str)
+            except ValueError:
+                continue
+            if move in board.legal_moves:
+                valid_book_moves.append((move, max(weight, 1), comment))
+        if not valid_book_moves:
+            return None
+        moves, weights, comments = zip(*valid_book_moves, strict=True)
+        idx = random.choices(range(len(moves)), weights=weights, k=1)[0]
+        return moves[idx], comments[idx]
 
-        # 1. Поиск хода в дебютной книге чемпиона
-        fen_key = normalize_fen_key(board)
-        if fen_key in self.opening_book:
-            candidates = self.opening_book[fen_key]
-            valid_book_moves = []
-            for item in candidates:
-                uci_str, weight, comment = item[0], int(item[1]), item[2]
-                if uci_str == "0000":
-                    continue
-                try:
-                    move = chess.Move.from_uci(uci_str)
-                except ValueError:
-                    continue
-                if move in board.legal_moves:
-                    valid_book_moves.append((move, max(weight, 1), comment))
-
-            if valid_book_moves:
-                _simulate_human_thinking_time(board, is_book_move=True)
-                moves, weights, comments = zip(*valid_book_moves, strict=True)
-                idx = random.choices(range(len(moves)), weights=weights, k=1)[0]
-                chosen_move = moves[idx]
-                san = board.san(chosen_move)
-                board.push(chosen_move)
-                return {
-                    "uci": chosen_move.uci(),
-                    "san": san,
-                    "fen_after": board.fen(),
-                    "source": "opening_book",
-                    "comment": comments[idx],
-                }
-
-        _simulate_human_thinking_time(board, is_book_move=False)
-
-        # 2. Тактический расчёт Stockfish
+    def _candidate_scores(self, board: chess.Board) -> tuple[dict[chess.Move, float], bool, str | None]:
+        """Оценки кандидатов (сантипешки за ходящую сторону), был ли это движок, и путь к нему."""
         engine_path = self._get_active_engine_path() if self.stockfish_path is not None else None
-        base_scores = analyse_with_stockfish(
+        scores = analyse_with_stockfish(
             board=board,
             engine_path=engine_path,
             skill_level=self.skill_level,
             uci_elo=self.uci_elo,
             depth=self.search_depth,
-            time_limit=0.25,
+            time_limit=self.time_limit,
             multipv=self.multipv,
         )
+        if scores:
+            return scores, True, engine_path
+        return fallback_scores(board), False, engine_path
 
-        used_stockfish = bool(base_scores)
-        # Fallback-расчёт при отсутствии бинарника Stockfish
-        if not base_scores:
-            us = board.turn
-            for mv in board.legal_moves:
-                b1 = board.copy()
-                b1.push(mv)
-                if b1.is_checkmate():
-                    base_scores[mv] = 100000.0
-                    continue
-                worst_reply_score = 100000.0
-                for reply in b1.legal_moves:
-                    b2 = b1.copy()
-                    b2.push(reply)
-                    s = static_board_eval_cp(b2, us)
-                    if s < worst_reply_score:
-                        worst_reply_score = s
-                base_scores[mv] = worst_reply_score if b1.legal_moves.count() > 0 else 0.0
-
-        # 3. Коридор допустимой уступки + индивидуальный стилевой бонус чемпиона
-        max_tactical_cp = max(base_scores.values())
+    def _select_move(
+            self, board: chess.Board, scores: dict[chess.Move, float],
+    ) -> tuple[chess.Move, str | None]:
+        """Лучший по сумме «оценка + стиль + разброс» среди кандидатов в окне blunder_guard_cp."""
+        max_tactical_cp = max(scores.values())
         candidate_scores = {
-                               mv: cp for mv, cp in base_scores.items()
-                               if cp >= max_tactical_cp - self.blunder_guard_cp
-                           } or base_scores
+            mv: cp for mv, cp in scores.items()
+            if cp >= max_tactical_cp - self.blunder_guard_cp
+        } or scores
 
         best_move = None
         best_total_score = -float("inf")
         best_comment = None
-
         for mv, tactical_cp in candidate_scores.items():
             style_bonus, note = self.evaluate_style_bonus(board, mv)
             jitter = random.uniform(-self.jitter_range, self.jitter_range)
             total_score = tactical_cp + style_bonus + jitter
-
             if total_score > best_total_score:
                 best_total_score = total_score
                 best_move = mv
@@ -342,6 +333,37 @@ class HistoricalBot:
 
         if best_move is None:
             best_move = next(iter(board.legal_moves))
+        return best_move, best_comment
+
+    def _comment_for(self, board: chess.Board, move: chess.Move, note: str | None) -> str:
+        return note or self.default_comment
+
+    def choose_move(self, fen: str) -> dict:
+        board = chess.Board(fen)
+        if board.is_game_over():
+            raise ValueError("Game is already over")
+
+        # 1. Дебютная книга
+        book = self._book_move(board)
+        if book is not None:
+            chosen_move, comment = book
+            _simulate_human_thinking_time(board, is_book_move=True)
+            san = board.san(chosen_move)
+            board.push(chosen_move)
+            return {
+                "uci": chosen_move.uci(),
+                "san": san,
+                "fen_after": board.fen(),
+                "source": "opening_book",
+                "comment": comment,
+            }
+
+        _simulate_human_thinking_time(board, is_book_move=False)
+
+        # 2. Кандидаты движка (или статического анализатора), 3. выбор по стилю
+        scores, used_stockfish, engine_path = self._candidate_scores(board)
+        best_move, note = self._select_move(board, scores)
+        comment = self._comment_for(board, best_move, note)
 
         san = board.san(best_move)
         board.push(best_move)
@@ -361,5 +383,5 @@ class HistoricalBot:
             "fen_after": board.fen(),
             "source": self.engine_source_name,
             "engine_backend": engine_backend,
-            "comment": best_comment or self.default_comment,
+            "comment": comment,
         }

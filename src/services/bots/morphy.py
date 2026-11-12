@@ -2,11 +2,24 @@
 
 import chess
 
-from src.services.bots.base import (
+from src.services.bots.base import HistoricalBot, load_bot_opening_book
+from src.services.bots.style import (
+    CAPTURE,
+    CASTLING,
     CENTER_SQUARES,
+    CHECK,
     EXTENDED_CENTER,
-    HistoricalBot,
-    load_bot_opening_book,
+    FROM_BACK_RANK,
+    MINOR_PIECES,
+    FirstOf,
+    Group,
+    Note,
+    Rule,
+    Style,
+    by_move,
+    piece,
+    to,
+    to_file,
 )
 
 MORPHY_BLUNDER_GUARD_CP = 150.0
@@ -29,48 +42,25 @@ DEFAULT_MORPHY_BOOK: dict[str, list[tuple[str, int, str]]] = {
 MORPHY_OPENING_BOOK = load_bot_opening_book("morphy", DEFAULT_MORPHY_BOOK)
 
 
-def evaluate_morphy_style_bonus(board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-    piece = board_before.piece_at(move.from_square)
-    if not piece:
-        return 0.0, None
-
-    bonus = 0.0
-    note = None
-
-    if board_before.is_castling(move):
-        bonus += 45.0
-        note = "Рокировка! Уводим короля в безопасность и подключаем ладью к борьбе за открытые линии."
-
-    if piece.piece_type in {chess.KNIGHT, chess.BISHOP} and board_before.fullmove_number <= 14:
-        back_rank = 0 if board_before.turn == chess.WHITE else 7
-        if chess.square_rank(move.from_square) == back_rank:
-            bonus += 32.0
-            note = "Каждая фигура должна вступить в бой! Быстрое развитие — секрет сокрушительной атаки."
-        if move.to_square in EXTENDED_CENTER:
-            bonus += 18.0
-            if not note:
-                note = "Размещаем фигуры в центре на идеальных ударных позициях!"
-
-    if piece.piece_type == chess.ROOK:
-        to_file = chess.square_file(move.to_square)
-        if to_file in (3, 4):
-            bonus += 26.0
-            note = "Ладья занимает центральную вертикаль для решающего вторжения!"
-
-    if move.to_square in CENTER_SQUARES:
-        bonus += 24.0
-        if not note:
-            note = "Вскрываем центр, чтобы дать простор нашим слонам и ладьям!"
-
-    if board_before.gives_check(move):
-        bonus += 28.0
-        note = "Шах с выигрышем темпа! Не даём сопернику времени перевести дух."
-    elif board_before.is_capture(move):
-        bonus += 16.0
-        if not note:
-            note = "Устраняем защитника и вскрываем линии для фигурной атаки!"
-
-    return bonus, note
+MORPHY_STYLE = Style(
+    "morphy",
+    Rule(CASTLING, 45.0, "Рокировка! Уводим короля в безопасность и подключаем ладью к борьбе за открытые линии."),
+    Group(
+        piece(*MINOR_PIECES) & by_move(14),
+        Rule(
+            FROM_BACK_RANK, 32.0,
+            "Каждая фигура должна вступить в бой! Быстрое развитие — секрет сокрушительной атаки.",
+        ),
+        Rule(to(EXTENDED_CENTER), 18.0, "Размещаем фигуры в центре на идеальных ударных позициях!", Note.FILL),
+    ),
+    Rule(piece(chess.ROOK) & to_file(3, 4), 26.0, "Ладья занимает центральную вертикаль для решающего вторжения!"),
+    Rule(to(CENTER_SQUARES), 24.0, "Вскрываем центр, чтобы дать простор нашим слонам и ладьям!", Note.FILL),
+    FirstOf(
+        Rule(CHECK, 28.0, "Шах с выигрышем темпа! Не даём сопернику времени перевести дух."),
+        Rule(CAPTURE, 16.0, "Устраняем защитника и вскрываем линии для фигурной атаки!", Note.FILL),
+    ),
+)
+evaluate_morphy_style_bonus = MORPHY_STYLE.evaluate
 
 
 class MorphyBot(HistoricalBot):
@@ -83,18 +73,9 @@ class MorphyBot(HistoricalBot):
     jitter_range = 8.0
     multipv = 8
     opening_book = MORPHY_OPENING_BOOK
-
-    def __init__(
-            self,
-            stockfish_path: str | None = None,
-            skill_level: int = 8,
-            uci_elo: int = 1850,
-            search_depth: int = 6,
-    ):
-        super().__init__(stockfish_path, skill_level, uci_elo, search_depth)
-
-    def evaluate_style_bonus(self, board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-        return evaluate_morphy_style_bonus(board_before, move)
+    style = MORPHY_STYLE
+    default_skill_level = 8
+    default_uci_elo = 1850
 
 
 morphy_bot = MorphyBot()

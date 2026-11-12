@@ -1,12 +1,22 @@
 # --- FILE: src/services/bots/anderssen.py ---
 
-import chess
 
-from src.services.bots.base import (
+from src.services.bots.base import HistoricalBot, load_bot_opening_book
+from src.services.bots.style import (
+    CAPTURE,
+    CASTLING,
     CENTER_SQUARES,
+    CHECK,
     EXTENDED_CENTER,
-    HistoricalBot,
-    load_bot_opening_book,
+    FROM_BACK_RANK,
+    MINOR_PIECES,
+    Group,
+    Note,
+    Rule,
+    Style,
+    by_move,
+    piece,
+    to,
 )
 
 ANDERSSEN_BLUNDER_GUARD_CP = 220.0
@@ -28,42 +38,19 @@ DEFAULT_ANDERSSEN_BOOK: dict[str, list[tuple[str, int, str]]] = {
 ANDERSSEN_OPENING_BOOK = load_bot_opening_book("anderssen", DEFAULT_ANDERSSEN_BOOK)
 
 
-def evaluate_anderssen_style_bonus(board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-    piece = board_before.piece_at(move.from_square)
-    if not piece:
-        return 0.0, None
-
-    bonus = 0.0
-    note = None
-
-    if board_before.gives_check(move):
-        bonus += 36.0
-        note = "Шах! В духе «Бессмертной партии» — ни одного темпа передышки королю соперника!"
-
-    if board_before.is_capture(move):
-        bonus += 24.0
-        if not note:
-            note = "Вскрываем линии и устраняем защитные редуты неприятеля!"
-
-    if board_before.is_castling(move):
-        bonus += 38.0
-        note = "Рокировка! Подключаем ладью к решающему штурму."
-
-    if piece.piece_type in {chess.KNIGHT, chess.BISHOP} and board_before.fullmove_number <= 14:
-        back_rank = 0 if board_before.turn == chess.WHITE else 7
-        if chess.square_rank(move.from_square) == back_rank:
-            bonus += 28.0
-            if not note:
-                note = "Мобилизуем лёгкие фигуры для комбинационного удара!"
-        if move.to_square in EXTENDED_CENTER:
-            bonus += 18.0
-
-    if move.to_square in CENTER_SQUARES:
-        bonus += 22.0
-        if not note:
-            note = "Борьба за инициативу и центральные диагонали!"
-
-    return bonus, note
+ANDERSSEN_STYLE = Style(
+    "anderssen",
+    Rule(CHECK, 36.0, "Шах! В духе «Бессмертной партии» — ни одного темпа передышки королю соперника!"),
+    Rule(CAPTURE, 24.0, "Вскрываем линии и устраняем защитные редуты неприятеля!", Note.FILL),
+    Rule(CASTLING, 38.0, "Рокировка! Подключаем ладью к решающему штурму."),
+    Group(
+        piece(*MINOR_PIECES) & by_move(14),
+        Rule(FROM_BACK_RANK, 28.0, "Мобилизуем лёгкие фигуры для комбинационного удара!", Note.FILL),
+        Rule(to(EXTENDED_CENTER), 18.0),
+    ),
+    Rule(to(CENTER_SQUARES), 22.0, "Борьба за инициативу и центральные диагонали!", Note.FILL),
+)
+evaluate_anderssen_style_bonus = ANDERSSEN_STYLE.evaluate
 
 
 class AnderssenBot(HistoricalBot):
@@ -76,18 +63,9 @@ class AnderssenBot(HistoricalBot):
     jitter_range = 10.0
     multipv = 8
     opening_book = ANDERSSEN_OPENING_BOOK
-
-    def __init__(
-            self,
-            stockfish_path: str | None = None,
-            skill_level: int = 8,
-            uci_elo: int = 1820,
-            search_depth: int = 6,
-    ):
-        super().__init__(stockfish_path, skill_level, uci_elo, search_depth)
-
-    def evaluate_style_bonus(self, board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
-        return evaluate_anderssen_style_bonus(board_before, move)
+    style = ANDERSSEN_STYLE
+    default_skill_level = 8
+    default_uci_elo = 1820
 
 
 anderssen_bot = AnderssenBot()
