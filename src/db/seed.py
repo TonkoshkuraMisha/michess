@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.session import AsyncSessionLocal
 from src.models.game import Game, GameStatus
 from src.models.user import User
+from src.services.game_engine import normalize_pgn_text
 
 logger = logging.getLogger(__name__)
 
@@ -153,7 +154,7 @@ def _download_champion_pgn_sync(champ_id: str) -> Path | None:
                     raw_bytes = zf.read(pgn_members[0])
                     text = raw_bytes.decode("utf-8", errors="ignore")
                     if "[Event " in text:
-                        target_path.write_text(text, encoding="utf-8")
+                        target_path.write_text(text, encoding="utf-8", newline="")
                         return target_path
     except Exception as exc:
         logger.warning("Не удалось скачать ZIP для %s (%s), пробуем прямой .pgn...", champ_id, exc)
@@ -161,7 +162,7 @@ def _download_champion_pgn_sync(champ_id: str) -> Path | None:
     try:
         resp = requests.get(pgn_url, headers=headers, timeout=30)
         if resp.status_code == 200 and "[Event " in resp.text:
-            target_path.write_text(resp.text, encoding="utf-8")
+            target_path.write_text(resp.text, encoding="utf-8", newline="")
             return target_path
     except Exception as exc:
         logger.error("Ошибка загрузки PGN для %s: %s", champ_id, exc)
@@ -179,11 +180,13 @@ def _is_target_champion_name(raw_name: str, champ_key: str, meta: dict) -> bool:
 
 
 def _split_pgn_games(content: str) -> list[str]:
-    cleaned = content.lstrip("\ufeff").replace("\r\n", "\n").replace("\r", "\n").strip()
+    # Файлы, записанные на Windows в текстовом режиме поверх виндовых переводов строк архива,
+    # содержат «\r\r\n» — такие уже лежат на машинах разработчиков. «\r+\n» — один перевод строки.
+    cleaned = re.sub(r"\r+\n|\r", "\n", content.lstrip("\ufeff")).strip()
     if not cleaned:
         return []
     chunks = re.split(r'(?m)^(?=\[Event\s+")', cleaned)
-    return [c.strip() for c in chunks if c.strip() and "[White " in c]
+    return [normalize_pgn_text(c) for c in chunks if c.strip() and "[White " in c]
 
 
 async def ensure_champion_seeded(db: AsyncSession, username_or_id: str) -> User | None:

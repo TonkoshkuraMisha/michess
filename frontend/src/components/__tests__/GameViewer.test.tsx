@@ -201,6 +201,22 @@ describe('GameViewer', () => {
         expect(await screen.findByText('Input should be a valid integer')).toBeInTheDocument();
     });
 
+    it('пустой анализ партии с ходами — понятная ошибка вместо «100 %» без графика', async () => {
+        const empty = {...ANALYSIS, white: sideStats(100), black: sideStats(100), moves: []};
+        stubApi({
+            pgn: {ok: true, text: FOOLS_MATE_PGN},
+            cached: {ok: true, body: empty},
+            analyze: {ok: true, body: empty},
+        });
+        renderViewer();
+
+        // Пустой кэш не показывается — доступна кнопка запуска анализа.
+        fireEvent.click(await screen.findByRole('button', {name: 'Компьютерный анализ'}));
+
+        expect(await screen.findByText(/Сервер вернул пустой анализ/)).toBeInTheDocument();
+        expect(screen.queryByText(/100(\.0)?%/)).toBeNull();
+    });
+
     it('недоступный PGN — сообщение об ошибке', async () => {
         stubApi({pgn: {ok: false, status: 404}});
         renderViewer();
