@@ -17,6 +17,10 @@ from src.services import puzzles as service
 router = APIRouter(dependencies=[Depends(rate_limit("puzzles", "RATE_LIMIT_PUZZLES"))])
 
 
+class TimedStartRequest(BaseModel):
+    minutes: int = Field(..., description="3 или 5")
+
+
 class MoveRequest(BaseModel):
     move: str = Field(..., min_length=4, max_length=5, description="Ход решающего в UCI")
 
@@ -49,6 +53,33 @@ async def daily(user: User = Depends(get_current_user), db: AsyncSession = Depen
         raise _http(exc) from exc
     await service.start(user, puzzle, daily=True)
     return {**service.public_view(puzzle), "daily": True}
+
+
+@router.post("/timed/start")
+async def timed_start(payload: TimedStartRequest, user: User = Depends(get_current_user)):
+    """Начать забег на время (предыдущий незаконченный отменяется)."""
+    try:
+        return await service.start_run(user, payload.minutes)
+    except service.PuzzleError as exc:
+        raise _http(exc) from exc
+
+
+@router.get("/timed/next")
+async def timed_next(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Следующая задача забега: сложнее с каждой решённой; рейтинг не меняет."""
+    try:
+        puzzle, run = await service.next_in_run(db, user)
+    except service.PuzzleError as exc:
+        raise _http(exc) from exc
+    return {**service.public_view(puzzle), "run": run}
+
+
+@router.post("/timed/finish")
+async def timed_finish(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    try:
+        return await service.finish_run(db, user)
+    except service.PuzzleError as exc:
+        raise _http(exc) from exc
 
 
 @router.post("/{puzzle_id}/move")

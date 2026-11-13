@@ -54,6 +54,9 @@ class User(Base):
     # Рейтинг решателя задач (таск 13.1) — отдельная категория, на игровые рейтинги не влияет.
     puzzle_rating: Mapped[int] = mapped_column(Integer, default=1500, server_default="1500", nullable=False)
     puzzle_games: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    # Личные рекорды режима на время (таск 13.3): решено задач за 3 и за 5 минут.
+    puzzle_best_3: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    puzzle_best_5: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
 
     # Исторический бот (играбельный AI) или архивный исторический игрок (партии из PGN,
     # посмотреть — нельзя сыграть) — не реальный зарегистрированный игрок, вне таблицы лидеров.
