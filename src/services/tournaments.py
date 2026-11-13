@@ -9,7 +9,7 @@
 
 import json
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Literal
 
 from sqlalchemy import select
@@ -25,6 +25,12 @@ from src.services.bots.calibration import strength_of
 from src.services.rating import classify_time_control
 
 Format = Literal["round_robin", "knockout"]
+
+# Партию ботов, которую забрал и не доиграл воркер (упал), через CLAIM_TIMEOUT можно забрать снова.
+CLAIM_TIMEOUT = timedelta(minutes=15)
+# Поставленную в очередь, но не начатую партию ботов ставим снова не раньше чем через REQUEUE_AFTER (таск A.1):
+# страница турнира опрашивает сервер каждые 3 с, и без этого очередь Celery росла бы с каждым опросом.
+REQUEUE_AFTER = timedelta(minutes=2)
 SIZES: dict[str, tuple[int, ...]] = {"round_robin": rules.ROUND_ROBIN_SIZES, "knockout": rules.KNOCKOUT_SIZES}
 
 
@@ -77,8 +83,11 @@ async def _entrant(db: AsyncSession, owner: User, spec: ParticipantSpec, order: 
 
 
 async def active_tournament(db: AsyncSession, owner_id: int) -> Tournament | None:
+    """Идущий турнир игрока; сданный (боты ещё доигрывают) новому турниру не мешает."""
     return (await db.execute(
-        select(Tournament).where(Tournament.owner_id == owner_id, Tournament.status == "active").limit(1)
+        select(Tournament).where(
+            Tournament.owner_id == owner_id, Tournament.status == "active", Tournament.withdrawn_at.is_(None),
+        ).limit(1)
     )).scalar_one_or_none()
 
 
@@ -284,3 +293,90 @@ async def simulatable_games(db: AsyncSession, tournament: Tournament) -> list[To
         if g.round == tournament.current_round and g.result is None
         and g.white_seat not in humans and g.black_seat not in humans
     ]
+
+
+
+def _aware(moment: datetime | None) -> datetime | None:
+    """SQLite в тестах отдаёт время без пояса — считаем его UTC."""
+    return moment.replace(tzinfo=UTC) if moment is not None and moment.tzinfo is None else moment
+
+
+async def mark_for_queue(db: AsyncSession, tournament: Tournament) -> list[int]:
+    """
+    Партии ботов, которые пора поставить в очередь: не начатые (или брошенные упавшим воркером) и не поставленные
+    недавно. Отмечает их queued_at и возвращает id — их публикует вызывающий.
+    """
+    now = datetime.now(UTC)
+    ids = []
+    for game in await simulatable_games(db, tournament):
+        started, queued = _aware(game.started_at), _aware(game.queued_at)
+        if started is not None and started > now - CLAIM_TIMEOUT:
+            continue
+        if queued is not None and queued > now - REQUEUE_AFTER and started is None:
+            continue
+        game.queued_at = now
+        ids.append(game.id)
+    if ids:
+        await db.commit()
+    return ids
+
+
+def opponent_session_key(opponent: TournamentPlayer) -> str:
+    """Ключ соперника для сессии честной партии (src/services/ladder.py): так его ходы запрашивает клиент."""
+    if opponent.kind in ("bot", "archetype") and opponent.bot_key:
+        return opponent.bot_key
+    return "custom:other"
+
+
+def loss_for(color: str) -> str:
+    return "0-1" if color == "white" else "1-0"
+
+
+@dataclass(frozen=True)
+class StartResult:
+    played: PlayerGame
+    # Партию уже начинали и бросили: повторный старт — поражение (таск A.2).
+    forfeited: bool
+
+
+async def start_player_game(db: AsyncSession, user: User, tournament_game_id: int) -> StartResult:
+    """
+    Игрок начинает свою партию турнира. Первый старт — захват партии и сессия честной игры; повторный старт уже
+    начатой партии — поражение: иначе проигрываемую партию можно было бы бросить и начать заново.
+    """
+    from src.services import ladder
+
+    played = await player_game(db, user, tournament_game_id)
+    if played.game.started_at is not None:
+        await ladder.clear_session(user.id, "tournament")
+        await record_result(db, played.tournament, played.game, loss_for(played.color))
+        return StartResult(played, forfeited=True)
+    played.game.started_at = datetime.now(UTC)
+    await db.commit()
+    await ladder.open_session(
+        user.id, opponent_session_key(played.opponent), played.color, scope="tournament",
+        tournament_game_id=played.game.id,
+    )
+    return StartResult(played, forfeited=False)
+
+
+async def withdraw(db: AsyncSession, user: User, tournament: Tournament) -> None:
+    """Игрок сдаёт турнир: его несыгранные партии — поражения, партии ботов доигрываются сами (таск A.3)."""
+    from src.services import ladder
+
+    if tournament.status != "active" or tournament.withdrawn_at is not None:
+        raise DomainError("tournament_game_closed")
+    mine = next((p.seat for p in await players_of(db, tournament.id) if p.user_id == user.id), None)
+    tournament.withdrawn_at = datetime.now(UTC)
+    await db.commit()
+    await ladder.clear_session(user.id, "tournament")
+    while True:
+        await db.refresh(tournament)
+        pending = [
+            g for g in await games_of(db, tournament.id)
+            if g.result is None and mine in (g.white_seat, g.black_seat)
+        ]
+        if not pending or tournament.status != "active":
+            return
+        game = pending[0]
+        await record_result(db, tournament, game, loss_for("white" if game.white_seat == mine else "black"))

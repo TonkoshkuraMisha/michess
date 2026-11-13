@@ -18,6 +18,7 @@ import {listPersonalities} from '../../services/personalities';
 import type {Personality} from '../../services/personalities';
 import {
     botGamesRunning, createTournament, gameStart, getTournament, listTournaments, myPendingGame, participantName,
+    startMyGame, withdrawTournament,
 } from '../../services/tournaments';
 import type {
     ParticipantKind, Tournament, TournamentFormat, TournamentGame, TournamentSummary,
@@ -196,6 +197,8 @@ export function TournamentView() {
     const [tournament, setTournament] = useState<Tournament | null>(null);
     const [error, setError] = useState<UiMessage | null>(null);
     const [myName, setMyName] = useState('');
+    const [notice, setNotice] = useState<UiMessage | null>(null);
+    const [reloadKey, setReloadKey] = useState(0);
 
     useEffect(() => {
         let alive = true;
@@ -213,7 +216,7 @@ export function TournamentView() {
             alive = false;
             if (timer) clearTimeout(timer);
         };
-    }, [id]);
+    }, [id, reloadKey]);
 
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -232,10 +235,33 @@ export function TournamentView() {
     const me = tournament.players.find((p) => p.seat === tournament.my_seat);
     const winner = tournament.players.find((p) => p.place === 1);
 
-    const play = () => {
+    const play = async () => {
         if (!pending) return;
-        const start = gameStart(tournament, pending, name(pending.white_seat === tournament.my_seat ? pending.black_seat : pending.white_seat));
-        navigate('/', {state: {tournamentGame: start}});
+        try {
+            // Партию начинает сервер (таск A.2): брошенная и начатая заново партия засчитывается поражением.
+            const started = await startMyGame(tournament.id, pending.id);
+            if (started.forfeited) {
+                setNotice({key: 'tournaments.forfeitedAbandoned'});
+                setReloadKey((k) => k + 1);
+                return;
+            }
+        } catch (err) {
+            setNotice(errorMessage(err, 'tournaments.loadFailed'));
+            return;
+        }
+        const opponentSeat = pending.white_seat === tournament.my_seat ? pending.black_seat : pending.white_seat;
+        navigate('/', {state: {tournamentGame: gameStart(tournament, pending, name(opponentSeat))}});
+    };
+
+    const withdraw = async () => {
+        if (!window.confirm(t('tournaments.withdrawConfirm'))) return;
+        try {
+            setTournament(await withdrawTournament(tournament.id));
+            setNotice({key: 'tournaments.withdrawn'});
+            setReloadKey((k) => k + 1);
+        } catch (err) {
+            setNotice(errorMessage(err, 'tournaments.loadFailed'));
+        }
     };
 
     return (
@@ -252,6 +278,7 @@ export function TournamentView() {
                 </span>
             </header>
 
+            {notice && <p role="status" className="text-sm text-amber-200" data-testid="tournament-notice">{renderUiMessage(notice, t)}</p>}
             {tournament.status === 'active' && (
                 <div className="bg-acacia p-3 rounded-lg border-2 border-acacia-dark flex flex-wrap items-center gap-3">
                     {pending ? (
@@ -263,6 +290,12 @@ export function TournamentView() {
                             </button>
                         </>
                     ) : botGamesRunning(tournament) && <span className="animate-pulse">{t('tournaments.botsPlaying')}</span>}
+                    {!tournament.withdrawn && (
+                        <button type="button" onClick={withdraw}
+                                className="ml-auto px-3 py-1.5 rounded-md bg-black/40 border border-rose-700/60 text-rose-200 hover:bg-black/60 cursor-pointer">
+                            {t('tournaments.withdraw')}
+                        </button>
+                    )}
                 </div>
             )}
             {tournament.status === 'finished' && winner && (

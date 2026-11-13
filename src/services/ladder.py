@@ -12,6 +12,9 @@
 Такая партия сохраняется в архив, но рейтинг и ступень лестницы не меняет — причину видно игроку.
 Новая партия при незавершённой предыдущей засчитывает предыдущую как поражение (иначе неудачные
 партии можно было бы просто бросать).
+
+Тот же механизм сторожит партию турнира (таск A.2): у сессии своя область (SCOPES) — «ladder» или
+«tournament», — проверки ходов и анализа действуют на обе.
 """
 
 import json
@@ -43,12 +46,17 @@ class Rung:
 
 @dataclass
 class LadderSession:
-    rung_key: str
+    rung_key: str  # ключ соперника: id бота, «archetype:<id>» или «custom:other»
     color: str  # цвет игрока
     started_at: float
     max_ply: int = -1
     last_fen: str | None = None
     assisted: str | None = None
+    tournament_game_id: int | None = None
+
+
+Scope = str  # "ladder" | "tournament"
+SCOPES: tuple[Scope, ...] = ("ladder", "tournament")
 
 
 def rungs() -> list[Rung]:
@@ -85,66 +93,74 @@ def opponent_key(bot_id: str, config: BotPersonalityConfig | None) -> str:
     return "custom:other"
 
 
-def _key(user_id: int) -> str:
-    return f"ladder:session:{user_id}"
+def _key(user_id: int, scope: Scope = "ladder") -> str:
+    return f"{scope}:session:{user_id}"
 
 
-async def get_session(user_id: int) -> LadderSession | None:
-    raw = await redis_module.redis_client.get(_key(user_id))
+async def get_session(user_id: int, scope: Scope = "ladder") -> LadderSession | None:
+    raw = await redis_module.redis_client.get(_key(user_id, scope))
     if not raw:
         return None
     return LadderSession(**json.loads(raw))
 
 
-async def _store(user_id: int, session: LadderSession) -> None:
-    await redis_module.redis_client.set(_key(user_id), json.dumps(asdict(session)), ex=LADDER_SESSION_TTL_S)
+async def _store(user_id: int, session: LadderSession, scope: Scope = "ladder") -> None:
+    await redis_module.redis_client.set(_key(user_id, scope), json.dumps(asdict(session)), ex=LADDER_SESSION_TTL_S)
 
 
-async def clear_session(user_id: int) -> None:
-    await redis_module.redis_client.delete(_key(user_id))
+async def clear_session(user_id: int, scope: Scope = "ladder") -> None:
+    await redis_module.redis_client.delete(_key(user_id, scope))
 
 
-async def open_session(user_id: int, rung: Rung, color: str) -> LadderSession:
-    session = LadderSession(rung_key=rung.key, color=color, started_at=time.time())
-    await _store(user_id, session)
+async def open_session(
+        user_id: int, rung: Rung | str, color: str, scope: Scope = "ladder", tournament_game_id: int | None = None,
+) -> LadderSession:
+    key = rung if isinstance(rung, str) else rung.key
+    session = LadderSession(rung_key=key, color=color, started_at=time.time(), tournament_game_id=tournament_game_id)
+    await _store(user_id, session, scope)
     return session
 
 
-async def _mark(user_id: int, session: LadderSession, reason: str) -> None:
+async def _mark(user_id: int, session: LadderSession, reason: str, scope: Scope) -> None:
     if session.assisted is None:
         session.assisted = reason
-    await _store(user_id, session)
+    await _store(user_id, session, scope)
 
 
 async def note_analysis(user_id: int | None) -> None:
-    """Анализ позиции движком во время партии лестницы — подсказка."""
+    """Анализ позиции движком во время партии лестницы или турнира — подсказка."""
     if user_id is None:
         return
-    session = await get_session(user_id)
-    if session is not None:
-        await _mark(user_id, session, "engine_analysis")
+    for scope in SCOPES:
+        session = await get_session(user_id, scope)
+        if session is not None:
+            await _mark(user_id, session, "engine_analysis", scope)
 
 
 async def note_bot_move_request(user_id: int | None, board: chess.Board, requested_key: str) -> None:
-    """Запрос хода бота во время партии лестницы: подсказка, возврат хода или подмена соперника."""
+    """Запрос хода бота во время партии лестницы или турнира: подсказка, возврат хода или подмена соперника."""
     if user_id is None:
         return
-    session = await get_session(user_id)
-    if session is None:
-        return
+    for scope in SCOPES:
+        session = await get_session(user_id, scope)
+        if session is not None:
+            await _note_move(user_id, session, board, requested_key, scope)
+
+
+async def _note_move(user_id: int, session: LadderSession, board: chess.Board, requested_key: str, scope: Scope) -> None:
     player_to_move = (board.turn == chess.WHITE) == (session.color == "white")
     if player_to_move:
-        await _mark(user_id, session, "engine_hint")
+        await _mark(user_id, session, "engine_hint", scope)
     elif requested_key != session.rung_key:
-        await _mark(user_id, session, "opponent_swapped")
+        await _mark(user_id, session, "opponent_swapped", scope)
     elif board.ply() == session.max_ply and board.fen() == session.last_fen:
         return  # повтор того же запроса (ретрай после сбоя связи, двойной эффект React) — не возврат
     elif board.ply() <= session.max_ply:
-        await _mark(user_id, session, "takeback")
+        await _mark(user_id, session, "takeback", scope)
     else:
         session.max_ply = board.ply()
         session.last_fen = board.fen()
-        await _store(user_id, session)
+        await _store(user_id, session, scope)
 
 
 def expected_score(rating: int, opponent: int) -> float:
