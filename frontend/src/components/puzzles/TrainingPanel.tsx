@@ -49,7 +49,7 @@ export function DemoViewer({examples}: { examples: DemoExample[] }) {
         <div className="flex flex-col gap-1.5" data-testid="demo-viewer">
             <div className="max-w-[360px] w-full">
                 <PuzzleBoard fen={position.fen} orientation={example.color} interactive={false}
-                             lastMove={position.last} onMove={() => undefined}/>
+                             lastMove={position.last} sound={false} onMove={() => undefined}/>
             </div>
             <p className="text-xs" data-testid="demo-caption">
                 {caption} · {t('puzzles.training.demoStep', {n: ply, total: example.moves.length})}

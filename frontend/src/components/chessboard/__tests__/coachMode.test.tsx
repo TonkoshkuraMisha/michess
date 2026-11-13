@@ -1,6 +1,6 @@
 // Игра с наставником (таск 11.3): когда предупреждать, проверка хода, «Переходить», совет и панель.
 
-import {act, fireEvent, render, renderHook, screen, waitFor} from '@testing-library/react';
+import {act, fireEvent, render, renderHook, screen, waitFor, within} from '@testing-library/react';
 import {Chess} from 'chess.js';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {
@@ -337,5 +337,21 @@ describe('AuxBoard', () => {
         expect(auxSquare('a1').style.backgroundColor).toBe('rgb(85, 85, 85)');
         const squares = Array.from(document.querySelectorAll('[data-aux-square]')).map((el) => el.getAttribute('data-aux-square'));
         expect(squares[0]).toBe('h1');
+    });
+
+    it('превращение: игрок выбирает фигуру, отмена оставляет пешку', () => {
+        render(<AuxBoard fen="8/4P2k/8/8/8/8/8/4K3 w - - 0 1" flipped={false} lightColor="#eee" darkColor="#555"
+                         renderPiece={renderPiece} onClose={vi.fn()}/>);
+        fireEvent.click(auxSquare('e7'));
+        fireEvent.click(auxSquare('e8'));
+        expect(screen.queryByTestId('aux-moves')).toBeNull();
+        fireEvent.click(document.querySelector('.z-50') as HTMLElement);  // щелчок мимо выбора — отмена
+        expect(auxSquare('e7').textContent).toBe('wp');
+
+        fireEvent.click(auxSquare('e7'));
+        fireEvent.click(auxSquare('e8'));
+        fireEvent.click(within(document.querySelector('.grid-cols-4') as HTMLElement).getAllByRole('button')[1]);
+        expect(screen.getByTestId('aux-moves').textContent).toBe('e8=N');
+        expect(auxSquare('e8').textContent).toBe('wn');
     });
 });
