@@ -150,7 +150,7 @@ def test_weak_target_elo_makes_controlled_errors(engine_lines, monkeypatch):
     engine_lines(THREAT_FEN, {"Nf3": 300, "Rh8+": 0, "Kd2": -50})
     monkeypatch.setattr(personality.random, "random", lambda: 0.0)  # ошибка выпадает всегда
     weak = BotPersonalityConfig(target_elo=600, blunder_guard_cp=0, **ONLY_AGGRESSION)
-    assert _choose(weak, THREAT_FEN) in {"Rh8+", "Kd2"}
+    assert _choose(weak, THREAT_FEN) != "Nf3"  # ошибка — не лучшая линия (с random()=0 — случайный зевок)
 
     # С 1320 и выше ошибок нет: с нулевым окном играется лучшая линия.
     strong = BotPersonalityConfig(target_elo=1500, blunder_guard_cp=0, **ONLY_AGGRESSION)
@@ -219,3 +219,11 @@ def test_custom_move_shares_the_bot_move_rate_limit(client, monkeypatch, freeze_
     third = client.post(f"{API}/bots/custom-move", json={"fen": fen})
 
     assert [first.status_code, second.status_code, third.status_code] == [200, 200, 429]
+
+
+def test_weak_error_without_blunder_takes_the_worse_half_of_the_lines(engine_lines, monkeypatch):
+    engine_lines(THREAT_FEN, {"Nf3": 300, "Nc6": 250, "Rh8+": 0, "Kd2": -50})
+    rolls = iter([0.0, 0.9])  # ошибка выпала; не зевок — ход из худшей половины линий
+    monkeypatch.setattr(personality.random, "random", lambda: next(rolls))
+    weak = BotPersonalityConfig(target_elo=600, blunder_guard_cp=0, **ONLY_AGGRESSION)
+    assert _choose(weak, THREAT_FEN) in {"Rh8+", "Kd2"}

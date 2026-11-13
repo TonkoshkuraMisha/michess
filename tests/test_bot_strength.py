@@ -54,6 +54,13 @@ def test_bot_plays_moves_as_strong_as_the_reference_not_the_best(engine):
     assert played <= {REF.uci(), NEAR.uci()}  # ни лучший ход (сильнее заявленного), ни зевок
 
 
+def test_style_may_not_upgrade_the_reference_move(engine):
+    # Ход на 60 сп лучше опорного — в пределах половины окна, но сильнее заявленной силы: не играется.
+    engine({BEST: 60, REF: 0, NEAR: -20}, reference=REF)
+    bot = BOT_INSTANCES["anderssen"].__class__(stockfish_path="stockfish")
+    assert {bot.choose_move(FEN)["uci"] for _ in range(30)} <= {REF.uci(), NEAR.uci()}
+
+
 def test_reference_outside_multipv_is_scored_separately(engine):
     calls = engine({BEST: 50, NEAR: 40}, reference=BLUNDER, reference_score=-200)
     bot = BOT_INSTANCES["morphy"].__class__(stockfish_path="stockfish")

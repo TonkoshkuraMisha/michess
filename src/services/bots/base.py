@@ -281,9 +281,11 @@ class Candidates:
     engine_path: str | None
 
 
-# Доля blunder_guard_cp, на которую ход может отличаться от опорного в любую сторону: стиль выбирает среди ходов,
-# равных опорному по силе, — и характер сохраняется, и сила не уходит от заявленной.
+# Окно выбора вокруг опорного хода силы: стиль может уступить опорному ходу до половины blunder_guard_cp, но
+# превзойти его — не больше чем на STRENGTH_UPSIDE_CP. Симметричное окно (калибровка 13.11) давало агрессивным
+# персоналиям с широким окном +300…+400 к заявленной силе: стиль «исправлял» слабый опорный ход.
 STRENGTH_BAND_SHARE = 0.5
+STRENGTH_UPSIDE_CP = 20.0
 
 
 class HistoricalBot:
@@ -383,13 +385,14 @@ class HistoricalBot:
 
     def _window(self, scores: dict[chess.Move, float], reference: chess.Move | None) -> dict[chess.Move, float]:
         """
-        Ходы, среди которых выбирает стиль. С опорным ходом — равные ему по силе (±половина blunder_guard_cp):
-        бот не сильнее и не слабее своей заявленной силы. Без него (нет движка) — окно от лучшего хода.
+        Ходы, среди которых выбирает стиль. С опорным ходом — не сильнее его больше чем на STRENGTH_UPSIDE_CP и не
+        слабее больше чем на половину blunder_guard_cp: бот не сильнее заявленной силы. Без опорного хода (нет движка)
+        — окно от лучшего хода.
         """
         if reference is not None and reference in scores:
             ref = scores[reference]
             band = self.blunder_guard_cp * STRENGTH_BAND_SHARE
-            window = {mv: cp for mv, cp in scores.items() if ref - band <= cp <= ref + band}
+            window = {mv: cp for mv, cp in scores.items() if ref - band <= cp <= ref + STRENGTH_UPSIDE_CP}
             window[reference] = ref
             return window
         best = max(scores.values())
