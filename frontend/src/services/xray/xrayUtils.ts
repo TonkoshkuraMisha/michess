@@ -146,18 +146,98 @@ function attackersBy(attacks: Map<string, Attack[]>, square: string, color: Colo
     return (attacks.get(square) ?? []).filter((a) => a.piece.color === color);
 }
 
-/** Фигура под ударом: бьют, а защиты нет или бьёт более дешёвая фигура. Король не в счёт. */
+/**
+ * Абсолютные связки обеих сторон: связанная фигура → поля, на которые она ещё может бить (линия связки
+ * между королём и связывающей фигурой, включая её саму).
+ */
+export function absolutePins(pieces: Map<string, BoardPiece>): Map<string, Set<string>> {
+    const pins = new Map<string, Set<string>>();
+    for (const king of pieces.values()) {
+        if (king.type !== 'k') continue;
+        const [kf, kr] = coords(king.square);
+        for (const direction of KING) {
+            const line: string[] = [];
+            let own: BoardPiece | null = null;
+            let file = kf + direction[0];
+            let rank = kr + direction[1];
+            while (onBoard(file, rank)) {
+                const square = squareName(file, rank);
+                line.push(square);
+                const other = pieces.get(square);
+                if (other) {
+                    if (other.color === king.color) {
+                        if (own) break;
+                        own = other;
+                    } else {
+                        if (own && other.type !== 'k' && other.type !== 'p' && other.type !== 'n'
+                            && slides(other.type, direction)) {
+                            pins.set(own.square, new Set(line));
+                        }
+                        break;
+                    }
+                }
+                file += direction[0];
+                rank += direction[1];
+            }
+        }
+    }
+    return pins;
+}
+
+/**
+ * Удары, которые фигуры действительно могут нанести: связанная с королём фигура бьёт только вдоль линии связки.
+ * Для «кто кого защищает» и «можно ли взять с выигрышем»; контроль полей (controlMap) остаётся полным — связанная
+ * фигура по-прежнему не пускает короля соперника на свои поля.
+ */
+export function effectiveAttacks(pieces: Map<string, BoardPiece>, attacks = attackMap(pieces)): Map<string, Attack[]> {
+    const pins = absolutePins(pieces);
+    if (pins.size === 0) return attacks;
+    const result = new Map<string, Attack[]>();
+    for (const [square, list] of attacks) {
+        result.set(square, list.filter((a) => {
+            const line = pins.get(a.from);
+            return !line || line.has(square);
+        }));
+    }
+    return result;
+}
+
+/** Порядок участия в размене: сначала прямые удары по возрастанию ценности, затем батареи (за своей фигурой). */
+function exchangeOrder(list: Attack[]): number[] {
+    return [...list].sort((a, b) => Number(a.xray) - Number(b.xray) || PIECE_VALUE[a.piece.type] - PIECE_VALUE[b.piece.type])
+        .map((a) => PIECE_VALUE[a.piece.type]);
+}
+
+/**
+ * Статическая оценка размена (SEE) на поле: сколько выигрывает сторона, берущая фигуру ценностью victim первой
+ * фигурой ценностью first; дальше стороны бьют по очереди самыми дешёвыми и могут остановиться в любой момент.
+ */
+export function exchangeGain(victim: number, first: number, takers: number[], defenders: number[]): number {
+    const gains = [victim];
+    let onSquare = first;
+    const lists = [defenders.slice(), takers.slice()];
+    for (let side = 0; lists[side].length > 0; side = 1 - side) {
+        gains.push(onSquare - gains[gains.length - 1]);
+        onSquare = lists[side].shift() as number;
+    }
+    for (let i = gains.length - 1; i > 0; i--) gains[i - 1] = -Math.max(-gains[i - 1], gains[i]);
+    return gains[0] + 0; // без -0
+}
+
+/**
+ * Фигура под ударом: размен на её поле, начатый самой дешёвой нападающей, выигрывает материал (SEE) —
+ * учитывает число нападающих и защитников и связки (attacks — из effectiveAttacks). Король не в счёт.
+ */
 export function isEnPrise(piece: BoardPiece, attacks: Map<string, Attack[]>): boolean {
     if (piece.type === 'k') return false;
-    const attackers = attackersBy(attacks, piece.square, opposite(piece.color));
+    const attackers = exchangeOrder(attackersBy(attacks, piece.square, opposite(piece.color)));
     if (attackers.length === 0) return false;
-    const defenders = attackersBy(attacks, piece.square, piece.color);
-    const cheapest = Math.min(...attackers.map((a) => PIECE_VALUE[a.piece.type]));
-    return defenders.length === 0 || cheapest < PIECE_VALUE[piece.type];
+    const defenders = exchangeOrder(attackersBy(attacks, piece.square, piece.color));
+    return exchangeGain(PIECE_VALUE[piece.type], attackers[0], attackers.slice(1), defenders) > 0;
 }
 
 /** Фигуры стороны color, которые можно взять с выигрышем. */
-export function hangingPieces(pieces: Map<string, BoardPiece>, color: Color, attacks = attackMap(pieces)): string[] {
+export function hangingPieces(pieces: Map<string, BoardPiece>, color: Color, attacks = effectiveAttacks(pieces)): string[] {
     return [...pieces.values()].filter((p) => p.color === color && isEnPrise(p, attacks)).map((p) => p.square);
 }
 
@@ -168,7 +248,7 @@ export interface Overload {
 
 /** Перегруженные защитники стороны color: единственная защита двух и более атакованных фигур. */
 export function overloadedDefenders(
-    pieces: Map<string, BoardPiece>, color: Color, attacks = attackMap(pieces),
+    pieces: Map<string, BoardPiece>, color: Color, attacks = effectiveAttacks(pieces),
 ): Overload[] {
     const duties = new Map<string, string[]>();
     for (const piece of pieces.values()) {
@@ -274,9 +354,9 @@ export function legalMoves(fen: string, color: Color, moves = verboseMoves(fen, 
     return arrows;
 }
 
-/** Взятия стороны color: выигрыш — цель без защиты или дороже берущей фигуры, иначе размен. */
+/** Взятия стороны color: выигрыш — размен на поле, начатый этим взятием, приносит материал (SEE, со связками), иначе размен. */
 export function captures(
-    fen: string, color: Color, pieces = piecesOf(fen), attacks = attackMap(pieces),
+    fen: string, color: Color, pieces = piecesOf(fen), attacks = effectiveAttacks(pieces),
     moves = verboseMoves(fen, color, pieces, attacks),
 ): CaptureArrow[] {
     const seen = new Set<string>();
@@ -285,15 +365,19 @@ export function captures(
         if (!move.captured || seen.has(`${move.from}${move.to}`)) continue;
         seen.add(`${move.from}${move.to}`);
         const target = pieces.get(move.to);
-        const defended = target ? attackersBy(attacks, move.to, target.color).length > 0 : true;
-        const winning = !defended || PIECE_VALUE[move.captured as PieceType] > PIECE_VALUE[move.piece as PieceType];
+        // Взятие на проходе: пешка соперника не на поле хода — размен на этом поле не считаем.
+        const winning = target !== undefined && exchangeGain(
+            PIECE_VALUE[target.type], PIECE_VALUE[move.piece as PieceType],
+            exchangeOrder(attackersBy(attacks, move.to, color).filter((a) => a.from !== move.from)),
+            exchangeOrder(attackersBy(attacks, move.to, target.color)),
+        ) > 0;
         arrows.push({from: move.from, to: move.to, kind: winning ? 'winning' : 'exchange'});
     }
     return arrows;
 }
 
 /** Защиты стороны color: какая своя фигура прикрывает какую (без короля под защитой). */
-export function defenses(pieces: Map<string, BoardPiece>, color: Color, attacks = attackMap(pieces)): MoveArrow[] {
+export function defenses(pieces: Map<string, BoardPiece>, color: Color, attacks = effectiveAttacks(pieces)): MoveArrow[] {
     const arrows: MoveArrow[] = [];
     for (const piece of pieces.values()) {
         if (piece.color !== color || piece.type === 'k') continue;
@@ -367,7 +451,7 @@ export function destinationSafety(fen: string, from: string): SquareSafety[] {
         after.move({from: move.from, to: move.to, promotion: move.promotion ?? 'q'});
         const afterPieces = piecesOf(after.fen());
         const moved = afterPieces.get(move.to);
-        result.push({square: move.to, safe: !moved || !isEnPrise(moved, attackMap(afterPieces))});
+        result.push({square: move.to, safe: !moved || !isEnPrise(moved, effectiveAttacks(afterPieces))});
     }
     return result;
 }
@@ -392,14 +476,16 @@ export function xrayFor(fen: string, color: Color): XrayReport {
     // Позиция разбирается один раз: фигуры, карта ударов и ходы chess.js — общие для всех режимов.
     const pieces = piecesOf(fen);
     const attacks = attackMap(pieces);
+    // Защиты и размены — без ударов связанных фигур; контроль полей — полный.
+    const effective = effectiveAttacks(pieces, attacks);
     const moves = verboseMoves(fen, color, pieces, attacks);
     return {
         control: controlMap(pieces, attacks),
-        hanging: hangingPieces(pieces, color, attacks),
-        overloaded: overloadedDefenders(pieces, color, attacks),
+        hanging: hangingPieces(pieces, color, effective),
+        overloaded: overloadedDefenders(pieces, color, effective),
         lines: lineTactics(pieces, color),
-        captures: captures(fen, color, pieces, attacks, moves),
-        defenses: defenses(pieces, color, attacks),
+        captures: captures(fen, color, pieces, effective, moves),
+        defenses: defenses(pieces, color, effective),
         checks: checks(fen, color, moves),
         moves: legalMoves(fen, color, moves),
         pawns: pawnFlags(pieces, color),

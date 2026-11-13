@@ -3,7 +3,7 @@
 import {Chess} from 'chess.js';
 import {describe, expect, it, vi} from 'vitest';
 import {
-    attackMap, captures, checks, controlMap, defenses, destinationSafety, gameFor, hangingPieces, legalMoves,
+    absolutePins, attackMap, captures, checks, exchangeGain, controlMap, defenses, destinationSafety, gameFor, hangingPieces, legalMoves,
     lineTactics, overloadedDefenders, pawnFlags, piecesOf, xrayFor,
 } from '../xrayUtils';
 
@@ -162,5 +162,44 @@ describe('полный рентген', () => {
         const startedAt = performance.now();
         for (let i = 0; i < 20; i++) xrayFor(fen, i % 2 ? 'b' : 'w');
         expect((performance.now() - startedAt) / 20).toBeLessThan(50);
+    });
+});
+
+
+describe('размены и связки (SEE)', () => {
+    it('связанный с королём защитник не защищает', () => {
+        // Слон d5 «защищён» конём e3, но конь связан ладьёй e8 с королём e1.
+        const pieces = piecesOf('4r2k/8/1n6/3B4/8/4N3/8/4K3 w - - 0 1');
+        // Сам связанный конь тоже висит: ладья бьёт его, защиты нет.
+        expect(hangingPieces(pieces, 'w').sort()).toEqual(['d5', 'e3']);
+        expect(defenses(pieces, 'w')).toEqual([]);
+    });
+
+    it('связанная фигура защищает вдоль линии связки', () => {
+        // Ладья e3 связана ладьёй e8, но защищает поле e5 на той же линии.
+        const pieces = piecesOf('4r2k/8/3n4/4N3/8/4R3/8/4K3 w - - 0 1');
+        expect(hangingPieces(pieces, 'w')).toEqual([]);
+    });
+
+    it('два нападающих против одного защитника той же ценности', () => {
+        const pieces = piecesOf('4k3/8/1n3n2/3N4/8/2N5/8/4K3 w - - 0 1');
+        expect(hangingPieces(pieces, 'w')).toEqual(['d5']);
+        expect(captures('4k3/8/1n3n2/3N4/8/2N5/8/4K3 b - - 0 1', 'b').map((c) => c.kind)).toEqual(['winning', 'winning']);
+    });
+
+    it('взятие защищённой пешки ферзём — не выигрыш, связанный защитник — выигрыш', () => {
+        expect(captures('4k3/8/4p3/3p4/8/8/8/3QK3 w - - 0 1', 'w')).toEqual([{from: 'd1', to: 'd5', kind: 'exchange'}]);
+        // Защитник d5 (пешка e6) связан ладьёй e1 с королём e8: взятие ферзём выигрывает пешку.
+        const pinned = '4k3/8/4p3/3p4/8/8/8/3QRK2 w - - 0 1';
+        expect([...absolutePins(piecesOf(pinned)).keys()]).toEqual(['e6']);
+        expect(captures(pinned, 'w')).toContainEqual({from: 'd1', to: 'd5', kind: 'winning'});
+    });
+
+    it('exchangeGain: стороны могут не продолжать размен', () => {
+        expect(exchangeGain(1, 9, [], [1])).toBe(-8);  // ферзь берёт защищённую пешку
+        expect(exchangeGain(3, 3, [], [3])).toBe(0);     // конь за коня
+        expect(exchangeGain(3, 3, [3], [3])).toBe(3);    // два коня против одного защитника
+        expect(exchangeGain(3, 3, [3], [])).toBe(3);
+        expect(exchangeGain(5, 3, [], [1])).toBe(2);     // конь берёт ладью, пешка берёт коня
     });
 });
