@@ -1,5 +1,5 @@
 // --- FILE: frontend/src/services/puzzles.ts ---
-// Задачи (таски 13.2–13.3): клиент API. Решение с сервера не приходит — только позиция, первый ход соперника и
+// Задачи (таски 13.2–13.3, защитные упражнения 13.6): клиент API. Решение с сервера не приходит — только позиция, первый ход соперника и
 // ответы на верные ходы.
 
 import {API_BASE_URL} from '../config/api';
@@ -146,6 +146,44 @@ export interface TimedResult {
     new_record: boolean;
 }
 
+/** Защитные упражнения (таск 13.6): «Что грозит соперник?» и «Не зевни». */
+export type DefenseKind = 'threat' | 'blunder';
+
+/** Темы реестра, которые решаются защитными упражнениями, а не задачами базы. */
+export const DEFENSE_DRILL_THEMES: Record<string, DefenseKind> = {
+    find_the_threat: 'threat',
+    blunder_check: 'blunder',
+};
+
+export interface DefenseDrillView {
+    id: number;
+    kind: DefenseKind;
+    theme: string;
+    fen: string;
+    color: 'white' | 'black';
+    rating: number;
+    stage: number;
+    /** «Не зевни»: три хода на выбор (UCI). */
+    choices: string[];
+}
+
+export interface DefenseThreatResponse {
+    correct: boolean;
+    threat: string;
+    motifs: string[];
+}
+
+export interface DefenseAnswer {
+    correct: boolean;
+    clean: boolean;
+    good: string[];
+    threat: string | null;
+    /** Проигрывающий ход → ответ соперника, который его опровергает. */
+    refutations: Record<string, string>;
+    motifs: string[];
+    training: TrainingProgress;
+}
+
 const BASE = `${API_BASE_URL}/api/v1/puzzles`;
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -194,6 +232,13 @@ export const puzzlesApi = {
         method: 'POST', body: JSON.stringify({move}),
     }),
     personalPlies: (gameId: number) => request<{ game_id: number; plies: number[] }>(`/personal/game/${gameId}`),
+    defenseNext: (kind: DefenseKind) => request<DefenseDrillView>(`/defense/next?kind=${kind}`),
+    defenseThreat: (id: number, square: string) => request<DefenseThreatResponse>(`/defense/${id}/threat`, {
+        method: 'POST', body: JSON.stringify({square}),
+    }),
+    defenseAnswer: (id: number, move: string) => request<DefenseAnswer>(`/defense/${id}/answer`, {
+        method: 'POST', body: JSON.stringify({move}),
+    }),
     demo: (theme: string) => request<{ theme: string; examples: DemoExample[] }>(
         `/demo?theme=${encodeURIComponent(theme)}`,
     ),

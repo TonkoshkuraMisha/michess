@@ -1,5 +1,8 @@
 # --- FILE: src/api/puzzles.py ---
-"""Задачи (таск 13.2): выдача, проверка хода, подсказка, «показать решение», задача дня, профиль решателя."""
+"""
+Задачи (таск 13.2): выдача, проверка хода, подсказка, «показать решение», задача дня, профиль решателя.
+Защитные упражнения (таск 13.6): /defense/*.
+"""
 
 import datetime as dt
 
@@ -12,7 +15,7 @@ from src.api.rate_limit import rate_limit
 from src.core.errors import DomainValueError
 from src.db.session import get_db
 from src.models.user import User
-from src.services import personal_puzzles
+from src.services import defense_drills, personal_puzzles
 from src.services import puzzles as service
 
 router = APIRouter(dependencies=[Depends(rate_limit("puzzles", "RATE_LIMIT_PUZZLES"))])
@@ -119,6 +122,45 @@ async def personal_answer(puzzle_id: int, payload: MoveRequest, user: User = Dep
 async def personal_for_game(game_id: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Полуходы партии, из которых сделаны задачи игрока — значок в разборе партии."""
     return {"game_id": game_id, "plies": await personal_puzzles.plies_for_game(db, game_id, user)}
+
+
+class SquareRequest(BaseModel):
+    square: str = Field(..., min_length=2, max_length=2, description="Поле доски, например e4")
+
+
+@router.get("/defense/next")
+async def defense_next(
+        kind: str = Query(..., max_length=10, description="threat — «Что грозит соперник?», blunder — «Не зевни»"),
+        user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+):
+    """Защитное упражнение (таск 13.6) на ступени игрока. Угроза и верные ходы не отправляются."""
+    try:
+        return defense_drills.public_view(await defense_drills.pick(db, user, kind))
+    except service.PuzzleError as exc:
+        raise _http(exc) from exc
+
+
+@router.post("/defense/{drill_id}/threat")
+async def defense_threat(drill_id: int, payload: SquareRequest, user: User = Depends(get_current_user),
+                         db: AsyncSession = Depends(get_db)):
+    """«Что грозит соперник?», первый этап: поле фигуры, которая бьёт, или поле удара. Угроза раскрывается."""
+    try:
+        return await defense_drills.show_threat(db, user, drill_id, payload.square)
+    except service.PuzzleError as exc:
+        raise _http(exc) from exc
+
+
+@router.post("/defense/{drill_id}/answer")
+async def defense_answer(drill_id: int, payload: MoveRequest, user: User = Depends(get_current_user),
+                         db: AsyncSession = Depends(get_db)):
+    """Защита (или ход из трёх в «Не зевни»): итог, верные ходы, опровержения, прогресс темы."""
+    try:
+        return await defense_drills.answer(db, user, drill_id, payload.move)
+    except service.PuzzleError as exc:
+        raise _http(exc) from exc
+    except DomainValueError as exc:
+        raise exc.to_http(400) from exc
 
 
 @router.post("/timed/start")
