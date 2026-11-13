@@ -12,6 +12,10 @@
 Режим на время (таск 13.3): забег на 3 или 5 минут хранится на сервере — счёт и ошибки считает сервер, клиент лишь
 показывает таймер. Задачи забега рейтинг не меняют; сложность растёт с каждой решённой (от рейтинга игрока −300 с
 шагом TIMED_STEP). Три ошибки или конец времени — забег окончен, лучший счёт — личный рекорд.
+
+Тренировка по приёмам (таск 13.4): задачи темы на текущей ступени игрока (1–4); ступень пройдена, когда из последних
+STAGE_WINDOW задач не меньше STAGE_PASS решены чисто (без ошибки и подсказки). Смешанная подборка — по разделу
+каталога; «без названия темы» — темы задачи не показываются до конца решения.
 """
 
 import datetime as dt
@@ -27,9 +31,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.errors import DomainError, DomainValueError
 from src.db import redis as redis_module
-from src.models.puzzle import Puzzle, PuzzleAttempt, PuzzleTheme
+from src.models.puzzle import Puzzle, PuzzleAttempt, PuzzleTheme, ThemeProgress
 from src.models.user import User
-from src.services.themes import THEMES_BY_CODE
+from src.services.themes import SECTIONS, THEMES, THEMES_BY_CODE
 
 SESSION_TTL_S = 2 * 60 * 60
 RECENT_EXCLUDED = 300
@@ -44,6 +48,9 @@ TIMED_MISTAKES = 3
 TIMED_START_OFFSET = -300
 TIMED_STEP = 40
 TIMED_GRACE_S = 2
+STAGES = (1, 2, 3, 4)
+STAGE_WINDOW = 10
+STAGE_PASS = 8
 
 
 class PuzzleError(DomainError):
@@ -61,6 +68,8 @@ class PuzzleSession:
     hints: int = 0
     daily: bool = False
     run: str | None = None  # забег режима на время: задача без рейтинга
+    training: str | None = None  # тренировка по теме: её код (прогресс темы обновляется по итогу)
+    stage: int | None = None
 
 
 def _session_key(user_id: int) -> str:
@@ -151,9 +160,130 @@ async def daily_puzzle(db: AsyncSession, day: dt.date) -> Puzzle:
     return puzzle
 
 
-async def start(user: User, puzzle: Puzzle, *, daily: bool = False, run: str | None = None) -> None:
+async def start(user: User, puzzle: Puzzle, *, daily: bool = False, run: str | None = None,
+                training: str | None = None, stage: int | None = None) -> None:
     """Начать задачу: предыдущая незаконченная просто отменяется (без изменения рейтинга)."""
-    await _save_session(user.id, PuzzleSession(puzzle_id=puzzle.id, daily=daily, run=run))
+    await _save_session(user.id, PuzzleSession(puzzle_id=puzzle.id, daily=daily, run=run, training=training,
+                                               stage=stage))
+
+
+# --- тренировка по приёмам -----------------------------------------------------------------------------------
+
+_stage_counts: dict[tuple[str, int], int] | None = None
+
+
+async def stage_counts(db: AsyncSession) -> dict[tuple[str, int], int]:
+    """Сколько задач у каждой темы на каждой ступени. База задач меняется только импортом — считается один раз."""
+    global _stage_counts
+    if _stage_counts is None:
+        rows = await db.execute(
+            select(PuzzleTheme.theme, Puzzle.stage, func.count()).join(Puzzle, Puzzle.id == PuzzleTheme.puzzle_id)
+            .group_by(PuzzleTheme.theme, Puzzle.stage)
+        )
+        _stage_counts = {(theme, stage): count for theme, stage, count in rows}
+    return _stage_counts
+
+
+def reset_stage_counts() -> None:
+    """После импорта задач и в тестах."""
+    global _stage_counts
+    _stage_counts = None
+
+
+async def _progress(db: AsyncSession, user_id: int, theme: str) -> ThemeProgress | None:
+    return await db.get(ThemeProgress, (user_id, theme))
+
+
+async def pick_training(
+        db: AsyncSession, user: User, *, theme: str | None = None, section: str | None = None,
+        stage: int | None = None,
+) -> tuple[Puzzle, int | None]:
+    """Задача тренировки: по теме (ступень — из прогресса, если не задана) или смешанная по разделу."""
+    if (theme is None) == (section is None):
+        raise PuzzleError("training_target_required", 400)
+    if theme is not None and theme not in THEMES_BY_CODE:
+        raise PuzzleError("unknown_theme", 400, theme=theme)
+    if section is not None and section not in SECTIONS:
+        raise PuzzleError("unknown_section", 400, section=section)
+    if stage is not None and stage not in STAGES:
+        raise PuzzleError("invalid_stage", 400, stage=stage)
+    if theme is not None and stage is None:
+        progress = await _progress(db, user.id, theme)
+        stage = min(progress.stage, STAGES[-1]) if progress else 1
+    codes = [theme] if theme is not None else [t.code for t in THEMES if t.section == section]
+    recent = await _recent_ids(db, user.id)
+    # Смешанная подборка — под рейтинг игрока, окно расширяется; по теме сложность задаёт ступень.
+    windows: tuple[int | None, ...] = (None,) if stage is not None else (300, 600, None)
+    for exclude, window in ((e, w) for e in (True, False) for w in windows):
+        query = select(Puzzle).join(PuzzleTheme).where(PuzzleTheme.theme.in_(codes))
+        if stage is not None:
+            query = query.where(Puzzle.stage == stage)
+        elif window is not None:
+            query = query.where(Puzzle.rating.between(user.puzzle_rating - window, user.puzzle_rating + window))
+        if exclude and recent:
+            query = query.where(Puzzle.id.not_in(recent))
+        puzzle = await db.scalar(query.order_by(func.random()).limit(1))
+        if puzzle is not None:
+            return puzzle, stage
+    raise PuzzleError("no_puzzles_available", 404)
+
+
+async def _update_progress(db: AsyncSession, user_id: int, theme: str, stage: int, clean: bool) -> dict:
+    progress = await _progress(db, user_id, theme)
+    if progress is None:
+        progress = ThemeProgress(user_id=user_id, theme=theme, stage=1, recent="", solved=0, mastered=False)
+        db.add(progress)
+    advanced = False
+    # Результат засчитывается ступени, которую игрок проходит сейчас (повтор пройденной ступени не мешает).
+    if stage == progress.stage and not progress.mastered:
+        progress.recent = (progress.recent + ("1" if clean else "0"))[-STAGE_WINDOW:]
+        if progress.recent.count("1") >= STAGE_PASS:
+            advanced = True
+            progress.recent = ""
+            if progress.stage >= STAGES[-1]:
+                progress.mastered = True
+            else:
+                progress.stage += 1
+    if clean:
+        progress.solved += 1
+    return {"theme": theme, "stage": progress.stage, "recent": progress.recent, "mastered": progress.mastered,
+            "advanced": advanced, "window": STAGE_WINDOW, "pass": STAGE_PASS}
+
+
+async def demo_puzzles(db: AsyncSession, theme: str, count: int = 2) -> list[dict]:
+    """
+    Показ приёма на доске: самые популярные задачи темы с самой лёгкой ступени — вместе с решением. Это не
+    попытка: сессия не создаётся, рейтинг и история не меняются.
+    """
+    if theme not in THEMES_BY_CODE:
+        raise PuzzleError("unknown_theme", 400, theme=theme)
+    rows = await db.execute(
+        select(Puzzle).join(PuzzleTheme).where(PuzzleTheme.theme == theme)
+        .order_by(Puzzle.stage, Puzzle.popularity.desc(), Puzzle.plays.desc(), Puzzle.id).limit(count)
+    )
+    return [{"fen": p.fen, "moves": p.moves.split(), "color": solver_color(p)} for p in rows.scalars()]
+
+
+async def training_overview(db: AsyncSession, user: User) -> dict:
+    """Прогресс по всем темам и сколько задач есть на каждой ступени (тема готова к выдаче, когда хватает минимумов)."""
+    counts = await stage_counts(db)
+    rows = await db.execute(select(ThemeProgress).where(ThemeProgress.user_id == user.id))
+    progress = {p.theme: p for p in rows.scalars()}
+    themes = []
+    for theme in THEMES:
+        own = progress.get(theme.code)
+        available = [counts.get((theme.code, stage), 0) for stage in STAGES]
+        themes.append({
+            "code": theme.code,
+            "section": theme.section,
+            "stage": own.stage if own else 1,
+            "recent": own.recent if own else "",
+            "solved": own.solved if own else 0,
+            "mastered": bool(own and own.mastered),
+            "available": available,
+            "ready": all(n >= minimum for n, minimum in zip(available, theme.minimums, strict=True)),
+        })
+    return {"window": STAGE_WINDOW, "pass": STAGE_PASS, "themes": themes}
 
 
 # --- режим на время -------------------------------------------------------------------------------------------
@@ -281,11 +411,16 @@ async def _finish(db: AsyncSession, user: User, puzzle: Puzzle, session: PuzzleS
         user.puzzle_games += 1
     db.add(PuzzleAttempt(user_id=user.id, puzzle_id=puzzle.id, solved=solved, hints_used=session.hints,
                          rating_before=before, rating_after=user.puzzle_rating))
+    training = None
+    if session.training and session.stage:
+        training = await _update_progress(db, user.id, session.training, session.stage,
+                                          clean=solved and session.hints == 0)
     await db.commit()
     await _drop_session(user.id)
     run = await _count_in_run(user.id, session.run, solved) if session.run else None
     return {
         "run": run,
+        "training": training,
         "solved": solved,
         "rating_before": before,
         "rating_after": user.puzzle_rating,

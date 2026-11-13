@@ -29,6 +29,10 @@ class Puzzle(Base):
     plays: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # Исходные теги базы — для повторной разметки при изменении реестра.
     source_tags: Mapped[str] = mapped_column(String(300), nullable=False, default="")
+    # Ступень (таск 13.4): 1 — знакомство, 2 — закрепление, 3 — в сочетании, 4 — мастер (см. stage_for).
+    stage: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1", index=True)
+    # Версия разметки тем (src/services/puzzle_import.TAG_VERSION): старая — задача переразмечается при импорте.
+    tag_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     themes: Mapped[list["PuzzleTheme"]] = relationship(
@@ -47,6 +51,20 @@ class PuzzleTheme(Base):
     theme: Mapped[str] = mapped_column(String(40), primary_key=True, index=True)
 
     puzzle: Mapped[Puzzle] = relationship(back_populates="themes")
+
+
+class ThemeProgress(Base):
+    """Прогресс игрока по теме (таск 13.4): ступень, последние результаты на ней ('1' — чисто, '0' — нет)."""
+    __tablename__ = "theme_progress"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    theme: Mapped[str] = mapped_column(String(40), primary_key=True)
+    stage: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+    recent: Mapped[str] = mapped_column(String(10), nullable=False, default="", server_default="")
+    solved: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    mastered: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(),
+                                                 onupdate=func.now())
 
 
 class PuzzleAttempt(Base):

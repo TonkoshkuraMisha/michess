@@ -27,9 +27,14 @@ class Theme:
     minimums: tuple[int, int, int, int] = field(default=DEFAULT_MINIMUMS)
 
 
-def _t(code: str, section: str, sources: str, parent: str | None = None, lichess: str = "", detector: str = "") -> Theme:
+def _t(code: str, section: str, sources: str, parent: str | None = None, lichess: str = "", detector: str = "",
+       minimums: tuple[int, int, int, int] = DEFAULT_MINIMUMS) -> Theme:
     return Theme(code, section, tuple(sources.split(",")), parent,
-                 tuple(lichess.split()) if lichess else (), tuple(detector.split()) if detector else ())
+                 tuple(lichess.split()) if lichess else (), tuple(detector.split()) if detector else (), minimums)
+
+
+# Темы, у которых по определению нет лёгких ступеней (длинное решение не бывает «знакомством»): минимум 0.
+_MATE_MINIMUMS = {1: DEFAULT_MINIMUMS, 2: DEFAULT_MINIMUMS, 3: (0, 25, 20, 15), 4: (0, 0, 20, 15), 5: (0, 0, 0, 15)}
 
 
 THEMES: tuple[Theme, ...] = (
@@ -81,7 +86,8 @@ THEMES: tuple[Theme, ...] = (
     _t("advanced_pawn", "E", "L", lichess="advancedPawn"),
     _t("passed_pawn_support", "E", "M"),
     # F. Матовые конструкции
-    *(_t(f"mate_in_{n}", "F", "L,D", lichess=f"mateIn{n}", detector="mate_in" if n == 1 else "") for n in range(1, 6)),
+    *(_t(f"mate_in_{n}", "F", "L,D", lichess=f"mateIn{n}", detector="mate_in" if n == 1 else "",
+         minimums=_MATE_MINIMUMS[n]) for n in range(1, 6)),
     _t("back_rank_mate", "F", "D,L", lichess="backRankMate", detector="back_rank"),
     _t("smothered_mate", "F", "L", lichess="smotheredMate"),
     _t("anastasia_mate", "F", "L", lichess="anastasiaMate"),
@@ -142,7 +148,7 @@ THEMES: tuple[Theme, ...] = (
     _t("basic_mates", "J", "M"),
     # K. Расчёт и сочетание приёмов
     _t("combination", "K", "L,D"),
-    _t("long_calculation", "K", "L", lichess="veryLong"),  # «long» в базе — всего 3 хода
+    _t("long_calculation", "K", "L", lichess="veryLong", minimums=(0, 0, 20, 15)),  # «long» в базе — 3 хода
     _t("equality", "K", "L", lichess="equality"),
     _t("candidate_moves", "K", "M"),
     # L. Позиционные темы
