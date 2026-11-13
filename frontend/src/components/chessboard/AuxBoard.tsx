@@ -2,14 +2,16 @@
 // Вспомогательная доска (таск 11.4): копия позиции партии, где игрок разыгрывает варианты за обе стороны,
 // пока соперник думает. На партию не влияет; «К позиции партии» — снова текущая позиция.
 
-import {useState} from 'react';
-import type {ReactNode} from 'react';
+import {useEffect, useState} from 'react';
+import type {PointerEvent as ReactPointerEvent, ReactNode} from 'react';
 import {Chess} from 'chess.js';
 import {useI18n} from '../../i18n';
 import {FILES} from './boardUtils';
 import type {PromotionPiece} from './boardUtils';
 import {PromotionDialog} from './PromotionDialog';
 import type {PendingPromotion} from './types';
+import {XrayOverlay} from '../xray/XrayOverlay';
+import type {XrayMode} from '../xray/useXraySettings';
 
 interface Props {
     /** Текущая позиция партии. */
@@ -19,9 +21,31 @@ interface Props {
     darkColor: string;
     renderPiece: (piece: { type: string; color: string }) => ReactNode;
     onClose: () => void;
+    /** Режимы «Рентгена» основной доски (таск B.5); не передано — слоя нет (рентген в этой партии недоступен). */
+    xrayModes?: Set<XrayMode>;
+    /** «Показать за соперника»: рентген за сторону, которая не ходит на вспомогательной доске. */
+    xrayForOpponent?: boolean;
 }
 
-export function AuxBoard({fen, flipped, lightColor, darkColor, renderPiece, onClose}: Props) {
+/** Поле вспомогательной доски под точкой экрана. */
+function auxSquareAt(x: number, y: number): string | null {
+    const elements = typeof document.elementsFromPoint === 'function' ? document.elementsFromPoint(x, y) : [];
+    const cell = elements.find((el) => el instanceof HTMLElement && el.dataset.auxSquare);
+    return cell instanceof HTMLElement ? cell.dataset.auxSquare ?? null : null;
+}
+
+interface Drag {
+    from: string;
+    startX: number;
+    startY: number;
+    x: number;
+    y: number;
+    moved: boolean;
+}
+
+const DRAG_THRESHOLD_PX = 4;
+
+export function AuxBoard({fen, flipped, lightColor, darkColor, renderPiece, onClose, xrayModes, xrayForOpponent = false}: Props) {
     const {t} = useI18n();
     // Позиция, с которой начат разбор, и сыгранные на доске ходы (SAN): доска строится из них заново.
     const [sourceFen, setSourceFen] = useState(fen);
@@ -29,6 +53,8 @@ export function AuxBoard({fen, flipped, lightColor, darkColor, renderPiece, onCl
     const [selected, setSelected] = useState<string | null>(null);
     // Превращение пешки ждёт выбора фигуры (раньше всегда ферзь — недопревращение не разыграть).
     const [promotion, setPromotion] = useState<PendingPromotion | null>(null);
+    // Перетаскивание фигуры (таск B.5): как на основной доске, ход — по полю под указателем при отпускании.
+    const [drag, setDrag] = useState<Drag | null>(null);
 
     const board = new Chess(sourceFen);
     for (const san of moves) board.move(san);
@@ -65,6 +91,46 @@ export function AuxBoard({fen, flipped, lightColor, darkColor, renderPiece, onCl
         setSelected(piece && piece.color === board.turn() ? square : null);
     };
 
+    /** Ход from → to, если он легален; превращение — через выбор фигуры. */
+    const attempt = (from: string, to: string) => {
+        const candidates = board.moves({square: from as never, verbose: true}).filter((m) => m.to === to);
+        if (candidates.length === 0) return;
+        if (candidates.some((m) => m.promotion)) setPromotion({from, to, color: board.turn()});
+        else play(from, to);
+    };
+
+    const pointerDown = (square: string, event: ReactPointerEvent) => {
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+        const piece = board.get(square as never);
+        if (!piece || piece.color !== board.turn() || promotion) return;
+        setSelected(square);
+        setDrag({from: square, startX: event.clientX, startY: event.clientY, x: event.clientX, y: event.clientY, moved: false});
+    };
+
+    useEffect(() => {
+        if (!drag) return;
+        const move = (event: PointerEvent) => setDrag((current) => current && {
+            ...current, x: event.clientX, y: event.clientY,
+            moved: current.moved || Math.hypot(event.clientX - current.startX, event.clientY - current.startY) > DRAG_THRESHOLD_PX,
+        });
+        const up = (event: PointerEvent) => {
+            const target = auxSquareAt(event.clientX, event.clientY);
+            if (drag.moved && target && target !== drag.from) attempt(drag.from, target);
+            setDrag(null);
+        };
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+        window.addEventListener('pointercancel', up);
+        return () => {
+            window.removeEventListener('pointermove', move);
+            window.removeEventListener('pointerup', up);
+            window.removeEventListener('pointercancel', up);
+        };
+    });  // eslint-disable-line react-hooks/exhaustive-deps
+
+    const dragged = drag?.moved ? board.get(drag.from as never) : null;
+    const xraySide = board.turn() === (xrayForOpponent ? 'w' : 'b') ? 'b' : 'w';
+
     const undo = () => {
         setMoves(moves.slice(0, -1));
         setSelected(null);
@@ -88,17 +154,28 @@ export function AuxBoard({fen, flipped, lightColor, darkColor, renderPiece, onCl
                     const isDark = (FILES.indexOf(file) + Number(rank)) % 2 === 1;
                     return (
                         <div key={square} data-aux-square={square} onClick={() => click(square)}
+                             onPointerDown={(event) => pointerDown(square, event)}
                              style={{backgroundColor: isDark ? darkColor : lightColor}}
                              className="relative flex items-center justify-center cursor-pointer">
                             {selected === square && <div className="absolute inset-0 bg-amber-400/50 pointer-events-none"/>}
                             {targets.has(square) && (
                                 <div className="absolute w-1/4 h-1/4 rounded-full bg-black/30 pointer-events-none z-10"/>
                             )}
-                            {piece && renderPiece(piece)}
+                            {piece && !(drag?.moved && drag.from === square) && renderPiece(piece)}
                         </div>
                     );
                 }))}
             </div>
+            {xrayModes && xrayModes.size > 0 && (
+                <XrayOverlay fen={board.fen()} side={xraySide} modes={xrayModes} flipped={flipped}
+                             selectedSquare={selected}/>
+            )}
+            {dragged && drag && (
+                <div className="fixed w-10 h-10 pointer-events-none z-50 -translate-x-1/2 -translate-y-1/2"
+                     data-testid="aux-drag-piece" style={{left: drag.x, top: drag.y}}>
+                    {renderPiece(dragged)}
+                </div>
+            )}
             {promotion && (
                 <PromotionDialog pendingPromotion={promotion} displayedFiles={files} displayedRanks={ranks}
                                  renderPieceSvg={renderPiece}
