@@ -7,7 +7,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.models.base import Base
@@ -92,6 +92,35 @@ class PersonalPuzzle(Base):
     done: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class DefenseDrill(Base):
+    """
+    Защитное упражнение (таск 13.6, src/services/defense_drills.py): «Что грозит соперник?» (kind=threat) и «Не
+    зевни» (kind=blunder). Позиция — с очередью хода обороняющегося; угроза и верные ходы клиенту не отправляются.
+    """
+    __tablename__ = "defense_drills"
+    __table_args__ = (
+        UniqueConstraint("kind", "source", "source_id", name="uq_defense_drills_source"),
+        Index("ix_defense_drills_kind_stage", "kind", "stage"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(10), nullable=False)
+    source: Mapped[str] = mapped_column(String(20), nullable=False)
+    source_id: Mapped[str] = mapped_column(String(20), nullable=False)
+    fen: Mapped[str] = mapped_column(String(100), nullable=False)
+    # threat: ход соперника, который грозит (если бы ход был его); blunder — нет.
+    threat: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    # blunder: три хода на выбор и опровержения проигрывающих («ход:ответ» через пробел).
+    choices: Mapped[str] = mapped_column(String(20), nullable=False, default="", server_default="")
+    refutations: Mapped[str] = mapped_column(String(30), nullable=False, default="", server_default="")
+    good_moves: Mapped[str] = mapped_column(String(30), nullable=False)
+    rating: Mapped[int] = mapped_column(Integer, nullable=False)
+    stage: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Темы тактики, которая стоит за угрозой или зевком (из исходной задачи) — объяснение после ответа.
+    motifs: Mapped[str] = mapped_column(String(300), nullable=False, default="", server_default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
 class PuzzleAttempt(Base):

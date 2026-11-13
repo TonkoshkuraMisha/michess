@@ -173,14 +173,22 @@ _stage_counts: dict[tuple[str, int], int] | None = None
 
 
 async def stage_counts(db: AsyncSession) -> dict[tuple[str, int], int]:
-    """Сколько задач у каждой темы на каждой ступени. База задач меняется только импортом — считается один раз."""
+    """
+    Сколько задач у каждой темы на каждой ступени. База задач меняется только импортом — считается один раз.
+    Темы «Что грозит соперник?» и «Не зевни» решаются защитными упражнениями (таск 13.6) — их счёт оттуда.
+    """
+    from src.services import defense_drills
+
     global _stage_counts
     if _stage_counts is None:
         rows = await db.execute(
             select(PuzzleTheme.theme, Puzzle.stage, func.count()).join(Puzzle, Puzzle.id == PuzzleTheme.puzzle_id)
             .group_by(PuzzleTheme.theme, Puzzle.stage)
         )
-        _stage_counts = {(theme, stage): count for theme, stage, count in rows}
+        counts = {(theme, stage): count for theme, stage, count in rows}
+        for key, count in (await defense_drills.stage_counts(db)).items():
+            counts[key] = counts.get(key, 0) + count
+        _stage_counts = counts
     return _stage_counts
 
 
@@ -228,7 +236,8 @@ async def pick_training(
     raise PuzzleError("no_puzzles_available", 404)
 
 
-async def _update_progress(db: AsyncSession, user_id: int, theme: str, stage: int, clean: bool) -> dict:
+async def update_theme_progress(db: AsyncSession, user_id: int, theme: str, stage: int, clean: bool) -> dict:
+    """Засчитать результат ступени темы (задача тренировки или защитное упражнение 13.6); коммит — за вызывающим."""
     progress = await _progress(db, user_id, theme)
     if progress is None:
         progress = ThemeProgress(user_id=user_id, theme=theme, stage=1, recent="", solved=0, mastered=False)
@@ -413,7 +422,7 @@ async def _finish(db: AsyncSession, user: User, puzzle: Puzzle, session: PuzzleS
                          rating_before=before, rating_after=user.puzzle_rating))
     training = None
     if session.training and session.stage:
-        training = await _update_progress(db, user.id, session.training, session.stage,
+        training = await update_theme_progress(db, user.id, session.training, session.stage,
                                           clean=solved and session.hints == 0)
     await db.commit()
     await _drop_session(user.id)

@@ -15,7 +15,8 @@ export default defineConfig({
     },
     test: {
         environment: 'jsdom',
-        setupFiles: ['./src/test/setup.ts'],
+        // storage.ts — первым: на Node 25+ подменяет собственный localStorage Node хранилищем jsdom.
+        setupFiles: ['./src/test/storage.ts', './src/test/setup.ts'],
         // npm run test:coverage (в CI): покрытие считается по всему src/, а не только по файлам,
         // которые импортируют тесты, — иначе непокрытые компоненты не попали бы в отчёт вовсе.
         coverage: {

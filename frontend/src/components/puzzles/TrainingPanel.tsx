@@ -8,7 +8,7 @@ import {BookOpen, CheckCircle2, Dumbbell, Shuffle} from 'lucide-react';
 import {renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
 import {UiError} from '../../services/apiErrors';
-import {puzzlesApi} from '../../services/puzzles';
+import {DEFENSE_DRILL_THEMES, puzzlesApi} from '../../services/puzzles';
 import type {DemoExample, ThemeOverview, TrainingOverview, TrainingTarget} from '../../services/puzzles';
 import {themeText} from '../../services/themes';
 import type {ThemeSection} from '../../services/themes';
@@ -147,10 +147,12 @@ export function TrainingPanel({onTrain, refreshKey}: Props) {
                         <p className="text-xs text-amber-200/80">{t('puzzles.training.noPuzzles')}</p>
                     ) : (
                         <div className="flex flex-wrap gap-1.5">
-                            <button type="button" onClick={() => void showDemo(current.code)} data-testid="theme-demo"
-                                    className="flex items-center gap-1 px-2 py-1 rounded bg-black/40 border border-amber-900/50 hover:border-amber-500 cursor-pointer">
-                                <BookOpen size={14}/> {t('puzzles.training.demo')}
-                            </button>
+                            {!DEFENSE_DRILL_THEMES[current.code] && (
+                                <button type="button" onClick={() => void showDemo(current.code)} data-testid="theme-demo"
+                                        className="flex items-center gap-1 px-2 py-1 rounded bg-black/40 border border-amber-900/50 hover:border-amber-500 cursor-pointer">
+                                    <BookOpen size={14}/> {t('puzzles.training.demo')}
+                                </button>
+                            )}
                             <button type="button" onClick={() => onTrain({theme: current.code, blind})}
                                     data-testid="theme-train"
                                     className="flex items-center gap-1 px-2 py-1 rounded bg-amber-800 hover:bg-amber-700 text-white font-bold cursor-pointer">
@@ -158,7 +160,7 @@ export function TrainingPanel({onTrain, refreshKey}: Props) {
                             </button>
                         </div>
                     )}
-                    {demo && <DemoViewer key={current.code} examples={demo}/>}
+                    {demo && demo.length > 0 && <DemoViewer key={current.code} examples={demo}/>}
                 </article>
             )}
 

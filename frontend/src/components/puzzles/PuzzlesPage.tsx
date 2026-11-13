@@ -1,5 +1,6 @@
 // --- FILE: frontend/src/components/puzzles/PuzzlesPage.tsx ---
 // Режим «Приёмы» (таск 13.4) — TrainingPanel: путь по теме реестра со ступенями и смешанные подборки.
+// Режим «Защита» (таск 13.6) — DefenseTrainer: «Что грозит?», «Не зевни», «Единственная защита».
 // Режим «Мои ошибки» (таск 13.5) — позиции перед ошибками в партиях игрока с повторением через интервалы.
 // Страница задач (таск 13.3): решение по рейтингу или теме, задача дня, режим на время (3/5 минут, три ошибки —
 // конец, личный рекорд), подсказка, «Показать решение», итог с изменением рейтинга, история и график рейтинга,
@@ -12,51 +13,27 @@ import {Puzzle as PuzzleIcon, Lightbulb, Flag, ArrowRight, GraduationCap, Timer,
 import {renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
 import {UiError} from '../../services/apiErrors';
-import {puzzlesApi} from '../../services/puzzles';
+import {DEFENSE_DRILL_THEMES, puzzlesApi} from '../../services/puzzles';
 import type {
-    HintResponse, PersonalAnswer, PersonalSummary, PersonalView, PuzzleProfile, PuzzleResult, PuzzleView,
+    DefenseKind, HintResponse, PersonalAnswer, PersonalSummary, PersonalView, PuzzleProfile, PuzzleResult, PuzzleView,
     TimedResult, TimedRun, TrainingTarget,
 } from '../../services/puzzles';
 import {fetchThemeRegistry, themeText} from '../../services/themes';
 import type {ThemeRegistry, ThemeSection} from '../../services/themes';
+import {DefenseTrainer} from './DefenseTrainer';
 import {PuzzleBoard} from './PuzzleBoard';
+import {solutionSan, toMove} from './puzzleNotation';
 import {TrainingPanel} from './TrainingPanel';
 
-type Mode = 'rated' | 'themes' | 'personal' | 'daily' | 'timed';
+type Mode = 'rated' | 'themes' | 'defense' | 'personal' | 'daily' | 'timed';
+const MODES: Mode[] = ['rated', 'themes', 'defense', 'personal', 'daily', 'timed'];
 type Phase = 'idle' | 'loading' | 'opponent' | 'solving' | 'waiting' | 'done';
 
 const OPPONENT_DELAY_MS = 500;
 const REPLY_DELAY_MS = 400;
 const SOLUTION_STEP_MS = 700;
 
-function toMove(uci: string) {
-    return {from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci.length > 4 ? uci[4] : undefined};
-}
-
-const FIGURINES: Record<'w' | 'b', Record<string, string>> = {
-    w: {K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘'},
-    b: {K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞'},
-};
-
-/** Фигурная нотация, как у наставника: понятна на любом языке. */
-function figurine(san: string, color: 'w' | 'b'): string {
-    return san.replace(/^[KQRBN]/, (letter) => FIGURINES[color][letter]).replace(/=([QRBN])/, (_, letter: string) => `=${FIGURINES[color][letter]}`);
-}
-
-/** Решение в привычной записи: «24. ♘f6+ ♚f8 25. ♖xf7#» — ходы от позиции fen. */
-export function solutionSan(fen: string, line: string[]): string {
-    const game = new Chess(fen);
-    const parts: string[] = [];
-    for (const uci of line) {
-        const number = game.moveNumber();
-        const white = game.turn() === 'w';
-        const move = game.move(toMove(uci));
-        const san = figurine(move.san, move.color);
-        if (white) parts.push(`${number}. ${san}`);
-        else parts.push(parts.length === 0 ? `${number}… ${san}` : san);
-    }
-    return parts.join(' ');
-}
+export {solutionSan};
 
 function errorOf(err: unknown): UiMessage {
     return err instanceof UiError ? err.ui : {key: 'common.networkError'};
@@ -107,6 +84,7 @@ export default function PuzzlesPage() {
     const [personalAnswer, setPersonalAnswer] = useState<PersonalAnswer | null>(null);
     const [personalSummary, setPersonalSummary] = useState<PersonalSummary | null>(null);
     const [trainingKey, setTrainingKey] = useState(0);
+    const [defenseKind, setDefenseKind] = useState<DefenseKind>('threat');
     const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
     const gameRef = useRef(new Chess());
 
@@ -334,11 +312,19 @@ export default function PuzzlesPage() {
         setTarget(null);
         setPersonal(null);
         if (next !== 'personal') setPersonalSummary(null);
-        if (next !== 'timed' && next !== 'themes') void load(next);
-        if (next === 'themes') setPhase('idle');
+        if (next !== 'timed' && next !== 'themes' && next !== 'defense') void load(next);
+        if (next === 'themes' || next === 'defense') setPhase('idle');
     };
 
     const startTraining = (next: TrainingTarget) => {
+        // «Что грозит?» и «Не зевни» — защитные упражнения (13.6), а не задачи базы.
+        const drill = next.theme ? DEFENSE_DRILL_THEMES[next.theme] : undefined;
+        if (drill) {
+            setDefenseKind(drill);
+            setMode('defense');
+            return;
+        }
+        setMode('themes');
         setTarget(next);
         void load('themes', next);
     };
@@ -353,6 +339,38 @@ export default function PuzzlesPage() {
     const turnText = puzzle ? t(puzzle.color === 'white' ? 'puzzles.yourMoveWhite' : 'puzzles.yourMoveBlack') : '';
     const showThemes = (mode !== 'timed' && !(target?.blind)) || phase === 'done';
     const training = result?.training ?? null;
+
+    const header = (
+        <>
+            <h1 className="flex items-center gap-2 text-lg font-bold text-amber-400">
+                <PuzzleIcon size={18}/> {t('puzzles.title')}
+            </h1>
+            {profile && (
+                <p data-testid="puzzle-profile">
+                    {t('puzzles.profile', {rating: profile.rating, games: profile.games, streak: profile.streak})}
+                </p>
+            )}
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 font-bold text-xs" role="tablist">
+                {MODES.map((m) => (
+                    <button key={m} type="button" role="tab" aria-selected={mode === m} data-testid={`puzzle-mode-${m}`}
+                            onClick={() => chooseMode(m)}
+                            className={`py-1.5 rounded border cursor-pointer flex items-center justify-center gap-1 ${mode === m
+                                ? 'bg-amber-800 text-white border-amber-400' : 'bg-black/35 border-amber-900/40'}`}>
+                        {m === 'daily' && <CalendarDays size={13}/>}
+                        {m === 'timed' && <Timer size={13}/>}
+                        {t(`puzzles.modes.${m}`)}
+                    </button>
+                ))}
+            </div>
+        </>
+    );
+
+    if (mode === 'defense') {
+        return (
+            <DefenseTrainer key={defenseKind} header={header} initialKind={defenseKind}
+                            onDefensiveMove={() => startTraining({theme: 'defensive_move', blind: false})}/>
+        );
+    }
 
     return (
         <div className="w-full max-w-6xl mx-auto p-3 sm:p-4 flex flex-col lg:flex-row gap-4" data-testid="puzzles-page">
@@ -377,26 +395,7 @@ export default function PuzzlesPage() {
 
             <aside className="flex-1 min-w-0 flex flex-col gap-3 text-sm text-boxwood-light">
                 <section className="bg-acacia-dark p-3 rounded-md border border-amber-700/40 flex flex-col gap-2">
-                    <h1 className="flex items-center gap-2 text-lg font-bold text-amber-400">
-                        <PuzzleIcon size={18}/> {t('puzzles.title')}
-                    </h1>
-                    {profile && (
-                        <p data-testid="puzzle-profile">
-                            {t('puzzles.profile', {rating: profile.rating, games: profile.games, streak: profile.streak})}
-                        </p>
-                    )}
-                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-1 font-bold text-xs" role="tablist">
-                        {(['rated', 'themes', 'personal', 'daily', 'timed'] as const).map((m) => (
-                            <button key={m} type="button" role="tab" aria-selected={mode === m} data-testid={`puzzle-mode-${m}`}
-                                    onClick={() => chooseMode(m)}
-                                    className={`py-1.5 rounded border cursor-pointer flex items-center justify-center gap-1 ${mode === m
-                                        ? 'bg-amber-800 text-white border-amber-400' : 'bg-black/35 border-amber-900/40'}`}>
-                                {m === 'daily' && <CalendarDays size={13}/>}
-                                {m === 'timed' && <Timer size={13}/>}
-                                {t(`puzzles.modes.${m}`)}
-                            </button>
-                        ))}
-                    </div>
+                    {header}
 
                     {mode === 'rated' && (
                         <label className="flex flex-col gap-1">
