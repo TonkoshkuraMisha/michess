@@ -9,10 +9,11 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Path
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.deps import get_current_user
+from src.core.errors import ApiError
 from src.db.session import get_db
 from src.models.lesson import LessonProgress
 from src.models.user import User
@@ -22,6 +23,9 @@ router = APIRouter()
 LESSON_ID_PATTERN = r"^[a-z0-9][a-z0-9-]{1,63}$"
 MAX_STEPS = 200
 MAX_EXAM_QUESTIONS = 10
+# Уроки — данные клиента, и сервер не знает их списка (таск A.8): потолок записей на игрока, чтобы произвольные id не
+# копились без конца. Уроков в плане — десятки.
+MAX_LESSON_RECORDS = 300
 
 
 class ProgressUpdate(BaseModel):
@@ -77,6 +81,11 @@ async def save_progress(
         select(LessonProgress).where(LessonProgress.user_id == user.id, LessonProgress.lesson_id == lesson_id)
     )).scalar_one_or_none()
     if progress is None:
+        count = (await db.execute(
+            select(func.count(LessonProgress.id)).where(LessonProgress.user_id == user.id)
+        )).scalar_one()
+        if count >= MAX_LESSON_RECORDS:
+            raise ApiError(409, "lesson_progress_limit", max=MAX_LESSON_RECORDS)
         progress = LessonProgress(user_id=user.id, lesson_id=lesson_id, step=0, steps_total=payload.steps_total)
         db.add(progress)
 

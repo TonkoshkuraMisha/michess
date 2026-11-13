@@ -67,3 +67,15 @@ def test_requires_login(client):
 ])
 def test_validation(client, token_user_1, lesson, body):
     assert put(client, token_user_1, lesson=lesson, **body).status_code == 422
+
+
+def test_progress_records_are_capped(client, token_user_1, monkeypatch):
+    from src.api import learn
+
+    monkeypatch.setattr(learn, "MAX_LESSON_RECORDS", 2)
+    assert put(client, token_user_1, lesson="lesson-one").status_code == 200
+    assert put(client, token_user_1, lesson="lesson-two").status_code == 200
+    over = put(client, token_user_1, lesson="lesson-three")
+    assert over.status_code == 409 and over.json()["detail"]["code"] == "lesson_progress_limit"
+    # Уже начатые уроки по-прежнему сохраняются.
+    assert put(client, token_user_1, lesson="lesson-one", step=3).status_code == 200

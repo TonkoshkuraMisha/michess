@@ -666,6 +666,7 @@ export const en = {
         custom_opponent_missing: 'A workshop opponent needs a name or a saved opponent',
         ladder_game_missing: 'The ladder game was not started or is out of date',
         ladder_game_mismatch: 'The game does not match the open ladder game',
+        lesson_progress_limit: 'Too many lessons in progress (limit {max})',
         tournament_not_found: 'Tournament not found',
         tournament_active_exists: 'You already have a tournament in progress — finish it first',
         tournament_size_invalid: 'This format needs {sizes} participants',
