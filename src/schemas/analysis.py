@@ -73,6 +73,25 @@ class AdviceResponse(CoachComment):
     eval_cp: int | None = Field(default=None, description="Оценка с точки зрения белых; None — движок недоступен")
 
 
+class MoveCheckRequest(BaseModel):
+    fen: str = Field(..., max_length=100, description="Позиция до хода игрока")
+    move: str = Field(..., min_length=4, max_length=5, description="Ход игрока в UCI")
+
+
+class MoveCheckResponse(BaseModel):
+    """Проверка хода. available=False — движка нет, проверка не проводилась (остальные поля пустые)."""
+    available: bool
+    cp_loss: int | None = None
+    classification: str | None = None
+    symbol: str | None = None
+    eval_before: int | None = Field(default=None, description="Оценка до хода с точки зрения сходившего")
+    eval_after: int | None = Field(default=None, description="Оценка после хода с точки зрения сходившего")
+    best_move_uci: str | None = None
+    reply_uci: str | None = None
+    missed_tactic: bool = False
+    coach: CoachComment | None = None
+
+
 class FullGameAnalysisResponse(BaseModel):
     game_id: int
     format_version: int

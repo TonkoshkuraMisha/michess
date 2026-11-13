@@ -65,6 +65,9 @@ class Game(Base):
     # Имя персоналии из мастерской соперников: в базе соперник — общий бот-пользователь,
     # в архиве и PGN показывается имя, которое дал ему игрок.
     personality_name: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    # Учебная партия (правило 2 Части II): игрок пользовался наставником — советами или проверкой ходов.
+    # Без рейтинга (партии с ботами и так без рейтинга), в архиве помечается.
+    assisted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

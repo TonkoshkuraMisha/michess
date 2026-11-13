@@ -48,6 +48,7 @@ ERROR_MESSAGES: dict[str, str] = {
     "invalid_position": "The position is impossible under the rules of chess",
     "game_already_over": "The game is already over in this position",
     "invalid_history_move": "Invalid move in the history: {move}",
+    "illegal_move": "Illegal move in this position: {move}",
     "illegal_history_move": "Illegal move in the history: {move}",
     "empty_moves": "The move list is empty",
     "invalid_player_color": "Invalid player color",

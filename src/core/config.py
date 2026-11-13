@@ -96,6 +96,9 @@ class Settings(BaseSettings):
     # Совет наставника по позиции (POST /analysis/advice) — свой лимит: это тоже работа движка
     RATE_LIMIT_ADVICE: int = 20
     RATE_LIMIT_ADVICE_GUEST: int = 6
+    # Проверка хода в игре с наставником (POST /analysis/check-move): каждый ход игрока — один запрос
+    RATE_LIMIT_MOVE_CHECK: int = 60
+    RATE_LIMIT_MOVE_CHECK_GUEST: int = 20
 
     # Authentication: attempts per IP, failed logins per account, registrations per IP
     RATE_LIMIT_LOGIN_PER_IP: int = 20

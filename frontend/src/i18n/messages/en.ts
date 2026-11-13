@@ -629,6 +629,7 @@ export const en = {
         invalid_position: 'This position is impossible under the rules of chess',
         game_already_over: 'The game is already over in this position',
         invalid_history_move: 'Invalid move in the game record: {move}',
+        illegal_move: 'Illegal move in this position: {move}',
         illegal_history_move: 'Illegal move in the game record: {move}',
         empty_moves: 'The game has no moves',
         invalid_player_color: 'Invalid player color',
@@ -875,6 +876,33 @@ export const en = {
     },
     // Наставник (src/services/coach.py): фигуры и поля приходят фигурной нотацией («♘f7»), поэтому
     // фразы не склоняют названия фигур. У каждого шаблона две формулировки (v1, v2).
+    coachMode: {
+        title: 'Play with a coach',
+        hint: 'The coach checks each of your moves against a bot or on the free board and warns you about mistakes. Such games are training games.',
+        levelLabel: 'When to warn',
+        advice: 'Advice',
+        thinking: 'Thinking…',
+        hintsUsed: 'Advice used: {count}',
+        checking: 'The coach is looking at your move…',
+        assistedGame: 'Training game: it will be saved with a coach mark.',
+        lockedLadder: 'The coach is off in ladder games: such a game would not count.',
+        verdictBlunder: 'Careful, that is a serious blunder.',
+        verdictMistake: 'That move is a mistake.',
+        verdictInaccuracy: 'There is a stronger move here.',
+        verdictMissed: 'Take another look at the position.',
+        missedTactic: 'You missed a tactical blow.',
+        why: 'Why?',
+        takeBack: 'Take the move back',
+        keep: 'Keep the move',
+        legend: 'Green arrow: the best move; red: the opponent\'s threat; blue: the idea.',
+        unavailable: 'The coach is unavailable right now, please try again later.',
+        archiveBadge: 'with coach',
+        levels: {
+            novice: 'Beginner: only blunders',
+            amateur: 'Amateur: mistakes and missed blows',
+            strong: 'Strong: inaccuracies too',
+        },
+    },
     coach: {
         verdict: {
             inaccuracy: {
