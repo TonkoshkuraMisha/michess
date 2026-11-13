@@ -99,6 +99,8 @@ class Settings(BaseSettings):
     # Проверка хода в игре с наставником (POST /analysis/check-move): каждый ход игрока — один запрос
     RATE_LIMIT_MOVE_CHECK: int = 60
     RATE_LIMIT_MOVE_CHECK_GUEST: int = 20
+    # Задачи (/puzzles/*): ход, подсказка, выдача — с запасом на режим на время
+    RATE_LIMIT_PUZZLES: int = 240
 
     # Authentication: attempts per IP, failed logins per account, registrations per IP
     RATE_LIMIT_LOGIN_PER_IP: int = 20
