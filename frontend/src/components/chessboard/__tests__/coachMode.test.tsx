@@ -339,6 +339,22 @@ describe('AuxBoard', () => {
         expect(squares[0]).toBe('h1');
     });
 
+    it('перетаскивание фигуры делает ход; без режимов рентгена слоя нет, с режимами — есть', () => {
+        const {rerender} = render(<AuxBoard fen={new Chess().fen()} flipped={false} lightColor="#eee" darkColor="#555"
+                                            renderPiece={renderPiece} onClose={vi.fn()}/>);
+        expect(screen.queryByTestId('xray-overlay')).toBeNull();
+        fireEvent.pointerDown(auxSquare('g1'), {pointerType: 'mouse', button: 0, clientX: 10, clientY: 10});
+        document.elementsFromPoint = () => [auxSquare('f3')];
+        fireEvent.pointerMove(window, {clientX: 60, clientY: 60});
+        expect(screen.getByTestId('aux-drag-piece').textContent).toBe('wn');
+        fireEvent.pointerUp(window, {clientX: 60, clientY: 60});
+        expect(screen.getByTestId('aux-moves').textContent).toBe('Nf3');
+
+        rerender(<AuxBoard fen={new Chess().fen()} flipped={false} lightColor="#eee" darkColor="#555"
+                           renderPiece={renderPiece} onClose={vi.fn()} xrayModes={new Set(['control'] as const)}/>);
+        expect(screen.getByTestId('xray-overlay')).toBeTruthy();
+    });
+
     it('превращение: игрок выбирает фигуру, отмена оставляет пешку', () => {
         render(<AuxBoard fen="8/4P2k/8/8/8/8/8/4K3 w - - 0 1" flipped={false} lightColor="#eee" darkColor="#555"
                          renderPiece={renderPiece} onClose={vi.fn()}/>);

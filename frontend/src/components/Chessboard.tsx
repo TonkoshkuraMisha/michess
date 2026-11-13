@@ -1727,7 +1727,8 @@ export default function Chessboard() {
                     >
                         <AuxBoard key={auxOpen ? 'aux-open' : 'aux-closed'} fen={game.fen()} flipped={isBoardFlipped}
                                   lightColor={activeTheme.light} darkColor={activeTheme.dark}
-                                  renderPiece={renderPieceSvg} onClose={() => setAuxOpen(false)}/>
+                                  renderPiece={renderPieceSvg} onClose={() => setAuxOpen(false)}
+                                  xrayModes={xrayAvailable ? xray.modes : undefined} xrayForOpponent={xray.forOpponent}/>
                     </CoachPanel>
                 )}
 
