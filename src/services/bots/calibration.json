@@ -1,0 +1,137 @@
+{
+  "meta": {
+    "date": "2026-11-13",
+    "games": 452,
+    "anchors": [
+      1350,
+      1600,
+      1850,
+      2100,
+      2400
+    ],
+    "anchor_movetime_s": 1.0,
+    "minutes": 52.3,
+    "scale": "Stockfish UCI_Elo anchors at our time control (not FIDE)"
+  },
+  "players": {
+    "archetype:quiet": {
+      "rating": 1287,
+      "games": 36,
+      "score": 9.5,
+      "ci95": 169,
+      "declared": 900
+    },
+    "archetype:strategist": {
+      "rating": 2167,
+      "games": 44,
+      "score": 26.5,
+      "ci95": 113,
+      "declared": 1800
+    },
+    "philidor": {
+      "rating": 2272,
+      "games": 44,
+      "score": 30.0,
+      "ci95": 119,
+      "declared": 1850
+    },
+    "zukertort": {
+      "rating": 2376,
+      "games": 44,
+      "score": 22.0,
+      "ci95": 111,
+      "declared": 2120
+    },
+    "labourdonnais": {
+      "rating": 2220,
+      "games": 44,
+      "score": 24.5,
+      "ci95": 114,
+      "declared": 1950
+    },
+    "archetype:combinator": {
+      "rating": 2457,
+      "games": 28,
+      "score": 19.5,
+      "ci95": 147,
+      "declared": 2200
+    },
+    "archetype:rusher": {
+      "rating": 1117,
+      "games": 28,
+      "score": 4.0,
+      "ci95": 204,
+      "declared": 700
+    },
+    "anderssen": {
+      "rating": 2458,
+      "games": 44,
+      "score": 29.5,
+      "ci95": 115,
+      "declared": 2100
+    },
+    "archetype:centralist": {
+      "rating": 1954,
+      "games": 44,
+      "score": 27.0,
+      "ci95": 119,
+      "declared": 1400
+    },
+    "archetype:fortress": {
+      "rating": 2082,
+      "games": 44,
+      "score": 30.0,
+      "ci95": 120,
+      "declared": 1550
+    },
+    "archetype:hunter": {
+      "rating": 2262,
+      "games": 44,
+      "score": 22.0,
+      "ci95": 121,
+      "declared": 2000
+    },
+    "paulsen": {
+      "rating": 2472,
+      "games": 44,
+      "score": 31.0,
+      "ci95": 117,
+      "declared": 2080
+    },
+    "archetype:pawn_keeper": {
+      "rating": 1694,
+      "games": 44,
+      "score": 26.0,
+      "ci95": 143,
+      "declared": 1100
+    },
+    "archetype:adventurer": {
+      "rating": 2055,
+      "games": 44,
+      "score": 24.5,
+      "ci95": 120,
+      "declared": 1650
+    },
+    "staunton": {
+      "rating": 2354,
+      "games": 44,
+      "score": 29.5,
+      "ci95": 119,
+      "declared": 2000
+    },
+    "morphy": {
+      "rating": 2411,
+      "games": 36,
+      "score": 21.0,
+      "ci95": 124,
+      "declared": 2150
+    },
+    "archetype:cavalier": {
+      "rating": 1904,
+      "games": 44,
+      "score": 29.5,
+      "ci95": 131,
+      "declared": 1250
+    }
+  }
+}
