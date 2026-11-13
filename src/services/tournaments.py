@@ -239,6 +239,41 @@ async def _advance_knockout(db: AsyncSession, tournament: Tournament) -> None:
         _add_game(db, tournament, tournament.current_round, board, rules.match_game(high, low, "main"))
 
 
+@dataclass(frozen=True)
+class PlayerGame:
+    """Партия турнира, которую играет игрок: турнир, партия, его цвет и соперник."""
+
+    tournament: Tournament
+    game: TournamentGame
+    color: Literal["white", "black"]
+    opponent: TournamentPlayer
+
+
+async def player_game(db: AsyncSession, user: User, tournament_game_id: int) -> PlayerGame:
+    """Партия текущего круга активного турнира игрока, ещё без результата; иначе DomainError."""
+    game = await db.get(TournamentGame, tournament_game_id)
+    tournament = await db.get(Tournament, game.tournament_id) if game else None
+    if game is None or tournament is None or tournament.owner_id != user.id:
+        raise DomainError("tournament_not_found")
+    if tournament.status != "active" or game.result is not None or game.round != tournament.current_round:
+        raise DomainError("tournament_game_closed")
+    seats = {p.seat: p for p in await players_of(db, tournament.id)}
+    mine = next((p.seat for p in seats.values() if p.user_id == user.id), None)
+    if mine not in (game.white_seat, game.black_seat):
+        raise DomainError("tournament_game_mismatch")
+    color: Literal["white", "black"] = "white" if game.white_seat == mine else "black"
+    opponent = seats[game.black_seat if color == "white" else game.white_seat]
+    return PlayerGame(tournament, game, color, opponent)
+
+
+def opponent_matches(opponent: TournamentPlayer, bot_id: str, personality_name: str | None) -> bool:
+    """Партию сыграли с тем соперником, что в турнире: бот — по id, архетип — по ключу, персоналия — по имени."""
+    if opponent.kind == "bot":
+        return bot_id == opponent.bot_key
+    expected = opponent.bot_key if opponent.kind == "archetype" else opponent.personality_name
+    return bot_id == "custom" and personality_name == expected
+
+
 async def simulatable_games(db: AsyncSession, tournament: Tournament) -> list[TournamentGame]:
     """Партии текущего круга без результата, где оба участника — боты: их играет сервер (таск 15.2)."""
     if tournament.status != "active":

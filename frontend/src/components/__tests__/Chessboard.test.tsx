@@ -620,3 +620,46 @@ describe('рентген доски', () => {
         expect(screen.getByTestId('xray-panel')).toBeInTheDocument();
     });
 });
+
+describe('партия турнира', () => {
+    it('стартует с турнирным контролем, без возврата хода, результат уходит в турнир', async () => {
+        vi.spyOn(window, 'confirm').mockReturnValue(true);
+        const fetchMock = mockFetchRouter({
+            '/profile/me': () => ({id: 1, username: 'TestPlayer', blitz_rating: 1500}),
+            '/profile/matchmaking/queue': () => [],
+            '/profile/games/live': () => [],
+            '/profile/games/my-active': () => ({active: false}),
+            '/bots/catalog': () => ({calibration: null, historical: [], archetypes: []}),
+            '/bots/move': () => BOT_MOVE_DEFAULT,
+            '/bots/save-game': () => ({game_id: 1002, status: 'finished', result: '0-1', tournament_id: 7}),
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        const tournamentGame = {
+            tournamentId: 7, gameId: 31, color: 'white', baseTimeMs: 150000, incrementMs: 1000, botId: 'morphy', custom: null,
+        };
+        render(
+            <MemoryRouter initialEntries={[{pathname: '/', state: {tournamentGame}}]}>
+                <Chessboard/>
+            </MemoryRouter>,
+        );
+
+        expect(await screen.findByTestId('back-to-tournament')).toHaveAttribute('href', '/tournaments/7');
+        expect(screen.getAllByText('02:30').length).toBeGreaterThan(0);  // 2,5 минуты — укороченный контроль переигровки
+
+        clickSquare('e2');
+        clickSquare('e4');
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(200);
+        });
+        expect(screen.getByRole('button', {name: /Вернуть ход/})).toBeDisabled();
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', {name: /Сдаться/}));
+        });
+        const saveCall = (fetchMock.mock.calls as unknown as [string, RequestInit][])
+            .find(([url]) => String(url).includes('/bots/save-game'));
+        expect(JSON.parse(String(saveCall?.[1].body))).toMatchObject({
+            bot_id: 'morphy', player_color: 'white', tournament_game_id: 31, base_time_ms: 150000, increment_ms: 1000,
+        });
+    });
+});

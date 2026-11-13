@@ -101,6 +101,8 @@ export interface LadderOutcome {
 export interface BotGameStartOptions {
     /** Партия клубной лестницы: без возврата ходов, итог меняет рейтинг лестницы. */
     ladder?: boolean;
+    /** Партия турнира (таск 15.3): без возврата ходов, результат записывается в турнир. */
+    tournamentGameId?: number;
 }
 
 /** Итог партии лестницы для строки статуса; reason пока приходит с сервера текстом (до таска 11.0c). */
@@ -149,6 +151,10 @@ export interface UseBotGameResult {
     ) => void;
     /** Идёт (или только что сыграна) партия клубной лестницы. */
     isLadderGame: boolean;
+    /** Идёт (или только что сыграна) партия турнира. */
+    isTournamentGame: boolean;
+    /** Турнир, в который записан результат последней сохранённой партии (для ссылки «К турниру»). */
+    savedTournamentId: number | null;
     /** Итог последней сохранённой партии лестницы (для обновления панели лестницы). */
     ladderOutcome: LadderOutcome | null;
     /** Профиль бота для доски и панели — исторического или собранного в мастерской. */
@@ -193,6 +199,9 @@ export function useBotGame({
     const customOpponentRef = useRef<CustomOpponent | null>(null);
     const ladderRef = useRef<boolean>(false);
     const [isLadderGame, setIsLadderGame] = useState<boolean>(false);
+    const tournamentGameRef = useRef<number | null>(null);
+    const [isTournamentGame, setIsTournamentGame] = useState<boolean>(false);
+    const [savedTournamentId, setSavedTournamentId] = useState<number | null>(null);
     const [ladderOutcome, setLadderOutcome] = useState<LadderOutcome | null>(null);
 
     const botProfileFor = useCallback((id: BotOpponentId): HistoricalBotProfile => {
@@ -234,6 +243,7 @@ export function useBotGame({
                 body: JSON.stringify({
                     bot_id: botId, player_color: playerColor, result,
                     ladder: ladderRef.current,
+                    ...(tournamentGameRef.current ? {tournament_game_id: tournamentGameRef.current} : {}),
                     assisted: Boolean(isAssisted?.()),
                     // Соперник из мастерской: сохранённый — по id, несохранённый — по имени.
                     ...(botId === 'custom' && customOpponentRef.current
@@ -258,6 +268,10 @@ export function useBotGame({
                     setGameOverResult(data.result);
                     setDrawOfferStatus(status('status.fideResult', {result: data.result}));
                 }
+                if (data.tournament_id) {
+                    setSavedTournamentId(data.tournament_id);
+                    setDrawOfferStatus(status('tournaments.gameSaved'));
+                }
                 if (data.ladder) {
                     setLadderOutcome(data.ladder);
                     setDrawOfferStatus(ladderOutcomeMessage(data.ladder));
@@ -276,6 +290,9 @@ export function useBotGame({
     ) => {
         ladderRef.current = Boolean(options.ladder);
         setIsLadderGame(Boolean(options.ladder));
+        tournamentGameRef.current = options.tournamentGameId ?? null;
+        setIsTournamentGame(Boolean(options.tournamentGameId));
+        setSavedTournamentId(null);
         if (isSearching) {
             setIsSearching(false);
             gameSocket.send('leave_queue', {});
@@ -486,6 +503,8 @@ export function useBotGame({
     const exitBotGame = useCallback(() => {
         ladderRef.current = false;
         setIsLadderGame(false);
+        tournamentGameRef.current = null;
+        setIsTournamentGame(false);
         setActiveBot(null);
         setBotComment(null);
         setIsBotThinking(false);
@@ -498,6 +517,6 @@ export function useBotGame({
     return {
         selectedBotId, setSelectedBotId, botComment, isBotThinking, savedBotGameId,
         startHistoricalBotGame, startCustomBotGame, botProfileFor, botNameParam, saveBotGameToDatabase, exitBotGame,
-        isLadderGame, ladderOutcome, customArchetypeId,
+        isLadderGame, ladderOutcome, customArchetypeId, isTournamentGame, savedTournamentId,
     };
 }
