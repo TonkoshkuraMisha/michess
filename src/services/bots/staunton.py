@@ -77,7 +77,7 @@ class StauntonBot(HistoricalBot):
     opening_book = STAUNTON_OPENING_BOOK
     style = STAUNTON_STYLE
     default_skill_level = 7
-    default_uci_elo = 1750
+    default_uci_elo = 2000
 
 
 staunton_bot = StauntonBot()

@@ -294,11 +294,11 @@ class PersonalityBot(HistoricalBot):
         self.default_comment = default_comment_for(config)
 
     def _select_move(
-            self, board: chess.Board, scores: dict[chess.Move, float],
+            self, board: chess.Board, scores: dict[chess.Move, float], reference: chess.Move | None = None,
     ) -> tuple[chess.Move, str | None]:
         # Управляемая ошибка ниже 1320: одна из более слабых линий вместо выбора по стилю.
         if self.strength.error_rate and len(scores) > 1 and random.random() < self.strength.error_rate:
             ranked = sorted(scores, key=lambda mv: scores[mv], reverse=True)
             weaker = random.choice(ranked[1:])
             return weaker, self.evaluate_style_bonus(board, weaker)[1]
-        return super()._select_move(board, scores)
+        return super()._select_move(board, scores, reference)

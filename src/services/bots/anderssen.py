@@ -65,7 +65,7 @@ class AnderssenBot(HistoricalBot):
     opening_book = ANDERSSEN_OPENING_BOOK
     style = ANDERSSEN_STYLE
     default_skill_level = 8
-    default_uci_elo = 1820
+    default_uci_elo = 2100
 
 
 anderssen_bot = AnderssenBot()

@@ -82,7 +82,7 @@ class PaulsenBot(HistoricalBot):
     opening_book = PAULSEN_OPENING_BOOK
     style = PAULSEN_STYLE
     default_skill_level = 8
-    default_uci_elo = 1800
+    default_uci_elo = 2080
 
 
 paulsen_bot = PaulsenBot()

@@ -75,7 +75,7 @@ class MorphyBot(HistoricalBot):
     opening_book = MORPHY_OPENING_BOOK
     style = MORPHY_STYLE
     default_skill_level = 8
-    default_uci_elo = 1850
+    default_uci_elo = 2150
 
 
 morphy_bot = MorphyBot()
