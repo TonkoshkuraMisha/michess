@@ -12,6 +12,7 @@ from src.api.rate_limit import rate_limit
 from src.core.errors import DomainValueError
 from src.db.session import get_db
 from src.models.user import User
+from src.services import personal_puzzles
 from src.services import puzzles as service
 
 router = APIRouter(dependencies=[Depends(rate_limit("puzzles", "RATE_LIMIT_PUZZLES"))])
@@ -87,6 +88,37 @@ async def daily(user: User = Depends(get_current_user), db: AsyncSession = Depen
         raise _http(exc) from exc
     await service.start(user, puzzle, daily=True)
     return {**service.public_view(puzzle), "daily": True}
+
+
+@router.get("/personal")
+async def personal_summary(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """«Ваши ошибки» (таск 13.5): сколько задач к повторению сейчас, всего в работе, освоено, когда следующая."""
+    return await personal_puzzles.summary(db, user)
+
+
+@router.get("/personal/next")
+async def personal_next(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    puzzle = await personal_puzzles.next_due(db, user)
+    if puzzle is None:
+        raise service.PuzzleError("no_puzzles_available", 404).to_http(404)
+    return personal_puzzles.view(puzzle)
+
+
+@router.post("/personal/{puzzle_id}/answer")
+async def personal_answer(puzzle_id: int, payload: MoveRequest, user: User = Depends(get_current_user),
+                          db: AsyncSession = Depends(get_db)):
+    try:
+        return await personal_puzzles.answer(db, user, puzzle_id, payload.move)
+    except service.PuzzleError as exc:
+        raise _http(exc) from exc
+    except DomainValueError as exc:
+        raise exc.to_http(400) from exc
+
+
+@router.get("/personal/game/{game_id}")
+async def personal_for_game(game_id: int, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Полуходы партии, из которых сделаны задачи игрока — значок в разборе партии."""
+    return {"game_id": game_id, "plies": await personal_puzzles.plies_for_game(db, game_id, user)}
 
 
 @router.post("/timed/start")

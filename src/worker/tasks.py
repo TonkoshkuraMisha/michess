@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from src.core.config import settings
+from src.services import personal_puzzles
 from src.services.analysis_service import analysis_service
 from src.services.engine_pool import EngineBusyError
 
@@ -37,7 +38,15 @@ async def _prewarm_game_analysis_async(game_id: int) -> dict:
     try:
         session_factory = async_sessionmaker(engine, expire_on_commit=False)
         async with session_factory() as db:
-            return await analysis_service.analyze_full_game(db, game_id, force=False)
+            report = await analysis_service.analyze_full_game(db, game_id, force=False)
+            # Задачи из ошибок игрока (таск 13.5) — по готовому разбору; сбой здесь разбор не отменяет.
+            try:
+                await personal_puzzles.extract_for_game(db, game_id)
+            except EngineBusyError:
+                raise
+            except Exception:
+                logger.exception("Personal puzzles extraction failed for game %s", game_id)
+            return report
     finally:
         await engine.dispose()
 

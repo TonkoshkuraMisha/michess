@@ -922,8 +922,22 @@ export const en = {
         modes: {
             rated: 'By rating',
             themes: 'Themes',
+            personal: 'My mistakes',
             daily: 'Of the day',
             timed: 'Timed',
+        },
+        personal: {
+            task: 'This happened in your game. Find the strong move!',
+            summary: 'To review now: {due} · in progress: {active} · mastered: {mastered}',
+            none: 'No puzzles from your games yet. They appear after games where a strong move was missed.',
+            allDone: 'All puzzles for today are done. The next one in {days} d.',
+            right: 'Correct!',
+            wrong: 'Not this move.',
+            again: 'We will come back to it in {days} d.',
+            mastered: 'Solved twice in a row — mastered.',
+            inGame: 'In the game you played {move}; the strong move was {best}.',
+            openGame: 'Open the game',
+            badge: 'A puzzle was made from this move',
         },
         training: {
             loading: 'Loading themes…',

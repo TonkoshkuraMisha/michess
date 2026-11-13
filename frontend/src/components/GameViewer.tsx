@@ -36,6 +36,8 @@ import {coachArrows, coachHighlights, coachText} from '../services/coach';
 import type {CoachArrowKind, CoachComment} from '../services/coach';
 import {isSummaryKind} from '../services/gameSummary';
 import {XrayOverlay} from './xray/XrayOverlay';
+import {Puzzle as PuzzleBadgeIcon} from 'lucide-react';
+import {puzzlesApi} from '../services/puzzles';
 import {XrayPanel} from './xray/XrayPanel';
 import {useXraySettings} from './xray/useXraySettings';
 import type {GameSummary} from '../services/gameSummary';
@@ -442,6 +444,14 @@ export default function GameViewer() {
     const [showCoachArrows, setShowCoachArrows] = useState(true);
     // Рентген доски (таск 12.1): в разборе — за сторону, которая ходит в показанной позиции.
     const xray = useXraySettings();
+    // Ходы этой партии, из которых сделаны задачи «Ваши ошибки» (таск 13.5) — только свои, только с токеном.
+    const [personalPlies, setPersonalPlies] = useState<Set<number>>(new Set());
+    useEffect(() => {
+        if (!gameId || !localStorage.getItem('token')) return;
+        puzzlesApi.personalPlies(Number(gameId))
+            .then((body) => setPersonalPlies(new Set(body.plies)))
+            .catch(() => undefined);
+    }, [gameId]);
     const currentCoach = viewIndex >= 0 ? analysisReport?.moves[viewIndex]?.coach ?? null : null;
     const currentCoachText = coachText(currentCoach, t);
     const visibleCoachArrows = showCoachArrows ? coachArrows(currentCoach) : [];
@@ -1167,6 +1177,11 @@ export default function GameViewer() {
                                                     {whiteAnalysis.symbol}
                                                 </span>
                                             )}
+                                            {personalPlies.has(pair.whiteIndex + 1) && (
+                                                <PuzzleBadgeIcon size={11} className="inline ml-1 text-sky-300"
+                                                                 aria-label={t('puzzles.personal.badge')}
+                                                                 data-testid={`personal-badge-${pair.whiteIndex + 1}`}/>
+                                            )}
                                         </span>
                                         {whiteAnalysis && (
                                             <span className="text-[10px] text-boxwood/55 shrink-0">
@@ -1195,6 +1210,11 @@ export default function GameViewer() {
                                                         className={`ml-0.5 ${classificationBadgeClass(blackAnalysis.classification)}`}>
                                                         {blackAnalysis.symbol}
                                                     </span>
+                                                )}
+                                                {personalPlies.has(pair.blackIndex + 1) && (
+                                                    <PuzzleBadgeIcon size={11} className="inline ml-1 text-sky-300"
+                                                                     aria-label={t('puzzles.personal.badge')}
+                                                                     data-testid={`personal-badge-${pair.blackIndex + 1}`}/>
                                                 )}
                                             </span>
                                             {blackAnalysis && (

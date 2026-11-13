@@ -67,6 +67,33 @@ class ThemeProgress(Base):
                                                  onupdate=func.now())
 
 
+class PersonalPuzzle(Base):
+    """
+    Задача из партии игрока (таск 13.5): позиция перед его ошибкой и единственный сильный ход. Повторение с
+    интервалами: нерешённая возвращается через 1, 3, 7, 21 день, пока не решится дважды подряд (тогда done).
+    """
+    __tablename__ = "personal_puzzles"
+    __table_args__ = (UniqueConstraint("user_id", "game_id", "ply", name="uq_personal_puzzles_move"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    game_id: Mapped[int] = mapped_column(ForeignKey("games.id", ondelete="CASCADE"), nullable=False, index=True)
+    # Полуход ошибки (1 — первый ход партии) и позиция перед ним; предыдущий ход — для подсветки.
+    ply: Mapped[int] = mapped_column(Integer, nullable=False)
+    fen: Mapped[str] = mapped_column(String(100), nullable=False)
+    previous_move: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    solution: Mapped[str] = mapped_column(String(5), nullable=False)
+    played: Mapped[str] = mapped_column(String(5), nullable=False)
+    cp_loss: Mapped[int] = mapped_column(Integer, nullable=False)
+    themes: Mapped[str] = mapped_column(String(300), nullable=False, default="")
+    interval_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    solved_streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    done: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    due_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
 class PuzzleAttempt(Base):
     __tablename__ = "puzzle_attempts"
 

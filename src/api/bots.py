@@ -33,6 +33,7 @@ from src.services.bots.staunton import staunton_bot
 from src.services.bots.zukertort import zukertort_bot
 from src.services.game_engine import board_from_start_fen, flag_outcome, is_standard_start, terminal_outcome
 from src.services.rating import classify_time_control
+from src.services.task_dispatch import schedule_game_analysis_in_background
 
 router = APIRouter()
 
@@ -683,6 +684,8 @@ async def save_bot_game(
     await db.refresh(new_game)
     if ladder_game is not None:
         await ladder_service.clear_session(current_user.id)
+    # Фоновый разбор: итог партии готов заранее, а из ошибок игрока делаются личные задачи (таск 13.5).
+    schedule_game_analysis_in_background(new_game.id)
 
     return BotGameSaveResponse(
         game_id=new_game.id,
