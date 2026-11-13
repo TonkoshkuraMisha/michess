@@ -12,7 +12,7 @@ import itertools
 import time
 
 from src.db.session import AsyncSessionLocal
-from src.services.puzzle_import import import_rows, read_subset
+from src.services.puzzle_import import import_rows, read_subset, retag_outdated
 
 
 async def main() -> None:
@@ -25,7 +25,8 @@ async def main() -> None:
     started = time.monotonic()
     async with AsyncSessionLocal() as db:
         added, skipped = await import_rows(db, rows)
-    print(f"Puzzles: added {added}, skipped {skipped} in {time.monotonic() - started:.1f}s")
+        retagged = await retag_outdated(db)
+    print(f"Puzzles: added {added}, skipped {skipped}, retagged {retagged} in {time.monotonic() - started:.1f}s")
 
 
 if __name__ == "__main__":

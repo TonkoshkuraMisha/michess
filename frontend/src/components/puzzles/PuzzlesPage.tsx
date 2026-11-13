@@ -1,4 +1,5 @@
 // --- FILE: frontend/src/components/puzzles/PuzzlesPage.tsx ---
+// Режим «Приёмы» (таск 13.4) — TrainingPanel: путь по теме реестра со ступенями и смешанные подборки.
 // Страница задач (таск 13.3): решение по рейтингу или теме, задача дня, режим на время (3/5 минут, три ошибки —
 // конец, личный рекорд), подсказка, «Показать решение», итог с изменением рейтинга, история и график рейтинга,
 // «Разобрать с наставником» — позиция задачи на свободной доске с включённым наставником.
@@ -11,12 +12,15 @@ import {renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
 import {UiError} from '../../services/apiErrors';
 import {puzzlesApi} from '../../services/puzzles';
-import type {HintResponse, PuzzleProfile, PuzzleResult, PuzzleView, TimedResult, TimedRun} from '../../services/puzzles';
+import type {
+    HintResponse, PuzzleProfile, PuzzleResult, PuzzleView, TimedResult, TimedRun, TrainingTarget,
+} from '../../services/puzzles';
 import {fetchThemeRegistry, themeText} from '../../services/themes';
 import type {ThemeRegistry, ThemeSection} from '../../services/themes';
 import {PuzzleBoard} from './PuzzleBoard';
+import {TrainingPanel} from './TrainingPanel';
 
-type Mode = 'rated' | 'daily' | 'timed';
+type Mode = 'rated' | 'themes' | 'daily' | 'timed';
 type Phase = 'idle' | 'loading' | 'opponent' | 'solving' | 'waiting' | 'done';
 
 const OPPONENT_DELAY_MS = 500;
@@ -96,6 +100,8 @@ export default function PuzzlesPage() {
     const [secondsLeft, setSecondsLeft] = useState(0);
     const [timedResult, setTimedResult] = useState<TimedResult | null>(null);
     const [error, setError] = useState<UiMessage | null>(null);
+    const [target, setTarget] = useState<TrainingTarget | null>(null);
+    const [trainingKey, setTrainingKey] = useState(0);
     const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
     const gameRef = useRef(new Chess());
 
@@ -138,11 +144,14 @@ export default function PuzzlesPage() {
         }, OPPONENT_DELAY_MS);
     }, []);
 
-    const load = useCallback(async (nextMode: Mode = mode) => {
+    const load = useCallback(async (nextMode: Mode = mode, nextTarget: TrainingTarget | null = target) => {
         setError(null);
         setPhase('loading');
         try {
-            if (nextMode === 'timed') {
+            if (nextMode === 'themes') {
+                if (nextTarget) present(await puzzlesApi.train(nextTarget));
+                else setPhase('idle');
+            } else if (nextMode === 'timed') {
                 const view = await puzzlesApi.timedNext();
                 setRun(view.run);
                 present(view);
@@ -153,7 +162,7 @@ export default function PuzzlesPage() {
             setError(errorOf(err));
             setPhase('idle');
         }
-    }, [mode, theme, present]);
+    }, [mode, theme, target, present]);
 
     const finishTimed = useCallback(async () => {
         try {
@@ -196,6 +205,7 @@ export default function PuzzlesPage() {
             else later(() => void load('timed'), res.solved ? REPLY_DELAY_MS * 2 : SOLUTION_STEP_MS * 2);
         } else {
             refreshProfile();
+            if (res.training) setTrainingKey((k) => k + 1);
         }
     };
 
@@ -264,7 +274,14 @@ export default function PuzzlesPage() {
     const chooseMode = (next: Mode) => {
         setMode(next);
         setTimedResult(null);
-        if (next !== 'timed') void load(next);
+        setTarget(null);
+        if (next !== 'timed' && next !== 'themes') void load(next);
+        if (next === 'themes') setPhase('idle');
+    };
+
+    const startTraining = (next: TrainingTarget) => {
+        setTarget(next);
+        void load('themes', next);
     };
 
     const analyze = () => {
@@ -272,7 +289,8 @@ export default function PuzzlesPage() {
     };
 
     const turnText = puzzle ? t(puzzle.color === 'white' ? 'puzzles.yourMoveWhite' : 'puzzles.yourMoveBlack') : '';
-    const showThemes = mode !== 'timed' || phase === 'done';
+    const showThemes = (mode !== 'timed' && !(target?.blind)) || phase === 'done';
+    const training = result?.training ?? null;
 
     return (
         <div className="w-full max-w-6xl mx-auto p-3 sm:p-4 flex flex-col lg:flex-row gap-4" data-testid="puzzles-page">
@@ -302,8 +320,8 @@ export default function PuzzlesPage() {
                             {t('puzzles.profile', {rating: profile.rating, games: profile.games, streak: profile.streak})}
                         </p>
                     )}
-                    <div className="grid grid-cols-3 gap-1 font-bold text-xs" role="tablist">
-                        {(['rated', 'daily', 'timed'] as const).map((m) => (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 font-bold text-xs" role="tablist">
+                        {(['rated', 'themes', 'daily', 'timed'] as const).map((m) => (
                             <button key={m} type="button" role="tab" aria-selected={mode === m} data-testid={`puzzle-mode-${m}`}
                                     onClick={() => chooseMode(m)}
                                     className={`py-1.5 rounded border cursor-pointer flex items-center justify-center gap-1 ${mode === m
@@ -364,7 +382,39 @@ export default function PuzzlesPage() {
                         </p>
                     )}
 
-                    {mode !== 'timed' && (
+                    {mode === 'themes' && target && (
+                        <div className="flex flex-wrap items-center justify-between gap-2" data-testid="training-target">
+                            <span className="font-bold text-amber-200">
+                                {target.theme
+                                    ? themeText(target.theme, 'name', t)
+                                    : t('puzzles.training.mixedOf', {section: t(`puzzles.sections.${target.section as ThemeSection}`)})}
+                                {target.blind && ` · ${t('puzzles.training.blind')}`}
+                            </span>
+                            <button type="button" onClick={() => {
+                                setTarget(null);
+                                setPhase('idle');
+                                setPuzzle(null);
+                            }} data-testid="training-back"
+                                    className="text-xs px-2 py-0.5 rounded bg-black/40 border border-amber-900/50 hover:border-amber-500 cursor-pointer">
+                                {t('puzzles.training.back')}
+                            </button>
+                        </div>
+                    )}
+                    {training && (
+                        <p className="text-amber-200" data-testid="training-progress">
+                            {training.mastered && training.advanced
+                                ? t('puzzles.training.justMastered')
+                                : training.advanced
+                                    ? t('puzzles.training.advanced', {stage: training.stage})
+                                    : t('puzzles.training.progress', {
+                                        stage: training.stage,
+                                        clean: training.recent.split('').filter((c) => c === '1').length,
+                                        window: training.window, pass: training.pass,
+                                    })}
+                        </p>
+                    )}
+
+                    {mode !== 'timed' && (mode !== 'themes' || target) && (
                         <div className="flex flex-wrap gap-2">
                             <button type="button" onClick={() => void load()} data-testid="puzzle-next"
                                     disabled={phase === 'loading' || phase === 'opponent'}
@@ -396,10 +446,20 @@ export default function PuzzlesPage() {
                     {error && <p className="text-rose-300" role="alert">{renderUiMessage(error, t)}</p>}
                 </section>
 
+                {mode === 'themes' && !target && (
+                    <section className="bg-acacia-dark p-3 rounded-md border border-amber-700/40">
+                        <TrainingPanel onTrain={startTraining} refreshKey={trainingKey}/>
+                    </section>
+                )}
+
                 {puzzle && (
                     <section className="bg-acacia-dark p-3 rounded-md border border-amber-700/40 flex flex-col gap-1.5"
                              data-testid="puzzle-info">
-                        <p>{t('puzzles.puzzleRating', {rating: puzzle.rating})}{puzzle.daily && ` · ${t('puzzles.dailyBadge')}`}</p>
+                        <p>
+                            {t('puzzles.puzzleRating', {rating: puzzle.rating})}
+                            {puzzle.daily && ` · ${t('puzzles.dailyBadge')}`}
+                            {puzzle.stage ? ` · ${t('puzzles.training.stageBadge', {stage: puzzle.stage})}` : ''}
+                        </p>
                         {showThemes && puzzle.themes.length > 0 && (
                             <div className="flex flex-wrap gap-1" data-testid="puzzle-themes">
                                 {puzzle.themes.map((code) => (

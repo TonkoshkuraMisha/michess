@@ -44,6 +44,40 @@ async def next_puzzle(
     return service.public_view(puzzle)
 
 
+@router.get("/train")
+async def train(
+        theme: str | None = Query(default=None, max_length=40, description="Тема реестра"),
+        section: str | None = Query(default=None, max_length=1, description="Раздел каталога (смешанная подборка)"),
+        stage: int | None = Query(default=None, description="Ступень 1–4; по умолчанию — текущая ступень игрока"),
+        blind: bool = Query(default=False, description="Не показывать темы задачи до конца решения"),
+        user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+):
+    """Тренировка по приёмам (таск 13.4): задача темы на ступени игрока или смешанная по разделу."""
+    try:
+        puzzle, chosen_stage = await service.pick_training(db, user, theme=theme, section=section, stage=stage)
+    except service.PuzzleError as exc:
+        raise _http(exc) from exc
+    await service.start(user, puzzle, training=theme, stage=chosen_stage)
+    return {**service.public_view(puzzle, show_themes=not blind), "stage": chosen_stage}
+
+
+@router.get("/demo")
+async def demo(theme: str = Query(..., max_length=40), user: User = Depends(get_current_user),
+               db: AsyncSession = Depends(get_db)):
+    """Показ приёма: две задачи темы с решением (не попытка — рейтинг и история не меняются)."""
+    try:
+        return {"theme": theme, "examples": await service.demo_puzzles(db, theme)}
+    except service.PuzzleError as exc:
+        raise _http(exc) from exc
+
+
+@router.get("/training")
+async def training(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Прогресс по всем темам: ступень, последние результаты, освоена ли, сколько задач на ступенях."""
+    return await service.training_overview(db, user)
+
+
 @router.get("/daily")
 async def daily(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Задача дня — одна на всех (по дате UTC)."""

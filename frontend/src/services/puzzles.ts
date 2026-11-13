@@ -16,6 +16,8 @@ export interface PuzzleView {
     solution_length: number;
     daily?: boolean;
     run?: TimedRun;
+    /** Тренировка по приёмам: ступень задачи (смешанная подборка — null). */
+    stage?: number | null;
 }
 
 export interface TimedRun {
@@ -27,6 +29,46 @@ export interface TimedRun {
     over: boolean;
 }
 
+export interface TrainingProgress {
+    theme: string;
+    stage: number;
+    recent: string;
+    mastered: boolean;
+    advanced: boolean;
+    window: number;
+    pass: number;
+}
+
+export interface ThemeOverview {
+    code: string;
+    section: string;
+    stage: number;
+    recent: string;
+    solved: number;
+    mastered: boolean;
+    available: [number, number, number, number];
+    ready: boolean;
+}
+
+export interface TrainingOverview {
+    window: number;
+    pass: number;
+    themes: ThemeOverview[];
+}
+
+export interface DemoExample {
+    fen: string;
+    moves: string[];
+    color: 'white' | 'black';
+}
+
+/** Что тренируем: тему (на ступени игрока) или раздел (смешанная подборка); «без названия темы». */
+export interface TrainingTarget {
+    theme?: string;
+    section?: string;
+    blind: boolean;
+}
+
 export interface PuzzleResult {
     solved: boolean;
     rating_before: number;
@@ -35,6 +77,7 @@ export interface PuzzleResult {
     streak: number;
     themes: string[];
     run: TimedRun | null;
+    training?: TrainingProgress | null;
 }
 
 export interface MoveResponse {
@@ -108,4 +151,15 @@ export const puzzlesApi = {
     }),
     timedNext: () => request<PuzzleView & { run: TimedRun }>('/timed/next'),
     timedFinish: () => request<TimedResult>('/timed/finish', {method: 'POST'}),
+    train: (target: TrainingTarget) => {
+        const params = new URLSearchParams();
+        if (target.theme) params.set('theme', target.theme);
+        if (target.section) params.set('section', target.section);
+        if (target.blind) params.set('blind', 'true');
+        return request<PuzzleView>(`/train?${params.toString()}`);
+    },
+    training: () => request<TrainingOverview>('/training'),
+    demo: (theme: string) => request<{ theme: string; examples: DemoExample[] }>(
+        `/demo?theme=${encodeURIComponent(theme)}`,
+    ),
 };

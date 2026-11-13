@@ -52,7 +52,7 @@ def test_registry_is_consistent():
         assert theme.sources and set(theme.sources) <= set(SOURCES), theme.code
         assert theme.parent is None or theme.parent in THEMES_BY_CODE, theme.code
         assert theme.parent != theme.code
-        assert len(theme.minimums) == 4 and all(n > 0 for n in theme.minimums)
+        assert len(theme.minimums) == 4 and all(n >= 0 for n in theme.minimums) and theme.minimums[-1] > 0
         if "L" in theme.sources and not theme.code.startswith("combination"):
             assert theme.lichess, f"{theme.code}: размечается тегом lichess, но тег не указан"
         if theme.detector:

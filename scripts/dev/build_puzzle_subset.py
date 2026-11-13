@@ -5,8 +5,12 @@
 База: https://database.lichess.org/#puzzles (lichess_db_puzzle.csv.zst, лицензия CC0). Скрипт читает её потоком и
 отбирает задачи хорошего качества (устойчивый рейтинг, высокая популярность, много решений) так, чтобы:
 * рейтинг 600–2600 был покрыт равномерно — 20 корзин по 100 пунктов, по ``--per-bucket`` задач в каждой;
-* у каждого тега, который реестр тем (src/services/themes.py) переводит в свою тему, было не меньше ``--per-tag``
-  задач (сколько найдётся), — редкие темы не тонут среди частых.
+* у каждого тега, который реестр тем (src/services/themes.py) переводит в свою тему, на каждой ступени (таск 13.4,
+  ``stage_for``) было не меньше ``--per-tag-stage`` задач (сколько найдётся), — редкие темы и лёгкие ступени не
+  тонут среди частых.
+
+Где задач хорошего качества не хватает (редкий тег на лёгкой ступени), квота добирается из задач с мягким
+фильтром (``acceptable``): популярность ≥ 70, ≥ 100 решений, отклонение рейтинга ≤ 90.
 
 Отбор детерминирован (``--seed``): повторный запуск на той же базе даёт ту же выборку. Нужен пакет zstandard
 (только для этого скрипта; сервер его не использует). В CI не запускается.
@@ -22,11 +26,18 @@ import pathlib
 import random
 import sys
 
+from src.services.puzzle_import import stage_for
 from src.services.themes import LICHESS_TAG_TO_THEMES
 
 OUTPUT = pathlib.Path(__file__).resolve().parents[2] / "data" / "puzzles" / "lichess_subset.csv.gz"
 FIELDS = ("PuzzleId", "FEN", "Moves", "Rating", "RatingDeviation", "Popularity", "NbPlays", "Themes")
 RATING_MIN, RATING_MAX, BUCKET = 600, 2600, 100
+
+
+def acceptable(row: dict) -> bool:
+    """Мягкий фильтр — только чтобы добрать редкие темы и ступени."""
+    return (int(row["RatingDeviation"]) <= 90 and int(row["Popularity"]) >= 70 and int(row["NbPlays"]) >= 100
+            and RATING_MIN <= int(row["Rating"]) < RATING_MAX)
 
 
 def good(row: dict) -> bool:
@@ -54,7 +65,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("source", type=pathlib.Path)
     parser.add_argument("--per-bucket", type=int, default=900)
-    parser.add_argument("--per-tag", type=int, default=150)
+    parser.add_argument("--per-tag-stage", type=int, default=45)
     parser.add_argument("--seed", type=int, default=13)
     args = parser.parse_args()
 
@@ -62,20 +73,34 @@ def main() -> None:
 
     rng = random.Random(args.seed)
     buckets = {low: Reservoir(args.per_bucket, rng) for low in range(RATING_MIN, RATING_MAX, BUCKET)}
-    tags = {tag: Reservoir(args.per_tag, rng) for tag in LICHESS_TAG_TO_THEMES}
+    tags = {(tag, stage): Reservoir(args.per_tag_stage, rng) for tag in LICHESS_TAG_TO_THEMES for stage in (1, 2, 3, 4)}
+    spare = {key: Reservoir(args.per_tag_stage, rng) for key in tags}
     total = kept = 0
     with args.source.open("rb") as raw:
         text = io.TextIOWrapper(zstandard.ZstdDecompressor().stream_reader(raw), encoding="utf-8")
         for row in csv.DictReader(text):
             total += 1
             if not good(row):
+                if acceptable(row):
+                    item = {field: row[field] for field in FIELDS}
+                    stage = stage_for(int(row["Rating"]), row["Moves"].split())
+                    for tag in row["Themes"].split():
+                        if (tag, stage) in spare:
+                            spare[(tag, stage)].offer(item)
                 continue
             kept += 1
             item = {field: row[field] for field in FIELDS}
             buckets[(int(row["Rating"]) - RATING_MIN) // BUCKET * BUCKET + RATING_MIN].offer(item)
+            stage = stage_for(int(row["Rating"]), row["Moves"].split())
             for tag in row["Themes"].split():
-                if tag in tags:
-                    tags[tag].offer(item)
+                if (tag, stage) in tags:
+                    tags[(tag, stage)].offer(item)
+
+    # Неполные квоты — добираем из мягкого фильтра.
+    for key, reservoir in tags.items():
+        missing = args.per_tag_stage - len(reservoir.items)
+        if missing > 0:
+            reservoir.items.extend(spare[key].items[:missing])
 
     chosen: dict[str, dict] = {}
     for reservoir in [*tags.values(), *buckets.values()]:
@@ -89,9 +114,9 @@ def main() -> None:
         writer.writerows(rows)
 
     print(f"Прочитано {total}, подходит по качеству {kept}, в выборке {len(rows)} → {OUTPUT}", file=sys.stderr)
-    thin = {tag: len(r.items) for tag, r in tags.items() if len(r.items) < args.per_tag}
+    thin = {f"{tag}/{stage}": len(r.items) for (tag, stage), r in tags.items() if len(r.items) < args.per_tag_stage}
     if thin:
-        print(f"Тегов с неполной квотой: {thin}", file=sys.stderr)
+        print(f"Неполные квоты (тег/ступень: найдено): {thin}", file=sys.stderr)
 
 
 if __name__ == "__main__":
