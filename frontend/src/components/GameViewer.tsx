@@ -70,7 +70,12 @@ interface SideSummaryStats {
     mistakes: number;
     blunders: number;
     avg_cp_loss: number;
+    /** Точность по фазам (таск B.5); null — в этой фазе ходов не было; нет поля — старый разбор. */
+    phases?: Partial<Record<GamePhase, number | null>>;
 }
+
+type GamePhase = 'opening' | 'middlegame' | 'endgame';
+const GAME_PHASES: GamePhase[] = ['opening', 'middlegame', 'endgame'];
 
 interface FullGameAnalysisReport {
     game_id: number;
@@ -1034,6 +1039,20 @@ export default function GameViewer() {
                                         <span className="text-rose-400 font-bold"
                                               title={t('viewer.blunders')}>?? {analysisReport.white.blunders}</span>
                                     </div>
+                                    {analysisReport.white.phases && (
+                                        <div className="flex justify-between text-[11px] text-boxwood/80"
+                                             data-testid="viewer-phases-white">
+                                            {GAME_PHASES.map((phase) => (
+                                                <span key={phase} title={t(`viewer.phases.${phase}`)}>
+                                                    {t(`viewer.phasesShort.${phase}`)}{' '}
+                                                    <b className="font-mono">
+                                                        {analysisReport.white.phases?.[phase] != null
+                                                            ? `${analysisReport.white.phases?.[phase]}%` : '—'}
+                                                    </b>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="p-2 rounded bg-black/40 border border-amber-900/40 flex flex-col gap-1">
@@ -1054,6 +1073,20 @@ export default function GameViewer() {
                                         <span className="text-rose-400 font-bold"
                                               title={t('viewer.blunders')}>?? {analysisReport.black.blunders}</span>
                                     </div>
+                                    {analysisReport.black.phases && (
+                                        <div className="flex justify-between text-[11px] text-boxwood/80"
+                                             data-testid="viewer-phases-black">
+                                            {GAME_PHASES.map((phase) => (
+                                                <span key={phase} title={t(`viewer.phases.${phase}`)}>
+                                                    {t(`viewer.phasesShort.${phase}`)}{' '}
+                                                    <b className="font-mono">
+                                                        {analysisReport.black.phases?.[phase] != null
+                                                            ? `${analysisReport.black.phases?.[phase]}%` : '—'}
+                                                    </b>
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 

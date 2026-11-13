@@ -541,6 +541,16 @@ export const uk: Messages = {
         },
     },
     viewer: {
+        phases: {
+            opening: 'Дебют',
+            middlegame: 'Мітельшпіль',
+            endgame: 'Ендшпіль',
+        },
+        phasesShort: {
+            opening: 'Деб.',
+            middlegame: 'Міт.',
+            endgame: 'Енд.',
+        },
         loadFailed: 'Не вдалося завантажити дані партії',
         analysisFailed: 'Помилка під час аналізу партії',
         analysisEmpty: 'Сервер повернув порожній аналіз: ходи партії не розпізнано. Повідомте про партію розробникові.',
