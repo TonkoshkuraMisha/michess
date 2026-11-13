@@ -108,6 +108,7 @@ ERROR_MESSAGES: dict[str, str] = {
     "no_draw_offer": "There is no draw offer to accept",
     "no_rematch_offer": "There is no rematch offer to accept",
     # --- турниры ---------------------------------------------------------------------------------------
+    "lesson_progress_limit": "Too many lessons in progress (limit {max})",
     "tournament_not_found": "Tournament not found",
     "tournament_active_exists": "You already have a tournament in progress — finish it first",
     "tournament_size_invalid": "This format needs {sizes} participants",

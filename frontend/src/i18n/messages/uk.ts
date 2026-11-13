@@ -668,6 +668,7 @@ export const uk: Messages = {
         custom_opponent_missing: 'Для суперника з майстерні потрібне ім’я або збережений суперник',
         ladder_game_missing: 'Партію драбини не розпочато або вона застаріла',
         ladder_game_mismatch: 'Партія не збігається з відкритою партією драбини',
+        lesson_progress_limit: 'Забагато уроків у процесі (не більше {max})',
         tournament_not_found: 'Турнір не знайдено',
         tournament_active_exists: 'У вас уже є незавершений турнір — спершу завершіть його',
         tournament_size_invalid: 'Для цього формату потрібно {sizes} учасників',

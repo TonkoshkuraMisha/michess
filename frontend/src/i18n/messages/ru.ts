@@ -668,6 +668,7 @@ export const ru: Messages = {
         custom_opponent_missing: 'Для соперника из мастерской нужно имя или сохранённый соперник',
         ladder_game_missing: 'Партия лестницы не начата или устарела',
         ladder_game_mismatch: 'Партия не совпадает с открытой партией лестницы',
+        lesson_progress_limit: 'Слишком много уроков в процессе (не больше {max})',
         tournament_not_found: 'Турнир не найден',
         tournament_active_exists: 'У вас уже есть незавершённый турнир — сначала завершите его',
         tournament_size_invalid: 'Для этого формата нужно {sizes} участников',
