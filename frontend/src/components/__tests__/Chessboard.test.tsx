@@ -473,3 +473,72 @@ describe('клавиатура', () => {
         addListener.mockRestore();
     });
 });
+
+describe('игра с наставником', () => {
+    const BLUNDER = {
+        available: true, cp_loss: 320, classification: 'Blunder', symbol: '??', eval_before: 30, eval_after: -290,
+        best_move_uci: 'd2d4', reply_uci: 'd8h4', missed_tactic: false,
+        coach: {comment: [{key: 'coach.verdict.blunder.v1', params: {move: 'f3'}}],
+            arrows: [{from: 'd8', to: 'h4', kind: 'threat'}], highlights: []},
+    };
+
+    async function startCoachedGame(check: object) {
+        localStorage.setItem('michess_coach_enabled', '1');
+        const calls: string[] = [];
+        vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request) => {
+            const url = String(input);
+            calls.push(url);
+            const body = (() => {
+                if (url.includes('/analysis/check-move')) return check;
+                if (url.includes('/bots/move')) return BOT_MOVE_DEFAULT;
+                if (url.includes('/bots/save-game')) return {game_id: 1};
+                if (url.includes('/profile/me')) return {id: 1, username: 'TestPlayer', blitz_rating: 1500};
+                if (url.includes('/profile/games/my-active')) return {active: false};
+                return [];
+            })();
+            return {ok: true, status: 200, json: async () => body} as Response;
+        }));
+        renderChessboard();
+        const startButton = await screen.findByRole('button', {name: /Белыми/});
+        await act(async () => {
+            fireEvent.click(startButton);
+        });
+        return {calls};
+    }
+
+    it('зевок: бот ждёт решения, «Почему?» рисует стрелку, «Переходить» возвращает позицию', async () => {
+        const {calls} = await startCoachedGame(BLUNDER);
+        clickSquare('f2');
+        clickSquare('f3');
+
+        expect(await screen.findByTestId('coach-warning')).toBeInTheDocument();
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(1500);
+        });
+        expect(calls.some((url) => url.includes('/bots/move'))).toBe(false);
+
+        fireEvent.click(screen.getByTestId('coach-why'));
+        expect(screen.getByTestId('coach-arrow-threat')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByTestId('coach-takeback'));
+        expect(screen.queryByTestId('coach-warning')).toBeNull();
+        expect(screen.queryByText('f3')).toBeNull();
+    });
+
+    it('ход оставлен — бот отвечает, партия сохраняется учебной', async () => {
+        const {calls} = await startCoachedGame(BLUNDER);
+        clickSquare('f2');
+        clickSquare('f3');
+        fireEvent.click(await screen.findByTestId('coach-keep'));
+        await waitFor(() => expect(calls.some((url) => url.includes('/bots/move'))).toBe(true));
+        expect(screen.getByTestId('coach-assisted')).toBeInTheDocument();
+    });
+
+    it('хороший ход — без предупреждения, бот отвечает сразу', async () => {
+        const {calls} = await startCoachedGame({...BLUNDER, cp_loss: 0, classification: 'Best', eval_after: 30});
+        clickSquare('e2');
+        clickSquare('e4');
+        await waitFor(() => expect(calls.some((url) => url.includes('/bots/move'))).toBe(true));
+        expect(screen.queryByTestId('coach-warning')).toBeNull();
+    });
+});

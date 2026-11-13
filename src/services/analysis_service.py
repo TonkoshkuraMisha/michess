@@ -15,8 +15,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.errors import DomainError, DomainValueError
 from src.models.game import Game, GameStatus
+from src.services import move_check
 from src.services.bots.base import resolve_stockfish_path, static_board_eval_cp
-from src.services.coach import advice_for_position, comment_for_move
+from src.services.coach import comment_for_move
 from src.services.engine_pool import EngineUnavailableError, get_engine_pool
 from src.services.game_engine import board_from_start_fen, read_pgn_game
 
@@ -326,35 +327,12 @@ class AnalysisService:
         }
 
     async def advise(self, fen: str) -> dict:
-        """
-        Совет наставника по позиции: что грозит стороне, которая ходит, что есть у неё самой и в чём идея лучшего
-        хода (src/services/coach.py). Лучший ход — только от Stockfish; без движка совет строится по фактам
-        детектора мотивов и лучший ход не называется.
-        """
-        board = board_from_start_fen(fen)  # invalid_fen / invalid_position
-        if board.is_game_over():
-            raise DomainValueError("game_already_over")
+        """Совет наставника по позиции (таск 11.2); оценка — из общего кэша (src/services/move_check.py)."""
+        return await move_check.advise(fen)
 
-        best_move: str | None = None
-        eval_cp: int | None = None
-        sf_path = resolve_stockfish_path()
-        if sf_path:
-            def _run() -> tuple[int, str | None]:
-                with get_engine_pool(sf_path).acquire() as eng:
-                    info = eng.analyse(board, chess.engine.Limit(depth=12, time=0.15))
-                    if isinstance(info, list):
-                        info = info[0]
-                    cp = info["score"].white().score(mate_score=10000) or 0
-                    pv = info.get("pv")
-                    return int(cp), (pv[0].uci() if pv else None)
-
-            try:
-                eval_cp, best_move = await asyncio.to_thread(_run)
-            except EngineUnavailableError as exc:
-                logger.warning("Stockfish недоступен, совет без движка: %s", exc)
-
-        return {"fen": board.fen(), "best_move_uci": best_move, "eval_cp": eval_cp,
-                **advice_for_position(board, best_move)}
+    async def check_move(self, fen: str, move_uci: str) -> dict:
+        """Проверка хода в игре с наставником (таск 11.3)."""
+        return await move_check.check_move(fen, move_uci)
 
     async def analyze_full_game(self, db: AsyncSession, game_id: int, force: bool = False) -> dict:
         result = await db.execute(select(Game).where(Game.id == game_id))

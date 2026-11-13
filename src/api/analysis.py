@@ -13,7 +13,14 @@ from src.api.rate_limit import rate_limit
 from src.core.errors import ApiError, DomainValueError
 from src.db.session import get_db
 from src.models.game import Game
-from src.schemas.analysis import AdviceRequest, AdviceResponse, FullGameAnalysisResponse, PositionAnalysisRequest
+from src.schemas.analysis import (
+    AdviceRequest,
+    AdviceResponse,
+    FullGameAnalysisResponse,
+    MoveCheckRequest,
+    MoveCheckResponse,
+    PositionAnalysisRequest,
+)
 from src.services.analysis_service import (
     GameDataNotFoundError,
     GameNotFinishedError,
@@ -91,6 +98,30 @@ async def get_position_advice(request: AdviceRequest):
     """
     try:
         return await analysis_service.advise(request.fen)
+    except DomainValueError as exc:
+        raise exc.to_http(400) from exc
+    except EngineBusyError:
+        raise _engine_busy() from None
+
+
+@router.post(
+    "/check-move",
+    response_model=MoveCheckResponse,
+    response_model_exclude_none=True,
+    dependencies=[
+        Depends(rate_limit("analysis_check_move", "RATE_LIMIT_MOVE_CHECK", "RATE_LIMIT_MOVE_CHECK_GUEST")),
+        Depends(forbid_engine_help_during_game),
+        Depends(note_ladder_analysis),
+    ],
+)
+async def check_player_move(request: MoveCheckRequest):
+    """
+    Игра с наставником (таск 11.3): оценка хода игрока — потеря, классификация, лучший ход, ответ соперника,
+    пропущенный удар и объяснение наставника. Это подсказка движка: недоступна в партии с человеком, в партии
+    лестницы делает её незасчитанной.
+    """
+    try:
+        return await analysis_service.check_move(request.fen, request.move)
     except DomainValueError as exc:
         raise exc.to_http(400) from exc
     except EngineBusyError:

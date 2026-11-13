@@ -47,6 +47,8 @@ interface GameData {
     black_rating: number;
     status: string;
     is_rated: boolean;
+    /** Игрок пользовался наставником (таск 11.3). */
+    assisted?: boolean;
     result: string;
     pgn_date: string | null;
     site: string | null;
@@ -518,6 +520,11 @@ export default function Profile() {
                                                 {resultText} <span
                                                 className="text-xs opacity-70 ml-1">({game.result})</span>
                                             </div>
+                                            {game.assisted && (
+                                                <div className="text-[10px] text-amber-300/80" data-testid="assisted-badge">
+                                                    {t('coachMode.archiveBadge')}
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="px-4 py-4 text-center font-mono text-amber-500/80">
                                             {game.eco || '—'}

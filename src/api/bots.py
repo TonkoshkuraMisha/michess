@@ -185,6 +185,7 @@ class BotGameSaveRequest(BaseModel):
         description="Для bot_id='custom' без сохранения: имя соперника из конструктора",
     )
     ladder: bool = Field(default=False, description="Партия клубной лестницы (открыта POST /bots/ladder/start)")
+    assisted: bool = Field(default=False, description="Игрок пользовался наставником: партия учебная")
     player_color: str = Field(..., description="Цвет игрока ('white' или 'black')")
     result: str = Field(..., description="Результат партии ('1-0', '0-1', '1/2-1/2')")
     termination: str | None = Field(
@@ -669,7 +670,7 @@ async def save_bot_game(
         payload=payload,
     )
 
-    new_game = Game(**game_kwargs, personality_name=personality_name)
+    new_game = Game(**game_kwargs, personality_name=personality_name, assisted=payload.assisted)
     db.add(new_game)
     ladder_outcome = None
     if ladder_game is not None:

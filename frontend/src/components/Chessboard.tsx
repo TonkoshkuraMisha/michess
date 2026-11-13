@@ -31,6 +31,10 @@ import type {PendingPromotion} from './chessboard/types';
 import {useClock} from './chessboard/hooks/useClock';
 import {usePremoves} from './chessboard/hooks/usePremoves';
 import {useBotGame} from './chessboard/hooks/useBotGame';
+import {useCoachMode} from './chessboard/hooks/useCoachMode';
+import {CoachPanel} from './chessboard/CoachPanel';
+import {CoachArrowsOverlay} from './chessboard/CoachArrowsOverlay';
+import {coachArrows} from '../services/coach';
 import {useGameSocket} from './chessboard/hooks/useGameSocket';
 import {PromotionDialog} from './chessboard/PromotionDialog';
 import {MoveList} from './chessboard/MoveList';
@@ -193,10 +197,16 @@ export default function Chessboard() {
         soundEngine.play(type);
     }, []);
 
+    // Игра с наставником (таск 11.3): проверка ходов игрока и советы — в партии с ботом и на свободной доске.
+    const coach = useCoachMode(currentUserRating);
+    const coachAssistedRef = useRef(false);
+    coachAssistedRef.current = coach.assisted;
+    const isCoachAssisted = useCallback(() => coachAssistedRef.current, []);
+
     const {
         whiteTimeMs, setWhiteTimeMs, blackTimeMs, setBlackTimeMs, resetLowTimeWarning, applyIncrement,
     } = useClock({
-        isTicking: Boolean(gameId || activeBot || spectatingGameId) && !gameOverResult,
+        isTicking: Boolean(gameId || activeBot || spectatingGameId) && !gameOverResult && !coach.holdBot,
         isParticipant: Boolean(gameId || activeBot) && !gameOverResult,
         currentTurn: game.turn() === 'w' ? 'white' : 'black',
         myColor,
@@ -260,6 +270,7 @@ export default function Chessboard() {
         setWhiteTimeMs, setBlackTimeMs, resetLowTimeWarning, applyIncrement,
         moveStartTime, myColorRef, gameIdRef, setGameId, setLeftSectionTab, setWhitePlayer, setBlackPlayer,
         playAudio, playOutcomeSound, updateSessionStats,
+        holdBot: coach.holdBot, isAssisted: isCoachAssisted, onNewGame: coach.reset,
     });
 
     const selectedBotProfile = HISTORICAL_BOTS[selectedBotId];
@@ -544,6 +555,9 @@ export default function Chessboard() {
                     playAudio(resolveMoveSound(move.san));
                 }
                 moveStartTime.current = Date.now();
+                if (!gameId && !isLadderGame && !nextGame.isGameOver()) {
+                    coach.onPlayerMove(game, game.fen(), uciMove, nextGame.fen());
+                }
 
                 if (gameId) {
                     const commandId = typeof crypto !== 'undefined' && crypto.randomUUID
@@ -579,7 +593,7 @@ export default function Chessboard() {
         }
         setDragState(null);
         return false;
-    }, [game, gameId, activeBot, spectatingGameId, myColor, stateVersion, viewIndex, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyIncrement, effectiveIncSeconds]);
+    }, [game, gameId, activeBot, spectatingGameId, myColor, stateVersion, viewIndex, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyIncrement, effectiveIncSeconds, isLadderGame, coach.onPlayerMove]);
 
     const {premove, setPremove, scheduleOrPromotePremove} = usePremoves({
         game,
@@ -739,6 +753,32 @@ export default function Chessboard() {
         setHistory([]);
     };
 
+    // «Переходить» по совету наставника: позиция до хода; добавление за отменённый ход снимается.
+    const handleCoachTakeBack = () => {
+        const previous = coach.takeBack();
+        if (!previous) return;
+        if (activeBot) applyIncrement(myColor, -effectiveIncSeconds);
+        setGame(previous);
+        setHistory(previous.history({verbose: true}));
+        setViewIndex(-1);
+        setSelectedSquare(null);
+        setPendingPromotion(null);
+        setPremove(null);
+        moveStartTime.current = Date.now();
+        playAudio('move');
+    };
+
+    const handleCoachAdvice = () => {
+        void coach.requestAdvice(game.fen());
+    };
+
+    // Стрелки и объяснение относятся к позиции, в которой их запросили: любой ход их снимает.
+    const coachClearOverlay = coach.clearOverlay;
+    const currentFen = game.fen();
+    useEffect(() => {
+        coachClearOverlay();
+    }, [currentFen, coachClearOverlay]);
+
     const handleUndoSandboxMove = () => {
         if (gameId || spectatingGameId || history.length === 0 || isBotThinking || !!gameOverResult) return;
         // Партия лестницы — без возврата ходов (сервер такую партию всё равно не засчитал бы).
@@ -751,6 +791,7 @@ export default function Chessboard() {
                 nextGame.undo();
             }
         }
+        coach.keepMove();
         setGame(nextGame);
         setHistory(nextGame.history({verbose: true}));
         setGameOverResult(null);
@@ -1244,6 +1285,10 @@ export default function Chessboard() {
 
                     <div
                         className="grid grid-cols-8 grid-rows-8 w-full h-full border border-black/60 relative z-10 shadow-inner-board rounded-[2px] overflow-hidden">
+                        {viewIndex === -1 && (
+                            <CoachArrowsOverlay arrows={coachArrows(coach.explanation ?? coach.advice)}
+                                                flipped={isBoardFlipped} idPrefix="play-coach"/>
+                        )}
                         {displayedRanks.map((rank) =>
                             displayedFiles.map((file) => {
                                 const rIdx = RANKS.indexOf(rank);
@@ -1531,6 +1576,17 @@ export default function Chessboard() {
                         onSendPreset={handleSendChatPreset}
                         isSpectator={!!spectatingGameId}
                         onLeaveSpectate={handleLeaveSpectate}
+                    />
+                )}
+
+                {!gameId && !spectatingGameId && (
+                    <CoachPanel
+                        coach={coach}
+                        locked={isLadderGame && !gameOverResult}
+                        inBotGame={Boolean(activeBot) && !gameOverResult}
+                        canAdvise={viewIndex === -1 && !gameOverResult && !game.isGameOver() && !coach.pending && (!activeBot || game.turn() === myColor[0])}
+                        onAdvice={handleCoachAdvice}
+                        onTakeBack={handleCoachTakeBack}
                     />
                 )}
 

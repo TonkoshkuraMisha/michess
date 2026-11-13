@@ -234,7 +234,9 @@ async def test_old_cached_analysis_is_not_served(client, db_session):
 
 @pytest.fixture
 def no_engine(monkeypatch):
-    monkeypatch.setattr(analysis_module, "resolve_stockfish_path", lambda *a, **k: None)
+    from src.services import move_check
+
+    monkeypatch.setattr(move_check, "resolve_stockfish_path", lambda *a, **k: None)
 
 
 def test_advice_endpoint(client, no_engine):

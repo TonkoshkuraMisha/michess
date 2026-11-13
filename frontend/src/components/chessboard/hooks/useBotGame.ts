@@ -79,6 +79,12 @@ export interface UseBotGameOptions {
     playAudio: (type: SoundEventType) => void;
     playOutcomeSound: (result: string, playerColor?: 'white' | 'black') => void;
     updateSessionStats: (result: string) => void;
+    /** Игра с наставником (11.3): бот ждёт, пока идёт проверка хода игрока или игрок решает, переходить ли. */
+    holdBot?: boolean;
+    /** Пользовался ли игрок наставником в этой партии — партия сохраняется учебной. */
+    isAssisted?: () => boolean;
+    /** Начало новой партии с ботом — сброс состояния наставника. */
+    onNewGame?: () => void;
 }
 
 /** Итог партии клубной лестницы — ответ сервера на сохранение. */
@@ -173,7 +179,7 @@ export function useBotGame({
     setGameOverResult, setRatingInfo, setDrawOfferStatus, setRematchStatus,
     setWhiteTimeMs, setBlackTimeMs, resetLowTimeWarning, applyIncrement,
     moveStartTime, myColorRef, gameIdRef, setGameId, setLeftSectionTab, setWhitePlayer, setBlackPlayer,
-    playAudio, playOutcomeSound, updateSessionStats,
+    playAudio, playOutcomeSound, updateSessionStats, holdBot = false, isAssisted, onNewGame,
 }: UseBotGameOptions): UseBotGameResult {
     const [selectedBotId, setSelectedBotId] = useState<HistoricalBotId>('philidor');
     const [botComment, setBotComment] = useState<GameStatus | null>(null);
@@ -226,6 +232,7 @@ export function useBotGame({
                 body: JSON.stringify({
                     bot_id: botId, player_color: playerColor, result,
                     ladder: ladderRef.current,
+                    assisted: Boolean(isAssisted?.()),
                     // Соперник из мастерской: сохранённый — по id, несохранённый — по имени.
                     ...(botId === 'custom' && customOpponentRef.current
                         ? (customOpponentRef.current.personalityId
@@ -257,7 +264,7 @@ export function useBotGame({
         } catch (err) {
             console.error('Failed to save the bot game:', err);
         }
-    }, [effectiveWhiteBaseMinutes, effectiveIncSeconds, setGameOverResult, setDrawOfferStatus]);
+    }, [effectiveWhiteBaseMinutes, effectiveIncSeconds, setGameOverResult, setDrawOfferStatus, isAssisted]);
 
     const startHistoricalBotGame = useCallback((
         botId: BotOpponentId,
@@ -283,6 +290,7 @@ export function useBotGame({
         const botInfo = botProfileFor(botId);
 
         botGameSavedRef.current = false;
+        onNewGame?.();
         resetLowTimeWarning();
         setSavedBotGameId(null);
         gameIdRef.current = null;
@@ -322,7 +330,7 @@ export function useBotGame({
         gameIdRef, setGameId, setActiveBot, setLeftSectionTab, myColorRef, setMyColor, setIsManualFlip, setGame,
         setHistory, setViewIndex, setSelectedSquare, setPendingPromotion, clearPremove, setGameOverResult,
         setRatingInfo, setDrawOfferStatus, setRematchStatus, setWhiteTimeMs, setBlackTimeMs, moveStartTime,
-        currentUsername, currentUserRating, setWhitePlayer, setBlackPlayer, playAudio, botProfileFor,
+        currentUsername, currentUserRating, setWhitePlayer, setBlackPlayer, playAudio, botProfileFor, onNewGame,
     ]);
 
     const startCustomBotGame = useCallback((
@@ -337,7 +345,7 @@ export function useBotGame({
 
     // Ход бота: запрашивает /bots/move, ждёт имитацию обдумывания, применяет ход.
     useEffect(() => {
-        if (!activeBot || gameOverResult || game.isGameOver()) return;
+        if (!activeBot || gameOverResult || game.isGameOver() || holdBot) return;
 
         const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
         if (currentTurnColor === myColor) return;
@@ -454,7 +462,7 @@ export function useBotGame({
             isCancelled = true;
             if (delayTimer) clearTimeout(delayTimer);
         };
-    }, [activeBot, game, myColor, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyIncrement, effectiveIncSeconds, setGame, setHistory, setViewIndex, clearPremove, setGameOverResult, setDrawOfferStatus, moveStartTime, botNameParam]);
+    }, [activeBot, game, myColor, gameOverResult, holdBot, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyIncrement, effectiveIncSeconds, setGame, setHistory, setViewIndex, clearPremove, setGameOverResult, setDrawOfferStatus, moveStartTime, botNameParam]);
 
     // Поражение по флагу в партии с ботом.
     useEffect(() => {
