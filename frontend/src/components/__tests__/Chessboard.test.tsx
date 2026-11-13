@@ -663,3 +663,25 @@ describe('партия турнира', () => {
         });
     });
 });
+
+describe('пометки правой кнопкой (таск B.1)', () => {
+    function rightDrag(from: string, to: string, init: Record<string, unknown> = {}) {
+        document.elementsFromPoint = () => [squareEl(from)];
+        fireEvent.pointerDown(squareEl(from), {pointerType: 'mouse', button: 2});
+        document.elementsFromPoint = () => [squareEl(to)];
+        fireEvent.pointerUp(squareEl(to), {pointerType: 'mouse', button: 2, ...init});
+    }
+
+    it('стрелка в живой партии, ход её снимает; при выбранной фигуре правая кнопка только отменяет выбор', async () => {
+        await startBotGame('white');
+        rightDrag('g1', 'f3', {altKey: true});
+        expect(screen.getByTestId('note-arrow-g1-f3').getAttribute('data-color')).toBe('blue');
+
+        clickSquare('e2');
+        rightDrag('d2', 'd4');
+        expect(screen.queryByTestId('note-arrow-d2-d4')).toBeNull();
+
+        clickSquare('e4');
+        await waitFor(() => expect(screen.queryByTestId('board-annotations')).toBeNull());
+    });
+});
