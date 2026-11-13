@@ -270,7 +270,13 @@ export function useBotGame({
                 }
                 if (data.tournament_id) {
                     setSavedTournamentId(data.tournament_id);
-                    setDrawOfferStatus(status('tournaments.gameSaved'));
+                    // Подсказка, анализ, возврат хода или наставник во время партии турнира — поражение (таск A.2).
+                    const reasonKey = `tournaments.forfeitReasons.${data.tournament_forfeit ?? ''}`;
+                    setDrawOfferStatus(data.tournament_forfeit
+                        ? status('tournaments.forfeited', {
+                            reason: hasMessage(reasonKey) ? messageParam(reasonKey as MessageKey) : String(data.tournament_forfeit),
+                        })
+                        : status('tournaments.gameSaved'));
                 }
                 if (data.ladder) {
                     setLadderOutcome(data.ladder);

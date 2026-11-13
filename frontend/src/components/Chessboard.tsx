@@ -292,6 +292,9 @@ export default function Chessboard() {
     });
 
     const selectedBotProfile = HISTORICAL_BOTS[selectedBotId];
+    // Партия «на счёт» — лестница или турнир (таск A.2): без наставника, рентгена и возврата хода — сервер такую
+    // помощь всё равно засчитал бы поражением или не засчитал бы партию.
+    const isRatedBotGame = isLadderGame || isTournamentGame;
     const activeBotProfile = activeBot ? botProfileFor(activeBot) : null;
 
     const {
@@ -573,7 +576,7 @@ export default function Chessboard() {
                     playAudio(resolveMoveSound(move.san));
                 }
                 moveStartTime.current = Date.now();
-                if (!gameId && !isLadderGame && !nextGame.isGameOver()) {
+                if (!gameId && !isRatedBotGame && !nextGame.isGameOver()) {
                     coach.onPlayerMove(game, game.fen(), uciMove, nextGame.fen());
                 }
 
@@ -611,7 +614,7 @@ export default function Chessboard() {
         }
         setDragState(null);
         return false;
-    }, [game, gameId, activeBot, spectatingGameId, myColor, stateVersion, viewIndex, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyIncrement, effectiveIncSeconds, isLadderGame, coach.onPlayerMove]);
+    }, [game, gameId, activeBot, spectatingGameId, myColor, stateVersion, viewIndex, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyIncrement, effectiveIncSeconds, isRatedBotGame, coach.onPlayerMove]);
 
     const {premove, setPremove, scheduleOrPromotePremove} = usePremoves({
         game,
@@ -788,7 +791,7 @@ export default function Chessboard() {
 
     // Итог партии с ботом: следующий соперник — по результату и силе (измеренной, если есть).
     const recommendedOpponent = (() => {
-        if (!activeBot || !gameOverResult || isLadderGame) return null;
+        if (!activeBot || !gameOverResult || isRatedBotGame) return null;
         const pool: PoolOpponent[] = [
             ...(Object.keys(HISTORICAL_BOTS) as HistoricalBotId[]).map((id) => ({
                 kind: 'historical' as const, id, rating: measuredBotRatings[id] ?? HISTORICAL_BOTS[id].rating,
@@ -838,8 +841,8 @@ export default function Chessboard() {
 
     const handleUndoSandboxMove = () => {
         if (gameId || spectatingGameId || history.length === 0 || isBotThinking || !!gameOverResult) return;
-        // Партия лестницы — без возврата ходов (сервер такую партию всё равно не засчитал бы).
-        if (isLadderGame) return;
+        // Партия лестницы или турнира — без возврата ходов (сервер всё равно не засчитал бы такую партию).
+        if (isRatedBotGame) return;
         const nextGame = cloneChessInstance(game);
         nextGame.undo();
         if (activeBot && nextGame.history().length > 0) {
@@ -938,7 +941,7 @@ export default function Chessboard() {
         return tg;
     })();
     const boardState = currentGame.board();
-    const xrayAvailable = Boolean(spectatingGameId) || (!gameId && (!activeBot || (coach.enabled && !isLadderGame)));
+    const xrayAvailable = Boolean(spectatingGameId) || (!gameId && (!activeBot || (coach.enabled && !isRatedBotGame)));
     // «Своя» сторона: в партии с ботом — цвет игрока, на свободной доске и у зрителя — сторона, которая ходит.
     const xraySide: 'w' | 'b' = activeBot && !spectatingGameId ? (myColor === 'white' ? 'w' : 'b') : currentGame.turn();
     const material = calculateMaterialBalance(boardState);
@@ -1703,7 +1706,7 @@ export default function Chessboard() {
                 {!gameId && !spectatingGameId && (
                     <CoachPanel
                         coach={coach}
-                        locked={isLadderGame && !gameOverResult}
+                        locked={isRatedBotGame && !gameOverResult}
                         inBotGame={Boolean(activeBot) && !gameOverResult}
                         canAdvise={viewIndex === -1 && !gameOverResult && !game.isGameOver() && !coach.pending && (!activeBot || game.turn() === myColor[0])}
                         onAdvice={handleCoachAdvice}
@@ -1740,7 +1743,7 @@ export default function Chessboard() {
                     onOfferRematch={handleOfferRematch}
                     onResetSandbox={handleResetSandbox}
                     onUndoSandboxMove={handleUndoSandboxMove}
-                    undoLocked={(isLadderGame || isTournamentGame) && !gameOverResult}
+                    undoLocked={isRatedBotGame && !gameOverResult}
                     hasCustomPosition={isSandbox && startFen !== null}
                     onLoadFen={handleLoadFen}
                 />}

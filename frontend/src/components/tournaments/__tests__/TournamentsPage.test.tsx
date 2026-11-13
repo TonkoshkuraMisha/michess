@@ -25,7 +25,7 @@ const game = (id: number, round: number, board: number, white: number, black: nu
 function roundRobin(overrides: Partial<Tournament> = {}): Tournament {
     return {
         id: 7, format: 'round_robin', size: 4, status: 'active', base_time_ms: 300000, increment_ms: 2000, current_round: 1,
-        created_at: '2026-11-13T10:00:00Z', finished_at: null, my_seat: 4, players,
+        created_at: '2026-11-13T10:00:00Z', finished_at: null, my_seat: 4, withdrawn: false, players,
         games: [game(1, 1, 1, 1, 4), game(2, 1, 2, 2, 3, '1-0'), game(3, 2, 1, 4, 3), game(4, 2, 2, 1, 2)] as Tournament['games'],
         standings: [
             {seat: 2, points: 1, head_to_head: 0, sonneborn_berger: 0, place: 1},
@@ -104,7 +104,10 @@ describe('создание турнира', () => {
 
 describe('турнир', () => {
     it('таблица кругового турнира и запуск своей партии на главной доске', async () => {
-        stub({'/tournaments/7': () => roundRobin(), '/profile/me': () => ({username: 'Alice'})});
+        stub({
+            '/tournaments/7': () => roundRobin(), '/profile/me': () => ({username: 'Alice'}),
+            '/games/1/start': () => ({forfeited: false, game: game(1, 1, 1, 1, 4)}),
+        });
         renderView();
 
         expect(await screen.findByTestId('crosstable')).toBeInTheDocument();
@@ -112,8 +115,8 @@ describe('турнир', () => {
         expect(screen.getByText('Your game decides the round.')).toBeInTheDocument();
         expect(screen.getAllByRole('link', {name: 'Game'})[0]).toHaveAttribute('href', '/game/102');
 
-        fireEvent.click(screen.getByRole('button', {name: 'Play my game'}));
-        const state = JSON.parse(screen.getByTestId('location').textContent!);
+        await act(async () => fireEvent.click(screen.getByRole('button', {name: 'Play my game'})));
+        const state = JSON.parse((await screen.findByTestId('location')).textContent!);
         expect(state.tournamentGame).toMatchObject({
             tournamentId: 7, gameId: 1, color: 'black', baseTimeMs: 300000, incrementMs: 2000, botId: 'morphy', custom: null,
         });
@@ -121,10 +124,11 @@ describe('турнир', () => {
 
     it('соперник из мастерской передаётся характером и архетипом', async () => {
         const t = roundRobin({games: [game(1, 1, 1, 4, 2), game(2, 1, 2, 1, 3)] as Tournament['games']});
-        stub({'/tournaments/7': () => t, '/profile/me': () => ({username: 'Alice'})});
+        stub({'/tournaments/7': () => t, '/profile/me': () => ({username: 'Alice'}), '/games/1/start': () => ({forfeited: false})});
         renderView();
-        fireEvent.click(await screen.findByRole('button', {name: 'Play my game'}));
-        const state = JSON.parse(screen.getByTestId('location').textContent!);
+        const play = await screen.findByRole('button', {name: 'Play my game'});
+        await act(async () => fireEvent.click(play));
+        const state = JSON.parse((await screen.findByTestId('location')).textContent!);
         expect(state.tournamentGame.color).toBe('white');
         expect(state.tournamentGame.custom).toMatchObject({archetypeId: 'combinator', config: {target_elo: 2200}});
     });
@@ -150,13 +154,13 @@ describe('турнир', () => {
                 game(2, 1, 2, 2, 3, '1-0'),
             ] as Tournament['games'],
         });
-        stub({'/tournaments/7': () => knockout, '/profile/me': () => ({})});
+        stub({'/tournaments/7': () => knockout, '/profile/me': () => ({}), '/games/5/start': () => ({forfeited: false})});
         renderView();
         expect(await screen.findByTestId('bracket')).toBeInTheDocument();
         expect(screen.getAllByText('Semifinal').length).toBeGreaterThan(0);
         expect(screen.getByText('Rematch')).toBeInTheDocument();
-        fireEvent.click(screen.getByRole('button', {name: 'Play my game'}));
-        const state = JSON.parse(screen.getByTestId('location').textContent!);
+        await act(async () => fireEvent.click(screen.getByRole('button', {name: 'Play my game'})));
+        const state = JSON.parse((await screen.findByTestId('location')).textContent!);
         expect(state.tournamentGame).toMatchObject({gameId: 5, color: 'white', baseTimeMs: 150000, incrementMs: 1000});
     });
 
@@ -181,5 +185,31 @@ describe('турнир', () => {
         }) as Response));
         renderView();
         expect(await screen.findByRole('alert')).toHaveTextContent('Tournament not found');
+    });
+
+    it('брошенная и начатая заново партия — поражение, на главную доску не переходим', async () => {
+        const fetchMock = stub({
+            '/tournaments/7': () => roundRobin(), '/profile/me': () => ({}),
+            '/games/1/start': () => ({forfeited: true, game: game(1, 1, 1, 1, 4, '1-0')}),
+        });
+        renderView();
+        const button = await screen.findByRole('button', {name: 'Play my game'});
+        await act(async () => fireEvent.click(button));
+        expect(await screen.findByTestId('tournament-notice')).toHaveTextContent('already started and abandoned');
+        expect(screen.queryByTestId('location')).toBeNull();
+        expect(fetchMock.mock.calls.filter(([url]) => String(url).endsWith('/tournaments/7')).length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('сдать турнир — с подтверждением', async () => {
+        vi.stubGlobal('confirm', vi.fn(() => true));
+        const fetchMock = stub({
+            '/tournaments/7': () => roundRobin(), '/profile/me': () => ({}),
+            '/withdraw': () => roundRobin({withdrawn: true}),
+        });
+        renderView();
+        const button = await screen.findByRole('button', {name: 'Withdraw'});
+        await act(async () => fireEvent.click(button));
+        expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith('/tournaments/7/withdraw') && init?.method === 'POST')).toBe(true);
+        expect(await screen.findByTestId('tournament-notice')).toHaveTextContent('You withdrew');
     });
 });

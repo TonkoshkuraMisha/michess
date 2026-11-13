@@ -116,6 +116,7 @@ ERROR_MESSAGES: dict[str, str] = {
     "tournament_participant_duplicate": "A participant is listed twice: {participant}",
     "tournament_game_closed": "This tournament game is already finished",
     "tournament_game_mismatch": "The game does not match your tournament game",
+    "tournament_game_not_started": "Start your tournament game from the tournament page",
 }
 
 
