@@ -46,8 +46,15 @@ MAX_TARGET_ELO = 2800
 STOCKFISH_MIN_ELO = 1320
 MAX_SEARCH_DEPTH = 8
 MAX_SEARCH_TIME_S = 0.5
-# Вероятность управляемой ошибки на минимальном рейтинге (линейно до нуля к STOCKFISH_MIN_ELO).
-MAX_ERROR_RATE = 0.5
+# Вероятность управляемой ошибки по целевому рейтингу — поправочная кривая по калибровке 14.11 (лог
+# 2026-11-13_asymmetric_window.log), а не прямая: измеренная сила падает с долей ошибок нелинейно (0,05 → 1398,
+# 0,15 → 1251, 0,29 → 737, 0,43 → 471), и линейная доля делала цели 1100–1250 сильнее, а 700–900 — слабее заявленного.
+# Выше 1320 Stockfish на минимальном UCI_Elo с окном стиля играет около 1420, поэтому ошибки сходят на нет к 1450.
+# Между точками — линейно; после правки — перекалибровка (scripts/calibrate_bots.py --only ...).
+ERROR_RATE_CURVE: tuple[tuple[int, float], ...] = (
+    (600, 0.36), (700, 0.31), (900, 0.25), (1100, 0.19), (1250, 0.15), (1320, 0.10), (1450, 0.0),
+)
+MAX_ERROR_RATE = ERROR_RATE_CURVE[0][1]
 # Доля грубых зевков (случайный легальный ход) среди управляемых ошибок ниже 1320.
 BLUNDER_SHARE = 1 / 3
 # randomness 100 → разброс ±40 сп между равными кандидатами.
@@ -107,13 +114,19 @@ class Strength:
     error_rate: float
 
 
+def _error_rate(elo: int) -> float:
+    for (lo_elo, lo_rate), (hi_elo, hi_rate) in zip(ERROR_RATE_CURVE, ERROR_RATE_CURVE[1:], strict=False):
+        if elo <= hi_elo:
+            share = (max(elo, lo_elo) - lo_elo) / (hi_elo - lo_elo)
+            return lo_rate + (hi_rate - lo_rate) * share
+    return 0.0
+
+
 def strength_for(target_elo: int) -> Strength:
     """Параметры поиска по целевому рейтингу; клиент их не задаёт."""
     elo = max(MIN_TARGET_ELO, min(MAX_TARGET_ELO, target_elo))
     t = (elo - MIN_TARGET_ELO) / (MAX_TARGET_ELO - MIN_TARGET_ELO)
-    error_rate = 0.0
-    if elo < STOCKFISH_MIN_ELO:
-        error_rate = MAX_ERROR_RATE * (STOCKFISH_MIN_ELO - elo) / (STOCKFISH_MIN_ELO - MIN_TARGET_ELO)
+    error_rate = _error_rate(elo)
     return Strength(
         uci_elo=max(STOCKFISH_MIN_ELO, elo),
         skill_level=round(20 * t),
@@ -298,9 +311,9 @@ class PersonalityBot(HistoricalBot):
     def _select_move(
             self, board: chess.Board, scores: dict[chess.Move, float], reference: chess.Move | None = None,
     ) -> tuple[chess.Move, str | None]:
-        # Управляемая ошибка ниже 1320. Линии MultiPV часто почти равны лучшей — «ошибка» среди них почти ничего не
-        # стоила (калибровка 13.11: «Торопыга» с целью 700 играл на ~1150). Теперь ошибка — ход из худшей половины
-        # линий, а в BLUNDER_SHARE случаев — случайный легальный ход: грубый зевок, как у новичка.
+        # Управляемая ошибка у слабых (кривая ERROR_RATE_CURVE). Линии MultiPV часто почти равны лучшей — «ошибка»
+        # среди них почти ничего не стоила (калибровка 13.11: «Торопыга» с целью 700 играл на ~1150). Теперь ошибка —
+        # ход из худшей половины линий, а в BLUNDER_SHARE случаев — случайный легальный ход: грубый зевок, как у новичка.
         if self.strength.error_rate and len(scores) > 1 and random.random() < self.strength.error_rate:
             if random.random() < BLUNDER_SHARE:
                 weaker = random.choice(list(board.legal_moves))

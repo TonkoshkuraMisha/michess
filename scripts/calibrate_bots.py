@@ -275,6 +275,9 @@ def main() -> None:
         games += reused
 
     fitted = fit(games, declared)
+    if args.only:
+        # Соседи по силе сыграли с выбранными лишь несколько партий — их прежняя оценка точнее, её не трогаем.
+        fitted = {key: entry for key, entry in fitted.items() if key in set(args.only)}
     previous = {}
     if args.out.exists():
         previous = json.loads(args.out.read_text(encoding="utf-8")).get("players", {})
