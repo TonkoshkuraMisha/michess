@@ -121,7 +121,8 @@ export function DefenseTrainer({header, initialKind = 'threat', onDefensiveMove}
                     {phase === 'move' && drill?.kind === 'blunder' && t('puzzles.defense.chooseMove')}
                     {phase === 'done' && answer && (
                         <span className={answer.correct ? 'text-emerald-400' : 'text-rose-400'} data-testid="defense-outcome">
-                            {t(answer.correct ? 'puzzles.defense.right' : 'puzzles.defense.wrong')}
+                            {t(answer.correct ? 'puzzles.defense.right'
+                                : drill?.kind === 'threat' ? 'puzzles.defense.wrongDefense' : 'puzzles.defense.wrong')}
                         </span>
                     )}
                 </div>

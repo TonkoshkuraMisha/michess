@@ -953,6 +953,7 @@ export const ru: Messages = {
             chooseMove: 'Ваш ход. Какой из трёх ходов не проигрывает?',
             right: 'Верно!',
             wrong: 'Этот ход проигрывает.',
+            wrongDefense: 'Этот ход не отражает угрозу.',
             goodMoves: 'Держит позицию: {moves}.',
             refutation: 'На {move} соперник отвечает {reply}.',
             motifs: 'Замысел соперника:',
