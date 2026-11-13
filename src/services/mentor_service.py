@@ -209,8 +209,14 @@ def _first_two_on_ray(board: chess.Board, square: chess.Square, step: tuple[int,
 
 
 def _is_defended(board: chess.Board, square: chess.Square) -> bool:
+    """Есть защитник, который может отбить: фигура, связанная с королём, защищает только вдоль линии связки."""
     piece = board.piece_at(square)
-    return piece is not None and bool(board.attackers(piece.color, square))
+    if piece is None:
+        return False
+    return any(
+        not board.is_pinned(piece.color, defender) or square in board.pin(piece.color, defender)
+        for defender in board.attackers(piece.color, square)
+    )
 
 
 # --- мотивы позиции ---------------------------------------------------------------------------
