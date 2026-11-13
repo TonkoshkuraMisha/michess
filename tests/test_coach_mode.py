@@ -155,3 +155,89 @@ def test_game_with_coach_is_saved_as_assisted(client, token_user_1, test_user_1)
     flags = {g["game_id"]: g["assisted"] for g in games}
     assert flags[saved.json()["game_id"]] is True
     assert flags[plain.json()["game_id"]] is False
+
+
+# --- Подсказка по ступеням (таск 11.4) ---------------------------------------------------------------------------
+
+HINT_URL = "/api/v1/analysis/hint"
+BACK_RANK = "6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1"
+LOOSE_KNIGHT = "rnbqkbnr/ppp2ppp/3p4/4N3/4P3/8/PPPP1PPP/RNBQKB1R w KQkq - 0 3"
+START = chess.STARTING_FEN
+
+
+def _hint(client, fen: str, step: int) -> dict:
+    response = client.post(HINT_URL, json={"fen": fen, "step": step})
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def _base_key(body: dict) -> str:
+    return body["comment"][0]["key"].rsplit(".", 1)[0]
+
+
+def test_hint_steps_reveal_the_move_only_at_the_end(client, engine):
+    engine(FORK_SETUP, 320, "e5f7")
+    first = _hint(client, FORK_SETUP, 1)
+    assert _base_key(first) == "coach.hint.fork"
+    assert first["best_move_uci"] is None and first["arrows"] == [] and first["highlights"] == []
+    assert first["final"] is False and first["step"] == 1
+
+    second = _hint(client, FORK_SETUP, 2)
+    assert _base_key(second) == "coach.hint.piece"
+    assert second["comment"][0]["params"] == {"piece": "♘e5"}
+    assert second["highlights"] == [{"square": "e5", "kind": "piece"}]
+    assert second["best_move_uci"] is None and second["arrows"] == []
+
+    third = _hint(client, FORK_SETUP, 3)
+    assert third["final"] is True and third["best_move_uci"] == "e5f7"
+    assert {"from": "e5", "to": "f7", "kind": "best"} in third["arrows"]
+
+
+@pytest.mark.parametrize("fen, best, key, params", [
+    (BACK_RANK, "a1a8", "coach.hint.mate", {"n": 1}),
+    (LOOSE_KNIGHT, "e5f3", "coach.hint.defend", {}),
+    (START, "e2e4", "coach.hint.quiet", {}),
+])
+def test_first_step_names_the_theme(client, engine, fen, best, key, params):
+    engine(fen, 0, best)
+    body = _hint(client, fen, 1)
+    assert _base_key(body) == key
+    assert body["comment"][0].get("params", {}) == params
+
+
+def test_without_engine_the_second_step_is_already_the_full_advice(client, monkeypatch):
+    monkeypatch.setattr(move_check, "resolve_stockfish_path", lambda *a, **k: None)
+    body = _hint(client, LOOSE_KNIGHT, 2)
+    assert body["final"] is True and body["step"] == 3 and body["best_move_uci"] is None
+
+
+def test_hint_step_is_validated(client, engine):
+    assert client.post(HINT_URL, json={"fen": START, "step": 4}).status_code == 422
+
+
+async def test_hint_is_closed_during_a_game_with_a_person(client, engine, test_user_1, test_user_2, token_user_1):
+    await state_manager.initialize_game(
+        game_id=712, white_id=test_user_1.id, black_id=test_user_2.id, base_time_ms=180000, increment_ms=0,
+    )
+    response = client.post(HINT_URL, json={"fen": START, "step": 1}, headers=_auth(token_user_1))
+    assert response.status_code == 409
+
+
+# --- «Не согласен» ----------------------------------------------------------------------------------------------
+
+async def test_dispute_goes_to_the_review_queue(client, token_user_1, test_user_1):
+    from src.db import redis as redis_module
+
+    response = client.post("/api/v1/analysis/dispute", headers=_auth(token_user_1),
+                           json={"fen": ITALIAN, "move": "c4f7", "cp_loss": 280})
+    assert response.status_code == 204
+    raw = await redis_module.redis_client.lrange(move_check.DISPUTES_KEY, 0, -1)
+    import json
+    entries = [json.loads(item) for item in raw]
+    assert entries[0]["move"] == "c4f7" and entries[0]["cp_loss"] == 280 and entries[0]["user_id"] == test_user_1.id
+
+
+def test_dispute_rejects_illegal_moves(client):
+    response = client.post("/api/v1/analysis/dispute", json={"fen": ITALIAN, "move": "a1a8"})
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "illegal_move"

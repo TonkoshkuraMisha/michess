@@ -21,13 +21,15 @@ export function squareCenter(square: string, flipped: boolean): { x: number; y: 
 
 interface Props {
     arrows: CoachArrow[];
+    /** Поля, на которые наставник обращает внимание (фигура, которой ходить; цель удара). */
+    highlights?: string[];
     flipped: boolean;
     /** Префикс id маркеров: на странице может быть несколько досок. */
     idPrefix?: string;
 }
 
-export function CoachArrowsOverlay({arrows, flipped, idPrefix = 'coach'}: Props) {
-    if (arrows.length === 0) return null;
+export function CoachArrowsOverlay({arrows, highlights = [], flipped, idPrefix = 'coach'}: Props) {
+    if (arrows.length === 0 && highlights.length === 0) return null;
     return (
         <svg viewBox="0 0 100 100" className="absolute inset-0 w-full h-full z-30 pointer-events-none"
              data-testid="coach-arrows">
@@ -39,6 +41,15 @@ export function CoachArrowsOverlay({arrows, flipped, idPrefix = 'coach'}: Props)
                     </marker>
                 ))}
             </defs>
+            {highlights.map((square) => {
+                const center = squareCenter(square, flipped);
+                if (!center) return null;
+                return (
+                    <rect key={`hl-${square}`} data-testid={`coach-highlight-${square}`}
+                          x={center.x - 5.75} y={center.y - 5.75} width="11.5" height="11.5" rx="1.5"
+                          fill="rgba(251, 191, 36, 0.18)" stroke="rgba(251, 191, 36, 0.9)" strokeWidth="0.9"/>
+                );
+            })}
             {arrows.map((arrow, idx) => {
                 const start = squareCenter(arrow.from, flipped);
                 const end = squareCenter(arrow.to, flipped);

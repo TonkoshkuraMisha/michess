@@ -880,7 +880,9 @@ export const en = {
         title: 'Play with a coach',
         hint: 'The coach checks each of your moves against a bot or on the free board and warns you about mistakes. Such games are training games.',
         levelLabel: 'When to warn',
-        advice: 'Advice',
+        advice: 'Hint',
+        hintPiece: 'Which piece?',
+        hintMove: 'Show the move',
         thinking: 'Thinking…',
         hintsUsed: 'Advice used: {count}',
         checking: 'The coach is looking at your move…',
@@ -894,9 +896,18 @@ export const en = {
         why: 'Why?',
         takeBack: 'Take the move back',
         keep: 'Keep the move',
+        disagree: 'I disagree',
+        disagreeHint: 'Keep the move and send the position for a deeper check',
+        disputeSent: 'Thank you: we will check this position more deeply.',
         legend: 'Green arrow: the best move; red: the opponent\'s threat; blue: the idea.',
         unavailable: 'The coach is unavailable right now, please try again later.',
         archiveBadge: 'with coach',
+        auxOpen: 'Analysis board',
+        auxTitle: 'Analysis board',
+        auxClose: 'Close',
+        auxNote: 'Try lines for both sides here: moves on this board do not affect the game.',
+        auxUndo: 'Undo',
+        auxReset: 'Back to the game position',
         levels: {
             novice: 'Beginner: only blunders',
             amateur: 'Amateur: mistakes and missed blows',
@@ -1074,6 +1085,64 @@ export const en = {
             quiet: {
                 v1: 'No direct threats. Improve your least active piece.',
                 v2: 'The position is calm: think about a plan and your worst-placed piece.',
+            },
+        },
+        hint: {
+            mate: {
+                v1: 'There is a mate in {n} here. Look at the checks.',
+                v2: 'Find the mate in {n}: start with the checks.',
+            },
+            fork: {
+                v1: 'Look for a fork: one piece can attack two targets at once.',
+                v2: 'There is a double attack here. Which piece can hit two targets?',
+            },
+            skewer: {
+                v1: 'Look along the lines: a valuable piece stands in front of another one.',
+                v2: 'A skewer is possible: attack the front piece so the one behind it falls.',
+            },
+            pin_absolute: {
+                v1: 'One of the opponent\'s pieces can be pinned to its king.',
+                v2: 'Look for a pin: a piece in front of the king cannot move.',
+            },
+            pin_relative: {
+                v1: 'A pin is possible: a piece shields a more valuable one behind it.',
+                v2: 'Look for a pin against a piece that stands in front of a stronger one.',
+            },
+            discovered_attack: {
+                v1: 'Move one piece out of the way of another: a discovered attack.',
+                v2: 'One of your long-range pieces is blocked by your own. Open the line with a gain.',
+            },
+            discovered_check: {
+                v1: 'A discovered check is possible: move the piece that blocks the line to the king.',
+                v2: 'Open the line to the king and use the move for something useful.',
+            },
+            double_check: {
+                v1: 'A double check is possible: two pieces give check at once.',
+                v2: 'Look for a move that checks with two pieces.',
+            },
+            mate_threat: {
+                v1: 'You can create a mating threat. Look at the squares around the king.',
+                v2: 'Attack the king: one move can threaten mate.',
+            },
+            trapped: {
+                v1: 'One of the opponent\'s pieces has almost no squares. Can you trap it?',
+                v2: 'Look for a piece with no retreat: it can be caught.',
+            },
+            capture: {
+                v1: 'Something of the opponent\'s is poorly defended.',
+                v2: 'Count the attackers and defenders: material can be won.',
+            },
+            defend: {
+                v1: 'First look at what your opponent threatens.',
+                v2: 'The opponent has a threat. Deal with it before your own plans.',
+            },
+            quiet: {
+                v1: 'No tactics here. Improve your worst piece.',
+                v2: 'A calm position: think about a plan, not about blows.',
+            },
+            piece: {
+                v1: 'Move this piece: {piece}.',
+                v2: 'The key piece is {piece}. Where should it go?',
             },
         },
     },

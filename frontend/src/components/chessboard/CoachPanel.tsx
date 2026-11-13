@@ -1,7 +1,8 @@
 // --- FILE: frontend/src/components/chessboard/CoachPanel.tsx ---
-// Панель игры с наставником (таск 11.3): включение, уровень, «Совет», предупреждение о плохом ходе
-// («Почему?», «Переходить», «Оставить»), объяснение и совет текстом.
+// Панель игры с наставником (таски 11.3, 11.4): включение, уровень, подсказка по ступеням, предупреждение о плохом
+// ходе («Почему?», «Переходить», «Оставить», «Не согласен»), объяснение текстом и вспомогательная доска.
 
+import type {ReactNode} from 'react';
 import {GraduationCap} from 'lucide-react';
 import {renderUiMessage, useI18n} from '../../i18n';
 import {coachText} from '../../services/coach';
@@ -17,7 +18,13 @@ interface Props {
     canAdvise: boolean;
     onAdvice: () => void;
     onTakeBack: () => void;
+    /** Вспомогательная доска открыта — показывается под панелью (children). */
+    auxOpen?: boolean;
+    onToggleAux?: () => void;
+    children?: ReactNode;
 }
+
+const HINT_BUTTON_KEYS = ['coachMode.advice', 'coachMode.hintPiece', 'coachMode.hintMove'] as const;
 
 const VERDICT_KEYS: Record<string, 'coachMode.verdictBlunder' | 'coachMode.verdictMistake' | 'coachMode.verdictInaccuracy'> = {
     Blunder: 'coachMode.verdictBlunder',
@@ -25,7 +32,9 @@ const VERDICT_KEYS: Record<string, 'coachMode.verdictBlunder' | 'coachMode.verdi
     Inaccuracy: 'coachMode.verdictInaccuracy',
 };
 
-export function CoachPanel({coach, locked, inBotGame, canAdvise, onAdvice, onTakeBack}: Props) {
+export function CoachPanel({
+    coach, locked, inBotGame, canAdvise, onAdvice, onTakeBack, auxOpen = false, onToggleAux, children,
+}: Props) {
     const {t} = useI18n();
     const warning = coach.pending?.status === 'warning' ? coach.pending.check : undefined;
     const shownText = coachText(coach.explanation ?? coach.advice, t);
@@ -58,11 +67,20 @@ export function CoachPanel({coach, locked, inBotGame, canAdvise, onAdvice, onTak
             {coach.enabled && !locked && (
                 <>
                     <div className="flex items-center justify-between gap-2">
-                        <button type="button" onClick={onAdvice} disabled={!canAdvise || coach.adviceLoading}
+                        <button type="button" onClick={onAdvice}
+                                disabled={!canAdvise || coach.adviceLoading || coach.hintFinal}
                                 data-testid="coach-advice"
                                 className="px-2 py-1 rounded bg-amber-800 hover:bg-amber-700 text-white font-bold disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed">
-                            {coach.adviceLoading ? t('coachMode.thinking') : t('coachMode.advice')}
+                            {coach.adviceLoading
+                                ? t('coachMode.thinking')
+                                : t(HINT_BUTTON_KEYS[Math.min(coach.hintStep, HINT_BUTTON_KEYS.length - 1)])}
                         </button>
+                        {onToggleAux && (
+                            <button type="button" onClick={onToggleAux} data-testid="aux-toggle" aria-pressed={auxOpen}
+                                    className="px-2 py-1 rounded bg-black/40 border border-amber-900/50 hover:border-amber-500 cursor-pointer">
+                                {t('coachMode.auxOpen')}
+                            </button>
+                        )}
                         <span className="text-boxwood/70" data-testid="coach-hints-used">
                             {t('coachMode.hintsUsed', {count: coach.hintsUsed})}
                         </span>
@@ -98,6 +116,11 @@ export function CoachPanel({coach, locked, inBotGame, canAdvise, onAdvice, onTak
                                 className="px-2 py-0.5 rounded bg-black/40 border border-amber-700/50 hover:border-amber-500 cursor-pointer">
                             {t('coachMode.keep')}
                         </button>
+                        <button type="button" onClick={coach.dispute} data-testid="coach-dispute"
+                                title={t('coachMode.disagreeHint')}
+                                className="px-2 py-0.5 rounded bg-black/40 border border-amber-700/50 hover:border-amber-500 cursor-pointer">
+                            {t('coachMode.disagree')}
+                        </button>
                     </div>
                 </div>
             )}
@@ -108,7 +131,11 @@ export function CoachPanel({coach, locked, inBotGame, canAdvise, onAdvice, onTak
             {(coach.explanation || coach.advice) && (
                 <p className="text-[10px] text-boxwood/60">{t('coachMode.legend')}</p>
             )}
+            {coach.disputeSent && (
+                <p className="text-amber-200/80" role="status" data-testid="coach-dispute-sent">{t('coachMode.disputeSent')}</p>
+            )}
             {coach.error && <p className="text-rose-300" role="status">{renderUiMessage(coach.error, t)}</p>}
+            {auxOpen && children}
         </section>
     );
 }

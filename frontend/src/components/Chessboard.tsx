@@ -34,7 +34,8 @@ import {useBotGame} from './chessboard/hooks/useBotGame';
 import {useCoachMode} from './chessboard/hooks/useCoachMode';
 import {CoachPanel} from './chessboard/CoachPanel';
 import {CoachArrowsOverlay} from './chessboard/CoachArrowsOverlay';
-import {coachArrows} from '../services/coach';
+import {coachArrows, coachHighlights} from '../services/coach';
+import {AuxBoard} from './chessboard/AuxBoard';
 import {useGameSocket} from './chessboard/hooks/useGameSocket';
 import {PromotionDialog} from './chessboard/PromotionDialog';
 import {MoveList} from './chessboard/MoveList';
@@ -769,8 +770,10 @@ export default function Chessboard() {
     };
 
     const handleCoachAdvice = () => {
-        void coach.requestAdvice(game.fen());
+        void coach.requestHint(game.fen());
     };
+    // Вспомогательная доска: копия текущей позиции; при каждом открытии — заново с позиции партии.
+    const [auxOpen, setAuxOpen] = useState(false);
 
     // Стрелки и объяснение относятся к позиции, в которой их запросили: любой ход их снимает.
     const coachClearOverlay = coach.clearOverlay;
@@ -1287,6 +1290,7 @@ export default function Chessboard() {
                         className="grid grid-cols-8 grid-rows-8 w-full h-full border border-black/60 relative z-10 shadow-inner-board rounded-[2px] overflow-hidden">
                         {viewIndex === -1 && (
                             <CoachArrowsOverlay arrows={coachArrows(coach.explanation ?? coach.advice)}
+                                                highlights={[...coachHighlights(coach.explanation ?? coach.advice)]}
                                                 flipped={isBoardFlipped} idPrefix="play-coach"/>
                         )}
                         {displayedRanks.map((rank) =>
@@ -1587,7 +1591,13 @@ export default function Chessboard() {
                         canAdvise={viewIndex === -1 && !gameOverResult && !game.isGameOver() && !coach.pending && (!activeBot || game.turn() === myColor[0])}
                         onAdvice={handleCoachAdvice}
                         onTakeBack={handleCoachTakeBack}
-                    />
+                        auxOpen={auxOpen}
+                        onToggleAux={() => setAuxOpen((open) => !open)}
+                    >
+                        <AuxBoard key={auxOpen ? 'aux-open' : 'aux-closed'} fen={game.fen()} flipped={isBoardFlipped}
+                                  lightColor={activeTheme.light} darkColor={activeTheme.dark}
+                                  renderPiece={renderPieceSvg} onClose={() => setAuxOpen(false)}/>
+                    </CoachPanel>
                 )}
 
                 {/* Зрителю кнопки песочницы не показываем: «отменить ход» и «сбросить доску»

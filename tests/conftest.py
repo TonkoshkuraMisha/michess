@@ -216,6 +216,17 @@ class MockAsyncRedis:
             self.lists[name].append(v)
         return len(self.lists[name])
 
+    async def lpush(self, name, *values):
+        lst = self.lists.setdefault(name, [])
+        for v in values:
+            lst.insert(0, v)
+        return len(lst)
+
+    async def ltrim(self, name, start, end):
+        lst = self.lists.get(name, [])
+        self.lists[name] = lst[start:] if end == -1 else lst[start:end + 1]
+        return True
+
     async def lrange(self, name, start, end):
         lst = self.lists.get(name, [])
         if end == -1:

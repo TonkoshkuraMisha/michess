@@ -86,7 +86,7 @@ async def _record_engine_signal(game_id: int, user_id: int, requester: int) -> N
     )
 
 
-async def _optional_user_id(request: Request, db: AsyncSession) -> int | None:
+async def optional_user_id(request: Request, db: AsyncSession) -> int | None:
     scheme, _, token = request.headers.get("authorization", "").partition(" ")
     if scheme.lower() != "bearer" or not token:
         return None
@@ -97,7 +97,7 @@ async def _optional_user_id(request: Request, db: AsyncSession) -> int | None:
 async def forbid_engine_help_during_game(request: Request, db: AsyncSession = Depends(get_db)) -> None:
     """Зависимость FastAPI: 409, если запрос движка совпадает по времени с рейтинговой партией."""
     try:
-        requester_id = await _optional_user_id(request, db)
+        requester_id = await optional_user_id(request, db)
 
         if requester_id is not None and await active_rated_game_id(requester_id) is not None:
             raise ApiError(status.HTTP_409_CONFLICT, "engine_locked_in_game")

@@ -330,6 +330,10 @@ class AnalysisService:
         """Совет наставника по позиции (таск 11.2); оценка — из общего кэша (src/services/move_check.py)."""
         return await move_check.advise(fen)
 
+    async def hint(self, fen: str, step: int) -> dict:
+        """Подсказка по ступеням (таск 11.4)."""
+        return await move_check.hint(fen, step)
+
     async def check_move(self, fen: str, move_uci: str) -> dict:
         """Проверка хода в игре с наставником (таск 11.3)."""
         return await move_check.check_move(fen, move_uci)

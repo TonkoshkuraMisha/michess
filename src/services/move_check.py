@@ -18,6 +18,7 @@
 import asyncio
 import json
 import logging
+import time
 from dataclasses import asdict, dataclass
 
 import chess
@@ -26,7 +27,7 @@ import chess.engine
 from src.core.errors import DomainValueError
 from src.db import redis as redis_module
 from src.services.bots.base import resolve_stockfish_path
-from src.services.coach import advice_for_position, comment_for_move
+from src.services.coach import HINT_STEPS, advice_for_position, comment_for_move, hint_for_position
 from src.services.engine_pool import EngineUnavailableError, get_engine_pool
 from src.services.game_engine import board_from_start_fen
 
@@ -172,3 +173,44 @@ async def advise(fen: str) -> dict:
         "eval_cp": _clamped(evaluation.cp_white) if evaluation else None,
         **advice_for_position(board, best),
     }
+
+
+async def hint(fen: str, step: int) -> dict:
+    """Подсказка по ступеням (таск 11.4). Лучший ход раскрывается только на последней ступени."""
+    board = _parse_position(fen)
+    evaluation = await evaluate_cached(board)
+    best = evaluation.best_uci if evaluation else None
+    payload = hint_for_position(board, best, step)
+    final = step >= HINT_STEPS or (step == 2 and best is None)
+    return {
+        "fen": board.fen(),
+        "step": HINT_STEPS if final else step,
+        "final": final,
+        "best_move_uci": best if final else None,
+        **payload,
+    }
+
+
+DISPUTES_KEY = "coach:disputes"
+DISPUTES_KEEP = 2000
+
+
+async def record_dispute(fen: str, move_uci: str, cp_loss: int | None, user_id: int | None) -> None:
+    """
+    «Не согласен» с предупреждением наставника: позиция и ход — в очередь спорных оценок (Redis, последние
+    DISPUTES_KEEP). Её разбирают глубоким анализом (scripts/dev/review_disputes.py) — так находятся ошибки
+    объяснений и порогов. Ход проверяется на легальность, чтобы очередь не засоряли.
+    """
+    board = _parse_position(fen)
+    try:
+        move = chess.Move.from_uci(move_uci)
+    except ValueError:
+        raise DomainValueError("illegal_move", move=move_uci) from None
+    if move not in board.legal_moves:
+        raise DomainValueError("illegal_move", move=move_uci)
+    entry = {"fen": board.fen(), "move": move.uci(), "cp_loss": cp_loss, "user_id": user_id, "at": int(time.time())}
+    try:
+        await redis_module.redis_client.lpush(DISPUTES_KEY, json.dumps(entry))
+        await redis_module.redis_client.ltrim(DISPUTES_KEY, 0, DISPUTES_KEEP - 1)
+    except Exception as exc:
+        logger.warning("Очередь спорных оценок недоступна: %s", exc)
