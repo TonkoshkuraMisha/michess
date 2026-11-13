@@ -1,7 +1,7 @@
 // --- FILE: frontend/src/components/Chessboard.tsx ---
 
 import {useState, useEffect, useRef, useCallback} from 'react';
-import {useNavigate, useParams} from 'react-router-dom';
+import {useLocation, useNavigate, useParams} from 'react-router-dom';
 import {Chess} from 'chess.js';
 import {ListOrdered, Bot, Zap, Radio} from 'lucide-react';
 import {gameSocket} from '../services/gameSocket';
@@ -1008,6 +1008,15 @@ export default function Chessboard() {
         }
         if (forfeited) setDrawOfferStatus(status('ladder.forfeited', {message: ladderOutcomeMessage(forfeited)}));
     };
+
+    // «Разобрать с наставником» со страницы задач (13.3): позиция задачи — на свободную доску, наставник включён.
+    const location = useLocation();
+    const analyzeFen = (location.state as { analyzeFen?: string } | null)?.analyzeFen;
+    useEffect(() => {
+        if (!analyzeFen || gameId || activeBot) return;
+        if (handleLoadFen(analyzeFen) === null) coach.setEnabled(true);
+        navigate('.', {replace: true, state: null});
+    }, [analyzeFen]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleLoadFen = (fen: string): string | null => {
         const error = validateFen(fen);

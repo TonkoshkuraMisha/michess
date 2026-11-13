@@ -144,3 +144,58 @@ async def test_profile_and_auth(client, token_user_1, puzzles):
     profile = client.get(f"{API}/me", headers=_auth(token_user_1)).json()
     assert profile["games"] == 1 and profile["streak"] == 1 and profile["rating"] > 1500
     assert profile["history"][0]["puzzle_id"] == puzzle["id"] and profile["history"][0]["solved"] is True
+
+
+# --- Режим на время (таск 13.3) ---------------------------------------------------------------------------
+
+SOLUTIONS = {row["FEN"]: row["Moves"].split()[1::2] for row in (BACK_RANK, FORK, TWO_MATES)}
+
+
+def _wrong_move(view: dict) -> str:
+    """Легальный ход решающего, который не из решения и не мат."""
+    import chess
+
+    board = chess.Board(view["fen"])
+    board.push_uci(view["first_move"])
+    for move in board.legal_moves:
+        if move.uci() in SOLUTIONS[view["fen"]]:
+            continue
+        board.push(move)
+        mate = board.is_checkmate()
+        board.pop()
+        if not mate:
+            return move.uci()
+    raise AssertionError("нет неверного хода")
+
+async def test_timed_run_counts_on_the_server_and_keeps_the_record(client, token_user_1, puzzles, monkeypatch):
+    assert client.post(f"{API}/timed/start", json={"minutes": 4}, headers=_auth(token_user_1)).status_code == 400
+    assert client.get(f"{API}/timed/next", headers=_auth(token_user_1)).status_code == 409
+    run = client.post(f"{API}/timed/start", json={"minutes": 3}, headers=_auth(token_user_1)).json()
+    assert run["minutes"] == 3 and run["solved"] == 0 and 170 < run["seconds_left"] <= 180
+
+    first = client.get(f"{API}/timed/next", headers=_auth(token_user_1)).json()
+    for uci in SOLUTIONS[first["fen"]]:
+        body = _move(client, token_user_1, first["id"], uci).json()
+    assert body["result"]["run"]["solved"] == 1
+    # Рейтинг в забеге не меняется.
+    assert body["result"]["delta"] == 0
+
+    second = client.get(f"{API}/timed/next", headers=_auth(token_user_1)).json()
+    body = _move(client, token_user_1, second["id"], _wrong_move(second)).json()
+    assert body["correct"] is False and body["result"]["run"]["mistakes"] == 1
+
+    result = client.post(f"{API}/timed/finish", headers=_auth(token_user_1)).json()
+    assert result == {"score": 1, "mistakes": 1, "minutes": 3, "best": 1, "new_record": True}
+    me = client.get(f"{API}/me", headers=_auth(token_user_1)).json()
+    assert me["best"] == {"3": 1, "5": 0} and me["games"] == 0
+    assert client.post(f"{API}/timed/finish", headers=_auth(token_user_1)).status_code == 409
+
+
+async def test_timed_run_ends_after_time_or_three_mistakes(client, token_user_1, puzzles, monkeypatch):
+    import time as time_module
+
+    client.post(f"{API}/timed/start", json={"minutes": 3}, headers=_auth(token_user_1))
+    now = time_module.time()
+    monkeypatch.setattr(service.time, "time", lambda: now + 3 * 60 + 10)
+    over = client.get(f"{API}/timed/next", headers=_auth(token_user_1))
+    assert over.status_code == 409 and over.json()["detail"]["code"] == "timed_run_over"

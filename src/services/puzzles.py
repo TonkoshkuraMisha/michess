@@ -8,10 +8,16 @@
 Рейтинг решателя — Эло против рейтинга задачи: K = 40 первые PROVISIONAL_GAMES задач, затем 20. Подсказка снижает
 начисление: одна — вдвое, две (показан ход) — до нуля; поражение считается полностью. Серия — подряд решённые без
 ошибок и подсказок. «Задача дня» — одна на всех: выбирается по дате из популярных задач среднего уровня.
+
+Режим на время (таск 13.3): забег на 3 или 5 минут хранится на сервере — счёт и ошибки считает сервер, клиент лишь
+показывает таймер. Задачи забега рейтинг не меняют; сложность растёт с каждой решённой (от рейтинга игрока −300 с
+шагом TIMED_STEP). Три ошибки или конец времени — забег окончен, лучший счёт — личный рекорд.
 """
 
 import datetime as dt
 import json
+import time
+import uuid
 import zlib
 from dataclasses import asdict, dataclass
 
@@ -33,6 +39,11 @@ MIN_RATING = 400
 HINT_FACTORS = (1.0, 0.5, 0.0)
 DAILY_RATING = (1300, 1900)
 DAILY_POPULARITY = 95
+TIMED_MINUTES = (3, 5)
+TIMED_MISTAKES = 3
+TIMED_START_OFFSET = -300
+TIMED_STEP = 40
+TIMED_GRACE_S = 2
 
 
 class PuzzleError(DomainError):
@@ -49,6 +60,7 @@ class PuzzleSession:
     index: int = 1          # индекс ожидаемого хода решающего в moves
     hints: int = 0
     daily: bool = False
+    run: str | None = None  # забег режима на время: задача без рейтинга
 
 
 def _session_key(user_id: int) -> str:
@@ -95,17 +107,20 @@ async def _recent_ids(db: AsyncSession, user_id: int) -> list[int]:
     return list(rows.scalars())
 
 
-async def pick_puzzle(db: AsyncSession, user: User, theme: str | None = None) -> Puzzle:
+async def pick_puzzle(
+        db: AsyncSession, user: User, theme: str | None = None, target_rating: int | None = None,
+) -> Puzzle:
     """Задача под рейтинг игрока (окно расширяется, пока не найдётся), по теме, без недавних."""
     if theme is not None and theme not in THEMES_BY_CODE:
         raise PuzzleError("unknown_theme", 400, theme=theme)
     recent = await _recent_ids(db, user.id)
+    target = user.puzzle_rating if target_rating is None else target_rating
     for window in RATING_WINDOWS:
         query = select(Puzzle)
         if theme is not None:
             query = query.join(PuzzleTheme).where(PuzzleTheme.theme == theme)
         if window is not None:
-            query = query.where(Puzzle.rating.between(user.puzzle_rating - window, user.puzzle_rating + window))
+            query = query.where(Puzzle.rating.between(target - window, target + window))
         if recent:
             query = query.where(Puzzle.id.not_in(recent))
         puzzle = await db.scalar(query.order_by(func.random()).limit(1))
@@ -136,9 +151,85 @@ async def daily_puzzle(db: AsyncSession, day: dt.date) -> Puzzle:
     return puzzle
 
 
-async def start(user: User, puzzle: Puzzle, *, daily: bool = False) -> None:
+async def start(user: User, puzzle: Puzzle, *, daily: bool = False, run: str | None = None) -> None:
     """Начать задачу: предыдущая незаконченная просто отменяется (без изменения рейтинга)."""
-    await _save_session(user.id, PuzzleSession(puzzle_id=puzzle.id, daily=daily))
+    await _save_session(user.id, PuzzleSession(puzzle_id=puzzle.id, daily=daily, run=run))
+
+
+# --- режим на время -------------------------------------------------------------------------------------------
+
+def _run_key(user_id: int) -> str:
+    return f"puzzle:run:{user_id}"
+
+
+async def _load_run(user_id: int) -> dict | None:
+    raw = await redis_module.redis_client.get(_run_key(user_id))
+    return json.loads(raw) if raw else None
+
+
+async def _save_run(user_id: int, run: dict) -> None:
+    ttl = int(run["ends_at"] - time.time()) + 600
+    await redis_module.redis_client.set(_run_key(user_id), json.dumps(run), ex=max(ttl, 60))
+
+
+def _run_view(run: dict) -> dict:
+    return {
+        "run_id": run["id"], "minutes": run["minutes"], "solved": run["solved"], "mistakes": run["mistakes"],
+        "seconds_left": max(0, round(run["ends_at"] - time.time())), "over": _run_over(run),
+    }
+
+
+def _run_over(run: dict) -> bool:
+    return run["mistakes"] >= TIMED_MISTAKES or time.time() > run["ends_at"] + TIMED_GRACE_S
+
+
+async def start_run(user: User, minutes: int) -> dict:
+    if minutes not in TIMED_MINUTES:
+        raise PuzzleError("invalid_timed_minutes", 400, minutes=minutes)
+    run = {"id": uuid.uuid4().hex, "minutes": minutes, "ends_at": time.time() + minutes * 60,
+           "solved": 0, "mistakes": 0, "base": user.puzzle_rating + TIMED_START_OFFSET}
+    await _save_run(user.id, run)
+    await _drop_session(user.id)
+    return _run_view(run)
+
+
+async def next_in_run(db: AsyncSession, user: User) -> tuple[Puzzle, dict]:
+    run = await _load_run(user.id)
+    if run is None:
+        raise PuzzleError("timed_run_not_active", 409)
+    if _run_over(run):
+        raise PuzzleError("timed_run_over", 409)
+    target = max(600, run["base"] + TIMED_STEP * run["solved"])
+    puzzle = await pick_puzzle(db, user, target_rating=target)
+    await start(user, puzzle, run=run["id"])
+    return puzzle, _run_view(run)
+
+
+async def _count_in_run(user_id: int, run_id: str, solved: bool) -> dict | None:
+    run = await _load_run(user_id)
+    if run is None or run["id"] != run_id:
+        return None
+    if not _run_over(run):
+        run["solved" if solved else "mistakes"] += 1
+        await _save_run(user_id, run)
+    return _run_view(run)
+
+
+async def finish_run(db: AsyncSession, user: User) -> dict:
+    """Итог забега: счёт, рекорд за эти минуты, новый ли это рекорд."""
+    run = await _load_run(user.id)
+    if run is None:
+        raise PuzzleError("timed_run_not_active", 409)
+    await redis_module.redis_client.delete(_run_key(user.id))
+    await _drop_session(user.id)
+    field = f"puzzle_best_{run['minutes']}"
+    best = getattr(user, field)
+    record = run["solved"] > best
+    if record:
+        setattr(user, field, run["solved"])
+        await db.commit()
+    return {"score": run["solved"], "mistakes": run["mistakes"], "minutes": run["minutes"],
+            "best": max(best, run["solved"]), "new_record": record}
 
 
 async def _active(db: AsyncSession, user: User, puzzle_id: int) -> tuple[PuzzleSession, Puzzle]:
@@ -184,14 +275,17 @@ async def streak(db: AsyncSession, user_id: int) -> int:
 
 async def _finish(db: AsyncSession, user: User, puzzle: Puzzle, session: PuzzleSession, solved: bool) -> dict:
     before = user.puzzle_rating
-    delta = rating_delta(before, puzzle.rating, user.puzzle_games, solved, session.hints)
-    user.puzzle_rating = max(MIN_RATING, before + delta)
-    user.puzzle_games += 1
+    if session.run is None:
+        delta = rating_delta(before, puzzle.rating, user.puzzle_games, solved, session.hints)
+        user.puzzle_rating = max(MIN_RATING, before + delta)
+        user.puzzle_games += 1
     db.add(PuzzleAttempt(user_id=user.id, puzzle_id=puzzle.id, solved=solved, hints_used=session.hints,
                          rating_before=before, rating_after=user.puzzle_rating))
     await db.commit()
     await _drop_session(user.id)
+    run = await _count_in_run(user.id, session.run, solved) if session.run else None
     return {
+        "run": run,
         "solved": solved,
         "rating_before": before,
         "rating_after": user.puzzle_rating,
@@ -264,4 +358,4 @@ async def profile(db: AsyncSession, user: User, limit: int = 30) -> dict:
         for attempt, rating in rows
     ]
     return {"rating": user.puzzle_rating, "games": user.puzzle_games, "streak": await streak(db, user.id),
-            "history": history}
+            "best": {"3": user.puzzle_best_3, "5": user.puzzle_best_5}, "history": history}

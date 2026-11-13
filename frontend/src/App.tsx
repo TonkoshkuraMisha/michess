@@ -10,6 +10,7 @@ import ChampionGames from './components/ChampionGames';
 import Leaderboard from './components/Leaderboard';
 import About from './components/About';
 import Settings from './components/Settings';
+import PuzzlesPage from './components/puzzles/PuzzlesPage';
 import {CHAMPIONS_LIST} from './config/champions';
 import {API_BASE_URL} from './config/api';
 import {gameSocket} from './services/gameSocket';
@@ -23,7 +24,8 @@ import {
     Crown,
     ChevronDown,
     Trophy,
-    Scale
+    Scale,
+    Puzzle
 } from 'lucide-react';
 import {useI18n} from './i18n';
 import LanguageSwitcher from './components/LanguageSwitcher';
@@ -210,6 +212,15 @@ export default function App() {
                         </Link>
 
                         <Link
+                            to="/puzzles"
+                            className={`flex items-center gap-2 transition ${
+                                location.pathname === '/puzzles' ? 'text-amber-300' : 'hover:text-amber-300'
+                            }`}
+                        >
+                            <Puzzle size={17}/> {t('nav.puzzles')}
+                        </Link>
+
+                        <Link
                             to="/leaderboard"
                             className={`flex items-center gap-2 transition ${
                                 location.pathname === '/leaderboard' ? 'text-amber-300' : 'hover:text-amber-300'
@@ -351,6 +362,15 @@ export default function App() {
                                         <button
                                             onClick={() => {
                                                 setIsProfileOpen(false);
+                                                navigate('/puzzles');
+                                            }}
+                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
+                                        >
+                                            <Puzzle size={16} className="text-amber-500"/> {t('nav.puzzles')}
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setIsProfileOpen(false);
                                                 navigate('/leaderboard');
                                             }}
                                             className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
@@ -414,6 +434,7 @@ export default function App() {
                     <Route path="/" element={<Chessboard key={token ? token : 'guest'}/>}/>
                     <Route path="/challenge/:inviteCode" element={<Chessboard key={token ? token : 'guest'}/>}/>
                     <Route path="/leaderboard" element={<Leaderboard/>}/>
+                    <Route path="/puzzles" element={<PuzzlesPage/>}/>
                     <Route path="/profile/:targetUsername" element={<Profile/>}/>
                     <Route path="/game/:gameId" element={<GameViewer/>}/>
                     <Route path="/champions/:championId" element={<ChampionGames/>}/>

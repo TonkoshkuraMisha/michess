@@ -71,9 +71,11 @@ describe('App: навигация', () => {
         const header = screen.getByRole('banner');
 
         expectNoDeadControls(header);
-        for (const label of ['Задачи', 'Обучение', 'Просмотр', 'Инструменты']) {
+        for (const label of ['Обучение', 'Просмотр', 'Инструменты']) {
             expect(within(header).queryByText(label)).not.toBeInTheDocument();
         }
+        // «Задачи» вернулись в шапку вместе с разделом (таск 13.3) — это рабочая ссылка.
+        expect(within(header).getByText('Задачи').closest('a')?.getAttribute('href')).toBe('/puzzles');
         expect(within(header).queryByTitle('Поиск партии')).not.toBeInTheDocument();
         expect(within(header).queryByTitle('Уведомления')).not.toBeInTheDocument();
     });
