@@ -46,11 +46,12 @@ const ANALYSIS = {
 
 type Reply = { ok: boolean; status?: number; body?: unknown; text?: string };
 
-function stubApi({pgn, cached, analyze}: { pgn: Reply; cached?: Reply; analyze?: Reply }) {
+function stubApi({pgn, cached, analyze, personal}: { pgn: Reply; cached?: Reply; analyze?: Reply; personal?: Reply }) {
     const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
         const url = input.toString();
         let reply: Reply = {ok: false, status: 404, body: {}};
         if (url.endsWith('/pgn')) reply = pgn;
+        else if (url.includes('/puzzles/personal/game/')) reply = personal ?? reply;
         else if (url.includes('/analysis/game/')) reply = (init?.method === 'POST' ? analyze : cached) ?? reply;
         return {
             ok: reply.ok,
@@ -177,6 +178,15 @@ describe('GameViewer', () => {
         expect(firstSquare()).toBe('a8');
         fireEvent.click(screen.getByTitle('Перевернуть доску'));
         expect(firstSquare()).toBe('h1');
+    });
+
+    it('ходы, из которых сделаны задачи «Ваши ошибки», отмечены значком', async () => {
+        localStorage.setItem('token', 'jwt');
+        stubApi({pgn: {ok: true, text: FOOLS_MATE_PGN}, personal: {ok: true, body: {game_id: 42, plies: [3]}}});
+        renderViewer();
+        expect(await screen.findByTestId('personal-badge-3')).toBeTruthy();
+        expect(screen.queryByTestId('personal-badge-1')).toBeNull();
+        localStorage.removeItem('token');
     });
 
     it('кэшированный анализ показывается сразу, без запуска движка', async () => {

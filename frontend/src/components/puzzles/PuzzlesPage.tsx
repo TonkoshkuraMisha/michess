@@ -1,5 +1,6 @@
 // --- FILE: frontend/src/components/puzzles/PuzzlesPage.tsx ---
 // Режим «Приёмы» (таск 13.4) — TrainingPanel: путь по теме реестра со ступенями и смешанные подборки.
+// Режим «Мои ошибки» (таск 13.5) — позиции перед ошибками в партиях игрока с повторением через интервалы.
 // Страница задач (таск 13.3): решение по рейтингу или теме, задача дня, режим на время (3/5 минут, три ошибки —
 // конец, личный рекорд), подсказка, «Показать решение», итог с изменением рейтинга, история и график рейтинга,
 // «Разобрать с наставником» — позиция задачи на свободной доске с включённым наставником.
@@ -13,14 +14,15 @@ import type {UiMessage} from '../../i18n';
 import {UiError} from '../../services/apiErrors';
 import {puzzlesApi} from '../../services/puzzles';
 import type {
-    HintResponse, PuzzleProfile, PuzzleResult, PuzzleView, TimedResult, TimedRun, TrainingTarget,
+    HintResponse, PersonalAnswer, PersonalSummary, PersonalView, PuzzleProfile, PuzzleResult, PuzzleView,
+    TimedResult, TimedRun, TrainingTarget,
 } from '../../services/puzzles';
 import {fetchThemeRegistry, themeText} from '../../services/themes';
 import type {ThemeRegistry, ThemeSection} from '../../services/themes';
 import {PuzzleBoard} from './PuzzleBoard';
 import {TrainingPanel} from './TrainingPanel';
 
-type Mode = 'rated' | 'themes' | 'daily' | 'timed';
+type Mode = 'rated' | 'themes' | 'personal' | 'daily' | 'timed';
 type Phase = 'idle' | 'loading' | 'opponent' | 'solving' | 'waiting' | 'done';
 
 const OPPONENT_DELAY_MS = 500;
@@ -101,6 +103,9 @@ export default function PuzzlesPage() {
     const [timedResult, setTimedResult] = useState<TimedResult | null>(null);
     const [error, setError] = useState<UiMessage | null>(null);
     const [target, setTarget] = useState<TrainingTarget | null>(null);
+    const [personal, setPersonal] = useState<PersonalView | null>(null);
+    const [personalAnswer, setPersonalAnswer] = useState<PersonalAnswer | null>(null);
+    const [personalSummary, setPersonalSummary] = useState<PersonalSummary | null>(null);
     const [trainingKey, setTrainingKey] = useState(0);
     const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
     const gameRef = useRef(new Chess());
@@ -148,7 +153,29 @@ export default function PuzzlesPage() {
         setError(null);
         setPhase('loading');
         try {
-            if (nextMode === 'themes') {
+            if (nextMode === 'personal') {
+                setPuzzle(null);
+                setPersonalAnswer(null);
+                setMark(null);
+                setPersonalSummary(await puzzlesApi.personalSummary());
+                let view: PersonalView | null = null;
+                try {
+                    view = await puzzlesApi.personalNext();
+                } catch {
+                    view = null;  // к повторению сейчас ничего нет — сводка скажет, когда следующая
+                }
+                setPersonal(view);
+                if (view) {
+                    gameRef.current = new Chess(view.fen);
+                    setFen(view.fen);
+                    setLastMove(view.previous_move
+                        ? {from: view.previous_move.slice(0, 2), to: view.previous_move.slice(2, 4)} : null);
+                    setStartFen(view.fen);
+                    setPhase('solving');
+                } else {
+                    setPhase('idle');
+                }
+            } else if (nextMode === 'themes') {
                 if (nextTarget) present(await puzzlesApi.train(nextTarget));
                 else setPhase('idle');
             } else if (nextMode === 'timed') {
@@ -209,7 +236,37 @@ export default function PuzzlesPage() {
         }
     };
 
+    const onPersonalMove = async (uci: string) => {
+        if (!personal) return;
+        const fenBefore = gameRef.current.fen();
+        apply(uci);
+        setPhase('waiting');
+        try {
+            const answer = await puzzlesApi.personalAnswer(personal.id, uci);
+            setMark({square: uci.slice(2, 4), ok: answer.correct});
+            setPersonalAnswer(answer);
+            setSolution(`${solutionSan(fenBefore, [answer.solution])}`);
+            setPhase('done');
+            if (!answer.correct) {
+                later(() => {
+                    gameRef.current.undo();
+                    setFen(gameRef.current.fen());
+                    later(() => apply(answer.solution), SOLUTION_STEP_MS);
+                }, SOLUTION_STEP_MS);
+            }
+        } catch (err) {
+            gameRef.current.undo();
+            setFen(gameRef.current.fen());
+            setError(errorOf(err));
+            setPhase('solving');
+        }
+    };
+
     const onMove = async (uci: string) => {
+        if (mode === 'personal' && phase === 'solving') {
+            await onPersonalMove(uci);
+            return;
+        }
         if (!puzzle || phase !== 'solving') return;
         const fenBefore = gameRef.current.fen();
         apply(uci);
@@ -275,6 +332,8 @@ export default function PuzzlesPage() {
         setMode(next);
         setTimedResult(null);
         setTarget(null);
+        setPersonal(null);
+        if (next !== 'personal') setPersonalSummary(null);
         if (next !== 'timed' && next !== 'themes') void load(next);
         if (next === 'themes') setPhase('idle');
     };
@@ -288,6 +347,9 @@ export default function PuzzlesPage() {
         if (startFen) navigate('/', {state: {analyzeFen: startFen}});
     };
 
+    const dueDays = (iso: string | null) => (iso
+        ? Math.max(1, Math.round((new Date(iso).getTime() - Date.now()) / 86_400_000)) : 0);
+
     const turnText = puzzle ? t(puzzle.color === 'white' ? 'puzzles.yourMoveWhite' : 'puzzles.yourMoveBlack') : '';
     const showThemes = (mode !== 'timed' && !(target?.blind)) || phase === 'done';
     const training = result?.training ?? null;
@@ -295,11 +357,14 @@ export default function PuzzlesPage() {
     return (
         <div className="w-full max-w-6xl mx-auto p-3 sm:p-4 flex flex-col lg:flex-row gap-4" data-testid="puzzles-page">
             <div className="w-full lg:w-[min(70vh,640px)] shrink-0 flex flex-col gap-2">
-                <PuzzleBoard fen={fen} orientation={puzzle?.color ?? 'white'} interactive={phase === 'solving'}
+                <PuzzleBoard fen={fen} orientation={personal?.color ?? puzzle?.color ?? 'white'} interactive={phase === 'solving'}
                              lastMove={lastMove} hint={hint} mark={mark} onMove={(uci) => void onMove(uci)}/>
                 <div className="flex flex-wrap items-center gap-2 text-sm" role="status" data-testid="puzzle-status">
                     {phase === 'opponent' && <span className="text-boxwood/80">{t('puzzles.opponentMoving')}</span>}
-                    {(phase === 'solving' || phase === 'waiting') && <span className="font-bold text-amber-300">{turnText}</span>}
+                    {(phase === 'solving' || phase === 'waiting') && personal && (
+                        <span className="font-bold text-amber-300">{t('puzzles.personal.task')}</span>
+                    )}
+                    {(phase === 'solving' || phase === 'waiting') && !personal && <span className="font-bold text-amber-300">{turnText}</span>}
                     {phase === 'done' && result && (
                         <span className={`font-bold ${result.solved ? 'text-emerald-400' : 'text-rose-400'}`}
                               data-testid="puzzle-outcome">
@@ -320,8 +385,8 @@ export default function PuzzlesPage() {
                             {t('puzzles.profile', {rating: profile.rating, games: profile.games, streak: profile.streak})}
                         </p>
                     )}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 font-bold text-xs" role="tablist">
-                        {(['rated', 'themes', 'daily', 'timed'] as const).map((m) => (
+                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-1 font-bold text-xs" role="tablist">
+                        {(['rated', 'themes', 'personal', 'daily', 'timed'] as const).map((m) => (
                             <button key={m} type="button" role="tab" aria-selected={mode === m} data-testid={`puzzle-mode-${m}`}
                                     onClick={() => chooseMode(m)}
                                     className={`py-1.5 rounded border cursor-pointer flex items-center justify-center gap-1 ${mode === m
@@ -414,7 +479,58 @@ export default function PuzzlesPage() {
                         </p>
                     )}
 
-                    {mode !== 'timed' && (mode !== 'themes' || target) && (
+                    {mode === 'personal' && personalSummary && (
+                        <div className="flex flex-col gap-1.5" data-testid="personal-panel">
+                            <p data-testid="personal-summary">
+                                {t('puzzles.personal.summary', {
+                                    due: personalSummary.due, active: personalSummary.active,
+                                    mastered: personalSummary.mastered,
+                                })}
+                            </p>
+                            {!personal && phase === 'idle' && (
+                                <p className="text-amber-200" data-testid="personal-empty">
+                                    {personalSummary.active === 0
+                                        ? t('puzzles.personal.none')
+                                        : t('puzzles.personal.allDone', {days: dueDays(personalSummary.next_due_at)})}
+                                </p>
+                            )}
+                            {personalAnswer && (
+                                <p className={personalAnswer.correct ? 'text-emerald-300' : 'text-rose-300'}
+                                   data-testid="personal-result">
+                                    {t(personalAnswer.correct ? 'puzzles.personal.right' : 'puzzles.personal.wrong')}
+                                    {' '}
+                                    {personalAnswer.done
+                                        ? t('puzzles.personal.mastered')
+                                        : t('puzzles.personal.again', {days: dueDays(personalAnswer.next_due_at)})}
+                                </p>
+                            )}
+                            {personalAnswer && personal && (
+                                <p className="text-xs text-boxwood/80" data-testid="personal-played">
+                                    {t('puzzles.personal.inGame', {
+                                        move: solutionSan(personal.fen, [personalAnswer.played]),
+                                        best: solution ?? '',
+                                    })}
+                                </p>
+                            )}
+                            <div className="flex flex-wrap gap-2">
+                                {phase === 'done' && (
+                                    <button type="button" onClick={() => void load('personal')} data-testid="personal-next"
+                                            className="flex items-center gap-1 px-3 py-1.5 rounded bg-amber-800 hover:bg-amber-700 text-white font-bold cursor-pointer">
+                                        <ArrowRight size={15}/> {t('puzzles.next')}
+                                    </button>
+                                )}
+                                {personal && (
+                                    <button type="button" onClick={() => navigate(`/game/${personal.game_id}`)}
+                                            data-testid="personal-open-game"
+                                            className="px-3 py-1.5 rounded bg-black/40 border border-amber-900/50 hover:border-amber-500 cursor-pointer">
+                                        {t('puzzles.personal.openGame')}
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {mode !== 'timed' && mode !== 'personal' && (mode !== 'themes' || target) && (
                         <div className="flex flex-wrap gap-2">
                             <button type="button" onClick={() => void load()} data-testid="puzzle-next"
                                     disabled={phase === 'loading' || phase === 'opponent'}

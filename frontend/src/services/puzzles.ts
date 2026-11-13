@@ -69,6 +69,35 @@ export interface TrainingTarget {
     blind: boolean;
 }
 
+/** «Ваши ошибки» (таск 13.5): позиция перед ошибкой в партии игрока. */
+export interface PersonalView {
+    id: number;
+    game_id: number;
+    ply: number;
+    fen: string;
+    previous_move: string | null;
+    color: 'white' | 'black';
+    themes: string[];
+    attempts: number;
+    solved_streak: number;
+}
+
+export interface PersonalAnswer {
+    correct: boolean;
+    solution: string;
+    played: string;
+    done: boolean;
+    solved_streak: number;
+    next_due_at: string | null;
+}
+
+export interface PersonalSummary {
+    due: number;
+    active: number;
+    mastered: number;
+    next_due_at: string | null;
+}
+
 export interface PuzzleResult {
     solved: boolean;
     rating_before: number;
@@ -159,6 +188,12 @@ export const puzzlesApi = {
         return request<PuzzleView>(`/train?${params.toString()}`);
     },
     training: () => request<TrainingOverview>('/training'),
+    personalSummary: () => request<PersonalSummary>('/personal'),
+    personalNext: () => request<PersonalView>('/personal/next'),
+    personalAnswer: (id: number, move: string) => request<PersonalAnswer>(`/personal/${id}/answer`, {
+        method: 'POST', body: JSON.stringify({move}),
+    }),
+    personalPlies: (gameId: number) => request<{ game_id: number; plies: number[] }>(`/personal/game/${gameId}`),
     demo: (theme: string) => request<{ theme: string; examples: DemoExample[] }>(
         `/demo?theme=${encodeURIComponent(theme)}`,
     ),
