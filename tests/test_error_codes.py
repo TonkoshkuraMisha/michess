@@ -64,7 +64,8 @@ def _codes_used_in_source() -> set[str]:
     positional = {
         "ApiError": 1, "error_payload": 0, "validation_error": 0, "DomainError": 0, "DomainValueError": 0,
         "MatchmakingError": 0, "GameNotFinishedError": 0, "GameDataNotFoundError": 0,
-        "InvalidStartPositionError": 0, "error": 0, "enforce_rate_limit": 4, "ensure_below_limit": 4,
+        "InvalidStartPositionError": 0, "PuzzleError": 0, "error": 0, "enforce_rate_limit": 4,
+        "ensure_below_limit": 4,
     }
     used: set[str] = set()
     for path in (ROOT / "src").rglob("*.py"):
