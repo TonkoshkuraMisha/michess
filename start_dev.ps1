@@ -105,7 +105,8 @@ Write-Host "[+] Запуск Celery-воркера (фоновый анализ 
 Start-Job -Name "MichessWorker" -ScriptBlock {
     param($py, $r)
     Set-Location $r
-    & $py -m celery -A src.worker.celery_app worker --loglevel=INFO --pool=solo
+    # Обе очереди (analysis — разбор партий, simulation — партии ботов в турнирах) слушает один воркер.
+    & $py -m celery -A src.worker.celery_app worker --loglevel=INFO --pool=solo -Q analysis,simulation
 } -ArgumentList $pythonExe, $root | Out-Null
 
 # 8.1. Запуск Vite Frontend в отдельном видимом окне терминала
