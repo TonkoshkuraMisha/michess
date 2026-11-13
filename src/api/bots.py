@@ -16,11 +16,12 @@ from src.api import deps
 from src.api.fair_play import forbid_engine_help_during_game, optional_user_id
 from src.api.personalities import get_owned_personality, personality_config, validate_personality_name
 from src.api.rate_limit import rate_limit
-from src.core.errors import ApiError, DomainValueError, validation_error
+from src.core.errors import ApiError, DomainError, DomainValueError, validation_error
 from src.db import session as db_session
 from src.models.game import Game, GameStatus
 from src.models.user import User
 from src.services import ladder as ladder_service
+from src.services import tournaments as tournament_service
 from src.services.bots import calibration as bot_calibration
 from src.services.bots.anderssen import anderssen_bot
 from src.services.bots.archetypes import ARCHETYPES, ARCHETYPES_BY_ID, ARCHETYPES_BY_KEY
@@ -33,7 +34,7 @@ from src.services.bots.staunton import staunton_bot
 from src.services.bots.zukertort import zukertort_bot
 from src.services.game_engine import board_from_start_fen, flag_outcome, is_standard_start, terminal_outcome
 from src.services.rating import classify_time_control
-from src.services.task_dispatch import schedule_game_analysis_in_background
+from src.services.task_dispatch import schedule_game_analysis_in_background, schedule_tournament_simulations_in_background
 
 router = APIRouter()
 
@@ -186,6 +187,7 @@ class BotGameSaveRequest(BaseModel):
         description="Для bot_id='custom' без сохранения: имя соперника из конструктора",
     )
     ladder: bool = Field(default=False, description="Партия клубной лестницы (открыта POST /bots/ladder/start)")
+    tournament_game_id: int | None = Field(default=None, description="Партия турнира игрока (таск 15.3)")
     assisted: bool = Field(default=False, description="Игрок пользовался наставником: партия учебная")
     player_color: str = Field(..., description="Цвет игрока ('white' или 'black')")
     result: str = Field(..., description="Результат партии ('1-0', '0-1', '1/2-1/2')")
@@ -208,6 +210,7 @@ class BotGameSaveResponse(BaseModel):
     status: str
     result: str
     ladder: ladder_service.LadderOutcome | None = None
+    tournament_id: int | None = None
 
 
 def calculate_authentic_thinking_time_ms(
@@ -577,6 +580,27 @@ async def _ladder_game_for_save(
     return session, *found
 
 
+async def _tournament_game_for_save(
+        db: AsyncSession, user: User, payload: BotGameSaveRequest,
+) -> tournament_service.PlayerGame:
+    """Партия турнира игрока, которой соответствует сохраняемая партия: соперник, цвет и контроль — как в турнире."""
+    assert payload.tournament_game_id is not None
+    try:
+        played = await tournament_service.player_game(db, user, payload.tournament_game_id)
+    except DomainError as exc:
+        raise exc.to_http(404 if exc.code == "tournament_not_found" else 409) from None
+    matches = (
+        payload.player_color == played.color
+        and tournament_service.opponent_matches(played.opponent, payload.bot_id, payload.personality_name)
+        and (payload.base_time_ms, payload.increment_ms) == (played.game.base_time_ms, played.game.increment_ms)
+        and not payload.start_fen
+        and not payload.ladder
+    )
+    if not matches:
+        raise ApiError(409, "tournament_game_mismatch")
+    return played
+
+
 async def _resolve_personality_for_save(
         db: AsyncSession, user: User, payload: BotGameSaveRequest,
 ) -> tuple[str | None, int | None]:
@@ -610,6 +634,7 @@ async def save_bot_game(
         raise ApiError(404, "bot_not_found", bot_id=payload.bot_id)
     personality_name, personality_elo = await _resolve_personality_for_save(db, current_user, payload)
     ladder_game = await _ladder_game_for_save(current_user, payload) if payload.ladder else None
+    tournament_game = await _tournament_game_for_save(db, current_user, payload) if payload.tournament_game_id else None
 
     if payload.player_color not in ("white", "black"):
         raise ApiError(400, "invalid_player_color")
@@ -684,6 +709,13 @@ async def save_bot_game(
     await db.refresh(new_game)
     if ladder_game is not None:
         await ladder_service.clear_session(current_user.id)
+    if tournament_game is not None:
+        # Результат — в турнир; партии ботов, которые от него открылись, считает воркер.
+        await tournament_service.record_result(db, tournament_game.tournament, tournament_game.game, result, new_game.id)
+        await db.refresh(tournament_game.tournament)
+        schedule_tournament_simulations_in_background(
+            [g.id for g in await tournament_service.simulatable_games(db, tournament_game.tournament)]
+        )
     # Фоновый разбор: итог партии готов заранее, а из ошибок игрока делаются личные задачи (таск 13.5).
     schedule_game_analysis_in_background(new_game.id)
 
@@ -692,4 +724,5 @@ async def save_bot_game(
         status="finished",
         result=result,
         ladder=ladder_outcome,
+        tournament_id=tournament_game.tournament.id if tournament_game else None,
     )

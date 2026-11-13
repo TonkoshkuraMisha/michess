@@ -1,7 +1,7 @@
 // --- FILE: frontend/src/components/Chessboard.tsx ---
 
 import {useState, useEffect, useRef, useCallback} from 'react';
-import {useLocation, useNavigate, useParams} from 'react-router-dom';
+import {Link, useLocation, useNavigate, useParams} from 'react-router-dom';
 import {Chess} from 'chess.js';
 import {ListOrdered, Bot, Zap, Radio} from 'lucide-react';
 import {gameSocket} from '../services/gameSocket';
@@ -19,7 +19,8 @@ import {
 import type {BoardTheme} from '../config/boardAppearance';
 import {HISTORICAL_BOTS} from '../config/champions';
 import type {BotOpponentId, HistoricalBotId, HistoricalBotProfile} from '../config/champions';
-import {DEFAULT_TIME_CONTROL, TIME_CONTROLS} from '../config/timeControls';
+import {ALL_TIME_CONTROLS, DEFAULT_TIME_CONTROL, TIME_CONTROLS, timeControlCategory} from '../config/timeControls';
+import type {TournamentGameStart} from '../services/tournaments';
 import type {TimeControlOption, TimeControlGroup} from '../config/timeControls';
 import {
     FILES, RANKS, MIN_BOARD_SIZE, MAX_BOARD_SIZE,
@@ -276,7 +277,7 @@ export default function Chessboard() {
     const {
         selectedBotId, setSelectedBotId, botComment, isBotThinking, savedBotGameId,
         startHistoricalBotGame, startCustomBotGame, botProfileFor, botNameParam, saveBotGameToDatabase, exitBotGame,
-        isLadderGame, ladderOutcome, customArchetypeId,
+        isLadderGame, ladderOutcome, customArchetypeId, isTournamentGame, savedTournamentId,
     } = useBotGame({
         game, myColor, gameOverResult, whiteTimeMs, blackTimeMs, isSearching, setIsSearching,
         activeBot, setActiveBot,
@@ -1009,6 +1010,37 @@ export default function Chessboard() {
         if (forfeited) setDrawOfferStatus(status('ladder.forfeited', {message: ladderOutcomeMessage(forfeited)}));
     };
 
+    // Партия турнира (таск 15.3): контроль времени зала выставляется турнирным, партия начинается, когда он применён —
+    // так прибавки времени у игрока и бота совпадают с турнирными, а сервер примет сохранение.
+    const routeLocation = useLocation();
+    const tournamentStart = (routeLocation.state as { tournamentGame?: TournamentGameStart } | null)?.tournamentGame;
+    const [pendingTournament, setPendingTournament] = useState<TournamentGameStart | null>(null);
+    const [tournamentLinkId, setTournamentLinkId] = useState<number | null>(null);
+    useEffect(() => {
+        if (!tournamentStart || gameId || (activeBot && !gameOverResult)) return;
+        const category = timeControlCategory(tournamentStart.baseTimeMs, tournamentStart.incrementMs);
+        const manual = ALL_TIME_CONTROLS.find((o) => o.isManual && o.category === category);
+        if (manual) setSelectedTimeControl(manual);
+        setManualBaseMinutes(tournamentStart.baseTimeMs / 60000);
+        setManualIncSeconds(tournamentStart.incrementMs / 1000);
+        setPendingTournament(tournamentStart);
+        navigate('.', {replace: true, state: null});
+    }, [tournamentStart]); // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(() => {
+        if (!pendingTournament) return;
+        const applied = Math.round(effectiveWhiteBaseMinutes * 60000) === pendingTournament.baseTimeMs
+            && Math.round(effectiveIncSeconds * 1000) === pendingTournament.incrementMs;
+        if (!applied) return;
+        const options = {tournamentGameId: pendingTournament.gameId};
+        if (pendingTournament.custom) {
+            startCustomBotGame(pendingTournament.custom, pendingTournament.color, null, options);
+        } else if (pendingTournament.botId) {
+            startHistoricalBotGame(pendingTournament.botId as HistoricalBotId, pendingTournament.color, null, options);
+        }
+        setTournamentLinkId(pendingTournament.tournamentId);
+        setPendingTournament(null);
+    }, [pendingTournament, effectiveWhiteBaseMinutes, effectiveIncSeconds]); // eslint-disable-line react-hooks/exhaustive-deps
+
     // «Разобрать с наставником» со страницы задач (13.3): позиция задачи — на свободную доску, наставник включён.
     const location = useLocation();
     const analyzeFen = (location.state as { analyzeFen?: string } | null)?.analyzeFen;
@@ -1221,6 +1253,12 @@ export default function Chessboard() {
                     </button>
                 </div>
 
+                {tournamentLinkId && (isTournamentGame || savedTournamentId) && (
+                    <Link to={`/tournaments/${savedTournamentId ?? tournamentLinkId}`} data-testid="back-to-tournament"
+                          className="shrink-0 text-center text-xs font-bold py-1.5 rounded-md bg-amber-800/70 border border-amber-500/60 text-amber-100 hover:bg-amber-700">
+                        {t('tournaments.backToTournament')}
+                    </Link>
+                )}
                 {leftSectionTab === 'bots' ? (
                     <div className="flex-1 min-h-0 flex flex-col gap-1.5">
                     <div className="grid grid-cols-3 gap-1 text-xs font-bold" role="tablist">
@@ -1702,7 +1740,7 @@ export default function Chessboard() {
                     onOfferRematch={handleOfferRematch}
                     onResetSandbox={handleResetSandbox}
                     onUndoSandboxMove={handleUndoSandboxMove}
-                    undoLocked={isLadderGame && !gameOverResult}
+                    undoLocked={(isLadderGame || isTournamentGame) && !gameOverResult}
                     hasCustomPosition={isSandbox && startFen !== null}
                     onLoadFen={handleLoadFen}
                 />}

@@ -4,6 +4,7 @@
 сюда не присылаются — их приносят сохранение партии игрока (15.3) и симуляция партий ботов (15.2).
 """
 
+import json
 from datetime import UTC, datetime
 from typing import Literal
 
@@ -19,6 +20,7 @@ from src.models.tournament import Tournament, TournamentGame, TournamentPlayer
 from src.models.user import User
 from src.services import tournament_rules as rules
 from src.services import tournaments as service
+from src.services.bots.archetypes import ARCHETYPES_BY_KEY
 from src.services.task_dispatch import schedule_tournament_simulations_in_background
 from src.services.tournament_simulation import CLAIM_TIMEOUT
 
@@ -50,6 +52,8 @@ class PlayerOut(BaseModel):
     rating: int
     place: int | None
     eliminated_round: int | None
+    # Характер соперника из мастерской (архетип или персоналия) — им клиент играет через /bots/custom-move.
+    config: dict | None = None
 
 
 class GameOut(BaseModel):
@@ -99,9 +103,14 @@ class TournamentSummary(BaseModel):
 
 
 def _player(p: TournamentPlayer) -> PlayerOut:
+    config = None
+    if p.kind == "personality" and p.config_json:
+        config = json.loads(p.config_json)
+    elif p.kind == "archetype" and p.bot_key in ARCHETYPES_BY_KEY:
+        config = ARCHETYPES_BY_KEY[p.bot_key].config.model_dump()
     return PlayerOut(
         seat=p.seat, kind=p.kind, user_id=p.user_id, bot_key=p.bot_key, personality_name=p.personality_name,
-        rating=p.rating, place=p.place, eliminated_round=p.eliminated_round,
+        rating=p.rating, place=p.place, eliminated_round=p.eliminated_round, config=config,
     )
 
 
