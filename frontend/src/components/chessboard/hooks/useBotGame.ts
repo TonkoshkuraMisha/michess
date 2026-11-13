@@ -233,7 +233,8 @@ export function useBotGame({
         const token = localStorage.getItem('token');
         if (!token) return;
         const verboseMoves = completedGame.history({verbose: true});
-        if (verboseMoves.length === 0) return;
+        // Без ходов сохраняется только засчитываемая партия (лестница, турнир): сдача до первого хода — тоже итог.
+        if (verboseMoves.length === 0 && !ladderRef.current && !tournamentGameRef.current) return;
         botGameSavedRef.current = true;
         const movesUci = verboseMoves.map((m: any) => `${m.from}${m.to}${m.promotion || ''}`);
         try {

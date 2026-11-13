@@ -213,3 +213,21 @@ async def test_polling_does_not_flood_the_queue(client, db_session, token_user_1
     await db_session.commit()
     client.get(f"{API}/{t['id']}", headers=auth(token_user_1))
     assert published_simulations == first + first
+
+
+def test_resigning_before_the_first_move_is_recorded(client, token_user_1, published_simulations):
+    t = create(client, token_user_1)
+    game, color, opponent = my_game(t)
+    start(client, token_user_1, t, game)
+    saved = client.post(SAVE, headers=auth(token_user_1),
+                        json=save_body(game, color, opponent, moves_uci=[], termination="resignation"))
+    assert saved.status_code == 200, saved.text
+    state = client.get(f"{API}/{t['id']}", headers=auth(token_user_1)).json()
+    assert next(g for g in state["games"] if g["id"] == game["id"])["result"] == loss(color)
+
+
+def test_an_ordinary_empty_game_is_still_rejected(client, token_user_1):
+    body = {"bot_id": "morphy", "player_color": "white", "result": "0-1", "moves_uci": [],
+            "termination": "resignation", "base_time_ms": 300_000, "increment_ms": 0}
+    response = client.post(SAVE, headers=auth(token_user_1), json=body)
+    assert response.status_code == 400 and response.json()["detail"]["code"] == "empty_moves"
