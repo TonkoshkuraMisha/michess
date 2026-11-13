@@ -184,6 +184,60 @@ export interface DefenseAnswer {
     training: TrainingProgress;
 }
 
+/** Упражнения-генераторы (таск 13.7): матрица «вид × фигура», уровни 1–3. */
+export const DRILL_KINDS = ['capture', 'fork', 'check', 'pin', 'safe', 'escape', 'mate1', 'mate2'] as const;
+export type DrillKind = typeof DRILL_KINDS[number];
+export const DRILL_PIECES = ['q', 'r', 'b', 'n', 'x'] as const;
+export type DrillPiece = typeof DRILL_PIECES[number];
+
+/** Тема реестра → вид упражнения (кнопка в карточке темы «Приёмов»). */
+export const THEME_DRILLS: Record<string, DrillKind> = {
+    hanging_piece: 'capture', fork: 'fork', pin: 'pin', basic_mates: 'mate1',
+};
+
+/** Конь не связывает. */
+export function drillSupported(kind: DrillKind, piece: DrillPiece): boolean {
+    return !(kind === 'pin' && piece === 'n');
+}
+
+export interface DrillView {
+    key: string;
+    kind: DrillKind;
+    piece: DrillPiece;
+    level: number;
+    fen: string;
+    color: 'white' | 'black';
+    /** Фигура, которой решать (q/r/b/n); в «уйти от мата» — любая. */
+    piece_type: string | null;
+    /** Ходов решающего: мат в 2 — два. */
+    moves: number;
+    run?: DrillRun;
+}
+
+export interface DrillRun {
+    combo: string;
+    solved: number;
+    mistakes: number;
+    seconds_left: number;
+    over: boolean;
+}
+
+export interface DrillAnswer {
+    correct: boolean;
+    done: boolean;
+    reply: string | null;
+    solution: string[] | null;
+    run: DrillRun | null;
+}
+
+export interface DrillRunResult {
+    combo: string;
+    score: number;
+    mistakes: number;
+    best: number;
+    new_record: boolean;
+}
+
 const BASE = `${API_BASE_URL}/api/v1/puzzles`;
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -232,6 +286,17 @@ export const puzzlesApi = {
         method: 'POST', body: JSON.stringify({move}),
     }),
     personalPlies: (gameId: number) => request<{ game_id: number; plies: number[] }>(`/personal/game/${gameId}`),
+    drillsNext: (kind: DrillKind, piece: DrillPiece, level: number) =>
+        request<DrillView>(`/drills/next?kind=${kind}&piece=${piece}&level=${level}`),
+    drillsAnswer: (key: string, moves: string[], run = false) => request<DrillAnswer>('/drills/answer', {
+        method: 'POST', body: JSON.stringify({key, moves, run}),
+    }),
+    drillsRunStart: (kind: DrillKind, piece: DrillPiece, level: number) => request<DrillRun>('/drills/run/start', {
+        method: 'POST', body: JSON.stringify({kind, piece, level}),
+    }),
+    drillsRunNext: () => request<DrillView & { run: DrillRun }>('/drills/run/next'),
+    drillsRunFinish: () => request<DrillRunResult>('/drills/run/finish', {method: 'POST'}),
+    drillsRecords: () => request<{ records: Record<string, number>; themes: Record<string, DrillKind> }>('/drills/records'),
     defenseNext: (kind: DefenseKind) => request<DefenseDrillView>(`/defense/next?kind=${kind}`),
     defenseThreat: (id: number, square: string) => request<DefenseThreatResponse>(`/defense/${id}/threat`, {
         method: 'POST', body: JSON.stringify({square}),

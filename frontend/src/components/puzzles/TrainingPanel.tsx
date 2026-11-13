@@ -8,7 +8,8 @@ import {BookOpen, CheckCircle2, Dumbbell, Shuffle} from 'lucide-react';
 import {renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
 import {UiError} from '../../services/apiErrors';
-import {DEFENSE_DRILL_THEMES, puzzlesApi} from '../../services/puzzles';
+import {DEFENSE_DRILL_THEMES, THEME_DRILLS, puzzlesApi} from '../../services/puzzles';
+import type {DrillKind} from '../../services/puzzles';
 import type {DemoExample, ThemeOverview, TrainingOverview, TrainingTarget} from '../../services/puzzles';
 import {themeText} from '../../services/themes';
 import type {ThemeSection} from '../../services/themes';
@@ -16,6 +17,8 @@ import {PuzzleBoard} from './PuzzleBoard';
 
 interface Props {
     onTrain: (target: TrainingTarget) => void;
+    /** Упражнение-генератор по теме (таск 13.7): вилка, связка, незащищённая фигура, мат. */
+    onDrill?: (kind: DrillKind) => void;
     /** Новые данные прогресса после решённой задачи — список обновляется. */
     refreshKey: number;
 }
@@ -88,7 +91,7 @@ function StageBadge({theme, overview}: { theme: ThemeOverview; overview: Trainin
     );
 }
 
-export function TrainingPanel({onTrain, refreshKey}: Props) {
+export function TrainingPanel({onTrain, onDrill, refreshKey}: Props) {
     const {t} = useI18n();
     const [overview, setOverview] = useState<TrainingOverview | null>(null);
     const [selected, setSelected] = useState<string | null>(null);
@@ -158,6 +161,13 @@ export function TrainingPanel({onTrain, refreshKey}: Props) {
                                     className="flex items-center gap-1 px-2 py-1 rounded bg-amber-800 hover:bg-amber-700 text-white font-bold cursor-pointer">
                                 <Dumbbell size={14}/> {t('puzzles.training.train')}
                             </button>
+                            {onDrill && THEME_DRILLS[current.code] && (
+                                <button type="button" onClick={() => onDrill(THEME_DRILLS[current.code])}
+                                        data-testid="theme-drill"
+                                        className="flex items-center gap-1 px-2 py-1 rounded bg-black/40 border border-amber-900/50 hover:border-amber-500 cursor-pointer">
+                                    <Shuffle size={14}/> {t('puzzles.drills.fromTheme')}
+                                </button>
+                            )}
                         </div>
                     )}
                     {demo && demo.length > 0 && <DemoViewer key={current.code} examples={demo}/>}

@@ -24,6 +24,8 @@ COPY migrations ./migrations
 COPY scripts ./scripts
 # Выборка задач (CC0) — загружается в базу сервисом migrate.
 COPY data/puzzles ./data/puzzles
+# Таблица seed упражнений-генераторов (таск 13.7) — позиции восстанавливаются по ней.
+COPY data/drills ./data/drills
 COPY src ./src
 
 # Не root: при уязвимости в приложении у процесса нет прав на систему контейнера.

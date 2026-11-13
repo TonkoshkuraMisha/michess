@@ -15,7 +15,7 @@ from src.api.rate_limit import rate_limit
 from src.core.errors import DomainValueError
 from src.db.session import get_db
 from src.models.user import User
-from src.services import defense_drills, personal_puzzles
+from src.services import defense_drills, generated_drills, personal_puzzles
 from src.services import puzzles as service
 
 router = APIRouter(dependencies=[Depends(rate_limit("puzzles", "RATE_LIMIT_PUZZLES"))])
@@ -161,6 +161,68 @@ async def defense_answer(drill_id: int, payload: MoveRequest, user: User = Depen
         raise _http(exc) from exc
     except DomainValueError as exc:
         raise exc.to_http(400) from exc
+
+
+class DrillAnswerRequest(BaseModel):
+    key: str = Field(..., max_length=60, description="Ключ упражнения из /drills/next")
+    moves: list[str] = Field(..., min_length=1, max_length=3, description="Ходы решения (мат в 2 — три)")
+    run: bool = Field(default=False, description="Ответ в забеге на время")
+
+
+class DrillRunRequest(BaseModel):
+    kind: str = Field(..., max_length=10)
+    piece: str = Field(..., max_length=1)
+    level: int = Field(..., ge=1, le=3)
+
+
+@router.get("/drills/next")
+async def drills_next(
+        kind: str = Query(..., max_length=10), piece: str = Query(..., max_length=1),
+        level: int = Query(..., ge=1, le=3), user: User = Depends(get_current_user),
+):
+    """Упражнение-генератор (таск 13.7): позиция по таблице seed; решение не отправляется."""
+    try:
+        return generated_drills.view(generated_drills.pick(kind, piece, level))
+    except service.PuzzleError as exc:
+        raise _http(exc) from exc
+
+
+@router.post("/drills/answer")
+async def drills_answer(payload: DrillAnswerRequest, user: User = Depends(get_current_user)):
+    try:
+        return await generated_drills.answer(user, payload.key, payload.moves, in_run=payload.run)
+    except service.PuzzleError as exc:
+        raise _http(exc) from exc
+
+
+@router.post("/drills/run/start")
+async def drills_run_start(payload: DrillRunRequest, user: User = Depends(get_current_user)):
+    try:
+        return await generated_drills.start_run(user, payload.kind, payload.piece, payload.level)
+    except service.PuzzleError as exc:
+        raise _http(exc) from exc
+
+
+@router.get("/drills/run/next")
+async def drills_run_next(user: User = Depends(get_current_user)):
+    try:
+        drill, run = await generated_drills.next_in_run(user)
+    except service.PuzzleError as exc:
+        raise _http(exc) from exc
+    return {**generated_drills.view(drill), "run": run}
+
+
+@router.post("/drills/run/finish")
+async def drills_run_finish(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    try:
+        return await generated_drills.finish_run(db, user)
+    except service.PuzzleError as exc:
+        raise _http(exc) from exc
+
+
+@router.get("/drills/records")
+async def drills_records(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    return {"records": await generated_drills.records(db, user), "themes": generated_drills.THEME_DRILLS}
 
 
 @router.post("/timed/start")
