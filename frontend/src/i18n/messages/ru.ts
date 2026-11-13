@@ -541,6 +541,16 @@ export const ru: Messages = {
         },
     },
     viewer: {
+        phases: {
+            opening: 'Дебют',
+            middlegame: 'Миттельшпиль',
+            endgame: 'Эндшпиль',
+        },
+        phasesShort: {
+            opening: 'Деб.',
+            middlegame: 'Мит.',
+            endgame: 'Энд.',
+        },
         loadFailed: 'Не удалось загрузить данные партии',
         analysisFailed: 'Ошибка при анализе партии',
         analysisEmpty: 'Сервер вернул пустой анализ: ходы партии не распознаны. Сообщите о партии разработчику.',

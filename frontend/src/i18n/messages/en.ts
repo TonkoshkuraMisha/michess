@@ -539,6 +539,16 @@ export const en = {
         },
     },
     viewer: {
+        phases: {
+            opening: 'Opening',
+            middlegame: 'Middlegame',
+            endgame: 'Endgame',
+        },
+        phasesShort: {
+            opening: 'Op.',
+            middlegame: 'Mid.',
+            endgame: 'End.',
+        },
         loadFailed: 'Could not load the game data',
         analysisFailed: 'Error while analyzing the game',
         analysisEmpty: 'The server returned an empty analysis: the moves of the game were not recognized. Please report this game to the developer.',

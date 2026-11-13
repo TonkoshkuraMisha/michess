@@ -60,6 +60,24 @@ def calculate_accuracy(cp_losses: list[int]) -> float:
     return round(sum(per_move) / len(per_move), 1)
 
 
+PHASES = ("opening", "middlegame", "endgame")
+# Дебют — первые 10 ходов, пока на доске ещё не эндшпиль; эндшпиль — ферзей нет и фигур мало или на доске у обеих
+# сторон вместе не больше двух ладей с лёгкой фигурой (src/services/positional.is_endgame или мало материала).
+OPENING_MOVES = 10
+ENDGAME_TOTAL_MATERIAL = 26
+
+
+def game_phase(board: chess.Board) -> str:
+    """Фаза партии в позиции перед ходом."""
+    from src.services.positional import PIECE_POINTS, is_endgame
+
+    total = sum(len(board.pieces(pt, color)) * points
+                for pt, points in PIECE_POINTS.items() for color in chess.COLORS)
+    if is_endgame(board) or total <= ENDGAME_TOTAL_MATERIAL:
+        return "endgame"
+    return "opening" if board.fullmove_number <= OPENING_MOVES else "middlegame"
+
+
 def format_eval_display(eval_white_cp: int, mate_white: int | None = None) -> str:
     """Форматирует оценку с точки зрения Белых для шкалы EvalBar (+1.4, -0.8, M3, -M2)."""
     if mate_white is not None and mate_white != 0:
@@ -165,12 +183,14 @@ def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
         uci_list: list[str] = []
         colors: list[str] = []
         move_numbers: list[int] = []
+        phases: list[str] = []
 
         for mv in mainline_moves:
             colors.append("white" if board.turn == chess.WHITE else "black")
             # Номер хода берём с доски: партия с произвольной позиции может начинаться
             # не с первого хода и с хода чёрных.
             move_numbers.append(board.fullmove_number)
+            phases.append(game_phase(board))
             san_list.append(board.san(mv))
             uci_list.append(mv.uci())
             board.push(mv)
@@ -199,14 +219,15 @@ def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
 
         if mover_color == "white":
             cp_loss = max(0, before_white_cp - after_white_cp)
-            white_losses.append(cp_loss)
         else:
             cp_loss = max(0, after_white_cp - before_white_cp)
-            black_losses.append(cp_loss)
 
         is_exact_best = recommended_uci is not None and recommended_uci == uci_played
         if is_exact_best:
             cp_loss = 0
+        # В точность — та же потеря, что в разборе хода: лучший ход движка не теряет ничего, даже если оценки
+        # соседних позиций разошлись из-за глубины (раньше такой шум снижал точность).
+        (white_losses if mover_color == "white" else black_losses).append(cp_loss)
 
         label, symbol = classify_move_by_cp_loss(cp_loss, is_best_move=is_exact_best)
         counts[mover_color][label] += 1
@@ -224,12 +245,22 @@ def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
             "cp_loss": cp_loss,
             "classification": label,
             "symbol": symbol,
+            "phase": phases[idx],
         })
 
-    def build_side_summary(losses: list[int], side_counts: dict[str, int]) -> dict:
+    def phase_accuracy(color: str) -> dict[str, float | None]:
+        """Точность стороны по фазам (таск B.5); фаза без её ходов — None."""
+        result: dict[str, float | None] = {}
+        for phase in PHASES:
+            losses = [m["cp_loss"] for m in moves_report if m["color"] == color and m["phase"] == phase]
+            result[phase] = calculate_accuracy(losses) if losses else None
+        return result
+
+    def build_side_summary(losses: list[int], side_counts: dict[str, int], color: str) -> dict:
         avg_loss = round(sum(losses) / len(losses), 1) if losses else 0.0
         return {
             "accuracy": calculate_accuracy(losses),
+            "phases": phase_accuracy(color),
             "best": side_counts["Best"],
             "good": side_counts["Good"],
             "inaccuracies": side_counts["Inaccuracy"],
@@ -249,8 +280,8 @@ def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
     return {
         "format_version": ANALYSIS_FORMAT_VERSION,
         "engine": engine_label,
-        "white": build_side_summary(white_losses, counts["white"]),
-        "black": build_side_summary(black_losses, counts["black"]),
+        "white": build_side_summary(white_losses, counts["white"], "white"),
+        "black": build_side_summary(black_losses, counts["black"], "black"),
         "moves": moves_report,
     }
 

@@ -196,6 +196,21 @@ describe('GameViewer', () => {
         expect((await screen.findAllByText(/31\.4%/)).length).toBeGreaterThan(0);
         expect(screen.getAllByText(/97\.2%/).length).toBeGreaterThan(0);
         expect(fetchMock.mock.calls.some(([, init]) => init?.method === 'POST')).toBe(false);
+        // Старый разбор без фаз — строки фаз нет.
+        expect(screen.queryByTestId('viewer-phases-white')).toBeNull();
+    });
+
+    it('точность по фазам: дебют, миттельшпиль, эндшпиль; фаза без ходов — прочерк', async () => {
+        const withPhases = {
+            ...ANALYSIS,
+            white: {...sideStats(31.4), phases: {opening: 31.4, middlegame: null, endgame: null}},
+            black: {...sideStats(97.2), phases: {opening: 97.2, middlegame: null, endgame: null}},
+        };
+        stubApi({pgn: {ok: true, text: FOOLS_MATE_PGN}, cached: {ok: true, body: withPhases}});
+        renderViewer();
+        const row = await screen.findByTestId('viewer-phases-white');
+        expect(row.textContent).toBe('Деб. 31.4%Мит. —Энд. —');
+        expect(screen.getByTestId('viewer-phases-black').textContent).toContain('97.2%');
     });
 
     it('комментарий наставника к ходу: текст, стрелки, подсветка и переключатель стрелок', async () => {
