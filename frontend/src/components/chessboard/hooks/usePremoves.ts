@@ -1,7 +1,7 @@
 // --- FILE: frontend/src/components/chessboard/hooks/usePremoves.ts ---
 
-import {useCallback, useEffect, useState} from 'react';
-import type {Chess} from 'chess.js';
+import {useCallback, useEffect, useMemo, useState} from 'react';
+import {Chess} from 'chess.js';
 import type {PromotionPiece} from '../boardUtils';
 import type {SoundEventType} from '../../../services/soundEngine';
 
@@ -27,9 +27,44 @@ export interface UsePremovesOptions {
     openPromotionDialog: (p: { from: string; to: string; color: 'w' | 'b'; isPremove: true }) => void;
 }
 
+/** Сколько предходов можно поставить подряд. */
+export const MAX_PREMOVES = 8;
+
+/**
+ * Позиция «как если бы предходы уже сыграны»: фигуры просто переставлены (без проверки правил — она при исполнении),
+ * рокировка переносит и ладью, превращение ставит выбранную фигуру. По ней выбираются фигуры для следующих предходов
+ * и рисуется доска, пока очередь не пуста.
+ */
+export function applyPremoves(game: Chess, premoves: Premove[]): Chess {
+    const view = new Chess(game.fen());
+    for (const move of premoves) {
+        const piece = view.get(move.from as never);
+        if (!piece) continue;
+        view.remove(move.from as never);
+        view.put(move.promotion ? {type: move.promotion, color: piece.color} : piece, move.to as never);
+        const fileShift = move.to.charCodeAt(0) - move.from.charCodeAt(0);
+        if (piece.type === 'k' && Math.abs(fileShift) === 2) {
+            const rank = move.from[1];
+            const [rookFrom, rookTo] = fileShift > 0 ? [`h${rank}`, `f${rank}`] : [`a${rank}`, `d${rank}`];
+            const rook = view.get(rookFrom as never);
+            if (rook && rook.type === 'r' && rook.color === piece.color) {
+                view.remove(rookFrom as never);
+                view.put(rook, rookTo as never);
+            }
+        }
+    }
+    return view;
+}
+
 export interface UsePremovesResult {
+    /** Первый предход очереди (его исполнят следующим). */
     premove: Premove | null;
-    setPremove: React.Dispatch<React.SetStateAction<Premove | null>>;
+    /** Вся очередь предходов. */
+    premoves: Premove[];
+    /** Позиция после предходов очереди (см. applyPremoves). */
+    premoveView: Chess;
+    /** null — снять всю очередь; предход — заменить очередь им одним. */
+    setPremove: (value: Premove | null) => void;
     /** Ставит ход в премув (или открывает диалог превращения) — вызывается на чужом ходу. */
     scheduleOrPromotePremove: (from: string, to: string, explicitPromotion?: PromotionPiece) => void;
 }
@@ -43,11 +78,14 @@ export function usePremoves({
     game, myColor, gameOverResult, viewIndex, isOpponentControlled, executeMove, playAudio,
     clearSelection, openPromotionDialog,
 }: UsePremovesOptions): UsePremovesResult {
-    const [premove, setPremove] = useState<Premove | null>(null);
+    const [premoves, setPremoves] = useState<Premove[]>([]);
+    const premoveView = useMemo(() => (premoves.length ? applyPremoves(game, premoves) : game), [game, premoves]);
+    const setPremove = useCallback((value: Premove | null) => setPremoves(value ? [value] : []), []);
 
     const scheduleOrPromotePremove = useCallback((from: string, to: string, explicitPromotion?: PromotionPiece) => {
         if (from === to) return;
-        const piece = game.get(from as any);
+        // Фигура — с поля, где она окажется после уже поставленных предходов (цепочка: Кf3, затем Кg5).
+        const piece = premoveView.get(from as never);
         const myColorChar = myColor === 'white' ? 'w' : 'b';
         if (!piece || piece.color !== myColorChar) {
             clearSelection();
@@ -65,25 +103,24 @@ export function usePremoves({
             return;
         }
 
-        setPremove({
-            from,
-            to,
-            promotion: isPawnPromotion ? (explicitPromotion || 'q') : undefined,
-        });
+        const next = {from, to, promotion: isPawnPromotion ? (explicitPromotion || 'q') : undefined};
+        setPremoves((queue) => (queue.length >= MAX_PREMOVES ? queue : [...queue, next]));
         playAudio('premove');
         clearSelection();
-    }, [game, myColor, playAudio, clearSelection, openPromotionDialog]);
+    }, [premoveView, myColor, playAudio, clearSelection, openPromotionDialog]);
 
     useEffect(() => {
-        if (!premove || gameOverResult || viewIndex !== -1 || !isOpponentControlled) return;
+        if (premoves.length === 0 || gameOverResult || viewIndex !== -1 || !isOpponentControlled) return;
 
         const currentTurnColor = game.turn() === 'w' ? 'white' : 'black';
         if (currentTurnColor !== myColor) return;
 
-        const currentPremove = premove;
-        setPremove(null);
-        executeMove(currentPremove.from, currentPremove.to, currentPremove.promotion || 'q', true);
-    }, [game, premove, isOpponentControlled, myColor, gameOverResult, viewIndex, executeMove]);
+        // Первый предход исполняется; если он стал невозможен (соперник ответил иначе) — снимается вся очередь:
+        // остальные строились на нём.
+        const [first, ...rest] = premoves;
+        const played = executeMove(first.from, first.to, first.promotion || 'q', true);
+        setPremoves(played ? rest : []);
+    }, [game, premoves, isOpponentControlled, myColor, gameOverResult, viewIndex, executeMove]);
 
-    return {premove, setPremove, scheduleOrPromotePremove};
+    return {premove: premoves[0] ?? null, premoves, premoveView, setPremove, scheduleOrPromotePremove};
 }

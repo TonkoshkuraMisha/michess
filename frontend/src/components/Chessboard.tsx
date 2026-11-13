@@ -617,7 +617,7 @@ export default function Chessboard() {
         return false;
     }, [game, gameId, activeBot, spectatingGameId, myColor, stateVersion, viewIndex, gameOverResult, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyIncrement, effectiveIncSeconds, isRatedBotGame, coach.onPlayerMove]);
 
-    const {premove, setPremove, scheduleOrPromotePremove} = usePremoves({
+    const {premove, premoves, premoveView, setPremove, scheduleOrPromotePremove} = usePremoves({
         game,
         myColor,
         gameOverResult,
@@ -893,7 +893,7 @@ export default function Chessboard() {
                 if (selectedSquare === squareId) {
                     setSelectedSquare(null);
                 } else {
-                    const pieceOnTarget = game.get(squareId as any);
+                    const pieceOnTarget = premoveView.get(squareId as never);
                     if (pieceOnTarget && pieceOnTarget.color === myColorChar) {
                         setSelectedSquare(squareId);
                     } else {
@@ -901,7 +901,7 @@ export default function Chessboard() {
                     }
                 }
             } else {
-                const piece = game.get(squareId as any);
+                const piece = premoveView.get(squareId as never);
                 if (piece && piece.color === myColorChar) {
                     setSelectedSquare(squareId);
                 } else if (premove) {
@@ -941,7 +941,8 @@ export default function Chessboard() {
         }
         return tg;
     })();
-    const boardState = currentGame.board();
+    // Пока стоят предходы, доска показывает фигуры на их полях (цепочка предходов, таск B.2).
+    const boardState = (viewIndex === -1 && premoves.length > 0 ? premoveView : currentGame).board();
     // Пометки игрока правой кнопкой (таск B.1); снимаются при смене позиции. Пока стоит предход или выбрана фигура,
     // правая кнопка их отменяет (onContextMenu ниже) и стрелку не рисует.
     const annotations = useBoardAnnotations(currentGame.fen(), !(premove || pendingPromotion || selectedSquare));
@@ -1423,7 +1424,7 @@ export default function Chessboard() {
 
                                 const isSelected = selectedSquare === squareId;
                                 const isLastMove = lastMove && (lastMove.from === squareId || lastMove.to === squareId);
-                                const isPremoveSquare = premove && (premove.from === squareId || premove.to === squareId);
+                                const isPremoveSquare = premoves.some((p) => p.from === squareId || p.to === squareId);
                                 const isLegalTarget = legalTargetSquares.has(squareId);
                                 const isBeingDragged = dragState?.from === squareId;
 
@@ -1629,13 +1630,15 @@ export default function Chessboard() {
                         className="bg-rose-950/90 px-3 py-1.5 rounded-md border border-rose-500/60 text-xs text-rose-100 flex items-center justify-between shadow shrink-0">
                         <span className="flex items-center gap-1.5 font-bold font-mono">
                             <Zap size={14} className="text-rose-400"/>
-                            {t('controls.premove', {
-                                from: premove.from,
-                                to: premove.to,
-                                promotion: premove.promotion
-                                    ? t('controls.premovePromotion', {piece: premove.promotion.toUpperCase()})
-                                    : '',
-                            })}
+                            <span data-testid="premove-queue">
+                                {premoves.map((p) => t('controls.premove', {
+                                    from: p.from,
+                                    to: p.to,
+                                    promotion: p.promotion
+                                        ? t('controls.premovePromotion', {piece: p.promotion.toUpperCase()})
+                                        : '',
+                                })).join(' · ')}
+                            </span>
                         </span>
                         <button
                             type="button"

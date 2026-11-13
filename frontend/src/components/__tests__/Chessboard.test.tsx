@@ -115,6 +115,24 @@ describe('премув', () => {
         });
         expect(screen.getByText('e5')).toBeInTheDocument();
     });
+
+    it('цепочка: второй предход — фигурой с поля первого, исполняются по одному', async () => {
+        await startBotGame('black', {uci: 'e2e4', san: 'e4', thinking_time_ms: 200});
+        clickSquare('g8');
+        clickSquare('f6');
+        // Конь уже стоит на f6 «в предходе» — его можно вести дальше.
+        expect(squareEl('f6').querySelector('img')).not.toBeNull();
+        clickSquare('f6');
+        clickSquare('g4');
+        expect(screen.getByTestId('premove-queue').textContent).toBe('Предход: g8 → f6 · Предход: f6 → g4');
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(300);
+        });
+        // Бот ответил e4 — исполнен первый предход, второй ждёт следующего хода соперника.
+        await waitFor(() => expect(screen.getByTestId('premove-queue').textContent).toBe('Предход: f6 → g4'));
+        expect(screen.getByText('Nf6')).toBeInTheDocument();
+    });
 });
 
 describe('флаг', () => {
