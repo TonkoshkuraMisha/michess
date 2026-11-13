@@ -11,6 +11,7 @@ import Leaderboard from './components/Leaderboard';
 import About from './components/About';
 import Settings from './components/Settings';
 import PuzzlesPage from './components/puzzles/PuzzlesPage';
+import {LearnPage, LessonPage} from './components/learn/LearnPage';
 import {CHAMPIONS_LIST} from './config/champions';
 import {API_BASE_URL} from './config/api';
 import {gameSocket} from './services/gameSocket';
@@ -188,7 +189,7 @@ export default function App() {
             }`}
         >
             <header
-                className="h-14 shrink-0 bg-acacia-dark border-b-2 border-amber-900/60 px-5 flex items-center justify-between shadow-heavy relative z-30">
+                className="h-14 shrink-0 bg-acacia-dark border-b-2 border-amber-900/60 px-3 sm:px-5 flex items-center justify-between shadow-heavy relative z-30">
                 <div className="flex items-center gap-7">
                     <Link to="/" className="flex items-center gap-2.5 cursor-pointer group outline-none">
                         <div
@@ -196,7 +197,7 @@ export default function App() {
                             ♞
                         </div>
                         <span
-                            className="text-2xl font-extrabold tracking-wide text-boxwood-light group-hover:text-white transition">
+                            className="hidden min-[380px]:inline text-2xl font-extrabold tracking-wide text-boxwood-light group-hover:text-white transition">
                             michess
                         </span>
                     </Link>
@@ -280,7 +281,7 @@ export default function App() {
                     </nav>
                 </div>
 
-                <div className="flex items-center gap-3 text-boxwood-light relative" ref={dropdownRef}>
+                <div className="flex items-center gap-1 sm:gap-3 text-boxwood-light relative" ref={dropdownRef}>
                     <LanguageSwitcher compact/>
                     <Link
                         to="/leaderboard"
@@ -415,9 +416,11 @@ export default function App() {
                     ) : (
                         <button
                             onClick={() => setShowAuthModal(true)}
-                            className="flex items-center gap-2 px-4 py-1.5 bg-boxwood text-acacia-dark font-bold text-sm rounded-md hover:bg-boxwood-light transition shadow border border-amber-600/40 cursor-pointer"
+                            aria-label={t('nav.login')}
+                            className="flex items-center gap-2 px-2.5 sm:px-4 py-1.5 bg-boxwood text-acacia-dark font-bold text-sm rounded-md hover:bg-boxwood-light transition shadow border border-amber-600/40 cursor-pointer"
                         >
-                            <LogIn size={16}/> {t('nav.login')}
+                            {/* На узком экране — только иконка: иначе шапка шире экрана. */}
+                            <LogIn size={16}/> <span className="hidden sm:inline">{t('nav.login')}</span>
                         </button>
                     )}
                 </div>
@@ -435,6 +438,8 @@ export default function App() {
                     <Route path="/challenge/:inviteCode" element={<Chessboard key={token ? token : 'guest'}/>}/>
                     <Route path="/leaderboard" element={<Leaderboard/>}/>
                     <Route path="/puzzles" element={<PuzzlesPage/>}/>
+                    <Route path="/learn" element={<LearnPage/>}/>
+                    <Route path="/learn/:lessonId" element={<LessonPage/>}/>
                     <Route path="/profile/:targetUsername" element={<Profile/>}/>
                     <Route path="/game/:gameId" element={<GameViewer/>}/>
                     <Route path="/champions/:championId" element={<ChampionGames/>}/>

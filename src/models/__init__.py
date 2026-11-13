@@ -1,5 +1,6 @@
 from src.models.base import Base
 from src.models.game import Game
+from src.models.lesson import LessonProgress
 from src.models.move import Move
 from src.models.personality import BotPersonality
 from src.models.puzzle import DefenseDrill, DrillRecord, PersonalPuzzle, Puzzle, PuzzleAttempt, PuzzleTheme, ThemeProgress
@@ -11,6 +12,7 @@ __all__ = [
     "DefenseDrill",
     "DrillRecord",
     "Game",
+    "LessonProgress",
     "Move",
     "PersonalPuzzle",
     "Puzzle",
