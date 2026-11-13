@@ -3,7 +3,7 @@
 // открывает системный список. Языки подписаны самоназваниями — свой язык узнают при любом текущем.
 
 import {Languages} from 'lucide-react';
-import {LANGUAGES, LANGUAGE_NATIVE_NAMES, isLanguage, useI18n} from '../i18n';
+import {LANGUAGES, LANGUAGE_NATIVE_NAMES, LANGUAGE_SHORT_LABELS, isLanguage, useI18n} from '../i18n';
 
 export interface LanguageSwitcherProps {
     /** compact — в шапке: только иконка и код языка; иначе — полные названия (страница настроек). */
@@ -31,7 +31,7 @@ export default function LanguageSwitcher({compact = false, className = ''}: Lang
             >
                 {LANGUAGES.map((code) => (
                     <option key={code} value={code} lang={code}>
-                        {compact ? code.toUpperCase() : LANGUAGE_NATIVE_NAMES[code]}
+                        {compact ? LANGUAGE_SHORT_LABELS[code] : LANGUAGE_NATIVE_NAMES[code]}
                     </option>
                 ))}
             </select>

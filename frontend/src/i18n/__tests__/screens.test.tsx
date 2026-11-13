@@ -143,4 +143,12 @@ describe('переключатель языка', () => {
         });
         expect(getLanguage()).toBe('ru');
     });
+
+    it('в компактном переключателе украинский подписан UA, а не UK (это Великобритания)', () => {
+        render(<LanguageSwitcher compact/>);
+        const labels = within(screen.getByRole('combobox')).getAllByRole('option').map((o) => o.textContent);
+        expect(labels).toEqual(['EN', 'UA', 'RU']);
+        // Код языка в приложении остаётся стандартным (ISO 639-1).
+        expect(within(screen.getByRole('combobox')).getByRole('option', {name: 'UA'})).toHaveAttribute('value', 'uk');
+    });
 });

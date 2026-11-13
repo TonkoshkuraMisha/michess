@@ -23,7 +23,7 @@ import {uk} from './messages/uk';
 import {ru} from './messages/ru';
 
 export * from './core';
-export {LANGUAGE_NATIVE_NAMES} from './messages/languageNames';
+export {LANGUAGE_NATIVE_NAMES, LANGUAGE_SHORT_LABELS} from './messages/languageNames';
 export type {Messages};
 
 export const CATALOGS: Record<Language, Messages> = {en, uk, ru};
