@@ -85,10 +85,24 @@ services:
   # Фоновый анализ завершённых партий (Stockfish).
   worker:
     <<: *backend
-    command: ["celery", "-A", "src.worker.celery_app", "worker", "--loglevel=INFO", "--concurrency=${CELERY_CONCURRENCY:-2}"]
+    command: ["celery", "-A", "src.worker.celery_app", "worker", "--loglevel=INFO",
+              "--concurrency=${CELERY_CONCURRENCY:-2}", "-Q", "analysis", "-n", "analysis@%h"]
     # Stockfish занимает все доступные ядра; без предела анализ партий отбирает CPU у API, и при
     # массовом завершении партий p95 задержки хода вырастал с ~70 до ~230 мс (scripts/loadtest).
     cpus: ${WORKER_CPUS:-1.0}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
+  # Партии ботов между собой в турнирах (таск 15.2) — отдельная очередь и отдельный воркер (таск A.4): турнир на 8
+  # (до 28 партий) не задерживает разбор партий игроков. Одна партия за раз и свой предел CPU.
+  worker-simulation:
+    <<: *backend
+    command: ["celery", "-A", "src.worker.celery_app", "worker", "--loglevel=INFO",
+              "--concurrency=${SIMULATION_CONCURRENCY:-1}", "-Q", "simulation", "-n", "simulation@%h"]
+    cpus: ${SIMULATION_CPUS:-0.5}
     depends_on:
       migrate:
         condition: service_completed_successfully

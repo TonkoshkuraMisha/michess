@@ -12,7 +12,7 @@
 import asyncio
 import logging
 from collections.abc import Callable
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 
 import chess
 from sqlalchemy import or_, update
@@ -29,7 +29,6 @@ SIM_MAX_PLIES = 200
 SIM_MAX_DEPTH = 4
 SIM_TIME_LIMIT_S = 0.1
 ADJUDICATE_CP = 300
-CLAIM_TIMEOUT = timedelta(minutes=15)
 
 
 def bot_for(player: TournamentPlayer) -> HistoricalBot:
@@ -97,7 +96,7 @@ async def claim(db: AsyncSession, game_id: int) -> bool:
         .where(
             TournamentGame.id == game_id,
             TournamentGame.result.is_(None),
-            or_(TournamentGame.started_at.is_(None), TournamentGame.started_at < now - CLAIM_TIMEOUT),
+            or_(TournamentGame.started_at.is_(None), TournamentGame.started_at < now - tournaments.CLAIM_TIMEOUT),
         )
         .values(started_at=now)
     )
@@ -145,7 +144,7 @@ async def save_and_record(
     await db.flush()
     await tournaments.record_result(db, tournament, tgame, result, game.id)
     await db.refresh(tournament)
-    return [g.id for g in await tournaments.simulatable_games(db, tournament)]
+    return await tournaments.mark_for_queue(db, tournament)
 
 
 async def simulate(db: AsyncSession, tournament_game_id: int, play: Callable = play_game) -> list[int]:

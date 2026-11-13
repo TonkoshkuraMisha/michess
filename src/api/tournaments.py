@@ -5,7 +5,6 @@
 """
 
 import json
-from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, status
@@ -22,7 +21,6 @@ from src.services import tournament_rules as rules
 from src.services import tournaments as service
 from src.services.bots.archetypes import ARCHETYPES_BY_KEY
 from src.services.task_dispatch import schedule_tournament_simulations_in_background
-from src.services.tournament_simulation import CLAIM_TIMEOUT
 
 router = APIRouter()
 
@@ -88,6 +86,8 @@ class TournamentOut(BaseModel):
     created_at: str
     finished_at: str | None
     my_seat: int | None
+    # Игрок сдал турнир (таск A.3): боты доигрывают, сам он больше не играет.
+    withdrawn: bool = False
     players: list[PlayerOut]
     games: list[GameOut]
     standings: list[StandingOut]
@@ -134,6 +134,7 @@ async def view(db: AsyncSession, tournament: Tournament, user: User) -> Tourname
         current_round=tournament.current_round, created_at=tournament.created_at.isoformat(),
         finished_at=tournament.finished_at.isoformat() if tournament.finished_at else None,
         my_seat=next((p.seat for p in players if p.user_id == user.id), None),
+        withdrawn=tournament.withdrawn_at is not None,
         players=[_player(p) for p in players], games=[_game(g) for g in games], standings=standings,
     )
 
@@ -185,10 +186,48 @@ async def get_tournament(tournament_id: int, db: AsyncSession = Depends(get_db),
 
 
 async def _schedule_bot_games(db: AsyncSession, tournament: Tournament) -> None:
-    stale = datetime.now(UTC) - CLAIM_TIMEOUT
-    ids = [
-        g.id for g in await service.simulatable_games(db, tournament)
-        if g.started_at is None or g.started_at.replace(tzinfo=g.started_at.tzinfo or UTC) < stale
-    ]
-    schedule_tournament_simulations_in_background(ids)
+    # Только не начатые и давно (или ни разу) не поставленные — см. service.mark_for_queue (таск A.1).
+    schedule_tournament_simulations_in_background(await service.mark_for_queue(db, tournament))
+
+
+class StartGameOut(BaseModel):
+    forfeited: bool
+    game: GameOut
+
+
+@router.post("/{tournament_id}/games/{game_id}/start", response_model=StartGameOut)
+async def start_my_game(
+        tournament_id: int, game_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    """
+    Начать свою партию турнира (таск A.2). Повторный старт уже начатой партии — поражение: проигрываемую партию
+    нельзя бросить и переиграть.
+    """
+    await owned(db, tournament_id, user)
+    try:
+        started = await service.start_player_game(db, user, game_id)
+    except DomainError as exc:
+        not_found = exc.code == "tournament_not_found"
+        raise exc.to_http(status.HTTP_404_NOT_FOUND if not_found else status.HTTP_409_CONFLICT) from None
+    if started.played.tournament.id != tournament_id:
+        raise ApiError(status.HTTP_404_NOT_FOUND, "tournament_not_found")
+    if started.forfeited:
+        await _schedule_bot_games(db, started.played.tournament)
+    await db.refresh(started.played.game)
+    return StartGameOut(forfeited=started.forfeited, game=_game(started.played.game))
+
+
+@router.post("/{tournament_id}/withdraw", response_model=TournamentOut)
+async def withdraw_from_tournament(
+        tournament_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
+):
+    """Сдать турнир (таск A.3): несыгранные партии игрока — поражения, боты доигрывают свои партии."""
+    tournament = await owned(db, tournament_id, user)
+    try:
+        await service.withdraw(db, user, tournament)
+    except DomainError as exc:
+        raise exc.to_http(status.HTTP_409_CONFLICT) from None
+    await db.refresh(tournament)
+    await _schedule_bot_games(db, tournament)
+    return await view(db, tournament, user)
 

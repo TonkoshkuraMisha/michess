@@ -211,6 +211,8 @@ class BotGameSaveResponse(BaseModel):
     result: str
     ladder: ladder_service.LadderOutcome | None = None
     tournament_id: int | None = None
+    # Причина поражения в турнире вместо результата на доске (код, как у лестницы: engine_hint, takeback, coach...).
+    tournament_forfeit: str | None = None
 
 
 def calculate_authentic_thinking_time_ms(
@@ -598,6 +600,10 @@ async def _tournament_game_for_save(
     )
     if not matches:
         raise ApiError(409, "tournament_game_mismatch")
+    session = await ladder_service.get_session(user.id, "tournament")
+    if session is None or session.tournament_game_id != played.game.id:
+        # Партию турнира начинают через POST /tournaments/{id}/games/{game_id}/start (таск A.2).
+        raise ApiError(409, "tournament_game_not_started")
     return played
 
 
@@ -709,12 +715,23 @@ async def save_bot_game(
     await db.refresh(new_game)
     if ladder_game is not None:
         await ladder_service.clear_session(current_user.id)
+    tournament_forfeit = None
     if tournament_game is not None:
+        # Подсказка движка, анализ, возврат хода или наставник во время партии турнира — поражение (таск A.2):
+        # «незасчитанной» партии в турнире быть не может.
+        tournament_session = await ladder_service.get_session(current_user.id, "tournament")
+        tournament_forfeit = (
+            (tournament_session.assisted if tournament_session else None) or ("coach" if payload.assisted else None)
+        )
+        tournament_result = tournament_service.loss_for(payload.player_color) if tournament_forfeit else result
+        await ladder_service.clear_session(current_user.id, "tournament")
         # Результат — в турнир; партии ботов, которые от него открылись, считает воркер.
-        await tournament_service.record_result(db, tournament_game.tournament, tournament_game.game, result, new_game.id)
+        await tournament_service.record_result(
+            db, tournament_game.tournament, tournament_game.game, tournament_result, new_game.id,
+        )
         await db.refresh(tournament_game.tournament)
         schedule_tournament_simulations_in_background(
-            [g.id for g in await tournament_service.simulatable_games(db, tournament_game.tournament)]
+            await tournament_service.mark_for_queue(db, tournament_game.tournament)
         )
     # Фоновый разбор: итог партии готов заранее, а из ошибок игрока делаются личные задачи (таск 13.5).
     schedule_game_analysis_in_background(new_game.id)
@@ -725,4 +742,5 @@ async def save_bot_game(
         result=result,
         ladder=ladder_outcome,
         tournament_id=tournament_game.tournament.id if tournament_game else None,
+        tournament_forfeit=tournament_forfeit,
     )

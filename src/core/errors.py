@@ -108,6 +108,7 @@ ERROR_MESSAGES: dict[str, str] = {
     "no_draw_offer": "There is no draw offer to accept",
     "no_rematch_offer": "There is no rematch offer to accept",
     # --- турниры ---------------------------------------------------------------------------------------
+    "lesson_progress_limit": "Too many lessons in progress (limit {max})",
     "tournament_not_found": "Tournament not found",
     "tournament_active_exists": "You already have a tournament in progress — finish it first",
     "tournament_size_invalid": "This format needs {sizes} participants",
@@ -116,6 +117,7 @@ ERROR_MESSAGES: dict[str, str] = {
     "tournament_participant_duplicate": "A participant is listed twice: {participant}",
     "tournament_game_closed": "This tournament game is already finished",
     "tournament_game_mismatch": "The game does not match your tournament game",
+    "tournament_game_not_started": "Start your tournament game from the tournament page",
 }
 
 

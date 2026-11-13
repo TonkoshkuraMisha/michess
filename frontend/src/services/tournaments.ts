@@ -56,6 +56,8 @@ export interface Tournament {
     created_at: string;
     finished_at: string | null;
     my_seat: number | null;
+    /** Игрок сдал турнир: боты доигрывают, сам он больше не играет. */
+    withdrawn: boolean;
     players: TournamentPlayer[];
     games: TournamentGame[];
     standings: Standing[];
@@ -107,6 +109,16 @@ async function call<T>(url: string, init: RequestInit, fallback: MessageKey): Pr
 
 export const listTournaments = () => call<TournamentSummary[]>(BASE, {method: 'GET'}, 'tournaments.loadFailed');
 export const getTournament = (id: number) => call<Tournament>(`${BASE}/${id}`, {method: 'GET'}, 'tournaments.loadFailed');
+/** Начать свою партию (таск A.2): повторный старт уже начатой партии — поражение, forfeited = true. */
+export const startMyGame = (tournamentId: number, gameId: number) =>
+    call<{ forfeited: boolean; game: TournamentGame }>(
+        `${BASE}/${tournamentId}/games/${gameId}/start`, {method: 'POST'}, 'tournaments.loadFailed',
+    );
+
+/** Сдать турнир (таск A.3): оставшиеся партии игрока — поражения. */
+export const withdrawTournament = (tournamentId: number) =>
+    call<Tournament>(`${BASE}/${tournamentId}/withdraw`, {method: 'POST'}, 'tournaments.loadFailed');
+
 export const createTournament = (body: TournamentCreate) =>
     call<Tournament>(BASE, {method: 'POST', body: JSON.stringify(body)}, 'tournaments.createFailed');
 
@@ -122,7 +134,7 @@ export function participantName(player: TournamentPlayer, t: I18n['t'], myName?:
 
 /** Партия игрока, которую можно играть сейчас: текущий круг, без результата. */
 export function myPendingGame(t: Tournament): TournamentGame | null {
-    if (t.status !== 'active' || t.my_seat == null) return null;
+    if (t.status !== 'active' || t.my_seat == null || t.withdrawn) return null;
     const mine = t.games.filter((g) => g.result === null && g.round === t.current_round
         && (g.white_seat === t.my_seat || g.black_seat === t.my_seat));
     return mine[0] ?? null;

@@ -30,6 +30,8 @@ class Tournament(Base):
     current_round: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Игрок сдал турнир (таск A.3): его оставшиеся партии — поражения, боты доигрывают; новый турнир можно начать.
+    withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class TournamentPlayer(Base):
@@ -75,6 +77,8 @@ class TournamentGame(Base):
     # 1-0 | 0-1 | 1/2-1/2; пусто — партия ещё не сыграна.
     result: Mapped[str | None] = mapped_column(String(8), nullable=True)
     game_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("games.id", ondelete="SET NULL"), nullable=True)
-    # Партию ботов между собой забрал воркер (таск 15.2): защищает от двойного счёта одной партии.
+    # Партию начали: ботов — забрал воркер (таск 15.2), игрока — он сам нажал «Играть» (таск A.2).
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Партию ботов поставили в очередь (таск A.1): повторно — только если давно поставлена и так и не начата.
+    queued_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

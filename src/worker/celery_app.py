@@ -5,6 +5,9 @@ from src.core.observability import init_sentry
 
 init_sentry("worker")
 
+ANALYSIS_QUEUE = "analysis"
+SIMULATION_QUEUE = "simulation"
+
 celery_app = Celery(
     "michess_worker",
     broker=f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/0",
@@ -28,4 +31,14 @@ celery_app.conf.update(
     task_publish_retry=False,
     # Воркер при старте по-прежнему ждёт брокер (это отдельная настройка).
     broker_connection_retry_on_startup=True,
+    # Две очереди (таск A.4): разбор только что сыгранной партии игрока не ждёт, пока досчитаются до 28 партий
+    # турнира ботов. В продакшене их слушают разные воркеры (docker-compose.prod.yml), в разработке — один
+    # (start_dev.ps1, -Q analysis,simulation).
+    task_default_queue=ANALYSIS_QUEUE,
+    task_routes={
+        "analyze_game": {"queue": ANALYSIS_QUEUE},
+        "simulate_tournament_game": {"queue": SIMULATION_QUEUE},
+    },
+    # Не брать впрок длинные партии симуляции: иначе один воркер набирает очередь и держит её.
+    worker_prefetch_multiplier=1,
 )
