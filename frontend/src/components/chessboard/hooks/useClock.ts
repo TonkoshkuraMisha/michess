@@ -33,9 +33,38 @@ export interface UseClockResult {
  * о цейтноте (<10с, один раз за партию) и начисление добавления за ход. Не знает ничего о
  * источнике партии (PvP/бот/зритель) — только о том, идут ли часы и чей сейчас ход.
  */
+/**
+ * Шаг, с которым меняются цифры на часах (как в formatTime): секунды, а в цейтноте (< 30 с) — десятые.
+ * В состояние React время попадает, только когда меняется видимое значение: раньше каждые 50 мс
+ * перерисовывался весь Chessboard — доска, журнал ходов, панели (20 раз в секунду на любой партии).
+ */
+export function displayBucket(ms: number): number {
+    const value = Math.max(0, ms);
+    return value >= 30000 ? Math.floor(value / 1000) : -1 - Math.floor(value / 100);
+}
+
+/** Точное время в ref, в состоянии — его копия на шаге отображения; сеттер меняет оба. */
+function useClockValue(initial: number) {
+    const exactRef = useRef(initial);
+    const [shown, setShown] = useState(initial);
+    const set: React.Dispatch<React.SetStateAction<number>> = useCallback((value) => {
+        const next = typeof value === 'function' ? value(exactRef.current) : value;
+        exactRef.current = next;
+        setShown(next);
+    }, []);
+    /** Тик часов: точное время меняется всегда, состояние — только когда меняются цифры на часах. */
+    const tick = useCallback((delta: number) => {
+        const before = exactRef.current;
+        const after = Math.max(0, before - delta);
+        exactRef.current = after;
+        if (displayBucket(after) !== displayBucket(before) || after === 0) setShown(after);
+    }, []);
+    return [shown, set, tick] as const;
+}
+
 export function useClock({isTicking, isParticipant, currentTurn, myColor, onLowTime}: UseClockOptions): UseClockResult {
-    const [whiteTimeMs, setWhiteTimeMs] = useState(180000);
-    const [blackTimeMs, setBlackTimeMs] = useState(180000);
+    const [whiteTimeMs, setWhiteTimeMs, tickWhite] = useClockValue(180000);
+    const [blackTimeMs, setBlackTimeMs, tickBlack] = useClockValue(180000);
     const lowTimeWarnedRef = useRef(false);
 
     useEffect(() => {
@@ -49,14 +78,14 @@ export function useClock({isTicking, isParticipant, currentTurn, myColor, onLowT
             lastTick = now;
 
             if (currentTurn === 'white') {
-                setWhiteTimeMs(prev => Math.max(0, prev - delta));
+                tickWhite(delta);
             } else {
-                setBlackTimeMs(prev => Math.max(0, prev - delta));
+                tickBlack(delta);
             }
         }, 50);
 
         return () => clearInterval(interval);
-    }, [isTicking, currentTurn]);
+    }, [isTicking, currentTurn, tickWhite, tickBlack]);
 
     // Звуковое предупреждение о цейтноте (< 10 секунд на часах игрока)
     useEffect(() => {
