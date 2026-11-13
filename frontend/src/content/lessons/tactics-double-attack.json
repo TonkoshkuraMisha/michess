@@ -1,0 +1,312 @@
+{
+  "id": "tactics-double-attack",
+  "course": "tactics",
+  "order": 1,
+  "title": {
+    "en": "Double attack",
+    "uk": "Подвійний удар",
+    "ru": "Двойной удар"
+  },
+  "summary": {
+    "en": "One piece attacks two targets at once — the opponent can save only one.",
+    "uk": "Одна фігура нападає одразу на дві цілі — суперник врятує лише одну.",
+    "ru": "Одна фигура нападает сразу на две цели — соперник спасёт только одну."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "r3k3/2N5/8/8/8/8/8/4K3 b - - 0 1",
+      "arrows": [
+        {
+          "from": "c7",
+          "to": "e8",
+          "color": "red"
+        },
+        {
+          "from": "c7",
+          "to": "a8",
+          "color": "red"
+        }
+      ],
+      "text": {
+        "en": "A double attack is a move that creates two threats at once. Here the white knight checks the king and attacks the rook at the same time. Black must answer the check, and the rook is lost.",
+        "uk": "Подвійний удар — це хід, що створює одразу дві загрози. Тут білий кінь дає шах королю й водночас нападає на туру. Чорні мусять рятуватися від шаху, і тура пропадає.",
+        "ru": "Двойной удар — это ход, который создаёт сразу две угрозы. Здесь белый конь шахует короля и одновременно нападает на ладью. Чёрные обязаны уходить от шаха, и ладья пропадает."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1",
+      "actions": [
+        {
+          "do": "highlight",
+          "squares": [
+            "b5"
+          ]
+        },
+        {
+          "do": "pause",
+          "ms": 700
+        },
+        {
+          "do": "move",
+          "uci": "b5c7"
+        },
+        {
+          "do": "arrow",
+          "from": "c7",
+          "to": "e8",
+          "color": "red"
+        },
+        {
+          "do": "arrow",
+          "from": "c7",
+          "to": "a8",
+          "color": "red"
+        },
+        {
+          "do": "pause",
+          "ms": 1200
+        },
+        {
+          "do": "clear"
+        },
+        {
+          "do": "move",
+          "uci": "e8d7"
+        },
+        {
+          "do": "pause",
+          "ms": 600
+        },
+        {
+          "do": "move",
+          "uci": "c7a8"
+        }
+      ],
+      "text": {
+        "en": "Watch how it happens: the knight jumps to c7 with check, the king steps aside, and the knight takes the rook.",
+        "uk": "Подивіться, як це відбувається: кінь стрибає на c7 із шахом, король відходить, і кінь забирає туру.",
+        "ru": "Посмотрите, как это происходит: конь прыгает на c7 с шахом, король отходит, и конь забирает ладью."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "2q3k1/5ppp/8/3N4/8/8/5PPP/6K1 w - - 0 1",
+      "text": {
+        "en": "Your turn. Find the knight move that attacks the king and the queen at the same time.",
+        "uk": "Ваш хід. Знайдіть хід конем, що нападає водночас на короля й ферзя.",
+        "ru": "Ваш ход. Найдите ход конём, который нападает одновременно на короля и ферзя."
+      },
+      "hint": {
+        "en": "Look for a square from which the knight reaches both g8 and c8.",
+        "uk": "Пошукайте поле, з якого кінь дістає і g8, і c8.",
+        "ru": "Поищите поле, с которого конь достаёт и g8, и c8."
+      },
+      "line": [
+        {
+          "answers": [
+            "d5e7"
+          ],
+          "reply": "g8h8",
+          "correct": {
+            "en": "Check and an attack on the queen! The king has to move.",
+            "uk": "Шах і напад на ферзя! Король мусить відійти.",
+            "ru": "Шах и нападение на ферзя! Король вынужден отойти."
+          },
+          "wrong": {
+            "d5f6": {
+              "en": "It is check, but the g7 pawn simply takes the knight.",
+              "uk": "Це шах, але пішак g7 просто б'є коня.",
+              "ru": "Это шах, но пешка g7 просто берёт коня."
+            },
+            "d5b6": {
+              "en": "The knight attacks only the queen — she just steps away.",
+              "uk": "Кінь нападає лише на ферзя — він просто відійде.",
+              "ru": "Конь нападает только на ферзя — он просто уйдёт."
+            }
+          }
+        },
+        {
+          "answers": [
+            "e7c8"
+          ],
+          "correct": {
+            "en": "The queen is won.",
+            "uk": "Ферзя виграно.",
+            "ru": "Ферзь выигран."
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "2q3k1/4Nppp/8/8/8/8/5PPP/6K1 b - - 0 1",
+      "text": {
+        "en": "Why was the knight move to e7 so strong?",
+        "uk": "Чому хід конем на e7 був таким сильним?",
+        "ru": "Почему ход конём на e7 был таким сильным?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "The check forced the king to move, and the queen stayed under attack.",
+            "uk": "Шах змусив короля відійти, і ферзь залишився під ударом.",
+            "ru": "Шах заставил короля уйти, и ферзь остался под ударом."
+          },
+          "correct": true,
+          "feedback": {
+            "en": "Exactly: a check is the strongest of the two threats — it must be answered first.",
+            "uk": "Саме так: шах — найсильніша з двох загроз, на нього треба відповісти першим.",
+            "ru": "Именно: шах — самая сильная из двух угроз, на него нужно отвечать первым."
+          }
+        },
+        {
+          "text": {
+            "en": "The knight threatened checkmate.",
+            "uk": "Кінь загрожував матом.",
+            "ru": "Конь угрожал матом."
+          },
+          "feedback": {
+            "en": "No mate here — the king had a free square. The point is the second target, the queen.",
+            "uk": "Мату тут немає — у короля було вільне поле. Суть у другій цілі — ферзі.",
+            "ru": "Мата здесь нет — у короля было свободное поле. Суть во второй цели — ферзе."
+          }
+        },
+        {
+          "text": {
+            "en": "The knight defended the f2 pawn.",
+            "uk": "Кінь захистив пішака f2.",
+            "ru": "Конь защитил пешку f2."
+          },
+          "feedback": {
+            "en": "The f2 pawn was not in danger. Look at what the knight attacked.",
+            "uk": "Пішакові f2 нічого не загрожувало. Подивіться, на що нападав кінь.",
+            "ru": "Пешке f2 ничего не угрожало. Посмотрите, на что нападал конь."
+          }
+        }
+      ],
+      "arrows": [
+        {
+          "from": "e7",
+          "to": "g8",
+          "color": "red"
+        },
+        {
+          "from": "e7",
+          "to": "c8",
+          "color": "red"
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "4k3/p7/2n1n3/8/3P4/8/P4PP1/R5K1 w - - 0 1",
+      "text": {
+        "en": "Not only knights can fork. Find the pawn move that attacks both black knights.",
+        "uk": "Не лише коні вміють нападати на дві цілі. Знайдіть хід пішаком, що нападає на обох чорних коней.",
+        "ru": "Не только кони умеют нападать на две цели. Найдите ход пешкой, который нападает на обоих чёрных коней."
+      },
+      "hint": {
+        "en": "A pawn attacks diagonally forward.",
+        "uk": "Пішак б'є навскіс уперед.",
+        "ru": "Пешка бьёт наискосок вперёд."
+      },
+      "line": [
+        {
+          "answers": [
+            "d4d5"
+          ],
+          "reply": "c6e5",
+          "correct": {
+            "en": "A pawn fork! Black can save only one knight — next move the pawn takes the other.",
+            "uk": "Пішакова вилка! Чорні можуть урятувати лише одного коня — наступним ходом пішак забере другого.",
+            "ru": "Пешечная вилка! Чёрные могут спасти только одного коня — следующим ходом пешка заберёт второго."
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "4k3/p7/4P3/4n3/8/8/P4PP1/R5K1 b - - 0 2",
+      "text": {
+        "en": "Remember: look for a move that creates two threats, ideally with check. Knights, pawns and queens are especially good at it.",
+        "uk": "Запам'ятайте: шукайте хід, що створює дві загрози, найкраще — із шахом. Особливо вправні в цьому коні, пішаки й ферзі.",
+        "ru": "Запомните: ищите ход, который создаёт две угрозы, лучше всего — с шахом. Особенно хороши в этом кони, пешки и ферзи."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "6k1/5pp1/7p/r7/8/8/5PPP/3Q2K1 w - - 0 1",
+      "text": {
+        "en": "Win the rook with a double attack.",
+        "uk": "Виграйте туру подвійним ударом.",
+        "ru": "Выиграйте ладью двойным ударом."
+      },
+      "line": [
+        {
+          "answers": [
+            "d1d8"
+          ],
+          "reply": "g8h7"
+        },
+        {
+          "answers": [
+            "d8a5"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "r3k3/8/8/1N6/8/8/8/4K3 w - - 0 1",
+      "text": {
+        "en": "Which move is a double attack?",
+        "uk": "Який хід — подвійний удар?",
+        "ru": "Какой ход — двойной удар?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "♘c7+",
+            "uk": "♘c7+",
+            "ru": "♘c7+"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "♘d6+",
+            "uk": "♘d6+",
+            "ru": "♘d6+"
+          }
+        },
+        {
+          "text": {
+            "en": "♘a7",
+            "uk": "♘a7",
+            "ru": "♘a7"
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "4k3/8/8/1b1n4/8/1PP5/8/4K3 w - - 0 1",
+      "text": {
+        "en": "Attack two black pieces with one pawn move.",
+        "uk": "Нападіть на дві чорні фігури одним ходом пішака.",
+        "ru": "Нападите на две чёрные фигуры одним ходом пешки."
+      },
+      "line": [
+        {
+          "answers": [
+            "c3c4"
+          ]
+        }
+      ]
+    }
+  ]
+}
