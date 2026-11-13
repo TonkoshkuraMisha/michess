@@ -114,7 +114,8 @@ describe('«Что грозит?»', () => {
         await act(async () => {
             fireEvent.click(square('a3'));
         });
-        expect(screen.getByTestId('defense-outcome').textContent).toBe('Этот ход проигрывает.');
+        // Неверная защита не обязательно проигрывает — она не отражает угрозу.
+        expect(screen.getByTestId('defense-outcome').textContent).toBe('Этот ход не отражает угрозу.');
         expect(screen.getByTestId('defense-good').textContent).toContain('♘xh4');
     });
 });

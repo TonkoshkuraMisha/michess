@@ -101,6 +101,10 @@ def test_blunder_drill_offers_safe_blunder_and_natural_trap():
     mild = {**deep, blunder: -100}
     assert drills.blunder_drill(row["FEN"], row["Moves"].split(), _fake_analyse({_key(board): mild}),
                                 _fake_analyse({_key(board): looks}), seed="x") is None
+    # «Ловушка» хуже лучшего на 300, но всё ещё выигрывает (+3): это не зевок — упражнения нет.
+    still_winning = {safe: 600, blunder: -400, trap: 300, absurd: -900}
+    assert drills.blunder_drill(row["FEN"], row["Moves"].split(), _fake_analyse({_key(board): still_winning}),
+                                _fake_analyse({_key(board): looks}), seed="x") is None
 
 
 # --- готовая выборка -----------------------------------------------------------------------------------------
@@ -125,7 +129,10 @@ def test_sample_rechecked_by_engine():
               *itertools.islice((r for r in ROWS if r["Kind"] == "threat"), 0, 400, 100)]
     with chess.engine.SimpleEngine.popen_uci(resolve_stockfish_path()) as engine:
         score_after = make_score_after(engine, depth=16)
-        failed = [row["SourceId"] for row in sample if not drills.verify_drill(row, score_after)]
+        # Допуски вдвое мягче сборки: у другой версии Stockfish (в CI — из пакетов) пограничные оценки расходятся,
+        # а грубую ошибку («проигрывающий» ход на деле выигрывает) проверка всё равно ловит.
+        failed = [row["SourceId"] for row in sample if not drills.verify_drill(
+            row, score_after, margin=drills.VERIFY_MARGIN // 2, losing=drills.LOSING // 2)]
     assert failed == []
 
 

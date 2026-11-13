@@ -951,6 +951,7 @@ export const en = {
             chooseMove: 'Your move. Which of the three moves does not lose?',
             right: 'Correct!',
             wrong: 'This move loses.',
+            wrongDefense: 'This move does not stop the threat.',
             goodMoves: 'Holds the position: {moves}.',
             refutation: 'After {move} your opponent replies {reply}.',
             motifs: 'Your opponent’s idea:',

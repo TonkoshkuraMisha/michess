@@ -28,6 +28,7 @@ from src.services.defense_drills import (
     MATE,
     MoveScores,
     blunder_drill,
+    read_drills,
     threat_drill,
     verify_drill,
     write_drills,
@@ -69,6 +70,8 @@ def main() -> None:
     parser.add_argument("--depth", type=int, default=12, help="глубина проверки движком")
     parser.add_argument("--shallow-depth", type=int, default=2, help="глубина «на глаз» для естественных ходов")
     parser.add_argument("--verify-depth", type=int, default=16, help="глубина независимой перепроверки")
+    parser.add_argument("--keep-existing", action="store_true",
+                        help="перепроверить уже собранную выборку и только добрать отбракованное")
     args = parser.parse_args()
 
     path = resolve_stockfish_path()
@@ -87,13 +90,24 @@ def main() -> None:
         evaluate = make_analyse(engine, args.depth)
         shallow = make_analyse(engine, args.shallow_depth)
         score_after = make_score_after(engine, args.verify_depth)
+        tried: set[tuple[str, str]] = set()
+        if args.keep_existing:
+            for old in read_drills():
+                tried.add((old["Kind"], old["SourceId"]))
+                key = (old["Kind"], int(old["Stage"]))
+                if quota.get(key, 0) > 0 and verify_drill(old, score_after):
+                    quota[key] -= 1
+                    found.append(old)
+                else:
+                    rejected[old["Kind"]] += 1
+            print(f"kept {len(found)} of the existing drills, rejected {dict(rejected)}", flush=True)
         for row in rows:
             if not any(quota.values()):
                 break
             moves = row["Moves"].split()
             stage = stage_for(int(row["Rating"]), moves[:2])
             for kind in KINDS:
-                if quota[(kind, stage)] <= 0:
+                if quota[(kind, stage)] <= 0 or (kind, row["PuzzleId"]) in tried:
                     continue
                 checked[kind] += 1
                 if kind == "threat":
@@ -121,6 +135,8 @@ def main() -> None:
                       flush=True)
 
     found.sort(key=lambda r: (r["Kind"], int(r["Stage"]), r["SourceId"]))
+    for row in found:
+        row["Stage"] = int(row["Stage"])
     written = write_drills(found)
     short = {key: n for key, n in quota.items() if n > 0}
     print(f"Written {written} drills in {time.monotonic() - started:.0f}s; checked {dict(checked)}; "

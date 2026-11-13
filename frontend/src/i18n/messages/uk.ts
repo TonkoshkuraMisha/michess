@@ -953,6 +953,7 @@ export const uk: Messages = {
             chooseMove: 'Ваш хід. Який із трьох ходів не програє?',
             right: 'Правильно!',
             wrong: 'Цей хід програє.',
+            wrongDefense: 'Цей хід не відбиває загрозу.',
             goodMoves: 'Тримає позицію: {moves}.',
             refutation: 'На {move} суперник відповідає {reply}.',
             motifs: 'Задум суперника:',

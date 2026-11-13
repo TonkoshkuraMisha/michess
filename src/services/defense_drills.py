@@ -52,7 +52,8 @@ THREAT_GAIN = 300        # «ничего не делать» теряет хо�
 THREAT_BEST_MARGIN = 50  # тактика задачи — лучший ход соперника (или почти)
 GOOD_MARGIN = 80         # защита засчитывается, если она почти так же хороша, как лучшая
 MAX_GOOD = 4             # защит немного: случайный ход угрозу не отражает
-BLUNDER_LOSS = 300       # проигрывающий вариант в «Не зевни» теряет хотя бы столько
+BLUNDER_LOSS = 300       # проигрывающий вариант в «Не зевни» теряет хотя бы столько против лучшего
+LOSING = -200            # …и действительно проигрывает: «хуже лучшего, но всё ещё +3» — не зевок
 NATURAL_GAP = 300        # «естественный» ход: на мелком поиске не хуже лучшего больше чем на столько
 NATURAL_CANDIDATES = 6   # сколько самых естественных ходов проверять глубоко как ловушку
 VERIFY_MARGIN = 200      # перепроверка: верный ход лучше неверных (и «ничего не делать») хотя бы на столько
@@ -137,9 +138,9 @@ def blunder_drill(fen: str, moves: list[str], analyse: Analyse, shallow: Analyse
     if not natural:
         return None
     scores = analyse(board, len(natural) + 1, [blunder, *natural])
-    if blunder not in scores or scores[blunder][0] > best - BLUNDER_LOSS:
+    if blunder not in scores or scores[blunder][0] > min(best - BLUNDER_LOSS, LOSING):
         return None
-    traps = [uci for uci in natural if uci in scores and scores[uci][0] <= best - BLUNDER_LOSS]
+    traps = [uci for uci in natural if uci in scores and scores[uci][0] <= min(best - BLUNDER_LOSS, LOSING)]
     if not traps:
         return None
     trap = traps[0]  # самый естественный из проигрывающих
@@ -151,24 +152,28 @@ def blunder_drill(fen: str, moves: list[str], analyse: Analyse, shallow: Analyse
     return {"fen": board.fen(), "choices": choices, "good": [safe], "refutations": refutations}
 
 
-def verify_drill(row: dict, score_after: Callable[[str, str], int]) -> bool:
+def verify_drill(row: dict, score_after: Callable[[str, str], int], *, margin: int = VERIFY_MARGIN,
+                 losing: int = LOSING) -> bool:
     """
     Независимая перепроверка упражнения (глубже и с чистой памятью движка, чем при отборе): в эндшпилях и позициях с
     цугцвангом оценка мелкого поиска нестабильна, и «безопасный» ход может оказаться хуже «проигрывающего».
-    ``score_after(fen, uci)`` — оценка после хода с точки зрения стороны, которая ходит в fen.
+    ``score_after(fen, uci)`` — оценка после хода с точки зрения стороны, которая ходит в fen. В «Не зевни» неверные
+    ходы должны проигрывать на самом деле (не выше ``losing``), а не только уступать безопасному. Тесты на другой
+    версии движка передают мягкие ``margin`` / ``losing``: пограничные оценки у версий расходятся.
     """
     good = row["Good"].split()
     if row["Kind"] == "blunder":
         safe = score_after(row["FEN"], good[0])
-        losing = set(row["Choices"].split()) - set(good)
-        return safe >= DEFENSIBLE and all(score_after(row["FEN"], uci) <= safe - VERIFY_MARGIN for uci in losing)
+        wrong = set(row["Choices"].split()) - set(good)
+        return safe >= DEFENSIBLE and all(score_after(row["FEN"], uci) <= min(safe - margin, losing)
+                                          for uci in wrong)
     defenses = [score_after(row["FEN"], uci) for uci in good]
     if min(defenses) < DEFENSIBLE:
         return False
     passing = chess.Board(row["FEN"])
     passing.push(chess.Move.null())
     threat = -score_after(passing.fen(), row["Threat"])  # оценка соперника → с точки зрения обороняющегося
-    return threat <= min(defenses) - VERIFY_MARGIN
+    return threat <= min(defenses) - margin
 
 
 # --- выборка и загрузка в базу -------------------------------------------------------------------------------
