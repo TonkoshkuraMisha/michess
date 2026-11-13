@@ -1,8 +1,9 @@
 // --- FILE: frontend/src/components/chessboard/hooks/useCoachMode.ts ---
 // Игра с наставником (таск 11.3) — только в партии с ботом и на свободной доске. После хода игрока сервер
 // оценивает ход (POST /analysis/check-move); если ход плохой для уровня игрока, бот и часы ждут, а игрок решает:
-// «Переходить» или «Оставить» (с объяснением «Почему?»). «Совет» (POST /analysis/advice) — план и стрелки для
-// текущей позиции, со счётчиком. Любое обращение к наставнику делает партию учебной (правило 2).
+// «Переходить», «Оставить» или «Не согласен» (с объяснением «Почему?»). Подсказка по ступеням (таск 11.4,
+// POST /analysis/hint): намёк словами → какой фигурой ходить → ход со стрелкой; счётчик ступеней. Любое обращение к
+// наставнику делает партию учебной (правило 2).
 
 import {useCallback, useRef, useState} from 'react';
 import type {Chess} from 'chess.js';
@@ -76,6 +77,9 @@ export interface PendingCheck {
     status: 'checking' | 'warning';
     /** Позиция до хода — для «Переходить». */
     previousGame: Chess;
+    /** Позиция до хода и сам ход — для «Не согласен». */
+    fenBefore: string;
+    uci: string;
     /** FEN после хода: ответ сервера к другой позиции (игрок успел походить дальше) отбрасывается. */
     fenAfter: string;
     check?: MoveCheck;
@@ -96,10 +100,21 @@ export interface UseCoachModeResult {
     keepMove: () => void;
     /** «Переходить»: возвращает позицию до хода (вызывающий восстанавливает доску и часы). */
     takeBack: () => Chess | null;
+    /** Последняя показанная ступень подсказки (её текст, стрелки и подсветка). */
     advice: CoachComment | null;
     adviceLoading: boolean;
-    requestAdvice: (fen: string) => Promise<void>;
+    /** Следующая ступень подсказки для позиции (новая позиция — снова с первой). */
+    requestHint: (fen: string) => Promise<void>;
+    /** 0 — подсказок к этой позиции не было, 1–3 — показанная ступень. */
+    hintStep: number;
+    /** Ход уже показан: дальше подсказывать нечего. */
+    hintFinal: boolean;
+    /** Использовано ступеней подсказки за партию. */
     hintsUsed: number;
+    /** «Не согласен»: позиция уходит на проверку, ход остаётся. */
+    dispute: () => void;
+    /** Спор отправлен — показать благодарность до следующего хода. */
+    disputeSent: boolean;
     /** Обращались ли к наставнику в этой партии: партия учебная. */
     assisted: boolean;
     error: UiMessage | null;
@@ -123,6 +138,10 @@ export function useCoachMode(playerRating: number): UseCoachModeResult {
     const [advice, setAdvice] = useState<CoachComment | null>(null);
     const [adviceLoading, setAdviceLoading] = useState(false);
     const [hintsUsed, setHintsUsed] = useState(0);
+    const [hintStep, setHintStep] = useState(0);
+    const [hintFinal, setHintFinal] = useState(false);
+    const [disputeSent, setDisputeSent] = useState(false);
+    const hintRef = useRef<{ fen: string; step: number } | null>(null);
     const [assisted, setAssisted] = useState(false);
     const [error, setError] = useState<UiMessage | null>(null);
     const pendingRef = useRef<PendingCheck | null>(null);
@@ -147,6 +166,10 @@ export function useCoachMode(playerRating: number): UseCoachModeResult {
     const clearOverlay = useCallback(() => {
         setExplanation(null);
         setAdvice(null);
+        setHintStep(0);
+        setHintFinal(false);
+        setDisputeSent(false);
+        hintRef.current = null;
     }, []);
 
     const onPlayerMove = useCallback((previousGame: Chess, fenBefore: string, uci: string, fenAfter: string) => {
@@ -154,7 +177,7 @@ export function useCoachMode(playerRating: number): UseCoachModeResult {
         if (!enabled) return;
         setAssisted(true);
         setError(null);
-        updatePending({status: 'checking', previousGame, fenAfter});
+        updatePending({status: 'checking', previousGame, fenBefore, uci, fenAfter});
         void (async () => {
             let check: MoveCheck | null = null;
             try {
@@ -169,7 +192,7 @@ export function useCoachMode(playerRating: number): UseCoachModeResult {
             // Игрок успел сыграть дальше (свободная доска) — ответ к старой позиции не нужен.
             if (pendingRef.current?.fenAfter !== fenAfter) return;
             if (check && shouldWarn(check, level)) {
-                updatePending({status: 'warning', previousGame, fenAfter, check});
+                updatePending({status: 'warning', previousGame, fenBefore, uci, fenAfter, check});
             } else {
                 updatePending(null);
             }
@@ -194,16 +217,35 @@ export function useCoachMode(playerRating: number): UseCoachModeResult {
         return current.previousGame;
     }, [updatePending]);
 
-    const requestAdvice = useCallback(async (fen: string) => {
+    const dispute = useCallback(() => {
+        const current = pendingRef.current;
+        if (!current) return;
+        const body = {fen: current.fenBefore, move: current.uci, cp_loss: current.check?.cp_loss ?? null};
+        updatePending(null);
+        setExplanation(null);
+        setDisputeSent(true);
+        // Отправка — без ожидания: игрок продолжает партию, а сбой очереди его не касается.
+        void fetch(`${API_BASE_URL}/api/v1/analysis/dispute`, {
+            method: 'POST', headers: authHeaders(), body: JSON.stringify(body),
+        }).catch(() => undefined);
+    }, [updatePending]);
+
+    const requestHint = useCallback(async (fen: string) => {
+        const previous = hintRef.current;
+        const step = previous && previous.fen === fen ? Math.min(3, previous.step + 1) : 1;
         setAdviceLoading(true);
         setError(null);
         setExplanation(null);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/analysis/advice`, {
-                method: 'POST', headers: authHeaders(), body: JSON.stringify({fen}),
+            const res = await fetch(`${API_BASE_URL}/api/v1/analysis/hint`, {
+                method: 'POST', headers: authHeaders(), body: JSON.stringify({fen, step}),
             });
             if (res.ok) {
-                setAdvice(await res.json());
+                const body = await res.json();
+                hintRef.current = {fen, step: body.step};
+                setAdvice(body);
+                setHintStep(body.step);
+                setHintFinal(Boolean(body.final));
                 setHintsUsed((n) => n + 1);
                 setAssisted(true);
             } else {
@@ -220,6 +262,10 @@ export function useCoachMode(playerRating: number): UseCoachModeResult {
         updatePending(null);
         setExplanation(null);
         setAdvice(null);
+        setHintStep(0);
+        setHintFinal(false);
+        setDisputeSent(false);
+        hintRef.current = null;
         setHintsUsed(0);
         setAssisted(false);
         setError(null);
@@ -229,7 +275,7 @@ export function useCoachMode(playerRating: number): UseCoachModeResult {
         enabled, setEnabled, level, setLevel, pending,
         holdBot: enabled && pending !== null,
         explanation, showWhy, keepMove, takeBack,
-        advice, adviceLoading, requestAdvice, hintsUsed, assisted, error,
+        advice, adviceLoading, requestHint, hintStep, hintFinal, hintsUsed, dispute, disputeSent, assisted, error,
         onPlayerMove, reset, clearOverlay,
     };
 }

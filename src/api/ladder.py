@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.deps import get_current_user
-from src.api.fair_play import _optional_user_id
+from src.api.fair_play import optional_user_id
 from src.db.session import get_db
 from src.models.user import User
 from src.services import ladder
@@ -78,7 +78,7 @@ def _state(user: User, active: str | None) -> LadderState:
 
 async def note_ladder_analysis(request: Request, db: AsyncSession = Depends(get_db)) -> None:
     """Зависимость эндпоинтов анализа: во время партии лестницы анализ — подсказка."""
-    await ladder.note_analysis(await _optional_user_id(request, db))
+    await ladder.note_analysis(await optional_user_id(request, db))
 
 
 @router.get("", response_model=LadderState)

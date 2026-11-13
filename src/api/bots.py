@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api import deps
-from src.api.fair_play import _optional_user_id, forbid_engine_help_during_game
+from src.api.fair_play import forbid_engine_help_during_game, optional_user_id
 from src.api.personalities import get_owned_personality, personality_config, validate_personality_name
 from src.api.rate_limit import rate_limit
 from src.core.errors import ApiError, DomainValueError, validation_error
@@ -494,7 +494,7 @@ async def get_bot_move(payload: BotMoveRequest, request: Request, db: AsyncSessi
         raise ApiError(404, "bot_not_found", bot_id=payload.bot_id)
 
     board = _playable_board(payload.fen)
-    await ladder_service.note_bot_move_request(await _optional_user_id(request, db), board, payload.bot_id)
+    await ladder_service.note_bot_move_request(await optional_user_id(request, db), board, payload.bot_id)
     result = await asyncio.to_thread(bot.choose_move, payload.fen)
     thinking_time_ms = calculate_authentic_thinking_time_ms(
         bot_id=payload.bot_id,
@@ -534,7 +534,7 @@ async def get_custom_bot_move(
         config = personality_config(await get_owned_personality(db, owner.id, payload.personality_id))
     bot = PersonalityBot(config or BotPersonalityConfig())
     await ladder_service.note_bot_move_request(
-        await _optional_user_id(request, db), board,
+        await optional_user_id(request, db), board,
         ladder_service.opponent_key("custom", None if payload.personality_id is not None else bot.config),
     )
     result = await asyncio.to_thread(bot.choose_move, payload.fen)

@@ -81,6 +81,21 @@ TEMPLATES: dict[tuple[str, str], tuple[str, ...]] = {
     ("advice", "chance_mate"): ("n", "move"),
     ("advice", "chance_capture"): ("piece",),
     ("advice", "quiet"): (),
+    # Подсказка по ступеням (таск 11.4). Ступень 1 — намёк без полей и фигур, ступень 2 — какой фигурой ходить.
+    ("hint", "mate"): ("n",),
+    ("hint", "fork"): (),
+    ("hint", "skewer"): (),
+    ("hint", "pin_absolute"): (),
+    ("hint", "pin_relative"): (),
+    ("hint", "discovered_attack"): (),
+    ("hint", "discovered_check"): (),
+    ("hint", "double_check"): (),
+    ("hint", "mate_threat"): (),
+    ("hint", "trapped"): (),
+    ("hint", "capture"): (),
+    ("hint", "defend"): (),
+    ("hint", "quiet"): (),
+    ("hint", "piece"): ("piece",),
 }
 
 BAD_CLASSIFICATIONS = {"Inaccuracy": "inaccuracy", "Mistake": "mistake", "Blunder": "blunder"}
@@ -288,6 +303,15 @@ def _threat_sentence(board: chess.Board, motif: Motif, seed: str) -> tuple[dict,
 
 # --- комментарий к ходу партии --------------------------------------------------------------------------------
 
+def _idea_of(board_before: chess.Board, move: chess.Move, before_motifs: list[Motif]) -> Motif | None:
+    """Самая сильная тактика, которую создаёт сам ход (не существовавшая до него)."""
+    board_after = board_before.copy(stack=False)
+    board_after.push(move)
+    facts = analyze_move(board_before, move, before_motifs=before_motifs)
+    ideas = [m for m in _first(facts.created, IDEA_PRIORITY) if _caused_by(m, move, board_after)]
+    return ideas[0] if ideas else None
+
+
 def _best_idea(board_before: chess.Board, best: chess.Move, seed: str,
                before_motifs: list[Motif]) -> tuple[list[dict], list[dict], list[dict]]:
     """Предложения про упущенное и про лучший ход, стрелки и подсветка."""
@@ -313,10 +337,8 @@ def _best_idea(board_before: chess.Board, best: chess.Move, seed: str,
             highlights.append({"square": chess.square_name(motif.square), "kind": "target"})
             break
 
-    facts = analyze_move(board_before, best, before_motifs=before_motifs)
-    ideas = [m for m in _first(facts.created, IDEA_PRIORITY) if _caused_by(m, best, board_after)]
-    if ideas:
-        idea = ideas[0]
+    idea = _idea_of(board_before, best, before_motifs)
+    if idea is not None:
         params = _tactic_params(board_after, idea)
         if idea.code == "double_check":
             params = {}
@@ -458,3 +480,52 @@ def advice_for_position(board: chess.Board, best_uci: str | None) -> dict:
     if not sentences:
         sentences.append(_sentence("advice", "quiet", seed))
     return {"comment": sentences, "arrows": arrows, "highlights": highlights}
+
+
+HINT_STEPS = 3
+
+
+def _nudge(board: chess.Board, best: chess.Move | None, motifs: list[Motif], seed: str) -> dict:
+    """Ступень 1: в чём суть позиции, без названия полей и фигур."""
+    mover = board.turn
+    own = [m for m in motifs if m.color == mover]
+    mate = next((m for m in own if m.code == "mate_in"), None)
+    if best is not None:
+        after = board.copy(stack=False)
+        after.push(best)
+        if after.is_checkmate():
+            return _sentence("hint", "mate", seed, n=1)
+        if mate is not None and best.from_square == mate.square:
+            return _sentence("hint", "mate", seed, n=int(mate.value or 1))
+        idea = _idea_of(board, best, motifs)
+        if idea is not None:
+            return _sentence("hint", idea.code, seed)
+        if any(m.code == "hanging" and m.square == best.to_square for m in own):
+            return _sentence("hint", "capture", seed)
+    elif mate is not None:
+        return _sentence("hint", "mate", seed, n=int(mate.value or 1))
+    elif any(m.code == "hanging" for m in own):
+        return _sentence("hint", "capture", seed)
+    if any(m.color != mover and m.code != "mate_in" for m in motifs):
+        return _sentence("hint", "defend", seed)
+    return _sentence("hint", "quiet", seed)
+
+
+def hint_for_position(board: chess.Board, best_uci: str | None, step: int) -> dict:
+    """
+    Подсказка по ступеням: 1 — намёк словами (тема), 2 — какой фигурой ходить (поле подсвечено), 3 — полный совет со
+    стрелкой лучшего хода. Ступени раньше третьей не раскрывают ход. Без лучшего хода (нет движка) вторая ступень
+    невозможна — сразу полный совет по фактам детектора.
+    """
+    step = max(1, min(HINT_STEPS, step))
+    seed = board.fen()
+    best = _legal(board, best_uci)
+    if step == 1:
+        return {"comment": [_nudge(board, best, detect_motifs(board), seed)], "arrows": [], "highlights": []}
+    if step == 2 and best is not None:
+        return {
+            "comment": [_sentence("hint", "piece", seed, piece=piece_label(board, best.from_square))],
+            "arrows": [],
+            "highlights": [{"square": chess.square_name(best.from_square), "kind": "piece"}],
+        }
+    return advice_for_position(board, best_uci)

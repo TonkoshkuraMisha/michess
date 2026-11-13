@@ -4,10 +4,10 @@ import asyncio
 import json
 from contextlib import asynccontextmanager
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.fair_play import forbid_engine_help_during_game
+from src.api.fair_play import forbid_engine_help_during_game, optional_user_id
 from src.api.ladder import note_ladder_analysis
 from src.api.rate_limit import rate_limit
 from src.core.errors import ApiError, DomainValueError
@@ -16,11 +16,15 @@ from src.models.game import Game
 from src.schemas.analysis import (
     AdviceRequest,
     AdviceResponse,
+    DisputeRequest,
     FullGameAnalysisResponse,
+    HintRequest,
+    HintResponse,
     MoveCheckRequest,
     MoveCheckResponse,
     PositionAnalysisRequest,
 )
+from src.services import move_check
 from src.services.analysis_service import (
     GameDataNotFoundError,
     GameNotFinishedError,
@@ -102,6 +106,43 @@ async def get_position_advice(request: AdviceRequest):
         raise exc.to_http(400) from exc
     except EngineBusyError:
         raise _engine_busy() from None
+
+
+@router.post(
+    "/hint",
+    response_model=HintResponse,
+    dependencies=[
+        Depends(rate_limit("analysis_hint", "RATE_LIMIT_ADVICE", "RATE_LIMIT_ADVICE_GUEST")),
+        Depends(forbid_engine_help_during_game),
+        Depends(note_ladder_analysis),
+    ],
+)
+async def graded_hint(request: HintRequest):
+    """
+    Подсказка по ступеням (таск 11.4): 1 — намёк словами, 2 — какой фигурой ходить, 3 — ход со стрелкой и
+    объяснением. Ход раскрывается только на последней ступени. Правила честной игры — как у совета.
+    """
+    try:
+        return await analysis_service.hint(request.fen, request.step)
+    except DomainValueError as exc:
+        raise exc.to_http(400) from exc
+    except EngineBusyError:
+        raise _engine_busy() from None
+
+
+@router.post(
+    "/dispute",
+    status_code=status.HTTP_204_NO_CONTENT,
+    response_class=Response,
+    dependencies=[Depends(rate_limit("analysis_dispute", "RATE_LIMIT_ADVICE", "RATE_LIMIT_ADVICE_GUEST"))],
+)
+async def dispute_coach_warning(payload: DisputeRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    """«Не согласен» с предупреждением наставника: позиция уходит в очередь спорных оценок для проверки."""
+    try:
+        await move_check.record_dispute(payload.fen, payload.move, payload.cp_loss, await optional_user_id(request, db))
+    except DomainValueError as exc:
+        raise exc.to_http(400) from exc
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(

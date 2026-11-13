@@ -9,6 +9,7 @@ import {
 import type {MoveCheck, UseCoachModeResult} from '../hooks/useCoachMode';
 import {CoachPanel} from '../CoachPanel';
 import {CoachArrowsOverlay, squareCenter} from '../CoachArrowsOverlay';
+import {AuxBoard} from '../AuxBoard';
 
 const BLUNDER: MoveCheck = {
     available: true, cp_loss: 280, classification: 'Blunder', symbol: '??', eval_before: 30, eval_after: -250,
@@ -137,17 +138,47 @@ describe('useCoachMode', () => {
         expect(result.current.error).toEqual({key: 'coachMode.unavailable'});
     });
 
-    it('совет считается, партия становится учебной; новая партия — с нуля', async () => {
-        stubFetch({comment: [{key: 'coach.advice.develop.v1'}], arrows: [], highlights: []});
+    it('подсказка идёт по ступеням для одной позиции, новая позиция — снова с первой', async () => {
+        const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+            const {step} = JSON.parse(String(init?.body));
+            return {ok: true, status: 200, json: async () => ({
+                step, final: step === 3, comment: [{key: 'coach.hint.quiet.v1'}], arrows: [], highlights: [],
+            })} as Response;
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        const sentSteps = () => fetchMock.mock.calls.map((call) => JSON.parse(String(call[1]?.body)).step);
         const {result} = renderHook(() => useCoachMode(1500));
-        await act(() => result.current.requestAdvice(before.fen()));
-        expect(result.current.hintsUsed).toBe(1);
+        for (let i = 0; i < 3; i++) await act(() => result.current.requestHint(before.fen()));
+        expect(sentSteps()).toEqual([1, 2, 3]);
+        expect(result.current.hintStep).toBe(3);
+        expect(result.current.hintFinal).toBe(true);
+        expect(result.current.hintsUsed).toBe(3);
         expect(result.current.assisted).toBe(true);
-        expect(result.current.advice?.comment).toHaveLength(1);
+
+        act(() => result.current.clearOverlay());
+        expect(result.current.hintStep).toBe(0);
+        await act(() => result.current.requestHint(after.fen()));
+        expect(sentSteps()[3]).toBe(1);
+
         act(() => result.current.reset());
         expect(result.current.hintsUsed).toBe(0);
         expect(result.current.assisted).toBe(false);
         expect(result.current.advice).toBeNull();
+    });
+
+    it('«Не согласен»: позиция и ход уходят на проверку, ход остаётся, бот не ждёт', async () => {
+        localStorage.setItem(COACH_ENABLED_KEY, '1');
+        const fetchMock = stubFetch(BLUNDER);
+        const {result} = renderHook(() => useCoachMode(1500));
+        act(() => result.current.onPlayerMove(before, before.fen(), 'f2f3', after.fen()));
+        await waitFor(() => expect(result.current.pending?.status).toBe('warning'));
+        act(() => result.current.dispute());
+        expect(result.current.pending).toBeNull();
+        expect(result.current.holdBot).toBe(false);
+        expect(result.current.disputeSent).toBe(true);
+        const [url, init] = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
+        expect(url).toContain('/analysis/dispute');
+        expect(JSON.parse(String(init.body))).toEqual({fen: before.fen(), move: 'f2f3', cp_loss: 280});
     });
 
     it('настройки запоминаются', () => {
@@ -167,7 +198,8 @@ function fakeCoach(overrides: Partial<UseCoachModeResult> = {}): UseCoachModeRes
     return {
         enabled: true, setEnabled: vi.fn(), level: 'amateur', setLevel: vi.fn(), pending: null, holdBot: false,
         explanation: null, showWhy: vi.fn(), keepMove: vi.fn(), takeBack: vi.fn(() => null),
-        advice: null, adviceLoading: false, requestAdvice: vi.fn(async () => {}), hintsUsed: 2, assisted: true,
+        advice: null, adviceLoading: false, requestHint: vi.fn(async () => {}), hintStep: 0, hintFinal: false,
+        hintsUsed: 2, dispute: vi.fn(), disputeSent: false, assisted: true,
         error: null, onPlayerMove: vi.fn(), reset: vi.fn(), clearOverlay: vi.fn(),
         ...overrides,
     };
@@ -194,13 +226,15 @@ describe('CoachPanel', () => {
     });
 
     it('предупреждение: вердикт и три решения', () => {
-        const coach = fakeCoach({pending: {status: 'warning', previousGame: new Chess(), fenAfter: 'x', check: BLUNDER}});
+        const coach = fakeCoach({pending: {status: 'warning', previousGame: new Chess(), fenBefore: 'x', uci: 'f2f3', fenAfter: 'y', check: BLUNDER}});
         const onTakeBack = vi.fn();
         render(<CoachPanel coach={coach} {...props} onTakeBack={onTakeBack}/>);
         expect(screen.getByRole('alert').textContent).toContain('грубая ошибка');
         fireEvent.click(screen.getByTestId('coach-why'));
         fireEvent.click(screen.getByTestId('coach-keep'));
         fireEvent.click(screen.getByTestId('coach-takeback'));
+        fireEvent.click(screen.getByTestId('coach-dispute'));
+        expect(coach.dispute).toHaveBeenCalled();
         expect(coach.showWhy).toHaveBeenCalled();
         expect(coach.keepMove).toHaveBeenCalled();
         expect(onTakeBack).toHaveBeenCalled();
@@ -231,5 +265,77 @@ describe('CoachArrowsOverlay', () => {
         expect(screen.getByTestId('coach-arrow-best')).toBeTruthy();
         rerender(<CoachArrowsOverlay arrows={[]} flipped={false}/>);
         expect(container.querySelector('svg')).toBeNull();
+    });
+});
+
+describe('CoachPanel: ступени подсказки', () => {
+    const props = {locked: false, inBotGame: true, canAdvise: true, onAdvice: vi.fn(), onTakeBack: vi.fn()};
+
+    it('надпись кнопки следует за ступенью, после хода — кнопка неактивна', () => {
+        const {rerender} = render(<CoachPanel coach={fakeCoach()} {...props}/>);
+        expect(screen.getByTestId('coach-advice').textContent).toBe('Подсказка');
+        rerender(<CoachPanel coach={fakeCoach({hintStep: 1})} {...props}/>);
+        expect(screen.getByTestId('coach-advice').textContent).toBe('Какой фигурой?');
+        rerender(<CoachPanel coach={fakeCoach({hintStep: 2})} {...props}/>);
+        expect(screen.getByTestId('coach-advice').textContent).toBe('Показать ход');
+        rerender(<CoachPanel coach={fakeCoach({hintStep: 3, hintFinal: true})} {...props}/>);
+        expect((screen.getByTestId('coach-advice') as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('спор отправлен — благодарность; вспомогательная доска — по кнопке', () => {
+        const onToggleAux = vi.fn();
+        render(
+            <CoachPanel coach={fakeCoach({disputeSent: true})} {...props} auxOpen onToggleAux={onToggleAux}>
+                <div data-testid="aux-child"/>
+            </CoachPanel>,
+        );
+        expect(screen.getByTestId('coach-dispute-sent')).toBeTruthy();
+        expect(screen.getByTestId('aux-child')).toBeTruthy();
+        fireEvent.click(screen.getByTestId('aux-toggle'));
+        expect(onToggleAux).toHaveBeenCalled();
+    });
+});
+
+describe('CoachArrowsOverlay: подсветка', () => {
+    it('рисует подсвеченное поле и без стрелок', () => {
+        render(<CoachArrowsOverlay arrows={[]} highlights={['e5']} flipped={false}/>);
+        expect(screen.getByTestId('coach-highlight-e5')).toBeTruthy();
+    });
+});
+
+describe('AuxBoard', () => {
+    const renderPiece = (piece: { type: string; color: string }) => <span>{`${piece.color}${piece.type}`}</span>;
+    const auxSquare = (square: string) => document.querySelector(`[data-aux-square="${square}"]`) as HTMLElement;
+
+    it('ходы за обе стороны, назад и возврат к позиции партии', () => {
+        const onClose = vi.fn();
+        render(<AuxBoard fen={new Chess().fen()} flipped={false} lightColor="#eee" darkColor="#555"
+                         renderPiece={renderPiece} onClose={onClose}/>);
+        fireEvent.click(auxSquare('e2'));
+        fireEvent.click(auxSquare('e4'));
+        fireEvent.click(auxSquare('e7'));
+        fireEvent.click(auxSquare('e5'));
+        expect(screen.getByTestId('aux-moves').textContent).toBe('e4 e5');
+        expect(auxSquare('e4').textContent).toBe('wp');
+
+        fireEvent.click(screen.getByTestId('aux-undo'));
+        expect(screen.getByTestId('aux-moves').textContent).toBe('e4');
+        fireEvent.click(screen.getByTestId('aux-reset'));
+        expect(screen.queryByTestId('aux-moves')).toBeNull();
+        expect(auxSquare('e2').textContent).toBe('wp');
+
+        fireEvent.click(screen.getByTestId('aux-close'));
+        expect(onClose).toHaveBeenCalled();
+    });
+
+    it('чужой ход не выбирается, a1 — тёмное поле, переворот', () => {
+        render(<AuxBoard fen={new Chess().fen()} flipped lightColor="#eee" darkColor="#555"
+                         renderPiece={renderPiece} onClose={vi.fn()}/>);
+        fireEvent.click(auxSquare('e7'));
+        fireEvent.click(auxSquare('e5'));
+        expect(screen.queryByTestId('aux-moves')).toBeNull();
+        expect(auxSquare('a1').style.backgroundColor).toBe('rgb(85, 85, 85)');
+        const squares = Array.from(document.querySelectorAll('[data-aux-square]')).map((el) => el.getAttribute('data-aux-square'));
+        expect(squares[0]).toBe('h1');
     });
 });

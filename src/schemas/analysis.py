@@ -73,6 +73,27 @@ class AdviceResponse(CoachComment):
     eval_cp: int | None = Field(default=None, description="Оценка с точки зрения белых; None — движок недоступен")
 
 
+class HintRequest(BaseModel):
+    fen: str = Field(..., max_length=100)
+    step: int = Field(1, ge=1, le=3, description="Ступень: 1 — намёк, 2 — фигура, 3 — ход")
+
+
+class HintResponse(BaseModel):
+    fen: str
+    step: int
+    final: bool = Field(description="Последняя ступень: ход показан, дальше подсказывать нечего")
+    best_move_uci: str | None = None
+    comment: list[CoachSentence]
+    arrows: list[CoachArrow] = []
+    highlights: list[CoachHighlight] = []
+
+
+class DisputeRequest(BaseModel):
+    fen: str = Field(..., max_length=100)
+    move: str = Field(..., min_length=4, max_length=5)
+    cp_loss: int | None = Field(default=None, ge=0, le=20000)
+
+
 class MoveCheckRequest(BaseModel):
     fen: str = Field(..., max_length=100, description="Позиция до хода игрока")
     move: str = Field(..., min_length=4, max_length=5, description="Ход игрока в UCI")
