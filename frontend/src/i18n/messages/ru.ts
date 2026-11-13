@@ -541,6 +541,13 @@ export const ru: Messages = {
         },
     },
     viewer: {
+        moments: {
+            title: 'Критические моменты',
+            turning: 'Перелом:',
+            worstWhite: 'Худший ход белых:',
+            worstBlack: 'Худший ход чёрных:',
+            missed: 'Упущенный удар:',
+        },
         phases: {
             opening: 'Дебют',
             middlegame: 'Миттельшпиль',

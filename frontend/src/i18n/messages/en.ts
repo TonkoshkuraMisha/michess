@@ -539,6 +539,13 @@ export const en = {
         },
     },
     viewer: {
+        moments: {
+            title: 'Critical moments',
+            turning: 'Turning point:',
+            worstWhite: 'Worst move by White:',
+            worstBlack: 'Worst move by Black:',
+            missed: 'Missed punishment:',
+        },
         phases: {
             opening: 'Opening',
             middlegame: 'Middlegame',

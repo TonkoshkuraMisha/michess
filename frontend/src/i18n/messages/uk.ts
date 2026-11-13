@@ -541,6 +541,13 @@ export const uk: Messages = {
         },
     },
     viewer: {
+        moments: {
+            title: 'Критичні моменти',
+            turning: 'Перелом:',
+            worstWhite: 'Найгірший хід білих:',
+            worstBlack: 'Найгірший хід чорних:',
+            missed: 'Пропущений удар:',
+        },
         phases: {
             opening: 'Дебют',
             middlegame: 'Мітельшпіль',

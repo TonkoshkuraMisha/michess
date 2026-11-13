@@ -200,6 +200,20 @@ describe('GameViewer', () => {
         expect(screen.queryByTestId('viewer-phases-white')).toBeNull();
     });
 
+    it('критические моменты: перелом, худшие ходы, упущенный удар — щелчок открывает ход', async () => {
+        const summary = {
+            kind: 'decisive_blunder', turning_point_ply: 3, lead_changes: 0, equal_share: 0.5,
+            white: {best_ply: null, worst_ply: 3}, black: {best_ply: 4, worst_ply: null},
+            missed: [{ply: 2, color: 'black', cp: 200}],
+        };
+        stubApi({pgn: {ok: true, text: FOOLS_MATE_PGN}, cached: {ok: true, body: {...ANALYSIS, summary}}});
+        renderViewer();
+        const block = await screen.findByTestId('viewer-moments');
+        expect(block.textContent).toBe('Критические моментыУпущенный удар: 1… e5Перелом: 2. g4');
+        fireEvent.click(screen.getByTestId('moment-3'));
+        expect(screen.getByTestId('moment-3').className).toContain('bg-amber-900/50');
+    });
+
     it('точность по фазам: дебют, миттельшпиль, эндшпиль; фаза без ходов — прочерк', async () => {
         const withPhases = {
             ...ANALYSIS,
