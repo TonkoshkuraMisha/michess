@@ -107,6 +107,14 @@ ERROR_MESSAGES: dict[str, str] = {
     "abort_too_late": "The game can only be aborted before move 2",
     "no_draw_offer": "There is no draw offer to accept",
     "no_rematch_offer": "There is no rematch offer to accept",
+    # --- турниры ---------------------------------------------------------------------------------------
+    "tournament_not_found": "Tournament not found",
+    "tournament_active_exists": "You already have a tournament in progress — finish it first",
+    "tournament_size_invalid": "This format needs {sizes} participants",
+    "tournament_participants_count": "Choose {expected} opponents",
+    "tournament_participant_unknown": "Unknown participant: {participant}",
+    "tournament_participant_duplicate": "A participant is listed twice: {participant}",
+    "tournament_game_closed": "This tournament game is already finished",
 }
 
 
