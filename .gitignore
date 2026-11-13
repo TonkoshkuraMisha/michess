@@ -51,3 +51,6 @@ backups/
 
 # Конфиг MCP, который PyCharm генерирует на каждом хосте (порт свой)
 .mcp.json
+
+# Логи калибровки ботов — данные для пересчёта рейтингов (scripts/calibrate_bots.py --from-log/--reuse-log)
+!scripts/calibration_runs/*.log
