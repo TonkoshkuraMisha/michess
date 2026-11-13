@@ -164,6 +164,8 @@ export interface UseBotGameResult {
     ) => Promise<void>;
     /** Полный выход из партии с ботом (матчмейкинг/вызов/реванш/сброс песочницы). */
     exitBotGame: () => void;
+    /** Архетип текущего (или последнего) соперника из мастерской, если это архетип без изменений. */
+    customArchetypeId: () => string | null;
 }
 
 /**
@@ -491,9 +493,11 @@ export function useBotGame({
         botGameSavedRef.current = false;
     }, [setActiveBot]);
 
+    const customArchetypeId = useCallback(() => customOpponentRef.current?.archetypeId ?? null, []);
+
     return {
         selectedBotId, setSelectedBotId, botComment, isBotThinking, savedBotGameId,
         startHistoricalBotGame, startCustomBotGame, botProfileFor, botNameParam, saveBotGameToDatabase, exitBotGame,
-        isLadderGame, ladderOutcome,
+        isLadderGame, ladderOutcome, customArchetypeId,
     };
 }
