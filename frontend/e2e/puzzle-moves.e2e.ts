@@ -122,3 +122,33 @@ test('защита: «Что грозит?» — угроза, затем защ
     await expect(page.getByTestId('defense-outcome')).toBeVisible({timeout: 10_000});
     await page.screenshot({path: 'test-results/defense.png'});
 });
+
+test('упражнения-генераторы: «взять незащищённую» перетаскиванием и мат в 1 щелчками', async ({page, request}) => {
+    await login(page, request, 'drl');
+    await page.goto('/puzzles');
+    await page.getByTestId('puzzle-mode-drills').click();
+
+    const capture = page.waitForResponse((r) => r.url().includes('/drills/next'));
+    await page.getByTestId('drill-next').click();
+    const first = await (await capture).json();
+    const game = new Chess(first.fen);
+    const enemy = game.turn() === 'w' ? 'b' : 'w';
+    const take = game.moves({verbose: true}).find((m) => m.captured && m.captured !== 'k'
+        && !game.isAttacked(m.to, enemy))!;
+    await page.locator(`[data-testid="puzzle-board"] [data-square="${take.from}"]`)
+        .dragTo(page.locator(`[data-testid="puzzle-board"] [data-square="${take.to}"]`));
+    await expect(page.getByTestId('drill-outcome')).toHaveText('Верно!', {timeout: 10_000});
+
+    await page.getByTestId('drill-kind-mate1').click();
+    const mate = page.waitForResponse((r) => r.url().includes('/drills/next'));
+    await page.getByTestId('drill-next').click();
+    const second = await (await mate).json();
+    const board = new Chess(second.fen);
+    const mating = board.moves({verbose: true}).find((m) => m.san.endsWith('#'))!;
+    await page.locator(`[data-testid="puzzle-board"] [data-square="${mating.from}"]`).click();
+    await page.locator(`[data-testid="puzzle-board"] [data-square="${mating.to}"]`).click();
+    const dialog = page.getByRole('dialog');
+    if (await dialog.isVisible().catch(() => false)) await page.getByTestId(`puzzle-promote-${mating.promotion ?? 'q'}`).click();
+    await expect(page.getByTestId('drill-outcome')).toHaveText('Верно!', {timeout: 10_000});
+    await page.screenshot({path: 'test-results/drills.png'});
+});

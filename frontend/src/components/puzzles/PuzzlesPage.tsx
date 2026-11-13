@@ -1,5 +1,6 @@
 // --- FILE: frontend/src/components/puzzles/PuzzlesPage.tsx ---
 // Режим «Приёмы» (таск 13.4) — TrainingPanel: путь по теме реестра со ступенями и смешанные подборки.
+// Режим «Упражнения» (таск 13.7) — GeneratedDrills: позиции-генераторы «вид × фигура», уровни, «на минуту».
 // Режим «Защита» (таск 13.6) — DefenseTrainer: «Что грозит?», «Не зевни», «Единственная защита».
 // Режим «Мои ошибки» (таск 13.5) — позиции перед ошибками в партиях игрока с повторением через интервалы.
 // Страница задач (таск 13.3): решение по рейтингу или теме, задача дня, режим на время (3/5 минут, три ошибки —
@@ -14,6 +15,7 @@ import {renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
 import {UiError} from '../../services/apiErrors';
 import {DEFENSE_DRILL_THEMES, puzzlesApi} from '../../services/puzzles';
+import type {DrillKind} from '../../services/puzzles';
 import type {
     DefenseKind, HintResponse, PersonalAnswer, PersonalSummary, PersonalView, PuzzleProfile, PuzzleResult, PuzzleView,
     TimedResult, TimedRun, TrainingTarget,
@@ -21,12 +23,13 @@ import type {
 import {fetchThemeRegistry, themeText} from '../../services/themes';
 import type {ThemeRegistry, ThemeSection} from '../../services/themes';
 import {DefenseTrainer} from './DefenseTrainer';
+import {GeneratedDrills} from './GeneratedDrills';
 import {PuzzleBoard} from './PuzzleBoard';
 import {solutionSan, toMove} from './puzzleNotation';
 import {TrainingPanel} from './TrainingPanel';
 
-type Mode = 'rated' | 'themes' | 'defense' | 'personal' | 'daily' | 'timed';
-const MODES: Mode[] = ['rated', 'themes', 'defense', 'personal', 'daily', 'timed'];
+type Mode = 'rated' | 'themes' | 'defense' | 'drills' | 'personal' | 'daily' | 'timed';
+const MODES: Mode[] = ['rated', 'themes', 'defense', 'drills', 'personal', 'daily', 'timed'];
 type Phase = 'idle' | 'loading' | 'opponent' | 'solving' | 'waiting' | 'done';
 
 const OPPONENT_DELAY_MS = 500;
@@ -85,6 +88,7 @@ export default function PuzzlesPage() {
     const [personalSummary, setPersonalSummary] = useState<PersonalSummary | null>(null);
     const [trainingKey, setTrainingKey] = useState(0);
     const [defenseKind, setDefenseKind] = useState<DefenseKind>('threat');
+    const [drillKind, setDrillKind] = useState<DrillKind>('capture');
     const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
     const gameRef = useRef(new Chess());
 
@@ -312,8 +316,8 @@ export default function PuzzlesPage() {
         setTarget(null);
         setPersonal(null);
         if (next !== 'personal') setPersonalSummary(null);
-        if (next !== 'timed' && next !== 'themes' && next !== 'defense') void load(next);
-        if (next === 'themes' || next === 'defense') setPhase('idle');
+        if (next !== 'timed' && next !== 'themes' && next !== 'defense' && next !== 'drills') void load(next);
+        if (next === 'themes' || next === 'defense' || next === 'drills') setPhase('idle');
     };
 
     const startTraining = (next: TrainingTarget) => {
@@ -350,7 +354,7 @@ export default function PuzzlesPage() {
                     {t('puzzles.profile', {rating: profile.rating, games: profile.games, streak: profile.streak})}
                 </p>
             )}
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-1 font-bold text-xs" role="tablist">
+            <div className="grid grid-cols-4 gap-1 font-bold text-xs" role="tablist">
                 {MODES.map((m) => (
                     <button key={m} type="button" role="tab" aria-selected={mode === m} data-testid={`puzzle-mode-${m}`}
                             onClick={() => chooseMode(m)}
@@ -364,6 +368,10 @@ export default function PuzzlesPage() {
             </div>
         </>
     );
+
+    if (mode === 'drills') {
+        return <GeneratedDrills key={drillKind} header={header} initialKind={drillKind}/>;
+    }
 
     if (mode === 'defense') {
         return (
@@ -563,7 +571,11 @@ export default function PuzzlesPage() {
 
                 {mode === 'themes' && !target && (
                     <section className="bg-acacia-dark p-3 rounded-md border border-amber-700/40">
-                        <TrainingPanel onTrain={startTraining} refreshKey={trainingKey}/>
+                        <TrainingPanel onTrain={startTraining} refreshKey={trainingKey}
+                                       onDrill={(kind) => {
+                                           setDrillKind(kind);
+                                           setMode('drills');
+                                       }}/>
                     </section>
                 )}
 

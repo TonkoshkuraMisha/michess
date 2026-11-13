@@ -64,6 +64,7 @@ ERROR_MESSAGES: dict[str, str] = {
     "drill_wrong_step": "This step of the exercise is already done",
     "invalid_square": "Invalid square: {square}",
     "drill_not_a_choice": "Choose one of the three offered moves",
+    "unknown_drill": "Unknown exercise: {drill}",
     "illegal_history_move": "Illegal move in the history: {move}",
     "empty_moves": "The move list is empty",
     "invalid_player_color": "Invalid player color",

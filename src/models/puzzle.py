@@ -123,6 +123,17 @@ class DefenseDrill(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
+class DrillRecord(Base):
+    """Личный рекорд забега на минуту в упражнениях-генераторах (таск 13.7): сочетание «вид.фигура.уровень»."""
+    __tablename__ = "drill_records"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    combo: Mapped[str] = mapped_column(String(30), primary_key=True)
+    best: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(),
+                                                 onupdate=func.now(), nullable=False)
+
+
 class PuzzleAttempt(Base):
     __tablename__ = "puzzle_attempts"
 
