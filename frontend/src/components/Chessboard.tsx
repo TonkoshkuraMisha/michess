@@ -35,6 +35,7 @@ import {useBotGame} from './chessboard/hooks/useBotGame';
 import {useCoachMode} from './chessboard/hooks/useCoachMode';
 import {CoachPanel} from './chessboard/CoachPanel';
 import {CoachArrowsOverlay} from './chessboard/CoachArrowsOverlay';
+import {AnnotationsOverlay, useBoardAnnotations} from './chessboard/annotations';
 import {coachArrows, coachHighlights} from '../services/coach';
 import {AuxBoard} from './chessboard/AuxBoard';
 import {XrayOverlay} from './xray/XrayOverlay';
@@ -941,6 +942,9 @@ export default function Chessboard() {
         return tg;
     })();
     const boardState = currentGame.board();
+    // Пометки игрока правой кнопкой (таск B.1); снимаются при смене позиции. Пока стоит предход или выбрана фигура,
+    // правая кнопка их отменяет (onContextMenu ниже) и стрелку не рисует.
+    const annotations = useBoardAnnotations(currentGame.fen(), !(premove || pendingPromotion || selectedSquare));
     const xrayAvailable = Boolean(spectatingGameId) || (!gameId && (!activeBot || (coach.enabled && !isRatedBotGame)));
     // «Своя» сторона: в партии с ботом — цвет игрока, на свободной доске и у зрителя — сторона, которая ходит.
     const xraySide: 'w' | 'b' = activeBot && !spectatingGameId ? (myColor === 'white' ? 'w' : 'b') : currentGame.turn();
@@ -1359,6 +1363,8 @@ export default function Chessboard() {
                 {/* ШАХМАТНАЯ ДОСКА С ПОДДЕРЖКОЙ TOUCH / POINTER EVENTS */}
                 <div
                     ref={boardContainerRef}
+                    onPointerDown={annotations.handlers.onPointerDown}
+                    onPointerUp={annotations.handlers.onPointerUp}
                     onContextMenu={(e) => {
                         e.preventDefault();
                         if (premove || pendingPromotion || selectedSquare) {
@@ -1404,6 +1410,8 @@ export default function Chessboard() {
                                                 highlights={[...coachHighlights(coach.explanation ?? coach.advice)]}
                                                 flipped={isBoardFlipped} idPrefix="play-coach"/>
                         )}
+                        <AnnotationsOverlay arrows={annotations.arrows} squares={annotations.squares}
+                                            flipped={isBoardFlipped} idPrefix="play-notes"/>
                         {displayedRanks.map((rank) =>
                             displayedFiles.map((file) => {
                                 const rIdx = RANKS.indexOf(rank);

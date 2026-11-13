@@ -12,6 +12,7 @@ import type {PointerEvent as ReactPointerEvent} from 'react';
 import {Chess} from 'chess.js';
 import {useI18n} from '../../i18n';
 import {resolveMoveSound, soundEngine} from '../../services/soundEngine';
+import {AnnotationsOverlay, useBoardAnnotations} from '../chessboard/annotations';
 import {
     BOARD_THEMES, getHarmoniousPieceStyle, getPieceSvgUrl, getSavedBoardThemeKey, getSavedPieceSetKey,
 } from '../../config/boardAppearance';
@@ -201,9 +202,13 @@ export function PuzzleBoard({
     useEffect(() => setDrag(null), [fen, interactive]);
 
     const dragged = drag?.moved ? game.get(drag.from as never) : null;
+    // Пометки решающего правой кнопкой (таск B.1): расчёт вариантов в задаче; новая позиция их снимает.
+    const notes = useBoardAnnotations(fen);
 
     return (
-        <div className="relative w-full aspect-square select-none touch-none" data-testid="puzzle-board">
+        <div className="relative w-full aspect-square select-none touch-none" data-testid="puzzle-board"
+             onPointerDown={notes.handlers.onPointerDown} onPointerUp={notes.handlers.onPointerUp}
+             onContextMenu={(event) => event.preventDefault()}>
             <div className="grid grid-cols-8 grid-rows-8 w-full h-full border border-black/60 rounded-[2px] overflow-hidden">
                 {ranks.map((rank) => files.map((file) => {
                     const square = `${file}${rank}`;
@@ -279,6 +284,8 @@ export function PuzzleBoard({
                      className="fixed w-[12%] max-w-[90px] aspect-square object-contain pointer-events-none z-50 -translate-x-1/2 -translate-y-1/2"
                      style={{left: drag.x, top: drag.y, ...getHarmoniousPieceStyle(pieceSet, themeKey, dragged.color)}}/>
             )}
+            <AnnotationsOverlay arrows={notes.arrows} squares={notes.squares} flipped={orientation === 'black'}
+                                idPrefix="puzzle-notes"/>
             {promotion && (
                 <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-30" role="dialog"
                      aria-label={t('puzzles.promotion')}>
