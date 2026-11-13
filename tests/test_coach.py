@@ -100,7 +100,8 @@ MATE_IN_ONE = "r1bqkb1r/pppp1ppp/2n2n2/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR w KQkq - 4
 
 def test_blunder_names_the_lost_piece_confirmed_by_the_reply():
     coach = comment_for_move(chess.Board(ITALIAN), _move("c4f7"), "e1g1", "e8f7", "Blunder")
-    assert _keys(coach) == ["coach.verdict.blunder", "coach.threat.hanging", "coach.best.generic"]
+    # Лучший ход — рокировка: наставник называет её идею, а не просто «сильнее было» (таск B.4).
+    assert _keys(coach) == ["coach.verdict.blunder", "coach.threat.hanging", "coach.best.pos_castle"]
     assert coach["comment"][1]["params"] == {"piece": "♗f7"}
     assert {"from": "e1", "to": "g1", "kind": "best"} in coach["arrows"]
 
