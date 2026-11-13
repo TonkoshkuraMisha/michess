@@ -20,7 +20,7 @@ import logging
 import time
 
 from src.core.config import settings
-from src.worker.tasks import analyze_game_task
+from src.worker.tasks import analyze_game_task, simulate_tournament_game_task
 
 logger = logging.getLogger(__name__)
 
@@ -66,3 +66,38 @@ def schedule_game_analysis_in_background(game_id: int) -> asyncio.Task:
 def reset_broker_cooldown() -> None:
     global _broker_down_until
     _broker_down_until = 0.0
+
+
+def _publish_simulation(tournament_game_id: int) -> None:
+    simulate_tournament_game_task.apply_async(args=(tournament_game_id,), retry=False)
+
+
+async def schedule_tournament_simulations(tournament_game_ids: list[int]) -> int:
+    """
+    Ставит партии ботов между собой в очередь (таск 15.2). Возвращает число опубликованных. При недоступном брокере
+    партии не теряются: они остаются без результата, и следующий запрос состояния турнира поставит их снова.
+    """
+    global _broker_down_until
+
+    published = 0
+    for game_id in tournament_game_ids:
+        if time.monotonic() < _broker_down_until:
+            break
+        try:
+            await asyncio.wait_for(
+                asyncio.to_thread(_publish_simulation, game_id), timeout=settings.CELERY_PUBLISH_TIMEOUT_S,
+            )
+            published += 1
+        except Exception as exc:
+            _broker_down_until = time.monotonic() + settings.CELERY_BROKER_COOLDOWN_S
+            logger.error("Could not schedule tournament game %s (%s)", game_id, exc.__class__.__name__)
+    return published
+
+
+def schedule_tournament_simulations_in_background(tournament_game_ids: list[int]) -> asyncio.Task | None:
+    if not tournament_game_ids:
+        return None
+    task = asyncio.create_task(schedule_tournament_simulations(tournament_game_ids))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task

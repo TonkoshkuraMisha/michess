@@ -302,6 +302,15 @@ def service_sessions_use_test_db(monkeypatch):
     monkeypatch.setattr("src.services.matchmaker.AsyncSessionLocal", TestSessionLocal)
 
 
+_PUBLISHED_SIMULATIONS: list[int] = []
+
+
+@pytest.fixture
+def published_simulations() -> list[int]:
+    """id партий турниров, поставленных на симуляцию в этом тесте."""
+    return _PUBLISHED_SIMULATIONS
+
+
 @pytest.fixture(autouse=True)
 def no_celery_publish(monkeypatch):
     """Тесты не публикуют задачи в брокер: список опубликованных id партий — для проверок."""
@@ -309,6 +318,9 @@ def no_celery_publish(monkeypatch):
 
     published: list[int] = []
     monkeypatch.setattr(task_dispatch, "_publish_analysis", published.append)
+    # Партии турниров (таск 15.2) — отдельный список: published_simulations.
+    monkeypatch.setattr(task_dispatch, "_publish_simulation", _PUBLISHED_SIMULATIONS.append)
+    _PUBLISHED_SIMULATIONS.clear()
     task_dispatch.reset_broker_cooldown()
     yield published
     task_dispatch.reset_broker_cooldown()

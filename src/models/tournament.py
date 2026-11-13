@@ -75,4 +75,6 @@ class TournamentGame(Base):
     # 1-0 | 0-1 | 1/2-1/2; пусто — партия ещё не сыграна.
     result: Mapped[str | None] = mapped_column(String(8), nullable=True)
     game_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("games.id", ondelete="SET NULL"), nullable=True)
+    # Партию ботов между собой забрал воркер (таск 15.2): защищает от двойного счёта одной партии.
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

@@ -4,6 +4,7 @@
 сюда не присылаются — их приносят сохранение партии игрока (15.3) и симуляция партий ботов (15.2).
 """
 
+from datetime import UTC, datetime
 from typing import Literal
 
 from fastapi import APIRouter, Depends, status
@@ -18,6 +19,8 @@ from src.models.tournament import Tournament, TournamentGame, TournamentPlayer
 from src.models.user import User
 from src.services import tournament_rules as rules
 from src.services import tournaments as service
+from src.services.task_dispatch import schedule_tournament_simulations_in_background
+from src.services.tournament_simulation import CLAIM_TIMEOUT
 
 router = APIRouter()
 
@@ -145,6 +148,7 @@ async def create_tournament(
         )
     except DomainError as exc:
         raise exc.to_http(status.HTTP_409_CONFLICT if exc.code in _CONFLICTS else status.HTTP_400_BAD_REQUEST) from None
+    await _schedule_bot_games(db, tournament)
     return await view(db, tournament, user)
 
 
@@ -165,5 +169,17 @@ async def list_tournaments(db: AsyncSession = Depends(get_db), user: User = Depe
 
 @router.get("/{tournament_id}", response_model=TournamentOut)
 async def get_tournament(tournament_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    return await view(db, await owned(db, tournament_id, user), user)
+    tournament = await owned(db, tournament_id, user)
+    # Партии ботов, которые никто не считает (брокер был недоступен, воркер упал), ставятся снова.
+    await _schedule_bot_games(db, tournament)
+    return await view(db, tournament, user)
+
+
+async def _schedule_bot_games(db: AsyncSession, tournament: Tournament) -> None:
+    stale = datetime.now(UTC) - CLAIM_TIMEOUT
+    ids = [
+        g.id for g in await service.simulatable_games(db, tournament)
+        if g.started_at is None or g.started_at.replace(tzinfo=g.started_at.tzinfo or UTC) < stale
+    ]
+    schedule_tournament_simulations_in_background(ids)
 

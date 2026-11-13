@@ -357,6 +357,7 @@ def _archive_conditions(user_id: int) -> list:
         Game.status == GameStatus.COMPLETED,
         Game.pgn.is_not(None),
         Game.pgn != "",
+        Game.is_simulation.is_(False),  # партии ботов в турнирах — не в архиве и статистике
     ]
 
 
