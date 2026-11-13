@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from src.core.config import settings
-from src.services import personal_puzzles
+from src.services import personal_puzzles, tournament_simulation
 from src.services.analysis_service import analysis_service
 from src.services.engine_pool import EngineBusyError
 
@@ -65,3 +65,27 @@ def analyze_game_task(self, game_id: int):
     except Exception:
         logger.exception("Background analysis task failed for game %s", game_id)
         return {"game_id": game_id, "status": "error"}
+
+
+async def _simulate_tournament_game_async(tournament_game_id: int) -> list[int]:
+    engine = create_async_engine(_task_database_url(), poolclass=NullPool)
+    try:
+        session_factory = async_sessionmaker(engine, expire_on_commit=False)
+        async with session_factory() as db:
+            return await tournament_simulation.simulate(db, tournament_game_id)
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="simulate_tournament_game", bind=True, max_retries=5, ignore_result=True)
+def simulate_tournament_game_task(self, tournament_game_id: int):
+    """Партия ботов между собой в турнире (таск 15.2); следующие партии тура ставятся в очередь здесь же."""
+    try:
+        follow_up = asyncio.run(_simulate_tournament_game_async(tournament_game_id))
+    except EngineBusyError as exc:
+        raise self.retry(exc=exc, countdown=ENGINE_BUSY_RETRY_S) from exc
+    except Exception:
+        logger.exception("Tournament game simulation failed for %s", tournament_game_id)
+        return
+    for game_id in follow_up:
+        simulate_tournament_game_task.apply_async(args=(game_id,), retry=False)

@@ -184,7 +184,11 @@ async def _finish(tournament: Tournament) -> None:
 
 async def _advance_round_robin(db: AsyncSession, tournament: Tournament) -> None:
     games = await games_of(db, tournament.id)
+    if any(g.result is None for g in games if g.round == tournament.current_round):
+        return
     if any(g.result is None for g in games):
+        # Тур закрыт — открывается следующий (его партии ботов между собой можно считать).
+        tournament.current_round += 1
         return
     players = await players_of(db, tournament.id)
     table = rules.round_robin_standings([p.seat for p in players], [_record(g) for g in games])
@@ -233,3 +237,15 @@ async def _advance_knockout(db: AsyncSession, tournament: Tournament) -> None:
     tournament.current_round += 1
     for board, (high, low) in enumerate(rules.knockout_next_round(winners), 1):
         _add_game(db, tournament, tournament.current_round, board, rules.match_game(high, low, "main"))
+
+
+async def simulatable_games(db: AsyncSession, tournament: Tournament) -> list[TournamentGame]:
+    """Партии текущего круга без результата, где оба участника — боты: их играет сервер (таск 15.2)."""
+    if tournament.status != "active":
+        return []
+    humans = {p.seat for p in await players_of(db, tournament.id) if p.kind == "user"}
+    return [
+        g for g in await games_of(db, tournament.id)
+        if g.round == tournament.current_round and g.result is None
+        and g.white_seat not in humans and g.black_seat not in humans
+    ]
