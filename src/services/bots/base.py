@@ -5,6 +5,7 @@ import logging
 import os
 import random
 import shutil
+from dataclasses import dataclass
 from pathlib import Path
 
 import chess
@@ -211,14 +212,14 @@ def analyse_with_stockfish(
         return {}
 
     scores: dict[chess.Move, float] = {}
-    options: dict[str, int | bool] = {"Skill Level": skill_level}
-    if uci_elo is not None:
-        options["UCI_LimitStrength"] = True
-        options["UCI_Elo"] = uci_elo
+    # Анализ — на полной силе. UCI_LimitStrength/UCI_Elo/Skill Level в Stockfish ослабляют только выбор хода
+    # в play(), а оценки analyse() не меняют (проверено калибровкой 13.11, таск 10.5): сила бота задаётся
+    # опорным ходом strength_reference_move, а не опциями анализа. skill_level и uci_elo оставлены в
+    # сигнатуре для совместимости вызовов.
+    del skill_level, uci_elo
 
     try:
-        # Пул сам приводит UCI_Elo / Skill Level к допустимому диапазону движка.
-        with get_engine_pool(engine_path).acquire(options) as engine:
+        with get_engine_pool(engine_path).acquire({}) as engine:
             infos = engine.analyse(
                 board,
                 chess.engine.Limit(depth=depth, time=time_limit),
@@ -238,6 +239,53 @@ def analyse_with_stockfish(
         return {}
 
     return scores
+
+
+def strength_reference_move(
+        board: chess.Board, engine_path: str | None, uci_elo: int | None, time_limit: float,
+) -> chess.Move | None:
+    """
+    Ход, который сыграл бы Stockfish с ограничением силы UCI_Elo (таск 10.5) — эталон силы бота: его ослабление
+    откалибровано самим движком. None — без движка или без ограничения силы.
+    """
+    if uci_elo is None or not engine_path or not os.path.exists(engine_path):
+        return None
+    try:
+        # Пул сам приводит UCI_Elo к допустимому диапазону движка (у Stockfish — от 1320).
+        with get_engine_pool(engine_path).acquire({"UCI_LimitStrength": True, "UCI_Elo": uci_elo}) as engine:
+            return engine.play(board, chess.engine.Limit(time=time_limit)).move
+    except Exception as exc:
+        logger.warning("Stockfish reference move failed (%s): %s", engine_path, exc)
+        return None
+
+
+def score_move(board: chess.Board, engine_path: str, move: chess.Move, depth: int, time_limit: float) -> float | None:
+    """Оценка одного хода на полной силе (для опорного хода, не попавшего в MultiPV)."""
+    try:
+        with get_engine_pool(engine_path).acquire({}) as engine:
+            info = engine.analyse(board, chess.engine.Limit(depth=depth, time=time_limit), root_moves=[move])
+            cp = info["score"].pov(board.turn).score(mate_score=100000)
+            return float(cp) if cp is not None else None
+    except Exception as exc:
+        logger.warning("Stockfish move scoring failed (%s): %s", engine_path, exc)
+        return None
+
+
+@dataclass
+class Candidates:
+    """Кандидаты хода: оценки (сп за ходящую сторону), опорный ход силы, был ли движок и путь к нему."""
+
+    scores: dict[chess.Move, float]
+    reference: chess.Move | None
+    used_engine: bool
+    engine_path: str | None
+
+
+# Окно выбора вокруг опорного хода силы: стиль может уступить опорному ходу до половины blunder_guard_cp, но
+# превзойти его — не больше чем на STRENGTH_UPSIDE_CP. Симметричное окно (калибровка 13.11) давало агрессивным
+# персоналиям с широким окном +300…+400 к заявленной силе: стиль «исправлял» слабый опорный ход.
+STRENGTH_BAND_SHARE = 0.5
+STRENGTH_UPSIDE_CP = 20.0
 
 
 class HistoricalBot:
@@ -312,8 +360,8 @@ class HistoricalBot:
         idx = random.choices(range(len(moves)), weights=weights, k=1)[0]
         return moves[idx], self._book_note(comments[idx])
 
-    def _candidate_scores(self, board: chess.Board) -> tuple[dict[chess.Move, float], bool, str | None]:
-        """Оценки кандидатов (сантипешки за ходящую сторону), был ли это движок, и путь к нему."""
+    def _candidate_scores(self, board: chess.Board) -> Candidates:
+        """Кандидаты MultiPV на полной силе и опорный ход силы (ход Stockfish с ограничением UCI_Elo)."""
         engine_path = self._get_active_engine_path() if self.stockfish_path is not None else None
         scores = analyse_with_stockfish(
             board=board,
@@ -324,19 +372,37 @@ class HistoricalBot:
             time_limit=self.time_limit,
             multipv=self.multipv,
         )
-        if scores:
-            return scores, True, engine_path
-        return fallback_scores(board), False, engine_path
+        if not scores:
+            return Candidates(fallback_scores(board), None, False, engine_path)
+        reference = strength_reference_move(board, engine_path, self.uci_elo, self.time_limit)
+        if reference is not None and reference not in scores and engine_path:
+            value = score_move(board, engine_path, reference, self.search_depth, self.time_limit)
+            if value is None:
+                reference = None
+            else:
+                scores[reference] = value
+        return Candidates(scores, reference, True, engine_path)
+
+    def _window(self, scores: dict[chess.Move, float], reference: chess.Move | None) -> dict[chess.Move, float]:
+        """
+        Ходы, среди которых выбирает стиль. С опорным ходом — не сильнее его больше чем на STRENGTH_UPSIDE_CP и не
+        слабее больше чем на половину blunder_guard_cp: бот не сильнее заявленной силы. Без опорного хода (нет движка)
+        — окно от лучшего хода.
+        """
+        if reference is not None and reference in scores:
+            ref = scores[reference]
+            band = self.blunder_guard_cp * STRENGTH_BAND_SHARE
+            window = {mv: cp for mv, cp in scores.items() if ref - band <= cp <= ref + STRENGTH_UPSIDE_CP}
+            window[reference] = ref
+            return window
+        best = max(scores.values())
+        return {mv: cp for mv, cp in scores.items() if cp >= best - self.blunder_guard_cp} or scores
 
     def _select_move(
-            self, board: chess.Board, scores: dict[chess.Move, float],
+            self, board: chess.Board, scores: dict[chess.Move, float], reference: chess.Move | None = None,
     ) -> tuple[chess.Move, str | None]:
-        """Лучший по сумме «оценка + стиль + разброс» среди кандидатов в окне blunder_guard_cp."""
-        max_tactical_cp = max(scores.values())
-        candidate_scores = {
-            mv: cp for mv, cp in scores.items()
-            if cp >= max_tactical_cp - self.blunder_guard_cp
-        } or scores
+        """Лучший по сумме «оценка + стиль + разброс» среди ходов окна силы (см. _window)."""
+        candidate_scores = self._window(scores, reference)
 
         best_move = None
         best_total_score = -float("inf")
@@ -380,8 +446,9 @@ class HistoricalBot:
         _simulate_human_thinking_time(board, is_book_move=False)
 
         # 2. Кандидаты движка (или статического анализатора), 3. выбор по стилю
-        scores, used_stockfish, engine_path = self._candidate_scores(board)
-        best_move, note = self._select_move(board, scores)
+        candidates = self._candidate_scores(board)
+        used_stockfish, engine_path = candidates.used_engine, candidates.engine_path
+        best_move, note = self._select_move(board, candidates.scores, candidates.reference)
         comment = self._comment_for(board, best_move, note)
 
         san = board.san(best_move)

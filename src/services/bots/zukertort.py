@@ -70,7 +70,7 @@ class ZukertortBot(HistoricalBot):
     opening_book = ZUKERTORT_OPENING_BOOK
     style = ZUKERTORT_STYLE
     default_skill_level = 8
-    default_uci_elo = 1840
+    default_uci_elo = 2120
 
 
 zukertort_bot = ZukertortBot()

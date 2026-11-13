@@ -1,7 +1,7 @@
 {
   "meta": {
     "date": "2026-11-13",
-    "games": 452,
+    "games": 328,
     "anchors": [
       1350,
       1600,
@@ -9,128 +9,128 @@
       2100,
       2400
     ],
-    "anchor_movetime_s": 1.0,
-    "minutes": 52.3,
+    "anchor_movetime_s": 0.5,
+    "minutes": 61.6,
     "scale": "Stockfish UCI_Elo anchors at our time control (not FIDE)"
   },
   "players": {
     "archetype:quiet": {
-      "rating": 1287,
-      "games": 36,
-      "score": 9.5,
-      "ci95": 169,
+      "rating": 737,
+      "games": 24,
+      "score": 3.5,
+      "ci95": 340,
       "declared": 900
     },
     "archetype:strategist": {
-      "rating": 2167,
-      "games": 44,
-      "score": 26.5,
-      "ci95": 113,
+      "rating": 1762,
+      "games": 28,
+      "score": 12.5,
+      "ci95": 145,
       "declared": 1800
     },
     "philidor": {
-      "rating": 2272,
-      "games": 44,
-      "score": 30.0,
-      "ci95": 119,
+      "rating": 1905,
+      "games": 28,
+      "score": 15.5,
+      "ci95": 144,
       "declared": 1850
     },
     "zukertort": {
-      "rating": 2376,
-      "games": 44,
-      "score": 22.0,
-      "ci95": 111,
+      "rating": 2125,
+      "games": 28,
+      "score": 12.0,
+      "ci95": 142,
       "declared": 2120
     },
     "labourdonnais": {
-      "rating": 2220,
-      "games": 44,
-      "score": 24.5,
-      "ci95": 114,
+      "rating": 1927,
+      "games": 28,
+      "score": 15.0,
+      "ci95": 141,
       "declared": 1950
     },
     "archetype:combinator": {
-      "rating": 2457,
-      "games": 28,
-      "score": 19.5,
-      "ci95": 147,
+      "rating": 2264,
+      "games": 20,
+      "score": 13.0,
+      "ci95": 175,
       "declared": 2200
     },
     "archetype:rusher": {
-      "rating": 1117,
-      "games": 28,
-      "score": 4.0,
-      "ci95": 204,
+      "rating": 471,
+      "games": 20,
+      "score": 0.5,
+      "ci95": 419,
       "declared": 700
     },
     "anderssen": {
-      "rating": 2458,
-      "games": 44,
-      "score": 29.5,
-      "ci95": 115,
+      "rating": 2145,
+      "games": 28,
+      "score": 14.5,
+      "ci95": 143,
       "declared": 2100
     },
     "archetype:centralist": {
-      "rating": 1954,
-      "games": 44,
-      "score": 27.0,
-      "ci95": 119,
+      "rating": 1493,
+      "games": 28,
+      "score": 13.0,
+      "ci95": 147,
       "declared": 1400
     },
     "archetype:fortress": {
-      "rating": 2082,
-      "games": 44,
-      "score": 30.0,
-      "ci95": 120,
+      "rating": 1563,
+      "games": 28,
+      "score": 13.0,
+      "ci95": 144,
       "declared": 1550
     },
     "archetype:hunter": {
-      "rating": 2262,
-      "games": 44,
-      "score": 22.0,
-      "ci95": 121,
+      "rating": 1947,
+      "games": 28,
+      "score": 12.0,
+      "ci95": 149,
       "declared": 2000
     },
     "paulsen": {
-      "rating": 2472,
-      "games": 44,
-      "score": 31.0,
-      "ci95": 117,
+      "rating": 2286,
+      "games": 28,
+      "score": 20.5,
+      "ci95": 156,
       "declared": 2080
     },
     "archetype:pawn_keeper": {
-      "rating": 1694,
-      "games": 44,
-      "score": 26.0,
-      "ci95": 143,
+      "rating": 1251,
+      "games": 28,
+      "score": 12.0,
+      "ci95": 191,
       "declared": 1100
     },
     "archetype:adventurer": {
-      "rating": 2055,
-      "games": 44,
-      "score": 24.5,
-      "ci95": 120,
+      "rating": 1707,
+      "games": 28,
+      "score": 16.0,
+      "ci95": 146,
       "declared": 1650
     },
     "staunton": {
-      "rating": 2354,
-      "games": 44,
-      "score": 29.5,
-      "ci95": 119,
+      "rating": 2085,
+      "games": 28,
+      "score": 18.5,
+      "ci95": 152,
       "declared": 2000
     },
     "morphy": {
-      "rating": 2411,
-      "games": 36,
-      "score": 21.0,
-      "ci95": 124,
+      "rating": 2200,
+      "games": 24,
+      "score": 13.5,
+      "ci95": 153,
       "declared": 2150
     },
     "archetype:cavalier": {
-      "rating": 1904,
-      "games": 44,
-      "score": 29.5,
-      "ci95": 131,
+      "rating": 1398,
+      "games": 28,
+      "score": 13.0,
+      "ci95": 158,
       "declared": 1250
     }
   }

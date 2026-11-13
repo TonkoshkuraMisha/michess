@@ -302,6 +302,17 @@ def service_sessions_use_test_db(monkeypatch):
     monkeypatch.setattr("src.services.matchmaker.AsyncSessionLocal", TestSessionLocal)
 
 
+@pytest.fixture(autouse=True)
+def no_strength_reference(monkeypatch):
+    """
+    Опорный ход силы (таск 10.5) по умолчанию выключен: тесты с подменённым анализом движка остаются
+    детерминированными даже там, где установлен настоящий Stockfish. Тесты силы включают его сами.
+    """
+    from src.services.bots import base as bots_base
+
+    monkeypatch.setattr(bots_base, "strength_reference_move", lambda *args, **kwargs: None)
+
+
 _PUBLISHED_SIMULATIONS: list[int] = []
 
 

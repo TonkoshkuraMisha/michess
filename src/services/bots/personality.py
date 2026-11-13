@@ -48,6 +48,8 @@ MAX_SEARCH_DEPTH = 8
 MAX_SEARCH_TIME_S = 0.5
 # Вероятность управляемой ошибки на минимальном рейтинге (линейно до нуля к STOCKFISH_MIN_ELO).
 MAX_ERROR_RATE = 0.5
+# Доля грубых зевков (случайный легальный ход) среди управляемых ошибок ниже 1320.
+BLUNDER_SHARE = 1 / 3
 # randomness 100 → разброс ±40 сп между равными кандидатами.
 JITTER_CP_PER_RANDOMNESS = 0.4
 
@@ -294,11 +296,16 @@ class PersonalityBot(HistoricalBot):
         self.default_comment = default_comment_for(config)
 
     def _select_move(
-            self, board: chess.Board, scores: dict[chess.Move, float],
+            self, board: chess.Board, scores: dict[chess.Move, float], reference: chess.Move | None = None,
     ) -> tuple[chess.Move, str | None]:
-        # Управляемая ошибка ниже 1320: одна из более слабых линий вместо выбора по стилю.
+        # Управляемая ошибка ниже 1320. Линии MultiPV часто почти равны лучшей — «ошибка» среди них почти ничего не
+        # стоила (калибровка 13.11: «Торопыга» с целью 700 играл на ~1150). Теперь ошибка — ход из худшей половины
+        # линий, а в BLUNDER_SHARE случаев — случайный легальный ход: грубый зевок, как у новичка.
         if self.strength.error_rate and len(scores) > 1 and random.random() < self.strength.error_rate:
-            ranked = sorted(scores, key=lambda mv: scores[mv], reverse=True)
-            weaker = random.choice(ranked[1:])
+            if random.random() < BLUNDER_SHARE:
+                weaker = random.choice(list(board.legal_moves))
+            else:
+                ranked = sorted(scores, key=lambda mv: scores[mv], reverse=True)
+                weaker = random.choice(ranked[max(1, len(ranked) // 2):])
             return weaker, self.evaluate_style_bonus(board, weaker)[1]
-        return super()._select_move(board, scores)
+        return super()._select_move(board, scores, reference)
