@@ -40,6 +40,8 @@ MotifCode = Literal[
     "half_open_file",     # ладья на полуоткрытой вертикали
     "development_lag",    # отставание в развитии лёгких фигур
     "delayed_castling",   # король застрял в центре
+    "battery",            # две дальнобойные фигуры одной линии вплотную, линия упирается в фигуру соперника
+    "interference",       # ход перекрыл линию, по которой фигура соперника защищала свою
 ]
 
 # Учебные ценности фигур (в сантипешках): размен считается по ним, как его объясняют ученику.
@@ -476,6 +478,33 @@ def _mates(board: chess.Board) -> list[Motif]:
     return found
 
 
+def _batteries(board: chess.Board) -> list[Motif]:
+    """
+    Батарея: передняя и задняя дальнобойные фигуры одной линии стоят вплотную (без фигур между ними), а линия за
+    передней упирается в фигуру соперника. Мотив — на передней фигуре; цели — задняя фигура и мишень.
+    """
+    found: list[Motif] = []
+    for color in (chess.WHITE, chess.BLACK):
+        for square in chess.SquareSet(board.occupied_co[color]):
+            front = board.piece_at(square)
+            if front is None:
+                continue
+            for step in _slider_steps(front.piece_type):
+                # Ищем заднюю фигуру — позади передней, в противоположную сторону от мишени.
+                back_step = (-step[0], -step[1])
+                rear_square = next((s for s in _ray_squares(square, back_step) if board.piece_at(s)), None)
+                if rear_square is None:
+                    continue
+                rear = board.piece_at(rear_square)
+                if rear is None or rear.color != color or step not in _slider_steps(rear.piece_type):
+                    continue
+                target = next((s for s in _ray_squares(square, step) if board.piece_at(s)), None)
+                if target is None or board.color_at(target) == color:
+                    continue
+                found.append(Motif("battery", color, square, (rear_square, target)))
+    return found
+
+
 def _passed_pawns(board: chess.Board) -> list[Motif]:
     found: list[Motif] = []
     for color in (chess.WHITE, chess.BLACK):
@@ -560,6 +589,7 @@ def detect_motifs(board: chess.Board) -> list[Motif]:
         *_passed_pawns(board),
         *_files(board),
         *_opening(board),
+        *_batteries(board),
     ]
     unique: dict[tuple, Motif] = {}
     for motif in motifs:
@@ -597,6 +627,32 @@ def _discoveries(board_before: chess.Board, move: chess.Move, board_after: chess
     return found
 
 
+def _interferences(board_before: chess.Board, move: chess.Move, board_after: chess.Board) -> list[Motif]:
+    """
+    Перекрытие: ходившая фигура встала между дальнобойной фигурой соперника и фигурой, которую та защищала, и
+    защищённая фигура стала добычей (её можно взять с выигрышем). Мотив — на поле хода; цели — защитник и фигура.
+    """
+    mover = board_before.turn
+    enemy = not mover
+    found: list[Motif] = []
+    for slider in chess.SquareSet(board_before.occupied_co[enemy]):
+        piece = board_before.piece_at(slider)
+        if piece is None or not _slider_steps(piece.piece_type):
+            continue
+        for defended in board_before.attacks(slider):
+            if board_before.color_at(defended) != enemy or board_before.piece_type_at(defended) == chess.KING:
+                continue
+            if move.to_square not in chess.SquareSet(chess.between(slider, defended)):
+                continue
+            if board_after.piece_at(defended) is None or defended in board_after.attacks(slider):
+                continue
+            probe = _as_side_to_move(board_after, mover)
+            gain = capture_gain(probe, defended) if probe is not None else None
+            if gain is not None and gain > 0:
+                found.append(Motif("interference", mover, move.to_square, (slider, defended)))
+    return found
+
+
 def analyze_move(
         board_before: chess.Board, move: chess.Move, before_motifs: list[Motif] | None = None,
 ) -> MoveFacts:
@@ -617,6 +673,7 @@ def analyze_move(
     after_list = detect_motifs(board_after)
     if not board_after.is_game_over():
         after_list += _discoveries(board_before, move, board_after)
+        after_list += _interferences(board_before, move, board_after)
     after: dict[tuple, Motif] = {}
     for motif in after_list:
         after.setdefault(motif.key, motif)

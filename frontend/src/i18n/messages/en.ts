@@ -876,6 +876,583 @@ export const en = {
     },
     // Наставник (src/services/coach.py): фигуры и поля приходят фигурной нотацией («♘f7»), поэтому
     // фразы не склоняют названия фигур. У каждого шаблона две формулировки (v1, v2).
+    themes: {
+        fork: {
+            name: 'Fork',
+            short: 'One piece attacks two targets at once.',
+            explain: 'A fork is when one piece attacks two of the opponent\'s pieces at the same time. The opponent can save only one of them, so you win the other. Look for squares from which your piece hits two loose or valuable targets, especially the king and something else.',
+        },
+        fork_knight: {
+            name: 'Knight fork',
+            short: 'The knight attacks two pieces; a family fork hits king, queen and rook.',
+            explain: 'The knight is the best forking piece: it jumps and cannot be blocked, and its targets cannot attack it back along the same lines. A knight check that also hits the queen or a rook usually wins material. Check every square your knight can reach in one or two moves.',
+        },
+        fork_pawn: {
+            name: 'Pawn fork',
+            short: 'A pawn steps forward and attacks two pieces.',
+            explain: 'A pawn fork is especially strong because the pawn is the cheapest unit: even if it is taken, you win a piece. It often comes after the opponent has placed two pieces side by side one rank ahead of your pawn. Check whether a pawn push hits two pieces at once.',
+        },
+        fork_bishop: {
+            name: 'Bishop fork',
+            short: 'The bishop attacks two pieces along its diagonals.',
+            explain: 'A bishop can fork two pieces that stand on the two diagonals crossing at one square. It works best against undefended pieces and against a rook and king, which cannot hit the bishop back. Look for loose pieces on light or dark squares that match your bishop.',
+        },
+        fork_rook: {
+            name: 'Rook fork',
+            short: 'The rook attacks two pieces along a rank or file.',
+            explain: 'A rook fork usually hits two pieces on the same rank, often the seventh, or a king and a piece on a file. It is common in the endgame when pieces are spread out and undefended. Count how many of your opponent\'s pieces stand on one open line.',
+        },
+        fork_queen: {
+            name: 'Queen fork',
+            short: 'The queen attacks two targets, often a mate threat plus a piece.',
+            explain: 'The queen moves in eight directions, so it finds double attacks more often than any other piece. The classic queen fork combines a mating threat with an attack on a loose piece: the opponent must stop mate and loses the piece. Remember that the queen itself is valuable, so its targets should be undefended.',
+        },
+        fork_king: {
+            name: 'King fork',
+            short: 'The king attacks two undefended pieces.',
+            explain: 'In the endgame the king becomes a fighting piece and can attack two pieces next to it. It only works against undefended targets, because the king cannot capture a protected piece. Keep your king active and watch for loose enemy pieces close to it.',
+        },
+        double_attack: {
+            name: 'Double attack',
+            short: 'One move creates two threats, not necessarily with one piece.',
+            explain: 'A double attack is any move that creates two threats at once: for example, a piece moves away to attack something while opening a line for another piece. The opponent can parry only one threat. When you look for a move, ask what new threats it creates, not just which piece it attacks.',
+        },
+        double_check: {
+            name: 'Double check',
+            short: 'Two pieces give check at once; only a king move helps.',
+            explain: 'In a double check the king is attacked by two pieces at once. You cannot block two checks or capture both checkers, so the king must move. This makes double check the strongest form of discovered check and often leads straight to mate.',
+        },
+        pin: {
+            name: 'Pin',
+            short: 'A piece cannot move without exposing a more valuable piece behind it.',
+            explain: 'A pin is an attack on a piece that shields a more valuable piece behind it. If the piece behind is the king, the pinned piece may not move at all; if it is the queen or a rook, moving would cost material. A pinned piece is a weak defender and a good target.',
+        },
+        pin_exploit: {
+            name: 'Attacking a pinned piece',
+            short: 'Pile up on a pinned piece: it cannot run away.',
+            explain: 'Once a piece is pinned, attack it again, preferably with a pawn or a cheaper piece. Because it cannot step aside, the opponent must defend it as many times as you attack it. Often the extra attacker simply wins it.',
+        },
+        skewer: {
+            name: 'Skewer',
+            short: 'A valuable piece is attacked and, when it moves, the piece behind falls.',
+            explain: 'A skewer is a reverse pin: the more valuable piece stands in front. When it is attacked it has to move away, and the piece behind it on the same line is lost. Skewers against the king along ranks and diagonals are common in the endgame.',
+        },
+        x_ray: {
+            name: 'X-ray',
+            short: 'A piece acts through another piece along a line.',
+            explain: 'An X-ray is the hidden action of a long-range piece through another piece standing on its line. A rook behind your rook defends the squares in front of it; an enemy piece in between may be removed by an exchange and reveal the attack. Count attackers and defenders including those standing behind.',
+        },
+        discovered_attack: {
+            name: 'Discovered attack',
+            short: 'One piece moves away and uncovers an attack by another.',
+            explain: 'In a discovered attack you move a piece that was blocking the line of your bishop, rook or queen. The moving piece can make its own threat, so the opponent faces two attacks at once. Look for your pieces standing in front of your own long-range pieces.',
+        },
+        discovered_check: {
+            name: 'Discovered check',
+            short: 'A piece moves away and uncovers check from another piece.',
+            explain: 'A discovered check is a discovered attack against the king. The opponent must deal with the check, so the piece that moved can capture or attack anything it likes. It is one of the strongest tactical weapons: one free move for your other piece.',
+        },
+        windmill: {
+            name: 'Windmill',
+            short: 'A series of discovered checks that collects material.',
+            explain: 'A windmill is a repeated discovered check: one piece keeps giving check while the other shuttles back and forth, capturing on every move. The opponent\'s king is stuck and can only step between two squares. It needs a rook and a bishop, or two other pieces, aimed at the king together.',
+        },
+        battery: {
+            name: 'Battery',
+            short: 'Two long-range pieces lined up on one line: queen and rook, queen and bishop, two rooks.',
+            explain: 'A battery doubles the power of a line: the front piece attacks, the rear piece supports it. A queen in front of a bishop aimed at h7, or doubled rooks on an open file, can break through a defence that holds against a single piece. Build batteries before you attack.',
+        },
+        remove_defender: {
+            name: 'Removing the defender',
+            short: 'Capture the piece that guards the target.',
+            explain: 'If a piece or square is defended only once, capture the defender and the target falls. Often you give up material for the defender, because what it protects is worth more: a mating square or a valuable piece. First ask: what holds the opponent\'s position together?',
+        },
+        deflection: {
+            name: 'Deflection',
+            short: 'Force a defender away from its post.',
+            explain: 'Deflection lures a defending piece away from the square or line it guards, usually with a capture or check it must answer. Once it has left, the original target is undefended. Typical examples are deflecting a back-rank rook or the queen guarding a mating square.',
+        },
+        decoy: {
+            name: 'Decoy',
+            short: 'Lure an enemy piece onto a fatal square.',
+            explain: 'A decoy, or attraction, forces an enemy piece, often the king, onto a square where it can be hit by a fork, a skewer or mate. It usually starts with a sacrifice the opponent cannot refuse. Ask yourself which square would be terrible for the enemy king or queen, and how to drive it there.',
+        },
+        overload: {
+            name: 'Overload',
+            short: 'One piece has two jobs and cannot do both.',
+            explain: 'An overloaded piece defends two things at once. Attack one of them: when the defender recaptures or moves, the other is left unprotected. Look for a single enemy piece that guards both a piece and an important square.',
+        },
+        undermining: {
+            name: 'Undermining',
+            short: 'Hit the base of the defence, often with a pawn.',
+            explain: 'Undermining attacks the piece or pawn that supports the opponent\'s defence. Typically a pawn strikes the pawn that protects a strong piece or the pawn shield of the king. When the base goes, the whole structure collapses.',
+        },
+        interference: {
+            name: 'Interference',
+            short: 'Put a piece between a defender and what it defends.',
+            explain: 'Interference blocks the line along which an enemy piece defends something. A piece placed on the crossing square, often as a sacrifice, cuts the connection. Afterwards the target or the mating square is no longer covered.',
+        },
+        clearance: {
+            name: 'Clearance',
+            short: 'Vacate a square or line for another piece, even at a cost.',
+            explain: 'Sometimes your own piece is in the way: it occupies the square your knight needs or blocks your queen\'s diagonal. A clearance move removes it with tempo, often by a sacrifice or a check. Think about which square you would want for your strongest piece.',
+        },
+        intermezzo: {
+            name: 'In-between move',
+            short: 'Before the expected recapture, insert a stronger move.',
+            explain: 'An in-between move, or zwischenzug, is a forcing move played instead of the obvious reply, such as a check or a threat before recapturing. The opponent must answer it, and the position changes in your favour. Before you recapture automatically, look for checks and threats first.',
+        },
+        quiet_move: {
+            name: 'Quiet move',
+            short: 'A move without check or capture that decides the combination.',
+            explain: 'A quiet move does not capture or check, yet creates an unstoppable threat or takes away the last defence. Because it looks harmless, it is easy to overlook, both for you and for the opponent. When forcing moves do not work, ask what a calm move would threaten.',
+        },
+        desperado: {
+            name: 'Desperado',
+            short: 'A doomed piece sells itself as dearly as possible.',
+            explain: 'When one of your pieces is lost anyway, use it to grab as much material as possible before it goes. This often happens in mutual captures: instead of recapturing, the threatened piece takes something else first. Count what each side has under attack before trading.',
+        },
+        hanging_piece: {
+            name: 'Hanging piece',
+            short: 'An undefended piece: take it, or protect your own.',
+            explain: 'A hanging piece is attacked and not defended, or defended too few times. The simplest tactic in chess is to take it; the simplest defence is to notice your own loose pieces before you move. Make a habit of checking every piece that has just been attacked.',
+        },
+        trapped_piece: {
+            name: 'Trapped piece',
+            short: 'A piece has no safe squares left and can be won.',
+            explain: 'A piece is trapped when every square it can go to is attacked. Then you can attack it with a cheaper piece and win it. Bishops on a2 or h7 and knights on the edge are classic victims, so check the escape squares before grabbing a pawn.',
+        },
+        domination: {
+            name: 'Domination',
+            short: 'A piece has squares to go to, but all of them are covered.',
+            explain: 'Domination is a quieter form of trapping: the enemy piece is not attacked yet, but every square it could move to is controlled. Then any attack on it wins it. It is often a knight or a bishop, dominated by a cheaper piece in the endgame.',
+        },
+        zugzwang: {
+            name: 'Zugzwang',
+            short: 'Any move makes the position worse.',
+            explain: 'Zugzwang means the side to move would rather pass, because every legal move spoils something. It is decisive in pawn endgames and also appears in positions where all pieces are tied to defence. Sometimes the strongest move is one that simply hands the move to the opponent.',
+        },
+        perpetual_check: {
+            name: 'Perpetual check',
+            short: 'Endless checks force a draw.',
+            explain: 'A perpetual check is a series of checks the opponent cannot escape. The game ends in a draw by repetition. When you are losing material, look for an exposed enemy king and a queen or rook that can keep checking it.',
+        },
+        stalemate_trick: {
+            name: 'Stalemate trick',
+            short: 'Give away your last mobile pieces to reach stalemate.',
+            explain: 'If your king has no moves, every other piece you lose brings you closer to stalemate, which is a draw. A \'mad\' rook or queen keeps offering itself: taking it stalemates, refusing it allows perpetual check. Remember this resource in hopeless endgames.',
+        },
+        fortress: {
+            name: 'Fortress',
+            short: 'A defensive setup the stronger side cannot break.',
+            explain: 'A fortress is a position where the weaker side, despite less material, keeps the enemy king and pieces out. Typical examples are a rook pawn with the wrong bishop or a rook against a queen with a pawn barrier. If you are behind, look for a structure that seals your king in safely.',
+        },
+        en_passant: {
+            name: 'En passant in tactics',
+            short: 'Capturing in passing opens lines or saves the day.',
+            explain: 'En passant is a special pawn capture available only on the very next move. In tactics it can open a line for your pieces, create a passed pawn or even deliver a discovered check or mate. Do not forget it when the opponent\'s pawn has just jumped two squares past yours.',
+        },
+        castling_tactic: {
+            name: 'Castling tactics',
+            short: 'Castling with a gain, or preventing the opponent\'s castling.',
+            explain: 'Castling can be a tactical move: long castling with check, castling that brings the rook to an attacked file, or castling that escapes a pin. The opposite idea is to keep the enemy king in the centre by attacking the squares it must cross. Check castling rights when you calculate.',
+        },
+        promotion: {
+            name: 'Promotion',
+            short: 'A pawn reaches the last rank and becomes a queen.',
+            explain: 'Promotion turns a pawn into a new queen, which usually decides the game. Tactics around promotion include deflecting the piece that guards the queening square and blocking the line of the defender. When a pawn is close to promotion, count tempi carefully.',
+        },
+        underpromotion: {
+            name: 'Underpromotion',
+            short: 'Promote to a knight, rook or bishop when a queen is worse.',
+            explain: 'Sometimes a queen is the wrong choice. A knight can promote with check or a fork; a rook or bishop avoids stalemating the opponent. Before promoting, check whether the new queen would stalemate or whether a knight check wins on the spot.',
+        },
+        pawn_breakthrough: {
+            name: 'Pawn breakthrough',
+            short: 'Sacrifice pawns to create a passed pawn.',
+            explain: 'In a pawn breakthrough, several pawns face each other and one side sacrifices one or two of them to push another through. The classic case is three pawns against three, where a double sacrifice creates an unstoppable passer. Count how far each side\'s kings are from the action.',
+        },
+        pawn_race: {
+            name: 'Pawn race',
+            short: 'Both sides push passed pawns: count the moves.',
+            explain: 'In a pawn race, count how many moves each pawn needs to promote and who moves first. Look out for promotion with check, a new queen that immediately stops the other pawn, and kings that can catch a pawn in time. Exact counting decides these endgames.',
+        },
+        advanced_pawn: {
+            name: 'Advanced pawn',
+            short: 'A pawn deep in the enemy camp ties the defence down.',
+            explain: 'A pawn on the sixth or seventh rank is a powerful attacker: it controls key squares, cramps the opponent and is always one step from promotion. Many combinations work only because such a pawn stands nearby. Support it with pieces and look for ways to deflect its blocker.',
+        },
+        passed_pawn_support: {
+            name: 'Escorting and stopping a passed pawn',
+            short: 'Support your passer; blockade the opponent\'s.',
+            explain: 'A passed pawn needs escorts: the king in the endgame, a rook behind it, pieces controlling the squares in front. Against a passer, place a piece directly in front of it, ideally a knight, and keep your king close. The side that handles passed pawns better usually wins.',
+        },
+        mate_in_1: {
+            name: 'Mate in 1',
+            short: 'Find the move that mates at once.',
+            explain: 'Find the single move that mates immediately. Look at every check, including captures with check and quiet checks from a distance. Before choosing, make sure the king really has no escape square and the checking piece cannot be captured or blocked.',
+        },
+        mate_in_2: {
+            name: 'Mate in 2',
+            short: 'Find a forced mate in 2 moves.',
+            explain: 'Find a forced sequence that mates in 2 moves against any defence. Start with checks, then captures, then threats, and check every reply of the opponent. In such positions the solution is usually the most forcing move, even if it gives up material.',
+        },
+        mate_in_3: {
+            name: 'Mate in 3',
+            short: 'Find a forced mate in 3 moves.',
+            explain: 'Find a forced sequence that mates in 3 moves against any defence. Start with checks, then captures, then threats, and check every reply of the opponent. In such positions the solution is usually the most forcing move, even if it gives up material.',
+        },
+        mate_in_4: {
+            name: 'Mate in 4',
+            short: 'Find a forced mate in 4 moves.',
+            explain: 'Find a forced sequence that mates in 4 moves against any defence. Start with checks, then captures, then threats, and check every reply of the opponent. In such positions the solution is usually the most forcing move, even if it gives up material.',
+        },
+        mate_in_5: {
+            name: 'Mate in 5',
+            short: 'Find a forced mate in 5 moves.',
+            explain: 'Find a forced sequence that mates in 5 moves against any defence. Start with checks, then captures, then threats, and check every reply of the opponent. In such positions the solution is usually the most forcing move, even if it gives up material.',
+        },
+        back_rank_mate: {
+            name: 'Back-rank mate',
+            short: 'A rook or queen mates a king trapped by its own pawns.',
+            explain: 'If the king stands behind its unmoved pawns and nothing covers the back rank, a single rook or queen check there is mate. The defence is to make a \'window\' with a pawn move or keep a piece guarding the rank. In attack, look for ways to deflect the last defender of the back rank.',
+        },
+        smothered_mate: {
+            name: 'Smothered mate',
+            short: 'A knight mates a king surrounded by its own pieces.',
+            explain: 'In a smothered mate the king is completely blocked by its own pieces and a knight delivers the final check. The classic pattern is a queen sacrifice on g8 forcing the rook to block, followed by Nf7 mate. Look for it when the enemy king is in the corner behind its rook and pawns.',
+        },
+        anastasia_mate: {
+            name: 'Anastasia\'s mate',
+            short: 'A knight and a rook trap the king on the edge.',
+            explain: 'In Anastasia\'s mate a knight covers the escape squares of a king on the edge, and a rook or queen gives mate along the file. It typically appears after the king has castled and a knight lands on e7 or e2. Often a queen sacrifice on h7 opens the h-file for the rook.',
+        },
+        arabian_mate: {
+            name: 'Arabian mate',
+            short: 'A rook and knight mate the king in the corner.',
+            explain: 'The Arabian mate is one of the oldest patterns: the knight protects the rook and covers the escape square, and the rook gives mate next to the cornered king. Look for it when the enemy king is in the corner and your knight can reach f6 or f3.',
+        },
+        boden_mate: {
+            name: 'Boden\'s mate',
+            short: 'Two bishops on crossing diagonals mate the king.',
+            explain: 'In Boden\'s mate two bishops attack along crossing diagonals and mate a king blocked by its own pieces, typically after long castling. A queen sacrifice on c6 or c3 often opens the diagonal. Watch for it when the enemy king has castled queenside and the b-pawn has moved.',
+        },
+        double_bishop_mate: {
+            name: 'Two-bishop mate in attack',
+            short: 'Two bishops side by side sweep the king\'s diagonals.',
+            explain: 'Two bishops aimed at the king on parallel diagonals cover all its escape squares; one of them delivers mate. It often appears when the king\'s pawn cover has been broken. Keep both bishops when attacking a castled king.',
+        },
+        dovetail_mate: {
+            name: 'Dovetail mate',
+            short: 'The queen mates diagonally; the king\'s own pieces block the retreat.',
+            explain: 'In the dovetail mate the queen stands diagonally next to the king, protected by another piece, and the two squares behind the king are occupied by its own pieces. The shape looks like a dove\'s tail. It is common in middlegame attacks with queen and bishop or queen and knight.',
+        },
+        epaulette_mate: {
+            name: 'Epaulette mate',
+            short: 'The king\'s own rooks on both sides block its escape.',
+            explain: 'In the epaulette mate the king stands between two of its own pieces, usually rooks, like epaulettes on shoulders, and a queen check in front of it is mate. It is a reminder that pieces next to the king can be a trap rather than protection.',
+        },
+        hook_mate: {
+            name: 'Hook mate',
+            short: 'Rook, knight and pawn work together to mate.',
+            explain: 'In the hook mate the rook gives mate next to the king, protected by a knight, which in turn is protected by a pawn. The knight also covers the escape square. It is a good example of a small team of pieces working together.',
+        },
+        opera_mate: {
+            name: 'Opera mate',
+            short: 'A rook mates on the back rank, supported by a bishop.',
+            explain: 'The opera mate is a back-rank mate where a bishop protects the mating rook and the king is blocked by its own pieces. The name comes from a famous game played in a box at the opera. Look for it when the enemy king is still in the centre and the back rank is open.',
+        },
+        legal_mate: {
+            name: 'Légal\'s mate',
+            short: 'A queen sacrifice against a pin, finished by minor pieces.',
+            explain: 'In Légal\'s mate one side breaks a pin on its knight, letting the queen be taken, and mates with the minor pieces. It punishes an opponent who greedily captures the queen without checking what happens next. It teaches that a pin is not absolute unless the king is behind.',
+        },
+        greco_mate: {
+            name: 'Greco\'s mate',
+            short: 'A bishop covers the escape square, the queen or rook mates on the h-file.',
+            explain: 'In Greco\'s mate a bishop on the diagonal to g8 or g1 takes away the escape square, and a queen or rook mates along the h-file. Often the h-file is opened by a sacrifice. It is a basic pattern of attacks on the castled king.',
+        },
+        damiano_mate: {
+            name: 'Damiano\'s mate',
+            short: 'The queen mates on h7 supported by a pawn on g6.',
+            explain: 'In Damiano\'s mate a pawn on g6 or g3 protects the queen as it delivers mate on h7 or h2. A rook sacrifice on the h-file often prepares it by dragging the king forward. Look for it whenever you have a pawn deep near the castled king.',
+        },
+        lolli_mate: {
+            name: 'Lolli\'s mate',
+            short: 'The queen mates on g7 with the help of a pawn on f6.',
+            explain: 'In Lolli\'s mate a pawn on f6 or f3 supports the queen, which mates on g7 or g2 after the king\'s fianchetto shield has been broken. Often the queen first sacrifices or penetrates via h6. A pawn lodged on f6 is a constant mating danger.',
+        },
+        pillsbury_mate: {
+            name: 'Pillsbury\'s mate',
+            short: 'A rook mates on the g-file while a bishop covers the corner.',
+            explain: 'In Pillsbury\'s mate the king on g8 or h8 is mated by a rook along the g-file, while a bishop on the long diagonal controls the escape squares. It often follows a sacrifice that opens the g-file. Rook plus long-diagonal bishop is a deadly combination against a castled king.',
+        },
+        morphy_mate: {
+            name: 'Morphy\'s mate',
+            short: 'A bishop mates in the corner while a rook seals the file.',
+            explain: 'In Morphy\'s mate a bishop gives mate on the long diagonal to a king in the corner, and a rook on the g-file takes away the remaining square. It often appears after the g-file is opened. The bishop and rook complement each other perfectly here.',
+        },
+        blackburne_mate: {
+            name: 'Blackburne\'s mate',
+            short: 'Two bishops and a knight mate the castled king.',
+            explain: 'In Blackburne\'s mate a bishop from a distance and a knight cover the escape squares, and the other bishop delivers mate on g7 or h7. It shows how dangerous two bishops aimed at a castled king can be. Watch your king when the opponent\'s bishops point at it.',
+        },
+        corridor_mate: {
+            name: 'Corridor mate',
+            short: 'The king is trapped in a corridor of its own pawns and pieces.',
+            explain: 'In a corridor mate the king can move only along a narrow line because its own pieces block both sides, and a rook or queen checks it along that corridor. The back-rank mate is the most famous example. Always check how much room your king has before an exchange of rooks.',
+        },
+        queen_kiss_mate: {
+            name: 'Queen\'s kiss',
+            short: 'The queen mates right next to the king, protected by another piece.',
+            explain: 'The queen\'s kiss is the simplest mate with the queen: it stands directly next to the king, and another piece protects it so the king cannot capture. It is the most common mate in beginners\' games. Ask which of your pieces could support the queen on a square touching the enemy king.',
+        },
+        vukovic_mate: {
+            name: 'Vuković\'s mate',
+            short: 'Rook and knight mate the king on the edge.',
+            explain: 'In Vuković\'s mate the rook gives mate next to the king on the edge of the board, protected by a knight that also covers the escape squares. Often a pawn or the board edge completes the net. It is a typical finish of a rook-and-knight attack.',
+        },
+        greek_gift: {
+            name: 'Greek gift',
+            short: 'A bishop sacrifice on h7 or h2 opens the castled king.',
+            explain: 'In the Greek gift the bishop takes on h7 with check, the king takes it, and then the knight jumps to g5 and the queen joins via h5. It works when the defender has no knight on f6, no easy way to cover h7, and your queen and knight can arrive quickly. Check the defender\'s resources before you give the bishop.',
+        },
+        double_bishop_sacrifice: {
+            name: 'Double bishop sacrifice',
+            short: 'Both bishops are given up on h7 and g7 to strip the king.',
+            explain: 'The double bishop sacrifice removes both pawns in front of the castled king: first on h7, then on g7. The naked king is then hunted by the queen and a rook lift. It is a famous attacking pattern that needs the queen nearby and a rook ready to swing to the g- or h-file.',
+        },
+        f7_f2_attack: {
+            name: 'Attack on f7 and f2',
+            short: 'The weakest square near the uncastled king.',
+            explain: 'At the start of the game f7 and f2 are defended only by the king, so a bishop and queen or knight aimed at them can win material or mate. Many opening traps and early sacrifices hit exactly this square. Develop and castle before the opponent can gang up on it.',
+        },
+        exposed_king: {
+            name: 'Exposed king',
+            short: 'A king without pawn cover is a target for every piece.',
+            explain: 'When the king has lost its pawn shield or is stuck in the centre, open lines lead straight to it. Bring more pieces into the attack than the opponent has defenders, and use checks to gain time. On defence, close lines and trade the most dangerous attackers.',
+        },
+        kingside_attack: {
+            name: 'Kingside attack',
+            short: 'Attacking the king castled on the short side.',
+            explain: 'A kingside attack concentrates pieces against the castled king: queen, knights, bishops aimed at h7 and g7, rooks via open files or lifts. Pawn breaks like h4-h5 or f4-f5 open the way. Count attackers and defenders before you start sacrificing.',
+        },
+        queenside_attack: {
+            name: 'Queenside attack',
+            short: 'Attacking the king castled on the long side.',
+            explain: 'After long castling the king sits on c8 or c1, with a7 and b7 as weak points and the a- and b-files ready to open. Pawn storms and sacrifices on b7 or a6 are typical. The race between attacks on opposite wings is decided by tempo.',
+        },
+        rook_lift: {
+            name: 'Rook lift',
+            short: 'A rook joins the attack along a rank.',
+            explain: 'A rook lift brings a rook from the back rank to the third or fourth rank and then across to the g- or h-file. It adds a heavy piece to the attack without opening any lines. Look for a free path along the rank, often via e3, f3 or d3.',
+        },
+        pawn_storm: {
+            name: 'Pawn storm',
+            short: 'Pawns march against the enemy king to open lines.',
+            explain: 'When kings have castled on opposite sides, each side throws its pawns forward against the other king. The pawns gain space, chase defending pieces away and open files for the rooks. Speed matters more than material: the first to break through usually wins.',
+        },
+        sacrifice: {
+            name: 'Sacrifice',
+            short: 'Give up material for attack, time or a decisive gain.',
+            explain: 'A sacrifice gives away material on purpose to get something bigger: mate, a winning attack, a dangerous passed pawn or the opponent\'s paralysis. A real sacrifice needs calculation or a clear compensation. Ask what the opponent\'s position looks like after accepting, and whether declining helps him.',
+        },
+        opening_trap: {
+            name: 'Opening trap',
+            short: 'A natural-looking opening move that loses quickly.',
+            explain: 'Opening traps catch players who move automatically: a pawn grab that loses a piece, an early queen that gets trapped, a pin that turns out to be fake. Learn the typical ones so you can set them and, more importantly, avoid them. After every opponent move ask: what does it attack?',
+        },
+        early_queen: {
+            name: 'Punishing an early queen',
+            short: 'Develop with tempo by attacking the queen.',
+            explain: 'When the opponent brings the queen out early, develop your pieces with threats against it. Each attack gains a tempo, while the queen runs around and the rest of the opponent\'s army stays home. Sometimes the queen can even be trapped.',
+        },
+        trap_noahs_ark: {
+            name: 'Noah\'s Ark trap',
+            short: 'A bishop on b3 is trapped by a chain of pawns.',
+            explain: 'In the Noah\'s Ark trap from the Ruy Lopez, Black\'s pawns on a6, b5 and c4 trap the white bishop on b3. It usually happens after White carelessly takes a pawn in the centre. If your bishop sits on b3, watch for ...c5-c4.',
+        },
+        trap_fishing_pole: {
+            name: 'Fishing Pole trap',
+            short: 'A knight \'bait\' on g4 opens the h-file against the castled king.',
+            explain: 'In the Fishing Pole a knight lands on g4 and invites h3xg4; after h5xg4 the h-file opens and the queen mates along it. It catches players who chase the knight automatically. Before taking such a piece, check what opens behind it.',
+        },
+        trap_elephant: {
+            name: 'Elephant trap',
+            short: 'In the Queen\'s Gambit, grabbing the d5 pawn loses a piece.',
+            explain: 'In the Elephant trap White takes on d5 twice, thinking the knight is pinned, but Black\'s bishop on b4 with check wins the queen back with interest. It shows that a pin on a knight is only relative when the queen stands behind it. Always check what the pinned piece can do anyway.',
+        },
+        trap_lasker: {
+            name: 'Lasker trap',
+            short: 'In the Albin Counter-Gambit, an underpromotion to a knight wins.',
+            explain: 'In the Lasker trap Black\'s pawn advances with tempo all the way and finally promotes to a knight with check, winning decisive material. It is a beautiful example of underpromotion in the opening. It also warns against careless king moves while an enemy pawn is close to promotion.',
+        },
+        trap_scholars_mate: {
+            name: 'Scholar\'s mate and how to stop it',
+            short: 'Queen and bishop attack f7 for a quick mate.',
+            explain: 'The scholar\'s mate is a quick attack with queen and bishop on f7 that mates in four moves if the defender is careless. It is easy to stop by covering f7 with the queen or a knight and developing calmly. After defending, the early queen becomes a target for your development with tempo.',
+        },
+        development_lag: {
+            name: 'Punishing slow development',
+            short: 'Open the position when you are ahead in development.',
+            explain: 'If the opponent has spent moves on pawns or on one piece, you have more pieces in play. Open lines quickly, even at the cost of a pawn, before the opponent catches up. A lead in development is temporary: use it or lose it.',
+        },
+        find_the_threat: {
+            name: 'Find the threat',
+            short: 'What does the opponent want after his last move?',
+            explain: 'Before you choose your own move, ask what the opponent\'s last move threatens: a capture, a check, a fork, a mate. Point to the target first, then look for a defence. Most blunders happen because this question was skipped.',
+        },
+        defensive_move: {
+            name: 'The only defence',
+            short: 'Only one move holds; everything else loses.',
+            explain: 'In some positions only one move saves the game: a precise retreat, an interposition, a counter-threat. Look at all candidate defences and calculate each against the strongest attack. Finding such moves under pressure is the mark of a good defender.',
+        },
+        counterattack: {
+            name: 'Counterattack',
+            short: 'Answer a threat with a bigger threat.',
+            explain: 'Sometimes the best defence is to create a threat of your own that is more dangerous than the opponent\'s: a check, a mating threat or an attack on the queen. It works only if your threat comes first or is bigger. Calculate both attacks to the end before choosing it.',
+        },
+        save_by_perpetual: {
+            name: 'Saving with perpetual check',
+            short: 'In a lost position, find endless checks.',
+            explain: 'When material is lost or a mate is coming, look for a way to give checks forever. The opponent\'s exposed king and your active queen are the key ingredients. A draw rescued from a lost position is worth as much as a draw from an equal one.',
+        },
+        save_by_stalemate: {
+            name: 'Saving with stalemate',
+            short: 'Leave your king without moves and give away the rest.',
+            explain: 'If your king is boxed in and has no legal moves, losing your other pieces can lead to stalemate. Offer them in a way the opponent must take, or must allow perpetual check. Stalemate tricks save many endgames that look completely lost.',
+        },
+        blunder_check: {
+            name: 'Don\'t blunder',
+            short: 'Three natural moves: only one does not lose.',
+            explain: 'Here several moves look natural, but only one avoids a tactical refutation. Before moving, check each candidate: what can the opponent capture, check or threaten in reply? This blunder check is the most useful habit in practical chess.',
+        },
+        opposition: {
+            name: 'Opposition',
+            short: 'Kings face each other; the side not to move has the advantage.',
+            explain: 'Opposition is when the kings stand on the same line with one square between them. The side that does not have to move keeps the opposition and forces the other king to give way. It decides most king-and-pawn endgames, including direct, distant and diagonal forms.',
+        },
+        triangulation: {
+            name: 'Triangulation',
+            short: 'Lose a move with the king to pass the turn to the opponent.',
+            explain: 'Triangulation is a king manoeuvre around three squares that returns to the same position with the other side to move. It is used to win the opposition or put the opponent in zugzwang when he has fewer free squares. It is one of the key techniques in pawn endgames.',
+        },
+        square_rule: {
+            name: 'Rule of the square',
+            short: 'Can the king catch the pawn? Draw the square.',
+            explain: 'Draw a square from the pawn to the promotion rank. If the defending king can step inside this square on its move, it catches the pawn; if not, the pawn promotes. Remember that a pawn on its starting rank can jump two squares, so the square starts one rank further.',
+        },
+        key_squares: {
+            name: 'Key squares',
+            short: 'If the king reaches them, the pawn promotes.',
+            explain: 'Key squares are the squares in front of a pawn that guarantee promotion once the attacking king occupies them. For a pawn on the fifth rank they are the three squares two ranks ahead. Aim your king at the key squares instead of pushing the pawn too early.',
+        },
+        outflanking: {
+            name: 'Outflanking',
+            short: 'Go around the opposing king to reach key squares.',
+            explain: 'When direct opposition does not work, the attacking king steps sideways and around the defender to reach the key squares from another direction. Outflanking often uses the threat of opposition on the next move. It needs precise counting of king steps.',
+        },
+        shouldering: {
+            name: 'Shouldering',
+            short: 'Use your king to push the opposing king away from the action.',
+            explain: 'Shouldering means placing your king so that it blocks the opponent\'s king from reaching an important area, like a pawn or a key square. The kings cannot stand next to each other, so your king acts as a wall. It is decisive in many races between kings and pawns.',
+        },
+        lucena: {
+            name: 'Lucena position',
+            short: 'Rook and pawn win by \'building a bridge\'.',
+            explain: 'In the Lucena position the stronger side has a pawn on the seventh rank and the king in front of it. The winning method is to bring the rook to the fourth rank and use it as a shield against checks — the famous bridge. Every rook-endgame player must know it.',
+        },
+        philidor_position: {
+            name: 'Philidor position',
+            short: 'The rook defends on the third rank and then checks from behind.',
+            explain: 'In the Philidor position the defender keeps the rook on the third rank, stopping the enemy king from advancing. When the pawn moves to that rank, the rook goes to the back and checks from behind. It is the basic drawing method in rook-and-pawn against rook.',
+        },
+        rook_behind_passer: {
+            name: 'Rook behind the passed pawn',
+            short: 'Rooks belong behind passed pawns, yours and the opponent\'s.',
+            explain: 'A rook behind a passed pawn gains activity as the pawn advances, while a rook in front of it only gets more passive. This applies both to supporting your own passer and to stopping the opponent\'s. It is one of the most useful rules in rook endgames.',
+        },
+        wrong_bishop: {
+            name: 'Wrong bishop',
+            short: 'A rook pawn with a bishop that cannot cover the corner is a draw.',
+            explain: 'With a rook pawn and a bishop that does not control the promotion square, the defending king simply sits in the corner and cannot be driven out. Even an extra piece is not enough. Remember this when trading down: check the colour of the corner.',
+        },
+        basic_mates: {
+            name: 'Basic mates',
+            short: 'Mate with queen, rook, two bishops, bishop and knight.',
+            explain: 'Basic mates are the techniques to mate a lone king: with the queen, with the rook, with two bishops, and the hardest one with bishop and knight. Each uses the king actively and drives the enemy king to the edge or the right corner. Knowing them saves many half-points.',
+        },
+        combination: {
+            name: 'Combination',
+            short: 'Several tactical ideas linked into one forcing sequence.',
+            explain: 'A combination joins two or more tactical ideas: for example, a deflection that prepares a fork, or a sacrifice that leads to a back-rank mate. Each move forces the reply, so you can calculate to the end. Name the ideas in the position first, then try to connect them.',
+        },
+        long_calculation: {
+            name: 'Long calculation',
+            short: 'A forcing line of five moves or more.',
+            explain: 'Some positions demand calculating far ahead: a series of checks, captures and threats leading to a clear result. Keep the line forcing, visualise the position after each move and check the opponent\'s best replies, not the ones you hope for. Training such positions builds calculating stamina.',
+        },
+        equality: {
+            name: 'Save the game',
+            short: 'The best move only reaches equality.',
+            explain: 'Not every puzzle wins: sometimes you are worse and the task is to find the move that holds the balance. Look for exchanges, counterplay, perpetual check or a fortress. Accepting a draw from a worse position is a real achievement.',
+        },
+        candidate_moves: {
+            name: 'Candidate moves',
+            short: 'List all serious options before calculating one.',
+            explain: 'Candidate moves are the few moves worth calculating in a position: checks, captures, threats and the main positional ideas. Listing them first prevents tunnel vision, when you calculate one move deeply and miss a better one. Train yourself to name at least three candidates.',
+        },
+        outpost: {
+            name: 'Outpost',
+            short: 'A protected square that enemy pawns can never attack.',
+            explain: 'An outpost is a square in the opponent\'s half, defended by your pawn, that no enemy pawn can attack. A knight placed there is often stronger than a rook. Look for holes in the opponent\'s pawn structure and plan how to bring a piece to them.',
+        },
+        open_file: {
+            name: 'Open file',
+            short: 'Rooks love files without pawns.',
+            explain: 'An open file has no pawns on it, so rooks can use it to invade the opponent\'s position. Occupy it first, double your rooks, and aim for the seventh rank. If the opponent also contests it, the side with more control usually wins the file.',
+        },
+        seventh_rank: {
+            name: 'Rook on the seventh',
+            short: 'A rook on the seventh rank attacks pawns and cuts off the king.',
+            explain: 'A rook on the seventh rank (second for Black) attacks pawns that have not moved and traps the enemy king on the back rank. Two rooks there often force mate or win material. It is a key goal in rook endgames and middlegames with open files.',
+        },
+        bad_bishop: {
+            name: 'Bad bishop',
+            short: 'A bishop blocked by its own pawns on its colour.',
+            explain: 'A bishop is \'bad\' when your own pawns stand on squares of its colour and restrict it. Trade it for the opponent\'s good bishop, or move your pawns to the other colour. Against a bad bishop, keep its pawns fixed and play on the squares it cannot reach.',
+        },
+        weak_squares: {
+            name: 'Weak squares',
+            short: 'Holes no pawn can defend any more.',
+            explain: 'A weak square is one that can no longer be protected by a pawn, usually because the nearby pawns have advanced. Such holes are perfect homes for enemy pieces, especially knights. Think twice before pushing pawns in front of your king.',
+        },
+        isolated_pawn: {
+            name: 'Isolated pawn',
+            short: 'A pawn with no neighbours: a target and a source of activity.',
+            explain: 'An isolated pawn has no friendly pawns on adjacent files, so it must be defended by pieces. The defender blockades it with a knight and trades pieces; the owner uses the open files and outposts it gives for an attack. Knowing both plans helps you choose the right exchanges.',
+        },
+        minority_attack: {
+            name: 'Minority attack',
+            short: 'Two pawns attack three to create a weakness.',
+            explain: 'In the minority attack, typically in the Queen\'s Gambit structure, two pawns on the queenside advance against three to create a weak pawn in the opponent\'s camp. After the exchange, the backward or isolated pawn becomes a long-term target for your pieces.',
+        },
+        piece_improvement: {
+            name: 'Improve your worst piece',
+            short: 'When nothing happens, find the piece that does least.',
+            explain: 'In a calm position, look at all your pieces and pick the one doing the least. Find a better square for it and a route to get there. This simple plan often brings more than any direct attack.',
+        },
+        prophylaxis: {
+            name: 'Prophylaxis',
+            short: 'Prevent the opponent\'s plan before it starts.',
+            explain: 'Prophylaxis means asking what the opponent wants to do and stopping it in advance: covering a key square, removing a piece from a future fork, making luft for the king. Strong players spend many moves on such quiet prevention. It turns the opponent\'s best plan into nothing.',
+        },
+        exchange_choice: {
+            name: 'Which exchange is right?',
+            short: 'Trade the pieces that help the opponent most.',
+            explain: 'Every exchange changes the position: trade your bad pieces for his good ones, trade attackers when you defend, keep pieces when you attack. Before capturing, ask what remains on the board afterwards and who benefits. The right exchange is often the whole plan.',
+        },
+    },
     xray: {
         title: 'Board X-ray',
         forOpponent: 'For the opponent',
