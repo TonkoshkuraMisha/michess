@@ -9,6 +9,12 @@ Run from the project root:
 
 Each part is capped at 80 KiB by default so chat attachments are never
 truncated by upload limits.
+
+The snapshot starts with a project status summary (project_status.py): git state, plan progress from ToDo.md and
+the next tasks, migration head, bot calibration. It is also written to STATUS.md next to the parts:
+    python make_snapshot.py --status    # print the status only, no snapshot
+
+The output folder is git-ignored: regenerate it whenever you need it.
 """
 
 from __future__ import annotations
@@ -343,6 +349,11 @@ def main() -> int:
         help="Не сворачивать большие JSON-книги дебютов.",
     )
     parser.add_argument(
+        "--status",
+        action="store_true",
+        help="Только напечатать сводку состояния проекта, без снимка.",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         default=None,
@@ -354,6 +365,14 @@ def main() -> int:
     if not root.is_dir():
         print(f"Ошибка: папка не найдена: {root}", file=sys.stderr)
         return 2
+
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from project_status import build_status
+
+    status = build_status(root)
+    if args.status:
+        print(status)
+        return 0
 
     if args.max_mb is not None:
         max_kb = args.max_mb * 1024.0
@@ -383,6 +402,8 @@ def main() -> int:
 
     total_parts = len(parts)
     index_lines = [
+        status,
+        "=" * 88,
         f"PROJECT: {root.name}",
         f"ROOT: {root}",
         f"FILES INCLUDED: {len(blocks)}",
@@ -401,8 +422,11 @@ def main() -> int:
     dash_line = "-" * 88
     for number, (part_files, content) in enumerate(parts, start=1):
         filename = f"snapshot_{number:03d}.txt"
+        # Сводка состояния — в начале первой части: ИИ-помощник видит её раньше кода.
+        status_block = f"{status}\n{'=' * 88}\n" if number == 1 else ""
         header = (
-            f"PROJECT SNAPSHOT — PART {number}/{total_parts}\n"
+            status_block
+            + f"PROJECT SNAPSHOT — PART {number}/{total_parts}\n"
             f"Project: {root.name}\n"
             f"Files in this part ({len(part_files)}): {', '.join(part_files)}\n"
             f"{dash_line}\n"
@@ -422,6 +446,7 @@ def main() -> int:
             index_lines.append(f"  - {pf}")
 
     (output / "README.txt").write_text("\n".join(index_lines) + "\n", encoding="utf-8")
+    (output / "STATUS.md").write_text(status, encoding="utf-8")
 
     if unreadable:
         report = output / "unreadable_files.txt"
