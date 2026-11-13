@@ -12,6 +12,7 @@ import About from './components/About';
 import Settings from './components/Settings';
 import PuzzlesPage from './components/puzzles/PuzzlesPage';
 import {LearnPage, LessonPage} from './components/learn/LearnPage';
+import {TournamentView, TournamentsPage} from './components/tournaments/TournamentsPage';
 import {CHAMPIONS_LIST} from './config/champions';
 import {API_BASE_URL} from './config/api';
 import {gameSocket} from './services/gameSocket';
@@ -222,6 +223,15 @@ export default function App() {
                         </Link>
 
                         <Link
+                            to="/tournaments"
+                            className={`flex items-center gap-2 transition ${
+                                location.pathname.startsWith('/tournaments') ? 'text-amber-300' : 'hover:text-amber-300'
+                            }`}
+                        >
+                            <Trophy size={17}/> {t('nav.tournaments')}
+                        </Link>
+
+                        <Link
                             to="/leaderboard"
                             className={`flex items-center gap-2 transition ${
                                 location.pathname === '/leaderboard' ? 'text-amber-300' : 'hover:text-amber-300'
@@ -372,6 +382,15 @@ export default function App() {
                                         <button
                                             onClick={() => {
                                                 setIsProfileOpen(false);
+                                                navigate('/tournaments');
+                                            }}
+                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
+                                        >
+                                            <Trophy size={16} className="text-amber-500"/> {t('nav.tournaments')}
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setIsProfileOpen(false);
                                                 navigate('/leaderboard');
                                             }}
                                             className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
@@ -440,6 +459,8 @@ export default function App() {
                     <Route path="/puzzles" element={<PuzzlesPage/>}/>
                     <Route path="/learn" element={<LearnPage/>}/>
                     <Route path="/learn/:lessonId" element={<LessonPage/>}/>
+                    <Route path="/tournaments" element={<TournamentsPage/>}/>
+                    <Route path="/tournaments/:tournamentId" element={<TournamentView/>}/>
                     <Route path="/profile/:targetUsername" element={<Profile/>}/>
                     <Route path="/game/:gameId" element={<GameViewer/>}/>
                     <Route path="/champions/:championId" element={<ChampionGames/>}/>

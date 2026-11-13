@@ -19,6 +19,7 @@ import type {Locale} from 'date-fns';
 import {getDateLocale, renderUiMessage, uiMessage, useI18n} from '../i18n';
 import type {UiMessage} from '../i18n';
 import {displayPlayerName} from '../config/players';
+import {TournamentHistory} from './tournaments/TournamentHistory';
 
 interface UserProfile {
     id: number;
@@ -330,6 +331,7 @@ export default function Profile() {
                 </div>
 
                 <div className="md:col-span-2 flex flex-col gap-4">
+                    <TournamentHistory username={profile.username}/>
                     {profile.ladder && profile.ladder.games > 0 && (
                         <div className="bg-[#1A120B] border border-amber-900/60 px-3 py-2.5 rounded shadow-inner flex items-center justify-between gap-3"
                              data-testid="profile-ladder">

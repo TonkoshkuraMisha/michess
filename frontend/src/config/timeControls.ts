@@ -100,3 +100,15 @@ export const TIME_CONTROLS: TimeControlGroup[] = [
 export const ALL_TIME_CONTROLS: TimeControlOption[] = TIME_CONTROLS.flatMap(g => g.options);
 export const DEFAULT_TIME_CONTROL: TimeControlOption =
     ALL_TIME_CONTROLS.find(o => o.id === 'blitz-3+2') || ALL_TIME_CONTROLS[0];
+
+/**
+ * Категория контроля — то же правило, что на сервере (src/services/rating.classify_time_control): оценка длительности
+ * «база + 40 × добавление»; пуля — до 3 минут, блиц — до 8, рапид — до 25, дальше классика.
+ */
+export function timeControlCategory(baseMs: number, incrementMs: number): TimeControlCategory {
+    const estimatedS = baseMs / 1000 + 40 * (incrementMs / 1000);
+    if (estimatedS < 180) return 'bullet';
+    if (estimatedS < 480) return 'blitz';
+    if (estimatedS < 1500) return 'rapid';
+    return 'classical';
+}
