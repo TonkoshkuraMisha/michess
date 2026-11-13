@@ -106,3 +106,12 @@ def test_punishing_a_blunder_is_the_best_moment():
     summary = summarize(moves_from(evals, {6: 9950}), "1-0")
     assert summary["kind"] == "decisive_blunder" and summary["turning_point_ply"] == 6
     assert summary["white"]["best_ply"] == 7
+
+
+def test_missed_punishment_is_listed():
+    # 3.… чёрные зевают (−250), 4. белые не наказывают (теряют 230), дальше ровно.
+    evals = [20, 25, 30, 280, 50, 40, 30, 35]
+    summary = summarize(moves_from(evals, {4: 250, 5: 230}), "1/2-1/2")
+    assert summary["missed"] == [{"ply": 5, "color": "white", "cp": 230}]
+    # Наказали — пропуска нет.
+    assert summarize(moves_from(evals, {4: 250}), "1/2-1/2")["missed"] == []

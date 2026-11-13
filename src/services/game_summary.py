@@ -26,6 +26,11 @@ DOMINATION_SHARE = 0.7
 BLUNDER_CP = 200
 CLAMP_CP = 1000
 OPENING_PLIES = 8
+# Упущенный удар (таск B.5): соперник ошибся не меньше чем на MISSED_ERROR_CP, а ответ потерял не меньше
+# MISSED_REPLY_CP из этого — наказать было можно, но не наказали. В списке — не больше MAX_MISSED.
+MISSED_ERROR_CP = 150
+MISSED_REPLY_CP = 150
+MAX_MISSED = 5
 
 
 def _clamp(value: int) -> int:
@@ -99,6 +104,18 @@ def _key_moments(moves: Sequence[dict], evals: Sequence[int], color: str) -> dic
     }
 
 
+def _missed_punishments(moves: Sequence[dict]) -> list[dict]:
+    """Полуходы, где сторона не наказала крупную ошибку соперника, — от самых дорогих."""
+    missed: list[dict] = []
+    for previous, move in zip(moves, moves[1:], strict=False):
+        if previous.get("color") == move.get("color"):
+            continue
+        if int(previous.get("cp_loss", 0)) >= MISSED_ERROR_CP and int(move.get("cp_loss", 0)) >= MISSED_REPLY_CP:
+            missed.append({"ply": int(move.get("ply", 0)), "color": move.get("color"), "cp": int(move.get("cp_loss", 0))})
+    missed.sort(key=lambda item: -int(item["cp"]))
+    return sorted(missed[:MAX_MISSED], key=lambda item: item["ply"])
+
+
 def summarize(moves: Sequence[dict], result: str | None) -> dict | None:
     """Итог по ходам разбора (moves из analysis_json) и результату партии. Пустая партия — None."""
     if not moves:
@@ -132,4 +149,5 @@ def summarize(moves: Sequence[dict], result: str | None) -> dict | None:
         "equal_share": round(equal_share, 3),
         "white": _key_moments(moves, evals, "white"),
         "black": _key_moments(moves, evals, "black"),
+        "missed": _missed_punishments(moves),
     }

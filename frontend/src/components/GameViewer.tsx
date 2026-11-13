@@ -1020,6 +1020,38 @@ export default function GameViewer() {
                                     <span className="text-boxwood/80">{t(`summary.kinds.${analysisReport.summary.kind}.text`)}</span>
                                 </div>
                             )}
+                            {analysisReport.summary && (() => {
+                                // Критические моменты (таск B.5): перелом, худшие ходы сторон, упущенные удары.
+                                const summary = analysisReport.summary;
+                                const moments: { ply: number; key: 'turning' | 'worstWhite' | 'worstBlack' | 'missed' }[] = [];
+                                if (summary.turning_point_ply) moments.push({ply: summary.turning_point_ply, key: 'turning'});
+                                if (summary.white.worst_ply) moments.push({ply: summary.white.worst_ply, key: 'worstWhite'});
+                                if (summary.black.worst_ply) moments.push({ply: summary.black.worst_ply, key: 'worstBlack'});
+                                for (const item of summary.missed ?? []) moments.push({ply: item.ply, key: 'missed'});
+                                const shown = moments
+                                    .filter((m, i) => moments.findIndex((o) => o.ply === m.ply) === i)
+                                    .filter((m) => analysisReport.moves[m.ply - 1])
+                                    .sort((a, b) => a.ply - b.ply);
+                                if (shown.length === 0) return null;
+                                return (
+                                    <div className="text-xs p-2 rounded bg-black/40 border border-amber-900/40 flex flex-col gap-1"
+                                         data-testid="viewer-moments">
+                                        <span className="font-bold text-amber-200">{t('viewer.moments.title')}</span>
+                                        {shown.map((moment) => {
+                                            const move = analysisReport.moves[moment.ply - 1];
+                                            const label = `${move.move_number}${move.color === 'white' ? '.' : '…'} ${move.san}`;
+                                            return (
+                                                <button key={moment.ply} type="button" data-testid={`moment-${moment.ply}`}
+                                                        onClick={() => setViewIndex(moment.ply - 1)}
+                                                        className={`text-left px-1.5 py-0.5 rounded hover:bg-black/40 cursor-pointer ${viewIndex === moment.ply - 1 ? 'bg-amber-900/50' : ''}`}>
+                                                    <span className="text-boxwood/70">{t(`viewer.moments.${moment.key}`)}</span>
+                                                    {' '}<b className="font-mono text-amber-100">{label}</b>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                );
+                            })()}
                             <div className="grid grid-cols-2 gap-2 text-xs">
                                 <div className="p-2 rounded bg-black/40 border border-amber-900/40 flex flex-col gap-1">
                                     <div className="flex justify-between items-center">

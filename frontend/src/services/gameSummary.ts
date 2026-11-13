@@ -14,6 +14,8 @@ export interface GameSummary {
     equal_share: number;
     white: { best_ply: number | null; worst_ply: number | null };
     black: { best_ply: number | null; worst_ply: number | null };
+    /** Упущенные удары: ответ не наказал крупную ошибку соперника (таск B.5). Нет поля — старый разбор. */
+    missed?: { ply: number; color: 'white' | 'black'; cp: number }[];
 }
 
 export function isSummaryKind(value: unknown): value is GameSummaryKind {
