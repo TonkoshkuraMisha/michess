@@ -104,7 +104,7 @@ async def personal_next(user: User = Depends(get_current_user), db: AsyncSession
     puzzle = await personal_puzzles.next_due(db, user)
     if puzzle is None:
         raise service.PuzzleError("no_puzzles_available", 404).to_http(404)
-    return personal_puzzles.view(puzzle)
+    return {**personal_puzzles.view(puzzle), **await personal_puzzles.game_context(db, puzzle, user)}
 
 
 @router.post("/personal/{puzzle_id}/answer")

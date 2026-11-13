@@ -142,6 +142,23 @@ describe('«Не зевни»', () => {
         expect(screen.getByTestId('defense-choice-f1c4').className).toContain('emerald');
         expect(screen.getByTestId('defense-choice-f3e5').className).toContain('rose');
         expect(screen.getByTestId('defense-refutation-f3e5').textContent).toBe('На ♘xe5 соперник отвечает ♞xe5.');
+
+        // Разбор на доске (таск B.3): опровержение по шагам со стрелкой следующего хода.
+        fireEvent.click(screen.getByTestId('replay-line-refutation-f3e5'));
+        expect(screen.getByTestId('replay-step').textContent).toBe('Ход 0 из 2');
+        expect(square('f3').querySelector('img')).not.toBeNull();
+        fireEvent.click(screen.getByTestId('replay-forward'));
+        expect(square('e5').querySelector('img')?.getAttribute('alt')).toBe('wn');
+        fireEvent.click(screen.getByTestId('replay-forward'));
+        expect(screen.getByTestId('replay-step').textContent).toBe('Ход 2 из 2');
+        expect(square('e5').querySelector('img')?.getAttribute('alt')).toBe('bn');
+        expect(square('c6').querySelector('img')).toBeNull();
+        // Верный ход — отдельная линия; повторный щелчок возвращает позицию упражнения.
+        fireEvent.click(screen.getByTestId('replay-line-good'));
+        expect(screen.getByTestId('replay-step').textContent).toBe('Ход 0 из 1');
+        fireEvent.click(screen.getByTestId('replay-line-good'));
+        expect(screen.queryByTestId('replay-step')).toBeNull();
+        expect(screen.getByTestId('replay-analyze')).toBeTruthy();
     });
 });
 

@@ -10,6 +10,7 @@ import {resetThemeRegistryCache} from '../../../services/themes';
 const VIEW = {
     id: 3, game_id: 41, ply: 6, fen: 'r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3',
     previous_move: 'd1h5', color: 'black', themes: [], attempts: 0, solved_streak: 0,
+    opponent: 'morphy', opponent_is_bot: true, played_at: '2026-11-10T18:30:00+00:00',
 };
 const SUMMARY = {due: 2, active: 3, mastered: 1, next_due_at: null};
 const tomorrow = () => new Date(Date.now() + 86_400_000).toISOString();
@@ -81,6 +82,14 @@ describe('Мои ошибки', () => {
         });
         expect(await screen.findByTestId('personal-result')).toHaveTextContent('Верно! Вернёмся к ней через 3 дн.');
         expect(screen.getByTestId('personal-played').textContent).toBe('В партии вы сыграли 3… ♞f6; сильный ход — 3… g6.');
+        // Откуда ошибка и разбор на доске (таск B.3).
+        expect(screen.getByTestId('personal-from').textContent).toBe('Партия против Морфи, 10 нояб. 2026');
+        fireEvent.click(screen.getByTestId('replay-line-played'));
+        expect(screen.getByTestId('replay-step').textContent).toBe('Ход 0 из 1');
+        fireEvent.click(screen.getByTestId('replay-forward'));
+        expect(square('f6').querySelector('img')?.getAttribute('alt')).toBe('bn');
+        fireEvent.click(screen.getByTestId('replay-line-best'));
+        expect(square('g8').querySelector('img')?.getAttribute('alt')).toBe('bn');
         await act(async () => {
             fireEvent.click(screen.getByTestId('personal-open-game'));
         });

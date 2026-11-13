@@ -17,6 +17,8 @@ import type {DefenseAnswer, DefenseDrillView, DefenseKind, DefenseThreatResponse
 import {themeText} from '../../services/themes';
 import {PuzzleBoard} from './PuzzleBoard';
 import {sanMoves, toMove} from './puzzleNotation';
+import {SolutionReplay} from './SolutionReplay';
+import type {ReplayLine, ReplayView} from './SolutionReplay';
 
 type Phase = 'idle' | 'loading' | 'threat' | 'move' | 'waiting' | 'done';
 
@@ -26,13 +28,15 @@ interface Props {
     initialKind?: DefenseKind;
     /** «Единственная защита» — тренировка по приёмам с темой defensive_move. */
     onDefensiveMove: () => void;
+    /** «Разобрать с наставником»: позиция упражнения на свободной доске. */
+    onAnalyze?: (fen: string) => void;
 }
 
 function errorOf(err: unknown): UiMessage {
     return err instanceof UiError ? err.ui : {key: 'common.networkError'};
 }
 
-export function DefenseTrainer({header, initialKind = 'threat', onDefensiveMove}: Props) {
+export function DefenseTrainer({header, initialKind = 'threat', onDefensiveMove, onAnalyze}: Props) {
     const {t} = useI18n();
     const [kind, setKind] = useState<DefenseKind>(initialKind);
     const [drill, setDrill] = useState<DefenseDrillView | null>(null);
@@ -43,6 +47,8 @@ export function DefenseTrainer({header, initialKind = 'threat', onDefensiveMove}
     const [played, setPlayed] = useState<{ from: string; to: string } | null>(null);
     const [mark, setMark] = useState<{ square: string; ok: boolean } | null>(null);
     const [error, setError] = useState<UiMessage | null>(null);
+    // Разбор после ответа (таск B.3): линия на доске вместо позиции упражнения.
+    const [replay, setReplay] = useState<ReplayView | null>(null);
 
     const load = useCallback(async (nextKind: DefenseKind) => {
         setError(null);
@@ -55,6 +61,7 @@ export function DefenseTrainer({header, initialKind = 'threat', onDefensiveMove}
             setAnswer(null);
             setPlayed(null);
             setMark(null);
+            setReplay(null);
             setPhase(view.kind === 'threat' ? 'threat' : 'move');
         } catch (err) {
             setError(errorOf(err));
@@ -106,13 +113,23 @@ export function DefenseTrainer({header, initialKind = 'threat', onDefensiveMove}
     const motifs = (answer?.motifs ?? threat?.motifs ?? []).filter((code) => code !== 'defensive_move');
     const training = answer?.training ?? null;
     const goodSan = drill && answer ? answer.good.map((uci) => sanMoves(drill.fen, [uci])[0]).join(', ') : '';
+    const replayLines: ReplayLine[] = drill && answer ? [
+        ...Object.entries(answer.refutations).map(([move, reply]): ReplayLine => ({
+            id: `refutation-${move}`, label: t('puzzles.review.refutation', {move: sanMoves(drill.fen, [move])[0]}),
+            moves: [move, reply], color: 'red',
+        })),
+        ...answer.good.slice(0, 1).map((move): ReplayLine => ({
+            id: 'good', label: t('puzzles.review.good', {move: sanMoves(drill.fen, [move])[0]}), moves: [move], color: 'green',
+        })),
+    ] : [];
 
     return (
         <div className="w-full max-w-6xl mx-auto p-3 sm:p-4 flex flex-col lg:flex-row gap-4" data-testid="defense-trainer">
             <div className="w-full lg:w-[min(70vh,640px)] shrink-0 flex flex-col gap-2">
-                <PuzzleBoard fen={fen} orientation={drill?.color ?? 'white'}
+                <PuzzleBoard fen={replay?.fen ?? fen} orientation={drill?.color ?? 'white'}
                              interactive={phase === 'threat' || (phase === 'move' && drill?.kind === 'threat')}
-                             lastMove={played} hint={threatSquares} mark={mark}
+                             lastMove={replay ? replay.lastMove : played} hint={replay ? null : threatSquares}
+                             mark={replay ? null : mark} arrows={replay?.arrows}
                              onMove={(uci) => void play(uci)}
                              onSquare={phase === 'threat' ? (square) => void pickThreat(square) : undefined}/>
                 <div className="text-sm font-bold text-amber-300" role="status" data-testid="defense-status">
@@ -186,6 +203,10 @@ export function DefenseTrainer({header, initialKind = 'threat', onDefensiveMove}
                             </p>
                         );
                     })}
+                    {phase === 'done' && drill && (
+                        <SolutionReplay key={drill.id} startFen={drill.fen} lines={replayLines} onShow={setReplay}
+                                        onAnalyze={onAnalyze}/>
+                    )}
                     {(threat || answer) && motifs.length > 0 && (
                         <div className="flex flex-wrap items-center gap-1" data-testid="defense-motifs">
                             <span className="text-xs">{t('puzzles.defense.motifs')}</span>

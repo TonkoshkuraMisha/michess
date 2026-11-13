@@ -191,6 +191,24 @@ def view(puzzle: PersonalPuzzle) -> dict:
     }
 
 
+async def game_context(db: AsyncSession, puzzle: PersonalPuzzle, user: User) -> dict:
+    """
+    Откуда ошибка (таск B.3): соперник (бот — его id, клиент переводит имя; своя персоналия — её имя) и дата партии.
+    """
+    game = await db.get(Game, puzzle.game_id)
+    if game is None:
+        return {"opponent": None, "opponent_is_bot": False, "played_at": None}
+    opponent_id = game.black_player_id if game.white_player_id == user.id else game.white_player_id
+    opponent = await db.get(User, opponent_id)
+    name = game.personality_name if game.personality_name and opponent is not None and opponent.is_bot else None
+    when = game.finished_at or game.created_at
+    return {
+        "opponent": name or (opponent.username if opponent is not None else None),
+        "opponent_is_bot": bool(opponent is not None and opponent.is_bot and not name),
+        "played_at": _aware(when).isoformat() if when else None,
+    }
+
+
 async def summary(db: AsyncSession, user: User) -> dict:
     now = _now()
     total = await db.scalar(select(func.count()).select_from(PersonalPuzzle).where(

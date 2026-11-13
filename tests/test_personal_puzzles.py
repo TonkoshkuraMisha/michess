@@ -111,6 +111,9 @@ async def test_api(client, db_session, game, engine, token_user_1, token_user_2)
     assert client.get(f"{API}/personal", headers=auth).json()["due"] == 1
     view = client.get(f"{API}/personal/next", headers=auth).json()
     assert view["color"] == "black" and view["previous_move"] == "d1h5" and "solution" not in view
+    # Откуда ошибка (таск B.3): соперник и дата партии.
+    assert isinstance(view["opponent"], str) and view["opponent"] and view["opponent_is_bot"] is False
+    assert dt.datetime.fromisoformat(view["played_at"]).tzinfo is not None
     assert client.get(f"{API}/personal/game/{game.id}", headers=auth).json()["plies"] == [6]
     # Чужая задача недоступна, чужой разбор значков не показывает.
     other = {"Authorization": f"Bearer {token_user_2}"}
