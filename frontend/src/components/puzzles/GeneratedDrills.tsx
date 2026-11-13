@@ -14,6 +14,8 @@ import {DRILL_KINDS, DRILL_PIECES, drillSupported, puzzlesApi} from '../../servi
 import type {DrillKind, DrillPiece, DrillRun, DrillRunResult, DrillView} from '../../services/puzzles';
 import {PuzzleBoard} from './PuzzleBoard';
 import {solutionSan, toMove} from './puzzleNotation';
+import {SolutionReplay} from './SolutionReplay';
+import type {ReplayView} from './SolutionReplay';
 
 type Phase = 'idle' | 'loading' | 'solving' | 'waiting' | 'done';
 
@@ -24,13 +26,15 @@ const FIGURINES: Record<string, string> = {q: '♕', r: '♖', b: '♗', n: '♘
 interface Props {
     header: ReactNode;
     initialKind?: DrillKind;
+    /** «Разобрать с наставником»: позиция упражнения на свободной доске. */
+    onAnalyze?: (fen: string) => void;
 }
 
 function errorOf(err: unknown): UiMessage {
     return err instanceof UiError ? err.ui : {key: 'common.networkError'};
 }
 
-export function GeneratedDrills({header, initialKind = 'capture'}: Props) {
+export function GeneratedDrills({header, initialKind = 'capture', onAnalyze}: Props) {
     const {t} = useI18n();
     const [kind, setKind] = useState<DrillKind>(initialKind);
     const [piece, setPiece] = useState<DrillPiece>('q');
@@ -43,6 +47,9 @@ export function GeneratedDrills({header, initialKind = 'capture'}: Props) {
     const [mark, setMark] = useState<{ square: string; ok: boolean } | null>(null);
     const [correct, setCorrect] = useState<boolean | null>(null);
     const [solution, setSolution] = useState<string | null>(null);
+    // Решение ходами (UCI) — для пошагового показа на доске (таск B.3).
+    const [solutionLine, setSolutionLine] = useState<string[]>([]);
+    const [replay, setReplay] = useState<ReplayView | null>(null);
     const [run, setRun] = useState<DrillRun | null>(null);
     const [secondsLeft, setSecondsLeft] = useState(0);
     const [runResult, setRunResult] = useState<DrillRunResult | null>(null);
@@ -68,6 +75,8 @@ export function GeneratedDrills({header, initialKind = 'capture'}: Props) {
         setMark(null);
         setCorrect(null);
         setSolution(null);
+        setSolutionLine([]);
+        setReplay(null);
         setPhase('solving');
     };
 
@@ -147,7 +156,10 @@ export function GeneratedDrills({header, initialKind = 'capture'}: Props) {
             }
             setCorrect(answer.correct);
             setPhase('done');
-            if (answer.solution) setSolution(solutionSan(drill.fen, answer.solution));
+            if (answer.solution) {
+                setSolution(solutionSan(drill.fen, answer.solution));
+                setSolutionLine(answer.solution);
+            }
             if (answer.run) {
                 setRun(answer.run);
                 if (answer.run.over) later(() => void finishRun(), NEXT_DELAY_MS);
@@ -176,8 +188,9 @@ export function GeneratedDrills({header, initialKind = 'capture'}: Props) {
     return (
         <div className="w-full max-w-6xl mx-auto p-3 sm:p-4 flex flex-col lg:flex-row gap-4" data-testid="generated-drills">
             <div className="w-full lg:w-[min(70vh,640px)] shrink-0 flex flex-col gap-2">
-                <PuzzleBoard fen={fen} orientation={drill?.color ?? 'white'} interactive={phase === 'solving'}
-                             lastMove={lastMove} mark={mark} onMove={(uci) => void play(uci)}/>
+                <PuzzleBoard fen={replay?.fen ?? fen} orientation={drill?.color ?? 'white'} interactive={phase === 'solving'}
+                             lastMove={replay ? replay.lastMove : lastMove} mark={replay ? null : mark}
+                             arrows={replay?.arrows} onMove={(uci) => void play(uci)}/>
                 <div className="text-sm font-bold text-amber-300" role="status" data-testid="drill-status">
                     {status()}
                     {drill?.piece_type && phase === 'solving' && line.length === 0 && (
@@ -256,6 +269,12 @@ export function GeneratedDrills({header, initialKind = 'capture'}: Props) {
                     )}
                     {solution && (
                         <p className="text-xs text-boxwood/80" data-testid="drill-solution">{t('puzzles.solution', {moves: solution})}</p>
+                    )}
+                    {phase === 'done' && drill && !run && (
+                        <SolutionReplay key={drill.key} startFen={drill.fen} onShow={setReplay} onAnalyze={onAnalyze}
+                                        lines={solutionLine.length > 0
+                                            ? [{id: 'solution', label: t('puzzles.review.solution'), moves: solutionLine, color: 'green'}]
+                                            : []}/>
                     )}
                     {error && <p className="text-rose-300" role="alert">{renderUiMessage(error, t)}</p>}
                 </section>

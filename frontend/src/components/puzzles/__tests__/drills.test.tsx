@@ -111,6 +111,14 @@ describe('упражнения-генераторы', () => {
         await clickMove('a1', 'a5');
         expect(screen.getByTestId('drill-outcome').textContent).toBe('Не тот ход.');
         expect(screen.getByTestId('drill-solution').textContent).toBe('Решение: 1. ♖xa8+');
+
+        // Решение на доске (таск B.3): с позиции упражнения, ход за ходом.
+        fireEvent.click(screen.getByTestId('replay-line-solution'));
+        const cell = (sq: string) => document.querySelector(`[data-square="${sq}"]`) as HTMLElement;
+        expect(cell('a1').querySelector('img')?.getAttribute('alt')).toBe('wr');
+        fireEvent.click(screen.getByTestId('replay-forward'));
+        expect(cell('a8').querySelector('img')?.getAttribute('alt')).toBe('wr');
+        expect(screen.getByTestId('replay-step').textContent).toBe('Ход 1 из 1');
     });
 
     it('мат в 2: после первого хода соперник отвечает, второй ход уходит вместе с историей', async () => {

@@ -10,8 +10,9 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {useNavigate} from 'react-router-dom';
 import {Chess} from 'chess.js';
+import {format, parseISO} from 'date-fns';
 import {Puzzle as PuzzleIcon, Lightbulb, Flag, ArrowRight, GraduationCap, Timer, CalendarDays} from 'lucide-react';
-import {renderUiMessage, useI18n} from '../../i18n';
+import {hasMessage, renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
 import {UiError} from '../../services/apiErrors';
 import {DEFENSE_DRILL_THEMES, puzzlesApi} from '../../services/puzzles';
@@ -25,8 +26,10 @@ import type {ThemeRegistry, ThemeSection} from '../../services/themes';
 import {DefenseTrainer} from './DefenseTrainer';
 import {GeneratedDrills} from './GeneratedDrills';
 import {PuzzleBoard} from './PuzzleBoard';
-import {solutionSan, toMove} from './puzzleNotation';
+import {sanMoves, solutionSan, toMove} from './puzzleNotation';
 import {TrainingPanel} from './TrainingPanel';
+import {SolutionReplay} from './SolutionReplay';
+import type {ReplayView} from './SolutionReplay';
 
 type Mode = 'rated' | 'themes' | 'defense' | 'drills' | 'personal' | 'daily' | 'timed';
 const MODES: Mode[] = ['rated', 'themes', 'defense', 'drills', 'personal', 'daily', 'timed'];
@@ -62,8 +65,14 @@ export function RatingChart({history}: { history: PuzzleProfile['history'] }) {
     );
 }
 
+/** Имя бота-соперника из каталога (исторический мастер); незнакомый id — как есть. */
+function botShortName(id: string, t: ReturnType<typeof useI18n>['t']): string {
+    const key = `bots.profiles.${id}.shortName`;
+    return hasMessage(key) ? t(key) : id;
+}
+
 export default function PuzzlesPage() {
-    const {t} = useI18n();
+    const {t, dateLocale} = useI18n();
     const navigate = useNavigate();
     const [mode, setMode] = useState<Mode>('rated');
     const [theme, setTheme] = useState<string | null>(null);
@@ -84,6 +93,8 @@ export default function PuzzlesPage() {
     const [error, setError] = useState<UiMessage | null>(null);
     const [target, setTarget] = useState<TrainingTarget | null>(null);
     const [personal, setPersonal] = useState<PersonalView | null>(null);
+    // Разбор личной ошибки на доске: ход из партии и сильный ход (таск B.3).
+    const [personalReplay, setPersonalReplay] = useState<ReplayView | null>(null);
     const [personalAnswer, setPersonalAnswer] = useState<PersonalAnswer | null>(null);
     const [personalSummary, setPersonalSummary] = useState<PersonalSummary | null>(null);
     const [trainingKey, setTrainingKey] = useState(0);
@@ -138,6 +149,7 @@ export default function PuzzlesPage() {
             if (nextMode === 'personal') {
                 setPuzzle(null);
                 setPersonalAnswer(null);
+                setPersonalReplay(null);
                 setMark(null);
                 setPersonalSummary(await puzzlesApi.personalSummary());
                 let view: PersonalView | null = null;
@@ -333,8 +345,9 @@ export default function PuzzlesPage() {
         void load('themes', next);
     };
 
+    const analyzePosition = (fen: string) => navigate('/', {state: {analyzeFen: fen}});
     const analyze = () => {
-        if (startFen) navigate('/', {state: {analyzeFen: startFen}});
+        if (startFen) analyzePosition(startFen);
     };
 
     const dueDays = (iso: string | null) => (iso
@@ -370,21 +383,25 @@ export default function PuzzlesPage() {
     );
 
     if (mode === 'drills') {
-        return <GeneratedDrills key={drillKind} header={header} initialKind={drillKind}/>;
+        return <GeneratedDrills key={drillKind} header={header} initialKind={drillKind} onAnalyze={analyzePosition}/>;
     }
 
     if (mode === 'defense') {
         return (
             <DefenseTrainer key={defenseKind} header={header} initialKind={defenseKind}
-                            onDefensiveMove={() => startTraining({theme: 'defensive_move', blind: false})}/>
+                            onDefensiveMove={() => startTraining({theme: 'defensive_move', blind: false})}
+                            onAnalyze={analyzePosition}/>
         );
     }
 
     return (
         <div className="w-full max-w-6xl mx-auto p-3 sm:p-4 flex flex-col lg:flex-row gap-4" data-testid="puzzles-page">
             <div className="w-full lg:w-[min(70vh,640px)] shrink-0 flex flex-col gap-2">
-                <PuzzleBoard fen={fen} orientation={personal?.color ?? puzzle?.color ?? 'white'} interactive={phase === 'solving'}
-                             lastMove={lastMove} hint={hint} mark={mark} onMove={(uci) => void onMove(uci)}/>
+                <PuzzleBoard fen={personalReplay?.fen ?? fen} orientation={personal?.color ?? puzzle?.color ?? 'white'}
+                             interactive={phase === 'solving'}
+                             lastMove={personalReplay ? personalReplay.lastMove : lastMove} hint={personalReplay ? null : hint}
+                             mark={personalReplay ? null : mark} arrows={personalReplay?.arrows}
+                             onMove={(uci) => void onMove(uci)}/>
                 <div className="flex flex-wrap items-center gap-2 text-sm" role="status" data-testid="puzzle-status">
                     {phase === 'opponent' && <span className="text-boxwood/80">{t('puzzles.opponentMoving')}</span>}
                     {(phase === 'solving' || phase === 'waiting') && personal && (
@@ -510,6 +527,29 @@ export default function PuzzlesPage() {
                                         ? t('puzzles.personal.mastered')
                                         : t('puzzles.personal.again', {days: dueDays(personalAnswer.next_due_at)})}
                                 </p>
+                            )}
+                            {personal?.opponent && (
+                                <p className="text-xs text-boxwood/80" data-testid="personal-from">
+                                    {t('puzzles.personal.from', {
+                                        opponent: personal.opponent_is_bot
+                                            ? botShortName(personal.opponent, t) : personal.opponent,
+                                        date: personal.played_at
+                                            ? format(parseISO(personal.played_at), 'd MMM yyyy', {locale: dateLocale}) : '',
+                                    })}
+                                </p>
+                            )}
+                            {personalAnswer && personal && (
+                                <SolutionReplay key={personal.id} startFen={personal.fen} onShow={setPersonalReplay}
+                                                onAnalyze={analyzePosition} lines={[
+                                    ...(personalAnswer.played !== personalAnswer.solution ? [{
+                                        id: 'played', moves: [personalAnswer.played], color: 'red' as const,
+                                        label: t('puzzles.review.refutation', {move: sanMoves(personal.fen, [personalAnswer.played])[0]}),
+                                    }] : []),
+                                    {
+                                        id: 'best', moves: [personalAnswer.solution], color: 'green' as const,
+                                        label: t('puzzles.review.good', {move: sanMoves(personal.fen, [personalAnswer.solution])[0]}),
+                                    },
+                                ]}/>
                             )}
                             {personalAnswer && personal && (
                                 <p className="text-xs text-boxwood/80" data-testid="personal-played">

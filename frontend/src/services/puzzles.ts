@@ -80,6 +80,10 @@ export interface PersonalView {
     themes: string[];
     attempts: number;
     solved_streak: number;
+    /** Откуда ошибка: соперник (у бота — его id) и дата партии (таск B.3). */
+    opponent?: string | null;
+    opponent_is_bot?: boolean;
+    played_at?: string | null;
 }
 
 export interface PersonalAnswer {
