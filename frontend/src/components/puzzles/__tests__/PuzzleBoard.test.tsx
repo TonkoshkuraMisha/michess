@@ -326,3 +326,28 @@ describe('выбор поля (защитные упражнения)', () => {
         expect(targets()).toEqual([]);
     });
 });
+
+describe('PuzzleBoard: звуки', () => {
+    it('ход из прошлой позиции — звук по нотации, новая позиция без хода и пример без звука — тишина', async () => {
+        const {soundEngine} = await import('../../../services/soundEngine');
+        const play = vi.spyOn(soundEngine, 'play').mockImplementation(() => undefined);
+        const onMove = vi.fn();
+        const {rerender} = render(<PuzzleBoard fen={START} orientation="white" interactive onMove={onMove}/>);
+        const afterE4 = 'rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1';
+        rerender(<PuzzleBoard fen={afterE4} orientation="white" interactive onMove={onMove} lastMove={{from: 'e2', to: 'e4'}}/>);
+        expect(play).toHaveBeenLastCalledWith('move');
+
+        rerender(<PuzzleBoard fen="4k3/8/8/8/8/8/8/4K2R w K - 0 1" orientation="white" interactive onMove={onMove}
+                              lastMove={{from: 'e2', to: 'e4'}}/>);
+        expect(play).toHaveBeenCalledTimes(1);  // другая задача, а не ход
+
+        rerender(<PuzzleBoard fen="4k3/8/8/8/8/8/8/4K2R w K - 0 1" orientation="white" interactive onMove={onMove}
+                              mark={{square: 'h1', ok: false}}/>);
+        expect(play).toHaveBeenLastCalledWith('illegal');
+
+        rerender(<PuzzleBoard fen="4k3/8/8/8/8/8/8/5RK1 b - - 1 1" orientation="white" interactive onMove={onMove}
+                              lastMove={{from: 'e1', to: 'g1'}} sound={false}/>);
+        expect(play).toHaveBeenCalledTimes(2);
+        play.mockRestore();
+    });
+});

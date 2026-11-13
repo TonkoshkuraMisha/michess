@@ -7,10 +7,11 @@
 // (или просто щёлкнули) — фигура остаётся выбранной, и ход можно закончить щелчком по полю. Выбор привязан к позиции:
 // после ответа соперника или новой задачи старый выбор не действует.
 
-import {useCallback, useEffect, useMemo, useState} from 'react';
+import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import type {PointerEvent as ReactPointerEvent} from 'react';
 import {Chess} from 'chess.js';
 import {useI18n} from '../../i18n';
+import {resolveMoveSound, soundEngine} from '../../services/soundEngine';
 import {
     BOARD_THEMES, getHarmoniousPieceStyle, getPieceSvgUrl, getSavedBoardThemeKey, getSavedPieceSetKey,
 } from '../../config/boardAppearance';
@@ -39,6 +40,8 @@ interface Props {
     highlights?: string[];
     /** «Призрачная» фигура: полупрозрачная, показывает, куда фигура может встать. */
     ghost?: { square: string; piece: string } | null;
+    /** Звуки хода и неверного решения, как на основной доске (по умолчанию включены; выключатель — общий). */
+    sound?: boolean;
 }
 
 export interface BoardArrow {
@@ -91,6 +94,7 @@ function squareAt(x: number, y: number): string | null {
 
 export function PuzzleBoard({
     fen, orientation, interactive, lastMove, hint, mark, onMove, onSquare, arrows = [], highlights = [], ghost = null,
+    sound = true,
 }: Props) {
     const {t} = useI18n();
     const [selection, setSelection] = useState<{ square: string; fen: string } | null>(null);
@@ -106,6 +110,27 @@ export function PuzzleBoard({
     const targets = useMemo(() => new Set(
         selected ? game.moves({square: selected as never, verbose: true}).map((m) => m.to as string) : [],
     ), [game, selected]);
+
+    // Звук хода: позиция сменилась ходом lastMove из предыдущей позиции (свой ход, ответ соперника, ход урока).
+    // Новая задача или переход к другому шагу — не ход, без звука.
+    const previousFen = useRef(fen);
+    useEffect(() => {
+        const before = previousFen.current;
+        previousFen.current = fen;
+        if (!sound || before === fen || !lastMove) return;
+        const placement = fen.split(' ')[0];
+        try {
+            const played = new Chess(before).moves({square: lastMove.from as never, verbose: true})
+                .find((m) => m.to === lastMove.to && m.after.split(' ')[0] === placement);
+            if (played) soundEngine.play(resolveMoveSound(played.san));
+        } catch {
+            // Предыдущая позиция не разбирается — просто без звука.
+        }
+    }, [fen, lastMove, sound]);
+    const wrongMark = mark && !mark.ok ? mark.square : null;
+    useEffect(() => {
+        if (sound && wrongMark) soundEngine.play('illegal');
+    }, [wrongMark, sound]);
 
     const select = (square: string | null) => setSelection(square ? {square, fen} : null);
 
