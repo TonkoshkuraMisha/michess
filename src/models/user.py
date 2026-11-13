@@ -51,6 +51,9 @@ class User(Base):
     ladder_rating: Mapped[int] = mapped_column(Integer, default=1000, server_default="1000", nullable=False)
     ladder_games: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     ladder_step: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
+    # Рейтинг решателя задач (таск 13.1) — отдельная категория, на игровые рейтинги не влияет.
+    puzzle_rating: Mapped[int] = mapped_column(Integer, default=1500, server_default="1500", nullable=False)
+    puzzle_games: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
 
     # Исторический бот (играбельный AI) или архивный исторический игрок (партии из PGN,
     # посмотреть — нельзя сыграть) — не реальный зарегистрированный игрок, вне таблицы лидеров.

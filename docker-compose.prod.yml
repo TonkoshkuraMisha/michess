@@ -46,10 +46,10 @@ services:
       retries: 20
     restart: unless-stopped
 
-  # Одноразовый сервис: применяет миграции до старта API и воркера.
+  # Одноразовый сервис: применяет миграции до старта API и воркера и загружает базу задач (повторно — безопасно).
   migrate:
     <<: *backend
-    command: ["alembic", "upgrade", "head"]
+    command: ["sh", "-c", "alembic upgrade head && python -m scripts.import_puzzles"]
     restart: "no"
     depends_on:
       db:
