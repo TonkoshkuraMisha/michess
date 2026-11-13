@@ -35,6 +35,9 @@ import {displayPlayerName} from '../config/players';
 import {coachArrows, coachHighlights, coachText} from '../services/coach';
 import type {CoachArrowKind, CoachComment} from '../services/coach';
 import {isSummaryKind} from '../services/gameSummary';
+import {XrayOverlay} from './xray/XrayOverlay';
+import {XrayPanel} from './xray/XrayPanel';
+import {useXraySettings} from './xray/useXraySettings';
 import type {GameSummary} from '../services/gameSummary';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
@@ -437,6 +440,8 @@ export default function GameViewer() {
 
     // Наставник к текущему ходу: текст, стрелки (лучший ход, угроза, идея) и подсвеченные цели.
     const [showCoachArrows, setShowCoachArrows] = useState(true);
+    // Рентген доски (таск 12.1): в разборе — за сторону, которая ходит в показанной позиции.
+    const xray = useXraySettings();
     const currentCoach = viewIndex >= 0 ? analysisReport?.moves[viewIndex]?.coach ?? null : null;
     const currentCoachText = coachText(currentCoach, t);
     const visibleCoachArrows = showCoachArrows ? coachArrows(currentCoach) : [];
@@ -733,6 +738,10 @@ export default function GameViewer() {
                                 })
                             )}
 
+                            {xray.modes.size > 0 && (
+                                <XrayOverlay fen={currentGame.fen()} flipped={isFlipped} modes={xray.modes}
+                                             side={xray.forOpponent ? (currentGame.turn() === 'w' ? 'b' : 'w') : currentGame.turn()}/>
+                            )}
                             {(arrows.length > 0 || visibleCoachArrows.length > 0) && (
                                 <svg
                                     viewBox="0 0 100 100"
@@ -1087,6 +1096,8 @@ export default function GameViewer() {
                             {renderUiMessage(analysisError, t)}
                         </div>
                     )}
+
+                    <XrayPanel settings={xray} canSelect={false}/>
 
                     {currentCoachText && (
                         <section

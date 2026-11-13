@@ -599,3 +599,24 @@ describe('итог партии', () => {
         expect(calls.filter((url) => url.includes('/bots/save-game'))).toHaveLength(1);
     });
 });
+
+describe('рентген доски', () => {
+    it('на свободной доске доступен и рисует контроль полей', async () => {
+        vi.stubGlobal('fetch', mockFetchRouter({
+            '/profile/me': () => ({id: 1, username: 'TestPlayer', blitz_rating: 1500}),
+            '/profile/matchmaking/queue': () => [],
+            '/profile/games/live': () => [],
+            '/profile/games/my-active': () => ({active: false}),
+        }));
+        renderChessboard();
+        fireEvent.click(await screen.findByTestId('xray-mode-control'));
+        expect(screen.getByTestId('xray-control-f3').textContent).toBe('+3');
+    });
+
+    it('в партии с ботом — только при включённом наставнике', async () => {
+        await startBotGame('white');
+        expect(screen.queryByTestId('xray-panel')).toBeNull();
+        fireEvent.click(screen.getByTestId('coach-toggle'));
+        expect(screen.getByTestId('xray-panel')).toBeInTheDocument();
+    });
+});

@@ -36,6 +36,9 @@ import {CoachPanel} from './chessboard/CoachPanel';
 import {CoachArrowsOverlay} from './chessboard/CoachArrowsOverlay';
 import {coachArrows, coachHighlights} from '../services/coach';
 import {AuxBoard} from './chessboard/AuxBoard';
+import {XrayOverlay} from './xray/XrayOverlay';
+import {XrayPanel} from './xray/XrayPanel';
+import {useXraySettings} from './xray/useXraySettings';
 import {GameSummaryPanel} from './chessboard/GameSummaryPanel';
 import {outcomeFor, recommendOpponent} from '../services/gameSummary';
 import type {PoolOpponent} from '../services/gameSummary';
@@ -210,6 +213,9 @@ export default function Chessboard() {
 
     // Игра с наставником (таск 11.3): проверка ходов игрока и советы — в партии с ботом и на свободной доске.
     const coach = useCoachMode(currentUserRating);
+    // Рентген доски (таск 12.1): свободная доска, партия с ботом при включённом наставнике, зритель. Игроку
+    // идущей партии с человеком — нет (правило 2).
+    const xray = useXraySettings();
     const coachAssistedRef = useRef(false);
     coachAssistedRef.current = coach.assisted;
     const isCoachAssisted = useCallback(() => coachAssistedRef.current, []);
@@ -931,6 +937,9 @@ export default function Chessboard() {
         return tg;
     })();
     const boardState = currentGame.board();
+    const xrayAvailable = Boolean(spectatingGameId) || (!gameId && (!activeBot || (coach.enabled && !isLadderGame)));
+    // «Своя» сторона: в партии с ботом — цвет игрока, на свободной доске и у зрителя — сторона, которая ходит.
+    const xraySide: 'w' | 'b' = activeBot && !spectatingGameId ? (myColor === 'white' ? 'w' : 'b') : currentGame.turn();
     const material = calculateMaterialBalance(boardState);
 
     const activeMoveIndex = viewIndex === -1 ? history.length - 1 : viewIndex;
@@ -1335,6 +1344,11 @@ export default function Chessboard() {
 
                     <div
                         className="grid grid-cols-8 grid-rows-8 w-full h-full border border-black/60 relative z-10 shadow-inner-board rounded-[2px] overflow-hidden">
+                        {xrayAvailable && xray.modes.size > 0 && (
+                            <XrayOverlay fen={currentGame.fen()} flipped={isBoardFlipped} modes={xray.modes}
+                                         selectedSquare={selectedSquare}
+                                         side={xray.forOpponent ? (xraySide === 'w' ? 'b' : 'w') : xraySide}/>
+                        )}
                         {viewIndex === -1 && (
                             <CoachArrowsOverlay arrows={coachArrows(coach.explanation ?? coach.advice)}
                                                 highlights={[...coachHighlights(coach.explanation ?? coach.advice)]}
@@ -1655,6 +1669,8 @@ export default function Chessboard() {
                                   renderPiece={renderPieceSvg} onClose={() => setAuxOpen(false)}/>
                     </CoachPanel>
                 )}
+
+                {xrayAvailable && <XrayPanel settings={xray} canSelect={!spectatingGameId}/>}
 
                 {/* Зрителю кнопки песочницы не показываем: «отменить ход» и «сбросить доску»
                     портили бы чужую партию на его экране. Выход — в панели чата. */}

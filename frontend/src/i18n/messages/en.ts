@@ -876,6 +876,50 @@ export const en = {
     },
     // Наставник (src/services/coach.py): фигуры и поля приходят фигурной нотацией («♘f7»), поэтому
     // фразы не склоняют названия фигур. У каждого шаблона две формулировки (v1, v2).
+    xray: {
+        title: 'Board X-ray',
+        forOpponent: 'For the opponent',
+        forOpponentHint: 'Show the same hints for the other side: how could the opponent answer?',
+        lockedPvp: 'The X-ray is unavailable while you are playing a person.',
+        modes: {
+            control: {
+                name: 'Square control',
+                legend: 'Who controls each square: the number is the balance of attackers; blue with diagonal hatching for White, red with dots for Black.',
+            },
+            hanging: {
+                name: 'Pieces under attack',
+                legend: 'Triangle: the piece can be taken with a gain. Dashed lines from an overloaded defender to everything it must guard.',
+            },
+            lines: {
+                name: 'Pins and skewers',
+                legend: 'Dashed line from the attacker through the pinned piece; a thick ring means it is pinned to the king.',
+            },
+            captures: {
+                name: 'Captures',
+                legend: 'Thick arrow: a capture that wins material; thin arrow: an exchange.',
+            },
+            defenses: {
+                name: 'Defences',
+                legend: 'Dashed green arrows: which piece guards which.',
+            },
+            checks: {
+                name: 'Checks and mates',
+                legend: 'Purple arrow: a check; thick arrow and a dashed frame on the square: mate.',
+            },
+            moves: {
+                name: 'All moves',
+                legend: 'Thin blue arrows: every legal move.',
+            },
+            pawns: {
+                name: 'Pawn weaknesses and strengths',
+                legend: 'Letter «i»: an isolated pawn; arrow «↑»: a passed pawn.',
+            },
+            safety: {
+                name: 'Safe squares',
+                legend: 'Select a piece: a green dot is a safe square for it, a red cross is a square where it would be lost.',
+            },
+        },
+    },
     summary: {
         title: 'Game summary',
         loading: 'The coach is going through the game…',
