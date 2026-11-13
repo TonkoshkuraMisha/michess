@@ -34,6 +34,8 @@ import type {UiMessage} from '../i18n';
 import {displayPlayerName} from '../config/players';
 import {coachArrows, coachHighlights, coachText} from '../services/coach';
 import type {CoachArrowKind, CoachComment} from '../services/coach';
+import {isSummaryKind} from '../services/gameSummary';
+import type {GameSummary} from '../services/gameSummary';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
@@ -71,6 +73,8 @@ interface FullGameAnalysisReport {
     white: SideSummaryStats;
     black: SideSummaryStats;
     moves: MoveEvaluationItem[];
+    /** Итог партии (таск 11.5): тип партии по графику оценки. */
+    summary?: GameSummary | null;
 }
 
 /** Цвета стрелок наставника: зелёная — лучший ход, красная — угроза соперника, синяя — идея. */
@@ -983,6 +987,15 @@ export default function GameViewer() {
                         </div>
                     ) : (
                         <>
+                            {analysisReport.summary && isSummaryKind(analysisReport.summary.kind) && (
+                                <div className="text-xs p-2 rounded bg-black/40 border border-amber-900/40" data-testid="viewer-summary">
+                                    <span className="font-bold text-amber-200">
+                                        {t(`summary.kinds.${analysisReport.summary.kind}.name`)}
+                                    </span>
+                                    {' — '}
+                                    <span className="text-boxwood/80">{t(`summary.kinds.${analysisReport.summary.kind}.text`)}</span>
+                                </div>
+                            )}
                             <div className="grid grid-cols-2 gap-2 text-xs">
                                 <div className="p-2 rounded bg-black/40 border border-amber-900/40 flex flex-col gap-1">
                                     <div className="flex justify-between items-center">

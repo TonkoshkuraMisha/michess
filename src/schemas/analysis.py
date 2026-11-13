@@ -113,6 +113,21 @@ class MoveCheckResponse(BaseModel):
     coach: CoachComment | None = None
 
 
+class KeyMoments(BaseModel):
+    best_ply: int | None = None
+    worst_ply: int | None = None
+
+
+class GameSummary(BaseModel):
+    """Итог партии (таск 11.5), см. src/services/game_summary.py."""
+    kind: str = Field(description="seesaw | decisive_blunder | domination | missed_win | balanced | gradual")
+    turning_point_ply: int | None = None
+    lead_changes: int
+    equal_share: float
+    white: KeyMoments
+    black: KeyMoments
+
+
 class FullGameAnalysisResponse(BaseModel):
     game_id: int
     format_version: int
@@ -120,3 +135,4 @@ class FullGameAnalysisResponse(BaseModel):
     white: SideSummaryStats
     black: SideSummaryStats
     moves: list[MoveEvaluationItem]
+    summary: GameSummary | None = None

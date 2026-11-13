@@ -876,6 +876,43 @@ export const en = {
     },
     // Наставник (src/services/coach.py): фигуры и поля приходят фигурной нотацией («♘f7»), поэтому
     // фразы не склоняют названия фигур. У каждого шаблона две формулировки (v1, v2).
+    summary: {
+        title: 'Game summary',
+        loading: 'The coach is going through the game…',
+        failed: 'Could not analyse the game, please try again later.',
+        accuracy: 'Accuracy: you {mine}%, opponent {theirs}%',
+        turningPoint: 'Turning point: {move}',
+        yourBest: 'Your best move: {move}',
+        yourWorst: 'Your costliest move: {move}',
+        recommend: 'Next opponent: {name} ({rating})',
+        play: 'Play',
+        kinds: {
+            domination: {
+                name: 'Domination',
+                text: 'The winner was never worse and was better for almost the whole game.',
+            },
+            decisive_blunder: {
+                name: 'Decided by one mistake',
+                text: 'The game was level until one serious mistake, and after it there was no way back.',
+            },
+            seesaw: {
+                name: 'Seesaw',
+                text: 'The advantage changed hands several times: both sides had their chances.',
+            },
+            missed_win: {
+                name: 'A win slipped away',
+                text: 'One side had a winning position, but the game ended in a draw.',
+            },
+            balanced: {
+                name: 'An even fight',
+                text: 'For most of the game the position was level.',
+            },
+            gradual: {
+                name: 'A slowly built advantage',
+                text: 'No single turning point: the winner gathered small advantages step by step.',
+            },
+        },
+    },
     coachMode: {
         title: 'Play with a coach',
         hint: 'The coach checks each of your moves against a bot or on the free board and warns you about mistakes. Such games are training games.',

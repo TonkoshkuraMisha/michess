@@ -36,6 +36,10 @@ import {CoachPanel} from './chessboard/CoachPanel';
 import {CoachArrowsOverlay} from './chessboard/CoachArrowsOverlay';
 import {coachArrows, coachHighlights} from '../services/coach';
 import {AuxBoard} from './chessboard/AuxBoard';
+import {GameSummaryPanel} from './chessboard/GameSummaryPanel';
+import {outcomeFor, recommendOpponent} from '../services/gameSummary';
+import type {PoolOpponent} from '../services/gameSummary';
+import type {BotCatalog} from '../services/botCatalog';
 import {useGameSocket} from './chessboard/hooks/useGameSocket';
 import {PromotionDialog} from './chessboard/PromotionDialog';
 import {MoveList} from './chessboard/MoveList';
@@ -56,6 +60,7 @@ import type {GameStatus} from './chessboard/status';
 import {useI18n} from '../i18n';
 import {fetchBotCatalog} from '../services/botCatalog';
 import {isArchetypeId} from '../config/archetypes';
+import type {ArchetypeId} from '../config/archetypes';
 import type {CustomOpponent} from '../config/archetypes';
 import {LobbyPanel} from './chessboard/LobbyPanel';
 import {AppearancePickerDropdown} from './chessboard/AppearancePickerDropdown';
@@ -116,11 +121,16 @@ export default function Chessboard() {
     const [botsView, setBotsView] = useState<'historical' | 'workshop' | 'ladder'>('historical');
     // Измеренная сила исторических ботов (калибровка матчами), если она есть.
     const [measuredBotRatings, setMeasuredBotRatings] = useState<Record<string, number>>({});
+    // Каталог целиком — для рекомендации следующего соперника в итоге партии (таск 11.5).
+    const [botCatalog, setBotCatalog] = useState<BotCatalog | null>(null);
     useEffect(() => {
         fetchBotCatalog()
-            .then((catalog) => setMeasuredBotRatings(Object.fromEntries(
-                catalog.historical.filter((h) => h.measured).map((h) => [h.id, h.rating]),
-            )))
+            .then((catalog) => {
+                setBotCatalog(catalog);
+                setMeasuredBotRatings(Object.fromEntries(
+                    catalog.historical.filter((h) => h.measured).map((h) => [h.id, h.rating]),
+                ));
+            })
             .catch(() => undefined);
     }, []);
 
@@ -260,7 +270,7 @@ export default function Chessboard() {
     const {
         selectedBotId, setSelectedBotId, botComment, isBotThinking, savedBotGameId,
         startHistoricalBotGame, startCustomBotGame, botProfileFor, botNameParam, saveBotGameToDatabase, exitBotGame,
-        isLadderGame, ladderOutcome,
+        isLadderGame, ladderOutcome, customArchetypeId,
     } = useBotGame({
         game, myColor, gameOverResult, whiteTimeMs, blackTimeMs, isSearching, setIsSearching,
         activeBot, setActiveBot,
@@ -767,6 +777,43 @@ export default function Chessboard() {
         setPremove(null);
         moveStartTime.current = Date.now();
         playAudio('move');
+    };
+
+    // Итог партии с ботом: следующий соперник — по результату и силе (измеренной, если есть).
+    const recommendedOpponent = (() => {
+        if (!activeBot || !gameOverResult || isLadderGame) return null;
+        const pool: PoolOpponent[] = [
+            ...(Object.keys(HISTORICAL_BOTS) as HistoricalBotId[]).map((id) => ({
+                kind: 'historical' as const, id, rating: measuredBotRatings[id] ?? HISTORICAL_BOTS[id].rating,
+            })),
+            ...(botCatalog?.archetypes ?? []).map((a) => ({kind: 'archetype' as const, id: a.id, rating: a.rating})),
+        ];
+        const profile = botProfileFor(activeBot);
+        const currentId = activeBot === 'custom' ? (customArchetypeId() ?? 'custom') : activeBot;
+        const current = pool.find((o) => o.id === currentId) ?? {id: currentId, rating: profile.rating};
+        return recommendOpponent(pool, current, outcomeFor(gameOverResult, myColor));
+    })();
+    const recommendationLabel = recommendedOpponent
+        ? {
+            name: recommendedOpponent.kind === 'historical'
+                ? HISTORICAL_BOTS[recommendedOpponent.id as HistoricalBotId].shortName
+                : t(`archetypes.${recommendedOpponent.id as ArchetypeId}.name`),
+            rating: recommendedOpponent.rating,
+        }
+        : null;
+    const handlePlayRecommended = () => {
+        if (!recommendedOpponent) return;
+        if (recommendedOpponent.kind === 'historical') {
+            startHistoricalBotGame(recommendedOpponent.id as HistoricalBotId, 'random', null);
+            return;
+        }
+        const archetype = botCatalog?.archetypes.find((a) => a.id === recommendedOpponent.id);
+        if (archetype) {
+            startCustomBotGame(
+                {name: t(`archetypes.${archetype.id}.name`), config: archetype.config, archetypeId: archetype.id},
+                'random', null,
+            );
+        }
     };
 
     const handleCoachAdvice = () => {
@@ -1580,6 +1627,15 @@ export default function Chessboard() {
                         onSendPreset={handleSendChatPreset}
                         isSpectator={!!spectatingGameId}
                         onLeaveSpectate={handleLeaveSpectate}
+                    />
+                )}
+
+                {activeBot && gameOverResult && savedBotGameId && (
+                    <GameSummaryPanel
+                        gameId={savedBotGameId}
+                        playerColor={myColor}
+                        recommendation={recommendationLabel}
+                        onPlayRecommended={handlePlayRecommended}
                     />
                 )}
 

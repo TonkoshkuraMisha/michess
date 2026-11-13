@@ -34,6 +34,7 @@ from src.services.analysis_service import (
 )
 from src.services.engine_pool import EngineBusyError
 from src.services.game_engine import InvalidStartPositionError
+from src.services.game_summary import summarize
 
 router = APIRouter(prefix="/analysis", tags=["Game Analysis"])
 
@@ -192,6 +193,7 @@ async def get_cached_game_analysis(
     if not game.pgn or not is_current_analysis(data, game.pgn):
         return None
     data["game_id"] = game_id
+    data["summary"] = summarize(data.get("moves", []), game.result)
     return data
 
 
@@ -212,7 +214,7 @@ async def analyze_full_game_endpoint(
     """
     async with _game_analysis_lock(game_id):
         try:
-            return await analysis_service.analyze_full_game(db, game_id, force=force)
+            report = await analysis_service.analyze_full_game(db, game_id, force=force)
         except GameDataNotFoundError as exc:
             raise exc.to_http(404) from exc
         except GameNotFinishedError as exc:
@@ -221,3 +223,5 @@ async def analyze_full_game_endpoint(
             raise _engine_busy() from None
         except DomainValueError as exc:
             raise exc.to_http(400) from exc
+    game = await db.get(Game, game_id)
+    return {**report, "summary": summarize(report.get("moves", []), game.result if game else None)}

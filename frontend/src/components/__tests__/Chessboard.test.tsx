@@ -542,3 +542,60 @@ describe('игра с наставником', () => {
         expect(screen.queryByTestId('coach-warning')).toBeNull();
     });
 });
+
+describe('итог партии', () => {
+    it('после мата: итог с типом партии и рекомендацией, «Сыграть» начинает новую партию', async () => {
+        const replies = [
+            {...BOT_MOVE_DEFAULT, uci: 'e7e5', san: 'e5'},
+            {...BOT_MOVE_DEFAULT, uci: 'd8h4', san: 'Qh4#'},
+            {...BOT_MOVE_DEFAULT, uci: 'e7e5', san: 'e5'},
+        ];
+        const calls: string[] = [];
+        vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request) => {
+            const url = String(input);
+            calls.push(url);
+            const body = (() => {
+                if (url.includes('/bots/move')) return replies.shift();
+                if (url.includes('/bots/save-game')) return {game_id: 77, status: 'finished', result: '0-1'};
+                if (url.includes('/analysis/game/77')) return {
+                    white: {accuracy: 20}, black: {accuracy: 100},
+                    moves: [
+                        {ply: 1, move_number: 1, color: 'white', san: 'f3'},
+                        {ply: 2, move_number: 1, color: 'black', san: 'e5'},
+                        {ply: 3, move_number: 2, color: 'white', san: 'g4'},
+                        {ply: 4, move_number: 2, color: 'black', san: 'Qh4#'},
+                    ],
+                    summary: {kind: 'decisive_blunder', turning_point_ply: 3, lead_changes: 0, equal_share: 0.5,
+                              white: {best_ply: null, worst_ply: 3}, black: {best_ply: 4, worst_ply: null}},
+                };
+                if (url.includes('/bots/catalog')) return {calibration: null, historical: [], archetypes: []};
+                if (url.includes('/profile/me')) return {id: 1, username: 'TestPlayer', blitz_rating: 1500};
+                if (url.includes('/profile/games/my-active')) return {active: false};
+                return [];
+            })();
+            return {ok: true, status: 200, json: async () => body} as Response;
+        }));
+        renderChessboard();
+        await act(async () => {
+            fireEvent.click(await screen.findByRole('button', {name: /Белыми/}));
+        });
+        clickSquare('f2');
+        clickSquare('f3');
+        await waitFor(() => expect(screen.getByText('e5')).toBeInTheDocument());
+        clickSquare('g2');
+        clickSquare('g4');
+
+        const summary = await screen.findByTestId('game-summary');
+        await waitFor(() => expect(summary.textContent).toContain('Решила одна ошибка'));
+        expect(summary.textContent).toContain('Перелом: 2. g4');
+        // Проиграл Филидору (1850 по умолчанию) — следующий соперник слабее среди исторических ботов нет,
+        // поэтому ближайший по силе.
+        expect(screen.getByTestId('summary-recommendation').textContent).toMatch(/\(\d{4}\)/);
+
+        await act(async () => {
+            fireEvent.click(screen.getByTestId('summary-play'));
+        });
+        expect(screen.queryByTestId('game-summary')).toBeNull();
+        expect(calls.filter((url) => url.includes('/bots/save-game'))).toHaveLength(1);
+    });
+});
