@@ -36,7 +36,9 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 ANCHOR_ELOS = (1350, 1600, 1850, 2100, 2400)
-ANCHOR_MOVETIME_S = 0.1
+# UCI_Elo в Stockfish откалиброван при контроле 60 с + 0,6 с (≈2 с на ход). При 0,1 с на ход якорь играет
+# заметно слабее своего номинала, и вся шкала уезжает вверх (первый прогон 12.11 — на 250–650 пунктов).
+ANCHOR_MOVETIME_S = 1.0
 MAX_PLIES = 180
 ADJUDICATE_CP = 400
 # Короткие уравновешенные дебюты — чтобы партии одной пары не повторялись ход в ход.
@@ -58,6 +60,7 @@ class Spec:
     white: str
     black: str
     opening: int
+    anchor_movetime: float = ANCHOR_MOVETIME_S
 
 
 def declared_ratings() -> dict[str, int]:
@@ -97,11 +100,11 @@ def _bot(key: str):
     return BOT_INSTANCES[key]
 
 
-def _move(player: str, board: chess.Board) -> chess.Move:
+def _move(player: str, board: chess.Board, anchor_movetime: float = ANCHOR_MOVETIME_S) -> chess.Move:
     if player.startswith("anchor:"):
         elo = int(player.split(":")[1])
         engine = _engine(player, {"UCI_LimitStrength": True, "UCI_Elo": elo})
-        return engine.play(board, chess.engine.Limit(time=ANCHOR_MOVETIME_S)).move
+        return engine.play(board, chess.engine.Limit(time=anchor_movetime)).move
     return chess.Move.from_uci(_bot(player).choose_move(board.fen())["uci"])
 
 
@@ -122,14 +125,17 @@ def play_game(spec: Spec) -> tuple[Spec, str, int]:
         board.push_san(san)
     while not board.is_game_over(claim_draw=True) and board.ply() < MAX_PLIES:
         player = spec.white if board.turn == chess.WHITE else spec.black
-        board.push(_move(player, board))
+        board.push(_move(player, board, spec.anchor_movetime))
     result = board.result(claim_draw=True) if board.is_game_over(claim_draw=True) else _adjudicate(board)
     return spec, result, board.ply()
 
 
 # --- Расписание и подбор рейтингов ------------------------------------------------------------
 
-def schedule(declared: dict[str, int], rounds: int, only: set[str] | None) -> list[Spec]:
+def schedule(
+        declared: dict[str, int], rounds: int, only: set[str] | None,
+        anchors_only: bool = False, anchor_movetime: float = ANCHOR_MOVETIME_S,
+) -> list[Spec]:
     bots = sorted(declared, key=lambda k: declared[k])
     specs: list[Spec] = []
     pairs: set[tuple[str, str]] = set()
@@ -138,7 +144,8 @@ def schedule(declared: dict[str, int], rounds: int, only: set[str] | None) -> li
             continue
         anchors = sorted(ANCHOR_ELOS, key=lambda e: abs(e - declared[bot]))[:3]
         opponents = [f"anchor:{e}" for e in anchors]
-        opponents += [b for b in bots[max(0, i - 2):i + 3] if b != bot]  # соседи по заявленной силе
+        if not anchors_only:
+            opponents += [b for b in bots[max(0, i - 2):i + 3] if b != bot]  # соседи по заявленной силе
         for opp in opponents:
             pair = tuple(sorted((bot, opp)))
             if pair in pairs:
@@ -146,7 +153,7 @@ def schedule(declared: dict[str, int], rounds: int, only: set[str] | None) -> li
             pairs.add(pair)
             for r in range(rounds):
                 opening = random.randrange(len(OPENINGS)) if r else hash(pair) % len(OPENINGS)
-                specs += [Spec(bot, opp, opening), Spec(opp, bot, opening)]
+                specs += [Spec(bot, opp, opening, anchor_movetime), Spec(opp, bot, opening, anchor_movetime)]
     return specs
 
 
@@ -154,13 +161,35 @@ SCORES = {"1-0": 1.0, "0-1": 0.0, "1/2-1/2": 0.5}
 _LOG_LINE = re.compile(r"^\[\d+/\d+\] (\S+) — (\S+): (1-0|0-1|1/2-1/2) ")
 
 
-def games_from_log(path: Path) -> list[tuple[str, str, float]]:
-    """Партии из вывода прошлого прогона: «[n/N] белые — чёрные: результат (… пл.)»."""
+# Первый прогон (12.11) шёл, когда архетипы назывались по-русски, — их ключи в логах переводятся в id.
+LEGACY_ARCHETYPE_KEYS = {
+    "archetype:Торопыга": "archetype:rusher",
+    "archetype:Тихоня": "archetype:quiet",
+    "archetype:Пешечник": "archetype:pawn_keeper",
+    "archetype:Кавалерист": "archetype:cavalier",
+    "archetype:Центровик": "archetype:centralist",
+    "archetype:Крепость": "archetype:fortress",
+    "archetype:Авантюрист": "archetype:adventurer",
+    "archetype:Стратег": "archetype:strategist",
+    "archetype:Охотник": "archetype:hunter",
+    "archetype:Комбинатор": "archetype:combinator",
+}
+
+
+def games_from_log(path: Path, without_anchors: bool = False) -> list[tuple[str, str, float]]:
+    """
+    Партии из вывода прошлого прогона: «[n/N] белые — чёрные: результат (… пл.)».
+    without_anchors — только партии ботов между собой: они не зависят от времени якорей.
+    """
     games = []
     for line in path.read_text(encoding="utf-8").splitlines():
         match = _LOG_LINE.match(line)
-        if match:
-            games.append((match.group(1), match.group(2), SCORES[match.group(3)]))
+        if not match:
+            continue
+        white, black = (LEGACY_ARCHETYPE_KEYS.get(k, k) for k in (match.group(1), match.group(2)))
+        if without_anchors and (white.startswith("anchor:") or black.startswith("anchor:")):
+            continue
+        games.append((white, black, SCORES[match.group(3)]))
     return games
 
 
@@ -212,6 +241,10 @@ def main() -> None:
     parser.add_argument("--only", nargs="*", help="Калибровать только этих (id или archetype:<id>)")
     parser.add_argument("--out", type=Path, default=OUT)
     parser.add_argument("--from-log", type=Path, help="Пересчитать рейтинги по логу прошлого прогона, без партий")
+    parser.add_argument("--anchors-only", action="store_true", help="Играть только партии с якорями")
+    parser.add_argument("--reuse-log", type=Path,
+                        help="Добавить партии ботов между собой из лога прошлого прогона (без его якорей)")
+    parser.add_argument("--anchor-movetime", type=float, default=ANCHOR_MOVETIME_S, help="Секунд на ход якоря")
     args = parser.parse_args()
 
     random.seed(20261112)
@@ -223,7 +256,10 @@ def main() -> None:
         games = games_from_log(args.from_log)
         print(f"{len(games)} партий из {args.from_log}", flush=True)
     else:
-        specs = schedule(declared, args.rounds, set(args.only) if args.only else None)
+        specs = schedule(
+            declared, args.rounds, set(args.only) if args.only else None,
+            anchors_only=args.anchors_only, anchor_movetime=args.anchor_movetime,
+        )
         print(f"{len(specs)} партий, {args.workers} процесса", flush=True)
         games = []
         pool = ProcessPoolExecutor(max_workers=args.workers)
@@ -232,6 +268,11 @@ def main() -> None:
             spec, result, plies = future.result()
             games.append((spec.white, spec.black, SCORES[result]))
             print(f"[{done}/{len(specs)}] {spec.white} — {spec.black}: {result} ({plies} пл.)", flush=True)
+
+    if args.reuse_log:
+        reused = games_from_log(args.reuse_log, without_anchors=True)
+        print(f"+ {len(reused)} партий ботов между собой из {args.reuse_log}", flush=True)
+        games += reused
 
     fitted = fit(games, declared)
     previous = {}
@@ -242,9 +283,9 @@ def main() -> None:
             "date": datetime.now(UTC).strftime("%Y-%m-%d"),
             "games": len(games),
             "anchors": list(ANCHOR_ELOS),
-            "anchor_movetime_s": ANCHOR_MOVETIME_S,
+            "anchor_movetime_s": args.anchor_movetime,
             "minutes": round((time.monotonic() - started) / 60, 1),
-            "scale": "Stockfish UCI_Elo при нашем контроле времени",
+            "scale": "Stockfish UCI_Elo anchors at our time control (not FIDE)",
         },
         "players": {**previous, **fitted},
     }
