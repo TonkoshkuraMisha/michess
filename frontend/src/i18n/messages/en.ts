@@ -1985,6 +1985,26 @@ export const en = {
                 v1: 'Stronger was {move}.',
                 v2: 'The engine prefers {move}.',
             },
+            pos_castle: {
+                v1: '{move} castles: the king is safe and the rook joins the game.',
+                v2: '{move} was stronger: tuck the king away first.',
+            },
+            pos_open_file: {
+                v1: '{move} puts the rook on the open {file}-file.',
+                v2: 'Better {move}: the rook belongs on the open {file}-file.',
+            },
+            pos_outpost: {
+                v1: '{move} plants the knight on the outpost {square}; no pawn can chase it.',
+                v2: 'Stronger {move}: on {square} the knight can\'t be driven away by a pawn.',
+            },
+            pos_king_active: {
+                v1: '{move}: in the endgame the king heads for the centre.',
+                v2: 'Better {move}: in the endgame the king is a strong piece, bring it forward.',
+            },
+            pos_passed_push: {
+                v1: '{move}: passed pawns must be pushed.',
+                v2: 'Stronger {move}: advance the passed pawn.',
+            },
         },
         good: {
             checkmate: {
@@ -2040,6 +2060,42 @@ export const en = {
             quiet: {
                 v1: 'No direct threats. Improve your least active piece.',
                 v2: 'The position is calm: think about a plan and your worst-placed piece.',
+            },
+            pos_king_center: {
+                v1: 'Your king is still in the centre: think about castling.',
+                v2: 'No threats, but the king isn\'t safe yet: king safety comes first.',
+            },
+            pos_passed_enemy: {
+                v1: 'The opponent has a passed pawn on {square}: blockade it with a piece.',
+                v2: 'Watch the passed pawn on {square}: put a piece in front of it.',
+            },
+            pos_passed_own: {
+                v1: 'Your passed pawn on {square}: push it with the pieces\' support.',
+                v2: 'Your trump is the passed pawn on {square}. Help it through.',
+            },
+            pos_king_active: {
+                v1: 'Endgame: bring your king to the centre.',
+                v2: 'In the endgame the king is a strong piece. Time to activate it.',
+            },
+            pos_open_file: {
+                v1: 'The {file}-file is open: take it with a rook.',
+                v2: 'A rook belongs on the open {file}-file.',
+            },
+            pos_outpost: {
+                v1: '{square} is an outpost: no pawn can chase a piece away. A great square for a knight.',
+                v2: 'Find a route for a knight to {square}: no pawn can drive it out.',
+            },
+            pos_isolated_enemy: {
+                v1: 'The pawn on {square} is isolated: attack it with pieces.',
+                v2: 'The opponent\'s weakness is the isolated pawn on {square}.',
+            },
+            pos_bad_bishop: {
+                v1: 'The bishop on {square} is blocked by its own pawns, a bad bishop. Trade it or move the pawns.',
+                v2: 'Your pawns stand on the colour of the bishop on {square} and hem it in.',
+            },
+            pos_doubled_own: {
+                v1: 'Doubled pawns on the {file}-file are a weakness: don\'t expose them.',
+                v2: 'Your pawns on the {file}-file are doubled: look after them.',
             },
         },
         hint: {

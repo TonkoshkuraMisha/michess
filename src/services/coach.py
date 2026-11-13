@@ -23,6 +23,7 @@ from collections.abc import Iterable
 import chess
 
 from src.services.mentor_service import PIECE_VALUE, Motif, analyze_move, detect_motifs
+from src.services.positional import move_idea, positional_features
 
 # Формулировок на каждый шаблон: ключи «coach.<группа>.<код>.v1» … «.vN».
 VARIANTS = 2
@@ -66,6 +67,12 @@ TEMPLATES: dict[tuple[str, str], tuple[str, ...]] = {
     ("best", "trapped"): ("move", "piece"),
     ("best", "capture"): ("move", "piece"),
     ("best", "generic"): ("move",),
+    # Позиционная идея лучшего хода, когда тактики нет (таск B.4, src/services/positional.py).
+    ("best", "pos_castle"): ("move",),
+    ("best", "pos_open_file"): ("move", "file"),
+    ("best", "pos_outpost"): ("move", "square"),
+    ("best", "pos_king_active"): ("move",),
+    ("best", "pos_passed_push"): ("move",),
     # Удачный ход с тактикой.
     ("good", "checkmate"): ("move",),
     ("good", "fork"): ("attacker", "target1", "target2"),
@@ -81,6 +88,16 @@ TEMPLATES: dict[tuple[str, str], tuple[str, ...]] = {
     ("advice", "chance_mate"): ("n", "move"),
     ("advice", "chance_capture"): ("piece",),
     ("advice", "quiet"): (),
+    # Позиционные признаки, когда угроз нет (таск B.4).
+    ("advice", "pos_king_center"): (),
+    ("advice", "pos_passed_enemy"): ("square",),
+    ("advice", "pos_passed_own"): ("square",),
+    ("advice", "pos_king_active"): (),
+    ("advice", "pos_open_file"): ("file",),
+    ("advice", "pos_outpost"): ("square",),
+    ("advice", "pos_isolated_enemy"): ("square",),
+    ("advice", "pos_bad_bishop"): ("square",),
+    ("advice", "pos_doubled_own"): ("file",),
     # Подсказка по ступеням (таск 11.4). Ступень 1 — намёк без полей и фигур, ступень 2 — какой фигурой ходить.
     ("hint", "mate"): ("n",),
     ("hint", "fork"): (),
@@ -352,7 +369,11 @@ def _best_idea(board_before: chess.Board, best: chess.Move, seed: str,
             label = piece_label(board_before, best.to_square) if captured else chess.square_name(best.to_square)
             sentences.append(_sentence("best", "capture", seed, move=move, piece=label))
         else:
-            sentences.append(_sentence("best", "generic", seed, move=move))
+            positional = move_idea(board_before, best)
+            if positional is not None:
+                sentences.append(_sentence("best", f"pos_{positional.code}", seed, move=move, **positional.params))
+            else:
+                sentences.append(_sentence("best", "generic", seed, move=move))
     return sentences, arrows, highlights
 
 
@@ -476,6 +497,14 @@ def advice_for_position(board: chess.Board, best_uci: str | None) -> dict:
         if loose is not None:
             sentences.append(_sentence("advice", "chance_capture", seed, piece=piece_label(board, loose.square)))
             highlights.append({"square": chess.square_name(loose.square), "kind": "target"})
+
+    # Угроз нет — одно слово о позиции: что важнее всего в структуре (таск B.4).
+    if not any(m.color != mover and m.code != "mate_in" for m in motifs):
+        features = positional_features(board, mover)
+        if features:
+            feature = features[0]
+            sentences.append(_sentence("advice", f"pos_{feature.code}", seed, **feature.params))
+            highlights += [{"square": chess.square_name(sq), "kind": "target"} for sq in feature.squares]
 
     if not sentences:
         sentences.append(_sentence("advice", "quiet", seed))
