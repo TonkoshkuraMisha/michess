@@ -648,7 +648,10 @@ async def save_bot_game(
     if payload.result not in ("1-0", "0-1", "1/2-1/2"):
         raise ApiError(400, "invalid_result")
 
-    if not payload.moves_uci:
+    # Партию без ходов в архив не пишем — кроме засчитываемых (лестница, турнир), сданных или проигранных по
+    # времени до первого хода: иначе турнирная партия осталась бы открытой, а тур — незакрытым.
+    counted = ladder_game is not None or tournament_game is not None
+    if not payload.moves_uci and not (counted and payload.termination in ("resignation", "timeout")):
         raise ApiError(400, "empty_moves")
 
     try:
