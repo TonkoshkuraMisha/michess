@@ -79,6 +79,10 @@ if ($LASTEXITCODE -ne 0)
 Write-Host "[*] Применяем миграции базы данных (Alembic)..." -ForegroundColor Cyan
 & $pythonExe -m alembic upgrade head
 
+# 7.0. База задач (выборка из открытой базы lichess, data/puzzles); уже загруженные задачи пропускаются
+Write-Host "[*] Загружаем базу задач..." -ForegroundColor Cyan
+& $pythonExe -m scripts.import_puzzles
+
 # 7.1. Автопроверка и докачка архивов партий 21 чемпиона мира
 $steinitzPgn = Join-Path $root "src\db\data\pgns\Steinitz.pgn"
 if (-not (Test-Path $steinitzPgn))

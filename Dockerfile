@@ -22,6 +22,8 @@ RUN pip install -r requirements.txt
 COPY alembic.ini .
 COPY migrations ./migrations
 COPY scripts ./scripts
+# Выборка задач (CC0) — загружается в базу сервисом migrate.
+COPY data/puzzles ./data/puzzles
 COPY src ./src
 
 # Не root: при уязвимости в приложении у процесса нет прав на систему контейнера.

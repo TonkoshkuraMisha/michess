@@ -310,6 +310,10 @@ function Sync-Database {
     if ($LASTEXITCODE -eq 0) { Ok "Схема БД актуальна: $(& $pythonExe -m alembic current 2>$null)" }
     else { Warn "alembic upgrade head завершился с ошибкой" }
 
+    Step "База задач"
+    & $pythonExe -m scripts.import_puzzles
+    if ($LASTEXITCODE -eq 0) { Ok "Задачи загружены" } else { Warn "Загрузка задач завершилась с ошибкой" }
+
     Step "Архив партий чемпионов мира"
     if (Test-Path (Join-Path $root "src\db\data\pgns\Steinitz.pgn")) {
         Ok "PGN-архивы на месте"

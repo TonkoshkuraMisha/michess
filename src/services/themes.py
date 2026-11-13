@@ -142,7 +142,7 @@ THEMES: tuple[Theme, ...] = (
     _t("basic_mates", "J", "M"),
     # K. Расчёт и сочетание приёмов
     _t("combination", "K", "L,D"),
-    _t("long_calculation", "K", "L", lichess="long veryLong"),
+    _t("long_calculation", "K", "L", lichess="veryLong"),  # «long» в базе — всего 3 хода
     _t("equality", "K", "L", lichess="equality"),
     _t("candidate_moves", "K", "M"),
     # L. Позиционные темы
