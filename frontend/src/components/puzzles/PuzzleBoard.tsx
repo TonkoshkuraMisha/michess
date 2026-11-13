@@ -1,8 +1,14 @@
 // --- FILE: frontend/src/components/puzzles/PuzzleBoard.tsx ---
-// Доска задач (таск 13.3): ход двумя щелчками (удобно и на телефоне), выбор фигуры при превращении (в задачах бывает
-// слабое превращение), подсветка последнего хода и подсказки. Фигуры и цвета — из настроек игрока.
+// Доска задач (таск 13.3): ход перетаскиванием фигуры (мышь, палец, перо) или двумя щелчками — фигура, затем поле;
+// выбор фигуры при превращении (в задачах бывает слабое превращение), подсветка последнего хода и подсказки.
+// Фигуры и цвета — из настроек игрока. С onSquare щелчок выбирает поле, а не ход (защитные упражнения, таск 13.6).
+//
+// Перетаскивание: фигура «прилипает» к указателю, ход — по полю под ним при отпускании. Отпустили на том же поле
+// (или просто щёлкнули) — фигура остаётся выбранной, и ход можно закончить щелчком по полю. Выбор привязан к позиции:
+// после ответа соперника или новой задачи старый выбор не действует.
 
-import {useMemo, useState} from 'react';
+import {useCallback, useEffect, useMemo, useState} from 'react';
+import type {PointerEvent as ReactPointerEvent} from 'react';
 import {Chess} from 'chess.js';
 import {useI18n} from '../../i18n';
 import {
@@ -11,6 +17,8 @@ import {
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const PROMOTIONS = ['q', 'r', 'b', 'n'] as const;
+/** Сдвиг указателя, после которого нажатие считается перетаскиванием, а не щелчком. */
+const DRAG_THRESHOLD_PX = 4;
 
 interface Props {
     fen: string;
@@ -23,13 +31,33 @@ interface Props {
     /** Отметка результата хода на поле. */
     mark?: { square: string; ok: boolean } | null;
     onMove: (uci: string) => void;
+    /** Выбор поля вместо хода (защитные упражнения 13.6: «покажите угрозу»). */
+    onSquare?: (square: string) => void;
 }
 
-export function PuzzleBoard({fen, orientation, interactive, lastMove, hint, mark, onMove}: Props) {
+interface Drag {
+    from: string;
+    startX: number;
+    startY: number;
+    x: number;
+    y: number;
+    moved: boolean;
+}
+
+/** Поле доски под точкой экрана (по атрибуту data-square). */
+function squareAt(x: number, y: number): string | null {
+    const elements = typeof document.elementsFromPoint === 'function' ? document.elementsFromPoint(x, y) : [];
+    const cell = elements.find((el) => el instanceof HTMLElement && el.dataset.square);
+    return cell instanceof HTMLElement ? cell.dataset.square ?? null : null;
+}
+
+export function PuzzleBoard({fen, orientation, interactive, lastMove, hint, mark, onMove, onSquare}: Props) {
     const {t} = useI18n();
-    const [selected, setSelected] = useState<string | null>(null);
+    const [selection, setSelection] = useState<{ square: string; fen: string } | null>(null);
     const [promotion, setPromotion] = useState<{ from: string; to: string } | null>(null);
+    const [drag, setDrag] = useState<Drag | null>(null);
     const game = useMemo(() => new Chess(fen), [fen]);
+    const selected = selection && selection.fen === fen && interactive && !onSquare ? selection.square : null;
     const themeKey = getSavedBoardThemeKey();
     const pieceSet = getSavedPieceSetKey();
     const theme = BOARD_THEMES[themeKey] || BOARD_THEMES.walnut;
@@ -39,24 +67,78 @@ export function PuzzleBoard({fen, orientation, interactive, lastMove, hint, mark
         selected ? game.moves({square: selected as never, verbose: true}).map((m) => m.to as string) : [],
     ), [game, selected]);
 
-    const click = (square: string) => {
-        if (!interactive || promotion) return;
-        if (selected && targets.has(square)) {
-            const candidates = game.moves({square: selected as never, verbose: true}).filter((m) => m.to === square);
-            setSelected(null);
-            if (candidates.some((m) => m.promotion)) {
-                setPromotion({from: selected, to: square});
-                return;
-            }
-            onMove(`${selected}${square}`);
-            return;
-        }
+    const select = (square: string | null) => setSelection(square ? {square, fen} : null);
+
+    const ownPiece = (square: string) => {
         const piece = game.get(square as never);
-        setSelected(piece && piece.color === game.turn() ? square : null);
+        return Boolean(piece && piece.color === game.turn());
     };
 
+    /** Ход from → to, если он легален; превращение — через выбор фигуры. Возвращает, был ли ход. */
+    const attempt = useCallback((from: string, to: string): boolean => {
+        const candidates = game.moves({square: from as never, verbose: true}).filter((m) => m.to === to);
+        if (candidates.length === 0) return false;
+        setSelection(null);
+        if (candidates.some((m) => m.promotion)) {
+            setPromotion({from, to});
+            return true;
+        }
+        onMove(`${from}${to}`);
+        return true;
+    }, [game, onMove]);
+
+    const click = (square: string) => {
+        if (!interactive || promotion) return;
+        if (onSquare) {
+            onSquare(square);
+            return;
+        }
+        if (selected && selected !== square && attempt(selected, square)) return;
+        select(ownPiece(square) ? square : null);
+    };
+
+    const pointerDown = (square: string, event: ReactPointerEvent) => {
+        if (!interactive || promotion || onSquare) return;
+        if (event.pointerType === 'mouse' && event.button !== 0) return;
+        if (!ownPiece(square)) return;  // чужая фигура или пустое поле — это щелчок (взятие, отмена выбора)
+        event.preventDefault();         // без выделения текста и «призрака» картинки браузера
+        select(square);
+        setDrag({from: square, startX: event.clientX, startY: event.clientY, x: event.clientX, y: event.clientY, moved: false});
+    };
+
+    useEffect(() => {
+        if (!drag) return;
+        const move = (event: PointerEvent) => {
+            setDrag((current) => current && {
+                ...current, x: event.clientX, y: event.clientY,
+                moved: current.moved || Math.hypot(event.clientX - current.startX, event.clientY - current.startY) > DRAG_THRESHOLD_PX,
+            });
+        };
+        const up = (event: PointerEvent) => {
+            const from = drag.from;
+            const target = squareAt(event.clientX, event.clientY);
+            setDrag(null);
+            // Отпустили на другом поле — ход; на том же или мимо доски — фигура остаётся выбранной (щелчок).
+            if (target && target !== from) attempt(from, target);
+        };
+        const cancel = () => setDrag(null);
+        window.addEventListener('pointermove', move);
+        window.addEventListener('pointerup', up);
+        window.addEventListener('pointercancel', cancel);
+        return () => {
+            window.removeEventListener('pointermove', move);
+            window.removeEventListener('pointerup', up);
+            window.removeEventListener('pointercancel', cancel);
+        };
+    }, [drag?.from, attempt]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Позиция сменилась посреди перетаскивания (ответ соперника, новая задача) — перетаскивание отменяется.
+    useEffect(() => setDrag(null), [fen, interactive]);
+
+    const dragged = drag?.moved ? game.get(drag.from as never) : null;
+
     return (
-        <div className="relative w-full aspect-square select-none" data-testid="puzzle-board">
+        <div className="relative w-full aspect-square select-none touch-none" data-testid="puzzle-board">
             <div className="grid grid-cols-8 grid-rows-8 w-full h-full border border-black/60 rounded-[2px] overflow-hidden">
                 {ranks.map((rank) => files.map((file) => {
                     const square = `${file}${rank}`;
@@ -64,10 +146,13 @@ export function PuzzleBoard({fen, orientation, interactive, lastMove, hint, mark
                     const dark = (FILES.indexOf(file) + Number(rank)) % 2 === 1;
                     const isLast = lastMove && (lastMove.from === square || lastMove.to === square);
                     const isHint = hint && (hint.from === square || hint.to === square);
+                    const lifted = Boolean(drag?.moved && drag.from === square);
+                    const grabbable = interactive && !onSquare && !promotion && piece && piece.color === game.turn();
                     return (
                         <div key={square} data-square={square} onClick={() => click(square)}
+                             onPointerDown={(event) => pointerDown(square, event)}
                              style={{backgroundColor: dark ? theme.dark : theme.light}}
-                             className={`relative flex items-center justify-center ${interactive ? 'cursor-pointer' : ''}`}>
+                             className={`relative flex items-center justify-center ${interactive ? 'cursor-pointer' : ''} ${grabbable ? 'cursor-grab' : ''}`}>
                             {isLast && <div className="absolute inset-0 bg-amber-300/35 pointer-events-none"/>}
                             {selected === square && <div className="absolute inset-0 bg-amber-400/50 pointer-events-none"/>}
                             {isHint && (
@@ -75,11 +160,13 @@ export function PuzzleBoard({fen, orientation, interactive, lastMove, hint, mark
                                      className="absolute inset-0 ring-4 ring-inset ring-sky-400/90 pointer-events-none"/>
                             )}
                             {targets.has(square) && (
-                                <div className="absolute w-1/4 h-1/4 rounded-full bg-black/25 pointer-events-none z-10"/>
+                                <div data-testid={`puzzle-target-${square}`}
+                                     className="absolute w-1/4 h-1/4 rounded-full bg-black/25 pointer-events-none z-10"/>
                             )}
                             {piece && (
                                 <img src={getPieceSvgUrl(pieceSet, piece.color, piece.type)} alt={`${piece.color}${piece.type}`}
-                                     draggable={false} className="w-full h-full object-contain pointer-events-none relative"
+                                     draggable={false}
+                                     className={`w-full h-full object-contain pointer-events-none relative ${lifted ? 'opacity-30' : ''}`}
                                      style={getHarmoniousPieceStyle(pieceSet, themeKey, piece.color)}/>
                             )}
                             {mark?.square === square && (
@@ -92,6 +179,12 @@ export function PuzzleBoard({fen, orientation, interactive, lastMove, hint, mark
                     );
                 }))}
             </div>
+            {drag && dragged && (
+                <img src={getPieceSvgUrl(pieceSet, dragged.color, dragged.type)} alt="" aria-hidden="true" draggable={false}
+                     data-testid="puzzle-drag-piece"
+                     className="fixed w-[12%] max-w-[90px] aspect-square object-contain pointer-events-none z-50 -translate-x-1/2 -translate-y-1/2"
+                     style={{left: drag.x, top: drag.y, ...getHarmoniousPieceStyle(pieceSet, themeKey, dragged.color)}}/>
+            )}
             {promotion && (
                 <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-30" role="dialog"
                      aria-label={t('puzzles.promotion')}>
