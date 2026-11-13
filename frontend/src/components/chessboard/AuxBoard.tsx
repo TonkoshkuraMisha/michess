@@ -7,6 +7,9 @@ import type {ReactNode} from 'react';
 import {Chess} from 'chess.js';
 import {useI18n} from '../../i18n';
 import {FILES} from './boardUtils';
+import type {PromotionPiece} from './boardUtils';
+import {PromotionDialog} from './PromotionDialog';
+import type {PendingPromotion} from './types';
 
 interface Props {
     /** Текущая позиция партии. */
@@ -24,6 +27,8 @@ export function AuxBoard({fen, flipped, lightColor, darkColor, renderPiece, onCl
     const [sourceFen, setSourceFen] = useState(fen);
     const [moves, setMoves] = useState<string[]>([]);
     const [selected, setSelected] = useState<string | null>(null);
+    // Превращение пешки ждёт выбора фигуры (раньше всегда ферзь — недопревращение не разыграть).
+    const [promotion, setPromotion] = useState<PendingPromotion | null>(null);
 
     const board = new Chess(sourceFen);
     for (const san of moves) board.move(san);
@@ -38,13 +43,22 @@ export function AuxBoard({fen, flipped, lightColor, darkColor, renderPiece, onCl
         setSourceFen(nextFen);
         setMoves([]);
         setSelected(null);
+        setPromotion(null);
+    };
+
+    const play = (from: string, to: string, piece?: PromotionPiece) => {
+        const move = board.move({from, to, promotion: piece});
+        setMoves([...moves, move.san]);
+        setSelected(null);
+        setPromotion(null);
     };
 
     const click = (square: string) => {
         if (selected && targets.has(square)) {
-            const move = board.move({from: selected, to: square, promotion: 'q'});
-            setMoves([...moves, move.san]);
-            setSelected(null);
+            const isPromotion = board.moves({square: selected as never, verbose: true})
+                .some((m) => m.to === square && m.promotion);
+            if (isPromotion) setPromotion({from: selected, to: square, color: board.turn()});
+            else play(selected, square);
             return;
         }
         const piece = board.get(square as never);
@@ -54,6 +68,7 @@ export function AuxBoard({fen, flipped, lightColor, darkColor, renderPiece, onCl
     const undo = () => {
         setMoves(moves.slice(0, -1));
         setSelected(null);
+        setPromotion(null);
     };
 
     return (
@@ -65,6 +80,7 @@ export function AuxBoard({fen, flipped, lightColor, darkColor, renderPiece, onCl
                     {t('coachMode.auxClose')}
                 </button>
             </div>
+            <div className="relative">
             <div className="grid grid-cols-8 grid-rows-8 w-full aspect-square border border-black/60 rounded-[2px] overflow-hidden">
                 {ranks.map((rank) => files.map((file) => {
                     const square = `${file}${rank}`;
@@ -82,6 +98,13 @@ export function AuxBoard({fen, flipped, lightColor, darkColor, renderPiece, onCl
                         </div>
                     );
                 }))}
+            </div>
+            {promotion && (
+                <PromotionDialog pendingPromotion={promotion} displayedFiles={files} displayedRanks={ranks}
+                                 renderPieceSvg={renderPiece}
+                                 onSelect={(piece) => play(promotion.from, promotion.to, piece)}
+                                 onCancel={() => setPromotion(null)}/>
+            )}
             </div>
             <p className="text-[10px] text-boxwood/60">{t('coachMode.auxNote')}</p>
             {moves.length > 0 && <p className="font-mono text-[11px]" data-testid="aux-moves">{moves.join(' ')}</p>}
