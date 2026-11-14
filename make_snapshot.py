@@ -4,17 +4,14 @@
 Create an LLM-ready multi-part text snapshot of the project.
 
 Run from the project root:
-    python make_snapshot.py
-    python make_snapshot.py --max-kb 80
+    python make_snapshot.py                  # полный снимок (код в начале, тесты в конце)
+    python make_snapshot.py --no-tests       # только рабочий код и конфиги (~13–15 частей, влезает в контекст целиком)
+    python make_snapshot.py --scope backend  # только бэкенд (ToDo, миграции, src, scripts)
+    python make_snapshot.py --scope frontend # только фронтенд
+    python make_snapshot.py --status         # только сводка состояния проекта, без снимка
 
 Each part is capped at 80 KiB by default so chat attachments are never
 truncated by upload limits.
-
-The snapshot starts with a project status summary (project_status.py): git state, plan progress from ToDo.md and
-the next tasks, migration head, bot calibration. It is also written to STATUS.md next to the parts:
-    python make_snapshot.py --status    # print the status only, no snapshot
-
-The output folder is git-ignored: regenerate it whenever you need it.
 """
 
 from __future__ import annotations
@@ -25,10 +22,12 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 DEFAULT_MAX_KB = 80
 OUTPUT_DIR_NAME = "_project_snapshot"
-MAX_DATA_JSON_BYTES = 15 * 1024  # Сворачивать большие JSON-словари (например, книги дебютов > 15 КБ)
+MAX_DATA_JSON_BYTES = 15 * 1024  # Сворачивать большие JSON-файлы (> 15 КБ)
+SAFE_CONTEXT_TOKENS = 260_000  # Безопасный порог токенов для одного окна чата без вытеснения
 
 EXCLUDED_DIRS = {
     ".git", ".hg", ".svn",
@@ -41,6 +40,7 @@ EXCLUDED_DIRS = {
     ".next", ".nuxt", ".cache",
     "site-packages", "vendor",
     "bin", "downloaded_pgns", "data",
+    "playwright-report", "test-results", "blob-report",
     OUTPUT_DIR_NAME,
 }
 
@@ -51,6 +51,9 @@ EXCLUDED_FILES = {
     ".env.test", ".env.staging",
     "id_rsa", "id_ed25519", "known_hosts",
     "unreadable_files.txt",
+    "style_bonus_golden.json",
+    # Дубликаты словарей локализации (полная структура и тексты остаются в ru.ts)
+    "en.ts", "uk.ts",
 }
 
 EXCLUDED_SUFFIXES = {
@@ -86,9 +89,13 @@ SECRET_PATH_PARTS = {
 PRIORITY_FILES = [
     "ToDo.md",
     "requirements.txt",
+    "requirements-dev.txt",
+    "pyproject.toml",
     "pytest.ini",
     "alembic.ini",
+    "Dockerfile",
     "docker-compose.yml",
+    "docker-compose.prod.yml",
     ".github/workflows/ci.yml",
     "frontend/package.json",
     "frontend/vite.config.ts",
@@ -96,15 +103,37 @@ PRIORITY_FILES = [
 ]
 
 
-def is_text_candidate(path: Path, relative: str) -> bool:
+def is_test_file(relative_posix: str) -> bool:
+    """Определяет, относится ли файл к тестам (бэкенд, фронтенд, e2e)."""
+    lower = relative_posix.lower()
+    parts = lower.split("/")
+    filename = parts[-1]
+    if lower.startswith("tests/") or lower.startswith("frontend/e2e/"):
+        return True
+    if "__tests__" in parts or "test" in parts:
+        return True
+    if filename.startswith("test_") or ".test." in filename or ".spec." in filename or ".e2e." in filename:
+        return True
+    return False
+
+
+def is_text_candidate(
+        path: Path,
+        relative: str,
+        *,
+        no_tests: bool = False,
+        include_all_i18n: bool = False,
+        scope: str = "all",
+) -> bool:
     name = path.name
     name_lower = name.lower()
     suffix = path.suffix.lower()
-    rel_parts = {part.lower() for part in Path(relative).parts}
+    rel_posix = relative.replace("\\", "/")
+    rel_lower = rel_posix.lower()
+    rel_parts = {part.lower() for part in Path(rel_posix).parts}
 
-    if name in EXCLUDED_FILES:
+    if name in EXCLUDED_FILES and not (include_all_i18n and name in {"en.ts", "uk.ts"}):
         return False
-    # Исключаем любые старые текстовые снэпшоты, чтобы они не попадали внутрь новых частей
     if "snapshot" in name_lower and suffix == ".txt":
         return False
     if name_lower.endswith("_generated_book.json"):
@@ -113,8 +142,18 @@ def is_text_candidate(path: Path, relative: str) -> bool:
         return False
     if rel_parts & SECRET_PATH_PARTS:
         return False
-    if re.search(r"(^|/)\.env(?:\.|$)", relative.replace("\\", "/"), re.I):
+    if re.search(r"(^|/)\.env(?:\.|$)", rel_posix, re.I):
         return False
+
+    if (no_tests or scope == "code") and is_test_file(rel_posix):
+        return False
+
+    if scope == "backend":
+        if rel_lower.startswith("frontend/"):
+            return False
+    elif scope == "frontend":
+        if rel_lower.startswith(("src/", "tests/", "migrations/", "scripts/")):
+            return False
 
     if suffix in TEXT_SUFFIXES or name in TEXT_FILENAMES:
         return True
@@ -131,34 +170,44 @@ def is_text_candidate(path: Path, relative: str) -> bool:
 
 def get_group_priority(relative_posix: str) -> tuple[int, str]:
     """
-    Упорядочивает файлы по смысловым блокам:
+    Упорядочивает файлы так, чтобы ВЕСЬ рабочий код шёл в первых частях,
+    а тесты — в самом конце:
     0..N — приоритетные манифесты (ToDo.md, requirements.txt и т.д.)
     100  — миграции БД (migrations/)
     200  — исходный код бэкенда (src/)
-    300  — тесты бэкенда (tests/)
-    400  — скрипты (scripts/)
-    500  — исходный код фронтенда (frontend/)
-    600  — остальные файлы
+    300  — исходный код фронтенда без тестов (frontend/src/)
+    400  — скрипты и документация (scripts/, docs/, *.md)
+    500  — тесты бэкенда (tests/)
+    600  — тесты фронтенда и E2E (frontend/**/__tests__, *.test.*, frontend/e2e/)
     """
     lower = relative_posix.lower()
     for idx, prio_name in enumerate(PRIORITY_FILES):
         if lower == prio_name.lower():
             return (idx, lower)
 
+    if is_test_file(relative_posix):
+        if lower.startswith("tests/"):
+            return (500, lower)
+        return (600, lower)
+
     if lower.startswith("migrations/"):
         return (100, lower)
     if lower.startswith("src/"):
         return (200, lower)
-    if lower.startswith("tests/"):
-        return (300, lower)
-    if lower.startswith("scripts/"):
-        return (400, lower)
     if lower.startswith("frontend/"):
-        return (500, lower)
-    return (600, lower)
+        return (300, lower)
+    if lower.startswith(("scripts/", "docs/")):
+        return (400, lower)
+    return (450, lower)
 
 
-def collect_files(root: Path) -> list[Path]:
+def collect_files(
+        root: Path,
+        *,
+        no_tests: bool = False,
+        include_all_i18n: bool = False,
+        scope: str = "all",
+) -> list[Path]:
     files: list[Path] = []
 
     for current, dirs, filenames in os.walk(root, topdown=True, followlinks=False):
@@ -175,7 +224,13 @@ def collect_files(root: Path) -> list[Path]:
                 continue
 
             relative = path.relative_to(root).as_posix()
-            if is_text_candidate(path, relative):
+            if is_text_candidate(
+                    path,
+                    relative,
+                    no_tests=no_tests,
+                    include_all_i18n=include_all_i18n,
+                    scope=scope,
+            ):
                 files.append(path)
 
     return sorted(files, key=lambda p: get_group_priority(p.relative_to(root).as_posix()))
@@ -191,10 +246,29 @@ def decode_file(path: Path) -> str:
     return raw.decode("utf-8", errors="replace")
 
 
+def _truncate_json_value(value: Any, max_items: int = 3, depth: int = 0) -> Any:
+    """Рекурсивно сворачивает длинные списки и словари внутри больших JSON-файлов."""
+    if depth > 4:
+        return "..."
+    if isinstance(value, dict):
+        items = list(value.items())
+        result = {k: _truncate_json_value(v, max_items=max_items, depth=depth + 1) for k, v in items[:max_items]}
+        if len(items) > max_items:
+            result[f"... (+{len(items) - max_items} keys)"] = "..."
+        return result
+    if isinstance(value, list):
+        if len(value) <= max_items:
+            return [_truncate_json_value(v, max_items=max_items, depth=depth + 1) for v in value]
+        head = [_truncate_json_value(v, max_items=max_items, depth=depth + 1) for v in value[:max_items]]
+        head.append(f"... (+{len(value) - max_items} items)")
+        return head
+    return value
+
+
 def maybe_summarize_large_json(path: Path, relative: str, content: str, full_json: bool) -> str:
     """
-    Если это большая JSON-книга дебютов (> 15 КБ), сворачивает её до первых 3 позиций
-    и общей сводки, чтобы не забивать контекст тысячами строк FEN.
+    Если это большой JSON-файл (> 15 КБ), сворачивает его структуру (включая вложенные списки)
+    до первых 3 элементов на каждом уровне, чтобы не забивать контекст данными.
     """
     if full_json or path.suffix.lower() != ".json":
         return content
@@ -205,21 +279,15 @@ def maybe_summarize_large_json(path: Path, relative: str, content: str, full_jso
 
     try:
         parsed = json.loads(content)
-        if isinstance(parsed, dict):
-            total_keys = len(parsed)
-            sample_items = list(parsed.items())[:3]
-            sample_dict = dict(sample_items)
-            sample_str = json.dumps(sample_dict, ensure_ascii=False, indent=2)
-            return (
-                f"// [AUTO-SUMMARY: Большой JSON-файл ({raw_size // 1024} KiB, {total_keys} ключей). "
-                f"Показаны первые 3 записи. Для полного вывода запустите с --full-json]\n"
-                f"{sample_str}\n"
-                f"// ... ещё {max(0, total_keys - 3)} записей скрыто ..."
-            )
+        summarized = _truncate_json_value(parsed, max_items=3)
+        sample_str = json.dumps(summarized, ensure_ascii=False, indent=2)
+        return (
+            f"// [AUTO-SUMMARY: Большой JSON-файл ({raw_size // 1024} KiB). "
+            f"Показаны первые 3 элемента каждого уровня. Для полного вывода запустите с --full-json]\n"
+            f"{sample_str}"
+        )
     except Exception:
-        pass
-
-    return content
+        return content
 
 
 def make_file_blocks(
@@ -344,6 +412,22 @@ def main() -> int:
         help="Альтернативный лимит в MiB (переопределяет --max-kb, если указан).",
     )
     parser.add_argument(
+        "--no-tests",
+        action="store_true",
+        help="Исключить все тесты (tests/, __tests__/, e2e/, *.test.*), чтобы весь код поместился в контекст ИИ.",
+    )
+    parser.add_argument(
+        "--scope",
+        choices=("all", "code", "backend", "frontend"),
+        default="all",
+        help="Область снимка: all (всё), code (код без тестов), backend, frontend.",
+    )
+    parser.add_argument(
+        "--all-i18n",
+        action="store_true",
+        help="Включить все языковые каталоги (en.ts, uk.ts, ru.ts), а не только эталонный ru.ts.",
+    )
+    parser.add_argument(
         "--full-json",
         action="store_true",
         help="Не сворачивать большие JSON-книги дебютов.",
@@ -391,7 +475,12 @@ def main() -> int:
     # Оставляем запас 3 KiB под шапку и футер части
     max_bytes = max(8192, int(max_kb * 1024) - 3072)
 
-    files = collect_files(root)
+    files = collect_files(
+        root,
+        no_tests=args.no_tests,
+        include_all_i18n=args.all_i18n,
+        scope=args.scope,
+    )
     blocks, unreadable = make_file_blocks(root, files, full_json=args.full_json)
     parts = pack_parts(blocks, max_bytes)
 
@@ -404,7 +493,7 @@ def main() -> int:
     index_lines = [
         status,
         "=" * 88,
-        f"PROJECT: {root.name}",
+        f"PROJECT: {root.name} (scope={args.scope}, no_tests={args.no_tests})",
         f"ROOT: {root}",
         f"FILES INCLUDED: {len(blocks)}",
         f"PARTS: {total_parts} (target <= {max_kb:.0f} KiB per part)",
@@ -414,7 +503,7 @@ def main() -> int:
         "TABLE OF CONTENTS BY PART:",
     ]
 
-    print(f"Проект: {root}")
+    print(f"Проект: {root} (режим: scope={args.scope}, no_tests={args.no_tests})")
     print(f"Текстовых файлов включено: {len(blocks)}")
     print(f"Количество частей: {total_parts} (лимит ~{max_kb:.0f} KiB на файл)\n")
 
@@ -422,14 +511,13 @@ def main() -> int:
     dash_line = "-" * 88
     for number, (part_files, content) in enumerate(parts, start=1):
         filename = f"snapshot_{number:03d}.txt"
-        # Сводка состояния — в начале первой части: ИИ-помощник видит её раньше кода.
         status_block = f"{status}\n{'=' * 88}\n" if number == 1 else ""
         header = (
-            status_block
-            + f"PROJECT SNAPSHOT — PART {number}/{total_parts}\n"
-            f"Project: {root.name}\n"
-            f"Files in this part ({len(part_files)}): {', '.join(part_files)}\n"
-            f"{dash_line}\n"
+                status_block
+                + f"PROJECT SNAPSHOT — PART {number}/{total_parts}\n"
+                  f"Project: {root.name}\n"
+                  f"Files in this part ({len(part_files)}): {', '.join(part_files)}\n"
+                  f"{dash_line}\n"
         )
         footer = (
             f"\n{dash_line}\n"
@@ -453,8 +541,17 @@ def main() -> int:
         report.write_text("\n".join(unreadable), encoding="utf-8")
         print(f"\nНе удалось прочитать файлов: {len(unreadable)} (см. {report})")
 
+    est_tokens = int(total_size / 3.5)
     print(f"\nГотово! Папка со снэпшотом: {output}")
-    print(f"Суммарный объём всех частей: {total_size / 1024:.1f} KiB")
+    print(f"Суммарный объём: {total_size / 1024:.1f} KiB (~{est_tokens // 1000}k токенов)")
+    if est_tokens > SAFE_CONTEXT_TOKENS:
+        print(
+            f"⚠️  Внимание: объём (~{est_tokens // 1000}k токенов) превышает безопасное окно чата "
+            f"(~{SAFE_CONTEXT_TOKENS // 1000}k).\n"
+            f"   Для полного удержания кода в памяти ИИ используйте: python make_snapshot.py --no-tests"
+        )
+    else:
+        print("✅ Снимок полностью помещается в контекстное окно ИИ без вытеснения ранних частей.")
     return 0
 
 
