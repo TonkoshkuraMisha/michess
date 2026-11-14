@@ -669,6 +669,7 @@ export const uk: Messages = {
         message_too_large: 'Повідомлення задовге',
         engine_busy: 'Рушій зайнятий — повторіть запит за кілька секунд',
         engine_rate_limited: 'Забагато запитів до рушія — спробуйте за {retry_after} с',
+        daily_limit_reached: 'Безкоштовний денний ліміт ({limit}) вичерпано — оновиться за {hours} год',
         engine_locked_in_game: 'Під час партії з людиною аналіз і підказки рушія недоступні',
         engine_locked_guest_ip: 'З цієї адреси зараз триває партія з людиною — увійдіть в акаунт, щоб користуватися рушієм',
         too_many_registrations: 'Забагато реєстрацій з цієї адреси — спробуйте за {retry_after} с',

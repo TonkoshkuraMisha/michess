@@ -9,7 +9,7 @@ from sqlalchemy.pool import NullPool
 from src.core.config import settings
 from src.services import personal_puzzles, tournament_simulation
 from src.services.analysis_service import analysis_service
-from src.services.engine_pool import EngineBusyError
+from src.services.engine_pool import EngineBusyError, engine_work
 
 # Задача привязана к нашему приложению Celery явно. С @shared_task API-процесс, где celery_app
 # никто не импортировал, публиковал через приложение по умолчанию — в amqp://localhost:5672
@@ -58,7 +58,8 @@ async def _prewarm_game_analysis_async(game_id: int) -> dict:
 def analyze_game_task(self, game_id: int):
     """Синхронная обёртка Celery для фонового анализа завершённой партии."""
     try:
-        return asyncio.run(_prewarm_game_analysis_async(game_id))
+        with engine_work("analysis"):
+            return asyncio.run(_prewarm_game_analysis_async(game_id))
     except EngineBusyError as exc:
         # Все движки заняты — анализ не теряем, а откладываем.
         raise self.retry(exc=exc, countdown=ENGINE_BUSY_RETRY_S) from exc
@@ -81,7 +82,8 @@ async def _simulate_tournament_game_async(tournament_game_id: int) -> list[int]:
 def simulate_tournament_game_task(self, tournament_game_id: int):
     """Партия ботов между собой в турнире (таск 15.2); следующие партии тура ставятся в очередь здесь же."""
     try:
-        follow_up = asyncio.run(_simulate_tournament_game_async(tournament_game_id))
+        with engine_work("simulation"):
+            follow_up = asyncio.run(_simulate_tournament_game_async(tournament_game_id))
     except EngineBusyError as exc:
         raise self.retry(exc=exc, countdown=ENGINE_BUSY_RETRY_S) from exc
     except Exception:

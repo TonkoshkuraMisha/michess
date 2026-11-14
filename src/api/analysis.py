@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.fair_play import forbid_engine_help_during_game, optional_user_id
 from src.api.ladder import note_ladder_analysis
-from src.api.rate_limit import rate_limit
+from src.api.rate_limit import DailyQuota, rate_limit
 from src.core.errors import ApiError, DomainValueError
 from src.db.session import get_db
 from src.models.game import Game
@@ -32,7 +32,7 @@ from src.services.analysis_service import (
     ensure_game_finished,
     is_current_analysis,
 )
-from src.services.engine_pool import EngineBusyError
+from src.services.engine_pool import EngineBusyError, engine_work
 from src.services.game_engine import InvalidStartPositionError
 from src.services.game_summary import summarize
 
@@ -54,6 +54,11 @@ async def _game_analysis_lock(game_id: int):
         entry[1] -= 1
         if entry[1] == 0:
             _ANALYSIS_LOCKS.pop(game_id, None)
+
+
+# Дневные квоты бесплатного тарифа (таск 23.3): выключены, пока не включён FREE_TIER_LIMITS.
+GAME_ANALYSIS_QUOTA = DailyQuota("game_analysis", "FREE_GAME_ANALYSES_PER_DAY")
+COACH_QUOTA = DailyQuota("coach", "FREE_COACH_REQUESTS_PER_DAY")
 
 
 def _engine_busy() -> HTTPException:
@@ -79,7 +84,8 @@ async def analyze_game_position(
     Недоступно, пока у запрашивающего идёт рейтинговая партия (см. src/api/fair_play.py).
     """
     try:
-        return await analysis_service.analyze_position(db, request.moves, request.start_fen)
+        with engine_work("analysis"):
+            return await analysis_service.analyze_position(db, request.moves, request.start_fen)
     except InvalidStartPositionError as exc:
         raise exc.to_http(400) from exc
     except EngineBusyError:
@@ -91,22 +97,26 @@ async def analyze_game_position(
     response_model=AdviceResponse,
     dependencies=[
         Depends(rate_limit("analysis_advice", "RATE_LIMIT_ADVICE", "RATE_LIMIT_ADVICE_GUEST")),
+        Depends(COACH_QUOTA.check),
         Depends(forbid_engine_help_during_game),
         Depends(note_ladder_analysis),
     ],
 )
-async def get_position_advice(request: AdviceRequest):
+async def get_position_advice(request: AdviceRequest, http: Request):
     """
     Совет наставника по позиции (таск 11.2): угроза соперника, своя возможность, идея лучшего хода и стрелки.
     Это подсказка движка: недоступна во время партии с человеком, в партии лестницы делает её незасчитанной.
     Текст собирает клиент по ключам каталога coach.
     """
     try:
-        return await analysis_service.advise(request.fen)
+        with engine_work("coach"):
+            advice = await analysis_service.advise(request.fen)
     except DomainValueError as exc:
         raise exc.to_http(400) from exc
     except EngineBusyError:
         raise _engine_busy() from None
+    await COACH_QUOTA.record(http)
+    return advice
 
 
 @router.post(
@@ -114,21 +124,25 @@ async def get_position_advice(request: AdviceRequest):
     response_model=HintResponse,
     dependencies=[
         Depends(rate_limit("analysis_hint", "RATE_LIMIT_ADVICE", "RATE_LIMIT_ADVICE_GUEST")),
+        Depends(COACH_QUOTA.check),
         Depends(forbid_engine_help_during_game),
         Depends(note_ladder_analysis),
     ],
 )
-async def graded_hint(request: HintRequest):
+async def graded_hint(request: HintRequest, http: Request):
     """
     Подсказка по ступеням (таск 11.4): 1 — намёк словами, 2 — какой фигурой ходить, 3 — ход со стрелкой и
     объяснением. Ход раскрывается только на последней ступени. Правила честной игры — как у совета.
     """
     try:
-        return await analysis_service.hint(request.fen, request.step)
+        with engine_work("coach"):
+            hint = await analysis_service.hint(request.fen, request.step)
     except DomainValueError as exc:
         raise exc.to_http(400) from exc
     except EngineBusyError:
         raise _engine_busy() from None
+    await COACH_QUOTA.record(http)
+    return hint
 
 
 @router.post(
@@ -152,22 +166,26 @@ async def dispute_coach_warning(payload: DisputeRequest, request: Request, db: A
     response_model_exclude_none=True,
     dependencies=[
         Depends(rate_limit("analysis_check_move", "RATE_LIMIT_MOVE_CHECK", "RATE_LIMIT_MOVE_CHECK_GUEST")),
+        Depends(COACH_QUOTA.check),
         Depends(forbid_engine_help_during_game),
         Depends(note_ladder_analysis),
     ],
 )
-async def check_player_move(request: MoveCheckRequest):
+async def check_player_move(request: MoveCheckRequest, http: Request):
     """
     Игра с наставником (таск 11.3): оценка хода игрока — потеря, классификация, лучший ход, ответ соперника,
     пропущенный удар и объяснение наставника. Это подсказка движка: недоступна в партии с человеком, в партии
     лестницы делает её незасчитанной.
     """
     try:
-        return await analysis_service.check_move(request.fen, request.move)
+        with engine_work("coach"):
+            checked = await analysis_service.check_move(request.fen, request.move)
     except DomainValueError as exc:
         raise exc.to_http(400) from exc
     except EngineBusyError:
         raise _engine_busy() from None
+    await COACH_QUOTA.record(http)
+    return checked
 
 
 @router.get("/game/{game_id}", response_model=FullGameAnalysisResponse | None)
@@ -200,10 +218,11 @@ async def get_cached_game_analysis(
 @router.post(
     "/game/{game_id}",
     response_model=FullGameAnalysisResponse,
-    dependencies=[Depends(rate_limit("analysis_game", "RATE_LIMIT_GAME_ANALYSIS"))],
+    dependencies=[Depends(rate_limit("analysis_game", "RATE_LIMIT_GAME_ANALYSIS")), Depends(GAME_ANALYSIS_QUOTA.check)],
 )
 async def analyze_full_game_endpoint(
         game_id: int,
+        http: Request,
         force: bool = Query(default=False, description="Принудительно пересчитать анализ"),
         db: AsyncSession = Depends(get_db),
 ):
@@ -214,7 +233,8 @@ async def analyze_full_game_endpoint(
     """
     async with _game_analysis_lock(game_id):
         try:
-            report = await analysis_service.analyze_full_game(db, game_id, force=force)
+            with engine_work("analysis"):
+                report = await analysis_service.analyze_full_game(db, game_id, force=force)
         except GameDataNotFoundError as exc:
             raise exc.to_http(404) from exc
         except GameNotFinishedError as exc:
@@ -223,5 +243,6 @@ async def analyze_full_game_endpoint(
             raise _engine_busy() from None
         except DomainValueError as exc:
             raise exc.to_http(400) from exc
+    await GAME_ANALYSIS_QUOTA.record(http)
     game = await db.get(Game, game_id)
     return {**report, "summary": summarize(report.get("moves", []), game.result if game else None)}

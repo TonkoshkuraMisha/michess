@@ -104,6 +104,45 @@ async def record_attempt(scope: str, identity: str, window_s: int) -> None:
         logger.warning("Rate limiter unavailable for %s: %s", scope, exc)
 
 
+DAY_S = 86400
+
+
+class DailyQuota:
+    """
+    Дневная квота бесплатного тарифа на дорогую работу движка (таск 23.3): полный анализ партии, наставник.
+    Действует, только когда включён FREE_TIER_LIMITS (тарифы — 25.1). Засчитывается выполненная работа, а не
+    попытка: check() — зависимость перед расчётом, record() — после успешного ответа. Окно — сутки UTC.
+    """
+
+    def __init__(self, scope: str, limit_setting: str):
+        self.scope = f"daily_{scope}"
+        self.limit_setting = limit_setting
+
+    def limit(self) -> int:
+        return int(getattr(settings, self.limit_setting)) if settings.FREE_TIER_LIMITS else 0
+
+    async def check(self, request: Request) -> None:
+        limit = self.limit()
+        if limit <= 0:
+            return
+        window_id, retry_after = _window(DAY_S)
+        try:
+            used = int(await redis_module.redis_client.get(
+                f"ratelimit:{self.scope}:{_client_identity(request)}:{window_id}") or 0)
+        except Exception as exc:
+            logger.warning("Daily quota unavailable for %s: %s", self.scope, exc)
+            return
+        if used >= limit:
+            raise ApiError(
+                status.HTTP_429_TOO_MANY_REQUESTS, "daily_limit_reached",
+                headers={"Retry-After": str(retry_after)}, limit=limit, hours=-(-retry_after // 3600),
+            )
+
+    async def record(self, request: Request) -> None:
+        if self.limit() > 0:
+            await record_attempt(self.scope, _client_identity(request), DAY_S)
+
+
 def rate_limit(scope: str, limit_setting: str, guest_limit_setting: str | None = None):
     """
     Фабрика зависимости FastAPI для эндпоинтов движка. limit_setting — имя поля Settings

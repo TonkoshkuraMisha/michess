@@ -18,6 +18,7 @@ import os
 import re
 import time
 from collections.abc import Awaitable, Callable
+from datetime import UTC, datetime
 
 from prometheus_client import (
     CONTENT_TYPE_LATEST,
@@ -66,6 +67,13 @@ GAMES_FINISHED = Counter(
 TIMEOUT_CHECK_FAILURES = Counter(
     "michess_timeout_check_failures_total", "Failed timeout checks of individual games",
 )
+# Бюджет движка (таск 23.3): «процессор на активного игрока в день» =
+#   increase(michess_engine_seconds_total[1d]) / michess_active_players_today (в конце суток UTC).
+# Время движка считает сам пул (src/services/engine_pool.py), игроков за день — HyperLogLog в Redis.
+ACTIVE_PLAYERS_TODAY = Gauge(
+    "michess_active_players_today", "Distinct logged-in players seen today (UTC)", multiprocess_mode="mostrecent",
+)
+ACTIVE_PLAYERS_TTL_S = 3 * 86400
 
 # Исходы WS-действия.
 OUTCOME_OK = "ok"
@@ -82,6 +90,32 @@ def bounded_label(value: object) -> str:
     """Значение метки из конечного набора: всё, что не похоже на короткий идентификатор, — "other"."""
     text = str(value or "").lower()
     return text if _LABEL_RE.match(text) else "other"
+
+
+def _active_players_key(now: datetime | None = None) -> str:
+    return f"active_players:{(now or datetime.now(UTC)).strftime('%Y-%m-%d')}"
+
+
+async def note_active_player(user_id: int) -> None:
+    """Отмечает игрока активным сегодня (HyperLogLog: ~12 КБ на сутки при любом числе игроков)."""
+    from src.db import redis as redis_module
+
+    key = _active_players_key()
+    try:
+        if await redis_module.redis_client.pfadd(key, user_id):
+            await redis_module.redis_client.expire(key, ACTIVE_PLAYERS_TTL_S)
+    except Exception as exc:  # метрика не должна ронять запрос
+        logger.debug("Active player mark failed: %s", exc)
+
+
+async def refresh_active_players() -> None:
+    """Перед отдачей /metrics: число игроков за сегодня из Redis."""
+    from src.db import redis as redis_module
+
+    try:
+        ACTIVE_PLAYERS_TODAY.set(await redis_module.redis_client.pfcount(_active_players_key()))
+    except Exception as exc:
+        logger.debug("Active players count failed: %s", exc)
 
 
 def metrics_response() -> Response:
