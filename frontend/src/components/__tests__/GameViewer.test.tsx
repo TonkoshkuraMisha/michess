@@ -169,6 +169,31 @@ describe('GameViewer', () => {
         addListener.mockRestore();
     });
 
+    it('пометки правой кнопкой — общий слой: цвет модификатором, листание их не снимает, Escape снимает', async () => {
+        stubApi({pgn: {ok: true, text: FOOLS_MATE_PGN}});
+        renderViewer();
+        await waitFor(() => expect(pieceOn('h4')).toBe('b q'));
+        const cell = (square: string) => document.querySelector(`[data-square="${square}"]`) as HTMLElement;
+        const rightDrag = (from: string, to: string, init: Record<string, unknown> = {}) => {
+            document.elementsFromPoint = () => [cell(from)];
+            fireEvent.pointerDown(cell(from), {pointerType: 'mouse', button: 2});
+            document.elementsFromPoint = () => [cell(to)];
+            fireEvent.pointerUp(cell(to), {pointerType: 'mouse', button: 2, ...init});
+        };
+
+        rightDrag('g1', 'f3', {shiftKey: true});
+        rightDrag('e4', 'e4');
+        expect(screen.getByTestId('note-arrow-g1-f3').getAttribute('data-color')).toBe('red');
+        expect(screen.getByTestId('note-square-e4').getAttribute('data-color')).toBe('green');
+
+        fireEvent.keyDown(window, {key: 'ArrowLeft'});
+        await expectPiece('h4', null);
+        expect(screen.getByTestId('note-arrow-g1-f3')).toBeInTheDocument();
+
+        fireEvent.keyDown(window, {key: 'Escape'});
+        await waitFor(() => expect(screen.queryByTestId('board-annotations')).toBeNull());
+    });
+
     it('переворот доски меняет порядок клеток', async () => {
         stubApi({pgn: {ok: true, text: FOOLS_MATE_PGN}});
         renderViewer();
