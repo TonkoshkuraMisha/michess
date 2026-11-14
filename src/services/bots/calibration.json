@@ -1,7 +1,7 @@
 {
   "meta": {
-    "date": "2026-11-13",
-    "games": 328,
+    "date": "2026-11-14",
+    "games": 150,
     "anchors": [
       1350,
       1600,
@@ -9,16 +9,16 @@
       2100,
       2400
     ],
-    "anchor_movetime_s": 0.5,
-    "minutes": 61.6,
+    "anchor_movetime_s": 1.0,
+    "minutes": 31.1,
     "scale": "Stockfish UCI_Elo anchors at our time control (not FIDE)"
   },
   "players": {
     "archetype:quiet": {
-      "rating": 737,
-      "games": 24,
-      "score": 3.5,
-      "ci95": 340,
+      "rating": 1171,
+      "games": 36,
+      "score": 14.0,
+      "ci95": 148,
       "declared": 900
     },
     "archetype:strategist": {
@@ -57,10 +57,10 @@
       "declared": 2200
     },
     "archetype:rusher": {
-      "rating": 471,
-      "games": 20,
-      "score": 0.5,
-      "ci95": 419,
+      "rating": 812,
+      "games": 30,
+      "score": 2.0,
+      "ci95": 266,
       "declared": 700
     },
     "anderssen": {
@@ -71,10 +71,10 @@
       "declared": 2100
     },
     "archetype:centralist": {
-      "rating": 1493,
-      "games": 28,
-      "score": 13.0,
-      "ci95": 147,
+      "rating": 1429,
+      "games": 42,
+      "score": 17.0,
+      "ci95": 140,
       "declared": 1400
     },
     "archetype:fortress": {
@@ -99,10 +99,10 @@
       "declared": 2080
     },
     "archetype:pawn_keeper": {
-      "rating": 1251,
-      "games": 28,
-      "score": 12.0,
-      "ci95": 191,
+      "rating": 1129,
+      "games": 42,
+      "score": 13.0,
+      "ci95": 140,
       "declared": 1100
     },
     "archetype:adventurer": {
@@ -127,10 +127,10 @@
       "declared": 2150
     },
     "archetype:cavalier": {
-      "rating": 1398,
-      "games": 28,
-      "score": 13.0,
-      "ci95": 158,
+      "rating": 1192,
+      "games": 42,
+      "score": 10.5,
+      "ci95": 139,
       "declared": 1250
     }
   }

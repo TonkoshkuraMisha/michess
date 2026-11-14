@@ -94,8 +94,8 @@ def test_unknown_fields_are_rejected():
 
 def test_strength_limits_search_and_starts_errors_below_stockfish_minimum():
     weakest, strongest = strength_for(600), strength_for(2800)
-    assert weakest.uci_elo == 1320 and weakest.error_rate == pytest.approx(0.36)
-    assert strength_for(1320).error_rate == pytest.approx(0.10) and strength_for(1320).uci_elo == 1320
+    assert weakest.uci_elo == 1320 and weakest.error_rate == pytest.approx(0.40)
+    assert strength_for(1320).error_rate == pytest.approx(0.07) and strength_for(1320).uci_elo == 1320
     # Кривая по калибровке: между точками линейно, к 1450 ошибки сходят на нет.
     assert strength_for(1000).error_rate == pytest.approx(0.22)
     assert strength_for(1450).error_rate == 0 and strength_for(1500).error_rate == 0
