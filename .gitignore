@@ -59,3 +59,5 @@ backups/
 # Сводка состояния — python make_snapshot.py --status (или _project_snapshot/STATUS.md после генерации).
 _project_snapshot/
 .venv/
+# Партии калибровки — для метрик стиля (scripts/style_metrics.py), небольшие.
+!scripts/calibration_runs/*.pgn

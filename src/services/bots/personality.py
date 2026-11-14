@@ -30,6 +30,10 @@ from src.services.bots.style import (
     EXTENDED_CENTER,
     FROM_BACK_RANK,
     MINOR_PIECES,
+    NEAR_ENEMY_KING,
+    QUIET,
+    SACRIFICE,
+    STANDARD_VALUES,
     Cond,
     MoveContext,
     Rule,
@@ -38,6 +42,7 @@ from src.services.bots.style import (
     mobility_count,
     pawn_structure_delta,
     piece,
+    prophylaxis,
     to,
 )
 
@@ -67,7 +72,6 @@ BLUNDER_SHARE = 1 / 3
 # randomness 100 → разброс ±40 сп между равными кандидатами.
 JITTER_CP_PER_RANDOMNESS = 0.4
 
-STANDARD_VALUES = {chess.PAWN: 1.0, chess.KNIGHT: 3.0, chess.BISHOP: 3.0, chess.ROOK: 5.0, chess.QUEEN: 9.0}
 
 
 class PieceValues(BaseModel):
@@ -145,23 +149,6 @@ def strength_for(target_elo: int) -> Strength:
 
 # --- Признаки ходов для ползунков -------------------------------------------------------------
 
-def _sacrifice(c: MoveContext) -> bool:
-    """Фигура встаёт под бой и стоит дороже взятого (незащищённая пешка — тоже жертва)."""
-    if c.piece is None or c.piece.piece_type == chess.KING or not c.destination_attacked:
-        return False
-    moved = STANDARD_VALUES[c.piece.piece_type]
-    taken = STANDARD_VALUES.get(c.captured_piece_type or 0, 0.0)
-    if moved <= taken:
-        return False
-    defended = c.board_after.is_attacked_by(c.us, c.move.to_square)
-    return not defended or c.piece.piece_type != chess.PAWN
-
-
-def _near_enemy_king(c: MoveContext) -> bool:
-    king = c.board.king(not c.us)
-    return king is not None and chess.square_distance(c.move.to_square, king) <= 2
-
-
 def _queens_on_board(c: MoveContext) -> bool:
     return bool(c.board.pieces(chess.QUEEN, chess.WHITE)) and bool(c.board.pieces(chess.QUEEN, chess.BLACK))
 
@@ -179,32 +166,8 @@ def _shelter_pawn_push(c: MoveContext) -> bool:
     return abs(chess.square_file(c.move.from_square) - king_file) <= 1
 
 
-SACRIFICE = Cond(_sacrifice)
-NEAR_ENEMY_KING = Cond(_near_enemy_king)
 QUEENS_ON = Cond(_queens_on_board)
 SHELTER_PAWN_PUSH = Cond(_shelter_pawn_push)
-QUIET = ~CHECK & ~CAPTURE
-
-
-def _active_moves(board: chess.Board, color: chess.Color) -> int:
-    """Взятия и шахи, доступные стороне color, — её угрозы."""
-    probe = board
-    if board.turn != color:
-        probe = board.copy(stack=False)
-        probe.turn = color
-        probe.ep_square = None
-    return sum(1 for m in probe.pseudo_legal_moves if probe.is_capture(m) or probe.gives_check(m))
-
-
-def _prophylaxis(c: MoveContext) -> float:
-    """
-    Профилактика: сколько угроз (взятий и шахов) ход отнимает у соперника — главный вклад,
-    и насколько сокращает его подвижность — дополнительный.
-    """
-    them = not c.us
-    threats_removed = _active_moves(c.board, them) - _active_moves(c.board_after, them)
-    squares_removed = mobility_count(c.board, them) - mobility_count(c.board_after, them)
-    return 6.0 * max(0, min(6, threats_removed)) + 1.0 * max(0, min(10, squares_removed))
 
 
 def _mobility_gain(c: MoveContext) -> float:
@@ -245,7 +208,7 @@ def build_style(config: BotPersonalityConfig) -> Style:
     elif a < 0:
         calm = -a
         rules += [
-            Rule(QUIET, _scaled(calm, _prophylaxis), "personality.prophylaxis"),
+            Rule(QUIET, _scaled(calm, prophylaxis), "personality.prophylaxis"),
             Rule(CHECK | CAPTURE, -10.0 * calm),
         ]
 

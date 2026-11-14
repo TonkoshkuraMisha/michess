@@ -267,3 +267,56 @@ def mobility_count(board: chess.Board, color: chess.Color) -> int:
     probe.turn = color
     probe.ep_square = None
     return probe.pseudo_legal_moves.count()
+
+
+# --- Признаки характера в миттельшпиле (таск B.5): общие для мастерской и исторических ботов -----------------
+
+STANDARD_VALUES = {chess.PAWN: 1.0, chess.KNIGHT: 3.0, chess.BISHOP: 3.0, chess.ROOK: 5.0, chess.QUEEN: 9.0}
+
+
+def _sacrifice(c: MoveContext) -> bool:
+    """Фигура встаёт под бой и стоит дороже взятого (незащищённая пешка — тоже жертва)."""
+    if c.piece is None or c.piece.piece_type == chess.KING or not c.destination_attacked:
+        return False
+    moved = STANDARD_VALUES[c.piece.piece_type]
+    taken = STANDARD_VALUES.get(c.captured_piece_type or 0, 0.0)
+    if moved <= taken:
+        return False
+    defended = c.board_after.is_attacked_by(c.us, c.move.to_square)
+    return not defended or c.piece.piece_type != chess.PAWN
+
+
+def _near_enemy_king(c: MoveContext) -> bool:
+    king = c.board.king(not c.us)
+    return king is not None and chess.square_distance(c.move.to_square, king) <= 2
+
+
+SACRIFICE = Cond(_sacrifice)
+NEAR_ENEMY_KING = Cond(_near_enemy_king)
+QUIET = ~CHECK & ~CAPTURE
+
+
+def after_move(n: int) -> Cond:
+    """После n-го хода партии — миттельшпиль и дальше (пара к by_move)."""
+    return Cond(lambda c: c.board.fullmove_number > n)
+
+
+def _active_moves(board: chess.Board, color: chess.Color) -> int:
+    """Взятия и шахи, доступные стороне color, — её угрозы."""
+    probe = board
+    if board.turn != color:
+        probe = board.copy(stack=False)
+        probe.turn = color
+        probe.ep_square = None
+    return sum(1 for m in probe.pseudo_legal_moves if probe.is_capture(m) or probe.gives_check(m))
+
+
+def prophylaxis(c: MoveContext) -> float:
+    """
+    Профилактика: сколько угроз (взятий и шахов) ход отнимает у соперника — главный вклад,
+    и насколько сокращает его подвижность — дополнительный.
+    """
+    them = not c.us
+    threats_removed = _active_moves(c.board, them) - _active_moves(c.board_after, them)
+    squares_removed = mobility_count(c.board, them) - mobility_count(c.board_after, them)
+    return 6.0 * max(0, min(6, threats_removed)) + 1.0 * max(0, min(10, squares_removed))

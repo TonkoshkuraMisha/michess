@@ -4,18 +4,23 @@ import chess
 
 from src.services.bots.base import BookEntry, HistoricalBot, load_bot_opening_book
 from src.services.bots.style import (
+    ALWAYS,
     CAPTURE,
     CASTLING,
     CENTER_SQUARES,
     CHECK,
     EXTENDED_CENTER,
+    QUIET,
     FirstOf,
     Group,
     Note,
     Rule,
     Style,
+    after_move,
     by_move,
+    pawn_structure_delta,
     piece,
+    prophylaxis,
     to,
 )
 
@@ -65,6 +70,11 @@ PAULSEN_STYLE = Style(
     FirstOf(
         Rule(CHECK, 18.0),
         Rule(CAPTURE, 14.0),
+    ),
+    Group(
+        after_move(14),
+        Rule(QUIET, prophylaxis),
+        Rule(ALWAYS, pawn_structure_delta),
     ),
 )
 evaluate_paulsen_style_bonus = PAULSEN_STYLE.evaluate

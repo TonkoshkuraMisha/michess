@@ -154,8 +154,11 @@ def test_wide_window_lets_style_override_a_slightly_better_line(engine_lines):
 def test_weak_target_elo_makes_controlled_errors(engine_lines, monkeypatch):
     engine_lines(THREAT_FEN, {"Nf3": 300, "Rh8+": 0, "Kd2": -50})
     monkeypatch.setattr(personality.random, "random", lambda: 0.0)  # ошибка выпадает всегда
+    # Ошибка — ход из худшей половины линий. Случайный зевок (BLUNDER_SHARE) здесь выключен: случайный легальный
+    # ход изредка совпадает с лучшим, и проверка «не лучший» от этого мигала.
+    monkeypatch.setattr(personality, "BLUNDER_SHARE", 0.0)
     weak = BotPersonalityConfig(target_elo=600, blunder_guard_cp=0, **ONLY_AGGRESSION)
-    assert _choose(weak, THREAT_FEN) != "Nf3"  # ошибка — не лучшая линия (с random()=0 — случайный зевок)
+    assert {_choose(weak, THREAT_FEN) for _ in range(20)} <= {"Rh8+", "Kd2"}
 
     # С 1320 и выше ошибок нет: с нулевым окном играется лучшая линия.
     strong = BotPersonalityConfig(target_elo=1500, blunder_guard_cp=0, **ONLY_AGGRESSION)
