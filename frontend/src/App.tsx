@@ -41,6 +41,8 @@ interface UserProfile {
     rapid_rating: number;
     classical_rating: number;
     is_cheater: boolean;
+    /** Категории с временным рейтингом (таск 17.8): меньше 30 партий. */
+    provisional?: string[];
 }
 
 export default function App() {
@@ -183,6 +185,9 @@ export default function App() {
     // Блиц — заголовочный рейтинг в компактной навигации (как на chess.com/lichess.org);
     // полный разбор по пуле/блицу/рапиду/классике — на странице профиля.
     const userRating = userProfile?.blitz_rating || 1200;
+    // Временный рейтинг (таск 17.8) — со знаком «?», пока сыграно мало партий блица.
+    const ratingProvisional = Boolean(userProfile?.provisional?.includes('blitz'));
+    const ratingLabel = ratingProvisional ? `${userRating}?` : String(userRating);
 
     return (
         <div
@@ -335,7 +340,8 @@ export default function App() {
                                 <div className="flex flex-col items-start hidden sm:flex">
                                     <span className="font-bold text-sm text-amber-200 leading-tight">{username}</span>
                                     <span
-                                        className="text-xs text-amber-400 font-mono font-semibold">({userRating})</span>
+                                        className="text-xs text-amber-400 font-mono font-semibold"
+                                        title={ratingProvisional ? t('nav.provisional') : undefined}>({ratingLabel})</span>
                                 </div>
                                 <span className="text-xs text-amber-400 ml-0.5">▼</span>
                             </div>
@@ -352,7 +358,7 @@ export default function App() {
                                         <div>
                                             <div className="font-bold text-base text-amber-200">{username}</div>
                                             <div
-                                                className="text-xs text-amber-400 font-mono">{t('nav.rating', {rating: userRating})}</div>
+                                                className="text-xs text-amber-400 font-mono">{t('nav.rating', {rating: ratingLabel})}</div>
                                             <div className="text-xs text-emerald-400 flex items-center gap-1.5 mt-0.5">
                                                 <span
                                                     className="w-2 h-2 rounded-full bg-emerald-500 inline-block"></span>
@@ -490,6 +496,7 @@ export default function App() {
                         setShowAuthModal(false);
                     }}
                     onClose={() => setShowAuthModal(false)}
+                    onFirstGame={(rating) => navigate('/', {state: {firstGame: {rating}}})}
                 />
             )}
         </div>

@@ -14,8 +14,9 @@ from src.core.errors import ApiError
 from src.core.security import create_user_token, get_password_hash, verify_password
 from src.db import redis as redis_module
 from src.db.session import get_db
-from src.models.user import User
+from src.models.user import RATING_CATEGORIES, User
 from src.schemas.user import UserCreate, UserResponse, username_key
+from src.services.onboarding import starting_rating
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -68,10 +69,17 @@ async def register_user(user_in: UserCreate, request: Request, db: AsyncSession 
     if result.first() is not None:
         raise ApiError(status.HTTP_400_BAD_REQUEST, "username_taken")
 
+    # Стартовый рейтинг по ответам при регистрации (таск 17.8) — во всех категориях игры и в задачах. Без ответов —
+    # значения по умолчанию модели (игра 1200, задачи 1500).
+    ratings: dict[str, int] = {}
+    if user_in.experience is not None or user_in.strength is not None:
+        start = starting_rating(user_in.experience, user_in.strength)
+        ratings = {f"{c}_rating": start for c in (*RATING_CATEGORIES, "puzzle")}
     new_user = User(
         username=user_in.username,
         username_key=key,
         hashed_password=get_password_hash(user_in.password),
+        **ratings,
     )
     db.add(new_user)
     try:

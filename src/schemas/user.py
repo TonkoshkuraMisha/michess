@@ -4,6 +4,7 @@ from datetime import datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from src.core.errors import validation_error
+from src.services.onboarding import Experience, StrengthBand
 
 USERNAME_MIN_LENGTH = 3
 USERNAME_MAX_LENGTH = 30
@@ -38,6 +39,9 @@ class UserCreate(BaseModel):
     )
     # Верхняя граница — чтобы не хэшировать мегабайтные «пароли»; bcrypt всё равно учитывает 72 байта.
     password: str = Field(..., min_length=8, max_length=128, description="Strong password")
+    # Первый вход (таск 17.8): необязательные ответы для стартового рейтинга (src/services/onboarding.py).
+    experience: Experience | None = None
+    strength: StrengthBand | None = None
 
     @field_validator("username")
     @classmethod
