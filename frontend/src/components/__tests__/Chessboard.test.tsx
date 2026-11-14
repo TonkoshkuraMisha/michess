@@ -639,6 +639,42 @@ describe('рентген доски', () => {
     });
 });
 
+describe('первая партия после регистрации (таск 17.8)', () => {
+    it('архетип по стартовому рейтингу, игрок — белыми', async () => {
+        const archetypeOf = (id: string, rating: number) => ({
+            id, config: {...DEFAULT_CONFIG, target_elo: rating},
+            declared_rating: rating, rating, measured: true, games: 80, ci95: 100,
+        });
+        const fetchMock = mockFetchRouter({
+            '/profile/me': () => ({id: 1, username: 'TestPlayer', blitz_rating: 600}),
+            '/profile/matchmaking/queue': () => [],
+            '/profile/games/live': () => [],
+            '/profile/games/my-active': () => ({active: false}),
+            '/bots/personalities': () => [],
+            '/bots/catalog': () => ({
+                calibration: null, historical: [], archetypes: [archetypeOf('quiet', 848), archetypeOf('rusher', 792)],
+            }),
+            '/bots/custom-move': () => ({...BOT_MOVE_DEFAULT, uci: 'e7e5', san: 'e5'}),
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        render(
+            <MemoryRouter initialEntries={[{pathname: '/', state: {firstGame: {rating: 600}}}]}>
+                <Chessboard/>
+            </MemoryRouter>,
+        );
+
+        await waitFor(() => expect(screen.getAllByText('Торопыга').length).toBeGreaterThan(0));
+        clickSquare('e2');
+        clickSquare('e4');
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(200);
+        });
+        const moveCall = (fetchMock.mock.calls as unknown as [string, RequestInit][])
+            .find(([url]) => String(url).includes('/bots/custom-move'));
+        expect(JSON.parse(String(moveCall?.[1].body)).config.target_elo).toBe(792);
+    });
+});
+
 describe('партия турнира', () => {
     it('стартует с турнирным контролем, без возврата хода, результат уходит в турнир', async () => {
         vi.spyOn(window, 'confirm').mockReturnValue(true);

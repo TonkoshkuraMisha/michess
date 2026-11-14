@@ -7,6 +7,8 @@ _RAPID_THRESHOLD_S = 480
 _CLASSICAL_THRESHOLD_S = 1500
 # Сколько ходов закладывается в оценку длительности партии.
 ESTIMATED_MOVES = 40
+# Первые партии в категории рейтинг временный: K = 40 и пометка в интерфейсе (таск 17.8).
+PROVISIONAL_GAMES = 30
 
 
 def classify_time_control(base_time_ms: int, increment_ms: int) -> RatingCategory:
@@ -39,8 +41,8 @@ class FideEloSystem:
     """
 
     @staticmethod
-    def get_k_factor(rating: int, games_played: int = 30) -> int:
-        if games_played < 30:
+    def get_k_factor(rating: int, games_played: int = PROVISIONAL_GAMES) -> int:
+        if games_played < PROVISIONAL_GAMES:
             return 40
         if rating >= 2400:
             return 10

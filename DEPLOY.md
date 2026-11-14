@@ -114,10 +114,24 @@ compose (или опубликуйте порт `api` только на внут
 | `michess_http_requests_total`, `michess_http_request_seconds` | HTTP по шаблону маршрута и статусу    |
 | `michess_games_finished_total{termination}`| завершённые партии                                          |
 | `michess_timeout_check_failures_total`     | сбои проверки флагов и неявок (должен быть около нуля)      |
+| `michess_engine_seconds_total{kind}`       | время, пока движки Stockfish заняты: `bot_move`, `analysis`, `coach`, `simulation`, `puzzles`, `other` |
+| `michess_engine_acquire_wait_seconds{kind}`, `michess_engine_busy_total{kind}` | ожидание свободного движка и отказы «пул занят» |
+| `michess_active_players_today`             | вошедшие игроки за сутки UTC (HyperLogLog в Redis)          |
 
 Стоит настроить оповещения: p95 `michess_ws_action_seconds{action="make_move"}` выше 0,5 с,
 рост `michess_ws_actions_total{outcome="error"}` и `michess_timeout_check_failures_total`,
 `michess_db_pool_checked_out` у предела пула, `/health` с кодом 503.
+
+**Бюджет движка (таск 23.3).** Процессор на активного игрока в день (в конце суток UTC):
+`increase(michess_engine_seconds_total[1d]) / michess_active_players_today`, по видам работ — с `by (kind)`.
+Счётчики пишет процесс, где работал движок: API (ходы ботов, анализ, наставник) отдаёт их на `/metrics`, а
+Celery-воркеры (фоновый анализ, симуляция турниров) — только если у них общий с API `PROMETHEUS_MULTIPROC_DIR`
+или свой экспортёр. Рост `michess_engine_busy_total` — сигнал добавить движков (`ENGINE_POOL_SIZE`) или воркеров.
+
+**Квоты бесплатного тарифа.** `FREE_TIER_LIMITS=true` включает дневные квоты на полный анализ партии
+(`FREE_GAME_ANALYSES_PER_DAY`, по умолчанию 3) и на наставника — совет, подсказку, проверку хода
+(`FREE_COACH_REQUESTS_PER_DAY`, 300). Засчитывается выполненная работа; сверх квоты — 429 `daily_limit_reached`.
+По умолчанию выключено — включит тарифная модель (25.1). Ходы ботов, задачи и игра квот не имеют.
 
 ## 7. Нагрузочный тест
 

@@ -32,6 +32,7 @@ from src.services.bots.personality import BotPersonalityConfig, PersonalityBot
 from src.services.bots.philidor import philidor_bot, resolve_stockfish_path
 from src.services.bots.staunton import staunton_bot
 from src.services.bots.zukertort import zukertort_bot
+from src.services.engine_pool import engine_work
 from src.services.game_engine import board_from_start_fen, flag_outcome, is_standard_start, terminal_outcome
 from src.services.rating import classify_time_control
 from src.services.task_dispatch import schedule_game_analysis_in_background, schedule_tournament_simulations_in_background
@@ -501,7 +502,8 @@ async def get_bot_move(payload: BotMoveRequest, request: Request, db: AsyncSessi
 
     board = _playable_board(payload.fen)
     await ladder_service.note_bot_move_request(await optional_user_id(request, db), board, payload.bot_id)
-    result = await asyncio.to_thread(bot.choose_move, payload.fen)
+    with engine_work("bot_move"):
+        result = await asyncio.to_thread(bot.choose_move, payload.fen)
     thinking_time_ms = calculate_authentic_thinking_time_ms(
         bot_id=payload.bot_id,
         board=board,
@@ -543,7 +545,8 @@ async def get_custom_bot_move(
         await optional_user_id(request, db), board,
         ladder_service.opponent_key("custom", None if payload.personality_id is not None else bot.config),
     )
-    result = await asyncio.to_thread(bot.choose_move, payload.fen)
+    with engine_work("bot_move"):
+        result = await asyncio.to_thread(bot.choose_move, payload.fen)
     return BotMoveResponse(
         bot_id=bot.bot_id,
         uci=result["uci"],

@@ -22,6 +22,7 @@ from src.models.game import Game, GameStatus
 from src.models.tournament import Tournament, TournamentGame, TournamentPlayer
 from src.services import tournaments
 from src.services.bots.base import HistoricalBot, analyse_with_stockfish, resolve_stockfish_path, static_board_eval_cp
+from src.services.engine_pool import engine_work
 
 logger = logging.getLogger(__name__)
 
@@ -160,8 +161,9 @@ async def simulate(db: AsyncSession, tournament_game_id: int, play: Callable = p
         return []
     seats = {p.seat: p for p in await tournaments.players_of(db, tournament.id)}
     # Партия — работа процессора: в отдельном потоке, чтобы не держать цикл событий.
-    moves, result, termination = await asyncio.to_thread(
-        play, bot_for(seats[tgame.white_seat]), bot_for(seats[tgame.black_seat]),
-    )
+    with engine_work("simulation"):
+        moves, result, termination = await asyncio.to_thread(
+            play, bot_for(seats[tgame.white_seat]), bot_for(seats[tgame.black_seat]),
+        )
     logger.info("Tournament %s game %s: %s in %d plies", tournament.id, tgame.id, result, len(moves))
     return await save_and_record(db, tournament, tgame, moves, result, termination)

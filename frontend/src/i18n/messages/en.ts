@@ -70,6 +70,7 @@ export const en = {
         settings: 'Settings',
         guest: 'Guest',
         rating: 'Rating: {rating}',
+        provisional: 'Provisional rating: it settles after the first 30 games.',
         online: 'Online',
         profile: 'Profile',
         logout: 'Log out',
@@ -106,6 +107,18 @@ export const en = {
         wrongCredentials: 'Wrong username or password',
         registrationFailed: 'Registration failed',
         registered: 'You are registered! Now log in.',
+        experienceLabel: 'How long have you been playing? (optional)',
+        experience: {new: 'I have just learned the rules', casual: 'I play now and then', regular: 'I play regularly'},
+        strengthLabel: 'Roughly how strong are you? (optional)',
+        strength: {under_1000: 'Below 1000', '1000_1400': '1000–1400', '1400_1800': '1400–1800', over_1800: 'Above 1800'},
+        notAnswered: 'Skip the question',
+        welcomeTitle: 'Welcome, {name}!',
+        welcomeRating: plural({
+            one: 'Your starting rating is {rating}. It is provisional for the first {count} game and will quickly settle at your real strength.',
+            other: 'Your starting rating is {rating}. It is provisional for the first {count} games and will quickly settle at your real strength.',
+        }),
+        playFirstGame: 'Play your first game',
+        later: 'Later',
         importSkipped: 'Not transferred: {list}',
         importSkippedItem: '{name} — {reason}',
         importConfirm: plural({
@@ -667,6 +680,7 @@ export const en = {
         message_too_large: 'The message is too long',
         engine_busy: 'The engine is busy — please try again in a few seconds',
         engine_rate_limited: 'Too many engine requests — please try again in {retry_after} s',
+        daily_limit_reached: 'The free daily limit ({limit}) is used up — it renews in {hours} h',
         engine_locked_in_game: 'Engine analysis and hints are unavailable while you are playing a person',
         engine_locked_guest_ip: 'A game against a person is in progress from this address — log in to use the engine',
         too_many_registrations: 'Too many registrations from this address — please try again in {retry_after} s',
@@ -2216,6 +2230,26 @@ export const en = {
             quiet: {
                 v1: 'No tactics here. Improve your worst piece.',
                 v2: 'A calm position: think about a plan, not about blows.',
+            },
+            pos_castle: {
+                v1: 'No threats: a good moment to think about king safety.',
+                v2: 'A calm position, but your king is not tucked away yet. How can you fix that?',
+            },
+            pos_open_file: {
+                v1: 'There is an open file on the board. Who will take it?',
+                v2: 'Your heavy pieces need room: look for an open line.',
+            },
+            pos_outpost: {
+                v1: 'There is a square from which no pawn can chase a knight away. Find it.',
+                v2: 'Look for an outpost for your knight.',
+            },
+            pos_king_active: {
+                v1: 'Endgame: the king is a strong piece. Time to bring it into play.',
+                v2: 'In the endgame the king belongs in the centre.',
+            },
+            pos_passed_push: {
+                v1: 'Your trump card is a passed pawn.',
+                v2: 'Passed pawns must be pushed.',
             },
             piece: {
                 v1: 'Move this piece: {piece}.',

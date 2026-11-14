@@ -152,6 +152,13 @@ class MockAsyncRedis:
                 added += 1
         return added
 
+    # HyperLogLog (активные игроки за день, таск 23.3) — в тестах точный подсчёт множеством.
+    async def pfadd(self, name, *values):
+        return 1 if await self.sadd(name, *values) else 0
+
+    async def pfcount(self, name):
+        return len(self.sets.get(name, set()))
+
     async def srem(self, name, *values):
         if name not in self.sets:
             return 0
