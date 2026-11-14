@@ -181,6 +181,14 @@ Celery-воркеры (фоновый анализ, симуляция турн�
 - **Сила ботов** показывается измеренной, если в образе есть `src/services/bots/calibration.json`. Его
   обновляет `scripts/calibrate_bots.py` (раздел 9) — после **любого** изменения выбора хода ботов.
 
+## 8б. Вход: короткий токен и refresh-cookie
+
+Access-токен живёт `ACCESS_TOKEN_EXPIRE_MINUTES` (15) и хранится только в памяти страницы; долгий вход — refresh-токен
+в cookie `michess_refresh` (HttpOnly, SameSite=Strict, путь `/api/v1/auth`, `REFRESH_TOKEN_EXPIRE_DAYS` = 30), его хэш —
+в Redis. Флаг Secure ставится при `ENVIRONMENT=production` (переопределяется `COOKIE_SECURE`): за nginx нужен HTTPS (раздел 4).
+Если фронтенд и API на разных адресах, адрес фронтенда должен быть в `CORS_ORIGINS` — запросы идут с
+`credentials: 'include'`. Сброс Redis выкидывает всех из долгих сессий: войти заново.
+
 ## 8а. Почта: подтверждение e-mail и сброс пароля
 
 E-mail у игрока необязателен; привязывается по ссылке из письма и нужен, чтобы восстановить доступ, если пароль

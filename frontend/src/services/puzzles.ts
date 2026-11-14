@@ -5,6 +5,7 @@
 import {API_BASE_URL} from '../config/api';
 import {readApiErrorOr, UiError} from './apiErrors';
 import {uiMessage} from '../i18n';
+import {getToken} from './authToken';
 
 export interface PuzzleView {
     id: number;
@@ -245,7 +246,7 @@ export interface DrillRunResult {
 const BASE = `${API_BASE_URL}/api/v1/puzzles`;
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     let res: Response;
     try {
         res = await fetch(`${BASE}${path}`, {

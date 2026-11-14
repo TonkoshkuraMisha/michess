@@ -8,6 +8,7 @@ import {API_BASE_URL} from '../../config/api';
 import {useI18n} from '../../i18n';
 import {listTournaments} from '../../services/tournaments';
 import type {TournamentSummary} from '../../services/tournaments';
+import {getToken} from '../../services/authToken';
 
 /** Показывается только в профиле вошедшего игрока: турниры видит лишь их владелец. */
 export function TournamentHistory({username}: { username: string }) {
@@ -15,7 +16,7 @@ export function TournamentHistory({username}: { username: string }) {
     const [items, setItems] = useState<TournamentSummary[] | null>(null);
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
+        const token = getToken();
         if (!token) return;
         let alive = true;
         fetch(`${API_BASE_URL}/api/v1/profile/me`, {headers: {Authorization: `Bearer ${token}`}})

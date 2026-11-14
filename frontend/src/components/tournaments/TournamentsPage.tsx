@@ -25,6 +25,7 @@ import type {
 } from '../../services/tournaments';
 import {ladderOpponentName} from '../../config/players';
 import {Diploma} from './Diploma';
+import {getToken} from '../../services/authToken';
 
 const SIZES: Record<TournamentFormat, number[]> = {round_robin: [4, 6, 8], knockout: [4, 8]};
 const POLL_MS = 3000;
@@ -52,7 +53,7 @@ function CreateTournament() {
             setArchetypes(c.archetypes);
             setHistorical(Object.fromEntries(c.historical.map((h) => [h.id, h])));
         }).catch(() => undefined);
-        const token = localStorage.getItem('token');
+        const token = getToken();
         if (token) listPersonalities(token).then(setPersonalities).catch(() => undefined);
     }, []);
 
@@ -225,7 +226,7 @@ export function TournamentView() {
     }, [id, reloadKey]);
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
+        const token = getToken();
         if (!token) return;
         fetch(`${API_BASE_URL}/api/v1/profile/me`, {headers: {Authorization: `Bearer ${token}`}})
             .then((r) => (r.ok ? r.json() : null)).then((me) => me?.username && setMyName(me.username)).catch(() => undefined);

@@ -9,6 +9,7 @@ import Chessboard from '../Chessboard';
 import {gameSocket} from '../../services/gameSocket';
 import {emitSocketEvent, mockFetchRouter} from '../../test/mocks';
 import {setLanguage} from '../../i18n';
+import {setToken} from '../../services/authToken';
 
 vi.mock('../../services/gameSocket', () => ({
     gameSocket: {
@@ -85,7 +86,7 @@ function renderBoard(fetchHandlers: Record<string, () => unknown> = {}) {
 }
 
 beforeEach(() => {
-    localStorage.setItem('token', 'test-token');
+    setToken('test-token');
     onMock.mockClear();
     sendMock.mockClear();
     vi.useFakeTimers({shouldAdvanceTime: true});

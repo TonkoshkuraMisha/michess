@@ -9,6 +9,7 @@ import {API_BASE_URL} from '../config/api';
 import {readApiErrorOr} from '../services/apiErrors';
 import {renderUiMessage, useI18n} from '../i18n';
 import type {UiMessage} from '../i18n';
+import {clearToken} from '../services/authToken';
 
 const MIN_PASSWORD_LENGTH = 8;
 const boxClass = 'w-full max-w-md bg-acacia-dark border border-amber-900/40 p-6 rounded shadow-heavy text-boxwood-light flex flex-col gap-3';
@@ -82,7 +83,7 @@ export function ResetPasswordPage() {
                 setError(await readApiErrorOr(res, 'serverErrors.email_link_invalid'));
                 return;
             }
-            localStorage.removeItem('token');
+            clearToken();
             setDone(true);
         } catch {
             setError({key: 'common.noConnection'});

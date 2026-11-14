@@ -19,6 +19,7 @@ import {useI18n} from '../i18n';
 import {renderUiMessage} from '../i18n';
 import type {UiMessage} from '../i18n';
 import LanguageSwitcher from './LanguageSwitcher';
+import {clearToken, setToken} from '../services/authToken';
 
 const MIN_PASSWORD_LENGTH = 8;
 
@@ -150,7 +151,7 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                 return;
             }
             gameSocket.disconnect();
-            localStorage.removeItem('token');
+            clearToken();
             onAccountDeleted?.();
         } catch {
             setDataError({key: 'common.noConnection'});
@@ -200,13 +201,14 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                 method: 'POST',
                 headers: {'Content-Type': 'application/json', Authorization: `Bearer ${token}`},
                 body: JSON.stringify({current_password: currentPassword, new_password: newPassword}),
+                credentials: 'include',  // новая refresh-cookie: прежние сессии отозваны (таск 17.5)
             });
             if (!res.ok) {
                 setPasswordError(await readApiErrorOr(res, 'settings.passwordChangeFailed'));
                 return;
             }
             const data = await res.json();
-            localStorage.setItem('token', data.access_token);
+            setToken(data.access_token);
             onTokenChange(data.access_token);
             setCurrentPassword('');
             setNewPassword('');

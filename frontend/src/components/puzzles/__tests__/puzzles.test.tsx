@@ -6,6 +6,7 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import PuzzlesPage, {solutionSan} from '../PuzzlesPage';
 import {PuzzleBoard} from '../PuzzleBoard';
 import {resetThemeRegistryCache} from '../../../services/themes';
+import {setToken} from '../../../services/authToken';
 
 // Чёрные уводят ладью: ...Le2, затем Ld8+ Le8 Lxe8#.
 const PUZZLE = {
@@ -62,7 +63,7 @@ async function play(from: string, to: string) {
 }
 
 beforeEach(() => {
-    localStorage.setItem('token', 'jwt');
+    setToken('jwt');
     vi.useFakeTimers({shouldAdvanceTime: true});
     resetThemeRegistryCache();
 });

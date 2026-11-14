@@ -6,6 +6,7 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import PuzzlesPage from '../PuzzlesPage';
 import {DemoViewer} from '../TrainingPanel';
 import {resetThemeRegistryCache} from '../../../services/themes';
+import {setToken} from '../../../services/authToken';
 
 const OVERVIEW = {window: 10, pass: 8, themes: [
     {code: 'fork', section: 'A', stage: 2, recent: '1101', solved: 14, mastered: false, available: [30, 40, 20, 10], ready: true},
@@ -40,7 +41,7 @@ function stub(extra: (url: string) => unknown = () => null) {
 }
 
 beforeEach(() => {
-    localStorage.setItem('token', 'jwt');
+    setToken('jwt');
     vi.useFakeTimers({shouldAdvanceTime: true});
     resetThemeRegistryCache();
 });

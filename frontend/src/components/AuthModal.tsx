@@ -10,6 +10,7 @@ import type {Experience, StrengthBand} from '../services/onboarding';
 import {useI18n} from '../i18n';
 import {renderUiMessage, uiMessage} from '../i18n';
 import type {UiMessage} from '../i18n';
+import {setToken} from '../services/authToken';
 
 /** Сообщение под заголовком: ошибка (ответ сервера по коду или своя) или успех регистрации. */
 type Feedback = { tone: 'error' | 'success'; message: UiMessage };
@@ -77,6 +78,7 @@ export default function AuthModal({onSuccess, onClose: onCloseProp, onFirstGame}
             method: 'POST',
             headers: {'Content-Type': 'application/x-www-form-urlencoded'},
             body: formData,
+            credentials: 'include',  // refresh-cookie долгого входа (таск 17.5)
         });
 
         if (!res.ok) {
@@ -86,7 +88,7 @@ export default function AuthModal({onSuccess, onClose: onCloseProp, onFirstGame}
             ));
         }
         const data = await res.json();
-        localStorage.setItem('token', data.access_token);
+        setToken(data.access_token);
         // Соперники, собранные гостем в этом браузере, — предложить перенести в профиль.
         offerGuestPersonalityTransfer(data.access_token)
             .then((result) => {

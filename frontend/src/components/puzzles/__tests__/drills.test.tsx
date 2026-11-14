@@ -6,6 +6,7 @@ import {MemoryRouter} from 'react-router-dom';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import PuzzlesPage from '../PuzzlesPage';
 import {resetThemeRegistryCache} from '../../../services/themes';
+import {setToken} from '../../../services/authToken';
 
 // Белая ладья a1 берёт незащищённого коня a8.
 const CAPTURE = {
@@ -63,7 +64,7 @@ async function openDrills() {
 }
 
 beforeEach(() => {
-    localStorage.setItem('token', 'jwt');
+    setToken('jwt');
     vi.useFakeTimers({shouldAdvanceTime: true});
     resetThemeRegistryCache();
 });

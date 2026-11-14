@@ -2,6 +2,7 @@
 
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {gameSocket} from '../gameSocket';
+import {getToken, setToken} from '../authToken';
 
 class FakeWebSocket {
     static OPEN = 1;
@@ -27,19 +28,13 @@ class FakeWebSocket {
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('gameSocket: подключение по одноразовому тикету', () => {
-    let storage: Map<string, string>;
     let events: string[];
 
     beforeEach(() => {
         FakeWebSocket.instances = [];
-        storage = new Map([['token', 'jwt.secret.token']]);
+        setToken('jwt.secret.token');  // токен входа — в памяти (таск 17.5)
         events = [];
         vi.stubGlobal('WebSocket', FakeWebSocket);
-        vi.stubGlobal('localStorage', {
-            getItem: (k: string) => storage.get(k) ?? null,
-            setItem: (k: string, v: string) => storage.set(k, v),
-            removeItem: (k: string) => storage.delete(k),
-        });
         vi.stubGlobal('window', {dispatchEvent: (e: Event) => events.push(e.type)});
     });
 
@@ -70,7 +65,7 @@ describe('gameSocket: подключение по одноразовому ти�
         await flush();
 
         expect(FakeWebSocket.instances).toHaveLength(0);
-        expect(storage.has('token')).toBe(false);
+        expect(getToken()).toBeNull();
         expect(events).toContain('michess-auth-expired');
     });
 
@@ -81,7 +76,7 @@ describe('gameSocket: подключение по одноразовому ти�
         await flush();
         FakeWebSocket.instances[0].onclose?.({code: 1008});
 
-        expect(storage.has('token')).toBe(false);
+        expect(getToken()).toBeNull();
         expect(events).toContain('michess-auth-expired');
     });
 

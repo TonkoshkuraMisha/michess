@@ -56,7 +56,11 @@ class Settings(BaseSettings):
     # Security (JWT)
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+    # Access-токен — короткий, клиент держит его в памяти; долгий вход — refresh-токен в httpOnly-cookie (17.5).
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 30
+    # Флаг Secure у cookie входа; по умолчанию — только в продакшене (ENVIRONMENT=production).
+    COOKIE_SECURE: bool | None = None
 
     # Anti-Cheat Thresholds
     AC_BLUR_RATE_HIGH: float = 0.8

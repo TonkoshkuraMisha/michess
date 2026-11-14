@@ -1,6 +1,7 @@
 // --- FILE: frontend/src/services/gameSocket.ts ---
 
 import {API_BASE_URL, WS_BASE_URL} from '../config/api';
+import {clearToken, getToken} from './authToken';
 
 type EventCallback = (data: any) => void;
 
@@ -151,7 +152,7 @@ class GameWebSocketService {
         // Токен истёк или отозван — очищаем его и уведомляем приложение
         this.currentToken = null;
         this.pendingMessages = [];
-        localStorage.removeItem('token');
+        clearToken();
         window.dispatchEvent(new Event('michess-auth-expired'));
     }
 
@@ -188,7 +189,7 @@ class GameWebSocketService {
             return;
         }
 
-        const fallbackToken = this.currentToken || localStorage.getItem('token');
+        const fallbackToken = this.currentToken || getToken();
         if (fallbackToken) {
             this.pendingMessages.push(serialized);
             this.connect(fallbackToken);

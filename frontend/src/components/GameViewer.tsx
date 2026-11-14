@@ -42,6 +42,7 @@ import {puzzlesApi} from '../services/puzzles';
 import {XrayPanel} from './xray/XrayPanel';
 import {useXraySettings} from './xray/useXraySettings';
 import type {GameSummary} from '../services/gameSummary';
+import {getToken} from '../services/authToken';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
@@ -333,7 +334,7 @@ export default function GameViewer() {
         setIsAnalyzing(true);
         setAnalysisError(null);
         try {
-            const authToken = localStorage.getItem('token');
+            const authToken = getToken();
             const res = await fetch(`${API_BASE_URL}/api/v1/analysis/game/${gameId}`, {
                 method: 'POST',
                 // С токеном лимит запросов считается на пользователя, а не на общий IP.
@@ -448,7 +449,7 @@ export default function GameViewer() {
     // Ходы этой партии, из которых сделаны задачи «Ваши ошибки» (таск 13.5) — только свои, только с токеном.
     const [personalPlies, setPersonalPlies] = useState<Set<number>>(new Set());
     useEffect(() => {
-        if (!gameId || !localStorage.getItem('token')) return;
+        if (!gameId || !getToken()) return;
         puzzlesApi.personalPlies(Number(gameId))
             .then((body) => setPersonalPlies(new Set(body.plies)))
             .catch(() => undefined);

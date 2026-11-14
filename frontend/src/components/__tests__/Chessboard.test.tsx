@@ -11,6 +11,7 @@ import Chessboard from '../Chessboard';
 import {mockFetchRouter} from '../../test/mocks';
 import {DEFAULT_CONFIG} from '../../services/personalities';
 import {resetBotCatalogCache} from '../../services/botCatalog';
+import {setToken} from '../../services/authToken';
 
 vi.mock('../../services/gameSocket', () => ({
     gameSocket: {
@@ -74,7 +75,7 @@ async function startBotGame(color: 'white' | 'black', botReply: Partial<typeof B
 
 beforeEach(() => {
     resetBotCatalogCache();
-    localStorage.setItem('token', 'test-token');
+    setToken('test-token');
     vi.useFakeTimers({shouldAdvanceTime: true});
 });
 

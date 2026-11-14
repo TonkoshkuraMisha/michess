@@ -8,6 +8,7 @@ import {setLanguage} from '../../../i18n';
 import {lessonById} from '../../../content/lessons';
 import {LessonPlayer} from '../LessonPlayer';
 import {LearnPage, LessonPage} from '../LearnPage';
+import {setToken} from '../../../services/authToken';
 
 const lesson = lessonById('tactics-double-attack')!;
 
@@ -137,7 +138,7 @@ describe('страницы школы', () => {
     }
 
     it('список курсов показывает прогресс и результат экзамена', async () => {
-        localStorage.setItem('token', 'jwt');
+        setToken('jwt');
         stubProgress([{lesson_id: 'tactics-double-attack', step: 5, steps_total: 6, completed: true, exam_score: 2, exam_total: 3}]);
         render(<MemoryRouter><LearnPage/></MemoryRouter>);
         expect(await screen.findByText('Exam 2/3')).toBeInTheDocument();
@@ -153,7 +154,7 @@ describe('страницы школы', () => {
     });
 
     it('урок продолжается с сохранённого шага и сохраняет новые шаги', async () => {
-        localStorage.setItem('token', 'jwt');
+        setToken('jwt');
         const fetchMock = stubProgress([{lesson_id: 'tactics-double-attack', step: 2, steps_total: 6, completed: false, exam_score: null, exam_total: null}]);
         render(
             <MemoryRouter initialEntries={['/learn/tactics-double-attack']}>

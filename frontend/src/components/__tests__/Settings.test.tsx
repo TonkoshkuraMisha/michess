@@ -8,6 +8,7 @@ import {afterEach, beforeEach, describe, expect, it, vi, type Mock} from 'vitest
 import Settings from '../Settings';
 import {gameSocket} from '../../services/gameSocket';
 import {soundEngine} from '../../services/soundEngine';
+import {getToken, setToken} from '../../services/authToken';
 
 vi.mock('../../services/gameSocket', () => ({
     gameSocket: {connect: vi.fn(), disconnect: vi.fn(), send: vi.fn(), on: vi.fn(), off: vi.fn()},
@@ -97,7 +98,7 @@ describe('Settings: смена пароля', () => {
         fillPasswords('old-password', 'new-password-1');
 
         await waitFor(() => expect(onTokenChange).toHaveBeenCalledWith('new-token'));
-        expect(localStorage.getItem('token')).toBe('new-token');
+        expect(getToken()).toBe('new-token');
         expect(screen.getByRole('status')).toHaveTextContent('Пароль изменён');
 
         const [url, init] = (fetchMock.mock.calls as unknown as [string, RequestInit][]).filter(([url]) => !String(url).includes('/profile/me'))[0] as unknown as [string, RequestInit];
@@ -118,7 +119,7 @@ describe('Settings: смена пароля', () => {
 
         expect(await screen.findByRole('alert')).toHaveTextContent('Текущий пароль указан неверно');
         expect(onTokenChange).not.toHaveBeenCalled();
-        expect(localStorage.getItem('token')).toBeNull();
+        expect(getToken()).toBeNull();
     });
 
     it.each([
@@ -155,7 +156,7 @@ describe('Settings: мои данные (таск 17.5)', () => {
         const fetchMock = vi.fn(async () => response(204));
         vi.stubGlobal('fetch', fetchMock);
         vi.spyOn(window, 'confirm').mockReturnValue(true);
-        localStorage.setItem('token', 'old-token');
+        setToken('old-token');
         const onAccountDeleted = vi.fn();
         renderSettings({onAccountDeleted});
         fireEvent.change(screen.getByTestId('settings-delete-password'), {target: {value: 'secret-pass'}});
@@ -164,7 +165,7 @@ describe('Settings: мои данные (таск 17.5)', () => {
         const [url, init] = (fetchMock.mock.calls as unknown as [string, RequestInit][]).filter(([url]) => !String(url).includes('/profile/me'))[0] as unknown as [string, RequestInit];
         expect(url).toContain('/api/v1/account/delete');
         expect(JSON.parse(String(init.body))).toEqual({password: 'secret-pass'});
-        expect(localStorage.getItem('token')).toBeNull();
+        expect(getToken()).toBeNull();
         expect(gameSocket.disconnect).toHaveBeenCalled();
     });
 

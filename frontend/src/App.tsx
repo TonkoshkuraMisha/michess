@@ -17,6 +17,7 @@ import {TournamentView, TournamentsPage} from './components/tournaments/Tourname
 import {CHAMPIONS_LIST} from './config/champions';
 import {API_BASE_URL} from './config/api';
 import {gameSocket} from './services/gameSocket';
+import * as auth from './services/authToken';
 
 import {
     Swords,
@@ -47,7 +48,8 @@ interface UserProfile {
 
 export default function App() {
     const {t} = useI18n();
-    const [token, setToken] = useState<string | null>(() => localStorage.getItem('token'));
+    // Токен — в памяти (services/authToken): при загрузке вход восстанавливается по httpOnly-cookie (таск 17.5).
+    const [token, setToken] = useState<string | null>(() => auth.getToken());
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [profileRetry, setProfileRetry] = useState(0);
 
@@ -68,21 +70,15 @@ export default function App() {
         location.pathname.startsWith('/game/');
 
     useEffect(() => {
-        const syncTokenFromStorage = () => {
-            const current = localStorage.getItem('token');
+        const unsubscribe = auth.onTokenChange((current) => {
             setToken(current);
             if (!current) {
                 setUserProfile(null);
                 gameSocket.disconnect();
             }
-        };
-
-        window.addEventListener('storage', syncTokenFromStorage);
-        window.addEventListener('michess-auth-expired', syncTokenFromStorage);
-        return () => {
-            window.removeEventListener('storage', syncTokenFromStorage);
-            window.removeEventListener('michess-auth-expired', syncTokenFromStorage);
-        };
+        });
+        void auth.restoreSession();
+        return unsubscribe;
     }, []);
 
     useEffect(() => {
@@ -103,12 +99,10 @@ export default function App() {
         })
             .then(res => {
                 if (res.status === 401) {
-                    // Только отказ в авторизации означает, что токен недействителен. Сетевая
-                    // ошибка или 5xx (например, сервер перезапускается) — не повод разлогинивать.
-                    localStorage.removeItem('token');
-                    gameSocket.disconnect();
-                    setToken(null);
-                    setUserProfile(null);
+                    // Только отказ в авторизации означает, что токен недействителен (например, истёк, пока
+                    // компьютер спал). Сетевая ошибка или 5xx — не повод разлогинивать. Сначала — обновить токен по
+                    // cookie; не вышло — выход (подписка выше).
+                    void auth.refreshSession();
                     return null;
                 }
                 if (!res.ok) throw new Error(`profile/me: HTTP ${res.status}`);
@@ -145,10 +139,7 @@ export default function App() {
     }, [isProfileOpen]);
 
     const handleLogout = () => {
-        localStorage.removeItem('token');
-        gameSocket.disconnect();
-        setToken(null);
-        setUserProfile(null);
+        void auth.logout();
         setIsProfileOpen(false);
         navigate('/');
     };
