@@ -57,7 +57,7 @@
 
 1. Если менялся Python-код (из корня проекта):
 
-   pip install -r requirements-dev.txt   # один раз: ruff, mypy, pytest-cov
+   uv sync                               # окружение по uv.lock (ruff, mypy, pytest-cov внутри)
    ruff check .                          # линтер (правила — pyproject.toml), любое замечание роняет CI
    mypy                                  # проверка типов src/
    python -m pytest --cov                # тесты и покрытие (порог — pyproject.toml)
@@ -143,7 +143,7 @@
 
 * **Пришёл.** Ставит в репозитории `pull.rebase`, `fetch.prune`, `rebase.autoStash`; подтягивает текущую
   ветку и локальные `dev`/`master`; сверяет `.env` с `.env.example` и проверяет, что настройки backend
-  загружаются; переустанавливает Python- и npm-зависимости, только если менялись `requirements*.txt` или
+  загружаются; переустанавливает Python- и npm-зависимости, только если менялись `uv.lock` или
   `package-lock.json` (`npm ci` — ровно по lock-файлу); скачивает Stockfish с официального GitHub, если его
   нет; запускает Docker Desktop при необходимости, поднимает `db` и `redis`, применяет миграции; импортирует
   партии чемпионов, если их нет. Повторный запуск ничего не переустанавливает.

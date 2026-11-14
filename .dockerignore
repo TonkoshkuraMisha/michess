@@ -9,6 +9,7 @@
 
 # Окружения и секреты
 michess_env
+.venv
 venv
 env
 .env

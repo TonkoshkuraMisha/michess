@@ -36,7 +36,7 @@ class ProgressUpdate(BaseModel):
     exam_total: int | None = Field(None, ge=1, le=MAX_EXAM_QUESTIONS)
 
     @model_validator(mode="after")
-    def _consistent(self) -> "ProgressUpdate":
+    def _consistent(self) -> ProgressUpdate:
         if self.step >= self.steps_total:
             raise ValueError("step must be less than steps_total")
         if (self.exam_score is None) != (self.exam_total is None):

@@ -173,7 +173,7 @@ class CustomBotMoveRequest(BaseModel):
     fen: str = Field(..., max_length=100, description="Текущая позиция на доске в формате FEN")
 
     @model_validator(mode="after")
-    def _config_or_saved(self) -> "CustomBotMoveRequest":
+    def _config_or_saved(self) -> CustomBotMoveRequest:
         if self.config is not None and self.personality_id is not None:
             raise validation_error("config_or_personality")
         return self
@@ -305,7 +305,7 @@ def _replay_moves(moves_uci: list[str], start_fen: str | None = None) -> chess.B
     return board
 
 
-def resolve_bot_game_outcome(board: chess.Board, payload: "BotGameSaveRequest") -> tuple[str, str]:
+def resolve_bot_game_outcome(board: chess.Board, payload: BotGameSaveRequest) -> tuple[str, str]:
     """
     Итог партии с ботом определяет сервер, а не клиент:
     - позиция на доске финальная (мат, пат, повторение, ...) — результат с доски;

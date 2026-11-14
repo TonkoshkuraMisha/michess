@@ -58,3 +58,4 @@ backups/
 # Снимок проекта для ИИ-помощника (make_snapshot.py) — генерируется локально, в git не хранится.
 # Сводка состояния — python make_snapshot.py --status (или _project_snapshot/STATUS.md после генерации).
 _project_snapshot/
+.venv/
