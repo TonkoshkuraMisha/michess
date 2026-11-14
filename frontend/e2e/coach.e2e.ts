@@ -24,9 +24,13 @@ test('разбор партии: наставник объясняет зево�
     const {game_id: gameId} = await saved.json();
 
     await page.goto(`/game/${gameId}`);
-    await page.getByRole('button', {name: 'Компьютерный анализ'}).click();
-
+    // Сохранённую партию сразу разбирает Celery-воркер: если он успел раньше, чем открылась страница, разбор уже
+    // показан и кнопки «Компьютерный анализ» нет (так тест падал в CI, где воркер свободен). Иначе — запустить.
+    const analyze = page.getByRole('button', {name: 'Компьютерный анализ'});
     const coach = page.getByTestId('coach-comment');
+    await expect(analyze.or(coach).first()).toBeVisible({timeout: 30_000});
+    if (await analyze.isVisible()) await analyze.click();
+
     await expect(coach).toContainText('мат', {timeout: 60_000});  // матующий ход: «♕xf7# — мат!»
 
     await page.getByTitle('Ход назад').click();  // 3... Nf6?? — пропускает мат
