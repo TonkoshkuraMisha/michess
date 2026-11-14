@@ -58,6 +58,10 @@ def check_position(engine, board: chess.Board, task: dict, limit, tolerance: int
 
     for uci in task.get("wrong", {}):
         move = chess.Move.from_uci(uci)
+        if move not in board.legal_moves:
+            # Движок оценил бы и невозможный ход (searchmoves его не проверяет) — сказать прямо.
+            problems.append(f"«неверный» ход {uci} невозможен в этой позиции — отклик никто не увидит")
+            continue
         value = evaluate(engine, board, move, limit)
         if value > best - margin:
             problems.append(f"«неверный» ход {uci} на самом деле неплох ({value} против {best} сп)")
