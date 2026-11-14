@@ -1,7 +1,7 @@
 {
   "meta": {
     "date": "2026-11-14",
-    "games": 150,
+    "games": 400,
     "anchors": [
       1350,
       1600,
@@ -15,10 +15,10 @@
   },
   "players": {
     "archetype:quiet": {
-      "rating": 1171,
-      "games": 36,
-      "score": 14.0,
-      "ci95": 148,
+      "rating": 848,
+      "games": 96,
+      "score": 16.5,
+      "ci95": 109,
       "declared": 900
     },
     "archetype:strategist": {
@@ -57,10 +57,10 @@
       "declared": 2200
     },
     "archetype:rusher": {
-      "rating": 812,
-      "games": 30,
-      "score": 2.0,
-      "ci95": 266,
+      "rating": 792,
+      "games": 80,
+      "score": 11.0,
+      "ci95": 126,
       "declared": 700
     },
     "anderssen": {
@@ -71,10 +71,10 @@
       "declared": 2100
     },
     "archetype:centralist": {
-      "rating": 1429,
-      "games": 42,
-      "score": 17.0,
-      "ci95": 140,
+      "rating": 1395,
+      "games": 112,
+      "score": 47.5,
+      "ci95": 81,
       "declared": 1400
     },
     "archetype:fortress": {
@@ -99,10 +99,10 @@
       "declared": 2080
     },
     "archetype:pawn_keeper": {
-      "rating": 1129,
-      "games": 42,
-      "score": 13.0,
-      "ci95": 140,
+      "rating": 1022,
+      "games": 112,
+      "score": 33.0,
+      "ci95": 95,
       "declared": 1100
     },
     "archetype:adventurer": {
@@ -127,10 +127,10 @@
       "declared": 2150
     },
     "archetype:cavalier": {
-      "rating": 1192,
-      "games": 42,
-      "score": 10.5,
-      "ci95": 139,
+      "rating": 1198,
+      "games": 112,
+      "score": 38.0,
+      "ci95": 90,
       "declared": 1250
     }
   }
