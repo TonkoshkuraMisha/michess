@@ -51,33 +51,116 @@ export function starsMove(fen: string, hero: string, uci: string, targets: Reado
     return {ok: true, fen: whiteToMove(game.fen()), to};
 }
 
-/** Наименьшее число ходов, чтобы собрать все звёзды; null — уровень нерешаем. */
-export function starsPar(level: { fen: string; hero: string; stars: string[] }): number | null {
+// Поиск минимума — на своём лёгком генераторе ходов: фигуры соперника на уровне неподвижны, ходит только hero, поэтому
+// бьющиеся поля зависят лишь от того, какие звёзды-фигуры уже взяты. Тест переигрывает найденный путь через chess.js
+// (starsMove) — так минимум проверен настоящими правилами.
+
+const KNIGHT_STEPS = [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]];
+const KING_STEPS = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
+const ROOK_DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+const BISHOP_DIRS = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
+
+const sq = (file: number, rank: number) => String.fromCharCode(97 + file) + (rank + 1);
+const onBoard = (file: number, rank: number) => file >= 0 && file < 8 && rank >= 0 && rank < 8;
+
+function placement(fen: string): Map<string, string> {
+    const pieces = new Map<string, string>();
+    fen.split(' ')[0].split('/').forEach((row, i) => {
+        let file = 0;
+        for (const ch of row) {
+            if (/\d/.test(ch)) file += Number(ch);
+            else pieces.set(sq(file++, 7 - i), ch);
+        }
+    });
+    return pieces;
+}
+
+/** Поля, куда фигура type (буква, регистр — цвет) с поля from ходит или бьёт на доске occupied. */
+function reach(type: string, from: string, occupied: (square: string) => boolean): string[] {
+    const file = from.charCodeAt(0) - 97;
+    const rank = Number(from[1]) - 1;
+    const kind = type.toLowerCase();
+    const result: string[] = [];
+    const steps = kind === 'n' ? KNIGHT_STEPS : kind === 'k' ? KING_STEPS : null;
+    if (steps) {
+        for (const [df, dr] of steps) if (onBoard(file + df, rank + dr)) result.push(sq(file + df, rank + dr));
+        return result;
+    }
+    const dirs = kind === 'r' ? ROOK_DIRS : kind === 'b' ? BISHOP_DIRS : [...ROOK_DIRS, ...BISHOP_DIRS];
+    for (const [df, dr] of dirs) {
+        for (let f = file + df, r = rank + dr; onBoard(f, r); f += df, r += dr) {
+            result.push(sq(f, r));
+            if (occupied(sq(f, r))) break;
+        }
+    }
+    return result;
+}
+
+/** Наименьшее число ходов, чтобы собрать все звёзды; null — уровень нерешаем. path — сами ходы (UCI). */
+export function starsSolution(level: { fen: string; hero: string; stars: string[] }): { par: number; path: string[] } | null {
+    const pieces = placement(level.fen);
+    const heroStart = pieces.get(level.hero)!;
+    pieces.delete(level.hero);
     const index = new Map(level.stars.map((square, i) => [square, i]));
     const full = (1 << level.stars.length) - 1;
-    type State = { square: string; fen: string; mask: number; depth: number };
-    const queue: State[] = [{square: level.hero, fen: whiteToMove(level.fen), mask: 0, depth: 0}];
-    const seen = new Set([`${level.hero}:0`]);
+    const present = (square: string, mask: number) =>
+        pieces.has(square) && !(index.has(square) && (mask & (1 << index.get(square)!)));
+    const attackedCache = new Map<number, Set<string>>();
+    const attacked = (mask: number): Set<string> => {
+        let set = attackedCache.get(mask);
+        if (set) return set;
+        set = new Set();
+        for (const [square, piece] of pieces) {
+            if (piece !== piece.toLowerCase() || !present(square, mask)) continue;
+            if (piece === 'p') {
+                const f = square.charCodeAt(0) - 97, r = Number(square[1]) - 1;
+                for (const df of [-1, 1]) if (onBoard(f + df, r - 1)) set.add(sq(f + df, r - 1));
+            } else {
+                // Фигура игрока поле под собой не прикрывает, поэтому линии считаются без неё.
+                for (const target of reach(piece, square, (s) => present(s, mask))) set.add(target);
+            }
+        }
+        attackedCache.set(mask, set);
+        return set;
+    };
+    type State = { square: string; type: string; mask: number; path: string[] };
+    const queue: State[] = [{square: level.hero, type: heroStart, mask: 0, path: []}];
+    const seen = new Set([`${level.hero}:${heroStart}:0`]);
     for (let head = 0; head < queue.length; head++) {
         const state = queue[head];
-        if (state.mask === full) return state.depth;
-        // Один объект на позицию: ход — проверка — откат (поиск перебирает тысячи позиций).
-        const game = new Chess(state.fen);
-        for (const move of game.moves({square: state.square as Square, verbose: true})) {
-            if (move.captured && !(index.has(move.to) && !(state.mask & (1 << index.get(move.to)!)))) continue;
-            game.move({from: move.from, to: move.to, promotion: move.promotion ? 'q' : undefined});
-            const safe = !game.isAttacked(move.to as Square, 'b');
-            const fen = safe ? whiteToMove(game.fen()) : '';
-            game.undo();
-            if (!safe) continue;
-            const mask = index.has(move.to) ? state.mask | (1 << index.get(move.to)!) : state.mask;
-            const key = `${move.to}:${mask}`;
+        if (state.mask === full) return {par: state.path.length, path: state.path};
+        const occupied = (s: string) => present(s, state.mask);
+        const free = (s: string) => !occupied(s);
+        const enemy = (s: string) => occupied(s) && pieces.get(s) === pieces.get(s)!.toLowerCase();
+        const targetHere = (s: string) => index.has(s) && occupied(s);
+        let moves: string[];
+        if (state.type === 'P') {
+            const f = state.square.charCodeAt(0) - 97, r = Number(state.square[1]) - 1;
+            moves = [];
+            if (onBoard(f, r + 1) && free(sq(f, r + 1))) {
+                moves.push(sq(f, r + 1));
+                if (r === 1 && free(sq(f, r + 2))) moves.push(sq(f, r + 2));
+            }
+            for (const df of [-1, 1]) if (onBoard(f + df, r + 1) && enemy(sq(f + df, r + 1))) moves.push(sq(f + df, r + 1));
+        } else {
+            moves = reach(state.type, state.square, occupied);
+        }
+        for (const to of moves) {
+            if (occupied(to) && !(enemy(to) && targetHere(to))) continue;
+            const mask = index.has(to) ? state.mask | (1 << index.get(to)!) : state.mask;
+            if (attacked(mask).has(to)) continue;
+            const type = state.type === 'P' && to[1] === '8' ? 'Q' : state.type;
+            const key = `${to}:${type}:${mask}`;
             if (seen.has(key)) continue;
             seen.add(key);
-            queue.push({square: move.to, fen, mask, depth: state.depth + 1});
+            queue.push({square: to, type, mask, path: [...state.path, state.square + to]});
         }
     }
     return null;
+}
+
+export function starsPar(level: { fen: string; hero: string; stars: string[] }): number | null {
+    return starsSolution(level)?.par ?? null;
 }
 
 /** Оценка прохождения: 3 звезды — за минимум ходов, 2 — до двух лишних, иначе 1. */

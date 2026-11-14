@@ -1,7 +1,7 @@
 import {describe, expect, it} from 'vitest';
 import {Chess} from 'chess.js';
 import {BASICS, progressId} from '../levels';
-import {boardState, goalMove, goalReachable, rating, starsMove, starsPar} from '../rules';
+import {boardState, goalMove, goalReachable, rating, starsMove, starsPar, starsSolution} from '../rules';
 
 const LESSON_ID = /^[a-z0-9][a-z0-9-]{1,63}$/;
 
@@ -27,7 +27,21 @@ describe('уровни азбуки', () => {
                         if (section.id === 'capture') expect(piece?.color, star).toBe('b');
                         else expect(piece, star).toBeFalsy();
                     }
-                    expect(starsPar(level), JSON.stringify(level.stars)).not.toBeNull();
+                    const solution = starsSolution(level);
+                    expect(solution, JSON.stringify(level.stars)).not.toBeNull();
+                    // Найденный кратчайший путь проходит по настоящим правилам (chess.js).
+                    let fen = level.fen;
+                    let hero = level.hero;
+                    const left = new Set(level.stars);
+                    for (const uci of solution!.path) {
+                        const verdict = starsMove(fen, hero, uci, left);
+                        expect(verdict.ok, uci).toBe(true);
+                        if (!verdict.ok) return;
+                        fen = verdict.fen;
+                        hero = verdict.to;
+                        left.delete(verdict.to);
+                    }
+                    expect(left.size).toBe(0);
                 } else if (level.kind === 'goal') {
                     expect(goalReachable(level.fen, level.goal)).toBe(true);
                 } else {
