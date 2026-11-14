@@ -108,8 +108,56 @@ describe('AuthModal: регистрация', () => {
         expect(screen.getByText('Регистрация аккаунта')).toBeInTheDocument();
     }
 
-    it('после успешной регистрации предлагает войти', async () => {
-        const fetchMock = stubFetch(response(201, {id: 1, username: 'alice'}));
+    function stubAuth(login: Response, created: Record<string, unknown> = {id: 1, username: 'alice', blitz_rating: 1200}) {
+        const fetchMock = vi.fn(async (url: string) => (String(url).endsWith('/auth/login')
+            ? login : response(201, created)));
+        vi.stubGlobal('fetch', fetchMock);
+        return fetchMock;
+    }
+
+    it('после регистрации сразу входит и предлагает первую партию (таск 17.8)', async () => {
+        const fetchMock = stubAuth(response(200, {access_token: 'jwt-new'}), {id: 1, username: 'alice', blitz_rating: 600});
+        const onSuccess = vi.fn();
+        const onFirstGame = vi.fn();
+        render(<AuthModal onSuccess={onSuccess} onFirstGame={onFirstGame}/>);
+        switchToRegistration();
+        fireEvent.change(screen.getByLabelText('Как давно вы играете? (необязательно)'), {target: {value: 'new'}});
+        // «Только начинаю» — сила не спрашивается.
+        expect(screen.queryByLabelText('Примерная сила? (необязательно)')).toBeNull();
+
+        fillAndSubmit('alice', 'secret-pass', /Зарегистрироваться/);
+
+        expect(await screen.findByText('Добро пожаловать, alice!')).toBeInTheDocument();
+        expect(screen.getByTestId('auth-welcome')).toHaveTextContent('Ваш стартовый рейтинг — 600. Первые 30 партий он временный');
+        expect(localStorage.getItem('token')).toBe('jwt-new');
+        const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+        expect(url).toMatch(/\/api\/v1\/auth\/register$/);
+        expect(JSON.parse(String(init.body))).toEqual({username: 'alice', password: 'secret-pass', experience: 'new'});
+
+        fireEvent.click(screen.getByTestId('auth-first-game'));
+        expect(onSuccess).toHaveBeenCalledWith('jwt-new');
+        expect(onFirstGame).toHaveBeenCalledWith(600);
+    });
+
+    it('без ответов на вопросы — регистрация как раньше; «Позже» просто входит', async () => {
+        const fetchMock = stubAuth(response(200, {access_token: 'jwt-new'}));
+        const onSuccess = vi.fn();
+        const onFirstGame = vi.fn();
+        render(<AuthModal onSuccess={onSuccess} onFirstGame={onFirstGame}/>);
+        switchToRegistration();
+
+        fillAndSubmit('alice', 'secret-pass', /Зарегистрироваться/);
+
+        await screen.findByTestId('auth-welcome');
+        const [, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+        expect(JSON.parse(String(init.body))).toEqual({username: 'alice', password: 'secret-pass'});
+        fireEvent.click(screen.getByRole('button', {name: 'Позже'}));
+        expect(onSuccess).toHaveBeenCalledWith('jwt-new');
+        expect(onFirstGame).not.toHaveBeenCalled();
+    });
+
+    it('если автоматический вход не удался — предлагает войти вручную', async () => {
+        stubAuth(response(500));
         const onSuccess = vi.fn();
         render(<AuthModal onSuccess={onSuccess}/>);
         switchToRegistration();
@@ -119,9 +167,6 @@ describe('AuthModal: регистрация', () => {
         expect(await screen.findByText('Регистрация успешна! Теперь войдите в систему.')).toBeInTheDocument();
         expect(screen.getByText('Вход в michess')).toBeInTheDocument();
         expect(onSuccess).not.toHaveBeenCalled();
-        const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
-        expect(url).toMatch(/\/api\/v1\/auth\/register$/);
-        expect(JSON.parse(String(init.body))).toEqual({username: 'alice', password: 'secret-pass'});
     });
 
     it('ошибки проверки полей показываются по типу проверки, с названием поля', async () => {

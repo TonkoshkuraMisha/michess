@@ -16,10 +16,15 @@ from src.core.errors import ApiError
 from src.db.seed import ensure_champion_seeded, extract_pgn_metadata, get_champion_meta
 from src.db.session import get_db
 from src.models.game import Game, GameStatus
-from src.models.user import RatingCategory, User
+from src.models.user import RATING_CATEGORIES, RatingCategory, User
 from src.schemas.user import username_key
 from src.services.ladder import rungs as ladder_rungs
-from src.services.rating import ESTIMATED_MOVES, category_duration_bounds_ms, classify_time_control
+from src.services.rating import (
+    ESTIMATED_MOVES,
+    PROVISIONAL_GAMES,
+    category_duration_bounds_ms,
+    classify_time_control,
+)
 
 router = APIRouter(prefix="/profile", tags=["Profile & Games"])
 
@@ -128,6 +133,8 @@ async def get_my_profile(current_user: User = Depends(get_current_user)):
         "created_at": current_user.created_at,
         # Подтверждённый e-mail (таск 17.5) — только самому игроку.
         "email": current_user.email,
+        # Временный рейтинг (таск 17.8): категории, где сыграно меньше PROVISIONAL_GAMES партий (K = 40).
+        "provisional": [c for c in RATING_CATEGORIES if current_user.games_played_for(c) < PROVISIONAL_GAMES],
     }
 
 

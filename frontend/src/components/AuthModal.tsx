@@ -5,6 +5,8 @@ import {LogIn, UserPlus, X} from 'lucide-react';
 import {API_BASE_URL} from '../config/api';
 import {UiError, errorMessage, readApiErrorOr, serverErrorMessage} from '../services/apiErrors';
 import {offerGuestPersonalityTransfer} from '../services/personalities';
+import {EXPERIENCES, PROVISIONAL_GAMES, STRENGTH_BANDS} from '../services/onboarding';
+import type {Experience, StrengthBand} from '../services/onboarding';
 import {useI18n} from '../i18n';
 import {renderUiMessage, uiMessage} from '../i18n';
 import type {UiMessage} from '../i18n';
@@ -16,11 +18,18 @@ interface AuthModalProps {
     onSuccess: (token: string) => void;
     /** Закрытие без входа: крестик, клик по затемнению или Esc. */
     onClose?: () => void;
+    /** «Сыграть первую партию» после регистрации (таск 17.8): стартовый рейтинг игрока. */
+    onFirstGame?: (rating: number) => void;
 }
 
-export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
-    const {t, language} = useI18n();
+export default function AuthModal({onSuccess, onClose: onCloseProp, onFirstGame}: AuthModalProps) {
+    const {t, tp, language} = useI18n();
     const [isLogin, setIsLogin] = useState(true);
+    const [experience, setExperience] = useState<Experience | ''>('');
+    const [strength, setStrength] = useState<StrengthBand | ''>('');
+    // После регистрации игрок уже вошёл: окно приветствия, закрытие окна — тоже вход.
+    const [welcome, setWelcome] = useState<{ token: string; rating: number } | null>(null);
+    const onClose = welcome ? () => onSuccess(welcome.token) : onCloseProp;
     // «Забыли пароль?» (таск 17.5): письмо со ссылкой на привязанный e-mail.
     const [forgot, setForgot] = useState(false);
     const [email, setEmail] = useState('');
@@ -57,6 +66,46 @@ export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
         }
     };
 
+    /** Вход по имени и паролю из формы: токен сохраняется, гостевые соперники предлагаются к переносу. */
+    const signIn = async (): Promise<string> => {
+        // OAuth2 form URL encoded
+        const formData = new URLSearchParams();
+        formData.append('username', username);
+        formData.append('password', password);
+
+        const res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: formData,
+        });
+
+        if (!res.ok) {
+            // 429 — превышен лимит попыток: показываем, сколько ждать, а не «неверный пароль».
+            throw new UiError(await readApiErrorOr(
+                res, res.status === 429 ? 'auth.tooManyAttempts' : 'auth.wrongCredentials',
+            ));
+        }
+        const data = await res.json();
+        localStorage.setItem('token', data.access_token);
+        // Соперники, собранные гостем в этом браузере, — предложить перенести в профиль.
+        offerGuestPersonalityTransfer(data.access_token)
+            .then((result) => {
+                if (result?.skipped.length) {
+                    const list = result.skipped
+                        .map((s) => t('auth.importSkippedItem', {
+                            name: s.name,
+                            reason: renderUiMessage(
+                                serverErrorMessage(s.reason, s.params) ?? {text: s.reason}, t,
+                            ),
+                        }))
+                        .join('; ');
+                    window.alert(t('auth.importSkipped', {list}));
+                }
+            })
+            .catch((err) => window.alert(renderUiMessage(errorMessage(err, 'workshop.importFailed'), t)));
+        return data.access_token as string;
+    };
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setFeedback(null);
@@ -64,57 +113,30 @@ export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
 
         try {
             if (isLogin) {
-                // Логин (OAuth2 form URL encoded)
-                const formData = new URLSearchParams();
-                formData.append('username', username);
-                formData.append('password', password);
-
-                const res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-                    body: formData,
-                });
-
-                if (!res.ok) {
-                    // 429 — превышен лимит попыток: показываем, сколько ждать, а не «неверный пароль».
-                    throw new UiError(await readApiErrorOr(
-                        res, res.status === 429 ? 'auth.tooManyAttempts' : 'auth.wrongCredentials',
-                    ));
-                }
-                const data = await res.json();
-                localStorage.setItem('token', data.access_token);
-                onSuccess(data.access_token);
-                // Соперники, собранные гостем в этом браузере, — предложить перенести в профиль.
-                offerGuestPersonalityTransfer(data.access_token)
-                    .then((result) => {
-                        if (result?.skipped.length) {
-                            const list = result.skipped
-                                .map((s) => t('auth.importSkippedItem', {
-                                    name: s.name,
-                                    reason: renderUiMessage(
-                                        serverErrorMessage(s.reason, s.params) ?? {text: s.reason}, t,
-                                    ),
-                                }))
-                                .join('; ');
-                            window.alert(t('auth.importSkipped', {list}));
-                        }
-                    })
-                    .catch((err) => window.alert(renderUiMessage(errorMessage(err, 'workshop.importFailed'), t)));
+                onSuccess(await signIn());
             } else {
-                // Регистрация
+                // Регистрация; ответы о силе необязательны (таск 17.8) — по ним сервер ставит стартовый рейтинг.
                 const res = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({username, password}),
+                    body: JSON.stringify({
+                        username, password,
+                        ...(experience ? {experience} : {}),
+                        ...(strength && experience !== 'new' ? {strength} : {}),
+                    }),
                 });
 
                 if (!res.ok) {
                     throw new UiError(await readApiErrorOr(res, 'auth.registrationFailed'));
                 }
-
-                // Автоматический вход после успешной регистрации
-                setIsLogin(true);
-                setFeedback({tone: 'success', message: uiMessage('auth.registered')});
+                const created = await res.json() as { blitz_rating: number };
+                // Сразу вход и приветствие с предложением первой партии.
+                try {
+                    setWelcome({token: await signIn(), rating: created.blitz_rating});
+                } catch {
+                    setIsLogin(true);
+                    setFeedback({tone: 'success', message: uiMessage('auth.registered')});
+                }
             }
         } catch (err) {
             setFeedback({tone: 'error', message: errorMessage(err, 'common.noConnection')});
@@ -158,11 +180,14 @@ export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
                 </div>
 
                 <h2 id="auth-modal-title" className="text-2xl font-bold text-center text-amber-200 mb-1">
-                    {t(forgot ? 'auth.forgotTitle' : isLogin ? 'auth.loginTitle' : 'auth.registerTitle')}
+                    {welcome ? t('auth.welcomeTitle', {name: username})
+                        : t(forgot ? 'auth.forgotTitle' : isLogin ? 'auth.loginTitle' : 'auth.registerTitle')}
                 </h2>
-                <p className="text-xs text-center text-boxwood/70 mb-6">
-                    {t(forgot ? 'auth.forgotNote' : isLogin ? 'auth.loginSubtitle' : 'auth.registerSubtitle')}
-                </p>
+                {!welcome && (
+                    <p className="text-xs text-center text-boxwood/70 mb-6">
+                        {t(forgot ? 'auth.forgotNote' : isLogin ? 'auth.loginSubtitle' : 'auth.registerSubtitle')}
+                    </p>
+                )}
 
                 {feedback && (
                     <div
@@ -172,7 +197,25 @@ export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
                     </div>
                 )}
 
-                {forgot ? (
+                {welcome ? (
+                    <div className="flex flex-col gap-4 mt-4" data-testid="auth-welcome">
+                        <p className="text-sm text-center text-boxwood-light">
+                            {tp('auth.welcomeRating', PROVISIONAL_GAMES, {rating: welcome.rating})}
+                        </p>
+                        <button type="button" data-testid="auth-first-game"
+                                onClick={() => {
+                                    onSuccess(welcome.token);
+                                    onFirstGame?.(welcome.rating);
+                                }}
+                                className="py-2.5 bg-boxwood text-acacia-dark font-bold rounded hover:bg-boxwood-light transition shadow border border-amber-600/40">
+                            {t('auth.playFirstGame')}
+                        </button>
+                        <button type="button" onClick={() => onSuccess(welcome.token)}
+                                className="text-xs text-amber-400 hover:underline">
+                            {t('auth.later')}
+                        </button>
+                    </div>
+                ) : forgot ? (
                     <form onSubmit={(e) => void requestReset(e)} className="flex flex-col gap-4" data-testid="forgot-form">
                         <div>
                             <label htmlFor="auth-email" className="block text-xs text-boxwood/80 mb-1">{t('auth.email')}</label>
@@ -215,6 +258,31 @@ export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
                         />
                     </div>
 
+                    {!isLogin && (
+                        <>
+                            <div>
+                                <label htmlFor="auth-experience" className="block text-xs text-boxwood/80 mb-1">{t('auth.experienceLabel')}</label>
+                                <select id="auth-experience" value={experience}
+                                        onChange={(e) => setExperience(e.target.value as Experience | '')}
+                                        className="w-full px-3 py-2 bg-black/40 border border-amber-900/60 rounded text-amber-100 text-sm focus:outline-none focus:border-amber-600">
+                                    <option value="">{t('auth.notAnswered')}</option>
+                                    {EXPERIENCES.map((value) => <option key={value} value={value}>{t(`auth.experience.${value}`)}</option>)}
+                                </select>
+                            </div>
+                            {experience !== 'new' && (
+                                <div>
+                                    <label htmlFor="auth-strength" className="block text-xs text-boxwood/80 mb-1">{t('auth.strengthLabel')}</label>
+                                    <select id="auth-strength" value={strength}
+                                            onChange={(e) => setStrength(e.target.value as StrengthBand | '')}
+                                            className="w-full px-3 py-2 bg-black/40 border border-amber-900/60 rounded text-amber-100 text-sm focus:outline-none focus:border-amber-600">
+                                        <option value="">{t('auth.notAnswered')}</option>
+                                        {STRENGTH_BANDS.map((value) => <option key={value} value={value}>{t(`auth.strength.${value}`)}</option>)}
+                                    </select>
+                                </div>
+                            )}
+                        </>
+                    )}
+
                     <button
                         type="submit"
                         disabled={loading}
@@ -226,7 +294,7 @@ export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
                 </form>
                 )}
 
-                <div className="mt-4 text-center text-xs flex flex-col gap-2">
+                {!welcome && <div className="mt-4 text-center text-xs flex flex-col gap-2">
                     {isLogin && (
                         <button type="button" data-testid="auth-forgot"
                                 onClick={() => {
@@ -248,7 +316,7 @@ export default function AuthModal({onSuccess, onClose}: AuthModalProps) {
                     >
                         {t(isLogin ? 'auth.toRegister' : 'auth.toLogin')}
                     </button>
-                </div>
+                </div>}
 
             </div>
         </div>
