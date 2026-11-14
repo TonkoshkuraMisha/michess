@@ -2123,6 +2123,10 @@ export const en = {
                 v1: 'Your king is still in the centre: think about castling.',
                 v2: 'No threats, but the king isn\'t safe yet: king safety comes first.',
             },
+            pos_king_holes: {
+                v1: 'No pawn can cover {square} next to your king any more, and the opponent has a bishop of that colour. Guard that square.',
+                v2: 'Your king has weak squares such as {square}: keep a piece there and don\'t trade off its defenders.',
+            },
             pos_passed_enemy: {
                 v1: 'The opponent has a passed pawn on {square}: blockade it with a piece.',
                 v2: 'Watch the passed pawn on {square}: put a piece in front of it.',
@@ -2146,6 +2150,10 @@ export const en = {
             pos_isolated_enemy: {
                 v1: 'The pawn on {square} is isolated: attack it with pieces.',
                 v2: 'The opponent\'s weakness is the isolated pawn on {square}.',
+            },
+            pos_backward_enemy: {
+                v1: 'The pawn on {square} is backward and cannot advance: pile up on it along the file.',
+                v2: 'Target the backward pawn on {square}. Put a piece on the square in front of it.',
             },
             pos_bad_bishop: {
                 v1: 'The bishop on {square} is blocked by its own pawns, a bad bishop. Trade it or move the pawns.',

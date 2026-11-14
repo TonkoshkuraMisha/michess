@@ -4,11 +4,15 @@
 наставник называет признак и поле, а не оценку:
 
 * king_center — миттельшпиль, а король стороны ещё на исходной вертикали d/e и не рокировал;
+* king_holes — король на фланге, а на третьей горизонтали перед ним (вертикали короля ±1) поле, которое своя пешка
+  уже никогда не защитит; у соперника есть слон этого цвета, у стороны — нет;
 * passed_enemy / passed_own — проходная пешка соперника (не заблокирована) или своя;
 * king_active — эндшпиль (ферзей нет, лёгких и тяжёлых фигур мало), а король на своих двух первых горизонталях;
 * open_file — вертикаль без пешек, на которой нет своей ладьи (а ладья есть);
 * outpost — поле для коня в половине соперника, защищённое своей пешкой, которое пешка соперника уже не прогонит;
 * isolated_enemy — изолированная пешка соперника в центре (c–f) — объект атаки;
+* backward_enemy — отсталая пешка соперника на полуоткрытой для стороны вертикали: соседние пешки ушли вперёд, а
+  поле перед ней бьёт пешка стороны;
 * bad_bishop — свой слон, а большинство своих пешек стоит на полях его цвета и заблокировано;
 * doubled_own — свои сдвоенные пешки.
 
@@ -22,8 +26,8 @@ from dataclasses import dataclass, field
 import chess
 
 POSITIONAL_PRIORITY = (
-    "king_center", "passed_enemy", "passed_own", "king_active", "open_file", "outpost",
-    "isolated_enemy", "bad_bishop", "doubled_own",
+    "king_center", "king_holes", "passed_enemy", "passed_own", "king_active", "open_file", "outpost",
+    "isolated_enemy", "backward_enemy", "bad_bishop", "doubled_own",
 )
 CENTRAL_FILES = (2, 3, 4, 5)  # c–f
 # Эндшпиль: у каждой стороны лёгких и тяжёлых фигур не больше чем на ладью с лёгкой фигурой.
@@ -165,6 +169,61 @@ def _isolated_enemy(board: chess.Board, color: chess.Color) -> Feature | None:
     return Feature("isolated_enemy", {"square": chess.square_name(square)}, (square,))
 
 
+def _shade(square: chess.Square) -> int:
+    """Цвет поля: 0 — тёмное (как a1), 1 — светлое."""
+    return (chess.square_file(square) + chess.square_rank(square)) % 2
+
+
+def _king_holes(board: chess.Board, color: chess.Color) -> Feature | None:
+    king = board.king(color)
+    if king is None or is_endgame(board) or _relative_rank(king, color) != 0:
+        return None
+    king_file = chess.square_file(king)
+    if king_file in (3, 4):
+        return None  # король в центре — об этом king_center
+    holes = []
+    # Третья горизонталь перед королём: поле прямо перед ним король защищает сам, а дыры после g3/h3 — f3, h3, g3.
+    for file in range(max(0, king_file - 1), min(7, king_file + 1) + 1):
+        square = chess.square(file, chess.square_rank(king) + 2 * _forward(color))
+        if board.piece_at(square) == chess.Piece(chess.PAWN, color) or pawn_can_attack(board, square, color):
+            continue
+        shade = _shade(square)
+        enemy_bishop = any(_shade(b) == shade for b in board.pieces(chess.BISHOP, not color))
+        own_bishop = any(_shade(b) == shade for b in board.pieces(chess.BISHOP, color))
+        if enemy_bishop and not own_bishop:
+            holes.append(square)
+    if not holes:
+        return None
+    nearest = min(holes, key=lambda s: (chess.square_distance(s, king), s))
+    return Feature("king_holes", {"square": chess.square_name(nearest)}, tuple(holes))
+
+
+def is_backward(board: chess.Board, square: chess.Square, color: chess.Color) -> bool:
+    """
+    Отсталая пешка стороны color: соседние пешки ушли вперёд и не защитят её, а поле перед ней бьёт пешка
+    соперника — продвинуться нельзя.
+    """
+    file, rank = chess.square_file(square), _relative_rank(square, color)
+    neighbours = [p for p in board.pieces(chess.PAWN, color) if abs(chess.square_file(p) - file) == 1]
+    if not neighbours or any(_relative_rank(p, color) <= rank for p in neighbours):
+        return False
+    stop = square + 8 * _forward(color)
+    if not 0 <= stop < 64:
+        return False
+    return any(board.piece_at(s) == chess.Piece(chess.PAWN, not color) for s in board.attackers(not color, stop))
+
+
+def _backward_enemy(board: chess.Board, color: chess.Color) -> Feature | None:
+    # Объект атаки, только если вертикаль полуоткрыта для нас: своя пешка не мешает давить на неё.
+    own_files = {chess.square_file(p) for p in board.pieces(chess.PAWN, color)}
+    pawns = [p for p in board.pieces(chess.PAWN, not color)
+             if chess.square_file(p) not in own_files and is_backward(board, p, not color)]
+    if not pawns:
+        return None
+    square = _central_first(pawns)[0]
+    return Feature("backward_enemy", {"square": chess.square_name(square)}, (square,))
+
+
 def _bad_bishop(board: chess.Board, color: chess.Color) -> Feature | None:
     pawns = list(board.pieces(chess.PAWN, color))
     for bishop in board.pieces(chess.BISHOP, color):
@@ -190,9 +249,10 @@ def _doubled_own(board: chess.Board, color: chess.Color) -> Feature | None:
 def positional_features(board: chess.Board, color: chess.Color) -> list[Feature]:
     """Признаки позиции для стороны color, в порядке POSITIONAL_PRIORITY."""
     found = [
-        _king_center(board, color), _passed(board, color, own=False), _passed(board, color, own=True),
-        _king_active(board, color), _open_file(board, color), _outpost(board, color),
-        _isolated_enemy(board, color), _bad_bishop(board, color), _doubled_own(board, color),
+        _king_center(board, color), _king_holes(board, color), _passed(board, color, own=False),
+        _passed(board, color, own=True), _king_active(board, color), _open_file(board, color),
+        _outpost(board, color), _isolated_enemy(board, color), _backward_enemy(board, color),
+        _bad_bishop(board, color), _doubled_own(board, color),
     ]
     return [f for f in found if f is not None]
 
