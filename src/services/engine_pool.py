@@ -15,9 +15,10 @@ import atexit
 import logging
 import os
 import queue
+import sys
 import threading
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 
 import chess.engine
 
@@ -140,6 +141,52 @@ class EnginePool:
             except queue.Empty:
                 break
             self._quit(engine)
+
+
+class EngineLease:
+    """
+    Один движок пула на несколько вызовов подряд — например, на ход бота: анализ MultiPV, опорный ход с
+    ограничением силы и оценка этого хода. Без аренды каждый шаг заново вставал в очередь пула: под нагрузкой ход
+    ждал движок 2–3 раза и мог получить EngineBusyError посередине.
+
+    Движок берётся при первом use() (если до движка дело не дошло — пул не трогается) и держится до close().
+    Опции UCI задаются на каждый use() заново поверх полной силы, как в acquire(). Ошибка протокола или таймаут
+    внутри use() сразу возвращают движок пулу как сломанный; следующий use() возьмёт новый.
+    """
+
+    def __init__(self, engine_path: str | None):
+        self.engine_path = engine_path
+        self._stack: ExitStack | None = None
+        self._engine: chess.engine.SimpleEngine | None = None
+
+    @contextmanager
+    def use(self, options: dict | None = None) -> Iterator[chess.engine.SimpleEngine]:
+        fresh = self._engine is None
+        if self._engine is None:
+            stack = ExitStack()
+            self._engine = stack.enter_context(get_engine_pool(self.engine_path).acquire(options))
+            self._stack = stack
+        try:
+            if not fresh:
+                EnginePool._configure(self._engine, options or {})
+            yield self._engine
+        except (chess.engine.EngineError, TimeoutError):
+            self._release(*sys.exc_info())
+            raise
+
+    def _release(self, *exc_info) -> None:
+        stack, self._stack, self._engine = self._stack, None, None
+        if stack is not None:
+            stack.__exit__(*exc_info)
+
+    def close(self) -> None:
+        self._release(None, None, None)
+
+    def __enter__(self) -> EngineLease:
+        return self
+
+    def __exit__(self, *exc_info) -> None:
+        self.close()
 
 
 _pools: dict[str, EnginePool] = {}
