@@ -1,0 +1,273 @@
+{
+  "id": "king-bishop-mates",
+  "course": "king-attack",
+  "order": 4,
+  "title": {
+    "en": "Bishop mates",
+    "uk": "Мат слонами",
+    "ru": "Мат слонами"
+  },
+  "summary": {
+    "en": "Two bishops on crossing diagonals mate a king hemmed in by its own pieces.",
+    "uk": "Два слони на діагоналях, що перетинаються, матують короля, якого замкнули свої фігури.",
+    "ru": "Два слона на перекрещивающихся диагоналях матуют короля, которого заперли свои фигуры."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "2kr3r/p2nqp2/B1p1pn1p/8/P2P2p1/2P3B1/1P3PPP/R3R1K1 b - - 1 21",
+      "arrows": [
+        {
+          "from": "a6",
+          "to": "c8",
+          "color": "red"
+        },
+        {
+          "from": "g3",
+          "to": "b8",
+          "color": "red"
+        }
+      ],
+      "highlights": [
+        "d7",
+        "d8"
+      ],
+      "text": {
+        "en": "Boden's mate: the a6 bishop checks the king on c8, the g3 bishop covers c7 and b8, and d7 and d8 are occupied by Black's own pieces. It is most dangerous after queenside castling with the b- and c-pawns moved.",
+        "uk": "Мат Бодена: слон a6 шахує короля c8, слон g3 тримає поля c7 і b8, а d7 і d8 зайняті фігурами чорних. Особливо небезпечно королю після довгої рокіровки, коли пішаки b і c зрушені.",
+        "ru": "Мат Бодена: слон a6 шахует короля c8, слон g3 держит поля c7 и b8, а d7 и d8 заняты фигурами чёрных. Особенно опасно королю после длинной рокировки, когда пешки b и c сдвинуты."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "2krq2r/p2n2pn/2p1p2p/2b5/5B2/2NB3P/PPP3P1/4RR1K w - - 0 21",
+      "text": {
+        "en": "Your move. Mate in one.",
+        "uk": "Ваш хід. Мат в один хід.",
+        "ru": "Ваш ход. Мат в один ход."
+      },
+      "hint": {
+        "en": "The f4 bishop already covers squares around the king. Check with the other bishop.",
+        "uk": "Слон f4 уже тримає поля навколо короля. Потрібен шах другим слоном.",
+        "ru": "Слон f4 уже держит поля вокруг короля. Нужен шах вторым слоном."
+      },
+      "line": [
+        {
+          "answers": [
+            "d3a6"
+          ],
+          "correct": {
+            "en": "Boden's mate!",
+            "uk": "Мат Бодена!",
+            "ru": "Мат Бодена!"
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "r4rk1/pp2bppp/4p3/P4b2/8/2P2N2/P2B1PPP/2KR1B1R b - - 0 17",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Mate in one.",
+        "uk": "Хід чорних. Мат в один хід.",
+        "ru": "Ход чёрных. Мат в один ход."
+      },
+      "hint": {
+        "en": "The white king castled long. The f5 bishop already covers b1.",
+        "uk": "Білий король після довгої рокіровки. Слон f5 уже тримає b1.",
+        "ru": "Белый король после длинной рокировки. Слон f5 уже держит b1."
+      },
+      "line": [
+        {
+          "answers": [
+            "e7a3"
+          ],
+          "correct": {
+            "en": "Checkmate!",
+            "uk": "Мат!",
+            "ru": "Мат!"
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "5rk1/p1b3pp/Q3ppb1/2P4P/6P1/1P6/P7/K1R5 b - - 0 31",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Mate in two.",
+        "uk": "Хід чорних. Мат у два ходи.",
+        "ru": "Ход чёрных. Мат в два хода."
+      },
+      "hint": {
+        "en": "The g6 bishop covers b1. Check along the long diagonal.",
+        "uk": "Слон g6 тримає b1. Дайте шах по великій діагоналі.",
+        "ru": "Слон g6 держит b1. Дайте шах по большой диагонали."
+      },
+      "line": [
+        {
+          "answers": [
+            "c7e5"
+          ],
+          "reply": "c1c3",
+          "correct": {
+            "en": "Check! The rook blocks, but it can be taken with check too.",
+            "uk": "Шах! Тура закривається, але її теж можна взяти з шахом.",
+            "ru": "Шах! Ладья закрывается, но её тоже можно взять с шахом."
+          }
+        },
+        {
+          "answers": [
+            "e5c3"
+          ],
+          "correct": {
+            "en": "Checkmate!",
+            "uk": "Мат!",
+            "ru": "Мат!"
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "2kr3r/p2nqp2/B1p1pn1p/8/P2P2p1/2P3B1/1P3PPP/R3R1K1 b - - 1 21",
+      "text": {
+        "en": "What allowed the bishops to mate?",
+        "uk": "Що допомогло слонам поставити мат?",
+        "ru": "Что помогло слонам поставить мат?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "The king was hemmed in by its own pieces, and open diagonals led straight to it.",
+            "uk": "Король стояв в оточенні своїх фігур, а відкриті діагоналі вели прямо до нього.",
+            "ru": "Король стоял в окружении своих фигур, а открытые диагонали вели прямо к нему."
+          },
+          "feedback": {
+            "en": "Yes: its own pieces took the king's squares, and the bishops covered the rest.",
+            "uk": "Так: свої фігури забрали в короля поля, а слони взяли під удар решту.",
+            "ru": "Да: свои фигуры отняли у короля поля, а слоны взяли под удар остальные."
+          }
+        },
+        {
+          "text": {
+            "en": "White had an extra queen.",
+            "uk": "У білих був зайвий ферзь.",
+            "ru": "У белых был лишний ферзь."
+          },
+          "feedback": {
+            "en": "The queen took no part — two bishops gave mate.",
+            "uk": "Ферзь не брав участі — мат поставили два слони.",
+            "ru": "Ферзь не участвовал — мат поставили два слона."
+          }
+        },
+        {
+          "text": {
+            "en": "Black had not castled.",
+            "uk": "Чорні не зробили рокіровки.",
+            "ru": "Чёрные не рокировали."
+          },
+          "feedback": {
+            "en": "Black had castled long — and the pawns in front of the king had moved.",
+            "uk": "Чорні якраз зробили довгу рокіровку — і пішаки перед королем були зрушені.",
+            "ru": "Чёрные как раз рокировали в длинную сторону — и пешки перед королём были сдвинуты."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "5r1k/pp5p/6p1/8/8/1Bb2P1b/PB3P1P/6K1 w - - 0 29",
+      "text": {
+        "en": "Your move. Mate in two.",
+        "uk": "Ваш хід. Мат у два ходи.",
+        "ru": "Ваш ход. Мат в два хода."
+      },
+      "hint": {
+        "en": "The b3 bishop covers g8. Check along the long diagonal.",
+        "uk": "Слон b3 тримає g8. Шах по великій діагоналі.",
+        "ru": "Слон b3 держит g8. Шах по большой диагонали."
+      },
+      "line": [
+        {
+          "answers": [
+            "b2c3"
+          ],
+          "reply": "f8f6"
+        },
+        {
+          "answers": [
+            "c3f6"
+          ],
+          "correct": {
+            "en": "Checkmate!",
+            "uk": "Мат!",
+            "ru": "Мат!"
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "2kr3r/p2nqp2/B1p1pn1p/8/P2P2p1/2P3B1/1P3PPP/R3R1K1 b - - 1 21",
+      "text": {
+        "en": "Look for a bishop mate when the enemy king is hemmed in by its own pieces and open diagonals lead to it. If you castled long yourself, watch the a6 and a3 squares.",
+        "uk": "Шукайте мат слонами, коли король суперника замкнений своїми фігурами, а до нього ведуть відкриті діагоналі. Якщо самі зробили довгу рокіровку — стежте за полями a6 і a3.",
+        "ru": "Ищите мат слонами, когда король соперника заперт своими фигурами, а к нему ведут открытые диагонали. Если сами рокировали в длинную сторону — следите за полями a6 и a3."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "2kr3r/B1pb1p1p/1p1p1np1/8/4PP1P/P2B4/1P3K1P/1R4R1 w - - 0 19",
+      "text": {
+        "en": "Your move. Mate in one.",
+        "uk": "Ваш хід. Мат в один хід.",
+        "ru": "Ваш ход. Мат в один ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "d3a6"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "4rk1r/pp3p1p/8/2b2b2/2P5/2P5/P2N2PP/R1KQ1BNR b - - 0 17",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Mate in one.",
+        "uk": "Хід чорних. Мат в один хід.",
+        "ru": "Ход чёрных. Мат в один ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "c5a3"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "7k/1b5p/p1np2p1/1pb1ppB1/4P3/1BP2N1P/PP3PP1/6K1 w - - 0 25",
+      "text": {
+        "en": "Your move. Mate in one.",
+        "uk": "Ваш хід. Мат в один хід.",
+        "ru": "Ваш ход. Мат в один ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "g5f6"
+          ]
+        }
+      ]
+    }
+  ]
+}
