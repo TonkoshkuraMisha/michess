@@ -690,16 +690,29 @@ describe('пометки правой кнопкой (таск B.1)', () => {
         fireEvent.pointerUp(squareEl(to), {pointerType: 'mouse', button: 2, ...init});
     }
 
-    it('стрелка в живой партии, ход её снимает; при выбранной фигуре правая кнопка только отменяет выбор', async () => {
+    it('стрелка в живой партии, ход её снимает; при выбранной фигуре правая кнопка снимает выбор и рисует', async () => {
         await startBotGame('white');
         rightDrag('g1', 'f3', {altKey: true});
         expect(screen.getByTestId('note-arrow-g1-f3').getAttribute('data-color')).toBe('blue');
 
         clickSquare('e2');
         rightDrag('d2', 'd4');
-        expect(screen.queryByTestId('note-arrow-d2-d4')).toBeNull();
+        fireEvent.contextMenu(squareEl('d4'));  // браузер присылает его вслед за правой кнопкой
+        expect(screen.getByTestId('note-arrow-d2-d4')).toBeInTheDocument();
 
+        clickSquare('e4');  // выбор снят — хода e2-e4 нет, пометки на месте
+        expect(screen.getByTestId('note-arrow-d2-d4')).toBeInTheDocument();
+
+        clickSquare('e2');
         clickSquare('e4');
         await waitFor(() => expect(screen.queryByTestId('board-annotations')).toBeNull());
+    });
+
+    it('пока стоит предход, правая кнопка отменяет его и стрелку не рисует', async () => {
+        await startBotGame('black');
+        clickSquare('e7');
+        clickSquare('e5');  // ход белых ещё не сделан — это предход
+        rightDrag('d7', 'd5');
+        expect(screen.queryByTestId('note-arrow-d7-d5')).toBeNull();
     });
 });
