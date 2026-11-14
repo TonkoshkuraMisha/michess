@@ -31,6 +31,7 @@ from pathlib import Path
 
 import chess
 import chess.engine
+import chess.pgn
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -119,7 +120,19 @@ def _adjudicate(board: chess.Board) -> str:
     return "1/2-1/2"
 
 
-def play_game(spec: Spec) -> tuple[Spec, str, int]:
+def game_pgn(spec: Spec, board: chess.Board, result: str) -> str:
+    """Партия калибровки в PGN — для метрик стиля (scripts/style_metrics.py)."""
+    game = chess.pgn.Game.from_board(board)
+    game.headers.update({
+        "Event": "michess calibration", "White": spec.white, "Black": spec.black, "Result": result,
+        "Opening": OPENINGS[spec.opening % len(OPENINGS)],
+    })
+    for tag in ("Site", "Date", "Round"):
+        game.headers.pop(tag, None)
+    return str(game)
+
+
+def play_game(spec: Spec) -> tuple[Spec, str, int, str]:
     board = chess.Board()
     for san in OPENINGS[spec.opening % len(OPENINGS)].split():
         board.push_san(san)
@@ -127,7 +140,7 @@ def play_game(spec: Spec) -> tuple[Spec, str, int]:
         player = spec.white if board.turn == chess.WHITE else spec.black
         board.push(_move(player, board, spec.anchor_movetime))
     result = board.result(claim_draw=True) if board.is_game_over(claim_draw=True) else _adjudicate(board)
-    return spec, result, board.ply()
+    return spec, result, board.ply(), game_pgn(spec, board, result)
 
 
 # --- Расписание и подбор рейтингов ------------------------------------------------------------
@@ -245,6 +258,8 @@ def main() -> None:
     parser.add_argument("--reuse-log", type=Path,
                         help="Добавить партии ботов между собой из лога прошлого прогона (без его якорей)")
     parser.add_argument("--anchor-movetime", type=float, default=ANCHOR_MOVETIME_S, help="Секунд на ход якоря")
+    parser.add_argument("--pgn", type=Path,
+                        help="Дописывать партии в этот PGN (метрики стиля: scripts/style_metrics.py)")
     args = parser.parse_args()
 
     random.seed(20261112)
@@ -265,9 +280,12 @@ def main() -> None:
         pool = ProcessPoolExecutor(max_workers=args.workers)
         futures = [pool.submit(play_game, spec) for spec in specs]
         for done, future in enumerate(as_completed(futures), 1):
-            spec, result, plies = future.result()
+            spec, result, plies, pgn = future.result()
             games.append((spec.white, spec.black, SCORES[result]))
             print(f"[{done}/{len(specs)}] {spec.white} — {spec.black}: {result} ({plies} пл.)", flush=True)
+            if args.pgn:
+                with args.pgn.open("a", encoding="utf-8") as handle:
+                    handle.write(pgn + "\n\n")
 
     if args.reuse_log:
         reused = games_from_log(args.reuse_log, without_anchors=True)
