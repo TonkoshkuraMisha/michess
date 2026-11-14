@@ -90,12 +90,14 @@ TEMPLATES: dict[tuple[str, str], tuple[str, ...]] = {
     ("advice", "quiet"): (),
     # Позиционные признаки, когда угроз нет (таск B.4).
     ("advice", "pos_king_center"): (),
+    ("advice", "pos_king_holes"): ("square",),
     ("advice", "pos_passed_enemy"): ("square",),
     ("advice", "pos_passed_own"): ("square",),
     ("advice", "pos_king_active"): (),
     ("advice", "pos_open_file"): ("file",),
     ("advice", "pos_outpost"): ("square",),
     ("advice", "pos_isolated_enemy"): ("square",),
+    ("advice", "pos_backward_enemy"): ("square",),
     ("advice", "pos_bad_bishop"): ("square",),
     ("advice", "pos_doubled_own"): ("file",),
     # Подсказка по ступеням (таск 11.4). Ступень 1 — намёк без полей и фигур, ступень 2 — какой фигурой ходить.
