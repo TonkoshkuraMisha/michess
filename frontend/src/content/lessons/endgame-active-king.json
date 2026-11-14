@@ -1,0 +1,300 @@
+{
+  "id": "endgame-active-king",
+  "course": "endgame",
+  "order": 2,
+  "title": {
+    "en": "The active king",
+    "uk": "Активний король",
+    "ru": "Активный король"
+  },
+  "summary": {
+    "en": "In the endgame the king is a strong piece: march it towards the enemy pawns.",
+    "uk": "В ендшпілі король — сильна фігура: ведіть його до пішаків суперника.",
+    "ru": "В эндшпиле король — сильная фигура: ведите его к пешкам соперника."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "8/6K1/8/3k1p2/5P2/8/8/8 w - - 5 56",
+      "arrows": [
+        {
+          "from": "g7",
+          "to": "f6",
+          "color": "green"
+        },
+        {
+          "from": "f6",
+          "to": "f5",
+          "color": "red"
+        }
+      ],
+      "text": {
+        "en": "With the queens gone, the king is no longer in danger of mate — it becomes a strong piece. Bring it to the centre and to the opponent's weak pawns: the f5 pawn is undefended, and the white king goes for it.",
+        "uk": "Коли ферзів немає, королю вже не загрожує мат — і він стає сильною фігурою. Ведіть короля до центру й до слабких пішаків суперника: пішак f5 не захищений, і білий король іде по нього.",
+        "ru": "Когда ферзей нет, королю уже не грозит мат — и он становится сильной фигурой. Ведите короля к центру и к слабым пешкам соперника: пешка f5 не защищена, и белый король идёт за ней."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "8/6K1/8/3k1p2/5P2/8/8/8 w - - 5 56",
+      "text": {
+        "en": "Your move. Find the winning move.",
+        "uk": "Ваш хід. Знайдіть виграшний хід.",
+        "ru": "Ваш ход. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "g7f6"
+          ],
+          "reply": "d5d6",
+          "correct": {
+            "en": "The king attacks the f5 pawn, and the black king is too late to defend it.",
+            "uk": "Король нападає на пішака f5, а чорний король не встигає його захистити.",
+            "ru": "Король нападает на пешку f5, а чёрный король не успевает её защитить."
+          },
+          "wrong": {
+            "g7g6": {
+              "en": "The king attacks f5 too, but after this move Black manages to defend — a draw. In pawn endings precision decides.",
+              "uk": "Король теж нападає на f5, але після цього ходу чорні встигають захиститися — нічия. У пішаковому ендшпілі вирішує точність.",
+              "ru": "Король тоже нападает на f5, но после этого хода чёрные успевают защититься — ничья. В пешечном эндшпиле решает точность."
+            }
+          }
+        },
+        {
+          "answers": [
+            "f6f5"
+          ],
+          "correct": {
+            "en": "The pawn is won.",
+            "uk": "Пішака виграно.",
+            "ru": "Пешка выиграна."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/8/8/6p1/5KPk/8/8/8 w - - 0 60",
+      "text": {
+        "en": "Your move. Find the winning move.",
+        "uk": "Ваш хід. Знайдіть виграшний хід.",
+        "ru": "Ваш ход. Найдите выигрывающий ход."
+      },
+      "hint": {
+        "en": "The black king will have to move, even if it hurts.",
+        "uk": "Чорному королю доведеться зробити хід, навіть якщо він йому шкодить.",
+        "ru": "Чёрному королю придётся сделать ход, даже если он ему вреден."
+      },
+      "line": [
+        {
+          "answers": [
+            "f4f5"
+          ],
+          "reply": "h4h3",
+          "correct": {
+            "en": "Zugzwang! Black has only king moves, and every one abandons the g5 pawn.",
+            "uk": "Цугцванг! У чорних лише ходи королем, і будь-який кидає пішака g5.",
+            "ru": "Цугцванг! У чёрных только ходы королём, и любой бросает пешку g5."
+          }
+        },
+        {
+          "answers": [
+            "f5g5"
+          ],
+          "correct": {
+            "en": "The pawn is won.",
+            "uk": "Пішака виграно.",
+            "ru": "Пешка выиграна."
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "8/8/8/5Kp1/6Pk/8/8/8 b - - 1 60",
+      "text": {
+        "en": "Why does Black lose the g5 pawn?",
+        "uk": "Чому чорні втрачають пішака g5?",
+        "ru": "Почему чёрные теряют пешку g5?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "It is zugzwang: Black must move, and every king move leaves the pawn.",
+            "uk": "Це цугцванг: хід обов'язковий, а всі ходи короля відводять його від пішака.",
+            "ru": "Это цугцванг: ход обязателен, а все ходы короля уводят его от пешки."
+          },
+          "feedback": {
+            "en": "Yes. In the endgame the obligation to move can be a burden.",
+            "uk": "Так. В ендшпілі право ходу іноді стає тягарем.",
+            "ru": "Да. В эндшпиле право хода иногда оказывается обузой."
+          }
+        },
+        {
+          "text": {
+            "en": "The g5 pawn is pinned.",
+            "uk": "Пішак g5 зв'язаний.",
+            "ru": "Пешка g5 связана."
+          },
+          "feedback": {
+            "en": "There is no pin; the point is that Black has no good move.",
+            "uk": "Зв'язки немає; річ у тім, що чорним нікуди ходити.",
+            "ru": "Связки нет; дело в том, что чёрным некуда ходить."
+          }
+        },
+        {
+          "text": {
+            "en": "The white g4 pawn is stronger.",
+            "uk": "Білий пішак g4 сильніший.",
+            "ru": "Белая пешка g4 сильнее."
+          },
+          "feedback": {
+            "en": "The pawns are equal; the active king and the move order decide.",
+            "uk": "Пішаки рівні; вирішує активність короля й черговість ходу.",
+            "ru": "Пешки равны; решает активность короля и очередь хода."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/8/8/8/6p1/5KPk/8/8 w - - 0 51",
+      "text": {
+        "en": "Your move. Find the winning move.",
+        "uk": "Ваш хід. Знайдіть виграшний хід.",
+        "ru": "Ваш ход. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "f3f4"
+          ],
+          "reply": "h3h2",
+          "correct": {
+            "en": "The same zugzwang: Black has only king moves.",
+            "uk": "Той самий цугцванг: у чорних є лише ходи королем.",
+            "ru": "Тот же цугцванг: у чёрных есть только ходы королём."
+          }
+        },
+        {
+          "answers": [
+            "f4g4"
+          ],
+          "correct": {
+            "en": "The pawn is won.",
+            "uk": "Пішака виграно.",
+            "ru": "Пешка выиграна."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/8/5k2/5p1P/1p6/1P2K3/8/8 b - - 0 53",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Find the winning move.",
+        "uk": "Хід чорних. Знайдіть виграшний хід.",
+        "ru": "Ход чёрных. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "f6g5"
+          ],
+          "reply": "e3f3"
+        },
+        {
+          "answers": [
+            "g5h5"
+          ],
+          "correct": {
+            "en": "The pawn is won.",
+            "uk": "Пішака виграно.",
+            "ru": "Пешка выиграна."
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "8/6K1/8/3k1p2/5P2/8/8/8 w - - 5 56",
+      "text": {
+        "en": "Endgame rule: first, an active king — to the centre, to your pawns and to the enemy's. When the kings are close, look for zugzwang: sometimes the best move is the one that forces the opponent to worsen their position.",
+        "uk": "Правило ендшпілю: спершу активний король — у центр, до своїх пішаків і до пішаків суперника. Коли королі стоять близько, шукайте цугцванг: іноді найкращий хід — той, після якого суперник мусить погіршити свою позицію.",
+        "ru": "Правило эндшпиля: сначала активный король — в центр, к своим пешкам и к пешкам соперника. Когда короли стоят близко, ищите цугцванг: иногда лучший ход — тот, после которого соперник обязан ухудшить свою позицию."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "8/8/8/1p3p2/1p5k/1P2K3/8/8 w - - 0 60",
+      "text": {
+        "en": "Your move. Find the winning move.",
+        "uk": "Ваш хід. Знайдіть виграшний хід.",
+        "ru": "Ваш ход. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "e3f4"
+          ],
+          "reply": "h4h5"
+        },
+        {
+          "answers": [
+            "f4f5"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/3k4/8/3pP1p1/3K2P1/8/8/8 b - - 3 57",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Find the winning move.",
+        "uk": "Хід чорних. Знайдіть виграшний хід.",
+        "ru": "Ход чёрных. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "d7e6"
+          ],
+          "reply": "d4d3"
+        },
+        {
+          "answers": [
+            "e6e5"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/8/8/8/6p1/5KPk/8/8 w - - 0 48",
+      "text": {
+        "en": "Your move. Find the winning move.",
+        "uk": "Ваш хід. Знайдіть виграшний хід.",
+        "ru": "Ваш ход. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "f3f4"
+          ],
+          "reply": "h3g2"
+        },
+        {
+          "answers": [
+            "f4g4"
+          ]
+        }
+      ]
+    }
+  ]
+}
