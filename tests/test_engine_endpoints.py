@@ -6,6 +6,8 @@
 
 import json
 import threading
+from contextlib import contextmanager
+from types import SimpleNamespace
 
 import chess
 import chess.engine
@@ -15,8 +17,9 @@ from src.api import analysis as analysis_api
 from src.core.config import settings
 from src.models.game import Game, GameStatus
 from src.models.user import User
+from src.services import engine_pool
 from src.services.bots.base import resolve_stockfish_path
-from src.services.engine_pool import EngineBusyError, EnginePool
+from src.services.engine_pool import EngineBusyError, EngineLease, EnginePool
 
 SF_PATH = resolve_stockfish_path()
 needs_stockfish = pytest.mark.skipif(SF_PATH is None, reason="Stockfish binary not available")
@@ -143,6 +146,40 @@ def test_pool_resets_and_clamps_options():
     # Следующий вызов без опций возвращает полную силу — настройки бота не «протекают».
     EnginePool._configure(engine, {})
     assert engine.configured == {"Skill Level": 20, "UCI_LimitStrength": False}
+
+
+def test_lease_keeps_one_engine_and_drops_a_broken_one(monkeypatch):
+    events: list = []
+
+    @contextmanager
+    def acquire(options=None):
+        events.append(("acquire", options))
+        try:
+            yield _FakeEngine()
+        except chess.engine.EngineError:
+            events.append("broken")
+            raise
+        finally:
+            events.append("release")
+
+    monkeypatch.setattr(engine_pool, "get_engine_pool", lambda path: SimpleNamespace(acquire=acquire))
+    with EngineLease("stockfish") as lease:
+        with lease.use({}) as first:
+            pass
+        with lease.use({"UCI_LimitStrength": True, "UCI_Elo": 900}) as second:
+            # Тот же движок, опции сменились на месте и приведены к диапазону.
+            assert second is first and second.configured["UCI_Elo"] == 1320
+        with pytest.raises(chess.engine.EngineError), lease.use({}):
+            raise chess.engine.EngineError("engine died")
+        with lease.use({}) as third:
+            assert third is not first
+    assert events == [("acquire", {}), "broken", "release", ("acquire", {}), "release"]
+
+
+def test_lease_without_use_does_not_touch_the_pool(monkeypatch):
+    monkeypatch.setattr(engine_pool, "get_engine_pool", lambda path: pytest.fail("pool must not be used"))
+    with EngineLease(None):
+        pass
 
 
 @needs_stockfish

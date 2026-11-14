@@ -12,9 +12,14 @@ import chess
 import chess.engine
 
 from src.services.bots.style import CENTER_SQUARES, EXTENDED_CENTER, Style
-from src.services.engine_pool import get_engine_pool
+from src.services.engine_pool import EngineLease, get_engine_pool
 
 logger = logging.getLogger(__name__)
+
+
+def _engine(engine_path: str, lease: EngineLease | None, options: dict):
+    """Движок из аренды хода, если она есть, иначе — отдельно из пула на один вызов."""
+    return lease.use(options) if lease is not None else get_engine_pool(engine_path).acquire(options)
 
 BOTS_DIR = Path(__file__).resolve().parent
 BOOKS_DIR = BOTS_DIR / "books"
@@ -206,8 +211,9 @@ def analyse_with_stockfish(
         depth: int = 6,
         time_limit: float = 0.25,
         multipv: int = 6,
+        lease: EngineLease | None = None,
 ) -> dict[chess.Move, float]:
-    """Запрашивает оценку топ-ходов у движка Stockfish."""
+    """Запрашивает оценку топ-ходов у движка Stockfish (lease — движок, арендованный на весь ход бота)."""
     if not engine_path or not os.path.exists(engine_path):
         return {}
 
@@ -219,7 +225,7 @@ def analyse_with_stockfish(
     del skill_level, uci_elo
 
     try:
-        with get_engine_pool(engine_path).acquire({}) as engine:
+        with _engine(engine_path, lease, {}) as engine:
             infos = engine.analyse(
                 board,
                 chess.engine.Limit(depth=depth, time=time_limit),
@@ -243,6 +249,7 @@ def analyse_with_stockfish(
 
 def strength_reference_move(
         board: chess.Board, engine_path: str | None, uci_elo: int | None, time_limit: float,
+        lease: EngineLease | None = None,
 ) -> chess.Move | None:
     """
     Ход, который сыграл бы Stockfish с ограничением силы UCI_Elo (таск 10.5) — эталон силы бота: его ослабление
@@ -252,17 +259,20 @@ def strength_reference_move(
         return None
     try:
         # Пул сам приводит UCI_Elo к допустимому диапазону движка (у Stockfish — от 1320).
-        with get_engine_pool(engine_path).acquire({"UCI_LimitStrength": True, "UCI_Elo": uci_elo}) as engine:
+        with _engine(engine_path, lease, {"UCI_LimitStrength": True, "UCI_Elo": uci_elo}) as engine:
             return engine.play(board, chess.engine.Limit(time=time_limit)).move
     except Exception as exc:
         logger.warning("Stockfish reference move failed (%s): %s", engine_path, exc)
         return None
 
 
-def score_move(board: chess.Board, engine_path: str, move: chess.Move, depth: int, time_limit: float) -> float | None:
+def score_move(
+        board: chess.Board, engine_path: str, move: chess.Move, depth: int, time_limit: float,
+        lease: EngineLease | None = None,
+) -> float | None:
     """Оценка одного хода на полной силе (для опорного хода, не попавшего в MultiPV)."""
     try:
-        with get_engine_pool(engine_path).acquire({}) as engine:
+        with _engine(engine_path, lease, {}) as engine:
             info = engine.analyse(board, chess.engine.Limit(depth=depth, time=time_limit), root_moves=[move])
             cp = info["score"].pov(board.turn).score(mate_score=100000)
             return float(cp) if cp is not None else None
@@ -363,24 +373,27 @@ class HistoricalBot:
     def _candidate_scores(self, board: chess.Board) -> Candidates:
         """Кандидаты MultiPV на полной силе и опорный ход силы (ход Stockfish с ограничением UCI_Elo)."""
         engine_path = self._get_active_engine_path() if self.stockfish_path is not None else None
-        scores = analyse_with_stockfish(
-            board=board,
-            engine_path=engine_path,
-            skill_level=self.skill_level,
-            uci_elo=self.uci_elo,
-            depth=self.search_depth,
-            time_limit=self.time_limit,
-            multipv=self.multipv,
-        )
-        if not scores:
-            return Candidates(fallback_scores(board), None, False, engine_path)
-        reference = strength_reference_move(board, engine_path, self.uci_elo, self.time_limit)
-        if reference is not None and reference not in scores and engine_path:
-            value = score_move(board, engine_path, reference, self.search_depth, self.time_limit)
-            if value is None:
-                reference = None
-            else:
-                scores[reference] = value
+        # Один движок на все шаги хода: в очередь пула ход встаёт один раз.
+        with EngineLease(engine_path) as lease:
+            scores = analyse_with_stockfish(
+                board=board,
+                engine_path=engine_path,
+                skill_level=self.skill_level,
+                uci_elo=self.uci_elo,
+                depth=self.search_depth,
+                time_limit=self.time_limit,
+                multipv=self.multipv,
+                lease=lease,
+            )
+            if not scores:
+                return Candidates(fallback_scores(board), None, False, engine_path)
+            reference = strength_reference_move(board, engine_path, self.uci_elo, self.time_limit, lease=lease)
+            if reference is not None and reference not in scores and engine_path:
+                value = score_move(board, engine_path, reference, self.search_depth, self.time_limit, lease=lease)
+                if value is None:
+                    reference = None
+                else:
+                    scores[reference] = value
         return Candidates(scores, reference, True, engine_path)
 
     def _window(self, scores: dict[chess.Move, float], reference: chess.Move | None) -> dict[chess.Move, float]:
