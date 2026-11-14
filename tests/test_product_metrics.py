@@ -77,3 +77,9 @@ def test_render_marks_days_that_have_not_come_yet():
                        reached={}, total_users=1)
     row = next(line for line in render(report).splitlines() if line.startswith(today.isoformat()))
     assert row.count("…") == len(pm.RETENTION_DAYS)
+
+
+async def test_logged_in_requests_mark_the_player_active_once(client, db_session, test_user_1, token_user_1):
+    for _ in range(2):
+        assert client.get("/api/v1/profile/me", headers={"Authorization": f"Bearer {token_user_1}"}).status_code == 200
+    assert await _count(db_session, kind=pm.ACTIVE, user_id=test_user_1.id) == 1
