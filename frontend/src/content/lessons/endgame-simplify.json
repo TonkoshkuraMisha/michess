@@ -1,0 +1,288 @@
+{
+  "id": "endgame-simplify",
+  "course": "endgame",
+  "order": 4,
+  "title": {
+    "en": "Simplification",
+    "uk": "Спрощення",
+    "ru": "Упрощение"
+  },
+  "summary": {
+    "en": "When you are ahead, trade pieces: the fewer remain, the stronger your advantage.",
+    "uk": "З зайвим матеріалом міняйте фігури: що менше їх на дошці, то сильніша перевага.",
+    "ru": "С лишним материалом меняйте фигуры: чем меньше их на доске, тем сильнее перевес."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "8/p4r2/R6K/5k2/8/7P/8/8 b - - 4 44",
+      "text": {
+        "en": "The rule for converting an advantage: trade pieces, not pawns. Every trade takes away the opponent's defenders and counterplay, and in a pawn ending an extra pawn or an active king decides.",
+        "uk": "Правило реалізації переваги: міняйте фігури, а не пішаки. Кожен розмін позбавляє суперника захисників і шансів на контргру, а в пішаковому ендшпілі зайвий пішак або активний король вирішують партію.",
+        "ru": "Правило реализации перевеса: меняйте фигуры, а не пешки. Каждый размен лишает соперника защитников и шансов на контригру, а в пешечном эндшпиле лишняя пешка или активный король решают партию."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "8/p4r2/R6K/5k2/8/7P/8/8 b - - 4 44",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Find the winning move.",
+        "uk": "Хід чорних. Знайдіть виграшний хід.",
+        "ru": "Ход чёрных. Найдите выигрывающий ход."
+      },
+      "hint": {
+        "en": "Offer a rook trade with check.",
+        "uk": "Запропонуйте розмін тур із шахом.",
+        "ru": "Предложите размен ладей с шахом."
+      },
+      "line": [
+        {
+          "answers": [
+            "f7f6"
+          ],
+          "reply": "a6f6",
+          "correct": {
+            "en": "Check, and White is forced to trade rooks.",
+            "uk": "Шах, і білі мусять міняти тури.",
+            "ru": "Шах, и белые вынуждены менять ладьи."
+          }
+        },
+        {
+          "answers": [
+            "f5f6"
+          ],
+          "correct": {
+            "en": "The pawn ending is won for Black: the king stops the h-pawn, and the white king cannot catch the a-pawn.",
+            "uk": "Пішаковий ендшпіль виграний для чорних: пішака h король зупинить, а пішака a білий король не наздожене.",
+            "ru": "Пешечный эндшпиль выигран для чёрных: пешку h король остановит, а пешку a белый король не догонит."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/8/5p2/4pPk1/4P3/1r1RK3/8/8 b - - 3 47",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Find the winning move.",
+        "uk": "Хід чорних. Знайдіть виграшний хід.",
+        "ru": "Ход чёрных. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "b3d3"
+          ],
+          "reply": "e3d3",
+          "correct": {
+            "en": "The rooks are off. Now the king decides.",
+            "uk": "Тури знято. Тепер усе вирішує король.",
+            "ru": "Ладьи сняты. Теперь всё решает король."
+          }
+        },
+        {
+          "answers": [
+            "g5f4"
+          ],
+          "correct": {
+            "en": "The king breaks into White's position — the pawn ending is won.",
+            "uk": "Король вривається в позицію білих — пішаковий ендшпіль виграно.",
+            "ru": "Король врывается в позицию белых — пешечный эндшпиль выигран."
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "You are a pawn up. What should you trade?",
+        "uk": "У вас зайвий пішак. Що краще розмінювати?",
+        "ru": "У вас лишняя пешка. Что лучше разменивать?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "Pieces: then the extra pawn becomes decisive.",
+            "uk": "Фігури: тоді зайвий пішак стає вирішальним.",
+            "ru": "Фигуры: тогда лишняя пешка становится решающей."
+          },
+          "feedback": {
+            "en": "Yes. With each trade the opponent has fewer ways to resist.",
+            "uk": "Так. З кожною розміняною фігурою в суперника менше способів опиратися.",
+            "ru": "Да. С каждой разменянной фигурой у соперника меньше способов сопротивляться."
+          }
+        },
+        {
+          "text": {
+            "en": "Pawns: fewer pawns, easier to calculate.",
+            "uk": "Пішаки: менше пішаків — простіше рахувати.",
+            "ru": "Пешки: меньше пешек — проще считать."
+          },
+          "feedback": {
+            "en": "The opposite: without pawns an extra piece often cannot win.",
+            "uk": "Навпаки: без пішаків зайва фігура часто не може виграти.",
+            "ru": "Наоборот: без пешек лишняя фигура часто не может выиграть."
+          }
+        },
+        {
+          "text": {
+            "en": "Trade nothing, keep the tension.",
+            "uk": "Нічого не міняти, зберігати напругу.",
+            "ru": "Ничего не менять, сохранять напряжение."
+          },
+          "feedback": {
+            "en": "Tension helps the side behind; the side ahead should simplify.",
+            "uk": "Напруга потрібна тому, хто відстає; тому, хто веде, вигідно спрощувати.",
+            "ru": "Напряжение нужно отстающему; ведущему выгодно упрощать."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/3r3p/8/5P2/1k4P1/2p5/2R3KP/8 b - - 0 42",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Find the winning move.",
+        "uk": "Хід чорних. Знайдіть виграшний хід.",
+        "ru": "Ход чёрных. Найдите выигрывающий ход."
+      },
+      "hint": {
+        "en": "Deflect the c2 rook from the c3 pawn.",
+        "uk": "Відволічіть туру c2 від пішака c3.",
+        "ru": "Отвлеките ладью c2 от пешки c3."
+      },
+      "line": [
+        {
+          "answers": [
+            "d7d2"
+          ],
+          "reply": "c2d2",
+          "correct": {
+            "en": "The rook is gone, but nothing holds the c3 pawn any more.",
+            "uk": "Туру віддано, зате пішака c3 більше ніхто не стримує.",
+            "ru": "Ладья отдана, зато пешка c3 больше никем не сдерживается."
+          }
+        },
+        {
+          "answers": [
+            "c3d2"
+          ],
+          "correct": {
+            "en": "The pawn will queen.",
+            "uk": "Пішак стане ферзем.",
+            "ru": "Пешка станет ферзём."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/8/8/8/1R4pk/8/1p3K2/5r2 w - - 2 63",
+      "text": {
+        "en": "Your move. Find the winning move.",
+        "uk": "Ваш хід. Знайдіть виграшний хід.",
+        "ru": "Ваш ход. Найдите выигрывающий ход."
+      },
+      "hint": {
+        "en": "Don't fear the promotion: the new queen will be taken at once.",
+        "uk": "Не бійтеся перетворення: нового ферзя одразу буде взято.",
+        "ru": "Не бойтесь превращения: новый ферзь будет сразу взят."
+      },
+      "line": [
+        {
+          "answers": [
+            "f2f1"
+          ],
+          "reply": "b2b1q",
+          "correct": {
+            "en": "The rook is taken. Black promotes…",
+            "uk": "Туру взято. Чорні перетворюють пішака…",
+            "ru": "Ладья взята. Чёрные превращают пешку…"
+          }
+        },
+        {
+          "answers": [
+            "b4b1"
+          ],
+          "correct": {
+            "en": "…but the queen falls at once — White is a rook up.",
+            "uk": "…але ферзя одразу взято — у білих зайва тура.",
+            "ru": "…но ферзь сразу взят — у белых лишняя ладья."
+          }
+        }
+      ]
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "8/R7/6p1/P7/5k2/3K4/5r2/8 w - - 0 47",
+      "text": {
+        "en": "Your move. Find the winning move.",
+        "uk": "Ваш хід. Знайдіть виграшний хід.",
+        "ru": "Ваш ход. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "a7f7"
+          ],
+          "reply": "f4g3"
+        },
+        {
+          "answers": [
+            "f7f2"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/8/8/4k3/5pp1/8/5K1R/8 b - - 1 58",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Find the winning move.",
+        "uk": "Хід чорних. Знайдіть виграшний хід.",
+        "ru": "Ход чёрных. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "g4g3"
+          ],
+          "reply": "f2g1"
+        },
+        {
+          "answers": [
+            "g3h2"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/5p1p/2P3p1/1k2P3/5P2/7r/2K5/8 w - - 1 42",
+      "text": {
+        "en": "Your move. Find the winning move.",
+        "uk": "Ваш хід. Знайдіть виграшний хід.",
+        "ru": "Ваш ход. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "c6c7"
+          ],
+          "reply": "h3a3"
+        },
+        {
+          "answers": [
+            "c7c8q"
+          ]
+        }
+      ]
+    }
+  ]
+}
