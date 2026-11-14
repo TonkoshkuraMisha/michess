@@ -2,12 +2,17 @@
 # Образ бэкенда: один и тот же для API (uvicorn), Celery-воркера и миграций —
 # различается только команда запуска (см. docker-compose.prod.yml).
 
-FROM python:3.11-slim
+FROM python:3.14-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PROJECT_ENVIRONMENT=/opt/venv \
+    PATH="/opt/venv/bin:$PATH"
+
+# uv — менеджер пакетов; ставит зависимости строго по uv.lock.
+COPY --from=ghcr.io/astral-sh/uv:0.13.8 /uv /usr/local/bin/uv
 
 # Stockfish из пакетов Debian (/usr/games/stockfish — его находит resolve_stockfish_path).
 RUN apt-get update \
@@ -16,8 +21,9 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install -r requirements.txt
+# Сначала только манифесты: слой с пакетами кэшируется, пока они не менялись. Без dev-группы.
+COPY pyproject.toml uv.lock .python-version ./
+RUN uv sync --frozen --no-dev --no-install-project
 
 COPY alembic.ini .
 COPY migrations ./migrations
