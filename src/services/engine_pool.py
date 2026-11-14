@@ -17,10 +17,13 @@ import os
 import queue
 import sys
 import threading
+import time
 from collections.abc import Iterator
 from contextlib import ExitStack, contextmanager
+from contextvars import ContextVar
 
 import chess.engine
+from prometheus_client import Counter, Histogram
 
 from src.core.config import settings
 
@@ -32,6 +35,45 @@ _DEFAULT_OPTIONS: dict[str, int | bool] = {
     "Skill Level": 20,
     "UCI_LimitStrength": False,
 }
+
+
+# --- Бюджет движка (таск 23.3): время, пока движок занят, по видам работ ----------------------------------------
+# Главная статья расходов — процессор Stockfish. Каждая выдача движка из пула засчитывает время, пока он был занят,
+# виду работы из контекста вызова (engine_work). Метки — из конечного набора ENGINE_WORK_KINDS.
+
+ENGINE_WORK_KINDS = ("bot_move", "analysis", "coach", "simulation", "puzzles", "other")
+_work_kind: ContextVar[str] = ContextVar("engine_work_kind", default="other")
+
+ENGINE_SECONDS = Counter(
+    "michess_engine_seconds_total", "Time Stockfish engines were held from the pool, by kind of work", ["kind"],
+)
+ENGINE_ACQUIRE_WAIT_SECONDS = Histogram(
+    "michess_engine_acquire_wait_seconds", "Waiting for a free engine in the pool", ["kind"],
+    buckets=(0.001, 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
+)
+ENGINE_BUSY = Counter("michess_engine_busy_total", "Requests refused because every engine was busy", ["kind"])
+
+
+@contextmanager
+def engine_work(kind: str) -> Iterator[None]:
+    """
+    Вид работы для учёта времени движка внутри блока. Внешний вид важнее внутреннего: ход бота в симуляции турнира
+    засчитывается симуляции. Контекст переживает asyncio.to_thread (contextvars копируются в поток).
+    """
+    if kind not in ENGINE_WORK_KINDS:
+        kind = "other"
+    if _work_kind.get() != "other":
+        yield
+        return
+    token = _work_kind.set(kind)
+    try:
+        yield
+    finally:
+        _work_kind.reset(token)
+
+
+def current_engine_work() -> str:
+    return _work_kind.get()
 
 
 class EngineUnavailableError(RuntimeError):
@@ -109,8 +151,13 @@ class EnginePool:
             raise EngineUnavailableError("Engine pool is closed")
 
         wait = self.acquire_timeout_s if timeout_s is None else timeout_s
+        kind = current_engine_work()
+        waiting_since = time.perf_counter()
         if not self._slots.acquire(timeout=wait):
+            ENGINE_BUSY.labels(kind).inc()
             raise EngineBusyError("All chess engines are busy")
+        held_since = time.perf_counter()
+        ENGINE_ACQUIRE_WAIT_SECONDS.labels(kind).observe(held_since - waiting_since)
 
         engine: chess.engine.SimpleEngine | None = None
         healthy = True
@@ -132,6 +179,7 @@ class EnginePool:
                 else:
                     self._quit(engine)
             self._slots.release()
+            ENGINE_SECONDS.labels(kind).inc(time.perf_counter() - held_since)
 
     def close(self) -> None:
         self._closed = True

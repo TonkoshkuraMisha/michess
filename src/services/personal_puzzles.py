@@ -28,7 +28,7 @@ from src.models.game import Game
 from src.models.puzzle import PersonalPuzzle
 from src.models.user import User
 from src.services.bots.base import resolve_stockfish_path
-from src.services.engine_pool import EngineUnavailableError, get_engine_pool
+from src.services.engine_pool import EngineUnavailableError, engine_work, get_engine_pool
 from src.services.game_engine import read_pgn_game
 from src.services.mentor_service import analyze_move
 from src.services.themes import themes_for_motif
@@ -152,7 +152,8 @@ async def extract_for_game(db: AsyncSession, game_id: int) -> int:
             if best not in position.legal_moves:
                 continue
             try:
-                top = await asyncio.to_thread(top_two, position.copy(stack=False))
+                with engine_work("puzzles"):
+                    top = await asyncio.to_thread(top_two, position.copy(stack=False))
             except EngineUnavailableError as exc:
                 logger.warning("Stockfish недоступен для задач из партии %s: %s", game_id, exc)
                 return added

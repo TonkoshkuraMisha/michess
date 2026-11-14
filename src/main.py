@@ -18,7 +18,7 @@ from src.api.profile import router as profile_router
 from src.api.websockets import router as ws_router
 from src.core.config import settings
 from src.core.errors import validation_error_items
-from src.core.observability import http_metrics_middleware, init_sentry, metrics_response
+from src.core.observability import http_metrics_middleware, init_sentry, metrics_response, refresh_active_players
 from src.db import redis as redis_module
 from src.db.session import AsyncSessionLocal
 from src.services.connection_manager import manager
@@ -135,6 +135,7 @@ async def health_check():
 @app.get("/metrics", include_in_schema=False)
 async def metrics():
     """Метрики Prometheus. Наружу через nginx не публикуется — только внутри сети compose."""
+    await refresh_active_players()
     return metrics_response()
 
 

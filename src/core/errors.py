@@ -28,6 +28,7 @@ ERROR_MESSAGES: dict[str, str] = {
     "message_too_large": "The message is too long",
     "engine_busy": "The engine is busy, please retry in a few seconds",
     "engine_rate_limited": "Too many engine requests, please try again in {retry_after} s",
+    "daily_limit_reached": "The free daily limit of {limit} is used up, it renews in {hours} h",
     "engine_locked_in_game": "Engine analysis and hints are unavailable during a game against a person",
     "engine_locked_guest_ip": "A game against a person is in progress from this address — log in to use the engine",
     # --- вход и регистрация --------------------------------------------------------------------

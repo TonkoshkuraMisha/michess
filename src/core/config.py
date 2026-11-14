@@ -101,6 +101,11 @@ class Settings(BaseSettings):
     RATE_LIMIT_MOVE_CHECK_GUEST: int = 20
     # Задачи (/puzzles/*): ход, подсказка, выдача — с запасом на режим на время
     RATE_LIMIT_PUZZLES: int = 240
+    # Дневные квоты бесплатного тарифа на дорогую работу движка (таск 23.3). Выключены, пока тарифы (25.1) не
+    # включат FREE_TIER_LIMITS; базовая игра (ходы ботов, задачи) квот не имеет.
+    FREE_TIER_LIMITS: bool = False
+    FREE_GAME_ANALYSES_PER_DAY: int = 3
+    FREE_COACH_REQUESTS_PER_DAY: int = 300
 
     # Authentication: attempts per IP, failed logins per account, registrations per IP
     RATE_LIMIT_LOGIN_PER_IP: int = 20
