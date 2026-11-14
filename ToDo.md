@@ -8,7 +8,8 @@
   выбранной фигуре и `GameViewer` на общем слое пометок; `calibrate_bots.py --pgn` + `scripts/style_metrics.py`;
   наставник: `king_holes`, `backward_enemy`.
 - Осталось: прогон исторических ботов с `--pgn` и метрики стиля (B.5); Паульсен +206 и ветка
-  `wip/bot-middlegame-style` — только на стационарном ПК; A.8 — сверка подписей силы в каталоге; `dev` → `master`.
+  `wip/bot-middlegame-style` (1 коммит, есть локально на игровом ноуте, на GitHub нет); A.8 — сверка подписей силы
+  в каталоге; `dev` → `master`.
 - Грабли: во время калибровки не гонять полные тесты — нагрузка на CPU ослабляет ботов с лимитом времени.
 - Проверка: `uv run python -m pytest -q --tb=short --no-header` (1435 passed, 4 skipped); vitest 2095 passed.
 
