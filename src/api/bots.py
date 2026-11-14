@@ -20,9 +20,8 @@ from src.core.errors import ApiError, DomainError, DomainValueError, validation_
 from src.db import session as db_session
 from src.models.game import Game, GameStatus
 from src.models.user import User
-from src.services import engine_info
+from src.services import engine_info, product_metrics
 from src.services import ladder as ladder_service
-from src.services import product_metrics
 from src.services import tournaments as tournament_service
 from src.services.bots import calibration as bot_calibration
 from src.services.bots.anderssen import anderssen_bot
