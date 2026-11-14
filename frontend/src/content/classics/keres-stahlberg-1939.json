@@ -1,0 +1,1028 @@
+{
+ "id": "keres-stahlberg-1939",
+ "white": "Keres, Paul",
+ "black": "Stahlberg, Gideon",
+ "event": "Buenos Aires ol prel-D",
+ "year": "1939",
+ "result": "1-0",
+ "moves": [
+  "e2e4",
+  "e7e6",
+  "d2d4",
+  "d7d5",
+  "b1d2",
+  "c7c5",
+  "g1f3",
+  "b8c6",
+  "e4d5",
+  "e6d5",
+  "f1b5",
+  "c5c4",
+  "e1g1",
+  "f8d6",
+  "b2b3",
+  "c4b3",
+  "a2b3",
+  "g8e7",
+  "f1e1",
+  "e8g8",
+  "d2f1",
+  "c8g4",
+  "c2c3",
+  "d8c7",
+  "c1a3",
+  "f8e8",
+  "b5d3",
+  "d6a3",
+  "a1a3",
+  "c7f4",
+  "d3e2",
+  "e7g6",
+  "f1e3",
+  "g4e6",
+  "g2g3",
+  "f4d6",
+  "a3a2",
+  "h7h6",
+  "e2d3",
+  "e6h3",
+  "f3d2",
+  "c6e7",
+  "f2f4",
+  "h3d7",
+  "d2f3",
+  "b7b5",
+  "f3e5",
+  "g6e5",
+  "f4e5",
+  "d6b6",
+  "b3b4",
+  "a7a5",
+  "b4a5",
+  "a8a5",
+  "d1b3",
+  "a5a2",
+  "b3a2",
+  "b6c6",
+  "a2a3",
+  "e7g6",
+  "e1b1",
+  "e8b8",
+  "a3b4",
+  "g6f8",
+  "b4b3",
+  "d7e6",
+  "g1f2",
+  "b5b4",
+  "c3b4",
+  "c6b6",
+  "b3b2",
+  "f8d7",
+  "b4b5",
+  "f7f6",
+  "e5f6",
+  "d7f6",
+  "b1c1",
+  "e6d7",
+  "f2g1",
+  "b8e8",
+  "e3g2",
+  "f6e4",
+  "g2f4",
+  "e4g5",
+  "g1g2",
+  "d7g4",
+  "c1f1",
+  "e8f8",
+  "h2h4",
+  "g5f3",
+  "d3e2",
+  "f8f4",
+  "e2f3",
+  "f4d4",
+  "f3g4",
+  "d4g4",
+  "b2e5",
+  "b6g6",
+  "b5b6",
+  "g4b4",
+  "e5d5",
+  "g8h7",
+  "f1f8",
+  "g6c2",
+  "g2h3",
+  "b4b2",
+  "d5g8",
+  "h7g6",
+  "h4h5",
+  "g6h5",
+  "g8f7"
+ ],
+ "evals": [
+  27,
+  42,
+  38,
+  38,
+  26,
+  26,
+  25,
+  23,
+  22,
+  24,
+  24,
+  74,
+  33,
+  45,
+  45,
+  45,
+  32,
+  42,
+  40,
+  44,
+  39,
+  52,
+  44,
+  69,
+  37,
+  58,
+  45,
+  42,
+  39,
+  45,
+  45,
+  64,
+  -11,
+  84,
+  77,
+  75,
+  75,
+  74,
+  67,
+  91,
+  80,
+  97,
+  81,
+  114,
+  111,
+  141,
+  65,
+  86,
+  71,
+  99,
+  31,
+  31,
+  26,
+  27,
+  16,
+  28,
+  25,
+  35,
+  52,
+  87,
+  109,
+  208,
+  77,
+  81,
+  72,
+  63,
+  69,
+  119,
+  143,
+  138,
+  117,
+  115,
+  124,
+  132,
+  128,
+  123,
+  71,
+  118,
+  140,
+  143,
+  144,
+  147,
+  167,
+  190,
+  196,
+  162,
+  176,
+  320,
+  280,
+  343,
+  201,
+  178,
+  146,
+  320,
+  318,
+  316,
+  356,
+  464,
+  116,
+  496,
+  476,
+  487,
+  495,
+  694,
+  646,
+  99994,
+  99995,
+  99995,
+  99996,
+  99996,
+  99997
+ ],
+ "comments": {
+  "10": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v1",
+     "params": {
+      "attacker": "♗b5",
+      "front": "♞c6",
+      "behind": "♚e8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b5",
+     "to": "e8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "c6",
+     "kind": "target"
+    },
+    {
+     "square": "e8",
+     "kind": "target"
+    }
+   ]
+  },
+  "11": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "c4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♛e7+"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d8",
+     "to": "e7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "18": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v1",
+     "params": {
+      "attacker": "♖e1",
+      "front": "♞e7",
+      "behind": "♚e8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e1",
+     "to": "e8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "e7",
+     "kind": "target"
+    },
+    {
+     "square": "e8",
+     "kind": "target"
+    }
+   ]
+  },
+  "21": {
+   "comment": [
+    {
+     "key": "coach.good.pin_relative.v1",
+     "params": {
+      "attacker": "♝g4",
+      "front": "♘f3",
+      "behind": "♕d1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g4",
+     "to": "d1",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "f3",
+     "kind": "target"
+    },
+    {
+     "square": "d1",
+     "kind": "target"
+    }
+   ]
+  },
+  "32": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♘e3"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "g3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g2",
+     "to": "g3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "33": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♝e6"
+     }
+    },
+    {
+     "key": "coach.best.capture.v2",
+     "params": {
+      "move": "♜xe3",
+      "piece": "♘e3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e8",
+     "to": "e3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "46": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♘e5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "f5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f4",
+     "to": "f5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "50": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "b4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♖f2"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a2",
+     "to": "f2",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "61": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♜b8"
+     }
+    },
+    {
+     "key": "coach.best.pos_open_file.v1",
+     "params": {
+      "move": "♜a8",
+      "file": "a"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e8",
+     "to": "a8",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "62": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♕b4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♕d6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a3",
+     "to": "d6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "67": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "b4"
+     }
+    },
+    {
+     "key": "coach.threat.hanging.v1",
+     "params": {
+      "piece": "♟b4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♛c8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b3",
+     "to": "b4",
+     "kind": "threat"
+    },
+    {
+     "from": "c6",
+     "to": "c8",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "b4",
+     "kind": "target"
+    }
+   ]
+  },
+  "76": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♖c1"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♔g1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f2",
+     "to": "g1",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "77": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♝d7"
+     }
+    },
+    {
+     "key": "coach.best.pos_outpost.v1",
+     "params": {
+      "move": "♞e4+",
+      "square": "e4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f6",
+     "to": "e4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "87": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♜f8"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♞e6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g5",
+     "to": "e6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "89": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♞f3"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♝f3+"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g4",
+     "to": "f3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "90": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♗e2"
+     }
+    },
+    {
+     "key": "coach.best.pin_absolute.v1",
+     "params": {
+      "move": "♕b3",
+      "attacker": "♕b3",
+      "front": "♟d5",
+      "behind": "♚g8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b2",
+     "to": "b3",
+     "kind": "best"
+    },
+    {
+     "from": "b3",
+     "to": "g8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "d5",
+     "kind": "target"
+    },
+    {
+     "square": "g8",
+     "kind": "target"
+    }
+   ]
+  },
+  "93": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♜xd4"
+     }
+    },
+    {
+     "key": "coach.best.capture.v1",
+     "params": {
+      "move": "♝xf3+",
+      "piece": "♗f3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g4",
+     "to": "f3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "95": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v1",
+     "params": {
+      "attacker": "♜g4",
+      "front": "♙g3",
+      "behind": "♔g2"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g4",
+     "to": "g2",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "g3",
+     "kind": "target"
+    },
+    {
+     "square": "g2",
+     "kind": "target"
+    }
+   ]
+  },
+  "97": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♛g6"
+     }
+    },
+    {
+     "key": "coach.best.pos_open_file.v2",
+     "params": {
+      "move": "♜e4",
+      "file": "e"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g4",
+     "to": "e4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "98": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v2",
+     "params": {
+      "move": "b6"
+     }
+    },
+    {
+     "key": "coach.threat.hanging.v1",
+     "params": {
+      "piece": "♙b6"
+     }
+    },
+    {
+     "key": "coach.missed.hanging.v2",
+     "params": {
+      "piece": "♟d5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g6",
+     "to": "b6",
+     "kind": "threat"
+    },
+    {
+     "from": "e5",
+     "to": "d5",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "b6",
+     "kind": "target"
+    },
+    {
+     "square": "d5",
+     "kind": "target"
+    }
+   ]
+  },
+  "99": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v1",
+     "params": {
+      "move": "♜b4"
+     }
+    },
+    {
+     "key": "coach.missed.hanging.v2",
+     "params": {
+      "piece": "♙b6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g6",
+     "to": "b6",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "b6",
+     "kind": "target"
+    }
+   ]
+  },
+  "103": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♛c2+"
+     }
+    },
+    {
+     "key": "coach.missed.hanging.v2",
+     "params": {
+      "piece": "♙b6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g6",
+     "to": "b6",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "b6",
+     "kind": "target"
+    }
+   ]
+  },
+  "105": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v2",
+     "params": {
+      "move": "♜b2"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♛e4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c2",
+     "to": "e4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  }
+ },
+ "stops": [
+  {
+   "ply": 94,
+   "move": "f3g4",
+   "best_cp": 364,
+   "gap_cp": 335,
+   "lines": [
+    [
+     "f3g4",
+     364
+    ],
+    [
+     "b2c3",
+     29
+    ],
+    [
+     "f1f2",
+     10
+    ]
+   ]
+  },
+  {
+   "ply": 96,
+   "move": "b2e5",
+   "best_cp": 422,
+   "gap_cp": 391,
+   "lines": [
+    [
+     "b2e5",
+     422
+    ],
+    [
+     "b2b3",
+     31
+    ],
+    [
+     "b2a3",
+     28
+    ]
+   ]
+  },
+  {
+   "ply": 100,
+   "move": "e5d5",
+   "best_cp": 503,
+   "gap_cp": 494,
+   "lines": [
+    [
+     "e5d5",
+     503
+    ],
+    [
+     "b6b7",
+     9
+    ],
+    [
+     "f1f5",
+     5
+    ]
+   ]
+  },
+  {
+   "ply": 102,
+   "move": "f1f8",
+   "best_cp": 537,
+   "gap_cp": 511,
+   "lines": [
+    [
+     "f1f8",
+     537
+    ],
+    [
+     "b6b7",
+     26
+    ],
+    [
+     "h4h5",
+     24
+    ]
+   ]
+  },
+  {
+   "ply": 104,
+   "move": "g2h3",
+   "best_cp": 797,
+   "gap_cp": 365,
+   "lines": [
+    [
+     "g2h3",
+     797
+    ],
+    [
+     "g2g1",
+     432
+    ],
+    [
+     "f8f2",
+     16
+    ]
+   ]
+  },
+  {
+   "ply": 106,
+   "move": "d5g8",
+   "best_cp": 99994,
+   "gap_cp": 99989,
+   "lines": [
+    [
+     "d5g8",
+     99994
+    ],
+    [
+     "d5f5",
+     5
+    ],
+    [
+     "h3g4",
+     1
+    ]
+   ]
+  },
+  {
+   "ply": 110,
+   "move": "g8f7",
+   "best_cp": 99996,
+   "gap_cp": 99996,
+   "lines": [
+    [
+     "g8f7",
+     99996
+    ],
+    [
+     "g8d5",
+     0
+    ],
+    [
+     "g3g4",
+     0
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Французская защита, вариант Тарраша (3.Nd2). Белые долго сохраняют небольшой перевес и ждут своего момента.",
+  "uk": "Французький захист, варіант Тарраша (3.Nd2). Білі довго зберігають невелику перевагу й чекають свого моменту.",
+  "en": "A French Defence, Tarrasch Variation (3.Nd2). White keeps a small edge for a long time and waits for the right moment."
+ },
+ "summary": {
+  "ru": "К 45-му ходу перевес вырос, а дальше ферзь и ладья белых гонят короля чёрных: 51.Qxd5+, 52.Rf8, 54.Qg8+, 56.Qf7+. Урок: ферзь с ладьёй особенно сильны против открытого короля — шахами его выгоняют туда, где ждёт мат.",
+  "uk": "До 45-го ходу перевага зросла, а далі ферзь і тура білих женуть короля чорних: 51.Qxd5+, 52.Rf8, 54.Qg8+, 56.Qf7+. Урок: ферзь із турою особливо сильні проти відкритого короля — шахами його виганяють туди, де чекає мат.",
+  "en": "By move 45 the advantage has grown, and then White's queen and rook hunt the black king: 51.Qxd5+, 52.Rf8, 54.Qg8+, 56.Qf7+. Lesson: queen and rook are especially strong against an exposed king — checks drive it to where mate is waiting."
+ }
+}

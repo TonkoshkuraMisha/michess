@@ -1,0 +1,561 @@
+{
+ "id": "spassky-stein-1964",
+ "white": "Spassky, Boris V",
+ "black": "Stein, Leonid",
+ "event": "URS-ch31 playoff-1pl",
+ "year": "1964",
+ "result": "0-1",
+ "moves": [
+  "d2d4",
+  "g8f6",
+  "c2c4",
+  "g7g6",
+  "b1c3",
+  "d7d5",
+  "c4d5",
+  "f6d5",
+  "e2e4",
+  "d5c3",
+  "b2c3",
+  "f8g7",
+  "f1c4",
+  "e8g8",
+  "g1e2",
+  "b8c6",
+  "h2h4",
+  "c6a5",
+  "c4b3",
+  "c7c5",
+  "h4h5",
+  "a5b3",
+  "a2b3",
+  "c5d4",
+  "c3d4",
+  "c8d7",
+  "h5g6",
+  "h7g6",
+  "d1d3",
+  "d8b6",
+  "c1d2",
+  "f8c8",
+  "a1a5",
+  "a7a6",
+  "a5c5",
+  "c8c5",
+  "d4c5",
+  "b6c7",
+  "d2c3",
+  "e7e5",
+  "b3b4",
+  "a8d8",
+  "d3g3",
+  "d7b5",
+  "f2f4",
+  "c7d7",
+  "e1f2",
+  "b5e2",
+  "f2e2",
+  "a6a5",
+  "e2f2",
+  "a5b4",
+  "c3e5",
+  "g7e5",
+  "f4e5",
+  "d7d4",
+  "f2f3",
+  "d4d3",
+  "f3f4",
+  "d3d2",
+  "f4g4",
+  "d8d4",
+  "h1f1",
+  "d4e4",
+  "g4h3",
+  "d2h6"
+ ],
+ "evals": [
+  23,
+  19,
+  18,
+  33,
+  33,
+  34,
+  33,
+  33,
+  33,
+  32,
+  32,
+  46,
+  27,
+  29,
+  31,
+  35,
+  16,
+  16,
+  12,
+  51,
+  45,
+  47,
+  56,
+  56,
+  56,
+  63,
+  21,
+  8,
+  -6,
+  -11,
+  -39,
+  -57,
+  -79,
+  -68,
+  -89,
+  -70,
+  -70,
+  -58,
+  -62,
+  -62,
+  -119,
+  -51,
+  -184,
+  -244,
+  -325,
+  -456,
+  -382,
+  -403,
+  -486,
+  -450,
+  -601,
+  -625,
+  -616,
+  -714,
+  -654,
+  -554,
+  -591,
+  -573,
+  -668,
+  -683,
+  -693,
+  -683,
+  -849,
+  -840,
+  -99998,
+  -99999
+ ],
+ "comments": {
+  "36": {
+   "comment": [
+    {
+     "key": "coach.good.discovered_attack.v1",
+     "params": {
+      "attacker": "♕d3",
+      "target": "♝d7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d3",
+     "to": "d7",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "d7",
+     "kind": "target"
+    }
+   ]
+  },
+  "40": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "b4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♗b4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c3",
+     "to": "b4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "41": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♜d8"
+     }
+    },
+    {
+     "key": "coach.best.skewer.v2",
+     "params": {
+      "move": "♝b5",
+      "attacker": "♝b5",
+      "front": "♕d3",
+      "behind": "♘e2"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d7",
+     "to": "b5",
+     "kind": "best"
+    },
+    {
+     "from": "b5",
+     "to": "e2",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "d3",
+     "kind": "target"
+    },
+    {
+     "square": "e2",
+     "kind": "target"
+    }
+   ]
+  },
+  "42": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♕g3"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♗d2"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c3",
+     "to": "d2",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "44": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "f4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♕e3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g3",
+     "to": "e3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "50": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♔f2"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♕h3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g3",
+     "to": "h3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "55": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♛d4+"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♛d2+"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d7",
+     "to": "d2",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "57": {
+   "comment": [
+    {
+     "key": "coach.good.skewer.v1",
+     "params": {
+      "attacker": "♛d3",
+      "front": "♔f3",
+      "behind": "♕g3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d3",
+     "to": "g3",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "f3",
+     "kind": "target"
+    },
+    {
+     "square": "g3",
+     "kind": "target"
+    }
+   ]
+  },
+  "61": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v1",
+     "params": {
+      "attacker": "♜d4",
+      "front": "♙e4",
+      "behind": "♔g4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d4",
+     "to": "g4",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "e4",
+     "kind": "target"
+    },
+    {
+     "square": "g4",
+     "kind": "target"
+    }
+   ]
+  },
+  "62": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♖f1"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♕f3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g3",
+     "to": "f3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "64": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v1",
+     "params": {
+      "move": "♔h3"
+     }
+    },
+    {
+     "key": "coach.threat.mate_in.v2",
+     "params": {
+      "n": 2,
+      "move": "♛h6+"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♖f4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d2",
+     "to": "h6",
+     "kind": "threat"
+    },
+    {
+     "from": "f1",
+     "to": "f4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  }
+ },
+ "stops": [
+  {
+   "ply": 47,
+   "move": "b5e2",
+   "best_cp": 502,
+   "gap_cp": 201,
+   "lines": [
+    [
+     "b5e2",
+     502
+    ],
+    [
+     "e5f4",
+     301
+    ],
+    [
+     "a6a5",
+     275
+    ]
+   ]
+  },
+  {
+   "ply": 51,
+   "move": "a5b4",
+   "best_cp": 660,
+   "gap_cp": 270,
+   "lines": [
+    [
+     "a5b4",
+     660
+    ],
+    [
+     "d7a4",
+     390
+    ],
+    [
+     "e5f4",
+     370
+    ]
+   ]
+  },
+  {
+   "ply": 57,
+   "move": "d4d3",
+   "best_cp": 701,
+   "gap_cp": 217,
+   "lines": [
+    [
+     "d4d3",
+     701
+    ],
+    [
+     "d4c3",
+     484
+    ],
+    [
+     "d8a8",
+     381
+    ]
+   ]
+  },
+  {
+   "ply": 59,
+   "move": "d3d2",
+   "best_cp": 743,
+   "gap_cp": 547,
+   "lines": [
+    [
+     "d3d2",
+     743
+    ],
+    [
+     "d3e2",
+     196
+    ],
+    [
+     "d3g3",
+     37
+    ]
+   ]
+  },
+  {
+   "ply": 61,
+   "move": "d8d4",
+   "best_cp": 828,
+   "gap_cp": 315,
+   "lines": [
+    [
+     "d8d4",
+     828
+    ],
+    [
+     "d2d7",
+     513
+    ],
+    [
+     "d2d4",
+     62
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Защита Грюнфельда, разменный вариант, — партия дополнительного матча чемпионата СССР. После 22.Qg3 инициатива переходит к чёрным.",
+  "uk": "Захист Грюнфельда, розмінний варіант, — партія додаткового матчу чемпіонату СРСР. Після 22.Qg3 ініціатива переходить до чорних.",
+  "en": "A Grünfeld Defence, Exchange Variation, from a playoff match of the USSR Championship. After 22.Qg3 the initiative passes to Black."
+ },
+ "summary": {
+  "ru": "Чёрные начинают охоту на короля: шахи 29...Qd3+ и 30...Qd2+, ладья подключается (31...Rd4), и белый король выходит под удар (33.Kh3). Урок: король без пешечного прикрытия становится мишенью — ферзь с ладьёй гонят его шахами.",
+  "uk": "Чорні починають полювання на короля: шахи 29...Qd3+ і 30...Qd2+, тура підключається (31...Rd4), і білий король виходить під удар (33.Kh3). Урок: король без пішакового прикриття стає мішенню — ферзь із турою женуть його шахами.",
+  "en": "Black starts a king hunt: the checks 29...Qd3+ and 30...Qd2+, the rook joins in (31...Rd4), and the white king is driven into the open (33.Kh3). Lesson: a king without pawn cover becomes a target — queen and rook chase it with checks."
+ }
+}

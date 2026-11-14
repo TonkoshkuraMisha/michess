@@ -1,0 +1,690 @@
+{
+ "id": "rombaldoni-ding-liren-2016",
+ "white": "Rombaldoni,Ax",
+ "black": "Ding Liren",
+ "event": "42nd Olympiad 2016",
+ "year": "2016",
+ "result": "0-1",
+ "moves": [
+  "d2d4",
+  "d7d5",
+  "c2c4",
+  "c7c6",
+  "g1f3",
+  "g8f6",
+  "b1c3",
+  "e7e6",
+  "g2g3",
+  "d5c4",
+  "f1g2",
+  "b8d7",
+  "e1g1",
+  "b7b5",
+  "e2e4",
+  "b5b4",
+  "e4e5",
+  "f6d5",
+  "c3e4",
+  "d7b6",
+  "f1e1",
+  "a7a5",
+  "e4c5",
+  "f8c5",
+  "d4c5",
+  "b6d7",
+  "f3d2",
+  "c8a6",
+  "d1g4",
+  "e8g8",
+  "d2c4",
+  "f7f5",
+  "g4d4",
+  "a6c4",
+  "d4c4",
+  "a8b8",
+  "c1d2",
+  "d8e7",
+  "a1c1",
+  "b8b5",
+  "c4d4",
+  "f8c8",
+  "d2e3",
+  "d5e3",
+  "d4e3",
+  "b5c5",
+  "c1c5",
+  "e7c5",
+  "e3d2",
+  "c5e7",
+  "d2d4",
+  "c6c5",
+  "d4c4",
+  "c8c7",
+  "f2f4",
+  "d7f8",
+  "e1d1",
+  "g7g5",
+  "g3g4",
+  "g8g7",
+  "g4f5",
+  "e6f5",
+  "d1d6",
+  "f8g6",
+  "d6f6",
+  "g6f4",
+  "f6f5",
+  "c7d7",
+  "g2f3",
+  "h7h6",
+  "h2h4",
+  "d7d4",
+  "c4c2",
+  "g5h4",
+  "c2h2",
+  "f4e6",
+  "h2g2",
+  "e6g5",
+  "f3h5",
+  "d4d3",
+  "g2c6",
+  "d3g3",
+  "g1f1",
+  "e7d8",
+  "c6f6",
+  "d8f6",
+  "e5f6",
+  "g7g8",
+  "f5c5",
+  "g5h7",
+  "c5c8",
+  "h7f8",
+  "c8c4",
+  "h4h3",
+  "c4h4",
+  "f8h7",
+  "f6f7",
+  "g8g7",
+  "f1f2",
+  "g3g2",
+  "f2f1",
+  "g2b2",
+  "h4h3",
+  "b2a2",
+  "h3g3",
+  "h7g5",
+  "g3d3",
+  "a2h2"
+ ],
+ "evals": [
+  23,
+  23,
+  25,
+  35,
+  30,
+  29,
+  25,
+  22,
+  14,
+  14,
+  14,
+  17,
+  10,
+  10,
+  10,
+  49,
+  19,
+  16,
+  12,
+  32,
+  26,
+  16,
+  -1,
+  47,
+  39,
+  52,
+  12,
+  22,
+  17,
+  17,
+  17,
+  12,
+  -3,
+  6,
+  6,
+  23,
+  13,
+  9,
+  11,
+  13,
+  15,
+  -14,
+  -24,
+  -22,
+  -35,
+  -33,
+  -38,
+  -40,
+  -40,
+  -15,
+  -10,
+  -10,
+  -10,
+  -13,
+  -48,
+  -80,
+  -96,
+  -96,
+  -91,
+  -60,
+  -59,
+  -56,
+  -56,
+  -50,
+  -217,
+  -126,
+  -143,
+  -138,
+  -172,
+  -133,
+  -142,
+  -143,
+  -351,
+  -352,
+  -426,
+  -270,
+  -271,
+  -271,
+  -271,
+  0,
+  0,
+  0,
+  0,
+  0,
+  -8,
+  -8,
+  -8,
+  -14,
+  -11,
+  -6,
+  -14,
+  -13,
+  -45,
+  -41,
+  -25,
+  -17,
+  -136,
+  -79,
+  -212,
+  -322,
+  -316,
+  -343,
+  -362,
+  -380,
+  -375,
+  -405,
+  -405,
+  -402
+ ],
+ "comments": {
+  "23": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♝xc5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♞d7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b6",
+     "to": "d7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "52": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v1",
+     "params": {
+      "attacker": "♕c4",
+      "front": "♟e6",
+      "behind": "♚g8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c4",
+     "to": "g8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "e6",
+     "kind": "target"
+    },
+    {
+     "square": "g8",
+     "kind": "target"
+    }
+   ]
+  },
+  "64": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♖f6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♕d3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c4",
+     "to": "d3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "65": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♞xf4"
+     }
+    },
+    {
+     "key": "coach.missed.hanging.v2",
+     "params": {
+      "piece": "♙f4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g5",
+     "to": "f4",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "f4",
+     "kind": "target"
+    }
+   ]
+  },
+  "72": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v2",
+     "params": {
+      "move": "♕c2"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♕a6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c4",
+     "to": "a6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "74": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♕h2"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♕b3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c2",
+     "to": "b3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "75": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♞e6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♛d8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e7",
+     "to": "d8",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "79": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v2",
+     "params": {
+      "move": "♜d3"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♛d7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e7",
+     "to": "d7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "84": {
+   "comment": [
+    {
+     "key": "coach.good.fork.v1",
+     "params": {
+      "attacker": "♕f6",
+      "target1": "♚g7",
+      "target2": "♛d8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f6",
+     "to": "g7",
+     "kind": "idea"
+    },
+    {
+     "from": "f6",
+     "to": "d8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "g7",
+     "kind": "target"
+    },
+    {
+     "square": "d8",
+     "kind": "target"
+    }
+   ]
+  },
+  "96": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "f7+"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♗g4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "h5",
+     "to": "g4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "97": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♚g7"
+     }
+    },
+    {
+     "key": "coach.best.pos_king_active.v2",
+     "params": {
+      "move": "♚f8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g8",
+     "to": "f8",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "98": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♔f2"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "a3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a2",
+     "to": "a3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  }
+ },
+ "stops": [
+  {
+   "ply": 25,
+   "move": "b6d7",
+   "best_cp": -55,
+   "gap_cp": 561,
+   "lines": [
+    [
+     "b6d7",
+     -55
+    ],
+    [
+     "e8g8",
+     -616
+    ],
+    [
+     "c8a6",
+     -617
+    ]
+   ]
+  },
+  {
+   "ply": 77,
+   "move": "e6g5",
+   "best_cp": 311,
+   "gap_cp": 372,
+   "lines": [
+    [
+     "e6g5",
+     311
+    ],
+    [
+     "g7h8",
+     -61
+    ],
+    [
+     "g7h7",
+     -287
+    ]
+   ]
+  },
+  {
+   "ply": 83,
+   "move": "e7d8",
+   "best_cp": 0,
+   "gap_cp": 163,
+   "lines": [
+    [
+     "e7d8",
+     0
+    ],
+    [
+     "b4b3",
+     -163
+    ],
+    [
+     "a5a4",
+     -490
+    ]
+   ]
+  },
+  {
+   "ply": 85,
+   "move": "d8f6",
+   "best_cp": 16,
+   "gap_cp": 100011,
+   "lines": [
+    [
+     "d8f6",
+     16
+    ],
+    [
+     "g7g8",
+     -99995
+    ],
+    [
+     "g7h7",
+     -99996
+    ]
+   ]
+  },
+  {
+   "ply": 99,
+   "move": "g3g2",
+   "best_cp": 350,
+   "gap_cp": 318,
+   "lines": [
+    [
+     "g3g2",
+     350
+    ],
+    [
+     "g3d3",
+     32
+    ],
+    [
+     "g3g5",
+     18
+    ]
+   ]
+  },
+  {
+   "ply": 101,
+   "move": "g2b2",
+   "best_cp": 334,
+   "gap_cp": 188,
+   "lines": [
+    [
+     "g2b2",
+     334
+    ],
+    [
+     "h7g5",
+     146
+    ],
+    [
+     "g2d2",
+     112
+    ]
+   ]
+  },
+  {
+   "ply": 105,
+   "move": "h7g5",
+   "best_cp": 420,
+   "gap_cp": 405,
+   "lines": [
+    [
+     "h7g5",
+     420
+    ],
+    [
+     "g7f6",
+     15
+    ],
+    [
+     "g7f8",
+     -421
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Славянская защита с 5.g3 и взятием 5...dxc4, партия шахматной олимпиады 2016 года. Позиция долго остаётся равной.",
+  "uk": "Слов'янський захист із 5.g3 і взяттям 5...dxc4, партія шахової олімпіади 2016 року. Позиція довго залишається рівною.",
+  "en": "A Slav Defence with 5.g3 and 5...dxc4, from the 2016 Chess Olympiad. The position stays level for a long time."
+ },
+ "summary": {
+  "ru": "После 37.Qc2 чёрные получают шанс и используют его: 43...Qxf6, а затем ладья вторгается на вторую горизонталь — 50...Rg2+, 51...Rxb2. Урок: ладья на предпоследней горизонтали соперника забирает пешки и стесняет его короля.",
+  "uk": "Після 37.Qc2 чорні отримують шанс і використовують його: 43...Qxf6, а потім тура вторгається на другу горизонталь — 50...Rg2+, 51...Rxb2. Урок: тура на передостанній горизонталі суперника забирає пішаків і обмежує його короля.",
+  "en": "After 37.Qc2 Black gets a chance and takes it: 43...Qxf6, and then the rook invades the second rank — 50...Rg2+, 51...Rxb2. Lesson: a rook on the opponent's second rank collects pawns and confines the king."
+ }
+}

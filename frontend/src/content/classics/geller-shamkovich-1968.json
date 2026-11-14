@@ -1,0 +1,626 @@
+{
+ "id": "geller-shamkovich-1968",
+ "white": "Geller, Efim P",
+ "black": "Shamkovich, Leonid",
+ "event": "URS-chT",
+ "year": "1968",
+ "result": "1-0",
+ "moves": [
+  "e2e4",
+  "e7e5",
+  "g1f3",
+  "b8c6",
+  "f1b5",
+  "d7d6",
+  "d2d4",
+  "e5d4",
+  "f3d4",
+  "c8d7",
+  "e1g1",
+  "g8f6",
+  "b1c3",
+  "f8e7",
+  "c1f4",
+  "e8g8",
+  "b5c6",
+  "b7c6",
+  "e4e5",
+  "f6e8",
+  "d1f3",
+  "d6d5",
+  "a1d1",
+  "g7g6",
+  "f4h6",
+  "e8g7",
+  "f1e1",
+  "a8b8",
+  "b2b3",
+  "c6c5",
+  "d4e2",
+  "c7c6",
+  "e2f4",
+  "d7e6",
+  "c3a4",
+  "d8a5",
+  "c2c4",
+  "b8d8",
+  "c4d5",
+  "c6d5",
+  "a4c3",
+  "d5d4",
+  "c3e4",
+  "a5a2",
+  "e4f6",
+  "g8h8",
+  "f4e6",
+  "f7e6",
+  "d1a1",
+  "a2c2",
+  "h6g7",
+  "h8g7",
+  "a1a7",
+  "f8f7",
+  "f3h3",
+  "h7h5",
+  "h3e6",
+  "c2f5",
+  "a7e7",
+  "f5e6",
+  "e7e6",
+  "f7b7",
+  "f6e4",
+  "b7b3",
+  "e4c5",
+  "b3c3",
+  "c5e4"
+ ],
+ "evals": [
+  27,
+  39,
+  28,
+  34,
+  29,
+  52,
+  54,
+  57,
+  61,
+  53,
+  52,
+  61,
+  62,
+  65,
+  30,
+  20,
+  23,
+  29,
+  1,
+  74,
+  36,
+  33,
+  33,
+  36,
+  37,
+  36,
+  35,
+  35,
+  24,
+  29,
+  28,
+  28,
+  22,
+  76,
+  34,
+  58,
+  6,
+  71,
+  41,
+  291,
+  302,
+  402,
+  208,
+  459,
+  537,
+  573,
+  380,
+  645,
+  758,
+  667,
+  749,
+  750,
+  751,
+  738,
+  732,
+  737,
+  749,
+  770,
+  739,
+  745,
+  740,
+  758,
+  761,
+  754,
+  751,
+  790,
+  800
+ ],
+ "comments": {
+  "19": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♞e8"
+     }
+    },
+    {
+     "key": "coach.best.capture.v2",
+     "params": {
+      "move": "dxe5",
+      "piece": "♙e5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d6",
+     "to": "e5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "33": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♝e6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♜e8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f8",
+     "to": "e8",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "36": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "c4"
+     }
+    },
+    {
+     "key": "coach.threat.hanging.v2",
+     "params": {
+      "piece": "♙c4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "h3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d5",
+     "to": "c4",
+     "kind": "threat"
+    },
+    {
+     "from": "h2",
+     "to": "h3",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "c4",
+     "kind": "target"
+    }
+   ]
+  },
+  "37": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♜bd8"
+     }
+    },
+    {
+     "key": "coach.missed.hanging.v1",
+     "params": {
+      "piece": "♙c4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d5",
+     "to": "c4",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "c4",
+     "kind": "target"
+    }
+   ]
+  },
+  "39": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v2",
+     "params": {
+      "move": "cxd5"
+     }
+    },
+    {
+     "key": "coach.best.capture.v1",
+     "params": {
+      "move": "♝xd5",
+      "piece": "♙d5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e6",
+     "to": "d5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "41": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "d4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♝g4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e6",
+     "to": "g4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "42": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♘e4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♘cd5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c3",
+     "to": "d5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "43": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v1",
+     "params": {
+      "move": "♛xa2"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♝c8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e6",
+     "to": "c8",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "46": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♘xe6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♕b7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f3",
+     "to": "b7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "47": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v2",
+     "params": {
+      "move": "fxe6"
+     }
+    },
+    {
+     "key": "coach.missed.hanging.v2",
+     "params": {
+      "piece": "♘e6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g7",
+     "to": "e6",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "e6",
+     "kind": "target"
+    }
+   ]
+  },
+  "52": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v1",
+     "params": {
+      "attacker": "♖a7",
+      "front": "♝e7",
+      "behind": "♚g7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a7",
+     "to": "g7",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "e7",
+     "kind": "target"
+    },
+    {
+     "square": "g7",
+     "kind": "target"
+    }
+   ]
+  },
+  "53": {
+   "comment": [
+    {
+     "key": "coach.good.pin_relative.v2",
+     "params": {
+      "attacker": "♜f7",
+      "front": "♘f6",
+      "behind": "♕f3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f7",
+     "to": "f3",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "f6",
+     "kind": "target"
+    },
+    {
+     "square": "f3",
+     "kind": "target"
+    }
+   ]
+  }
+ },
+ "stops": [
+  {
+   "ply": 40,
+   "move": "a4c3",
+   "best_cp": 327,
+   "gap_cp": 263,
+   "lines": [
+    [
+     "a4c3",
+     327
+    ],
+    [
+     "f3c3",
+     64
+    ],
+    [
+     "h2h4",
+     54
+    ]
+   ]
+  },
+  {
+   "ply": 48,
+   "move": "d1a1",
+   "best_cp": 625,
+   "gap_cp": 478,
+   "lines": [
+    [
+     "d1a1",
+     625
+    ],
+    [
+     "h6g5",
+     147
+    ],
+    [
+     "f3d3",
+     133
+    ]
+   ]
+  },
+  {
+   "ply": 50,
+   "move": "h6g7",
+   "best_cp": 647,
+   "gap_cp": 367,
+   "lines": [
+    [
+     "h6g7",
+     647
+    ],
+    [
+     "e1c1",
+     280
+    ],
+    [
+     "a1a7",
+     277
+    ]
+   ]
+  },
+  {
+   "ply": 52,
+   "move": "a1a7",
+   "best_cp": 667,
+   "gap_cp": 249,
+   "lines": [
+    [
+     "a1a7",
+     667
+    ],
+    [
+     "f3h3",
+     418
+    ],
+    [
+     "h2h4",
+     25
+    ]
+   ]
+  },
+  {
+   "ply": 54,
+   "move": "f3h3",
+   "best_cp": 673,
+   "gap_cp": 505,
+   "lines": [
+    [
+     "f3h3",
+     673
+    ],
+    [
+     "e1f1",
+     168
+    ],
+    [
+     "f3g4",
+     0
+    ]
+   ]
+  },
+  {
+   "ply": 56,
+   "move": "h3e6",
+   "best_cp": 714,
+   "gap_cp": 649,
+   "lines": [
+    [
+     "h3e6",
+     714
+    ],
+    [
+     "h3h4",
+     65
+    ],
+    [
+     "e1f1",
+     2
+    ]
+   ]
+  },
+  {
+   "ply": 58,
+   "move": "a7e7",
+   "best_cp": 716,
+   "gap_cp": 189,
+   "lines": [
+    [
+     "a7e7",
+     716
+    ],
+    [
+     "e6f5",
+     527
+    ],
+    [
+     "f6h5",
+     248
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Испанская партия, защита Стейница (3...d6). После 20...cxd5 белые получают ощутимый перевес.",
+  "uk": "Іспанська партія, захист Стейніца (3...d6). Після 20...cxd5 білі отримують відчутну перевагу.",
+  "en": "A Ruy Lopez, Steinitz Defence (3...d6). After 20...cxd5 White gets a clear advantage."
+ },
+ "summary": {
+  "ru": "Взятие 26.Bxg7+ с шахом ломает прикрытие короля, а затем ладья и ферзь собирают материал: 27.Rxa7, 29.Qxe6, 30.Rxe7. Урок: взятие с шахом рядом с королём часто вскрывает его — посчитайте, не выигрываете ли вы после этого материал по всей доске.",
+  "uk": "Взяття 26.Bxg7+ із шахом ламає прикриття короля, а потім тура й ферзь збирають матеріал: 27.Rxa7, 29.Qxe6, 30.Rxe7. Урок: взяття з шахом поруч із королем часто розкриває його — порахуйте, чи не виграєте ви після цього матеріал по всій дошці.",
+  "en": "The capture 26.Bxg7+ with check breaks the king's cover, and then rook and queen collect material: 27.Rxa7, 29.Qxe6, 30.Rxe7. Lesson: a capture with check next to the king often exposes it — calculate whether you then win material all over the board."
+ }
+}

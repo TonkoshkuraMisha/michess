@@ -1,0 +1,1072 @@
+{
+ "id": "agdestein-spassky-1983",
+ "white": "Agdestein, Simen",
+ "black": "Spassky, Boris V",
+ "event": "Gjovik",
+ "year": "1983",
+ "result": "1-0",
+ "moves": [
+  "d2d4",
+  "g8f6",
+  "c2c4",
+  "e7e6",
+  "g1f3",
+  "d7d5",
+  "b1c3",
+  "f8e7",
+  "c1f4",
+  "e8g8",
+  "e2e3",
+  "b7b6",
+  "a1c1",
+  "c7c5",
+  "c4d5",
+  "f6d5",
+  "c3d5",
+  "e6d5",
+  "f1d3",
+  "b8d7",
+  "e1g1",
+  "c8b7",
+  "d1c2",
+  "g7g6",
+  "d4c5",
+  "b6c5",
+  "f1d1",
+  "d7f6",
+  "f4h6",
+  "d8b6",
+  "h6f8",
+  "e7f8",
+  "d3e2",
+  "a7a5",
+  "f3d2",
+  "a5a4",
+  "e2f3",
+  "b6e6",
+  "d1e1",
+  "f6d7",
+  "e3e4",
+  "d7e5",
+  "f3e2",
+  "f8h6",
+  "c1d1",
+  "d5e4",
+  "d2e4",
+  "e6f5",
+  "e2f1",
+  "h6f8",
+  "c2e2",
+  "a8e8",
+  "e4g3",
+  "f5f4",
+  "e2c2",
+  "h7h5",
+  "e1e3",
+  "c5c4",
+  "d1e1",
+  "f8c5",
+  "e3e2",
+  "g8g7",
+  "c2c1",
+  "f4g4",
+  "e2e4",
+  "b7e4",
+  "e1e4",
+  "g4e6",
+  "c1g5",
+  "f7f5",
+  "f1c4",
+  "c5f2",
+  "g1f1",
+  "f2g3",
+  "c4e6",
+  "f5e4",
+  "g5g3",
+  "e8e6",
+  "g3c3",
+  "g7f7",
+  "c3d4",
+  "e5g4",
+  "d4a4",
+  "g4e3",
+  "f1f2",
+  "e3f5",
+  "a4c4",
+  "e4e3",
+  "f2e2",
+  "f7f6",
+  "a2a4",
+  "e6d6",
+  "a4a5",
+  "d6d2",
+  "e2e1",
+  "f6g5",
+  "c4b5",
+  "g5f4",
+  "a5a6",
+  "f5d4",
+  "b5c4",
+  "f4e5",
+  "a6a7",
+  "d2b2",
+  "c4c5"
+ ],
+ "evals": [
+  23,
+  19,
+  18,
+  26,
+  23,
+  14,
+  14,
+  27,
+  32,
+  34,
+  30,
+  30,
+  24,
+  20,
+  -9,
+  -5,
+  0,
+  0,
+  -14,
+  16,
+  13,
+  45,
+  35,
+  42,
+  29,
+  25,
+  25,
+  142,
+  179,
+  174,
+  162,
+  184,
+  171,
+  201,
+  201,
+  219,
+  156,
+  172,
+  120,
+  133,
+  130,
+  229,
+  133,
+  180,
+  187,
+  314,
+  254,
+  272,
+  244,
+  253,
+  252,
+  227,
+  241,
+  240,
+  184,
+  272,
+  234,
+  227,
+  -13,
+  -13,
+  -222,
+  176,
+  -7,
+  671,
+  -15,
+  6,
+  -15,
+  -15,
+  10,
+  327,
+  453,
+  460,
+  470,
+  473,
+  466,
+  437,
+  463,
+  432,
+  353,
+  434,
+  433,
+  467,
+  446,
+  446,
+  407,
+  421,
+  415,
+  385,
+  379,
+  413,
+  379,
+  463,
+  486,
+  520,
+  547,
+  550,
+  505,
+  694,
+  726,
+  825,
+  823,
+  839,
+  820,
+  1097,
+  1276
+ ],
+ "comments": {
+  "27": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♞f6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♛b6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d8",
+     "to": "b6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "36": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♗f3"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♘b1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d2",
+     "to": "b1",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "38": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♖e1"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♘b1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d2",
+     "to": "b1",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "41": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♞e5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "d4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d5",
+     "to": "d4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "42": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♗e2"
+     }
+    },
+    {
+     "key": "coach.best.pin_relative.v2",
+     "params": {
+      "move": "exd5",
+      "attacker": "♖e1",
+      "front": "♞e5",
+      "behind": "♛e6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e4",
+     "to": "d5",
+     "kind": "best"
+    },
+    {
+     "from": "e1",
+     "to": "e6",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "e5",
+     "kind": "target"
+    },
+    {
+     "square": "e6",
+     "kind": "target"
+    }
+   ]
+  },
+  "43": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♝h6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "c4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c5",
+     "to": "c4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "45": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "dxe4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "d4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d5",
+     "to": "d4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "54": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♕c2"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♘e4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g3",
+     "to": "e4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "55": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "h5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "c4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c5",
+     "to": "c4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "58": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v2",
+     "params": {
+      "move": "♖de1"
+     }
+    },
+    {
+     "key": "coach.best.capture.v2",
+     "params": {
+      "move": "♗xc4",
+      "piece": "♟c4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f1",
+     "to": "c4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "60": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v2",
+     "params": {
+      "move": "♖3e2"
+     }
+    },
+    {
+     "key": "coach.best.capture.v2",
+     "params": {
+      "move": "♖xe5",
+      "piece": "♞e5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e3",
+     "to": "e5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "61": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v2",
+     "params": {
+      "move": "♚g7"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "h4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "h5",
+     "to": "h4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "62": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♕c1"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♕f5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c2",
+     "to": "f5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "63": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v1",
+     "params": {
+      "move": "♛g4"
+     }
+    },
+    {
+     "key": "coach.threat.hanging.v2",
+     "params": {
+      "piece": "♞e5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♛f6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e2",
+     "to": "e5",
+     "kind": "threat"
+    },
+    {
+     "from": "f4",
+     "to": "f6",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "e5",
+     "kind": "target"
+    }
+   ]
+  },
+  "64": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v2",
+     "params": {
+      "move": "♖e4"
+     }
+    },
+    {
+     "key": "coach.threat.hanging.v1",
+     "params": {
+      "piece": "♖e4"
+     }
+    },
+    {
+     "key": "coach.missed.hanging.v2",
+     "params": {
+      "piece": "♞e5"
+     }
+    },
+    {
+     "key": "coach.best.fork.v2",
+     "params": {
+      "move": "♖xe5",
+      "attacker": "♖e5",
+      "target1": "♝c5",
+      "target2": "♜e8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g4",
+     "to": "e4",
+     "kind": "threat"
+    },
+    {
+     "from": "e2",
+     "to": "e5",
+     "kind": "best"
+    },
+    {
+     "from": "e5",
+     "to": "c5",
+     "kind": "idea"
+    },
+    {
+     "from": "e5",
+     "to": "e8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "e4",
+     "kind": "target"
+    },
+    {
+     "square": "e5",
+     "kind": "target"
+    },
+    {
+     "square": "c5",
+     "kind": "target"
+    },
+    {
+     "square": "e8",
+     "kind": "target"
+    }
+   ]
+  },
+  "68": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v2",
+     "params": {
+      "attacker": "♕g5",
+      "front": "♟g6",
+      "behind": "♚g7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g5",
+     "to": "g7",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "g6",
+     "kind": "target"
+    },
+    {
+     "square": "g7",
+     "kind": "target"
+    }
+   ]
+  },
+  "69": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v2",
+     "params": {
+      "move": "f5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♚h7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g7",
+     "to": "h7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "76": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v1",
+     "params": {
+      "attacker": "♕g3",
+      "front": "♟g6",
+      "behind": "♚g7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g3",
+     "to": "g7",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "g6",
+     "kind": "target"
+    },
+    {
+     "square": "g7",
+     "kind": "target"
+    }
+   ]
+  },
+  "78": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♕c3"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♕a3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g3",
+     "to": "a3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "79": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♚f7"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♚f6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g7",
+     "to": "f6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "86": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v2",
+     "params": {
+      "attacker": "♕c4",
+      "front": "♜e6",
+      "behind": "♚f7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c4",
+     "to": "f7",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "e6",
+     "kind": "target"
+    },
+    {
+     "square": "f7",
+     "kind": "target"
+    }
+   ]
+  },
+  "96": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v2",
+     "params": {
+      "attacker": "♕b5",
+      "front": "♞f5",
+      "behind": "♚g5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b5",
+     "to": "g5",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "f5",
+     "kind": "target"
+    },
+    {
+     "square": "g5",
+     "kind": "target"
+    }
+   ]
+  },
+  "97": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♚f4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♚h6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g5",
+     "to": "h6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "99": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♞d4"
+     }
+    },
+    {
+     "key": "coach.missed.hanging.v1",
+     "params": {
+      "piece": "♙g2"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d2",
+     "to": "g2",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "g2",
+     "kind": "target"
+    }
+   ]
+  },
+  "100": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v2",
+     "params": {
+      "attacker": "♕c4",
+      "front": "♞d4",
+      "behind": "♚f4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c4",
+     "to": "f4",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "d4",
+     "kind": "target"
+    },
+    {
+     "square": "f4",
+     "kind": "target"
+    }
+   ]
+  },
+  "103": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v1",
+     "params": {
+      "move": "♜xb2"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♞c2+"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d4",
+     "to": "c2",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  }
+ },
+ "stops": [
+  {
+   "ply": 30,
+   "move": "h6f8",
+   "best_cp": 184,
+   "gap_cp": 169,
+   "lines": [
+    [
+     "h6f8",
+     184
+    ],
+    [
+     "h2h3",
+     15
+    ],
+    [
+     "b2b3",
+     7
+    ]
+   ]
+  },
+  {
+   "ply": 74,
+   "move": "c4e6",
+   "best_cp": 397,
+   "gap_cp": 1054,
+   "lines": [
+    [
+     "c4e6",
+     397
+    ],
+    [
+     "h2g3",
+     -657
+    ],
+    [
+     "g5g3",
+     -667
+    ]
+   ]
+  },
+  {
+   "ply": 94,
+   "move": "e2e1",
+   "best_cp": 564,
+   "gap_cp": 564,
+   "lines": [
+    [
+     "e2e1",
+     564
+    ],
+    [
+     "e2f1",
+     0
+    ],
+    [
+     "e2f3",
+     -302
+    ]
+   ]
+  },
+  {
+   "ply": 100,
+   "move": "b5c4",
+   "best_cp": 835,
+   "gap_cp": 240,
+   "lines": [
+    [
+     "b5c4",
+     835
+    ],
+    [
+     "b5b8",
+     595
+    ],
+    [
+     "b5b4",
+     527
+    ]
+   ]
+  },
+  {
+   "ply": 102,
+   "move": "a6a7",
+   "best_cp": 824,
+   "gap_cp": 175,
+   "lines": [
+    [
+     "a6a7",
+     824
+    ],
+    [
+     "c4c3",
+     649
+    ],
+    [
+     "c4c7",
+     613
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Отказанный ферзевый гамбит с ранним Bf4. К 15-му ходу у белых заметный перевес, но чёрные долго держатся — до ошибки 32...Qg4.",
+  "uk": "Відхилений ферзевий гамбіт із раннім Bf4. До 15-го ходу в білих помітна перевага, але чорні довго тримаються — до помилки 32...Qg4.",
+  "en": "A Queen's Gambit Declined with an early Bf4. By move 15 White is clearly better, but Black holds on for a long time — until the mistake 32...Qg4."
+ },
+ "summary": {
+  "ru": "Большой перевес сам по себе партию не выигрывает: белые терпеливо улучшали фигуры (38.Bxe6, 51.Qc4), а решила проходная пешка, дошедшая до a7 (52.a7). Урок: имея перевес, ищите, где создать проходную, — она доводит дело до победы.",
+  "uk": "Велика перевага сама по собі партію не виграє: білі терпляче покращували фігури (38.Bxe6, 51.Qc4), а вирішив прохідний пішак, що дійшов до a7 (52.a7). Урок: маючи перевагу, шукайте, де створити прохідного, — він доводить справу до перемоги.",
+  "en": "A big advantage does not win the game by itself: White patiently improved the pieces (38.Bxe6, 51.Qc4), and the decisive factor was the passed pawn that reached a7 (52.a7). Lesson: when you are better, look for a way to create a passed pawn — it brings the game home."
+ }
+}

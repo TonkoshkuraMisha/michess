@@ -1,0 +1,690 @@
+{
+ "id": "spassky-tal-1959",
+ "white": "Spassky, Boris V",
+ "black": "Tal, Mihail",
+ "event": "URS-chT",
+ "year": "1959",
+ "result": "1-0",
+ "moves": [
+  "e2e4",
+  "e7e5",
+  "g1f3",
+  "b8c6",
+  "f1b5",
+  "a7a6",
+  "b5a4",
+  "g8f6",
+  "e1g1",
+  "f8e7",
+  "f1e1",
+  "b7b5",
+  "a4b3",
+  "e8g8",
+  "c2c3",
+  "d7d6",
+  "h2h3",
+  "f6d7",
+  "d2d4",
+  "d7b6",
+  "b1d2",
+  "e5d4",
+  "c3d4",
+  "d6d5",
+  "b3c2",
+  "c8e6",
+  "e4e5",
+  "d8d7",
+  "d2b3",
+  "e6f5",
+  "c1g5",
+  "e7b4",
+  "e1e2",
+  "f8e8",
+  "a1c1",
+  "b6c4",
+  "b3a1",
+  "f5c2",
+  "d1c2",
+  "e8e6",
+  "c2f5",
+  "h7h6",
+  "g5f4",
+  "a8f8",
+  "b2b3",
+  "f7f6",
+  "f5g4",
+  "f6f5",
+  "g4h5",
+  "c4d6",
+  "a1c2",
+  "d6e4",
+  "c2b4",
+  "c6b4",
+  "f3e1",
+  "c7c5",
+  "e2b2",
+  "c5d4",
+  "h5d1",
+  "g7g5",
+  "f4h2",
+  "f8c8",
+  "c1c8",
+  "d7c8",
+  "f2f3",
+  "c8c3",
+  "f3e4",
+  "c3b2",
+  "e4f5",
+  "e6c6",
+  "h2g3",
+  "d4d3",
+  "d1h5",
+  "d3d2",
+  "h5e8",
+  "g8g7",
+  "e8e7",
+  "g7h8",
+  "f5f6",
+  "d2e1q",
+  "g3e1"
+ ],
+ "evals": [
+  27,
+  39,
+  28,
+  34,
+  29,
+  32,
+  36,
+  36,
+  34,
+  34,
+  34,
+  34,
+  34,
+  34,
+  45,
+  32,
+  34,
+  68,
+  73,
+  67,
+  68,
+  77,
+  76,
+  133,
+  124,
+  138,
+  136,
+  129,
+  144,
+  93,
+  94,
+  94,
+  103,
+  92,
+  68,
+  68,
+  68,
+  49,
+  26,
+  130,
+  91,
+  74,
+  80,
+  56,
+  12,
+  12,
+  12,
+  53,
+  -9,
+  -9,
+  -37,
+  -34,
+  -33,
+  -44,
+  -58,
+  -58,
+  -78,
+  -74,
+  -133,
+  -10,
+  -191,
+  -82,
+  -81,
+  -63,
+  -194,
+  -119,
+  -119,
+  88,
+  64,
+  110,
+  164,
+  338,
+  439,
+  1090,
+  1245,
+  1245,
+  1326,
+  1978,
+  99984,
+  2192,
+  2167
+ ],
+ "comments": {
+  "23": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "d5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♞b4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c6",
+     "to": "b4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "39": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♜e6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "h6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "h7",
+     "to": "h6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "46": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v1",
+     "params": {
+      "attacker": "♕g4",
+      "front": "♟g7",
+      "behind": "♚g8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g4",
+     "to": "g8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "g7",
+     "kind": "target"
+    },
+    {
+     "square": "g8",
+     "kind": "target"
+    }
+   ]
+  },
+  "48": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♕h5"
+     }
+    },
+    {
+     "key": "coach.best.pin_absolute.v2",
+     "params": {
+      "move": "♕g3",
+      "attacker": "♕g3",
+      "front": "♟g7",
+      "behind": "♚g8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g4",
+     "to": "g3",
+     "kind": "best"
+    },
+    {
+     "from": "g3",
+     "to": "g8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "g7",
+     "kind": "target"
+    },
+    {
+     "square": "g8",
+     "kind": "target"
+    }
+   ]
+  },
+  "58": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♕d1"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♗d2"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f4",
+     "to": "d2",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "59": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "g5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♞c6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b4",
+     "to": "c6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "60": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♗h2"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♗d2"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f4",
+     "to": "d2",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "61": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♜c8"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "f4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f5",
+     "to": "f4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "64": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "f3"
+     }
+    },
+    {
+     "key": "coach.missed.hanging.v1",
+     "params": {
+      "piece": "♟d4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d1",
+     "to": "d4",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "d4",
+     "kind": "target"
+    }
+   ]
+  },
+  "65": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♛c3"
+     }
+    },
+    {
+     "key": "coach.best.pos_passed_push.v1",
+     "params": {
+      "move": "d3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d4",
+     "to": "d3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "67": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v2",
+     "params": {
+      "move": "♛xb2"
+     }
+    },
+    {
+     "key": "coach.missed.hanging.v2",
+     "params": {
+      "piece": "♙e4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d5",
+     "to": "e4",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "e4",
+     "kind": "target"
+    }
+   ]
+  },
+  "71": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "d3"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♛c3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b2",
+     "to": "c3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "73": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v1",
+     "params": {
+      "move": "d2"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♛d4+"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b2",
+     "to": "d4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "76": {
+   "comment": [
+    {
+     "key": "coach.good.fork.v2",
+     "params": {
+      "attacker": "♕e7",
+      "target1": "♞b4",
+      "target2": "♚g7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e7",
+     "to": "b4",
+     "kind": "idea"
+    },
+    {
+     "from": "e7",
+     "to": "g7",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "b4",
+     "kind": "target"
+    },
+    {
+     "square": "g7",
+     "kind": "target"
+    }
+   ]
+  },
+  "77": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v1",
+     "params": {
+      "move": "♚h8"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♚g8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g7",
+     "to": "g8",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  }
+ },
+ "stops": [
+  {
+   "ply": 66,
+   "move": "f3e4",
+   "best_cp": -168,
+   "gap_cp": 380,
+   "lines": [
+    [
+     "f3e4",
+     -168
+    ],
+    [
+     "d1b1",
+     -548
+    ],
+    [
+     "d1a1",
+     -566
+    ]
+   ]
+  },
+  {
+   "ply": 68,
+   "move": "e4f5",
+   "best_cp": 54,
+   "gap_cp": 586,
+   "lines": [
+    [
+     "e4f5",
+     54
+    ],
+    [
+     "h2f4",
+     -532
+    ],
+    [
+     "a2a3",
+     -566
+    ]
+   ]
+  },
+  {
+   "ply": 72,
+   "move": "d1h5",
+   "best_cp": 423,
+   "gap_cp": 544,
+   "lines": [
+    [
+     "d1h5",
+     423
+    ],
+    [
+     "e5e6",
+     -121
+    ],
+    [
+     "f5f6",
+     -442
+    ]
+   ]
+  },
+  {
+   "ply": 74,
+   "move": "h5e8",
+   "best_cp": 1196,
+   "gap_cp": 973,
+   "lines": [
+    [
+     "h5e8",
+     1196
+    ],
+    [
+     "g1h2",
+     223
+    ],
+    [
+     "f5f6",
+     12
+    ]
+   ]
+  },
+  {
+   "ply": 76,
+   "move": "e8e7",
+   "best_cp": 1237,
+   "gap_cp": 811,
+   "lines": [
+    [
+     "e8e7",
+     1237
+    ],
+    [
+     "g1h2",
+     426
+    ],
+    [
+     "e8d7",
+     277
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Испанская партия, закрытый вариант. Больше 30 ходов идёт равная маневренная борьба.",
+  "uk": "Іспанська партія, закритий варіант. Понад 30 ходів триває рівна маневрова боротьба.",
+  "en": "A closed Ruy Lopez. For more than 30 moves there is a level manoeuvring struggle."
+ },
+ "summary": {
+  "ru": "Решающая атака белых — 37.Qh5, шахи 38.Qe8+ и 39.Qe7+, затем 40.f6: даже новый ферзь чёрных (40...dxe1=Q+) не спасает. Урок: в атаке на короля решают не только фигуры, но и время — у атакующего может быть меньше материала, но больше угроз.",
+  "uk": "Вирішальна атака білих — 37.Qh5, шахи 38.Qe8+ і 39.Qe7+, потім 40.f6: навіть новий ферзь чорних (40...dxe1=Q+) не рятує. Урок: в атаці на короля вирішують не лише фігури, а й час — у того, хто атакує, може бути менше матеріалу, але більше загроз.",
+  "en": "White's decisive attack — 37.Qh5, the checks 38.Qe8+ and 39.Qe7+, then 40.f6: even Black's new queen (40...dxe1=Q+) does not save the game. Lesson: in a king attack time matters as much as material — the attacker may have less material but more threats."
+ }
+}

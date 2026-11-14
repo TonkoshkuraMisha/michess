@@ -1,0 +1,601 @@
+{
+ "id": "steinitz-chigorin-1889",
+ "white": "Steinitz, William",
+ "black": "Chigorin, Mikhail",
+ "event": "World Championship 2nd",
+ "year": "1889",
+ "result": "0-1",
+ "moves": [
+  "g1f3",
+  "d7d5",
+  "d2d4",
+  "c8g4",
+  "c2c4",
+  "g4f3",
+  "g2f3",
+  "d5c4",
+  "e2e4",
+  "e7e5",
+  "d4e5",
+  "d8d1",
+  "e1d1",
+  "b8c6",
+  "f3f4",
+  "a8d8",
+  "c1d2",
+  "f8c5",
+  "h1g1",
+  "g8e7",
+  "f1c4",
+  "e7g6",
+  "d1c1",
+  "c5f2",
+  "g1g2",
+  "f2b6",
+  "b1c3",
+  "c6d4",
+  "c3d5",
+  "d4f3",
+  "d5b6",
+  "f3d2",
+  "g2d2",
+  "a7b6",
+  "d2d8",
+  "e8d8",
+  "c4f7",
+  "g6f4",
+  "c1d2",
+  "h8f8",
+  "f7b3",
+  "f4g6",
+  "e5e6",
+  "d8e7",
+  "a1g1",
+  "f8f2",
+  "d2e3",
+  "f2h2",
+  "g1g5",
+  "h2h3",
+  "e3d4",
+  "h3f3",
+  "g5b5",
+  "g6f4",
+  "a2a4",
+  "h7h5",
+  "a4a5",
+  "h5h4",
+  "a5b6",
+  "c7c6",
+  "b5f5",
+  "f4e2",
+  "d4c5",
+  "f3f5",
+  "e4f5",
+  "h4h3",
+  "b3a4",
+  "h3h2",
+  "a4c6",
+  "b7c6",
+  "b6b7",
+  "h2h1q",
+  "b7b8q",
+  "h1c1"
+ ],
+ "evals": [
+  16,
+  16,
+  17,
+  74,
+  70,
+  78,
+  83,
+  79,
+  69,
+  59,
+  0,
+  -1,
+  6,
+  0,
+  -15,
+  -14,
+  -16,
+  33,
+  4,
+  6,
+  1,
+  35,
+  38,
+  37,
+  17,
+  0,
+  2,
+  41,
+  100,
+  139,
+  -16,
+  -6,
+  -13,
+  -12,
+  -9,
+  -11,
+  -78,
+  -94,
+  -94,
+  -94,
+  -50,
+  -19,
+  -106,
+  -25,
+  0,
+  8,
+  8,
+  17,
+  0,
+  0,
+  -129,
+  -127,
+  -246,
+  -170,
+  -353,
+  -381,
+  -381,
+  -432,
+  -461,
+  -357,
+  -417,
+  -561,
+  -611,
+  -558,
+  -621,
+  -632,
+  -637,
+  -650,
+  -700,
+  -641,
+  -700,
+  -701,
+  -754,
+  -818
+ ],
+ "comments": {
+  "3": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♝g4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♞f6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g8",
+     "to": "f6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "10": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "dxe5"
+     }
+    },
+    {
+     "key": "coach.missed.hanging.v2",
+     "params": {
+      "piece": "♟c4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f1",
+     "to": "c4",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "c4",
+     "kind": "target"
+    }
+   ]
+  },
+  "17": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♝c5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "f6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f7",
+     "to": "f6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "30": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♘xb6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♗c3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d2",
+     "to": "c3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "36": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♗xf7"
+     }
+    },
+    {
+     "key": "coach.best.pos_king_active.v1",
+     "params": {
+      "move": "♔d2"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c1",
+     "to": "d2",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "42": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "e6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♖g1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a1",
+     "to": "g1",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "43": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♚e7"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♞e5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g6",
+     "to": "e5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "49": {
+   "comment": [
+    {
+     "key": "coach.good.skewer.v1",
+     "params": {
+      "attacker": "♜h3",
+      "front": "♔e3",
+      "behind": "♗b3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "h3",
+     "to": "b3",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "e3",
+     "kind": "target"
+    },
+    {
+     "square": "b3",
+     "kind": "target"
+    }
+   ]
+  },
+  "50": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♔d4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♔f2"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e3",
+     "to": "f2",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "52": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♖b5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♗d1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b3",
+     "to": "d1",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "53": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♞f4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♞f8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g6",
+     "to": "f8",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "54": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "a4"
+     }
+    },
+    {
+     "key": "coach.best.pos_open_file.v2",
+     "params": {
+      "move": "♖f5",
+      "file": "f"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b5",
+     "to": "f5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "59": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "c6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "c5+"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c7",
+     "to": "c5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "62": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♔c5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♔e5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d4",
+     "to": "e5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  }
+ },
+ "stops": [
+  {
+   "ply": 65,
+   "move": "h4h3",
+   "best_cp": 655,
+   "gap_cp": 249,
+   "lines": [
+    [
+     "h4h3",
+     655
+    ],
+    [
+     "e2g3",
+     406
+    ],
+    [
+     "e2f4",
+     30
+    ]
+   ]
+  },
+  {
+   "ply": 67,
+   "move": "h3h2",
+   "best_cp": 661,
+   "gap_cp": 511,
+   "lines": [
+    [
+     "h3h2",
+     661
+    ],
+    [
+     "e2c1",
+     150
+    ],
+    [
+     "e2f4",
+     13
+    ]
+   ]
+  },
+  {
+   "ply": 71,
+   "move": "h2h1q",
+   "best_cp": 787,
+   "gap_cp": 802,
+   "lines": [
+    [
+     "h2h1q",
+     787
+    ],
+    [
+     "e2f4",
+     -17
+    ],
+    [
+     "e2d4",
+     -15
+    ]
+   ]
+  },
+  {
+   "ply": 73,
+   "move": "h1c1",
+   "best_cp": 1156,
+   "gap_cp": 482,
+   "lines": [
+    [
+     "h1c1",
+     1156
+    ],
+    [
+     "h1d5",
+     674
+    ],
+    [
+     "h1g1",
+     556
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Матч за звание чемпиона мира 1889 года. Уже на 3-м ходу Чигорин меняет слона на коня и портит белым пешечную структуру (4.gxf3).",
+  "uk": "Матч за звання чемпіона світу 1889 року. Уже на 3-му ході Чигорін міняє слона на коня й псує білим пішакову структуру (4.gxf3).",
+  "en": "The 1889 world championship match. As early as move 3 Chigorin trades bishop for knight and damages White's pawn structure (4.gxf3)."
+ },
+ "summary": {
+  "ru": "Всё решила пешка «h»: 33...h3, 34...h2, 36...h1=Q — белые тоже провели ферзя (37.b8=Q), но первым шах объявил чёрный (37...Qc1+). Урок: в гонке проходных важен каждый темп — ферзь, появившийся первым, забирает инициативу.",
+  "uk": "Усе вирішив пішак «h»: 33...h3, 34...h2, 36...h1=Q — білі теж провели ферзя (37.b8=Q), але першим шах оголосив чорний (37...Qc1+). Урок: у перегонах прохідних важливий кожен темп — ферзь, що з'явився першим, забирає ініціативу.",
+  "en": "The h-pawn decided everything: 33...h3, 34...h2, 36...h1=Q — White also queened (37.b8=Q), but Black gave the first check (37...Qc1+). Lesson: in a race of passed pawns every tempo counts — the queen that appears first takes the initiative."
+ }
+}

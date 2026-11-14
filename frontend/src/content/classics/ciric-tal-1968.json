@@ -1,0 +1,561 @@
+{
+ "id": "ciric-tal-1968",
+ "white": "Ciric, Dragoljub M",
+ "black": "Tal, Mihail",
+ "event": "Hoogovens",
+ "year": "1968",
+ "result": "1-0",
+ "moves": [
+  "e2e4",
+  "c7c5",
+  "g1f3",
+  "d7d6",
+  "d2d4",
+  "c5d4",
+  "f3d4",
+  "g8f6",
+  "b1c3",
+  "b8c6",
+  "f1c4",
+  "c8d7",
+  "h2h3",
+  "c6d4",
+  "d1d4",
+  "g7g6",
+  "e1g1",
+  "f8g7",
+  "c1e3",
+  "e8g8",
+  "d4d3",
+  "d8a5",
+  "e3d4",
+  "d7c6",
+  "a2a3",
+  "e7e5",
+  "d4e3",
+  "f6e4",
+  "b2b4",
+  "a5d8",
+  "c3e4",
+  "d6d5",
+  "b4b5",
+  "d5c4",
+  "d3d8",
+  "f8d8",
+  "b5c6",
+  "b7c6",
+  "e4d2",
+  "c4c3",
+  "d2c4",
+  "f7f5",
+  "f2f3",
+  "d8d7",
+  "a1b1",
+  "a8d8",
+  "f1e1",
+  "g7f6",
+  "e3f2",
+  "d8e8",
+  "b1d1",
+  "d7d5",
+  "f2a7",
+  "e5e4",
+  "a7f2",
+  "f6g5",
+  "d1b1",
+  "d5d2",
+  "c4d2",
+  "c3d2",
+  "e1e3",
+  "g5e3",
+  "f2e3",
+  "e4f3",
+  "g1f2",
+  "e8a8",
+  "g2f3",
+  "a8a3",
+  "f2e2",
+  "a3a4",
+  "f3f4",
+  "g8f7",
+  "b1b7",
+  "f7e6",
+  "b7h7",
+  "a4a1",
+  "e2d2",
+  "e6d5",
+  "h7g7"
+ ],
+ "evals": [
+  27,
+  36,
+  38,
+  43,
+  36,
+  26,
+  39,
+  26,
+  25,
+  53,
+  5,
+  32,
+  0,
+  34,
+  25,
+  23,
+  12,
+  8,
+  8,
+  11,
+  13,
+  20,
+  19,
+  13,
+  10,
+  104,
+  129,
+  490,
+  504,
+  506,
+  509,
+  522,
+  516,
+  521,
+  483,
+  474,
+  486,
+  494,
+  465,
+  496,
+  497,
+  476,
+  487,
+  504,
+  455,
+  485,
+  480,
+  484,
+  497,
+  486,
+  491,
+  491,
+  413,
+  440,
+  345,
+  460,
+  462,
+  434,
+  415,
+  409,
+  430,
+  427,
+  473,
+  422,
+  437,
+  544,
+  596,
+  600,
+  556,
+  587,
+  567,
+  617,
+  592,
+  593,
+  628,
+  608,
+  634,
+  649,
+  632
+ ],
+ "comments": {
+  "10": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♗c4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♗g5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c1",
+     "to": "g5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "25": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "e5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♞h5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f6",
+     "to": "h5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "27": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v1",
+     "params": {
+      "move": "♞xe4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♜ac8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a8",
+     "to": "c8",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "31": {
+   "comment": [
+    {
+     "key": "coach.good.fork.v2",
+     "params": {
+      "attacker": "♟d5",
+      "target1": "♗c4",
+      "target2": "♘e4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d5",
+     "to": "c4",
+     "kind": "idea"
+    },
+    {
+     "from": "d5",
+     "to": "e4",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "c4",
+     "kind": "target"
+    },
+    {
+     "square": "e4",
+     "kind": "target"
+    }
+   ]
+  },
+  "44": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♖ab1"
+     }
+    },
+    {
+     "key": "coach.best.pos_open_file.v2",
+     "params": {
+      "move": "♖fd1",
+      "file": "d"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f1",
+     "to": "d1",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "52": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♗xa7"
+     }
+    },
+    {
+     "key": "coach.best.pos_open_file.v2",
+     "params": {
+      "move": "♖b1",
+      "file": "b"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d1",
+     "to": "b1",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "54": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♗f2"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "f4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f3",
+     "to": "f4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "55": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♝g5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "f4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f5",
+     "to": "f4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "63": {
+   "comment": [
+    {
+     "key": "coach.good.discovered_attack.v1",
+     "params": {
+      "attacker": "♜e8",
+      "target": "♗e3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e8",
+     "to": "e3",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "e3",
+     "kind": "target"
+    }
+   ]
+  },
+  "65": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♜a8"
+     }
+    },
+    {
+     "key": "coach.best.capture.v2",
+     "params": {
+      "move": "fxg2",
+      "piece": "♙g2"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f3",
+     "to": "g2",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "71": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♚f7"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "g5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g6",
+     "to": "g5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  }
+ },
+ "stops": [
+  {
+   "ply": 28,
+   "move": "b2b4",
+   "best_cp": 527,
+   "gap_cp": 495,
+   "lines": [
+    [
+     "b2b4",
+     527
+    ],
+    [
+     "c3d5",
+     32
+    ],
+    [
+     "c3e4",
+     7
+    ]
+   ]
+  },
+  {
+   "ply": 30,
+   "move": "c3e4",
+   "best_cp": 524,
+   "gap_cp": 418,
+   "lines": [
+    [
+     "c3e4",
+     524
+    ],
+    [
+     "c3d5",
+     106
+    ],
+    [
+     "a1d1",
+     -35
+    ]
+   ]
+  },
+  {
+   "ply": 32,
+   "move": "b4b5",
+   "best_cp": 527,
+   "gap_cp": 386,
+   "lines": [
+    [
+     "b4b5",
+     527
+    ],
+    [
+     "c4b3",
+     141
+    ],
+    [
+     "c4a2",
+     72
+    ]
+   ]
+  },
+  {
+   "ply": 34,
+   "move": "d3d8",
+   "best_cp": 508,
+   "gap_cp": 513,
+   "lines": [
+    [
+     "d3d8",
+     508
+    ],
+    [
+     "d3c4",
+     -5
+    ],
+    [
+     "e4f6",
+     -637
+    ]
+   ]
+  },
+  {
+   "ply": 36,
+   "move": "b5c6",
+   "best_cp": 510,
+   "gap_cp": 652,
+   "lines": [
+    [
+     "b5c6",
+     510
+    ],
+    [
+     "e4c3",
+     -142
+    ],
+    [
+     "e4f6",
+     -164
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Сицилианская защита. Таль, известный смелыми решениями, на 14-м ходу берёт пешку 14...Nxe4 — и этот ход оказывается ошибкой.",
+  "uk": "Сицилійський захист. Таль, відомий сміливими рішеннями, на 14-му ході бере пішака 14...Nxe4 — і цей хід виявляється помилкою.",
+  "en": "A Sicilian Defence. Tal, famous for his daring decisions, grabs a pawn with 14...Nxe4 — and the move turns out to be a mistake."
+ },
+ "summary": {
+  "ru": "Белые опровергли взятие точно: пешка «b» гонит фигуры чёрных (15.b4, 17.b5), и к 19.bxc6 белые выигрывают материал. Урок: прежде чем взять «бесплатную» пешку, проверьте, не попадут ли ваши фигуры под удар пешек.",
+  "uk": "Білі спростували взяття точно: пішак «b» жене фігури чорних (15.b4, 17.b5), і до 19.bxc6 білі виграють матеріал. Урок: перш ніж узяти «безкоштовного» пішака, перевірте, чи не потраплять ваші фігури під удар пішаків.",
+  "en": "White refuted the capture precisely: the b-pawn chases Black's pieces (15.b4, 17.b5), and by 19.bxc6 White wins material. Lesson: before taking a 'free' pawn, check whether your pieces will come under attack from pawns."
+ }
+}
