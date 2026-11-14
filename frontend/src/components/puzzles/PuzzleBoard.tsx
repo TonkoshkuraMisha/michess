@@ -41,6 +41,8 @@ interface Props {
     highlights?: string[];
     /** «Призрачная» фигура: полупрозрачная, показывает, куда фигура может встать. */
     ghost?: { square: string; piece: string } | null;
+    /** Звёзды азбуки (таск 14.5): поля, которые нужно обойти; на поле с фигурой — звёздочка в углу. */
+    stars?: string[];
     /** Звуки хода и неверного решения, как на основной доске (по умолчанию включены; выключатель — общий). */
     sound?: boolean;
 }
@@ -94,7 +96,7 @@ function squareAt(x: number, y: number): string | null {
 }
 
 export function PuzzleBoard({
-    fen, orientation, interactive, lastMove, hint, mark, onMove, onSquare, arrows = [], highlights = [], ghost = null,
+    fen, orientation, interactive, lastMove, hint, mark, onMove, onSquare, arrows = [], highlights = [], ghost = null, stars = [],
     sound = true,
 }: Props) {
     const {t} = useI18n();
@@ -227,6 +229,10 @@ export function PuzzleBoard({
                             {highlights.includes(square) && (
                                 <div data-testid={`board-highlight-${square}`}
                                      className="absolute inset-0 bg-sky-400/40 pointer-events-none"/>
+                            )}
+                            {stars.includes(square) && (
+                                <span data-testid={`board-star-${square}`} aria-hidden="true"
+                                      className={`absolute pointer-events-none text-yellow-400 drop-shadow-[0_1px_1px_rgba(0,0,0,0.8)] leading-none ${piece ? 'top-0.5 right-1 text-sm' : 'text-3xl'}`}>★</span>
                             )}
                             {ghost?.square === square && !piece && (
                                 <img src={getPieceSvgUrl(pieceSet, ghost.piece[0] as 'w' | 'b', ghost.piece[1].toLowerCase())}
