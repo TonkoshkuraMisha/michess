@@ -114,6 +114,12 @@ TEMPLATES: dict[tuple[str, str], tuple[str, ...]] = {
     ("hint", "capture"): (),
     ("hint", "defend"): (),
     ("hint", "quiet"): (),
+    # Ступень 1 в спокойной позиции — позиционная идея без полей и фигур (таск B.4).
+    ("hint", "pos_castle"): (),
+    ("hint", "pos_open_file"): (),
+    ("hint", "pos_outpost"): (),
+    ("hint", "pos_king_active"): (),
+    ("hint", "pos_passed_push"): (),
     ("hint", "piece"): ("piece",),
 }
 
@@ -539,7 +545,31 @@ def _nudge(board: chess.Board, best: chess.Move | None, motifs: list[Motif], see
         return _sentence("hint", "capture", seed)
     if any(m.color != mover and m.code != "mate_in" for m in motifs):
         return _sentence("hint", "defend", seed)
+    positional = _positional_nudge(board, best)
+    if positional is not None:
+        return _sentence("hint", f"pos_{positional}", seed)
     return _sentence("hint", "quiet", seed)
+
+
+# Признак позиции → идея хода для намёка без движка: о чём подумать, если лучший ход неизвестен.
+_FEATURE_NUDGES = {
+    "king_center": "castle", "open_file": "open_file", "outpost": "outpost", "king_active": "king_active",
+    "passed_own": "passed_push",
+}
+
+
+def _positional_nudge(board: chess.Board, best: chess.Move | None) -> str | None:
+    """
+    Позиционная идея для ступени 1: с лучшим ходом — его идея (move_idea), без движка — главный признак позиции,
+    у которого есть идея хода. Поля и фигуры не называются.
+    """
+    if best is not None:
+        idea = move_idea(board, best)
+        return idea.code if idea is not None else None
+    for feature in positional_features(board, board.turn):
+        if feature.code in _FEATURE_NUDGES:
+            return _FEATURE_NUDGES[feature.code]
+    return None
 
 
 def hint_for_position(board: chess.Board, best_uci: str | None, step: int) -> dict:

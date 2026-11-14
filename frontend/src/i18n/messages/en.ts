@@ -2217,6 +2217,26 @@ export const en = {
                 v1: 'No tactics here. Improve your worst piece.',
                 v2: 'A calm position: think about a plan, not about blows.',
             },
+            pos_castle: {
+                v1: 'No threats: a good moment to think about king safety.',
+                v2: 'A calm position, but your king is not tucked away yet. How can you fix that?',
+            },
+            pos_open_file: {
+                v1: 'There is an open file on the board. Who will take it?',
+                v2: 'Your heavy pieces need room: look for an open line.',
+            },
+            pos_outpost: {
+                v1: 'There is a square from which no pawn can chase a knight away. Find it.',
+                v2: 'Look for an outpost for your knight.',
+            },
+            pos_king_active: {
+                v1: 'Endgame: the king is a strong piece. Time to bring it into play.',
+                v2: 'In the endgame the king belongs in the centre.',
+            },
+            pos_passed_push: {
+                v1: 'Your trump card is a passed pawn.',
+                v2: 'Passed pawns must be pushed.',
+            },
             piece: {
                 v1: 'Move this piece: {piece}.',
                 v2: 'The key piece is {piece}. Where should it go?',
