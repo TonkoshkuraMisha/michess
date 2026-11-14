@@ -17,6 +17,7 @@ from src.core.errors import ApiError
 from src.db.session import get_db
 from src.models.lesson import LessonProgress
 from src.models.user import User
+from src.services import product_metrics
 
 router = APIRouter()
 
@@ -94,6 +95,7 @@ async def save_progress(
     progress.step = min(max(progress.step, payload.step), payload.steps_total - 1)
     if payload.completed and progress.completed_at is None:
         progress.completed_at = datetime.now(UTC)
+        await product_metrics.record_event(db, user.id, product_metrics.LESSON_COMPLETED)
     if payload.exam_score is not None and payload.exam_total is not None:
         if progress.exam_total != payload.exam_total:
             # Экзамен изменился — прежний результат к нему не относится.

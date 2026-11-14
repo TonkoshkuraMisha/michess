@@ -19,6 +19,7 @@ from src.core.errors import DomainError
 from src.models.personality import BotPersonality
 from src.models.tournament import Tournament, TournamentGame, TournamentPlayer
 from src.models.user import User
+from src.services import product_metrics
 from src.services import tournament_rules as rules
 from src.services.bots.archetypes import ARCHETYPE_PREFIX, ARCHETYPES_BY_KEY
 from src.services.bots.calibration import strength_of
@@ -136,6 +137,7 @@ async def create_tournament(
     else:
         for board, (high, low) in enumerate(rules.knockout_first_round(size), 1):
             _add_game(db, tournament, 1, board, rules.match_game(high, low, "main"))
+    await product_metrics.record_event(db, owner.id, product_metrics.TOURNAMENT_CREATED)
     await db.commit()
     await db.refresh(tournament)
     return tournament
