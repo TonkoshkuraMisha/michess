@@ -74,7 +74,13 @@ test('приёмы: ход перетаскиванием в тренировк�
     await page.locator(`[data-testid="puzzle-board"] [data-square="${from}"]`)
         .dragTo(page.locator(`[data-testid="puzzle-board"] [data-square="${to}"]`));
     await expect(answered(page)).toBeVisible({timeout: 10_000});
-    await expect(page.getByTestId('training-progress')).toBeVisible();
+    // Задача выбирается случайно, а ход — первый легальный: он может оказаться верным первым ходом многоходовой
+    // задачи, и тогда она продолжается без итога. В таком случае задача сдаётся — прогресс темы считается и так.
+    const progress = page.getByTestId('training-progress');
+    const giveUp = page.getByTestId('puzzle-give-up');
+    await expect(progress.or(giveUp).first()).toBeVisible();
+    if (!(await progress.isVisible())) await giveUp.click();
+    await expect(progress).toBeVisible();
 });
 
 test('ход по двум подсказкам засчитывается верным', async ({page, request}) => {
