@@ -109,6 +109,9 @@ ERROR_MESSAGES: dict[str, str] = {
     "no_rematch_offer": "There is no rematch offer to accept",
     # --- турниры ---------------------------------------------------------------------------------------
     "account_in_game": "Finish your current game before deleting the account",
+    "email_taken": "This e-mail is already linked to another account",
+    "email_link_invalid": "The link is invalid, expired or already used",
+    "too_many_emails": "Too many letters requested, try again later",
     "lesson_progress_limit": "Too many lessons in progress (limit {max})",
     "tournament_not_found": "Tournament not found",
     "tournament_active_exists": "You already have a tournament in progress — finish it first",

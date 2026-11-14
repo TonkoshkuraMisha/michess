@@ -109,6 +109,23 @@ class Settings(BaseSettings):
     RATE_LIMIT_LOGIN_FAILURES_WINDOW_S: int = 900
     RATE_LIMIT_REGISTER_PER_IP: int = 5
     RATE_LIMIT_REGISTER_WINDOW_S: int = 3600
+    # Письма со ссылками (подтверждение e-mail, сброс пароля): не больше N запросов на адрес и на IP за окно.
+    RATE_LIMIT_EMAIL_PER_ADDRESS: int = 3
+    RATE_LIMIT_EMAIL_PER_IP: int = 10
+    RATE_LIMIT_EMAIL_WINDOW_S: int = 3600
+
+    # Почта (таск 17.5). SMTP_HOST пуст — письма не отправляются, а пишутся в лог (разработка). Любой провайдер
+    # (Brevo, Amazon SES, Postmark…) или свой сервер — только эти переменные, код не меняется.
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_STARTTLS: bool = True
+    MAIL_FROM: str = "michess <noreply@localhost>"
+    # Адрес сайта для ссылок в письмах.
+    PUBLIC_BASE_URL: str = "http://localhost:5173"
+    EMAIL_VERIFY_TTL_S: int = 24 * 3600
+    PASSWORD_RESET_TTL_S: int = 3600
 
     # One-time WebSocket tickets (the JWT never goes into the WS URL)
     WS_TICKET_TTL_S: int = 30

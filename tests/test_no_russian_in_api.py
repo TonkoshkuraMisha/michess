@@ -6,6 +6,8 @@
 * Исходники src: ни одной строки с кириллицей вне docstring, описаний полей для OpenAPI (description=),
   логов и print — это тексты для разработчиков, они пишутся по-русски. Исключение — регулярные выражения
   правил имени, которые кириллицу как раз разрешают.
+* Исключение — тексты писем (src/services/mailer.py, таск 17.5): письмо читают в почтовом клиенте, каталогов
+  фронтенда там нет, поэтому оно собирается на сервере на языке игрока; там же — все три языка.
 * Данные, которые сервер отдаёт как есть (дебютные книги ботов), — без кириллицы.
 * Ответы ключевых эндпоинтов ботов и лестницы — без кириллицы.
 """
@@ -57,8 +59,14 @@ def _user_facing_cyrillic(path: pathlib.Path) -> list[str]:
     return found
 
 
+# Файлы, где тексты для людей на трёх языках живут на сервере по необходимости (см. описание модуля).
+ALLOWED_FILES = {"src/services/mailer.py"}
+
+
 def test_server_source_has_no_user_facing_russian():
-    found = [line for path in sorted((ROOT / "src").rglob("*.py")) for line in _user_facing_cyrillic(path)]
+    found = [line for path in sorted((ROOT / "src").rglob("*.py"))
+             if path.relative_to(ROOT).as_posix() not in ALLOWED_FILES
+             for line in _user_facing_cyrillic(path)]
     assert found == [], "\n" + "\n".join(found)
 
 
@@ -121,3 +129,12 @@ def test_custom_bot_move_answers_with_a_comment_key(client, monkeypatch):
     assert response.status_code == 200, response.text
     _assert_no_cyrillic(response.json())
     assert response.json()["comment"]["key"].startswith("personality.")
+
+
+def test_mail_templates_cover_every_language():
+    from src.services.mailer import LANGUAGES, TEMPLATES
+
+    for kind, by_language in TEMPLATES.items():
+        assert set(by_language) == set(LANGUAGES), kind
+        for subject, body in by_language.values():
+            assert subject and "{link}" in body and "{hours}" in body and "{username}" in body

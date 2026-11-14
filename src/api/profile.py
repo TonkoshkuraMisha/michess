@@ -126,6 +126,8 @@ async def get_my_profile(current_user: User = Depends(get_current_user)):
         # калибровать обход античита.
         "is_cheater": current_user.is_cheater,
         "created_at": current_user.created_at,
+        # Подтверждённый e-mail (таск 17.5) — только самому игроку.
+        "email": current_user.email,
     }
 
 
