@@ -11,11 +11,14 @@ from src.services.bots.style import (
     EXTENDED_CENTER,
     FROM_BACK_RANK,
     MINOR_PIECES,
+    NEAR_ENEMY_KING,
+    SACRIFICE,
     FirstOf,
     Group,
     Note,
     Rule,
     Style,
+    after_move,
     by_move,
     piece,
     to,
@@ -58,6 +61,11 @@ MORPHY_STYLE = Style(
     FirstOf(
         Rule(CHECK, 28.0, "morphy.check"),
         Rule(CAPTURE, 16.0, "morphy.capture", Note.FILL),
+    ),
+    Group(
+        after_move(14),
+        Rule(NEAR_ENEMY_KING, 16.0, "morphy.openCenter", Note.FILL),
+        Rule(SACRIFICE, 12.0),
     ),
 )
 evaluate_morphy_style_bonus = MORPHY_STYLE.evaluate

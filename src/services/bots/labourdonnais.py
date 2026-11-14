@@ -10,11 +10,14 @@ from src.services.bots.style import (
     EXTENDED_CENTER,
     FROM_BACK_RANK,
     MINOR_PIECES,
+    NEAR_ENEMY_KING,
+    SACRIFICE,
     FirstOf,
     Group,
     Note,
     Rule,
     Style,
+    after_move,
     by_move,
     piece,
     to,
@@ -52,6 +55,11 @@ LABOURDONNAIS_STYLE = Style(
     FirstOf(
         Rule(CHECK, 24.0, "labourdonnais.check"),
         Rule(CAPTURE, 14.0),
+    ),
+    Group(
+        after_move(12),
+        Rule(NEAR_ENEMY_KING, 20.0),
+        Rule(SACRIFICE, 16.0),
     ),
 )
 evaluate_labourdonnais_style_bonus = LABOURDONNAIS_STYLE.evaluate

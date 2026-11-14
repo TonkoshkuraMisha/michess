@@ -10,10 +10,13 @@ from src.services.bots.style import (
     EXTENDED_CENTER,
     FROM_BACK_RANK,
     MINOR_PIECES,
+    NEAR_ENEMY_KING,
+    SACRIFICE,
     Group,
     Note,
     Rule,
     Style,
+    after_move,
     by_move,
     piece,
     to,
@@ -49,6 +52,11 @@ ANDERSSEN_STYLE = Style(
         Rule(to(EXTENDED_CENTER), 18.0),
     ),
     Rule(to(CENTER_SQUARES), 22.0, "anderssen.center", Note.FILL),
+    Group(
+        after_move(14),
+        Rule(SACRIFICE, 30.0, "anderssen.develop", Note.FILL),
+        Rule(NEAR_ENEMY_KING, 18.0),
+    ),
 )
 evaluate_anderssen_style_bonus = ANDERSSEN_STYLE.evaluate
 

@@ -4,6 +4,7 @@ import chess
 
 from src.services.bots.base import BookEntry, HistoricalBot, load_bot_opening_book
 from src.services.bots.style import (
+    ALWAYS,
     CAPTURE,
     CASTLING,
     CENTER_SQUARES,
@@ -11,13 +12,17 @@ from src.services.bots.style import (
     EXTENDED_CENTER,
     FROM_BACK_RANK,
     MINOR_PIECES,
+    QUIET,
     FirstOf,
     Group,
     Note,
     Rule,
     Style,
+    after_move,
     by_move,
+    pawn_structure_delta,
     piece,
+    prophylaxis,
     to,
 )
 
@@ -60,6 +65,11 @@ STAUNTON_STYLE = Style(
     FirstOf(
         Rule(CHECK, 18.0, "staunton.check", Note.FILL),
         Rule(CAPTURE, 14.0),
+    ),
+    Group(
+        after_move(12),
+        Rule(QUIET, prophylaxis),
+        Rule(ALWAYS, pawn_structure_delta),
     ),
 )
 evaluate_staunton_style_bonus = STAUNTON_STYLE.evaluate

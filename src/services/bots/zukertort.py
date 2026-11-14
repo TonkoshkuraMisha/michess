@@ -10,11 +10,14 @@ from src.services.bots.style import (
     EXTENDED_CENTER,
     FROM_BACK_RANK,
     MINOR_PIECES,
+    NEAR_ENEMY_KING,
+    SACRIFICE,
     FirstOf,
     Group,
     Note,
     Rule,
     Style,
+    after_move,
     by_move,
     piece,
     to,
@@ -53,6 +56,11 @@ ZUKERTORT_STYLE = Style(
             "zukertort.check",
         ),
         Rule(CAPTURE, 16.0),
+    ),
+    Group(
+        after_move(14),
+        Rule(NEAR_ENEMY_KING, 14.0),
+        Rule(SACRIFICE, 12.0),
     ),
 )
 evaluate_zukertort_style_bonus = ZUKERTORT_STYLE.evaluate
