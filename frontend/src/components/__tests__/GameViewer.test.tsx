@@ -47,12 +47,13 @@ const ANALYSIS = {
 
 type Reply = { ok: boolean; status?: number; body?: unknown; text?: string };
 
-function stubApi({pgn, cached, analyze, personal}: { pgn: Reply; cached?: Reply; analyze?: Reply; personal?: Reply }) {
+function stubApi({pgn, cached, analyze, personal, guess}: { pgn: Reply; cached?: Reply; analyze?: Reply; personal?: Reply; guess?: Reply }) {
     const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
         const url = input.toString();
         let reply: Reply = {ok: false, status: 404, body: {}};
         if (url.endsWith('/pgn')) reply = pgn;
         else if (url.includes('/puzzles/personal/game/')) reply = personal ?? reply;
+        else if (url.includes('/guess/game/')) reply = guess ?? reply;
         else if (url.includes('/analysis/game/')) reply = (init?.method === 'POST' ? analyze : cached) ?? reply;
         return {
             ok: reply.ok,
@@ -193,6 +194,19 @@ describe('GameViewer', () => {
 
         fireEvent.keyDown(window, {key: 'Escape'});
         await waitFor(() => expect(screen.queryByTestId('board-annotations')).toBeNull());
+    });
+
+    it('«Угадай ход мастера»: кнопка ведёт к первому отобранному моменту партии, без моментов — кнопки нет', async () => {
+        stubApi({pgn: {ok: true, text: FOOLS_MATE_PGN}, guess: {ok: true, body: {positions: [{id: 77, ply: 22, series_id: null}]}}});
+        renderViewer();
+        expect(await screen.findByTestId('guess-from-game')).toHaveAttribute('href', '/guess/77');
+    });
+
+    it('без отобранных моментов кнопки «Угадай ход» нет', async () => {
+        stubApi({pgn: {ok: true, text: FOOLS_MATE_PGN}, guess: {ok: true, body: {positions: []}}});
+        renderViewer();
+        await waitFor(() => expect(pieceOn('h4')).toBe('b q'));
+        expect(screen.queryByTestId('guess-from-game')).toBeNull();
     });
 
     it('переворот доски меняет порядок клеток', async () => {

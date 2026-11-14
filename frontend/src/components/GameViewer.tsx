@@ -8,7 +8,7 @@ import {
 } from 'recharts';
 import {
     ChevronFirst, ChevronLeft, ChevronRight, ChevronLast, ArrowLeft,
-    Download, Loader2, Sword, RefreshCw, Palette, Cpu, Sparkles, X, Volume2, VolumeX, GraduationCap
+    Download, Loader2, Sword, RefreshCw, Palette, Cpu, Sparkles, X, Volume2, VolumeX, GraduationCap, Crown
 } from 'lucide-react';
 import {format, parseISO} from 'date-fns';
 import {
@@ -39,6 +39,7 @@ import {isSummaryKind} from '../services/gameSummary';
 import {XrayOverlay} from './xray/XrayOverlay';
 import {Puzzle as PuzzleBadgeIcon} from 'lucide-react';
 import {puzzlesApi} from '../services/puzzles';
+import {guessApi} from '../services/guess';
 import {XrayPanel} from './xray/XrayPanel';
 import {useXraySettings} from './xray/useXraySettings';
 import type {GameSummary} from '../services/gameSummary';
@@ -446,6 +447,14 @@ export default function GameViewer() {
     const [showCoachArrows, setShowCoachArrows] = useState(true);
     // Рентген доски (таск 12.1): в разборе — за сторону, которая ходит в показанной позиции.
     const xray = useXraySettings();
+    // Отобранные моменты для «Угадай ход мастера» (таск 14.3): есть — кнопка ведёт к первому.
+    const [guessFirstId, setGuessFirstId] = useState<number | null>(null);
+    useEffect(() => {
+        if (!gameId) return;
+        guessApi.ofGame(Number(gameId))
+            .then((r) => setGuessFirstId(r.positions[0]?.id ?? null))
+            .catch(() => setGuessFirstId(null));
+    }, [gameId]);
     // Ходы этой партии, из которых сделаны задачи «Ваши ошибки» (таск 13.5) — только свои, только с токеном.
     const [personalPlies, setPersonalPlies] = useState<Set<number>>(new Set());
     useEffect(() => {
@@ -1297,6 +1306,12 @@ export default function GameViewer() {
                         </div>
                     </div>
 
+                    {guessFirstId !== null && (
+                        <Link to={`/guess/${guessFirstId}`} data-testid="guess-from-game"
+                              className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-amber-800 text-white font-bold text-sm rounded-md hover:bg-amber-700 transition shadow border border-amber-500/60">
+                            <Crown size={16}/> {t('guess.openFromGame')}
+                        </Link>
+                    )}
                     <a
                         href={`${API_BASE_URL}/api/v1/profile/games/${gameId}/pgn`}
                         download

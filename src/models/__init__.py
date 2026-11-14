@@ -1,6 +1,7 @@
 from src.models.base import Base
 from src.models.email_token import EmailToken
 from src.models.game import Game
+from src.models.guess import GuessPosition
 from src.models.lesson import LessonProgress
 from src.models.move import Move
 from src.models.personality import BotPersonality
@@ -16,6 +17,7 @@ __all__ = [
     "DrillRecord",
     "EmailToken",
     "Game",
+    "GuessPosition",
     "LessonProgress",
     "Move",
     "PersonalPuzzle",
