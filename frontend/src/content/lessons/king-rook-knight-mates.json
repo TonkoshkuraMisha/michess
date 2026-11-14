@@ -1,0 +1,295 @@
+{
+  "id": "king-rook-knight-mates",
+  "course": "king-attack",
+  "order": 5,
+  "title": {
+    "en": "Rook and knight",
+    "uk": "Тура й кінь",
+    "ru": "Ладья и конь"
+  },
+  "summary": {
+    "en": "The Arabian and Anastasia's mates: the knight takes squares away, the rook mates.",
+    "uk": "Арабський мат і мат Анастасії: кінь забирає поля, тура матує.",
+    "ru": "Арабский мат и мат Анастасии: конь отнимает поля, ладья матует."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "7k/7R/5N2/8/8/8/8/6K1 b - - 0 1",
+      "arrows": [
+        {
+          "from": "h7",
+          "to": "h8",
+          "color": "red"
+        },
+        {
+          "from": "f6",
+          "to": "h7",
+          "color": "green"
+        },
+        {
+          "from": "f6",
+          "to": "g8",
+          "color": "green"
+        }
+      ],
+      "text": {
+        "en": "The Arabian mate: the rook checks the king at close range, and the knight guards the rook and covers g8. The king is in the corner, cannot take the rook and has nowhere to go.",
+        "uk": "Арабський мат: тура шахує короля впритул, а кінь захищає туру й тримає поле g8. Король у куті, узяти туру не можна, піти нікуди.",
+        "ru": "Арабский мат: ладья шахует короля вплотную, а конь защищает ладью и держит поле g8. Король в углу, взять ладью нельзя, уйти некуда."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "1r4rk/n4R2/5Npp/p1p5/K7/1P6/2P3PP/8 w - - 0 38",
+      "text": {
+        "en": "Your move. Mate in one.",
+        "uk": "Ваш хід. Мат в один хід.",
+        "ru": "Ваш ход. Мат в один ход."
+      },
+      "hint": {
+        "en": "The f6 knight will defend the rook on h7.",
+        "uk": "Кінь f6 захистить туру на h7.",
+        "ru": "Конь f6 защитит ладью на h7."
+      },
+      "line": [
+        {
+          "answers": [
+            "f7h7"
+          ],
+          "correct": {
+            "en": "The Arabian mate!",
+            "uk": "Арабський мат!",
+            "ru": "Арабский мат!"
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "5r1k/7p/5N2/p3qp1R/2p5/8/P5PP/3R3K w - - 0 40",
+      "text": {
+        "en": "Your move. Mate in one.",
+        "uk": "Ваш хід. Мат в один хід.",
+        "ru": "Ваш ход. Мат в один ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "h5h7"
+          ],
+          "correct": {
+            "en": "Checkmate!",
+            "uk": "Мат!",
+            "ru": "Мат!"
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "8/pp2N1pk/5p2/8/K3p3/2Pn3R/P7/8 b - - 0 40",
+      "arrows": [
+        {
+          "from": "h3",
+          "to": "h7",
+          "color": "red"
+        },
+        {
+          "from": "e7",
+          "to": "g8",
+          "color": "green"
+        },
+        {
+          "from": "e7",
+          "to": "g6",
+          "color": "green"
+        }
+      ],
+      "highlights": [
+        "g7"
+      ],
+      "text": {
+        "en": "Anastasia's mate: the knight on e7 takes g8 and g6 from the king, its own pawn on g7 locks it in, and the rook mates along the h-file.",
+        "uk": "Мат Анастасії: кінь e7 забирає в короля поля g8 і g6, власний пішак g7 замикає його, а тура матує по вертикалі h.",
+        "ru": "Мат Анастасии: конь e7 отнимает у короля поля g8 и g6, собственная пешка g7 запирает его, а ладья матует по вертикали h."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "8/pp2N1pk/5p2/8/K3p3/2Pn1r2/P7/1R6 w - - 4 39",
+      "text": {
+        "en": "Your move. Mate in two.",
+        "uk": "Ваш хід. Мат у два ходи.",
+        "ru": "Ваш ход. Мат в два хода."
+      },
+      "hint": {
+        "en": "The h-file leads straight to the king.",
+        "uk": "Вертикаль h веде прямо до короля.",
+        "ru": "Вертикаль h ведёт прямо к королю."
+      },
+      "line": [
+        {
+          "answers": [
+            "b1h1"
+          ],
+          "reply": "f3h3",
+          "correct": {
+            "en": "Check! Black blocks with the rook — but it can be taken.",
+            "uk": "Шах! Чорні закриваються турою — але її можна взяти.",
+            "ru": "Шах! Чёрные закрываются ладьёй — но её можно взять."
+          }
+        },
+        {
+          "answers": [
+            "h1h3"
+          ],
+          "correct": {
+            "en": "Anastasia's mate!",
+            "uk": "Мат Анастасії!",
+            "ru": "Мат Анастасии!"
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "5r1k/1p4r1/5N2/p1P5/3P4/4PK2/8/R7 w - - 1 44",
+      "text": {
+        "en": "Your move. Mate in two.",
+        "uk": "Ваш хід. Мат у два ходи.",
+        "ru": "Ваш ход. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "a1h1"
+          ],
+          "reply": "g7h7"
+        },
+        {
+          "answers": [
+            "h1h7"
+          ],
+          "correct": {
+            "en": "Checkmate!",
+            "uk": "Мат!",
+            "ru": "Мат!"
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "7k/7R/5N2/8/8/8/8/6K1 b - - 0 1",
+      "text": {
+        "en": "What role does the knight play in these mates?",
+        "uk": "Яку роль у цих матах відіграє кінь?",
+        "ru": "Какую роль в этих матах играет конь?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "It guards the rook and takes the squares the rook cannot reach.",
+            "uk": "Захищає туру й забирає в короля поля, до яких тура не дістає.",
+            "ru": "Защищает ладью и отнимает у короля поля, до которых ладья не достаёт."
+          },
+          "feedback": {
+            "en": "Right: the rook checks, the knight closes the escape routes.",
+            "uk": "Правильно: тура шахує, кінь закриває шляхи втечі.",
+            "ru": "Верно: ладья шахует, конь закрывает пути к бегству."
+          }
+        },
+        {
+          "text": {
+            "en": "The knight gives the mate itself.",
+            "uk": "Кінь сам оголошує мат.",
+            "ru": "Конь сам объявляет мат."
+          },
+          "feedback": {
+            "en": "The rook mates; the knight is its helper.",
+            "uk": "Матує тура; кінь — її помічник.",
+            "ru": "Матует ладья; конь — её помощник."
+          }
+        },
+        {
+          "text": {
+            "en": "The knight is not needed — the rook can do it alone.",
+            "uk": "Кінь не потрібен — тура впорається сама.",
+            "ru": "Конь не нужен — ладья справится одна."
+          },
+          "feedback": {
+            "en": "Without the knight the king would just take the rook or step to g8.",
+            "uk": "Без коня король просто взяв би туру або пішов на g8.",
+            "ru": "Без коня король просто взял бы ладью или ушёл на g8."
+          }
+        }
+      ]
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "r6k/1pp2p2/3b1N2/4n1RP/2q5/p7/2P5/1K4R1 w - - 4 36",
+      "text": {
+        "en": "Your move. Mate in two.",
+        "uk": "Ваш хід. Мат у два ходи.",
+        "ru": "Ваш ход. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "g5g8"
+          ],
+          "reply": "a8g8"
+        },
+        {
+          "answers": [
+            "g1g8"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "3r2k1/5ppp/5r2/2p5/6P1/8/1P2nPPK/R3NR2 b - - 2 24",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Mate in one.",
+        "uk": "Хід чорних. Мат в один хід.",
+        "ru": "Ход чёрных. Мат в один ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "f6h6"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "5r2/1Q6/p1n1pk2/3p4/P2P4/2P5/1P2nPPK/2R2N2 b - - 2 28",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Mate in two.",
+        "uk": "Хід чорних. Мат у два ходи.",
+        "ru": "Ход чёрных. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "f8h8"
+          ],
+          "reply": "b7h7"
+        },
+        {
+          "answers": [
+            "h8h7"
+          ]
+        }
+      ]
+    }
+  ]
+}

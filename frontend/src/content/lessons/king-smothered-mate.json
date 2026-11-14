@@ -1,0 +1,274 @@
+{
+  "id": "king-smothered-mate",
+  "course": "king-attack",
+  "order": 3,
+  "title": {
+    "en": "Smothered mate",
+    "uk": "Задушений мат",
+    "ru": "Спёртый мат"
+  },
+  "summary": {
+    "en": "The king is surrounded by its own pieces, and a knight mates it by jumping over them.",
+    "uk": "Король оточений своїми фігурами, і кінь матує його, перестрибнувши через них.",
+    "ru": "Король окружён своими фигурами, и конь матует его, перепрыгнув через них."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "6rk/5Npp/8/8/8/8/8/6K1 b - - 0 1",
+      "arrows": [
+        {
+          "from": "f7",
+          "to": "h8",
+          "color": "red"
+        }
+      ],
+      "highlights": [
+        "g8",
+        "g7",
+        "h7"
+      ],
+      "text": {
+        "en": "Smothered mate: every square around the king is taken by its own pieces, and a knight gives check. A knight check cannot be blocked, and there is nowhere to go — mate.",
+        "uk": "Задушений мат: усі поля навколо короля зайняті його власними фігурами, а кінь дає шах. Шах конем не можна закрити, а піти нікуди — це мат.",
+        "ru": "Спёртый мат: все поля вокруг короля заняты его собственными фигурами, а конь даёт шах. Шах конём нельзя закрыть, а уйти некуда — это мат."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "1r4rk/5qpp/7N/8/8/p3B2P/5PP1/2R3K1 w - - 0 31",
+      "text": {
+        "en": "Your move. Mate in one.",
+        "uk": "Ваш хід. Мат в один хід.",
+        "ru": "Ваш ход. Мат в один ход."
+      },
+      "hint": {
+        "en": "Which squares around the black king are filled by its own pieces?",
+        "uk": "Які поля навколо чорного короля зайняті його ж фігурами?",
+        "ru": "Какие поля вокруг чёрного короля заняты его же фигурами?"
+      },
+      "line": [
+        {
+          "answers": [
+            "h6f7"
+          ],
+          "correct": {
+            "en": "Mate! The knight takes the queen, and the king is trapped.",
+            "uk": "Мат! Кінь бере ферзя, і королю нікуди подітися.",
+            "ru": "Мат! Конь берёт ферзя, и королю некуда деться."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "5rk1/p1p1pp1p/6p1/8/4P3/7n/PQP3PP/R5RK b - - 0 23",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Mate in one.",
+        "uk": "Хід чорних. Мат в один хід.",
+        "ru": "Ход чёрных. Мат в один ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "h3f2"
+          ],
+          "correct": {
+            "en": "Mate! The rook on g1 and the pawns lock the white king in the corner.",
+            "uk": "Мат! Тура g1 і пішаки замкнули білого короля в куті.",
+            "ru": "Мат! Ладья g1 и пешки заперли белого короля в углу."
+          }
+        }
+      ]
+    },
+    {
+      "type": "demo",
+      "fen": "5r1k/p5bp/qp4pN/4p3/6n1/1QP1B3/PP3PPP/3r1RK1 w - - 2 22",
+      "actions": [
+        {
+          "do": "move",
+          "uci": "b3g8"
+        },
+        {
+          "do": "pause",
+          "ms": 700
+        },
+        {
+          "do": "move",
+          "uci": "f8g8"
+        },
+        {
+          "do": "pause",
+          "ms": 700
+        },
+        {
+          "do": "move",
+          "uci": "h6f7"
+        }
+      ],
+      "text": {
+        "en": "Philidor's Legacy: the queen is sacrificed on g8 with check. The king cannot take — the h6 knight guards g8 — so the rook takes and boxes in its own king. Knight to f7 — mate.",
+        "uk": "«Спадщина Філідора»: ферзь жертвується на g8 із шахом. Король узяти не може — його б'є кінь h6, тож бере тура і сама замикає короля. Кінь f7 — мат.",
+        "ru": "«Наследство Филидора»: ферзь жертвуется на g8 с шахом. Король взять не может — его бьёт конь h6, поэтому берёт ладья и сама запирает короля. Конь f7 — мат."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "r1bqr2k/pppppQbp/5np1/n5N1/8/1B1P4/PPP2PPP/R1B2RK1 w - - 3 13",
+      "text": {
+        "en": "Your move. Mate in two.",
+        "uk": "Ваш хід. Мат у два ходи.",
+        "ru": "Ваш ход. Мат в два хода."
+      },
+      "hint": {
+        "en": "Force a black piece onto g8.",
+        "uk": "Змусьте чорну фігуру зайняти поле g8.",
+        "ru": "Заставьте чёрную фигуру занять поле g8."
+      },
+      "line": [
+        {
+          "answers": [
+            "f7g8"
+          ],
+          "reply": "f6g8",
+          "correct": {
+            "en": "A sacrifice! The knight must take and seals the king's last square.",
+            "uk": "Жертва! Кінь мусить узяти й закриває королю останнє поле.",
+            "ru": "Жертва! Конь вынужден взять и закрывает королю последнее поле."
+          }
+        },
+        {
+          "answers": [
+            "g5f7"
+          ],
+          "correct": {
+            "en": "Checkmate!",
+            "uk": "Мат!",
+            "ru": "Мат!"
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "6rk/p5bp/qp4pN/4p3/6n1/2P1B3/PP3PPP/3r1RK1 w - - 0 23",
+      "text": {
+        "en": "Why did the rook have to take the queen on g8?",
+        "uk": "Чому турі довелося брати ферзя на g8?",
+        "ru": "Почему ладье пришлось брать ферзя на g8?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "The queen gave check, and the king could not take it: the h6 knight covers g8.",
+            "uk": "Ферзь оголосив шах, а король узяти його не міг: поле g8 б'є кінь h6.",
+            "ru": "Ферзь объявил шах, а король взять его не мог: поле g8 бьёт конь h6."
+          },
+          "feedback": {
+            "en": "Yes. The capture was forced — and that is what boxed the king in.",
+            "uk": "Так. Взяття було вимушеним — і саме воно замкнуло короля.",
+            "ru": "Да. Взятие было вынужденным — и именно оно заперло короля."
+          }
+        },
+        {
+          "text": {
+            "en": "Black wanted to win the queen.",
+            "uk": "Чорні хотіли виграти ферзя.",
+            "ru": "Чёрные хотели выиграть ферзя."
+          },
+          "feedback": {
+            "en": "There was no choice: Black has no other answer to the check.",
+            "uk": "Вибору не було: інших відповідей на шах у чорних немає.",
+            "ru": "Выбора не было: других ответов на шах у чёрных нет."
+          }
+        },
+        {
+          "text": {
+            "en": "The rook was protecting the king from the knight.",
+            "uk": "Тура захищала короля від коня.",
+            "ru": "Ладья защищала короля от коня."
+          },
+          "feedback": {
+            "en": "The opposite: on g8 the rook took the king's last square.",
+            "uk": "Навпаки: на g8 тура забрала в короля останнє поле.",
+            "ru": "Наоборот: на g8 ладья отняла у короля последнее поле."
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "6rk/5Npp/8/8/8/8/8/6K1 b - - 0 1",
+      "text": {
+        "en": "Look for a smothered mate when the enemy king sits in the corner surrounded by its own pieces and pawns. A sacrifice that forces an enemy piece onto the last free square often leads to it.",
+        "uk": "Шукайте задушений мат, коли король суперника стоїть у куті, а поруч із ним його фігури й пішаки. Часто до нього веде жертва, що змушує фігуру суперника зайняти останнє вільне поле.",
+        "ru": "Ищите спёртый мат, когда король соперника стоит в углу, а рядом с ним его фигуры и пешки. Часто к нему ведёт жертва, которая заставляет фигуру соперника занять последнее свободное поле."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "r4rk1/p5pp/2Q5/3pPp2/3P4/2PBq2n/PP4PP/2R2R1K b - - 6 20",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Mate in two.",
+        "uk": "Хід чорних. Мат у два ходи.",
+        "ru": "Ход чёрных. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "e3g1"
+          ],
+          "reply": "f1g1"
+        },
+        {
+          "answers": [
+            "h3f2"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "3q1r1k/6bp/3NQ1p1/8/1p4P1/1B5P/1P1p1P2/6K1 w - - 0 37",
+      "text": {
+        "en": "Your move. Mate in two.",
+        "uk": "Ваш хід. Мат у два ходи.",
+        "ru": "Ваш ход. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "e6g8"
+          ],
+          "reply": "f8g8"
+        },
+        {
+          "answers": [
+            "d6f7"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "r5rk/ppp3pp/7N/8/3n4/2qP3P/P1P2PP1/R3R1K1 w - - 0 21",
+      "text": {
+        "en": "Your move. Mate in one.",
+        "uk": "Ваш хід. Мат в один хід.",
+        "ru": "Ваш ход. Мат в один ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "h6f7"
+          ]
+        }
+      ]
+    }
+  ]
+}

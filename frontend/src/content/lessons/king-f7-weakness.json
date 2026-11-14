@@ -1,0 +1,245 @@
+{
+  "id": "king-f7-weakness",
+  "course": "king-attack",
+  "order": 2,
+  "title": {
+    "en": "The weak f7 square",
+    "uk": "Слабке поле f7",
+    "ru": "Слабое поле f7"
+  },
+  "summary": {
+    "en": "Until the king castles, f7 (f2 for White) is defended by the king alone.",
+    "uk": "Поки король не зробив рокіровку, поле f7 (у білих — f2) захищає лише він сам.",
+    "ru": "Пока король не рокировал, поле f7 (у белых — f2) защищает только он сам."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3",
+      "arrows": [
+        {
+          "from": "c4",
+          "to": "f7",
+          "color": "red"
+        },
+        {
+          "from": "h5",
+          "to": "f7",
+          "color": "red"
+        }
+      ],
+      "highlights": [
+        "f7"
+      ],
+      "text": {
+        "en": "At the start of the game f7 is defended only by the king. The bishop on c4 and the queen on h5 both attack f7: if the queen takes the pawn, the king has nowhere to go — mate.",
+        "uk": "На початку партії поле f7 захищене лише королем. Слон c4 і ферзь h5 удвох нападають на f7: якщо ферзь візьме пішака, королю нікуди буде піти — це мат.",
+        "ru": "В начале партии поле f7 защищено только королём. Слон c4 и ферзь h5 вдвоём нападают на f7: если ферзь возьмёт пешку, королю некуда будет уйти — это мат."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3",
+      "actions": [
+        {
+          "do": "move",
+          "uci": "g8f6"
+        },
+        {
+          "do": "pause",
+          "ms": 700
+        },
+        {
+          "do": "move",
+          "uci": "h5f7"
+        }
+      ],
+      "text": {
+        "en": "Black attacks the queen with the knight but misses the threat. The queen takes f7, backed by the bishop — mate. This is the Scholar's Mate, worth knowing from both sides.",
+        "uk": "Чорні нападають на ферзя конем, але не помічають загрози. Ферзь бере f7 під захистом слона — мат. Це «дитячий мат», і його варто знати з обох боків.",
+        "ru": "Чёрные нападают на ферзя конём, но не замечают угрозу. Ферзь берёт f7 под защитой слона — мат. Это «детский мат», и его стоит знать с обеих сторон."
+      }
+    },
+    {
+      "type": "choice",
+      "fen": "r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3",
+      "text": {
+        "en": "How should Black defend here?",
+        "uk": "Як чорним захиститися в цій позиції?",
+        "ru": "Как чёрным защититься в этой позиции?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "Defend f7 once more, e.g. with the queen on e7, or block the queen with g6.",
+            "uk": "Захистити f7 ще раз, наприклад ферзем на e7, або закрити ферзю шлях ходом g6.",
+            "ru": "Защитить f7 ещё раз, например ферзём на e7, или закрыть ферзю путь ходом g6."
+          },
+          "feedback": {
+            "en": "Right: the key is not to leave f7 attacked twice and defended once.",
+            "uk": "Правильно: головне — не залишати f7 під двома ударами з одним захистом.",
+            "ru": "Верно: главное — не оставлять f7 под двумя ударами с одной защитой."
+          }
+        },
+        {
+          "text": {
+            "en": "Attack the queen with the knight on f6.",
+            "uk": "Напасти на ферзя конем f6.",
+            "ru": "Напасть на ферзя конём f6."
+          },
+          "feedback": {
+            "en": "That blunders: the queen takes f7 with mate, as in the demo.",
+            "uk": "Це позіх: ферзь бере f7 з матом, як у показі.",
+            "ru": "Это зевок: ферзь берёт f7 с матом, как в показе."
+          }
+        },
+        {
+          "text": {
+            "en": "Ignore it and keep developing.",
+            "uk": "Не відволікатися й розвивати фігури далі.",
+            "ru": "Не отвлекаться и развивать фигуры дальше."
+          },
+          "feedback": {
+            "en": "Development matters, but first you must answer the mate threat.",
+            "uk": "Розвиток важливий, але спершу треба відповісти на загрозу мату.",
+            "ru": "Развитие важно, но сначала нужно ответить на угрозу мата."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "r1bqk2r/p2p1p2/2p4p/4p1p1/1bB5/2n2QB1/PPP2PPP/R3K2R w KQkq - 0 12",
+      "text": {
+        "en": "Your move. Mate in one.",
+        "uk": "Ваш хід. Мат в один хід.",
+        "ru": "Ваш ход. Мат в один ход."
+      },
+      "hint": {
+        "en": "Look at who defends f7.",
+        "uk": "Подивіться, хто захищає f7.",
+        "ru": "Посмотрите, кто защищает f7."
+      },
+      "line": [
+        {
+          "answers": [
+            "f3f7"
+          ],
+          "correct": {
+            "en": "Mate! The bishop on c4 backs the queen, and the king is boxed in.",
+            "uk": "Мат! Слон c4 підтримує ферзя, а король замкнений.",
+            "ru": "Мат! Слон c4 поддерживает ферзя, а король заперт."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "r1b1k2r/p1p2ppp/2p5/2b1q1B1/4p3/1B3Q2/PPP2PPP/R3K2R w KQkq - 0 12",
+      "text": {
+        "en": "Your move. Mate in one.",
+        "uk": "Ваш хід. Мат в один хід.",
+        "ru": "Ваш ход. Мат в один ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "f3f7"
+          ],
+          "correct": {
+            "en": "Checkmate!",
+            "uk": "Мат!",
+            "ru": "Мат!"
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "3r1rk1/pp6/7p/n3Bqp1/4p2P/2P1P3/PPQ1BP2/R3K2R b KQ - 0 27",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Mate in one.",
+        "uk": "Хід чорних. Мат в один хід.",
+        "ru": "Ход чёрных. Мат в один ход."
+      },
+      "hint": {
+        "en": "White has the same weak spot — f2.",
+        "uk": "У білих те саме слабке місце — f2.",
+        "ru": "У белых то же слабое место — f2."
+      },
+      "line": [
+        {
+          "answers": [
+            "f5f2"
+          ],
+          "correct": {
+            "en": "Mate! Only the king guarded f2, and the rook on f8 backs the queen.",
+            "uk": "Мат! Поле f2 захищав лише король, а тура f8 підтримує ферзя.",
+            "ru": "Мат! Поле f2 защищал только король, а ладья f8 поддерживает ферзя."
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "r1bqkbnr/pppp1ppp/2n5/4p2Q/2B1P3/8/PPPP1PPP/RNB1K1NR b KQkq - 3 3",
+      "text": {
+        "en": "Remember: while the king is in the centre, f7 and f2 are the most vulnerable squares. In the opening don't let them be attacked twice — castling removes the weakness.",
+        "uk": "Запам'ятайте: поки король у центрі, f7 і f2 — найвразливіші поля. У дебюті не дозволяйте нападати на них двічі, а рокіровка знімає цю слабкість.",
+        "ru": "Запомните: пока король в центре, f7 и f2 — самые уязвимые поля. В дебюте не позволяйте нападать на них дважды, а рокировка снимает эту слабость."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "r1bqk2r/pp3pp1/4p2p/3p4/3P4/2bB1Q1P/PPP3P1/2KR1R2 w kq - 0 17",
+      "text": {
+        "en": "Your move. Mate in one.",
+        "uk": "Ваш хід. Мат в один хід.",
+        "ru": "Ваш ход. Мат в один ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "f3f7"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "r2qkb1r/ppp2ppp/8/3pN3/4n3/2P2Q2/PP3PPP/RNB2bK1 w kq - 0 10",
+      "text": {
+        "en": "Your move. Mate in one.",
+        "uk": "Ваш хід. Мат в один хід.",
+        "ru": "Ваш ход. Мат в один ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "f3f7"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "3rk1r1/1Q3pp1/p2qn2p/2p1p3/1pP1P3/3P3P/P3N1P1/3R1R1K w - - 2 23",
+      "text": {
+        "en": "Your move. Mate in one.",
+        "uk": "Ваш хід. Мат в один хід.",
+        "ru": "Ваш ход. Мат в один ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "b7f7"
+          ]
+        }
+      ]
+    }
+  ]
+}

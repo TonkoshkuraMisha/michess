@@ -1,0 +1,320 @@
+{
+  "id": "king-back-rank",
+  "course": "king-attack",
+  "order": 1,
+  "title": {
+    "en": "Back-rank mate",
+    "uk": "Мат по останній горизонталі",
+    "ru": "Мат по последней горизонтали"
+  },
+  "summary": {
+    "en": "The king is shut in by its own pawns — a rook or queen on the back rank mates.",
+    "uk": "Король замкнений своїми пішаками — тура або ферзь на останній горизонталі матує.",
+    "ru": "Король заперт своими пешками — ладья или ферзь на последней горизонтали матует."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "4r1k1/5ppp/8/8/8/8/5PPP/6K1 b - - 0 1",
+      "arrows": [
+        {
+          "from": "e8",
+          "to": "e1",
+          "color": "red"
+        }
+      ],
+      "highlights": [
+        "f2",
+        "g2",
+        "h2"
+      ],
+      "text": {
+        "en": "The pawns on f2, g2 and h2 shield the king — and also lock it in. If a rook or queen arrives on the first rank, the king has nowhere to go.",
+        "uk": "Пішаки f2, g2, h2 прикривають короля від фігур — і водночас замикають його. Якщо по першій горизонталі прийде тура або ферзь, королю нікуди піти.",
+        "ru": "Пешки f2, g2, h2 прикрывают короля от фигур — и одновременно запирают его. Если по первой горизонтали придёт ладья или ферзь, королю некуда уйти."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "4r1k1/5ppp/8/8/8/8/5PPP/6K1 b - - 0 1",
+      "actions": [
+        {
+          "do": "move",
+          "uci": "e8e1"
+        },
+        {
+          "do": "highlight",
+          "squares": [
+            "f1",
+            "h1",
+            "f2",
+            "g2",
+            "h2"
+          ]
+        }
+      ],
+      "text": {
+        "en": "Rook to e1 — checkmate. The rook covers f1 and h1, and the second rank is blocked by the king's own pawns.",
+        "uk": "Тура на e1 — мат. Поля f1 і h1 під ударом тури, а на другій горизонталі стоять свої пішаки.",
+        "ru": "Ладья на e1 — мат. Поля f1 и h1 под ударом ладьи, а на второй горизонтали стоят свои пешки."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "6k1/1q3ppp/3p4/r3R3/1P6/2Pp4/3B1PPP/6K1 w - - 0 29",
+      "text": {
+        "en": "Your move. Mate in one.",
+        "uk": "Ваш хід. Мат в один хід.",
+        "ru": "Ваш ход. Мат в один ход."
+      },
+      "hint": {
+        "en": "The black king is locked in by the pawns on f7, g7 and h7.",
+        "uk": "Чорний король замкнений пішаками f7, g7, h7.",
+        "ru": "Чёрный король заперт пешками f7, g7, h7."
+      },
+      "line": [
+        {
+          "answers": [
+            "e5e8"
+          ],
+          "correct": {
+            "en": "Checkmate!",
+            "uk": "Мат!",
+            "ru": "Мат!"
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "1b4k1/q4ppp/4p3/3p4/3P4/1N4P1/1PQ3PP/7K w - - 4 30",
+      "text": {
+        "en": "Your move. Mate in one.",
+        "uk": "Ваш хід. Мат в один хід.",
+        "ru": "Ваш ход. Мат в один ход."
+      },
+      "hint": {
+        "en": "The queen can reach the eighth rank.",
+        "uk": "Ферзь може вийти на восьму горизонталь.",
+        "ru": "Ферзь может выйти на восьмую горизонталь."
+      },
+      "line": [
+        {
+          "answers": [
+            "c2c8"
+          ],
+          "correct": {
+            "en": "Mate! The bishop on b8 is behind the queen and cannot block.",
+            "uk": "Мат! Слон b8 стоїть позаду ферзя й закритися не може.",
+            "ru": "Мат! Слон b8 стоит позади ферзя и закрыться не может."
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "6k1/5pp1/7p/8/8/7P/5PP1/6K1 w - - 0 1",
+      "highlights": [
+        "h3",
+        "h6"
+      ],
+      "text": {
+        "en": "How do you guard against a back-rank mate in advance?",
+        "uk": "Як заздалегідь захиститися від мату по останній горизонталі?",
+        "ru": "Как заранее защититься от мата по последней горизонтали?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "Make luft: push the h- (or g-) pawn so the king gets a square.",
+            "uk": "Зробити «кватирку»: просунути пішака h (або g), щоб у короля з'явилося поле.",
+            "ru": "Сделать «форточку»: продвинуть пешку h (или g), чтобы у короля появилось поле."
+          },
+          "feedback": {
+            "en": "Yes. One quiet pawn move — and a rook on the back rank no longer mates.",
+            "uk": "Так. Один тихий хід пішаком — і тура на останній горизонталі більше не матує.",
+            "ru": "Да. Один тихий ход пешкой — и ладья на последней горизонтали больше не матует."
+          }
+        },
+        {
+          "text": {
+            "en": "Keep all the pawns in front of the king unmoved.",
+            "uk": "Тримати всі пішаки перед королем на місці.",
+            "ru": "Держать все пешки перед королём на месте."
+          },
+          "feedback": {
+            "en": "That is exactly how the king gets locked in.",
+            "uk": "Саме так король і опиняється замкненим.",
+            "ru": "Именно так король и оказывается заперт."
+          }
+        },
+        {
+          "text": {
+            "en": "Walk the king to the centre.",
+            "uk": "Відвести короля в центр.",
+            "ru": "Увести короля в центр."
+          },
+          "feedback": {
+            "en": "In the middlegame a king in the centre is in even greater danger.",
+            "uk": "У мітельшпілі король у центрі в ще більшій небезпеці.",
+            "ru": "В миттельшпиле король в центре в ещё большей опасности."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "r3r1k1/p4ppp/8/2P5/3PQq2/8/P5PP/4R2K w - - 1 28",
+      "text": {
+        "en": "Your move. The rook on e8 guards the back rank. Remove the defender.",
+        "uk": "Ваш хід. Тура e8 захищає останню горизонталь. Приберіть захисника.",
+        "ru": "Ваш ход. Ладья e8 защищает последнюю горизонталь. Уберите защитника."
+      },
+      "hint": {
+        "en": "Giving up the queen is fine if mate follows.",
+        "uk": "Ферзя не шкода, якщо за ним мат.",
+        "ru": "Ферзь не жалко, если за ним мат."
+      },
+      "line": [
+        {
+          "answers": [
+            "e4e8"
+          ],
+          "reply": "a8e8",
+          "correct": {
+            "en": "A queen sacrifice! The a8 rook must take, and only one rook remains on e8.",
+            "uk": "Жертва ферзя! Тура a8 мусить узяти, і на e8 лишається одна тура.",
+            "ru": "Жертва ферзя! Ладья a8 вынуждена взять, и на e8 остаётся одна ладья."
+          },
+          "wrong": {
+            "e4f4": {
+              "en": "Trading queens achieves nothing — and there was mate in two.",
+              "uk": "Розмін ферзів нічого не дає — а мат був у двох ходах.",
+              "ru": "Размен ферзей ничего не даёт — а мат был в двух ходах."
+            }
+          }
+        },
+        {
+          "answers": [
+            "e1e8"
+          ],
+          "correct": {
+            "en": "Checkmate!",
+            "uk": "Мат!",
+            "ru": "Мат!"
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "1k1r4/ppp3Q1/7p/8/8/8/PP1q2PP/1R5K b - - 0 31",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Mate in two.",
+        "uk": "Хід чорних. Мат у два ходи.",
+        "ru": "Ход чёрных. Мат в два хода."
+      },
+      "hint": {
+        "en": "The white rook on b1 alone holds the first rank.",
+        "uk": "Біла тура b1 сама тримає першу горизонталь.",
+        "ru": "Белая ладья b1 одна держит первую горизонталь."
+      },
+      "line": [
+        {
+          "answers": [
+            "d2d1"
+          ],
+          "reply": "b1d1",
+          "correct": {
+            "en": "The queen deflects the rook from b1.",
+            "uk": "Ферзь відволікає туру з b1.",
+            "ru": "Ферзь отвлекает ладью с b1."
+          }
+        },
+        {
+          "answers": [
+            "d8d1"
+          ],
+          "correct": {
+            "en": "Checkmate!",
+            "uk": "Мат!",
+            "ru": "Мат!"
+          }
+        }
+      ]
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "8/p5pk/6bp/3p4/3N4/5P2/Pr2R1PP/7K b - - 2 33",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Mate in two.",
+        "uk": "Хід чорних. Мат у два ходи.",
+        "ru": "Ход чёрных. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "b2b1"
+          ],
+          "reply": "e2e1"
+        },
+        {
+          "answers": [
+            "b1e1"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "5k2/3rpp2/Q7/8/2Pq4/1P6/5PPP/R5K1 b - - 2 35",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Mate in two.",
+        "uk": "Хід чорних. Мат у два ходи.",
+        "ru": "Ход чёрных. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "d4d1"
+          ],
+          "reply": "a1d1"
+        },
+        {
+          "answers": [
+            "d7d1"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "1q5k/2Q1b1p1/4N2p/p7/8/5P2/P5PP/7K b - - 2 38",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Mate in two.",
+        "uk": "Хід чорних. Мат у два ходи.",
+        "ru": "Ход чёрных. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "b8b1"
+          ],
+          "reply": "c7c1"
+        },
+        {
+          "answers": [
+            "b1c1"
+          ]
+        }
+      ]
+    }
+  ]
+}
