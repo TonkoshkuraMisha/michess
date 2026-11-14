@@ -1,0 +1,297 @@
+{
+  "id": "king-review",
+  "course": "king-attack",
+  "order": 6,
+  "title": {
+    "en": "Find the mate",
+    "uk": "Знайдіть мат",
+    "ru": "Найдите мат"
+  },
+  "summary": {
+    "en": "Course review: the pattern is not named — find the mate yourself.",
+    "uk": "Повторення курсу: побудову не підказано — знайдіть мат самі.",
+    "ru": "Повторение курса: построение не подсказано — найдите мат сами."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "r4n1k/1q3p1p/p3pN2/4P1P1/2r3PQ/3p3R/P6P/R5K1 w - - 0 32",
+      "text": {
+        "en": "How to find a mate: list every check; see which squares the king still has and who guards them; think which enemy piece can be deflected or lured with a sacrifice. Often the queen gives itself up and a humbler piece delivers mate.",
+        "uk": "Як шукати мат: перелічіть усі шахи; подивіться, які поля лишилися в короля і хто їх тримає; подумайте, яку фігуру суперника можна відволікти чи заманити жертвою. Часто ферзь віддає себе, а мат ставить скромніша фігура.",
+        "ru": "Как искать мат: перечислите все шахи; посмотрите, какие поля остались у короля и кто их держит; подумайте, какую фигуру соперника можно отвлечь или завлечь жертвой. Часто ферзь отдаёт себя, а мат ставит более скромная фигура."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "r4n1k/1q3p1p/p3pN2/4P1P1/2r3PQ/3p3R/P6P/R5K1 w - - 0 32",
+      "text": {
+        "en": "Your move. Mate in two.",
+        "uk": "Ваш хід. Мат у два ходи.",
+        "ru": "Ваш ход. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "h4h7"
+          ],
+          "reply": "f8h7",
+          "correct": {
+            "en": "The queen sacrifice opened the h-file.",
+            "uk": "Жертва ферзя відкрила вертикаль h.",
+            "ru": "Жертва ферзя открыла вертикаль h."
+          }
+        },
+        {
+          "answers": [
+            "h3h7"
+          ],
+          "correct": {
+            "en": "The Arabian mate: the f6 knight guards the rook.",
+            "uk": "Арабський мат: кінь f6 захищає туру.",
+            "ru": "Арабский мат: конь f6 защищает ладью."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "2r4k/1p2Q1pp/p6q/2nB4/3B4/P2p3P/2r2PP1/1n2R1K1 w - - 0 37",
+      "text": {
+        "en": "Your move. Mate in two.",
+        "uk": "Ваш хід. Мат у два ходи.",
+        "ru": "Ваш ход. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "e7e8"
+          ],
+          "reply": "c8e8",
+          "correct": {
+            "en": "The queen deflects the c8 rook from the back rank.",
+            "uk": "Ферзь відволікає туру c8 з останньої горизонталі.",
+            "ru": "Ферзь отвлекает ладью c8 с последней горизонтали."
+          }
+        },
+        {
+          "answers": [
+            "e1e8"
+          ],
+          "correct": {
+            "en": "Back-rank mate.",
+            "uk": "Мат по останній горизонталі.",
+            "ru": "Мат по последней горизонтали."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "3r3k/pp5p/1q1PB1p1/4br2/8/6QP/PP3PPB/1R4K1 w - - 3 24",
+      "text": {
+        "en": "Your move. Mate in two.",
+        "uk": "Ваш хід. Мат у два ходи.",
+        "ru": "Ваш ход. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "g3e5"
+          ],
+          "reply": "f5e5",
+          "correct": {
+            "en": "The queen is given up to open the long diagonal for the h2 bishop.",
+            "uk": "Ферзь жертвується, щоб відкрити велику діагональ для слона h2.",
+            "ru": "Ферзь жертвуется, чтобы открыть большую диагональ для слона h2."
+          }
+        },
+        {
+          "answers": [
+            "h2e5"
+          ],
+          "correct": {
+            "en": "Mate with two bishops.",
+            "uk": "Мат двома слонами.",
+            "ru": "Мат двумя слонами."
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "What do the solutions have in common?",
+        "uk": "Що спільного в розв'язках цих задач?",
+        "ru": "Что общего у решений этих задач?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "The queen is sacrificed to open a line or remove a defender, and another piece mates.",
+            "uk": "Ферзь жертвується, щоб відкрити лінію або відвести захисника, а мат ставить інша фігура.",
+            "ru": "Ферзь жертвуется, чтобы открыть линию или увести защитника, а мат ставит другая фигура."
+          },
+          "feedback": {
+            "en": "Yes. Don't spare material if mate follows — just check that the reply is forced.",
+            "uk": "Так. Не шкодуйте матеріалу, якщо за ним мат — перевірте лише, що відповідь суперника вимушена.",
+            "ru": "Да. Не жалейте материал, если за ним мат — проверьте только, что ответ соперника вынужден."
+          }
+        },
+        {
+          "text": {
+            "en": "The queen mates in every task.",
+            "uk": "У всіх задачах мат ставить ферзь.",
+            "ru": "Во всех задачах мат ставит ферзь."
+          },
+          "feedback": {
+            "en": "The opposite: the queen was sacrificed, and a rook or bishop mated.",
+            "uk": "Навпаки: ферзь жертвувався, а матували тура і слон.",
+            "ru": "Наоборот: ферзь жертвовался, а матовали ладья и слон."
+          }
+        },
+        {
+          "text": {
+            "en": "The solution always starts with a quiet move.",
+            "uk": "Розв'язок завжди починається з тихого ходу.",
+            "ru": "Решение всегда начинается с тихого хода."
+          },
+          "feedback": {
+            "en": "Every solution began with a check or a capture with check.",
+            "uk": "Усі розв'язки починалися з шаху або взяття з шахом.",
+            "ru": "Все решения начинались с шаха или взятия с шахом."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "5rk1/1p3ppp/1q6/1B2P3/P6Q/6nP/1B1r1PP1/1R2R1K1 b - - 0 26",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Mate in two.",
+        "uk": "Хід чорних. Мат у два ходи.",
+        "ru": "Ход чёрных. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "b6f2"
+          ],
+          "reply": "g1h2",
+          "correct": {
+            "en": "A strike on f2: the king must retreat to the corner.",
+            "uk": "Удар по f2: король мусить піти в кут.",
+            "ru": "Удар по f2: король вынужден уйти в угол."
+          }
+        },
+        {
+          "answers": [
+            "f2g2"
+          ],
+          "correct": {
+            "en": "Checkmate!",
+            "uk": "Мат!",
+            "ru": "Мат!"
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "rn4k1/5r1p/p3p1pQ/1p3p2/2q1b3/7R/PP4PP/3R3K w - - 2 23",
+      "text": {
+        "en": "Your move. Mate in two.",
+        "uk": "Ваш хід. Мат у два ходи.",
+        "ru": "Ваш ход. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "d1d8"
+          ],
+          "reply": "f7f8"
+        },
+        {
+          "answers": [
+            "d8f8"
+          ],
+          "correct": {
+            "en": "Checkmate!",
+            "uk": "Мат!",
+            "ru": "Мат!"
+          }
+        }
+      ]
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "3n1r1k/pp2p2P/1q3r1N/6Q1/3pp3/8/PP3PP1/R4RK1 w - - 5 26",
+      "text": {
+        "en": "Your move. Mate in two.",
+        "uk": "Ваш хід. Мат у два ходи.",
+        "ru": "Ваш ход. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "g5g8"
+          ],
+          "reply": "f8g8"
+        },
+        {
+          "answers": [
+            "h7g8q"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "3r2k1/p2PQp1p/1p3bpP/4p3/2r2q2/7B/1P3P2/1K1R3R w - - 2 38",
+      "text": {
+        "en": "Your move. Mate in two.",
+        "uk": "Ваш хід. Мат у два ходи.",
+        "ru": "Ваш ход. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "e7e8"
+          ],
+          "reply": "d8e8"
+        },
+        {
+          "answers": [
+            "d7e8q"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "4r1k1/1p3p1R/p5r1/3p1bP1/2p2P2/n1Nq4/PP6/K2B3Q w - - 9 39",
+      "text": {
+        "en": "Your move. Mate in two.",
+        "uk": "Ваш хід. Мат у два ходи.",
+        "ru": "Ваш ход. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "h7h8"
+          ],
+          "reply": "g8g7"
+        },
+        {
+          "answers": [
+            "h1h7"
+          ]
+        }
+      ]
+    }
+  ]
+}
