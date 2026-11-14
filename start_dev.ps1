@@ -2,7 +2,7 @@
 
 $ErrorActionPreference = "Continue"
 $root = $PSScriptRoot
-$pythonExe = Join-Path $root "michess_env\Scripts\python.exe"
+$pythonExe = Join-Path $root ".venv\Scripts\python.exe"
 $frontendDir = Join-Path $root "frontend"
 $stockfishBin = Join-Path $root "bin\stockfish.exe"
 
@@ -45,10 +45,15 @@ foreach ($port in @(8000, 3000))
 # 3. Автопроверка и создание виртуального окружения Python на любой машине
 if (-not (Test-Path $pythonExe))
 {
-    Write-Host "[*] Создаем виртуальное окружение Python (michess_env)..." -ForegroundColor Yellow
-    python -m venv (Join-Path $root "michess_env")
-    & $pythonExe -m pip install --upgrade pip
-    & $pythonExe -m pip install -r (Join-Path $root "requirements.txt")
+    Write-Host "[*] Создаем окружение Python (.venv) через uv..." -ForegroundColor Yellow
+    if (-not (Get-Command uv -ErrorAction SilentlyContinue))
+    {
+        Write-Host "[!] uv не найден. Установка: powershell -ExecutionPolicy ByPass -c ""irm https://astral.sh/uv/install.ps1 | iex""" -ForegroundColor Red
+        exit 1
+    }
+    Push-Location $root
+    & uv sync --frozen
+    Pop-Location
 }
 
 # 4. Автопроверка и скачивание движка Stockfish 19

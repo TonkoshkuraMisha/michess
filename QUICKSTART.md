@@ -20,10 +20,8 @@
 
 ### Шаг 3. Настройка Python-окружения, миграций и движка Stockfish (Бэкенд)
 
-    python -m venv michess_env
-    .\michess_env\Scripts\Activate.ps1
-    python -m pip install --upgrade pip
-    pip install -r requirements.txt
+    uv sync                       # создаёт .venv: Python 3.14 из .python-version, пакеты строго по uv.lock
+    .\.venv\Scripts\Activate.ps1
     python scripts/setup_stockfish.py
     python scripts/download_champions.py
     alembic upgrade head
@@ -54,13 +52,13 @@
 
 **Терминал 2 — Бэкенд (FastAPI):**
 
-    .\michess_env\Scripts\Activate.ps1
+    .\.venv\Scripts\Activate.ps1
     alembic upgrade head
     python -m uvicorn src.main:app --host 127.0.0.1 --port 8000 --reload
 
 **Терминал 3 — Celery-воркер (фоновый анализ партий):**
 
-    .\michess_env\Scripts\Activate.ps1
+    .\.venv\Scripts\Activate.ps1
     celery -A src.worker.celery_app worker --loglevel=INFO --pool=solo
 
 `--pool=solo` нужен на Windows: пул prefork у Celery там не работает.
@@ -85,8 +83,8 @@
 
 **Бэкенд:**
 
-    .\michess_env\Scripts\Activate.ps1
-    pip install -r requirements-dev.txt   # один раз: ruff, mypy, pytest-cov
+    .\.venv\Scripts\Activate.ps1
+    uv sync                               # dev-инструменты (ruff, mypy, pytest-cov) ставятся по умолчанию
     ruff check .                          # линтер (правила — pyproject.toml)
     mypy                                  # проверка типов src/
     python -m pytest --cov                # тесты и покрытие (порог — pyproject.toml)

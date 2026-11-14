@@ -131,7 +131,7 @@ compose (или опубликуйте порт `api` только на внут
     # уборка: игроки и их партии
     docker compose -f docker-compose.prod.yml exec -T api python -m scripts.loadtest.seed_users --cleanup
 
-Клиенту нужны `websockets`, `httpx` и `chess` (есть в `requirements.txt`). Код выхода 1 при ошибках
+Клиенту нужны `websockets`, `httpx` и `chess` (есть в `uv.lock`). Код выхода 1 при ошибках
 или p95 выше `--max-p95-ms`. Запускайте на копии, а не на рабочем сервере: тест создаёт партии,
 которые попадают в очередь анализа.
 

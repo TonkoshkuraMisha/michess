@@ -9,7 +9,7 @@
 
 ## 🛠 Технологический стек
 
-### Бэкенд (Python 3.11+)
+### Бэкенд (Python 3.14, менеджер пакетов uv)
 
 * **Framework:** FastAPI (REST API + WebSockets)
 * **База данных:** PostgreSQL 16 (асинхронный `asyncpg` + SQLAlchemy 2.0)
@@ -66,7 +66,7 @@
     git checkout dev
     .\start_dev.ps1
 
-Скрипт `start_dev.ps1` автоматически создаст `.env`, виртуальное окружение `michess_env`, скачает движок Stockfish 19 в
+Скрипт `start_dev.ps1` автоматически создаст `.env`, окружение `.venv` (через `uv sync`), скачает движок Stockfish 19 в
 папку `bin/`, установит пакеты фронтенда, поднимет контейнеры PostgreSQL и Redis, применит миграции Alembic и откроет
 приложение в браузере:
 

@@ -28,7 +28,7 @@ $env:PYTHONIOENCODING = "utf-8"
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
 
-$pythonExe = Join-Path $root "michess_env\Scripts\python.exe"
+$pythonExe = Join-Path $root ".venv\Scripts\python.exe"
 $frontendDir = Join-Path $root "frontend"
 $hostTag = ($env:COMPUTERNAME).ToLower() -replace '[^a-z0-9-]', '-'
 $protectedBranches = @("dev", "master")
@@ -235,25 +235,16 @@ function Sync-Env {
 }
 
 function Sync-Python {
-    Step "Python-окружение (michess_env)"
-    if (-not (Test-Path $pythonExe)) {
-        Info "Создаём виртуальное окружение..."
-        & python -m venv (Join-Path $root "michess_env")
-        if ($LASTEXITCODE -ne 0) { Warn "Не удалось создать venv — установлен ли Python 3?"; return }
-        & $pythonExe -m pip install --quiet --upgrade pip
-    }
-    $reqFiles = @("requirements.txt", "requirements-dev.txt") | ForEach-Object { Join-Path $root $_ }
-    $stamp = Join-Path $root "michess_env\.sync_requirements"
-    $hash = FileHash $reqFiles
-    if ((Test-Path $stamp) -and (Get-Content $stamp -Raw).Trim() -eq $hash) {
-        Ok "Зависимости не менялись"
+    Step "Python-окружение (.venv, uv)"
+    if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
+        Warn "uv не найден. Установка: powershell -ExecutionPolicy ByPass -c ""irm https://astral.sh/uv/install.ps1 | iex"""
         return
     }
-    $pipArgs = @("-m", "pip", "install", "--quiet", "--disable-pip-version-check")
-    foreach ($f in $reqFiles) { if (Test-Path $f) { $pipArgs += @("-r", $f) } }
-    & $pythonExe @pipArgs
-    if ($LASTEXITCODE -eq 0) { Set-Content $stamp $hash; Ok "Зависимости установлены" }
-    else { Warn "pip install завершился с ошибкой" }
+    # uv сам ставит Python из .python-version и держит пакеты строго по uv.lock;
+    # если ничего не менялось, команда отрабатывает мгновенно.
+    & uv sync --frozen --quiet
+    if ($LASTEXITCODE -eq 0) { Ok "Python-окружение синхронизировано с uv.lock" }
+    else { Warn "uv sync завершился с ошибкой" }
 }
 
 function Sync-Frontend {
