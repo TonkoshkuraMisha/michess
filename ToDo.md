@@ -6,7 +6,7 @@
   `.github/workflows/ci.yml` на uv + 3.14; `start_dev.ps1`, `scripts/sync_host.ps1` и доки на `uv sync`;
   удалены `requirements*.txt`; Actions: checkout/setup-node/upload-artifact v7, setup-uv v10.3.3; PR #1–#3 слиты в `dev`.
 - Осталось: слабые боты (ветка `fix/bot-strength-weak` слита, калибровка — `scripts/calibration_runs/`); `dev` → `master`
-  при релизе; `mako==1.4.0` в `uv.lock` помечен yanked — обновить; убрать устаревший `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24`.
+  при релизе (mako обновлён до 1.4.3, `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` убран из CI).
 - Решения/грабли: ruff/mypy на py314 (UP037 исправлен); команды — только через `uv run`; в терминале мог остаться
   `VIRTUAL_ENV=michess_env` (предупреждение uv) — открыть новый терминал; `.idea` указывает на удалённый `michess_env`.
 - Проверка: `uv sync && uv run python -m pytest -q --tb=short --no-header` (1423 passed, 4 skipped).
