@@ -12,8 +12,8 @@ import type {UiMessage} from '../../i18n';
 import {errorMessage} from '../../services/apiErrors';
 import {HISTORICAL_BOTS_LIST} from '../../config/champions';
 import {ALL_TIME_CONTROLS} from '../../config/timeControls';
-import {fetchBotCatalog} from '../../services/botCatalog';
-import type {CatalogArchetype} from '../../services/botCatalog';
+import {fetchBotCatalog, strengthLabel} from '../../services/botCatalog';
+import type {BotStrength, CatalogArchetype} from '../../services/botCatalog';
 import {listPersonalities} from '../../services/personalities';
 import type {Personality} from '../../services/personalities';
 import {
@@ -41,12 +41,17 @@ function CreateTournament() {
     const presets = useMemo(() => ALL_TIME_CONTROLS.filter((o) => !o.isManual), []);
     const [timeControlId, setTimeControlId] = useState(presets.find((o) => o.base === 5)?.id ?? presets[0].id);
     const [archetypes, setArchetypes] = useState<CatalogArchetype[]>([]);
+    // Сила исторических ботов из каталога сервера: посев турнира идёт по измеренной силе, её и показываем.
+    const [historical, setHistorical] = useState<Record<string, BotStrength>>({});
     const [personalities, setPersonalities] = useState<Personality[]>([]);
     const [error, setError] = useState<UiMessage | null>(null);
     const [busy, setBusy] = useState(false);
 
     useEffect(() => {
-        fetchBotCatalog().then((c) => setArchetypes(c.archetypes)).catch(() => undefined);
+        fetchBotCatalog().then((c) => {
+            setArchetypes(c.archetypes);
+            setHistorical(Object.fromEntries(c.historical.map((h) => [h.id, h])));
+        }).catch(() => undefined);
         const token = localStorage.getItem('token');
         if (token) listPersonalities(token).then(setPersonalities).catch(() => undefined);
     }, []);
@@ -73,7 +78,7 @@ function CreateTournament() {
         }
     };
 
-    const chip = (pick: Pick, label: string, rating?: number) => (
+    const chip = (pick: Pick, label: string, rating?: string) => (
         <button key={pickKey(pick)} type="button" onClick={() => toggle(pick)} aria-pressed={chosen(pick)}
                 className={`px-2 py-1 rounded border text-sm cursor-pointer ${chosen(pick)
                     ? 'bg-amber-800 border-amber-400 text-white' : 'bg-black/30 border-amber-900/50 hover:border-amber-600'}`}>
@@ -121,15 +126,16 @@ function CreateTournament() {
             <div className="flex flex-col gap-2">
                 <h3 className="text-sm font-bold">{t('tournaments.historicalBots')}</h3>
                 <div className="flex flex-wrap gap-1.5">
-                    {HISTORICAL_BOTS_LIST.map((b) => chip({kind: 'bot', id: b.id}, ladderOpponentName('historical', b.id, t), b.rating))}
+                    {HISTORICAL_BOTS_LIST.map((b) => chip({kind: 'bot', id: b.id}, ladderOpponentName('historical', b.id, t),
+                        historical[b.id] ? strengthLabel(historical[b.id]) : String(b.rating)))}
                 </div>
                 {archetypes.length > 0 && <h3 className="text-sm font-bold">{t('tournaments.archetypes')}</h3>}
                 <div className="flex flex-wrap gap-1.5">
-                    {archetypes.map((a) => chip({kind: 'archetype', id: a.id}, ladderOpponentName('archetype', a.id, t), a.rating))}
+                    {archetypes.map((a) => chip({kind: 'archetype', id: a.id}, ladderOpponentName('archetype', a.id, t), strengthLabel(a)))}
                 </div>
                 {personalities.length > 0 && <h3 className="text-sm font-bold">{t('tournaments.myOpponents')}</h3>}
                 <div className="flex flex-wrap gap-1.5">
-                    {personalities.map((p) => chip({kind: 'personality', id: p.id}, p.name, p.config.target_elo))}
+                    {personalities.map((p) => chip({kind: 'personality', id: p.id}, p.name, String(p.config.target_elo)))}
                 </div>
             </div>
             {error && <p role="alert" className="text-sm text-rose-300">{renderUiMessage(error, t)}</p>}

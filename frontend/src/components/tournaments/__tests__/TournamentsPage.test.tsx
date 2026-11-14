@@ -100,6 +100,22 @@ describe('создание турнира', () => {
         expect(body.participants).toEqual([{kind: 'bot', id: 'morphy'}, {kind: 'bot', id: 'philidor'}, {kind: 'bot', id: 'staunton'}]);
         expect(await screen.findByText('opened')).toBeInTheDocument();
     });
+
+    it('сила соперников — как в посеве: измеренная с пометкой, без замера — заявленная', async () => {
+        stub({
+            '/tournaments': () => [],
+            '/bots/catalog': () => ({
+                calibration: {date: '2026-11-14', games: 400},
+                historical: [{id: 'morphy', declared_rating: 2150, rating: 2234, measured: true, games: 80, ci95: 90}],
+                archetypes: [],
+            }),
+            '/bots/personalities': () => [],
+        });
+        render(<MemoryRouter><TournamentsPage/></MemoryRouter>);
+
+        expect(await screen.findByRole('button', {name: /^Morphy/})).toHaveTextContent('2234 (meas.)');
+        expect(screen.getByRole('button', {name: /^Philidor/})).not.toHaveTextContent('meas.');
+    });
 });
 
 describe('турнир', () => {
