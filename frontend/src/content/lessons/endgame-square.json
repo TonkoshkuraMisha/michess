@@ -1,0 +1,340 @@
+{
+  "id": "endgame-square",
+  "course": "endgame",
+  "order": 1,
+  "title": {
+    "en": "The rule of the square",
+    "uk": "Правило квадрата",
+    "ru": "Правило квадрата"
+  },
+  "summary": {
+    "en": "Whether the king catches a passed pawn — you can tell without calculating.",
+    "uk": "Чи наздожене король прохідного пішака — можна дізнатися без розрахунку.",
+    "ru": "Догонит ли король проходную пешку — можно узнать без расчёта."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "8/8/8/7k/2P5/8/8/6K1 w - - 0 1",
+      "arrows": [
+        {
+          "from": "c4",
+          "to": "c8",
+          "color": "green"
+        }
+      ],
+      "highlights": [
+        "c4",
+        "g4",
+        "g8",
+        "c8"
+      ],
+      "text": {
+        "en": "Picture a square: from the pawn to its promotion square and the same distance sideways — here c4–c8–g8–g4. If the enemy king, on its move, can step into the square, it catches the pawn. If not, the pawn queens.",
+        "uk": "Подумки побудуйте квадрат: від пішака до поля перетворення і стільки ж убік — тут c4–c8–g8–g4. Якщо король суперника, коли хід його, може стати в квадрат, він наздожене пішака. Якщо ні — пішак стане ферзем.",
+        "ru": "Мысленно постройте квадрат: от пешки до поля превращения и столько же в сторону — здесь c4–c8–g8–g4. Если король соперника, когда ход его, может встать в квадрат, он догонит пешку. Если нет — пешка станет ферзём."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "8/8/8/7k/2P5/8/8/6K1 w - - 0 1",
+      "actions": [
+        {
+          "do": "move",
+          "uci": "c4c5"
+        },
+        {
+          "do": "highlight",
+          "squares": [
+            "c5",
+            "f5",
+            "f8",
+            "c8"
+          ]
+        },
+        {
+          "do": "pause",
+          "ms": 700
+        },
+        {
+          "do": "move",
+          "uci": "h5g6"
+        },
+        {
+          "do": "move",
+          "uci": "c5c6"
+        },
+        {
+          "do": "move",
+          "uci": "g6f7"
+        },
+        {
+          "do": "move",
+          "uci": "c6c7"
+        },
+        {
+          "do": "move",
+          "uci": "f7e7"
+        },
+        {
+          "do": "move",
+          "uci": "c7c8q"
+        }
+      ],
+      "text": {
+        "en": "White to move: the pawn steps and the square shrinks to c5–f8. The king on h5 can no longer get in — and is exactly one move late.",
+        "uk": "Хід білих: пішак ступає, і квадрат стискається до c5–f8. Король h5 у нього вже не потрапляє — і запізнюється рівно на один хід.",
+        "ru": "Ход белых: пешка шагает, и квадрат сжимается до c5–f8. Король h5 в него уже не попадает — и опаздывает ровно на один ход."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "8/7k/8/p2P4/7p/5P1K/8/8 w - - 0 45",
+      "text": {
+        "en": "Your move. Find the winning move.",
+        "uk": "Ваш хід. Знайдіть виграшний хід.",
+        "ru": "Ваш ход. Найдите выигрывающий ход."
+      },
+      "hint": {
+        "en": "Build the square of the d5 pawn. Where is the black king?",
+        "uk": "Побудуйте квадрат пішака d5. Де чорний король?",
+        "ru": "Постройте квадрат пешки d5. Где чёрный король?"
+      },
+      "line": [
+        {
+          "answers": [
+            "d5d6"
+          ],
+          "reply": "h7g6",
+          "correct": {
+            "en": "The black king is outside the d6–d8–f8–f6 square — it cannot catch the pawn.",
+            "uk": "Король чорних поза квадратом d6–d8–f8–f6 — наздогнати пішака він не встигне.",
+            "ru": "Король чёрных вне квадрата d6–d8–f8–f6 — догнать пешку он не успеет."
+          }
+        },
+        {
+          "answers": [
+            "d6d7"
+          ],
+          "correct": {
+            "en": "The pawn will queen.",
+            "uk": "Пішак проходить у ферзі.",
+            "ru": "Пешка проходит в ферзи."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/8/4p3/8/8/8/2K1k1P1/8 w - - 5 52",
+      "text": {
+        "en": "Your move. The g2 pawn is still on its starting square. How does it get through?",
+        "uk": "Ваш хід. Пішак g2 ще на вихідній. Як йому пройти?",
+        "ru": "Ваш ход. Пешка g2 ещё на исходной. Как ей пройти?"
+      },
+      "hint": {
+        "en": "From its starting square a pawn may move two squares.",
+        "uk": "З вихідного поля пішак може ступити одразу на два.",
+        "ru": "С исходного поля пешка может шагнуть сразу на два."
+      },
+      "line": [
+        {
+          "answers": [
+            "g2g4"
+          ],
+          "reply": "e2f2",
+          "correct": {
+            "en": "A double step: the square is now g4–g8–c8–c4, and the king on e2 cannot get in.",
+            "uk": "Подвійний крок: квадрат тепер g4–g8–c8–c4, а королю e2 у нього не потрапити.",
+            "ru": "Двойной шаг: квадрат теперь g4–g8–c8–c4, а королю e2 в него не попасть."
+          }
+        },
+        {
+          "answers": [
+            "g4g5"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "8/8/8/4k3/2P5/8/8/6K1 b - - 0 1",
+      "highlights": [
+        "c4",
+        "g4",
+        "g8",
+        "c8"
+      ],
+      "text": {
+        "en": "Black to move. Can the king catch the c4 pawn?",
+        "uk": "Хід чорних. Чи наздожене король пішака c4?",
+        "ru": "Ход чёрных. Догонит ли король пешку c4?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "Yes: the king is already inside the c4–c8–g8–g4 square.",
+            "uk": "Так: король уже стоїть у квадраті c4–c8–g8–g4.",
+            "ru": "Да: король уже стоит в квадрате c4–c8–g8–g4."
+          },
+          "feedback": {
+            "en": "Right — it will always get in front of the pawn.",
+            "uk": "Правильно — він завжди встигне стати на шляху пішака.",
+            "ru": "Верно — он всегда успеет встать на пути пешки."
+          }
+        },
+        {
+          "text": {
+            "en": "No: the pawn is faster than the king.",
+            "uk": "Ні: пішак ходить швидше за короля.",
+            "ru": "Нет: пешка ходит быстрее короля."
+          },
+          "feedback": {
+            "en": "The king is inside the square — so it is in time.",
+            "uk": "Король усередині квадрата — отже, встигає.",
+            "ru": "Король внутри квадрата — значит, успевает."
+          }
+        },
+        {
+          "text": {
+            "en": "Only if the white king helps.",
+            "uk": "Тільки якщо білий король допоможе.",
+            "ru": "Только если белый король поможет."
+          },
+          "feedback": {
+            "en": "The white king is far away; the square decides it.",
+            "uk": "Білий король далеко; усе вирішує квадрат.",
+            "ru": "Белый король далеко; всё решает квадрат."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/5k2/1pK5/p6P/8/8/6P1/8 b - - 3 52",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. The white king is close, but can it stop the a5 pawn?",
+        "uk": "Хід чорних. У білих король поруч, але чи зможе він зупинити пішака a5?",
+        "ru": "Ход чёрных. У белых король рядом, но сможет ли он остановить пешку a5?"
+      },
+      "line": [
+        {
+          "answers": [
+            "a5a4"
+          ],
+          "reply": "c6b5",
+          "correct": {
+            "en": "The white king does not reach the a4–a1–d1–d4 square in time.",
+            "uk": "Король білих не встигає у квадрат a4–a1–d1–d4.",
+            "ru": "Король белых не успевает в квадрат a4–a1–d1–d4."
+          }
+        },
+        {
+          "answers": [
+            "a4a3"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "8/8/8/7k/2P5/8/8/6K1 w - - 0 1",
+      "text": {
+        "en": "Mind two things: whose move it is (a pawn move shrinks the square) and the double step from the starting square. And if pieces stand in the king's way, the square can mislead — then count the moves.",
+        "uk": "Враховуйте дві речі: чий хід (хід пішака стискає квадрат) і подвійний крок із вихідного поля. А якщо на шляху короля стоять фігури — квадрат може підвести, тоді рахуйте ходи.",
+        "ru": "Учитывайте две вещи: чей ход (ход пешки сжимает квадрат) и двойной шаг с исходного поля. А если на пути короля стоят фигуры — квадрат может обмануть, тогда считайте ходы."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "8/8/8/8/2pPK3/8/5k2/8 w - - 1 53",
+      "text": {
+        "en": "Your move. Find the winning move.",
+        "uk": "Ваш хід. Знайдіть виграшний хід.",
+        "ru": "Ваш ход. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "d4d5"
+          ],
+          "reply": "c4c3"
+        },
+        {
+          "answers": [
+            "e4d3"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "5k2/8/5PK1/7p/6p1/8/7P/8 b - - 4 55",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Find the winning move.",
+        "uk": "Хід чорних. Знайдіть виграшний хід.",
+        "ru": "Ход чёрных. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "h5h4"
+          ],
+          "reply": "g6g5"
+        },
+        {
+          "answers": [
+            "g4g3"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "The pawn is still on the second rank. Where do you build the square from?",
+        "uk": "Пішак ще на другій горизонталі. Звідки будувати квадрат?",
+        "ru": "Пешка ещё на второй горизонтали. Откуда строить квадрат?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "From the fourth rank: on its first move the pawn may advance two squares.",
+            "uk": "Від четвертої горизонталі: першим ходом пішак може ступити на два поля.",
+            "ru": "От четвёртой горизонтали: первым ходом пешка может шагнуть на два поля."
+          }
+        },
+        {
+          "text": {
+            "en": "From the second rank, where the pawn stands.",
+            "uk": "Від другої горизонталі, де пішак стоїть.",
+            "ru": "От второй горизонтали, где пешка стоит."
+          },
+          "feedback": {
+            "en": "Then you forget the double step and miscount by a move.",
+            "uk": "Так ви забудете про подвійний крок і помилитеся на хід.",
+            "ru": "Так вы забудете про двойной шаг и ошибётесь на ход."
+          }
+        },
+        {
+          "text": {
+            "en": "From the promotion square.",
+            "uk": "Від поля перетворення.",
+            "ru": "От поля превращения."
+          },
+          "feedback": {
+            "en": "The square always starts at the pawn.",
+            "uk": "Квадрат завжди починається від пішака.",
+            "ru": "Квадрат всегда начинается от пешки."
+          }
+        }
+      ]
+    }
+  ]
+}

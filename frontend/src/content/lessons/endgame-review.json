@@ -1,0 +1,299 @@
+{
+  "id": "endgame-review",
+  "course": "endgame",
+  "order": 6,
+  "title": {
+    "en": "Convert the advantage",
+    "uk": "Реалізуйте перевагу",
+    "ru": "Реализуйте перевес"
+  },
+  "summary": {
+    "en": "Course review: the king, passed pawns, trades and endgame tactics.",
+    "uk": "Повторення курсу: король, прохідні, розміни й тактика в ендшпілі.",
+    "ru": "Повторение курса: король, проходные, размены и тактика в эндшпиле."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "8/5R2/4kpK1/5rP1/8/8/8/8 w - - 1 61",
+      "text": {
+        "en": "An endgame checklist: is my king active? Is there a passed pawn and what stops it? Is a trade favourable? Any tactics — a check, a pin, a skewer? Tactics occur in the endgame as often as in the middlegame.",
+        "uk": "Чек-лист ендшпілю: чи активний мій король? Чи є прохідний і що йому заважає? Чи вигідний розмін? Чи немає тактики — шаху, зв'язки, наскрізного удару? В ендшпілі тактика трапляється не рідше, ніж у мітельшпілі.",
+        "ru": "Чек-лист эндшпиля: активен ли мой король? Есть ли проходная и что ей мешает? Выгоден ли размен? Нет ли тактики — шаха, связки, сквозного удара? В эндшпиле тактика встречается не реже, чем в миттельшпиле."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "8/5R2/4kpK1/5rP1/8/8/8/8 w - - 1 61",
+      "text": {
+        "en": "Your move. Find the winning move.",
+        "uk": "Ваш хід. Знайдіть виграшний хід.",
+        "ru": "Ваш ход. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "f7f6"
+          ],
+          "reply": "f5f6",
+          "correct": {
+            "en": "The rook takes the pawn with check and offers a trade.",
+            "uk": "Тура бере пішака з шахом і пропонує розмін.",
+            "ru": "Ладья берёт пешку с шахом и предлагает размен."
+          }
+        },
+        {
+          "answers": [
+            "g5f6"
+          ],
+          "correct": {
+            "en": "The pawn ending with the passed f6 pawn is won.",
+            "uk": "Пішаковий ендшпіль із прохідним f6 виграно.",
+            "ru": "Пешечный эндшпиль с проходной f6 выигран."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/8/7p/1P4k1/2p5/6PK/1R6/2r5 w - - 2 46",
+      "text": {
+        "en": "Your move. Find the winning move.",
+        "uk": "Ваш хід. Знайдіть виграшний хід.",
+        "ru": "Ваш ход. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "b5b6"
+          ],
+          "reply": "c1h1",
+          "correct": {
+            "en": "The passed pawn advances; the rook's checks are harmless.",
+            "uk": "Прохідний іде вперед; шахи тури не страшні.",
+            "ru": "Проходная идёт вперёд; шахи ладьи не страшны."
+          }
+        },
+        {
+          "answers": [
+            "h3g2"
+          ],
+          "correct": {
+            "en": "The king steps out of the checks, and the b-pawn can no longer be stopped.",
+            "uk": "Король іде від шахів, а пішака b уже не зупинити.",
+            "ru": "Король уходит от шахов, а пешку b уже не остановить."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "7k/7p/p7/Ppp5/8/8/5pK1/8 w - b6 0 52",
+      "text": {
+        "en": "Your move. Find the winning move.",
+        "uk": "Ваш хід. Знайдіть виграшний хід.",
+        "ru": "Ваш ход. Найдите выигрывающий ход."
+      },
+      "hint": {
+        "en": "The b-pawn has just made a double step.",
+        "uk": "Пішак b6 щойно зробив подвійний крок.",
+        "ru": "Пешка b6 только что сделала двойной шаг."
+      },
+      "line": [
+        {
+          "answers": [
+            "a5b6"
+          ],
+          "reply": "f2f1q",
+          "correct": {
+            "en": "En passant! White now has a passed pawn on b6.",
+            "uk": "Взяття на проході! У білих з'явився прохідний b6.",
+            "ru": "Взятие на проходе! У белых появилась проходная b6."
+          }
+        },
+        {
+          "answers": [
+            "g2f1"
+          ],
+          "correct": {
+            "en": "The new queen is taken, and the black king cannot catch the b6 pawn.",
+            "uk": "Нового ферзя взято, а пішака b6 чорний король не наздожене.",
+            "ru": "Новый ферзь взят, а пешку b6 чёрный король не догонит."
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "Where should you usually start in a quiet endgame?",
+        "uk": "З чого найчастіше варто почати в спокійному ендшпілі?",
+        "ru": "С чего чаще всего стоит начать в спокойном эндшпиле?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "By activating the king.",
+            "uk": "З активізації короля.",
+            "ru": "С активизации короля."
+          },
+          "feedback": {
+            "en": "Yes. In the endgame the king is a strong piece, and every tempo spent bringing it closer counts.",
+            "uk": "Так. Король в ендшпілі — сильна фігура, і кожен темп на його підхід дорогий.",
+            "ru": "Да. Король в эндшпиле — сильная фигура, и каждый темп на его подход дорог."
+          }
+        },
+        {
+          "text": {
+            "en": "By trading all the pawns.",
+            "uk": "З розміну всіх пішаків.",
+            "ru": "С размена всех пешек."
+          },
+          "feedback": {
+            "en": "Without pawns there is usually nothing to win with — trade pieces, not pawns.",
+            "uk": "Без пішаків виграти зазвичай нічим — міняйте фігури, а не пішаки.",
+            "ru": "Без пешек выиграть обычно нечем — меняйте фигуры, а не пешки."
+          }
+        },
+        {
+          "text": {
+            "en": "By hiding the king in the corner.",
+            "uk": "З того, щоб сховати короля в кут.",
+            "ru": "С того, чтобы спрятать короля в угол."
+          },
+          "feedback": {
+            "en": "That is middlegame advice; in the endgame the king must work.",
+            "uk": "Це порада для мітельшпілю; в ендшпілі король має працювати.",
+            "ru": "Это совет для миттельшпиля; в эндшпиле король должен работать."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/8/4k1p1/4p1P1/7P/3K4/8/8 b - - 12 53",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Find the winning move.",
+        "uk": "Хід чорних. Знайдіть виграшний хід.",
+        "ru": "Ход чёрных. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "e6f5"
+          ],
+          "reply": "h4h5"
+        },
+        {
+          "answers": [
+            "g6h5"
+          ],
+          "correct": {
+            "en": "The king goes after the pawns — the ending is won.",
+            "uk": "Король іде по пішаків — ендшпіль виграно.",
+            "ru": "Король идёт за пешками — эндшпиль выигран."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "1K1k4/1p1r4/8/P7/8/8/8/2R5 w - - 7 54",
+      "text": {
+        "en": "Your move. Find the winning move.",
+        "uk": "Ваш хід. Знайдіть виграшний хід.",
+        "ru": "Ваш ход. Найдите выигрывающий ход."
+      },
+      "hint": {
+        "en": "A check will drive the king onto a line with its rook.",
+        "uk": "Шах вижене короля на одну лінію з турою.",
+        "ru": "Шах выгонит короля на одну линию с ладьёй."
+      },
+      "line": [
+        {
+          "answers": [
+            "c1c8"
+          ],
+          "reply": "d8e7"
+        },
+        {
+          "answers": [
+            "c8c7"
+          ],
+          "correct": {
+            "en": "A pin! The d7 rook is pinned to the king on e7 and will be lost.",
+            "uk": "Зв'язка! Тура d7 зв'язана з королем e7 і пропадає.",
+            "ru": "Связка! Ладья d7 связана с королём e7 и пропадает."
+          }
+        }
+      ]
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "8/8/1P5p/1K2k1p1/P3P3/5p2/8/8 b - - 0 50",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Find the winning move.",
+        "uk": "Хід чорних. Знайдіть виграшний хід.",
+        "ru": "Ход чёрных. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "f3f2"
+          ],
+          "reply": "b6b7"
+        },
+        {
+          "answers": [
+            "f2f1q"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/6p1/5k2/8/5PP1/R4K1P/8/7r b - - 9 43",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Find the winning move.",
+        "uk": "Хід чорних. Знайдіть виграшний хід.",
+        "ru": "Ход чёрных. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "h1h3"
+          ],
+          "reply": "f3e4"
+        },
+        {
+          "answers": [
+            "h3a3"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/2P3R1/8/7p/8/5kP1/2r5/5K2 b - - 4 45",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Mate in one.",
+        "uk": "Хід чорних. Мат в один хід.",
+        "ru": "Ход чёрных. Мат в один ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "c2c1"
+          ]
+        }
+      ]
+    }
+  ]
+}

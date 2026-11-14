@@ -1,0 +1,310 @@
+{
+  "id": "endgame-passed-pawn",
+  "course": "endgame",
+  "order": 5,
+  "title": {
+    "en": "The passed pawn",
+    "uk": "Прохідний пішак",
+    "ru": "Проходная пешка"
+  },
+  "summary": {
+    "en": "A pawn unopposed by enemy pawns must be pushed — and supported by the king and rook.",
+    "uk": "Пішака, якому не заважають пішаки суперника, треба просувати — і підтримувати королем і турою.",
+    "ru": "Пешку, которой не мешают пешки соперника, нужно двигать — и поддерживать королём и ладьёй."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "8/8/1P1P4/2p4p/2P1K3/1r6/6k1/8 w - - 1 54",
+      "highlights": [
+        "b6",
+        "d6"
+      ],
+      "text": {
+        "en": "A passed pawn has no enemy pawns in its way to promotion. The further it has advanced, the more dangerous it is. A single rook usually cannot hold two passed pawns at once.",
+        "uk": "Прохідний пішак — той, якому на шляху до перетворення не заважають пішаки суперника. Що далі він просунувся, то він небезпечніший. Двох прохідних одразу одна тура зазвичай не втримує.",
+        "ru": "Проходная пешка — та, которой на пути к превращению не мешают пешки соперника. Чем дальше она продвинулась, тем она опаснее. Две проходные сразу одна ладья обычно не удерживает."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "8/8/1P1P4/2p4p/2P1K3/1r6/6k1/8 w - - 1 54",
+      "text": {
+        "en": "Your move. Find the winning move.",
+        "uk": "Ваш хід. Знайдіть виграшний хід.",
+        "ru": "Ваш ход. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "d6d7"
+          ],
+          "reply": "b3b6",
+          "correct": {
+            "en": "The rook takes one pawn, but the other can no longer be stopped.",
+            "uk": "Тура забирає одного пішака, але другого вже не зупинити.",
+            "ru": "Ладья забирает одну пешку, но вторая уже не остановить."
+          }
+        },
+        {
+          "answers": [
+            "d7d8q"
+          ],
+          "correct": {
+            "en": "A new queen against a rook — a decisive advantage.",
+            "uk": "Новий ферзь проти тури — вирішальна перевага.",
+            "ru": "Новый ферзь против ладьи — решающий перевес."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "R7/5p2/8/P2K1k2/2P2rp1/8/8/8 b - - 0 39",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Find the winning move.",
+        "uk": "Хід чорних. Знайдіть виграшний хід.",
+        "ru": "Ход чёрных. Найдите выигрывающий ход."
+      },
+      "hint": {
+        "en": "Push your most dangerous passed pawn.",
+        "uk": "Просувайте найнебезпечнішого прохідного.",
+        "ru": "Двигайте самую опасную проходную."
+      },
+      "line": [
+        {
+          "answers": [
+            "g4g3"
+          ],
+          "reply": "a8b8",
+          "correct": {
+            "en": "The pawn races ahead, and the f4 rook cuts off the white king.",
+            "uk": "Пішак рветься вперед, а тура f4 відрізає білого короля.",
+            "ru": "Пешка рвётся вперёд, а ладья f4 отрезает белого короля."
+          }
+        },
+        {
+          "answers": [
+            "g3g2"
+          ],
+          "correct": {
+            "en": "The pawn will queen.",
+            "uk": "Пішак проходить у ферзі.",
+            "ru": "Пешка проходит в ферзи."
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "6k1/8/8/8/P7/8/8/R5K1 w - - 0 1",
+      "arrows": [
+        {
+          "from": "a1",
+          "to": "a4",
+          "color": "green"
+        }
+      ],
+      "text": {
+        "en": "Where is the rook best placed when there is a passed pawn?",
+        "uk": "Де найкраще стояти турі, коли на дошці прохідний пішак?",
+        "ru": "Где лучше всего стоять ладье, когда на доске проходная пешка?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "Behind the passed pawn — yours or the opponent's.",
+            "uk": "Позаду прохідного — свого чи чужого.",
+            "ru": "Позади проходной — своей или чужой."
+          },
+          "feedback": {
+            "en": "Yes, that is Tarrasch's rule: from behind the rook supports its own pawn or chases the enemy's, and grows stronger with every step the pawn takes.",
+            "uk": "Так, це правило Тарраша: ззаду тура підтримує свого пішака або переслідує чужого, і з кожним кроком пішака її сила зростає.",
+            "ru": "Да, это правило Тарраша: сзади ладья поддерживает свою пешку или преследует чужую, и с каждым шагом пешки её сила растёт."
+          }
+        },
+        {
+          "text": {
+            "en": "In front of the passed pawn, to blockade it.",
+            "uk": "Попереду прохідного, щоб його блокувати.",
+            "ru": "Впереди проходной, чтобы её блокировать."
+          },
+          "feedback": {
+            "en": "A rook is a poor blockader: it loses mobility. A king or minor piece blockades better.",
+            "uk": "Тура — поганий блокувальник: вона втрачає рухливість. Блокувати краще королем або легкою фігурою.",
+            "ru": "Ладья — плохой блокёр: она теряет подвижность. Блокировать лучше королём или лёгкой фигурой."
+          }
+        },
+        {
+          "text": {
+            "en": "Beside the pawn, on the same rank.",
+            "uk": "Збоку від пішака, на тій самій горизонталі.",
+            "ru": "Сбоку от пешки, на той же горизонтали."
+          },
+          "feedback": {
+            "en": "From the side the rook must retreat with every step the pawn takes.",
+            "uk": "Збоку турі доведеться відступати з кожним кроком пішака.",
+            "ru": "Сбоку ладье придётся отступать с каждым шагом пешки."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/8/8/4p3/2p5/1pk5/4R3/3K4 b - - 1 58",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Find the winning move.",
+        "uk": "Хід чорних. Знайдіть виграшний хід.",
+        "ru": "Ход чёрных. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "b3b2"
+          ],
+          "reply": "e2c2",
+          "correct": {
+            "en": "The pawn advances, and the king will hide from the checks next to it.",
+            "uk": "Пішак іде вперед, а від шахів король сховається поруч із ним.",
+            "ru": "Пешка идёт вперёд, а от шахов король спрячется рядом с ней."
+          }
+        },
+        {
+          "answers": [
+            "c3b3"
+          ],
+          "correct": {
+            "en": "The king guards the pawn and shelters behind it — White cannot hold b1.",
+            "uk": "Король захищає пішака й прикривається ним — білі не втримають поле b1.",
+            "ru": "Король защищает пешку и прикрывается ею — белые не удержат поле b1."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "2R5/8/8/8/2k5/1p5P/3K4/7r b - - 8 65",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Find the winning move.",
+        "uk": "Хід чорних. Знайдіть виграшний хід.",
+        "ru": "Ход чёрных. Найдите выигрывающий ход."
+      },
+      "hint": {
+        "en": "The king needs shelter from the rook's checks.",
+        "uk": "Королю потрібне укриття від шахів тури.",
+        "ru": "Королю нужно укрытие от шахов ладьи."
+      },
+      "line": [
+        {
+          "answers": [
+            "c4b4"
+          ],
+          "reply": "c8b8"
+        },
+        {
+          "answers": [
+            "b4a3"
+          ],
+          "correct": {
+            "en": "The king has escaped the checks, and the b-pawn will advance.",
+            "uk": "Король сховався від шахів, і пішак b піде вперед.",
+            "ru": "Король спрятался от шахов, и пешка b пойдёт вперёд."
+          }
+        }
+      ]
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "6R1/8/8/6Pp/p1k3rP/7K/8/8 b - - 4 44",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Find the winning move.",
+        "uk": "Хід чорних. Знайдіть виграшний хід.",
+        "ru": "Ход чёрных. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "a4a3"
+          ],
+          "reply": "g5g6"
+        },
+        {
+          "answers": [
+            "a3a2"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/8/8/1k4p1/5r2/7P/5R2/5K2 w - - 0 50",
+      "text": {
+        "en": "Your move. Find the winning move.",
+        "uk": "Ваш хід. Знайдіть виграшний хід.",
+        "ru": "Ваш ход. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "f2f4"
+          ],
+          "reply": "g5f4"
+        },
+        {
+          "answers": [
+            "h3h4"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "Two connected passed pawns against a lone rook usually…",
+        "uk": "Два зв'язані прохідні проти однієї тури — зазвичай…",
+        "ru": "Две связанные проходные против одной ладьи — обычно…"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "…beat the rook if the pawns are far advanced.",
+            "uk": "…сильніші за туру, якщо пішаки далеко просунуті.",
+            "ru": "…сильнее ладьи, если пешки далеко продвинуты."
+          }
+        },
+        {
+          "text": {
+            "en": "…are easily stopped by the rook.",
+            "uk": "…легко зупиняються турою.",
+            "ru": "…легко останавливаются ладьёй."
+          },
+          "feedback": {
+            "en": "The rook cannot attack both pawns at once.",
+            "uk": "Тура не може бити обох пішаків одразу.",
+            "ru": "Ладья не может бить обе пешки сразу."
+          }
+        },
+        {
+          "text": {
+            "en": "…always lose.",
+            "uk": "…завжди програють.",
+            "ru": "…всегда проигрывают."
+          },
+          "feedback": {
+            "en": "The opposite: advanced connected passed pawns often beat a rook.",
+            "uk": "Навпаки: просунуті зв'язані прохідні часто виграють у тури.",
+            "ru": "Наоборот: продвинутые связанные проходные часто выигрывают у ладьи."
+          }
+        }
+      ]
+    }
+  ]
+}
