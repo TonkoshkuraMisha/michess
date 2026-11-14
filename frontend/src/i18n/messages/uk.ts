@@ -192,6 +192,8 @@ export const uk: Messages = {
         subtitle: 'Чужі роботи, на яких побудовано michess, їхні автори та умови використання.',
         engineTitle: 'Шаховий рушій',
         engineText: 'Аналіз партій і гра ботів працюють на рушії Stockfish. Він поширюється за ліцензією GNU GPL версії 3; вихідний код — {link}. Рушій запускається як окрема програма і не змінений.',
+        engineVersion: 'У цій установці працює {name}. Вихідний код саме цієї версії — {link}; повний текст ліцензії є в образі сервера (/usr/share/common-licenses/GPL-3).',
+        engineSource: 'на GitHub',
         piecesTitle: 'Набори фігур',
         pieceSet: 'Набір',
         author: 'Автор',

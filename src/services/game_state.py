@@ -20,6 +20,7 @@ from src.db.session import AsyncSessionLocal
 from src.models.game import Game, GameStatus
 from src.models.move import Move
 from src.models.user import User
+from src.services import product_metrics
 from src.services.anticheat import evaluate_game_telemetry
 from src.services.game_engine import (  # noqa: F401  (flag_outcome реэкспортируется для тестов)
     FLAG_DRAW_TERMINATION,
@@ -760,6 +761,9 @@ class GameStateManager:
             if meta["eco"]:
                 db_game.eco = meta["eco"]
 
+        for player in (white_user, black_user):
+            if player is not None and not player.is_bot:
+                await product_metrics.record_event(db, player.id, product_metrics.GAME_FINISHED)
         await db.commit()
         await self._mark_finished_in_db(game_id)
         GAMES_FINISHED.labels(bounded_label(termination)).inc()

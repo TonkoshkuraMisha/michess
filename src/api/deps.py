@@ -9,6 +9,7 @@ from src.core.security import InvalidTokenError, decode_user_token
 from src.db import redis as redis_module
 from src.db.session import get_db, get_session_factory
 from src.models.user import User
+from src.services import product_metrics
 
 # Схема для извлечения токена из заголовка Authorization: Bearer
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl=f"{settings.API_V1_STR}/auth/login")
@@ -33,7 +34,8 @@ async def user_from_token(db: AsyncSession, token: str) -> User | None:
 
 async def get_current_user(
         token: str = Depends(oauth2_scheme),
-        db: AsyncSession = Depends(get_db)
+        db: AsyncSession = Depends(get_db),
+        session_factory: async_sessionmaker[AsyncSession] = Depends(get_session_factory),
 ) -> User:
     """
     Dependency for HTTP endpoints to authenticate users via Bearer token in headers.
@@ -42,6 +44,7 @@ async def get_current_user(
     if user is None:
         raise ApiError(status.HTTP_401_UNAUTHORIZED, "not_authenticated", headers={"WWW-Authenticate": "Bearer"})
     await note_active_player(user.id)  # для метрики «процессор на активного игрока» (таск 23.3)
+    await product_metrics.mark_active(session_factory, user.id)  # удержание D1/D7/D30 (таск 23.5)
     return user
 
 

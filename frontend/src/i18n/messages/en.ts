@@ -188,6 +188,8 @@ export const en = {
         subtitle: 'Third-party works michess is built on, their authors and terms of use.',
         engineTitle: 'Chess engine',
         engineText: 'Game analysis and bot play run on the Stockfish engine. It is distributed under the GNU GPL version 3; the source code is at {link}. The engine runs as a separate program and is unmodified.',
+        engineVersion: 'This installation runs {name}. The source code of exactly this version is {link}; the full licence text is in the server image (/usr/share/common-licenses/GPL-3).',
+        engineSource: 'on GitHub',
         piecesTitle: 'Piece sets',
         pieceSet: 'Set',
         author: 'Author',

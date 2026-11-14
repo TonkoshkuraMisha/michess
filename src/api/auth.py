@@ -16,6 +16,7 @@ from src.db import redis as redis_module
 from src.db.session import get_db
 from src.models.user import RATING_CATEGORIES, User
 from src.schemas.user import UserCreate, UserResponse, username_key
+from src.services import product_metrics
 from src.services.onboarding import starting_rating
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -89,6 +90,8 @@ async def register_user(user_in: UserCreate, request: Request, db: AsyncSession 
         await db.rollback()
         raise ApiError(status.HTTP_400_BAD_REQUEST, "username_taken") from None
     await db.refresh(new_user)
+    await product_metrics.record_event(db, new_user.id, product_metrics.REGISTERED)
+    await db.commit()
 
     return new_user
 

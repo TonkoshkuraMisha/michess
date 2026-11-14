@@ -33,6 +33,7 @@ from src.core.errors import DomainError, DomainValueError
 from src.db import redis as redis_module
 from src.models.puzzle import Puzzle, PuzzleAttempt, PuzzleTheme, ThemeProgress
 from src.models.user import User
+from src.services import product_metrics
 from src.services.themes import SECTIONS, THEMES, THEMES_BY_CODE
 
 SESSION_TTL_S = 2 * 60 * 60
@@ -424,6 +425,7 @@ async def _finish(db: AsyncSession, user: User, puzzle: Puzzle, session: PuzzleS
     if session.training and session.stage:
         training = await update_theme_progress(db, user.id, session.training, session.stage,
                                           clean=solved and session.hints == 0)
+    await product_metrics.record_event(db, user.id, product_metrics.PUZZLE_ATTEMPT)
     await db.commit()
     await _drop_session(user.id)
     run = await _count_in_run(user.id, session.run, solved) if session.run else None
