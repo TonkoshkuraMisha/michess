@@ -4,7 +4,7 @@
 
 import {render, screen, within} from '@testing-library/react';
 import {MemoryRouter} from 'react-router-dom';
-import {afterEach, describe, expect, it} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import About from '../About';
 import {PIECE_SETS, getSavedPieceSetKey} from '../../config/boardAppearance';
 import portraitCredits from '../../config/portraitCredits.json';
@@ -17,8 +17,15 @@ function renderAbout() {
     );
 }
 
+const ENGINE = {name: 'Stockfish 17.1', source_url: 'https://github.com/official-stockfish/Stockfish/tree/sf_17.1'};
+
+beforeEach(() => {
+    vi.stubGlobal('fetch', vi.fn(async () => ({ok: true, json: async () => ENGINE}) as Response));
+});
+
 afterEach(() => {
     localStorage.clear();
+    vi.unstubAllGlobals();
 });
 
 describe('About', () => {
@@ -26,6 +33,20 @@ describe('About', () => {
         renderAbout();
         expect(screen.getByText(/GNU GPL версии 3/)).toBeInTheDocument();
         expect(screen.getByRole('link', {name: /github\.com\/official-stockfish\/Stockfish/})).toBeInTheDocument();
+    });
+
+    it('версия движка этой установки и исходники именно её (GPL)', async () => {
+        renderAbout();
+        const line = await screen.findByTestId('engine-version');
+        expect(line).toHaveTextContent('В этой установке работает Stockfish 17.1');
+        expect(within(line).getByRole('link', {name: 'на GitHub'})).toHaveAttribute('href', ENGINE.source_url);
+    });
+
+    it('без сведений о движке строки о версии нет', async () => {
+        vi.stubGlobal('fetch', vi.fn(async () => ({ok: false, json: async () => ({})}) as Response));
+        renderAbout();
+        await Promise.resolve();
+        expect(screen.queryByTestId('engine-version')).toBeNull();
     });
 
     it('показывает автора и лицензию каждого набора фигур из интерфейса', () => {

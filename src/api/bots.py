@@ -20,6 +20,7 @@ from src.core.errors import ApiError, DomainError, DomainValueError, validation_
 from src.db import session as db_session
 from src.models.game import Game, GameStatus
 from src.models.user import User
+from src.services import engine_info
 from src.services import ladder as ladder_service
 from src.services import tournaments as tournament_service
 from src.services.bots import calibration as bot_calibration
@@ -453,6 +454,15 @@ def _playable_board(fen: str) -> chess.Board:
     if board.is_game_over():
         raise ApiError(400, "game_already_over")
     return board
+
+
+@router.get("/engine")
+async def get_engine_info():
+    """
+    Движок этой установки для «О проекте» (таск 23.1): версия, лицензия GPL-3.0 и исходники именно этой версии.
+    Сведения без опасности для честной игры — ни оценок, ни ходов.
+    """
+    return await asyncio.to_thread(engine_info.describe, resolve_stockfish_path())
 
 
 @router.get("/catalog")
