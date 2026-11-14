@@ -943,9 +943,10 @@ export default function Chessboard() {
     })();
     // Пока стоят предходы, доска показывает фигуры на их полях (цепочка предходов, таск B.2).
     const boardState = (viewIndex === -1 && premoves.length > 0 ? premoveView : currentGame).board();
-    // Пометки игрока правой кнопкой (таск B.1); снимаются при смене позиции. Пока стоит предход или выбрана фигура,
-    // правая кнопка их отменяет (onContextMenu ниже) и стрелку не рисует.
-    const annotations = useBoardAnnotations(currentGame.fen(), !(premove || pendingPromotion || selectedSquare));
+    // Пометки игрока правой кнопкой (таск B.1); снимаются при смене позиции. Пока стоит предход или выбирается
+    // превращение, правая кнопка их отменяет (onContextMenu ниже) и стрелку не рисует. Выбранная фигура пометкам не
+    // мешает: правая кнопка снимает выбор и рисует стрелку — расчёт варианта не требует сначала отпустить фигуру.
+    const annotations = useBoardAnnotations(currentGame.fen(), !(premove || pendingPromotion));
     const xrayAvailable = Boolean(spectatingGameId) || (!gameId && (!activeBot || (coach.enabled && !isRatedBotGame)));
     // «Своя» сторона: в партии с ботом — цвет игрока, на свободной доске и у зрителя — сторона, которая ходит.
     const xraySide: 'w' | 'b' = activeBot && !spectatingGameId ? (myColor === 'white' ? 'w' : 'b') : currentGame.turn();

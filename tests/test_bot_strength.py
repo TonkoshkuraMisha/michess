@@ -4,10 +4,15 @@
 сила бота задаётся опорным ходом — ходом движка с ограничением силы, — а стиль выбирает среди равных ему ходов.
 """
 
+from contextlib import contextmanager
+from types import SimpleNamespace
+
 import chess
+import chess.engine
 import pytest
 
 from src.api.bots import AVAILABLE_BOTS
+from src.services import engine_pool
 from src.services.bots import BOT_INSTANCES
 from src.services.bots import base as bots_base
 from src.services.bots.personality import BotPersonalityConfig, PersonalityBot
@@ -16,6 +21,8 @@ from src.services.bots.personality import BotPersonalityConfig, PersonalityBot
 FEN = "r2q1rk1/pp2bppp/2n1pn2/3p4/3P4/2NBPN2/PP3PPP/R2Q1RK1 w - - 0 10"
 BOARD = chess.Board(FEN)
 BEST, REF, NEAR, BLUNDER = (BOARD.parse_san(s) for s in ("Rc1", "g3", "a3", "Bxh7+"))
+# Настоящая функция: на время каждого теста conftest подменяет её заглушкой.
+REAL_REFERENCE_MOVE = bots_base.strength_reference_move
 
 
 @pytest.fixture
@@ -26,11 +33,11 @@ def engine(monkeypatch):
     def install(scores: dict[chess.Move, float], reference: chess.Move | None, reference_score: float = 0.0):
         monkeypatch.setattr(bots_base, "analyse_with_stockfish", lambda **kwargs: dict(scores))
 
-        def ref(board, path, uci_elo, time_limit):
+        def ref(board, path, uci_elo, time_limit, lease=None):
             calls["reference"].append(uci_elo)
             return reference
 
-        def score(board, path, move, depth, time_limit):
+        def score(board, path, move, depth, time_limit, lease=None):
             calls["score"].append(move)
             return reference_score
 
@@ -103,3 +110,34 @@ def test_analysis_runs_at_full_strength(monkeypatch):
     monkeypatch.setattr(bots_base.os.path, "exists", lambda path: True)
     assert bots_base.analyse_with_stockfish(board=BOARD, engine_path="stockfish", uci_elo=1400) == {}
     assert seen == [{}]  # без UCI_LimitStrength: оно не влияет на analyse, а оценки нужны честные
+
+
+def test_bot_move_takes_the_engine_from_the_pool_once(monkeypatch):
+    """Анализ, опорный ход и его отдельная оценка — на одном движке: в очередь пула ход встаёт один раз."""
+    pov = lambda cp: chess.engine.PovScore(chess.engine.Cp(cp), BOARD.turn)  # noqa: E731
+
+    class Engine:
+        options: dict = {}
+
+        def analyse(self, board, limit, multipv=None, root_moves=None):
+            if root_moves:
+                return {"score": pov(-200)}
+            return [{"pv": [BEST], "score": pov(50)}, {"pv": [NEAR], "score": pov(40)}]
+
+        def play(self, board, limit):
+            return chess.engine.PlayResult(BLUNDER, None)
+
+    acquired: list = []
+
+    @contextmanager
+    def acquire(options=None):
+        acquired.append(options)
+        yield Engine()
+
+    monkeypatch.setattr(bots_base, "strength_reference_move", REAL_REFERENCE_MOVE)  # вместо заглушки conftest
+    monkeypatch.setattr(engine_pool, "get_engine_pool", lambda path: SimpleNamespace(acquire=acquire))
+    monkeypatch.setattr(bots_base, "get_engine_pool", lambda path: pytest.fail("each step must use the lease"))
+    monkeypatch.setattr(bots_base.os.path, "exists", lambda path: True)
+    bot = BOT_INSTANCES["morphy"].__class__(stockfish_path="stockfish")
+    assert bot.choose_move(FEN)["uci"] == BLUNDER.uci()  # опорный ход вне MultiPV оценён отдельно
+    assert acquired == [{}]

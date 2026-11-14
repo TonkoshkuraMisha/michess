@@ -106,8 +106,7 @@ export function styleRadar(config: PersonalityConfig): { key: RadarAxis; axis: s
  * подобрана по калибровке). Совпадение чисел проверяет tests/test_personality_bot.py.
  */
 export const ERROR_RATE_CURVE: readonly (readonly [number, number])[] = [
-    [600, 0.42], [700, 0.387], [900, 0.331], [1100, 0.207], [1250, 0.133], [1320, 0.101], [1400, 0.064],
-    [1500, 0.0],
+    [600, 0.43], [1500, 0.0],
 ];
 
 export function errorRate(elo: number): number {

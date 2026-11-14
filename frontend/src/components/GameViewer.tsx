@@ -34,6 +34,7 @@ import type {UiMessage} from '../i18n';
 import {displayPlayerName} from '../config/players';
 import {coachArrows, coachHighlights, coachText} from '../services/coach';
 import type {CoachArrowKind, CoachComment} from '../services/coach';
+import {AnnotationsOverlay, useBoardAnnotations} from './chessboard/annotations';
 import {isSummaryKind} from '../services/gameSummary';
 import {XrayOverlay} from './xray/XrayOverlay';
 import {Puzzle as PuzzleBadgeIcon} from 'lucide-react';
@@ -93,11 +94,6 @@ const COACH_ARROW_COLORS: Record<CoachArrowKind, string> = {
     threat: 'rgba(244, 63, 94, 0.88)',
     idea: 'rgba(56, 189, 248, 0.88)',
 };
-
-interface DrawnArrow {
-    from: string;
-    to: string;
-}
 
 const PIECE_MAT_VALUES: Record<string, number> = {p: 100, n: 320, b: 330, r: 500, q: 900, k: 0};
 
@@ -166,9 +162,10 @@ export default function GameViewer() {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [analysisError, setAnalysisError] = useState<UiMessage | null>(null);
 
-    const [arrows, setArrows] = useState<DrawnArrow[]>([]);
-    const [highlightedSquares, setHighlightedSquares] = useState<Set<string>>(new Set());
-    const rightClickStartRef = useRef<string | null>(null);
+    // Пометки правой кнопкой — общий слой досок (таск B.1). В разборе они переживают листание ходов (план на
+    // несколько ходов вперёд) и снимаются со сменой партии, левым щелчком по доске или Escape.
+    const notes = useBoardAnnotations(gameId ?? '');
+    const clearNotes = notes.clear;
 
     const [boardThemeKey, setBoardThemeKey] = useState<string>(() => getSavedBoardThemeKey());
     const [pieceSetKey, setPieceSetKey] = useState<string>(() => getSavedPieceSetKey());
@@ -370,8 +367,7 @@ export default function GameViewer() {
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-                setArrows([]);
-                setHighlightedSquares(new Set());
+                clearNotes();
                 setShowAppearancePanel(false);
                 return;
             }
@@ -406,7 +402,7 @@ export default function GameViewer() {
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [playAudio]);
+    }, [playAudio, clearNotes]);
 
     useEffect(() => {
         if (notationScrollRef.current) {
@@ -529,42 +525,6 @@ export default function GameViewer() {
         };
     };
 
-    const handleSquareMouseDown = (e: React.MouseEvent, squareId: string) => {
-        if (e.button === 2) {
-            e.preventDefault();
-            rightClickStartRef.current = squareId;
-        } else if (e.button === 0) {
-            if (arrows.length > 0 || highlightedSquares.size > 0) {
-                setArrows([]);
-                setHighlightedSquares(new Set());
-            }
-        }
-    };
-
-    const handleSquareMouseUp = (e: React.MouseEvent, targetSquareId: string) => {
-        if (e.button !== 2 || !rightClickStartRef.current) return;
-        e.preventDefault();
-        const startSq = rightClickStartRef.current;
-        rightClickStartRef.current = null;
-
-        if (startSq === targetSquareId) {
-            setHighlightedSquares(prev => {
-                const next = new Set(prev);
-                if (next.has(targetSquareId)) next.delete(targetSquareId);
-                else next.add(targetSquareId);
-                return next;
-            });
-        } else {
-            setArrows(prev => {
-                const exists = prev.some(a => a.from === startSq && a.to === targetSquareId);
-                if (exists) {
-                    return prev.filter(a => !(a.from === startSq && a.to === targetSquareId));
-                }
-                return [...prev, {from: startSq, to: targetSquareId}];
-            });
-        }
-    };
-
     if (loading) {
         return (
             <div className="my-auto flex flex-col items-center justify-center w-full text-boxwood-light">
@@ -662,6 +622,8 @@ export default function GameViewer() {
 
                     <div
                         onContextMenu={(e) => e.preventDefault()}
+                        onPointerDown={notes.handlers.onPointerDown}
+                        onPointerUp={notes.handlers.onPointerUp}
                         style={{
                             width: `${responsiveBoardPx}px`,
                             height: `${responsiveBoardPx}px`,
@@ -688,15 +650,13 @@ export default function GameViewer() {
 
                                     const lastMove = viewIndex >= 0 ? history[viewIndex] : null;
                                     const isLastMoveSquare = lastMove && (lastMove.from === squareId || lastMove.to === squareId);
-                                    const isRightHighlighted = highlightedSquares.has(squareId);
+                                    const isNoted = squareId in notes.squares;
                                     const isCoachTarget = coachTargets.has(squareId);
 
                                     return (
                                         <div
                                             key={squareId}
                                             data-square={squareId}
-                                            onMouseDown={(e) => handleSquareMouseDown(e, squareId)}
-                                            onMouseUp={(e) => handleSquareMouseUp(e, squareId)}
                                             style={{
                                                 backgroundColor: isDark ? activeTheme.dark : activeTheme.light
                                             }}
@@ -714,15 +674,10 @@ export default function GameViewer() {
                                                     className="absolute inset-0 bg-amber-300/40 z-10 pointer-events-none"/>
                                             )}
 
-                                            {isCoachTarget && !isRightHighlighted && (
+                                            {isCoachTarget && !isNoted && (
                                                 <div
                                                     data-testid="coach-target"
                                                     className="absolute inset-0 ring-[3px] ring-inset ring-rose-400/90 z-10 pointer-events-none"/>
-                                            )}
-
-                                            {isRightHighlighted && (
-                                                <div
-                                                    className="absolute inset-0 bg-emerald-500/45 ring-2 ring-inset ring-emerald-300 z-10 pointer-events-none"/>
                                             )}
 
                                             {piece && (
@@ -757,22 +712,12 @@ export default function GameViewer() {
                                 <XrayOverlay fen={currentGame.fen()} flipped={isFlipped} modes={xray.modes}
                                              side={xray.forOpponent ? (currentGame.turn() === 'w' ? 'b' : 'w') : currentGame.turn()}/>
                             )}
-                            {(arrows.length > 0 || visibleCoachArrows.length > 0) && (
+                            {visibleCoachArrows.length > 0 && (
                                 <svg
                                     viewBox="0 0 100 100"
                                     className="absolute inset-0 w-full h-full z-30 pointer-events-none"
                                 >
                                     <defs>
-                                        <marker
-                                            id="viewer-arrowhead"
-                                            markerWidth="3.5"
-                                            markerHeight="3.5"
-                                            refX="2.3"
-                                            refY="1.75"
-                                            orient="auto"
-                                        >
-                                            <polygon points="0 0, 3.5 1.75, 0 3.5" fill="rgba(245, 158, 11, 0.88)"/>
-                                        </marker>
                                         {(Object.keys(COACH_ARROW_COLORS) as CoachArrowKind[]).map((kind) => (
                                             <marker key={kind} id={`coach-arrowhead-${kind}`} markerWidth="3.5"
                                                     markerHeight="3.5" refX="2.3" refY="1.75" orient="auto">
@@ -799,26 +744,10 @@ export default function GameViewer() {
                                             />
                                         );
                                     })}
-                                    {arrows.map((arr, idx) => {
-                                        const start = squareToSvgCoords(arr.from);
-                                        const end = squareToSvgCoords(arr.to);
-                                        if (!start || !end) return null;
-                                        return (
-                                            <line
-                                                key={`${arr.from}-${arr.to}-${idx}`}
-                                                x1={start.x}
-                                                y1={start.y}
-                                                x2={end.x}
-                                                y2={end.y}
-                                                stroke="rgba(245, 158, 11, 0.88)"
-                                                strokeWidth="2.1"
-                                                strokeLinecap="round"
-                                                markerEnd="url(#viewer-arrowhead)"
-                                            />
-                                        );
-                                    })}
                                 </svg>
                             )}
+                            <AnnotationsOverlay arrows={notes.arrows} squares={notes.squares} flipped={isFlipped}
+                                                idPrefix="viewer-notes"/>
                         </div>
 
                         {isResizing && (

@@ -49,6 +49,31 @@ def test_isolated_enemy_pawn_and_doubled_own():
     assert "isolated_enemy" in found and "doubled_own" in found
 
 
+def test_holes_in_front_of_the_castled_king():
+    # После g3 поля f3 и h3 пешкой не прикрыть; у чёрных белопольный слон b7, у белых белопольного нет.
+    holes = "6k1/1b3ppp/8/8/8/6P1/5P1P/3Q2K1 w - - 0 20"
+    feature = next(f for f in positional_features(chess.Board(holes), chess.WHITE) if f.code == "king_holes")
+    assert feature.params == {"square": "f3"} and set(feature.squares) == {chess.F3, chess.H3}
+    # Свой белопольный слон закрывает слабость; нетронутое прикрытие f2-g2-h2 дыр не даёт.
+    assert "king_holes" not in codes("6k1/1b3ppp/8/8/8/6P1/4BP1P/3Q2K1 w - - 0 20")
+    assert "king_holes" not in codes("6k1/1b3ppp/8/8/8/8/5PPP/3Q2K1 w - - 0 20")
+
+
+def test_backward_enemy_pawn_on_a_half_open_file():
+    # d6 отстала от e5, поле d5 бьют пешки c4 и e4, d-пешки у белых нет.
+    board = chess.Board("6k1/pp3ppp/3p4/4p3/2P1P3/8/PP3PPP/6K1 w - - 0 20")
+    feature = next(f for f in positional_features(board, chess.WHITE) if f.code == "backward_enemy")
+    assert feature.params == {"square": "d6"}
+    # Своя пешка на d-вертикали мешает давить на d6 — объекта атаки нет.
+    assert "backward_enemy" not in codes("6k1/pp3ppp/3p4/4p3/2P1P3/3P4/PP3PPP/6K1 w - - 0 20")
+
+
+def test_king_holes_advice_sentence():
+    advice = advice_for_position(chess.Board("6k1/1b3pp1/7p/8/8/6P1/5P1P/3Q2K1 w - - 0 20"), None)  # h6: мата Фd8 нет
+    keys = [s["key"].rsplit(".", 1)[0] for s in advice["comment"]]
+    assert keys == ["coach.advice.pos_king_holes"]
+
+
 def test_bad_bishop():
     # Белые пешки на тёмных полях d4, e5, c3 (заблокированы), слон c1 тёмнопольный.
     board = chess.Board("4k3/8/2p1p3/2PpP3/3P4/8/8/2B1K3 w - - 0 30")
