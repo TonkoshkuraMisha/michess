@@ -88,8 +88,8 @@ SECRET_PATH_PARTS = {
 
 PRIORITY_FILES = [
     "ToDo.md",
-    "requirements.txt",
-    "requirements-dev.txt",
+    "pyproject.toml",
+    "uv.lock",
     "pyproject.toml",
     "pytest.ini",
     "alembic.ini",
@@ -168,7 +168,7 @@ def get_group_priority(relative_posix: str) -> tuple[int, str]:
     """
     Упорядочивает файлы так, чтобы ВЕСЬ рабочий код шёл в первых частях,
     а тесты — в самом конце:
-    0..N — приоритетные манифесты (ToDo.md, requirements.txt и т.д.)
+    0..N — приоритетные манифесты (ToDo.md, pyproject.toml и т.д.)
     100  — миграции БД (migrations/)
     200  — исходный код бэкенда (src/)
     300  — исходный код фронтенда без тестов (frontend/src/)

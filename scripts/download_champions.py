@@ -90,7 +90,7 @@ def as_jpeg(content: bytes) -> bytes:
     """
     if content.startswith(JPEG_MAGIC):
         return content
-    from PIL import Image  # нужен только для не-JPEG оригиналов: pip install -r requirements-dev.txt
+    from PIL import Image  # нужен только для не-JPEG оригиналов: uv sync
 
     image = Image.open(io.BytesIO(content)).convert("RGBA")
     background = Image.new("RGB", image.size, (255, 255, 255))

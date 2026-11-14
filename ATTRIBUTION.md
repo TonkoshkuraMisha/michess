@@ -90,7 +90,7 @@ CC BY-NC-SA 4.0), а также набор без известного прои�
 
 ## Программные библиотеки
 
-Полные списки — `requirements.txt` и `frontend/package.json`. Основные: FastAPI, SQLAlchemy, Pydantic, Celery,
+Полные списки — `uv.lock` и `frontend/package.json`. Основные: FastAPI, SQLAlchemy, Pydantic, Celery,
 redis-py (MIT / BSD); React, React Router, Tailwind CSS, Recharts, date-fns (MIT); lucide (ISC); chess.js
 (BSD-2-Clause); **python-chess (GPL-3.0)**.
 
