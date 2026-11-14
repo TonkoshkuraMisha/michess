@@ -3,7 +3,7 @@
 
 import chess
 
-from src.services.coach import advice_for_position
+from src.services.coach import advice_for_position, hint_for_position
 from src.services.positional import is_outpost, move_idea, positional_features
 
 
@@ -94,3 +94,21 @@ def test_quiet_position_gets_a_positional_sentence():
     advice = advice_for_position(chess.Board("4k3/pp3ppp/8/8/8/8/PP3PPP/R3K3 w - - 0 25"), None)
     keys = [s["key"].rsplit(".", 1)[0] for s in advice["comment"]]
     assert keys == ["coach.advice.pos_king_active"]
+
+
+def hint_key(fen: str, best: str | None) -> str:
+    comment = hint_for_position(chess.Board(fen), best, step=1)["comment"]
+    assert len(comment) == 1 and not comment[0]["params"]  # ступень 1 не называет полей и фигур
+    return comment[0]["key"].rsplit(".", 1)[0]
+
+
+def test_first_hint_step_names_the_positional_idea_of_the_best_move():
+    castle = "r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1"
+    assert hint_key(castle, "e1g1") == "coach.hint.pos_castle"
+    rook = "4k3/pp3ppp/8/8/8/8/PP3PPP/R3K3 w - - 0 25"
+    assert hint_key(rook, "a1d1") == "coach.hint.pos_open_file"
+    assert hint_key(rook, "a2a3") == "coach.hint.quiet"  # у лучшего хода нет позиционной идеи — общий совет
+
+
+def test_first_hint_step_without_engine_uses_the_main_feature():
+    assert hint_key("4k3/8/8/8/8/8/4P3/4K3 w - - 0 50", None) == "coach.hint.pos_king_active"
