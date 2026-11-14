@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
-from src.api import bots, ladder, learn, personalities, puzzles, themes, tournaments
+from src.api import account, bots, ladder, learn, personalities, puzzles, themes, tournaments
 from src.api.analysis import router as analysis_router
 from src.api.auth import router as auth_router
 from src.api.profile import router as profile_router
@@ -94,6 +94,7 @@ def create_app() -> FastAPI:
     app.include_router(puzzles.router, prefix="/api/v1/puzzles", tags=["training"])
     app.include_router(learn.router, prefix="/api/v1/learn", tags=["training"])
     app.include_router(tournaments.router, prefix="/api/v1/tournaments", tags=["tournaments"])
+    app.include_router(account.router, prefix=settings.API_V1_STR)
 
     return app
 

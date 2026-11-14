@@ -473,6 +473,7 @@ export default function App() {
                                 username={userProfile?.username ?? null}
                                 onTokenChange={setToken}
                                 onLogoutEverywhere={handleLogoutEverywhere}
+                                onAccountDeleted={handleLogout}
                             />
                         }
                     />

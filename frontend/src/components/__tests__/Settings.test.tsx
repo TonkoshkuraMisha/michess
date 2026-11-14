@@ -148,3 +148,45 @@ describe('Settings: смена пароля', () => {
         expect(screen.getByRole('button', {name: 'Графит'})).toBeInTheDocument();
     });
 });
+
+describe('Settings: мои данные (таск 17.5)', () => {
+    it('удаление аккаунта: подтверждение, пароль уходит на сервер, затем выход', async () => {
+        const fetchMock = vi.fn(async () => response(204));
+        vi.stubGlobal('fetch', fetchMock);
+        vi.spyOn(window, 'confirm').mockReturnValue(true);
+        localStorage.setItem('token', 'old-token');
+        const onAccountDeleted = vi.fn();
+        renderSettings({onAccountDeleted});
+        fireEvent.change(screen.getByTestId('settings-delete-password'), {target: {value: 'secret-pass'}});
+        fireEvent.click(screen.getByTestId('settings-delete'));
+        await waitFor(() => expect(onAccountDeleted).toHaveBeenCalled());
+        const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+        expect(url).toContain('/api/v1/account/delete');
+        expect(JSON.parse(String(init.body))).toEqual({password: 'secret-pass'});
+        expect(localStorage.getItem('token')).toBeNull();
+        expect(gameSocket.disconnect).toHaveBeenCalled();
+    });
+
+    it('идущая партия — текст сервера, аккаунт не удалён', async () => {
+        vi.stubGlobal('fetch', vi.fn(async () => response(409, {detail: {code: 'account_in_game'}})));
+        vi.spyOn(window, 'confirm').mockReturnValue(true);
+        const onAccountDeleted = vi.fn();
+        renderSettings({onAccountDeleted});
+        fireEvent.change(screen.getByTestId('settings-delete-password'), {target: {value: 'secret-pass'}});
+        fireEvent.click(screen.getByTestId('settings-delete'));
+        expect(await screen.findByRole('alert')).toHaveTextContent('Сначала доиграйте текущую партию');
+        expect(onAccountDeleted).not.toHaveBeenCalled();
+    });
+
+    it('без пароля кнопка удаления недоступна; выгрузка запрашивает свои данные', async () => {
+        const fetchMock = vi.fn(async () => response(200, {format: 1}));
+        vi.stubGlobal('fetch', fetchMock);
+        URL.createObjectURL = vi.fn(() => 'blob:x');
+        URL.revokeObjectURL = vi.fn();
+        renderSettings();
+        expect(screen.getByTestId('settings-delete')).toBeDisabled();
+        fireEvent.click(screen.getByTestId('settings-export'));
+        await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
+        expect(String((fetchMock.mock.calls[0] as unknown as [string])[0])).toContain('/api/v1/account/export');
+    });
+});

@@ -33,6 +33,12 @@ class QueueJoinRequest(BaseModel):
 
 
 async def _resolve_user(db: AsyncSession, username: str) -> User | None:
+    """Игрок по имени из адреса; удалённый аккаунт (таск 17.5) публичного профиля и партий не имеет."""
+    user = await _find_user(db, username)
+    return None if user is None or user.deleted_at is not None else user
+
+
+async def _find_user(db: AsyncSession, username: str) -> User | None:
     champ_meta = get_champion_meta(username)
     if champ_meta is not None:
         champ_user = await ensure_champion_seeded(db, champ_meta["id"])
@@ -140,7 +146,7 @@ async def get_leaderboard(
     rating_column = _LEADERBOARD_RATING_COLUMN[category]
     query = (
         select(User)
-        .where(User.is_cheater == False, User.is_bot == False)  # noqa: E712
+        .where(User.is_cheater == False, User.is_bot == False, User.deleted_at.is_(None))  # noqa: E712
         .order_by(desc(rating_column))
         .limit(limit)
     )
