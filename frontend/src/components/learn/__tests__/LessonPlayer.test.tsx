@@ -5,7 +5,7 @@ import {act, fireEvent, render, screen, waitFor} from '@testing-library/react';
 import {MemoryRouter, Route, Routes} from 'react-router-dom';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {setLanguage} from '../../../i18n';
-import {lessonById} from '../../../content/lessons';
+import {LESSONS, lessonById} from '../../../content/lessons';
 import {LessonPlayer} from '../LessonPlayer';
 import {LearnPage, LessonPage} from '../LearnPage';
 import {setToken} from '../../../services/authToken';
@@ -149,7 +149,9 @@ describe('страницы школы', () => {
         const fetchMock = stubProgress([]);
         render(<MemoryRouter><LearnPage/></MemoryRouter>);
         expect(screen.getByText('Log in to save your progress.')).toBeInTheDocument();
-        expect(screen.getByRole('link', {name: 'Start'})).toBeInTheDocument();
+        const starts = screen.getAllByRole('link', {name: 'Start'});
+        expect(starts).toHaveLength(LESSONS.length);  // у каждого урока — своя кнопка
+        expect(starts[0]).toHaveAttribute('href', '/learn/tactics-double-attack');
         expect(fetchMock).not.toHaveBeenCalled();
     });
 

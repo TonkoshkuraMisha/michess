@@ -1,0 +1,317 @@
+{
+  "id": "tactics-skewer",
+  "course": "tactics",
+  "order": 4,
+  "title": {
+    "en": "The skewer",
+    "uk": "Наскрізний удар",
+    "ru": "Сквозной удар"
+  },
+  "summary": {
+    "en": "An attack on a valuable piece with another behind it on the same line: the first steps aside — the second falls.",
+    "uk": "Напад на цінну фігуру, за якою на тій самій лінії стоїть інша: перша йде — друга гине.",
+    "ru": "Нападение на ценную фигуру, за которой на той же линии стоит другая: первая уходит — вторая гибнет."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "7q/8/5k2/8/8/2B5/8/6K1 b - - 0 1",
+      "arrows": [
+        {
+          "from": "c3",
+          "to": "h8",
+          "color": "red"
+        }
+      ],
+      "highlights": [
+        "f6",
+        "h8"
+      ],
+      "text": {
+        "en": "A skewer is a pin in reverse: the more valuable piece stands in front. The bishop checks the king on f6, and the queen stands behind it on the same diagonal. The king must leave the line.",
+        "uk": "Наскрізний удар — зв'язка навпаки: попереду стоїть цінніша фігура. Слон оголосив шах королю f6, а за королем на тій самій діагоналі — ферзь. Король мусить піти з лінії.",
+        "ru": "Сквозной удар — связка наоборот: впереди стоит более ценная фигура. Слон объявил шах королю f6, а за королём на той же диагонали — ферзь. Король обязан уйти с линии."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "7q/8/5k2/8/8/2B5/8/6K1 b - - 0 1",
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "c3",
+          "to": "h8",
+          "color": "red"
+        },
+        {
+          "do": "pause",
+          "ms": 700
+        },
+        {
+          "do": "move",
+          "uci": "f6e6"
+        },
+        {
+          "do": "pause",
+          "ms": 600
+        },
+        {
+          "do": "move",
+          "uci": "c3h8"
+        }
+      ],
+      "text": {
+        "en": "The king steps away — and the bishop takes the queen standing behind it.",
+        "uk": "Король іде — і слон забирає ферзя, що стояв за ним.",
+        "ru": "Король уходит — и слон забирает ферзя, который стоял за ним."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "8/1r3k2/7R/8/5ppP/8/6P1/6K1 w - - 0 37",
+      "text": {
+        "en": "Your move. The black king and rook share a rank. Win the rook.",
+        "uk": "Ваш хід. Король і тура чорних стоять на одній горизонталі. Виграйте туру.",
+        "ru": "Ваш ход. Король и ладья чёрных стоят на одной горизонтали. Выиграйте ладью."
+      },
+      "hint": {
+        "en": "Check along the seventh rank.",
+        "uk": "Шах по сьомій горизонталі.",
+        "ru": "Шах по седьмой горизонтали."
+      },
+      "line": [
+        {
+          "answers": [
+            "h6h7"
+          ],
+          "reply": "f7e6",
+          "correct": {
+            "en": "Check! The king leaves the seventh rank, and the rook stays under attack.",
+            "uk": "Шах! Король іде із сьомої горизонталі, а тура залишається під ударом.",
+            "ru": "Шах! Король уходит с седьмой горизонтали, а ладья остаётся под ударом."
+          },
+          "wrong": {
+            "h6b6": {
+              "en": "The rook steps into the line of fire: the black rook simply takes it.",
+              "uk": "Тура стає під удар: чорна тура її просто візьме.",
+              "ru": "Ладья встаёт под бой: чёрная ладья её просто возьмёт."
+            }
+          }
+        },
+        {
+          "answers": [
+            "h7b7"
+          ],
+          "correct": {
+            "en": "The rook is won.",
+            "uk": "Туру виграно.",
+            "ru": "Ладья выиграна."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/6k1/8/7P/6r1/R3K3/8/8 b - - 0 55",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Find the skewer.",
+        "uk": "Хід чорних. Знайдіть наскрізний удар.",
+        "ru": "Ход чёрных. Найдите сквозной удар."
+      },
+      "hint": {
+        "en": "The white king and rook are on the third rank.",
+        "uk": "Білий король і тура — на третій горизонталі.",
+        "ru": "Белый король и ладья — на третьей горизонтали."
+      },
+      "line": [
+        {
+          "answers": [
+            "g4g3"
+          ],
+          "reply": "e3d4",
+          "correct": {
+            "en": "Check, and the rook on a3 is behind the king.",
+            "uk": "Шах, і за королем — тура a3.",
+            "ru": "Шах, и за королём — ладья a3."
+          }
+        },
+        {
+          "answers": [
+            "g3a3"
+          ],
+          "correct": {
+            "en": "The rook is won.",
+            "uk": "Туру виграно.",
+            "ru": "Ладья выиграна."
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "How does a skewer differ from a pin?",
+        "uk": "Чим наскрізний удар відрізняється від зв'язки?",
+        "ru": "Чем сквозной удар отличается от связки?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "The more valuable piece is in front, and it moves away, exposing the one behind.",
+            "uk": "Попереду стоїть цінніша фігура, і вона йде, відкриваючи ту, що позаду.",
+            "ru": "Впереди стоит более ценная фигура, и она уходит, открывая ту, что сзади."
+          },
+          "feedback": {
+            "en": "Right. A pin is the opposite: the less valuable piece is in front and cannot move.",
+            "uk": "Правильно. У зв'язці все навпаки: попереду менш цінна фігура, і піти їй не можна.",
+            "ru": "Верно. При связке всё наоборот: впереди менее ценная фигура, и уйти ей нельзя."
+          }
+        },
+        {
+          "text": {
+            "en": "Only a rook can skewer.",
+            "uk": "Наскрізний удар буває тільки в тури.",
+            "ru": "Сквозной удар бывает только у ладьи."
+          },
+          "feedback": {
+            "en": "No — bishops and queens skewer too, as in the first example.",
+            "uk": "Ні — слон і ферзь теж б'ють наскрізь, як у першому прикладі.",
+            "ru": "Нет — слон и ферзь тоже бьют насквозь, как в первом примере."
+          }
+        },
+        {
+          "text": {
+            "en": "It is the same as a double attack.",
+            "uk": "Це те саме, що подвійний удар.",
+            "ru": "Это то же самое, что двойной удар."
+          },
+          "feedback": {
+            "en": "In a double attack the targets are on different lines; here they share one.",
+            "uk": "У подвійному ударі цілі на різних лініях; тут — на одній.",
+            "ru": "При двойном ударе цели на разных линиях; здесь — на одной."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/5p2/7R/p1r2k2/8/P7/5P2/6K1 w - - 0 39",
+      "text": {
+        "en": "Your move. Win the rook on c5.",
+        "uk": "Ваш хід. Виграйте туру c5.",
+        "ru": "Ваш ход. Выиграйте ладью c5."
+      },
+      "line": [
+        {
+          "answers": [
+            "h6h5"
+          ],
+          "reply": "f5e6"
+        },
+        {
+          "answers": [
+            "h5c5"
+          ],
+          "correct": {
+            "en": "The rook is won.",
+            "uk": "Туру виграно.",
+            "ru": "Ладья выиграна."
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "8/5p2/7R/p1r2k2/8/P7/5P2/6K1 w - - 0 39",
+      "arrows": [
+        {
+          "from": "h5",
+          "to": "c5",
+          "color": "red"
+        }
+      ],
+      "highlights": [
+        "f5",
+        "c5"
+      ],
+      "text": {
+        "en": "How to spot a skewer: look for a king or queen on one line with another piece, with nothing in between. Check the front one — win the one behind.",
+        "uk": "Як шукати наскрізний удар: шукайте короля або ферзя на одній лінії з іншою фігурою, коли між ними порожньо. Шах передньому — виграш заднього.",
+        "ru": "Как искать сквозной удар: ищите короля или ферзя на одной линии с другой фигурой, когда между ними пусто. Шах переднему — выигрыш заднего."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "8/8/4k3/5p1R/8/6PK/8/4r3 b - - 0 59",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Win the rook.",
+        "uk": "Хід чорних. Виграйте туру.",
+        "ru": "Ход чёрных. Выиграйте ладью."
+      },
+      "line": [
+        {
+          "answers": [
+            "e1h1"
+          ],
+          "reply": "h3g2"
+        },
+        {
+          "answers": [
+            "h1h5"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "6k1/5p2/4p3/8/7r/1PR2K2/5P2/8 b - - 1 41",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Win the rook.",
+        "uk": "Хід чорних. Виграйте туру.",
+        "ru": "Ход чёрных. Выиграйте ладью."
+      },
+      "line": [
+        {
+          "answers": [
+            "h4h3"
+          ],
+          "reply": "f3g4"
+        },
+        {
+          "answers": [
+            "h3c3"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/4k3/6R1/4Pp2/5P2/5PK1/8/5r2 b - - 2 63",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Win the rook.",
+        "uk": "Хід чорних. Виграйте туру.",
+        "ru": "Ход чёрных. Выиграйте ладью."
+      },
+      "line": [
+        {
+          "answers": [
+            "f1g1"
+          ],
+          "reply": "g3f2"
+        },
+        {
+          "answers": [
+            "g1g6"
+          ]
+        }
+      ]
+    }
+  ]
+}

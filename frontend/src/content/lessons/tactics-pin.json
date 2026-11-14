@@ -1,0 +1,375 @@
+{
+  "id": "tactics-pin",
+  "course": "tactics",
+  "order": 2,
+  "title": {
+    "en": "The pin",
+    "uk": "Зв'язка",
+    "ru": "Связка"
+  },
+  "summary": {
+    "en": "A piece shielding a more valuable one cannot move away — and becomes a target.",
+    "uk": "Фігура, що закриває собою ціннішу, не може піти — і стає мішенню.",
+    "ru": "Фигура, которая закрывает собой более ценную, не может уйти — и становится мишенью."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "4k3/8/2n5/1B6/8/8/8/4K3 w - - 0 1",
+      "arrows": [
+        {
+          "from": "b5",
+          "to": "e8",
+          "color": "red"
+        }
+      ],
+      "highlights": [
+        "c6"
+      ],
+      "text": {
+        "en": "A pin: a long-range piece attacks a piece with a more valuable one standing behind it on the same line. The knight on c6 is pinned: if it moved, the bishop would check the king on e8. Such a move is simply illegal — this is an absolute pin.",
+        "uk": "Зв'язка: далекобійна фігура нападає на фігуру, за якою на тій самій лінії стоїть цінніша. Кінь c6 зв'язаний: якщо він піде, слон оголосить шах королю e8. Такий хід просто неможливий — це абсолютна зв'язка.",
+        "ru": "Связка: дальнобойная фигура нападает на фигуру, за которой на той же линии стоит более ценная. Конь c6 связан: если он уйдёт, слон объявит шах королю e8. Такой ход просто невозможен — это абсолютная связка."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "4k3/8/2n5/1B6/3P4/8/8/4K3 w - - 0 1",
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "b5",
+          "to": "e8",
+          "color": "red"
+        },
+        {
+          "do": "pause",
+          "ms": 700
+        },
+        {
+          "do": "move",
+          "uci": "d4d5"
+        },
+        {
+          "do": "arrow",
+          "from": "d5",
+          "to": "c6",
+          "color": "red"
+        },
+        {
+          "do": "highlight",
+          "squares": [
+            "c6"
+          ]
+        }
+      ],
+      "text": {
+        "en": "A pinned piece cannot run away. So you can attack it once more — with a pawn, for example. The knight is attacked and cannot move: it will be lost.",
+        "uk": "Зв'язана фігура не може втекти. Отже, на неї можна напасти ще раз — наприклад, пішаком. Кінь під ударом і зрушити не може: його буде втрачено.",
+        "ru": "Связанная фигура не может убежать. Значит, на неё можно напасть ещё раз — например, пешкой. Конь под боем и сдвинуться не может: он будет потерян."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "8/2n3k1/6p1/PR6/3P4/1P5r/1P1K4/8 w - - 3 44",
+      "text": {
+        "en": "Your move. Pin the black knight to its king and win it.",
+        "uk": "Ваш хід. Зв'яжіть чорного коня з королем і виграйте його.",
+        "ru": "Ваш ход. Свяжите чёрного коня с королём и выиграйте его."
+      },
+      "hint": {
+        "en": "The king on g7 and the knight on c7 are on the same rank.",
+        "uk": "Король g7 і кінь c7 стоять на одній горизонталі.",
+        "ru": "Король g7 и конь c7 стоят на одной горизонтали."
+      },
+      "line": [
+        {
+          "answers": [
+            "b5b7"
+          ],
+          "reply": "g7f6",
+          "correct": {
+            "en": "A pin! The knight cannot leave the seventh rank. The king steps away, but it is your move now.",
+            "uk": "Зв'язка! Кінь не може піти із сьомої горизонталі. Король відходить, але хід уже ваш.",
+            "ru": "Связка! Конь не может уйти с седьмой горизонтали. Король отходит, но ход уже ваш."
+          },
+          "wrong": {
+            "b5c5": {
+              "en": "The rook attacks the knight, but it is not pinned and simply steps away.",
+              "uk": "Тура нападає на коня, але він не зв'язаний і просто відійде.",
+              "ru": "Ладья нападает на коня, но он не связан и просто отойдёт."
+            }
+          }
+        },
+        {
+          "answers": [
+            "b7c7"
+          ],
+          "correct": {
+            "en": "The knight is won.",
+            "uk": "Коня виграно.",
+            "ru": "Конь выигран."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "1B6/8/1n2p3/6p1/5pP1/4kP2/6K1/8 w - - 2 40",
+      "text": {
+        "en": "Your move. The black knight stands on one line with its king — make use of it.",
+        "uk": "Ваш хід. Чорний кінь стоїть на одній лінії зі своїм королем — скористайтеся цим.",
+        "ru": "Ваш ход. Чёрный конь стоит на одной линии со своим королём — воспользуйтесь этим."
+      },
+      "hint": {
+        "en": "The knight on b6 and the king on e3 are on the same diagonal.",
+        "uk": "Кінь b6 і король e3 стоять на одній діагоналі.",
+        "ru": "Конь b6 и король e3 стоят на одной диагонали."
+      },
+      "line": [
+        {
+          "answers": [
+            "b8a7"
+          ],
+          "reply": "e3e2",
+          "correct": {
+            "en": "A pin along the diagonal: the knight cannot move without exposing the king.",
+            "uk": "Зв'язка по діагоналі: кінь не може піти, бо буде шах королю.",
+            "ru": "Связка по диагонали: конь не может уйти, иначе шах королю."
+          },
+          "wrong": {
+            "b8c7": {
+              "en": "The bishop attacks the knight, but there is no pin — the knight simply leaves.",
+              "uk": "Слон нападає на коня, але зв'язки немає — кінь просто піде.",
+              "ru": "Слон нападает на коня, но связки нет — конь просто уйдёт."
+            }
+          }
+        },
+        {
+          "answers": [
+            "a7b6"
+          ],
+          "correct": {
+            "en": "The knight is won.",
+            "uk": "Коня виграно.",
+            "ru": "Конь выигран."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "6k1/5p2/1b2r1p1/1P6/8/1K1Q4/8/8 b - - 14 66",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Pin the white queen to its king.",
+        "uk": "Хід чорних. Зв'яжіть білого ферзя з його королем.",
+        "ru": "Ход чёрных. Свяжите белого ферзя с его королём."
+      },
+      "hint": {
+        "en": "The queen on d3 and the king on b3 share the third rank.",
+        "uk": "Ферзь d3 і король b3 — на третій горизонталі.",
+        "ru": "Ферзь d3 и король b3 — на третьей горизонтали."
+      },
+      "line": [
+        {
+          "answers": [
+            "e6e3"
+          ],
+          "reply": "d3e3",
+          "correct": {
+            "en": "The queen is pinned and the bishop on b6 defends the rook — White can only take it.",
+            "uk": "Ферзь зв'язаний, а туру захищає слон b6 — білим лишається тільки взяти її.",
+            "ru": "Ферзь связан, а ладью защищает слон b6 — белым остаётся только взять её."
+          },
+          "wrong": {
+            "e6d6": {
+              "en": "The rook attacks the queen but is undefended — the queen just takes it.",
+              "uk": "Тура нападає на ферзя, але вона не захищена — ферзь її просто візьме.",
+              "ru": "Ладья нападает на ферзя, но она не защищена — ферзь её просто возьмёт."
+            }
+          }
+        },
+        {
+          "answers": [
+            "b6e3"
+          ],
+          "correct": {
+            "en": "A queen for a rook — a decisive advantage.",
+            "uk": "Ферзь за туру — вирішальна перевага.",
+            "ru": "Ферзь за ладью — решающий перевес."
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "6k1/5p2/1b4p1/1P6/8/1K1Qr3/8/8 w - - 15 67",
+      "arrows": [
+        {
+          "from": "e3",
+          "to": "b3",
+          "color": "red"
+        },
+        {
+          "from": "b6",
+          "to": "e3",
+          "color": "green"
+        }
+      ],
+      "text": {
+        "en": "Why does White lose the queen?",
+        "uk": "Чому білі втрачають ферзя?",
+        "ru": "Почему белые теряют ферзя?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "The queen is pinned to the king on b3, and taking the rook does not help: the bishop on b6 defends it.",
+            "uk": "Ферзь зв'язаний з королем b3, а взяття тури не рятує: її захищає слон b6.",
+            "ru": "Ферзь связан с королём b3, а взятие ладьи не спасает: её защищает слон b6."
+          },
+          "feedback": {
+            "en": "Right: the queen cannot leave, and giving it up for the rook is still a loss.",
+            "uk": "Правильно: піти не можна, а віддати ферзя за туру — однаково втрата.",
+            "ru": "Верно: уйти нельзя, а отдать ферзя за ладью — всё равно потеря."
+          }
+        },
+        {
+          "text": {
+            "en": "The white king is about to be mated.",
+            "uk": "Білому королю загрожує мат.",
+            "ru": "Белому королю грозит мат."
+          },
+          "feedback": {
+            "en": "There is no mate — the king has free squares. The point is the pinned queen.",
+            "uk": "Мату немає — у короля є вільні поля. Уся справа у зв'язці ферзя.",
+            "ru": "Мата нет — у короля есть свободные поля. Всё дело в связке ферзя."
+          }
+        },
+        {
+          "text": {
+            "en": "The queen is simply undefended.",
+            "uk": "Ферзь просто нічим не захищений.",
+            "ru": "Ферзь просто ничем не защищён."
+          },
+          "feedback": {
+            "en": "An undefended queen could just move away. Here it shields the king — that is the whole problem.",
+            "uk": "Незахищений ферзь міг би відійти. Тут він закриває короля — у цьому вся біда.",
+            "ru": "Незащищённый ферзь мог бы отойти. Здесь он закрывает короля — в этом вся беда."
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "3qk3/8/5n2/6B1/8/8/8/4K3 w - - 0 1",
+      "arrows": [
+        {
+          "from": "g5",
+          "to": "d8",
+          "color": "red"
+        }
+      ],
+      "highlights": [
+        "f6"
+      ],
+      "text": {
+        "en": "There is also a relative pin: behind the knight stands the queen, not the king. The knight may move, but then the bishop takes the queen. One rule: see a pinned piece — attack it again.",
+        "uk": "Буває й відносна зв'язка: за конем стоїть не король, а ферзь. Піти коню можна, але тоді слон візьме ферзя. Правило одне: побачили зв'язану фігуру — нападіть на неї ще раз.",
+        "ru": "Бывает и относительная связка: за конём стоит не король, а ферзь. Уйти коню можно, но тогда слон возьмёт ферзя. Правило одно: увидели связанную фигуру — нападите на неё ещё раз."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "8/5pkp/6r1/7Q/6P1/8/7K/8 b - - 0 47",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Win the queen.",
+        "uk": "Хід чорних. Виграйте ферзя.",
+        "ru": "Ход чёрных. Выиграйте ферзя."
+      },
+      "line": [
+        {
+          "answers": [
+            "g6h6"
+          ],
+          "reply": "h2h3"
+        },
+        {
+          "answers": [
+            "h6h5"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/8/p4k2/1p3rp1/1P2Q3/P3K3/8/8 b - - 0 45",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Find the pin.",
+        "uk": "Хід чорних. Знайдіть зв'язку.",
+        "ru": "Ход чёрных. Найдите связку."
+      },
+      "line": [
+        {
+          "answers": [
+            "f5e5"
+          ],
+          "reply": "e3d4"
+        },
+        {
+          "answers": [
+            "e5e4"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "How does an absolute pin differ from a relative one?",
+        "uk": "Чим абсолютна зв'язка відрізняється від відносної?",
+        "ru": "Чем абсолютная связка отличается от относительной?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "The king stands behind the pinned piece — moving it is against the rules.",
+            "uk": "За зв'язаною фігурою стоїть король — піти їй не можна за правилами.",
+            "ru": "За связанной фигурой стоит король — уйти ей нельзя по правилам."
+          }
+        },
+        {
+          "text": {
+            "en": "The queen stands behind the pinned piece.",
+            "uk": "За зв'язаною фігурою стоїть ферзь.",
+            "ru": "За связанной фигурой стоит ферзь."
+          },
+          "feedback": {
+            "en": "That is a relative pin: the piece may move, at a cost.",
+            "uk": "Це відносна зв'язка: піти можна, але дорого.",
+            "ru": "Это относительная связка: уйти можно, но дорого."
+          }
+        },
+        {
+          "text": {
+            "en": "Only a bishop can pin.",
+            "uk": "Зв'язувати може тільки слон.",
+            "ru": "Связывать может только слон."
+          },
+          "feedback": {
+            "en": "Every long-range piece pins: bishop, rook and queen.",
+            "uk": "Зв'язують усі далекобійні фігури: слон, тура і ферзь.",
+            "ru": "Связывают все дальнобойные фигуры: слон, ладья и ферзь."
+          }
+        }
+      ]
+    }
+  ]
+}

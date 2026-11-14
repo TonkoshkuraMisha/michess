@@ -1,0 +1,346 @@
+{
+  "id": "tactics-deflection",
+  "course": "tactics",
+  "order": 3,
+  "title": {
+    "en": "Deflection",
+    "uk": "Відволікання",
+    "ru": "Отвлечение"
+  },
+  "summary": {
+    "en": "Lure the defender away — and what it guarded is left unprotected.",
+    "uk": "Відведіть захисника — і те, що він охороняв, залишиться без захисту.",
+    "ru": "Уведите защитника — и то, что он охранял, останется без защиты."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "8/8/p2kp3/2n2pBp/2PK1P2/7P/P7/8 w - - 4 52",
+      "arrows": [
+        {
+          "from": "d6",
+          "to": "c5",
+          "color": "green"
+        },
+        {
+          "from": "d4",
+          "to": "c5",
+          "color": "red"
+        }
+      ],
+      "highlights": [
+        "c5"
+      ],
+      "text": {
+        "en": "Every defending piece has a duty. Here the black king guards the knight on c5 — the white king attacks it but cannot take it yet. If the king is distracted, the knight is lost.",
+        "uk": "У кожної фігури-захисника є обов'язок. Тут чорний король охороняє коня c5 — білий король на нього нападає, але взяти поки не може. Якщо король відволічеться, кінь пропаде.",
+        "ru": "У каждой защищающей фигуры есть обязанность. Здесь чёрный король охраняет коня c5 — белый король на него нападает, но взять пока не может. Если король отвлечётся, конь пропадёт."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "8/8/p2kp3/2n2pBp/2PK1P2/7P/P7/8 w - - 4 52",
+      "actions": [
+        {
+          "do": "move",
+          "uci": "g5e7"
+        },
+        {
+          "do": "pause",
+          "ms": 600
+        },
+        {
+          "do": "move",
+          "uci": "d6e7"
+        },
+        {
+          "do": "pause",
+          "ms": 600
+        },
+        {
+          "do": "move",
+          "uci": "d4c5"
+        }
+      ],
+      "text": {
+        "en": "The bishop sacrifices itself with check. The king takes it — and leaves the knight. The white king collects the knight: bishop for knight, and the ending is now winning.",
+        "uk": "Слон жертвує собою з шахом. Король бере його — і йде від коня. Білий король забирає коня: слона віддано за коня, а ендшпіль став виграним.",
+        "ru": "Слон жертвует собой с шахом. Король берёт его — и уходит от коня. Белый король забирает коня: слон отдан за коня, а эндшпиль стал выигранным."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "8/8/7p/7P/1Rbkr3/5KP1/8/8 w - - 1 58",
+      "text": {
+        "en": "Your move. The black king defends both the bishop on c4 and the rook on e4. Deflect it.",
+        "uk": "Ваш хід. Чорний король захищає одразу слона c4 і туру e4. Відволічіть його.",
+        "ru": "Ваш ход. Чёрный король защищает сразу слона c4 и ладью e4. Отвлеките его."
+      },
+      "hint": {
+        "en": "Take one of the pieces with check.",
+        "uk": "Візьміть одну з фігур із шахом.",
+        "ru": "Возьмите одну из фигур с шахом."
+      },
+      "line": [
+        {
+          "answers": [
+            "b4c4"
+          ],
+          "reply": "d4c4",
+          "correct": {
+            "en": "The rook is given up, but the king went to c4 and abandoned the rook on e4.",
+            "uk": "Туру віддано, але король пішов на c4 і покинув туру e4.",
+            "ru": "Ладья отдана, но король ушёл на c4 и бросил ладью e4."
+          }
+        },
+        {
+          "answers": [
+            "f3e4"
+          ],
+          "correct": {
+            "en": "The rook on e4 falls — White is left a pawn up in a winning pawn ending.",
+            "uk": "Туру e4 взято — білі залишилися з зайвим пішаком у виграному пішаковому ендшпілі.",
+            "ru": "Ладья e4 взята — белые остались с лишней пешкой в выигранном пешечном эндшпиле."
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "8/8/7p/7P/2k1r3/5KP1/8/8 w - - 0 59",
+      "arrows": [
+        {
+          "from": "f3",
+          "to": "e4",
+          "color": "red"
+        }
+      ],
+      "text": {
+        "en": "Why did the rook sacrifice work?",
+        "uk": "Чому жертва тури спрацювала?",
+        "ru": "Почему жертва ладьи сработала?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "The king went to c4 and no longer defends the rook on e4.",
+            "uk": "Король пішов на c4 і більше не захищає туру e4.",
+            "ru": "Король ушёл на c4 и больше не защищает ладью e4."
+          },
+          "feedback": {
+            "en": "Yes: the defender had two duties, and we took one away.",
+            "uk": "Так: у захисника було два обов'язки, і один ми в нього забрали.",
+            "ru": "Да: у защитника было две обязанности, и одну мы у него отняли."
+          }
+        },
+        {
+          "text": {
+            "en": "White delivered mate.",
+            "uk": "Білі оголосили мат.",
+            "ru": "Белые объявили мат."
+          },
+          "feedback": {
+            "en": "There was no mate — only a check that pulled the king away.",
+            "uk": "Мату не було — був шах, що відвів короля.",
+            "ru": "Мата не было — был шах, который увёл короля."
+          }
+        },
+        {
+          "text": {
+            "en": "The rook on e4 was pinned.",
+            "uk": "Тура e4 була зв'язана.",
+            "ru": "Ладья e4 была связана."
+          },
+          "feedback": {
+            "en": "There is no pin: the rook simply had no defender left.",
+            "uk": "Зв'язки немає: туру просто нікому стало захищати.",
+            "ru": "Связки нет: ладью просто некому стало защищать."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "2R5/6kp/6p1/8/8/2b5/P1P3PP/3r1NK1 b - - 5 31",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. The knight on f1 is held only by the king. Find mate in two.",
+        "uk": "Хід чорних. Кінь f1 тримається лише на королі. Знайдіть мат у два ходи.",
+        "ru": "Ход чёрных. Конь f1 держится только на короле. Найдите мат в два хода."
+      },
+      "hint": {
+        "en": "Drive the king off g1 with a check.",
+        "uk": "Шахом відведіть короля з g1.",
+        "ru": "Шахом уведите короля с g1."
+      },
+      "line": [
+        {
+          "answers": [
+            "c3d4"
+          ],
+          "reply": "g1h1",
+          "correct": {
+            "en": "Check! The king runs to the corner and abandons the knight.",
+            "uk": "Шах! Король іде в кут і кидає коня.",
+            "ru": "Шах! Король уходит в угол и бросает коня."
+          },
+          "wrong": {
+            "d1f1": {
+              "en": "Too early: the king defends the knight and simply takes the rook.",
+              "uk": "Зарано: король захищає коня і просто візьме туру.",
+              "ru": "Рано: король защищает коня и просто возьмёт ладью."
+            }
+          }
+        },
+        {
+          "answers": [
+            "d1f1"
+          ],
+          "correct": {
+            "en": "Mate! The defender was lured away, and the knight fell along with the king.",
+            "uk": "Мат! Захисника відволікли, і кінь упав разом із королем.",
+            "ru": "Мат! Защитника отвлекли, и конь пал вместе с королём."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/6p1/2k3p1/3R3p/2K2P1P/2P3P1/r7/8 b - - 0 40",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. The rook on d5 is held by the white king. Deflect it.",
+        "uk": "Хід чорних. Тура d5 тримається на білому королі. Відволічіть його.",
+        "ru": "Ход чёрных. Ладья d5 держится на белом короле. Отвлеките его."
+      },
+      "hint": {
+        "en": "Check the king on c4.",
+        "uk": "Оголосіть шах королю c4.",
+        "ru": "Объявите шах королю c4."
+      },
+      "line": [
+        {
+          "answers": [
+            "a2a4"
+          ],
+          "reply": "c4d3",
+          "correct": {
+            "en": "A check along the rank — the king has no square next to its rook.",
+            "uk": "Шах по горизонталі — королю нікуди стати поруч із турою.",
+            "ru": "Шах с горизонтали — королю некуда встать рядом с ладьёй."
+          }
+        },
+        {
+          "answers": [
+            "c6d5"
+          ],
+          "correct": {
+            "en": "The rook is won.",
+            "uk": "Туру виграно.",
+            "ru": "Ладья выиграна."
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "8/8/7p/7P/2k1r3/5KP1/8/8 w - - 0 59",
+      "text": {
+        "en": "How to spot a deflection: find a piece that defends something important and ask — can I force it to leave? A check, a capture or a sacrifice that must be accepted works best.",
+        "uk": "Як шукати відволікання: знайдіть фігуру, що захищає щось важливе, і запитайте — чи можна змусити її піти? Найкраще відводить шах, взяття або жертва, яку не можна не прийняти.",
+        "ru": "Как искать отвлечение: найдите фигуру, которая защищает что-то важное, и спросите — можно ли заставить её уйти? Лучше всего уводит шах, взятие или жертва, которую нельзя не принять."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "1R6/6pk/3R3p/P7/8/2n5/5PPP/r4NK1 b - - 10 45",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Mate in two.",
+        "uk": "Хід чорних. Мат у два ходи.",
+        "ru": "Ход чёрных. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "c3e2"
+          ],
+          "reply": "g1h1"
+        },
+        {
+          "answers": [
+            "a1f1"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/4R1pp/1R6/5pk1/6P1/2r2PK1/3r3P/8 b - - 3 40",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Mate in two.",
+        "uk": "Хід чорних. Мат у два ходи.",
+        "ru": "Ход чёрных. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "f5f4"
+          ],
+          "reply": "g3h3"
+        },
+        {
+          "answers": [
+            "c3f3"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "What most often helps to deflect a defender?",
+        "uk": "Що найчастіше допомагає відволікти захисника?",
+        "ru": "Что чаще всего помогает отвлечь защитника?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "A check or a sacrifice that cannot be declined.",
+            "uk": "Шах або жертва, від якої не можна відмовитися.",
+            "ru": "Шах или жертва, от которой нельзя отказаться."
+          }
+        },
+        {
+          "text": {
+            "en": "A quiet move away from the defender.",
+            "uk": "Тихий хід осторонь від захисника.",
+            "ru": "Тихий ход в сторону от защитника."
+          },
+          "feedback": {
+            "en": "The defender will simply ignore a quiet move.",
+            "uk": "Тихий хід захисник просто проігнорує.",
+            "ru": "Тихий ход защитник просто проигнорирует."
+          }
+        },
+        {
+          "text": {
+            "en": "Trading the strongest piece.",
+            "uk": "Розмін найсильнішої фігури.",
+            "ru": "Размен самой сильной фигуры."
+          },
+          "feedback": {
+            "en": "A trade changes nothing if the defender stays put.",
+            "uk": "Розмін нічого не змінює, якщо захисник лишається на місці.",
+            "ru": "Размен ничего не меняет, если защитник остаётся на месте."
+          }
+        }
+      ]
+    }
+  ]
+}

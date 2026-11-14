@@ -3,9 +3,9 @@
     "id": "tactics",
     "order": 1,
     "title": {
-      "en": "Tactics: double attack, pin, deflection",
-      "uk": "Тактика: подвійний удар, зв'язка, відволікання",
-      "ru": "Тактика: двойной удар, связка, отвлечение"
+      "en": "Tactics: double attack, pin, deflection and more",
+      "uk": "Тактика: подвійний удар, зв'язка, відволікання та інші прийоми",
+      "ru": "Тактика: двойной удар, связка, отвлечение и другие приёмы"
     },
     "summary": {
       "en": "The basic tactical blows that win material in almost every game.",

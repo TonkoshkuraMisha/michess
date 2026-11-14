@@ -1,0 +1,320 @@
+{
+  "id": "tactics-review",
+  "course": "tactics",
+  "order": 6,
+  "title": {
+    "en": "Find the blow",
+    "uk": "Знайдіть удар",
+    "ru": "Найдите удар"
+  },
+  "summary": {
+    "en": "Course review: the motif is not named — find it yourself.",
+    "uk": "Повторення курсу: прийом не підказано — знайдіть його самі.",
+    "ru": "Повторение курса: приём не подсказан — найдите его сами."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "8/8/p7/1p6/1P3N2/P2K4/5k2/6q1 w - - 0 50",
+      "text": {
+        "en": "Before every move, check the checks, captures and threats — yours and your opponent's. Then ask: what is undefended? Which pieces share a line? Which defender is overloaded? From here on the motif is not named — find it yourself.",
+        "uk": "Перед кожним ходом перевірте шахи, взяття й загрози — свої та суперника. Потім запитайте себе: що не захищене? Які фігури стоять на одній лінії? Який захисник перевантажений? Далі прийом у задачі не підказано — знайдіть його самі.",
+        "ru": "Перед каждым ходом проверьте шахи, взятия и угрозы — свои и соперника. Затем спросите себя: что не защищено? Какие фигуры стоят на одной линии? Какой защитник перегружен? Дальше приём в задаче не подсказан — найдите его сами."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "8/8/p7/1p6/1P3N2/P2K4/5k2/6q1 w - - 0 50",
+      "text": {
+        "en": "Your move. Black has a queen and White only a knight — but there is a blow.",
+        "uk": "Ваш хід. У чорних ферзь, у білих лише кінь — але удар є.",
+        "ru": "Ваш ход. У чёрных ферзь, у белых только конь — но удар есть."
+      },
+      "hint": {
+        "en": "The knight can attack king and queen at once.",
+        "uk": "Кінь може напасти одразу на короля й ферзя.",
+        "ru": "Конь может напасть сразу на короля и ферзя."
+      },
+      "line": [
+        {
+          "answers": [
+            "f4h3"
+          ],
+          "reply": "f2e1",
+          "correct": {
+            "en": "A fork: check and an attack on the queen.",
+            "uk": "Вилка: шах і напад на ферзя.",
+            "ru": "Вилка: шах и нападение на ферзя."
+          }
+        },
+        {
+          "answers": [
+            "h3g1"
+          ],
+          "correct": {
+            "en": "The queen is won.",
+            "uk": "Ферзя виграно.",
+            "ru": "Ферзь выигран."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/1P3p2/8/R3b3/P2rk3/1K5p/8/8 w - - 2 49",
+      "text": {
+        "en": "Your move. The b7 pawn wants to queen. How do you promote with a gain?",
+        "uk": "Ваш хід. Пішак b7 рветься у ферзі, але поле b8 під наглядом. Як провести його з виграшем?",
+        "ru": "Ваш ход. Пешка b7 рвётся в ферзи, но поле b8 под присмотром. Как провести её с выигрышем?"
+      },
+      "hint": {
+        "en": "Lure the king to a square where the new queen will check it.",
+        "uk": "Заманіть короля туди, де новий ферзь оголосить йому шах.",
+        "ru": "Заманите короля туда, где новый ферзь объявит ему шах."
+      },
+      "line": [
+        {
+          "answers": [
+            "a5e5"
+          ],
+          "reply": "e4e5",
+          "correct": {
+            "en": "The rook is gone, but the king is lured to e5 — onto the b8 diagonal.",
+            "uk": "Туру віддано, але короля заманено на e5 — на діагональ поля b8.",
+            "ru": "Ладья отдана, но король завлечён на e5 — на диагональ поля b8."
+          }
+        },
+        {
+          "answers": [
+            "b7b8q"
+          ],
+          "correct": {
+            "en": "The new queen arrives with check — White is winning.",
+            "uk": "Ферзь народжується з шахом — у білих вирішальна перевага.",
+            "ru": "Ферзь рождается с шахом — у белых решающий перевес."
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "Which motif worked in the last task?",
+        "uk": "Який прийом спрацював у минулій задачі?",
+        "ru": "Какой приём сработал в прошлой задаче?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "Attraction: the sacrifice lured the king onto a square where it was checked.",
+            "uk": "Заманювання: жертва заманила короля на поле, де він потрапив під шах.",
+            "ru": "Завлечение: жертва заманила короля на поле, где он попал под шах."
+          },
+          "feedback": {
+            "en": "Right. Attraction is deflection's cousin: the piece is brought to a square, not sent away.",
+            "uk": "Правильно. Заманювання — родич відволікання: фігуру не відводять, а приводять.",
+            "ru": "Верно. Завлечение — родственник отвлечения: фигуру не уводят, а приводят."
+          }
+        },
+        {
+          "text": {
+            "en": "A pin.",
+            "uk": "Зв'язка.",
+            "ru": "Связка."
+          },
+          "feedback": {
+            "en": "Nothing was pinned: the king went to take the rook itself.",
+            "uk": "Ніхто не був зв'язаний: король сам пішов брати туру.",
+            "ru": "Никто не был связан: король сам пошёл брать ладью."
+          }
+        },
+        {
+          "text": {
+            "en": "A skewer.",
+            "uk": "Наскрізний удар.",
+            "ru": "Сквозной удар."
+          },
+          "feedback": {
+            "en": "Nothing stands behind the king on the line of the check — it is not a skewer.",
+            "uk": "За королем на лінії шаху нічого немає — це не наскрізний удар.",
+            "ru": "За королём на линии шаха ничего нет — это не сквозной удар."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/pp6/2b1k3/2p4R/8/1PP5/P3Kp2/8 b - - 1 52",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. The f2 pawn is one step from queening, but the king guards f1.",
+        "uk": "Хід чорних. Пішак f2 за крок від ферзя, але поле f1 тримає король.",
+        "ru": "Ход чёрных. Пешка f2 в шаге от ферзя, но поле f1 держит король."
+      },
+      "hint": {
+        "en": "Deflect the king with a check.",
+        "uk": "Відволічіть короля шахом.",
+        "ru": "Отвлеките короля шахом."
+      },
+      "line": [
+        {
+          "answers": [
+            "c6f3"
+          ],
+          "reply": "e2f3",
+          "correct": {
+            "en": "Deflection: the king took the bishop and left f1.",
+            "uk": "Відволікання: король узяв слона й пішов від поля f1.",
+            "ru": "Отвлечение: король взял слона и ушёл от поля f1."
+          }
+        },
+        {
+          "answers": [
+            "f2f1q"
+          ],
+          "correct": {
+            "en": "A new queen with check — Black is winning.",
+            "uk": "Новий ферзь із шахом — у чорних вирішальна перевага.",
+            "ru": "Новый ферзь с шахом — у чёрных решающий перевес."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/1q6/p7/8/1Q6/1KR5/PP1r3k/8 b - - 10 45",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. The white queen on b4 is held by the king. Remove the defender.",
+        "uk": "Хід чорних. Білий ферзь b4 тримається на королі. Знищіть захист.",
+        "ru": "Ход чёрных. Белый ферзь b4 держится на короле. Уничтожьте защиту."
+      },
+      "line": [
+        {
+          "answers": [
+            "d2b2"
+          ],
+          "reply": "b3b2",
+          "correct": {
+            "en": "The king took the rook and no longer defends the queen.",
+            "uk": "Король узяв туру і більше не захищає ферзя.",
+            "ru": "Король взял ладью и больше не защищает ферзя."
+          }
+        },
+        {
+          "answers": [
+            "b7b4"
+          ],
+          "correct": {
+            "en": "The queen is won with check.",
+            "uk": "Ферзя виграно з шахом.",
+            "ru": "Ферзь выигран с шахом."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/8/3n3k/5R1P/1P3K2/P7/6r1/8 w - - 4 49",
+      "text": {
+        "en": "Your move. Win a piece.",
+        "uk": "Ваш хід. Виграйте фігуру.",
+        "ru": "Ваш ход. Выиграйте фигуру."
+      },
+      "line": [
+        {
+          "answers": [
+            "f5f6"
+          ],
+          "reply": "h6g7",
+          "correct": {
+            "en": "The rook hits both the king and the knight — not only knights can fork.",
+            "uk": "Тура нападає і на короля, і на коня — вилка буває не тільки в коня.",
+            "ru": "Ладья нападает и на короля, и на коня — вилка бывает не только у коня."
+          }
+        },
+        {
+          "answers": [
+            "f6d6"
+          ],
+          "correct": {
+            "en": "The knight is won.",
+            "uk": "Коня виграно.",
+            "ru": "Конь выигран."
+          }
+        }
+      ]
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "8/4k3/R3n3/6bB/4K1Pp/8/5P2/8 b - - 12 67",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Win the rook.",
+        "uk": "Хід чорних. Виграйте туру.",
+        "ru": "Ход чёрных. Выиграйте ладью."
+      },
+      "line": [
+        {
+          "answers": [
+            "e6c5"
+          ],
+          "reply": "e4f3"
+        },
+        {
+          "answers": [
+            "c5a6"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/5k2/4n1p1/1R5p/5p2/P4K2/1P6/8 b - - 1 47",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Win the rook.",
+        "uk": "Хід чорних. Виграйте туру.",
+        "ru": "Ход чёрных. Выиграйте ладью."
+      },
+      "line": [
+        {
+          "answers": [
+            "e6d4"
+          ],
+          "reply": "f3f4"
+        },
+        {
+          "answers": [
+            "d4b5"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/7p/5p2/5N2/6P1/1r3PK1/4k3/8 w - - 15 54",
+      "text": {
+        "en": "Your move. Win the rook.",
+        "uk": "Ваш хід. Виграйте туру.",
+        "ru": "Ваш ход. Выиграйте ладью."
+      },
+      "line": [
+        {
+          "answers": [
+            "f5d4"
+          ],
+          "reply": "e2e3"
+        },
+        {
+          "answers": [
+            "d4b3"
+          ]
+        }
+      ]
+    }
+  ]
+}
