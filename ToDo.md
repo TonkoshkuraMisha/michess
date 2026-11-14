@@ -1,13 +1,15 @@
 <!-- --- FILE: ToDo.md --- -->
 
-```
 ## ▶ Сейчас (handoff, перезаписывается каждую сессию)
-- Ветка: feature/xxx | Цель: <одно предложение>
-- Сделано: <2–4 пункта, с путями файлов>
-- Осталось: <2–4 пункта, следующий шаг первым>
-- Решения/грабли: <почему выбрали так; что НЕ работает и почему>
-- Проверка: <точная команда, которая должна стать зелёной>
-```
+- Ветка: `dev` (чистая, CI зелёный) | Цель: проект на uv и Python 3.14, актуальные GitHub Actions — выполнено.
+- Сделано: `pyproject.toml` ([project], dependency-groups), `uv.lock`, `.python-version`; `Dockerfile` и
+  `.github/workflows/ci.yml` на uv + 3.14; `start_dev.ps1`, `scripts/sync_host.ps1` и доки на `uv sync`;
+  удалены `requirements*.txt`; Actions: checkout/setup-node/upload-artifact v7, setup-uv v10.3.3; PR #1–#3 слиты в `dev`.
+- Осталось: слабые боты (ветка `fix/bot-strength-weak` слита, калибровка — `scripts/calibration_runs/`); `dev` → `master`
+  при релизе; `mako==1.4.0` в `uv.lock` помечен yanked — обновить; убрать устаревший `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24`.
+- Решения/грабли: ruff/mypy на py314 (UP037 исправлен); команды — только через `uv run`; в терминале мог остаться
+  `VIRTUAL_ENV=michess_env` (предупреждение uv) — открыть новый терминал; `.idea` указывает на удалённый `michess_env`.
+- Проверка: `uv sync && uv run python -m pytest -q --tb=short --no-header` (1423 passed, 4 skipped).
 
 # ♟️ Линейный план разработки Michess (PvP Self-Product Roadmap)
 
@@ -48,6 +50,11 @@
 ### - [x] Таск 1.1. Синхронизация `requirements.txt` и починка пайплайна `.github/workflows/ci.yml`
 
 ### - [x] Таск 1.2. Вынос API/WS URL в переменные окружения фронтенда (`.env`)
+
+### - [x] Таск 1.3. Переход на uv и Python 3.14
+
+* Сделано: `uv.lock` — единый источник версий пакетов (вместо `requirements*.txt`), `.python-version` = 3.14; Docker и CI
+  собираются через `uv sync --frozen`; Actions обновлены до актуальных версий; dev-скрипты и документация — на `uv sync`.
 
 ---
 
