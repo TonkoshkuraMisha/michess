@@ -1,0 +1,297 @@
+{
+  "id": "endgame-opposition",
+  "course": "endgame",
+  "order": 3,
+  "title": {
+    "en": "The opposition",
+    "uk": "Опозиція",
+    "ru": "Оппозиция"
+  },
+  "summary": {
+    "en": "Kings face to face: whoever does not have to move is the stronger.",
+    "uk": "Королі один проти одного: хто не мусить ходити, той і сильніший.",
+    "ru": "Короли друг против друга: кто не обязан ходить, тот и сильнее."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "8/4k3/8/4K3/4P3/8/8/8 b - - 0 1",
+      "highlights": [
+        "e5",
+        "e7"
+      ],
+      "text": {
+        "en": "The opposition: the kings stand on one line with one square between them. Neither can come closer, so someone must give way. Here it is Black to move — Black has to step aside and let the white king through.",
+        "uk": "Опозиція: королі стоять на одній лінії через одне поле. Підійти ближче не можна, тож хтось мусить поступитися. Тут хід чорних — їм доведеться відійти вбік і пропустити білого короля вперед.",
+        "ru": "Оппозиция: короли стоят на одной линии через одно поле. Подойти ближе нельзя, поэтому кто-то должен уступить. Здесь ход чёрных — им придётся отойти в сторону и пропустить белого короля вперёд."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "8/4k3/8/4K3/4P3/8/8/8 b - - 0 1",
+      "actions": [
+        {
+          "do": "move",
+          "uci": "e7d7"
+        },
+        {
+          "do": "pause",
+          "ms": 600
+        },
+        {
+          "do": "move",
+          "uci": "e5f6"
+        },
+        {
+          "do": "highlight",
+          "squares": [
+            "f6",
+            "e6",
+            "d6"
+          ]
+        }
+      ],
+      "text": {
+        "en": "The black king gave way — the white king reaches the sixth rank ahead of its pawn. Now the pawn will get through.",
+        "uk": "Чорний король поступився — білий король виходить на шосту горизонталь попереду пішака. Тепер пішак пройде.",
+        "ru": "Чёрный король уступил — белый король выходит на шестую горизонталь впереди пешки. Теперь пешка пройдёт."
+      }
+    },
+    {
+      "type": "choice",
+      "fen": "8/4k3/8/4K3/4P3/8/8/8 w - - 0 1",
+      "text": {
+        "en": "The same position, but White to move. How does it end with best play?",
+        "uk": "Та сама позиція, але хід білих. Чим вона закінчиться за точної гри?",
+        "ru": "Та же позиция, но ход белых. Чем она кончится при точной игре?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "A draw: now White must give way — Black has the opposition.",
+            "uk": "Нічиєю: тепер поступатися доводиться білим, опозиція в чорних.",
+            "ru": "Ничьей: теперь уступать приходится белым, оппозиция у чёрных."
+          },
+          "feedback": {
+            "en": "Right. The same setup — and the result depends on whose move it is.",
+            "uk": "Правильно. Та сама розстановка — а результат залежить від черговості ходу.",
+            "ru": "Верно. Одна и та же расстановка — а итог зависит от очереди хода."
+          }
+        },
+        {
+          "text": {
+            "en": "White still wins: they are a pawn up.",
+            "uk": "Білі однаково виграють: у них зайвий пішак.",
+            "ru": "Белые всё равно выигрывают: у них лишняя пешка."
+          },
+          "feedback": {
+            "en": "An extra pawn is not enough: without the opposition the king cannot escort it.",
+            "uk": "Зайвого пішака замало: без опозиції король його не проведе.",
+            "ru": "Лишней пешки мало: без оппозиции король её не проведёт."
+          }
+        },
+        {
+          "text": {
+            "en": "Black wins.",
+            "uk": "Виграють чорні.",
+            "ru": "Выигрывают чёрные."
+          },
+          "feedback": {
+            "en": "Black has no pawns — nothing to win with.",
+            "uk": "У чорних немає пішаків — виграти їм нічим.",
+            "ru": "У чёрных нет пешек — выиграть им нечем."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/8/4k3/8/4K3/8/4P3/8 w - - 0 1",
+      "text": {
+        "en": "Your move. The kings are in opposition and it is your move — that is bad. How do you hand the move to Black?",
+        "uk": "Ваш хід. Королі стоять в опозиції, і хід ваш — це погано. Як передати черговість ходу чорним?",
+        "ru": "Ваш ход. Короли стоят в оппозиции, и ход ваш — это плохо. Как передать очередь хода чёрным?"
+      },
+      "hint": {
+        "en": "The e2 pawn has a spare move.",
+        "uk": "У пішака e2 є запасний хід.",
+        "ru": "У пешки e2 есть запасной ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "e2e3",
+            "e4d4",
+            "e4f4"
+          ],
+          "correct": {
+            "en": "Right! A waiting pawn move (or outflanking with the king) — and now Black must give way.",
+            "uk": "Правильно! Вичікувальний хід пішаком (або обхід королем збоку) — і поступатися доводиться чорним.",
+            "ru": "Верно! Выжидательный ход пешкой (или обход королём сбоку) — и уступать приходится чёрным."
+          },
+          "wrong": {
+            "e4e3": {
+              "en": "The king retreated — Black takes the opposition: a draw.",
+              "uk": "Король відступив — опозицію забрали чорні, нічия.",
+              "ru": "Король отступил — оппозицию забрали чёрные, ничья."
+            },
+            "e4f3": {
+              "en": "Retreating gives up the opposition — a draw.",
+              "uk": "Відступ віддає опозицію — нічия.",
+              "ru": "Отступление отдаёт оппозицию — ничья."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "4k3/8/4K3/4P3/8/8/8/8 w - - 0 1",
+      "text": {
+        "en": "Your move. The king is already on the sixth rank ahead of the pawn. How do you win?",
+        "uk": "Ваш хід. Король уже на шостій горизонталі перед пішаком. Як виграти?",
+        "ru": "Ваш ход. Король уже на шестой горизонтали перед пешкой. Как выиграть?"
+      },
+      "line": [
+        {
+          "answers": [
+            "e6d6",
+            "e6f6"
+          ],
+          "correct": {
+            "en": "The king stays ahead of the pawn — the black king cannot hold the squares in front of it.",
+            "uk": "Король залишається попереду пішака — чорний король не втримає поля перед ним.",
+            "ru": "Король остаётся впереди пешки — чёрный король не удержит поля перед ней."
+          },
+          "wrong": {
+            "e6d5": {
+              "en": "The king stepped back, and Black blockades the pawn — a draw.",
+              "uk": "Король пішов назад, і чорні стають перед пішаком — нічия.",
+              "ru": "Король ушёл назад, и чёрные встают перед пешкой — ничья."
+            },
+            "e6f5": {
+              "en": "Stepping back hands over the squares in front of the pawn — a draw.",
+              "uk": "Крок назад віддає поля перед пішаком — нічия.",
+              "ru": "Шаг назад отдаёт поля перед пешкой — ничья."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "8/4k3/8/4K3/4P3/8/8/8 b - - 0 1",
+      "text": {
+        "en": "The key in king-and-pawn versus king: put your king in front of the pawn and fight for the opposition. If your opponent has it, take it back with a waiting pawn move or by outflanking with the king.",
+        "uk": "Головне в ендшпілі «король із пішаком проти короля»: поставте свого короля попереду пішака й боріться за опозицію. Якщо опозиція в суперника, заберіть її вичікувальним ходом пішака або обходом королем.",
+        "ru": "Главное в эндшпиле «король с пешкой против короля»: поставьте своего короля впереди пешки и боритесь за оппозицию. Если оппозиция у соперника, отберите её выжидательным ходом пешки или обходом королём."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "8/8/3k4/8/3K4/8/3P4/8 w - - 0 1",
+      "text": {
+        "en": "Your move. Find the winning move.",
+        "uk": "Ваш хід. Знайдіть виграшний хід.",
+        "ru": "Ваш ход. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "d2d3",
+            "d4c4",
+            "d4e4"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "4k3/8/4K3/4P3/8/8/8/8 b - - 0 1",
+      "text": {
+        "en": "Black to move. How does the game end?",
+        "uk": "Хід чорних. Чим закінчиться партія?",
+        "ru": "Ход чёрных. Чем кончится партия?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "White wins: the black king must give way.",
+            "uk": "Білі виграють: чорний король мусить поступитися.",
+            "ru": "Белые выигрывают: чёрный король вынужден уступить."
+          }
+        },
+        {
+          "text": {
+            "en": "A draw: the king stands in front of the pawn.",
+            "uk": "Нічия: король стоїть перед пішаком.",
+            "ru": "Ничья: король стоит перед пешкой."
+          },
+          "feedback": {
+            "en": "With Black to move, White has the opposition — the king will yield.",
+            "uk": "За ходу чорних опозиція в білих — король поступиться полем.",
+            "ru": "При ходе чёрных оппозиция у белых — король уступит поле."
+          }
+        },
+        {
+          "text": {
+            "en": "A draw by stalemate.",
+            "uk": "Нічия — пат.",
+            "ru": "Ничья — пат."
+          },
+          "feedback": {
+            "en": "The black king has moves; there is no stalemate.",
+            "uk": "У чорного короля є ходи, пату немає.",
+            "ru": "У чёрного короля есть ходы, пата нет."
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "Who has the opposition?",
+        "uk": "У кого опозиція?",
+        "ru": "У кого оппозиция?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "The side that made the last move — the opponent must now give way.",
+            "uk": "У того, хто зробив останній хід, — суперникові тепер доводиться поступатися.",
+            "ru": "У того, кто сделал последний ход, — сопернику теперь приходится уступать."
+          }
+        },
+        {
+          "text": {
+            "en": "The side whose turn it is.",
+            "uk": "У того, чий зараз хід.",
+            "ru": "У того, чей сейчас ход."
+          },
+          "feedback": {
+            "en": "The opposite: having to move in the opposition is a minus.",
+            "uk": "Навпаки: черговість ходу в опозиції — це мінус.",
+            "ru": "Наоборот: очередь хода в оппозиции — это минус."
+          }
+        },
+        {
+          "text": {
+            "en": "The side with more pawns.",
+            "uk": "У того, в кого більше пішаків.",
+            "ru": "У того, у кого больше пешек."
+          },
+          "feedback": {
+            "en": "The opposition is about the kings' placement, not material.",
+            "uk": "Опозиція — про положення королів, а не про матеріал.",
+            "ru": "Оппозиция — про положение королей, а не про материал."
+          }
+        }
+      ]
+    }
+  ]
+}
