@@ -3,7 +3,7 @@
 
 import {useState} from 'react';
 import {Link} from 'react-router-dom';
-import {ArrowLeft, Check, KeyRound, Languages, LogOut, Palette, Settings as SettingsIcon, Volume2, VolumeX} from 'lucide-react';
+import {ArrowLeft, Check, Download, KeyRound, Languages, LogOut, Palette, Settings as SettingsIcon, Trash2, Volume2, VolumeX} from 'lucide-react';
 import {API_BASE_URL} from '../config/api';
 import {
     BOARD_THEMES,
@@ -28,6 +28,8 @@ interface SettingsProps {
     /** Сервер выдал новый токен (после смены пароля прежние отозваны). */
     onTokenChange: (token: string) => void;
     onLogoutEverywhere: () => void | Promise<void>;
+    /** Аккаунт удалён (таск 17.5): токен уже недействителен — выйти. */
+    onAccountDeleted?: () => void;
 }
 
 const sectionClass = 'bg-acacia-dark border border-amber-900/40 p-5 rounded shadow-heavy';
@@ -41,7 +43,7 @@ const optionClass = (active: boolean) =>
             : 'bg-black/35 border-amber-900/40 text-boxwood/85 hover:border-amber-600/60'
     }`;
 
-export default function Settings({token, username, onTokenChange, onLogoutEverywhere}: SettingsProps) {
+export default function Settings({token, username, onTokenChange, onLogoutEverywhere, onAccountDeleted}: SettingsProps) {
     const {t} = useI18n();
     const [boardThemeKey, setBoardThemeKey] = useState(() => getSavedBoardThemeKey());
     const [pieceSetKey, setPieceSetKey] = useState(() => getSavedPieceSetKey());
@@ -53,6 +55,56 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
     const [passwordError, setPasswordError] = useState<UiMessage | null>(null);
     const [passwordSaved, setPasswordSaved] = useState(false);
     const [isSaving, setIsSaving] = useState(false);
+    // Мои данные (таски 17.5, 23.1): выгрузка и удаление аккаунта.
+    const [dataError, setDataError] = useState<UiMessage | null>(null);
+    const [deletePassword, setDeletePassword] = useState('');
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const downloadMyData = async () => {
+        if (!token) return;
+        setDataError(null);
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/v1/account/export`, {headers: {Authorization: `Bearer ${token}`}});
+            if (!res.ok) {
+                setDataError(await readApiErrorOr(res, 'settings.exportFailed'));
+                return;
+            }
+            const blob = new Blob([JSON.stringify(await res.json(), null, 2)], {type: 'application/json'});
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `michess-${username ?? 'data'}.json`;
+            link.click();
+            URL.revokeObjectURL(url);
+        } catch {
+            setDataError({key: 'common.noConnection'});
+        }
+    };
+
+    const deleteAccount = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!token || !deletePassword || !window.confirm(t('settings.deleteConfirm'))) return;
+        setDataError(null);
+        setIsDeleting(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/v1/account/delete`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', Authorization: `Bearer ${token}`},
+                body: JSON.stringify({password: deletePassword}),
+            });
+            if (!res.ok) {
+                setDataError(await readApiErrorOr(res, 'settings.deleteFailed'));
+                return;
+            }
+            gameSocket.disconnect();
+            localStorage.removeItem('token');
+            onAccountDeleted?.();
+        } catch {
+            setDataError({key: 'common.noConnection'});
+        } finally {
+            setIsDeleting(false);
+        }
+    };
 
     const selectBoardTheme = (themeId: string) => {
         setBoardThemeKey(themeId);
@@ -293,6 +345,29 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                         >
                             {t('settings.logoutEverywhere')}
                         </button>
+                    </section>
+
+                    <section className={sectionClass} data-testid="settings-my-data">
+                        <h2 className={headingClass}><Download size={18} className="text-amber-400"/> {t('settings.myData')}</h2>
+                        <p className="text-sm text-boxwood/80 mb-3 max-w-xl">{t('settings.myDataNote')}</p>
+                        <button type="button" onClick={() => void downloadMyData()} data-testid="settings-export"
+                                className="px-4 py-2 rounded-md bg-amber-800 hover:bg-amber-700 text-white text-sm font-bold transition cursor-pointer flex items-center gap-1.5">
+                            <Download size={15}/> {t('settings.exportData')}
+                        </button>
+                        <form onSubmit={(e) => void deleteAccount(e)} className="mt-5 flex flex-col gap-2 max-w-sm">
+                            <p className="text-sm text-red-200 font-bold flex items-center gap-1.5">
+                                <Trash2 size={15}/> {t('settings.deleteAccount')}
+                            </p>
+                            <p className="text-xs text-boxwood/75">{t('settings.deleteNote')}</p>
+                            <input type="password" autoComplete="current-password" value={deletePassword}
+                                   onChange={(e) => setDeletePassword(e.target.value)} className={inputClass}
+                                   placeholder={t('settings.currentPassword')} data-testid="settings-delete-password"/>
+                            <button type="submit" disabled={!deletePassword || isDeleting} data-testid="settings-delete"
+                                    className="self-start px-4 py-2 rounded-md bg-red-950/60 border border-red-800 text-red-200 text-sm font-bold hover:bg-red-900/60 transition cursor-pointer disabled:opacity-40">
+                                {t('settings.deleteAccount')}
+                            </button>
+                        </form>
+                        {dataError && <p className="text-sm text-red-300 mt-2" role="alert">{renderUiMessage(dataError, t)}</p>}
                     </section>
                 </>
             ) : (
