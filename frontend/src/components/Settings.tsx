@@ -1,9 +1,9 @@
 // --- FILE: frontend/src/components/Settings.tsx ---
 // Настройки: оформление доски, звук, смена пароля и завершение сессий на всех устройствах.
 
-import {useState} from 'react';
+import {useEffect, useState} from 'react';
 import {Link} from 'react-router-dom';
-import {ArrowLeft, Check, Download, KeyRound, Languages, LogOut, Palette, Settings as SettingsIcon, Trash2, Volume2, VolumeX} from 'lucide-react';
+import {ArrowLeft, AtSign, Check, Download, KeyRound, Languages, LogOut, Palette, Settings as SettingsIcon, Trash2, Volume2, VolumeX} from 'lucide-react';
 import {API_BASE_URL} from '../config/api';
 import {
     BOARD_THEMES,
@@ -44,7 +44,7 @@ const optionClass = (active: boolean) =>
     }`;
 
 export default function Settings({token, username, onTokenChange, onLogoutEverywhere, onAccountDeleted}: SettingsProps) {
-    const {t} = useI18n();
+    const {t, language} = useI18n();
     const [boardThemeKey, setBoardThemeKey] = useState(() => getSavedBoardThemeKey());
     const [pieceSetKey, setPieceSetKey] = useState(() => getSavedPieceSetKey());
     const [isMuted, setIsMuted] = useState(() => soundEngine.isMuted());
@@ -59,6 +59,59 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
     const [dataError, setDataError] = useState<UiMessage | null>(null);
     const [deletePassword, setDeletePassword] = useState('');
     const [isDeleting, setIsDeleting] = useState(false);
+    // E-mail (таск 17.5): необязателен, нужен для сброса пароля; привязывается по ссылке из письма.
+    const [email, setEmail] = useState<string | null>(null);
+    const [emailInput, setEmailInput] = useState('');
+    const [emailPassword, setEmailPassword] = useState('');
+    const [emailNotice, setEmailNotice] = useState<UiMessage | null>(null);
+    const [emailError, setEmailError] = useState<UiMessage | null>(null);
+
+    useEffect(() => {
+        if (!token) return;
+        void (async () => {
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/v1/profile/me`, {headers: {Authorization: `Bearer ${token}`}});
+                if (res?.ok) setEmail((await res.json())?.email ?? null);
+            } catch {
+                // Не удалось узнать адрес — раздел покажет «не привязан», привязать можно всё равно.
+            }
+        })();
+    }, [token]);
+
+    const emailRequest = async (path: string, body: object, onOk: () => void, fallback: 'settings.emailFailed') => {
+        if (!token) return;
+        setEmailError(null);
+        setEmailNotice(null);
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/v1/account/${path}`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', Authorization: `Bearer ${token}`},
+                body: JSON.stringify(body),
+            });
+            if (!res.ok) {
+                setEmailError(await readApiErrorOr(res, fallback));
+                return;
+            }
+            setEmailPassword('');
+            onOk();
+        } catch {
+            setEmailError({key: 'common.noConnection'});
+        }
+    };
+
+    const sendEmailLink = (e: React.FormEvent) => {
+        e.preventDefault();
+        const address = emailInput.trim();
+        void emailRequest('email', {email: address, password: emailPassword, language},
+            () => setEmailNotice({key: 'settings.emailSent', params: {email: address}}), 'settings.emailFailed');
+    };
+
+    const removeEmail = () => {
+        void emailRequest('email/remove', {password: emailPassword}, () => {
+            setEmail(null);
+            setEmailNotice({key: 'settings.emailRemoved'});
+        }, 'settings.emailFailed');
+    };
 
     const downloadMyData = async () => {
         if (!token) return;
@@ -345,6 +398,37 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                         >
                             {t('settings.logoutEverywhere')}
                         </button>
+                    </section>
+
+                    <section className={sectionClass} data-testid="settings-email">
+                        <h2 className={headingClass}><AtSign size={18} className="text-amber-400"/> {t('settings.email')}</h2>
+                        <p className="text-sm text-boxwood/80 mb-2 max-w-xl">{t('settings.emailNote')}</p>
+                        <p className="text-sm mb-3" data-testid="settings-email-current">
+                            {email ? t('settings.emailCurrent', {email}) : t('settings.emailNone')}
+                        </p>
+                        <form onSubmit={sendEmailLink} className="flex flex-col gap-2 max-w-sm">
+                            <input type="email" autoComplete="email" value={emailInput} required
+                                   onChange={(e) => setEmailInput(e.target.value)} className={inputClass}
+                                   placeholder={t(email ? 'settings.emailChange' : 'settings.email')}
+                                   data-testid="settings-email-input"/>
+                            <input type="password" autoComplete="current-password" value={emailPassword}
+                                   onChange={(e) => setEmailPassword(e.target.value)} className={inputClass}
+                                   placeholder={t('settings.currentPassword')} data-testid="settings-email-password"/>
+                            <div className="flex flex-wrap gap-2">
+                                <button type="submit" disabled={!emailInput.trim() || !emailPassword} data-testid="settings-email-send"
+                                        className="px-4 py-2 rounded-md bg-amber-800 hover:bg-amber-700 text-white text-sm font-bold transition cursor-pointer disabled:opacity-40">
+                                    {t('settings.emailSend')}
+                                </button>
+                                {email && (
+                                    <button type="button" onClick={removeEmail} disabled={!emailPassword} data-testid="settings-email-remove"
+                                            className="px-4 py-2 rounded-md bg-black/40 border border-amber-900/50 text-sm font-bold cursor-pointer disabled:opacity-40">
+                                        {t('settings.emailRemove')}
+                                    </button>
+                                )}
+                            </div>
+                        </form>
+                        {emailNotice && <p className="text-sm text-emerald-300 mt-2" role="status">{renderUiMessage(emailNotice, t)}</p>}
+                        {emailError && <p className="text-sm text-red-300 mt-2" role="alert">{renderUiMessage(emailError, t)}</p>}
                     </section>
 
                     <section className={sectionClass} data-testid="settings-my-data">

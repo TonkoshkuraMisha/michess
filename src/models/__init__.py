@@ -1,4 +1,5 @@
 from src.models.base import Base
+from src.models.email_token import EmailToken
 from src.models.game import Game
 from src.models.lesson import LessonProgress
 from src.models.move import Move
@@ -12,6 +13,7 @@ __all__ = [
     "BotPersonality",
     "DefenseDrill",
     "DrillRecord",
+    "EmailToken",
     "Game",
     "LessonProgress",
     "Move",

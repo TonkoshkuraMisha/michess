@@ -179,3 +179,21 @@ describe('AuthModal: доступность', () => {
         expect(screen.getByRole('dialog', {name: 'Регистрация аккаунта'})).toBeInTheDocument();
     });
 });
+
+describe('AuthModal: забыли пароль (таск 17.5)', () => {
+    it('ссылка сброса уходит на адрес с языком интерфейса, ответ одинаковый', async () => {
+        const fetchMock = vi.fn(async () => ({ok: true, status: 202, json: async () => ({})}) as Response);
+        vi.stubGlobal('fetch', fetchMock);
+        render(<AuthModal onSuccess={vi.fn()}/>);
+        fireEvent.click(screen.getByTestId('auth-forgot'));
+        expect(screen.getByRole('heading', {name: 'Сброс пароля'})).toBeInTheDocument();
+        fireEvent.change(screen.getByLabelText('E-mail'), {target: {value: 'alice@example.com'}});
+        fireEvent.click(screen.getByRole('button', {name: 'Прислать ссылку'}));
+        expect(await screen.findByRole('status')).toHaveTextContent('Если этот адрес привязан к аккаунту');
+        const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+        expect(url).toContain('/api/v1/account/password-reset');
+        expect(JSON.parse(String(init.body))).toEqual({email: 'alice@example.com', language: 'ru'});
+        fireEvent.click(screen.getByTestId('auth-forgot'));
+        expect(screen.getByRole('heading', {name: /Вход/})).toBeInTheDocument();
+    });
+});

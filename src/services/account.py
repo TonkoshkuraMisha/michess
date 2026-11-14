@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.errors import ApiError
 from src.core.security import get_password_hash
+from src.models.email_token import EmailToken
 from src.models.game import Game, GameStatus
 from src.models.lesson import LessonProgress
 from src.models.personality import BotPersonality
@@ -57,7 +58,7 @@ async def export_data(db: AsyncSession, user: User) -> dict:
         "format": EXPORT_FORMAT,
         "exported_at": datetime.now(UTC).isoformat(),
         "profile": {
-            "id": user.id, "username": user.username, "created_at": _iso(user.created_at),
+            "id": user.id, "username": user.username, "email": user.email, "created_at": _iso(user.created_at),
             "ratings": {
                 "bullet": user.bullet_rating, "blitz": user.blitz_rating,
                 "rapid": user.rapid_rating, "classical": user.classical_rating,
@@ -122,13 +123,14 @@ async def delete_account(db: AsyncSession, user: User) -> None:
             (BotPersonality, BotPersonality.owner_id), (LessonProgress, LessonProgress.user_id),
             (ThemeProgress, ThemeProgress.user_id), (PuzzleAttempt, PuzzleAttempt.user_id),
             (PersonalPuzzle, PersonalPuzzle.user_id), (DrillRecord, DrillRecord.user_id),
-            (Tournament, Tournament.owner_id),
+            (Tournament, Tournament.owner_id), (EmailToken, EmailToken.user_id),
     ):
         await db.execute(delete(model).where(column == user.id))
 
     anonymous = f"deleted_{user.id}"
     user.username = anonymous
     user.username_key = anonymous
+    user.email = None
     user.hashed_password = get_password_hash(secrets.token_urlsafe(32))
     user.deleted_at = datetime.now(UTC)
     user.token_version = (user.token_version or 0) + 1

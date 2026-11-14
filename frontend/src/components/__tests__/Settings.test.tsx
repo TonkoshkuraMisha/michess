@@ -100,7 +100,7 @@ describe('Settings: смена пароля', () => {
         expect(localStorage.getItem('token')).toBe('new-token');
         expect(screen.getByRole('status')).toHaveTextContent('Пароль изменён');
 
-        const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+        const [url, init] = (fetchMock.mock.calls as unknown as [string, RequestInit][]).filter(([url]) => !String(url).includes('/profile/me'))[0] as unknown as [string, RequestInit];
         expect(url).toContain('/api/v1/auth/change-password');
         expect((init.headers as Record<string, string>).Authorization).toBe('Bearer old-token');
         expect(JSON.parse(init.body as string)).toEqual({
@@ -132,7 +132,8 @@ describe('Settings: смена пароля', () => {
         fillPasswords('old-password', next, repeat);
 
         expect(screen.getByRole('alert')).toHaveTextContent(message);
-        expect(fetchMock).not.toHaveBeenCalled();
+        // Запрошен только профиль (e-mail для раздела) — смена пароля на сервер не ушла.
+        expect((fetchMock.mock.calls as unknown as [string][]).filter(([url]) => !String(url).includes('/profile/me'))).toEqual([]);
     });
 
     it('кнопка «Выйти на всех устройствах» вызывает выход', () => {
@@ -160,7 +161,7 @@ describe('Settings: мои данные (таск 17.5)', () => {
         fireEvent.change(screen.getByTestId('settings-delete-password'), {target: {value: 'secret-pass'}});
         fireEvent.click(screen.getByTestId('settings-delete'));
         await waitFor(() => expect(onAccountDeleted).toHaveBeenCalled());
-        const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+        const [url, init] = (fetchMock.mock.calls as unknown as [string, RequestInit][]).filter(([url]) => !String(url).includes('/profile/me'))[0] as unknown as [string, RequestInit];
         expect(url).toContain('/api/v1/account/delete');
         expect(JSON.parse(String(init.body))).toEqual({password: 'secret-pass'});
         expect(localStorage.getItem('token')).toBeNull();
@@ -187,6 +188,34 @@ describe('Settings: мои данные (таск 17.5)', () => {
         expect(screen.getByTestId('settings-delete')).toBeDisabled();
         fireEvent.click(screen.getByTestId('settings-export'));
         await waitFor(() => expect(URL.createObjectURL).toHaveBeenCalled());
-        expect(String((fetchMock.mock.calls[0] as unknown as [string])[0])).toContain('/api/v1/account/export');
+        expect(String(((fetchMock.mock.calls as unknown as [string, RequestInit][]).filter(([url]) => !String(url).includes('/profile/me'))[0] as unknown as [string])[0])).toContain('/api/v1/account/export');
+    });
+});
+
+describe('Settings: e-mail (таск 17.5)', () => {
+    it('привязка: адрес, пароль и язык уходят на сервер, подсказка про письмо', async () => {
+        const fetchMock = vi.fn(async (url: string) => (url.includes('/profile/me')
+            ? response(200, {email: null}) : response(202)));
+        vi.stubGlobal('fetch', fetchMock);
+        renderSettings();
+        expect(await screen.findByText('E-mail не привязан.')).toBeInTheDocument();
+        fireEvent.change(screen.getByTestId('settings-email-input'), {target: {value: 'alice@example.com'}});
+        fireEvent.change(screen.getByTestId('settings-email-password'), {target: {value: 'secret-pass'}});
+        fireEvent.click(screen.getByTestId('settings-email-send'));
+        expect(await screen.findByText(/Письмо отправлено на alice@example.com/)).toBeInTheDocument();
+        const call = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/account/email')) as unknown as [string, RequestInit];
+        expect(JSON.parse(String(call[1].body))).toEqual({email: 'alice@example.com', password: 'secret-pass', language: 'ru'});
+    });
+
+    it('привязанный адрес показан, его можно отвязать с паролем', async () => {
+        const fetchMock = vi.fn(async (url: string) => (url.includes('/profile/me')
+            ? response(200, {email: 'alice@example.com'}) : response(204)));
+        vi.stubGlobal('fetch', fetchMock);
+        renderSettings();
+        expect(await screen.findByText('Привязан: alice@example.com')).toBeInTheDocument();
+        fireEvent.change(screen.getByTestId('settings-email-password'), {target: {value: 'secret-pass'}});
+        fireEvent.click(screen.getByTestId('settings-email-remove'));
+        expect(await screen.findByText('E-mail отвязан.')).toBeInTheDocument();
+        expect(screen.getByTestId('settings-email-current').textContent).toBe('E-mail не привязан.');
     });
 });

@@ -58,7 +58,7 @@ async def test_delete_anonymises_and_wipes_personal_data(client, db_session, tes
 
     db_session.expire_all()
     user = await db_session.get(User, user_id)
-    assert user.username == f"deleted_{user_id}" and user.deleted_at is not None
+    assert user.username == f"deleted_{user_id}" and user.deleted_at is not None and user.email is None
     assert await db_session.scalar(select(func.count(BotPersonality.id)).where(BotPersonality.owner_id == user_id)) == 0
     # Партия осталась у соперника.
     assert await db_session.scalar(select(func.count(Game.id)).where(Game.white_player_id == user_id)) == 1

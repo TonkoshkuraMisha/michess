@@ -10,6 +10,7 @@ import ChampionGames from './components/ChampionGames';
 import Leaderboard from './components/Leaderboard';
 import About from './components/About';
 import Settings from './components/Settings';
+import {ResetPasswordPage, VerifyEmailPage} from './components/EmailLinkPages';
 import PuzzlesPage from './components/puzzles/PuzzlesPage';
 import {LearnPage, LessonPage} from './components/learn/LearnPage';
 import {TournamentView, TournamentsPage} from './components/tournaments/TournamentsPage';
@@ -465,6 +466,8 @@ export default function App() {
                     <Route path="/game/:gameId" element={<GameViewer/>}/>
                     <Route path="/champions/:championId" element={<ChampionGames/>}/>
                     <Route path="/about" element={<About/>}/>
+                    <Route path="/verify-email" element={<VerifyEmailPage/>}/>
+                    <Route path="/reset-password" element={<ResetPasswordPage/>}/>
                     <Route
                         path="/settings"
                         element={
