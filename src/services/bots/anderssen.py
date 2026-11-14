@@ -54,7 +54,7 @@ ANDERSSEN_STYLE = Style(
     Rule(to(CENTER_SQUARES), 22.0, "anderssen.center", Note.FILL),
     Group(
         after_move(14),
-        Rule(SACRIFICE, 30.0, "anderssen.develop", Note.FILL),
+        Rule(SACRIFICE, 30.0, "anderssen.openLines", Note.FILL),
         Rule(NEAR_ENEMY_KING, 18.0),
     ),
 )

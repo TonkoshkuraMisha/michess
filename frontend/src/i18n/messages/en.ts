@@ -876,6 +876,7 @@ export const en = {
             centralize: 'We place the pieces on ideal attacking squares in the center!',
             check: 'A check that gains a tempo! No time for the opponent to catch their breath.',
             capture: 'We remove a defender and open lines for a piece attack!',
+            kingAttack: 'The pieces close in on the enemy king — the attack is ripe!',
         },
         paulsen: {
             default: 'A deep prophylactic maneuver that strengthens the position, Louis Paulsen-style.',

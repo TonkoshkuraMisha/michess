@@ -64,7 +64,7 @@ MORPHY_STYLE = Style(
     ),
     Group(
         after_move(14),
-        Rule(NEAR_ENEMY_KING, 16.0, "morphy.openCenter", Note.FILL),
+        Rule(NEAR_ENEMY_KING, 16.0, "morphy.kingAttack", Note.FILL),
         Rule(SACRIFICE, 12.0),
     ),
 )
