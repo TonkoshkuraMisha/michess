@@ -22,13 +22,11 @@ async function newPlayer(browser: Browser, username: string): Promise<Page> {
     await page.getByPlaceholder('например, string1').fill(username);
     await page.getByPlaceholder('••••••••').fill(PASSWORD);
     await page.getByRole('button', {name: 'Зарегистрироваться'}).click();
-    await expect(page.getByText('Регистрация успешна! Теперь войдите в систему.')).toBeVisible();
 
-    // После регистрации форма переключилась на вход с теми же полями.
-    // Ищем именно окно входа: на главной странице есть и другие формы (ввод позиции FEN).
-    const authDialog = page.getByRole('dialog', {name: /Вход в michess/});
-    await authDialog.getByRole('button', {name: 'Войти'}).click();
-    await expect(authDialog).toHaveCount(0);
+    // После регистрации игрок уже вошёл (таск 17.8): приветствие с предложением первой партии — «Позже».
+    const welcome = page.getByRole('dialog', {name: `Добро пожаловать, ${username}!`});
+    await welcome.getByRole('button', {name: 'Позже'}).click();
+    await expect(welcome).toHaveCount(0);
     await expect(page.getByText(username).first()).toBeVisible();
     return page;
 }
