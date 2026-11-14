@@ -263,7 +263,24 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     return res.json() as Promise<T>;
 }
 
+/** Курс матовых конструкций (таск 14.6). */
+export interface MateCourseOverview {
+    tasks: number;
+    exam_size: number;
+    exam_minutes: number;
+    constructions: { code: string; available: number }[];
+}
+
+export interface MateExamPlan {
+    minutes: number;
+    tasks: { theme: string; index: number }[];
+}
+
 export const puzzlesApi = {
+    mateCourse: () => request<MateCourseOverview>('/course/mates'),
+    mateExam: () => request<MateExamPlan>('/course/mates/exam'),
+    mateTask: (theme: string, index: number) =>
+        request<PuzzleView & { course: string; index: number }>(`/course/mates/${encodeURIComponent(theme)}/${index}`),
     next: (theme?: string | null) => request<PuzzleView>(`/next${theme ? `?theme=${encodeURIComponent(theme)}` : ''}`),
     daily: () => request<PuzzleView>('/daily'),
     move: (id: number, move: string) => request<MoveResponse>(`/${id}/move`, {
