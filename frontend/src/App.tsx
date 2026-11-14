@@ -29,7 +29,8 @@ import {
     ChevronDown,
     Trophy,
     Scale,
-    Puzzle
+    Puzzle,
+    GraduationCap
 } from 'lucide-react';
 import {useI18n} from './i18n';
 import LanguageSwitcher from './components/LanguageSwitcher';
@@ -200,7 +201,7 @@ export default function App() {
                         </span>
                     </Link>
 
-                    <nav className="hidden md:flex items-center gap-6 text-[15px] font-semibold text-boxwood/90">
+                    <nav className="hidden md:flex items-center gap-4 lg:gap-6 text-[15px] font-semibold text-boxwood/90">
                         <Link
                             to="/"
                             className={`flex items-center gap-2 transition ${
@@ -217,6 +218,16 @@ export default function App() {
                             }`}
                         >
                             <Puzzle size={17}/> {t('nav.puzzles')}
+                        </Link>
+
+                        {/* Школа (14.2): три курса готовы — пункт вернулся в шапку (23.6). */}
+                        <Link
+                            to="/learn"
+                            className={`flex items-center gap-2 transition ${
+                                location.pathname.startsWith('/learn') ? 'text-amber-300' : 'hover:text-amber-300'
+                            }`}
+                        >
+                            <GraduationCap size={17}/> {t('learn.title')}
                         </Link>
 
                         <Link
@@ -376,6 +387,15 @@ export default function App() {
                                             className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
                                         >
                                             <Puzzle size={16} className="text-amber-500"/> {t('nav.puzzles')}
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setIsProfileOpen(false);
+                                                navigate('/learn');
+                                            }}
+                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
+                                        >
+                                            <GraduationCap size={16} className="text-amber-500"/> {t('learn.title')}
                                         </button>
                                         <button
                                             onClick={() => {
