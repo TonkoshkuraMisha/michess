@@ -13,6 +13,7 @@ import Settings from './components/Settings';
 import {ResetPasswordPage, VerifyEmailPage} from './components/EmailLinkPages';
 import PuzzlesPage from './components/puzzles/PuzzlesPage';
 import {LearnPage, LessonPage} from './components/learn/LearnPage';
+import {GuessPage} from './components/guess/GuessPage';
 import {TournamentView, TournamentsPage} from './components/tournaments/TournamentsPage';
 import {CHAMPIONS_LIST} from './config/champions';
 import {API_BASE_URL} from './config/api';
@@ -476,6 +477,8 @@ export default function App() {
                     <Route path="/leaderboard" element={<Leaderboard/>}/>
                     <Route path="/puzzles" element={<PuzzlesPage/>}/>
                     <Route path="/learn" element={<LearnPage/>}/>
+                        <Route path="/guess" element={<GuessPage/>}/>
+                        <Route path="/guess/:positionId" element={<GuessPage/>}/>
                     <Route path="/learn/:lessonId" element={<LessonPage/>}/>
                     <Route path="/tournaments" element={<TournamentsPage/>}/>
                     <Route path="/tournaments/:tournamentId" element={<TournamentView/>}/>

@@ -51,6 +51,7 @@ ERROR_MESSAGES: dict[str, str] = {
     "invalid_history_move": "Invalid move in the history: {move}",
     "illegal_move": "Illegal move in this position: {move}",
     "puzzle_not_found": "Puzzle not found",
+    "guess_position_not_found": "Position not found",
     "puzzle_not_active": "This puzzle is no longer active: open the next one",
     "no_puzzles_available": "No suitable puzzles right now",
     "unknown_theme": "Unknown theme: {theme}",

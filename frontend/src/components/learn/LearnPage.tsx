@@ -44,6 +44,7 @@ export function LearnPage() {
             </header>
             <p className="text-boxwood/85">{t('learn.intro')}</p>
             {!getToken() && <p className="text-sm text-amber-300">{t('learn.loginToSave')}</p>}
+            <Link to="/guess" className="text-sm text-amber-400 hover:underline" data-testid="learn-guess-link">{t('guess.fromLearn')}</Link>
             {COURSES.map((course) => {
                 const lessons = lessonsOfCourse(course.id);
                 return (
