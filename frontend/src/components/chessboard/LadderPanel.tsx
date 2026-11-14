@@ -10,6 +10,7 @@ import {useI18n} from '../../i18n';
 import {renderUiMessage} from '../../i18n';
 import type {UiMessage} from '../../i18n';
 import {ladderOpponentName} from '../../config/players';
+import {getToken} from '../../services/authToken';
 
 interface Rung {
     key: string;
@@ -63,7 +64,7 @@ export function LadderPanel({playDisabled, onStart, lastOutcome}: LadderPanelPro
     const [error, setError] = useState<UiMessage | null>(null);
     const [starting, setStarting] = useState(false);
 
-    const token = localStorage.getItem('token');
+    const token = getToken();
 
     const load = useCallback(async () => {
         if (!token) return;

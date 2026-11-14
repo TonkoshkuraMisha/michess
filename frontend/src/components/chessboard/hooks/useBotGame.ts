@@ -17,6 +17,7 @@ import {hasMessage, t, uiMessage} from '../../../i18n';
 import type {MessageKey} from '../../../i18n';
 import {messageParam, status} from '../status';
 import type {GameStatus, StatusParam} from '../status';
+import {getToken} from '../../../services/authToken';
 
 const BOT_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000];
 
@@ -230,7 +231,7 @@ export function useBotGame({
         termination?: 'resignation' | 'timeout'
     ) => {
         if (botGameSavedRef.current) return;
-        const token = localStorage.getItem('token');
+        const token = getToken();
         if (!token) return;
         const verboseMoves = completedGame.history({verbose: true});
         // Без ходов сохраняется только засчитываемая партия (лестница, турнир): сдача до первого хода — тоже итог.
@@ -389,7 +390,7 @@ export function useBotGame({
 
         (async () => {
             try {
-                const authToken = localStorage.getItem('token');
+                const authToken = getToken();
                 const headers: Record<string, string> = {'Content-Type': 'application/json'};
                 // С токеном лимит запросов считается на пользователя, а не на общий IP.
                 if (authToken) headers['Authorization'] = `Bearer ${authToken}`;

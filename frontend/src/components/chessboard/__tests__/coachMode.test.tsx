@@ -10,6 +10,7 @@ import type {MoveCheck, UseCoachModeResult} from '../hooks/useCoachMode';
 import {CoachPanel} from '../CoachPanel';
 import {CoachArrowsOverlay, squareCenter} from '../CoachArrowsOverlay';
 import {AuxBoard} from '../AuxBoard';
+import {setToken} from '../../../services/authToken';
 
 const BLUNDER: MoveCheck = {
     available: true, cp_loss: 280, classification: 'Blunder', symbol: '??', eval_before: 30, eval_after: -250,
@@ -28,7 +29,7 @@ function stubFetch(body: unknown, ok = true) {
     return fetchMock;
 }
 
-beforeEach(() => localStorage.setItem('token', 'jwt'));
+beforeEach(() => setToken('jwt'));
 afterEach(() => {
     vi.unstubAllGlobals();
     localStorage.clear();

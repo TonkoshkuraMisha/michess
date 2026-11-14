@@ -7,6 +7,7 @@ import {MemoryRouter} from 'react-router-dom';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import PuzzlesPage from '../PuzzlesPage';
 import {resetThemeRegistryCache} from '../../../services/themes';
+import {setToken} from '../../../services/authToken';
 
 // Чёрные уводят ладью: ...Le2, затем Лd8+ Le8 Лxe8#.
 const BACK_RANK = {
@@ -75,7 +76,7 @@ async function openMode(mode: string, start = true) {
 }
 
 beforeEach(() => {
-    localStorage.setItem('token', 'jwt');
+    setToken('jwt');
     vi.useFakeTimers({shouldAdvanceTime: true});
     resetThemeRegistryCache();
 });

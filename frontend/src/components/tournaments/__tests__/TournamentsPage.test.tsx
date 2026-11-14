@@ -8,6 +8,7 @@ import {resetBotCatalogCache} from '../../../services/botCatalog';
 import {DEFAULT_CONFIG} from '../../../services/personalities';
 import {TournamentView, TournamentsPage} from '../TournamentsPage';
 import type {Tournament} from '../../../services/tournaments';
+import {setToken} from '../../../services/authToken';
 
 const players = [
     {seat: 1, kind: 'bot', bot_key: 'morphy', user_id: null, personality_name: null, rating: 2150, place: null, eliminated_round: null, config: null},
@@ -66,7 +67,7 @@ function renderView(path = '/tournaments/7') {
 beforeEach(() => {
     setLanguage('en', {persist: false});
     resetBotCatalogCache();
-    localStorage.setItem('token', 'jwt');
+    setToken('jwt');
 });
 
 afterEach(() => {

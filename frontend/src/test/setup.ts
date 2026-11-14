@@ -14,6 +14,7 @@ import {cleanup, configure} from '@testing-library/react';
 configure({asyncUtilTimeout: 5000});
 
 import {setLanguage} from '../i18n';
+import {clearToken} from '../services/authToken';
 
 // Тесты компонентов написаны против русского интерфейса: язык задаётся явно, а не берётся из jsdom
 // (там en-US). Отдельные тесты переключают язык сами — тогда проверяется и английский, и украинский.
@@ -23,6 +24,7 @@ beforeEach(() => {
 
 afterEach(() => {
     cleanup();
+    clearToken();  // токен входа живёт в памяти модуля (таск 17.5) — между тестами не переносится
 });
 
 if (!Element.prototype.scrollIntoView) {

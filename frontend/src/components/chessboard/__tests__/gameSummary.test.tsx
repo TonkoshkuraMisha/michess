@@ -5,6 +5,7 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {isSummaryKind, outcomeFor, recommendOpponent} from '../../../services/gameSummary';
 import type {PoolOpponent} from '../../../services/gameSummary';
 import {GameSummaryPanel} from '../GameSummaryPanel';
+import {setToken} from '../../../services/authToken';
 
 const POOL: PoolOpponent[] = [
     {kind: 'archetype', id: 'rusher', rating: 700},
@@ -59,7 +60,7 @@ const REPORT = {
     },
 };
 
-beforeEach(() => localStorage.setItem('token', 'jwt'));
+beforeEach(() => setToken('jwt'));
 afterEach(() => {
     vi.unstubAllGlobals();
     localStorage.clear();

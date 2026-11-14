@@ -7,6 +7,7 @@ import {MemoryRouter} from 'react-router-dom';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import App from '../App';
 import {mockFetchRouter} from '../test/mocks';
+import {setToken} from '../services/authToken';
 
 vi.mock('../services/gameSocket', () => ({
     gameSocket: {connect: vi.fn(), disconnect: vi.fn(), send: vi.fn(), on: vi.fn(), off: vi.fn()},
@@ -81,7 +82,7 @@ describe('App: навигация', () => {
     });
 
     it('в шапке и меню профиля вошедшего игрока нет элементов без действия', async () => {
-        localStorage.setItem('token', 'test-token');
+        setToken('test-token');
         renderApp();
         const header = screen.getByRole('banner');
 
@@ -93,7 +94,7 @@ describe('App: навигация', () => {
     });
 
     it('«Настройки» из меню профиля открывают страницу настроек', async () => {
-        localStorage.setItem('token', 'test-token');
+        setToken('test-token');
         renderApp();
         const header = screen.getByRole('banner');
 

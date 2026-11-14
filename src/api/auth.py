@@ -1,6 +1,7 @@
 import secrets
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Request, Response, status
+from fastapi.responses import JSONResponse
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
 from sqlalchemy import func, or_, select
@@ -10,13 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.deps import WS_TICKET_PREFIX, get_current_user
 from src.api.rate_limit import client_ip, enforce_rate_limit, ensure_below_limit, record_attempt
 from src.core.config import settings
-from src.core.errors import ApiError
+from src.core.errors import ApiError, error_payload
 from src.core.security import create_user_token, get_password_hash, verify_password
 from src.db import redis as redis_module
 from src.db.session import get_db
 from src.models.user import RATING_CATEGORIES, User
 from src.schemas.user import UserCreate, UserResponse, username_key
-from src.services import product_metrics
+from src.services import auth_sessions, product_metrics
 from src.services.onboarding import starting_rating
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -109,6 +110,7 @@ async def _find_login_user(db: AsyncSession, username: str) -> User | None:
 @router.post("/login")
 async def login(
         request: Request,
+        response: Response,
         form_data: OAuth2PasswordRequestForm = Depends(),
         db: AsyncSession = Depends(get_db)
 ):
@@ -138,11 +140,40 @@ async def login(
         raise ApiError(status.HTTP_401_UNAUTHORIZED, "login_failed", headers={"WWW-Authenticate": "Bearer"})
 
     access_token = create_user_token(user)
+    auth_sessions.set_refresh_cookie(response, await auth_sessions.issue(user.id, user.token_version or 0))
 
     return {
         "access_token": access_token,
         "token_type": "bearer"
     }
+
+
+@router.post("/refresh")
+async def refresh_session(request: Request, response: Response, db: AsyncSession = Depends(get_db)):
+    """
+    Новый короткий access-токен по refresh-cookie (таск 17.5): клиент зовёт при загрузке страницы и незадолго до
+    истечения токена. 401 — сессии нет или она отозвана (выход, «выйти везде», смена пароля, удаление аккаунта).
+    """
+    found = await auth_sessions.lookup(request.cookies.get(auth_sessions.REFRESH_COOKIE))
+    user = await db.get(User, found[0]) if found else None
+    if found is None or user is None or user.deleted_at is not None or (user.token_version or 0) != found[1]:
+        # Ответ собирается здесь, а не исключением: иначе стирание отозванной cookie потерялось бы.
+        rejected = JSONResponse({"detail": error_payload("not_authenticated")}, status_code=401,
+                                headers={"WWW-Authenticate": "Bearer"})
+        auth_sessions.clear_refresh_cookie(rejected)
+        return rejected
+    # Срок cookie продлевается вместе с записью в Redis: активный игрок не выходит сам собой.
+    auth_sessions.set_refresh_cookie(response, request.cookies[auth_sessions.REFRESH_COOKIE])
+    return {"access_token": create_user_token(user), "token_type": "bearer"}
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(request: Request) -> Response:
+    """Выход на этом устройстве: refresh-сессия удаляется, cookie стирается. Access-токен клиент забывает сам."""
+    await auth_sessions.revoke(request.cookies.get(auth_sessions.REFRESH_COOKIE))
+    response = Response(status_code=status.HTTP_204_NO_CONTENT)
+    auth_sessions.clear_refresh_cookie(response)
+    return response
 
 
 @router.post("/ws-ticket")
@@ -187,6 +218,7 @@ class PasswordChange(BaseModel):
 @router.post("/change-password")
 async def change_password(
         payload: PasswordChange,
+        response: Response,
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
 ):
@@ -206,4 +238,6 @@ async def change_password(
 
     current_user.hashed_password = get_password_hash(payload.new_password)
     await _revoke_all_tokens(db, current_user)
+    # Прежние refresh-сессии отозваны вместе с версией токенов; этому клиенту — новая.
+    auth_sessions.set_refresh_cookie(response, await auth_sessions.issue(current_user.id, current_user.token_version))
     return {"access_token": create_user_token(current_user), "token_type": "bearer"}

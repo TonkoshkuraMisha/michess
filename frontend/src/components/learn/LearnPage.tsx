@@ -10,12 +10,13 @@ import {COURSES, lessonById, lessonsOfCourse, localized, nextLesson} from '../..
 import {fetchLessonProgress, saveLessonProgress} from '../../services/lessonProgress';
 import type {LessonProgress} from '../../services/lessonProgress';
 import {LessonPlayer} from './LessonPlayer';
+import {getToken} from '../../services/authToken';
 
 function useProgress(): [Record<string, LessonProgress>, boolean] {
     const [progress, setProgress] = useState<Record<string, LessonProgress>>({});
     const [loaded, setLoaded] = useState(false);
     useEffect(() => {
-        const token = localStorage.getItem('token');
+        const token = getToken();
         if (!token) {
             setLoaded(true);
             return;
@@ -42,7 +43,7 @@ export function LearnPage() {
                 <h1 className="text-2xl font-bold text-amber-200">{t('learn.title')}</h1>
             </header>
             <p className="text-boxwood/85">{t('learn.intro')}</p>
-            {!localStorage.getItem('token') && <p className="text-sm text-amber-300">{t('learn.loginToSave')}</p>}
+            {!getToken() && <p className="text-sm text-amber-300">{t('learn.loginToSave')}</p>}
             {COURSES.map((course) => {
                 const lessons = lessonsOfCourse(course.id);
                 return (
@@ -91,7 +92,7 @@ export function LessonPage() {
     const [saveError, setSaveError] = useState(false);
     const furthest = useRef(-1);
 
-    const token = localStorage.getItem('token');
+    const token = getToken();
     const saved = progress[lessonId];
 
     const save = (update: Parameters<typeof saveLessonProgress>[2]) => {

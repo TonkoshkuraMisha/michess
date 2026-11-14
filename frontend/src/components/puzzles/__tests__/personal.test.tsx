@@ -5,6 +5,7 @@ import {MemoryRouter, Route, Routes, useLocation} from 'react-router-dom';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import PuzzlesPage from '../PuzzlesPage';
 import {resetThemeRegistryCache} from '../../../services/themes';
+import {setToken} from '../../../services/authToken';
 
 // После 3. Фh5 чёрные сыграли 3...Кf6?? — сильный ход 3...g6.
 const VIEW = {
@@ -54,7 +55,7 @@ async function open() {
 const square = (name: string) => document.querySelector(`[data-square="${name}"]`) as HTMLElement;
 
 beforeEach(() => {
-    localStorage.setItem('token', 'jwt');
+    setToken('jwt');
     vi.useFakeTimers({shouldAdvanceTime: true});
     resetThemeRegistryCache();
 });

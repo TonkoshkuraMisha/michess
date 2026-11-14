@@ -6,6 +6,7 @@ import {MemoryRouter, Route, Routes} from 'react-router-dom';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import GameViewer from '../GameViewer';
 import {setLanguage} from '../../i18n';
+import {clearToken, setToken} from '../../services/authToken';
 
 vi.mock('../../services/soundEngine', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../../services/soundEngine')>();
@@ -206,12 +207,12 @@ describe('GameViewer', () => {
     });
 
     it('ходы, из которых сделаны задачи «Ваши ошибки», отмечены значком', async () => {
-        localStorage.setItem('token', 'jwt');
+        setToken('jwt');
         stubApi({pgn: {ok: true, text: FOOLS_MATE_PGN}, personal: {ok: true, body: {game_id: 42, plies: [3]}}});
         renderViewer();
         expect(await screen.findByTestId('personal-badge-3')).toBeTruthy();
         expect(screen.queryByTestId('personal-badge-1')).toBeNull();
-        localStorage.removeItem('token');
+        clearToken();
     });
 
     it('кэшированный анализ показывается сразу, без запуска движка', async () => {
@@ -296,7 +297,7 @@ describe('GameViewer', () => {
     });
 
     it('кнопка анализа запускает движок с токеном и показывает точность', async () => {
-        localStorage.setItem('token', 'jwt-abc');
+        setToken('jwt-abc');
         const fetchMock = stubApi({
             pgn: {ok: true, text: FOOLS_MATE_PGN},
             cached: {ok: false, status: 404, body: {detail: 'Not analysed'}},

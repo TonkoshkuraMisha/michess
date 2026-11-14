@@ -4,6 +4,7 @@ import {fireEvent, render, screen} from '@testing-library/react';
 import {MemoryRouter} from 'react-router-dom';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {ResetPasswordPage, VerifyEmailPage} from '../EmailLinkPages';
+import {getToken, setToken} from '../../services/authToken';
 
 const response = (status: number, body: unknown = {}) => ({ok: status < 400, status, json: async () => body}) as Response;
 
@@ -32,7 +33,7 @@ describe('ссылки из писем', () => {
     it('новый пароль: проверка длины и совпадения, затем сохранение и выход', async () => {
         const fetchMock = vi.fn(async () => response(204));
         vi.stubGlobal('fetch', fetchMock);
-        localStorage.setItem('token', 'old');
+        setToken('old');
         render(<MemoryRouter initialEntries={['/reset-password?token=abcdefghijkl']}><ResetPasswordPage/></MemoryRouter>);
         fireEvent.change(screen.getByLabelText(/Новый пароль \(не короче/), {target: {value: 'short'}});
         fireEvent.click(screen.getByRole('button', {name: 'Сохранить пароль'}));
@@ -43,6 +44,6 @@ describe('ссылки из писем', () => {
         expect(await screen.findByRole('status')).toHaveTextContent('Пароль изменён');
         expect(JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body)))
             .toEqual({token: 'abcdefghijkl', new_password: 'brand-new-pass'});
-        expect(localStorage.getItem('token')).toBeNull();
+        expect(getToken()).toBeNull();
     });
 });

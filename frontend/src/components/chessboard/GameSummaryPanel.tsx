@@ -12,6 +12,7 @@ import {coachText} from '../../services/coach';
 import type {CoachComment} from '../../services/coach';
 import {isSummaryKind} from '../../services/gameSummary';
 import type {GameSummary} from '../../services/gameSummary';
+import {getToken} from '../../services/authToken';
 
 interface ReportMove {
     ply: number;
@@ -49,7 +50,7 @@ export function GameSummaryPanel({gameId, playerColor, recommendation, onPlayRec
         let cancelled = false;
         setReport(null);
         setError(null);
-        const token = localStorage.getItem('token');
+        const token = getToken();
         fetch(`${API_BASE_URL}/api/v1/analysis/game/${gameId}`, {
             method: 'POST', headers: token ? {Authorization: `Bearer ${token}`} : {},
         })

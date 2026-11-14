@@ -8,6 +8,7 @@ import {ARCHETYPE_PREFIX, isArchetypeId} from '../config/archetypes';
 import type {CustomOpponent} from '../config/archetypes';
 import {ladderOpponentName} from '../config/players';
 import type {I18n, MessageKey} from '../i18n';
+import {getToken} from './authToken';
 
 export type TournamentFormat = 'round_robin' | 'knockout';
 export type ParticipantKind = 'bot' | 'archetype' | 'personality';
@@ -95,7 +96,7 @@ export interface TournamentGameStart {
 const BASE = `${API_BASE_URL}/api/v1/tournaments`;
 
 async function call<T>(url: string, init: RequestInit, fallback: MessageKey): Promise<T> {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     const res = await fetch(url, {
         ...init,
         headers: {

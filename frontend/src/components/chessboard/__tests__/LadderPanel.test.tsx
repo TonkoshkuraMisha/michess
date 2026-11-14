@@ -6,6 +6,7 @@ import {LadderPanel} from '../LadderPanel';
 import {ladderOutcomeMessage} from '../hooks/useBotGame';
 import {renderStatus} from '../status';
 import {makeI18n} from '../../../i18n';
+import {setToken} from '../../../services/authToken';
 
 const STATE = {
     rating: 1032, games: 3, step: 1, total: 3, active_opponent: null,
@@ -30,7 +31,7 @@ function stub() {
     return fetchMock;
 }
 
-beforeEach(() => localStorage.setItem('token', 'jwt'));
+beforeEach(() => setToken('jwt'));
 afterEach(() => {
     vi.unstubAllGlobals();
     localStorage.clear();

@@ -6,6 +6,7 @@ import {MemoryRouter} from 'react-router-dom';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import PuzzlesPage from '../PuzzlesPage';
 import {resetThemeRegistryCache} from '../../../services/themes';
+import {setToken} from '../../../services/authToken';
 
 // Белые; чёрный ферзь h4 грозит взять f2. Защита — конь f3 бьёт ферзя.
 const THREAT = {
@@ -53,7 +54,7 @@ async function openDefense() {
 }
 
 beforeEach(() => {
-    localStorage.setItem('token', 'jwt');
+    setToken('jwt');
     resetThemeRegistryCache();
 });
 afterEach(() => {

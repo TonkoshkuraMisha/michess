@@ -11,6 +11,7 @@ import {API_BASE_URL} from '../../../config/api';
 import {readApiError} from '../../../services/apiErrors';
 import type {CoachComment} from '../../../services/coach';
 import type {UiMessage} from '../../../i18n';
+import {getToken} from '../../../services/authToken';
 
 export type CoachLevel = 'novice' | 'amateur' | 'strong';
 export const COACH_LEVELS: readonly CoachLevel[] = ['novice', 'amateur', 'strong'];
@@ -130,7 +131,7 @@ export interface UseCoachModeResult {
 }
 
 function authHeaders(): Record<string, string> {
-    const token = localStorage.getItem('token');
+    const token = getToken();
     return token ? {'Content-Type': 'application/json', Authorization: `Bearer ${token}`} : {'Content-Type': 'application/json'};
 }
 

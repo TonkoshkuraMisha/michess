@@ -19,6 +19,7 @@ import type {BotOpponentId} from '../../../config/champions';
 import {describeGameOver, hasStatusKey, messageParam, status} from '../status';
 import type {GameStatus} from '../status';
 import {serverErrorMessage} from '../../../services/apiErrors';
+import {getToken} from '../../../services/authToken';
 
 const DRAW_OFFER_INCOMING = status('status.drawOffered');
 const DRAW_OFFER_OUTGOING = status('status.drawOfferSent');
@@ -329,7 +330,7 @@ export function useGameSocket({
     }, [playAudio, concludeGame]);
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
+        const token = getToken();
         if (!token) return;
 
         gameSocket.connect(token);
@@ -538,7 +539,7 @@ export function useGameSocket({
         exitBotGame, playAudio]);
 
     useEffect(() => {
-        if (!inviteCode || !localStorage.getItem('token')) return;
+        if (!inviteCode || !getToken()) return;
         const timer = setTimeout(() => {
             gameSocket.send('accept_invite', {code: inviteCode});
             navigate('/', {replace: true});
@@ -565,7 +566,7 @@ export function useGameSocket({
 
     useEffect(() => {
         const syncLobbyAndActiveGame = async () => {
-            const token = localStorage.getItem('token');
+            const token = getToken();
             try {
                 if (token && !activeBot && !spectatingGameId) {
                     const activeRes = await fetch(`${API_BASE_URL}/api/v1/profile/games/my-active`, {
@@ -661,7 +662,7 @@ export function useGameSocket({
             rated: ratedChoice
         });
 
-        const token = localStorage.getItem('token');
+        const token = getToken();
         if (token) {
             try {
                 const res = await fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/join`, {
@@ -696,7 +697,7 @@ export function useGameSocket({
         setIsSearching(false);
         setDrawOfferStatus(null);
         gameSocket.send('leave_queue', {});
-        const token = localStorage.getItem('token');
+        const token = getToken();
         if (token) {
             fetch(`${API_BASE_URL}/api/v1/profile/matchmaking/leave`, {
                 method: 'POST',
@@ -713,7 +714,7 @@ export function useGameSocket({
 
         gameSocket.send('accept_challenge', {target_user_id: targetUserId});
 
-        const token = localStorage.getItem('token');
+        const token = getToken();
         if (!token) return;
 
         try {

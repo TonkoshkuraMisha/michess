@@ -8,9 +8,8 @@ const PASSWORD = 'e2e-pass-12345';
 test('задачи: выдача, показ решения, следующая задача и история', async ({page, request}) => {
     const username = `puz_${Date.now().toString(36)}`;
     expect((await request.post('/api/v1/auth/register', {data: {username, password: PASSWORD}})).ok()).toBe(true);
-    const login = await request.post('/api/v1/auth/login', {form: {username, password: PASSWORD}});
-    const {access_token: token} = await login.json();
-    await page.addInitScript((value) => localStorage.setItem('token', value), token);
+    // Вход в контексте страницы: refresh-cookie восстановит его при загрузке (таск 17.5).
+    expect((await page.request.post('/api/v1/auth/login', {form: {username, password: PASSWORD}})).ok()).toBe(true);
 
     await page.goto('/');
     await page.getByRole('banner').getByRole('link', {name: 'Задачи'}).click();
@@ -35,9 +34,8 @@ test('задачи: выдача, показ решения, следующая 
 test('приёмы: объяснение темы, показ на доске и тренировка на ступени', async ({page, request}) => {
     const username = `thm_${Date.now().toString(36)}`;
     expect((await request.post('/api/v1/auth/register', {data: {username, password: PASSWORD}})).ok()).toBe(true);
-    const login = await request.post('/api/v1/auth/login', {form: {username, password: PASSWORD}});
-    const {access_token: token} = await login.json();
-    await page.addInitScript((value) => localStorage.setItem('token', value), token);
+    // Вход в контексте страницы: refresh-cookie восстановит его при загрузке (таск 17.5).
+    expect((await page.request.post('/api/v1/auth/login', {form: {username, password: PASSWORD}})).ok()).toBe(true);
 
     await page.goto('/puzzles');
     await page.getByTestId('puzzle-mode-themes').click();

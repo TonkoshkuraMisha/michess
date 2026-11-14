@@ -71,6 +71,7 @@ import type {ArchetypeId} from '../config/archetypes';
 import type {CustomOpponent} from '../config/archetypes';
 import {LobbyPanel} from './chessboard/LobbyPanel';
 import {AppearancePickerDropdown} from './chessboard/AppearancePickerDropdown';
+import {getToken} from '../services/authToken';
 
 export {MIN_BOARD_SIZE, MAX_BOARD_SIZE, getMaxViewportBoardSize, getDefaultBoardSize, TIME_CONTROLS};
 export type {PromotionPiece, TimeControlOption, TimeControlGroup};
@@ -481,7 +482,7 @@ export default function Chessboard() {
     }, [isTimeDropdownOpen, showAppearanceDropdown]);
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
+        const token = getToken();
         if (!token) return;
 
         fetch(`${API_BASE_URL}/api/v1/profile/me`, {
@@ -1163,7 +1164,7 @@ export default function Chessboard() {
         );
     };
 
-    if (!localStorage.getItem('token')) {
+    if (!getToken()) {
         return (
             <div
                 className="my-auto flex flex-col items-center justify-center p-8 bg-acacia rounded-lg shadow-heavy border-4 border-acacia-dark text-boxwood-light text-center">
@@ -1319,7 +1320,7 @@ export default function Chessboard() {
                                 />
                             ) : (
                                 <PersonalityWorkshop
-                                    token={localStorage.getItem('token')}
+                                    token={getToken()}
                                     playDisabled={!!gameId && !gameOverResult}
                                     onPlay={(opponent: CustomOpponent, colorPref) => handleStartCustomGame(opponent, colorPref)}
                                     canStartFromPosition={canStartFromPosition}

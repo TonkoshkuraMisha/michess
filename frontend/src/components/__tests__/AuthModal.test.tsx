@@ -5,6 +5,7 @@ import {fireEvent, render, screen} from '@testing-library/react';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import AuthModal from '../AuthModal';
 import {DEFAULT_CONFIG, GUEST_STORAGE_KEY} from '../../services/personalities';
+import {getToken} from '../../services/authToken';
 
 const response = (status: number, body: unknown = {}) =>
     ({ok: status < 400, status, json: async () => body}) as Response;
@@ -38,7 +39,7 @@ describe('AuthModal: вход', () => {
         fillAndSubmit('alice', 'secret-pass', /Войти/);
 
         await vi.waitFor(() => expect(onSuccess).toHaveBeenCalledWith('jwt-123'));
-        expect(localStorage.getItem('token')).toBe('jwt-123');
+        expect(getToken()).toBe('jwt-123');
         const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
         expect(url).toMatch(/\/api\/v1\/auth\/login$/);
         expect(init.method).toBe('POST');
@@ -55,7 +56,7 @@ describe('AuthModal: вход', () => {
 
         expect(await screen.findByText('Неверное имя пользователя или пароль')).toBeInTheDocument();
         expect(onSuccess).not.toHaveBeenCalled();
-        expect(localStorage.getItem('token')).toBeNull();
+        expect(getToken()).toBeNull();
         expect(screen.getByRole('button', {name: /Войти/})).not.toBeDisabled();
     });
 
@@ -129,7 +130,7 @@ describe('AuthModal: регистрация', () => {
 
         expect(await screen.findByText('Добро пожаловать, alice!')).toBeInTheDocument();
         expect(screen.getByTestId('auth-welcome')).toHaveTextContent('Ваш стартовый рейтинг — 600. Первые 30 партий он временный');
-        expect(localStorage.getItem('token')).toBe('jwt-new');
+        expect(getToken()).toBe('jwt-new');
         const [url, init] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
         expect(url).toMatch(/\/api\/v1\/auth\/register$/);
         expect(JSON.parse(String(init.body))).toEqual({username: 'alice', password: 'secret-pass', experience: 'new'});
