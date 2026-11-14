@@ -16,6 +16,7 @@ from src.core.errors import DomainValueError
 from src.db.session import get_db
 from src.models.user import User
 from src.services import defense_drills, generated_drills, personal_puzzles
+from src.services import mate_course as mate_course_service
 from src.services import puzzles as service
 
 router = APIRouter(dependencies=[Depends(rate_limit("puzzles", "RATE_LIMIT_PUZZLES"))])
@@ -223,6 +224,29 @@ async def drills_run_finish(user: User = Depends(get_current_user), db: AsyncSes
 @router.get("/drills/records")
 async def drills_records(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     return {"records": await generated_drills.records(db, user), "themes": generated_drills.THEME_DRILLS}
+
+
+@router.get("/course/mates")
+async def mate_course(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """Курс матовых конструкций (таск 14.6): конструкции по порядку и число задач у каждой."""
+    return await mate_course_service.overview(db)
+
+
+@router.get("/course/mates/exam")
+async def mate_course_exam(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    """План итоговой проверки: задачи разных конструкций (тема и номер в её наборе)."""
+    return {"minutes": mate_course_service.EXAM_MINUTES, "tasks": await mate_course_service.exam_plan(db)}
+
+
+@router.get("/course/mates/{theme}/{index}")
+async def mate_course_task(theme: str, index: int, user: User = Depends(get_current_user),
+                           db: AsyncSession = Depends(get_db)):
+    """Начать задачу курса: index-я по сложности задача конструкции; рейтинг задач она не меняет."""
+    try:
+        puzzle = await mate_course_service.start_task(db, user, theme, index)
+    except service.PuzzleError as exc:
+        raise _http(exc) from exc
+    return {**service.public_view(puzzle), "course": theme, "index": index}
 
 
 @router.post("/timed/start")

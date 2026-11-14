@@ -71,6 +71,7 @@ class PuzzleSession:
     run: str | None = None  # забег режима на время: задача без рейтинга
     training: str | None = None  # тренировка по теме: её код (прогресс темы обновляется по итогу)
     stage: int | None = None
+    course: str | None = None  # курс матовых конструкций (14.6): задача без рейтинга
 
 
 def _session_key(user_id: int) -> str:
@@ -162,10 +163,10 @@ async def daily_puzzle(db: AsyncSession, day: dt.date) -> Puzzle:
 
 
 async def start(user: User, puzzle: Puzzle, *, daily: bool = False, run: str | None = None,
-                training: str | None = None, stage: int | None = None) -> None:
+                training: str | None = None, stage: int | None = None, course: str | None = None) -> None:
     """Начать задачу: предыдущая незаконченная просто отменяется (без изменения рейтинга)."""
     await _save_session(user.id, PuzzleSession(puzzle_id=puzzle.id, daily=daily, run=run, training=training,
-                                               stage=stage))
+                                               stage=stage, course=course))
 
 
 # --- тренировка по приёмам -----------------------------------------------------------------------------------
@@ -415,7 +416,7 @@ async def streak(db: AsyncSession, user_id: int) -> int:
 
 async def _finish(db: AsyncSession, user: User, puzzle: Puzzle, session: PuzzleSession, solved: bool) -> dict:
     before = user.puzzle_rating
-    if session.run is None:
+    if session.run is None and session.course is None:
         delta = rating_delta(before, puzzle.rating, user.puzzle_games, solved, session.hints)
         user.puzzle_rating = max(MIN_RATING, before + delta)
         user.puzzle_games += 1
