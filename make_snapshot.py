@@ -112,9 +112,7 @@ def is_test_file(relative_posix: str) -> bool:
         return True
     if "__tests__" in parts or "test" in parts:
         return True
-    if filename.startswith("test_") or ".test." in filename or ".spec." in filename or ".e2e." in filename:
-        return True
-    return False
+    return filename.startswith("test_") or ".test." in filename or ".spec." in filename or ".e2e." in filename
 
 
 def is_text_candidate(
@@ -148,12 +146,10 @@ def is_text_candidate(
     if (no_tests or scope == "code") and is_test_file(rel_posix):
         return False
 
-    if scope == "backend":
-        if rel_lower.startswith("frontend/"):
-            return False
-    elif scope == "frontend":
-        if rel_lower.startswith(("src/", "tests/", "migrations/", "scripts/")):
-            return False
+    if scope == "backend" and rel_lower.startswith("frontend/"):
+        return False
+    if scope == "frontend" and rel_lower.startswith(("src/", "tests/", "migrations/", "scripts/")):
+        return False
 
     if suffix in TEXT_SUFFIXES or name in TEXT_FILENAMES:
         return True

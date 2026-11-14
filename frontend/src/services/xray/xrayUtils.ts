@@ -276,7 +276,9 @@ export interface LineTactic {
 }
 
 /** Связки и сквозные удары фигур стороны color по фигурам соперника. */
-export function lineTactics(pieces: Map<string, BoardPiece>, color: Color): LineTactic[] {
+export function lineTactics(
+    pieces: Map<string, BoardPiece>, color: Color, attacks = effectiveAttacks(pieces),
+): LineTactic[] {
     const result: LineTactic[] = [];
     for (const piece of pieces.values()) {
         if (piece.color !== color || !['b', 'r', 'q'].includes(piece.type)) continue;
@@ -300,7 +302,9 @@ export function lineTactics(pieces: Map<string, BoardPiece>, color: Color): Line
             if (behindValue > frontValue && behind.type !== 'p') {
                 result.push({kind: 'pin', attacker: piece.square, front: front.square, behind: behind.square,
                     absolute: behind.type === 'k'});
-            } else if (frontValue > behindValue && frontValue > PIECE_VALUE[piece.type] && behind.type !== 'p') {
+            } else if (frontValue > behindValue && behind.type !== 'p' && (frontValue > PIECE_VALUE[piece.type]
+                // Незащищённую переднюю фигуру можно взять и более ценной: ферзь бьёт сквозь ладью на слона.
+                || attackersBy(attacks, front.square, front.color).length === 0)) {
                 result.push({kind: 'skewer', attacker: piece.square, front: front.square, behind: behind.square,
                     absolute: front.type === 'k'});
             }
@@ -483,7 +487,7 @@ export function xrayFor(fen: string, color: Color): XrayReport {
         control: controlMap(pieces, attacks),
         hanging: hangingPieces(pieces, color, effective),
         overloaded: overloadedDefenders(pieces, color, effective),
-        lines: lineTactics(pieces, color),
+        lines: lineTactics(pieces, color, effective),
         captures: captures(fen, color, pieces, effective, moves),
         defenses: defenses(pieces, color, effective),
         checks: checks(fen, color, moves),

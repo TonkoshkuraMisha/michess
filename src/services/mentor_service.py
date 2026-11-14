@@ -208,15 +208,17 @@ def _first_two_on_ray(board: chess.Board, square: chess.Square, step: tuple[int,
     return found
 
 
+def _real_defenders(board: chess.Board, square: chess.Square, color: chess.Color) -> list[chess.Square]:
+    """Защитники поля, которые могут отбить: фигура, связанная с королём, защищает только вдоль линии связки."""
+    return [
+        defender for defender in board.attackers(color, square)
+        if not board.is_pinned(color, defender) or square in board.pin(color, defender)
+    ]
+
+
 def _is_defended(board: chess.Board, square: chess.Square) -> bool:
-    """Есть защитник, который может отбить: фигура, связанная с королём, защищает только вдоль линии связки."""
     piece = board.piece_at(square)
-    if piece is None:
-        return False
-    return any(
-        not board.is_pinned(piece.color, defender) or square in board.pin(piece.color, defender)
-        for defender in board.attackers(piece.color, square)
-    )
+    return piece is not None and bool(_real_defenders(board, square, piece.color))
 
 
 # --- мотивы позиции ---------------------------------------------------------------------------
@@ -340,9 +342,10 @@ def _overloaded(board: chess.Board) -> list[Motif]:
             gain = capture_gain(probe, square)
             if gain is None or gain > 0:
                 continue
-            defenders = board.attackers(defender_color, square)
+            # Связанный с королём «второй защитник» не защищает — перегружен единственный настоящий.
+            defenders = _real_defenders(board, square, defender_color)
             if len(defenders) == 1:
-                duties.setdefault(next(iter(defenders)), []).append(square)
+                duties.setdefault(defenders[0], []).append(square)
         for defender, guarded in duties.items():
             defender_piece = board.piece_at(defender)
             if len(guarded) >= 2 and defender_piece and defender_piece.piece_type != chess.KING:
