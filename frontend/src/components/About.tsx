@@ -3,11 +3,13 @@
 // из того же конфига, что и выбор набора в интерфейсе, портреты — из манифеста, который пишет
 // scripts/download_champions.py, поэтому страница не расходится с тем, что реально раздаётся.
 
+import {useEffect, useState} from 'react';
 import {Link} from 'react-router-dom';
 import {ArrowLeft, Scale} from 'lucide-react';
 import {PIECE_SETS} from '../config/boardAppearance';
 import portraitCredits from '../config/portraitCredits.json';
 import {CHAMPIONS_LIST, HISTORICAL_BOTS_LIST} from '../config/champions';
+import {API_BASE_URL} from '../config/api';
 import {useI18n} from '../i18n';
 import type {MessageKey} from '../i18n';
 
@@ -20,6 +22,12 @@ interface PortraitCredit {
 }
 
 const PORTRAITS = portraitCredits as Record<string, PortraitCredit>;
+
+/** Движок этой установки (GET /bots/engine): версия и исходники именно её — требование GPL (таск 23.1). */
+interface EngineInfo {
+    name: string | null;
+    source_url: string;
+}
 
 /** Имя шахматиста на текущем языке (геттеры профилей читают каталог при обращении). */
 function playerName(id: string): string {
@@ -49,6 +57,13 @@ const cellClass = 'py-1.5 pr-4 align-top';
 
 export default function About() {
     const {t, rich} = useI18n();
+    const [engine, setEngine] = useState<EngineInfo | null>(null);
+    useEffect(() => {
+        fetch(`${API_BASE_URL}/api/v1/bots/engine`)
+            .then((res) => (res.ok ? res.json() as Promise<EngineInfo> : null))
+            .then(setEngine)
+            .catch(() => undefined);
+    }, []);
     return (
         <div className="w-full max-w-4xl flex flex-col gap-5 text-boxwood-light select-text">
             <div className={`${sectionClass} flex items-center justify-between gap-4`}>
@@ -77,6 +92,15 @@ export default function About() {
                                  target="_blank" rel="noreferrer">github.com/official-stockfish/Stockfish</a>,
                     })}
                 </p>
+                {engine?.name && (
+                    <p className="text-sm leading-relaxed mt-2" data-testid="engine-version">
+                        {rich('about.engineVersion', {
+                            name: engine.name,
+                            link: <a key="source" className={linkClass} href={engine.source_url}
+                                     target="_blank" rel="noreferrer">{t('about.engineSource')}</a>,
+                        })}
+                    </p>
+                )}
             </section>
 
             <section className={sectionClass}>
