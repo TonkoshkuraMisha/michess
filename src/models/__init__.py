@@ -4,6 +4,7 @@ from src.models.game import Game
 from src.models.lesson import LessonProgress
 from src.models.move import Move
 from src.models.personality import BotPersonality
+from src.models.product_event import ProductEvent
 from src.models.puzzle import DefenseDrill, DrillRecord, PersonalPuzzle, Puzzle, PuzzleAttempt, PuzzleTheme, ThemeProgress
 from src.models.tournament import Tournament, TournamentGame, TournamentPlayer
 from src.models.user import User
@@ -18,6 +19,7 @@ __all__ = [
     "LessonProgress",
     "Move",
     "PersonalPuzzle",
+    "ProductEvent",
     "Puzzle",
     "PuzzleAttempt",
     "PuzzleTheme",

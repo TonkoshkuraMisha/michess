@@ -21,6 +21,7 @@ from src.db import session as db_session
 from src.models.game import Game, GameStatus
 from src.models.user import User
 from src.services import ladder as ladder_service
+from src.services import product_metrics
 from src.services import tournaments as tournament_service
 from src.services.bots import calibration as bot_calibration
 from src.services.bots.anderssen import anderssen_bot
@@ -717,6 +718,7 @@ async def save_bot_game(
         if payload.player_color == "black" and result != "1/2-1/2":
             player_score = 1.0 - player_score
         ladder_outcome = ladder_service.apply_result(current_user, rung_index, rung, player_score, session.assisted)
+    await product_metrics.record_event(db, current_user.id, product_metrics.GAME_FINISHED)
     await db.commit()
     await db.refresh(new_game)
     if ladder_game is not None:

@@ -21,6 +21,7 @@ from src.models.email_token import EmailToken
 from src.models.game import Game, GameStatus
 from src.models.lesson import LessonProgress
 from src.models.personality import BotPersonality
+from src.models.product_event import ProductEvent
 from src.models.puzzle import DrillRecord, PersonalPuzzle, PuzzleAttempt, ThemeProgress
 from src.models.tournament import Tournament
 from src.models.user import User
@@ -124,6 +125,7 @@ async def delete_account(db: AsyncSession, user: User) -> None:
             (ThemeProgress, ThemeProgress.user_id), (PuzzleAttempt, PuzzleAttempt.user_id),
             (PersonalPuzzle, PersonalPuzzle.user_id), (DrillRecord, DrillRecord.user_id),
             (Tournament, Tournament.owner_id), (EmailToken, EmailToken.user_id),
+            (ProductEvent, ProductEvent.user_id),
     ):
         await db.execute(delete(model).where(column == user.id))
 
