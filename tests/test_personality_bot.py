@@ -230,3 +230,17 @@ def test_weak_error_without_blunder_takes_the_worse_half_of_the_lines(engine_lin
     monkeypatch.setattr(personality.random, "random", lambda: next(rolls))
     weak = BotPersonalityConfig(target_elo=600, blunder_guard_cp=0, **ONLY_AGGRESSION)
     assert _choose(weak, THREAT_FEN) in {"Rh8+", "Kd2"}
+
+
+def test_frontend_error_curve_matches_the_server():
+    """Мастерская показывает долю ошибок по копии кривой (frontend/src/config/archetypes.ts) — числа те же."""
+    import pathlib
+    import re
+
+    from src.services.bots.personality import ERROR_RATE_CURVE
+
+    source = (pathlib.Path(__file__).resolve().parent.parent / "frontend/src/config/archetypes.ts").read_text(
+        encoding="utf-8")
+    block = source[source.index("ERROR_RATE_CURVE"):source.index("];", source.index("ERROR_RATE_CURVE"))]
+    pairs = [(int(elo), float(rate)) for elo, rate in re.findall(r"\[(\d+), ([\d.]+)\]", block)]
+    assert pairs == list(ERROR_RATE_CURVE)

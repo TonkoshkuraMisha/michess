@@ -101,14 +101,30 @@ export function styleRadar(config: PersonalityConfig): { key: RadarAxis; axis: s
     }));
 }
 
-const STOCKFISH_MIN_ELO = 1320;
+/**
+ * Доля управляемых ошибок по целевой силе — копия ERROR_RATE_CURVE сервера (src/services/bots/personality.py,
+ * подобрана по калибровке). Совпадение чисел проверяет tests/test_personality_bot.py.
+ */
+export const ERROR_RATE_CURVE: readonly (readonly [number, number])[] = [
+    [600, 0.40], [700, 0.355], [900, 0.265], [1100, 0.175], [1250, 0.10], [1320, 0.07], [1450, 0.0],
+];
 
-/** Пояснение силы — та же формула, что на сервере (src/services/bots/personality.py). */
+export function errorRate(elo: number): number {
+    for (let i = 1; i < ERROR_RATE_CURVE.length; i++) {
+        const [loElo, loRate] = ERROR_RATE_CURVE[i - 1];
+        const [hiElo, hiRate] = ERROR_RATE_CURVE[i];
+        if (elo <= hiElo) {
+            const share = (Math.max(elo, loElo) - loElo) / (hiElo - loElo);
+            return loRate + (hiRate - loRate) * share;
+        }
+    }
+    return 0;
+}
+
+/** Пояснение силы: доля ошибок — по той же кривой, что на сервере. */
 export function strengthNote(config: PersonalityConfig): string {
     const elo = config.target_elo;
-    if (elo < STOCKFISH_MIN_ELO) {
-        const errors = Math.round((0.5 * (STOCKFISH_MIN_ELO - elo) / (STOCKFISH_MIN_ELO - 600)) * 100);
-        return t('workshop.strengthWithErrors', {elo, errors});
-    }
+    const errors = Math.round(errorRate(elo) * 100);
+    if (errors > 0) return t('workshop.strengthWithErrors', {elo, errors});
     return t('workshop.strengthExact', {elo});
 }

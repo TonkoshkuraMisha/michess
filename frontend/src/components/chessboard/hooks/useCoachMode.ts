@@ -33,6 +33,7 @@ export interface MoveCheck {
 
 /** Позиция, после которой перевес настолько велик, что «потеря» не меняет результата — без предупреждения. */
 const STILL_WINNING_CP = 600;
+const MISSED_WHILE_WINNING_CP = 200;
 
 /**
  * Предупреждать ли игрока: новичку — только о грубых зевках, любителю — об ошибках и пропущенных ударах,
@@ -42,7 +43,10 @@ export function shouldWarn(check: MoveCheck, level: CoachLevel): boolean {
     if (!check.available) return false;
     const loss = check.cp_loss ?? 0;
     const missed = Boolean(check.missed_tactic);
-    if ((check.eval_after ?? 0) >= STILL_WINNING_CP && loss < 500) return false;
+    // Пока перевес решающий, мелочи не тревожат — но о пропущенном дорогом ударе (от 200 сп) сказать стоит:
+    // так учатся реализовывать выигранное, а не только не зевать.
+    const stillWinning = (check.eval_after ?? 0) >= STILL_WINNING_CP && loss < 500;
+    if (stillWinning && !(missed && loss >= MISSED_WHILE_WINNING_CP)) return false;
     if (level === 'novice') return loss >= 300;
     if (level === 'amateur') return loss >= 150 || (missed && loss >= 50);
     return loss >= 100 || (missed && loss >= 30);

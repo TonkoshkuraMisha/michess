@@ -203,3 +203,12 @@ describe('размены и связки (SEE)', () => {
         expect(exchangeGain(5, 3, [], [1])).toBe(2);     // конь берёт ладью, пешка берёт коня
     });
 });
+
+describe('сквозной удар', () => {
+    it('ферзь сквозь незащищённую ладью на коня; защищённая ладья — не удар', () => {
+        const lined = lineTactics(piecesOf('3nk3/8/8/8/3r4/8/8/3QK3 w - - 0 1'), 'w');
+        expect(lined).toContainEqual({kind: 'skewer', attacker: 'd1', front: 'd4', behind: 'd8', absolute: false});
+        const guarded = lineTactics(piecesOf('3nk3/8/8/4p3/3r4/8/8/3QK3 w - - 0 1'), 'w');
+        expect(guarded.filter((l) => l.kind === 'skewer')).toEqual([]);
+    });
+});

@@ -59,6 +59,9 @@ describe('shouldWarn', () => {
     it('при решающем перевесе мелкие потери не тревожат, без движка — молчит', () => {
         expect(shouldWarn(check(300, {eval_after: 900}), 'strong')).toBe(false);
         expect(shouldWarn(check(600, {eval_after: 900}), 'strong')).toBe(true);
+        // Пропущенный дорогой удар — сказать и в выигранной позиции; мелкий — нет.
+        expect(shouldWarn(check(250, {eval_after: 900, missed_tactic: true}), 'amateur')).toBe(true);
+        expect(shouldWarn(check(120, {eval_after: 900, missed_tactic: true}), 'strong')).toBe(false);
         expect(shouldWarn({available: false}, 'strong')).toBe(false);
     });
 
