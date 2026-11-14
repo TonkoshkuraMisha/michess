@@ -1,0 +1,330 @@
+{
+  "id": "tactics-discovered-attack",
+  "course": "tactics",
+  "order": 5,
+  "title": {
+    "en": "Discovered attack",
+    "uk": "Розкритий напад",
+    "ru": "Вскрытое нападение"
+  },
+  "summary": {
+    "en": "A piece leaves the line and unmasks another: two pieces attack at once.",
+    "uk": "Фігура йде з лінії й відкриває удар іншої: нападають одразу дві.",
+    "ru": "Фигура уходит с линии и открывает удар другой: нападают сразу две."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "4q1k1/8/8/8/4B3/8/8/4R1K1 w - - 0 1",
+      "arrows": [
+        {
+          "from": "e1",
+          "to": "e8",
+          "color": "blue"
+        }
+      ],
+      "highlights": [
+        "e4"
+      ],
+      "text": {
+        "en": "A discovered attack: one piece leaves a line and unmasks another. The bishop on e4 blocks the rook. Once it moves, the rook attacks the queen — and the bishop gets a move of its own.",
+        "uk": "Розкритий напад: одна фігура йде з лінії й відкриває удар іншої. Слон e4 затуляє туру. Варто йому відійти — тура нападе на ферзя, а сам слон устигне зробити щось своє.",
+        "ru": "Вскрытое нападение: одна фигура уходит с линии и открывает удар другой. Слон e4 загораживает ладью. Стоит ему отойти — ладья нападёт на ферзя, а сам слон успеет сделать что-то своё."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "4q1k1/8/8/8/4B3/8/8/4R1K1 w - - 0 1",
+      "actions": [
+        {
+          "do": "move",
+          "uci": "e4h7"
+        },
+        {
+          "do": "arrow",
+          "from": "e1",
+          "to": "e8",
+          "color": "red"
+        },
+        {
+          "do": "pause",
+          "ms": 700
+        },
+        {
+          "do": "move",
+          "uci": "g8h7"
+        },
+        {
+          "do": "pause",
+          "ms": 600
+        },
+        {
+          "do": "move",
+          "uci": "e1e8"
+        }
+      ],
+      "text": {
+        "en": "The bishop leaves with check. Black must answer the check — and the rook takes the queen. A bishop for a queen.",
+        "uk": "Слон іде з шахом. Чорні мусять відповісти на шах — і тура забирає ферзя. Слона віддано, ферзя виграно.",
+        "ru": "Слон уходит с шахом. Чёрные обязаны ответить на шах — и ладья забирает ферзя. Слон отдан, ферзь выигран."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "6k1/p5p1/1b2R3/3B3p/8/2P5/3K3r/8 w - - 2 56",
+      "text": {
+        "en": "Your move. You are in check from the rook on h2, and the rook on e6 blocks the bishop on d5. Defend so that you win the rook.",
+        "uk": "Ваш хід. Вам шах від тури h2, а тура e6 затуляє слона d5. Захистіться так, щоб виграти туру.",
+        "ru": "Ваш ход. Вам шах от ладьи h2, а ладья e6 загораживает слона d5. Защититесь так, чтобы выиграть ладью."
+      },
+      "hint": {
+        "en": "Block the check with the rook — and unmask the bishop.",
+        "uk": "Закрийтеся від шаху турою — і відкрийте слона.",
+        "ru": "Закройтесь от шаха ладьёй — и откройте слона."
+      },
+      "line": [
+        {
+          "answers": [
+            "e6e2"
+          ],
+          "reply": "g8f8",
+          "correct": {
+            "en": "The rook blocked the check and unmasked the bishop: now Black is in check and the rook on h2 is attacked.",
+            "uk": "Тура закрила шах і відкрила слона: тепер шах чорним, а тура h2 під ударом.",
+            "ru": "Ладья закрыла шах и открыла слона: теперь шах чёрным, а ладья h2 под ударом."
+          },
+          "wrong": {
+            "d2e1": {
+              "en": "The king escaped the check, but the rook on h2 survived — and it could have been won.",
+              "uk": "Король пішов від шаху, але тура h2 лишилася цілою — а її ж можна було виграти.",
+              "ru": "Король ушёл от шаха, но ладья h2 осталась целой — а ведь её можно было выиграть."
+            }
+          }
+        },
+        {
+          "answers": [
+            "e2h2"
+          ],
+          "correct": {
+            "en": "The rook is won.",
+            "uk": "Туру виграно.",
+            "ru": "Ладья выиграна."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "2R5/5p2/4k3/3p1p1p/2P2P1P/2r3P1/6K1/8 w - - 0 43",
+      "text": {
+        "en": "Your move. The pawn on c4 blocks the rook on c8. Win the rook on c3.",
+        "uk": "Ваш хід. Пішак c4 затуляє туру c8. Виграйте туру c3.",
+        "ru": "Ваш ход. Пешка c4 загораживает ладью c8. Выиграйте ладью c3."
+      },
+      "hint": {
+        "en": "The pawn can leave the file by capturing with check.",
+        "uk": "Пішак може піти з вертикалі зі взяттям і шахом.",
+        "ru": "Пешка может уйти с вертикали со взятием и шахом."
+      },
+      "line": [
+        {
+          "answers": [
+            "c4d5"
+          ],
+          "reply": "e6d5",
+          "correct": {
+            "en": "Check! The king takes the pawn, but the c-file is now open.",
+            "uk": "Шах! Король бере пішака, але вертикаль c уже відкрита.",
+            "ru": "Шах! Король берёт пешку, но вертикаль c уже открыта."
+          }
+        },
+        {
+          "answers": [
+            "c8c3"
+          ],
+          "correct": {
+            "en": "The rook is won.",
+            "uk": "Туру виграно.",
+            "ru": "Ладья выиграна."
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "Why is a discovered attack so dangerous?",
+        "uk": "Чому розкритий напад такий небезпечний?",
+        "ru": "Почему вскрытое нападение так опасно?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "Two pieces attack at once: the one that moved and the one it unmasked.",
+            "uk": "Нападають одразу дві фігури: та, що пішла, і та, що відкрилася.",
+            "ru": "Нападают сразу две фигуры: та, что ушла, и та, что открылась."
+          },
+          "feedback": {
+            "en": "Exactly. It is strongest when one of the threats is a check.",
+            "uk": "Саме так. Особливо сильно, коли одна із загроз — шах.",
+            "ru": "Именно. Особенно сильно, когда одна из угроз — шах."
+          }
+        },
+        {
+          "text": {
+            "en": "The moving piece becomes invulnerable.",
+            "uk": "Фігура, що пішла, стає невразливою.",
+            "ru": "Ушедшая фигура становится неуязвимой."
+          },
+          "feedback": {
+            "en": "No, it can be taken — but the opponent usually has no time.",
+            "uk": "Ні, її можна взяти — але суперникові зазвичай ніколи.",
+            "ru": "Нет, её можно взять — но сопернику обычно некогда."
+          }
+        },
+        {
+          "text": {
+            "en": "It only works against the king.",
+            "uk": "Це працює тільки проти короля.",
+            "ru": "Это работает только против короля."
+          },
+          "feedback": {
+            "en": "You can unmask an attack on any piece; a check just makes it stronger.",
+            "uk": "Розкрити можна удар по будь-якій фігурі; шах просто робить його ще сильнішим.",
+            "ru": "Вскрыть можно удар по любой фигуре; шах просто делает его ещё сильнее."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "5b1k/6pp/8/Q3Bq2/3P1N2/6P1/7q/5K2 w - - 0 38",
+      "text": {
+        "en": "Your move. The bishop on e5 blocks the queen on a5. Win the black queen.",
+        "uk": "Ваш хід. Слон e5 затуляє ферзя a5. Виграйте чорного ферзя.",
+        "ru": "Ваш ход. Слон e5 загораживает ферзя a5. Выиграйте чёрного ферзя."
+      },
+      "hint": {
+        "en": "Move the bishop away, capturing with check.",
+        "uk": "Відійдіть слоном зі взяттям і шахом.",
+        "ru": "Уйдите слоном со взятием и шахом."
+      },
+      "line": [
+        {
+          "answers": [
+            "e5g7"
+          ],
+          "reply": "h8g7",
+          "correct": {
+            "en": "Check! The king takes the bishop, and the queen on a5 now eyes f5.",
+            "uk": "Шах! Король бере слона, а ферзь a5 уже дивиться на f5.",
+            "ru": "Шах! Король берёт слона, а ферзь a5 уже смотрит на f5."
+          }
+        },
+        {
+          "answers": [
+            "a5f5"
+          ],
+          "correct": {
+            "en": "The queen is won.",
+            "uk": "Ферзя виграно.",
+            "ru": "Ферзь выигран."
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "6k1/p5p1/1b2R3/3B3p/8/2P5/3K3r/8 w - - 2 56",
+      "arrows": [
+        {
+          "from": "d5",
+          "to": "g8",
+          "color": "red"
+        },
+        {
+          "from": "e6",
+          "to": "e2",
+          "color": "green"
+        }
+      ],
+      "text": {
+        "en": "The strongest kind is the discovered check: the moving piece can go anywhere, even en prise — the opponent must save the king first. Here the rook even blocked a check to its own king. Look for your pieces that block your long-range ones.",
+        "uk": "Найсильніший вид — розкритий шах: фігура, що йде, може стати куди завгодно, навіть під удар, — спершу суперник мусить рятувати короля. Тут тура навіть закрила шах своєму королю. Шукайте свої фігури, що затуляють далекобійні.",
+        "ru": "Самый сильный вид — вскрытый шах: уходящая фигура может встать куда угодно, даже под бой, — сначала соперник должен спасать короля. Здесь ладья даже закрыла шах своему королю. Ищите свои фигуры, которые загораживают дальнобойные."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "3b4/8/2k2p2/1p2p3/4K1PR/8/5P2/8 b - - 0 48",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Win the rook.",
+        "uk": "Хід чорних. Виграйте туру.",
+        "ru": "Ход чёрных. Выиграйте ладью."
+      },
+      "line": [
+        {
+          "answers": [
+            "f6f5"
+          ],
+          "reply": "e4f5"
+        },
+        {
+          "answers": [
+            "d8h4"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "2k5/6R1/1P1p4/3Pp1p1/2P3P1/2b2KP1/8/8 b - - 4 54",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Win the rook.",
+        "uk": "Хід чорних. Виграйте туру.",
+        "ru": "Ход чёрных. Выиграйте ладью."
+      },
+      "line": [
+        {
+          "answers": [
+            "e5e4"
+          ],
+          "reply": "f3e3"
+        },
+        {
+          "answers": [
+            "c3g7"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/2R5/3p2p1/8/4KbkP/8/8/8 b - - 5 54",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Win the rook.",
+        "uk": "Хід чорних. Виграйте туру.",
+        "ru": "Ход чёрных. Выиграйте ладью."
+      },
+      "line": [
+        {
+          "answers": [
+            "d6d5"
+          ],
+          "reply": "e4d3"
+        },
+        {
+          "answers": [
+            "f4c7"
+          ]
+        }
+      ]
+    }
+  ]
+}
