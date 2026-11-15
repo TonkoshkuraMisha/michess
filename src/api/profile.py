@@ -341,6 +341,17 @@ async def get_live_games(db: AsyncSession = Depends(get_db)):
     return live_list
 
 
+@router.get("/{username}/achievements")
+async def get_user_achievements(username: str, db: AsyncSession = Depends(get_db)):
+    """Достижения и звание клуба (таск 17.6): прогресс по каждому, новые открытые записываются."""
+    from src.services import achievements
+
+    user = await _resolve_user(db, username)
+    if not user:
+        raise ApiError(404, "user_not_found", username=username)
+    return await achievements.evaluate(db, user)
+
+
 @router.get("/{username}")
 async def get_user_profile(username: str, db: AsyncSession = Depends(get_db)):
     user = await _resolve_user(db, username)

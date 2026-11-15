@@ -1,3 +1,4 @@
+from src.models.achievement import UserAchievement
 from src.models.arena import Arena, ArenaGame, ArenaPlayer
 from src.models.base import Base
 from src.models.collection import CollectionEntry
@@ -51,6 +52,7 @@ __all__ = [
     "TournamentGame",
     "TournamentPlayer",
     "User",
+    "UserAchievement",
 ]
 
 # This ensures all models are loaded when Alembic imports this file.
