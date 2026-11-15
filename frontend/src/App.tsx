@@ -27,6 +27,7 @@ import {ModerationPage} from './components/social/ModerationPage';
 import {MiniGamePage, MiniGamesPage} from './components/trainers/MiniGames';
 import {RepertoireEditorPage, RepertoireListPage} from './components/repertoire/RepertoirePages';
 import {LibraryPage} from './components/library/LibraryPage';
+import {RepertoireDrillPage} from './components/repertoire/RepertoireDrill';
 import {moderationApi} from './services/moderation';
 import {TrainerPage, TrainersPage} from './components/trainers/TrainersPage';
 import {NotificationBell, PlayerSearch} from './components/social/SocialHeader';
@@ -628,6 +629,7 @@ export default function App() {
                         <Route path="/train/games" element={<MiniGamesPage/>}/>
                         <Route path="/repertoire" element={<RepertoireListPage/>}/>
                         <Route path="/repertoire/:repertoireId" element={<RepertoireEditorPage/>}/>
+                        <Route path="/repertoire/:repertoireId/drill" element={<RepertoireDrillPage/>}/>
                         <Route path="/train/games/:gameId" element={<MiniGamePage/>}/>
                         <Route path="/train/:trainerId" element={<TrainerPage/>}/>
                         <Route path="/guess" element={<GuessPage/>}/>

@@ -235,6 +235,8 @@ export function RepertoireEditorPage() {
                     {t('repertoire.save')}
                 </button>
                 <span className="text-sm text-boxwood/80">{t(`repertoire.colors.${rep.color}`)} · {tp('repertoire.movesCount', rep.moves.length)}</span>
+                <Link to={`/repertoire/${rep.id}/drill`} data-testid="repertoire-drill-link"
+                      className="px-3 py-1 rounded bg-amber-700 text-white font-bold text-sm">{t('repertoire.drill.open')}</Link>
                 <button type="button" onClick={() => void removeAll()} disabled={busy} data-testid="repertoire-delete" className={`${BUTTON} text-rose-300`}>
                     <Trash2 size={14}/> {t('repertoire.delete')}
                 </button>
