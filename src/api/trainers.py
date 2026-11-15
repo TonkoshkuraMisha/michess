@@ -18,8 +18,8 @@ from src.models.user import User
 
 router = APIRouter(dependencies=[Depends(rate_limit("trainers", "RATE_LIMIT_PUZZLES"))])
 
-# Известные тренажёры: «Тихая тропа», «Двойной удар», «Маршрут коня» (таск 16.5); новые (спринт 19) — сюда же.
-TRAINERS = ("quiet_path", "double_strike", "knight_route")
+# Известные тренажёры: «Тихая тропа», «Двойной удар», «Маршрут коня», «Хвост» (таск 16.5); новые (спринт 19) — сюда же.
+TRAINERS = ("quiet_path", "double_strike", "knight_route", "tail")
 MAX_LEVEL = 20
 HISTORY = 50
 

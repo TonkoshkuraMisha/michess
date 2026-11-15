@@ -26,6 +26,7 @@ def test_records_per_level(client, token_user_1):
 def test_history_oldest_first(client, token_user_1):
     for score in (10, 20, 30):
         client.post(f"{API}/results", headers=auth(token_user_1), json=result(trainer="knight_route", score=score))
+    assert client.post(f"{API}/results", headers=auth(token_user_1), json=result(trainer="tail")).status_code == 200
     history = client.get(f"{API}/history/knight_route", headers=auth(token_user_1)).json()["results"]
     assert [r["score"] for r in history] == [10, 20, 30]
 

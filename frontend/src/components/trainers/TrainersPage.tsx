@@ -9,7 +9,7 @@ import {useI18n} from '../../i18n';
 import {getToken} from '../../services/authToken';
 import {TRAINER_IDS, trainersApi} from '../../services/trainers';
 import type {TrainerId, TrainerRecord} from '../../services/trainers';
-import {ForkGame, PathGame} from './VisionGames';
+import {ForkGame, PathGame, TailGame} from './VisionGames';
 
 const LEVELS = 10;
 
@@ -128,7 +128,8 @@ export function TrainerPage() {
                 </div>
             )}
             {seed !== null && id === 'double_strike' && <ForkGame level={level} seed={seed} onFinish={finish}/>}
-            {seed !== null && id !== 'double_strike' && (
+            {seed !== null && id === 'tail' && <TailGame level={level} seed={seed} onFinish={finish}/>}
+            {seed !== null && (id === 'quiet_path' || id === 'knight_route') && (
                 <PathGame kind={id === 'knight_route' ? 'knight' : 'quiet'} level={level} seed={seed} onFinish={finish}/>
             )}
             {history.length > 1 && (
