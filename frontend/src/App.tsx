@@ -18,6 +18,7 @@ import {BasicsPage, BasicsSectionPage} from './components/learn/BasicsPage';
 import {MateConstructionPage, MateCoursePage, MateExamPage} from './components/learn/MateCourse';
 import {ClassicGamePage, ClassicsPage} from './components/learn/ClassicsPage';
 import {ToolsPage} from './components/tools/ToolsPage';
+import {WatchPage} from './components/watch/WatchPage';
 import {TournamentView, TournamentsPage} from './components/tournaments/TournamentsPage';
 import {CHAMPIONS_LIST} from './config/champions';
 import {API_BASE_URL} from './config/api';
@@ -35,7 +36,8 @@ import {
     Trophy,
     Scale,
     Puzzle,
-    GraduationCap
+    GraduationCap,
+    Eye
 } from 'lucide-react';
 import {useI18n} from './i18n';
 import LanguageSwitcher from './components/LanguageSwitcher';
@@ -405,6 +407,15 @@ export default function App() {
                                         <button
                                             onClick={() => {
                                                 setIsProfileOpen(false);
+                                                navigate('/watch');
+                                            }}
+                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
+                                        >
+                                            <Eye size={16} className="text-amber-500"/> {t('watch.title')}
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setIsProfileOpen(false);
                                                 navigate('/tournaments');
                                             }}
                                             className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
@@ -489,6 +500,7 @@ export default function App() {
                         <Route path="/learn/classics" element={<ClassicsPage/>}/>
                         <Route path="/learn/classics/:gameId" element={<ClassicGamePage/>}/>
                         <Route path="/tools" element={<ToolsPage/>}/>
+                        <Route path="/watch" element={<WatchPage/>}/>
                         <Route path="/guess" element={<GuessPage/>}/>
                         <Route path="/guess/:positionId" element={<GuessPage/>}/>
                     <Route path="/learn/:lessonId" element={<LessonPage/>}/>

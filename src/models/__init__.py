@@ -1,4 +1,5 @@
 from src.models.base import Base
+from src.models.collection import CollectionEntry
 from src.models.email_token import EmailToken
 from src.models.game import Game
 from src.models.guess import GuessPosition
@@ -18,6 +19,7 @@ __all__ = [
     "DrillRecord",
     "EmailToken",
     "Game",
+    "CollectionEntry",
     "GuessPosition",
     "PositionGame",
     "PositionStat",

@@ -1079,6 +1079,14 @@ export default function Chessboard() {
         navigate('.', {replace: true, state: null});
     }, [analyzeFen]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // «Смотреть» со страницы «Просмотр» (16.3): режим зрителя для партии из location.state.
+    const spectateId = (location.state as { spectate?: number } | null)?.spectate;
+    useEffect(() => {
+        if (!spectateId || gameId) return;
+        handleSpectateGame(spectateId);
+        navigate('.', {replace: true, state: null});
+    }, [spectateId]); // eslint-disable-line react-hooks/exhaustive-deps
+
     const handleLoadFen = (fen: string): string | null => {
         const error = validateFen(fen);
         if (error) return error;

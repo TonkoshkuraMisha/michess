@@ -338,3 +338,21 @@ describe('товарищеские партии', () => {
         expect(serious.textContent).not.toContain('товарищеская');
     });
 });
+
+describe('режим зрителя со страницы «Просмотр» (16.3)', () => {
+    it('доска сама просит сервер показать партию из location.state', async () => {
+        vi.stubGlobal('fetch', mockFetchRouter({
+            '/profile/me': () => ({id: 1, username: 'TestPlayer', blitz_rating: 1500}),
+            '/profile/matchmaking/queue': () => [],
+            '/profile/games/live': () => [],
+            '/profile/games/my-active': () => ({active: false}),
+        }));
+        render(
+            <MemoryRouter initialEntries={[{pathname: '/', state: {spectate: 42}}]}>
+                <Chessboard/>
+            </MemoryRouter>,
+        );
+        await act(async () => undefined);
+        expect(sendMock).toHaveBeenCalledWith('spectate_game', {game_id: 42});
+    });
+});
