@@ -23,7 +23,7 @@ from src.services import product_metrics
 from src.services import tournament_rules as rules
 from src.services.bots.archetypes import ARCHETYPE_PREFIX, ARCHETYPES_BY_KEY
 from src.services.bots.calibration import strength_of
-from src.services.rating import classify_time_control
+from src.services.rating import classify_time_control, elo_calculator
 
 Format = Literal["round_robin", "knockout", "swiss"]
 
@@ -331,6 +331,32 @@ async def player_game(db: AsyncSession, user: User, tournament_game_id: int) -> 
     return PlayerGame(tournament, game, color, opponent)
 
 
+@dataclass(frozen=True)
+class RatingChange:
+    category: str
+    before: int
+    after: int
+    delta: int
+
+
+def apply_rating(user: User, played: PlayerGame, result: str) -> RatingChange:
+    """
+    Все турниры рейтинговые (решение владельца, 15.11): партия игрока меняет его рейтинг в категории контроля турнира.
+    Соперник — с силой на старте турнира (TournamentPlayer.rating), его «рейтинг» не меняется. Без commit.
+    """
+    category = classify_time_control(played.tournament.base_time_ms, played.tournament.increment_ms)
+    before = user.rating_for(category)
+    games = user.games_played_for(category)
+    opponent = played.opponent.rating
+    if played.color == "white":
+        after, delta, _, _ = elo_calculator.calculate_new_ratings(before, opponent, result, white_games=games)
+    else:
+        _, _, after, delta = elo_calculator.calculate_new_ratings(opponent, before, result, black_games=games)
+    setattr(user, f"{category}_rating", after)
+    setattr(user, f"{category}_games_played", games + 1)
+    return RatingChange(category, before, after, delta)
+
+
 def opponent_matches(opponent: TournamentPlayer, bot_id: str, personality_name: str | None) -> bool:
     """Партию сыграли с тем соперником, что в турнире: бот — по id, архетип — по ключу, персоналия — по имени."""
     if opponent.kind == "bot":
@@ -405,6 +431,8 @@ async def start_player_game(db: AsyncSession, user: User, tournament_game_id: in
     played = await player_game(db, user, tournament_game_id)
     if played.game.started_at is not None:
         await ladder.clear_session(user.id, "tournament")
+        # Брошенная партия — рейтинговое поражение (пользователь — из этой же сессии, иначе изменение не запишется).
+        apply_rating(await db.get(User, user.id) or user, played, loss_for(played.color))
         await record_result(db, played.tournament, played.game, loss_for(played.color))
         return StartResult(played, forfeited=True)
     played.game.started_at = datetime.now(UTC)
@@ -435,4 +463,11 @@ async def withdraw(db: AsyncSession, user: User, tournament: Tournament) -> None
         if not pending or tournament.status != "active":
             return
         game = pending[0]
-        await record_result(db, tournament, game, loss_for("white" if game.white_seat == mine else "black"))
+        color = "white" if game.white_seat == mine else "black"
+        if game.started_at is not None:
+            # Сдача посреди начатой партии — рейтинговое поражение; несыгранные партии рейтинг не меняют.
+            seats = {p.seat: p for p in await players_of(db, tournament.id)}
+            opponent = seats[game.black_seat if color == "white" else game.white_seat]
+            fresh = await db.get(User, user.id) or user
+            apply_rating(fresh, PlayerGame(tournament, game, color, opponent), loss_for(color))  # type: ignore[arg-type]
+        await record_result(db, tournament, game, loss_for(color))

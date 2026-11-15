@@ -215,6 +215,10 @@ class BotGameSaveResponse(BaseModel):
     tournament_id: int | None = None
     # Причина поражения в турнире вместо результата на доске (код, как у лестницы: engine_hint, takeback, coach...).
     tournament_forfeit: str | None = None
+    # Все турниры рейтинговые (15.4): изменение рейтинга игрока в категории контроля турнира.
+    rating_before: int | None = None
+    rating_after: int | None = None
+    rating_delta: int | None = None
 
 
 def calculate_authentic_thinking_time_ms(
@@ -701,6 +705,7 @@ async def save_bot_game(
     if ladder_game is not None:
         await ladder_service.clear_session(current_user.id)
     tournament_forfeit = None
+    rating_change = None
     if tournament_game is not None:
         # Подсказка движка, анализ, возврат хода или наставник во время партии турнира — поражение (таск A.2):
         # «незасчитанной» партии в турнире быть не может.
@@ -711,6 +716,13 @@ async def save_bot_game(
         tournament_result = tournament_service.loss_for(payload.player_color) if tournament_forfeit else result
         await ladder_service.clear_session(current_user.id, "tournament")
         # Результат — в турнир; партии ботов, которые от него открылись, считает воркер.
+        # Все турниры рейтинговые (решение владельца): рейтинг игрока — по итогу партии в турнире.
+        rating_change = tournament_service.apply_rating(current_user, tournament_game, tournament_result)
+        new_game.is_rated = True
+        if tournament_game.color == "white":
+            new_game.white_initial_rating, new_game.white_rating_delta = rating_change.before, rating_change.delta
+        else:
+            new_game.black_initial_rating, new_game.black_rating_delta = rating_change.before, rating_change.delta
         await tournament_service.record_result(
             db, tournament_game.tournament, tournament_game.game, tournament_result, new_game.id,
         )
@@ -728,4 +740,7 @@ async def save_bot_game(
         ladder=ladder_outcome,
         tournament_id=tournament_game.tournament.id if tournament_game else None,
         tournament_forfeit=tournament_forfeit,
+        rating_before=rating_change.before if rating_change else None,
+        rating_after=rating_change.after if rating_change else None,
+        rating_delta=rating_change.delta if rating_change else None,
     )
