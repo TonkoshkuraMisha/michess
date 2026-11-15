@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 
 import chess
 import chess.pgn
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from pydantic import BaseModel, Field, model_validator
 from pydantic_core import PydanticCustomError
 from sqlalchemy import select
@@ -458,6 +458,17 @@ async def get_bot_catalog():
             for a in ARCHETYPES
         ],
     }
+
+
+@router.get("/openings")
+async def search_openings(q: str = Query("", max_length=60), epd: list[str] = Query(default_factory=list, max_length=120)):
+    """
+    Дебюты для мастерской (таск 21.2): поиск по названию или коду ECO, либо записи по позициям (EPD) — чтобы
+    показать названия уже выбранных. Названия — английские имена собственные из открытой таблицы.
+    """
+    table = openings.lines()
+    found = [table[key] for key in epd if key in table] if epd else openings.search(q)
+    return {"openings": [{"eco": o.eco, "name": o.name, "epd": o.epd, "moves": list(o.moves)} for o in found]}
 
 
 @router.get("/list")

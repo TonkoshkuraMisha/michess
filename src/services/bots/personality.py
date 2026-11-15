@@ -18,9 +18,11 @@ import random
 from dataclasses import dataclass
 
 import chess
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from src.services.bots.base import BookEntry, HistoricalBot
+from src.core.errors import validation_error
+from src.services import openings
+from src.services.bots.base import BookEntry, HistoricalBot, bot_comment
 from src.services.bots.style import (
     ALWAYS,
     CAPTURE,
@@ -74,6 +76,9 @@ JITTER_CP_PER_RANDOMNESS = 0.4
 
 
 
+MAX_FAVORITE_OPENINGS = 3
+
+
 class PieceValues(BaseModel):
     """Как персоналия ценит фигуры (в пешках). Влияет на выбор разменов, не на оценку движка."""
 
@@ -112,6 +117,18 @@ class BotPersonalityConfig(BaseModel):
     randomness: int = Field(20, ge=0, le=100)
     blunder_guard_cp: int = Field(120, ge=0, le=400)
     target_elo: int = Field(1500, ge=MIN_TARGET_ELO, le=MAX_TARGET_ELO)
+    # Любимые дебюты (таск 21.2): позиции (EPD) записей открытой таблицы дебютов, до трёх за каждый цвет.
+    openings_white: list[str] = Field(default_factory=list, max_length=MAX_FAVORITE_OPENINGS)
+    openings_black: list[str] = Field(default_factory=list, max_length=MAX_FAVORITE_OPENINGS)
+
+    @field_validator("openings_white", "openings_black")
+    @classmethod
+    def _known_openings(cls, value: list[str]) -> list[str]:
+        table = openings.lines()
+        unique = list(dict.fromkeys(value))
+        if any(epd not in table or not table[epd].moves for epd in unique):
+            raise validation_error("bot_opening_unknown")
+        return unique
 
 
 # --- Сила ----------------------------------------------------------------------------------------
@@ -255,8 +272,26 @@ def default_comment_for(config: BotPersonalityConfig) -> str:
     return "personality.positional"
 
 
+def favorite_moves(config: BotPersonalityConfig) -> dict[str, list[tuple[str, str]]]:
+    """
+    Позиция (EPD) → ходы любимых дебютов бота из неё и название дебюта. Ходы берутся только за цвет списка: белые
+    дебюты — когда бот играет белыми, чёрные — чёрными; по позиции, поэтому перестановки ходов тоже ведут в линию.
+    """
+    table = openings.lines()
+    moves: dict[str, list[tuple[str, str]]] = {}
+    for color, epds in ((chess.WHITE, config.openings_white), (chess.BLACK, config.openings_black)):
+        for epd in epds:
+            line = table[epd]
+            board = chess.Board()
+            for uci in line.moves:
+                if board.turn == color:
+                    moves.setdefault(board.epd(), []).append((uci, line.name))
+                board.push_uci(uci)
+    return moves
+
+
 class PersonalityBot(HistoricalBot):
-    """Соперник с характером из BotPersonalityConfig: без дебютной книги, с силой по target_elo."""
+    """Соперник с характером из BotPersonalityConfig: любимые дебюты вместо книги, сила по target_elo."""
 
     bot_id = "custom"
     engine_source_name = "personality_engine"
@@ -277,6 +312,16 @@ class PersonalityBot(HistoricalBot):
         self.jitter_range = config.randomness * JITTER_CP_PER_RANDOMNESS
         self.style = build_style(config)
         self.default_comment = default_comment_for(config)
+        self.favorites = favorite_moves(config)
+
+    def _book_move(self, board: chess.Board) -> tuple[chess.Move, dict] | None:
+        """Ход любимого дебюта, пока позиция есть в его линиях; соперник свернул — дальше играет движок."""
+        options = [(chess.Move.from_uci(uci), name) for uci, name in self.favorites.get(board.epd(), [])]
+        options = [(move, name) for move, name in options if move in board.legal_moves]
+        if not options:
+            return None
+        move, name = random.choice(options)
+        return move, bot_comment("personality.favoriteOpening", name=name)
 
     def _select_move(
             self, board: chess.Board, scores: dict[chess.Move, float], reference: chess.Move | None = None,

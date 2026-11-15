@@ -467,6 +467,14 @@ export const en = {
         lastPage: 'Last page',
     },
     workshop: {
+        openings: {
+            hint: 'Favorite openings: the opponent plays their moves while the position stays in the line; after a deviation it thinks on its own.',
+            white: 'Favorite openings as White',
+            black: 'Favorite openings as Black',
+            none: 'none — the opponent chooses moves itself',
+            search: 'Find an opening: name or ECO code',
+            remove: 'Remove {name}',
+        },
         sliders: {
             aggression: {
                 label: 'Aggression',
@@ -832,6 +840,7 @@ export const en = {
         game_init_failed: 'Could not start the game — please try again',
         user_not_found: 'User {username} not found',
         bot_not_found: 'Bot “{bot_id}” not found',
+        bot_opening_unknown: 'This opening is not in the openings table',
         config_or_personality: 'Specify either the opponent’s settings or a saved opponent, not both',
         login_required_for_personality: 'Log in to play against a saved opponent',
         custom_opponent_missing: 'A workshop opponent needs a name or a saved opponent',
@@ -1023,6 +1032,7 @@ export const en = {
             pawns: 'Strengthening the pawn structure.',
             trade: 'A trade by my own scale of values.',
             prophylaxis: 'Prophylaxis: we take active moves away from the opponent.',
+            favoriteOpening: 'My favorite opening: {name}.',
         },
         // Ход из дебютной книги бота: в скобках — сколько партий архива с этим ходом.
         book: {

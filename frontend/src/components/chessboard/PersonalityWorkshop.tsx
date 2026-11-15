@@ -17,6 +17,7 @@ import {
 } from '../../services/personalities';
 import type {Personality, PersonalityConfig} from '../../services/personalities';
 import {fetchBotCatalog, strengthLabel} from '../../services/botCatalog';
+import {FavoriteOpeningsPicker, OpeningsLine} from './FavoriteOpeningsPicker';
 import type {CatalogArchetype} from '../../services/botCatalog';
 import {useI18n} from '../../i18n';
 import {t as translate} from '../../i18n';
@@ -132,7 +133,13 @@ export function PersonalityWorkshop({
     const pick = (
         name: string, config: PersonalityConfig, savedId: Draft['savedId'], bio?: string, archetypeId?: ArchetypeId,
     ) => {
-        setDraft({name, config: {...config, piece_values: {...config.piece_values}}, savedId, bio, archetypeId});
+        setDraft({
+            name, savedId, bio, archetypeId,
+            config: {
+                ...config, piece_values: {...config.piece_values},
+                openings_white: [...(config.openings_white ?? [])], openings_black: [...(config.openings_black ?? [])],
+            },
+        });
         setError(null);
         setNotice(null);
     };
@@ -185,7 +192,7 @@ export function PersonalityWorkshop({
         const archetype = archetypes.find((a) => a.id === draft.archetypeId);
         const pristineArchetype = archetype && draft.savedId === null
             && name === t(`archetypes.${archetype.id}.name`)
-            && JSON.stringify(draft.config) === JSON.stringify(archetype.config);
+            && sameConfig(draft.config, archetype.config);
         onPlay({
             name,
             config: draft.config,
@@ -206,7 +213,10 @@ export function PersonalityWorkshop({
                     <ul className="flex flex-col gap-1">
                         {mine.map((p) => (
                             <li key={p.id} className="flex items-center gap-1.5 bg-black/35 rounded px-2 py-1 border border-amber-900/40">
-                                <span className="font-bold truncate flex-1">{p.name}</span>
+                                <span className="flex-1 min-w-0">
+                                    <span className="font-bold truncate block">{p.name}</span>
+                                    <OpeningsLine white={p.config.openings_white} black={p.config.openings_black}/>
+                                </span>
                                 <span className="font-mono text-amber-300/90">~{p.config.target_elo}</span>
                                 <button type="button" title={t('workshop.edit', {name: p.name})} aria-label={t('workshop.edit', {name: p.name})}
                                         onClick={() => pick(p.name, p.config, p.id)}
@@ -281,6 +291,11 @@ export function PersonalityWorkshop({
                     </label>
                 ))}
 
+                <FavoriteOpeningsPicker white={draft.config.openings_white ?? []} black={draft.config.openings_black ?? []}
+                                        onChange={(side, epds) => setDraft((d) => ({
+                                            ...d, config: {...d.config, [side === 'white' ? 'openings_white' : 'openings_black']: epds},
+                                        }))}/>
+
                 <p className="text-amber-200/90" data-testid="strength-note">{strengthNote(draft.config)}</p>
                 <p className="text-[10px] text-boxwood/60 leading-tight">
                     {t('workshop.engineNote')}
@@ -324,5 +339,11 @@ export function PersonalityWorkshop({
 
 function isUnchanged(mine: Personality[], draft: Draft): boolean {
     const saved = mine.find((p) => p.id === draft.savedId);
-    return !!saved && saved.name === draft.name.trim() && JSON.stringify(saved.config) === JSON.stringify(draft.config);
+    return !!saved && saved.name === draft.name.trim() && sameConfig(saved.config, draft.config);
+}
+
+/** Сравнение конфигов: у соперников, сохранённых до любимых дебютов (таск 21.2), этих полей нет — это пустые списки. */
+function sameConfig(a: PersonalityConfig, b: PersonalityConfig): boolean {
+    const normal = (c: PersonalityConfig) => JSON.stringify({...c, openings_white: c.openings_white ?? [], openings_black: c.openings_black ?? []});
+    return normal(a) === normal(b);
 }
