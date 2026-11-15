@@ -1,6 +1,6 @@
 // Совместный разбор (таск 17.3): стрелки ведущего, вопрос, ответ ученика ходом, шаг урока в формате школы.
 
-import {act, fireEvent, render, screen} from '@testing-library/react';
+import {act, fireEvent, render, screen, waitFor} from '@testing-library/react';
 import {MemoryRouter, Route, Routes} from 'react-router-dom';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {setToken} from '../../../services/authToken';
@@ -68,6 +68,8 @@ describe('совместный разбор', () => {
         await act(async () => {
             fireEvent.pointerUp(window, {clientX: 90, clientY: 90});
         });
+        // Ответ уходит асинхронно — под нагрузкой CI запроса ещё могло не быть: дождаться его.
+        await waitFor(() => expect(calls(fetchMock, 'POST')).toHaveLength(1));
         expect(JSON.parse(String(calls(fetchMock, 'POST')[0][1].body))).toEqual({answer: 'e2e4'});
     });
 
