@@ -21,6 +21,7 @@ import type {UiMessage} from '../i18n';
 import {displayPlayerName} from '../config/players';
 import {ProfileSocial} from './social/ProfileSocial';
 import {TournamentHistory} from './tournaments/TournamentHistory';
+import {Achievements} from './social/Achievements';
 
 interface UserProfile {
     id: number;
@@ -333,6 +334,7 @@ export default function Profile() {
                 </div>
 
                 <div className="md:col-span-2 flex flex-col gap-4">
+                    <Achievements username={profile.username}/>
                     <TournamentHistory username={profile.username}/>
                     {profile.ladder && profile.ladder.games > 0 && (
                         <div className="bg-[#1A120B] border border-amber-900/60 px-3 py-2.5 rounded shadow-inner flex items-center justify-between gap-3"
