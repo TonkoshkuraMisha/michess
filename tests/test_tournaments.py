@@ -88,16 +88,16 @@ def test_one_active_tournament_per_player(client, token_user_1):
 
 def test_personality_participant_is_copied(client, token_user_1):
     pid = client.post("/api/v1/bots/personalities", headers=auth(token_user_1),
-                      json={"name": "Gambiteer", "config": {"aggression": 80, "target_elo": 1700}}).json()["id"]
+                      json={"name": "Romantic", "config": {"aggression": 80, "target_elo": 1700}}).json()["id"]
     t = client.post(API, headers=auth(token_user_1), json=body(participants=[
         {"kind": "personality", "id": pid}, {"kind": "bot", "id": "morphy"}, {"kind": "archetype", "id": "rusher"},
     ])).json()
     personality = next(p for p in t["players"] if p["kind"] == "personality")
-    assert personality["personality_name"] == "Gambiteer" and personality["rating"] == 1700
+    assert personality["personality_name"] == "Romantic" and personality["rating"] == 1700
     # Удаление персоналии не меняет турнир.
     assert client.delete(f"/api/v1/bots/personalities/{pid}", headers=auth(token_user_1)).status_code == 204
     again = client.get(f"{API}/{t['id']}", headers=auth(token_user_1)).json()
-    assert next(p for p in again["players"] if p["kind"] == "personality")["personality_name"] == "Gambiteer"
+    assert next(p for p in again["players"] if p["kind"] == "personality")["personality_name"] == "Romantic"
 
 
 def test_other_players_tournament_is_hidden(client, token_user_1, token_user_2):

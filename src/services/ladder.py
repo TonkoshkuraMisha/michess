@@ -25,7 +25,7 @@ import chess
 
 from src.db import redis as redis_module
 from src.models.user import User
-from src.services.bots.archetypes import ARCHETYPES, ARCHETYPES_BY_ID
+from src.services.bots.archetypes import ARCHETYPES, ARCHETYPES_BY_ID, LADDER_ARCHETYPES
 from src.services.bots.calibration import strength_of
 from src.services.bots.personality import BotPersonalityConfig
 
@@ -67,7 +67,7 @@ def rungs() -> list[Rung]:
         for b in AVAILABLE_BOTS
     ]
     items += [
-        Rung(a.key, "archetype", a.id, *_strength(a.key, a.config.target_elo)) for a in ARCHETYPES
+        Rung(a.key, "archetype", a.id, *_strength(a.key, a.config.target_elo)) for a in LADDER_ARCHETYPES
     ]
     return sorted(items, key=lambda r: (r.rating, r.key))
 

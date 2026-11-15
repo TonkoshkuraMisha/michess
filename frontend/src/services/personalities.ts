@@ -35,7 +35,18 @@ export interface PersonalityConfig {
     /** Любимые дебюты (таск 21.2): позиции (EPD) записей таблицы дебютов, до трёх за каждый цвет. */
     openings_white?: string[];
     openings_black?: string[];
+    /** Таск 21.4: привычки новичков, дебютный характер, отношение к ничьей и проходные. */
+    habits?: Habit[];
+    opening_style?: OpeningStyle;
+    draw_attitude?: number;
+    passed_pawns?: number;
 }
+
+export const HABITS = ['hangs_pieces', 'early_queen', 'pawn_grabber', 'knight_lover', 'no_castling', 'trades_all'] as const;
+export type Habit = typeof HABITS[number];
+export const OPENING_STYLES = ['normal', 'trapper', 'trap_victim', 'gambit', 'early_queen', 'drawish', 'capture_lover', 'offbeat'] as const;
+export type OpeningStyle = typeof OPENING_STYLES[number];
+export const MAX_HABITS = 3;
 
 export const MAX_FAVORITE_OPENINGS = 3;
 
@@ -88,6 +99,8 @@ export const DEFAULT_CONFIG: PersonalityConfig = {
     randomness: 20,
     blunder_guard_cp: 120,
     target_elo: 1500,
+    draw_attitude: 0,
+    passed_pawns: 100,
 };
 
 const sameName = (a: string, b: string) => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();

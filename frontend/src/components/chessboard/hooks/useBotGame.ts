@@ -174,8 +174,10 @@ export interface UseBotGameResult {
         playerColor: 'white' | 'black',
         result: string,
         completedGame: Chess,
-        termination?: 'resignation' | 'timeout',
+        termination?: 'resignation' | 'timeout' | 'agreement',
     ) => Promise<void>;
+    /** Предложить боту ничью (таск 21.4): ответ по оценке позиции и отношению бота к ничьей. */
+    offerDrawToBot: () => Promise<void>;
     /** Полный выход из партии с ботом (матчмейкинг/вызов/реванш/сброс песочницы). */
     exitBotGame: () => void;
     /** Архетип текущего (или последнего) соперника из мастерской, если это архетип без изменений. */
@@ -235,7 +237,7 @@ export function useBotGame({
         playerColor: 'white' | 'black',
         result: string,
         completedGame: Chess,
-        termination?: 'resignation' | 'timeout'
+        termination?: 'resignation' | 'timeout' | 'agreement'
     ) => {
         if (botGameSavedRef.current) return;
         const token = getToken();
@@ -545,9 +547,52 @@ export function useBotGame({
 
     const customArchetypeId = useCallback(() => customOpponentRef.current?.archetypeId ?? null, []);
 
+    const offerDrawToBot = useCallback(async () => {
+        if (!activeBot || gameOverResult) return;
+        // В лестнице и турнире согласие бота сервер не запоминает — ничья там только на доске.
+        if (ladderRef.current || tournamentGameRef.current) {
+            setDrawOfferStatus(status('status.botDrawNotHere'));
+            return;
+        }
+        const custom = activeBot === 'custom' ? customOpponentRef.current : null;
+        const myColorNow = myColorRef.current;
+        const body = {
+            fen: game.fen(), bot_id: activeBot, bot_color: myColorNow === 'white' ? 'black' : 'white',
+            ...(custom ? (custom.personalityId ? {personality_id: custom.personalityId} : {config: custom.config}) : {}),
+        };
+        const token = getToken();
+        setDrawOfferStatus(status('status.drawOfferSent'));
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/v1/bots/draw-offer`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json', ...(token ? {Authorization: `Bearer ${token}`} : {})},
+                body: JSON.stringify(body),
+            });
+            if (!res.ok) {
+                setDrawOfferStatus(status('status.botDrawFailed'));
+                return;
+            }
+            const data = await res.json() as { accepted: boolean; comment: unknown };
+            setBotComment(botCommentMessage(data.comment));
+            if (!data.accepted) {
+                setDrawOfferStatus(status('status.botDrawDeclined', {bot: botNameParam(activeBot)}));
+                return;
+            }
+            const result = '1/2-1/2';
+            setGameOverResult(result);
+            setDrawOfferStatus(status('status.botDrawAccepted', {bot: botNameParam(activeBot)}));
+            updateSessionStats(result);
+            playOutcomeSound(result, myColorNow);
+            await saveBotGameToDatabase(activeBot, myColorNow, result, game, 'agreement');
+        } catch {
+            setDrawOfferStatus(status('status.botDrawFailed'));
+        }
+    }, [activeBot, gameOverResult, game, setDrawOfferStatus, setGameOverResult, updateSessionStats, playOutcomeSound,
+        saveBotGameToDatabase, botNameParam, myColorRef]);
+
     return {
         selectedBotId, setSelectedBotId, botComment, isBotThinking, savedBotGameId,
         startHistoricalBotGame, startCustomBotGame, botProfileFor, botNameParam, saveBotGameToDatabase, exitBotGame,
-        isLadderGame, ladderOutcome, customArchetypeId, isTournamentGame, savedTournamentId,
+        isLadderGame, ladderOutcome, customArchetypeId, isTournamentGame, savedTournamentId, offerDrawToBot,
     };
 }

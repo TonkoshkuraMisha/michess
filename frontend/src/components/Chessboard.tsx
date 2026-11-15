@@ -304,7 +304,7 @@ export default function Chessboard() {
     const {
         selectedBotId, setSelectedBotId, botComment, isBotThinking, savedBotGameId,
         startHistoricalBotGame, startCustomBotGame, botProfileFor, botNameParam, saveBotGameToDatabase, exitBotGame,
-        isLadderGame, ladderOutcome, customArchetypeId, isTournamentGame, savedTournamentId,
+        isLadderGame, ladderOutcome, customArchetypeId, isTournamentGame, savedTournamentId, offerDrawToBot,
     } = useBotGame({
         game, myColor, gameOverResult, whiteTimeMs, blackTimeMs, isSearching, setIsSearching,
         activeBot, setActiveBot,
@@ -1909,7 +1909,7 @@ export default function Chessboard() {
                     navigate={navigate}
                     onAbortGame={handleAbortGame}
                     onResign={handleResign}
-                    onOfferDraw={handleOfferDraw}
+                    onOfferDraw={activeBot ? () => void offerDrawToBot() : handleOfferDraw}
                     onAcceptRematch={handleAcceptRematch}
                     onDeclineRematch={handleDeclineRematch}
                     onOfferRematch={handleOfferRematch}

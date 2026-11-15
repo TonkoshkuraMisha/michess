@@ -3,8 +3,8 @@
 import {useCallback, useEffect, useState} from 'react';
 import {PolarAngleAxis, PolarGrid, Radar, RadarChart} from 'recharts';
 import {Pencil, Save, Trash2} from 'lucide-react';
-import {strengthNote, styleRadar} from '../../config/archetypes';
-import type {ArchetypeId, CustomOpponent} from '../../config/archetypes';
+import {STRENGTH_BUCKETS, STYLE_TAGS, strengthBucket, strengthNote, styleRadar, styleTags} from '../../config/archetypes';
+import type {ArchetypeId, CustomOpponent, StrengthBucket, StyleTag} from '../../config/archetypes';
 import {
     DEFAULT_CONFIG,
     createPersonality,
@@ -15,7 +15,8 @@ import {
     saveGuestPersonality,
     updatePersonality,
 } from '../../services/personalities';
-import type {Personality, PersonalityConfig} from '../../services/personalities';
+import {HABITS, MAX_HABITS, OPENING_STYLES} from '../../services/personalities';
+import type {Habit, OpeningStyle, Personality, PersonalityConfig} from '../../services/personalities';
 import {fetchBotCatalog, strengthLabel} from '../../services/botCatalog';
 import {FavoriteOpeningsPicker, OpeningsLine} from './FavoriteOpeningsPicker';
 import type {CatalogArchetype} from '../../services/botCatalog';
@@ -26,7 +27,10 @@ import {renderUiMessage, uiMessage} from '../../i18n';
 import type {UiMessage} from '../../i18n';
 
 type SliderKey = 'aggression' | 'center_control' | 'mobility' | 'king_safety' | 'pawn_structure'
-    | 'randomness' | 'blunder_guard_cp' | 'target_elo';
+    | 'randomness' | 'blunder_guard_cp' | 'target_elo' | 'draw_attitude' | 'passed_pawns';
+
+/** Значения новых ползунков у соперников, сохранённых до них (таск 21.4). */
+const SLIDER_FALLBACK: Partial<Record<SliderKey, number>> = {draw_attitude: 0, passed_pawns: 100};
 
 interface SliderSpec {
     key: SliderKey;
@@ -61,7 +65,9 @@ export const SLIDERS: SliderSpec[] = [
     slider('pawn_structure', 0, 200, 10),
     slider('randomness', 0, 100, 5),
     slider('blunder_guard_cp', 0, 400, 10),
-    slider('target_elo', 600, 2800, 50),
+    slider('draw_attitude', -100, 100, 10),
+    slider('passed_pawns', 0, 200, 10),
+    slider('target_elo', 300, 2800, 50),
 ];
 
 export interface PersonalityWorkshopProps {
@@ -100,6 +106,14 @@ export function PersonalityWorkshop({
     const [notice, setNotice] = useState<'workshop.savedProfile' | 'workshop.savedBrowser' | null>(null);
     const [busy, setBusy] = useState(false);
     const [archetypes, setArchetypes] = useState<CatalogArchetype[]>([]);
+    // Фильтры выбора соперника (таск 21.4).
+    const [show, setShow] = useState<'all' | 'archetypes' | 'mine'>('all');
+    const [bucket, setBucket] = useState<StrengthBucket | 'any'>('any');
+    const [styleTag, setStyleTag] = useState<StyleTag | 'any'>('any');
+    const fits = (rating: number, config: PersonalityConfig) =>
+        (bucket === 'any' || strengthBucket(rating) === bucket) && (styleTag === 'any' || styleTags(config).includes(styleTag));
+    const shownMine = mine.filter((p) => fits(p.config.target_elo, p.config));
+    const shownArchetypes = archetypes.filter((a) => fits(a.rating, a.config));
 
     useEffect(() => {
         let alive = true;
@@ -205,13 +219,34 @@ export function PersonalityWorkshop({
 
     return (
         <div className="flex flex-col gap-2 text-xs text-boxwood" data-testid="personality-workshop">
+            <div className="flex flex-wrap items-center gap-1.5" data-testid="opponent-filters">
+                <select value={show} onChange={(e) => setShow(e.target.value as typeof show)} aria-label={t('workshop.filters.label')}
+                        data-testid="filter-show" className="bg-black/40 rounded px-1 py-0.5">
+                    <option value="all">{t('workshop.filters.label')}: {t('workshop.filters.any')}</option>
+                    <option value="archetypes">{t('workshop.archetypes')}</option>
+                    <option value="mine">{t('workshop.myOpponents')}</option>
+                </select>
+                <select value={bucket} onChange={(e) => setBucket(e.target.value as typeof bucket)} aria-label={t('workshop.filters.strength')}
+                        data-testid="filter-strength" className="bg-black/40 rounded px-1 py-0.5">
+                    <option value="any">{t('workshop.filters.strength')}: {t('workshop.filters.any')}</option>
+                    {STRENGTH_BUCKETS.map((b) => <option key={b} value={b}>{t(`workshop.filters.strengths.${b}`)}</option>)}
+                </select>
+                <select value={styleTag} onChange={(e) => setStyleTag(e.target.value as typeof styleTag)} aria-label={t('workshop.filters.style')}
+                        data-testid="filter-style" className="bg-black/40 rounded px-1 py-0.5">
+                    <option value="any">{t('workshop.filters.style')}: {t('workshop.filters.any')}</option>
+                    {STYLE_TAGS.map((tag) => <option key={tag} value={tag}>{t(`workshop.filters.styles.${tag}`)}</option>)}
+                </select>
+            </div>
+            {show !== 'archetypes' && (
             <section>
                 <h3 className="font-bold text-amber-300 mb-1">{t('workshop.myOpponents')}</h3>
                 {mine.length === 0 ? (
                     <p className="text-boxwood/70">{t('workshop.noOpponents')}</p>
+                ) : shownMine.length === 0 ? (
+                    <p className="text-boxwood/70">{t('workshop.filters.nothing')}</p>
                 ) : (
                     <ul className="flex flex-col gap-1">
-                        {mine.map((p) => (
+                        {shownMine.map((p) => (
                             <li key={p.id} className="flex items-center gap-1.5 bg-black/35 rounded px-2 py-1 border border-amber-900/40">
                                 <span className="flex-1 min-w-0">
                                     <span className="font-bold truncate block">{p.name}</span>
@@ -233,12 +268,15 @@ export function PersonalityWorkshop({
                     </ul>
                 )}
             </section>
+            )}
 
+            {show !== 'mine' && (
             <section>
                 <h3 className="font-bold text-amber-300 mb-1">{t('workshop.archetypes')}</h3>
                 {archetypes.length === 0 && <p className="text-boxwood/70">{t('workshop.archetypesLoading')}</p>}
-                <div className="flex flex-wrap gap-1">
-                    {archetypes.map((a) => (
+                {archetypes.length > 0 && shownArchetypes.length === 0 && <p className="text-boxwood/70">{t('workshop.filters.nothing')}</p>}
+                <div className="flex flex-wrap gap-1" data-testid="archetype-list">
+                    {shownArchetypes.map((a) => (
                         <button key={a.id} type="button" title={t(`archetypes.${a.id}.bio`)}
                                 onClick={() => pick(
                                     t(`archetypes.${a.id}.name`), a.config, null, t(`archetypes.${a.id}.bio`), a.id,
@@ -253,6 +291,7 @@ export function PersonalityWorkshop({
                     ))}
                 </div>
             </section>
+            )}
 
             <section className="flex flex-col gap-1.5 p-2 rounded-md bg-black/40 border border-amber-800/50">
                 <label className="flex flex-col gap-0.5">
@@ -281,15 +320,46 @@ export function PersonalityWorkshop({
                     <label key={s.key} className="flex flex-col" title={s.hint}>
                         <span className="flex justify-between">
                             <span>{s.label}</span>
-                            <span className="font-mono text-amber-300">{draft.config[s.key]}</span>
+                            <span className="font-mono text-amber-300">{draft.config[s.key] ?? SLIDER_FALLBACK[s.key]}</span>
                         </span>
                         <input type="range" min={s.min} max={s.max} step={s.step} aria-label={s.label}
-                               value={draft.config[s.key]}
+                               value={draft.config[s.key] ?? SLIDER_FALLBACK[s.key] ?? 0}
                                onChange={(e) => setValue(s.key, Number(e.target.value))}
                                className="accent-amber-600"/>
                         <span className="text-[10px] text-boxwood/60 leading-tight">{s.hint}</span>
                     </label>
                 ))}
+
+                <fieldset className="flex flex-col gap-1" data-testid="habits">
+                    <legend className="text-amber-200 font-semibold">{t('workshop.habits.label')}</legend>
+                    <span className="text-[10px] text-boxwood/60 leading-tight">{t('workshop.habits.hint')}</span>
+                    <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                        {HABITS.map((habit) => {
+                            const chosen = (draft.config.habits ?? []).includes(habit);
+                            const full = (draft.config.habits ?? []).length >= MAX_HABITS;
+                            return (
+                                <label key={habit} className="flex items-center gap-1 cursor-pointer">
+                                    <input type="checkbox" checked={chosen} disabled={!chosen && full} className="accent-amber-600"
+                                           data-testid={`habit-${habit}`}
+                                           onChange={() => setDraft((d) => {
+                                               const current = d.config.habits ?? [];
+                                               const next: Habit[] = chosen ? current.filter((h) => h !== habit) : [...current, habit];
+                                               return {...d, config: {...d.config, habits: next}};
+                                           })}/>
+                                    {t(`workshop.habits.items.${habit}`)}
+                                </label>
+                            );
+                        })}
+                    </div>
+                </fieldset>
+                <label className="flex flex-col gap-0.5">
+                    <span className="text-amber-200 font-semibold">{t('workshop.openingStyle.label')}</span>
+                    <select value={draft.config.opening_style ?? 'normal'} data-testid="opening-style"
+                            onChange={(e) => setDraft((d) => ({...d, config: {...d.config, opening_style: e.target.value as OpeningStyle}}))}
+                            className="bg-black/50 rounded px-1 py-1 border border-amber-800/60">
+                        {OPENING_STYLES.map((style) => <option key={style} value={style}>{t(`workshop.openingStyle.items.${style}`)}</option>)}
+                    </select>
+                </label>
 
                 <FavoriteOpeningsPicker white={draft.config.openings_white ?? []} black={draft.config.openings_black ?? []}
                                         onChange={(side, epds) => setDraft((d) => ({
@@ -344,6 +414,9 @@ function isUnchanged(mine: Personality[], draft: Draft): boolean {
 
 /** Сравнение конфигов: у соперников, сохранённых до любимых дебютов (таск 21.2), этих полей нет — это пустые списки. */
 function sameConfig(a: PersonalityConfig, b: PersonalityConfig): boolean {
-    const normal = (c: PersonalityConfig) => JSON.stringify({...c, openings_white: c.openings_white ?? [], openings_black: c.openings_black ?? []});
+    const normal = (c: PersonalityConfig) => JSON.stringify({
+        ...c, openings_white: c.openings_white ?? [], openings_black: c.openings_black ?? [], habits: c.habits ?? [],
+        opening_style: c.opening_style ?? 'normal', draw_attitude: c.draw_attitude ?? 0, passed_pawns: c.passed_pawns ?? 100,
+    });
     return normal(a) === normal(b);
 }

@@ -209,6 +209,18 @@ export function GameControlsPanel({
                             </button>
                         )}
                     </div>
+                    {/* Ничья с ботом (таск 21.4): бот отвечает по оценке позиции и своему отношению к ничьей. */}
+                    {!gameOverResult && historyLength >= 2 && (
+                        <button
+                            type="button"
+                            onClick={onOfferDraw}
+                            disabled={isBotThinking}
+                            data-testid="bot-offer-draw"
+                            className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-acacia-dark text-boxwood-light text-xs font-bold rounded-md hover:bg-black/50 transition shadow border border-amber-700/30 disabled:opacity-40 cursor-pointer"
+                        >
+                            <Handshake size={14}/> {t('controls.offerDraw')}
+                        </button>
+                    )}
 
                     {savedBotGameId && (
                         <div className="grid grid-cols-2 gap-2">
