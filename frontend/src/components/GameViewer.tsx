@@ -41,6 +41,7 @@ import {Puzzle as PuzzleBadgeIcon} from 'lucide-react';
 import {puzzlesApi} from '../services/puzzles';
 import {guessApi} from '../services/guess';
 import {OpeningExplorer} from './OpeningExplorer';
+import {buildPgn, downloadText} from '../services/pgnExport';
 import {XrayPanel} from './xray/XrayPanel';
 import {useXraySettings} from './xray/useXraySettings';
 import type {GameSummary} from '../services/gameSummary';
@@ -1318,6 +1319,21 @@ export default function GameViewer() {
                     )}
                     {showExplorer && !startFen && (
                         <OpeningExplorer moves={history.slice(0, viewIndex + 1).map((m) => `${m.from}${m.to}${m.promotion ?? ''}`)}/>
+                    )}
+                    {analysisReport && history.length > 0 && (
+                        <button type="button" data-testid="download-annotated"
+                                onClick={() => downloadText(`michess-${gameId}-annotated.pgn`, buildPgn({
+                                    headers: pgnHeaders, startFen, result: pgnHeaders.Result,
+                                    moves: history.map((m, i) => {
+                                        const a = analysisReport.moves[i];
+                                        const note = a ? [`[%eval ${a.mate !== null ? `#${a.mate}` : (a.eval_cp / 100).toFixed(2)}]`,
+                                            coachText(a.coach, t)].filter(Boolean).join(' ') : null;
+                                        return {san: m.san, symbol: a?.symbol && a.symbol !== '!' ? a.symbol : '', comment: note};
+                                    }),
+                                }))}
+                                className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-room-dark text-amber-400 font-bold text-sm rounded-md hover:bg-black transition shadow border border-amber-800/60">
+                            <Download size={16}/> {t('tools.exportAnnotated')}
+                        </button>
                     )}
                     {guessFirstId !== null && (
                         <Link to={`/guess/${guessFirstId}`} data-testid="guess-from-game"

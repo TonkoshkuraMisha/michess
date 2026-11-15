@@ -37,7 +37,8 @@ import {
     Scale,
     Puzzle,
     GraduationCap,
-    Eye
+    Eye,
+    Wrench
 } from 'lucide-react';
 import {useI18n} from './i18n';
 import LanguageSwitcher from './components/LanguageSwitcher';
@@ -412,6 +413,15 @@ export default function App() {
                                             className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
                                         >
                                             <Eye size={16} className="text-amber-500"/> {t('watch.title')}
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setIsProfileOpen(false);
+                                                navigate('/tools');
+                                            }}
+                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
+                                        >
+                                            <Wrench size={16} className="text-amber-500"/> {t('tools.title')}
                                         </button>
                                         <button
                                             onClick={() => {

@@ -103,7 +103,14 @@ export function PuzzleBoard({
     const [selection, setSelection] = useState<{ square: string; fen: string } | null>(null);
     const [promotion, setPromotion] = useState<{ from: string; to: string } | null>(null);
     const [drag, setDrag] = useState<Drag | null>(null);
-    const game = useMemo(() => new Chess(fen), [fen]);
+    // Редактор позиции (16.4) показывает и незаконченную расстановку (без королей) — её chess.js без проверки.
+    const game = useMemo(() => {
+        try {
+            return new Chess(fen);
+        } catch {
+            return new Chess(fen, {skipValidation: true});
+        }
+    }, [fen]);
     const selected = selection && selection.fen === fen && interactive && !onSquare ? selection.square : null;
     const themeKey = getSavedBoardThemeKey();
     const pieceSet = getSavedPieceSetKey();

@@ -25,7 +25,7 @@ from src.schemas.analysis import (
     MoveCheckResponse,
     PositionAnalysisRequest,
 )
-from src.services import move_check, opening_explorer
+from src.services import mate_finder, move_check, opening_explorer
 from src.services.analysis_service import (
     GameDataNotFoundError,
     GameNotFinishedError,
@@ -33,11 +33,16 @@ from src.services.analysis_service import (
     ensure_game_finished,
     is_current_analysis,
 )
-from src.services.engine_pool import EngineBusyError, engine_work
+from src.services.engine_pool import EngineBusyError, EngineUnavailableError, engine_work
 from src.services.game_engine import InvalidStartPositionError
 from src.services.game_summary import summarize
 
 router = APIRouter(prefix="/analysis", tags=["Game Analysis"])
+
+
+class FindMateRequest(BaseModel):
+    fen: str = Field(..., max_length=120)
+    moves: int = Field(3, ge=1, le=mate_finder.MAX_MOVES, description="Искать мат не длиннее стольких ходов")
 
 
 class OpeningExplorerRequest(BaseModel):
@@ -95,6 +100,27 @@ async def analyze_game_position(
     except InvalidStartPositionError as exc:
         raise exc.to_http(400) from exc
     except EngineBusyError:
+        raise _engine_busy() from None
+
+
+@router.post(
+    "/find-mate",
+    dependencies=[
+        Depends(rate_limit(
+            "find_mate", "RATE_LIMIT_POSITION_ANALYSIS", "RATE_LIMIT_POSITION_ANALYSIS_GUEST",
+        )),
+        Depends(forbid_engine_help_during_game),
+        Depends(note_ladder_analysis),
+    ],
+)
+async def find_mate(request: FindMateRequest):
+    """«Найти мат» (таск 16.4): мат не длиннее moves ходов и его линия; это движок — под правилом честной игры."""
+    try:
+        with engine_work("analysis"):
+            return await mate_finder.find_mate(request.fen, request.moves)
+    except InvalidStartPositionError as exc:
+        raise exc.to_http(400) from exc
+    except (EngineBusyError, EngineUnavailableError):
         raise _engine_busy() from None
 
 
