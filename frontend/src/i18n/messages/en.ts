@@ -1269,6 +1269,22 @@ export const en = {
         modes: {chosen: 'Choose myself', my_level: 'Random: my level', stronger: 'Random: stronger', weaker: 'Random: weaker'},
         randomHint: 'The server will pick {count} opponents by strength — around your rating for this time control.',
     },
+    explorer: {
+        title: 'Opening explorer',
+        card: 'Opening explorer — which moves are played in a position, how they score, and master games.',
+        noName: 'Starting position',
+        noGames: 'No games in the database reached this position.',
+        move: 'Move',
+        games: 'Games',
+        results: 'White · draws · Black, %',
+        share: 'White wins {white}%, draws {draw}%, Black wins {black}%',
+        masterGames: 'Master games',
+    },
+    tools: {
+        title: 'Tools',
+        back: 'Move back',
+        reset: 'Starting position',
+    },
     guess: {
         title: 'Guess the master\'s move',
         subtitle: 'Positions from champions\' games where the master\'s move can be found by calculation. Make your move — and compare.',
