@@ -1874,6 +1874,16 @@ export const uk: Messages = {
         choose: 'Репертуар',
         addLine: 'Додати цю лінію',
         createFirst: 'Спершу створіть репертуар',
+        deviations: {
+            title: 'Ваш репертуар',
+            youLeft: 'Хід {move} {played}: ви відійшли від «{name}» — тут ваш хід {expected}.',
+            opponentNew: 'Хід {move} {played}: суперник зіграв хід, якого немає в «{name}». Додати відповідь?',
+            end: 'Хід {move}: партія вийшла за межі вашої підготовки в «{name}».',
+            followed: 'Уся партія пройшла за «{name}».',
+            train: 'Потренувати позицію',
+            addAnswer: 'Додати відповідь',
+            open: 'Відкрити в репертуарі',
+        },
         drill: {
             title: 'Тренування репертуару',
             open: 'Тренувати',

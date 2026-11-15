@@ -1870,6 +1870,16 @@ export const en = {
         choose: 'Repertoire',
         addLine: 'Add this line',
         createFirst: 'Create a repertoire first',
+        deviations: {
+            title: 'Your repertoire',
+            youLeft: 'Move {move} {played}: you left “{name}” — your move here is {expected}.',
+            opponentNew: 'Move {move} {played}: the opponent played a move that “{name}” does not have. Add your answer?',
+            end: 'Move {move}: the game went beyond your preparation in “{name}”.',
+            followed: 'The whole game followed “{name}”.',
+            train: 'Train this position',
+            addAnswer: 'Add an answer',
+            open: 'Open in the repertoire',
+        },
         drill: {
             title: 'Repertoire training',
             open: 'Train',
