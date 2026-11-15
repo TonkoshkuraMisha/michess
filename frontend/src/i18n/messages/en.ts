@@ -467,6 +467,26 @@ export const en = {
         lastPage: 'Last page',
     },
     workshop: {
+        habits: {
+            label: 'Habits',
+            hint: 'Recognisable beginner weaknesses — up to three.',
+            items: {hangs_pieces: 'leaves pieces en prise', early_queen: 'brings the queen out early', pawn_grabber: 'grabs pawns',
+                knight_lover: 'loves knights', no_castling: 'never castles', trades_all: 'trades everything'},
+        },
+        openingStyle: {
+            label: 'Opening character',
+            items: {normal: 'ordinary', trapper: 'sets traps', trap_victim: 'falls into traps', gambit: 'gambits', early_queen: 'early queen',
+                drawish: 'drawish: exchange lines', capture_lover: 'loves captures', offbeat: 'unusual first moves'},
+        },
+        filters: {
+            label: 'Show',
+            strength: 'Strength',
+            style: 'Style',
+            any: 'any',
+            strengths: {beginner: 'up to 800', novice: '800–1200', club: '1200–1600', strong: '1600–2000', expert: '2000+'},
+            styles: {weakness: 'with a weakness', attacking: 'attacking', calm: 'calm', opening: 'opening character'},
+            nothing: 'No opponents match the filter.',
+        },
         openings: {
             hint: 'Favorite openings: the opponent plays their moves while the position stays in the line; after a deviation it thinks on its own.',
             white: 'Favorite openings as White',
@@ -476,6 +496,8 @@ export const en = {
             remove: 'Remove {name}',
         },
         sliders: {
+            draw_attitude: {label: 'Attitude to a draw', hint: 'Minus — never agrees and avoids trades when equal. Plus — gladly accepts a draw and trades pieces.'},
+            passed_pawns: {label: 'Passed pawns', hint: 'How eagerly it pushes passed pawns (separately from the pawn structure).'},
             aggression: {
                 label: 'Aggression',
                 hint: 'Plus — checks, sacrifices, play against the king. Minus — prophylaxis and quiet moves.',
@@ -622,6 +644,10 @@ export const en = {
         },
     },
     status: {
+        botDrawAccepted: '{bot} accepted the draw (½-½).',
+        botDrawDeclined: '{bot} declined the draw — play on.',
+        botDrawFailed: 'The opponent could not answer the draw offer. Try again in a moment.',
+        botDrawNotHere: 'In ladder and tournament games a draw happens only on the board.',
         drawOffered: 'Your opponent offers a draw.',
         drawOfferSent: 'You offered a draw…',
         drawDeclined: 'The draw offer was declined.',
@@ -1034,6 +1060,15 @@ export const en = {
             trade: 'A trade by my own scale of values.',
             prophylaxis: 'Prophylaxis: we take active moves away from the opponent.',
             favoriteOpening: 'My favorite opening: {name}.',
+            careless: 'I like this square. What could go wrong?',
+            passedPawn: 'Forward, my passed pawn!',
+            pawnGrab: 'A free pawn? Mine!',
+            openingHabit: 'I know this opening by heart.',
+            earlyQueen: 'The queen is out — let’s attack right away!',
+            knights: 'Knights are my favourite pieces.',
+            drawAccepted: 'I accept the draw. Good game!',
+            drawDeclined: 'No, let’s play on.',
+            drawTooEarly: 'A draw? The game has only just begun — let’s play.',
         },
         // Ход из дебютной книги бота: в скобках — сколько партий архива с этим ходом.
         book: {
@@ -1048,6 +1083,54 @@ export const en = {
     },
     // Архетипы мастерской: id присылает сервер (src/services/bots/archetypes.py).
     archetypes: {
+        blunderer: {
+            name: 'Gaper',
+            bio: 'Moves quickly and cheerfully and often leaves pieces where they can be taken. Look around before you grab — sometimes it is a bait after all.',
+        },
+        queen_rusher: {
+            name: 'Queen Rusher',
+            bio: 'Brings the queen out on the second or third move and attacks f7 at once. Learn to meet an early queen with development.',
+        },
+        trap_victim: {
+            name: 'Simpleton',
+            bio: 'Plays the old opening lines trustingly and falls into the classic traps. A training partner for the opening traps section.',
+        },
+        pawn_grabber: {
+            name: 'Pawn Eater',
+            bio: 'Cannot resist a pawn, even if the king is still in the centre. Punish the greed with development and an attack.',
+        },
+        knight_rider: {
+            name: 'Knight Rider',
+            bio: 'Moves knights whenever possible and forgets about the bishops and rooks. Use the open lines.',
+        },
+        homebody: {
+            name: 'Homebody',
+            bio: 'Never castles: the king stays at home in the centre. Open the centre and go for it.',
+        },
+        trader: {
+            name: 'Trader',
+            bio: 'Exchanges every piece it can and gladly agrees to a draw. Keep the tension and avoid easy trades.',
+        },
+        oddball: {
+            name: 'Oddball',
+            bio: 'Starts with the strangest first moves. Do not be afraid — just follow the opening principles.',
+        },
+        trapper: {
+            name: 'Trapper',
+            bio: 'Steers the opening into well-known traps. Check every capture twice before taking.',
+        },
+        gambiteer: {
+            name: 'Gambiteer',
+            bio: 'Gives up pawns in the opening for a quick attack. Accept wisely or decline calmly.',
+        },
+        peacemaker: {
+            name: 'Peacemaker',
+            bio: 'Exchanges pieces, plays the exchange variations and is always ready to shake hands. Learn to play for a win.',
+        },
+        pawn_pusher: {
+            name: 'Pawn Pusher',
+            bio: 'Its passed pawns always run forward. Learn to blockade them in time.',
+        },
         rusher: {
             name: 'Rusher',
             bio: 'Brings the queen out on move three and looks for mate in two. Sometimes finds it.',

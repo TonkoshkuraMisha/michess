@@ -68,7 +68,7 @@ def test_default_config_is_balanced():
     ("aggression", 101), ("aggression", -101),
     ("center_control", -1), ("mobility", 201), ("king_safety", 201), ("pawn_structure", -1),
     ("randomness", 101), ("blunder_guard_cp", 401), ("blunder_guard_cp", -1),
-    ("target_elo", 599), ("target_elo", 2801),
+    ("target_elo", 299), ("target_elo", 2801),
 ])
 def test_config_bounds(field, value):
     with pytest.raises(ValidationError):

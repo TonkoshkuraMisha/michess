@@ -3,6 +3,7 @@
 import asyncio
 import random
 from datetime import UTC, datetime
+from typing import Literal
 
 import chess
 import chess.pgn
@@ -20,7 +21,7 @@ from src.core.errors import ApiError, DomainError, DomainValueError, validation_
 from src.db import session as db_session
 from src.models.game import Game, GameStatus
 from src.models.user import User
-from src.services import engine_info, openings, product_metrics
+from src.services import engine_info, move_check, openings, product_metrics
 from src.services import ladder as ladder_service
 from src.services import tournaments as tournament_service
 from src.services.bots import calibration as bot_calibration
@@ -29,7 +30,7 @@ from src.services.bots.archetypes import ARCHETYPES, ARCHETYPES_BY_ID, ARCHETYPE
 from src.services.bots.labourdonnais import labourdonnais_bot
 from src.services.bots.morphy import morphy_bot
 from src.services.bots.paulsen import paulsen_bot
-from src.services.bots.personality import BotPersonalityConfig, PersonalityBot
+from src.services.bots.personality import DRAW_OFFER_MIN_MOVE, BotPersonalityConfig, PersonalityBot, draw_answer
 from src.services.bots.philidor import philidor_bot, resolve_stockfish_path
 from src.services.bots.staunton import staunton_bot
 from src.services.bots.zukertort import zukertort_bot
@@ -197,7 +198,8 @@ class BotGameSaveRequest(BaseModel):
     result: str = Field(..., description="Результат партии ('1-0', '0-1', '1/2-1/2')")
     termination: str | None = Field(
         default=None,
-        description="Для незавершённой на доске позиции: 'resignation' (игрок сдался) или 'timeout' (упал флаг)",
+        description="Для незавершённой на доске позиции: 'resignation' (игрок сдался), 'timeout' (упал флаг) или "
+                    "'agreement' (бот принял ничью, таск 21.4; не для лестницы и турнира)",
     )
     moves_uci: list[str] = Field(default_factory=list, max_length=1000, description="Список сделанных ходов в формате UCI")
     start_fen: str | None = Field(
@@ -297,6 +299,9 @@ def resolve_bot_game_outcome(board: chess.Board, payload: BotGameSaveRequest) ->
 
     if payload.termination == "resignation":
         return ("0-1" if payload.player_color == "white" else "1-0"), "resignation"
+
+    if payload.termination == "agreement":
+        return "1/2-1/2", "agreement"
 
     if payload.termination == "timeout":
         if payload.result == "1-0":
@@ -458,6 +463,47 @@ async def get_bot_catalog():
             for a in ARCHETYPES
         ],
     }
+
+
+class DrawOfferRequest(BaseModel):
+    fen: str = Field(..., max_length=100)
+    bot_id: str = Field(..., max_length=40)
+    bot_color: Literal["white", "black"]
+    config: BotPersonalityConfig | None = None
+    personality_id: int | None = None
+
+
+# Отношение исторических мастеров к ничьей (таск 21.4): атакующие романтики соглашаются неохотно.
+HISTORICAL_DRAW_ATTITUDE = {"labourdonnais": -40, "anderssen": -60, "morphy": -40, "zukertort": -20}
+
+
+@router.post("/draw-offer", dependencies=[
+    Depends(rate_limit("bot_move", "RATE_LIMIT_BOT_MOVE")),
+    Depends(forbid_engine_help_during_game),
+])
+async def draw_offer(payload: DrawOfferRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    """
+    Ответ бота на предложение ничьей (таск 21.4): по оценке позиции за бота и его отношению к ничьей. В дебюте
+    (до 10-го хода) бот не соглашается — партия ещё не началась.
+    """
+    board = _playable_board(payload.fen)
+    if payload.bot_id == CUSTOM_BOT_ID:
+        config = payload.config or BotPersonalityConfig()
+        if payload.personality_id is not None:
+            owner = await _bearer_user(request, db)
+            config = personality_config(await get_owned_personality(db, owner.id, payload.personality_id))
+    elif payload.bot_id in BOT_INSTANCES:
+        config = BotPersonalityConfig(draw_attitude=HISTORICAL_DRAW_ATTITUDE.get(payload.bot_id, 0))
+    else:
+        raise ApiError(404, "bot_not_found", bot_id=payload.bot_id)
+    score = None
+    if board.fullmove_number >= DRAW_OFFER_MIN_MOVE:
+        evaluation = await move_check.evaluate_cached(board)
+        if evaluation is None:
+            raise ApiError(503, "engine_busy", headers={"Retry-After": "5"})
+        score = evaluation.cp_white if payload.bot_color == "white" else -evaluation.cp_white
+    accepted, comment = draw_answer(config, score, board.fullmove_number)
+    return {"accepted": accepted, "comment": comment}
 
 
 @router.get("/openings")
@@ -652,6 +698,9 @@ async def save_bot_game(
     # Партию без ходов в архив не пишем — кроме засчитываемых (лестница, турнир), сданных или проигранных по
     # времени до первого хода: иначе турнирная партия осталась бы открытой, а тур — незакрытым.
     counted = ladder_game is not None or tournament_game is not None
+    if counted and payload.termination == "agreement":
+        # Согласие бота на ничью сервер не запоминает — в засчитываемой партии его не подделать.
+        raise ApiError(400, "termination_required")
     if not payload.moves_uci and not (counted and payload.termination in ("resignation", "timeout")):
         raise ApiError(400, "empty_moves")
 

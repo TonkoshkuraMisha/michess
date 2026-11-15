@@ -770,3 +770,47 @@ describe('пометки правой кнопкой (таск B.1)', () => {
         expect(screen.queryByTestId('note-arrow-d7-d5')).toBeNull();
     });
 });
+
+describe('ничья с ботом (таск 21.4)', () => {
+    async function gameWithDrawAnswer(accepted: boolean) {
+        const fetchMock = mockFetchRouter({
+            '/profile/me': () => ({id: 1, username: 'TestPlayer', blitz_rating: 1500}),
+            '/profile/matchmaking/queue': () => [],
+            '/profile/games/live': () => [],
+            '/profile/games/my-active': () => ({active: false}),
+            '/bots/move': () => BOT_MOVE_DEFAULT,
+            '/bots/draw-offer': () => ({accepted, comment: {key: accepted ? 'personality.drawAccepted' : 'personality.drawDeclined', params: {}}}),
+            '/bots/save-game': () => ({game_id: 999, status: 'finished', result: '1/2-1/2'}),
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        renderChessboard();
+        await act(async () => {
+            fireEvent.click(await screen.findByRole('button', {name: /Белыми/}));
+        });
+        clickSquare('e2');
+        clickSquare('e4');
+        await screen.findByText('e5');
+        await act(async () => {
+            fireEvent.click(screen.getByTestId('bot-offer-draw'));
+        });
+        return fetchMock;
+    }
+
+    const call = (fetchMock: ReturnType<typeof mockFetchRouter>, part: string) =>
+        (fetchMock.mock.calls as unknown as [string, RequestInit][]).find(([url]) => String(url).includes(part));
+
+    it('бот принял — ничья по соглашению сохраняется', async () => {
+        const fetchMock = await gameWithDrawAnswer(true);
+        expect(await screen.findByText(/принял ничью/)).toBeInTheDocument();
+        const offer = JSON.parse(String(call(fetchMock, '/bots/draw-offer')![1].body));
+        expect(offer).toMatchObject({bot_id: 'philidor', bot_color: 'black'});
+        await waitFor(() => expect(call(fetchMock, '/bots/save-game')).toBeTruthy());
+        expect(JSON.parse(String(call(fetchMock, '/bots/save-game')![1].body))).toMatchObject({termination: 'agreement', result: '1/2-1/2'});
+    });
+
+    it('бот отклонил — партия продолжается', async () => {
+        const fetchMock = await gameWithDrawAnswer(false);
+        expect(await screen.findByText(/отклонил ничью/)).toBeInTheDocument();
+        expect(call(fetchMock, '/bots/save-game')).toBeUndefined();
+    });
+});

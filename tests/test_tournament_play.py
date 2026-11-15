@@ -73,7 +73,7 @@ def test_players_game_result_goes_into_the_tournament(client, token_user_1, publ
 
 def test_archetype_and_personality_opponents_are_playable(client, token_user_1):
     pid = client.post("/api/v1/bots/personalities", headers=auth(token_user_1),
-                      json={"name": "Gambiteer", "config": {"aggression": 80, "target_elo": 2500}}).json()["id"]
+                      json={"name": "Romantic", "config": {"aggression": 80, "target_elo": 2500}}).json()["id"]
     t = create(client, token_user_1, [
         {"kind": "personality", "id": pid}, {"kind": "archetype", "id": "combinator"}, {"kind": "bot", "id": "morphy"},
     ])

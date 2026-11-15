@@ -16,6 +16,8 @@ from __future__ import annotations
 
 import random
 from dataclasses import dataclass
+from functools import cache
+from typing import Literal
 
 import chess
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -48,7 +50,10 @@ from src.services.bots.style import (
     to,
 )
 
-MIN_TARGET_ELO = 600
+MIN_TARGET_ELO = 300
+# Параметры поиска (уровень, глубина, время) считаются от 600: ниже сила задаётся только долей ошибок (таск 21.4),
+# поэтому соперники 600+ после расширения диапазона играют как раньше.
+SEARCH_FLOOR_ELO = 600
 MAX_TARGET_ELO = 2800
 STOCKFISH_MIN_ELO = 1320
 MAX_SEARCH_DEPTH = 8
@@ -67,16 +72,26 @@ MAX_SEARCH_TIME_S = 0.5
 # 0,207 → 994, 0,133 → 1057 (−106…−193), края в цели (0,387 → 728, 0,064 → 1390). Поточечная подгонка гоняется за
 # шумом (±80…130 на точку), поэтому теперь — прямая, взвешенная по погрешности, по всем 11 точкам трёх прогонов:
 # сила ≈ 1501 − 2091 × доля (остатки в пределах погрешности). Обратно: 0,43 при 600 → 0 при 1500.
-ERROR_RATE_CURVE: tuple[tuple[int, float], ...] = ((600, 0.43), (1500, 0.0))
+# Ниже 600 (таск 21.4) — та же прямая: 300 ↔ 0,57.
+ERROR_RATE_CURVE: tuple[tuple[int, float], ...] = ((300, 0.57), (600, 0.43), (1500, 0.0))
 MAX_ERROR_RATE = ERROR_RATE_CURVE[0][1]
 # Доля грубых зевков (случайный легальный ход) среди управляемых ошибок ниже 1320.
 BLUNDER_SHARE = 1 / 3
 # randomness 100 → разброс ±40 сп между равными кандидатами.
 JITTER_CP_PER_RANDOMNESS = 0.4
+# Отношение к ничьей (таск 21.4): «равенство» — лучший ход в пределах ±0,8; размен фигуры ±40 сп при ±100.
+EQUAL_CP = 80
+TRADE_CP_PER_ATTITUDE = 0.4
 
 
 
 MAX_FAVORITE_OPENINGS = 3
+# Привычки новичков (таск 21.4) и дебютные характеры: коды, тексты — на клиенте (workshop.habits / openingStyles).
+HABITS = ("hangs_pieces", "early_queen", "pawn_grabber", "knight_lover", "no_castling", "trades_all")
+OPENING_STYLES = ("normal", "trapper", "trap_victim", "gambit", "early_queen", "drawish", "capture_lover", "offbeat")
+Habit = Literal["hangs_pieces", "early_queen", "pawn_grabber", "knight_lover", "no_castling", "trades_all"]
+OpeningStyle = Literal["normal", "trapper", "trap_victim", "gambit", "early_queen", "drawish", "capture_lover",
+                       "offbeat"]
 
 
 class PieceValues(BaseModel):
@@ -120,6 +135,12 @@ class BotPersonalityConfig(BaseModel):
     # Любимые дебюты (таск 21.2): позиции (EPD) записей открытой таблицы дебютов, до трёх за каждый цвет.
     openings_white: list[str] = Field(default_factory=list, max_length=MAX_FAVORITE_OPENINGS)
     openings_black: list[str] = Field(default_factory=list, max_length=MAX_FAVORITE_OPENINGS)
+    # Таск 21.4: привычки (слабости новичков), дебютный характер, отношение к ничьей (-100 — никогда не соглашается,
+    # +100 — охотно) и проходные пешки (100 — как у всех; отдельно от пешечной структуры).
+    habits: list[Habit] = Field(default_factory=list, max_length=3)
+    opening_style: OpeningStyle = "normal"
+    draw_attitude: int = Field(0, ge=-100, le=100)
+    passed_pawns: int = Field(100, ge=0, le=200)
 
     @field_validator("openings_white", "openings_black")
     @classmethod
@@ -153,7 +174,7 @@ def _error_rate(elo: int) -> float:
 def strength_for(target_elo: int) -> Strength:
     """Параметры поиска по целевому рейтингу; клиент их не задаёт."""
     elo = max(MIN_TARGET_ELO, min(MAX_TARGET_ELO, target_elo))
-    t = (elo - MIN_TARGET_ELO) / (MAX_TARGET_ELO - MIN_TARGET_ELO)
+    t = (max(elo, SEARCH_FLOOR_ELO) - SEARCH_FLOOR_ELO) / (MAX_TARGET_ELO - SEARCH_FLOOR_ELO)
     error_rate = _error_rate(elo)
     return Strength(
         uci_elo=max(STOCKFISH_MIN_ELO, elo),
@@ -261,7 +282,104 @@ def build_style(config: BotPersonalityConfig) -> Style:
     if not config.piece_values.is_standard():
         rules.append(Rule(ALWAYS, _material_perception(config.piece_values), "personality.trade"))
 
+    passed = (config.passed_pawns - 100) / 100.0
+    if passed:
+        rules.append(Rule(PASSED_PAWN_PUSH, 35.0 * passed, "personality.passedPawn" if passed > 0 else None))
+
+    rules += _habit_rules(config)
     return Style("personality", *rules, note_by_weight=True)
+
+
+def _passed_pawn_push(c: MoveContext) -> bool:
+    """Ход пешкой, после которого она проходная: впереди на своей и соседних вертикалях нет пешек соперника."""
+    if c.piece is None or c.piece.piece_type != chess.PAWN:
+        return False
+    square = c.move.to_square
+    file, rank = chess.square_file(square), chess.square_rank(square)
+    ahead = range(rank + 1, 8) if c.us == chess.WHITE else range(0, rank)
+    for enemy in c.board_after.pieces(chess.PAWN, not c.us):
+        if abs(chess.square_file(enemy) - file) <= 1 and chess.square_rank(enemy) in ahead:
+            return False
+    return True
+
+
+def _captures(*types: int) -> Cond:
+    return Cond(lambda c: c.captured_piece_type in types)
+
+
+PASSED_PAWN_PUSH = Cond(_passed_pawn_push)
+HANGING = ~piece(chess.PAWN, chess.KING) & Cond(lambda c: c.destination_attacked) & ~CAPTURE
+
+
+def _habit_rules(config: BotPersonalityConfig) -> list[Rule]:
+    """Привычки новичков и дебютный характер (таск 21.4) — бонусы в сантипешках поверх оценки движка."""
+    rules: list[Rule] = []
+    habits = set(config.habits)
+    style = config.opening_style
+    if "hangs_pieces" in habits:
+        rules.append(Rule(HANGING, 70.0, "personality.careless"))
+    if "early_queen" in habits or style == "early_queen":
+        rules.append(Rule(piece(chess.QUEEN) & by_move(10), 80.0, "personality.earlyQueen"))
+    if "pawn_grabber" in habits:
+        rules.append(Rule(_captures(chess.PAWN), 90.0, "personality.pawnGrab"))
+    if "knight_lover" in habits:
+        rules += [Rule(piece(chess.KNIGHT), 45.0, "personality.knights"),
+                  Rule(piece(chess.BISHOP, chess.ROOK, chess.QUEEN) & ~CAPTURE, -15.0)]
+    if "no_castling" in habits:
+        rules.append(Rule(CASTLING, -250.0))
+    if "trades_all" in habits:
+        rules.append(Rule(_captures(chess.KNIGHT, chess.BISHOP, chess.ROOK, chess.QUEEN), 80.0, "personality.trade"))
+    if style == "capture_lover":
+        rules.append(Rule(CAPTURE & by_move(15), 50.0, "personality.trade"))
+    return rules
+
+
+def _style_match(style: str, line: openings.OpeningLine) -> bool:
+    """Линии характера, которые играются за оба цвета: гамбиты, разменные варианты, необычные начала."""
+    if style == "gambit":
+        return "Gambit" in line.name and "Declined" not in line.name
+    if style == "drawish":
+        return "Exchange Variation" in line.name
+    return style == "offbeat" and line.eco in ("A00", "B00")
+
+
+@cache
+def style_lines(style: str) -> tuple[tuple[chess.Color | None, tuple[str, ...], str], ...]:
+    """
+    Линии таблицы дебютов для дебютного характера: (за какой цвет их играть — None за оба, ходы, название).
+    Ловушки — записи с «Trap» в названии: ставящий ловушку — сторона последнего хода линии, попадающийся — другая.
+    """
+    found: list[tuple[chess.Color | None, tuple[str, ...], str]] = []
+    for line in openings.lines().values():
+        if not line.moves:
+            continue
+        springer = chess.WHITE if len(line.moves) % 2 else chess.BLACK
+        if style in ("trapper", "trap_victim") and "Trap" in line.name:
+            found.append((springer if style == "trapper" else not springer, line.moves, line.name))
+        elif _style_match(style, line):
+            found.append((None, line.moves, line.name))
+    return tuple(found)
+
+
+def accepts_draw(config: BotPersonalityConfig, score_cp: int) -> bool:
+    """
+    Ответ на предложение ничьей (таск 21.4). score_cp — оценка позиции за бота. Обычный соперник соглашается в
+    равной или худшей позиции (до +0,3), миролюбивый — даже с перевесом до +2, непримиримый (-100) — никогда.
+    """
+    if config.draw_attitude <= -100:
+        return False
+    return score_cp <= 30 + round(1.7 * config.draw_attitude)
+
+
+DRAW_OFFER_MIN_MOVE = 10
+
+
+def draw_answer(config: BotPersonalityConfig, score_cp: int | None, move_number: int) -> tuple[bool, dict]:
+    """Ответ и реплика: в дебюте (до 10-го хода) — «рано», дальше — по оценке и отношению к ничьей."""
+    if move_number < DRAW_OFFER_MIN_MOVE or score_cp is None:
+        return False, bot_comment("personality.drawTooEarly")
+    accepted = accepts_draw(config, score_cp)
+    return accepted, bot_comment("personality.drawAccepted" if accepted else "personality.drawDeclined")
 
 
 def default_comment_for(config: BotPersonalityConfig) -> str:
@@ -278,15 +396,22 @@ def favorite_moves(config: BotPersonalityConfig) -> dict[str, list[tuple[str, st
     дебюты — когда бот играет белыми, чёрные — чёрными; по позиции, поэтому перестановки ходов тоже ведут в линию.
     """
     table = openings.lines()
+    sources: list[tuple[chess.Color | None, tuple[str, ...], str]] = []
+    for own, epds in ((chess.WHITE, config.openings_white), (chess.BLACK, config.openings_black)):
+        sources += [(own, table[epd].moves, table[epd].name) for epd in epds]
+    # Свои любимые дебюты важнее линий характера: при выбранных дебютах характер добавляет линии, а не заменяет.
+    # Линии характера — без названия: реплика не должна выдавать ловушку («… Trap»).
+    sources += [(color, line_moves, "") for color, line_moves, _ in style_lines(config.opening_style)]
     moves: dict[str, list[tuple[str, str]]] = {}
-    for color, epds in ((chess.WHITE, config.openings_white), (chess.BLACK, config.openings_black)):
-        for epd in epds:
-            line = table[epd]
-            board = chess.Board()
-            for uci in line.moves:
-                if board.turn == color:
-                    moves.setdefault(board.epd(), []).append((uci, line.name))
-                board.push_uci(uci)
+    for color, line_moves, name in sources:
+        board = chess.Board()
+        for uci in line_moves:
+            if color is None or board.turn == color:
+                entry = (uci, name)
+                bucket = moves.setdefault(board.epd(), [])
+                if entry not in bucket:
+                    bucket.append(entry)
+            board.push_uci(uci)
     return moves
 
 
@@ -321,7 +446,21 @@ class PersonalityBot(HistoricalBot):
         if not options:
             return None
         move, name = random.choice(options)
+        if not name:
+            return move, bot_comment("personality.openingHabit")
         return move, bot_comment("personality.favoriteOpening", name=name)
+
+    def _draw_attitude(self, board: chess.Board, scores: dict[chess.Move, float]) -> dict[chess.Move, float]:
+        """При равенстве (лучший ход в пределах ±0,8) миролюбивый охотнее меняет фигуры, непримиримый — избегает."""
+        attitude = self.config.draw_attitude
+        if not attitude or not scores or abs(max(scores.values())) > EQUAL_CP:
+            return scores
+        adjusted = dict(scores)
+        for move in scores:
+            captured = board.piece_at(move.to_square)
+            if captured is not None and captured.piece_type != chess.PAWN and board.is_capture(move):
+                adjusted[move] += TRADE_CP_PER_ATTITUDE * attitude
+        return adjusted
 
     def _select_move(
             self, board: chess.Board, scores: dict[chess.Move, float], reference: chess.Move | None = None,
@@ -329,6 +468,7 @@ class PersonalityBot(HistoricalBot):
         # Управляемая ошибка у слабых (кривая ERROR_RATE_CURVE). Линии MultiPV часто почти равны лучшей — «ошибка»
         # среди них почти ничего не стоила (калибровка 13.11: «Торопыга» с целью 700 играл на ~1150). Теперь ошибка —
         # ход из худшей половины линий, а в BLUNDER_SHARE случаев — случайный легальный ход: грубый зевок, как у новичка.
+        scores = self._draw_attitude(board, scores)
         if self.strength.error_rate and len(scores) > 1 and random.random() < self.strength.error_rate:
             if random.random() < BLUNDER_SHARE:
                 weaker = random.choice(list(board.legal_moves))

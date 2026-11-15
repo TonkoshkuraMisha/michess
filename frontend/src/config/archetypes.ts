@@ -106,7 +106,7 @@ export function styleRadar(config: PersonalityConfig): { key: RadarAxis; axis: s
  * подобрана по калибровке). Совпадение чисел проверяет tests/test_personality_bot.py.
  */
 export const ERROR_RATE_CURVE: readonly (readonly [number, number])[] = [
-    [600, 0.43], [1500, 0.0],
+    [300, 0.57], [600, 0.43], [1500, 0.0],
 ];
 
 export function errorRate(elo: number): number {
@@ -119,6 +119,31 @@ export function errorRate(elo: number): number {
         }
     }
     return 0;
+}
+
+// --- Фильтры выбора соперника (таск 21.4) ----------------------------------------------------
+
+export const STRENGTH_BUCKETS = ['beginner', 'novice', 'club', 'strong', 'expert'] as const;
+export type StrengthBucket = typeof STRENGTH_BUCKETS[number];
+export const STYLE_TAGS = ['weakness', 'attacking', 'calm', 'opening'] as const;
+export type StyleTag = typeof STYLE_TAGS[number];
+
+export function strengthBucket(rating: number): StrengthBucket {
+    if (rating < 800) return 'beginner';
+    if (rating < 1200) return 'novice';
+    if (rating < 1600) return 'club';
+    if (rating < 2000) return 'strong';
+    return 'expert';
+}
+
+/** Метки стиля соперника по его конфигу: слабость, атака, спокойствие, дебютный характер. */
+export function styleTags(config: PersonalityConfig): StyleTag[] {
+    const tags: StyleTag[] = [];
+    if ((config.habits ?? []).length > 0) tags.push('weakness');
+    if (config.aggression >= 30) tags.push('attacking');
+    if (config.aggression <= -30) tags.push('calm');
+    if ((config.opening_style ?? 'normal') !== 'normal') tags.push('opening');
+    return tags;
 }
 
 /** Пояснение силы: доля ошибок — по той же кривой, что на сервере. */

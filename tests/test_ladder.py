@@ -10,7 +10,7 @@ import pytest
 from src.services import ladder
 from src.services.bots import base as bots_base
 from src.services.bots import calibration
-from src.services.bots.archetypes import ARCHETYPES
+from src.services.bots.archetypes import ARCHETYPES, LADDER_ARCHETYPES
 
 API = "/api/v1/bots"
 FOOLS_MATE = ["f2f3", "e7e5", "g2g4", "d8h4"]  # мат белым на 4-м полуходе
@@ -79,7 +79,7 @@ def save(client, token, opponent: dict, moves: list[str], color: str, result: st
 
 def test_rungs_are_ordered_by_measured_strength(fake_calibration):
     items = ladder.rungs()
-    assert len(items) == 7 + len(ARCHETYPES)
+    assert len(items) == 7 + len(LADDER_ARCHETYPES)
     assert [r.rating for r in items] == sorted(r.rating for r in items)
     assert items[0].key == "archetype:rusher" and items[0].measured and items[0].rating == 650
     morphy = next(r for r in items if r.key == "morphy")
