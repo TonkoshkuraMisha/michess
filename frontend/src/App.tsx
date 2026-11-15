@@ -263,7 +263,7 @@ export default function App() {
                             ♞
                         </div>
                         <span
-                            className="hidden min-[380px]:inline text-2xl font-extrabold tracking-wide text-boxwood-light group-hover:text-white transition">
+                            className={`hidden ${token && userProfile ? "sm:inline" : "min-[380px]:inline"} text-2xl font-extrabold tracking-wide text-boxwood-light group-hover:text-white transition`}>
                             michess
                         </span>
                     </Link>
@@ -411,7 +411,7 @@ export default function App() {
                         <>
                             <div
                                 onClick={() => setIsProfileOpen(!isProfileOpen)}
-                                className="flex items-center gap-2.5 pl-3 border-l border-amber-900/50 cursor-pointer hover:opacity-90 transition select-none py-1 px-2.5 rounded-md hover:bg-black/25"
+                                className="flex items-center gap-1.5 sm:gap-2.5 border-l border-amber-900/50 cursor-pointer hover:opacity-90 transition select-none py-1 pl-1.5 pr-1 sm:pl-3 sm:pr-2.5 rounded-md hover:bg-black/25"
                             >
                                 <img
                                     src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${encodeURIComponent(username)}&backgroundColor=D0A972`}
