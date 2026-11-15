@@ -23,7 +23,9 @@ router = APIRouter(dependencies=[Depends(rate_limit("trainers", "RATE_LIMIT_PUZZ
 TRAINERS = ("quiet_path", "double_strike", "knight_route", "tail",
             "coord_find", "coord_name", "coord_color", "coord_diagonal",
             # Память (19.3): «Восстанови позицию» и «Запомни партию».
-            "memory_position", "memory_game")
+            "memory_position", "memory_game",
+            # Головоломки на доске (19.4): уровень расстановки — номер задачи, обхода — размер доски (3 — 8×8).
+            "board_placement", "knight_tour")
 MAX_LEVEL = 20
 HISTORY = 50
 

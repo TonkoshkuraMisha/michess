@@ -70,3 +70,18 @@ def test_club_title():
     assert achievements.title(user) == "amateur"   # лучший рейтинг теперь 1200 (в других категориях)
     user.bullet_rating = user.rapid_rating = user.classical_rating = 800
     assert achievements.title(user) == "beginner"
+
+
+async def test_closed_knight_tour(db_session, test_user_1):
+    """Таск 19.4: замкнутый обход конём 8×8 — тренажёр пишет больше 100 очков; открытый и малые доски не считаются."""
+    from src.models.trainer import TrainerResult
+
+    db_session.add_all([
+        TrainerResult(user_id=test_user_1.id, trainer="knight_tour", level=3, score=100, time_ms=1, mistakes=0),
+        TrainerResult(user_id=test_user_1.id, trainer="knight_tour", level=1, score=200, time_ms=1, mistakes=0),
+    ])
+    await db_session.commit()
+    assert by_code(await achievements.evaluate(db_session, test_user_1))["knight_tour_closed"]["earned_at"] is None
+    db_session.add(TrainerResult(user_id=test_user_1.id, trainer="knight_tour", level=3, score=180, time_ms=1, mistakes=0))
+    await db_session.commit()
+    assert by_code(await achievements.evaluate(db_session, test_user_1))["knight_tour_closed"]["earned_at"]
