@@ -1343,7 +1343,7 @@ export const uk: Messages = {
         createFailed: 'Не вдалося створити турнір',
         newTournament: 'Новий турнір',
         format: 'Формат',
-        formats: {round_robin: 'Коловий', knockout: 'На вибування'},
+        formats: {round_robin: 'Коловий', knockout: 'На вибування', swiss: 'Швейцарська'},
         size: 'Учасників',
         opponents: 'Суперники',
         chooseOpponents: plural({
@@ -1369,6 +1369,7 @@ export const uk: Messages = {
         schedule: 'Партії',
         points: 'Очки',
         sonnebornBerger: 'КЗБ',
+        buchholz: 'Бухгольц',
         player: 'Учасник',
         playMyGame: 'Грати мою партію',
         botsPlaying: 'Інші партії туру ще йдуть…',

@@ -1343,7 +1343,7 @@ export const ru: Messages = {
         createFailed: 'Не удалось создать турнир',
         newTournament: 'Новый турнир',
         format: 'Формат',
-        formats: {round_robin: 'Круговой', knockout: 'На выбывание'},
+        formats: {round_robin: 'Круговой', knockout: 'На выбывание', swiss: 'Швейцарская'},
         size: 'Участников',
         opponents: 'Соперники',
         chooseOpponents: plural({
@@ -1369,6 +1369,7 @@ export const ru: Messages = {
         schedule: 'Партии',
         points: 'Очки',
         sonnebornBerger: 'КЗБ',
+        buchholz: 'Бухгольц',
         player: 'Участник',
         playMyGame: 'Играть мою партию',
         botsPlaying: 'Остальные партии тура ещё идут…',
