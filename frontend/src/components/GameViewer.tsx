@@ -3,13 +3,7 @@
 import {useState, useEffect, useRef, useMemo, useCallback} from 'react';
 import {useParams, useLocation, Link} from 'react-router-dom';
 import {Chess} from 'chess.js';
-import {
-    AreaChart, Area, XAxis, YAxis, Tooltip, ReferenceLine, ResponsiveContainer
-} from 'recharts';
-import {
-    ChevronFirst, ChevronLeft, ChevronRight, ChevronLast, ArrowLeft,
-    Download, Loader2, Sword, RefreshCw, Palette, Cpu, Sparkles, X, Volume2, VolumeX, GraduationCap, Crown
-} from 'lucide-react';
+import {ArrowLeft, Download, Loader2, Sword, Palette, Cpu, Sparkles, Volume2, VolumeX, Crown} from 'lucide-react';
 import {format, parseISO} from 'date-fns';
 import {
     BOARD_THEMES,
@@ -23,7 +17,6 @@ import {soundEngine, resolveMoveSound} from '../services/soundEngine';
 import {customStartFen, pairHalfMoves} from './chessboard/boardUtils';
 import type {SoundEventType} from '../services/soundEngine';
 import {
-    PIECE_SETS,
     getAnalysisBoardThemeKey,
     getAnalysisPieceSetKey,
     hasAnalysisAppearance,
@@ -37,118 +30,26 @@ import {renderUiMessage, uiMessage, useI18n} from '../i18n';
 import type {UiMessage} from '../i18n';
 import {displayPlayerName} from '../config/players';
 import {coachArrows, coachHighlights, coachText} from '../services/coach';
-import type {CoachArrowKind, CoachComment} from '../services/coach';
+import type {CoachArrowKind} from '../services/coach';
 import {AnnotationsOverlay, useBoardAnnotations} from './chessboard/annotations';
 import {isSummaryKind} from '../services/gameSummary';
 import {XrayOverlay} from './xray/XrayOverlay';
-import {Puzzle as PuzzleBadgeIcon} from 'lucide-react';
 import {puzzlesApi} from '../services/puzzles';
 import {guessApi} from '../services/guess';
 import {OpeningExplorer} from './OpeningExplorer';
 import {buildPgn, downloadText} from '../services/pgnExport';
 import {XrayPanel} from './xray/XrayPanel';
 import {useXraySettings} from './xray/useXraySettings';
-import type {GameSummary} from '../services/gameSummary';
 import {getToken} from '../services/authToken';
 
-const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
-const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
-
-interface MoveEvaluationItem {
-    ply: number;
-    move_number: number;
-    color: string;
-    san: string;
-    uci: string;
-    eval_cp: number;
-    eval_display: string;
-    mate: number | null;
-    best_move_uci: string | null;
-    cp_loss: number;
-    classification: string;
-    symbol: string;
-    /** Комментарий наставника (формат разбора 2+); null — сказать нечего или движок был недоступен. */
-    coach?: CoachComment | null;
-}
-
-interface SideSummaryStats {
-    accuracy: number;
-    best: number;
-    good: number;
-    inaccuracies: number;
-    mistakes: number;
-    blunders: number;
-    avg_cp_loss: number;
-    /** Точность по фазам (таск B.5); null — в этой фазе ходов не было; нет поля — старый разбор. */
-    phases?: Partial<Record<GamePhase, number | null>>;
-}
-
-type GamePhase = 'opening' | 'middlegame' | 'endgame';
-const GAME_PHASES: GamePhase[] = ['opening', 'middlegame', 'endgame'];
-
-interface FullGameAnalysisReport {
-    game_id: number;
-    engine: string;
-    white: SideSummaryStats;
-    black: SideSummaryStats;
-    moves: MoveEvaluationItem[];
-    /** Итог партии (таск 11.5): тип партии по графику оценки. */
-    summary?: GameSummary | null;
-}
-
-/** Цвета стрелок наставника: зелёная — лучший ход, красная — угроза соперника, синяя — идея. */
-const COACH_ARROW_COLORS: Record<CoachArrowKind, string> = {
-    best: 'rgba(16, 185, 129, 0.88)',
-    threat: 'rgba(244, 63, 94, 0.88)',
-    idea: 'rgba(56, 189, 248, 0.88)',
-};
-
-const PIECE_MAT_VALUES: Record<string, number> = {p: 100, n: 320, b: 330, r: 500, q: 900, k: 0};
-
-function computeStaticWhiteEvalCp(gameInstance: Chess): { cp: number; display: string } {
-    if (gameInstance.isCheckmate()) {
-        const whiteMated = gameInstance.turn() === 'w';
-        return {
-            cp: whiteMated ? -1000 : 1000,
-            display: whiteMated ? '-M1' : 'M1'
-        };
-    }
-    if (gameInstance.isDraw()) {
-        return {cp: 0, display: '0.0'};
-    }
-    let score = 0;
-    for (const row of gameInstance.board()) {
-        for (const cell of row) {
-            if (!cell) continue;
-            const v = PIECE_MAT_VALUES[cell.type] || 0;
-            score += cell.color === 'w' ? v : -v;
-        }
-    }
-    const pawns = score / 100;
-    const sign = pawns > 0 ? '+' : '';
-    return {cp: score, display: `${sign}${pawns.toFixed(1)}`};
-}
-
-function evalCpToWhitePercentage(evalCp: number): number {
-    const clamped = Math.max(-1000, Math.min(1000, evalCp));
-    const pct = 50 + (clamped / 1000) * 46;
-    return Math.max(4, Math.min(96, Math.round(pct)));
-}
-
-function classificationBadgeClass(classification?: string): string {
-    switch (classification) {
-        case 'Best':
-            return 'text-emerald-400 font-extrabold';
-        case 'Inaccuracy':
-            return 'text-sky-400 font-bold';
-        case 'Mistake':
-            return 'text-amber-400 font-bold';
-        case 'Blunder':
-            return 'text-rose-400 font-extrabold';
-        default:
-            return 'text-boxwood/70';
-    }
-}
+import {
+    COACH_ARROW_COLORS, FILES, RANKS, annotatedMoves, chartPoints, computeStaticWhiteEvalCp, evalCpToWhitePercentage,
+} from './gameViewer/viewerModel';
+import type {FullGameAnalysisReport} from './gameViewer/viewerModel';
+import {CoachCommentBox, CriticalMoments, EvalChart, SideStatsCard} from './gameViewer/AnalysisSummary';
+import {MoveList} from './gameViewer/MoveList';
+import {NavigationControls} from './gameViewer/NavigationControls';
+import {ViewerAppearancePanel} from './gameViewer/ViewerAppearancePanel';
 
 export default function GameViewer() {
     const {t, dateLocale} = useI18n();
@@ -199,7 +100,6 @@ export default function GameViewer() {
     const notationScrollRef = useRef<HTMLDivElement>(null);
 
     const activeTheme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
-    const activePieceSet = PIECE_SETS[pieceSetKey] || PIECE_SETS.merida;
 
     const playAudio = useCallback((type: SoundEventType) => {
         soundEngine.play(type);
@@ -479,17 +379,7 @@ export default function GameViewer() {
     const visibleCoachArrows = showCoachArrows ? coachArrows(currentCoach) : [];
     const coachTargets = showCoachArrows ? coachHighlights(currentCoach) : new Set<string>();
 
-    const chartData = useMemo(() => {
-        if (!analysisReport) return [];
-        return analysisReport.moves.map((m, idx) => ({
-            idx,
-            ply: m.ply,
-            label: `${m.move_number}${m.color === 'white' ? '.' : '...'} ${m.san}`,
-            evalPawns: Number((Math.max(-1000, Math.min(1000, m.eval_cp)) / 100).toFixed(2)),
-            display: m.eval_display,
-            classification: m.classification
-        }));
-    }, [analysisReport]);
+    const chartData = useMemo(() => chartPoints(analysisReport), [analysisReport]);
 
     const renderPieceSvg = (piece: { type: string; color: string }) => {
         const styleProps = getHarmoniousPieceStyle(pieceSetKey, boardThemeKey, piece.color);
@@ -879,52 +769,8 @@ export default function GameViewer() {
                 </div>
 
                 {showAppearancePanel && (
-                    <div
-                        className="bg-acacia-dark p-3 rounded-md border border-amber-700/50 flex flex-col gap-2 shadow-lg shrink-0">
-                        <div className="flex justify-between items-center text-xs text-boxwood/90">
-                            <span className="font-bold">{t('viewer.piecesLabel')} <span
-                                className="text-amber-400">{activePieceSet.name}</span></span>
-                            <button
-                                type="button"
-                                onClick={() => setShowAppearancePanel(false)}
-                                className="text-boxwood/60 hover:text-white cursor-pointer"
-                            >
-                                <X size={14}/>
-                            </button>
-                        </div>
-                        <div className="grid grid-cols-5 gap-1">
-                            {Object.values(PIECE_SETS).map((pset) => (
-                                <button
-                                    key={pset.id}
-                                    type="button"
-                                    onClick={() => handlePieceSetChange(pset.id)}
-                                    className={`py-1 px-1 rounded border text-xs font-bold transition cursor-pointer truncate ${
-                                        pset.id === activePieceSet.id
-                                            ? 'bg-amber-900/50 border-amber-400 text-amber-200'
-                                            : 'bg-black/35 border-amber-900/40 text-boxwood/75 hover:text-amber-200'
-                                    }`}
-                                >
-                                    {pset.shortName}
-                                </button>
-                            ))}
-                        </div>
-                        <div className="grid grid-cols-5 gap-1 pt-1 border-t border-amber-900/30">
-                            {Object.values(BOARD_THEMES).map((theme) => (
-                                <button
-                                    key={theme.id}
-                                    type="button"
-                                    onClick={() => handleThemeChange(theme.id)}
-                                    className={`py-1 px-1 rounded border text-xs font-bold transition cursor-pointer truncate ${
-                                        theme.id === activeTheme.id
-                                            ? 'bg-amber-900/50 border-amber-400 text-amber-200'
-                                            : 'bg-black/35 border-amber-900/40 text-boxwood/75 hover:text-amber-200'
-                                    }`}
-                                >
-                                    {theme.name}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
+                    <ViewerAppearancePanel pieceSetKey={pieceSetKey} themeKey={activeTheme.id} onPieceSetChange={handlePieceSetChange}
+                                           onThemeChange={handleThemeChange} onClose={() => setShowAppearancePanel(false)}/>
                 )}
 
                 <div
@@ -960,148 +806,18 @@ export default function GameViewer() {
                                     <span className="text-boxwood/80">{t(`summary.kinds.${analysisReport.summary.kind}.text`)}</span>
                                 </div>
                             )}
-                            {analysisReport.summary && (() => {
-                                // Критические моменты (таск B.5): перелом, худшие ходы сторон, упущенные удары.
-                                const summary = analysisReport.summary;
-                                const moments: { ply: number; key: 'turning' | 'worstWhite' | 'worstBlack' | 'missed' }[] = [];
-                                if (summary.turning_point_ply) moments.push({ply: summary.turning_point_ply, key: 'turning'});
-                                if (summary.white.worst_ply) moments.push({ply: summary.white.worst_ply, key: 'worstWhite'});
-                                if (summary.black.worst_ply) moments.push({ply: summary.black.worst_ply, key: 'worstBlack'});
-                                for (const item of summary.missed ?? []) moments.push({ply: item.ply, key: 'missed'});
-                                const shown = moments
-                                    .filter((m, i) => moments.findIndex((o) => o.ply === m.ply) === i)
-                                    .filter((m) => analysisReport.moves[m.ply - 1])
-                                    .sort((a, b) => a.ply - b.ply);
-                                if (shown.length === 0) return null;
-                                return (
-                                    <div className="text-xs p-2 rounded bg-black/40 border border-amber-900/40 flex flex-col gap-1"
-                                         data-testid="viewer-moments">
-                                        <span className="font-bold text-amber-200">{t('viewer.moments.title')}</span>
-                                        {shown.map((moment) => {
-                                            const move = analysisReport.moves[moment.ply - 1];
-                                            const label = `${move.move_number}${move.color === 'white' ? '.' : '…'} ${move.san}`;
-                                            return (
-                                                <button key={moment.ply} type="button" data-testid={`moment-${moment.ply}`}
-                                                        onClick={() => setViewIndex(moment.ply - 1)}
-                                                        className={`text-left px-1.5 py-0.5 rounded hover:bg-black/40 cursor-pointer ${viewIndex === moment.ply - 1 ? 'bg-amber-900/50' : ''}`}>
-                                                    <span className="text-boxwood/70">{t(`viewer.moments.${moment.key}`)}</span>
-                                                    {' '}<b className="font-mono text-amber-100">{label}</b>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                );
-                            })()}
+                            <CriticalMoments report={analysisReport} viewIndex={viewIndex} onSelect={setViewIndex}/>
                             <div className="grid grid-cols-2 gap-2 text-xs">
-                                <div className="p-2 rounded bg-black/40 border border-amber-900/40 flex flex-col gap-1">
-                                    <div className="flex justify-between items-center">
-                                        <span className="font-bold text-amber-200 truncate">♔ {whiteName}</span>
-                                        <span className="font-mono font-extrabold text-sm text-emerald-400">
-                                            {analysisReport.white.accuracy}%
-                                        </span>
-                                    </div>
-                                    <div
-                                        className="flex items-center justify-between text-[11px] font-mono text-boxwood/80">
-                                        <span className="text-emerald-400"
-                                              title={t('viewer.bestMoves')}>! {analysisReport.white.best}</span>
-                                        <span className="text-sky-400"
-                                              title={t('viewer.inaccuracies')}>?! {analysisReport.white.inaccuracies}</span>
-                                        <span className="text-amber-400"
-                                              title={t('viewer.mistakes')}>? {analysisReport.white.mistakes}</span>
-                                        <span className="text-rose-400 font-bold"
-                                              title={t('viewer.blunders')}>?? {analysisReport.white.blunders}</span>
-                                    </div>
-                                    {analysisReport.white.phases && (
-                                        <div className="flex justify-between text-[11px] text-boxwood/80"
-                                             data-testid="viewer-phases-white">
-                                            {GAME_PHASES.map((phase) => (
-                                                <span key={phase} title={t(`viewer.phases.${phase}`)}>
-                                                    {t(`viewer.phasesShort.${phase}`)}{' '}
-                                                    <b className="font-mono">
-                                                        {analysisReport.white.phases?.[phase] != null
-                                                            ? `${analysisReport.white.phases?.[phase]}%` : '—'}
-                                                    </b>
-                                                </span>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-
-                                <div className="p-2 rounded bg-black/40 border border-amber-900/40 flex flex-col gap-1">
-                                    <div className="flex justify-between items-center">
-                                        <span className="font-bold text-amber-200 truncate">♚ {blackName}</span>
-                                        <span className="font-mono font-extrabold text-sm text-emerald-400">
-                                            {analysisReport.black.accuracy}%
-                                        </span>
-                                    </div>
-                                    <div
-                                        className="flex items-center justify-between text-[11px] font-mono text-boxwood/80">
-                                        <span className="text-emerald-400"
-                                              title={t('viewer.bestMoves')}>! {analysisReport.black.best}</span>
-                                        <span className="text-sky-400"
-                                              title={t('viewer.inaccuracies')}>?! {analysisReport.black.inaccuracies}</span>
-                                        <span className="text-amber-400"
-                                              title={t('viewer.mistakes')}>? {analysisReport.black.mistakes}</span>
-                                        <span className="text-rose-400 font-bold"
-                                              title={t('viewer.blunders')}>?? {analysisReport.black.blunders}</span>
-                                    </div>
-                                    {analysisReport.black.phases && (
-                                        <div className="flex justify-between text-[11px] text-boxwood/80"
-                                             data-testid="viewer-phases-black">
-                                            {GAME_PHASES.map((phase) => (
-                                                <span key={phase} title={t(`viewer.phases.${phase}`)}>
-                                                    {t(`viewer.phasesShort.${phase}`)}{' '}
-                                                    <b className="font-mono">
-                                                        {analysisReport.black.phases?.[phase] != null
-                                                            ? `${analysisReport.black.phases?.[phase]}%` : '—'}
-                                                    </b>
-                                                </span>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
+                                <SideStatsCard symbol="♔" name={whiteName} stats={analysisReport.white} side="white"/>
+                                <SideStatsCard symbol="♚" name={blackName} stats={analysisReport.black} side="black"/>
                             </div>
 
-                            <div className="h-24 w-full bg-room-dark rounded border border-amber-900/50 p-1">
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <AreaChart
-                                        data={chartData}
-                                        onClick={(state: any) => {
-                                            if (!state || typeof state.activeTooltipIndex !== 'number') return;
-                                            const idx = state.activeTooltipIndex;
-                                            if (idx === viewIndex) return;
-                                            setViewIndex(idx);
-                                            const san = analysisReport?.moves[idx]?.san;
-                                            playAudio(san ? resolveMoveSound(san) : 'move');
-                                        }}
-                                    >
-                                        <XAxis dataKey="ply" hide/>
-                                        <YAxis domain={[-10, 10]} hide/>
-                                        <ReferenceLine y={0} stroke="#7A4B31" strokeDasharray="3 3"/>
-                                        <Tooltip
-                                            contentStyle={{
-                                                backgroundColor: '#1A120B',
-                                                borderColor: '#7A4B31',
-                                                fontSize: '12px',
-                                                padding: '4px 8px'
-                                            }}
-                                            formatter={(_val: any, _name: any, props: any) => [
-                                                `${props.payload.display} (${props.payload.classification})`,
-                                                props.payload.label
-                                            ]}
-                                            labelFormatter={() => ''}
-                                        />
-                                        <Area
-                                            type="monotone"
-                                            dataKey="evalPawns"
-                                            stroke="#f59e0b"
-                                            fill="#E6C998"
-                                            fillOpacity={0.35}
-                                            strokeWidth={2}
-                                        />
-                                    </AreaChart>
-                                </ResponsiveContainer>
-                            </div>
+                            <EvalChart data={chartData} onSelect={(idx) => {
+                                if (idx === viewIndex) return;
+                                setViewIndex(idx);
+                                const san = analysisReport?.moves[idx]?.san;
+                                playAudio(san ? resolveMoveSound(san) : 'move');
+                            }}/>
                         </>
                     )}
 
@@ -1115,197 +831,23 @@ export default function GameViewer() {
                     <XrayPanel settings={xray} canSelect={false}/>
 
                     {currentCoachText && (
-                        <section
-                            aria-label={t('viewer.coachTitle')}
-                            data-testid="coach-comment"
-                            className="text-xs bg-black/35 border border-amber-800/50 rounded px-2.5 py-2 flex flex-col gap-1.5"
-                        >
-                            <div className="flex items-center justify-between gap-2">
-                                <span className="font-bold text-amber-300 flex items-center gap-1.5">
-                                    <GraduationCap size={14} className="text-amber-400"/> {t('viewer.coachTitle')}
-                                </span>
-                                {coachArrows(currentCoach).length > 0 && (
-                                    <label className="flex items-center gap-1 text-boxwood/75 cursor-pointer select-none"
-                                           title={t('viewer.coachLegend')}>
-                                        <input type="checkbox" checked={showCoachArrows} className="accent-amber-600"
-                                               onChange={(e) => setShowCoachArrows(e.target.checked)}/>
-                                        {t('viewer.coachArrows')}
-                                    </label>
-                                )}
-                            </div>
-                            <p className="text-boxwood-light leading-snug">{currentCoachText}</p>
-                        </section>
+                        <CoachCommentBox text={currentCoachText} hasArrows={coachArrows(currentCoach).length > 0}
+                                         showArrows={showCoachArrows} onShowArrowsChange={setShowCoachArrows}/>
                     )}
                 </div>
 
-                <div
-                    className="flex-1 min-h-0 flex flex-col bg-room-dark/90 rounded-md border border-amber-900/50 overflow-hidden shadow-inner">
-                    <div
-                        className="grid grid-cols-[44px_1fr_1fr] px-3 py-1.5 bg-black/55 border-b border-amber-900/40 text-xs uppercase tracking-wider text-boxwood/65 font-bold shrink-0">
-                        <span>{t('board.moveNumber')}</span>
-                        <span>{t('common.white')}</span>
-                        <span>{t('common.black')}</span>
-                    </div>
-
-                    <div
-                        ref={notationScrollRef}
-                        className="flex-1 min-h-0 overflow-y-auto p-1.5 font-mono text-sm divide-y divide-amber-900/15 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-amber-900/50"
-                    >
-                        {movePairs.map((pair: any, idx: number) => {
-                            const isActiveWhite = viewIndex === pair.whiteIndex;
-                            const isActiveBlack = viewIndex === pair.blackIndex;
-                            const whiteAnalysis = analysisReport?.moves[pair.whiteIndex];
-                            const blackAnalysis = pair.blackIndex >= 0 ? analysisReport?.moves[pair.blackIndex] : undefined;
-
-                            return (
-                                <div key={idx}
-                                     className="grid grid-cols-[44px_1fr_1fr] items-center px-2 py-1 hover:bg-white/5 rounded">
-                                    <span className="text-xs text-amber-500/70 font-bold">{pair.moveNumber}.</span>
-
-                                    <button
-                                        onClick={() => {
-                                            if (isActiveWhite) return;
-                                            setViewIndex(pair.whiteIndex);
-                                            playAudio(resolveMoveSound(pair.white));
-                                        }}
-                                        className={`text-left px-2 py-0.5 rounded flex items-center justify-between gap-1 cursor-pointer transition ${
-                                            isActiveWhite
-                                                ? 'active-move bg-amber-600/40 text-white font-bold border border-amber-500/50'
-                                                : 'text-amber-100/90 hover:bg-amber-900/30 hover:text-white'
-                                        }`}
-                                    >
-                                        <span className="truncate">
-                                            {pair.white}
-                                            {whiteAnalysis?.symbol && (
-                                                <span
-                                                    className={`ml-0.5 ${classificationBadgeClass(whiteAnalysis.classification)}`}>
-                                                    {whiteAnalysis.symbol}
-                                                </span>
-                                            )}
-                                            {personalPlies.has(pair.whiteIndex + 1) && (
-                                                <PuzzleBadgeIcon size={11} className="inline ml-1 text-sky-300"
-                                                                 aria-label={t('puzzles.personal.badge')}
-                                                                 data-testid={`personal-badge-${pair.whiteIndex + 1}`}/>
-                                            )}
-                                        </span>
-                                        {whiteAnalysis && (
-                                            <span className="text-[10px] text-boxwood/55 shrink-0">
-                                                {whiteAnalysis.eval_display}
-                                            </span>
-                                        )}
-                                    </button>
-
-                                    {pair.black ? (
-                                        <button
-                                            onClick={() => {
-                                                if (isActiveBlack) return;
-                                                setViewIndex(pair.blackIndex);
-                                                playAudio(resolveMoveSound(pair.black));
-                                            }}
-                                            className={`text-left px-2 py-0.5 rounded flex items-center justify-between gap-1 cursor-pointer transition ${
-                                                isActiveBlack
-                                                    ? 'active-move bg-amber-600/40 text-white font-bold border border-amber-500/50'
-                                                    : 'text-amber-100/90 hover:bg-amber-900/30 hover:text-white'
-                                            }`}
-                                        >
-                                            <span className="truncate">
-                                                {pair.black}
-                                                {blackAnalysis?.symbol && (
-                                                    <span
-                                                        className={`ml-0.5 ${classificationBadgeClass(blackAnalysis.classification)}`}>
-                                                        {blackAnalysis.symbol}
-                                                    </span>
-                                                )}
-                                                {personalPlies.has(pair.blackIndex + 1) && (
-                                                    <PuzzleBadgeIcon size={11} className="inline ml-1 text-sky-300"
-                                                                     aria-label={t('puzzles.personal.badge')}
-                                                                     data-testid={`personal-badge-${pair.blackIndex + 1}`}/>
-                                                )}
-                                            </span>
-                                            {blackAnalysis && (
-                                                <span className="text-[10px] text-boxwood/55 shrink-0">
-                                                    {blackAnalysis.eval_display}
-                                                </span>
-                                            )}
-                                        </button>
-                                    ) : (
-                                        <span/>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
+                <MoveList pairs={movePairs} viewIndex={viewIndex} moves={analysisReport?.moves} personalPlies={personalPlies}
+                          scrollRef={notationScrollRef} onSelect={(index, san) => {
+                              setViewIndex(index);
+                              playAudio(resolveMoveSound(san));
+                          }}/>
 
                 <div className="flex flex-col gap-2 shrink-0">
-                    <div
-                        className="flex justify-between items-center bg-acacia-dark p-2 rounded-md border border-amber-900/40">
-                        <span className="text-xs font-semibold text-boxwood/80 pl-1">
-                            {t('viewer.controls')}
-                        </span>
-                        <div className="flex gap-1 items-center">
-                            <button
-                                onClick={() => {
-                                    if (viewIndex === -1) return;
-                                    setViewIndex(-1);
-                                    playAudio('move');
-                                }}
-                                className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition cursor-pointer"
-                                title={t('viewer.gameStart')}
-                                aria-label={t('viewer.gameStart')}
-                            >
-                                <ChevronFirst size={17}/>
-                            </button>
-                            <button
-                                onClick={() => {
-                                    const nextIdx = Math.max(-1, viewIndex - 1);
-                                    if (nextIdx === viewIndex) return;
-                                    setViewIndex(nextIdx);
-                                    playAudio(nextIdx >= 0 ? resolveMoveSound(history[nextIdx].san) : 'move');
-                                }}
-                                className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition cursor-pointer"
-                                title={t('viewer.moveBack')}
-                                aria-label={t('viewer.moveBack')}
-                            >
-                                <ChevronLeft size={17}/>
-                            </button>
-                            <button
-                                onClick={() => {
-                                    const nextIdx = Math.min(history.length - 1, viewIndex + 1);
-                                    if (nextIdx === viewIndex) return;
-                                    setViewIndex(nextIdx);
-                                    playAudio(resolveMoveSound(history[nextIdx].san));
-                                }}
-                                className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition cursor-pointer"
-                                title={t('viewer.moveForward')}
-                                aria-label={t('viewer.moveForward')}
-                            >
-                                <ChevronRight size={17}/>
-                            </button>
-                            <button
-                                onClick={() => {
-                                    const lastIdx = history.length - 1;
-                                    if (viewIndex === lastIdx) return;
-                                    setViewIndex(lastIdx);
-                                    if (lastIdx >= 0) playAudio(resolveMoveSound(history[lastIdx].san));
-                                }}
-                                className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition cursor-pointer"
-                                title={t('viewer.gameEnd')}
-                                aria-label={t('viewer.gameEnd')}
-                            >
-                                <ChevronLast size={17}/>
-                            </button>
-                            <div className="w-px h-4 bg-amber-900/50 mx-1"/>
-                            <button
-                                onClick={() => setIsFlipped(!isFlipped)}
-                                className="p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition text-amber-400 cursor-pointer"
-                                title={t('common.flipBoard')}
-                                aria-label={t('common.flipBoard')}
-                            >
-                                <RefreshCw size={15}/>
-                            </button>
-                        </div>
-                    </div>
+                    <NavigationControls viewIndex={viewIndex} total={history.length} onFlip={() => setIsFlipped(!isFlipped)}
+                                        onGo={(index) => {
+                                            setViewIndex(index);
+                                            playAudio(index >= 0 ? resolveMoveSound(history[index].san) : 'move');
+                                        }}/>
 
                     {!startFen && (
                         <button type="button" onClick={() => setShowExplorer((v) => !v)} aria-expanded={showExplorer}
@@ -1321,12 +863,7 @@ export default function GameViewer() {
                         <button type="button" data-testid="download-annotated"
                                 onClick={() => downloadText(`michess-${gameId}-annotated.pgn`, buildPgn({
                                     headers: pgnHeaders, startFen, result: pgnHeaders.Result,
-                                    moves: history.map((m, i) => {
-                                        const a = analysisReport.moves[i];
-                                        const note = a ? [`[%eval ${a.mate !== null ? `#${a.mate}` : (a.eval_cp / 100).toFixed(2)}]`,
-                                            coachText(a.coach, t)].filter(Boolean).join(' ') : null;
-                                        return {san: m.san, symbol: a?.symbol && a.symbol !== '!' ? a.symbol : '', comment: note};
-                                    }),
+                                    moves: annotatedMoves(history, analysisReport, (coach) => coachText(coach, t)),
                                 }))}
                                 className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-room-dark text-amber-400 font-bold text-sm rounded-md hover:bg-black transition shadow border border-amber-800/60">
                             <Download size={16}/> {t('tools.exportAnnotated')}
