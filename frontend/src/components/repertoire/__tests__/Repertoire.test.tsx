@@ -94,7 +94,7 @@ describe('список репертуаров', () => {
 
 describe('редактор', () => {
     it('ходы из позиции, переход по дереву, новый ход с доски добавляется кнопкой', async () => {
-        const mock = stubFetch((url, init) => (init?.method === 'POST'
+        const mock = stubFetch((_url, init) => (init?.method === 'POST'
             ? {...REP, added: 1, moves: [...REP.moves, {position: AFTER_C6, uci: 'd2d4', san: 'd4', child: 'y', comment: '', mine: false}]}
             : REP));
         await act(async () => page('/repertoire/7'));
@@ -118,11 +118,11 @@ describe('редактор', () => {
 
     it('комментарий, удаление хода и импорт PGN', async () => {
         vi.spyOn(window, 'confirm').mockReturnValue(true);
-        const mock = stubFetch((url, init) => {
+        const mock = stubFetch((url) => {
             if (url.endsWith('/comment')) return {comment: 'new idea'};
             if (url.endsWith('/remove')) return {...REP, removed: 2, moves: REP.moves.slice(0, 2)};
             if (url.endsWith('/pgn')) return {...REP, added: 3};
-            return init ? REP : REP;
+            return REP;
         });
         await act(async () => page('/repertoire/7'));
         await act(async () => fireEvent.click(screen.getByTestId('repertoire-move-e2e4')));
