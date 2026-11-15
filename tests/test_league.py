@@ -34,7 +34,8 @@ async def test_teams_and_league_table(client, db_session, token_user_1, token_us
     assert again.json()["detail"]["code"] == "team_name_taken"
     assert client.post(API, json={"name": "ab"}, headers=auth(token_user_2)).json()["detail"]["code"] == "team_name_invalid"
     other = client.post(API, json={"name": "Pawn Storm"}, headers=auth(token_user_2)).json()
-    assert client.post(f"{API}/{other['id']}/join", headers=auth(token_user_1)).json()["detail"]["code"] == "team_already_member"
+    joined = client.post(f"{API}/{other['id']}/join", headers=auth(token_user_1)).json()
+    assert joined["detail"]["code"] == "team_already_member"
 
     # Две рейтинговые партии этого сезона между командами и одна — с игроком без команды (не в счёт).
     third = User(username="lonely", hashed_password="x")
@@ -49,7 +50,8 @@ async def test_teams_and_league_table(client, db_session, token_user_1, token_us
     await db_session.commit()
 
     table = client.get(f"{API}/league").json()
-    assert [(t["name"], t["points"], t["place"]) for t in table["teams"]] == [("Kings of Rook", 4 + 2, 1), ("Pawn Storm", 1, 2)]
+    rows = [(t["name"], t["points"], t["place"]) for t in table["teams"]]
+    assert rows == [("Kings of Rook", 4 + 2, 1), ("Pawn Storm", 1, 2)]
     mine = client.get(f"{API}/mine", headers=auth(token_user_1)).json()["team"]
     assert mine["members"] == [{"username": "player1", "points": 6, "owner": True}]
 
