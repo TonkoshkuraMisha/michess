@@ -56,6 +56,7 @@ import {isLanguage, useI18n} from './i18n';
 import {saveProfileSettings, setTranslationHelper} from './services/profileSettings';
 import {applyPreset, findPreset, getSavedPresetId} from './config/themePresets';
 import {TranslationHelper} from './components/social/TranslationHelper';
+import {PlayerAvatar} from './components/PlayerAvatar';
 import LanguageSwitcher from './components/LanguageSwitcher';
 
 interface UserProfile {
@@ -73,6 +74,8 @@ interface UserProfile {
     translation_helper?: boolean;
     /** Тема-комплект (таск 18.3). */
     theme_preset?: string | null;
+    /** Аватар из собственного набора (таск 18.4). */
+    avatar?: string | null;
 }
 
 export default function App() {
@@ -413,11 +416,8 @@ export default function App() {
                                 onClick={() => setIsProfileOpen(!isProfileOpen)}
                                 className="flex items-center gap-1.5 sm:gap-2.5 border-l border-amber-900/50 cursor-pointer hover:opacity-90 transition select-none py-1 pl-1.5 pr-1 sm:pl-3 sm:pr-2.5 rounded-md hover:bg-black/25"
                             >
-                                <img
-                                    src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${encodeURIComponent(username)}&backgroundColor=D0A972`}
-                                    alt="Avatar"
-                                    className="w-8 h-8 rounded bg-black/40 border border-amber-900/50 shadow"
-                                />
+                                <PlayerAvatar username={username} avatar={userProfile.avatar}
+                                              className="w-8 h-8 rounded border border-amber-900/50 shadow"/>
                                 <div className="flex flex-col items-start hidden sm:flex">
                                     <span className="font-bold text-sm text-amber-200 leading-tight">{username}</span>
                                     <span
@@ -431,11 +431,8 @@ export default function App() {
                                 <div
                                     className="absolute right-0 top-12 w-64 bg-[#261C14] border-2 border-amber-900/80 rounded-lg shadow-2xl py-2 z-50 text-boxwood-light">
                                     <div className="px-4 py-2.5 border-b border-amber-900/40 flex items-center gap-3">
-                                        <img
-                                            src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${encodeURIComponent(username)}&backgroundColor=D0A972`}
-                                            alt="Avatar"
-                                            className="w-10 h-10 rounded bg-black/40 border border-amber-900/50 shadow"
-                                        />
+                                        <PlayerAvatar username={username} avatar={userProfile.avatar}
+                                                      className="w-10 h-10 rounded border border-amber-900/50 shadow"/>
                                         <div>
                                             <div className="font-bold text-base text-amber-200">{username}</div>
                                             <div

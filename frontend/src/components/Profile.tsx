@@ -20,12 +20,14 @@ import {getDateLocale, renderUiMessage, uiMessage, useI18n} from '../i18n';
 import type {UiMessage} from '../i18n';
 import {displayPlayerName} from '../config/players';
 import {ProfileSocial} from './social/ProfileSocial';
+import {PlayerAvatar} from './PlayerAvatar';
 import {TournamentHistory} from './tournaments/TournamentHistory';
 import {Achievements} from './social/Achievements';
 
 interface UserProfile {
     id: number;
     username: string;
+    avatar?: string | null;
     bullet_rating: number;
     blitz_rating: number;
     rapid_rating: number;
@@ -314,16 +316,8 @@ export default function Profile() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div
                     className="bg-acacia-dark border border-amber-900/40 p-6 rounded shadow-heavy flex flex-col items-center justify-center text-center relative overflow-hidden">
-                    <img
-                        src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${encodeURIComponent(profile.username)}&backgroundColor=D0A972`}
-                        alt="Avatar Background"
-                        className="absolute top-0 right-0 w-48 h-48 opacity-10 pointer-events-none translate-x-10 -translate-y-10"
-                    />
-                    <img
-                        src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${encodeURIComponent(profile.username)}&backgroundColor=E6C998`}
-                        alt="Avatar"
-                        className="w-24 h-24 rounded-lg bg-black/40 shadow-inner border-2 border-amber-600/40 mb-3 z-10"
-                    />
+                    <PlayerAvatar username={profile.username} avatar={profile.avatar}
+                                  className="w-24 h-24 rounded-lg shadow-inner border-2 border-amber-600/40 mb-3 z-10"/>
                     <h1 className="text-3xl font-bold text-amber-200 z-10">{displayPlayerName(profile.username, t)}</h1>
                     <ProfileSocial username={profile.username}/>
 

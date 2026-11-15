@@ -129,7 +129,7 @@ async def test_language_settings_and_translation_suggestion(client, db_session, 
 
     saved = client.patch("/api/v1/profile/me/settings", json={"language": "uk", "translation_helper": True},
                          headers=auth(token_user_1))
-    assert saved.json() == {"language": "uk", "translation_helper": True, "theme_preset": None}
+    assert saved.json() == {"language": "uk", "translation_helper": True, "theme_preset": None, "avatar": None}
     assert client.patch("/api/v1/profile/me/settings", json={"language": "de"}, headers=auth(token_user_1)).status_code == 422
     me = client.get("/api/v1/profile/me", headers=auth(token_user_1)).json()
     assert (me["language"], me["translation_helper"]) == ("uk", True)
@@ -151,3 +151,15 @@ def test_theme_preset_in_profile(client, token_user_1):
     assert client.get("/api/v1/profile/me", headers=auth(token_user_1)).json()["theme_preset"] == "marble_hall"
     bad = client.patch("/api/v1/profile/me/settings", json={"theme_preset": "<script>"}, headers=auth(token_user_1))
     assert bad.status_code == 422
+
+
+def test_avatar_in_profile_and_leaderboard(client, token_user_1):
+    """Таск 18.4: аватар из собственного набора хранится в профиле и виден другим."""
+    saved = client.patch("/api/v1/profile/me/settings", json={"avatar": "bN-3"}, headers=auth(token_user_1))
+    assert saved.json()["avatar"] == "bN-3"
+    assert client.get("/api/v1/profile/me", headers=auth(token_user_1)).json()["avatar"] == "bN-3"
+    assert client.get("/api/v1/profile/player1").json()["avatar"] == "bN-3"
+    board = client.get("/api/v1/profile/leaderboard").json()
+    assert next(row for row in board if row["username"] == "player1")["avatar"] == "bN-3"
+    for bad in ("xN-3", "bZ-1", "bN-9", "https://evil"):
+        assert client.patch("/api/v1/profile/me/settings", json={"avatar": bad}, headers=auth(token_user_1)).status_code == 422

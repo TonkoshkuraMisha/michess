@@ -1,6 +1,7 @@
 // --- FILE: frontend/src/components/Leaderboard.tsx ---
 
 import {useState, useEffect} from 'react';
+import {PlayerAvatar} from './PlayerAvatar';
 import {Link, useNavigate} from 'react-router-dom';
 import {Trophy, Medal, Crown, ArrowLeft, Swords, User} from 'lucide-react';
 import {API_BASE_URL} from '../config/api';
@@ -8,6 +9,7 @@ import {useI18n} from '../i18n';
 
 interface LeaderboardEntry {
     rank: number;
+    avatar?: string | null;
     username: string;
     rating: number;
 }
@@ -170,11 +172,8 @@ export default function Leaderboard() {
                                         </td>
                                         <td className="px-5 py-3.5">
                                             <div className="flex items-center gap-3">
-                                                <img
-                                                    src={`https://api.dicebear.com/9.x/bottts-neutral/svg?seed=${player.username}&backgroundColor=D0A972`}
-                                                    alt={player.username}
-                                                    className="w-9 h-9 rounded bg-black/40 border border-amber-900/50 shadow shrink-0"
-                                                />
+                                                <PlayerAvatar username={player.username} avatar={player.avatar} alt={player.username}
+                                                              className="w-9 h-9 rounded border border-amber-900/50 shadow"/>
                                                 <span
                                                     className="font-bold text-base text-amber-200 group-hover:text-white transition">
                                                     {player.username}
