@@ -15,6 +15,7 @@ from src.api import (
     account,
     arenas,
     bots,
+    chess960,
     guess,
     ladder,
     learn,
@@ -123,6 +124,7 @@ def create_app() -> FastAPI:
     app.include_router(social.router, prefix="/api/v1/social", tags=["social"])
     app.include_router(moderation.router, prefix="/api/v1/moderation", tags=["social"])
     app.include_router(mini_games.router, prefix="/api/v1/mini-games", tags=["trainers"])
+    app.include_router(chess960.router, prefix="/api/v1/chess960", tags=["bots"])
     app.include_router(repertoire.router, prefix="/api/v1/repertoires", tags=["repertoire"])
     app.include_router(library.router, prefix="/api/v1/library", tags=["library"])
     app.include_router(account.router, prefix=settings.API_V1_STR)

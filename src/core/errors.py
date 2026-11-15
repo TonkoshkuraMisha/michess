@@ -71,6 +71,7 @@ ERROR_MESSAGES: dict[str, str] = {
     "mini_game_bad_position": "Invalid position for this game",
     "mini_game_illegal_move": "This move is not allowed by the rules of the game",
     "mini_game_over": "The game is already over",
+    "chess960_bad_position": "There is no such starting position (0-959)",
     "repertoire_not_found": "Repertoire not found",
     "library_collection_not_found": "Collection not found",
     "library_game_not_found": "Game not found in the library",

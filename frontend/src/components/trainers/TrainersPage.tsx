@@ -46,6 +46,11 @@ export function TrainersPage() {
                 <span className="font-bold text-amber-200">{t('repertoire.title')}</span>
                 <span className="text-sm text-boxwood/80">{t('repertoire.intro')}</span>
             </Link>
+            <Link to="/play/960" data-testid="trainer-chess960"
+                  className="bg-acacia-dark p-4 rounded-lg border-2 border-amber-800 hover:border-amber-500 flex flex-col gap-1">
+                <span className="font-bold text-amber-200">{t('chess960.title')}</span>
+                <span className="text-sm text-boxwood/80">{t('chess960.intro')}</span>
+            </Link>
             <Link to="/train/games" data-testid="trainer-mini-games"
                   className="bg-acacia-dark p-4 rounded-lg border-2 border-amber-800 hover:border-amber-500 flex flex-col gap-1">
                 <span className="font-bold text-amber-200">{t('miniGames.title')}</span>
