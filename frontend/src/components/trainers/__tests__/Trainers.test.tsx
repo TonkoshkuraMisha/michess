@@ -103,6 +103,25 @@ describe('страница тренажёров', () => {
         render(<MemoryRouter initialEntries={['/train/nope']}><Routes><Route path="/train/:trainerId" element={<TrainerPage/>}/></Routes></MemoryRouter>);
         expect(screen.getByText('Такого тренажёра нет.')).toBeInTheDocument();
     });
+
+    it('координаты: настройки вместо уровня, итог уходит с уровнем этих настроек', async () => {
+        vi.useFakeTimers({shouldAdvanceTime: true});
+        setToken('jwt');
+        const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => ({ok: true, status: 200, json: async () => ({results: [], record: true, best: 0})} as Response));
+        vi.stubGlobal('fetch', fetchMock);
+        render(<MemoryRouter initialEntries={['/train/coord_color']}><Routes><Route path="/train/:trainerId" element={<TrainerPage/>}/></Routes></MemoryRouter>);
+        expect(screen.queryByTestId('trainer-level')).toBeNull();
+        fireEvent.click(screen.getByTestId('coord-side-black'));
+        fireEvent.click(screen.getByTestId('coord-seconds-60'));
+        fireEvent.click(screen.getByTestId('trainer-start'));
+        expect(screen.getByTestId('coord-game')).toBeInTheDocument();
+        await act(async () => {
+            vi.advanceTimersByTime(61_000);
+        });
+        const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')!;
+        expect(JSON.parse(String(post[1]!.body))).toMatchObject({trainer: 'coord_color', level: 6, score: 0});
+        vi.useRealTimers();
+    });
 });
 
 describe('Хвост', () => {
