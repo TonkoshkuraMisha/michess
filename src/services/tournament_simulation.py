@@ -121,7 +121,8 @@ async def save_and_record(
         termination: str,
 ) -> list[int]:
     """Сохраняет партию (PGN, пометка симуляции), пишет результат в турнир. Возвращает id партий для симуляции."""
-    from src.api.bots import CUSTOM_BOT_ID, _build_pgn_string, _detect_eco_code, _get_or_create_bot_user
+    from src.api.bots import CUSTOM_BOT_ID, _build_pgn_string, _get_or_create_bot_user
+    from src.services.openings import eco_code
 
     seats = {p.seat: p for p in await tournaments.players_of(db, tournament.id)}
     white, black = seats[tgame.white_seat], seats[tgame.black_seat]
@@ -139,7 +140,7 @@ async def save_and_record(
         white_player_id=await user_id(white), black_player_id=await user_id(black), pgn=pgn_text, board_fen=final_fen,
         result=result, termination=termination, is_rated=False, base_time_ms=tgame.base_time_ms,
         increment_ms=tgame.increment_ms, status=GameStatus.COMPLETED, finished_at=now,
-        pgn_date=now.strftime("%Y.%m.%d"), site="Michess Tournament", eco=_detect_eco_code(moves), is_simulation=True,
+        pgn_date=now.strftime("%Y.%m.%d"), site="Michess Tournament", eco=eco_code(moves), is_simulation=True,
     )
     db.add(game)
     await db.flush()

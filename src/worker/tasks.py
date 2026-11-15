@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from src.core.config import settings
-from src.services import personal_puzzles, tournament_simulation
+from src.services import personal_puzzles, position_index, tournament_simulation
 from src.services.analysis_service import analysis_service
 from src.services.engine_pool import EngineBusyError, engine_work
 
@@ -38,6 +38,12 @@ async def _prewarm_game_analysis_async(game_id: int) -> dict:
     try:
         session_factory = async_sessionmaker(engine, expire_on_commit=False)
         async with session_factory() as db:
+            # Индекс позиций (таск 16.1) не зависит от движка — до анализа: занятый движок его не откладывает.
+            try:
+                await position_index.index_by_id(db, game_id)
+            except Exception:
+                await db.rollback()
+                logger.exception("Position indexing failed for game %s", game_id)
             report = await analysis_service.analyze_full_game(db, game_id, force=False)
             # Задачи из ошибок игрока (таск 13.5) — по готовому разбору; сбой здесь разбор не отменяет.
             try:

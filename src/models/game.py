@@ -68,6 +68,8 @@ class Game(Base):
     # Партия ботов между собой, сыгранная сервером в турнире (таск 15.2): без рейтинга, не в архиве и статистике
     # профилей, открывается по ссылке из турнира.
     is_simulation: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    # Партия разложена в индекс позиций (таск 16.1, src/services/position_index.py) — повторно не считается.
+    positions_indexed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     # Учебная партия (правило 2 Части II): игрок пользовался наставником — советами или проверкой ходов.
     # Без рейтинга (партии с ботами и так без рейтинга), в архиве помечается.
     assisted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)

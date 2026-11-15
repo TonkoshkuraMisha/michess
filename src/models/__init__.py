@@ -5,6 +5,7 @@ from src.models.guess import GuessPosition
 from src.models.lesson import LessonProgress
 from src.models.move import Move
 from src.models.personality import BotPersonality
+from src.models.position import PositionGame, PositionStat
 from src.models.product_event import ProductEvent
 from src.models.puzzle import DefenseDrill, DrillRecord, PersonalPuzzle, Puzzle, PuzzleAttempt, PuzzleTheme, ThemeProgress
 from src.models.tournament import Tournament, TournamentGame, TournamentPlayer
@@ -18,6 +19,8 @@ __all__ = [
     "EmailToken",
     "Game",
     "GuessPosition",
+    "PositionGame",
+    "PositionStat",
     "LessonProgress",
     "Move",
     "PersonalPuzzle",
