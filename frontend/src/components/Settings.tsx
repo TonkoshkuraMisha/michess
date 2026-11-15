@@ -22,6 +22,8 @@ import {THEME_PRESETS, applyPreset} from '../config/themePresets';
 import type {ThemePreset} from '../config/themePresets';
 import {ThemePreview} from './settings/ThemePreview';
 import {SOUND_SETS} from '../services/soundEngine';
+import {setBoardPref, useBoardPrefs} from '../config/boardPrefs';
+import type {BoardPrefs} from '../config/boardPrefs';
 import type {SoundSetId} from '../services/soundEngine';
 import {gameSocket} from '../services/gameSocket';
 import {soundEngine} from '../services/soundEngine';
@@ -76,6 +78,8 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
         setAnalysisAppearance(preset?.board ?? null, preset?.pieces ?? null);
     };
     const [isMuted, setIsMuted] = useState(() => soundEngine.isMuted());
+    // Настройки доски (таск 18.4).
+    const boardPrefs = useBoardPrefs();
     // Темы-комплекты (таск 18.3): комплект «выбран», пока все его части совпадают с текущими настройками.
     const [soundSet, setSoundSetState] = useState<SoundSetId>(() => soundEngine.getSoundSet());
     const activePreset = THEME_PRESETS.find((p) => p.board === boardThemeKey && p.pieces === pieceSetKey
@@ -396,6 +400,41 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                             <span className="w-5 h-5 rounded-full shrink-0 border border-black/50" style={{backgroundColor: PAGE_PALETTES[palette]}}/>
                             <span>{t(`settings.pagePalettes.${palette}`)}</span>
                         </button>
+                    ))}
+                </div>
+            </section>
+
+            <section className={sectionClass} data-testid="board-prefs">
+                <h2 className={headingClass}><SettingsIcon size={18} className="text-amber-400"/> {t('settings.boardPrefs.title')}</h2>
+                <div className="flex flex-col gap-3 text-sm">
+                    {([
+                        ['lastMove', ['highlight', 'arrow', 'both']],
+                        ['moveInput', ['both', 'click']],
+                        ['captured', ['value', 'kind', 'order']],
+                    ] as const).map(([key, values]) => (
+                        <div key={key} className="flex flex-col gap-1">
+                            <span className="text-xs uppercase tracking-wider text-boxwood/65 font-bold">{t(`settings.boardPrefs.${key}.label`)}</span>
+                            <div className="flex flex-wrap gap-2" role="radiogroup" aria-label={t(`settings.boardPrefs.${key}.label`)}>
+                                {values.map((value) => (
+                                    <button key={value} type="button" role="radio" aria-checked={boardPrefs[key] === value}
+                                            data-testid={`pref-${key}-${value}`}
+                                            onClick={() => setBoardPref(key, value as BoardPrefs[typeof key])}
+                                            className={optionClass(boardPrefs[key] === value)}>
+                                        {t(`settings.boardPrefs.${key}.${value}` as never)}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    ))}
+                    {(['quickMove', 'animateOpponent'] as const).map((key) => (
+                        <label key={key} className="flex items-start gap-2 cursor-pointer">
+                            <input type="checkbox" checked={boardPrefs[key]} data-testid={`pref-${key}`} className="mt-1"
+                                   onChange={(e) => setBoardPref(key, e.target.checked)}/>
+                            <span>
+                                <span className="font-bold">{t(`settings.boardPrefs.${key}.label`)}</span>
+                                <span className="block text-xs text-boxwood/70">{t(`settings.boardPrefs.${key}.hint`)}</span>
+                            </span>
+                        </label>
                     ))}
                 </div>
             </section>
