@@ -47,8 +47,8 @@ describe('GameWebSocketService, SoundEngine & API Config', () => {
         expect(getMaxViewportBoardSize()).toBeGreaterThanOrEqual(MIN_BOARD_SIZE);
     });
 
-    it('should provide 16 piece sets and 22 board themes with harmonious styles', () => {
-        expect(Object.keys(PIECE_SETS).length).toBe(16);
+    it('should provide 17 piece sets and 22 board themes with harmonious styles', () => {
+        expect(Object.keys(PIECE_SETS).length).toBe(17);
         expect(Object.keys(BOARD_THEMES).length).toBe(22);
 
         for (const setKey of Object.keys(PIECE_SETS)) {

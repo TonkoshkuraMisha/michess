@@ -268,6 +268,7 @@ export const en = {
             firi: {name: 'Firi (Ornate)', shortName: 'Firi', description: 'Ornate oriental figures, gold against silver'},
             shapes: {name: 'Shapes (Abstract)', shortName: 'Shapes', description: 'Abstract geometric signs instead of figures'},
             letter: {name: 'Letters (Notation)', shortName: 'Letters', description: 'Piece letters, as in notation — high contrast'},
+            lewis: {name: 'Lewis (Medieval)', shortName: 'Lewis', description: 'Our own set after the 12th-century Lewis chessmen: enthroned king and queen, mitred bishop, warrior with a shield'},
         },
         outlineAuthor: 'michess, based on Merida (Armando Hernandez Marroquin)',
     },

@@ -34,6 +34,7 @@
 | `shapes` | flugsio | CC-BY-SA-4.0 |
 | `letter` | usolando | AGPL-3.0-or-later |
 | `outline` | michess, производная от `merida` (добавлена окантовка) | GPL-2.0-or-later |
+| `lewis` | michess, собственный рисунок по мотивам льюисских шахмат XII века (общественное достояние); `scripts/build_lewis_pieces.py` | CC0-1.0 |
 
 Убраны как несвободные: `alpha` (Eric Bentzen, «free for personal non commercial use»), `maestro` (sadsnake1,
 CC BY-NC-SA 4.0), а также набор без известного происхождения, лежавший в корне папки и в `classic/`.
