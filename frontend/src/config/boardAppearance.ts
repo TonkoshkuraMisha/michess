@@ -605,6 +605,23 @@ export const PIECE_SETS: Record<string, PieceSetConfig> = {
         },
         author: 'usolando',
         license: 'AGPL-3.0-or-later'
+    },
+    // Собственный набор проекта (таск 18.2): по мотивам льюисских шахмат XII века, scripts/build_lewis_pieces.py.
+    lewis: {
+        id: 'lewis',
+        get name() {
+            return t('appearance.pieceSets.lewis.name');
+        },
+        get shortName() {
+            return t('appearance.pieceSets.lewis.shortName');
+        },
+        folder: 'lewis',
+        scalePercent: 94,
+        get description() {
+            return t('appearance.pieceSets.lewis.description');
+        },
+        author: 'michess',
+        license: 'CC0-1.0'
     }
 };
 

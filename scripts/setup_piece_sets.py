@@ -49,6 +49,11 @@ DERIVED_SETS: dict[str, tuple[str, str]] = {
     OUTLINE_SET: ("michess, на основе Merida (Armando Hernandez Marroquin)", "GPL-2.0-or-later"),
 }
 
+# Собственные наборы проекта (таск 18.2): рисуются своими скриптами, а не скачиваются.
+OWN_SETS: dict[str, tuple[str, str]] = {
+    "lewis": ("michess, по мотивам льюисских шахмат XII века (scripts/build_lewis_pieces.py)", "CC0-1.0"),
+}
+
 
 def make_outlined_svg(base_svg: str, code: str) -> str:
     is_black = code.startswith("b")

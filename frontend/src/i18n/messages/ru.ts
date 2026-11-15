@@ -272,6 +272,7 @@ export const ru: Messages = {
             firi: {name: 'Фири (Узорный)', shortName: 'Фири', description: 'Узорные фигуры в восточном духе, золото против серебра'},
             shapes: {name: 'Знаки (Абстракция)', shortName: 'Знаки', description: 'Абстрактные геометрические знаки вместо фигур'},
             letter: {name: 'Буквы (Нотация)', shortName: 'Буквы', description: 'Буквы фигур, как в нотации, — высокий контраст'},
+            lewis: {name: 'Льюис (Средневековье)', shortName: 'Льюис', description: 'Собственный набор по мотивам льюисских шахмат XII века: король и ферзь на тронах, епископ в митре, воин со щитом'},
         },
         outlineAuthor: 'michess, на основе Merida (Armando Hernandez Marroquin)',
     },

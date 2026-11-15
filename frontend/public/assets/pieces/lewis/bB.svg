@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="45" height="45" viewBox="4 0 37.5 43">
+  <!-- Набор «Льюис» по мотивам льюисских шахмат XII века: собственная работа проекта michess, CC0. -->
+  <g stroke="#1C0B07" stroke-width="1.5" stroke-linejoin="round">
+  <path d="M12.5 39 L15.5 24 Q16.5 21 22.5 21 Q28.5 21 29.5 24 L32.5 39 Z" fill="#7A2E24"/>
+  <path d="M22.5 22 V38" stroke-width="1" opacity="0.6"/>
+  <circle cx="22.5" cy="16" r="4.4" fill="#7A2E24"/>
+  <path d="M17.6 12.6 L19 2.5 L22.5 7.5 L26 2.5 L27.4 12.6 Z" fill="#5A1F18"/>
+  <path d="M22.5 7.5 V12.6" stroke-width="1"/>
+  <path d="M20.3 16.3 h1 M23.7 16.3 h1 M21.5 18.7 h2" stroke-width="0.9"/>
+  <path d="M34 39 V11 Q34 5.5 38.5 6 Q41.5 7 40.2 10 Q39 12 36.8 10.6" stroke-width="2" fill="none" stroke-linecap="round"/>
+  <path d="M17.5 30 V25 M19.3 30 V24.5 M21.1 30 V25" stroke-width="1.3" stroke-linecap="round"/>
+  <rect x="8" y="38" width="29" height="4" rx="1.2" fill="#7A2E24"/>
+  </g>
+</svg>

@@ -27,7 +27,7 @@ def _load_script(name: str):
 
 piece_script = _load_script("setup_piece_sets")
 portrait_script = _load_script("download_champions")
-LICENSED_SETS = {**piece_script.PIECE_SETS, **piece_script.DERIVED_SETS}
+LICENSED_SETS = {**piece_script.PIECE_SETS, **piece_script.DERIVED_SETS, **piece_script.OWN_SETS}
 
 
 def test_only_licensed_piece_sets_are_shipped():
