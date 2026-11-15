@@ -19,12 +19,15 @@ from src.models.lesson import LessonProgress
 from src.models.puzzle import PuzzleAttempt
 from src.models.team import TeamMember
 from src.models.tournament import Tournament, TournamentPlayer
+from src.models.trainer import TrainerResult
 from src.models.user import RatingCategory, User
 
 CATEGORIES: tuple[RatingCategory, ...] = ("bullet", "blitz", "rapid", "classical")
 TITLE_MIN_GAMES = 10
 TITLES = ((2000, "club_master"), (1700, "candidate"), (1400, "first_class"), (1000, "amateur"), (0, "beginner"))
 BASICS_SECTIONS = 8
+# Обход конём: за открытый — до 100 очков, за замкнутый — больше (frontend/src/trainers/boardPuzzles.ts).
+CLOSED_TOUR_MIN = 100
 
 
 @dataclass(frozen=True)
@@ -53,6 +56,7 @@ RULES = (
     Rule("rating_1800", "best_rating", 1800),
     Rule("rating_2000", "best_rating", 2000),
     Rule("team_player", "team", 1),
+    Rule("knight_tour_closed", "closed_tours", 1),
 )
 
 
@@ -82,6 +86,10 @@ async def _metrics(db: AsyncSession, user: User) -> dict[str, int]:
     arena_games = await db.scalar(
         select(func.coalesce(func.sum(ArenaPlayer.games), 0)).where(ArenaPlayer.user_id == user.id)) or 0
     team = await db.scalar(select(func.count()).select_from(TeamMember).where(TeamMember.user_id == user.id)) or 0
+    # Замкнутый обход конём 8×8 (таск 19.4): тренажёр пишет за замкнутый обход больше 100 очков.
+    closed_tours = await db.scalar(select(func.count()).select_from(TrainerResult).where(
+        TrainerResult.user_id == user.id, TrainerResult.trainer == "knight_tour", TrainerResult.level == 3,
+        TrainerResult.score > CLOSED_TOUR_MIN)) or 0
     return {
         "games": games, "wins": wins, "human_wins": human_wins, "puzzles": puzzles, "puzzle_rating": user.puzzle_rating,
         "lessons": lessons, "basics": basics, "endgames": endgames,
@@ -90,6 +98,7 @@ async def _metrics(db: AsyncSession, user: User) -> dict[str, int]:
         "invitations": sum(1 for _, stage in places if stage and stage.startswith("invitational")),
         "arena_games": int(arena_games), "best_rating": _best_rating(user),
         "team": team,
+        "closed_tours": closed_tours,
     }
 
 

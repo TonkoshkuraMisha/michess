@@ -12,6 +12,8 @@ import type {TrainerId, TrainerRecord} from '../../services/trainers';
 import {ForkGame, PathGame, TailGame} from './VisionGames';
 import {CoordOptionsPicker, CoordinateGame} from './CoordinateGames';
 import {RecallGame, RestoreGame} from './MemoryGames';
+import {KnightTourGame, PlacementGame} from './BoardPuzzleGames';
+import {PLACEMENT_PUZZLES, TOUR_SIZES} from '../../trainers/boardPuzzles';
 import {COORD_TRAINERS, levelToOptions, optionsToLevel} from '../../trainers/coordinates';
 import type {CoordTrainer} from '../../trainers/coordinates';
 
@@ -119,7 +121,11 @@ export function TrainerPage() {
                         {t('trainers.level')}
                         <select value={level} onChange={(e) => setLevel(Number(e.target.value))} data-testid="trainer-level"
                                 className="bg-black/40 rounded px-2 py-1">
-                            {Array.from({length: LEVELS}, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}
+                            {id === 'board_placement' ? PLACEMENT_PUZZLES.map((p, i) => (
+                                <option key={p.id} value={i + 1}>{t(`trainers.boardPuzzles.puzzles.${p.id}` as never)}</option>
+                            )) : id === 'knight_tour' ? TOUR_SIZES.map((size, i) => (
+                                <option key={size} value={i + 1}>{t('trainers.boardPuzzles.size', {n: size})}</option>
+                            )) : Array.from({length: LEVELS}, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}
                         </select>
                     </label>
                     )}
@@ -141,6 +147,8 @@ export function TrainerPage() {
             {seed !== null && isCoord && <CoordinateGame trainer={id as CoordTrainer} level={level} seed={seed} onFinish={finish}/>}
             {seed !== null && id === 'memory_position' && <RestoreGame level={level} seed={seed} onFinish={finish}/>}
             {seed !== null && id === 'memory_game' && <RecallGame level={level} seed={seed} onFinish={finish}/>}
+            {seed !== null && id === 'board_placement' && <PlacementGame level={level} seed={seed} onFinish={finish}/>}
+            {seed !== null && id === 'knight_tour' && <KnightTourGame level={level} seed={seed} onFinish={finish}/>}
             {seed !== null && (id === 'quiet_path' || id === 'knight_route') && (
                 <PathGame kind={id === 'knight_route' ? 'knight' : 'quiet'} level={level} seed={seed} onFinish={finish}/>
             )}

@@ -8,7 +8,8 @@ import {uiMessage} from '../i18n';
 import {getToken} from './authToken';
 
 export const TRAINER_IDS = ['quiet_path', 'knight_route', 'double_strike', 'tail',
-    'coord_find', 'coord_name', 'coord_color', 'coord_diagonal', 'memory_position', 'memory_game'] as const;
+    'coord_find', 'coord_name', 'coord_color', 'coord_diagonal', 'memory_position', 'memory_game',
+    'board_placement', 'knight_tour'] as const;
 export type TrainerId = typeof TRAINER_IDS[number];
 
 export interface TrainerAttempt {
