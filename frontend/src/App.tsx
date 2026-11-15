@@ -19,6 +19,7 @@ import {MateConstructionPage, MateCoursePage, MateExamPage} from './components/l
 import {ClassicGamePage, ClassicsPage} from './components/learn/ClassicsPage';
 import {ToolsPage} from './components/tools/ToolsPage';
 import {WatchPage} from './components/watch/WatchPage';
+import {TrainerPage, TrainersPage} from './components/trainers/TrainersPage';
 import {TournamentView, TournamentsPage} from './components/tournaments/TournamentsPage';
 import {CHAMPIONS_LIST} from './config/champions';
 import {API_BASE_URL} from './config/api';
@@ -38,7 +39,8 @@ import {
     Puzzle,
     GraduationCap,
     Eye,
-    Wrench
+    Wrench,
+    Dumbbell
 } from 'lucide-react';
 import {useI18n} from './i18n';
 import LanguageSwitcher from './components/LanguageSwitcher';
@@ -245,6 +247,16 @@ export default function App() {
                             }`}
                         >
                             <Trophy size={17}/> {t('nav.tournaments')}
+                        </Link>
+
+                        {/* Тренажёры (19.1). */}
+                        <Link
+                            to="/train"
+                            className={`flex items-center gap-2 transition ${
+                                location.pathname.startsWith('/train') ? 'text-amber-300' : 'hover:text-amber-300'
+                            }`}
+                        >
+                            <Dumbbell size={17}/> {t('trainers.title')}
                         </Link>
 
                         <Link
@@ -511,6 +523,8 @@ export default function App() {
                         <Route path="/learn/classics/:gameId" element={<ClassicGamePage/>}/>
                         <Route path="/tools" element={<ToolsPage/>}/>
                         <Route path="/watch" element={<WatchPage/>}/>
+                        <Route path="/train" element={<TrainersPage/>}/>
+                        <Route path="/train/:trainerId" element={<TrainerPage/>}/>
                         <Route path="/guess" element={<GuessPage/>}/>
                         <Route path="/guess/:positionId" element={<GuessPage/>}/>
                     <Route path="/learn/:lessonId" element={<LessonPage/>}/>
