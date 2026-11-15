@@ -65,6 +65,28 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 const json = (method: string, body: object): RequestInit => ({method, body: JSON.stringify(body)});
 
+// --- Отклонения в партиях (таск 20.3) ---
+
+export interface Deviation {
+    repertoire_id: number;
+    name: string;
+    starter: StarterId | null;
+    kind: 'you_left' | 'opponent_new' | 'end' | 'followed';
+    /** Полуход партии (с 1). */
+    ply: number;
+    played: string | null;
+    played_uci: string | null;
+    expected: string[];
+    /** Ходы до позиции отклонения. */
+    line: string[];
+    position: string;
+}
+
+/** «3.» для хода белых, «1…» для хода чёрных — номер хода по полуходу. */
+export function moveLabel(ply: number): string {
+    return `${Math.ceil(ply / 2)}${ply % 2 ? '.' : '…'}`;
+}
+
 // --- Повторение (таск 20.2) ---
 
 export type CardStatus = 'new' | 'learning' | 'learned';
@@ -119,6 +141,8 @@ export const repertoireApi = {
     drill: (id: number, mode: 'review' | 'learn') => call<{ stats: DrillStats; cards: DrillCard[] }>(`/${id}/drill?mode=${mode}`),
     answer: (id: number, position: string, uci: string, retry: boolean) =>
         call<DrillAnswer>(`/${id}/drill/answer`, json('POST', {position, uci, retry})),
+    focus: (id: number, position: string) => call<{ ok: boolean }>(`/${id}/drill/focus`, json('POST', {position})),
+    deviations: (gameId: number | string) => call<{ color: RepertoireColor; results: Deviation[] }>(`/game/${gameId}/deviations`),
     opponent: (id: number, moves: string[]) =>
         call<{ reply: string | null; san: string | null }>(`/${id}/opponent`, json('POST', {moves})),
 };

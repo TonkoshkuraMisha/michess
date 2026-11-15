@@ -124,14 +124,14 @@ async def session(db: AsyncSession, repertoire: Repertoire, mode: str, now: date
     """review — сначала просроченные, затем новые в пределах дневной нормы; learn — только новые, без нормы."""
     found, cards = await sync_cards(db, repertoire)
     summary = stats(cards, now)
-    fresh = sorted((key for key, card in cards.items() if status(card) == "new"),
+    # Срок есть у отвеченных карточек и у поставленных «потренировать» после партии (20.3), даже ещё новых.
+    overdue = sorted((key for key, card in cards.items() if (due := _aware(card.due_at)) is not None and due <= now),
+                     key=lambda key: _aware(cards[key].due_at) or now)
+    fresh = sorted((key for key, card in cards.items() if status(card) == "new" and key not in overdue),
                    key=lambda key: (len(found[key].line), found[key].line))
     if mode == "learn":
         chosen = fresh[:SESSION // 2]
     else:
-        overdue = sorted((key for key, card in cards.items()
-                          if status(card) != "new" and (_aware(card.due_at) or now) <= now),
-                         key=lambda key: _aware(cards[key].due_at) or now)
         chosen = overdue[:SESSION]
         chosen += fresh[:max(0, min(summary["new_left"], SESSION - len(chosen)))]
     return {
@@ -179,3 +179,12 @@ async def opponent_reply(db: AsyncSession, repertoire: Repertoire, moves: list[s
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+async def focus(db: AsyncSession, repertoire: Repertoire, position: str, now: datetime) -> None:
+    """Поставить карточку позиции в сегодняшнее повторение (после ошибки в партии, таск 20.3)."""
+    _, cards = await sync_cards(db, repertoire)
+    card = cards.get(position)
+    if card is None:
+        raise DomainValueError("repertoire_move_not_found")
+    card.due_at = now

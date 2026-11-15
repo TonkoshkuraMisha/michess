@@ -38,6 +38,7 @@ import {puzzlesApi} from '../services/puzzles';
 import {guessApi} from '../services/guess';
 import {OpeningExplorer} from './OpeningExplorer';
 import {AddToRepertoire} from './repertoire/AddToRepertoire';
+import {RepertoireDeviations} from './repertoire/RepertoireDeviations';
 import {buildPgn, downloadText} from '../services/pgnExport';
 import {XrayPanel} from './xray/XrayPanel';
 import {useXraySettings} from './xray/useXraySettings';
@@ -856,6 +857,7 @@ export default function GameViewer({library = false}: { library?: boolean }) {
                                             playAudio(index >= 0 ? resolveMoveSound(history[index].san) : 'move');
                                         }}/>
 
+                    {!library && !startFen && gameId && <RepertoireDeviations gameId={gameId}/>}
                     {!startFen && (
                         <button type="button" onClick={() => setShowExplorer((v) => !v)} aria-expanded={showExplorer}
                                 data-testid="explorer-toggle"

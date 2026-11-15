@@ -4,7 +4,7 @@
 // комментарий к ходу и удаление хода вместе с ветками за ним.
 
 import {useEffect, useMemo, useState} from 'react';
-import {Link, useNavigate, useParams} from 'react-router-dom';
+import {Link, useNavigate, useParams, useSearchParams} from 'react-router-dom';
 import {Chess} from 'chess.js';
 import {ArrowLeft, BookMarked, RotateCcw, Trash2, Undo2} from 'lucide-react';
 import {renderUiMessage, useI18n} from '../../i18n';
@@ -17,6 +17,21 @@ import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 import {OpeningExplorer} from '../OpeningExplorer';
 
 const BUTTON = 'px-2 py-1 rounded bg-black/30 border border-amber-900/50 flex items-center gap-1 disabled:opacity-40';
+
+/** Самое длинное легальное начало линии UCI из начальной позиции. */
+export function legalPrefix(line: string[]): string[] {
+    const game = new Chess();
+    const legal: string[] = [];
+    for (const uci of line.slice(0, 40)) {
+        try {
+            game.move({from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4]});
+        } catch {
+            break;
+        }
+        legal.push(uci);
+    }
+    return legal;
+}
 
 /** Ходы линии SAN с номерами ходов из начальной позиции: «1. e4», «e5», «2. Nf3»… */
 export function numbered(sans: string[]): string[] {
@@ -130,8 +145,10 @@ export function RepertoireEditorPage() {
     const navigate = useNavigate();
     const {repertoireId = ''} = useParams<{ repertoireId: string }>();
     const id = Number(repertoireId);
+    const [params] = useSearchParams();
     const [rep, setRep] = useState<Repertoire | null>(null);
-    const [line, setLine] = useState<string[]>([]);
+    // ?line=e2e4,e7e5 — открыть на линии (из отклонений в партии, таск 20.3); нелегальный хвост отбрасывается.
+    const [line, setLine] = useState<string[]>(() => legalPrefix((params.get('line') ?? '').split(',').filter(Boolean)));
     const [name, setName] = useState('');
     const [comment, setComment] = useState('');
     const [pgn, setPgn] = useState('');

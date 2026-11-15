@@ -1,0 +1,66 @@
+// Отклонения от репертуара в сыгранной партии (таск 20.3) — блок в просмотре своей законченной партии:
+// «на 7-м ходу вы отошли от репертуара» (потренировать позицию / открыть в репертуаре) или «соперник сыграл ход,
+// которого нет в репертуаре» (добавить ответ). Без входа, в чужой партии и без репертуаров блока нет.
+
+import {useEffect, useState} from 'react';
+import {Link, useNavigate} from 'react-router-dom';
+import {BookMarked} from 'lucide-react';
+import {useI18n} from '../../i18n';
+import {getToken} from '../../services/authToken';
+import {moveLabel, repertoireApi} from '../../services/repertoire';
+import type {Deviation} from '../../services/repertoire';
+
+const SHOWN = 2;
+
+export function RepertoireDeviations({gameId}: { gameId: string }) {
+    const {t} = useI18n();
+    const navigate = useNavigate();
+    const [results, setResults] = useState<Deviation[]>([]);
+
+    useEffect(() => {
+        if (!getToken() || !gameId) return;
+        let alive = true;
+        repertoireApi.deviations(gameId).then((r) => alive && setResults(r.results)).catch(() => undefined);
+        return () => {
+            alive = false;
+        };
+    }, [gameId]);
+
+    if (results.length === 0) return null;
+
+    const name = (d: Deviation) => d.name || (d.starter ? t(`repertoire.starters.${d.starter}.name`) : t('repertoire.untitled'));
+    const editorLink = (d: Deviation, extra: string[] = []) => `/repertoire/${d.repertoire_id}?line=${[...d.line, ...extra].join(',')}`;
+    const train = async (d: Deviation) => {
+        await repertoireApi.focus(d.repertoire_id, d.position).catch(() => undefined);
+        navigate(`/repertoire/${d.repertoire_id}/drill`);
+    };
+
+    return (
+        <section className="bg-black/30 rounded-lg p-3 flex flex-col gap-2 text-sm" data-testid="repertoire-deviations">
+            <h3 className="font-bold text-amber-200 flex items-center gap-1.5"><BookMarked size={16}/> {t('repertoire.deviations.title')}</h3>
+            {results.slice(0, SHOWN).map((d) => {
+                const params = {move: moveLabel(d.ply), played: d.played ?? '', expected: d.expected.join(', '), name: name(d)};
+                return (
+                    <div key={d.repertoire_id} className="flex flex-col gap-1.5" data-testid={`deviation-${d.repertoire_id}`}>
+                        <p>{t(`repertoire.deviations.${d.kind === 'you_left' ? 'youLeft' : d.kind === 'opponent_new' ? 'opponentNew' : d.kind}`, params)}</p>
+                        <div className="flex flex-wrap gap-2">
+                            {d.kind === 'you_left' && (
+                                <button type="button" onClick={() => void train(d)} data-testid={`deviation-train-${d.repertoire_id}`}
+                                        className="px-2 py-1 rounded bg-amber-700 text-white font-bold text-xs">{t('repertoire.deviations.train')}</button>
+                            )}
+                            {d.kind === 'opponent_new' && d.played_uci && (
+                                <Link to={editorLink(d, [d.played_uci])} data-testid={`deviation-add-${d.repertoire_id}`}
+                                      className="px-2 py-1 rounded bg-amber-700 text-white font-bold text-xs">{t('repertoire.deviations.addAnswer')}</Link>
+                            )}
+                            {d.kind !== 'followed' && (
+                                <Link to={editorLink(d)} className="px-2 py-1 rounded bg-black/30 border border-amber-900/50 text-xs">
+                                    {t('repertoire.deviations.open')}
+                                </Link>
+                            )}
+                        </div>
+                    </div>
+                );
+            })}
+        </section>
+    );
+}

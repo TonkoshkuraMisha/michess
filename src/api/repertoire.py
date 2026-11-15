@@ -5,8 +5,11 @@
 файла: карточки по SM-2 и ответы соперника по популярности ходов у людей.
 """
 
+import io
 from typing import Literal
 
+import chess
+import chess.pgn
 from fastapi import APIRouter, Depends, Path, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select
@@ -17,9 +20,11 @@ from src.api.fair_play import forbid_engine_help_during_game
 from src.api.rate_limit import rate_limit
 from src.core.errors import ApiError, DomainError
 from src.db.session import get_db
+from src.models.game import Game, GameStatus
 from src.models.repertoire import Repertoire, RepertoireCard, RepertoireMove
 from src.models.user import User
 from src.services import repertoire as service
+from src.services import repertoire_deviations as deviations
 from src.services import repertoire_drill as drill
 from src.services.repertoire_starters import BY_ID, STARTERS
 
@@ -240,3 +245,55 @@ async def opponent(payload: OpponentIn, repertoire_id: int = RepertoireId, db: A
         return await drill.opponent_reply(db, repertoire, payload.moves)
     except DomainError as exc:
         raise _http(exc) from None
+
+
+class FocusIn(BaseModel):
+    position: str = Field(..., max_length=100)
+
+
+@router.post("/{repertoire_id}/drill/focus")
+async def drill_focus(payload: FocusIn, repertoire_id: int = RepertoireId, db: AsyncSession = Depends(get_db),
+                      user: User = Depends(get_current_user)):
+    """Карточка позиции — в сегодняшнее повторение (кнопка «Потренировать» после партии, таск 20.3)."""
+    repertoire = await _own(db, repertoire_id, user)
+    try:
+        await drill.focus(db, repertoire, payload.position, drill.utcnow())
+    except DomainError as exc:
+        raise _http(exc) from None
+    await db.commit()
+    return {"ok": True}
+
+
+def _game_moves(game: Game) -> list[chess.Move]:
+    """Главная линия законченной партии из начальной позиции; партии с особой расстановкой не сверяются."""
+    parsed = chess.pgn.read_game(io.StringIO(game.pgn or ""))
+    if parsed is None or parsed.board().fen() != chess.STARTING_FEN:
+        return []
+    return list(parsed.mainline_moves())
+
+
+@router.get("/game/{game_id}/deviations")
+async def game_deviations(game_id: int = Path(..., ge=1), db: AsyncSession = Depends(get_db),
+                          user: User = Depends(get_current_user)):
+    """Где сыгранная партия ушла из репертуаров игрока её цвета (таск 20.3). Только свои законченные партии."""
+    game = await db.get(Game, game_id)
+    player = game is not None and user.id in (game.white_player_id, game.black_player_id)
+    if game is None or not player or game.status != GameStatus.COMPLETED:
+        raise ApiError(404, "game_not_found", game_id=game_id)
+    color = "white" if game.white_player_id == user.id else "black"
+    moves = _game_moves(game)
+    repertoires = (await db.execute(
+        select(Repertoire).where(Repertoire.user_id == user.id, Repertoire.color == color).order_by(Repertoire.id)
+    )).scalars().all()
+    results: list[dict] = []
+    for repertoire in repertoires:
+        edges = service.build_tree(repertoire.color, await service.load_moves(db, repertoire.id))
+        found = deviations.find(repertoire, edges, moves)
+        if found is None:
+            continue
+        results.append({"repertoire_id": repertoire.id, "name": repertoire.name, "starter": repertoire.starter,
+                        "kind": found.kind, "ply": found.ply, "played": found.played, "played_uci": found.played_uci,
+                        "expected": found.expected,
+                        "line": found.line, "position": found.position})
+    results.sort(key=lambda r: -int(r["ply"]))
+    return {"color": color, "results": results}
