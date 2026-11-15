@@ -9,7 +9,8 @@ import {getToken} from './authToken';
 
 export const TRAINER_IDS = ['quiet_path', 'knight_route', 'double_strike', 'tail',
     'coord_find', 'coord_name', 'coord_color', 'coord_diagonal', 'memory_position', 'memory_game',
-    'board_placement', 'knight_tour', 'blind_move', 'blind_where'] as const;
+    'board_placement', 'knight_tour', 'blind_move', 'blind_where',
+    'calc_checks', 'calc_exchange', 'calc_distance', 'calc_square', 'calc_eval'] as const;
 export type TrainerId = typeof TRAINER_IDS[number];
 
 export interface TrainerAttempt {

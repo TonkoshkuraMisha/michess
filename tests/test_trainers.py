@@ -47,6 +47,7 @@ def test_validation(client, token_user_1):
 def test_coordinate_trainers_accepted(client, token_user_1):
     """Таск 19.2: тренажёры координат; уровень 1–8 — сочетание настроек попытки."""
     for trainer in ("coord_find", "coord_name", "coord_color", "coord_diagonal", "memory_position", "memory_game",
-                    "board_placement", "knight_tour", "blind_move", "blind_where"):
+                    "board_placement", "knight_tour", "blind_move", "blind_where",
+                    "calc_checks", "calc_exchange", "calc_distance", "calc_square", "calc_eval"):
         response = client.post(f"{API}/results", json=result(trainer=trainer, level=8, score=12), headers=auth(token_user_1))
         assert response.status_code == 200 and response.json()["record"] is True

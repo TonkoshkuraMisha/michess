@@ -27,7 +27,9 @@ TRAINERS = ("quiet_path", "double_strike", "knight_route", "tail",
             # Головоломки на доске (19.4): уровень расстановки — номер задачи, обхода — размер доски (3 — 8×8).
             "board_placement", "knight_tour",
             # Визуализация (19.6): ход вслепую и «Где фигура?», уровень — число полуходов вслепую (1–10).
-            "blind_move", "blind_where")
+            "blind_move", "blind_where",
+            # Счёт и внимание (19.7): уровней нет (всегда 1).
+            "calc_checks", "calc_exchange", "calc_distance", "calc_square", "calc_eval")
 MAX_LEVEL = 20
 HISTORY = 50
 

@@ -1,0 +1,63 @@
+// Счёт и внимание (таск 19.7): викторины целиком (верный ответ — по той же логике, что и генерация), «Шахи и взятия».
+
+import {act, fireEvent, render, screen} from '@testing-library/react';
+import {describe, expect, it, vi} from 'vitest';
+import {ChecksGame, QUIZ_ROUNDS, QuizGame} from '../CalcGames';
+import type {QuizKind} from '../CalcGames';
+import {loadAllClassics} from '../../../content/classics';
+import {positionPool} from '../../../trainers/memory';
+import {checksAndCaptures, checksPosition, distanceQuestion, evalQuestion, exchangeQuestion, squareQuestion} from '../../../trainers/calculation';
+
+async function settle() {
+    for (let i = 0; i < 5; i++) await act(async () => Promise.resolve());
+}
+
+describe('викторины счёта', () => {
+    it.each(['calc_exchange', 'calc_distance', 'calc_square', 'calc_eval'] as QuizKind[])('%s: верные ответы — 100 очков', async (kind) => {
+        const games = await loadAllClassics();
+        const pool = positionPool(games, []);
+        const onFinish = vi.fn();
+        render(<QuizGame kind={kind} level={1} seed={8} onFinish={onFinish}/>);
+        await settle();
+        for (let i = 0; i < QUIZ_ROUNDS; i++) {
+            const answer = kind === 'calc_exchange' ? exchangeQuestion(pool, 8 * 97 + i)!.answer
+                : kind === 'calc_distance' ? String(distanceQuestion(8, i).answer)
+                    : kind === 'calc_square' ? (squareQuestion(8, i).answer ? 'yes' : 'no')
+                        : evalQuestion(games, 8 * 53 + i)!.answer;
+            fireEvent.click(screen.getByTestId(`quiz-option-${answer}`));
+            fireEvent.click(screen.getByTestId('quiz-next'));
+        }
+        expect(onFinish).toHaveBeenCalledWith(100, 0);
+    }, 30_000);
+
+    it('неверный ответ — ошибка, правильный подсвечивается', async () => {
+        render(<QuizGame kind="calc_square" level={1} seed={2} onFinish={vi.fn()}/>);
+        await settle();
+        const right = squareQuestion(2, 0).answer ? 'yes' : 'no';
+        const wrong = right === 'yes' ? 'no' : 'yes';
+        fireEvent.click(screen.getByTestId(`quiz-option-${wrong}`));
+        expect(screen.getByTestId('quiz-score')).toHaveTextContent('Верно: 0 · ошибок: 1');
+        expect(screen.getByTestId(`quiz-option-${right}`).className).toContain('emerald');
+    });
+});
+
+describe('шахи и взятия', () => {
+    it('все верные отметки — 100 за позицию; лишняя — минус; разбор по цветам', async () => {
+        const games = await loadAllClassics();
+        const pool = positionPool(games, []);
+        const onFinish = vi.fn();
+        render(<ChecksGame level={1} seed={6} onFinish={onFinish}/>);
+        await settle();
+        for (let round = 0; round < 3; round++) {
+            const fen = checksPosition(pool, 6 * 13 + round * 101)!;
+            for (const uci of checksAndCaptures(fen)) {
+                fireEvent.click(document.querySelector(`[data-square="${uci.slice(0, 2)}"]`)!);
+                fireEvent.click(document.querySelector(`[data-square="${uci.slice(2, 4)}"]`)!);
+            }
+            fireEvent.click(screen.getByTestId('checks-done'));
+            expect(screen.getByTestId('checks-review')).toHaveTextContent('пропущено: 0');
+            fireEvent.click(screen.getByTestId('checks-next'));
+        }
+        expect(onFinish).toHaveBeenCalledWith(300, 0);
+    }, 30_000);
+});
