@@ -29,6 +29,17 @@ PIECE_SETS: dict[str, tuple[str, str]] = {
     "chessnut": ("Alexis Luengas", "Apache-2.0"),
     "fantasy": ("Maurizio Monge", "MIT"),
     "rhosgfx": ("RhosGFX", "CC0-1.0"),
+    # Таск 18.2: аудит COPYING.md lila (15.11.2026) — только лицензии без «NC».
+    "mpchess": ("Maxime Chupin", "GPL-3.0-or-later"),
+    "celtic": ("Maurizio Monge", "MIT"),
+    "spatial": ("Maurizio Monge", "MIT"),
+    "papercut": ("Nikolay Anzarov", "CC-BY-4.0"),
+    "totoy": ("Kosal Sen", "CC-BY-4.0"),
+    "pirouetti": ("pirouetti", "AGPL-3.0-or-later"),
+    "pixel": ("therealqtpi", "AGPL-3.0-or-later"),
+    "firi": ("James Faure", "CC-BY-4.0"),
+    "shapes": ("flugsio", "CC-BY-SA-4.0"),
+    "letter": ("usolando", "AGPL-3.0-or-later"),
 }
 
 # Собственная производная от merida (белая/тёмная окантовка) — наследует её лицензию.

@@ -58,15 +58,12 @@ describe('совместный разбор', () => {
         const fetchMock = stub(room({is_host: false, question: {id: 'q', kind: 'move', prompt: 'Ваш ход', deadline: Date.now() / 1000 + 60, revealed: false}}));
         open();
         expect(await screen.findByTestId('study-question')).toHaveTextContent('Ваш ход');
-        document.elementsFromPoint = vi.fn(() => [cell('e4')]);
+        // Ход двумя щелчками: перетаскивание проверяют тесты PuzzleBoard, а здесь под полной нагрузкой оно изредка терялось.
         await act(async () => {
-            fireEvent.pointerDown(cell('e2'), {button: 0, pointerType: 'mouse', clientX: 5, clientY: 5});
+            fireEvent.click(cell('e2'));
         });
         await act(async () => {
-            fireEvent.pointerMove(window, {clientX: 50, clientY: 50});
-        });
-        await act(async () => {
-            fireEvent.pointerUp(window, {clientX: 90, clientY: 90});
+            fireEvent.click(cell('e4'));
         });
         // Ответ уходит асинхронно — под нагрузкой CI запроса ещё могло не быть: дождаться его.
         await waitFor(() => expect(calls(fetchMock, 'POST')).toHaveLength(1));

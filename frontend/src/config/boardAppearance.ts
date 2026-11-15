@@ -445,6 +445,166 @@ export const PIECE_SETS: Record<string, PieceSetConfig> = {
         },
         author: 'RhosGFX',
         license: 'CC0-1.0'
+    },
+    mpchess: {
+        id: 'mpchess',
+        get name() {
+            return t('appearance.pieceSets.mpchess.name');
+        },
+        get shortName() {
+            return t('appearance.pieceSets.mpchess.shortName');
+        },
+        folder: 'mpchess',
+        scalePercent: 92,
+        get description() {
+            return t('appearance.pieceSets.mpchess.description');
+        },
+        author: 'Maxime Chupin',
+        license: 'GPL-3.0-or-later'
+    },
+    celtic: {
+        id: 'celtic',
+        get name() {
+            return t('appearance.pieceSets.celtic.name');
+        },
+        get shortName() {
+            return t('appearance.pieceSets.celtic.shortName');
+        },
+        folder: 'celtic',
+        scalePercent: 93,
+        get description() {
+            return t('appearance.pieceSets.celtic.description');
+        },
+        author: 'Maurizio Monge',
+        license: 'MIT'
+    },
+    spatial: {
+        id: 'spatial',
+        get name() {
+            return t('appearance.pieceSets.spatial.name');
+        },
+        get shortName() {
+            return t('appearance.pieceSets.spatial.shortName');
+        },
+        folder: 'spatial',
+        scalePercent: 93,
+        get description() {
+            return t('appearance.pieceSets.spatial.description');
+        },
+        author: 'Maurizio Monge',
+        license: 'MIT'
+    },
+    papercut: {
+        id: 'papercut',
+        get name() {
+            return t('appearance.pieceSets.papercut.name');
+        },
+        get shortName() {
+            return t('appearance.pieceSets.papercut.shortName');
+        },
+        folder: 'papercut',
+        scalePercent: 92,
+        get description() {
+            return t('appearance.pieceSets.papercut.description');
+        },
+        author: 'Nikolay Anzarov',
+        license: 'CC-BY-4.0'
+    },
+    totoy: {
+        id: 'totoy',
+        get name() {
+            return t('appearance.pieceSets.totoy.name');
+        },
+        get shortName() {
+            return t('appearance.pieceSets.totoy.shortName');
+        },
+        folder: 'totoy',
+        scalePercent: 90,
+        get description() {
+            return t('appearance.pieceSets.totoy.description');
+        },
+        author: 'Kosal Sen',
+        license: 'CC-BY-4.0'
+    },
+    pirouetti: {
+        id: 'pirouetti',
+        get name() {
+            return t('appearance.pieceSets.pirouetti.name');
+        },
+        get shortName() {
+            return t('appearance.pieceSets.pirouetti.shortName');
+        },
+        folder: 'pirouetti',
+        scalePercent: 92,
+        get description() {
+            return t('appearance.pieceSets.pirouetti.description');
+        },
+        author: 'pirouetti',
+        license: 'AGPL-3.0-or-later'
+    },
+    pixel: {
+        id: 'pixel',
+        get name() {
+            return t('appearance.pieceSets.pixel.name');
+        },
+        get shortName() {
+            return t('appearance.pieceSets.pixel.shortName');
+        },
+        folder: 'pixel',
+        scalePercent: 90,
+        get description() {
+            return t('appearance.pieceSets.pixel.description');
+        },
+        author: 'therealqtpi',
+        license: 'AGPL-3.0-or-later'
+    },
+    firi: {
+        id: 'firi',
+        get name() {
+            return t('appearance.pieceSets.firi.name');
+        },
+        get shortName() {
+            return t('appearance.pieceSets.firi.shortName');
+        },
+        folder: 'firi',
+        scalePercent: 92,
+        get description() {
+            return t('appearance.pieceSets.firi.description');
+        },
+        author: 'James Faure',
+        license: 'CC-BY-4.0'
+    },
+    shapes: {
+        id: 'shapes',
+        get name() {
+            return t('appearance.pieceSets.shapes.name');
+        },
+        get shortName() {
+            return t('appearance.pieceSets.shapes.shortName');
+        },
+        folder: 'shapes',
+        scalePercent: 88,
+        get description() {
+            return t('appearance.pieceSets.shapes.description');
+        },
+        author: 'flugsio',
+        license: 'CC-BY-SA-4.0'
+    },
+    letter: {
+        id: 'letter',
+        get name() {
+            return t('appearance.pieceSets.letter.name');
+        },
+        get shortName() {
+            return t('appearance.pieceSets.letter.shortName');
+        },
+        folder: 'letter',
+        scalePercent: 88,
+        get description() {
+            return t('appearance.pieceSets.letter.description');
+        },
+        author: 'usolando',
+        license: 'AGPL-3.0-or-later'
     }
 };
 
