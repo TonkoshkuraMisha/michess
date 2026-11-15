@@ -1,0 +1,649 @@
+{
+ "id": "tolush-keres-1947",
+ "white": "Tolush, Alexander V",
+ "black": "Keres, Paul",
+ "event": "URS-ch15",
+ "year": "1947",
+ "result": "0-1",
+ "moves": [
+  "d2d4",
+  "g8f6",
+  "c2c4",
+  "e7e6",
+  "b1c3",
+  "f8b4",
+  "d1c2",
+  "e8g8",
+  "g1f3",
+  "c7c5",
+  "d4c5",
+  "b8a6",
+  "c1d2",
+  "a6c5",
+  "e2e3",
+  "b7b6",
+  "f1e2",
+  "c8a6",
+  "e1g1",
+  "d7d5",
+  "c4d5",
+  "a6e2",
+  "c3e2",
+  "b4d2",
+  "c2d2",
+  "f6d5",
+  "f1d1",
+  "d8f6",
+  "d2d4",
+  "a7a5",
+  "a1c1",
+  "f6d4",
+  "d1d4",
+  "d5b4",
+  "e2c3",
+  "c5d3",
+  "c1b1",
+  "a8c8",
+  "a2a3",
+  "d3b2",
+  "a3b4",
+  "c8c3",
+  "b4a5",
+  "b6a5",
+  "h2h3",
+  "c3b3",
+  "d4d2",
+  "f8b8",
+  "f3d4",
+  "b3b6",
+  "d4c6",
+  "b6c6",
+  "b1b2",
+  "c6c8",
+  "b2a2",
+  "b8a8",
+  "d2d7",
+  "h7h5",
+  "d7b7",
+  "c8d8",
+  "a2c2",
+  "a5a4",
+  "c2c7",
+  "d8b8",
+  "b7a7",
+  "a8a7",
+  "c7a7",
+  "b8b4",
+  "f2f4",
+  "h5h4",
+  "g1f2",
+  "b4e4",
+  "f2f3",
+  "f7f5",
+  "a7b7",
+  "g8h7",
+  "b7b8",
+  "h7g6",
+  "b8a8",
+  "g6f6",
+  "a8f8",
+  "f6e7",
+  "f8g8",
+  "e7f7",
+  "g8a8",
+  "g7g6",
+  "a8b8",
+  "f7f6",
+  "b8b7",
+  "g6g5",
+  "b7a7",
+  "e4b4",
+  "g2g3",
+  "g5g4",
+  "f3g2",
+  "b4b2",
+  "g2g1",
+  "h4g3",
+  "h3g4",
+  "b2a2",
+  "a7a6",
+  "a4a3",
+  "g4g5",
+  "f6f7",
+  "g1f1",
+  "a2f2",
+  "f1g1",
+  "a3a2",
+  "g1h1",
+  "f7g6",
+  "h1g1",
+  "g6h5"
+ ],
+ "evals": [
+  23,
+  19,
+  18,
+  26,
+  19,
+  17,
+  14,
+  65,
+  12,
+  7,
+  7,
+  7,
+  -6,
+  -6,
+  -3,
+  -1,
+  0,
+  3,
+  -4,
+  0,
+  0,
+  4,
+  4,
+  5,
+  8,
+  18,
+  19,
+  18,
+  10,
+  10,
+  11,
+  7,
+  0,
+  31,
+  -17,
+  -9,
+  -18,
+  -5,
+  -12,
+  -13,
+  -11,
+  -8,
+  -8,
+  -11,
+  -8,
+  4,
+  -4,
+  -14,
+  -9,
+  4,
+  -35,
+  3,
+  -7,
+  -13,
+  -5,
+  -7,
+  -12,
+  -14,
+  -35,
+  -11,
+  -27,
+  -61,
+  -95,
+  -85,
+  -97,
+  -98,
+  -104,
+  -96,
+  -110,
+  -115,
+  -97,
+  -145,
+  -174,
+  -157,
+  -157,
+  -168,
+  -172,
+  -203,
+  -204,
+  -198,
+  -196,
+  -193,
+  -238,
+  -181,
+  -198,
+  -165,
+  -367,
+  -172,
+  -194,
+  -220,
+  -192,
+  -192,
+  -174,
+  -257,
+  -325,
+  -355,
+  -355,
+  -201,
+  -143,
+  -99,
+  -113,
+  -84,
+  -401,
+  -601,
+  -640,
+  -702,
+  -704,
+  -707,
+  -731,
+  -747,
+  -779,
+  -806
+ ],
+ "comments": {
+  "5": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v2",
+     "params": {
+      "attacker": "♝b4",
+      "front": "♘c3",
+      "behind": "♔e1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b4",
+     "to": "e1",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "c3",
+     "kind": "target"
+    },
+    {
+     "square": "e1",
+     "kind": "target"
+    }
+   ]
+  },
+  "7": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "O-O"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "d5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d7",
+     "to": "d5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "8": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♘f3"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "e4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e2",
+     "to": "e4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "22": {
+   "comment": [
+    {
+     "key": "coach.good.discovered_attack.v1",
+     "params": {
+      "attacker": "♗d2",
+      "target": "♝b4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d2",
+     "to": "b4",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "b4",
+     "kind": "target"
+    }
+   ]
+  },
+  "34": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♘c3"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "a3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a2",
+     "to": "a3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "83": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♚f7"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "g6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g7",
+     "to": "g6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "86": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v1",
+     "params": {
+      "move": "♖b8"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♖a7+"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a8",
+     "to": "a7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "87": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♚f6"
+     }
+    },
+    {
+     "key": "coach.best.pos_king_active.v2",
+     "params": {
+      "move": "♚e7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f7",
+     "to": "e7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "97": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "hxg3"
+     }
+    },
+    {
+     "key": "coach.missed.hanging.v1",
+     "params": {
+      "piece": "♙h3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g4",
+     "to": "h3",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "h3",
+     "kind": "target"
+    }
+   ]
+  },
+  "100": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v2",
+     "params": {
+      "attacker": "♖a6",
+      "front": "♟e6",
+      "behind": "♚f6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a6",
+     "to": "f6",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "e6",
+     "kind": "target"
+    },
+    {
+     "square": "f6",
+     "kind": "target"
+    }
+   ]
+  },
+  "102": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v1",
+     "params": {
+      "move": "g5+"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♖a7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a6",
+     "to": "a7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  }
+ },
+ "stops": [
+  {
+   "ply": 23,
+   "move": "b4d2",
+   "best_cp": -5,
+   "gap_cp": 154,
+   "lines": [
+    [
+     "b4d2",
+     -5
+    ],
+    [
+     "f6d5",
+     -159
+    ],
+    [
+     "a7a5",
+     -286
+    ]
+   ]
+  },
+  {
+   "ply": 47,
+   "move": "f8b8",
+   "best_cp": 26,
+   "gap_cp": 390,
+   "lines": [
+    [
+     "f8b8",
+     26
+    ],
+    [
+     "f8a8",
+     -364
+    ],
+    [
+     "g7g6",
+     -567
+    ]
+   ]
+  },
+  {
+   "ply": 49,
+   "move": "b3b6",
+   "best_cp": 16,
+   "gap_cp": 428,
+   "lines": [
+    [
+     "b3b6",
+     16
+    ],
+    [
+     "b3b7",
+     -412
+    ],
+    [
+     "b2c4",
+     -502
+    ]
+   ]
+  },
+  {
+   "ply": 73,
+   "move": "f7f5",
+   "best_cp": 218,
+   "gap_cp": 201,
+   "lines": [
+    [
+     "f7f5",
+     218
+    ],
+    [
+     "e4c4",
+     17
+    ],
+    [
+     "e4b4",
+     15
+    ]
+   ]
+  },
+  {
+   "ply": 95,
+   "move": "b4b2",
+   "best_cp": 355,
+   "gap_cp": 337,
+   "lines": [
+    [
+     "b4b2",
+     355
+    ],
+    [
+     "g4h3",
+     18
+    ],
+    [
+     "b4b3",
+     5
+    ]
+   ]
+  },
+  {
+   "ply": 107,
+   "move": "a3a2",
+   "best_cp": 776,
+   "gap_cp": 161,
+   "lines": [
+    [
+     "a3a2",
+     776
+    ],
+    [
+     "f2a2",
+     615
+    ],
+    [
+     "f7g6",
+     201
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Защита Нимцовича, система 4.Qc2 с 5...c5. Чёрные сдваивают ладьи на линии «b» (24...Rfb8, 25...R3b6) и давят на ферзевый фланг.",
+  "uk": "Захист Німцовича, система 4.Qc2 з 5...c5. Чорні здвоюють тури на лінії «b» (24...Rfb8, 25...R3b6) і тиснуть на ферзевий фланг.",
+  "en": "A Nimzo-Indian Defence, 4.Qc2 with 5...c5. Black doubles rooks on the b-file (24...Rfb8, 25...R3b6) and presses on the queenside."
+ },
+ "summary": {
+  "ru": "Давление по линии «b» приносит плоды: ладья вторгается (48...Rb2+), а после ошибки 52.g5+ проходная «a» доходит до a2 (54...a2). Урок: полуоткрытая линия против пешек соперника — основа долгого плана; сдвоенные ладьи на ней создают давление, которое трудно выдержать.",
+  "uk": "Тиск по лінії «b» приносить плоди: тура вторгається (48...Rb2+), а після помилки 52.g5+ прохідний «a» доходить до a2 (54...a2). Урок: напіввідкрита лінія проти пішаків суперника — основа довгого плану; здвоєні тури на ній створюють тиск, який важко витримати.",
+  "en": "The pressure along the b-file bears fruit: the rook invades (48...Rb2+), and after the mistake 52.g5+ the a-pawn reaches a2 (54...a2). Lesson: a half-open file against the opponent's pawns is the basis of a long-term plan; doubled rooks on it create pressure that is hard to withstand."
+ }
+}

@@ -16,6 +16,7 @@ import {LearnPage, LessonPage} from './components/learn/LearnPage';
 import {GuessPage} from './components/guess/GuessPage';
 import {BasicsPage, BasicsSectionPage} from './components/learn/BasicsPage';
 import {MateConstructionPage, MateCoursePage, MateExamPage} from './components/learn/MateCourse';
+import {ClassicGamePage, ClassicsPage} from './components/learn/ClassicsPage';
 import {TournamentView, TournamentsPage} from './components/tournaments/TournamentsPage';
 import {CHAMPIONS_LIST} from './config/champions';
 import {API_BASE_URL} from './config/api';
@@ -484,6 +485,8 @@ export default function App() {
                         <Route path="/learn/mates" element={<MateCoursePage/>}/>
                         <Route path="/learn/mates/exam" element={<MateExamPage/>}/>
                         <Route path="/learn/mates/:theme" element={<MateConstructionPage/>}/>
+                        <Route path="/learn/classics" element={<ClassicsPage/>}/>
+                        <Route path="/learn/classics/:gameId" element={<ClassicGamePage/>}/>
                         <Route path="/guess" element={<GuessPage/>}/>
                         <Route path="/guess/:positionId" element={<GuessPage/>}/>
                     <Route path="/learn/:lessonId" element={<LessonPage/>}/>

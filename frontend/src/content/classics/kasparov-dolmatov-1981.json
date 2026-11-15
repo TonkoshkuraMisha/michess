@@ -1,0 +1,595 @@
+{
+ "id": "kasparov-dolmatov-1981",
+ "white": "Kasparov, Gary",
+ "black": "Dolmatov, Sergey",
+ "event": "URS-ch49",
+ "year": "1981",
+ "result": "1-0",
+ "moves": [
+  "d2d4",
+  "d7d5",
+  "c2c4",
+  "c7c6",
+  "g1f3",
+  "g8f6",
+  "b1c3",
+  "d5c4",
+  "a2a4",
+  "c8f5",
+  "e2e3",
+  "e7e6",
+  "f1c4",
+  "f8b4",
+  "e1g1",
+  "b8d7",
+  "d1b3",
+  "a7a5",
+  "c3a2",
+  "b4e7",
+  "f3h4",
+  "f5g6",
+  "g2g3",
+  "d8b6",
+  "a2c3",
+  "b6b3",
+  "c4b3",
+  "g6d3",
+  "f1d1",
+  "d3e4",
+  "c3e4",
+  "f6e4",
+  "f2f3",
+  "e4d6",
+  "e3e4",
+  "g7g5",
+  "h4g2",
+  "h7h5",
+  "g2e3",
+  "c6c5",
+  "d4c5",
+  "d7c5",
+  "b3c2",
+  "c5d7",
+  "b2b3",
+  "f7f6",
+  "g1g2",
+  "d7e5",
+  "c1b2",
+  "e8f7",
+  "d1d2",
+  "a8d8",
+  "a1d1",
+  "b7b6",
+  "b2d4",
+  "d6c8",
+  "f3f4",
+  "g5f4",
+  "g3f4",
+  "h8g8",
+  "g2f2",
+  "e5g4",
+  "e3g4",
+  "g8g4",
+  "f2f3",
+  "d8g8",
+  "d4f2",
+  "e6e5",
+  "f4e5",
+  "f6e5",
+  "f2g3",
+  "g8f8",
+  "f3g2",
+  "h5h4",
+  "d1f1",
+  "f7e8",
+  "f1f8",
+  "e8f8",
+  "g2f3",
+  "g4g5",
+  "g3h4",
+  "g5h5",
+  "h4g3",
+  "c8a7",
+  "d2f2",
+  "f8g7",
+  "h2h4",
+  "a7c6",
+  "f3g4",
+  "h5h8",
+  "c2d3"
+ ],
+ "evals": [
+  23,
+  23,
+  25,
+  35,
+  30,
+  29,
+  25,
+  40,
+  35,
+  35,
+  22,
+  23,
+  33,
+  25,
+  29,
+  35,
+  31,
+  29,
+  1,
+  39,
+  7,
+  21,
+  -13,
+  27,
+  -17,
+  -22,
+  -19,
+  -17,
+  -15,
+  45,
+  35,
+  42,
+  25,
+  24,
+  26,
+  58,
+  67,
+  83,
+  91,
+  129,
+  39,
+  25,
+  22,
+  22,
+  20,
+  22,
+  14,
+  12,
+  32,
+  25,
+  22,
+  52,
+  47,
+  48,
+  22,
+  22,
+  22,
+  25,
+  27,
+  27,
+  27,
+  25,
+  25,
+  28,
+  22,
+  79,
+  37,
+  32,
+  23,
+  25,
+  25,
+  25,
+  18,
+  161,
+  162,
+  299,
+  340,
+  300,
+  300,
+  330,
+  315,
+  386,
+  361,
+  361,
+  273,
+  306,
+  395,
+  422,
+  420,
+  451,
+  462
+ ],
+ "comments": {
+  "13": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v1",
+     "params": {
+      "attacker": "♝b4",
+      "front": "♘c3",
+      "behind": "♔e1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b4",
+     "to": "e1",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "c3",
+     "kind": "target"
+    },
+    {
+     "square": "e1",
+     "kind": "target"
+    }
+   ]
+  },
+  "29": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♝e4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♝a6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d3",
+     "to": "a6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "40": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "dxc5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "d5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d4",
+     "to": "d5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "65": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♜dg8"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♜h4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g4",
+     "to": "h4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "73": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "h4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♞d6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c8",
+     "to": "d6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "74": {
+   "comment": [
+    {
+     "key": "coach.good.skewer.v2",
+     "params": {
+      "attacker": "♖f1",
+      "front": "♚f7",
+      "behind": "♜f8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f1",
+     "to": "f8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "f7",
+     "kind": "target"
+    },
+    {
+     "square": "f8",
+     "kind": "target"
+    }
+   ]
+  },
+  "75": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♚e8"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♚e6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f7",
+     "to": "e6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "80": {
+   "comment": [
+    {
+     "key": "coach.good.skewer.v2",
+     "params": {
+      "attacker": "♗h4",
+      "front": "♜g5",
+      "behind": "♝e7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "h4",
+     "to": "e7",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "g5",
+     "kind": "target"
+    },
+    {
+     "square": "e7",
+     "kind": "target"
+    }
+   ]
+  },
+  "81": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♜h5"
+     }
+    },
+    {
+     "key": "coach.best.discovered_attack.v2",
+     "params": {
+      "move": "♜g6",
+      "attacker": "♝e7",
+      "target": "♗h4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g5",
+     "to": "g6",
+     "kind": "best"
+    },
+    {
+     "from": "e7",
+     "to": "h4",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "h4",
+     "kind": "target"
+    }
+   ]
+  },
+  "84": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♖f2"
+     }
+    },
+    {
+     "key": "coach.best.pos_passed_push.v1",
+     "params": {
+      "move": "h4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "h2",
+     "to": "h4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  }
+ },
+ "stops": [
+  {
+   "ply": 36,
+   "move": "h4g2",
+   "best_cp": 73,
+   "gap_cp": 199,
+   "lines": [
+    [
+     "h4g2",
+     73
+    ],
+    [
+     "e4e5",
+     -126
+    ],
+    [
+     "d4d5",
+     -386
+    ]
+   ]
+  },
+  {
+   "ply": 60,
+   "move": "g2f2",
+   "best_cp": 17,
+   "gap_cp": 316,
+   "lines": [
+    [
+     "g2f2",
+     17
+    ],
+    [
+     "g2h1",
+     -299
+    ],
+    [
+     "g2h3",
+     -312
+    ]
+   ]
+  },
+  {
+   "ply": 74,
+   "move": "d1f1",
+   "best_cp": 174,
+   "gap_cp": 154,
+   "lines": [
+    [
+     "d1f1",
+     174
+    ],
+    [
+     "g2h3",
+     20
+    ],
+    [
+     "d2f2",
+     -240
+    ]
+   ]
+  },
+  {
+   "ply": 76,
+   "move": "f1f8",
+   "best_cp": 311,
+   "gap_cp": 716,
+   "lines": [
+    [
+     "f1f8",
+     311
+    ],
+    [
+     "f1c1",
+     -405
+    ],
+    [
+     "c2d1",
+     -484
+    ]
+   ]
+  },
+  {
+   "ply": 80,
+   "move": "g3h4",
+   "best_cp": 326,
+   "gap_cp": 219,
+   "lines": [
+    [
+     "g3h4",
+     326
+    ],
+    [
+     "g3f2",
+     107
+    ],
+    [
+     "g3e1",
+     81
+    ]
+   ]
+  },
+  {
+   "ply": 82,
+   "move": "h4g3",
+   "best_cp": 369,
+   "gap_cp": 245,
+   "lines": [
+    [
+     "h4g3",
+     369
+    ],
+    [
+     "h4e7",
+     124
+    ],
+    [
+     "h4f2",
+     64
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Славянская защита. Почти 40 ходов позиция остаётся равной.",
+  "uk": "Слов'янський захист. Майже 40 ходів позиція залишається рівною.",
+  "en": "A Slav Defence. For almost 40 moves the position stays level."
+ },
+ "summary": {
+  "ru": "Продвижение 37...h4 стало ошибкой: после размена ладей (38.Rf1+, 39.Rxf8+) белые забирают пешку — 41.Bxh4. Урок: в эндшпиле пешка, ушедшая вперёд без защиты, становится слабостью — продвигайте пешки, только если их есть кому защитить.",
+  "uk": "Просування 37...h4 стало помилкою: після розміну тур (38.Rf1+, 39.Rxf8+) білі забирають пішака — 41.Bxh4. Урок: в ендшпілі пішак, що пішов уперед без захисту, стає слабкістю — просувайте пішаків, лише якщо є кому їх захистити.",
+  "en": "The advance 37...h4 was a mistake: after the rook trade (38.Rf1+, 39.Rxf8+) White picks up the pawn — 41.Bxh4. Lesson: in the endgame a pawn that runs ahead without protection becomes a weakness — advance pawns only when they can be defended."
+ }
+}

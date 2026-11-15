@@ -1,0 +1,692 @@
+{
+ "id": "botvinnik-tal-1961",
+ "white": "Botvinnik, Mikhail",
+ "black": "Tal, Mihail",
+ "event": "World Championship 24th",
+ "year": "1961",
+ "result": "1-0",
+ "moves": [
+  "c2c4",
+  "g8f6",
+  "b1c3",
+  "e7e6",
+  "d2d4",
+  "f8b4",
+  "a2a3",
+  "b4c3",
+  "b2c3",
+  "b7b6",
+  "f2f3",
+  "c8a6",
+  "e2e4",
+  "d7d5",
+  "c4d5",
+  "a6f1",
+  "e1f1",
+  "e6d5",
+  "c1g5",
+  "h7h6",
+  "d1a4",
+  "c7c6",
+  "g5h4",
+  "d5e4",
+  "a1e1",
+  "g7g5",
+  "h4f2",
+  "d8e7",
+  "g1e2",
+  "b6b5",
+  "a4c2",
+  "e7a3",
+  "h2h4",
+  "g5h4",
+  "f2h4",
+  "b8d7",
+  "e2g3",
+  "e8c8",
+  "g3e4",
+  "h8e8",
+  "f1f2",
+  "f6e4",
+  "f3e4",
+  "f7f6",
+  "e1a1",
+  "a3e7",
+  "a1a7",
+  "e7e4",
+  "c2e4",
+  "e8e4",
+  "a7a8",
+  "d7b8",
+  "h4g3",
+  "c8b7",
+  "h1a1",
+  "d8c8",
+  "a8a7",
+  "b7b6",
+  "g3b8",
+  "b5b4",
+  "b8d6",
+  "b4c3",
+  "d6c5",
+  "b6b5",
+  "a1a4"
+ ],
+ "evals": [
+  18,
+  26,
+  11,
+  48,
+  23,
+  16,
+  12,
+  -4,
+  -10,
+  -11,
+  1,
+  11,
+  30,
+  85,
+  82,
+  74,
+  85,
+  93,
+  14,
+  14,
+  -2,
+  28,
+  -6,
+  -3,
+  -7,
+  78,
+  75,
+  91,
+  108,
+  108,
+  94,
+  157,
+  160,
+  180,
+  189,
+  198,
+  196,
+  196,
+  126,
+  276,
+  328,
+  321,
+  329,
+  386,
+  386,
+  565,
+  534,
+  560,
+  550,
+  564,
+  594,
+  595,
+  585,
+  660,
+  658,
+  669,
+  669,
+  649,
+  637,
+  651,
+  645,
+  818,
+  99995,
+  99995,
+  99996
+ ],
+ "comments": {
+  "5": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v2",
+     "params": {
+      "attacker": "♝b4",
+      "front": "♘c3",
+      "behind": "♔e1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b4",
+     "to": "e1",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "c3",
+     "kind": "target"
+    },
+    {
+     "square": "e1",
+     "kind": "target"
+    }
+   ]
+  },
+  "13": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "d5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♞c6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b8",
+     "to": "c6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "18": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♗g5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "e5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e4",
+     "to": "e5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "22": {
+   "comment": [
+    {
+     "key": "coach.good.pin_relative.v2",
+     "params": {
+      "attacker": "♗h4",
+      "front": "♞f6",
+      "behind": "♛d8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "h4",
+     "to": "d8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "f6",
+     "kind": "target"
+    },
+    {
+     "square": "d8",
+     "kind": "target"
+    }
+   ]
+  },
+  "24": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v1",
+     "params": {
+      "attacker": "♖e1",
+      "front": "♟e4",
+      "behind": "♚e8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e1",
+     "to": "e8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "e4",
+     "kind": "target"
+    },
+    {
+     "square": "e8",
+     "kind": "target"
+    }
+   ]
+  },
+  "25": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "g5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♞bd7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b8",
+     "to": "d7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "31": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♛xa3"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♞bd7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b8",
+     "to": "d7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "36": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v1",
+     "params": {
+      "attacker": "♖e1",
+      "front": "♟e4",
+      "behind": "♚e8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e1",
+     "to": "e8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "e4",
+     "kind": "target"
+    },
+    {
+     "square": "e8",
+     "kind": "target"
+    }
+   ]
+  },
+  "38": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♘xe4"
+     }
+    },
+    {
+     "key": "coach.missed.hanging.v1",
+     "params": {
+      "piece": "♟e4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f3",
+     "to": "e4",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "e4",
+     "kind": "target"
+    }
+   ]
+  },
+  "39": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♜he8"
+     }
+    },
+    {
+     "key": "coach.best.capture.v2",
+     "params": {
+      "move": "♞xe4",
+      "piece": "♘e4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f6",
+     "to": "e4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "43": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "f6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♚b7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c8",
+     "to": "b7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "45": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♛e7"
+     }
+    },
+    {
+     "key": "coach.threat.hanging.v2",
+     "params": {
+      "piece": "♟a7"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♛f8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a1",
+     "to": "a7",
+     "kind": "threat"
+    },
+    {
+     "from": "a3",
+     "to": "f8",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "a7",
+     "kind": "target"
+    }
+   ]
+  },
+  "46": {
+   "comment": [
+    {
+     "key": "coach.good.pin_relative.v1",
+     "params": {
+      "attacker": "♖a7",
+      "front": "♞d7",
+      "behind": "♛e7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a7",
+     "to": "e7",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "d7",
+     "kind": "target"
+    },
+    {
+     "square": "e7",
+     "kind": "target"
+    }
+   ]
+  },
+  "50": {
+   "comment": [
+    {
+     "key": "coach.good.skewer.v1",
+     "params": {
+      "attacker": "♖a8",
+      "front": "♚c8",
+      "behind": "♜d8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a8",
+     "to": "d8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "c8",
+     "kind": "target"
+    },
+    {
+     "square": "d8",
+     "kind": "target"
+    }
+   ]
+  },
+  "53": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♚b7"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♚d7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c8",
+     "to": "d7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "61": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "bxc3"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♚b5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b6",
+     "to": "b5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  }
+ },
+ "stops": [
+  {
+   "ply": 44,
+   "move": "e1a1",
+   "best_cp": 394,
+   "gap_cp": 313,
+   "lines": [
+    [
+     "e1a1",
+     394
+    ],
+    [
+     "e4e5",
+     81
+    ],
+    [
+     "f2g1",
+     64
+    ]
+   ]
+  },
+  {
+   "ply": 46,
+   "move": "a1a7",
+   "best_cp": 536,
+   "gap_cp": 309,
+   "lines": [
+    [
+     "a1a7",
+     536
+    ],
+    [
+     "h1e1",
+     227
+    ],
+    [
+     "c2a2",
+     195
+    ]
+   ]
+  },
+  {
+   "ply": 50,
+   "move": "a7a8",
+   "best_cp": 583,
+   "gap_cp": 170,
+   "lines": [
+    [
+     "a7a8",
+     583
+    ],
+    [
+     "h4g3",
+     413
+    ],
+    [
+     "f2f3",
+     55
+    ]
+   ]
+  },
+  {
+   "ply": 52,
+   "move": "h4g3",
+   "best_cp": 582,
+   "gap_cp": 321,
+   "lines": [
+    [
+     "h4g3",
+     582
+    ],
+    [
+     "f2f3",
+     261
+    ],
+    [
+     "g2g4",
+     30
+    ]
+   ]
+  },
+  {
+   "ply": 54,
+   "move": "h1a1",
+   "best_cp": 686,
+   "gap_cp": 564,
+   "lines": [
+    [
+     "h1a1",
+     686
+    ],
+    [
+     "a8a5",
+     66
+    ],
+    [
+     "a8a3",
+     122
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Матч-реванш за звание чемпиона мира 1961 года. Защита Нимцовича, вариант Земиша: чёрные сразу отдают слона за коня c3 (4...Bxc3+), и у белых сдвоенные пешки.",
+  "uk": "Матч-реванш за звання чемпіона світу 1961 року. Захист Німцовича, варіант Земіша: чорні одразу віддають слона за коня c3 (4...Bxc3+), і в білих здвоєні пішаки.",
+  "en": "The 1961 world championship return match. A Nimzo-Indian Defence, Sämisch Variation: Black gives up the bishop for the c3 knight at once (4...Bxc3+), leaving White with doubled pawns."
+ },
+ "summary": {
+  "ru": "Белые захватили открытую линию «a»: 23.Ra1, 24.Rxa7, 26.Ra8+ и сдвоение ладей 28.Rha1. Урок: открытая линия — дорога для ладей; кто первым её занял и сдвоил ладьи, тот вторгается в лагерь соперника.",
+  "uk": "Білі захопили відкриту лінію «a»: 23.Ra1, 24.Rxa7, 26.Ra8+ і здвоєння тур 28.Rha1. Урок: відкрита лінія — дорога для тур; хто першим її зайняв і здвоїв тури, той вторгається в табір суперника.",
+  "en": "White took over the open a-file: 23.Ra1, 24.Rxa7, 26.Ra8+ and doubled rooks with 28.Rha1. Lesson: an open file is a highway for the rooks; whoever occupies it first and doubles rooks breaks into the opponent's camp."
+ }
+}

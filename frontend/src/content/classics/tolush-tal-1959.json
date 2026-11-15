@@ -1,0 +1,736 @@
+{
+ "id": "tolush-tal-1959",
+ "white": "Tolush, Alexander V",
+ "black": "Tal, Mihail",
+ "event": "Riga",
+ "year": "1959",
+ "result": "0-1",
+ "moves": [
+  "e2e4",
+  "c7c5",
+  "g1f3",
+  "e7e6",
+  "d2d4",
+  "c5d4",
+  "f3d4",
+  "a7a6",
+  "b1c3",
+  "d8c7",
+  "f1d3",
+  "b8c6",
+  "d4e2",
+  "g8f6",
+  "e1g1",
+  "f8e7",
+  "e2g3",
+  "b7b5",
+  "c1e3",
+  "c8b7",
+  "f2f4",
+  "d7d6",
+  "d1e2",
+  "e8g8",
+  "a1d1",
+  "a8c8",
+  "a2a4",
+  "b5b4",
+  "c3b1",
+  "d6d5",
+  "e4e5",
+  "f6d7",
+  "b1d2",
+  "e7c5",
+  "d2b3",
+  "c5e3",
+  "e2e3",
+  "d7b6",
+  "g3h5",
+  "g7g6",
+  "h5f6",
+  "g8g7",
+  "f1f3",
+  "b6a4",
+  "f3h3",
+  "f8h8",
+  "d1e1",
+  "c7b6",
+  "e3b6",
+  "a4b6",
+  "b3c5",
+  "c6e5",
+  "f6h5",
+  "g6h5",
+  "c5b7",
+  "e5d3",
+  "c2d3",
+  "c8c7",
+  "b7a5",
+  "h8c8",
+  "a5b3",
+  "c7c2",
+  "f4f5",
+  "c2b2",
+  "b3d4",
+  "e6e5",
+  "f5f6",
+  "g7f6",
+  "h3f3",
+  "f6g7",
+  "d4f5",
+  "g7f8",
+  "e1e5",
+  "c8c1",
+  "f3f1",
+  "b2b1"
+ ],
+ "evals": [
+  27,
+  36,
+  38,
+  39,
+  21,
+  34,
+  33,
+  47,
+  34,
+  25,
+  56,
+  65,
+  -32,
+  -26,
+  -32,
+  -3,
+  -58,
+  -43,
+  -51,
+  -29,
+  -36,
+  -15,
+  -128,
+  1,
+  -23,
+  -16,
+  -5,
+  10,
+  6,
+  32,
+  28,
+  30,
+  30,
+  49,
+  54,
+  53,
+  48,
+  335,
+  345,
+  396,
+  268,
+  244,
+  59,
+  144,
+  17,
+  0,
+  -51,
+  -52,
+  -51,
+  -54,
+  -254,
+  -284,
+  -352,
+  -357,
+  -360,
+  -425,
+  -409,
+  -391,
+  -385,
+  -385,
+  -394,
+  -388,
+  -388,
+  -386,
+  -396,
+  -361,
+  -368,
+  -367,
+  -380,
+  -367,
+  -375,
+  -398,
+  -616,
+  -628,
+  -650,
+  -617
+ ],
+ "comments": {
+  "12": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♘de2"
+     }
+    },
+    {
+     "key": "coach.best.capture.v2",
+     "params": {
+      "move": "♘xc6",
+      "piece": "♞c6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d4",
+     "to": "c6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "16": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♘g3"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "f4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f2",
+     "to": "f4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "22": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♕e2"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "a3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a2",
+     "to": "a3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "23": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "O-O"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "h5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "h7",
+     "to": "h5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "37": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v2",
+     "params": {
+      "move": "♞b6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "a5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a6",
+     "to": "a5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "39": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "g6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♞d7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b6",
+     "to": "d7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "40": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♘f6+"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "f5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f4",
+     "to": "f5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "42": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♖f3"
+     }
+    },
+    {
+     "key": "coach.best.pin_absolute.v1",
+     "params": {
+      "move": "♕g3",
+      "attacker": "♕g3",
+      "front": "♟g6",
+      "behind": "♚g7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e3",
+     "to": "g3",
+     "kind": "best"
+    },
+    {
+     "from": "g3",
+     "to": "g7",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "g6",
+     "kind": "target"
+    },
+    {
+     "square": "g7",
+     "kind": "target"
+    }
+   ]
+  },
+  "44": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♖h3"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♕c1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e3",
+     "to": "c1",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "46": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♖e1"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♕c1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e3",
+     "to": "c1",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "50": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v1",
+     "params": {
+      "move": "♘c5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♖a1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e1",
+     "to": "a1",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "51": {
+   "comment": [
+    {
+     "key": "coach.good.discovered_attack.v2",
+     "params": {
+      "attacker": "♜c8",
+      "target": "♘c5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c8",
+     "to": "c5",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "c5",
+     "kind": "target"
+    }
+   ]
+  },
+  "52": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♘h5+"
+     }
+    },
+    {
+     "key": "coach.threat.hanging.v2",
+     "params": {
+      "piece": "♘h5"
+     }
+    },
+    {
+     "key": "coach.missed.hanging.v1",
+     "params": {
+      "piece": "♞e5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g6",
+     "to": "h5",
+     "kind": "threat"
+    },
+    {
+     "from": "f4",
+     "to": "e5",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "h5",
+     "kind": "target"
+    },
+    {
+     "square": "e5",
+     "kind": "target"
+    }
+   ]
+  },
+  "72": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v1",
+     "params": {
+      "move": "♖xe5"
+     }
+    },
+    {
+     "key": "coach.threat.back_rank.v2",
+     "params": {
+      "king": "♔g1",
+      "square": "b1"
+     }
+    },
+    {
+     "key": "coach.best.pin_absolute.v1",
+     "params": {
+      "move": "♘h6",
+      "attacker": "♖f3",
+      "front": "♟f7",
+      "behind": "♚f8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f5",
+     "to": "h6",
+     "kind": "best"
+    },
+    {
+     "from": "f3",
+     "to": "f8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "b1",
+     "kind": "target"
+    },
+    {
+     "square": "f7",
+     "kind": "target"
+    },
+    {
+     "square": "f8",
+     "kind": "target"
+    }
+   ]
+  }
+ },
+ "stops": [
+  {
+   "ply": 41,
+   "move": "g8g7",
+   "best_cp": -278,
+   "gap_cp": 470,
+   "lines": [
+    [
+     "g8g7",
+     -278
+    ],
+    [
+     "g8h8",
+     -748
+    ]
+   ]
+  },
+  {
+   "ply": 45,
+   "move": "f8h8",
+   "best_cp": -36,
+   "gap_cp": 356,
+   "lines": [
+    [
+     "f8h8",
+     -36
+    ],
+    [
+     "h7h6",
+     -392
+    ],
+    [
+     "f8g8",
+     -620
+    ]
+   ]
+  },
+  {
+   "ply": 47,
+   "move": "c7b6",
+   "best_cp": 64,
+   "gap_cp": 164,
+   "lines": [
+    [
+     "c7b6",
+     64
+    ],
+    [
+     "d5d4",
+     -100
+    ],
+    [
+     "h7h6",
+     -124
+    ]
+   ]
+  },
+  {
+   "ply": 51,
+   "move": "c6e5",
+   "best_cp": 323,
+   "gap_cp": 292,
+   "lines": [
+    [
+     "c6e5",
+     323
+    ],
+    [
+     "c6d8",
+     31
+    ],
+    [
+     "c6a5",
+     21
+    ]
+   ]
+  },
+  {
+   "ply": 53,
+   "move": "g6h5",
+   "best_cp": 387,
+   "gap_cp": 288,
+   "lines": [
+    [
+     "g6h5",
+     387
+    ],
+    [
+     "g7f8",
+     99
+    ],
+    [
+     "g7g8",
+     0
+    ]
+   ]
+  },
+  {
+   "ply": 55,
+   "move": "e5d3",
+   "best_cp": 451,
+   "gap_cp": 300,
+   "lines": [
+    [
+     "e5d3",
+     451
+    ],
+    [
+     "e5d7",
+     151
+    ],
+    [
+     "e5c6",
+     91
+    ]
+   ]
+  },
+  {
+   "ply": 57,
+   "move": "c8c7",
+   "best_cp": 431,
+   "gap_cp": 165,
+   "lines": [
+    [
+     "c8c7",
+     431
+    ],
+    [
+     "b6d7",
+     266
+    ],
+    [
+     "c8c6",
+     261
+    ]
+   ]
+  },
+  {
+   "ply": 71,
+   "move": "g7f8",
+   "best_cp": 472,
+   "gap_cp": 160,
+   "lines": [
+    [
+     "g7f8",
+     472
+    ],
+    [
+     "g7h8",
+     312
+    ],
+    [
+     "g7f6",
+     246
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Сицилианская защита, система с ...a6 и ...Qc7. К 20-му ходу у белых большой перевес, но Таль защищается изобретательно.",
+  "uk": "Сицилійський захист, система з ...a6 і ...Qc7. До 20-го ходу в білих велика перевага, але Таль захищається винахідливо.",
+  "en": "A Sicilian Defence with ...a6 and ...Qc7. By move 20 White has a big advantage, but Tal defends resourcefully."
+ },
+ "summary": {
+  "ru": "Ошибка 26.Nc5 переворачивает партию: конь чёрных забирает пешку e5 (26...Nxe5), а затем и слона (28...Nxd3), и уже белым приходится защищаться. Урок: не сдавайтесь в трудной позиции — ищите ходы, которые ставят сопернику задачи, и ошибка может последовать.",
+  "uk": "Помилка 26.Nc5 перевертає партію: кінь чорних забирає пішака e5 (26...Nxe5), а потім і слона (28...Nxd3), і вже білим доводиться захищатися. Урок: не здавайтеся у важкій позиції — шукайте ходи, що ставлять суперникові задачі, і помилка може статися.",
+  "en": "The mistake 26.Nc5 turns the game around: Black's knight takes the e5-pawn (26...Nxe5) and then a bishop (28...Nxd3), and now White has to defend. Lesson: do not give up in a difficult position — look for moves that set your opponent problems, and a mistake may follow."
+ }
+}

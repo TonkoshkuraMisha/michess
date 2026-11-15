@@ -1,0 +1,911 @@
+{
+ "id": "konstantinopolsky-smyslov-1945",
+ "white": "Konstantinopolsky, Alexander",
+ "black": "Smyslov, Vassily",
+ "event": "URS-ch14",
+ "year": "1945",
+ "result": "1-0",
+ "moves": [
+  "d2d4",
+  "g8f6",
+  "g1f3",
+  "d7d5",
+  "c2c4",
+  "c7c6",
+  "e2e3",
+  "e7e6",
+  "b1d2",
+  "g7g6",
+  "f1d3",
+  "f8g7",
+  "e1g1",
+  "e8g8",
+  "e3e4",
+  "d5e4",
+  "d2e4",
+  "f6e4",
+  "d3e4",
+  "d8c7",
+  "c1g5",
+  "h7h6",
+  "g5e3",
+  "b8d7",
+  "d1c1",
+  "f7f5",
+  "e4c2",
+  "g6g5",
+  "f1e1",
+  "c6c5",
+  "h2h4",
+  "g5g4",
+  "e3h6",
+  "d7f6",
+  "h6g7",
+  "c7g7",
+  "f3g5",
+  "g4g3",
+  "f2g3",
+  "f6g4",
+  "c1f4",
+  "g7f6",
+  "c2d1",
+  "f6d4",
+  "f4d4",
+  "c5d4",
+  "d1g4",
+  "f5g4",
+  "a1d1",
+  "f8d8",
+  "d1d3",
+  "b7b5",
+  "c4b5",
+  "a8b8",
+  "e1e4",
+  "b8b5",
+  "e4d4",
+  "b5d5",
+  "d4d5",
+  "e6d5",
+  "d3d4",
+  "c8f5",
+  "g1f2",
+  "g8g7",
+  "f2e3",
+  "g7f6",
+  "d4a4",
+  "d8d7",
+  "e3d4",
+  "f5b1",
+  "a4a6",
+  "f6f5",
+  "a6a5",
+  "f5g6",
+  "b2b4",
+  "d7c7",
+  "a5a6",
+  "g6f5",
+  "a6a5",
+  "c7c4",
+  "d4d5",
+  "c4b4",
+  "a2a3",
+  "b4b2",
+  "d5d4",
+  "f5g6",
+  "a5a6",
+  "g6g7",
+  "a6a7",
+  "g7g6",
+  "a7a6",
+  "g6g7",
+  "h4h5",
+  "b2g2",
+  "h5h6",
+  "g7f8",
+  "g5e4",
+  "f8f7",
+  "a6f6",
+  "f7g8",
+  "e4g5",
+  "b1c2",
+  "f6c6",
+  "g8f8",
+  "c6c7",
+  "c2b1",
+  "h6h7"
+ ],
+ "evals": [
+  23,
+  19,
+  24,
+  24,
+  24,
+  25,
+  29,
+  30,
+  31,
+  47,
+  55,
+  43,
+  40,
+  38,
+  17,
+  25,
+  44,
+  49,
+  56,
+  51,
+  29,
+  45,
+  50,
+  66,
+  63,
+  160,
+  159,
+  145,
+  87,
+  115,
+  109,
+  302,
+  418,
+  418,
+  338,
+  338,
+  366,
+  334,
+  333,
+  339,
+  343,
+  521,
+  599,
+  577,
+  573,
+  557,
+  556,
+  525,
+  536,
+  547,
+  462,
+  506,
+  381,
+  449,
+  421,
+  403,
+  363,
+  363,
+  346,
+  349,
+  385,
+  380,
+  408,
+  356,
+  392,
+  389,
+  414,
+  408,
+  391,
+  377,
+  396,
+  402,
+  405,
+  551,
+  395,
+  446,
+  447,
+  464,
+  409,
+  408,
+  413,
+  366,
+  419,
+  445,
+  445,
+  462,
+  424,
+  471,
+  468,
+  485,
+  521,
+  557,
+  564,
+  658,
+  644,
+  596,
+  493,
+  546,
+  516,
+  526,
+  509,
+  617,
+  627,
+  623,
+  600,
+  654,
+  644
+ ],
+ "comments": {
+  "25": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "f5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "h5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "h6",
+     "to": "h5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "28": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♖e1"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "c5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c4",
+     "to": "c5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "31": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "g4"
+     }
+    },
+    {
+     "key": "coach.threat.hanging.v2",
+     "params": {
+      "piece": "♟h6"
+     }
+    },
+    {
+     "key": "coach.best.capture.v2",
+     "params": {
+      "move": "cxd4",
+      "piece": "♙d4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e3",
+     "to": "h6",
+     "kind": "threat"
+    },
+    {
+     "from": "c5",
+     "to": "d4",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "h6",
+     "kind": "target"
+    }
+   ]
+  },
+  "34": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♗xg7"
+     }
+    },
+    {
+     "key": "coach.best.pos_outpost.v2",
+     "params": {
+      "move": "♘e5",
+      "square": "e5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f3",
+     "to": "e5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "41": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♛f6"
+     }
+    },
+    {
+     "key": "coach.missed.hanging.v1",
+     "params": {
+      "piece": "♙d4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g7",
+     "to": "d4",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "d4",
+     "kind": "target"
+    }
+   ]
+  },
+  "50": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♖d3"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♖e4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e1",
+     "to": "e4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "52": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "cxb5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "c5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c4",
+     "to": "c5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "53": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♜b8"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "a6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a7",
+     "to": "a6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "72": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v2",
+     "params": {
+      "attacker": "♖a5",
+      "front": "♟d5",
+      "behind": "♚f5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a5",
+     "to": "f5",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "d5",
+     "kind": "target"
+    },
+    {
+     "square": "f5",
+     "kind": "target"
+    }
+   ]
+  },
+  "73": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♚g6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♜b7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d7",
+     "to": "b7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "74": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "b4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♘e6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g5",
+     "to": "e6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "75": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♜c7"
+     }
+    },
+    {
+     "key": "coach.best.pos_open_file.v2",
+     "params": {
+      "move": "♜e7",
+      "file": "e"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d7",
+     "to": "e7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "78": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♖a5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♘e6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g5",
+     "to": "e6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "84": {
+   "comment": [
+    {
+     "key": "coach.good.discovered_check.v1",
+     "params": {
+      "attacker": "♖a5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a5",
+     "to": "f5",
+     "kind": "idea"
+    }
+   ],
+   "highlights": []
+  },
+  "87": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♚g7"
+     }
+    },
+    {
+     "key": "coach.threat.hanging.v1",
+     "params": {
+      "piece": "♟a7"
+     }
+    },
+    {
+     "key": "coach.best.pos_king_active.v2",
+     "params": {
+      "move": "♚f5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a6",
+     "to": "a7",
+     "kind": "threat"
+    },
+    {
+     "from": "g6",
+     "to": "f5",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "a7",
+     "kind": "target"
+    }
+   ]
+  },
+  "93": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♜xg2"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♚f8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g7",
+     "to": "f8",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "96": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♘e4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♖a8+"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a6",
+     "to": "a8",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "101": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♝c2"
+     }
+    },
+    {
+     "key": "coach.best.pos_open_file.v2",
+     "params": {
+      "move": "♜d2+",
+      "file": "d"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g2",
+     "to": "d2",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "102": {
+   "comment": [
+    {
+     "key": "coach.good.mate_threat.v2",
+     "params": {
+      "piece": "♖c6",
+      "square": "c8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c6",
+     "to": "c8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": []
+  },
+  "105": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♝b1"
+     }
+    },
+    {
+     "key": "coach.best.pos_open_file.v1",
+     "params": {
+      "move": "♜d2+",
+      "file": "d"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g2",
+     "to": "d2",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "106": {
+   "comment": [
+    {
+     "key": "coach.good.mate_threat.v2",
+     "params": {
+      "piece": "♙h7",
+      "square": "h8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "h7",
+     "to": "h8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": []
+  }
+ },
+ "stops": [
+  {
+   "ply": 32,
+   "move": "e3h6",
+   "best_cp": 408,
+   "gap_cp": 352,
+   "lines": [
+    [
+     "e3h6",
+     408
+    ],
+    [
+     "e3f4",
+     56
+    ],
+    [
+     "f3h2",
+     25
+    ]
+   ]
+  },
+  {
+   "ply": 38,
+   "move": "f2g3",
+   "best_cp": 381,
+   "gap_cp": 163,
+   "lines": [
+    [
+     "f2g3",
+     381
+    ],
+    [
+     "f2f3",
+     218
+    ],
+    [
+     "c1e3",
+     92
+    ]
+   ]
+  },
+  {
+   "ply": 46,
+   "move": "d1g4",
+   "best_cp": 582,
+   "gap_cp": 191,
+   "lines": [
+    [
+     "d1g4",
+     582
+    ],
+    [
+     "c4c5",
+     391
+    ],
+    [
+     "g5e6",
+     333
+    ]
+   ]
+  },
+  {
+   "ply": 58,
+   "move": "d4d5",
+   "best_cp": 453,
+   "gap_cp": 511,
+   "lines": [
+    [
+     "d4d5",
+     453
+    ],
+    [
+     "g5f3",
+     -58
+    ],
+    [
+     "g5e6",
+     -95
+    ]
+   ]
+  },
+  {
+   "ply": 80,
+   "move": "d4d5",
+   "best_cp": 473,
+   "gap_cp": 371,
+   "lines": [
+    [
+     "d4d5",
+     473
+    ],
+    [
+     "d4e3",
+     102
+    ]
+   ]
+  },
+  {
+   "ply": 84,
+   "move": "d5d4",
+   "best_cp": 492,
+   "gap_cp": 179,
+   "lines": [
+    [
+     "d5d4",
+     492
+    ],
+    [
+     "g5e4",
+     313
+    ],
+    [
+     "d5d6",
+     255
+    ]
+   ]
+  },
+  {
+   "ply": 100,
+   "move": "e4g5",
+   "best_cp": 590,
+   "gap_cp": 401,
+   "lines": [
+    [
+     "e4g5",
+     590
+    ],
+    [
+     "f6f4",
+     189
+    ],
+    [
+     "f6g6",
+     113
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Славянская система с ранним ...g6 у чёрных. Смыслов играет активно — 13...f5 и 16...g4, — но эти пешечные броски ослабляют его короля.",
+  "uk": "Слов'янська система з раннім ...g6 у чорних. Смислов грає активно — 13...f5 і 16...g4, — але ці пішакові кидки послаблюють його короля.",
+  "en": "A Slav setup with an early ...g6 for Black. Smyslov plays actively — 13...f5 and 16...g4 — but these pawn thrusts weaken his own king."
+ },
+ "summary": {
+  "ru": "Белые наказали за ослабления: слоны врываются в позицию короля (17.Bxh6, 24.Bxg4), и материальный перевес остаётся у белых до конца. Урок: пешки перед своим королём — его защита; двигая их в атаку, проверяйте, не открываете ли вы дорогу фигурам соперника.",
+  "uk": "Білі покарали за послаблення: слони вриваються в позицію короля (17.Bxh6, 24.Bxg4), і матеріальна перевага залишається в білих до кінця. Урок: пішаки перед власним королем — його захист; рухаючи їх в атаку, перевіряйте, чи не відкриваєте дорогу фігурам суперника.",
+  "en": "White punished the weaknesses: the bishops break into the king's position (17.Bxh6, 24.Bxg4), and White keeps the material edge to the end. Lesson: the pawns in front of your king are its shelter; before throwing them forward, check that you are not opening the road for the opponent's pieces."
+ }
+}

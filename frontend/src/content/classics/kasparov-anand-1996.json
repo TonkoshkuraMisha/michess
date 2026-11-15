@@ -1,0 +1,584 @@
+{
+ "id": "kasparov-anand-1996",
+ "white": "Kasparov, Gary",
+ "black": "Anand, Viswanathan",
+ "event": "Geneve Credit Suisse",
+ "year": "1996",
+ "result": "0-1",
+ "moves": [
+  "g1f3",
+  "g8f6",
+  "c2c4",
+  "g7g6",
+  "b1c3",
+  "f8g7",
+  "e2e4",
+  "d7d6",
+  "d2d4",
+  "e8g8",
+  "f1e2",
+  "e7e5",
+  "c1e3",
+  "f6g4",
+  "e3g5",
+  "f7f6",
+  "g5c1",
+  "b8c6",
+  "e1g1",
+  "f6f5",
+  "c1g5",
+  "g7f6",
+  "g5f6",
+  "g4f6",
+  "e4f5",
+  "c8f5",
+  "d4d5",
+  "c6e7",
+  "d1d2",
+  "g8g7",
+  "f3h4",
+  "f5d7",
+  "f2f4",
+  "e5f4",
+  "d2f4",
+  "e7f5",
+  "h4f5",
+  "d7f5",
+  "g2g4",
+  "f5d7",
+  "g4g5",
+  "f6g4",
+  "f4f8",
+  "d8f8",
+  "f1f8",
+  "a8f8",
+  "e2g4",
+  "d7g4",
+  "c3b5",
+  "f8f4",
+  "b5c7",
+  "f4c4",
+  "c7e8",
+  "g7f8",
+  "e8f6",
+  "g4f5",
+  "a1e1",
+  "c4c2",
+  "e1e8",
+  "f8f7",
+  "e8h8",
+  "c2b2",
+  "h8h7",
+  "f7f8",
+  "h2h4",
+  "a7a5",
+  "h4h5",
+  "g6h5",
+  "f6d7",
+  "f5d7",
+  "h7d7",
+  "b2a2",
+  "d7d6",
+  "a2d2",
+  "d6d8",
+  "f8g7",
+  "d5d6",
+  "b7b5",
+  "g1f1",
+  "a5a4",
+  "f1e1",
+  "d2d5",
+  "d6d7",
+  "b5b4",
+  "d8b8",
+  "d5d7",
+  "b8b4",
+  "d7a7"
+ ],
+ "evals": [
+  16,
+  17,
+  28,
+  29,
+  29,
+  50,
+  62,
+  65,
+  65,
+  60,
+  60,
+  59,
+  66,
+  46,
+  45,
+  46,
+  41,
+  41,
+  17,
+  25,
+  20,
+  36,
+  41,
+  44,
+  45,
+  44,
+  51,
+  49,
+  49,
+  36,
+  24,
+  19,
+  37,
+  85,
+  63,
+  131,
+  142,
+  143,
+  87,
+  89,
+  17,
+  17,
+  26,
+  20,
+  34,
+  14,
+  15,
+  10,
+  0,
+  40,
+  38,
+  25,
+  34,
+  38,
+  14,
+  16,
+  16,
+  8,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  -91,
+  -70,
+  -308,
+  -256,
+  -319,
+  -347,
+  -382,
+  -375,
+  -363,
+  -364,
+  -458,
+  -464,
+  -470,
+  -457,
+  -465,
+  -451,
+  -450,
+  -444,
+  -506,
+  -519,
+  -531,
+  -498
+ ],
+ "comments": {
+  "33": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "exf4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♞f5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e7",
+     "to": "f5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "35": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♞f5"
+     }
+    },
+    {
+     "key": "coach.best.discovered_attack.v1",
+     "params": {
+      "move": "♞g4",
+      "attacker": "♜f8",
+      "target": "♕f4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f6",
+     "to": "g4",
+     "kind": "best"
+    },
+    {
+     "from": "f8",
+     "to": "f4",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "f4",
+     "kind": "target"
+    }
+   ]
+  },
+  "38": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "g4"
+     }
+    },
+    {
+     "key": "coach.best.pos_open_file.v1",
+     "params": {
+      "move": "♖ae1",
+      "file": "e"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a1",
+     "to": "e1",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "40": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "g5"
+     }
+    },
+    {
+     "key": "coach.best.pin_absolute.v1",
+     "params": {
+      "move": "♕d4",
+      "attacker": "♕d4",
+      "front": "♞f6",
+      "behind": "♚g7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f4",
+     "to": "d4",
+     "kind": "best"
+    },
+    {
+     "from": "d4",
+     "to": "g7",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "f6",
+     "kind": "target"
+    },
+    {
+     "square": "g7",
+     "kind": "target"
+    }
+   ]
+  },
+  "41": {
+   "comment": [
+    {
+     "key": "coach.good.discovered_attack.v2",
+     "params": {
+      "attacker": "♜f8",
+      "target": "♕f4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f8",
+     "to": "f4",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "f4",
+     "kind": "target"
+    }
+   ]
+  },
+  "66": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "h5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♖h8+"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "h7",
+     "to": "h8",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "67": {
+   "comment": [
+    {
+     "key": "coach.good.discovered_attack.v1",
+     "params": {
+      "attacker": "♝f5",
+      "target": "♖h7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f5",
+     "to": "h7",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "h7",
+     "kind": "target"
+    }
+   ]
+  },
+  "68": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v1",
+     "params": {
+      "move": "♘d7+"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♖h6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "h7",
+     "to": "h6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "76": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "d6"
+     }
+    },
+    {
+     "key": "coach.best.pos_king_active.v2",
+     "params": {
+      "move": "♔f1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g1",
+     "to": "f1",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "84": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♖b8"
+     }
+    },
+    {
+     "key": "coach.threat.hanging.v2",
+     "params": {
+      "piece": "♙d7"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♖a8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d5",
+     "to": "d7",
+     "kind": "threat"
+    },
+    {
+     "from": "d8",
+     "to": "a8",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "d7",
+     "kind": "target"
+    }
+   ]
+  }
+ },
+ "stops": [
+  {
+   "ply": 41,
+   "move": "f6g4",
+   "best_cp": -16,
+   "gap_cp": 268,
+   "lines": [
+    [
+     "f6g4",
+     -16
+    ],
+    [
+     "f6h5",
+     -284
+    ],
+    [
+     "d7f5",
+     -541
+    ]
+   ]
+  },
+  {
+   "ply": 59,
+   "move": "f8f7",
+   "best_cp": 0,
+   "gap_cp": 247,
+   "lines": [
+    [
+     "f8f7",
+     0
+    ],
+    [
+     "f8g7",
+     -247
+    ]
+   ]
+  },
+  {
+   "ply": 69,
+   "move": "f5d7",
+   "best_cp": 380,
+   "gap_cp": 263,
+   "lines": [
+    [
+     "f5d7",
+     380
+    ],
+    [
+     "f8e8",
+     117
+    ],
+    [
+     "f8g8",
+     106
+    ]
+   ]
+  },
+  {
+   "ply": 71,
+   "move": "b2a2",
+   "best_cp": 405,
+   "gap_cp": 219,
+   "lines": [
+    [
+     "b2a2",
+     405
+    ],
+    [
+     "b7b5",
+     186
+    ],
+    [
+     "b2b1",
+     54
+    ]
+   ]
+  },
+  {
+   "ply": 73,
+   "move": "a2d2",
+   "best_cp": 437,
+   "gap_cp": 326,
+   "lines": [
+    [
+     "a2d2",
+     437
+    ],
+    [
+     "b7b5",
+     111
+    ],
+    [
+     "a2b2",
+     89
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Староиндийская защита: белые — Каспаров, чёрные — Ананд. До 35-го хода позиция в равновесии.",
+  "uk": "Староіндійський захист: білі — Каспаров, чорні — Ананд. До 35-го ходу позиція в рівновазі.",
+  "en": "A King's Indian Defence with Kasparov as White and Anand as Black. Until move 35 the position is balanced."
+ },
+ "summary": {
+  "ru": "Ход 35.Nd7+ оказался ошибкой: после 35...Bxd7 чёрные выигрывают материал, а ладья врывается на вторую горизонталь — 36...Rxa2, 37...Rd2. Урок: ошибиться в равной позиции может даже чемпион мира — и тогда побеждает тот, кто сразу находит опровержение.",
+  "uk": "Хід 35.Nd7+ виявився помилкою: після 35...Bxd7 чорні виграють матеріал, а тура вривається на другу горизонталь — 36...Rxa2, 37...Rd2. Урок: помилитися в рівній позиції може навіть чемпіон світу — і тоді перемагає той, хто одразу знаходить спростування.",
+  "en": "35.Nd7+ turned out to be a mistake: after 35...Bxd7 Black wins material and the rook invades the second rank — 36...Rxa2, 37...Rd2. Lesson: even a world champion can go wrong in a level position — and then the player who finds the refutation at once wins."
+ }
+}

@@ -1,0 +1,746 @@
+{
+ "id": "geller-polugaevsky-1963",
+ "white": "Geller, Efim P",
+ "black": "Polugaevsky, Lev",
+ "event": "URS-ch31",
+ "year": "1963",
+ "result": "0-1",
+ "moves": [
+  "d2d4",
+  "g8f6",
+  "c2c4",
+  "e7e6",
+  "b1c3",
+  "f8b4",
+  "e2e3",
+  "e8g8",
+  "g1f3",
+  "c7c5",
+  "f1e2",
+  "d7d5",
+  "e1g1",
+  "d5c4",
+  "e2c4",
+  "a7a6",
+  "a2a3",
+  "b4a5",
+  "c4d3",
+  "b8d7",
+  "a3a4",
+  "d8e7",
+  "c3e4",
+  "f6e4",
+  "d3e4",
+  "f8d8",
+  "e4b1",
+  "d7f8",
+  "d1e2",
+  "c8d7",
+  "b1e4",
+  "a8b8",
+  "f1d1",
+  "d7e8",
+  "c1d2",
+  "a5d2",
+  "e2d2",
+  "f8d7",
+  "d2c2",
+  "d7f6",
+  "d4c5",
+  "d8d1",
+  "a1d1",
+  "f6e4",
+  "c2e4",
+  "e7c5",
+  "b2b4",
+  "c5c6",
+  "e4d3",
+  "c6a4",
+  "d3d6",
+  "b8c8",
+  "h2h4",
+  "a4c6",
+  "d6d4",
+  "c6c4",
+  "d4d6",
+  "c4c7",
+  "d6d4",
+  "h7h6",
+  "f3e5",
+  "b7b6",
+  "d4d6",
+  "a6a5",
+  "d6c7",
+  "c8c7",
+  "d1d6",
+  "c7b7",
+  "e5c4",
+  "e8b5",
+  "c4a3",
+  "b5d7",
+  "b4a5",
+  "b6a5",
+  "d6a6",
+  "a5a4",
+  "a6a8",
+  "g8h7",
+  "a3c4",
+  "f7f6",
+  "h4h5",
+  "b7b1",
+  "g1h2",
+  "b1b5",
+  "g2g4",
+  "b5b4",
+  "c4d6",
+  "b4g4",
+  "a8a7",
+  "g4h4",
+  "h2g3",
+  "h4h5",
+  "a7d7",
+  "h5d5",
+  "e3e4",
+  "d5d1",
+  "f2f4",
+  "a4a3",
+  "d7a7",
+  "d1d6",
+  "a7a3",
+  "h7g6",
+  "a3a7",
+  "h6h5",
+  "a7e7",
+  "d6a6",
+  "g3f3",
+  "g6h6",
+  "f3e3",
+  "g7g5",
+  "e4e5",
+  "h6g6",
+  "e7e8",
+  "g6f5"
+ ],
+ "evals": [
+  23,
+  19,
+  18,
+  26,
+  19,
+  17,
+  21,
+  16,
+  20,
+  20,
+  5,
+  15,
+  17,
+  16,
+  17,
+  19,
+  25,
+  44,
+  21,
+  19,
+  0,
+  0,
+  -12,
+  -13,
+  -17,
+  -10,
+  -6,
+  -10,
+  -8,
+  -11,
+  -13,
+  60,
+  -2,
+  12,
+  -12,
+  -13,
+  -21,
+  -23,
+  -25,
+  -25,
+  -24,
+  -29,
+  -27,
+  -13,
+  -17,
+  -9,
+  -66,
+  -143,
+  -154,
+  -164,
+  -161,
+  -141,
+  -237,
+  -226,
+  -235,
+  -248,
+  -249,
+  -248,
+  -251,
+  -227,
+  -256,
+  -199,
+  -199,
+  -199,
+  -196,
+  -182,
+  -403,
+  -102,
+  -137,
+  -106,
+  -127,
+  -127,
+  -120,
+  -124,
+  -113,
+  -124,
+  -250,
+  -227,
+  -229,
+  -243,
+  -375,
+  -366,
+  -383,
+  -381,
+  -386,
+  -402,
+  -412,
+  -402,
+  -412,
+  -407,
+  -464,
+  -496,
+  -434,
+  -420,
+  -420,
+  -427,
+  -445,
+  -425,
+  -425,
+  -423,
+  -429,
+  -435,
+  -414,
+  -415,
+  -425,
+  -423,
+  -408,
+  -400,
+  -476,
+  -444,
+  -507,
+  -483,
+  -507,
+  -535
+ ],
+ "comments": {
+  "5": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v2",
+     "params": {
+      "attacker": "♝b4",
+      "front": "♘c3",
+      "behind": "♔e1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b4",
+     "to": "e1",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "c3",
+     "kind": "target"
+    },
+    {
+     "square": "e1",
+     "kind": "target"
+    }
+   ]
+  },
+  "24": {
+   "comment": [
+    {
+     "key": "coach.good.pin_relative.v2",
+     "params": {
+      "attacker": "♗e4",
+      "front": "♟b7",
+      "behind": "♜a8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e4",
+     "to": "a8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "b7",
+     "kind": "target"
+    },
+    {
+     "square": "a8",
+     "kind": "target"
+    }
+   ]
+  },
+  "27": {
+   "comment": [
+    {
+     "key": "coach.good.pin_relative.v2",
+     "params": {
+      "attacker": "♜d8",
+      "front": "♙d4",
+      "behind": "♕d1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d8",
+     "to": "d1",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "d4",
+     "kind": "target"
+    },
+    {
+     "square": "d1",
+     "kind": "target"
+    }
+   ]
+  },
+  "30": {
+   "comment": [
+    {
+     "key": "coach.good.pin_relative.v2",
+     "params": {
+      "attacker": "♗e4",
+      "front": "♟b7",
+      "behind": "♜a8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e4",
+     "to": "a8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "b7",
+     "kind": "target"
+    },
+    {
+     "square": "a8",
+     "kind": "target"
+    }
+   ]
+  },
+  "31": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♜ab8"
+     }
+    },
+    {
+     "key": "coach.best.capture.v2",
+     "params": {
+      "move": "cxd4",
+      "piece": "♙d4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c5",
+     "to": "d4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "32": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♖d1"
+     }
+    },
+    {
+     "key": "coach.best.capture.v2",
+     "params": {
+      "move": "♗xb7",
+      "piece": "♟b7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e4",
+     "to": "b7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "46": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "b4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "h3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "h2",
+     "to": "h3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "52": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "h4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♘e5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f3",
+     "to": "e5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "61": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "b6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♛e7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c7",
+     "to": "e7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "67": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v1",
+     "params": {
+      "move": "♜b7"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "a4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a5",
+     "to": "a4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "76": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♖a8+"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♘c4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a3",
+     "to": "c4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "80": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "h5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "f3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f2",
+     "to": "f3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "92": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v1",
+     "params": {
+      "attacker": "♖d7",
+      "front": "♟g7",
+      "behind": "♚h7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d7",
+     "to": "h7",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "g7",
+     "kind": "target"
+    },
+    {
+     "square": "h7",
+     "kind": "target"
+    }
+   ]
+  },
+  "98": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v2",
+     "params": {
+      "attacker": "♖a7",
+      "front": "♟g7",
+      "behind": "♚h7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a7",
+     "to": "h7",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "g7",
+     "kind": "target"
+    },
+    {
+     "square": "h7",
+     "kind": "target"
+    }
+   ]
+  },
+  "108": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♔e3"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♖e8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e7",
+     "to": "e8",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  }
+ },
+ "stops": [
+  {
+   "ply": 49,
+   "move": "c6a4",
+   "best_cp": 178,
+   "gap_cp": 150,
+   "lines": [
+    [
+     "c6a4",
+     178
+    ],
+    [
+     "f7f6",
+     21
+    ],
+    [
+     "b8c8",
+     28
+    ]
+   ]
+  },
+  {
+   "ply": 77,
+   "move": "g8h7",
+   "best_cp": 210,
+   "gap_cp": 575,
+   "lines": [
+    [
+     "g8h7",
+     210
+    ],
+    [
+     "d7c8",
+     -365
+    ],
+    [
+     "d7e8",
+     -530
+    ]
+   ]
+  },
+  {
+   "ply": 85,
+   "move": "b5b4",
+   "best_cp": 395,
+   "gap_cp": 226,
+   "lines": [
+    [
+     "b5b4",
+     395
+    ],
+    [
+     "b5b1",
+     169
+    ],
+    [
+     "d7c6",
+     141
+    ]
+   ]
+  },
+  {
+   "ply": 87,
+   "move": "b4g4",
+   "best_cp": 428,
+   "gap_cp": 229,
+   "lines": [
+    [
+     "b4g4",
+     428
+    ],
+    [
+     "d7c6",
+     199
+    ],
+    [
+     "b4b1",
+     104
+    ]
+   ]
+  },
+  {
+   "ply": 91,
+   "move": "h4h5",
+   "best_cp": 437,
+   "gap_cp": 413,
+   "lines": [
+    [
+     "h4h5",
+     437
+    ],
+    [
+     "h4h1",
+     24
+    ],
+    [
+     "h4b4",
+     -453
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Защита Нимцовича, система с 4.e3. На 25-м ходу чёрные выигрывают пешку (25...Qxa4) и дальше реализуют перевес.",
+  "uk": "Захист Німцовича, система з 4.e3. На 25-му ході чорні виграють пішака (25...Qxa4) і далі реалізують перевагу.",
+  "en": "A Nimzo-Indian Defence, the 4.e3 system. On move 25 Black wins a pawn (25...Qxa4) and then converts the advantage."
+ },
+ "summary": {
+  "ru": "Лишняя пешка превращается в победу через активность: ладья чёрных идёт вперёд (43...Rb4) и забирает пешки 44...Rxg4 и 46...Rxh5. Урок: реализуя лишнюю пешку, упрощайте позицию и активизируйте ладью — пешки соперника станут её целями.",
+  "uk": "Зайвий пішак перетворюється на перемогу через активність: тура чорних іде вперед (43...Rb4) і забирає пішаків 44...Rxg4 і 46...Rxh5. Урок: реалізуючи зайвого пішака, спрощуйте позицію й активізуйте туру — пішаки суперника стануть її цілями.",
+  "en": "The extra pawn turns into a win through activity: Black's rook advances (43...Rb4) and picks up pawns with 44...Rxg4 and 46...Rxh5. Lesson: when converting an extra pawn, simplify and activate your rook — the opponent's pawns become its targets."
+ }
+}

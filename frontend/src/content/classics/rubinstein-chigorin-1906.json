@@ -1,0 +1,747 @@
+{
+ "id": "rubinstein-chigorin-1906",
+ "white": "Rubinstein, Akiba",
+ "black": "Chigorin, Mikhail",
+ "event": "Lodz",
+ "year": "1906",
+ "result": "1-0",
+ "moves": [
+  "d2d4",
+  "d7d5",
+  "g1f3",
+  "e7e6",
+  "e2e3",
+  "g8f6",
+  "f1d3",
+  "c7c5",
+  "b2b3",
+  "b8c6",
+  "e1g1",
+  "a7a6",
+  "c1b2",
+  "c5d4",
+  "e3d4",
+  "f8d6",
+  "b1d2",
+  "e8g8",
+  "f1e1",
+  "c8d7",
+  "f3e5",
+  "a8c8",
+  "a2a3",
+  "c6e7",
+  "d2f3",
+  "e7g6",
+  "g2g3",
+  "d7e8",
+  "f3g5",
+  "d6e7",
+  "h2h4",
+  "g6h8",
+  "a3a4",
+  "h7h6",
+  "g5h3",
+  "f6d7",
+  "h3f4",
+  "e7b4",
+  "c2c3",
+  "b4d6",
+  "d1c2",
+  "g7g6",
+  "c2d2",
+  "g6g5",
+  "f4h3",
+  "d7e5",
+  "d4e5",
+  "d6e7",
+  "h4g5",
+  "h6g5",
+  "d2e2",
+  "h8g6",
+  "e2g4",
+  "g8g7",
+  "a1d1",
+  "b7b5",
+  "a4b5",
+  "a6b5",
+  "c3c4",
+  "b5c4",
+  "b3c4",
+  "e8c6",
+  "b2c1",
+  "f8h8",
+  "h3g5",
+  "d8e8",
+  "d3g6",
+  "f7g6",
+  "g5e6",
+  "g7g8",
+  "c4d5",
+  "c6b7",
+  "c1g5",
+  "e7g5",
+  "e6g5",
+  "c8c5",
+  "g5e4"
+ ],
+ "evals": [
+  23,
+  23,
+  18,
+  21,
+  9,
+  11,
+  11,
+  6,
+  11,
+  17,
+  3,
+  23,
+  12,
+  27,
+  23,
+  22,
+  17,
+  17,
+  17,
+  76,
+  23,
+  57,
+  47,
+  50,
+  33,
+  83,
+  31,
+  32,
+  24,
+  109,
+  116,
+  174,
+  124,
+  124,
+  133,
+  130,
+  116,
+  116,
+  138,
+  258,
+  263,
+  248,
+  234,
+  234,
+  203,
+  283,
+  259,
+  257,
+  298,
+  288,
+  156,
+  191,
+  217,
+  201,
+  207,
+  364,
+  324,
+  300,
+  158,
+  165,
+  203,
+  262,
+  237,
+  302,
+  290,
+  521,
+  538,
+  573,
+  526,
+  513,
+  511,
+  587,
+  610,
+  611,
+  611,
+  834,
+  851
+ ],
+ "comments": {
+  "19": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♝d7"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "b5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b7",
+     "to": "b5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "20": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♘e5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "c4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c2",
+     "to": "c4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "25": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♞g6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "b5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b7",
+     "to": "b5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "26": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "g3"
+     }
+    },
+    {
+     "key": "coach.best.capture.v1",
+     "params": {
+      "move": "♘xd7",
+      "piece": "♝d7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e5",
+     "to": "d7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "29": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♝e7"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♞e7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g6",
+     "to": "e7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "31": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♞h8"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♜c7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c8",
+     "to": "c7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "32": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "a4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "c4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c2",
+     "to": "c4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "39": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♝d6"
+     }
+    },
+    {
+     "key": "coach.best.capture.v1",
+     "params": {
+      "move": "♞xe5",
+      "piece": "♘e5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d7",
+     "to": "e5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "45": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♞xe5"
+     }
+    },
+    {
+     "key": "coach.best.capture.v2",
+     "params": {
+      "move": "♝xe5",
+      "piece": "♘e5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d6",
+     "to": "e5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "50": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♕e2"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♗a3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b2",
+     "to": "a3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "55": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "b5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "d4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d5",
+     "to": "d4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "58": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "c4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♗c1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b2",
+     "to": "c1",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "61": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♝c6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♝a4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e8",
+     "to": "a4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "63": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♜h8"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♚h6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g7",
+     "to": "h6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "65": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v1",
+     "params": {
+      "move": "♛e8"
+     }
+    },
+    {
+     "key": "coach.best.capture.v1",
+     "params": {
+      "move": "♝xg5",
+      "piece": "♘g5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e7",
+     "to": "g5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "68": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v2",
+     "params": {
+      "attacker": "♕g4",
+      "front": "♟g6",
+      "behind": "♚g7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g4",
+     "to": "g7",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "g6",
+     "kind": "target"
+    },
+    {
+     "square": "g7",
+     "kind": "target"
+    }
+   ]
+  },
+  "71": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♝b7"
+     }
+    },
+    {
+     "key": "coach.best.pin_relative.v2",
+     "params": {
+      "move": "♝d7",
+      "attacker": "♝d7",
+      "front": "♘e6",
+      "behind": "♕g4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c6",
+     "to": "d7",
+     "kind": "best"
+    },
+    {
+     "from": "d7",
+     "to": "g4",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "e6",
+     "kind": "target"
+    },
+    {
+     "square": "g4",
+     "kind": "target"
+    }
+   ]
+  },
+  "75": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v1",
+     "params": {
+      "move": "♜c5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♛e7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e8",
+     "to": "e7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "76": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v1",
+     "params": {
+      "attacker": "♕g4",
+      "front": "♟g6",
+      "behind": "♚g8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g4",
+     "to": "g8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "g6",
+     "kind": "target"
+    },
+    {
+     "square": "g8",
+     "kind": "target"
+    }
+   ]
+  }
+ },
+ "stops": [
+  {
+   "ply": 64,
+   "move": "h3g5",
+   "best_cp": 266,
+   "gap_cp": 180,
+   "lines": [
+    [
+     "h3g5",
+     266
+    ],
+    [
+     "d3g6",
+     86
+    ],
+    [
+     "c1g5",
+     50
+    ]
+   ]
+  },
+  {
+   "ply": 66,
+   "move": "d3g6",
+   "best_cp": 547,
+   "gap_cp": 253,
+   "lines": [
+    [
+     "d3g6",
+     547
+    ],
+    [
+     "f2f3",
+     294
+    ],
+    [
+     "c4c5",
+     193
+    ]
+   ]
+  },
+  {
+   "ply": 68,
+   "move": "g5e6",
+   "best_cp": 580,
+   "gap_cp": 186,
+   "lines": [
+    [
+     "g5e6",
+     580
+    ],
+    [
+     "c4d5",
+     394
+    ],
+    [
+     "g1g2",
+     253
+    ]
+   ]
+  },
+  {
+   "ply": 70,
+   "move": "c4d5",
+   "best_cp": 617,
+   "gap_cp": 208,
+   "lines": [
+    [
+     "c4d5",
+     617
+    ],
+    [
+     "d1d5",
+     409
+    ],
+    [
+     "c1g5",
+     348
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Ферзевый гамбит в спокойной системе с e3 и b3. Рубинштейн постепенно наращивает перевес, не идя на риск.",
+  "uk": "Ферзевий гамбіт у спокійній системі з e3 і b3. Рубінштейн поступово нарощує перевагу, не ризикуючи.",
+  "en": "A Queen's Pawn game in a quiet system with e3 and b3. Rubinstein steadily increases his advantage without taking risks."
+ },
+ "summary": {
+  "ru": "Когда позиция созрела, белые ударили на королевском фланге: 33.Nxg5, 34.Bxg6, 35.Nxe6+ — взятия разрушают пешечное прикрытие чёрного короля. Урок: позиционный перевес превращается в победу через тактику — в нужный момент удары становятся логичным завершением плана.",
+  "uk": "Коли позиція визріла, білі вдарили на королівському фланзі: 33.Nxg5, 34.Bxg6, 35.Nxe6+ — взяття руйнують пішакове прикриття чорного короля. Урок: позиційна перевага перетворюється на перемогу через тактику — у потрібний момент удари стають логічним завершенням плану.",
+  "en": "When the position was ripe, White struck on the kingside: 33.Nxg5, 34.Bxg6, 35.Nxe6+ — the captures destroy the black king's pawn cover. Lesson: a positional advantage turns into a win through tactics — at the right moment, the blows become the logical end of the plan."
+ }
+}

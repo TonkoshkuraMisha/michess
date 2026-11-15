@@ -1,0 +1,634 @@
+{
+ "id": "flohr-spassky-1965",
+ "white": "Flohr, Salo",
+ "black": "Spassky, Boris V",
+ "event": "Chigorin mem",
+ "year": "1965",
+ "result": "0-1",
+ "moves": [
+  "g1f3",
+  "g8f6",
+  "c2c4",
+  "e7e6",
+  "b2b3",
+  "d7d5",
+  "c1b2",
+  "f8e7",
+  "g2g3",
+  "e8g8",
+  "f1g2",
+  "c7c5",
+  "c4d5",
+  "e6d5",
+  "d2d4",
+  "b8c6",
+  "e1g1",
+  "c8g4",
+  "d4c5",
+  "e7c5",
+  "b1c3",
+  "a7a6",
+  "f3e1",
+  "f8e8",
+  "h2h3",
+  "g4f5",
+  "e1d3",
+  "c5a7",
+  "a1c1",
+  "d5d4",
+  "c3a4",
+  "f5e4",
+  "a4c5",
+  "e4g2",
+  "g1g2",
+  "d8d5",
+  "g2h2",
+  "f6e4",
+  "c5e4",
+  "e8e4",
+  "c1c2",
+  "a8e8",
+  "b2c1",
+  "f7f6",
+  "f2f3",
+  "e4e7",
+  "c1a3",
+  "e7f7",
+  "d3b4",
+  "c6b4",
+  "a3b4",
+  "d5b5",
+  "b4a3",
+  "h7h5",
+  "d1d3",
+  "b5d3",
+  "e2d3",
+  "e8e3",
+  "c2d2",
+  "f7c7",
+  "h2g2",
+  "g8f7",
+  "f1c1",
+  "c7c3",
+  "c1d1",
+  "f7e6",
+  "a3b2",
+  "c3c6",
+  "d1c1",
+  "e6d5",
+  "c1c6",
+  "b7c6",
+  "g2f2",
+  "a7c5",
+  "d2d1",
+  "c5b4",
+  "a2a3",
+  "b4d6",
+  "b2c1",
+  "e3e7",
+  "c1d2",
+  "e7b7",
+  "b3b4",
+  "a6a5",
+  "b4a5",
+  "b7b2",
+  "f3f4",
+  "b2a2",
+  "f2e2",
+  "h5h4",
+  "g3h4",
+  "d6f4",
+  "a5a6",
+  "f4d2",
+  "d1d2",
+  "a2a3",
+  "d2b2",
+  "a3a6",
+  "b2b7",
+  "a6a2",
+  "e2f3",
+  "a2d2",
+  "b7g7",
+  "d2d3",
+  "f3g4",
+  "f6f5",
+  "g4f5",
+  "d3h3",
+  "g7d7",
+  "d5c4",
+  "f5g5",
+  "c6c5",
+  "h4h5",
+  "d4d3"
+ ],
+ "evals": [
+  16,
+  17,
+  28,
+  24,
+  -2,
+  2,
+  0,
+  8,
+  6,
+  14,
+  21,
+  21,
+  21,
+  21,
+  19,
+  21,
+  26,
+  30,
+  26,
+  29,
+  31,
+  32,
+  -58,
+  -31,
+  -23,
+  -27,
+  -67,
+  -70,
+  -69,
+  -73,
+  -93,
+  -100,
+  -117,
+  -130,
+  -126,
+  -102,
+  -99,
+  -98,
+  -110,
+  -111,
+  -103,
+  -112,
+  -113,
+  -49,
+  -90,
+  -74,
+  -63,
+  -62,
+  -98,
+  -110,
+  -107,
+  -104,
+  -108,
+  -97,
+  -138,
+  -136,
+  -124,
+  -136,
+  -128,
+  -127,
+  -118,
+  -111,
+  -124,
+  -124,
+  -115,
+  -169,
+  -168,
+  -82,
+  -82,
+  -79,
+  -71,
+  -48,
+  -62,
+  -52,
+  -59,
+  -47,
+  -85,
+  -94,
+  -91,
+  -90,
+  -179,
+  -157,
+  -142,
+  -142,
+  -146,
+  -146,
+  -177,
+  -181,
+  -181,
+  -207,
+  -206,
+  -259,
+  -261,
+  -285,
+  -280,
+  -283,
+  -304,
+  -301,
+  -381,
+  -393,
+  -408,
+  -412,
+  -455,
+  -406,
+  -520,
+  -524,
+  -534,
+  -538,
+  -538,
+  -536,
+  -549,
+  -578,
+  -578,
+  -578
+ ],
+ "comments": {
+  "19": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v2",
+     "params": {
+      "attacker": "♝c5",
+      "front": "♙f2",
+      "behind": "♔g1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c5",
+     "to": "g1",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "f2",
+     "kind": "target"
+    },
+    {
+     "square": "g1",
+     "kind": "target"
+    }
+   ]
+  },
+  "22": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♘e1"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "h3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "h2",
+     "to": "h3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "27": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v1",
+     "params": {
+      "attacker": "♝a7",
+      "front": "♙f2",
+      "behind": "♔g1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a7",
+     "to": "g1",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "f2",
+     "kind": "target"
+    },
+    {
+     "square": "g1",
+     "kind": "target"
+    }
+   ]
+  },
+  "43": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "f6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♛f5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d5",
+     "to": "f5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "67": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♜c6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♚d5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e6",
+     "to": "d5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "80": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♗d2"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "b4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b3",
+     "to": "b4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "85": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v1",
+     "params": {
+      "attacker": "♜b2",
+      "front": "♗d2",
+      "behind": "♔f2"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b2",
+     "to": "f2",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "d2",
+     "kind": "target"
+    },
+    {
+     "square": "f2",
+     "kind": "target"
+    }
+   ]
+  },
+  "87": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v2",
+     "params": {
+      "attacker": "♜a2",
+      "front": "♗d2",
+      "behind": "♔f2"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a2",
+     "to": "f2",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "d2",
+     "kind": "target"
+    },
+    {
+     "square": "f2",
+     "kind": "target"
+    }
+   ]
+  },
+  "98": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♖b7"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "h5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "h4",
+     "to": "h5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "104": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♔g4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♔g2"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f3",
+     "to": "g2",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  }
+ },
+ "stops": [
+  {
+   "ply": 45,
+   "move": "e4e7",
+   "best_cp": 68,
+   "gap_cp": 212,
+   "lines": [
+    [
+     "e4e7",
+     68
+    ],
+    [
+     "e4e6",
+     -144
+    ],
+    [
+     "e4e3",
+     -219
+    ]
+   ]
+  },
+  {
+   "ply": 93,
+   "move": "f4d2",
+   "best_cp": 300,
+   "gap_cp": 216,
+   "lines": [
+    [
+     "f4d2",
+     300
+    ],
+    [
+     "f4d6",
+     84
+    ],
+    [
+     "f4h2",
+     32
+    ]
+   ]
+  },
+  {
+   "ply": 95,
+   "move": "a2a3",
+   "best_cp": 340,
+   "gap_cp": 299,
+   "lines": [
+    [
+     "a2a3",
+     340
+    ],
+    [
+     "a2a1",
+     41
+    ],
+    [
+     "d5c5",
+     -757
+    ]
+   ]
+  },
+  {
+   "ply": 103,
+   "move": "d2d3",
+   "best_cp": 569,
+   "gap_cp": 168,
+   "lines": [
+    [
+     "d2d3",
+     569
+    ],
+    [
+     "c6c5",
+     401
+    ],
+    [
+     "f6f5",
+     392
+    ]
+   ]
+  },
+  {
+   "ply": 105,
+   "move": "f6f5",
+   "best_cp": 620,
+   "gap_cp": 158,
+   "lines": [
+    [
+     "f6f5",
+     620
+    ],
+    [
+     "d3d1",
+     462
+    ],
+    [
+     "c6c5",
+     429
+    ]
+   ]
+  },
+  {
+   "ply": 107,
+   "move": "d3h3",
+   "best_cp": 615,
+   "gap_cp": 203,
+   "lines": [
+    [
+     "d3h3",
+     615
+    ],
+    [
+     "d5c4",
+     412
+    ],
+    [
+     "d3e3",
+     392
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Закрытое начало с фианкетто слона на b2. Спасский играет чёрными и постепенно, без резких ударов, накапливает небольшие преимущества.",
+  "uk": "Закритий початок із фіанкето слона на b2. Спаський грає чорними й поступово, без різких ударів, накопичує невеликі переваги.",
+  "en": "A closed opening with the bishop fianchettoed on b2. Spassky has Black and gradually, without any sharp blows, accumulates small advantages."
+ },
+ "summary": {
+  "ru": "Решил эндшпиль: активная ладья чёрных собирает пешки — 48...Rxa3, 52...Rxd3+, 54...Rxh3. Урок: в ладейном эндшпиле активность ладьи важнее пешки — ладья должна нападать, а не сторожить.",
+  "uk": "Вирішив ендшпіль: активна тура чорних збирає пішаків — 48...Rxa3, 52...Rxd3+, 54...Rxh3. Урок: у турному ендшпілі активність тури важливіша за пішака — тура має нападати, а не стерегти.",
+  "en": "The endgame decided it: Black's active rook collects pawns — 48...Rxa3, 52...Rxd3+, 54...Rxh3. Lesson: in a rook endgame activity matters more than a pawn — the rook should attack, not stand guard."
+ }
+}

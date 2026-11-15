@@ -1,0 +1,713 @@
+{
+ "id": "carlsen-wang-hao-2012",
+ "white": "Carlsen,M",
+ "black": "Wang Hao",
+ "event": "45th Biel GM",
+ "year": "2012",
+ "result": "1-0",
+ "moves": [
+  "d2d4",
+  "g8f6",
+  "c2c4",
+  "e7e6",
+  "b1c3",
+  "f8b4",
+  "d1c2",
+  "e8g8",
+  "g1f3",
+  "b7b6",
+  "e2e4",
+  "c7c5",
+  "e4e5",
+  "f6e8",
+  "d4d5",
+  "e6d5",
+  "c4d5",
+  "d7d6",
+  "c1g5",
+  "f7f6",
+  "e5f6",
+  "e8f6",
+  "e1c1",
+  "b4c3",
+  "b2c3",
+  "c8g4",
+  "d1e1",
+  "g4f3",
+  "g2f3",
+  "b8d7",
+  "f1d3",
+  "h7h6",
+  "g5f4",
+  "c5c4",
+  "d3f5",
+  "d7c5",
+  "h1g1",
+  "g8h8",
+  "g1g6",
+  "f8f7",
+  "e1g1",
+  "d8f8",
+  "f4e3",
+  "f6d5",
+  "e3d4",
+  "d5f6",
+  "c2d2",
+  "a8e8",
+  "g6g7",
+  "f8g7",
+  "g1g7",
+  "h8g7",
+  "d2f4",
+  "c5d3",
+  "f5d3",
+  "c4d3",
+  "c1d2",
+  "g7g6",
+  "d2d3",
+  "e8e6",
+  "h2h4",
+  "f7e7",
+  "h4h5",
+  "g6f7",
+  "f4f5",
+  "e6e5",
+  "f5g6",
+  "f7e6",
+  "f3f4"
+ ],
+ "evals": [
+  23,
+  19,
+  18,
+  26,
+  19,
+  17,
+  14,
+  65,
+  12,
+  109,
+  109,
+  102,
+  102,
+  126,
+  97,
+  129,
+  124,
+  107,
+  53,
+  52,
+  45,
+  47,
+  41,
+  17,
+  17,
+  25,
+  25,
+  88,
+  87,
+  71,
+  68,
+  68,
+  81,
+  89,
+  55,
+  75,
+  75,
+  147,
+  141,
+  100,
+  111,
+  108,
+  5,
+  140,
+  142,
+  146,
+  244,
+  318,
+  335,
+  329,
+  326,
+  323,
+  327,
+  349,
+  392,
+  396,
+  303,
+  331,
+  326,
+  335,
+  341,
+  598,
+  534,
+  571,
+  462,
+  481,
+  481,
+  481,
+  481
+ ],
+ "comments": {
+  "5": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v2",
+     "params": {
+      "attacker": "♝b4",
+      "front": "♘c3",
+      "behind": "♔e1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b4",
+     "to": "e1",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "c3",
+     "kind": "target"
+    },
+    {
+     "square": "e1",
+     "kind": "target"
+    }
+   ]
+  },
+  "7": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "O-O"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "d5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d7",
+     "to": "d5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "8": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♘f3"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "e4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e2",
+     "to": "e4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "9": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "b6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "c5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c7",
+     "to": "c5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "18": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♗g5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♗d3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f1",
+     "to": "d3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "25": {
+   "comment": [
+    {
+     "key": "coach.good.pin_relative.v2",
+     "params": {
+      "attacker": "♝g4",
+      "front": "♘f3",
+      "behind": "♖d1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g4",
+     "to": "d1",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "f3",
+     "kind": "target"
+    },
+    {
+     "square": "d1",
+     "kind": "target"
+    }
+   ]
+  },
+  "27": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♝xf3"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♞bd7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b8",
+     "to": "d7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "36": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v2",
+     "params": {
+      "attacker": "♖g1",
+      "front": "♟g7",
+      "behind": "♚g8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g1",
+     "to": "g8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "g7",
+     "kind": "target"
+    },
+    {
+     "square": "g8",
+     "kind": "target"
+    }
+   ]
+  },
+  "37": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♚h8"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♞h5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f6",
+     "to": "h5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "42": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♗e3"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♕d2"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c2",
+     "to": "d2",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "43": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♞xd5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♞h5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f6",
+     "to": "h5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "44": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v2",
+     "params": {
+      "attacker": "♗d4",
+      "front": "♟g7",
+      "behind": "♚h8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d4",
+     "to": "h8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "g7",
+     "kind": "target"
+    },
+    {
+     "square": "h8",
+     "kind": "target"
+    }
+   ]
+  },
+  "47": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♜e8"
+     }
+    },
+    {
+     "key": "coach.best.pos_outpost.v2",
+     "params": {
+      "move": "♞d3+",
+      "square": "d3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c5",
+     "to": "d3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "53": {
+   "comment": [
+    {
+     "key": "coach.good.fork.v2",
+     "params": {
+      "attacker": "♞d3",
+      "target1": "♔c1",
+      "target2": "♕f4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d3",
+     "to": "c1",
+     "kind": "idea"
+    },
+    {
+     "from": "d3",
+     "to": "f4",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "c1",
+     "kind": "target"
+    },
+    {
+     "square": "f4",
+     "kind": "target"
+    }
+   ]
+  },
+  "56": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♔d2"
+     }
+    },
+    {
+     "key": "coach.missed.hanging.v1",
+     "params": {
+      "piece": "♟d6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f4",
+     "to": "d6",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "d6",
+     "kind": "target"
+    }
+   ]
+  },
+  "61": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v1",
+     "params": {
+      "move": "♜fe7"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♜h7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f7",
+     "to": "h7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "64": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♕f5"
+     }
+    },
+    {
+     "key": "coach.missed.hanging.v2",
+     "params": {
+      "piece": "♟h6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f4",
+     "to": "h6",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "h6",
+     "kind": "target"
+    }
+   ]
+  }
+ },
+ "stops": [
+  {
+   "ply": 46,
+   "move": "c2d2",
+   "best_cp": 348,
+   "gap_cp": 257,
+   "lines": [
+    [
+     "c2d2",
+     348
+    ],
+    [
+     "c2e2",
+     91
+    ],
+    [
+     "c2b2",
+     64
+    ]
+   ]
+  },
+  {
+   "ply": 48,
+   "move": "g6g7",
+   "best_cp": 407,
+   "gap_cp": 381,
+   "lines": [
+    [
+     "g6g7",
+     407
+    ],
+    [
+     "h2h4",
+     14
+    ],
+    [
+     "c1b2",
+     26
+    ]
+   ]
+  },
+  {
+   "ply": 54,
+   "move": "f5d3",
+   "best_cp": 497,
+   "gap_cp": 1378,
+   "lines": [
+    [
+     "f5d3",
+     497
+    ],
+    [
+     "c1c2",
+     -881
+    ],
+    [
+     "c1b1",
+     -891
+    ]
+   ]
+  },
+  {
+   "ply": 62,
+   "move": "h4h5",
+   "best_cp": 641,
+   "gap_cp": 215,
+   "lines": [
+    [
+     "h4h5",
+     641
+    ],
+    [
+     "d3c2",
+     426
+    ],
+    [
+     "f4g3",
+     423
+    ]
+   ]
+  },
+  {
+   "ply": 66,
+   "move": "f5g6",
+   "best_cp": 524,
+   "gap_cp": 307,
+   "lines": [
+    [
+     "f5g6",
+     524
+    ],
+    [
+     "f5f4",
+     217
+    ],
+    [
+     "d4e5",
+     211
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Защита Нимцовича, классическая система 4.Qc2. Белые получают небольшой перевес уже в дебюте, а к 24-му ходу (24.Qd2) начинают атаку на короля.",
+  "uk": "Захист Німцовича, класична система 4.Qc2. Білі отримують невелику перевагу вже в дебюті, а до 24-го ходу (24.Qd2) починають атаку на короля.",
+  "en": "A Nimzo-Indian Defence, Classical System with 4.Qc2. White gets a small edge out of the opening, and by move 24 (24.Qd2) starts an attack on the king."
+ },
+ "summary": {
+  "ru": "Ладья врывается на g7 (25.Rxg7), а затем шахи 32.h5+ и 34.Qg6+ не дают чёрному королю покоя. Урок: когда пешечное прикрытие короля разрушено, подключайте фигуры к атаке с темпом — шахами и угрозами.",
+  "uk": "Тура вривається на g7 (25.Rxg7), а потім шахи 32.h5+ і 34.Qg6+ не дають чорному королю спокою. Урок: коли пішакове прикриття короля зруйноване, підключайте фігури до атаки з темпом — шахами й загрозами.",
+  "en": "The rook crashes in on g7 (25.Rxg7), and then the checks 32.h5+ and 34.Qg6+ give the black king no rest. Lesson: once the king's pawn cover is broken, bring pieces into the attack with tempo — with checks and threats."
+ }
+}
