@@ -105,6 +105,22 @@ afterEach(() => {
 });
 
 describe('GameViewer', () => {
+    it('режим библиотеки: PGN из библиотеки, без разбора движком и запросов про партии игроков', async () => {
+        const fetchMock = stubApi({pgn: {ok: true, text: FOOLS_MATE_PGN}});
+        render(
+            <MemoryRouter initialEntries={['/library/game/7']}>
+                <Routes>
+                    <Route path="/library/game/:gameId" element={<GameViewer library/>}/>
+                </Routes>
+            </MemoryRouter>,
+        );
+        await waitFor(() => expect(pieceOn('h4')).toBe('b q'));
+        const urls = fetchMock.mock.calls.map(([url]) => url.toString());
+        expect(urls.some((u) => u.endsWith('/api/v1/library/games/7/pgn'))).toBe(true);
+        expect(urls.some((u) => u.includes('/analysis/game/') || u.includes('/guess/game/') || u.includes('/profile/games/'))).toBe(false);
+        expect(screen.queryByRole('button', {name: 'Компьютерный анализ'})).toBeNull();
+    });
+
     it('показывает игроков из PGN и финальную позицию', async () => {
         stubApi({pgn: {ok: true, text: FOOLS_MATE_PGN}});
         renderViewer();

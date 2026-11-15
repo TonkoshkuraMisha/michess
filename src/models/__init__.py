@@ -6,6 +6,7 @@ from src.models.email_token import EmailToken
 from src.models.game import Game
 from src.models.guess import GuessPosition
 from src.models.lesson import LessonProgress
+from src.models.library import LibraryCollection, LibraryGame, LibraryGameCollection
 from src.models.moderation import Report
 from src.models.move import Move
 from src.models.personality import BotPersonality
@@ -45,6 +46,9 @@ __all__ = [
     "PuzzleAttempt",
     "PuzzleTheme",
     "ThemeProgress",
+    "LibraryCollection",
+    "LibraryGame",
+    "LibraryGameCollection",
     "Repertoire",
     "RepertoireMove",
     "TrainerResult",

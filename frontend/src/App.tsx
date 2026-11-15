@@ -26,6 +26,7 @@ import {StudyLobby, StudyRoomPage} from './components/study/StudyPages';
 import {ModerationPage} from './components/social/ModerationPage';
 import {MiniGamePage, MiniGamesPage} from './components/trainers/MiniGames';
 import {RepertoireEditorPage, RepertoireListPage} from './components/repertoire/RepertoirePages';
+import {LibraryPage} from './components/library/LibraryPage';
 import {moderationApi} from './services/moderation';
 import {TrainerPage, TrainersPage} from './components/trainers/TrainersPage';
 import {NotificationBell, PlayerSearch} from './components/social/SocialHeader';
@@ -636,6 +637,8 @@ export default function App() {
                     <Route path="/tournaments/:tournamentId" element={<TournamentView/>}/>
                     <Route path="/profile/:targetUsername" element={<Profile/>}/>
                     <Route path="/game/:gameId" element={<GameViewer/>}/>
+                    <Route path="/library" element={<LibraryPage/>}/>
+                    <Route path="/library/game/:gameId" element={<GameViewer key="library" library/>}/>
                     <Route path="/champions/:championId" element={<ChampionGames/>}/>
                     <Route path="/about" element={<About/>}/>
                     <Route path="/verify-email" element={<VerifyEmailPage/>}/>
