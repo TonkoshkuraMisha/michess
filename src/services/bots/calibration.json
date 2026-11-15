@@ -1,7 +1,7 @@
 {
   "meta": {
-    "date": "2026-11-14",
-    "games": 312,
+    "date": "2026-11-15",
+    "games": 260,
     "anchors": [
       1350,
       1600,
@@ -10,7 +10,7 @@
       2400
     ],
     "anchor_movetime_s": 1.0,
-    "minutes": 32.1,
+    "minutes": 46.7,
     "scale": "Stockfish UCI_Elo anchors at our time control (not FIDE)"
   },
   "players": {
@@ -132,6 +132,90 @@
       "score": 38.0,
       "ci95": 90,
       "declared": 1250
+    },
+    "archetype:oddball": {
+      "rating": 571,
+      "games": 28,
+      "score": 4.0,
+      "ci95": 194,
+      "declared": 800
+    },
+    "archetype:trapper": {
+      "rating": 798,
+      "games": 28,
+      "score": 8.5,
+      "ci95": 178,
+      "declared": 900
+    },
+    "archetype:trap_victim": {
+      "rating": 507,
+      "games": 28,
+      "score": 7.5,
+      "ci95": 173,
+      "declared": 500
+    },
+    "archetype:gambiteer": {
+      "rating": 969,
+      "games": 28,
+      "score": 11.0,
+      "ci95": 170,
+      "declared": 1000
+    },
+    "archetype:peacemaker": {
+      "rating": 876,
+      "games": 28,
+      "score": 7.0,
+      "ci95": 168,
+      "declared": 1100
+    },
+    "archetype:trader": {
+      "rating": 746,
+      "games": 28,
+      "score": 10.5,
+      "ci95": 182,
+      "declared": 750
+    },
+    "archetype:knight_rider": {
+      "rating": 612,
+      "games": 28,
+      "score": 9.5,
+      "ci95": 174,
+      "declared": 600
+    },
+    "archetype:pawn_grabber": {
+      "rating": 531,
+      "games": 28,
+      "score": 8.5,
+      "ci95": 173,
+      "declared": 550
+    },
+    "archetype:pawn_pusher": {
+      "rating": 980,
+      "games": 28,
+      "score": 6.5,
+      "ci95": 182,
+      "declared": 1200
+    },
+    "archetype:blunderer": {
+      "rating": 568,
+      "games": 20,
+      "score": 5.5,
+      "ci95": 250,
+      "declared": 350
+    },
+    "archetype:queen_rusher": {
+      "rating": 416,
+      "games": 24,
+      "score": 4.0,
+      "ci95": 208,
+      "declared": 450
+    },
+    "archetype:homebody": {
+      "rating": 501,
+      "games": 28,
+      "score": 5.0,
+      "ci95": 185,
+      "declared": 650
     }
   }
 }

@@ -33,6 +33,7 @@ from src.api import (
     tournaments,
     trainers,
     watch,
+    workout,
 )
 from src.api.analysis import router as analysis_router
 from src.api.auth import router as auth_router
@@ -129,6 +130,7 @@ def create_app() -> FastAPI:
     app.include_router(repertoire.router, prefix="/api/v1/repertoires", tags=["repertoire"])
     app.include_router(library.router, prefix="/api/v1/library", tags=["library"])
     app.include_router(skills.router, prefix="/api/v1/skills", tags=["training"])
+    app.include_router(workout.router, prefix="/api/v1/workout", tags=["training"])
     app.include_router(account.router, prefix=settings.API_V1_STR)
 
     return app
