@@ -22,6 +22,7 @@ from src.api import (
     moderation,
     personalities,
     puzzles,
+    repertoire,
     social,
     study,
     teams,
@@ -121,6 +122,7 @@ def create_app() -> FastAPI:
     app.include_router(social.router, prefix="/api/v1/social", tags=["social"])
     app.include_router(moderation.router, prefix="/api/v1/moderation", tags=["social"])
     app.include_router(mini_games.router, prefix="/api/v1/mini-games", tags=["trainers"])
+    app.include_router(repertoire.router, prefix="/api/v1/repertoires", tags=["repertoire"])
     app.include_router(account.router, prefix=settings.API_V1_STR)
 
     return app

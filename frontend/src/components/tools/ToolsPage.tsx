@@ -16,6 +16,7 @@ import type {MateResult} from '../../services/tools';
 import {validateFen} from '../chessboard/boardUtils';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 import {OpeningExplorer} from '../OpeningExplorer';
+import {AddToRepertoire} from '../repertoire/AddToRepertoire';
 import {PositionEditor} from './PositionEditor';
 
 type Tab = 'board' | 'editor' | 'import';
@@ -184,7 +185,7 @@ export function ToolsPage() {
                     </div>
                     <div className="flex-1 w-full min-w-0">
                         {standard
-                            ? <OpeningExplorer moves={moves} onPlay={play}/>
+                            ? <div className="flex flex-col gap-3"><OpeningExplorer moves={moves} onPlay={play}/>{moves.length > 0 && <AddToRepertoire moves={moves}/>}</div>
                             : <p className="text-sm text-boxwood/70" data-testid="tools-explorer-custom">{t('tools.explorerOnlyStandard')}</p>}
                     </div>
                 </div>
