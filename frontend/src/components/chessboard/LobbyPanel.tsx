@@ -1,6 +1,7 @@
 // --- FILE: frontend/src/components/chessboard/LobbyPanel.tsx ---
 
 import {Radio, Play, Eye} from 'lucide-react';
+import {ArenaBanner} from '../arena/ArenaPages';
 import type {LiveGameItem, QueuePlayer} from './types';
 import {useI18n} from '../../i18n';
 
@@ -24,6 +25,8 @@ export function LobbyPanel({
     const {t, rich} = useI18n();
     return (
         <div className="flex-1 min-h-0 bg-acacia-dark rounded-md border border-amber-900/50 p-2.5 flex flex-col shadow-inner">
+            {/* Анонс арены (17.2). */}
+            <ArenaBanner/>
             <div className="grid grid-cols-2 gap-1.5 p-1 bg-black/40 rounded border border-amber-900/40 mb-2 shrink-0">
                 <button
                     type="button"

@@ -133,6 +133,11 @@ class MockAsyncRedis:
     async def hgetall(self, name):
         return self.store.get(name, {})
 
+    async def hdel(self, name, *keys):
+        bucket = self.store.get(name, {})
+        removed = sum(1 for key in keys if bucket.pop(str(key), None) is not None)
+        return removed
+
     async def delete(self, *names):
         count = 0
         for name in names:

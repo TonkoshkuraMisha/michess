@@ -733,6 +733,9 @@ class GameStateManager:
         for player in (white_user, black_user):
             if player is not None and not player.is_bot:
                 await product_metrics.record_event(db, player.id, product_metrics.GAME_FINISHED)
+        # Партия арены (17.2): очки и серии участников — в той же транзакции, что и итог партии.
+        from src.services import arena as arena_service
+        await arena_service.on_game_finished(db, game_id, result)
         await db.commit()
         await self._mark_finished_in_db(game_id)
         GAMES_FINISHED.labels(bounded_label(termination)).inc()

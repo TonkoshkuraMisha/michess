@@ -175,6 +175,7 @@ export function TournamentsPage() {
                 <h1 className="text-2xl font-bold text-amber-200">{t('tournaments.title')}</h1>
             </header>
             <p className="text-boxwood/85">{t('tournaments.intro')}</p>
+            <Link to="/arenas" data-testid="arenas-link" className="self-start text-amber-300 hover:underline">{t('arenas.cta')}</Link>
             <section className="bg-acacia p-4 rounded-lg border-2 border-acacia-dark flex flex-col gap-2">
                 <h2 className="text-lg font-bold text-amber-200">{t('tournaments.myTournaments')}</h2>
                 {items.length === 0 ? <p className="text-sm text-boxwood/70">{t('tournaments.none')}</p> : (

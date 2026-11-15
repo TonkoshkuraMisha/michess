@@ -1,3 +1,4 @@
+from src.models.arena import Arena, ArenaGame, ArenaPlayer
 from src.models.base import Base
 from src.models.collection import CollectionEntry
 from src.models.email_token import EmailToken
@@ -15,6 +16,9 @@ from src.models.trainer import TrainerResult
 from src.models.user import User
 
 __all__ = [
+    "Arena",
+    "ArenaGame",
+    "ArenaPlayer",
     "Base",
     "BotPersonality",
     "DefenseDrill",
