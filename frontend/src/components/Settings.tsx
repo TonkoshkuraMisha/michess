@@ -13,6 +13,8 @@ import {
     getSavedPieceSetKey,
 } from '../config/boardAppearance';
 import {readApiErrorOr} from '../services/apiErrors';
+import {PAGE_PALETTES, PAGE_PATTERNS, applyPageBackground, getSavedPagePalette, getSavedPagePattern, pageBackgroundStyle} from '../config/pageBackground';
+import type {PagePalette, PagePattern} from '../config/pageBackground';
 import {gameSocket} from '../services/gameSocket';
 import {soundEngine} from '../services/soundEngine';
 import {useI18n} from '../i18n';
@@ -48,6 +50,14 @@ const optionClass = (active: boolean) =>
 export default function Settings({token, username, onTokenChange, onLogoutEverywhere, onAccountDeleted}: SettingsProps) {
     const {t, language} = useI18n();
     const [boardThemeKey, setBoardThemeKey] = useState(() => getSavedBoardThemeKey());
+    // Фон страницы (таск 18.1): узор и палитра.
+    const [pagePattern, setPagePattern] = useState<PagePattern>(() => getSavedPagePattern());
+    const [pagePalette, setPagePalette] = useState<PagePalette>(() => getSavedPagePalette());
+    const selectPageBackground = (pattern: PagePattern, palette: PagePalette) => {
+        setPagePattern(pattern);
+        setPagePalette(palette);
+        applyPageBackground(pattern, palette, true);
+    };
     const [pieceSetKey, setPieceSetKey] = useState(() => getSavedPieceSetKey());
     const [isMuted, setIsMuted] = useState(() => soundEngine.isMuted());
 
@@ -290,6 +300,36 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                                 <img src={getPieceSvgUrl(set.id, 'w', 'n')} alt="" className="w-8 h-8" draggable={false}/>
                             </span>
                             <span className="truncate">{set.name}</span>
+                        </button>
+                    ))}
+                </div>
+
+                <div className="text-xs uppercase tracking-wider text-boxwood/65 font-bold mb-1.5 mt-4">{t('settings.pageBackground')}</div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2" data-testid="page-patterns">
+                    {PAGE_PATTERNS.map((pattern) => (
+                        <button
+                            key={pattern}
+                            type="button"
+                            aria-pressed={pagePattern === pattern}
+                            onClick={() => selectPageBackground(pattern, pagePalette)}
+                            className={optionClass(pagePattern === pattern)}
+                        >
+                            <span className="w-9 h-9 rounded shrink-0 border border-black/50" style={pageBackgroundStyle(pattern, pagePalette)}/>
+                            <span className="truncate">{t(`settings.pagePatterns.${pattern}`)}</span>
+                        </button>
+                    ))}
+                </div>
+                <div className="flex flex-wrap gap-2" data-testid="page-palettes">
+                    {(Object.keys(PAGE_PALETTES) as PagePalette[]).map((palette) => (
+                        <button
+                            key={palette}
+                            type="button"
+                            aria-pressed={pagePalette === palette}
+                            onClick={() => selectPageBackground(pagePattern, palette)}
+                            className={optionClass(pagePalette === palette)}
+                        >
+                            <span className="w-5 h-5 rounded-full shrink-0 border border-black/50" style={{backgroundColor: PAGE_PALETTES[palette]}}/>
+                            <span>{t(`settings.pagePalettes.${palette}`)}</span>
                         </button>
                     ))}
                 </div>
