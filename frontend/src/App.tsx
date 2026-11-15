@@ -57,6 +57,7 @@ import {saveProfileSettings, setTranslationHelper} from './services/profileSetti
 import {applyPreset, findPreset, getSavedPresetId} from './config/themePresets';
 import {TranslationHelper} from './components/social/TranslationHelper';
 import {PlayerAvatar} from './components/PlayerAvatar';
+import {loadUnlocks} from './config/unlocks';
 import LanguageSwitcher from './components/LanguageSwitcher';
 
 interface UserProfile {
@@ -116,6 +117,10 @@ export default function App() {
         const preset = findPreset(userProfile.theme_preset);
         if (preset && preset.id !== getSavedPresetId()) applyPreset(preset);
     }, [userProfile]);
+    // Открываемое оформление (таск 18.4): полученные достижения игрока; гость — ничего.
+    useEffect(() => {
+        void loadUnlocks(token && userProfile ? userProfile.username : null);
+    }, [token, userProfile?.username]); // eslint-disable-line react-hooks/exhaustive-deps
     // Пункт «Модерация» (17.4) — только модератору и игроку с флагом нечестной игры (там — апелляция).
     const [showModeration, setShowModeration] = useState(false);
     useEffect(() => {

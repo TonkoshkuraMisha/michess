@@ -4,6 +4,7 @@
 import {X} from 'lucide-react';
 import {BOARD_THEMES, PIECE_SETS} from '../../config/boardAppearance';
 import {useI18n} from '../../i18n';
+import {unlockText, useUnlocks} from '../../config/unlocks';
 
 const option = (active: boolean) => `py-1 px-1 rounded border text-xs font-bold transition cursor-pointer truncate ${
     active ? 'bg-amber-900/50 border-amber-400 text-amber-200' : 'bg-black/35 border-amber-900/40 text-boxwood/75 hover:text-amber-200'
@@ -13,6 +14,7 @@ export function ViewerAppearancePanel({pieceSetKey, themeKey, onPieceSetChange, 
     pieceSetKey: string; themeKey: string; onPieceSetChange: (id: string) => void; onThemeChange: (id: string) => void; onClose: () => void;
 }) {
     const {t} = useI18n();
+    const lockOf = useUnlocks();
     const activePieceSet = PIECE_SETS[pieceSetKey] || PIECE_SETS.merida;
     return (
         <div className="bg-acacia-dark p-3 rounded-md border border-amber-700/50 flex flex-col gap-2 shadow-lg shrink-0" data-testid="viewer-appearance">
@@ -24,14 +26,18 @@ export function ViewerAppearancePanel({pieceSetKey, themeKey, onPieceSetChange, 
             </div>
             <div className="grid grid-cols-5 gap-1">
                 {Object.values(PIECE_SETS).map((pset) => (
-                    <button key={pset.id} type="button" onClick={() => onPieceSetChange(pset.id)} className={option(pset.id === activePieceSet.id)}>
+                    <button key={pset.id} type="button" onClick={() => onPieceSetChange(pset.id)} className={`${option(pset.id === activePieceSet.id)} disabled:opacity-50`}
+                            disabled={Boolean(lockOf('pieces', pset.id)) && pset.id !== activePieceSet.id}
+                            title={lockOf('pieces', pset.id) ? unlockText(lockOf('pieces', pset.id)!) : undefined}>
                         {pset.shortName}
                     </button>
                 ))}
             </div>
             <div className="grid grid-cols-5 gap-1 pt-1 border-t border-amber-900/30">
                 {Object.values(BOARD_THEMES).map((theme) => (
-                    <button key={theme.id} type="button" onClick={() => onThemeChange(theme.id)} className={option(theme.id === themeKey)}>
+                    <button key={theme.id} type="button" onClick={() => onThemeChange(theme.id)} className={`${option(theme.id === themeKey)} disabled:opacity-50`}
+                            disabled={Boolean(lockOf('board', theme.id)) && theme.id !== themeKey}
+                            title={lockOf('board', theme.id) ? unlockText(lockOf('board', theme.id)!) : undefined}>
                         {theme.name}
                     </button>
                 ))}
