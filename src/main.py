@@ -25,6 +25,7 @@ from src.api import (
     personalities,
     puzzles,
     repertoire,
+    skills,
     social,
     study,
     teams,
@@ -127,6 +128,7 @@ def create_app() -> FastAPI:
     app.include_router(chess960.router, prefix="/api/v1/chess960", tags=["bots"])
     app.include_router(repertoire.router, prefix="/api/v1/repertoires", tags=["repertoire"])
     app.include_router(library.router, prefix="/api/v1/library", tags=["library"])
+    app.include_router(skills.router, prefix="/api/v1/skills", tags=["training"])
     app.include_router(account.router, prefix=settings.API_V1_STR)
 
     return app
