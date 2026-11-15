@@ -20,6 +20,7 @@ import {ClassicGamePage, ClassicsPage} from './components/learn/ClassicsPage';
 import {EndgamesPage, EndgameTrainerPage} from './components/learn/EndgameTrainer';
 import {ToolsPage} from './components/tools/ToolsPage';
 import {WatchPage} from './components/watch/WatchPage';
+import {ArenaPage, ArenasPage} from './components/arena/ArenaPages';
 import {TrainerPage, TrainersPage} from './components/trainers/TrainersPage';
 import {NotificationBell, PlayerSearch} from './components/social/SocialHeader';
 import {TournamentView, TournamentsPage} from './components/tournaments/TournamentsPage';
@@ -529,6 +530,8 @@ export default function App() {
                         <Route path="/learn/endgames/:exerciseId" element={<EndgameTrainerPage/>}/>
                         <Route path="/tools" element={<ToolsPage/>}/>
                         <Route path="/watch" element={<WatchPage/>}/>
+                        <Route path="/arenas" element={<ArenasPage/>}/>
+                        <Route path="/arenas/:arenaId" element={<ArenaPage/>}/>
                         <Route path="/train" element={<TrainersPage/>}/>
                         <Route path="/train/:trainerId" element={<TrainerPage/>}/>
                         <Route path="/guess" element={<GuessPage/>}/>

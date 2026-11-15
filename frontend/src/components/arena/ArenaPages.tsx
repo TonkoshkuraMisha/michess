@@ -1,0 +1,190 @@
+// --- FILE: frontend/src/components/arena/ArenaPages.tsx ---
+// Арены (таск 17.2): /arenas — идущие и ближайшие арены; /arenas/:id — таблица, вход и «Играть». Пока игрок ждёт
+// пару, страница повторяет «Играть» раз в WAIT_POLL_MS; как только партия создана — переход на главную доску (она
+// сама подхватывает идущую партию). ArenaBanner — анонс в лобби главной доски.
+
+import {useCallback, useEffect, useRef, useState} from 'react';
+import {Link, useNavigate, useParams} from 'react-router-dom';
+import {Flame, Swords, Trophy} from 'lucide-react';
+import {renderUiMessage, useI18n} from '../../i18n';
+import type {UiMessage} from '../../i18n';
+import {errorMessage} from '../../services/apiErrors';
+import {getToken} from '../../services/authToken';
+import {arenasApi, clock, controlLabel, secondsUntil} from '../../services/arenas';
+import type {ArenaDetail, ArenaInfo} from '../../services/arenas';
+
+export const WAIT_POLL_MS = 2000;
+const REFRESH_MS = 5000;
+
+function useNow(intervalMs = 1000): number {
+    const [now, setNow] = useState(() => Date.now());
+    useEffect(() => {
+        const id = window.setInterval(() => setNow(Date.now()), intervalMs);
+        return () => window.clearInterval(id);
+    }, [intervalMs]);
+    return now;
+}
+
+function timing(a: ArenaInfo, now: number, t: ReturnType<typeof useI18n>['t']): string {
+    if (a.status === 'scheduled') return t('arenas.startsIn', {time: clock(secondsUntil(a.starts_at, now))});
+    if (a.status === 'running') return t('arenas.endsIn', {time: clock(secondsUntil(a.ends_at, now))});
+    return t('arenas.finished');
+}
+
+export function ArenasPage() {
+    const {t} = useI18n();
+    const now = useNow();
+    const [arenas, setArenas] = useState<ArenaInfo[]>([]);
+    useEffect(() => {
+        arenasApi.list().then((r) => setArenas(r.arenas)).catch(() => undefined);
+    }, []);
+    return (
+        <div className="w-full max-w-4xl mx-auto p-3 flex flex-col gap-4 text-boxwood-light" data-testid="arenas-page">
+            <header className="flex items-center gap-2">
+                <Swords className="text-amber-400"/>
+                <h1 className="text-2xl font-bold text-amber-200">{t('arenas.title')}</h1>
+            </header>
+            <p className="text-boxwood/85">{t('arenas.intro')}</p>
+            <ul className="flex flex-col gap-2">
+                {arenas.map((a) => (
+                    <li key={a.id}>
+                        <Link to={`/arenas/${a.id}`} data-testid={`arena-${a.id}`}
+                              className={`flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded border-2 ${a.status === 'running'
+                                  ? 'bg-amber-900/30 border-amber-600' : 'bg-acacia border-acacia-dark'} hover:border-amber-400`}>
+                            <span className="font-bold">{t('arenas.name', {control: controlLabel(a)})}</span>
+                            <span className="text-sm text-boxwood/80">{timing(a, now, t)} · {t('arenas.players', {n: a.players ?? 0})}</span>
+                        </Link>
+                    </li>
+                ))}
+            </ul>
+        </div>
+    );
+}
+
+export function ArenaPage() {
+    const {t} = useI18n();
+    const navigate = useNavigate();
+    const now = useNow();
+    const {arenaId = ''} = useParams<{ arenaId: string }>();
+    const id = Number(arenaId);
+    const [arena, setArena] = useState<ArenaDetail | null>(null);
+    const [searching, setSearching] = useState(false);
+    const [error, setError] = useState<UiMessage | null>(null);
+    const searchingRef = useRef(false);
+
+    const load = useCallback(() => {
+        arenasApi.get(id).then((data) => {
+            setArena(data);
+            // Партия уже идёт (началась в другой вкладке или пока страница ждала) — на доску.
+            if (data.me?.current_game_id) navigate('/');
+        }).catch((err) => setError(errorMessage(err, 'common.networkError')));
+    }, [id, navigate]);
+
+    useEffect(() => {
+        load();
+        const timer = window.setInterval(load, REFRESH_MS);
+        return () => window.clearInterval(timer);
+    }, [load]);
+
+    useEffect(() => {
+        if (!searching) return;
+        searchingRef.current = true;
+        const tick = () => arenasApi.ready(id).then((r) => {
+            if (r.game_id && searchingRef.current) navigate('/');
+        }).catch((err) => {
+            setSearching(false);
+            setError(errorMessage(err, 'common.networkError'));
+        });
+        void tick();
+        const timer = window.setInterval(tick, WAIT_POLL_MS);
+        return () => {
+            searchingRef.current = false;
+            window.clearInterval(timer);
+        };
+    }, [searching, id, navigate]);
+
+    if (!arena) return error ? <p role="alert" className="p-4 text-rose-300">{renderUiMessage(error, t)}</p> : null;
+
+    const join = () => arenasApi.join(id).then(load).catch((err) => setError(errorMessage(err, 'common.networkError')));
+    const stop = () => {
+        setSearching(false);
+        arenasApi.leaveWaiting(id).catch(() => undefined);
+    };
+
+    return (
+        <div className="w-full max-w-4xl mx-auto p-3 flex flex-col gap-4 text-boxwood-light" data-testid="arena-page">
+            <Link to="/arenas" className="text-sm text-amber-400 hover:underline">{t('arenas.title')}</Link>
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h1 className="text-2xl font-bold text-amber-200">{t('arenas.name', {control: controlLabel(arena)})}</h1>
+                <span className="font-mono text-amber-300" data-testid="arena-timing">{timing(arena, now, t)}</span>
+            </div>
+            <p className="text-sm text-boxwood/80">{t('arenas.rules')}</p>
+            {error && <p role="alert" className="text-sm text-rose-300">{renderUiMessage(error, t)}</p>}
+            {getToken() && arena.status !== 'finished' && (
+                <div className="flex flex-wrap items-center gap-3">
+                    {!arena.me?.joined && (
+                        <button type="button" onClick={() => void join()} data-testid="arena-join"
+                                className="px-4 py-2 rounded bg-amber-700 text-white font-bold">{t('arenas.join')}</button>
+                    )}
+                    {arena.me?.joined && arena.status === 'running' && !searching && (
+                        <button type="button" onClick={() => {
+                            setError(null);
+                            setSearching(true);
+                        }} data-testid="arena-play" className="px-4 py-2 rounded bg-amber-700 text-white font-bold">{t('arenas.play')}</button>
+                    )}
+                    {searching && (
+                        <>
+                            <span className="animate-pulse" data-testid="arena-searching">{t('arenas.searching')}</span>
+                            <button type="button" onClick={stop} className="text-sm text-amber-400 hover:underline">{t('arenas.stop')}</button>
+                        </>
+                    )}
+                    {arena.me?.joined && arena.status === 'scheduled' && <span className="text-sm">{t('arenas.joinedWait')}</span>}
+                </div>
+            )}
+            <section className="bg-acacia p-3 rounded-lg border-2 border-acacia-dark overflow-x-auto">
+                <h2 className="font-bold text-amber-200 mb-2 flex items-center gap-1.5"><Trophy size={16}/> {t('arenas.standings')}</h2>
+                {arena.standings.length === 0 ? <p className="text-sm text-boxwood/70">{t('arenas.empty')}</p> : (
+                    <table className="w-full text-sm" data-testid="arena-standings">
+                        <thead>
+                            <tr className="text-boxwood/70 text-left">
+                                <th>#</th><th>{t('arenas.player')}</th><th className="text-right">{t('arenas.score')}</th>
+                                <th className="text-right">{t('arenas.games')}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {arena.standings.map((s) => (
+                                <tr key={s.username}>
+                                    <td>{s.place}</td>
+                                    <td className="flex items-center gap-1">
+                                        {s.username} <span className="text-xs text-boxwood/60">{s.rating}</span>
+                                        {s.fire && <Flame size={14} className="text-orange-400" aria-label={t('arenas.fire')}/>}
+                                    </td>
+                                    <td className="text-right font-bold">{s.score}</td>
+                                    <td className="text-right font-mono text-boxwood/80">{s.games}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                )}
+            </section>
+        </div>
+    );
+}
+
+/** Анонс в лобби: идущая (или ближайшая) арена. */
+export function ArenaBanner() {
+    const {t} = useI18n();
+    const now = useNow();
+    const [arena, setArena] = useState<ArenaInfo | null>(null);
+    useEffect(() => {
+        arenasApi.current().then((r) => setArena(r.arena)).catch(() => undefined);
+    }, []);
+    if (!arena) return null;
+    return (
+        <Link to={`/arenas/${arena.id}`} data-testid="arena-banner"
+              className="flex items-center justify-between gap-2 px-2 py-1.5 mb-2 rounded bg-amber-900/40 border border-amber-700/60 text-xs hover:border-amber-400">
+            <span className="flex items-center gap-1 font-bold text-amber-200"><Swords size={13}/> {t('arenas.name', {control: controlLabel(arena)})}</span>
+            <span className="text-boxwood/80">{timing(arena, now, t)}</span>
+        </Link>
+    );
+}
