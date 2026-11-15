@@ -71,12 +71,15 @@ export interface TournamentSummary {
     status: 'active' | 'finished';
     created_at: string;
     my_place: number | null;
+    career_stage?: string | null;
 }
 
 export interface TournamentCreate {
     format: TournamentFormat;
     size: number;
     participants: { kind: ParticipantKind; id: string | number }[];
+    /** Случайные соперники из диапазона силы (таск 15.4) вместо выбранных. */
+    random?: RandomOpponents;
     base_time_ms: number;
     increment_ms: number;
 }
@@ -119,6 +122,28 @@ export const startMyGame = (tournamentId: number, gameId: number) =>
 /** Сдать турнир (таск A.3): оставшиеся партии игрока — поражения. */
 export const withdrawTournament = (tournamentId: number) =>
     call<Tournament>(`${BASE}/${tournamentId}/withdraw`, {method: 'POST'}, 'tournaments.loadFailed');
+
+export type RandomOpponents = 'my_level' | 'stronger' | 'weaker';
+
+/** Этап карьеры (таск 15.4); у скрытого приглашения подробностей нет. */
+export interface CareerStage {
+    key: string;
+    number: number;
+    invitational: boolean;
+    hidden: boolean;
+    unlocked: boolean;
+    best_place: number | null;
+    format?: TournamentFormat;
+    size?: number;
+    base_time_ms?: number;
+    increment_ms?: number;
+    target?: number;
+    opponents?: { kind: ParticipantKind; id: string | number }[];
+}
+
+export const getCareer = () => call<{ stages: CareerStage[] }>(`${BASE}/career`, {method: 'GET'}, 'tournaments.loadFailed');
+export const startCareerStage = (key: string) =>
+    call<Tournament>(`${BASE}/career/${encodeURIComponent(key)}`, {method: 'POST'}, 'tournaments.createFailed');
 
 export const createTournament = (body: TournamentCreate) =>
     call<Tournament>(BASE, {method: 'POST', body: JSON.stringify(body)}, 'tournaments.createFailed');
