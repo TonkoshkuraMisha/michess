@@ -10,7 +10,9 @@ import {ladderOpponentName} from '../config/players';
 import type {I18n, MessageKey} from '../i18n';
 import {getToken} from './authToken';
 
-export type TournamentFormat = 'round_robin' | 'knockout';
+export type TournamentFormat = 'round_robin' | 'knockout' | 'swiss';
+/** Швейцарская система (таск 15.4): число туров по размеру — как на сервере (tournament_rules.SWISS_ROUNDS). */
+export const SWISS_ROUNDS: Record<number, number> = {6: 4, 8: 5};
 export type ParticipantKind = 'bot' | 'archetype' | 'personality';
 
 export interface TournamentPlayer {
@@ -43,6 +45,7 @@ export interface Standing {
     points: number;
     head_to_head: number;
     sonneborn_berger: number;
+    buchholz?: number;
     place: number;
 }
 

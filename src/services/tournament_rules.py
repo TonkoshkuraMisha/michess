@@ -21,6 +21,9 @@ Stage = Literal["main", "rematch", "armageddon"]
 
 ROUND_ROBIN_SIZES = (4, 6, 8)
 KNOCKOUT_SIZES = (4, 8)
+# Швейцарская система (таск 15.4): размер и число туров.
+SWISS_SIZES = (6, 8)
+SWISS_ROUNDS = {6: 4, 8: 5}
 MIN_SHORTENED_BASE_MS = 60_000
 
 
@@ -61,6 +64,8 @@ class Standing:
     head_to_head: float
     sonneborn_berger: float
     place: int
+    # Бухгольц — сумма очков соперников (швейцарская система).
+    buchholz: float = 0.0
 
 
 def _score(game: GameRecord, seat: int) -> float:
@@ -92,6 +97,84 @@ def round_robin_standings(seats: list[int], games: list[GameRecord]) -> list[Sta
         Standing(seat=s, points=points[s], head_to_head=h2h[s], sonneborn_berger=sb[s], place=i + 1)
         for i, s in enumerate(order)
     ]
+
+
+# --- Швейцарская система ----------------------------------------------------------------------------
+
+def _points(seats: list[int], games: list[GameRecord]) -> dict[int, float]:
+    points = {s: 0.0 for s in seats}
+    for g in games:
+        points[g.white] += _score(g, g.white)
+        points[g.black] += _score(g, g.black)
+    return points
+
+
+def swiss_standings(seats: list[int], games: list[GameRecord]) -> list[Standing]:
+    """Таблица швейцарки: очки, затем Бухгольц (сумма очков соперников), Зоннеборн–Бергер, посев."""
+    points = _points(seats, games)
+    buchholz = {s: 0.0 for s in seats}
+    sb = {s: 0.0 for s in seats}
+    for g in games:
+        for seat, opponent in ((g.white, g.black), (g.black, g.white)):
+            buchholz[seat] += points[opponent]
+            sb[seat] += _score(g, seat) * points[opponent]
+    order = sorted(seats, key=lambda s: (-points[s], -buchholz[s], -sb[s], s))
+    return [
+        Standing(seat=s, points=points[s], head_to_head=0.0, sonneborn_berger=sb[s], place=i + 1, buchholz=buchholz[s])
+        for i, s in enumerate(order)
+    ]
+
+
+def _colors(a: int, b: int, games: list[GameRecord]) -> tuple[int, int]:
+    """Белые тому, у кого меньше белых (разность белых и чёрных); при равенстве — кто прошлую партию играл чёрными,
+    затем — сеяному выше."""
+    def balance(seat: int) -> int:
+        return sum(1 if g.white == seat else -1 for g in games if seat in (g.white, g.black))
+
+    def last_white(seat: int) -> bool | None:
+        own = [g for g in games if seat in (g.white, g.black)]
+        return own[-1].white == seat if own else None
+
+    if balance(a) != balance(b):
+        return (a, b) if balance(a) < balance(b) else (b, a)
+    if last_white(a) is not None and last_white(a) != last_white(b):
+        return (b, a) if last_white(a) else (a, b)
+    return (a, b) if a < b else (b, a)
+
+
+def swiss_pairings(seats: list[int], games: list[GameRecord]) -> list[tuple[int, int]]:
+    """
+    Пары следующего тура (белые, чёрные). Первый тур — верхняя половина посева против нижней (1–4, 2–5, 3–6), цвета
+    чередуются по доскам. Дальше — по очкам: каждый, начиная с лидера, получает ближайшего по таблице соперника, с
+    которым ещё не играл (перебор с возвратом гарантирует, что пары найдутся для всех); если без повторов нельзя —
+    повтор допускается.
+    """
+    ordered = sorted(seats)
+    if not games:
+        half = len(ordered) // 2
+        pairs = []
+        for board, (high, low) in enumerate(zip(ordered[:half], ordered[half:], strict=True)):
+            pairs.append((high, low) if board % 2 == 0 else (low, high))
+        return pairs
+    points = _points(seats, games)
+    ranking = sorted(seats, key=lambda s: (-points[s], s))
+    played = {frozenset((g.white, g.black)) for g in games}
+
+    def search(rest: list[int], allow_repeat: bool) -> list[tuple[int, int]] | None:
+        if not rest:
+            return []
+        first = rest[0]
+        for opponent in rest[1:]:
+            if not allow_repeat and frozenset((first, opponent)) in played:
+                continue
+            tail = search([s for s in rest[1:] if s != opponent], allow_repeat)
+            if tail is not None:
+                return [(first, opponent), *tail]
+        return None
+
+    found = search(ranking, False) or search(ranking, True)
+    assert found is not None
+    return [_colors(a, b, games) for a, b in found]
 
 
 # --- На выбывание ------------------------------------------------------------------------------------

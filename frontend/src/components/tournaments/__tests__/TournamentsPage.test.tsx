@@ -281,3 +281,25 @@ describe('карьера (таск 15.4)', () => {
         expect(JSON.parse(String(post[1]!.body))).toMatchObject({random: 'stronger', participants: []});
     });
 });
+
+describe('швейцарская система (таск 15.4)', () => {
+    it('таблица с Бухгольцем и туры «N из 5»', async () => {
+        const swiss = roundRobin({
+            format: 'swiss', size: 8, current_round: 2,
+            standings: [
+                {seat: 2, points: 1, head_to_head: 0, sonneborn_berger: 0, place: 1, buchholz: 1.5},
+                {seat: 1, points: 0, head_to_head: 0, sonneborn_berger: 0, place: 2, buchholz: 0.5},
+                {seat: 4, points: 0, head_to_head: 0, sonneborn_berger: 0, place: 3, buchholz: 0},
+                {seat: 3, points: 0, head_to_head: 0, sonneborn_berger: 0, place: 4, buchholz: 0},
+            ],
+        });
+        stub({'/tournaments/7': () => swiss});
+        renderView();
+        const table = await screen.findByTestId('swiss-table');
+        expect(table).toHaveTextContent('Buchholz');
+        expect(table).toHaveTextContent('1.5');
+        expect(screen.getByTestId('tournament-status')).toHaveTextContent('2');
+        expect(screen.getByTestId('tournament-status')).toHaveTextContent('5');
+        expect(screen.queryByTestId('crosstable')).toBeNull();
+    });
+});

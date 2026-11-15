@@ -17,7 +17,7 @@ import type {BotStrength, CatalogArchetype} from '../../services/botCatalog';
 import {listPersonalities} from '../../services/personalities';
 import type {Personality} from '../../services/personalities';
 import {
-    botGamesRunning, createTournament, gameStart, getTournament, listTournaments, myPendingGame, participantName,
+    SWISS_ROUNDS, botGamesRunning, createTournament, gameStart, getTournament, listTournaments, myPendingGame, participantName,
     startMyGame, withdrawTournament,
 } from '../../services/tournaments';
 import type {
@@ -28,7 +28,7 @@ import {Diploma} from './Diploma';
 import {Career} from './Career';
 import {getToken} from '../../services/authToken';
 
-const SIZES: Record<TournamentFormat, number[]> = {round_robin: [4, 6, 8], knockout: [4, 8]};
+const SIZES: Record<TournamentFormat, number[]> = {round_robin: [4, 6, 8], knockout: [4, 8], swiss: [6, 8]};
 const POLL_MS = 3000;
 
 type Pick = { kind: ParticipantKind; id: string | number };
@@ -101,10 +101,10 @@ function CreateTournament() {
                             onChange={(e) => {
                                 const next = e.target.value as TournamentFormat;
                                 setFormat(next);
-                                if (!SIZES[next].includes(size)) setSize(4);
+                                if (!SIZES[next].includes(size)) setSize(SIZES[next][0]);
                                 setPicks([]);
                             }}>
-                        {(['round_robin', 'knockout'] as const).map((f) => <option key={f} value={f}>{t(`tournaments.formats.${f}`)}</option>)}
+                        {(['round_robin', 'knockout', 'swiss'] as const).map((f) => <option key={f} value={f}>{t(`tournaments.formats.${f}`)}</option>)}
                     </select>
                 </label>
                 <label className="flex flex-col text-sm gap-1">
@@ -252,7 +252,8 @@ export function TournamentView() {
 
     const name = (seat: number) => participantName(tournament.players.find((p) => p.seat === seat)!, t);
     const rounds = Array.from(new Set(tournament.games.map((g) => g.round))).sort((a, b) => a - b);
-    const totalRounds = tournament.format === 'round_robin' ? tournament.size - 1 : (tournament.size === 4 ? 2 : 3);
+    const totalRounds = tournament.format === 'round_robin' ? tournament.size - 1
+        : tournament.format === 'swiss' ? SWISS_ROUNDS[tournament.size] : (tournament.size === 4 ? 2 : 3);
     const pending = myPendingGame(tournament);
     const me = tournament.players.find((p) => p.seat === tournament.my_seat);
     const winner = tournament.players.find((p) => p.place === 1);
@@ -356,6 +357,32 @@ export function TournamentView() {
                         </tbody>
                     </table>
                 </section>
+            ) : tournament.format === 'swiss' ? (
+                <section className="bg-acacia p-3 rounded-lg border-2 border-acacia-dark overflow-x-auto">
+                    <h2 className="font-bold text-amber-200 mb-2">{t('tournaments.crosstable')}</h2>
+                    <table className="w-full text-sm" data-testid="swiss-table">
+                        <thead>
+                            <tr className="text-boxwood/70">
+                                <th className="text-left px-1">#</th>
+                                <th className="text-left px-1">{t('tournaments.player')}</th>
+                                <th className="px-1">{t('tournaments.points')}</th>
+                                <th className="px-1">{t('tournaments.buchholz')}</th>
+                                <th className="px-1">{t('tournaments.sonnebornBerger')}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {tournament.standings.map((row) => (
+                                <tr key={row.seat} className={row.seat === tournament.my_seat ? 'bg-amber-900/30' : ''}>
+                                    <td className="px-1">{row.place}</td>
+                                    <td className="px-1 whitespace-nowrap">{name(row.seat)}</td>
+                                    <td className="px-1 text-center font-bold">{row.points}</td>
+                                    <td className="px-1 text-center font-mono text-boxwood/80">{row.buchholz ?? 0}</td>
+                                    <td className="px-1 text-center font-mono text-boxwood/80">{row.sonneborn_berger}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </section>
             ) : (
                 <section className="bg-acacia p-3 rounded-lg border-2 border-acacia-dark overflow-x-auto" data-testid="bracket">
                     <h2 className="font-bold text-amber-200 mb-2">{t('tournaments.bracket')}</h2>
@@ -390,7 +417,7 @@ export function TournamentView() {
                 {rounds.map((round) => (
                     <div key={round} className="mb-2">
                         <h3 className="text-xs text-boxwood/70">
-                            {tournament.format === 'round_robin'
+                            {tournament.format !== 'knockout'
                                 ? t('tournaments.roundOf', {round, total: totalRounds})
                                 : knockoutRoundName(t, tournament.size, round)}
                         </h3>

@@ -25,14 +25,16 @@ from src.services.bots.archetypes import ARCHETYPE_PREFIX, ARCHETYPES_BY_KEY
 from src.services.bots.calibration import strength_of
 from src.services.rating import classify_time_control
 
-Format = Literal["round_robin", "knockout"]
+Format = Literal["round_robin", "knockout", "swiss"]
 
 # Партию ботов, которую забрал и не доиграл воркер (упал), через CLAIM_TIMEOUT можно забрать снова.
 CLAIM_TIMEOUT = timedelta(minutes=15)
 # Поставленную в очередь, но не начатую партию ботов ставим снова не раньше чем через REQUEUE_AFTER (таск A.1):
 # страница турнира опрашивает сервер каждые 3 с, и без этого очередь Celery росла бы с каждым опросом.
 REQUEUE_AFTER = timedelta(minutes=2)
-SIZES: dict[str, tuple[int, ...]] = {"round_robin": rules.ROUND_ROBIN_SIZES, "knockout": rules.KNOCKOUT_SIZES}
+SIZES: dict[str, tuple[int, ...]] = {
+    "round_robin": rules.ROUND_ROBIN_SIZES, "knockout": rules.KNOCKOUT_SIZES, "swiss": rules.SWISS_SIZES,
+}
 
 
 @dataclass(frozen=True)
@@ -135,6 +137,9 @@ async def create_tournament(
         for rnd, pairs in enumerate(rules.berger_rounds(size), 1):
             for board, (white, black) in enumerate(pairs, 1):
                 _add_game(db, tournament, rnd, board, rules.MatchGame("main", white, black, False))
+    elif fmt == "swiss":
+        for board, (white, black) in enumerate(rules.swiss_pairings(list(range(1, size + 1)), []), 1):
+            _add_game(db, tournament, 1, board, rules.MatchGame("main", white, black, False))
     else:
         for board, (high, low) in enumerate(rules.knockout_first_round(size), 1):
             _add_game(db, tournament, 1, board, rules.match_game(high, low, "main"))
@@ -184,6 +189,8 @@ async def record_result(
     await db.flush()
     if tournament.format == "round_robin":
         await _advance_round_robin(db, tournament)
+    elif tournament.format == "swiss":
+        await _advance_swiss(db, tournament)
     else:
         await _advance_knockout(db, tournament)
     await db.commit()
@@ -208,6 +215,34 @@ async def _advance_round_robin(db: AsyncSession, tournament: Tournament) -> None
     for p in players:
         p.place = place[p.seat]
     await _finish(tournament)
+
+
+async def _advance_swiss(db: AsyncSession, tournament: Tournament) -> None:
+    """Тур закрыт — пары следующего по очкам (rules.swiss_pairings); последний тур — итоговые места."""
+    games = await games_of(db, tournament.id)
+    if any(g.result is None for g in games):
+        return
+    players = await players_of(db, tournament.id)
+    seats = [p.seat for p in players]
+    records = [_record(g) for g in games]
+    if tournament.current_round >= rules.SWISS_ROUNDS[tournament.size]:
+        place = {s.seat: s.place for s in rules.swiss_standings(seats, records)}
+        for p in players:
+            p.place = place[p.seat]
+        await _finish(tournament)
+        return
+    tournament.current_round += 1
+    # Сдавший турнир игрок (таск A.3) в новых турах не играет: его партия сразу записывается поражением.
+    withdrawn = {p.seat for p in players if p.kind == "user"} if tournament.withdrawn_at is not None else set()
+    for board, (white, black) in enumerate(rules.swiss_pairings(seats, records), 1):
+        _add_game(db, tournament, tournament.current_round, board, rules.MatchGame("main", white, black, False))
+    await db.flush()
+    if withdrawn:
+        for game in await games_of(db, tournament.id):
+            if game.round == tournament.current_round and {game.white_seat, game.black_seat} & withdrawn:
+                game.result = loss_for("white" if game.white_seat in withdrawn else "black")
+        await db.flush()
+        await _advance_swiss(db, tournament)
 
 
 async def _advance_knockout(db: AsyncSession, tournament: Tournament) -> None:

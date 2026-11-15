@@ -19,7 +19,7 @@ class Tournament(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     owner_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    # round_robin | knockout
+    # round_robin | knockout | swiss
     format: Mapped[str] = mapped_column(String(16), nullable=False)
     size: Mapped[int] = mapped_column(Integer, nullable=False)
     # active | finished

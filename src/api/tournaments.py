@@ -36,7 +36,7 @@ class ParticipantIn(BaseModel):
 
 
 class TournamentCreate(BaseModel):
-    format: Literal["round_robin", "knockout"]
+    format: Literal["round_robin", "knockout", "swiss"]
     size: int = Field(..., ge=4, le=8)
     participants: list[ParticipantIn] = Field(default_factory=list, max_length=7)
     # Случайные соперники из диапазона силы (таск 15.4) вместо выбранных: participants тогда не нужен.
@@ -77,6 +77,7 @@ class StandingOut(BaseModel):
     head_to_head: float
     sonneborn_berger: float
     place: int
+    buchholz: float = 0.0
 
 
 class TournamentOut(BaseModel):
@@ -131,9 +132,10 @@ async def view(db: AsyncSession, tournament: Tournament, user: User) -> Tourname
     players = await service.players_of(db, tournament.id)
     games = await service.games_of(db, tournament.id)
     standings: list[StandingOut] = []
-    if tournament.format == "round_robin":
+    if tournament.format in ("round_robin", "swiss"):
         played = [rules.GameRecord(g.white_seat, g.black_seat, g.result) for g in games if g.result]  # type: ignore[arg-type]
-        standings = [StandingOut(**s.__dict__) for s in rules.round_robin_standings([p.seat for p in players], played)]
+        table = rules.round_robin_standings if tournament.format == "round_robin" else rules.swiss_standings
+        standings = [StandingOut(**s.__dict__) for s in table([p.seat for p in players], played)]
     return TournamentOut(
         id=tournament.id, format=tournament.format, size=tournament.size, status=tournament.status,
         base_time_ms=tournament.base_time_ms, increment_ms=tournament.increment_ms,
