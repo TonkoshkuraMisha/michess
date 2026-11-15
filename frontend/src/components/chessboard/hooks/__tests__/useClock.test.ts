@@ -29,6 +29,18 @@ function tickFor(ms: number) {
 }
 
 describe('useClock', () => {
+    it('песочные часы: время ходящего прибавляется сопернику (фора, таск 21.1)', () => {
+        const hook = renderHook(() => useClock({isTicking: true, isParticipant: true, currentTurn: 'white', myColor: 'white',
+            onLowTime: vi.fn(), hourglass: true}));
+        act(() => {
+            hook.result.current.setWhiteTimeMs(60_000);
+            hook.result.current.setBlackTimeMs(60_000);
+        });
+        tickFor(2_000);
+        expect(formatTime(hook.result.current.whiteTimeMs)).toBe('00:58');
+        expect(formatTime(hook.result.current.blackTimeMs)).toBe('01:02');
+    });
+
     it('вне цейтнота — перерисовка раз в секунду, а не каждые 50 мс', () => {
         const {hook, rendersSince} = clock(60_000);
         tickFor(3_000);

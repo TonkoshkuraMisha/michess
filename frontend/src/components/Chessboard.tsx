@@ -1,5 +1,6 @@
 // --- FILE: frontend/src/components/Chessboard.tsx ---
 
+import type {OddsChoice} from './chessboard/odds';
 import {useState, useEffect, useRef, useCallback} from 'react';
 import {socialApi} from '../services/social';
 import {Link, useLocation, useNavigate, useParams} from 'react-router-dom';
@@ -241,6 +242,11 @@ export default function Chessboard() {
     coachAssistedRef.current = coach.assisted;
     const isCoachAssisted = useCallback(() => coachAssistedRef.current, []);
 
+    // Фора (таск 21.1): выбор перед партией с ботом и фора идущей партии (для реванша и «песочных часов»).
+    const [oddsChoice, setOddsChoice] = useState<OddsChoice>({kind: 'none', giver: 'opponent'});
+    const [activeOdds, setActiveOdds] = useState<OddsChoice | null>(null);
+    const [hourglass, setHourglass] = useState(false);
+
     const {
         whiteTimeMs, setWhiteTimeMs, blackTimeMs, setBlackTimeMs, resetLowTimeWarning, applyIncrement,
     } = useClock({
@@ -249,6 +255,7 @@ export default function Chessboard() {
         currentTurn: game.turn() === 'w' ? 'white' : 'black',
         myColor,
         onLowTime: () => playAudio('low_time'),
+        hourglass: hourglass && Boolean(activeBot),
     });
 
     const playOutcomeSound = useCallback((result: string, playerColor: 'white' | 'black' = myColorRef.current) => {
@@ -301,7 +308,7 @@ export default function Chessboard() {
     } = useBotGame({
         game, myColor, gameOverResult, whiteTimeMs, blackTimeMs, isSearching, setIsSearching,
         activeBot, setActiveBot,
-        effectiveWhiteBaseMinutes, effectiveBlackBaseMinutes, effectiveIncSeconds,
+        effectiveWhiteBaseMinutes, effectiveBlackBaseMinutes, effectiveIncSeconds, setHourglass,
         currentUsername, currentUserRating,
         setGame, setHistory, setViewIndex, setSelectedSquare, setMyColor, setIsManualFlip, setPendingPromotion,
         clearPremove, setGameOverResult, setRatingInfo, setDrawOfferStatus, setRematchStatus,
@@ -748,8 +755,10 @@ export default function Chessboard() {
             playAudio('premove');
         } else if (activeBot && gameOverResult) {
             const nextColor = myColor === 'white' ? 'black' : 'white';
-            // Реванш — с той же начальной позиции, что и сыгранная партия.
-            startHistoricalBotGame(activeBot, nextColor, startFen);
+            // Реванш — с той же начальной позиции, что и сыгранная партия; с форой — та же фора (позиция
+            // пересчитывается: цвета меняются).
+            if (activeOdds) startHistoricalBotGame(activeBot, nextColor, null, {odds: activeOdds});
+            else startHistoricalBotGame(activeBot, nextColor, startFen);
         }
     };
 
@@ -1070,10 +1079,15 @@ export default function Chessboard() {
     const canStartFromPosition = isSandbox && sandboxFen !== STANDARD_START_FEN && !game.isGameOver();
 
     const handleStartBotGame = (botId: HistoricalBotId, colorPref: 'white' | 'black' | 'random') => {
-        startHistoricalBotGame(botId, colorPref, canStartFromPosition && startFromPosition ? sandboxFen : null);
+        const fromPosition = canStartFromPosition && startFromPosition;
+        // Фора — только с обычной расстановки (материальная фора сама задаёт позицию).
+        const odds = !fromPosition && oddsChoice.kind !== 'none' ? oddsChoice : null;
+        setActiveOdds(odds);
+        startHistoricalBotGame(botId, colorPref, fromPosition ? sandboxFen : null, odds ? {odds} : {});
     };
 
     const handleStartCustomGame = (opponent: CustomOpponent, colorPref: 'white' | 'black' | 'random') => {
+        setActiveOdds(null);
         startCustomBotGame(opponent, colorPref, canStartFromPosition && startFromPosition ? sandboxFen : null);
     };
 
@@ -1447,6 +1461,8 @@ export default function Chessboard() {
                         startFromPosition={startFromPosition}
                         onStartFromPositionChange={setStartFromPosition}
                         measured={measuredBotRatings}
+                        odds={oddsChoice}
+                        onOddsChange={setOddsChoice}
                     />
                     )}
                     </div>

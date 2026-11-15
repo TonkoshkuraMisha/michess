@@ -15,6 +15,8 @@ export interface UseClockOptions {
     currentTurn: ClockColor;
     myColor: ClockColor;
     onLowTime: () => void;
+    /** «Песочные часы» (фора, таск 21.1): время, которое тратит ходящий, прибавляется сопернику. */
+    hourglass?: boolean;
 }
 
 export interface UseClockResult {
@@ -62,7 +64,7 @@ function useClockValue(initial: number) {
     return [shown, set, tick] as const;
 }
 
-export function useClock({isTicking, isParticipant, currentTurn, myColor, onLowTime}: UseClockOptions): UseClockResult {
+export function useClock({isTicking, isParticipant, currentTurn, myColor, onLowTime, hourglass = false}: UseClockOptions): UseClockResult {
     const [whiteTimeMs, setWhiteTimeMs, tickWhite] = useClockValue(180000);
     const [blackTimeMs, setBlackTimeMs, tickBlack] = useClockValue(180000);
     const lowTimeWarnedRef = useRef(false);
@@ -79,13 +81,15 @@ export function useClock({isTicking, isParticipant, currentTurn, myColor, onLowT
 
             if (currentTurn === 'white') {
                 tickWhite(delta);
+                if (hourglass) tickBlack(-delta);
             } else {
                 tickBlack(delta);
+                if (hourglass) tickWhite(-delta);
             }
         }, 50);
 
         return () => clearInterval(interval);
-    }, [isTicking, currentTurn, tickWhite, tickBlack]);
+    }, [isTicking, currentTurn, tickWhite, tickBlack, hourglass]);
 
     // Звуковое предупреждение о цейтноте (< 10 секунд на часах игрока)
     useEffect(() => {

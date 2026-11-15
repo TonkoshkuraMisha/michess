@@ -1,5 +1,7 @@
 // --- FILE: frontend/src/components/chessboard/HistoricalBotsPanel.tsx ---
 
+import {ODDS} from './odds';
+import type {OddsChoice, OddsGiver, OddsKind} from './odds';
 import {MessageSquareQuote} from 'lucide-react';
 import {HISTORICAL_BOTS_LIST} from '../../config/champions';
 import type {BotOpponentId, HistoricalBotId, HistoricalBotProfile} from '../../config/champions';
@@ -22,13 +24,16 @@ export interface HistoricalBotsPanelProps {
     onStartFromPositionChange: (value: boolean) => void;
     /** Измеренная сила (GET /bots/catalog): id бота → рейтинг; без калибровки — заявленный. */
     measured?: Record<string, number>;
+    /** Фора (таск 21.1); без обработчика выбор не показывается. */
+    odds?: OddsChoice;
+    onOddsChange?: (odds: OddsChoice) => void;
 }
 
 /** Выбор исторического бота, карточка с его девизом/рейтингом и кнопками старта партии. */
 export function HistoricalBotsPanel({
     selectedBotId, onSelectBot, selectedBotProfile, activeBot, activeBotProfile, gameId,
     gameOverResult, isBotThinking, botComment, onStartBotGame,
-    canStartFromPosition, startFromPosition, onStartFromPositionChange, measured = {},
+    canStartFromPosition, startFromPosition, onStartFromPositionChange, measured = {}, odds, onOddsChange,
 }: HistoricalBotsPanelProps) {
     const {t} = useI18n();
     return (
@@ -126,6 +131,26 @@ export function HistoricalBotsPanel({
                         />
                         {t('common.startFromPosition')}
                     </label>
+                )}
+
+                {odds && onOddsChange && (
+                    <div className="flex flex-wrap items-center gap-1.5 text-xs text-amber-200" data-testid="odds-picker">
+                        <label className="flex items-center gap-1.5 min-w-0">
+                            {t('odds.label')}
+                            <select value={odds.kind} disabled={canStartFromPosition && startFromPosition}
+                                    onChange={(e) => onOddsChange({...odds, kind: e.target.value as OddsKind})}
+                                    data-testid="odds-kind" className="bg-black/40 rounded px-1 py-0.5 min-w-0 max-w-[11rem] disabled:opacity-50">
+                                {ODDS.map((kind) => <option key={kind} value={kind}>{t(`odds.kinds.${kind}`)}</option>)}
+                            </select>
+                        </label>
+                        {odds.kind !== 'none' && odds.kind !== 'hourglass' && (
+                            <select value={odds.giver} onChange={(e) => onOddsChange({...odds, giver: e.target.value as OddsGiver})}
+                                    aria-label={t('odds.giver')} data-testid="odds-giver" className="bg-black/40 rounded px-1 py-0.5">
+                                <option value="opponent">{t('odds.opponentGives')}</option>
+                                <option value="me">{t('odds.iGive')}</option>
+                            </select>
+                        )}
+                    </div>
                 )}
 
                 <div className="grid grid-cols-3 gap-1.5">
