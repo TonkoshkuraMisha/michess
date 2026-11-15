@@ -10,6 +10,11 @@ import anderssenAvatar from '../assets/champions/anderssen.jpg';
 import morphyAvatar from '../assets/champions/morphy.jpg';
 import paulsenAvatar from '../assets/champions/paulsen.jpg';
 import zukertortAvatar from '../assets/champions/zukertort.jpg';
+import steinitzAvatar from '../assets/champions/Steinitz.jpg';
+import laskerAvatar from '../assets/champions/Lasker.jpg';
+import rubinsteinAvatar from '../assets/champions/Rubinstein.jpg';
+import capablancaAvatar from '../assets/champions/Capablanca.jpg';
+import alekhineAvatar from '../assets/champions/Alekhine.jpg';
 import {t} from '../i18n';
 
 export type HistoricalBotId =
@@ -19,7 +24,13 @@ export type HistoricalBotId =
     | 'anderssen'
     | 'morphy'
     | 'paulsen'
-    | 'zukertort';
+    | 'zukertort'
+    // Мастера второй волны (таск 21.5): портреты — из раздела чемпионов.
+    | 'steinitz'
+    | 'lasker'
+    | 'rubinstein'
+    | 'capablanca'
+    | 'alekhine';
 
 /** Исторический бот или соперник из мастерской (персоналия с ползунками). */
 export type BotOpponentId = HistoricalBotId | 'custom';
@@ -37,13 +48,13 @@ export interface HistoricalBotProfile {
     fallbackAvatar: string;
 }
 
-function historicalBot(id: HistoricalBotId, era: string, rating: number, avatar: string): HistoricalBotProfile {
+function historicalBot(id: HistoricalBotId, era: string, rating: number, avatar: string, fallback = `/assets/champions/${id}.jpg`): HistoricalBotProfile {
     return {
         id,
         era,
         rating,
         avatar,
-        fallbackAvatar: `/assets/champions/${id}.jpg`,
+        fallbackAvatar: fallback,
         get name() {
             return t(`bots.profiles.${id}.name`);
         },
@@ -70,6 +81,11 @@ export const HISTORICAL_BOTS: Record<HistoricalBotId, HistoricalBotProfile> = {
     morphy: historicalBot('morphy', '1837–1884', 2150, morphyAvatar),
     paulsen: historicalBot('paulsen', '1833–1891', 2080, paulsenAvatar),
     zukertort: historicalBot('zukertort', '1842–1888', 2120, zukertortAvatar),
+    steinitz: historicalBot('steinitz', '1836–1900', 2050, steinitzAvatar, '/assets/champions/Steinitz.jpg'),
+    lasker: historicalBot('lasker', '1868–1941', 2250, laskerAvatar, '/assets/champions/Lasker.jpg'),
+    rubinstein: historicalBot('rubinstein', '1880–1961', 2200, rubinsteinAvatar, '/assets/champions/Rubinstein.jpg'),
+    capablanca: historicalBot('capablanca', '1888–1942', 2300, capablancaAvatar, '/assets/champions/Capablanca.jpg'),
+    alekhine: historicalBot('alekhine', '1892–1946', 2300, alekhineAvatar, '/assets/champions/Alekhine.jpg'),
 };
 
 export const HISTORICAL_BOTS_LIST: (HistoricalBotProfile & {id: HistoricalBotId})[] =

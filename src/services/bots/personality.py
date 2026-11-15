@@ -335,12 +335,10 @@ def _habit_rules(config: BotPersonalityConfig) -> list[Rule]:
 
 
 def _style_match(style: str, line: openings.OpeningLine) -> bool:
-    """Линии характера, которые играются за оба цвета: гамбиты, разменные варианты, необычные начала."""
+    """Линии характера, которые играются за оба цвета: гамбиты и разменные варианты."""
     if style == "gambit":
         return "Gambit" in line.name and "Declined" not in line.name
-    if style == "drawish":
-        return "Exchange Variation" in line.name
-    return style == "offbeat" and line.eco in ("A00", "B00")
+    return style == "drawish" and "Exchange Variation" in line.name
 
 
 @cache
@@ -356,6 +354,10 @@ def style_lines(style: str) -> tuple[tuple[chess.Color | None, tuple[str, ...], 
         springer = chess.WHITE if len(line.moves) % 2 else chess.BLACK
         if style in ("trapper", "trap_victim") and "Trap" in line.name:
             found.append((springer if style == "trapper" else not springer, line.moves, line.name))
+        elif style == "offbeat" and line.eco in ("A00", "B00"):
+            # Необычный первый ход белых (A00) и необычный ответ чёрных на 1.e4 (B00): линии B00 начинаются с
+            # обычного 1.e4, поэтому за белых их играть нельзя.
+            found.append((chess.WHITE if line.eco == "A00" else chess.BLACK, line.moves, line.name))
         elif _style_match(style, line):
             found.append((None, line.moves, line.name))
     return tuple(found)

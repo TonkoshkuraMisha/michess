@@ -3,6 +3,7 @@
 from src.services.bots.anderssen import AnderssenBot, anderssen_bot
 from src.services.bots.base import HistoricalBot, normalize_fen_key, resolve_stockfish_path
 from src.services.bots.labourdonnais import LabourdonnaisBot, labourdonnais_bot
+from src.services.bots.masters import MASTER_BOTS
 from src.services.bots.morphy import MorphyBot, morphy_bot
 from src.services.bots.paulsen import PaulsenBot, paulsen_bot
 from src.services.bots.philidor import PhilidorBot, philidor_bot
@@ -17,6 +18,7 @@ BOT_INSTANCES: dict[str, HistoricalBot] = {
     "morphy": morphy_bot,
     "paulsen": paulsen_bot,
     "zukertort": zukertort_bot,
+    **MASTER_BOTS,  # мастера второй волны (таск 21.5)
 }
 
 __all__ = [
