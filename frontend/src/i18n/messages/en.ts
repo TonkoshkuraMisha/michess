@@ -1816,6 +1816,14 @@ export const en = {
         blackWins: 'Black wins!',
         draw: 'Draw: no moves left.',
     },
+    odds: {
+        label: 'Odds',
+        giver: 'Who gives the odds',
+        opponentGives: 'the opponent gives',
+        iGive: 'I give',
+        kinds: {none: 'no odds', knight: 'without a knight', rook: 'without a rook', queen: 'without the queen',
+            pawn: 'without the f-pawn', time: 'on time (⅓ of the clock)', hourglass: 'hourglass clock'},
+    },
     library: {
         title: 'Game library',
         intro: 'Collections of master games, model games for pawn structures and opening lines, and selected beautiful games.',

@@ -354,6 +354,20 @@ describe('партия с ботом с произвольной позиции'
         expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/bots/save-game'))).toBe(false);
     });
 
+    it('фора: партия с ботом начинается без коня соперника (таск 21.1)', async () => {
+        stubBotApi();
+        renderChessboard();
+        await screen.findByRole('button', {name: /Белыми/});
+        fireEvent.change(screen.getByTestId('odds-kind'), {target: {value: 'knight'}});
+        expect(screen.getByTestId('odds-giver')).toHaveValue('opponent');
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', {name: /Белыми/}));
+        });
+        // Играю белыми, фору даёт соперник — у чёрных нет коня b8, у белых всё на месте.
+        expect(squareEl('b8').querySelector('img')).toBeNull();
+        expect(squareEl('b1').querySelector('img')?.getAttribute('alt')).toBe('wn');
+    });
+
     it('на обычной расстановке выбора «с позиции» нет', async () => {
         stubBotApi();
         renderChessboard();

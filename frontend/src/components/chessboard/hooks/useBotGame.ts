@@ -1,5 +1,7 @@
 // --- FILE: frontend/src/components/chessboard/hooks/useBotGame.ts ---
 
+import {giverColor, oddsFen, oddsTimes} from '../odds';
+import type {OddsChoice} from '../odds';
 import {getBlindfold} from '../../../config/blindfold';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Chess} from 'chess.js';
@@ -52,6 +54,8 @@ export interface UseBotGameOptions {
     effectiveWhiteBaseMinutes: number;
     effectiveBlackBaseMinutes: number;
     effectiveIncSeconds: number;
+    /** «Песочные часы» форы: часы живут в компоненте (useClock вызывается раньше этого хука). */
+    setHourglass?: (on: boolean) => void;
     currentUsername: string;
     currentUserRating: number;
     setGame: (g: Chess) => void;
@@ -105,6 +109,8 @@ export interface BotGameStartOptions {
     ladder?: boolean;
     /** Партия турнира (таск 15.3): без возврата ходов, результат записывается в турнир. */
     tournamentGameId?: number;
+    /** Фора (таск 21.1): материальная — начальная позиция, по времени — часы сторон, «песочные часы». */
+    odds?: OddsChoice;
 }
 
 /** Итог партии лестницы для строки статуса; reason пока приходит с сервера текстом (до таска 11.0c). */
@@ -183,7 +189,7 @@ export interface UseBotGameResult {
 export function useBotGame({
     game, myColor, gameOverResult, whiteTimeMs, blackTimeMs, isSearching, setIsSearching,
     activeBot, setActiveBot,
-    effectiveWhiteBaseMinutes, effectiveBlackBaseMinutes, effectiveIncSeconds,
+    effectiveWhiteBaseMinutes, effectiveBlackBaseMinutes, effectiveIncSeconds, setHourglass,
     currentUsername, currentUserRating,
     setGame, setHistory, setViewIndex, setSelectedSquare, setMyColor, setIsManualFlip, setPendingPromotion, clearPremove,
     setGameOverResult, setRatingInfo, setDrawOfferStatus, setRematchStatus,
@@ -320,9 +326,16 @@ export function useBotGame({
                 ? (Math.random() < 0.5 ? 'white' : 'black')
                 : colorPref;
 
-        const whiteStartMs = Math.round(effectiveWhiteBaseMinutes * 60 * 1000);
-        const blackStartMs = Math.round(effectiveBlackBaseMinutes * 60 * 1000);
-        const freshGame = startFen ? new Chess(startFen) : new Chess();
+        const odds = options.odds && options.odds.kind !== 'none' ? options.odds : null;
+        const giver = odds ? giverColor(odds.giver, chosenColor) : 'white';
+        const oddsStart = odds && !startFen ? oddsFen(odds.kind, giver) : null;
+        const times = oddsTimes(odds?.kind ?? 'none', giver,
+            Math.round(effectiveWhiteBaseMinutes * 60 * 1000), Math.round(effectiveBlackBaseMinutes * 60 * 1000));
+        const whiteStartMs = times.white;
+        const blackStartMs = times.black;
+        setHourglass?.(odds?.kind === 'hourglass');
+        const firstFen = startFen ?? oddsStart;
+        const freshGame = firstFen ? new Chess(firstFen) : new Chess();
         const botInfo = botProfileFor(botId);
 
         botGameSavedRef.current = false;
@@ -367,6 +380,7 @@ export function useBotGame({
         setHistory, setViewIndex, setSelectedSquare, setPendingPromotion, clearPremove, setGameOverResult,
         setRatingInfo, setDrawOfferStatus, setRematchStatus, setWhiteTimeMs, setBlackTimeMs, moveStartTime,
         currentUsername, currentUserRating, setWhitePlayer, setBlackPlayer, playAudio, botProfileFor, onNewGame,
+        setHourglass,
     ]);
 
     const startCustomBotGame = useCallback((
