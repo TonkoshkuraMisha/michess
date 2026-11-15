@@ -16,7 +16,7 @@ const VIEWPORTS = [
 // Страницы без параметров и разделы, у которых есть своя первая страница.
 const ROUTES = [
     '/', '/puzzles', '/learn', '/learn/basics', '/learn/classics', '/learn/endgames', '/learn/mates', '/train', '/tools',
-    '/watch', '/guess', '/tournaments', '/arenas', '/teams', '/study', '/leaderboard', '/about', '/settings', '/moderation',
+    '/watch', '/guess', '/train/games', '/tournaments', '/arenas', '/teams', '/study', '/leaderboard', '/about', '/settings', '/moderation',
     'PROFILE',
 ];
 

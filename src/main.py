@@ -18,6 +18,7 @@ from src.api import (
     guess,
     ladder,
     learn,
+    mini_games,
     moderation,
     personalities,
     puzzles,
@@ -119,6 +120,7 @@ def create_app() -> FastAPI:
     app.include_router(trainers.router, prefix="/api/v1/trainers", tags=["training"])
     app.include_router(social.router, prefix="/api/v1/social", tags=["social"])
     app.include_router(moderation.router, prefix="/api/v1/moderation", tags=["social"])
+    app.include_router(mini_games.router, prefix="/api/v1/mini-games", tags=["trainers"])
     app.include_router(account.router, prefix=settings.API_V1_STR)
 
     return app
