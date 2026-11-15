@@ -20,7 +20,7 @@ from src.core.errors import ApiError, DomainError, DomainValueError, validation_
 from src.db import session as db_session
 from src.models.game import Game, GameStatus
 from src.models.user import User
-from src.services import engine_info, product_metrics
+from src.services import engine_info, openings, product_metrics
 from src.services import ladder as ladder_service
 from src.services import tournaments as tournament_service
 from src.services.bots import calibration as bot_calibration
@@ -258,38 +258,6 @@ def calculate_authentic_thinking_time_ms(
     return max(320, min(int(raw_ms), 2900))
 
 
-def _detect_eco_code(moves_uci: list[str]) -> str:
-    """Определяет базовый код дебюта ECO по первым ходам партии."""
-    prefix = " ".join(moves_uci[:6])
-    if prefix.startswith("e2e4 e7e5 g1f3 d7d6"):
-        return "C41"
-    if prefix.startswith("e2e4 e7e5 f2f4"):
-        return "C30"
-    if prefix.startswith("e2e4 e7e5 f1c4"):
-        return "C23"
-    if prefix.startswith("e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 b2b4"):
-        return "C51"
-    if prefix.startswith("e2e4 e7e5 g1f3 b8c6 f1c4"):
-        return "C50"
-    if prefix.startswith("e2e4 e7e5 g1f3 b8c6 f1b5"):
-        return "C60"
-    if prefix.startswith("e2e4 c7c5"):
-        return "B20"
-    if prefix.startswith("e2e4 e7e6"):
-        return "C00"
-    if prefix.startswith("c2c4"):
-        return "A10"
-    if prefix.startswith("g1f3"):
-        return "A04"
-    if prefix.startswith("d2d4 d7d5 c2c4"):
-        return "D06"
-    if prefix.startswith("d2d4"):
-        return "D00"
-    if prefix.startswith("e2e4"):
-        return "B00"
-    return "A00"
-
-
 def _replay_moves(moves_uci: list[str], start_fen: str | None = None) -> chess.Board:
     """
     Переигрывает ходы с историей (нужна для правил повторения) от обычной расстановки или
@@ -360,7 +328,7 @@ def _build_pgn_string(
     pgn_game.headers["WhiteElo"] = str(white_elo)
     pgn_game.headers["BlackElo"] = str(black_elo)
     if not custom_start:
-        pgn_game.headers["ECO"] = _detect_eco_code(moves_uci)
+        pgn_game.headers["ECO"] = openings.eco_code(moves_uci)
 
     node: chess.pgn.GameNode = pgn_game
     for uci_str in moves_uci:
@@ -435,7 +403,7 @@ def _prepare_game_kwargs(
         "pgn_date": now_utc.strftime("%Y.%m.%d"),
         "site": "Michess Bot Arena",
         # У партии с произвольной позиции дебюта нет.
-        "eco": None if payload.start_fen else _detect_eco_code(payload.moves_uci),
+        "eco": None if payload.start_fen else openings.eco_code(payload.moves_uci),
     }
 
 

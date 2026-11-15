@@ -20,7 +20,7 @@ from src.db.session import AsyncSessionLocal
 from src.models.game import Game, GameStatus
 from src.models.move import Move
 from src.models.user import User
-from src.services import product_metrics
+from src.services import openings, product_metrics
 from src.services.anticheat import evaluate_game_telemetry
 from src.services.game_engine import (  # noqa: F401  (flag_outcome реэкспортируется для тестов)
     FLAG_DRAW_TERMINATION,
@@ -33,37 +33,6 @@ from src.services.rating import classify_time_control, elo_calculator
 from src.services.task_dispatch import schedule_game_analysis_in_background
 
 logger = logging.getLogger(__name__)
-
-
-def _detect_eco_from_moves(moves_uci: list[str]) -> str:
-    prefix = " ".join(moves_uci[:6])
-    if prefix.startswith("e2e4 e7e5 g1f3 d7d6"):
-        return "C41"
-    if prefix.startswith("e2e4 e7e5 f2f4"):
-        return "C30"
-    if prefix.startswith("e2e4 e7e5 f1c4"):
-        return "C23"
-    if prefix.startswith("e2e4 e7e5 g1f3 b8c6 f1c4 f8c5 b2b4"):
-        return "C51"
-    if prefix.startswith("e2e4 e7e5 g1f3 b8c6 f1c4"):
-        return "C50"
-    if prefix.startswith("e2e4 e7e5 g1f3 b8c6 f1b5"):
-        return "C60"
-    if prefix.startswith("e2e4 c7c5"):
-        return "B20"
-    if prefix.startswith("e2e4 e7e6"):
-        return "C00"
-    if prefix.startswith("c2c4"):
-        return "A10"
-    if prefix.startswith("g1f3"):
-        return "A04"
-    if prefix.startswith("d2d4 d7d5 c2c4"):
-        return "D06"
-    if prefix.startswith("d2d4"):
-        return "D00"
-    if prefix.startswith("e2e4"):
-        return "B00"
-    return "A00"
 
 
 _INT_STATE_KEYS = (
@@ -721,7 +690,7 @@ class GameStateManager:
             db.add_all(db_moves)
 
             uci_seq = [m.get("notation", "") for m in moves_telemetry if m.get("notation")]
-            eco_code = _detect_eco_from_moves(uci_seq)
+            eco_code = openings.eco_code(uci_seq)
             db_game.eco = eco_code
 
             pgn_game = chess.pgn.Game()
