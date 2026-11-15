@@ -37,6 +37,7 @@ import {XrayOverlay} from './xray/XrayOverlay';
 import {puzzlesApi} from '../services/puzzles';
 import {guessApi} from '../services/guess';
 import {OpeningExplorer} from './OpeningExplorer';
+import {AddToRepertoire} from './repertoire/AddToRepertoire';
 import {buildPgn, downloadText} from '../services/pgnExport';
 import {XrayPanel} from './xray/XrayPanel';
 import {useXraySettings} from './xray/useXraySettings';
@@ -857,7 +858,12 @@ export default function GameViewer() {
                         </button>
                     )}
                     {showExplorer && !startFen && (
-                        <OpeningExplorer moves={history.slice(0, viewIndex + 1).map((m) => `${m.from}${m.to}${m.promotion ?? ''}`)}/>
+                        <>
+                            <OpeningExplorer moves={history.slice(0, viewIndex + 1).map((m) => `${m.from}${m.to}${m.promotion ?? ''}`)}/>
+                            {viewIndex >= 0 && (
+                                <AddToRepertoire moves={history.slice(0, Math.min(viewIndex + 1, 40)).map((m) => `${m.from}${m.to}${m.promotion ?? ''}`)}/>
+                            )}
+                        </>
                     )}
                     {analysisReport && history.length > 0 && (
                         <button type="button" data-testid="download-annotated"

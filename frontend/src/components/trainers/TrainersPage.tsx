@@ -41,6 +41,11 @@ export function TrainersPage() {
             </header>
             <p className="text-boxwood/85">{t('trainers.intro')}</p>
             {!getToken() && <p className="text-sm text-amber-300">{t('trainers.loginToSave')}</p>}
+            <Link to="/repertoire" data-testid="trainer-repertoire"
+                  className="bg-acacia-dark p-4 rounded-lg border-2 border-amber-800 hover:border-amber-500 flex flex-col gap-1">
+                <span className="font-bold text-amber-200">{t('repertoire.title')}</span>
+                <span className="text-sm text-boxwood/80">{t('repertoire.intro')}</span>
+            </Link>
             <Link to="/train/games" data-testid="trainer-mini-games"
                   className="bg-acacia-dark p-4 rounded-lg border-2 border-amber-800 hover:border-amber-500 flex flex-col gap-1">
                 <span className="font-bold text-amber-200">{t('miniGames.title')}</span>

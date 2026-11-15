@@ -25,6 +25,7 @@ import {TeamsPage} from './components/social/TeamsPage';
 import {StudyLobby, StudyRoomPage} from './components/study/StudyPages';
 import {ModerationPage} from './components/social/ModerationPage';
 import {MiniGamePage, MiniGamesPage} from './components/trainers/MiniGames';
+import {RepertoireEditorPage, RepertoireListPage} from './components/repertoire/RepertoirePages';
 import {moderationApi} from './services/moderation';
 import {TrainerPage, TrainersPage} from './components/trainers/TrainersPage';
 import {NotificationBell, PlayerSearch} from './components/social/SocialHeader';
@@ -624,6 +625,8 @@ export default function App() {
                         <Route path="/moderation" element={<ModerationPage/>}/>
                         <Route path="/train" element={<TrainersPage/>}/>
                         <Route path="/train/games" element={<MiniGamesPage/>}/>
+                        <Route path="/repertoire" element={<RepertoireListPage/>}/>
+                        <Route path="/repertoire/:repertoireId" element={<RepertoireEditorPage/>}/>
                         <Route path="/train/games/:gameId" element={<MiniGamePage/>}/>
                         <Route path="/train/:trainerId" element={<TrainerPage/>}/>
                         <Route path="/guess" element={<GuessPage/>}/>
