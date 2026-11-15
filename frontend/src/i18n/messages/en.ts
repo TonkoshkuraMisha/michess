@@ -1517,6 +1517,7 @@ export const en = {
             coach: 'the coach was used',
         },
         gameSaved: 'The result is recorded in the tournament.',
+        gameSavedRated: 'The result is recorded in the tournament. Rating: {before} → {after} ({delta}).',
         history: 'Tournament history',
         diploma: {
             title: 'Diploma',

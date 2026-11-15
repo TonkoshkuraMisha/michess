@@ -1533,6 +1533,7 @@ export const uk: Messages = {
             coach: 'користувалися наставником',
         },
         gameSaved: 'Результат записано в турнір.',
+        gameSavedRated: 'Результат записано в турнір. Рейтинг: {before} → {after} ({delta}).',
         history: 'Історія турнірів',
         diploma: {
             title: 'Диплом',
