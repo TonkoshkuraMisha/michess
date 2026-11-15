@@ -52,6 +52,8 @@ export function LearnPage() {
                   className="bg-acacia p-4 rounded-lg border-2 border-amber-700 hover:border-amber-500 text-amber-200 font-bold">{t('classics.card')}</Link>
             <Link to="/tools" data-testid="learn-explorer-link"
                   className="bg-acacia p-4 rounded-lg border-2 border-amber-700 hover:border-amber-500 text-amber-200 font-bold">{t('explorer.card')}</Link>
+            <Link to="/learn/endgames" data-testid="learn-endgames-link"
+                  className="bg-acacia p-4 rounded-lg border-2 border-amber-700 hover:border-amber-500 text-amber-200 font-bold">{t('endgames.card')}</Link>
             <Link to="/guess" className="text-sm text-amber-400 hover:underline" data-testid="learn-guess-link">{t('guess.fromLearn')}</Link>
             {COURSES.map((course) => {
                 const lessons = lessonsOfCourse(course.id);

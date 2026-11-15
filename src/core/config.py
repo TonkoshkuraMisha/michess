@@ -78,6 +78,9 @@ class Settings(BaseSettings):
     # Celery publishing from the API process: short timeouts, no publish retries, and a pause
     # after a broker failure so a dead broker cannot stall the event loop or pile up threads
     CELERY_PUBLISH_TIMEOUT_S: float = 3.0
+    # Эндшпильные таблицы (таск 14.4): в разработке — открытый API lichess; в продакшене — свой сервер таблиц с тем же
+    # API (решение владельца: таблицы храним у себя, DEPLOY).
+    TABLEBASE_URL: str = "https://tablebase.lichess.ovh/standard"
     CELERY_BROKER_CONNECT_TIMEOUT_S: float = 1.0
     CELERY_BROKER_COOLDOWN_S: float = 30.0
 

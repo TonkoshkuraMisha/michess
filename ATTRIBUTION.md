@@ -79,6 +79,7 @@ CC BY-NC-SA 4.0), а также набор без известного прои�
 
 | Что | Автор | Условия | Примечание |
 |---|---|---|---|
+| Эндшпильные таблицы — открытый API [lichess](https://tablebase.lichess.ovh) (`TABLEBASE_URL`) | lichess.org (сервер lila-tablebase; таблицы Syzygy и др.) | Открытый сервис | Только в разработке: на сервер уходит одна позиция (FEN), без данных игрока. В продакшене — свой сервер таблиц (решение владельца, DEPLOY). |
 | Аватары игроков — [DiceBear](https://www.dicebear.com), стиль Bottts Neutral | Pablo Stanley (исходный набор Bottts), DiceBear | Free for personal and commercial use | Картинка запрашивается с `api.dicebear.com`, имя игрока уходит на сторонний сервер. |
 
 ## Данные
