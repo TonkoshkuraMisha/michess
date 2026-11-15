@@ -24,8 +24,10 @@ import {customStartFen, pairHalfMoves} from './chessboard/boardUtils';
 import type {SoundEventType} from '../services/soundEngine';
 import {
     PIECE_SETS,
-    getSavedBoardThemeKey,
-    getSavedPieceSetKey,
+    getAnalysisBoardThemeKey,
+    getAnalysisPieceSetKey,
+    hasAnalysisAppearance,
+    setAnalysisAppearance,
     getPieceSvgUrl,
     getHarmoniousPieceStyle,
     lastMoveColor
@@ -173,8 +175,9 @@ export default function GameViewer() {
     const notes = useBoardAnnotations(gameId ?? '');
     const clearNotes = notes.clear;
 
-    const [boardThemeKey, setBoardThemeKey] = useState<string>(() => getSavedBoardThemeKey());
-    const [pieceSetKey, setPieceSetKey] = useState<string>(() => getSavedPieceSetKey());
+    // Тема разбора (таск 18.3): своя, если задана в настройках, иначе — как в игре.
+    const [boardThemeKey, setBoardThemeKey] = useState<string>(() => getAnalysisBoardThemeKey());
+    const [pieceSetKey, setPieceSetKey] = useState<string>(() => getAnalysisPieceSetKey());
 
     const [boardSize, setBoardSize] = useState<number>(() => {
         const maxFit = getMaxViewportBoardSize();
@@ -221,12 +224,14 @@ export default function GameViewer() {
 
     const handleThemeChange = (themeId: string) => {
         setBoardThemeKey(themeId);
-        localStorage.setItem('michess_board_theme', themeId);
+        if (hasAnalysisAppearance()) setAnalysisAppearance(themeId, pieceSetKey);
+        else localStorage.setItem('michess_board_theme', themeId);
     };
 
     const handlePieceSetChange = (setId: string) => {
         setPieceSetKey(setId);
-        localStorage.setItem('michess_piece_set', setId);
+        if (hasAnalysisAppearance()) setAnalysisAppearance(boardThemeKey, setId);
+        else localStorage.setItem('michess_piece_set', setId);
     };
 
     useEffect(() => {

@@ -113,6 +113,16 @@ describe('Settings: оформление и звук', () => {
         setToken(null);
     });
 
+    it('отдельная тема для разбора партий: комплект или «как в игре»', () => {
+        renderSettings();
+        fireEvent.change(screen.getByTestId('analysis-theme'), {target: {value: 'study'}});
+        expect(localStorage.getItem('michess_analysis_board_theme')).toBe('leather');
+        expect(localStorage.getItem('michess_analysis_piece_set')).toBe('mpchess');
+        expect(localStorage.getItem('michess_board_theme')).toBeNull();
+        fireEvent.change(screen.getByTestId('analysis-theme'), {target: {value: 'same'}});
+        expect(localStorage.getItem('michess_analysis_board_theme')).toBeNull();
+    });
+
     it('набор звуков выбирается отдельно', () => {
         renderSettings();
         // Звук мог остаться выключенным предыдущим тестом (общий мок) — наборы при выключенном звуке недоступны.
