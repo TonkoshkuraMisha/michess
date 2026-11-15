@@ -71,6 +71,16 @@ CC BY-NC-SA 4.0), а также набор без известного прои�
 |---|---|---|
 | Звуки ходов и сигналов | Синтезируются в браузере (`frontend/src/services/soundEngine.ts`), записей нет | собственная работа |
 | `frontend/public/assets/textures/wood-grain.svg` | Процедурная графика проекта (SVG-фильтр) | собственная работа, CC0-1.0 |
+| `frontend/public/assets/textures/wood-fine.svg` | Процедурная графика проекта (SVG), мелкие древесные волокна (дуб, вишня, эбен) — доски таска 18.1 | собственная работа, CC0-1.0 |
+| `frontend/public/assets/textures/marble.svg` | Процедурная графика проекта (SVG), прожилки мрамора (белый и зелёный) — доски таска 18.1 | собственная работа, CC0-1.0 |
+| `frontend/public/assets/textures/stone.svg` | Процедурная графика проекта (SVG), зерно камня — доски таска 18.1 | собственная работа, CC0-1.0 |
+| `frontend/public/assets/textures/brushed-metal.svg` | Процедурная графика проекта (SVG), шлифованный металл — доски таска 18.1 | собственная работа, CC0-1.0 |
+| `frontend/public/assets/textures/leather.svg` | Процедурная графика проекта (SVG), фактура кожи — доски таска 18.1 | собственная работа, CC0-1.0 |
+| `frontend/public/assets/textures/paper.svg` | Процедурная графика проекта (SVG), старая бумага — доски таска 18.1 | собственная работа, CC0-1.0 |
+| `frontend/public/assets/textures/chalk.svg` | Процедурная графика проекта (SVG), меловая пыль (школьная доска) — доски таска 18.1 | собственная работа, CC0-1.0 |
+| `frontend/public/assets/textures/stained-glass.svg` | Процедурная графика проекта (SVG), перемычки витража — доски таска 18.1 | собственная работа, CC0-1.0 |
+| `frontend/public/assets/textures/glass.svg` | Процедурная графика проекта (SVG), блик стекла — доски таска 18.1 | собственная работа, CC0-1.0 |
+| `frontend/public/assets/textures/hatch.svg` | Процедурная графика проекта (SVG), штриховка газетной диаграммы — доски таска 18.1 | собственная работа, CC0-1.0 |
 
 Убраны: `Move.mp3`, `Capture.mp3`, `GenericNotify.mp3` (звуки lichess, отнесённые в его COPYING.md к несвободным) и
 `wood-grain.png` (происхождение неизвестно).

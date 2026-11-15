@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+  <!-- Штриховка тёмных полей, как на газетной диаграмме: собственная работа проекта michess, CC0. -->
+  <rect width="16" height="16" fill="#ffffff"/>
+  <path d="M-4 4 L4 -4 M0 16 L16 0 M12 20 L20 12" stroke="#1a1a1a" stroke-width="1.6"/>
+</svg>
