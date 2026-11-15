@@ -25,7 +25,9 @@ TRAINERS = ("quiet_path", "double_strike", "knight_route", "tail",
             # Память (19.3): «Восстанови позицию» и «Запомни партию».
             "memory_position", "memory_game",
             # Головоломки на доске (19.4): уровень расстановки — номер задачи, обхода — размер доски (3 — 8×8).
-            "board_placement", "knight_tour")
+            "board_placement", "knight_tour",
+            # Визуализация (19.6): ход вслепую и «Где фигура?», уровень — число полуходов вслепую (1–10).
+            "blind_move", "blind_where")
 MAX_LEVEL = 20
 HISTORY = 50
 
