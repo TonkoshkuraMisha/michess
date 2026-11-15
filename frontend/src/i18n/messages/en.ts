@@ -1497,6 +1497,21 @@ export const en = {
             undo: 'Undo',
             tourRule: 'Hint (Warnsdorff\'s rule): go where the knight has the fewest onward moves. Each hint costs 5 points.',
         },
+        blind_move: {title: 'Blindfold move', rules: 'See the position, then follow N moves without the board and make the decisive move on an empty board. Level — how many half-moves.'},
+        blind_where: {title: 'Where is the piece?', rules: 'See the position, follow N moves without the board, then point to the square of the named piece.'},
+        blind: {
+            look: 'Remember the position: then {n} half-moves will be announced without the board.',
+            ready: 'Got it — hide the board',
+            moveWhite: 'White to move: make the move on the empty board (square "from", then square "to").',
+            moveBlack: 'Black to move: make the move on the empty board (square "from", then square "to").',
+            where: 'Where is {piece} now?',
+            moveVerdict: '— your move {yours}, the game had {best}.',
+            whereVerdict: '— the piece is on {square}.',
+            pieces: {
+                white: {king: 'the white king', queen: 'the white queen', rook: 'the white rook', bishop: 'the white bishop', knight: 'the white knight', pawn: 'the white pawn'},
+                black: {king: 'the black king', queen: 'the black queen', rook: 'the black rook', bishop: 'the black bishop', knight: 'the black knight', pawn: 'the black pawn'},
+            },
+        },
         coord: {
             findPrompt: 'Find {square}',
             namePrompt: 'Which square is marked?',

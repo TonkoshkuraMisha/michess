@@ -15,7 +15,7 @@ interface Props {
     onFinish: (score: number, mistakes: number) => void;
 }
 
-function CoordBoard({options, highlight, marks, onSquare}: {
+export function CoordBoard({options, highlight, marks, onSquare}: {
     options: CoordOptions; highlight?: string | null; marks?: Record<string, 'good' | 'bad'>; onSquare?: (square: string) => void;
 }) {
     const theme = BOARD_THEMES[getSavedBoardThemeKey()] ?? BOARD_THEMES.walnut;

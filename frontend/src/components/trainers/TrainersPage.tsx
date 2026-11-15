@@ -13,6 +13,7 @@ import {ForkGame, PathGame, TailGame} from './VisionGames';
 import {CoordOptionsPicker, CoordinateGame} from './CoordinateGames';
 import {RecallGame, RestoreGame} from './MemoryGames';
 import {KnightTourGame, PlacementGame} from './BoardPuzzleGames';
+import {BlindGame} from './BlindGames';
 import {PLACEMENT_PUZZLES, TOUR_SIZES} from '../../trainers/boardPuzzles';
 import {COORD_TRAINERS, levelToOptions, optionsToLevel} from '../../trainers/coordinates';
 import type {CoordTrainer} from '../../trainers/coordinates';
@@ -149,6 +150,9 @@ export function TrainerPage() {
             {seed !== null && id === 'memory_game' && <RecallGame level={level} seed={seed} onFinish={finish}/>}
             {seed !== null && id === 'board_placement' && <PlacementGame level={level} seed={seed} onFinish={finish}/>}
             {seed !== null && id === 'knight_tour' && <KnightTourGame level={level} seed={seed} onFinish={finish}/>}
+            {seed !== null && (id === 'blind_move' || id === 'blind_where') && (
+                <BlindGame mode={id === 'blind_move' ? 'move' : 'where'} level={level} seed={seed} onFinish={finish}/>
+            )}
             {seed !== null && (id === 'quiet_path' || id === 'knight_route') && (
                 <PathGame kind={id === 'knight_route' ? 'knight' : 'quiet'} level={level} seed={seed} onFinish={finish}/>
             )}
