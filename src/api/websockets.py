@@ -18,6 +18,7 @@ from src.core import observability as obs
 from src.core.errors import error_payload
 from src.db.session import get_session_factory
 from src.models.user import User
+from src.services import notifications
 from src.services.anticheat import trusted_premove
 from src.services.connection_manager import manager
 from src.services.game_state import is_rated_state, pending_draw_offer, state_manager
@@ -479,10 +480,15 @@ async def _decline_draw(ctx: ActionContext, data: dict) -> None:
 async def _offer_rematch(ctx: ActionContext, data: dict) -> None:
     game = await _participant_game(ctx, data, in_progress=False)
     await state_manager.update_game_state(game.game_id, {"rematch_offer": str(ctx.user.id)})
+    opponent = game.opponent_of(ctx.user.id)
+    # Центр уведомлений (17.1): соперник мог уйти со страницы партии — реванш останется в колокольчике.
+    notification = await notifications.record(ctx.db, opponent, "rematch",
+                                              {"from": ctx.user.username, "game_id": game.game_id})
+    await ctx.release_db()
     await manager.send_personal_message(
-        {"event": "rematch_offered", "game_id": game.game_id, "player_id": ctx.user.id},
-        game.opponent_of(ctx.user.id),
+        {"event": "rematch_offered", "game_id": game.game_id, "player_id": ctx.user.id}, opponent,
     )
+    await notifications.deliver(opponent, notification)
 
 
 @action("accept_rematch")

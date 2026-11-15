@@ -201,6 +201,20 @@ async def _finish(tournament: Tournament) -> None:
     tournament.finished_at = datetime.now(UTC)
 
 
+async def _notify_round(db: AsyncSession, tournament: Tournament) -> None:
+    """Центр уведомлений (17.1): открылся тур, где у игрока есть партия. Без доставки по сокету — колокольчик спросит сам."""
+    from src.services import notifications
+
+    if tournament.withdrawn_at is not None:
+        return
+    mine = next((p.seat for p in await players_of(db, tournament.id) if p.kind == "user"), None)
+    pending = [g for g in await games_of(db, tournament.id)
+               if g.round == tournament.current_round and g.result is None and mine in (g.white_seat, g.black_seat)]
+    if pending:
+        await notifications.record(db, tournament.owner_id, "tournament_round",
+                                   {"tournament_id": tournament.id, "round": tournament.current_round}, commit=False)
+
+
 async def _advance_round_robin(db: AsyncSession, tournament: Tournament) -> None:
     games = await games_of(db, tournament.id)
     if any(g.result is None for g in games if g.round == tournament.current_round):
@@ -208,6 +222,7 @@ async def _advance_round_robin(db: AsyncSession, tournament: Tournament) -> None
     if any(g.result is None for g in games):
         # Тур закрыт — открывается следующий (его партии ботов между собой можно считать).
         tournament.current_round += 1
+        await _notify_round(db, tournament)
         return
     players = await players_of(db, tournament.id)
     table = rules.round_robin_standings([p.seat for p in players], [_record(g) for g in games])
@@ -237,6 +252,7 @@ async def _advance_swiss(db: AsyncSession, tournament: Tournament) -> None:
     for board, (white, black) in enumerate(rules.swiss_pairings(seats, records), 1):
         _add_game(db, tournament, tournament.current_round, board, rules.MatchGame("main", white, black, False))
     await db.flush()
+    await _notify_round(db, tournament)
     if withdrawn:
         for game in await games_of(db, tournament.id):
             if game.round == tournament.current_round and {game.white_seat, game.black_seat} & withdrawn:
@@ -284,6 +300,8 @@ async def _advance_knockout(db: AsyncSession, tournament: Tournament) -> None:
     tournament.current_round += 1
     for board, (high, low) in enumerate(rules.knockout_next_round(winners), 1):
         _add_game(db, tournament, tournament.current_round, board, rules.match_game(high, low, "main"))
+    await db.flush()
+    await _notify_round(db, tournament)
 
 
 @dataclass(frozen=True)

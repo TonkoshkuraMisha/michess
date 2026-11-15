@@ -55,6 +55,8 @@ ERROR_MESSAGES: dict[str, str] = {
     "career_stage_unknown": "Unknown career tournament",
     "career_stage_locked": "This career tournament is not open yet",
     "trainer_not_found": "Unknown trainer",
+    "cannot_follow_self": "You cannot follow yourself",
+    "cannot_challenge_self": "You cannot challenge yourself",
     "puzzle_not_active": "This puzzle is no longer active: open the next one",
     "no_puzzles_available": "No suitable puzzles right now",
     "unknown_theme": "Unknown theme: {theme}",

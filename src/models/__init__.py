@@ -9,6 +9,7 @@ from src.models.personality import BotPersonality
 from src.models.position import PositionGame, PositionStat
 from src.models.product_event import ProductEvent
 from src.models.puzzle import DefenseDrill, DrillRecord, PersonalPuzzle, Puzzle, PuzzleAttempt, PuzzleTheme, ThemeProgress
+from src.models.social import Follow, Notification
 from src.models.tournament import Tournament, TournamentGame, TournamentPlayer
 from src.models.trainer import TrainerResult
 from src.models.user import User
@@ -21,7 +22,9 @@ __all__ = [
     "EmailToken",
     "Game",
     "CollectionEntry",
+    "Follow",
     "GuessPosition",
+    "Notification",
     "PositionGame",
     "PositionStat",
     "LessonProgress",

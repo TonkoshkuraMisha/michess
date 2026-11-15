@@ -356,3 +356,28 @@ describe('режим зрителя со страницы «Просмотр» (
         expect(sendMock).toHaveBeenCalledWith('spectate_game', {game_id: 42});
     });
 });
+
+describe('прямой вызов из профиля (17.1)', () => {
+    it('доска создаёт приглашение и отправляет его сопернику уведомлением', async () => {
+        const fetchMock = mockFetchRouter({
+            '/profile/me': () => ({id: 1, username: 'TestPlayer', blitz_rating: 1500}),
+            '/profile/matchmaking/queue': () => [],
+            '/profile/games/live': () => [],
+            '/profile/games/my-active': () => ({active: false}),
+            '/social/challenge/magnus': () => ({sent: true, online: true}),
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        render(
+            <MemoryRouter initialEntries={[{pathname: '/', state: {challenge: 'magnus'}}]}>
+                <Chessboard/>
+            </MemoryRouter>,
+        );
+        await act(async () => undefined);
+        expect(sendMock).toHaveBeenCalledWith('create_invite', expect.objectContaining({color_pref: expect.any(String)}));
+        await emitAct('invite_created', {code: 'abc12345'});
+        expect(await screen.findByTestId('challenge-sent')).toHaveTextContent('magnus');
+        const call = (fetchMock as unknown as { mock: { calls: [string, RequestInit][] } }).mock.calls
+            .find(([url]) => String(url).includes('/social/challenge/magnus'))!;
+        expect(JSON.parse(String(call[1].body))).toEqual({code: 'abc12345'});
+    });
+});
