@@ -11,6 +11,9 @@ import {
     getPieceSvgUrl,
     getSavedBoardThemeKey,
     getSavedPieceSetKey,
+    hasAnalysisAppearance,
+    getAnalysisBoardThemeKey,
+    setAnalysisAppearance,
 } from '../config/boardAppearance';
 import {readApiErrorOr} from '../services/apiErrors';
 import {PAGE_PALETTES, PAGE_PATTERNS, applyPageBackground, getSavedPagePalette, getSavedPagePattern, pageBackgroundStyle} from '../config/pageBackground';
@@ -64,6 +67,14 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
         applyPageBackground(pattern, palette, true);
     };
     const [pieceSetKey, setPieceSetKey] = useState(() => getSavedPieceSetKey());
+    // Отдельная тема для разбора партий (таск 18.3): комплект (доска и фигуры) или «как в игре».
+    const [analysisPreset, setAnalysisPreset] = useState<string>(() => (hasAnalysisAppearance()
+        ? THEME_PRESETS.find((p) => p.board === getAnalysisBoardThemeKey())?.id ?? 'custom' : 'same'));
+    const chooseAnalysisPreset = (id: string) => {
+        setAnalysisPreset(id);
+        const preset = THEME_PRESETS.find((p) => p.id === id);
+        setAnalysisAppearance(preset?.board ?? null, preset?.pieces ?? null);
+    };
     const [isMuted, setIsMuted] = useState(() => soundEngine.isMuted());
     // Темы-комплекты (таск 18.3): комплект «выбран», пока все его части совпадают с текущими настройками.
     const [soundSet, setSoundSetState] = useState<SoundSetId>(() => soundEngine.getSoundSet());
@@ -347,6 +358,16 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                         </button>
                     ))}
                 </div>
+
+                <label className="flex flex-wrap items-center gap-2 text-sm mt-4">
+                    <span className="text-xs uppercase tracking-wider text-boxwood/65 font-bold">{t('settings.analysisTheme')}</span>
+                    <select value={analysisPreset} onChange={(e) => chooseAnalysisPreset(e.target.value)} data-testid="analysis-theme"
+                            className="bg-black/40 border border-amber-900/60 rounded px-2 py-1 text-boxwood-light">
+                        <option value="same">{t('settings.analysisSame')}</option>
+                        {analysisPreset === 'custom' && <option value="custom">{t('settings.analysisCustom')}</option>}
+                        {THEME_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{t(`settings.presetNames.${preset.id}.name`)}</option>)}
+                    </select>
+                </label>
 
                 <div className="text-xs uppercase tracking-wider text-boxwood/65 font-bold mb-1.5 mt-4">{t('settings.pageBackground')}</div>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-2" data-testid="page-patterns">

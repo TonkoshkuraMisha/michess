@@ -632,6 +632,48 @@ export function getSavedPieceSetKey(): string {
     return 'merida';
 }
 
+// Отдельная тема для разбора партий (таск 18.3): своя доска и фигуры в просмотре партии; без записи — как в игре.
+const ANALYSIS_BOARD_KEY = 'michess_analysis_board_theme';
+const ANALYSIS_PIECES_KEY = 'michess_analysis_piece_set';
+
+function readKey(key: string): string | null {
+    try {
+        return localStorage.getItem(key);
+    } catch {
+        return null;
+    }
+}
+
+export function hasAnalysisAppearance(): boolean {
+    const board = readKey(ANALYSIS_BOARD_KEY);
+    return Boolean(board && BOARD_THEMES[board]);
+}
+
+export function getAnalysisBoardThemeKey(): string {
+    const board = readKey(ANALYSIS_BOARD_KEY);
+    return board && BOARD_THEMES[board] ? board : getSavedBoardThemeKey();
+}
+
+export function getAnalysisPieceSetKey(): string {
+    const pieces = readKey(ANALYSIS_PIECES_KEY);
+    return pieces && PIECE_SETS[pieces] && hasAnalysisAppearance() ? pieces : getSavedPieceSetKey();
+}
+
+/** Задать тему разбора (или null — как в игре). */
+export function setAnalysisAppearance(board: string | null, pieces: string | null): void {
+    try {
+        if (board && pieces) {
+            localStorage.setItem(ANALYSIS_BOARD_KEY, board);
+            localStorage.setItem(ANALYSIS_PIECES_KEY, pieces);
+        } else {
+            localStorage.removeItem(ANALYSIS_BOARD_KEY);
+            localStorage.removeItem(ANALYSIS_PIECES_KEY);
+        }
+    } catch {
+        // Хранилище недоступно — разбор показывается в теме игры.
+    }
+}
+
 export function getPieceSvgUrl(pieceSetKey: string, color: string, type: string): string {
     const setConfig = PIECE_SETS[pieceSetKey] || PIECE_SETS.merida;
     return `/assets/pieces/${setConfig.folder}/${color}${type.toUpperCase()}.svg`;
