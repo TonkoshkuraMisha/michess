@@ -66,6 +66,7 @@ ERROR_MESSAGES: dict[str, str] = {
     "appeal_not_flagged": "Your account is not flagged",
     "moderator_only": "Moderators only",
     "translation_helper_off": "Turn on translation helper mode in your profile first",
+    "blindfold_not_allowed": "Blindfold play is only for unrated games",
     "chat_banned": "Chat is disabled for you for now",
     "study_room_not_found": "Study room not found",
     "study_host_only": "Only the host can do this",

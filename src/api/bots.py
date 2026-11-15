@@ -191,6 +191,8 @@ class BotGameSaveRequest(BaseModel):
     ladder: bool = Field(default=False, description="Партия клубной лестницы (открыта POST /bots/ladder/start)")
     tournament_game_id: int | None = Field(default=None, description="Партия турнира игрока (таск 15.3)")
     assisted: bool = Field(default=False, description="Игрок пользовался наставником: партия учебная")
+    blindfold: int | None = Field(default=None, ge=1, le=4, description="Игра вслепую (таск 19.5): ступень 1–4")
+    peeks: int = Field(default=0, ge=0, le=10_000, description="Сколько раз игрок подсмотрел позицию")
     player_color: str = Field(..., description="Цвет игрока ('white' или 'black')")
     result: str = Field(..., description="Результат партии ('1-0', '0-1', '1/2-1/2')")
     termination: str | None = Field(
@@ -621,6 +623,9 @@ async def save_bot_game(
         current_user: User = Depends(get_current_user),
 ):
     """Сохраняет завершённую партию против исторического бота или персоналии из мастерской."""
+    if payload.blindfold and (payload.ladder or payload.tournament_game_id):
+        # Игра вслепую — тренировка: в лестнице и турнире её нет (таск 19.5).
+        raise ApiError(400, "blindfold_not_allowed")
     if payload.bot_id != CUSTOM_BOT_ID and payload.bot_id not in BOT_METADATA:
         raise ApiError(404, "bot_not_found", bot_id=payload.bot_id)
     personality_name, personality_elo = await _resolve_personality_for_save(db, current_user, payload)
@@ -690,7 +695,8 @@ async def save_bot_game(
         payload=payload,
     )
 
-    new_game = Game(**game_kwargs, personality_name=personality_name, assisted=payload.assisted)
+    new_game = Game(**game_kwargs, personality_name=personality_name, assisted=payload.assisted,
+                    blindfold_level=payload.blindfold, blindfold_peeks=payload.peeks if payload.blindfold else None)
     db.add(new_game)
     ladder_outcome = None
     if ladder_game is not None:
