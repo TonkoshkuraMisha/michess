@@ -23,6 +23,16 @@
 | `chessnut` | Alexis Luengas | Apache-2.0 |
 | `fantasy` | Maurizio Monge | MIT |
 | `rhosgfx` | RhosGFX | CC0-1.0 |
+| `mpchess` | Maxime Chupin | GPL-3.0-or-later |
+| `celtic` | Maurizio Monge | MIT |
+| `spatial` | Maurizio Monge | MIT |
+| `papercut` | Nikolay Anzarov | CC-BY-4.0 |
+| `totoy` | Kosal Sen | CC-BY-4.0 |
+| `pirouetti` | pirouetti | AGPL-3.0-or-later |
+| `pixel` | therealqtpi | AGPL-3.0-or-later |
+| `firi` | James Faure | CC-BY-4.0 |
+| `shapes` | flugsio | CC-BY-SA-4.0 |
+| `letter` | usolando | AGPL-3.0-or-later |
 | `outline` | michess, производная от `merida` (добавлена окантовка) | GPL-2.0-or-later |
 
 Убраны как несвободные: `alpha` (Eric Bentzen, «free for personal non commercial use»), `maestro` (sadsnake1,

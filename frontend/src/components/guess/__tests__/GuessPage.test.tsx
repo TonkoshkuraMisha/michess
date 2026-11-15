@@ -20,16 +20,14 @@ const ANSWER = {
 
 const cell = (name: string) => document.querySelector(`[data-square="${name}"]`) as HTMLElement;
 
-async function drag(from: string, to: string) {
-    document.elementsFromPoint = vi.fn(() => [cell(to)]);
+// Ход двумя щелчками: тест про сценарий страницы, перетаскивание проверяют тесты PuzzleBoard. Перетаскивание здесь
+// (подменённый elementsFromPoint и слушатели окна из эффекта) под полной нагрузкой изредка терялось.
+async function play(from: string, to: string) {
     await act(async () => {
-        fireEvent.pointerDown(cell(from), {button: 0, pointerType: 'mouse', clientX: 5, clientY: 5});
+        fireEvent.click(cell(from));
     });
     await act(async () => {
-        fireEvent.pointerMove(window, {clientX: 50, clientY: 50});
-    });
-    await act(async () => {
-        fireEvent.pointerUp(window, {clientX: 90, clientY: 90});
+        fireEvent.click(cell(to));
     });
 }
 
@@ -67,16 +65,16 @@ describe('Угадай ход мастера', () => {
         expect(screen.getByText('Ход белых')).toBeInTheDocument();
         expect(screen.getByTestId('guess-series')).toHaveTextContent('Ход 1 из 2 в этой партии');
 
-        await drag('f3', 'e5');
+        await play('f3', 'e5');
         // Сначала дождаться ответа (запрос уходит асинхронно — под нагрузкой CI его ещё могло не быть), потом проверить тело.
-        expect(await screen.findByTestId('guess-score', {}, {timeout: 5000})).toHaveTextContent('100');
+        expect(await screen.findByTestId('guess-score')).toHaveTextContent('100');
         const post = (fetchMock.mock.calls as unknown as [string, RequestInit][]).find(([, init]) => init?.method === 'POST')!;
         expect(JSON.parse(String(post[1].body))).toEqual({move: 'f3e5'});
         expect(screen.getByText('Как мастер!')).toBeInTheDocument();
         expect(screen.getByText('Ход мастера: Nxe5')).toBeInTheDocument();
         expect(screen.getByRole('button', {name: /Дальше в партии/})).toBeInTheDocument();
         expect(screen.getByTestId('guess-session')).toHaveTextContent('Баллы: 100 из 100 · точность понимания 100%');
-    }, 20000);   // доска с перетаскиванием под полной параллельной нагрузкой изредка не укладывалась в 5 с
+    });
 
     it('позиции ещё не отобраны — понятное сообщение', async () => {
         stub({'/guess/next': () => ({position: null})});
