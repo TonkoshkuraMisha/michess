@@ -21,7 +21,9 @@ router = APIRouter(dependencies=[Depends(rate_limit("trainers", "RATE_LIMIT_PUZZ
 # Известные тренажёры: «Тихая тропа», «Двойной удар», «Маршрут коня», «Хвост» (таск 16.5); координаты (19.2):
 # уровень у них — сочетание настроек (сторона, координаты на доске, 30/60 с), см. frontend/src/trainers/coordinates.ts.
 TRAINERS = ("quiet_path", "double_strike", "knight_route", "tail",
-            "coord_find", "coord_name", "coord_color", "coord_diagonal")
+            "coord_find", "coord_name", "coord_color", "coord_diagonal",
+            # Память (19.3): «Восстанови позицию» и «Запомни партию».
+            "memory_position", "memory_game")
 MAX_LEVEL = 20
 HISTORY = 50
 
