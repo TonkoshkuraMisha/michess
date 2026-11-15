@@ -25,8 +25,15 @@ function useNow(intervalMs = 1000): number {
     return now;
 }
 
+function arenaName(a: ArenaInfo, t: ReturnType<typeof useI18n>['t']): string {
+    return a.format === 'swiss'
+        ? t('arenas.swissName', {control: controlLabel(a), rounds: a.rounds ?? 0})
+        : t('arenas.name', {control: controlLabel(a)});
+}
+
 function timing(a: ArenaInfo, now: number, t: ReturnType<typeof useI18n>['t']): string {
     if (a.status === 'scheduled') return t('arenas.startsIn', {time: clock(secondsUntil(a.starts_at, now))});
+    if (a.status === 'running' && a.format === 'swiss') return t('arenas.round', {round: a.current_round ?? 0, total: a.rounds ?? 0});
     if (a.status === 'running') return t('arenas.endsIn', {time: clock(secondsUntil(a.ends_at, now))});
     return t('arenas.finished');
 }
@@ -51,7 +58,7 @@ export function ArenasPage() {
                         <Link to={`/arenas/${a.id}`} data-testid={`arena-${a.id}`}
                               className={`flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded border-2 ${a.status === 'running'
                                   ? 'bg-amber-900/30 border-amber-600' : 'bg-acacia border-acacia-dark'} hover:border-amber-400`}>
-                            <span className="font-bold">{t('arenas.name', {control: controlLabel(a)})}</span>
+                            <span className="font-bold">{arenaName(a, t)}</span>
                             <span className="text-sm text-boxwood/80">{timing(a, now, t)} · {t('arenas.players', {n: a.players ?? 0})}</span>
                         </Link>
                     </li>
@@ -115,10 +122,10 @@ export function ArenaPage() {
         <div className="w-full max-w-4xl mx-auto p-3 flex flex-col gap-4 text-boxwood-light" data-testid="arena-page">
             <Link to="/arenas" className="text-sm text-amber-400 hover:underline">{t('arenas.title')}</Link>
             <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <h1 className="text-2xl font-bold text-amber-200">{t('arenas.name', {control: controlLabel(arena)})}</h1>
+                <h1 className="text-2xl font-bold text-amber-200">{arenaName(arena, t)}</h1>
                 <span className="font-mono text-amber-300" data-testid="arena-timing">{timing(arena, now, t)}</span>
             </div>
-            <p className="text-sm text-boxwood/80">{t('arenas.rules')}</p>
+            <p className="text-sm text-boxwood/80">{t(arena.format === 'swiss' ? 'arenas.swissRules' : 'arenas.rules')}</p>
             {error && <p role="alert" className="text-sm text-rose-300">{renderUiMessage(error, t)}</p>}
             {getToken() && arena.status !== 'finished' && (
                 <div className="flex flex-wrap items-center gap-3">
@@ -126,7 +133,7 @@ export function ArenaPage() {
                         <button type="button" onClick={() => void join()} data-testid="arena-join"
                                 className="px-4 py-2 rounded bg-amber-700 text-white font-bold">{t('arenas.join')}</button>
                     )}
-                    {arena.me?.joined && arena.status === 'running' && !searching && (
+                    {arena.me?.joined && arena.status === 'running' && arena.format !== 'swiss' && !searching && (
                         <button type="button" onClick={() => {
                             setError(null);
                             setSearching(true);
@@ -139,6 +146,7 @@ export function ArenaPage() {
                         </>
                     )}
                     {arena.me?.joined && arena.status === 'scheduled' && <span className="text-sm">{t('arenas.joinedWait')}</span>}
+                    {arena.me?.joined && arena.status === 'running' && arena.format === 'swiss' && <span className="text-sm" data-testid="swiss-waiting">{t('arenas.swissWaiting')}</span>}
                 </div>
             )}
             <section className="bg-acacia p-3 rounded-lg border-2 border-acacia-dark overflow-x-auto">
@@ -183,7 +191,7 @@ export function ArenaBanner() {
     return (
         <Link to={`/arenas/${arena.id}`} data-testid="arena-banner"
               className="flex items-center justify-between gap-2 px-2 py-1.5 mb-2 rounded bg-amber-900/40 border border-amber-700/60 text-xs hover:border-amber-400">
-            <span className="flex items-center gap-1 font-bold text-amber-200"><Swords size={13}/> {t('arenas.name', {control: controlLabel(arena)})}</span>
+            <span className="flex items-center gap-1 font-bold text-amber-200"><Swords size={13}/> {arenaName(arena, t)}</span>
             <span className="text-boxwood/80">{timing(arena, now, t)}</span>
         </Link>
     );

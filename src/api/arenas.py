@@ -68,6 +68,9 @@ async def get_arena(arena_id: int, request: Request, db: AsyncSession = Depends(
         arena = await service.get(db, arena_id)
     except DomainError as exc:
         raise _http(exc) from None
+    if arena.format == "swiss":
+        await service.advance_swiss(db, arena)  # тур мог закончиться, а турнир — начаться
+        await db.commit()
     me = None
     if user_id is not None:
         joined = await service._player(db, arena.id, user_id) is not None
