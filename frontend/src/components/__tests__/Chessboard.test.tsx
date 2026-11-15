@@ -686,7 +686,8 @@ describe('партия турнира', () => {
             '/profile/games/my-active': () => ({active: false}),
             '/bots/catalog': () => ({calibration: null, historical: [], archetypes: []}),
             '/bots/move': () => BOT_MOVE_DEFAULT,
-            '/bots/save-game': () => ({game_id: 1002, status: 'finished', result: '0-1', tournament_id: 7}),
+            '/bots/save-game': () => ({game_id: 1002, status: 'finished', result: '0-1', tournament_id: 7,
+                rating_before: 1500, rating_after: 1488, rating_delta: -12}),
         });
         vi.stubGlobal('fetch', fetchMock);
         const tournamentGame = {
@@ -716,6 +717,8 @@ describe('партия турнира', () => {
         expect(JSON.parse(String(saveCall?.[1].body))).toMatchObject({
             bot_id: 'morphy', player_color: 'white', tournament_game_id: 31, base_time_ms: 150000, increment_ms: 1000,
         });
+        // Все турниры рейтинговые (15.4): игрок видит изменение рейтинга.
+        expect(await screen.findByText(/Рейтинг: 1500 → 1488 \(-12\)/)).toBeInTheDocument();
     });
 });
 

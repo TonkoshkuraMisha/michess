@@ -278,7 +278,13 @@ export function useBotGame({
                         ? status('tournaments.forfeited', {
                             reason: hasMessage(reasonKey) ? messageParam(reasonKey as MessageKey) : String(data.tournament_forfeit),
                         })
-                        : status('tournaments.gameSaved'));
+                        : typeof data.rating_delta === 'number'
+                            // Все турниры рейтинговые (15.4): показываем изменение рейтинга.
+                            ? status('tournaments.gameSavedRated', {
+                                before: data.rating_before, after: data.rating_after,
+                                delta: `${data.rating_delta >= 0 ? '+' : ''}${data.rating_delta}`,
+                            })
+                            : status('tournaments.gameSaved'));
                 }
                 if (data.ladder) {
                     setLadderOutcome(data.ladder);
