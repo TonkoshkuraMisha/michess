@@ -1,6 +1,7 @@
 // --- FILE: frontend/src/components/Chessboard.tsx ---
 
 import {useState, useEffect, useRef, useCallback} from 'react';
+import {socialApi} from '../services/social';
 import {Link, useLocation, useNavigate, useParams} from 'react-router-dom';
 import {Chess} from 'chess.js';
 import {ListOrdered, Bot, Zap, Radio} from 'lucide-react';
@@ -1087,6 +1088,23 @@ export default function Chessboard() {
         navigate('.', {replace: true, state: null});
     }, [spectateId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // Прямой вызов из профиля (17.1): создаём приватное приглашение и, когда сервер его создал, отправляем сопернику.
+    const challengeTarget = (location.state as { challenge?: string } | null)?.challenge;
+    const pendingChallenge = useRef<string | null>(null);
+    const [challengeSent, setChallengeSent] = useState<string | null>(null);
+    useEffect(() => {
+        if (!challengeTarget || gameId) return;
+        pendingChallenge.current = challengeTarget;
+        handleCreatePrivateInvite();
+        navigate('.', {replace: true, state: null});
+    }, [challengeTarget]); // eslint-disable-line react-hooks/exhaustive-deps
+    useEffect(() => {
+        const target = pendingChallenge.current;
+        if (!target || !createdInviteCode) return;
+        pendingChallenge.current = null;
+        socialApi.challenge(target, createdInviteCode).then(() => setChallengeSent(target)).catch(() => undefined);
+    }, [createdInviteCode]);
+
     const handleLoadFen = (fen: string): string | null => {
         const error = validateFen(fen);
         if (error) return error;
@@ -1190,6 +1208,12 @@ export default function Chessboard() {
     return (
         <div
             className="w-full max-w-[1920px] h-full flex flex-col xl:flex-row items-center xl:items-stretch justify-between gap-3 px-1 xl:overflow-hidden relative">
+            {challengeSent && !gameId && (
+                <div role="status" data-testid="challenge-sent"
+                     className="absolute top-1 left-1/2 -translate-x-1/2 z-40 bg-amber-900/90 border border-amber-500 text-amber-100 text-sm rounded px-3 py-1.5">
+                    {t('social.challengeSent', {name: challengeSent})}
+                </div>
+            )}
 
             {dragState && (
                 <div

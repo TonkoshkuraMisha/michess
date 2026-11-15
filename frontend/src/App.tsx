@@ -20,6 +20,7 @@ import {ClassicGamePage, ClassicsPage} from './components/learn/ClassicsPage';
 import {ToolsPage} from './components/tools/ToolsPage';
 import {WatchPage} from './components/watch/WatchPage';
 import {TrainerPage, TrainersPage} from './components/trainers/TrainersPage';
+import {NotificationBell, PlayerSearch} from './components/social/SocialHeader';
 import {TournamentView, TournamentsPage} from './components/tournaments/TournamentsPage';
 import {CHAMPIONS_LIST} from './config/champions';
 import {API_BASE_URL} from './config/api';
@@ -321,6 +322,8 @@ export default function App() {
 
                 <div className="flex items-center gap-1 sm:gap-3 text-boxwood-light relative" ref={dropdownRef}>
                     <LanguageSwitcher compact/>
+                    {token && userProfile && <PlayerSearch/>}
+                    {token && userProfile && <NotificationBell/>}
                     <Link
                         to="/leaderboard"
                         className="md:hidden p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300"

@@ -19,6 +19,7 @@ import type {Locale} from 'date-fns';
 import {getDateLocale, renderUiMessage, uiMessage, useI18n} from '../i18n';
 import type {UiMessage} from '../i18n';
 import {displayPlayerName} from '../config/players';
+import {ProfileSocial} from './social/ProfileSocial';
 import {TournamentHistory} from './tournaments/TournamentHistory';
 
 interface UserProfile {
@@ -323,6 +324,7 @@ export default function Profile() {
                         className="w-24 h-24 rounded-lg bg-black/40 shadow-inner border-2 border-amber-600/40 mb-3 z-10"
                     />
                     <h1 className="text-3xl font-bold text-amber-200 z-10">{displayPlayerName(profile.username, t)}</h1>
+                    <ProfileSocial username={profile.username}/>
 
                     <div className="flex items-center gap-2 mt-3 text-boxwood-light/80 text-sm z-10">
                         <Calendar size={16} className="text-amber-600"/>
