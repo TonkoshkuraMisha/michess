@@ -20,6 +20,7 @@ from src.models.puzzle import PersonalPuzzle, PuzzleAttempt, PuzzleTheme
 from src.models.repertoire import Repertoire, RepertoireCard
 from src.models.trainer import TrainerResult
 from src.models.user import User
+from src.services import exam
 from src.services.themes import SECTIONS, THEMES
 
 MIN_ATTEMPTS = 5  # меньше — оценки раздела или темы нет («мало данных»)
@@ -112,4 +113,6 @@ async def skill_map(db: AsyncSession, user: User) -> dict:
         "openings": await openings(db, user.id),
         "endgames": {"done": await lessons_done(db, user.id, "endgame-"), "total": ENDGAME_EXERCISES},
         "mates": {"done": await lessons_done(db, user.id, "mates-"), "total": MATE_CONSTRUCTIONS},
+        # Диагностический экзамен (22.0) — стартовые данные, пока попыток задач мало.
+        "exam": await exam.latest(db, user.id),
     }

@@ -21,6 +21,8 @@ export interface SkillMapData {
     openings: { repertoires: number; new: number; learning: number; learned: number };
     endgames: { done: number; total: number };
     mates: { done: number; total: number };
+    /** Диагностический экзамен (22.0). */
+    exam?: { overall: number | null; level: string | null; passed: number; of: number };
 }
 
 export async function fetchSkillMap(): Promise<SkillMapData | null> {
@@ -51,6 +53,7 @@ export function SkillMap({username}: { username: string }) {
         axis: s.section, value: s.score ?? 0,
     }));
     const measured = data.sections.filter((s) => s.score !== null);
+    const examLevelKey = `exam.levels.${data.exam?.level ?? ''}`;
 
     return (
         <section className="bg-acacia rounded-lg border-2 border-acacia-dark p-4 flex flex-col gap-3 text-sm" data-testid="skill-map">
@@ -114,6 +117,11 @@ export function SkillMap({username}: { username: string }) {
                     <Link to="/learn/endgames" className="text-xs hover:underline">{t('skills.endgames', {done: data.endgames.done, total: data.endgames.total})}</Link>
                     <Link to="/learn/mates" className="text-xs hover:underline">{t('skills.mates', {done: data.mates.done, total: data.mates.total})}</Link>
                     <Link to="/train" className="text-xs hover:underline">{t('skills.trainers', {n: data.trainers.length})}</Link>
+                    <Link to="/exam" className="text-xs hover:underline" data-testid="skill-exam">
+                        {data.exam?.overall && hasMessage(examLevelKey)
+                            ? t('skills.exam', {level: t(examLevelKey), passed: data.exam.passed, of: data.exam.of})
+                            : t('skills.examNone')}
+                    </Link>
                 </div>
             </div>
         </section>
