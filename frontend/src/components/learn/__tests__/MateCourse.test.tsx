@@ -93,7 +93,7 @@ describe('Курс матовых конструкций', () => {
         expect(put[0]).toContain(mateProgressId('back_rank_mate'));
         expect(JSON.parse(String(put[1].body))).toMatchObject({step: 1, steps_total: 2, completed: false});
         expect(screen.getByTestId('mates-next')).toBeInTheDocument();
-    });
+    }, 20_000);  // под нагрузкой (замер покрытия, CI) 5 с по умолчанию не хватало
 
     it('без входа курс просит войти', () => {
         setToken(null);
