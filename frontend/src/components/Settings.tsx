@@ -19,6 +19,7 @@ import {useI18n} from '../i18n';
 import {renderUiMessage} from '../i18n';
 import type {UiMessage} from '../i18n';
 import LanguageSwitcher from './LanguageSwitcher';
+import {saveProfileSettings, setTranslationHelper} from '../services/profileSettings';
 import {clearToken, setToken} from '../services/authToken';
 
 const MIN_PASSWORD_LENGTH = 8;
@@ -66,13 +67,19 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
     const [emailPassword, setEmailPassword] = useState('');
     const [emailNotice, setEmailNotice] = useState<UiMessage | null>(null);
     const [emailError, setEmailError] = useState<UiMessage | null>(null);
+    // Режим «помощник перевода» (таск 17.7) — хранится в профиле.
+    const [helper, setHelper] = useState(false);
 
     useEffect(() => {
         if (!token) return;
         void (async () => {
             try {
                 const res = await fetch(`${API_BASE_URL}/api/v1/profile/me`, {headers: {Authorization: `Bearer ${token}`}});
-                if (res?.ok) setEmail((await res.json())?.email ?? null);
+                if (res?.ok) {
+                    const me = await res.json();
+                    setEmail(me?.email ?? null);
+                    setHelper(!!me?.translation_helper);
+                }
             } catch {
                 // Не удалось узнать адрес — раздел покажет «не привязан», привязать можно всё равно.
             }
@@ -291,6 +298,21 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
             <section className={sectionClass}>
                 <h2 className={headingClass}><Languages size={18} className="text-amber-400"/> {t('settings.language')}</h2>
                 <LanguageSwitcher/>
+                {token && (
+                    <label className="flex items-start gap-2 text-sm mt-1 cursor-pointer">
+                        <input type="checkbox" checked={helper} data-testid="translation-helper-toggle" className="mt-1"
+                               onChange={(e) => {
+                                   const value = e.target.checked;
+                                   setHelper(value);
+                                   setTranslationHelper(value);
+                                   saveProfileSettings({translation_helper: value}).catch(() => undefined);
+                               }}/>
+                        <span>
+                            <span className="font-bold">{t('translationHelper.setting')}</span>
+                            <span className="block text-xs text-boxwood/70">{t('translationHelper.settingHint')}</span>
+                        </span>
+                    </label>
+                )}
             </section>
 
             <section className={sectionClass}>

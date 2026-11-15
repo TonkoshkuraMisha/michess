@@ -69,14 +69,14 @@ describe('Угадай ход мастера', () => {
 
         await drag('f3', 'e5');
         // Сначала дождаться ответа (запрос уходит асинхронно — под нагрузкой CI его ещё могло не быть), потом проверить тело.
-        expect(await screen.findByTestId('guess-score')).toHaveTextContent('100');
+        expect(await screen.findByTestId('guess-score', {}, {timeout: 5000})).toHaveTextContent('100');
         const post = (fetchMock.mock.calls as unknown as [string, RequestInit][]).find(([, init]) => init?.method === 'POST')!;
         expect(JSON.parse(String(post[1].body))).toEqual({move: 'f3e5'});
         expect(screen.getByText('Как мастер!')).toBeInTheDocument();
         expect(screen.getByText('Ход мастера: Nxe5')).toBeInTheDocument();
         expect(screen.getByRole('button', {name: /Дальше в партии/})).toBeInTheDocument();
         expect(screen.getByTestId('guess-session')).toHaveTextContent('Баллы: 100 из 100 · точность понимания 100%');
-    });
+    }, 20000);   // доска с перетаскиванием под полной параллельной нагрузкой изредка не укладывалась в 5 с
 
     it('позиции ещё не отобраны — понятное сообщение', async () => {
         stub({'/guess/next': () => ({position: null})});

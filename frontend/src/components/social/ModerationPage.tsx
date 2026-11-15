@@ -17,6 +17,7 @@ const ACTIONS: Record<QueueItem['kind'], ModerationAction[]> = {
     message: ['dismiss', 'warn', 'chat_ban'],
     cheat_review: ['mark_cheater', 'clear_cheater'],
     appeal: ['mark_cheater', 'clear_cheater'],
+    translation: ['accept', 'dismiss'],
 };
 
 export function ReportButton({username}: { username: string }) {
@@ -103,7 +104,12 @@ export function ModerationPage() {
                                 {item.reporter && <span className="text-boxwood/70">{t('moderation.from', {name: item.reporter})}</span>}
                                 <span className="text-xs text-boxwood/60">{t('moderation.targetStats', {n: item.reports_on_target, trust: item.target_trust ?? 0})}</span>
                             </div>
-                            {item.reason !== 'auto' && <span>{t(`moderation.reasons.${item.reason as ReportReason}`)}</span>}
+                            {item.subject && (
+                                <span className="font-mono text-xs text-amber-200" data-testid={`mod-subject-${item.id}`}>
+                                    {item.subject}{item.context ? ` · ${item.context}` : ''}
+                                </span>
+                            )}
+                            {item.reason !== 'auto' && item.kind !== 'translation' && <span>{t(`moderation.reasons.${item.reason as ReportReason}`)}</span>}
                             {item.message_text && <blockquote className="border-l-2 border-rose-600 pl-2 italic">{item.message_text}</blockquote>}
                             {item.comment && <p className="text-boxwood/85">{item.comment}</p>}
                             {item.game_id && <Link to={`/game/${item.game_id}`} className="text-amber-300 underline self-start">{t('moderation.openGame')}</Link>}

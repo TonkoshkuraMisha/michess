@@ -65,6 +65,7 @@ ERROR_MESSAGES: dict[str, str] = {
     "report_not_found": "Report not found or already resolved",
     "appeal_not_flagged": "Your account is not flagged",
     "moderator_only": "Moderators only",
+    "translation_helper_off": "Turn on translation helper mode in your profile first",
     "chat_banned": "Chat is disabled for you for now",
     "study_room_not_found": "Study room not found",
     "study_host_only": "Only the host can do this",
