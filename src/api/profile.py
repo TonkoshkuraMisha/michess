@@ -5,7 +5,7 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import and_, asc, case, desc, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import aliased
@@ -138,12 +138,15 @@ async def get_my_profile(current_user: User = Depends(get_current_user)):
         # Языки (таск 17.7): язык интерфейса из профиля и режим «помощник перевода».
         "language": current_user.language,
         "translation_helper": current_user.translation_helper,
+        # Оформление (таск 18.3): тема-комплект.
+        "theme_preset": current_user.theme_preset,
     }
 
 
 class SettingsIn(BaseModel):
     language: Literal["en", "uk", "ru"] | None = None
     translation_helper: bool | None = None
+    theme_preset: str | None = Field(None, min_length=1, max_length=32, pattern=r"^[a-z0-9_]+$")
 
 
 @router.patch("/me/settings")
@@ -154,8 +157,11 @@ async def update_my_settings(payload: SettingsIn, db: AsyncSession = Depends(get
         current_user.language = payload.language
     if payload.translation_helper is not None:
         current_user.translation_helper = payload.translation_helper
+    if payload.theme_preset is not None:
+        current_user.theme_preset = payload.theme_preset
     await db.commit()
-    return {"language": current_user.language, "translation_helper": current_user.translation_helper}
+    return {"language": current_user.language, "translation_helper": current_user.translation_helper,
+            "theme_preset": current_user.theme_preset}
 
 
 _LEADERBOARD_RATING_COLUMN: dict[RatingCategory, Any] = {

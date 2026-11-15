@@ -54,6 +54,7 @@ import {
 } from 'lucide-react';
 import {isLanguage, useI18n} from './i18n';
 import {saveProfileSettings, setTranslationHelper} from './services/profileSettings';
+import {applyPreset, findPreset, getSavedPresetId} from './config/themePresets';
 import {TranslationHelper} from './components/social/TranslationHelper';
 import LanguageSwitcher from './components/LanguageSwitcher';
 
@@ -70,6 +71,8 @@ interface UserProfile {
     /** Языки (таск 17.7): язык из профиля и режим «помощник перевода». */
     language?: string | null;
     translation_helper?: boolean;
+    /** Тема-комплект (таск 18.3). */
+    theme_preset?: string | null;
 }
 
 export default function App() {
@@ -102,6 +105,14 @@ export default function App() {
             saveProfileSettings({language}).catch(() => undefined);
         }
     }, [token, userProfile, language, setLanguage]);
+    // Тема-комплект из профиля (таск 18.3) применяется при входе, если в браузере выбрана другая.
+    const presetSyncedFor = useRef<number | null>(null);
+    useEffect(() => {
+        if (!userProfile || presetSyncedFor.current === userProfile.id) return;
+        presetSyncedFor.current = userProfile.id;
+        const preset = findPreset(userProfile.theme_preset);
+        if (preset && preset.id !== getSavedPresetId()) applyPreset(preset);
+    }, [userProfile]);
     // Пункт «Модерация» (17.4) — только модератору и игроку с флагом нечестной игры (там — апелляция).
     const [showModeration, setShowModeration] = useState(false);
     useEffect(() => {

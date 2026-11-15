@@ -9,6 +9,7 @@ import {getToken} from './authToken';
 export interface ProfileSettings {
     language: Language | null;
     translation_helper: boolean;
+    theme_preset: string | null;
 }
 
 export async function saveProfileSettings(body: Partial<ProfileSettings>): Promise<ProfileSettings | null> {
