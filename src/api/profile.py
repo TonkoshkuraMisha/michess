@@ -1,7 +1,7 @@
 # --- FILE: src/api/profile.py ---
 
 import time
-from typing import Any
+from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import PlainTextResponse
@@ -135,7 +135,27 @@ async def get_my_profile(current_user: User = Depends(get_current_user)):
         "email": current_user.email,
         # Временный рейтинг (таск 17.8): категории, где сыграно меньше PROVISIONAL_GAMES партий (K = 40).
         "provisional": [c for c in RATING_CATEGORIES if current_user.games_played_for(c) < PROVISIONAL_GAMES],
+        # Языки (таск 17.7): язык интерфейса из профиля и режим «помощник перевода».
+        "language": current_user.language,
+        "translation_helper": current_user.translation_helper,
     }
+
+
+class SettingsIn(BaseModel):
+    language: Literal["en", "uk", "ru"] | None = None
+    translation_helper: bool | None = None
+
+
+@router.patch("/me/settings")
+async def update_my_settings(payload: SettingsIn, db: AsyncSession = Depends(get_db),
+                             current_user: User = Depends(get_current_user)):
+    """Настройки профиля (таск 17.7): язык интерфейса и режим «помощник перевода»."""
+    if payload.language is not None:
+        current_user.language = payload.language
+    if payload.translation_helper is not None:
+        current_user.translation_helper = payload.translation_helper
+    await db.commit()
+    return {"language": current_user.language, "translation_helper": current_user.translation_helper}
 
 
 _LEADERBOARD_RATING_COLUMN: dict[RatingCategory, Any] = {

@@ -17,6 +17,7 @@ from src.services import moderation
 router = APIRouter(dependencies=[Depends(rate_limit("moderation", "RATE_LIMIT_PUZZLES"))])
 
 _CODES = {"report_not_found": status.HTTP_404_NOT_FOUND, "moderator_only": status.HTTP_403_FORBIDDEN,
+          "translation_helper_off": status.HTTP_403_FORBIDDEN,
           "report_duplicate": status.HTTP_409_CONFLICT}
 
 
@@ -33,12 +34,20 @@ class ReportIn(BaseModel):
     game_id: int | None = None
 
 
+class TranslationIn(BaseModel):
+    language: str = Field(..., pattern="^(en|uk|ru)$")
+    key: str = Field(..., min_length=1, max_length=150, pattern=r"^[A-Za-z0-9_.]+$")
+    current: str | None = Field(None, max_length=300)
+    suggestion: str = Field(..., min_length=1, max_length=300)
+    context: str | None = Field(None, max_length=200)
+
+
 class AppealIn(BaseModel):
     comment: str | None = Field(None, max_length=300)
 
 
 class ResolveIn(BaseModel):
-    action: str = Field(..., pattern="^(dismiss|warn|chat_ban|mark_cheater|clear_cheater)$")
+    action: str = Field(..., pattern="^(dismiss|warn|chat_ban|mark_cheater|clear_cheater|accept)$")
 
 
 def _moderator(user: User) -> None:
@@ -64,6 +73,17 @@ async def create_report(payload: ReportIn, db: AsyncSession = Depends(get_db), u
     try:
         item = await moderation.report(db, user, target, payload.kind, payload.reason, payload.comment,
                                        payload.message_text, payload.game_id)
+    except DomainError as exc:
+        raise _http(exc) from None
+    return {"id": item.id}
+
+
+@router.post("/translations", status_code=status.HTTP_201_CREATED)
+async def suggest_translation(payload: TranslationIn, db: AsyncSession = Depends(get_db),
+                              user: User = Depends(get_current_user)):
+    try:
+        item = await moderation.suggest_translation(db, user, payload.language, payload.key, payload.current,
+                                                    payload.suggestion, payload.context)
     except DomainError as exc:
         raise _http(exc) from None
     return {"id": item.id}

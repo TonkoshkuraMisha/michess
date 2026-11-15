@@ -22,7 +22,8 @@ from src.models.user import User
 from src.services import notifications
 
 REASONS = ("cheating", "abuse", "spam", "other")
-ACTIONS = ("dismiss", "warn", "chat_ban", "mark_cheater", "clear_cheater")
+ACTIONS = ("dismiss", "warn", "chat_ban", "mark_cheater", "clear_cheater", "accept")
+LANGUAGES = ("en", "uk", "ru")
 CHAT_BAN_HOURS = 24
 RESTORED_TRUST = 100
 
@@ -66,6 +67,27 @@ async def flag_for_review(db: AsyncSession, user: User, game_id: int | None) -> 
         db.add(Report(kind="cheat_review", reporter_id=None, target_id=user.id, reason="auto", game_id=game_id))
 
 
+async def suggest_translation(db: AsyncSession, user: User, language: str, key: str, current: str | None,
+                             suggestion: str, context: str | None) -> Report:
+    """Предложение исправить текст интерфейса (таск 17.7): только в режиме «помощник перевода»."""
+    suggestion = " ".join(suggestion.split())[:300]
+    if not user.translation_helper:
+        raise DomainError("translation_helper_off")
+    if language not in LANGUAGES or not key or not suggestion:
+        raise DomainError("report_invalid")
+    subject = f"{language}:{key}"[:200]
+    exists = await db.scalar(select(Report.id).where(
+        Report.reporter_id == user.id, Report.kind == "translation", Report.subject == subject, Report.status == "open"))
+    if exists is not None:
+        raise DomainError("report_duplicate")
+    item = Report(kind="translation", reporter_id=user.id, target_id=user.id, reason="other", subject=subject,
+                  context=(context or "")[:200] or None, message_text=(current or "")[:300] or None, comment=suggestion)
+    db.add(item)
+    await db.commit()
+    await db.refresh(item)
+    return item
+
+
 async def appeal(db: AsyncSession, user: User, comment: str | None) -> Report:
     if not user.is_cheater:
         raise DomainError("appeal_not_flagged")
@@ -96,6 +118,7 @@ async def queue(db: AsyncSession) -> list[dict]:
         target = names.get(r.target_id)
         result.append({
             "id": r.id, "kind": r.kind, "reason": r.reason, "comment": r.comment, "message_text": r.message_text,
+            "subject": r.subject, "context": r.context,
             "game_id": r.game_id, "created_at": r.created_at.isoformat() if r.created_at else None,
             "reporter": names[r.reporter_id].username if r.reporter_id in names else None,
             "target": target.username if target else None,

@@ -74,6 +74,10 @@ class User(Base):
     # Модерация (таск 17.4): роль модератора (scripts/make_moderator.py) и отключённый чат до момента.
     is_moderator: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     chat_banned_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Языки (таск 17.7): язык интерфейса хранится в профиле (переходит между устройствами) и режим «помощник
+    # перевода» — кнопка «Предложить исправление текста».
+    language: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    translation_helper: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

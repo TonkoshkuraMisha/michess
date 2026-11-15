@@ -115,3 +115,29 @@ async def test_anticheat_flag_creates_review(db_session):
     reviews = (await db_session.execute(select(Report).where(Report.kind == "cheat_review"))).scalars().all()
     assert {r.target_id for r in reviews} == flagged and len(reviews) == len(flagged)
     assert {r.game_id for r in reviews} == {game.id}
+
+
+async def test_language_settings_and_translation_suggestion(client, db_session, token_user_1, test_user_1, moderator):
+    """Таск 17.7: язык в профиле, режим «помощник перевода», предложение исправления — в очередь модерации."""
+    _, mod_token = moderator
+    me = client.get("/api/v1/profile/me", headers=auth(token_user_1)).json()
+    assert me["language"] is None and me["translation_helper"] is False
+
+    body = {"language": "uk", "key": "chat.title", "current": "Чат", "suggestion": "Розмова", "context": "/play"}
+    off = client.post(f"{API}/translations", json=body, headers=auth(token_user_1))
+    assert off.status_code == 403 and off.json()["detail"]["code"] == "translation_helper_off"
+
+    saved = client.patch("/api/v1/profile/me/settings", json={"language": "uk", "translation_helper": True},
+                         headers=auth(token_user_1))
+    assert saved.json() == {"language": "uk", "translation_helper": True}
+    assert client.patch("/api/v1/profile/me/settings", json={"language": "de"}, headers=auth(token_user_1)).status_code == 422
+    me = client.get("/api/v1/profile/me", headers=auth(token_user_1)).json()
+    assert (me["language"], me["translation_helper"]) == ("uk", True)
+
+    assert client.post(f"{API}/translations", json=body, headers=auth(token_user_1)).status_code == 201
+    assert client.post(f"{API}/translations", json=body, headers=auth(token_user_1)).status_code == 409
+    queue = client.get(f"{API}/queue", headers=auth(mod_token)).json()["reports"]
+    assert [(r["kind"], r["subject"], r["context"], r["message_text"], r["comment"]) for r in queue] == [
+        ("translation", "uk:chat.title", "/play", "Чат", "Розмова")]
+    done = client.post(f"{API}/reports/{queue[0]['id']}/resolve", json={"action": "accept"}, headers=auth(mod_token))
+    assert done.json()["action"] == "accept"

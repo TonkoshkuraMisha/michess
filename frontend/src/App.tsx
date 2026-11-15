@@ -52,7 +52,9 @@ import {
     Presentation,
     Gavel
 } from 'lucide-react';
-import {useI18n} from './i18n';
+import {isLanguage, useI18n} from './i18n';
+import {saveProfileSettings, setTranslationHelper} from './services/profileSettings';
+import {TranslationHelper} from './components/social/TranslationHelper';
 import LanguageSwitcher from './components/LanguageSwitcher';
 
 interface UserProfile {
@@ -65,16 +67,41 @@ interface UserProfile {
     is_cheater: boolean;
     /** Категории с временным рейтингом (таск 17.8): меньше 30 партий. */
     provisional?: string[];
+    /** Языки (таск 17.7): язык из профиля и режим «помощник перевода». */
+    language?: string | null;
+    translation_helper?: boolean;
 }
 
 export default function App() {
-    const {t} = useI18n();
+    const {t, language, setLanguage} = useI18n();
     // Токен — в памяти (services/authToken): при загрузке вход восстанавливается по httpOnly-cookie (таск 17.5).
     const [token, setToken] = useState<string | null>(() => auth.getToken());
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [profileRetry, setProfileRetry] = useState(0);
 
     const [isProfileOpen, setIsProfileOpen] = useState(false);
+    // Язык хранится в профиле (таск 17.7): при входе язык профиля применяется (так он переходит между устройствами),
+    // если в профиле его ещё нет — туда записывается текущий; дальше каждая смена языка сохраняется на сервере.
+    const languageSyncedFor = useRef<number | null>(null);
+    useEffect(() => {
+        if (!token || !userProfile) {
+            languageSyncedFor.current = null;
+            setTranslationHelper(false);
+            return;
+        }
+        setTranslationHelper(!!userProfile.translation_helper);
+        if (languageSyncedFor.current !== userProfile.id) {
+            languageSyncedFor.current = userProfile.id;
+            if (isLanguage(userProfile.language) && userProfile.language !== language) {
+                setLanguage(userProfile.language);
+                return;
+            }
+        }
+        if (userProfile.language !== language) {
+            setUserProfile((p) => (p ? {...p, language} : p));
+            saveProfileSettings({language}).catch(() => undefined);
+        }
+    }, [token, userProfile, language, setLanguage]);
     // Пункт «Модерация» (17.4) — только модератору и игроку с флагом нечестной игры (там — апелляция).
     const [showModeration, setShowModeration] = useState(false);
     useEffect(() => {
@@ -608,6 +635,7 @@ export default function App() {
                     />
                 </Routes>
             </main>
+            <TranslationHelper/>
 
             {showAuthModal && (
                 <AuthModal
