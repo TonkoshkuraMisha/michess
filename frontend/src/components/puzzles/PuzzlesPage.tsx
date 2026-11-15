@@ -367,7 +367,7 @@ export default function PuzzlesPage() {
                     {t('puzzles.profile', {rating: profile.rating, games: profile.games, streak: profile.streak})}
                 </p>
             )}
-            <div className="grid grid-cols-4 gap-1 font-bold text-xs" role="tablist">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-1 font-bold text-xs" role="tablist">
                 {MODES.map((m) => (
                     <button key={m} type="button" role="tab" aria-selected={mode === m} data-testid={`puzzle-mode-${m}`}
                             onClick={() => chooseMode(m)}

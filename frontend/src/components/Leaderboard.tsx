@@ -81,7 +81,7 @@ export default function Leaderboard() {
     return (
         <div className="w-full max-w-5xl flex flex-col gap-6 font-serif">
             <div
-                className="bg-acacia-dark border border-amber-900/40 p-6 rounded shadow-heavy flex items-center justify-between gap-4 relative overflow-hidden">
+                className="bg-acacia-dark border border-amber-900/40 p-4 sm:p-6 rounded shadow-heavy flex flex-wrap items-center justify-between gap-4 relative overflow-hidden">
                 <div className="flex items-center gap-4 z-10">
                     <div
                         className="w-14 h-14 rounded-lg bg-black/40 border-2 border-amber-600/50 flex items-center justify-center text-amber-400 shadow-inner shrink-0">

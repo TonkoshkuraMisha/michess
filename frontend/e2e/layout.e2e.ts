@@ -89,9 +89,16 @@ for (const language of LANGUAGES) {
             });
             const me = await (await page.request.get(`${API}/api/v1/profile/me`, {headers: {Authorization: `Bearer ${token}`}})).json();
             const failures: string[] = [];
-            for (const route of ROUTES) {
-                const path = route === 'PROFILE' ? `/profile/${encodeURIComponent(me.username)}` : route;
-                failures.push(...await check(page, testInfo, `${language} ${viewport.width}`, path));
+            try {
+                for (const route of ROUTES) {
+                    const path = route === 'PROFILE' ? `/profile/${encodeURIComponent(me.username)}` : route;
+                    failures.push(...await check(page, testInfo, `${language} ${viewport.width}`, path));
+                }
+            } finally {
+                // Игрок общий для прогона, а остальные сценарии написаны против русского интерфейса — вернуть язык.
+                await page.request.patch(`${API}/api/v1/profile/me/settings`, {
+                    data: {language: 'ru'}, headers: {Authorization: `Bearer ${token}`},
+                });
             }
             expect(failures).toEqual([]);
         });
