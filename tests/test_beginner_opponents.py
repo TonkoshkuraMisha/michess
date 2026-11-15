@@ -70,7 +70,8 @@ def test_opening_characters_follow_table_lines():
     bot = PersonalityBot(BotPersonalityConfig(opening_style="offbeat"))
     move, comment = bot._book_move(chess.Board())
     assert comment == {"key": "personality.openingHabit", "params": {}}  # название линии не выдаётся
-    assert move.uci() not in ("e2e4", "d2d4", "c2c4", "g1f3")
+    first_moves = {uci for uci, _ in bot.favorites[chess.Board().epd()]}
+    assert move.uci() in first_moves and not first_moves & {"e2e4", "d2d4", "c2c4", "g1f3"}
 
 
 def test_draw_attitude():
