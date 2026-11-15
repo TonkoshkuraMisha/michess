@@ -39,6 +39,8 @@ interface Props {
     arrows?: BoardArrow[];
     /** Подсвеченные поля. */
     highlights?: string[];
+    /** Тёмная подсветка (занятие с тренером, таск 17.3). */
+    darkHighlights?: string[];
     /** «Призрачная» фигура: полупрозрачная, показывает, куда фигура может встать. */
     ghost?: { square: string; piece: string } | null;
     /** Звёзды азбуки (таск 14.5): поля, которые нужно обойти; на поле с фигурой — звёздочка в углу. */
@@ -96,7 +98,7 @@ function squareAt(x: number, y: number): string | null {
 }
 
 export function PuzzleBoard({
-    fen, orientation, interactive, lastMove, hint, mark, onMove, onSquare, arrows = [], highlights = [], ghost = null, stars = [],
+    fen, orientation, interactive, lastMove, hint, mark, onMove, onSquare, arrows = [], highlights = [], darkHighlights = [], ghost = null, stars = [],
     sound = true,
 }: Props) {
     const {t} = useI18n();
@@ -233,6 +235,9 @@ export function PuzzleBoard({
                              style={{backgroundColor: dark ? theme.dark : theme.light}}
                              className={`relative flex items-center justify-center ${interactive ? 'cursor-pointer' : ''} ${grabbable ? 'cursor-grab' : ''}`}>
                             {isLast && <div className="absolute inset-0 bg-amber-300/35 pointer-events-none"/>}
+                            {darkHighlights.includes(square) && (
+                                <div data-testid={`board-dark-${square}`} className="absolute inset-0 bg-stone-900/55 pointer-events-none"/>
+                            )}
                             {highlights.includes(square) && (
                                 <div data-testid={`board-highlight-${square}`}
                                      className="absolute inset-0 bg-sky-400/40 pointer-events-none"/>

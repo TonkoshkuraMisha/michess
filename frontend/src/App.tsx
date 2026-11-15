@@ -22,6 +22,7 @@ import {ToolsPage} from './components/tools/ToolsPage';
 import {WatchPage} from './components/watch/WatchPage';
 import {ArenaPage, ArenasPage} from './components/arena/ArenaPages';
 import {TeamsPage} from './components/social/TeamsPage';
+import {StudyLobby, StudyRoomPage} from './components/study/StudyPages';
 import {TrainerPage, TrainersPage} from './components/trainers/TrainersPage';
 import {NotificationBell, PlayerSearch} from './components/social/SocialHeader';
 import {TournamentView, TournamentsPage} from './components/tournaments/TournamentsPage';
@@ -45,7 +46,8 @@ import {
     Eye,
     Wrench,
     Dumbbell,
-    Shield
+    Shield,
+    Presentation
 } from 'lucide-react';
 import {useI18n} from './i18n';
 import LanguageSwitcher from './components/LanguageSwitcher';
@@ -454,6 +456,15 @@ export default function App() {
                                         <button
                                             onClick={() => {
                                                 setIsProfileOpen(false);
+                                                navigate('/study');
+                                            }}
+                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
+                                        >
+                                            <Presentation size={16} className="text-amber-500"/> {t('study.title')}
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setIsProfileOpen(false);
                                                 navigate('/tournaments');
                                             }}
                                             className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
@@ -544,6 +555,8 @@ export default function App() {
                         <Route path="/arenas" element={<ArenasPage/>}/>
                         <Route path="/arenas/:arenaId" element={<ArenaPage/>}/>
                         <Route path="/teams" element={<TeamsPage/>}/>
+                        <Route path="/study" element={<StudyLobby/>}/>
+                        <Route path="/study/:code" element={<StudyRoomPage/>}/>
                         <Route path="/train" element={<TrainersPage/>}/>
                         <Route path="/train/:trainerId" element={<TrainerPage/>}/>
                         <Route path="/guess" element={<GuessPage/>}/>

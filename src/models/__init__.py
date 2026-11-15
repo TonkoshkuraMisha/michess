@@ -11,6 +11,7 @@ from src.models.position import PositionGame, PositionStat
 from src.models.product_event import ProductEvent
 from src.models.puzzle import DefenseDrill, DrillRecord, PersonalPuzzle, Puzzle, PuzzleAttempt, PuzzleTheme, ThemeProgress
 from src.models.social import Follow, Notification
+from src.models.study import StudyMaterial
 from src.models.team import Team, TeamMember
 from src.models.tournament import Tournament, TournamentGame, TournamentPlayer
 from src.models.trainer import TrainerResult
@@ -41,6 +42,7 @@ __all__ = [
     "PuzzleTheme",
     "ThemeProgress",
     "TrainerResult",
+    "StudyMaterial",
     "Team",
     "TeamMember",
     "Tournament",
