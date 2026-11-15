@@ -127,6 +127,7 @@ ERROR_MESSAGES: dict[str, str] = {
     # --- боты, мастерская, лестница ----------------------------------------------------------------
     "bot_not_found": "Bot '{bot_id}' not found",
     "config_or_personality": "Specify either config or personality_id, not both",
+    "bot_opening_unknown": "This opening is not in the openings table",
     "login_required_for_personality": "Log in to play against a saved opponent",
     "custom_opponent_missing": "A workshop opponent needs a personality_id or a name",
     "ladder_game_missing": "The ladder game was not started or is out of date",

@@ -26,6 +26,34 @@ class Opening:
     name: str
 
 
+@dataclass(frozen=True)
+class OpeningLine:
+    """Запись таблицы с ходами — для любимых дебютов соперников мастерской (таск 21.2)."""
+
+    eco: str
+    name: str
+    epd: str
+    moves: tuple[str, ...]
+
+
+@lru_cache(maxsize=1)
+def lines() -> dict[str, OpeningLine]:
+    with DATA.open(encoding="utf-8") as handle:
+        return {row["epd"]: OpeningLine(row["eco"], row["name"], row["epd"], tuple(row["uci"].split()))
+                for row in csv.DictReader(handle, delimiter="\t")}
+
+
+def search(query: str, limit: int = 20) -> list[OpeningLine]:
+    """Дебюты по части названия или по коду ECO: сначала названия, начинающиеся с запроса, внутри — короткие линии."""
+    text = query.strip().lower()
+    if not text:
+        return []
+    found = [line for line in lines().values()
+             if text in line.name.lower() or line.eco.lower().startswith(text)]
+    return sorted(found, key=lambda line: (not line.name.lower().startswith(text), len(line.moves), line.eco,
+                                           line.name))[:limit]
+
+
 @lru_cache(maxsize=1)
 def _table() -> dict[str, Opening]:
     with DATA.open(encoding="utf-8") as handle:

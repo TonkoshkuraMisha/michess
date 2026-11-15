@@ -32,6 +32,29 @@ export interface PersonalityConfig {
     randomness: number;
     blunder_guard_cp: number;
     target_elo: number;
+    /** Любимые дебюты (таск 21.2): позиции (EPD) записей таблицы дебютов, до трёх за каждый цвет. */
+    openings_white?: string[];
+    openings_black?: string[];
+}
+
+export const MAX_FAVORITE_OPENINGS = 3;
+
+export interface OpeningEntry {
+    eco: string;
+    /** Английское имя собственное из открытой таблицы дебютов — не переводится. */
+    name: string;
+    epd: string;
+    moves: string[];
+}
+
+/** Поиск дебютов по названию или коду ECO, либо записи по позициям (чтобы показать названия выбранных). */
+export async function fetchOpenings(params: { q?: string; epds?: string[] }): Promise<OpeningEntry[]> {
+    const query = new URLSearchParams();
+    if (params.q) query.set('q', params.q);
+    for (const epd of params.epds ?? []) query.append('epd', epd);
+    const res = await fetch(`${API_BASE_URL}/api/v1/bots/openings?${query.toString()}`);
+    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
+    return ((await res.json()) as { openings: OpeningEntry[] }).openings;
 }
 
 export interface PersonalityDraft {
