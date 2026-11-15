@@ -75,6 +75,9 @@ import type {CustomOpponent} from '../config/archetypes';
 import {LobbyPanel} from './chessboard/LobbyPanel';
 import {AppearancePickerDropdown} from './chessboard/AppearancePickerDropdown';
 import {getToken} from '../services/authToken';
+import {orderCaptured, quickMoveFrom, useBoardPrefs} from '../config/boardPrefs';
+import {LastMoveArrow} from './chessboard/LastMoveArrow';
+import {squareCenter} from './chessboard/CoachArrowsOverlay';
 
 export {MIN_BOARD_SIZE, MAX_BOARD_SIZE, getMaxViewportBoardSize, getDefaultBoardSize, TIME_CONTROLS};
 export type {PromotionPiece, TimeControlOption, TimeControlGroup};
@@ -167,6 +170,10 @@ export default function Chessboard() {
 
     const moveStartTime = useRef<number>(Date.now());
 
+    // Настройки доски (таск 18.4) и анимация хода соперника: фигура скользит с поля на поле, пока цель скрыта.
+    const boardPrefs = useBoardPrefs();
+    const [moveAnim, setMoveAnim] = useState<{ from: string; to: string; go: boolean } | null>(null);
+    const animatedHistoryLength = useRef(0);
     const [dragState, setDragState] = useState<{
         from: string;
         piece: { type: string; color: string };
@@ -932,6 +939,10 @@ export default function Chessboard() {
             const piece = game.get(squareId as any);
             if (piece && piece.color === turnChar && ((!gameId && !activeBot) || currentTurnColor === myColor)) {
                 setSelectedSquare(squareId);
+            } else if (boardPrefs.quickMove && ((!gameId && !activeBot) || currentTurnColor === myColor)) {
+                // «Быстрый ход» (таск 18.4): на это поле может пойти только одна фигура — сразу ход.
+                const from = quickMoveFrom(game.moves({verbose: true}), squareId);
+                if (from) executeMove(from, squareId);
             }
         }
     };
@@ -959,6 +970,24 @@ export default function Chessboard() {
     const material = calculateMaterialBalance(boardState);
 
     const activeMoveIndex = viewIndex === -1 ? history.length - 1 : viewIndex;
+
+    // Анимация хода соперника (таск 18.4): только новый ход соперника в живой партии с ботом или человеком.
+    useEffect(() => {
+        const previous = animatedHistoryLength.current;
+        animatedHistoryLength.current = history.length;
+        const last = history[history.length - 1];
+        const mine = myColor === 'white' ? 'w' : 'b';
+        if (!boardPrefs.animateOpponent || viewIndex !== -1 || history.length !== previous + 1 || !(gameId || activeBot)
+            || !last || last.color === mine) return;
+        setMoveAnim({from: last.from, to: last.to, go: false});
+        const frame = requestAnimationFrame(() => setMoveAnim((anim) => anim && {...anim, go: true}));
+        const timer = setTimeout(() => setMoveAnim(null), 240);
+        return () => {
+            cancelAnimationFrame(frame);
+            clearTimeout(timer);
+            setMoveAnim(null);
+        };
+    }, [history.length]); // eslint-disable-line react-hooks/exhaustive-deps
     const lastMove = activeMoveIndex >= 0 ? history[activeMoveIndex] : null;
 
     const legalTargetSquares = new Set<string>();
@@ -988,8 +1017,11 @@ export default function Chessboard() {
     // «Взятые фигуры» считаются от полного комплекта — для партии с произвольной позиции это
     // был бы почти весь комплект с первого хода. Показываем только перевес в материале.
     const showCaptured = startFen === null;
-    const topCaptured = !showCaptured ? [] : topIsWhite ? material.whiteCapturedSymbols : material.blackCapturedSymbols;
-    const bottomCaptured = !showCaptured ? [] : topIsWhite ? material.blackCapturedSymbols : material.whiteCapturedSymbols;
+    // Порядок взятых фигур (таск 18.4): по ценности, по видам или по порядку взятия.
+    const captured = orderCaptured(boardPrefs.captured, {white: material.whiteCapturedSymbols, black: material.blackCapturedSymbols},
+        history.slice(0, activeMoveIndex + 1));
+    const topCaptured = !showCaptured ? [] : topIsWhite ? captured.white : captured.black;
+    const bottomCaptured = !showCaptured ? [] : topIsWhite ? captured.black : captured.white;
     const topAdvantage = topIsWhite ? material.whiteAdvantage : material.blackAdvantage;
     const bottomAdvantage = topIsWhite ? material.blackAdvantage : material.whiteAdvantage;
 
@@ -1219,6 +1251,7 @@ export default function Chessboard() {
 
             {dragState && (
                 <div
+                    data-testid="drag-ghost"
                     className="fixed pointer-events-none z-50 scale-110"
                     style={{
                         left: `${dragState.x}px`,
@@ -1463,6 +1496,9 @@ export default function Chessboard() {
                         )}
                         <AnnotationsOverlay arrows={annotations.arrows} squares={annotations.squares}
                                             flipped={isBoardFlipped} idPrefix="play-notes"/>
+                        {lastMove && boardPrefs.lastMove !== 'highlight' && (
+                            <LastMoveArrow from={lastMove.from} to={lastMove.to} flipped={isBoardFlipped}/>
+                        )}
                         {displayedRanks.map((rank) =>
                             displayedFiles.map((file) => {
                                 const rIdx = RANKS.indexOf(rank);
@@ -1477,6 +1513,13 @@ export default function Chessboard() {
                                 const isPremoveSquare = premoves.some((p) => p.from === squareId || p.to === squareId);
                                 const isLegalTarget = legalTargetSquares.has(squareId);
                                 const isBeingDragged = dragState?.from === squareId;
+                                // Анимация хода соперника: фигура уже стоит на своём поле и съезжает туда со старого
+                                // (смещение в клетках), поэтому клетки доски всегда показывают настоящую позицию.
+                                const slide = moveAnim?.to === squareId ? (() => {
+                                    const a = squareCenter(moveAnim.from, isBoardFlipped);
+                                    const b = squareCenter(moveAnim.to, isBoardFlipped);
+                                    return a && b ? {dx: (a.x - b.x) / 12.5, dy: (a.y - b.y) / 12.5, go: moveAnim.go} : null;
+                                })() : null;
 
                                 return (
                                     <div
@@ -1490,7 +1533,7 @@ export default function Chessboard() {
                                     >
                                         <BoardTextureLayer theme={activeTheme} where="square" isDark={isDark}/>
 
-                                        {isLastMove && !isSelected && !isPremoveSquare && (
+                                        {isLastMove && boardPrefs.lastMove !== 'arrow' && !isSelected && !isPremoveSquare && (
                                             <div className="absolute inset-0 z-10 pointer-events-none" style={{backgroundColor: lastMoveColor(activeTheme)}}/>
                                         )}
 
@@ -1518,6 +1561,8 @@ export default function Chessboard() {
                                             <div
                                                 onPointerDown={(e) => {
                                                     if ((e.pointerType === 'mouse' && e.button !== 0) || viewIndex !== -1 || gameOverResult) return;
+                                                    // «Только щелчки» (таск 18.4): без перетаскивания, ход — щелчок по фигуре и по полю.
+                                                    if (boardPrefs.moveInput === 'click') return;
                                                     // Зритель фигуры не двигает (и не ставит «премувы» на чужой доске).
                                                     if (spectatingGameId) return;
                                                     const turnChar = currentGame.turn();
@@ -1541,6 +1586,12 @@ export default function Chessboard() {
                                                         y: e.clientY
                                                     });
                                                 }}
+                                                data-testid={slide ? 'move-animation' : undefined}
+                                                style={slide ? {
+                                                    transform: slide.go ? 'translate(0, 0)' : `translate(${slide.dx * 100}%, ${slide.dy * 100}%)`,
+                                                    transition: slide.go ? 'transform 200ms ease-out' : 'none',
+                                                    zIndex: 40,
+                                                } : undefined}
                                                 className={`relative w-full h-full p-[1.5%] z-20 transition-transform duration-75 ${
                                                     viewIndex === -1 && !gameOverResult && !spectatingGameId && (
                                                         (gameId || activeBot)

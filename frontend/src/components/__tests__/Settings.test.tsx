@@ -123,6 +123,17 @@ describe('Settings: оформление и звук', () => {
         expect(localStorage.getItem('michess_analysis_board_theme')).toBeNull();
     });
 
+    it('настройки доски: показ хода соперника, ввод хода, быстрый ход сохраняются', () => {
+        renderSettings();
+        fireEvent.click(screen.getByTestId('pref-lastMove-arrow'));
+        fireEvent.click(screen.getByTestId('pref-moveInput-click'));
+        fireEvent.click(screen.getByTestId('pref-quickMove'));
+        fireEvent.click(screen.getByTestId('pref-captured-order'));
+        expect(JSON.parse(localStorage.getItem('michess_board_prefs')!)).toMatchObject(
+            {lastMove: 'arrow', moveInput: 'click', quickMove: true, captured: 'order'});
+        expect(screen.getByTestId('pref-lastMove-arrow')).toHaveAttribute('aria-checked', 'true');
+    });
+
     it('набор звуков выбирается отдельно', () => {
         renderSettings();
         // Звук мог остаться выключенным предыдущим тестом (общий мок) — наборы при выключенном звуке недоступны.
