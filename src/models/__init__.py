@@ -18,7 +18,7 @@ from src.models.social import Follow, Notification
 from src.models.study import StudyMaterial
 from src.models.team import Team, TeamMember
 from src.models.tournament import Tournament, TournamentGame, TournamentPlayer
-from src.models.trainer import TrainerResult
+from src.models.trainer import ExamResult, TrainerResult
 from src.models.user import User
 
 __all__ = [
@@ -52,6 +52,7 @@ __all__ = [
     "Repertoire",
     "RepertoireCard",
     "RepertoireMove",
+    "ExamResult",
     "TrainerResult",
     "StudyMaterial",
     "Team",
