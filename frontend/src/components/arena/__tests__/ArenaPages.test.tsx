@@ -91,3 +91,17 @@ describe('арены', () => {
         expect(await screen.findByTestId('arena-banner')).toHaveAttribute('href', '/arenas/3');
     });
 });
+
+describe('швейцарка между людьми', () => {
+    it('название с турами, «тур N из M», кнопки «Играть» нет — партия откроется сама', async () => {
+        vi.stubGlobal('fetch', vi.fn(async () => ({ok: true, status: 200, json: async () => ({
+            ...RUNNING, format: 'swiss', rounds: 5, current_round: 2, standings: [],
+            me: {joined: true, waiting: false, current_game_id: null},
+        })} as Response)));
+        routes('/arenas/3');
+        expect(await screen.findByText('Швейцарка 3+2, 5 туров')).toBeInTheDocument();
+        expect(screen.getByTestId('arena-timing')).toHaveTextContent('тур 2 из 5');
+        expect(screen.queryByTestId('arena-play')).toBeNull();
+        expect(screen.getByTestId('swiss-waiting')).toBeInTheDocument();
+    });
+});

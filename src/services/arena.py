@@ -8,6 +8,11 @@
   (matchmaker.start_pvp_game), цвета — тому, кто реже играл белыми;
 * очки: победа 2, ничья 1, поражение 0; с FIRE_AFTER побед подряд («огонь») — вдвое; серию рвёт ничья или поражение;
 * после конца новые пары не создаются, начатые партии доигрываются и засчитываются.
+
+Швейцарка между людьми (format="swiss"): заданное число туров; тур составляется по правилам швейцарки
+(tournament_rules.swiss_pairings, посев — по рейтингу на входе), партии всех пар создаются сразу (неявка — поражение по
+времени), при нечётном числе — свободный тур слабейшему без свободного тура (очки за победу); следующий тур — когда
+сыграны все партии текущего; «огня» нет. Ход турнира продвигается при каждом завершении партии и при запросе страницы.
 """
 
 from dataclasses import dataclass
@@ -34,12 +39,15 @@ class Slot:
     increment_ms: int
     every: timedelta
     duration: timedelta
+    format: str = "arena"
+    rounds: int = 0
 
 
 SCHEDULE = (
     Slot("bullet-1+0", 60_000, 0, timedelta(hours=2), timedelta(minutes=30)),
     Slot("blitz-3+2", 180_000, 2_000, timedelta(hours=1), timedelta(minutes=45)),
     Slot("rapid-10+0", 600_000, 0, timedelta(hours=3), timedelta(minutes=60)),
+    Slot("swiss-rapid-10+5", 600_000, 5_000, timedelta(hours=12), timedelta(hours=3), "swiss", 5),
 )
 
 
@@ -55,6 +63,8 @@ def status(arena: Arena, now: datetime | None = None) -> str:
     now = now or _now()
     if now < _aware(arena.starts_at):
         return "scheduled"
+    if arena.format == "swiss":
+        return "finished" if arena.finished_at is not None else "running"
     return "running" if now < _aware(arena.ends_at) else "finished"
 
 
@@ -70,7 +80,7 @@ async def ensure_schedule(db: AsyncSession, now: datetime | None = None) -> None
                 exists = await db.scalar(select(Arena.id).where(Arena.schedule_key == slot.key, Arena.starts_at == start))
                 if exists is None:
                     db.add(Arena(schedule_key=slot.key, base_time_ms=slot.base_time_ms, increment_ms=slot.increment_ms,
-                                 starts_at=start, ends_at=start + slot.duration))
+                                 starts_at=start, ends_at=start + slot.duration, format=slot.format, rounds=slot.rounds))
             start += slot.every
     await db.commit()
 
@@ -150,7 +160,7 @@ async def ready(db: AsyncSession, arena: Arena, user: User) -> dict:
     from src.services.connection_manager import manager
     from src.services.matchmaker import matchmaker
 
-    if status(arena) != "running":
+    if status(arena) != "running" or arena.format != "arena":
         raise DomainError("arena_not_running")
     me = await _player(db, arena.id, user.id)
     if me is None:
@@ -191,11 +201,13 @@ async def on_game_finished(db: AsyncSession, game_id: int, result: str) -> bool:
     white_score = {"1-0": 1.0, "0-1": 0.0}.get(result, 0.5)
     game.result = result
     sides = ((game.white_id, white_score, "white_points"), (game.black_id, 1.0 - white_score, "black_points"))
+    arena = await db.get(Arena, game.arena_id)
+    swiss = arena is not None and arena.format == "swiss"
     for user_id, score, field in sides:
         player = await _player(db, game.arena_id, user_id)
         if player is None:
             continue
-        earned = points(score, player.streak)
+        earned = points(score, 0 if swiss else player.streak)
         setattr(game, field, earned)
         player.score += earned
         player.games += 1
@@ -205,6 +217,91 @@ async def on_game_finished(db: AsyncSession, game_id: int, result: str) -> bool:
         else:
             player.streak = 0
     return True
+
+
+async def advance_after_game(db: AsyncSession, game_id: int) -> None:
+    """
+    После полного завершения партии (её состояние уже очищено — игроки свободны) — следующий тур швейцарки. Вызывать
+    из game_state после clear_game_state: раньше новая пара не начнётся («игрок уже в партии»).
+    """
+    record = (await db.execute(select(ArenaGame).where(ArenaGame.game_id == game_id))).scalar_one_or_none()
+    if record is None:
+        return
+    arena = await db.get(Arena, record.arena_id)
+    if arena is None or arena.format != "swiss":
+        return
+    await db.refresh(arena)
+    await advance_swiss(db, arena)
+    await db.commit()
+
+
+# --- Швейцарка между людьми -------------------------------------------------------------------------------
+
+async def advance_swiss(db: AsyncSession, arena: Arena, now: datetime | None = None) -> None:
+    """
+    Продвигает швейцарку (без commit): после начала — первый тур; тур сыгран — следующий или конец. Меньше двух
+    участников на старте — турнир окончен без партий.
+    """
+    from src.services import tournament_rules as rules
+
+    now = now or _now()
+    if arena.format != "swiss" or arena.finished_at is not None or now < _aware(arena.starts_at):
+        return
+    games = list((await db.execute(select(ArenaGame).where(ArenaGame.arena_id == arena.id))).scalars())
+    if any(g.result is None for g in games if g.round == arena.current_round):
+        return
+    players = list((await db.execute(
+        select(ArenaPlayer).where(ArenaPlayer.arena_id == arena.id)
+        .order_by(ArenaPlayer.rating.desc(), ArenaPlayer.joined_at, ArenaPlayer.id)
+    )).scalars())
+    if arena.current_round >= arena.rounds or len(players) < 2:
+        arena.finished_at = now
+        return
+    arena.current_round += 1
+    seat_of = {p.user_id: i + 1 for i, p in enumerate(players)}
+    user_of = {seat: uid for uid, seat in seat_of.items()}
+    pairable = list(players)
+    if len(pairable) % 2:
+        # Свободный тур — слабейшему по очкам из тех, у кого его ещё не было.
+        bye = min((p for p in pairable if p.byes == 0), key=lambda p: (p.score, -seat_of[p.user_id]), default=pairable[-1])
+        bye.byes += 1
+        bye.score += points(1.0, 0)
+        bye.games += 1
+        pairable.remove(bye)
+    seats = [seat_of[p.user_id] for p in pairable]
+    records = [rules.GameRecord(seat_of[g.white_id], seat_of[g.black_id], g.result)  # type: ignore[arg-type]
+               for g in games if g.result and g.white_id in seat_of and g.black_id in seat_of
+               and seat_of[g.white_id] in seats and seat_of[g.black_id] in seats]
+    for white_seat, black_seat in rules.swiss_pairings(seats, records):
+        await _start_swiss_game(db, arena, user_of[white_seat], user_of[black_seat])
+
+
+async def _start_swiss_game(db: AsyncSession, arena: Arena, white: int, black: int) -> None:
+    """Партия тура; начать не удалось (кто-то из пары занят другой партией) — ничья без игры, чтобы тур не встал."""
+    from src.models.game import Game, GameStatus
+    from src.services.connection_manager import manager
+    from src.services.matchmaker import MatchmakingError, matchmaker
+
+    try:
+        started = await matchmaker.start_pvp_game(white, black, arena.base_time_ms, arena.increment_ms,
+                                                  connection_manager=manager, db=db, is_rated=True)
+        db.add(ArenaGame(arena_id=arena.id, game_id=started["game_id"], white_id=white, black_id=black,
+                         round=arena.current_round))
+        await db.flush()
+    except MatchmakingError:
+        game = Game(white_player_id=white, black_player_id=black, status=GameStatus.ABORTED, is_rated=False)
+        db.add(game)
+        await db.flush()
+        record = ArenaGame(arena_id=arena.id, game_id=game.id, white_id=white, black_id=black, round=arena.current_round)
+        db.add(record)
+        await db.flush()
+        record.result = "1/2-1/2"
+        for user_id in (white, black):
+            player = await _player(db, arena.id, user_id)
+            if player is not None:
+                player.games += 1
+                player.score += points(0.5, 0)
+        record.white_points = record.black_points = points(0.5, 0)
 
 
 async def standings(db: AsyncSession, arena_id: int) -> list[dict]:
@@ -218,7 +315,8 @@ async def standings(db: AsyncSession, arena_id: int) -> list[dict]:
 
 
 def view(arena: Arena, now: datetime | None = None) -> dict:
-    return {"id": arena.id, "schedule_key": arena.schedule_key, "base_time_ms": arena.base_time_ms,
+    return {"id": arena.id, "schedule_key": arena.schedule_key, "format": arena.format, "rounds": arena.rounds,
+            "current_round": arena.current_round, "base_time_ms": arena.base_time_ms,
             "increment_ms": arena.increment_ms, "starts_at": _aware(arena.starts_at).isoformat(),
             "ends_at": _aware(arena.ends_at).isoformat(), "status": status(arena, now)}
 

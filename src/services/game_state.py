@@ -748,6 +748,12 @@ class GameStateManager:
 
         await self.clear_game_state(game_id)
 
+        # Швейцарка между людьми (17.2): следующий тур — когда игроки уже свободны.
+        try:
+            await arena_service.advance_after_game(db, game_id)
+        except Exception as arena_err:
+            logger.error("Arena round advance failed after game %s: %s", game_id, arena_err)
+
         # Не ждём брокер: публикация идёт в потоке, итог партии рассылается сразу.
         schedule_game_analysis_in_background(game_id)
 

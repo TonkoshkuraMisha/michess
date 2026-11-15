@@ -22,6 +22,12 @@ class Arena(Base):
     increment_ms: Mapped[int] = mapped_column(Integer, default=0)
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
+    # arena — играешь, пока идёт время; swiss — заданное число туров, пары по очкам (src/services/arena.py).
+    format: Mapped[str] = mapped_column(String(16), default="arena", server_default="arena")
+    rounds: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    current_round: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Швейцарка закончена (все туры сыграны или участников не хватило) — момент окончания.
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -39,6 +45,8 @@ class ArenaPlayer(Base):
     streak: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     # Рейтинг в категории арены на момент входа — для пар и таблицы.
     rating: Mapped[int] = mapped_column(Integer)
+    # Швейцарка: свободных туров при нечётном числе игроков (каждому — не больше одного).
+    byes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -53,4 +61,6 @@ class ArenaGame(Base):
     result: Mapped[str | None] = mapped_column(String(8), nullable=True)
     white_points: Mapped[int | None] = mapped_column(Integer, nullable=True)
     black_points: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Тур швейцарки (у арены — 0).
+    round: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

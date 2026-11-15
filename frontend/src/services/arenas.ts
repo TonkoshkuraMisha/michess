@@ -11,6 +11,10 @@ export type ArenaStatus = 'scheduled' | 'running' | 'finished';
 export interface ArenaInfo {
     id: number;
     schedule_key: string | null;
+    /** arena — по времени, swiss — по турам (17.2). */
+    format?: 'arena' | 'swiss';
+    rounds?: number;
+    current_round?: number;
     base_time_ms: number;
     increment_ms: number;
     starts_at: string;
