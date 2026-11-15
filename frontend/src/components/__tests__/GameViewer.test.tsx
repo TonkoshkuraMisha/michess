@@ -202,6 +202,17 @@ describe('GameViewer', () => {
         expect(await screen.findByTestId('guess-from-game')).toHaveAttribute('href', '/guess/77');
     });
 
+    it('справочник дебютов открывается кнопкой и запрашивает ходы до показанной позиции', async () => {
+        stubApi({pgn: {ok: true, text: FOOLS_MATE_PGN}});
+        renderViewer();
+        await waitFor(() => expect(pieceOn('h4')).toBe('b q'));
+        expect(screen.queryByTestId('opening-explorer')).toBeNull();
+        fireEvent.click(screen.getByTestId('explorer-toggle'));
+        expect(await screen.findByTestId('opening-explorer')).toBeInTheDocument();
+        const call = (vi.mocked(fetch).mock.calls as unknown as [string, RequestInit][]).find(([url]) => String(url).includes('opening-explorer'))!;
+        expect(JSON.parse(String(call[1].body)).moves).toEqual(['f2f3', 'e7e5', 'g2g4', 'd8h4']);
+    });
+
     it('без отобранных моментов кнопки «Угадай ход» нет', async () => {
         stubApi({pgn: {ok: true, text: FOOLS_MATE_PGN}, guess: {ok: true, body: {positions: []}}});
         renderViewer();

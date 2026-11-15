@@ -40,6 +40,7 @@ import {XrayOverlay} from './xray/XrayOverlay';
 import {Puzzle as PuzzleBadgeIcon} from 'lucide-react';
 import {puzzlesApi} from '../services/puzzles';
 import {guessApi} from '../services/guess';
+import {OpeningExplorer} from './OpeningExplorer';
 import {XrayPanel} from './xray/XrayPanel';
 import {useXraySettings} from './xray/useXraySettings';
 import type {GameSummary} from '../services/gameSummary';
@@ -449,6 +450,8 @@ export default function GameViewer() {
     const xray = useXraySettings();
     // Отобранные моменты для «Угадай ход мастера» (таск 14.3): есть — кнопка ведёт к первому.
     const [guessFirstId, setGuessFirstId] = useState<number | null>(null);
+    // Справочник дебютов к показанной позиции (таск 16.2): открывается по кнопке — запрос только тогда.
+    const [showExplorer, setShowExplorer] = useState(false);
     useEffect(() => {
         if (!gameId) return;
         guessApi.ofGame(Number(gameId))
@@ -1306,6 +1309,16 @@ export default function GameViewer() {
                         </div>
                     </div>
 
+                    {!startFen && (
+                        <button type="button" onClick={() => setShowExplorer((v) => !v)} aria-expanded={showExplorer}
+                                data-testid="explorer-toggle"
+                                className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-room-dark text-amber-300 font-bold text-sm rounded-md hover:bg-black transition shadow border border-amber-800/60">
+                            {t('explorer.title')}
+                        </button>
+                    )}
+                    {showExplorer && !startFen && (
+                        <OpeningExplorer moves={history.slice(0, viewIndex + 1).map((m) => `${m.from}${m.to}${m.promotion ?? ''}`)}/>
+                    )}
                     {guessFirstId !== null && (
                         <Link to={`/guess/${guessFirstId}`} data-testid="guess-from-game"
                               className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-amber-800 text-white font-bold text-sm rounded-md hover:bg-amber-700 transition shadow border border-amber-500/60">

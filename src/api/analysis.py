@@ -5,6 +5,7 @@ import json
 from contextlib import asynccontextmanager
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response, status
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.fair_play import forbid_engine_help_during_game, optional_user_id
@@ -24,7 +25,7 @@ from src.schemas.analysis import (
     MoveCheckResponse,
     PositionAnalysisRequest,
 )
-from src.services import move_check
+from src.services import move_check, opening_explorer
 from src.services.analysis_service import (
     GameDataNotFoundError,
     GameNotFinishedError,
@@ -37,6 +38,11 @@ from src.services.game_engine import InvalidStartPositionError
 from src.services.game_summary import summarize
 
 router = APIRouter(prefix="/analysis", tags=["Game Analysis"])
+
+
+class OpeningExplorerRequest(BaseModel):
+    moves: list[str] = Field(default_factory=list, max_length=opening_explorer.MAX_MOVES,
+                             description="Ходы из начальной позиции в UCI")
 
 # game_id -> [lock, число запросов, ожидающих или держащих лок]. Запись удаляется, когда
 # счётчик падает до нуля, поэтому словарь не растёт с каждой когда-либо анализированной партией.
@@ -90,6 +96,27 @@ async def analyze_game_position(
         raise exc.to_http(400) from exc
     except EngineBusyError:
         raise _engine_busy() from None
+
+
+@router.post(
+    "/opening-explorer",
+    dependencies=[
+        Depends(rate_limit(
+            "opening_explorer", "RATE_LIMIT_POSITION_ANALYSIS", "RATE_LIMIT_POSITION_ANALYSIS_GUEST",
+        )),
+        Depends(forbid_engine_help_during_game),
+        Depends(note_ladder_analysis),
+    ],
+)
+async def explore_opening(request: OpeningExplorerRequest, db: AsyncSession = Depends(get_db)):
+    """
+    Справочник дебютов (таск 16.2): ходы из позиции со статистикой партий, название дебюта и партии мастеров.
+    Это помощь в партии — под правилом честной игры, как анализ.
+    """
+    try:
+        return await opening_explorer.explore(db, request.moves)
+    except DomainValueError as exc:
+        raise exc.to_http(400) from exc
 
 
 @router.post(
