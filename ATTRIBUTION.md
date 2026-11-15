@@ -81,6 +81,12 @@ CC BY-NC-SA 4.0), а также набор без известного прои�
 | `frontend/public/assets/textures/stained-glass.svg` | Процедурная графика проекта (SVG), перемычки витража — доски таска 18.1 | собственная работа, CC0-1.0 |
 | `frontend/public/assets/textures/glass.svg` | Процедурная графика проекта (SVG), блик стекла — доски таска 18.1 | собственная работа, CC0-1.0 |
 | `frontend/public/assets/textures/hatch.svg` | Процедурная графика проекта (SVG), штриховка газетной диаграммы — доски таска 18.1 | собственная работа, CC0-1.0 |
+| `frontend/public/assets/patterns/celtic.svg` | Тиснёный тайл фона страницы (SVG), кельтский узел — таск 18.1 | собственная работа, CC0-1.0 |
+| `frontend/public/assets/patterns/map.svg` | Тиснёный тайл фона страницы (SVG), старинная карта — таск 18.1 | собственная работа, CC0-1.0 |
+| `frontend/public/assets/patterns/manuscript.svg` | Тиснёный тайл фона страницы (SVG), рукопись — таск 18.1 | собственная работа, CC0-1.0 |
+| `frontend/public/assets/patterns/circuit.svg` | Тиснёный тайл фона страницы (SVG), печатная плата — таск 18.1 | собственная работа, CC0-1.0 |
+| `frontend/public/assets/patterns/bauhaus.svg` | Тиснёный тайл фона страницы (SVG), геометрия Баухауса — таск 18.1 | собственная работа, CC0-1.0 |
+| `frontend/public/assets/patterns/marble.svg` | Тиснёный тайл фона страницы (SVG), мраморные прожилки — таск 18.1 | собственная работа, CC0-1.0 |
 
 Убраны: `Move.mp3`, `Capture.mp3`, `GenericNotify.mp3` (звуки lichess, отнесённые в его COPYING.md к несвободным) и
 `wood-grain.png` (происхождение неизвестно).
