@@ -118,12 +118,17 @@ CC BY-NC-SA 4.0), а также набор без известного прои�
 | Архив исторических партий | PGN-коллекции pgnmentor.com (`src/db/seed.py`), загрузчик `scripts/chessgames_downloader.py` | Запись ходов партии — факт, авторским правом не охраняется. Условия сайтов-источников и права на подборку как базу данных не проверялись — см. «Открытые вопросы». |
 | Таблица дебютов (`src/services/data/openings.tsv`) | [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings) — коды ECO и названия; преобразована `scripts/build_openings.py` (позиция вместо ходов) | CC0-1.0 (лицензия репозитория проверена 15.11.2026). |
 | Дебютные книги ботов (`src/services/bots/books/*.json`) | Построены `scripts/build_opening_books.py` из тех же партий | Статистика ходов, собственная обработка. |
+| Библиотека партий (`library_*`, таски 27.1–27.3) | Подборки и базы владельца проекта: собранные им PGN и учебные базы из его библиотеки; загружаются `scripts/import_library.py` (и `scripts/cbh_to_pgn.py`), в репозиторий не входят | Только заголовки и главная линия — факты; комментарии, варианты и упражнения из изданий не берутся. Подборки «Красивые партии» и дебютного репертуара составлены владельцем. |
 
 ## Программные библиотеки
 
 Полные списки — `uv.lock` и `frontend/package.json`. Основные: FastAPI, SQLAlchemy, Pydantic, Celery,
 redis-py (MIT / BSD); React, React Router, Tailwind CSS, Recharts, date-fns (MIT); lucide (ISC); chess.js
 (BSD-2-Clause); **python-chess (GPL-3.0)**.
+
+Сведения о двоичном формате учебных баз (таблицы кодирования ходов) для `src/services/cbh_reader.py` взяты из
+открытого конвертера [cbh2pgn](https://github.com/asdfjkl/cbh2pgn) — © 2022 Dominik Klein, лицензия MIT. Код модуля
+свой; это инструмент разработки, в продукте он не используется.
 
 ## Открытые вопросы
 
