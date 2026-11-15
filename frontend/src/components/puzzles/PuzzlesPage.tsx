@@ -8,7 +8,7 @@
 // «Разобрать с наставником» — позиция задачи на свободной доске с включённым наставником.
 
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {useNavigate} from 'react-router-dom';
+import {useLocation, useNavigate} from 'react-router-dom';
 import {Chess} from 'chess.js';
 import {format, parseISO} from 'date-fns';
 import {Puzzle as PuzzleIcon, Lightbulb, Flag, ArrowRight, GraduationCap, Timer, CalendarDays} from 'lucide-react';
@@ -344,6 +344,14 @@ export default function PuzzlesPage() {
         setTarget(next);
         void load('themes', next);
     };
+
+    // Переход из ежедневной разминки (таск 22.2): сразу тренировка по теме или «ваши ошибки».
+    const location = useLocation();
+    const entry = location.state as { train?: TrainingTarget; mode?: Mode } | null;
+    useEffect(() => {
+        if (entry?.train) startTraining(entry.train);
+        else if (entry?.mode && MODES.includes(entry.mode)) chooseMode(entry.mode);
+    }, [location.key]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const analyzePosition = (fen: string) => navigate('/', {state: {analyzeFen: fen}});
     const analyze = () => {
