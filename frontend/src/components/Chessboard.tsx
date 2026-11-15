@@ -1499,22 +1499,6 @@ export default function Chessboard() {
                         {lastMove && boardPrefs.lastMove !== 'highlight' && (
                             <LastMoveArrow from={lastMove.from} to={lastMove.to} flipped={isBoardFlipped}/>
                         )}
-                        {moveAnim && (() => {
-                            const a = squareCenter(moveAnim.from, isBoardFlipped);
-                            const b = squareCenter(moveAnim.to, isBoardFlipped);
-                            const target = currentGame.get(moveAnim.to as never);
-                            if (!a || !b || !target) return null;
-                            return (
-                                <div data-testid="move-animation" className="absolute z-40 pointer-events-none p-[1.5%] flex items-center justify-center"
-                                     style={{
-                                         left: `${a.x - 6.25}%`, top: `${a.y - 6.25}%`, width: '12.5%', height: '12.5%',
-                                         transform: moveAnim.go ? `translate(${((b.x - a.x) / 12.5) * 100}%, ${((b.y - a.y) / 12.5) * 100}%)` : 'none',
-                                         transition: 'transform 200ms ease-out',
-                                     }}>
-                                    {renderPieceSvg(target)}
-                                </div>
-                            );
-                        })()}
                         {displayedRanks.map((rank) =>
                             displayedFiles.map((file) => {
                                 const rIdx = RANKS.indexOf(rank);
@@ -1528,7 +1512,14 @@ export default function Chessboard() {
                                 const isLastMove = lastMove && (lastMove.from === squareId || lastMove.to === squareId);
                                 const isPremoveSquare = premoves.some((p) => p.from === squareId || p.to === squareId);
                                 const isLegalTarget = legalTargetSquares.has(squareId);
-                                const isBeingDragged = dragState?.from === squareId || moveAnim?.to === squareId;
+                                const isBeingDragged = dragState?.from === squareId;
+                                // Анимация хода соперника: фигура уже стоит на своём поле и съезжает туда со старого
+                                // (смещение в клетках), поэтому клетки доски всегда показывают настоящую позицию.
+                                const slide = moveAnim?.to === squareId ? (() => {
+                                    const a = squareCenter(moveAnim.from, isBoardFlipped);
+                                    const b = squareCenter(moveAnim.to, isBoardFlipped);
+                                    return a && b ? {dx: (a.x - b.x) / 12.5, dy: (a.y - b.y) / 12.5, go: moveAnim.go} : null;
+                                })() : null;
 
                                 return (
                                     <div
@@ -1595,6 +1586,12 @@ export default function Chessboard() {
                                                         y: e.clientY
                                                     });
                                                 }}
+                                                data-testid={slide ? 'move-animation' : undefined}
+                                                style={slide ? {
+                                                    transform: slide.go ? 'translate(0, 0)' : `translate(${slide.dx * 100}%, ${slide.dy * 100}%)`,
+                                                    transition: slide.go ? 'transform 200ms ease-out' : 'none',
+                                                    zIndex: 40,
+                                                } : undefined}
                                                 className={`relative w-full h-full p-[1.5%] z-20 transition-transform duration-75 ${
                                                     viewIndex === -1 && !gameOverResult && !spectatingGameId && (
                                                         (gameId || activeBot)

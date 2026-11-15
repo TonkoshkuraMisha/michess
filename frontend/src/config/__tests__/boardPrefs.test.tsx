@@ -87,8 +87,11 @@ describe('настройки на доске', () => {
         await act(async () => fireEvent.click(squareEl('e4')));   // e4 может занять только пешка e2
         expect(screen.getByText('e4')).toBeInTheDocument();
         expect(await screen.findByTestId('last-move-arrow')).toBeInTheDocument();
-        // Ответ бота (e7e5) анимируется: фигура скользит, цель на время скрыта.
-        expect(await screen.findByTestId('move-animation')).toBeInTheDocument();
+        // Ответ бота (e7e5) анимируется.
+        const sliding = await screen.findByTestId('move-animation');
+        // Фигура уже на своём поле (клетки показывают настоящую позицию) и съезжает туда со старого.
+        expect(squareEl('e5').contains(sliding)).toBe(true);
+        expect(sliding.querySelector('img')).not.toBeNull();
         await act(async () => {
             await new Promise((resolve) => setTimeout(resolve, 300));
         });
