@@ -21,10 +21,11 @@ import {
     startMyGame, withdrawTournament,
 } from '../../services/tournaments';
 import type {
-    ParticipantKind, Tournament, TournamentFormat, TournamentGame, TournamentSummary,
+    ParticipantKind, RandomOpponents, Tournament, TournamentFormat, TournamentGame, TournamentSummary,
 } from '../../services/tournaments';
 import {ladderOpponentName} from '../../config/players';
 import {Diploma} from './Diploma';
+import {Career} from './Career';
 import {getToken} from '../../services/authToken';
 
 const SIZES: Record<TournamentFormat, number[]> = {round_robin: [4, 6, 8], knockout: [4, 8]};
@@ -39,6 +40,8 @@ function CreateTournament() {
     const [format, setFormat] = useState<TournamentFormat>('round_robin');
     const [size, setSize] = useState(4);
     const [picks, setPicks] = useState<Pick[]>([]);
+    // Соперники: выбранные вручную или случайные из диапазона силы (таск 15.4).
+    const [mode, setMode] = useState<'chosen' | RandomOpponents>('chosen');
     const presets = useMemo(() => ALL_TIME_CONTROLS.filter((o) => !o.isManual), []);
     const [timeControlId, setTimeControlId] = useState(presets.find((o) => o.base === 5)?.id ?? presets[0].id);
     const [archetypes, setArchetypes] = useState<CatalogArchetype[]>([]);
@@ -69,7 +72,8 @@ function CreateTournament() {
         setError(null);
         try {
             const created = await createTournament({
-                format, size, participants: picks, base_time_ms: control.base * 60000, increment_ms: control.inc * 1000,
+                format, size, participants: mode === 'chosen' ? picks : [], ...(mode === 'chosen' ? {} : {random: mode}),
+                base_time_ms: control.base * 60000, increment_ms: control.inc * 1000,
             });
             navigate(`/tournaments/${created.id}`);
         } catch (err) {
@@ -121,10 +125,20 @@ function CreateTournament() {
                     </select>
                 </label>
             </div>
-            <p className="text-sm text-amber-300" data-testid="opponents-needed">
+            <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={t('career.opponents')}>
+                {(['chosen', 'my_level', 'stronger', 'weaker'] as const).map((m) => (
+                    <button key={m} type="button" role="radio" aria-checked={mode === m} onClick={() => setMode(m)}
+                            data-testid={`opponents-mode-${m}`}
+                            className={`px-2 py-1 rounded border text-sm ${mode === m ? 'bg-amber-800 border-amber-400 text-white' : 'bg-black/30 border-amber-900/50 hover:border-amber-600'}`}>
+                        {t(`career.modes.${m}`)}
+                    </button>
+                ))}
+            </div>
+            {mode !== 'chosen' && <p className="text-sm text-amber-300" data-testid="opponents-random">{t('career.randomHint', {count: needed})}</p>}
+            {mode === 'chosen' && <p className="text-sm text-amber-300" data-testid="opponents-needed">
                 {tp('tournaments.chooseOpponents', needed)} ({picks.length}/{needed})
-            </p>
-            <div className="flex flex-col gap-2">
+            </p>}
+            {mode === 'chosen' && <div className="flex flex-col gap-2">
                 <h3 className="text-sm font-bold">{t('tournaments.historicalBots')}</h3>
                 <div className="flex flex-wrap gap-1.5">
                     {HISTORICAL_BOTS_LIST.map((b) => chip({kind: 'bot', id: b.id}, ladderOpponentName('historical', b.id, t),
@@ -138,9 +152,9 @@ function CreateTournament() {
                 <div className="flex flex-wrap gap-1.5">
                     {personalities.map((p) => chip({kind: 'personality', id: p.id}, p.name, String(p.config.target_elo)))}
                 </div>
-            </div>
+            </div>}
             {error && <p role="alert" className="text-sm text-rose-300">{renderUiMessage(error, t)}</p>}
-            <button type="button" onClick={submit} disabled={busy || picks.length !== needed}
+            <button type="button" onClick={submit} disabled={busy || (mode === 'chosen' && picks.length !== needed)}
                     className="self-start px-4 py-2 rounded-md bg-amber-700 text-white font-bold hover:bg-amber-600 disabled:opacity-40 cursor-pointer">
                 {t('tournaments.create')}
             </button>
@@ -180,6 +194,7 @@ export function TournamentsPage() {
                     </ul>
                 )}
             </section>
+            <Career/>
             <CreateTournament/>
         </div>
     );

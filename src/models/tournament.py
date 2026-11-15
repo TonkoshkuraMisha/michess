@@ -32,6 +32,8 @@ class Tournament(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Игрок сдал турнир (таск A.3): его оставшиеся партии — поражения, боты доигрывают; новый турнир можно начать.
     withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Турнир карьеры (таск 15.4): ключ этапа лестницы (src/services/tournament_career.py); пусто — свой турнир.
+    career_stage: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
 
 
 class TournamentPlayer(Base):

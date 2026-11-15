@@ -17,9 +17,11 @@ from src.core.errors import ApiError, DomainError
 from src.db.session import get_db
 from src.models.tournament import Tournament, TournamentGame, TournamentPlayer
 from src.models.user import User
+from src.services import tournament_career as career
 from src.services import tournament_rules as rules
 from src.services import tournaments as service
 from src.services.bots.archetypes import ARCHETYPES_BY_KEY
+from src.services.rating import classify_time_control
 from src.services.task_dispatch import schedule_tournament_simulations_in_background
 
 router = APIRouter()
@@ -36,7 +38,9 @@ class ParticipantIn(BaseModel):
 class TournamentCreate(BaseModel):
     format: Literal["round_robin", "knockout"]
     size: int = Field(..., ge=4, le=8)
-    participants: list[ParticipantIn] = Field(..., min_length=3, max_length=7)
+    participants: list[ParticipantIn] = Field(default_factory=list, max_length=7)
+    # Случайные соперники из диапазона силы (таск 15.4) вместо выбранных: participants тогда не нужен.
+    random: Literal["my_level", "stronger", "weaker"] | None = None
     base_time_ms: int = Field(300_000, ge=60_000, le=3_600_000)
     increment_ms: int = Field(0, ge=0, le=60_000)
 
@@ -88,6 +92,7 @@ class TournamentOut(BaseModel):
     my_seat: int | None
     # Игрок сдал турнир (таск A.3): боты доигрывают, сам он больше не играет.
     withdrawn: bool = False
+    career_stage: str | None = None
     players: list[PlayerOut]
     games: list[GameOut]
     standings: list[StandingOut]
@@ -100,6 +105,7 @@ class TournamentSummary(BaseModel):
     status: str
     created_at: str
     my_place: int | None
+    career_stage: str | None = None
 
 
 def _player(p: TournamentPlayer) -> PlayerOut:
@@ -134,7 +140,7 @@ async def view(db: AsyncSession, tournament: Tournament, user: User) -> Tourname
         current_round=tournament.current_round, created_at=tournament.created_at.isoformat(),
         finished_at=tournament.finished_at.isoformat() if tournament.finished_at else None,
         my_seat=next((p.seat for p in players if p.user_id == user.id), None),
-        withdrawn=tournament.withdrawn_at is not None,
+        withdrawn=tournament.withdrawn_at is not None, career_stage=tournament.career_stage,
         players=[_player(p) for p in players], games=[_game(g) for g in games], standings=standings,
     )
 
@@ -151,10 +157,13 @@ async def create_tournament(
         payload: TournamentCreate, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
     try:
+        if payload.random is not None:
+            category = classify_time_control(payload.base_time_ms, payload.increment_ms)
+            participants = career.random_opponents(user.rating_for(category), payload.random, payload.size - 1)
+        else:
+            participants = [service.ParticipantSpec(p.kind, p.id) for p in payload.participants]
         tournament = await service.create_tournament(
-            db, user, payload.format, payload.size,
-            [service.ParticipantSpec(p.kind, p.id) for p in payload.participants],
-            payload.base_time_ms, payload.increment_ms,
+            db, user, payload.format, payload.size, participants, payload.base_time_ms, payload.increment_ms,
         )
     except DomainError as exc:
         raise exc.to_http(status.HTTP_409_CONFLICT if exc.code in _CONFLICTS else status.HTTP_400_BAD_REQUEST) from None
@@ -172,9 +181,28 @@ async def list_tournaments(db: AsyncSession = Depends(get_db), user: User = Depe
     )).all()
     return [
         TournamentSummary(id=t.id, format=t.format, size=t.size, status=t.status,
-                          created_at=t.created_at.isoformat(), my_place=place)
+                          created_at=t.created_at.isoformat(), my_place=place, career_stage=t.career_stage)
         for t, place in rows
     ]
+
+
+@router.get("/career")
+async def career_overview(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Карьера (таск 15.4): этапы лестницы — открыт ли, лучшее место; скрытые приглашения без подробностей."""
+    return {"stages": await career.overview(db, user)}
+
+
+@router.post("/career/{stage_key}", response_model=TournamentOut, status_code=status.HTTP_201_CREATED)
+async def start_career_stage(stage_key: str, db: AsyncSession = Depends(get_db),
+                             user: User = Depends(get_current_user)):
+    try:
+        tournament = await career.start_stage(db, user, stage_key)
+    except DomainError as exc:
+        code = {"career_stage_unknown": status.HTTP_404_NOT_FOUND, "career_stage_locked": status.HTTP_403_FORBIDDEN}
+        raise exc.to_http(code.get(exc.code, status.HTTP_409_CONFLICT if exc.code in _CONFLICTS
+                                   else status.HTTP_400_BAD_REQUEST)) from None
+    await _schedule_bot_games(db, tournament)
+    return await view(db, tournament, user)
 
 
 @router.get("/{tournament_id}", response_model=TournamentOut)

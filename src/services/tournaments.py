@@ -100,6 +100,7 @@ async def create_tournament(
         participants: list[ParticipantSpec],
         base_time_ms: int,
         increment_ms: int,
+        career_stage: str | None = None,
 ) -> Tournament:
     if size not in SIZES[fmt]:
         raise DomainError("tournament_size_invalid", sizes=", ".join(map(str, SIZES[fmt])))
@@ -120,7 +121,7 @@ async def create_tournament(
 
     tournament = Tournament(
         owner_id=owner.id, format=fmt, size=size, status="active",
-        base_time_ms=base_time_ms, increment_ms=increment_ms, current_round=1,
+        base_time_ms=base_time_ms, increment_ms=increment_ms, current_round=1, career_stage=career_stage,
     )
     db.add(tournament)
     await db.flush()

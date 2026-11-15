@@ -230,3 +230,54 @@ describe('турнир', () => {
         expect(await screen.findByTestId('tournament-notice')).toHaveTextContent('You withdrew');
     });
 });
+
+describe('карьера (таск 15.4)', () => {
+    const CAREER = {
+        stages: [
+            {key: 'main-1', number: 1, invitational: false, hidden: false, unlocked: true, best_place: 2, format: 'round_robin', size: 4,
+                base_time_ms: 300000, increment_ms: 0, target: 800, opponents: [{kind: 'archetype', id: 'rusher'}]},
+            {key: 'main-2', number: 2, invitational: false, hidden: false, unlocked: false, best_place: null, format: 'knockout', size: 4,
+                base_time_ms: 600000, increment_ms: 0, target: 900, opponents: []},
+            {key: 'invitational-1', number: 1, invitational: true, hidden: true, unlocked: false, best_place: null},
+        ],
+    };
+
+    function renderPage() {
+        return render(<MemoryRouter><Routes><Route path="/" element={<TournamentsPage/>}/><Route path="/tournaments/:tournamentId" element={<p>opened</p>}/></Routes></MemoryRouter>);
+    }
+
+    it('лестница: пройденный, закрытый и скрытый этапы; запуск этапа', async () => {
+        const fetchMock = stub({
+            '/tournaments': () => [],
+            '/tournaments/career': () => CAREER,
+            '/tournaments/career/main-1': () => ({id: 12}),
+            '/bots/catalog': () => ({calibration: null, historical: [], archetypes: []}),
+            '/bots/personalities': () => [],
+        });
+        renderPage();
+        expect(await screen.findByTestId('career-progress')).toHaveTextContent('Tournaments completed: 1 of 3');
+        expect(screen.getByTestId('career-main-1')).toHaveTextContent('best place: 2');
+        expect(screen.queryByTestId('career-start-main-2')).toBeNull();
+        expect(screen.getByTestId('career-invitational-1')).toHaveTextContent('???');
+        await act(async () => fireEvent.click(screen.getByTestId('career-start-main-1')));
+        expect(fetchMock.mock.calls.some(([url, init]) => String(url).endsWith('/tournaments/career/main-1') && init?.method === 'POST')).toBe(true);
+        expect(await screen.findByText('opened')).toBeInTheDocument();
+    });
+
+    it('случайные соперники: выбирать не нужно, на сервер уходит режим', async () => {
+        const fetchMock = stub({
+            '/tournaments': (init) => (init?.method === 'POST' ? {id: 9} : []),
+            '/tournaments/career': () => ({stages: []}),
+            '/bots/catalog': () => ({calibration: null, historical: [], archetypes: []}),
+            '/bots/personalities': () => [],
+        });
+        renderPage();
+        fireEvent.click(await screen.findByTestId('opponents-mode-stronger'));
+        expect(screen.getByTestId('opponents-random')).toHaveTextContent('3 opponents');
+        const create = screen.getByRole('button', {name: 'Create tournament'});
+        expect(create).toBeEnabled();
+        await act(async () => fireEvent.click(create));
+        const post = fetchMock.mock.calls.find(([, init]) => init?.method === 'POST')!;
+        expect(JSON.parse(String(post[1]!.body))).toMatchObject({random: 'stronger', participants: []});
+    });
+});
