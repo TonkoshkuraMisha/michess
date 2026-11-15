@@ -140,6 +140,7 @@ async def get_my_profile(current_user: User = Depends(get_current_user)):
         "translation_helper": current_user.translation_helper,
         # Оформление (таск 18.3): тема-комплект.
         "theme_preset": current_user.theme_preset,
+        "avatar": current_user.avatar,
     }
 
 
@@ -147,6 +148,7 @@ class SettingsIn(BaseModel):
     language: Literal["en", "uk", "ru"] | None = None
     translation_helper: bool | None = None
     theme_preset: str | None = Field(None, min_length=1, max_length=32, pattern=r"^[a-z0-9_]+$")
+    avatar: str | None = Field(None, pattern=r"^[wb][KQRBNP]-[0-7]$")
 
 
 @router.patch("/me/settings")
@@ -159,9 +161,11 @@ async def update_my_settings(payload: SettingsIn, db: AsyncSession = Depends(get
         current_user.translation_helper = payload.translation_helper
     if payload.theme_preset is not None:
         current_user.theme_preset = payload.theme_preset
+    if payload.avatar is not None:
+        current_user.avatar = payload.avatar
     await db.commit()
     return {"language": current_user.language, "translation_helper": current_user.translation_helper,
-            "theme_preset": current_user.theme_preset}
+            "theme_preset": current_user.theme_preset, "avatar": current_user.avatar}
 
 
 _LEADERBOARD_RATING_COLUMN: dict[RatingCategory, Any] = {
@@ -189,7 +193,7 @@ async def get_leaderboard(
     top_users = result.scalars().all()
 
     return [
-        {"rank": index + 1, "username": user.username, "rating": user.rating_for(category)}
+        {"rank": index + 1, "username": user.username, "avatar": user.avatar, "rating": user.rating_for(category)}
         for index, user in enumerate(top_users)
     ]
 
@@ -387,6 +391,7 @@ async def get_user_profile(username: str, db: AsyncSession = Depends(get_db)):
     return {
         "id": user.id,
         "username": user.username,
+        "avatar": user.avatar,
         "bullet_rating": user.bullet_rating,
         "blitz_rating": user.blitz_rating,
         "rapid_rating": user.rapid_rating,

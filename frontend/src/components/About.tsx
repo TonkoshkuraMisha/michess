@@ -167,12 +167,7 @@ export default function About() {
                 <ul className="text-sm leading-relaxed list-disc pl-5 space-y-1">
                     <li>{t('about.sounds')}</li>
                     <li>{t('about.texture')}</li>
-                    <li>
-                        {rich('about.avatars', {
-                            link: <a key="link" className={linkClass} href="https://www.dicebear.com" target="_blank"
-                                     rel="noreferrer">DiceBear</a>,
-                        })}
-                    </li>
+                    <li>{t('about.avatars')}</li>
                 </ul>
             </section>
 

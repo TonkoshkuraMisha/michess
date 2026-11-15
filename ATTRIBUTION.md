@@ -36,6 +36,9 @@
 | `outline` | michess, производная от `merida` (добавлена окантовка) | GPL-2.0-or-later |
 | `lewis` | michess, собственный рисунок по мотивам льюисских шахмат XII века (общественное достояние); `scripts/build_lewis_pieces.py` | CC0-1.0 |
 
+Аватары игроков (таск 18.4) — фигуры набора `lewis` на цветном фоне (`frontend/src/components/PlayerAvatar.tsx`);
+внешний сервис аватаров (DiceBear) больше не используется.
+
 Убраны как несвободные: `alpha` (Eric Bentzen, «free for personal non commercial use»), `maestro` (sadsnake1,
 CC BY-NC-SA 4.0), а также набор без известного происхождения, лежавший в корне папки и в `classic/`.
 
@@ -107,7 +110,6 @@ CC BY-NC-SA 4.0), а также набор без известного прои�
 | Что | Автор | Условия | Примечание |
 |---|---|---|---|
 | Эндшпильные таблицы — открытый API [lichess](https://tablebase.lichess.ovh) (`TABLEBASE_URL`) | lichess.org (сервер lila-tablebase; таблицы Syzygy и др.) | Открытый сервис | Только в разработке: на сервер уходит одна позиция (FEN), без данных игрока. В продакшене — свой сервер таблиц (решение владельца, DEPLOY). |
-| Аватары игроков — [DiceBear](https://www.dicebear.com), стиль Bottts Neutral | Pablo Stanley (исходный набор Bottts), DiceBear | Free for personal and commercial use | Картинка запрашивается с `api.dicebear.com`, имя игрока уходит на сторонний сервер. |
 
 ## Данные
 

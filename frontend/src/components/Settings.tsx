@@ -21,6 +21,7 @@ import type {PagePalette, PagePattern} from '../config/pageBackground';
 import {THEME_PRESETS, applyPreset} from '../config/themePresets';
 import type {ThemePreset} from '../config/themePresets';
 import {ThemePreview} from './settings/ThemePreview';
+import {AvatarPicker} from './PlayerAvatar';
 import {SOUND_SETS} from '../services/soundEngine';
 import {setBoardPref, useBoardPrefs} from '../config/boardPrefs';
 import type {BoardPrefs} from '../config/boardPrefs';
@@ -117,6 +118,8 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
     const [emailError, setEmailError] = useState<UiMessage | null>(null);
     // Режим «помощник перевода» (таск 17.7) — хранится в профиле.
     const [helper, setHelper] = useState(false);
+    // Аватар из собственного набора (таск 18.4) — хранится в профиле.
+    const [avatar, setAvatar] = useState<string | null>(null);
 
     useEffect(() => {
         if (!token) return;
@@ -127,6 +130,7 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                     const me = await res.json();
                     setEmail(me?.email ?? null);
                     setHelper(!!me?.translation_helper);
+                    setAvatar(me?.avatar ?? null);
                 }
             } catch {
                 // Не удалось узнать адрес — раздел покажет «не привязан», привязать можно всё равно.
@@ -295,6 +299,16 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                     <ArrowLeft size={15}/> {t('common.backToGame')}
                 </Link>
             </div>
+
+            {token && username && (
+                <section className={sectionClass}>
+                    <h2 className={headingClass}><Palette size={18} className="text-amber-400"/> {t('settings.avatar')}</h2>
+                    <AvatarPicker username={username} value={avatar} onChange={(code) => {
+                        setAvatar(code);
+                        saveProfileSettings({avatar: code}).catch(() => undefined);
+                    }}/>
+                </section>
+            )}
 
             <section className={sectionClass} data-testid="theme-presets">
                 <h2 className={headingClass}><Palette size={18} className="text-amber-400"/> {t('settings.presets')}</h2>

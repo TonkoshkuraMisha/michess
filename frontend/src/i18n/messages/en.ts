@@ -154,6 +154,7 @@ export const en = {
         boardAndPieces: 'Board and pieces',
         board: 'Board',
         pieces: 'Pieces',
+        avatar: 'Avatar',
         boardPrefs: {
             title: 'Board',
             lastMove: {label: 'Opponent\'s move', highlight: 'Highlight squares', arrow: 'Arrow', both: 'Both'},
@@ -227,7 +228,7 @@ export const en = {
         mediaTitle: 'Sounds, textures and avatars',
         sounds: 'Move and signal sounds are synthesized in the browser — the project contains no recordings.',
         texture: 'The wood texture of the board is the project’s own procedural graphics.',
-        avatars: 'Player avatars are drawn by the {link} service (Bottts Neutral style, original set by Pablo Stanley). To do this, the player’s name is sent to the DiceBear server.',
+        avatars: 'Player avatars are our own: figures of the Lewis set (CC0) on a coloured background; until a player chooses one, it is derived from the name. Nothing is sent to outside services.',
         archiveTitle: 'Game archive',
         archiveText: 'Records of historical games are common knowledge and are not subject to copyright. The game texts were taken from open PGN collections (pgnmentor.com).',
         librariesTitle: 'Software libraries',
