@@ -154,6 +154,14 @@ export const en = {
         boardAndPieces: 'Board and pieces',
         board: 'Board',
         pieces: 'Pieces',
+        boardPrefs: {
+            title: 'Board',
+            lastMove: {label: 'Opponent\'s move', highlight: 'Highlight squares', arrow: 'Arrow', both: 'Both'},
+            moveInput: {label: 'Making a move', both: 'Drag or two clicks', click: 'Two clicks only'},
+            captured: {label: 'Captured pieces', value: 'By value', kind: 'By kind', order: 'In capture order'},
+            quickMove: {label: 'Quick move', hint: 'A click on a square only one of your pieces can reach makes that move at once.'},
+            animateOpponent: {label: 'Animate the opponent\'s move', hint: 'The piece slides to its square instead of appearing there.'},
+        },
         presets: 'Themes',
         presetsHint: 'One click sets the board, pieces, page background and sounds. Any part can then be changed below.',
         presetNames: {
