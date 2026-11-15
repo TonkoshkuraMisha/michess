@@ -57,6 +57,8 @@ ERROR_MESSAGES: dict[str, str] = {
     "trainer_not_found": "Unknown trainer",
     "cannot_follow_self": "You cannot follow yourself",
     "cannot_challenge_self": "You cannot challenge yourself",
+    "tablebase_unavailable": "Endgame tables are unavailable, please try again later",
+    "tablebase_too_many_pieces": "Endgame tables cover at most {max} pieces",
     "puzzle_not_active": "This puzzle is no longer active: open the next one",
     "no_puzzles_available": "No suitable puzzles right now",
     "unknown_theme": "Unknown theme: {theme}",

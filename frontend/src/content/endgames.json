@@ -1,0 +1,202 @@
+[
+ {
+  "id": "kq_center",
+  "fen": "8/8/8/4k3/8/8/8/KQ6 w - - 0 1",
+  "goal": "mate",
+  "limit": 17,
+  "optimum": 9,
+  "side": "white"
+ },
+ {
+  "id": "kq_far",
+  "fen": "8/8/3k4/8/8/8/1Q6/6K1 w - - 0 1",
+  "goal": "mate",
+  "limit": 17,
+  "optimum": 9,
+  "side": "white"
+ },
+ {
+  "id": "kr_edge",
+  "fen": "4k3/8/8/8/8/8/8/R3K3 w - - 0 1",
+  "goal": "mate",
+  "limit": 20,
+  "optimum": 12,
+  "side": "white"
+ },
+ {
+  "id": "kr_center",
+  "fen": "8/8/8/4k3/8/8/8/R3K3 w - - 0 1",
+  "goal": "mate",
+  "limit": 22,
+  "optimum": 14,
+  "side": "white"
+ },
+ {
+  "id": "kr_box",
+  "fen": "8/8/2k5/8/8/8/8/1R2K3 w - - 0 1",
+  "goal": "mate",
+  "limit": 22,
+  "optimum": 14,
+  "side": "white"
+ },
+ {
+  "id": "bb_corner",
+  "fen": "7k/8/5K2/8/8/8/8/2B2B2 w - - 0 1",
+  "goal": "mate",
+  "limit": 11,
+  "optimum": 3,
+  "side": "white"
+ },
+ {
+  "id": "bb_center",
+  "fen": "8/8/8/4k3/8/8/8/2B1KB2 w - - 0 1",
+  "goal": "mate",
+  "limit": 25,
+  "optimum": 17,
+  "side": "white"
+ },
+ {
+  "id": "bn_near",
+  "fen": "k7/8/1K6/8/8/8/8/3BN3 w - - 0 1",
+  "goal": "mate",
+  "limit": 13,
+  "optimum": 5,
+  "side": "white"
+ },
+ {
+  "id": "bn_corner",
+  "fen": "7k/8/5K2/8/8/8/8/2B1N3 w - - 0 1",
+  "goal": "mate",
+  "limit": 14,
+  "optimum": 6,
+  "side": "white"
+ },
+ {
+  "id": "square_win",
+  "fen": "8/8/8/k7/8/8/6P1/7K w - - 0 1",
+  "goal": "promote",
+  "limit": 30,
+  "optimum": null,
+  "side": "white"
+ },
+ {
+  "id": "square_race",
+  "fen": "8/8/8/8/2k5/8/6P1/7K w - - 0 1",
+  "goal": "promote",
+  "limit": 30,
+  "optimum": null,
+  "side": "white"
+ },
+ {
+  "id": "kp_key_square",
+  "fen": "8/8/4k3/8/3K4/3P4/8/8 w - - 0 1",
+  "goal": "promote",
+  "limit": 30,
+  "optimum": null,
+  "side": "white"
+ },
+ {
+  "id": "two_pawns",
+  "fen": "8/8/8/4k3/8/8/3PP3/4K3 w - - 0 1",
+  "goal": "promote",
+  "limit": 30,
+  "optimum": null,
+  "side": "white"
+ },
+ {
+  "id": "two_pawns_connected",
+  "fen": "8/8/3k4/8/8/8/5PP1/6K1 w - - 0 1",
+  "goal": "promote",
+  "limit": 30,
+  "optimum": null,
+  "side": "white"
+ },
+ {
+  "id": "lucena",
+  "fen": "1K1k4/1P6/8/8/8/8/r7/2R5 w - - 0 1",
+  "goal": "promote",
+  "limit": 25,
+  "optimum": null,
+  "side": "white"
+ },
+ {
+  "id": "q_vs_pawn",
+  "fen": "8/8/8/8/8/1K6/5kp1/7Q w - - 0 1",
+  "goal": "convert",
+  "limit": 30,
+  "optimum": null,
+  "side": "white"
+ },
+ {
+  "id": "rook_vs_pawn",
+  "fen": "8/8/8/8/8/3k4/2p5/K5R1 w - - 0 1",
+  "goal": "convert",
+  "limit": 30,
+  "optimum": null,
+  "side": "white"
+ },
+ {
+  "id": "q_vs_knight",
+  "fen": "8/8/8/3k4/3n4/8/8/KQ6 w - - 0 1",
+  "goal": "convert",
+  "limit": 30,
+  "optimum": null,
+  "side": "white"
+ },
+ {
+  "id": "q_vs_rook",
+  "fen": "8/8/8/3k4/8/2r5/8/KQ6 w - - 0 1",
+  "goal": "convert",
+  "limit": 30,
+  "optimum": null,
+  "side": "white"
+ },
+ {
+  "id": "kp_opposition_def",
+  "fen": "4k3/8/8/4K3/4P3/8/8/8 b - - 0 1",
+  "goal": "draw",
+  "limit": 15,
+  "optimum": null,
+  "side": "black"
+ },
+ {
+  "id": "rook_pawn_def",
+  "fen": "7k/8/6K1/7P/8/8/8/8 b - - 0 1",
+  "goal": "draw",
+  "limit": 15,
+  "optimum": null,
+  "side": "black"
+ },
+ {
+  "id": "wrong_bishop",
+  "fen": "7k/8/5K2/7P/8/3B4/8/8 b - - 0 1",
+  "goal": "draw",
+  "limit": 15,
+  "optimum": null,
+  "side": "black"
+ },
+ {
+  "id": "philidor",
+  "fen": "4k3/8/r7/4PK2/8/8/8/4R3 b - - 0 1",
+  "goal": "draw",
+  "limit": 15,
+  "optimum": null,
+  "side": "black"
+ },
+ {
+  "id": "rook_vs_bishop_def",
+  "fen": "8/8/8/3k4/8/3b4/8/K2R4 b - - 0 1",
+  "goal": "draw",
+  "limit": 15,
+  "optimum": null,
+  "side": "black"
+ },
+ {
+  "id": "rook_vs_knight_def",
+  "fen": "8/8/8/8/4k3/4n3/8/1K1R4 b - - 0 1",
+  "goal": "draw",
+  "limit": 15,
+  "optimum": null,
+  "side": "black"
+ }
+]

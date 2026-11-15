@@ -17,6 +17,7 @@ import {GuessPage} from './components/guess/GuessPage';
 import {BasicsPage, BasicsSectionPage} from './components/learn/BasicsPage';
 import {MateConstructionPage, MateCoursePage, MateExamPage} from './components/learn/MateCourse';
 import {ClassicGamePage, ClassicsPage} from './components/learn/ClassicsPage';
+import {EndgamesPage, EndgameTrainerPage} from './components/learn/EndgameTrainer';
 import {ToolsPage} from './components/tools/ToolsPage';
 import {WatchPage} from './components/watch/WatchPage';
 import {TrainerPage, TrainersPage} from './components/trainers/TrainersPage';
@@ -524,6 +525,8 @@ export default function App() {
                         <Route path="/learn/mates/:theme" element={<MateConstructionPage/>}/>
                         <Route path="/learn/classics" element={<ClassicsPage/>}/>
                         <Route path="/learn/classics/:gameId" element={<ClassicGamePage/>}/>
+                        <Route path="/learn/endgames" element={<EndgamesPage/>}/>
+                        <Route path="/learn/endgames/:exerciseId" element={<EndgameTrainerPage/>}/>
                         <Route path="/tools" element={<ToolsPage/>}/>
                         <Route path="/watch" element={<WatchPage/>}/>
                         <Route path="/train" element={<TrainersPage/>}/>

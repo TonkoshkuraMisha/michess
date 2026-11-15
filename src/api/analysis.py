@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.api.fair_play import forbid_engine_help_during_game, optional_user_id
 from src.api.ladder import note_ladder_analysis
 from src.api.rate_limit import DailyQuota, rate_limit
-from src.core.errors import ApiError, DomainValueError
+from src.core.errors import ApiError, DomainError, DomainValueError
 from src.db.session import get_db
 from src.models.game import Game
 from src.schemas.analysis import (
@@ -25,7 +25,7 @@ from src.schemas.analysis import (
     MoveCheckResponse,
     PositionAnalysisRequest,
 )
-from src.services import mate_finder, move_check, opening_explorer
+from src.services import mate_finder, move_check, opening_explorer, tablebase
 from src.services.analysis_service import (
     GameDataNotFoundError,
     GameNotFinishedError,
@@ -34,10 +34,14 @@ from src.services.analysis_service import (
     is_current_analysis,
 )
 from src.services.engine_pool import EngineBusyError, EngineUnavailableError, engine_work
-from src.services.game_engine import InvalidStartPositionError
+from src.services.game_engine import InvalidStartPositionError, board_from_start_fen
 from src.services.game_summary import summarize
 
 router = APIRouter(prefix="/analysis", tags=["Game Analysis"])
+
+
+class TablebaseRequest(BaseModel):
+    fen: str = Field(..., max_length=120)
 
 
 class FindMateRequest(BaseModel):
@@ -101,6 +105,30 @@ async def analyze_game_position(
         raise exc.to_http(400) from exc
     except EngineBusyError:
         raise _engine_busy() from None
+
+
+@router.post(
+    "/tablebase",
+    dependencies=[
+        Depends(rate_limit(
+            "tablebase", "RATE_LIMIT_POSITION_ANALYSIS", "RATE_LIMIT_POSITION_ANALYSIS_GUEST",
+        )),
+        Depends(forbid_engine_help_during_game),
+        Depends(note_ladder_analysis),
+    ],
+)
+async def probe_tablebase(request: TablebaseRequest):
+    """
+    Эндшпильный тренажёр (таск 14.4): результат позиции по таблицам и лучший ход стороны, которая ходит (им отвечает
+    «идеальный защитник»). Это точная оценка — под правилом честной игры, как анализ.
+    """
+    try:
+        board = board_from_start_fen(request.fen)
+        return await tablebase.probe(board)
+    except InvalidStartPositionError as exc:
+        raise exc.to_http(400) from exc
+    except DomainError as exc:
+        raise exc.to_http(503 if exc.code == "tablebase_unavailable" else 400) from exc
 
 
 @router.post(
