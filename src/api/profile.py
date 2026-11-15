@@ -565,6 +565,8 @@ async def get_user_games(
             Game.increment_ms,
             Game.personality_name,
             Game.assisted,
+            Game.blindfold_level,
+            Game.blindfold_peeks,
             WhiteUser.username,
             WhiteUser.bullet_rating,
             WhiteUser.blitz_rating,
@@ -601,6 +603,8 @@ async def get_user_games(
             increment_ms,
             personality_name,
             assisted,
+            blindfold_level,
+            blindfold_peeks,
             w_name,
             w_bullet,
             w_blitz,
@@ -638,6 +642,9 @@ async def get_user_games(
             "status": status_val.value if hasattr(status_val, "value") else str(status_val),
             "is_rated": is_rated,
             "assisted": bool(assisted),
+            # Игра вслепую (таск 19.5): ступень и число подсмотров.
+            "blindfold": blindfold_level,
+            "peeks": blindfold_peeks,
             "result": result_val or "*",
             "pgn_date": pgn_date,
             "site": site,
@@ -649,6 +656,26 @@ async def get_user_games(
         "total": total_count,
         "items": items,
     }
+
+
+class BlindfoldIn(BaseModel):
+    level: int = Field(..., ge=1, le=4)
+    peeks: int = Field(0, ge=0, le=10_000)
+
+
+@router.post("/games/{game_id}/blindfold")
+async def mark_blindfold(game_id: int, payload: BlindfoldIn, db: AsyncSession = Depends(get_db),
+                         current_user: User = Depends(get_current_user)):
+    """Отметка «вслепую» для товарищеской партии с человеком (таск 19.5): участник, партия закончена и без рейтинга."""
+    game = await db.get(Game, game_id)
+    if not game or current_user.id not in (game.white_player_id, game.black_player_id):
+        raise ApiError(404, "game_not_found", game_id=game_id)
+    if game.is_rated or game.status != GameStatus.COMPLETED:
+        raise ApiError(400, "blindfold_not_allowed")
+    game.blindfold_level = max(game.blindfold_level or 0, payload.level)
+    game.blindfold_peeks = (game.blindfold_peeks or 0) + payload.peeks
+    await db.commit()
+    return {"blindfold": game.blindfold_level, "peeks": game.blindfold_peeks}
 
 
 @router.get("/games/{game_id}/summary")

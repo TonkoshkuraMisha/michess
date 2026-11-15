@@ -77,6 +77,8 @@ import {AppearancePickerDropdown} from './chessboard/AppearancePickerDropdown';
 import {getToken} from '../services/authToken';
 import {orderCaptured, quickMoveFrom, useBoardPrefs} from '../config/boardPrefs';
 import {LastMoveArrow} from './chessboard/LastMoveArrow';
+import {BlindfoldPanel} from './chessboard/BlindfoldPanel';
+import {parseMoveInput, startBlindfold, useBlindfold, visibleSquares} from '../config/blindfold';
 import {squareCenter} from './chessboard/CoachArrowsOverlay';
 
 export {MIN_BOARD_SIZE, MAX_BOARD_SIZE, getMaxViewportBoardSize, getDefaultBoardSize, TIME_CONTROLS};
@@ -172,6 +174,10 @@ export default function Chessboard() {
 
     // Настройки доски (таск 18.4) и анимация хода соперника: фигура скользит с поля на поле, пока цель скрыта.
     const boardPrefs = useBoardPrefs();
+    // Игра вслепую (таск 19.5): ступень текущей партии, подсмотры.
+    const blind = useBlindfold();
+    const blindStartedRef = useRef(false);
+    const blindMarkedRef = useRef<number | null>(null);
     const [moveAnim, setMoveAnim] = useState<{ from: string; to: string; go: boolean } | null>(null);
     const animatedHistoryLength = useRef(0);
     const [dragState, setDragState] = useState<{
@@ -970,6 +976,34 @@ export default function Chessboard() {
     const material = calculateMaterialBalance(boardState);
 
     const activeMoveIndex = viewIndex === -1 ? history.length - 1 : viewIndex;
+    const liveGame = Boolean(gameId || activeBot) && !gameOverResult && !spectatingGameId;
+    // Вслепую: какие фигуры видны (null — видны все: обычная партия, подсмотр или партия окончена).
+    const blindVisible = blind.level > 0 && liveGame && blind.peekUntil <= Date.now()
+        ? visibleSquares(blind.level, boardState, history.slice(0, activeMoveIndex + 1), myColor === 'white' ? 'w' : 'b')
+        : null;
+
+    // Новая партия — вслепую, если выбрана ступень и партия без рейтинга (лестница, турнир, рейтинговая — обычные).
+    useEffect(() => {
+        if (!liveGame) {
+            blindStartedRef.current = false;
+            return;
+        }
+        if (blindStartedRef.current || history.length > 1) return;
+        blindStartedRef.current = true;
+        startBlindfold(activeBot ? !isRatedBotGame : !isRatedGame);
+    }, [liveGame, history.length, activeBot, isRatedBotGame, isRatedGame]);
+
+    // Товарищеская партия с человеком вслепую — отметка в архиве после окончания (бот — при сохранении партии).
+    useEffect(() => {
+        if (!gameId || !gameOverResult || activeBot || isRatedGame || blind.level === 0 || blindMarkedRef.current === gameId) return;
+        blindMarkedRef.current = gameId;
+        const token = getToken();
+        if (!token) return;
+        fetch(`${API_BASE_URL}/api/v1/profile/games/${gameId}/blindfold`, {
+            method: 'POST', headers: {'Content-Type': 'application/json', Authorization: `Bearer ${token}`},
+            body: JSON.stringify({level: blind.level, peeks: blind.peeks}),
+        }).catch(() => undefined);
+    }, [gameId, gameOverResult, activeBot, isRatedGame, blind.level, blind.peeks]);
 
     // Анимация хода соперника (таск 18.4): только новый ход соперника в живой партии с ботом или человеком.
     useEffect(() => {
@@ -1261,7 +1295,8 @@ export default function Chessboard() {
                         transform: 'translate(-50%, -50%)'
                     }}
                 >
-                    {renderPieceSvg(dragState.piece)}
+                    {/* Вслепую перетаскиваемая скрытая фигура не показывается: ход «с пустой клетки». */}
+                    {!(blindVisible && !blindVisible.has(dragState.from)) && renderPieceSvg(dragState.piece)}
                 </div>
             )}
 
@@ -1592,7 +1627,8 @@ export default function Chessboard() {
                                                     transition: slide.go ? 'transform 200ms ease-out' : 'none',
                                                     zIndex: 40,
                                                 } : undefined}
-                                                className={`relative w-full h-full p-[1.5%] z-20 transition-transform duration-75 ${
+                                                data-hidden={blindVisible && !blindVisible.has(squareId) ? 'true' : undefined}
+                                                className={`relative w-full h-full p-[1.5%] z-20 transition-transform duration-75 ${blindVisible && !blindVisible.has(squareId) ? 'opacity-0' : ''} ${
                                                     viewIndex === -1 && !gameOverResult && !spectatingGameId && (
                                                         (gameId || activeBot)
                                                             ? piece.color === (myColor === 'white' ? 'w' : 'b')
@@ -1769,7 +1805,17 @@ export default function Chessboard() {
                     </div>
                 )}
 
-                <MoveList
+                {!spectatingGameId && (
+                    <BlindfoldPanel inGame={liveGame}
+                                    myTurn={liveGame && viewIndex === -1 && (currentGame.turn() === 'w' ? 'white' : 'black') === myColor}
+                                    onMoveInput={(text) => {
+                                        const move = parseMoveInput(game.moves({verbose: true}), text);
+                                        if (!move) return false;
+                                        executeMove(move.from, move.to, move.promotion as PromotionPiece | undefined);
+                                        return true;
+                                    }}/>
+                )}
+                {!(blind.hideMoves && blind.level > 0 && liveGame) && <MoveList
                     movePairs={movePairs}
                     activeMoveIndex={activeMoveIndex}
                     viewIndex={viewIndex}
@@ -1778,7 +1824,7 @@ export default function Chessboard() {
                     scrollRef={notationScrollRef}
                     onSelectMove={handleSelectMoveFromList}
                     onReturnToLive={() => setViewIndex(-1)}
-                />
+                />}
 
                 <BoardNavigationControls
                     historyLength={history.length}

@@ -1,5 +1,6 @@
 // --- FILE: frontend/src/components/chessboard/hooks/useBotGame.ts ---
 
+import {getBlindfold} from '../../../config/blindfold';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Chess} from 'chess.js';
 import {gameSocket} from '../../../services/gameSocket';
@@ -247,6 +248,8 @@ export function useBotGame({
                     ladder: ladderRef.current,
                     ...(tournamentGameRef.current ? {tournament_game_id: tournamentGameRef.current} : {}),
                     assisted: Boolean(isAssisted?.()),
+                    // Игра вслепую (таск 19.5): ступень и подсмотры — в архив.
+                    ...(getBlindfold().level > 0 ? {blindfold: getBlindfold().level, peeks: getBlindfold().peeks} : {}),
                     // Соперник из мастерской: сохранённый — по id, несохранённый — по имени.
                     ...(botId === 'custom' && customOpponentRef.current
                         ? (customOpponentRef.current.personalityId

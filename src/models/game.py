@@ -73,6 +73,10 @@ class Game(Base):
     # Учебная партия (правило 2 Части II): игрок пользовался наставником — советами или проверкой ходов.
     # Без рейтинга (партии с ботами и так без рейтинга), в архиве помечается.
     assisted: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    # Игра вслепую (таск 19.5): ступень 1–4 (свои фигуры видны → исчезают → только пешки → полностью) и число
+    # подсмотров; null — обычная партия. Только нерейтинговые партии.
+    blindfold_level: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    blindfold_peeks: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
