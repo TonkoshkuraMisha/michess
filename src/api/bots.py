@@ -28,6 +28,7 @@ from src.services.bots import calibration as bot_calibration
 from src.services.bots.anderssen import anderssen_bot
 from src.services.bots.archetypes import ARCHETYPES, ARCHETYPES_BY_ID, ARCHETYPES_BY_KEY
 from src.services.bots.labourdonnais import labourdonnais_bot
+from src.services.bots.masters import MASTER_BOTS, MASTERS
 from src.services.bots.morphy import morphy_bot
 from src.services.bots.paulsen import paulsen_bot
 from src.services.bots.personality import DRAW_OFFER_MIN_MOVE, BotPersonalityConfig, PersonalityBot, draw_answer
@@ -97,6 +98,9 @@ AVAILABLE_BOTS = [
         "rating": 2120,
         "avatar": "/assets/champions/zukertort.jpg",
     },
+    # Мастера второй волны (таск 21.5): портреты — из раздела чемпионов, в лестницу не входят (ступень — индекс).
+    *({"id": m.id, "pgn_name": m.pgn_name, "era": m.era, "rating": m.rating,
+       "avatar": f"/assets/champions/{m.id.capitalize()}.jpg", "ladder": False} for m in MASTERS),
 ]
 
 BOT_INSTANCES = {
@@ -107,6 +111,7 @@ BOT_INSTANCES = {
     "morphy": morphy_bot,
     "paulsen": paulsen_bot,
     "zukertort": zukertort_bot,
+    **MASTER_BOTS,
 }
 
 BOT_METADATA = {b["id"]: b for b in AVAILABLE_BOTS}

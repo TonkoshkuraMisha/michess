@@ -64,7 +64,7 @@ def rungs() -> list[Rung]:
 
     items = [
         Rung(str(b["id"]), "historical", str(b["id"]), *_strength(str(b["id"]), int(str(b["rating"]))))
-        for b in AVAILABLE_BOTS
+        for b in AVAILABLE_BOTS if b.get("ladder", True)
     ]
     items += [
         Rung(a.key, "archetype", a.id, *_strength(a.key, a.config.target_elo)) for a in LADDER_ARCHETYPES
