@@ -21,6 +21,7 @@ from src.api import (
     personalities,
     puzzles,
     social,
+    study,
     teams,
     themes,
     tournaments,
@@ -112,6 +113,7 @@ def create_app() -> FastAPI:
     app.include_router(tournaments.router, prefix="/api/v1/tournaments", tags=["tournaments"])
     app.include_router(arenas.router, prefix="/api/v1/arenas", tags=["tournaments"])
     app.include_router(teams.router, prefix="/api/v1/teams", tags=["social"])
+    app.include_router(study.router, prefix="/api/v1/study", tags=["social"])
     app.include_router(watch.router, prefix="/api/v1/watch", tags=["watch"])
     app.include_router(trainers.router, prefix="/api/v1/trainers", tags=["training"])
     app.include_router(social.router, prefix="/api/v1/social", tags=["social"])
