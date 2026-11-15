@@ -97,7 +97,7 @@ describe('настройки на доске', () => {
         });
         expect(screen.queryByTestId('move-animation')).toBeNull();
         setToken(null);
-    });
+    }, 20_000);  // под нагрузкой (замер покрытия, CI) 5 с по умолчанию не хватало
 
     it('«только щелчки»: перетаскивание не начинается', async () => {
         setBoardPref('moveInput', 'click');

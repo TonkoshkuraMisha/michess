@@ -46,6 +46,11 @@ export function TrainersPage() {
                 <span className="font-bold text-amber-200">{t('workout.title')}</span>
                 <span className="text-sm text-boxwood/80">{t('workout.intro')}</span>
             </Link>
+            <Link to="/programs" data-testid="trainer-programs"
+                  className="bg-acacia-dark p-4 rounded-lg border-2 border-amber-800 hover:border-amber-500 flex flex-col gap-1">
+                <span className="font-bold text-amber-200">{t('programs.title')}</span>
+                <span className="text-sm text-boxwood/80">{t('programs.intro')}</span>
+            </Link>
             <Link to="/exam" data-testid="trainer-exam"
                   className="bg-acacia-dark p-4 rounded-lg border-2 border-amber-800 hover:border-amber-500 flex flex-col gap-1">
                 <span className="font-bold text-amber-200">{t('exam.title')}</span>
