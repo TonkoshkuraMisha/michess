@@ -11,6 +11,7 @@ import {TRAINER_IDS, trainersApi} from '../../services/trainers';
 import type {TrainerId, TrainerRecord} from '../../services/trainers';
 import {ForkGame, PathGame, TailGame} from './VisionGames';
 import {CoordOptionsPicker, CoordinateGame} from './CoordinateGames';
+import {RecallGame, RestoreGame} from './MemoryGames';
 import {COORD_TRAINERS, levelToOptions, optionsToLevel} from '../../trainers/coordinates';
 import type {CoordTrainer} from '../../trainers/coordinates';
 
@@ -138,6 +139,8 @@ export function TrainerPage() {
             {seed !== null && id === 'double_strike' && <ForkGame level={level} seed={seed} onFinish={finish}/>}
             {seed !== null && id === 'tail' && <TailGame level={level} seed={seed} onFinish={finish}/>}
             {seed !== null && isCoord && <CoordinateGame trainer={id as CoordTrainer} level={level} seed={seed} onFinish={finish}/>}
+            {seed !== null && id === 'memory_position' && <RestoreGame level={level} seed={seed} onFinish={finish}/>}
+            {seed !== null && id === 'memory_game' && <RecallGame level={level} seed={seed} onFinish={finish}/>}
             {seed !== null && (id === 'quiet_path' || id === 'knight_route') && (
                 <PathGame kind={id === 'knight_route' ? 'knight' : 'quiet'} level={level} seed={seed} onFinish={finish}/>
             )}
