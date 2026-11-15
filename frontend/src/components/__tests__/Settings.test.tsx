@@ -2,13 +2,14 @@
 // Настройки: оформление и звук сохраняются в браузере, смена пароля отправляет запрос, подменяет
 // токен и не даёт серверному закрытию WebSocket разлогинить игрока.
 
-import {fireEvent, render, screen, waitFor} from '@testing-library/react';
+import {act, fireEvent, render, screen, waitFor} from '@testing-library/react';
 import {MemoryRouter} from 'react-router-dom';
 import {afterEach, beforeEach, describe, expect, it, vi, type Mock} from 'vitest';
 import Settings from '../Settings';
 import {gameSocket} from '../../services/gameSocket';
 import {soundEngine} from '../../services/soundEngine';
 import {getToken, setToken} from '../../services/authToken';
+import {setEarnedForTests} from '../../config/unlocks';
 
 vi.mock('../../services/gameSocket', () => ({
     gameSocket: {connect: vi.fn(), disconnect: vi.fn(), send: vi.fn(), on: vi.fn(), off: vi.fn()},
@@ -99,6 +100,7 @@ describe('Settings: оформление и звук', () => {
         const fetchMock = vi.fn(async () => response(200, {}));
         vi.stubGlobal('fetch', fetchMock);
         setToken('old-token');
+        setEarnedForTests(['wins_10']);   // мраморная доска открывается за десять побед (таск 18.4)
         renderSettings();
         fireEvent.click(screen.getByTestId('preset-marble_hall'));
         expect(localStorage.getItem('michess_board_theme')).toBe('marble');
@@ -132,6 +134,21 @@ describe('Settings: оформление и звук', () => {
         expect(JSON.parse(localStorage.getItem('michess_board_prefs')!)).toMatchObject(
             {lastMove: 'arrow', moveInput: 'click', quickMove: true, captured: 'order'});
         expect(screen.getByTestId('pref-lastMove-arrow')).toHaveAttribute('aria-checked', 'true');
+    });
+
+    it('закрытое оформление: видно с условием, выбрать нельзя; после достижения — можно', () => {
+        setEarnedForTests([]);
+        renderSettings();
+        expect(screen.getByTestId('lock-preset-marble_hall')).toHaveTextContent('Откроется за достижение «Десять побед»');
+        expect(screen.getByTestId('preset-marble_hall')).toBeDisabled();
+        expect(screen.getByTestId('board-marble')).toBeDisabled();
+        expect(screen.getByTestId('pieces-lewis')).toHaveAttribute('title', 'Откроется за достижение «Чемпион»');
+        fireEvent.click(screen.getByTestId('board-marble'));
+        expect(localStorage.getItem('michess_board_theme')).toBeNull();
+        act(() => setEarnedForTests(['wins_10', 'tournament_win']));
+        expect(screen.getByTestId('board-marble')).not.toBeDisabled();
+        expect(screen.getByTestId('pieces-lewis')).not.toBeDisabled();
+        setEarnedForTests([]);
     });
 
     it('набор звуков выбирается отдельно', () => {

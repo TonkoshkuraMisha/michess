@@ -5,6 +5,7 @@ import {BOARD_THEMES, PIECE_SETS, getPieceSvgUrl} from '../../config/boardAppear
 import type {BoardTheme} from '../../config/boardAppearance';
 import {MIN_BOARD_SIZE, getMaxViewportBoardSize} from './boardUtils';
 import {useI18n} from '../../i18n';
+import {unlockText, useUnlocks} from '../../config/unlocks';
 
 export interface AppearancePickerDropdownProps {
     isOpen: boolean;
@@ -28,6 +29,7 @@ export function AppearancePickerDropdown({
     onBoardSizeChange,
 }: AppearancePickerDropdownProps) {
     const {t} = useI18n();
+    const lockOf = useUnlocks();
     return (
         <div className="relative">
             <button
@@ -80,7 +82,8 @@ export function AppearancePickerDropdown({
                                         key={pset.id}
                                         type="button"
                                         onClick={() => onPieceSetChange(pset.id)}
-                                        title={pset.description}
+                                        disabled={Boolean(lockOf('pieces', pset.id)) && !isCurrent}
+                                        title={lockOf('pieces', pset.id) ? unlockText(lockOf('pieces', pset.id)!) : pset.description}
                                         className={`flex flex-col items-center gap-1 p-1.5 rounded-md border text-xs font-bold transition cursor-pointer ${
                                             isCurrent
                                                 ? 'bg-amber-900/60 border-amber-400 text-amber-200 shadow'
@@ -122,7 +125,9 @@ export function AppearancePickerDropdown({
                                         key={theme.id}
                                         type="button"
                                         onClick={() => onThemeChange(theme.id)}
-                                        className={`flex flex-col items-center gap-1 p-1.5 rounded-md border text-xs font-bold transition cursor-pointer ${
+                                        disabled={Boolean(lockOf('board', theme.id)) && !isCurrent}
+                                        title={lockOf('board', theme.id) ? unlockText(lockOf('board', theme.id)!) : undefined}
+                                        className={`flex flex-col items-center gap-1 p-1.5 rounded-md border text-xs font-bold transition cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
                                             isCurrent
                                                 ? 'bg-amber-900/60 border-amber-400 text-amber-200 shadow'
                                                 : 'bg-black/35 border-amber-900/40 text-boxwood/75 hover:bg-black/55 hover:text-amber-200'

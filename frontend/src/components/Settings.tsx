@@ -3,7 +3,7 @@
 
 import {useEffect, useState} from 'react';
 import {Link} from 'react-router-dom';
-import {ArrowLeft, AtSign, Check, Download, KeyRound, Languages, LogOut, Palette, Settings as SettingsIcon, Trash2, Volume2, VolumeX} from 'lucide-react';
+import {ArrowLeft, AtSign, Check, Download, KeyRound, Languages, Lock, LogOut, Palette, Settings as SettingsIcon, Trash2, Volume2, VolumeX} from 'lucide-react';
 import {API_BASE_URL} from '../config/api';
 import {
     BOARD_THEMES,
@@ -22,6 +22,7 @@ import {THEME_PRESETS, applyPreset} from '../config/themePresets';
 import type {ThemePreset} from '../config/themePresets';
 import {ThemePreview} from './settings/ThemePreview';
 import {AvatarPicker} from './PlayerAvatar';
+import {unlockText, useUnlocks} from '../config/unlocks';
 import {SOUND_SETS} from '../services/soundEngine';
 import {setBoardPref, useBoardPrefs} from '../config/boardPrefs';
 import type {BoardPrefs} from '../config/boardPrefs';
@@ -81,6 +82,9 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
     const [isMuted, setIsMuted] = useState(() => soundEngine.isMuted());
     // Настройки доски (таск 18.4).
     const boardPrefs = useBoardPrefs();
+    // Открываемое оформление (таск 18.4): закрытое видно с замком и условием, выбрать нельзя.
+    const lockOf = useUnlocks();
+    const presetLock = (preset: ThemePreset) => lockOf('board', preset.board) ?? lockOf('pieces', preset.pieces);
     // Темы-комплекты (таск 18.3): комплект «выбран», пока все его части совпадают с текущими настройками.
     const [soundSet, setSoundSetState] = useState<SoundSetId>(() => soundEngine.getSoundSet());
     const activePreset = THEME_PRESETS.find((p) => p.board === boardThemeKey && p.pieces === pieceSetKey
@@ -314,20 +318,26 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                 <h2 className={headingClass}><Palette size={18} className="text-amber-400"/> {t('settings.presets')}</h2>
                 <p className="text-sm text-boxwood/75 mb-3">{t('settings.presetsHint')}</p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {THEME_PRESETS.map((preset) => (
+                    {THEME_PRESETS.map((preset) => {
+                        const lock = presetLock(preset);
+                        return (
                         <button
                             key={preset.id}
                             type="button"
                             aria-pressed={activePreset?.id === preset.id}
                             data-testid={`preset-${preset.id}`}
+                            disabled={Boolean(lock)}
+                            title={lock ? unlockText(lock) : undefined}
                             onClick={() => choosePreset(preset)}
-                            className={`${optionClass(activePreset?.id === preset.id)} flex-col items-stretch`}
+                            className={`${optionClass(activePreset?.id === preset.id)} flex-col items-stretch disabled:opacity-60 disabled:cursor-not-allowed`}
                         >
                             <ThemePreview preset={preset}/>
-                            <span className="font-bold">{t(`settings.presetNames.${preset.id}.name`)}</span>
+                            <span className="font-bold flex items-center gap-1">{lock && <Lock size={12} className="text-amber-400 shrink-0" aria-label={unlockText(lock)}/>}{t(`settings.presetNames.${preset.id}.name`)}</span>
+                            {lock && <span className="text-xs text-amber-300" data-testid={`lock-preset-${preset.id}`}>{unlockText(lock)}</span>}
                             <span className="text-xs text-boxwood/70">{t(`settings.presetNames.${preset.id}.description`)}</span>
                         </button>
-                    ))}
+                        );
+                    })}
                 </div>
             </section>
 
@@ -336,13 +346,18 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
 
                 <div className="text-xs uppercase tracking-wider text-boxwood/65 font-bold mb-1.5">{t('settings.board')}</div>
                 <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-4">
-                    {Object.values(BOARD_THEMES).map((theme) => (
+                    {Object.values(BOARD_THEMES).map((theme) => {
+                        const lock = lockOf('board', theme.id);
+                        return (
                         <button
                             key={theme.id}
                             type="button"
                             aria-pressed={boardThemeKey === theme.id}
+                            data-testid={`board-${theme.id}`}
+                            disabled={Boolean(lock) && boardThemeKey !== theme.id}
+                            title={lock ? unlockText(lock) : undefined}
                             onClick={() => selectBoardTheme(theme.id)}
-                            className={optionClass(boardThemeKey === theme.id)}
+                            className={`${optionClass(boardThemeKey === theme.id)} disabled:opacity-55 disabled:cursor-not-allowed`}
                         >
                             <span className="grid grid-cols-2 w-7 h-7 rounded overflow-hidden border border-black/50 shrink-0">
                                 <span style={{backgroundColor: theme.light}}/>
@@ -351,20 +366,26 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                                 <span style={{backgroundColor: theme.light}}/>
                             </span>
                             <span className="truncate">{theme.name}</span>
+                            {lock && <Lock size={12} className="text-amber-400 shrink-0" aria-label={unlockText(lock)}/>}
                         </button>
-                    ))}
+                        );
+                    })}
                 </div>
 
                 <div className="text-xs uppercase tracking-wider text-boxwood/65 font-bold mb-1.5">{t('settings.pieces')}</div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                    {Object.values(PIECE_SETS).map((set) => (
+                    {Object.values(PIECE_SETS).map((set) => {
+                        const lock = lockOf('pieces', set.id);
+                        return (
                         <button
                             key={set.id}
                             type="button"
                             aria-pressed={pieceSetKey === set.id}
-                            title={set.description}
+                            data-testid={`pieces-${set.id}`}
+                            title={lock ? unlockText(lock) : set.description}
+                            disabled={Boolean(lock) && pieceSetKey !== set.id}
                             onClick={() => selectPieceSet(set.id)}
-                            className={optionClass(pieceSetKey === set.id)}
+                            className={`${optionClass(pieceSetKey === set.id)} disabled:opacity-55 disabled:cursor-not-allowed`}
                         >
                             <span
                                 className="w-9 h-9 rounded shrink-0 flex items-center justify-center"
@@ -373,8 +394,10 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                                 <img src={getPieceSvgUrl(set.id, 'w', 'n')} alt="" className="w-8 h-8" draggable={false}/>
                             </span>
                             <span className="truncate">{set.name}</span>
+                            {lock && <Lock size={12} className="text-amber-400 shrink-0" aria-label={unlockText(lock)}/>}
                         </button>
-                    ))}
+                        );
+                    })}
                 </div>
 
                 <label className="flex flex-wrap items-center gap-2 text-sm mt-4">
@@ -383,7 +406,11 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                             className="bg-black/40 border border-amber-900/60 rounded px-2 py-1 text-boxwood-light">
                         <option value="same">{t('settings.analysisSame')}</option>
                         {analysisPreset === 'custom' && <option value="custom">{t('settings.analysisCustom')}</option>}
-                        {THEME_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{t(`settings.presetNames.${preset.id}.name`)}</option>)}
+                        {THEME_PRESETS.map((preset) => (
+                            <option key={preset.id} value={preset.id} disabled={Boolean(presetLock(preset))}>
+                                {t(`settings.presetNames.${preset.id}.name`)}
+                            </option>
+                        ))}
                     </select>
                 </label>
 

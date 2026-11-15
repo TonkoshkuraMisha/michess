@@ -163,6 +163,7 @@ export const en = {
             quickMove: {label: 'Quick move', hint: 'A click on a square only one of your pieces can reach makes that move at once.'},
             animateOpponent: {label: 'Animate the opponent\'s move', hint: 'The piece slides to its square instead of appearing there.'},
         },
+        unlockBy: 'Unlocks with the achievement «{name}»',
         presets: 'Themes',
         presetsHint: 'One click sets the board, pieces, page background and sounds. Any part can then be changed below.',
         presetNames: {
