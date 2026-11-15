@@ -27,3 +27,6 @@ project_snapshot.txt
 test-results/
 playwright-report/
 blob-report/
+
+# Отчёт покрытия vitest (npm run test:coverage)
+coverage/
