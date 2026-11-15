@@ -4,7 +4,7 @@
 
 import {useEffect, useState} from 'react';
 import {Link, useNavigate} from 'react-router-dom';
-import {Eye, Radio, Star} from 'lucide-react';
+import {Eye, Library, Radio, Star} from 'lucide-react';
 import {renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
 import {errorMessage} from '../../services/apiErrors';
@@ -163,6 +163,11 @@ export function WatchPage() {
                     <span className="text-sm text-boxwood/75">{[daily.site, daily.year, daily.result].filter(Boolean).join(', ')}</span>
                 </Link>
             )}
+            <Link to="/library" data-testid="watch-library"
+                  className="bg-acacia-dark border-2 border-amber-800 hover:border-amber-500 rounded-lg p-3 flex flex-col gap-0.5">
+                <span className="font-bold text-amber-200 flex items-center gap-1.5"><Library size={16}/> {t('library.title')}</span>
+                <span className="text-sm text-boxwood/80">{t('library.intro')}</span>
+            </Link>
             <div className="flex gap-1.5" role="tablist">
                 {(['live', 'archive', 'collections'] as const).map((key) => (
                     <button key={key} type="button" role="tab" aria-selected={tab === key} onClick={() => setTab(key)}

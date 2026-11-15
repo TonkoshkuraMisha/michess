@@ -72,6 +72,8 @@ ERROR_MESSAGES: dict[str, str] = {
     "mini_game_illegal_move": "This move is not allowed by the rules of the game",
     "mini_game_over": "The game is already over",
     "repertoire_not_found": "Repertoire not found",
+    "library_collection_not_found": "Collection not found",
+    "library_game_not_found": "Game not found in the library",
     "repertoire_starter_not_found": "No such starter repertoire",
     "repertoire_limit": "You can have at most {limit} repertoires",
     "repertoire_too_large": "A repertoire can hold at most {limit} moves",

@@ -42,6 +42,7 @@ import {buildPgn, downloadText} from '../services/pgnExport';
 import {XrayPanel} from './xray/XrayPanel';
 import {useXraySettings} from './xray/useXraySettings';
 import {getToken} from '../services/authToken';
+import {libraryApi} from '../services/library';
 
 import {
     COACH_ARROW_COLORS, FILES, RANKS, annotatedMoves, chartPoints, computeStaticWhiteEvalCp, evalCpToWhitePercentage,
@@ -52,7 +53,11 @@ import {MoveList} from './gameViewer/MoveList';
 import {NavigationControls} from './gameViewer/NavigationControls';
 import {ViewerAppearancePanel} from './gameViewer/ViewerAppearancePanel';
 
-export default function GameViewer() {
+/**
+ * library — партия библиотеки (таск 27.1): PGN из /library, без разбора движком, «Угадай ход» и своих ошибок —
+ * они привязаны к партиям игроков и ботов.
+ */
+export default function GameViewer({library = false}: { library?: boolean }) {
     const {t, dateLocale} = useI18n();
     const {gameId} = useParams<{ gameId: string }>();
     const location = useLocation();
@@ -74,7 +79,8 @@ export default function GameViewer() {
 
     // Пометки правой кнопкой — общий слой досок (таск B.1). В разборе они переживают листание ходов (план на
     // несколько ходов вперёд) и снимаются со сменой партии, левым щелчком по доске или Escape.
-    const notes = useBoardAnnotations(gameId ?? '');
+    const notes = useBoardAnnotations(library ? `library-${gameId ?? ''}` : gameId ?? '');
+    const pgnUrl = library ? libraryApi.pgnUrl(gameId ?? '') : `${API_BASE_URL}/api/v1/profile/games/${gameId}/pgn`;
     const clearNotes = notes.clear;
 
     // Тема разбора (таск 18.3): своя, если задана в настройках, иначе — как в игре.
@@ -200,8 +206,8 @@ export default function GameViewer() {
             setAnalysisReport(null);
             try {
                 const [pgnRes, cachedAnalysisRes] = await Promise.all([
-                    fetch(`${API_BASE_URL}/api/v1/profile/games/${gameId}/pgn`),
-                    fetch(`${API_BASE_URL}/api/v1/analysis/game/${gameId}`).catch(() => null)
+                    fetch(pgnUrl),
+                    library ? Promise.resolve(null) : fetch(`${API_BASE_URL}/api/v1/analysis/game/${gameId}`).catch(() => null)
                 ]);
 
                 if (!pgnRes.ok) {
@@ -238,7 +244,7 @@ export default function GameViewer() {
         };
 
         if (gameId) loadGame();
-    }, [gameId]);
+    }, [gameId, library]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleRunFullAnalysis = async () => {
         if (!gameId || isAnalyzing) return;
@@ -362,7 +368,7 @@ export default function GameViewer() {
     // Справочник дебютов к показанной позиции (таск 16.2): открывается по кнопке — запрос только тогда.
     const [showExplorer, setShowExplorer] = useState(false);
     useEffect(() => {
-        if (!gameId) return;
+        if (!gameId || library) return;
         guessApi.ofGame(Number(gameId))
             .then((r) => setGuessFirstId(r.positions[0]?.id ?? null))
             .catch(() => setGuessFirstId(null));
@@ -370,7 +376,7 @@ export default function GameViewer() {
     // Ходы этой партии, из которых сделаны задачи «Ваши ошибки» (таск 13.5) — только свои, только с токеном.
     const [personalPlies, setPersonalPlies] = useState<Set<number>>(new Set());
     useEffect(() => {
-        if (!gameId || !getToken()) return;
+        if (!gameId || library || !getToken()) return;
         puzzlesApi.personalPlies(Number(gameId))
             .then((body) => setPersonalPlies(new Set(body.plies)))
             .catch(() => undefined);
@@ -776,7 +782,7 @@ export default function GameViewer() {
 
                 <div
                     className="bg-acacia-dark p-3 rounded-md border border-amber-800/50 flex flex-col gap-2.5 shrink-0">
-                    {!analysisReport ? (
+                    {library ? null : !analysisReport ? (
                         <div className="flex items-center justify-between gap-3">
                             <div className="text-xs text-boxwood/85 leading-snug">
                                 <div className="font-bold text-amber-200 flex items-center gap-1.5">
@@ -882,7 +888,7 @@ export default function GameViewer() {
                         </Link>
                     )}
                     <a
-                        href={`${API_BASE_URL}/api/v1/profile/games/${gameId}/pgn`}
+                        href={pgnUrl}
                         download
                         className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-room-dark text-amber-400 font-bold text-sm rounded-md hover:bg-black transition shadow border border-amber-800/60"
                     >
