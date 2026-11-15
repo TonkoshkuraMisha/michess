@@ -14,8 +14,9 @@ import {useI18n} from '../../i18n';
 import {resolveMoveSound, soundEngine} from '../../services/soundEngine';
 import {AnnotationsOverlay, useBoardAnnotations} from '../chessboard/annotations';
 import {
-    BOARD_THEMES, getHarmoniousPieceStyle, getPieceSvgUrl, getSavedBoardThemeKey, getSavedPieceSetKey,
+    BOARD_THEMES, lastMoveColor, getHarmoniousPieceStyle, getPieceSvgUrl, getSavedBoardThemeKey, getSavedPieceSetKey,
 } from '../../config/boardAppearance';
+import {BoardTextureLayer} from '../chessboard/BoardTextureLayer';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const PROMOTIONS = ['q', 'r', 'b', 'n'] as const;
@@ -234,7 +235,8 @@ export function PuzzleBoard({
                              onPointerDown={(event) => pointerDown(square, event)}
                              style={{backgroundColor: dark ? theme.dark : theme.light}}
                              className={`relative flex items-center justify-center ${interactive ? 'cursor-pointer' : ''} ${grabbable ? 'cursor-grab' : ''}`}>
-                            {isLast && <div className="absolute inset-0 bg-amber-300/35 pointer-events-none"/>}
+                            <BoardTextureLayer theme={theme} where="square" isDark={dark}/>
+                            {isLast && <div className="absolute inset-0 pointer-events-none" style={{backgroundColor: lastMoveColor(theme)}}/>}
                             {darkHighlights.includes(square) && (
                                 <div data-testid={`board-dark-${square}`} className="absolute inset-0 bg-stone-900/55 pointer-events-none"/>
                             )}

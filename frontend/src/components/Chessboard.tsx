@@ -11,12 +11,14 @@ import type {SoundEventType} from '../services/soundEngine';
 import {API_BASE_URL} from '../config/api';
 import {
     BOARD_THEMES,
+    lastMoveColor,
     PIECE_SETS,
     getSavedBoardThemeKey,
     getSavedPieceSetKey,
     getPieceSvgUrl,
     getHarmoniousPieceStyle
 } from '../config/boardAppearance';
+import {BoardTextureLayer} from './chessboard/BoardTextureLayer';
 import type {BoardTheme} from '../config/boardAppearance';
 import {HISTORICAL_BOTS} from '../config/champions';
 import type {BotOpponentId, HistoricalBotId, HistoricalBotProfile} from '../config/champions';
@@ -1434,12 +1436,7 @@ export default function Chessboard() {
                     }}
                     className={`p-2.5 rounded-lg shadow-heavy border-2 border-amber-950/80 relative select-none touch-none group/board shrink-0 ${isResizing ? 'transition-none ring-2 ring-amber-500/60' : 'transition-colors'}`}
                 >
-                    {activeTheme.useWoodGrain && (
-                        <div
-                            className="absolute inset-0 opacity-25 mix-blend-multiply pointer-events-none"
-                            style={{backgroundImage: "url('/assets/textures/wood-grain.svg')"}}
-                        />
-                    )}
+                    <BoardTextureLayer theme={activeTheme} where="frame"/>
 
                     {pendingPromotion && (
                         <PromotionDialog
@@ -1491,15 +1488,10 @@ export default function Chessboard() {
                                         }}
                                         className="w-full h-full flex items-center justify-center relative cursor-pointer transition-colors duration-75"
                                     >
-                                        {activeTheme.useWoodGrain && (
-                                            <div
-                                                className="absolute inset-0 opacity-15 mix-blend-multiply pointer-events-none"
-                                                style={{backgroundImage: "url('/assets/textures/wood-grain.svg')"}}
-                                            />
-                                        )}
+                                        <BoardTextureLayer theme={activeTheme} where="square" isDark={isDark}/>
 
                                         {isLastMove && !isSelected && !isPremoveSquare && (
-                                            <div className="absolute inset-0 bg-amber-300/35 z-10 pointer-events-none"/>
+                                            <div className="absolute inset-0 z-10 pointer-events-none" style={{backgroundColor: lastMoveColor(activeTheme)}}/>
                                         )}
 
                                         {isPremoveSquare && (

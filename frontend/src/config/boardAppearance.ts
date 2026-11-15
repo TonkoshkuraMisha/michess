@@ -10,8 +10,39 @@ export interface BoardTheme {
     coordLight: string;
     coordDark: string;
     border: string;
-    useWoodGrain: boolean;
+    /** Процедурная текстура (таск 18.1) поверх цвета: рамки и клеток, с режимом наложения. */
+    texture?: BoardTexture;
+    /** Подсветка последнего хода под эту доску; по умолчанию — янтарная. */
+    lastMove?: string;
     isDarkBoard?: boolean;
+}
+
+export interface BoardTexture {
+    /** Файл в /assets/textures (собственная работа проекта, ATTRIBUTION.md). */
+    file: string;
+    /** Непрозрачность на рамке и на клетках (0 — не накладывать). */
+    frame: number;
+    square: number;
+    blend: 'multiply' | 'screen';
+    /** Только на тёмных полях (штриховка газетной диаграммы). */
+    darkOnly?: boolean;
+}
+
+export const DEFAULT_LAST_MOVE = 'rgba(252, 211, 77, 0.38)';
+
+/** Стиль слоя текстуры клетки или рамки; null — слой не нужен. */
+export function textureLayerStyle(theme: BoardTheme, where: 'frame' | 'square', isDark = false): {
+    backgroundImage: string; opacity: number; mixBlendMode: 'multiply' | 'screen'
+} | null {
+    const texture = theme.texture;
+    if (!texture) return null;
+    const opacity = where === 'frame' ? texture.frame : texture.square;
+    if (!opacity || (where === 'square' && texture.darkOnly && !isDark)) return null;
+    return {backgroundImage: `url('/assets/textures/${texture.file}')`, opacity, mixBlendMode: texture.blend};
+}
+
+export function lastMoveColor(theme: BoardTheme): string {
+    return theme.lastMove ?? DEFAULT_LAST_MOVE;
 }
 
 export interface PieceSetConfig {
@@ -34,10 +65,10 @@ export const BOARD_THEMES: Record<string, BoardTheme> = {
         },
         light: '#DFC8A2',
         dark: '#966C46',
-        coordLight: '#6E4B2A',
-        coordDark: '#F3E5AB',
+        coordLight: '#6C4E32',
+        coordDark: '#FFFEFE',
         border: '#2A1810',
-        useWoodGrain: true,
+        texture: {file: 'wood-grain.svg', frame: 0.25, square: 0.15, blend: 'multiply'},
         isDarkBoard: true
     },
     maple: {
@@ -47,10 +78,9 @@ export const BOARD_THEMES: Record<string, BoardTheme> = {
         },
         light: '#F0D9B5',
         dark: '#B58863',
-        coordLight: '#8C6239',
-        coordDark: '#F0D9B5',
+        coordLight: '#775A41',
+        coordDark: '#2B2721',
         border: '#3D2314',
-        useWoodGrain: false,
         isDarkBoard: false
     },
     tournament: {
@@ -60,10 +90,9 @@ export const BOARD_THEMES: Record<string, BoardTheme> = {
         },
         light: '#EBECD0',
         dark: '#739552',
-        coordLight: '#537133',
-        coordDark: '#EBECD0',
+        coordLight: '#56703E',
+        coordDark: '#23231F',
         border: '#263318',
-        useWoodGrain: false,
         isDarkBoard: false
     },
     slate: {
@@ -73,10 +102,9 @@ export const BOARD_THEMES: Record<string, BoardTheme> = {
         },
         light: '#DEE3E6',
         dark: '#788A94',
-        coordLight: '#4E5D66',
-        coordDark: '#DEE3E6',
+        coordLight: '#58656C',
+        coordDark: '#1D1E1E',
         border: '#1F292E',
-        useWoodGrain: false,
         isDarkBoard: true
     },
     sapphire: {
@@ -86,12 +114,235 @@ export const BOARD_THEMES: Record<string, BoardTheme> = {
         },
         light: '#ECEFF4',
         dark: '#6E88AC',
-        coordLight: '#435B7D',
-        coordDark: '#ECEFF4',
+        coordLight: '#576B88',
+        coordDark: '#1C1D1D',
         border: '#233142',
-        useWoodGrain: false,
         isDarkBoard: false
-    }
+    },
+    oak: {
+        id: 'oak',
+        get name() {
+            return t('appearance.themes.oak');
+        },
+        light: '#E8D3AE',
+        dark: '#B98D5C',
+        coordLight: '#715638',
+        coordDark: '#312C25',
+        border: '#4A3220',
+        texture: {file: 'wood-fine.svg', frame: 0.3, square: 0.22, blend: 'multiply'},
+        isDarkBoard: false
+    },
+    cherry: {
+        id: 'cherry',
+        get name() {
+            return t('appearance.themes.cherry');
+        },
+        light: '#E9C9A7',
+        dark: '#9C5A3C',
+        coordLight: '#7E4931',
+        coordDark: '#F8EDE1',
+        border: '#3B1D12',
+        texture: {file: 'wood-fine.svg', frame: 0.3, square: 0.2, blend: 'multiply'},
+        isDarkBoard: true
+    },
+    ebony: {
+        id: 'ebony',
+        get name() {
+            return t('appearance.themes.ebony');
+        },
+        light: '#C9B79C',
+        dark: '#3E2E25',
+        coordLight: '#3E2E25',
+        coordDark: '#C9B79C',
+        border: '#120B07',
+        texture: {file: 'wood-fine.svg', frame: 0.35, square: 0.25, blend: 'multiply'},
+        lastMove: 'rgba(232, 176, 76, 0.45)',
+        isDarkBoard: true
+    },
+    marble: {
+        id: 'marble',
+        get name() {
+            return t('appearance.themes.marble');
+        },
+        light: '#F2F0EA',
+        dark: '#B9B5AC',
+        coordLight: '#6D6B65',
+        coordDark: '#464644',
+        border: '#5E5A52',
+        texture: {file: 'marble.svg', frame: 0.35, square: 0.3, blend: 'multiply'},
+        isDarkBoard: false
+    },
+    malachite: {
+        id: 'malachite',
+        get name() {
+            return t('appearance.themes.malachite');
+        },
+        light: '#E3EBE2',
+        dark: '#4F7A63',
+        coordLight: '#486F5A',
+        coordDark: '#F6F9F6',
+        border: '#1D3326',
+        texture: {file: 'marble.svg', frame: 0.35, square: 0.28, blend: 'multiply'},
+        isDarkBoard: true
+    },
+    stone: {
+        id: 'stone',
+        get name() {
+            return t('appearance.themes.stone');
+        },
+        light: '#CFCBC3',
+        dark: '#7D776E',
+        coordLight: '#59544E',
+        coordDark: '#040404',
+        border: '#2E2A25',
+        texture: {file: 'stone.svg', frame: 0.4, square: 0.3, blend: 'multiply'},
+        isDarkBoard: false
+    },
+    glass: {
+        id: 'glass',
+        get name() {
+            return t('appearance.themes.glass');
+        },
+        light: '#D8EEF4',
+        dark: '#6FA3B8',
+        coordLight: '#4A6D7B',
+        coordDark: '#2D3233',
+        border: '#1E3A46',
+        texture: {file: 'glass.svg', frame: 0.6, square: 0.5, blend: 'screen'},
+        isDarkBoard: false
+    },
+    steel: {
+        id: 'steel',
+        get name() {
+            return t('appearance.themes.steel');
+        },
+        light: '#D5D8DC',
+        dark: '#8A9098',
+        coordLight: '#585C61',
+        coordDark: '#262728',
+        border: '#2B2F34',
+        texture: {file: 'brushed-metal.svg', frame: 0.4, square: 0.3, blend: 'multiply'},
+        isDarkBoard: false
+    },
+    leather: {
+        id: 'leather',
+        get name() {
+            return t('appearance.themes.leather');
+        },
+        light: '#C9A07A',
+        dark: '#6E4127',
+        coordLight: '#57331F',
+        coordDark: '#D7B99D',
+        border: '#2A160C',
+        texture: {file: 'leather.svg', frame: 0.35, square: 0.3, blend: 'multiply'},
+        isDarkBoard: true
+    },
+    vinyl: {
+        id: 'vinyl',
+        get name() {
+            return t('appearance.themes.vinyl');
+        },
+        light: '#E8EDF2',
+        dark: '#4C6B8A',
+        coordLight: '#4C6B8A',
+        coordDark: '#E8EDF2',
+        border: '#1E2B38',
+        isDarkBoard: true
+    },
+    newspaper: {
+        id: 'newspaper',
+        get name() {
+            return t('appearance.themes.newspaper');
+        },
+        light: '#FFFFFF',
+        dark: '#C9C9C9',
+        coordLight: '#757575',
+        coordDark: '#525252',
+        border: '#111111',
+        texture: {file: 'hatch.svg', frame: 0, square: 0.55, blend: 'multiply', darkOnly: true},
+        lastMove: 'rgba(120, 120, 120, 0.35)',
+        isDarkBoard: false
+    },
+    contrast: {
+        id: 'contrast',
+        get name() {
+            return t('appearance.themes.contrast');
+        },
+        light: '#FFF8D6',
+        dark: '#3D6FC2',
+        coordLight: '#3D6FC2',
+        coordDark: '#FFF8D6',
+        border: '#000000',
+        lastMove: 'rgba(255, 196, 0, 0.6)',
+        isDarkBoard: true
+    },
+    chalkboard: {
+        id: 'chalkboard',
+        get name() {
+            return t('appearance.themes.chalkboard');
+        },
+        light: '#3F6B4E',
+        dark: '#2C4E39',
+        coordLight: '#DBE1DD',
+        coordDark: '#A9BCAF',
+        border: '#5A3A22',
+        texture: {file: 'chalk.svg', frame: 0.25, square: 0.3, blend: 'screen'},
+        lastMove: 'rgba(255, 255, 255, 0.22)',
+        isDarkBoard: true
+    },
+    neon: {
+        id: 'neon',
+        get name() {
+            return t('appearance.themes.neon');
+        },
+        light: '#2B2350',
+        dark: '#15102B',
+        coordLight: '#93919D',
+        coordDark: '#827D98',
+        border: '#0A0716',
+        lastMove: 'rgba(255, 64, 200, 0.4)',
+        isDarkBoard: true
+    },
+    stained: {
+        id: 'stained',
+        get name() {
+            return t('appearance.themes.stained');
+        },
+        light: '#E8C77A',
+        dark: '#7A3B5E',
+        coordLight: '#7A3B5E',
+        coordDark: '#E8C77A',
+        border: '#1A1014',
+        texture: {file: 'stained-glass.svg', frame: 0.4, square: 0.45, blend: 'multiply'},
+        lastMove: 'rgba(120, 200, 255, 0.4)',
+        isDarkBoard: true
+    },
+    parchment: {
+        id: 'parchment',
+        get name() {
+            return t('appearance.themes.parchment');
+        },
+        light: '#EFE2C2',
+        dark: '#C2A878',
+        coordLight: '#716146',
+        coordDark: '#413D34',
+        border: '#3F2E1A',
+        texture: {file: 'paper.svg', frame: 0.4, square: 0.35, blend: 'multiply'},
+        isDarkBoard: false
+    },
+    expert: {
+        id: 'expert',
+        get name() {
+            return t('appearance.themes.expert');
+        },
+        light: '#D9D9D9',
+        dark: '#8F8F8F',
+        coordLight: '#5D5D5D',
+        coordDark: '#272727',
+        border: '#3A3A3A',
+        lastMove: 'rgba(90, 160, 255, 0.35)',
+        isDarkBoard: false
+    },
 };
 
 // Только наборы со свободной лицензией, допускающей любое использование. Список должен совпадать

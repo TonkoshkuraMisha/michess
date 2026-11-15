@@ -27,8 +27,10 @@ import {
     getSavedBoardThemeKey,
     getSavedPieceSetKey,
     getPieceSvgUrl,
-    getHarmoniousPieceStyle
+    getHarmoniousPieceStyle,
+    lastMoveColor
 } from '../config/boardAppearance';
+import {BoardTextureLayer} from './chessboard/BoardTextureLayer';
 import {renderUiMessage, uiMessage, useI18n} from '../i18n';
 import type {UiMessage} from '../i18n';
 import {displayPlayerName} from '../config/players';
@@ -645,12 +647,7 @@ export default function GameViewer() {
                         }}
                         className={`p-3 rounded-lg shadow-heavy border-2 border-amber-950/80 relative select-none touch-none group/board ${isResizing ? 'transition-none ring-2 ring-amber-500/60' : 'transition-colors'}`}
                     >
-                        {activeTheme.useWoodGrain && (
-                            <div
-                                className="absolute inset-0 opacity-25 mix-blend-multiply pointer-events-none"
-                                style={{backgroundImage: "url('/assets/textures/wood-grain.svg')"}}
-                            />
-                        )}
+                        <BoardTextureLayer theme={activeTheme} where="frame"/>
 
                         <div
                             className="grid grid-cols-8 grid-rows-8 w-full h-full border border-black/60 relative z-10 shadow-inner-board rounded-xs overflow-hidden">
@@ -676,16 +673,11 @@ export default function GameViewer() {
                                             }}
                                             className="w-full h-full flex items-center justify-center relative"
                                         >
-                                            {activeTheme.useWoodGrain && (
-                                                <div
-                                                    className="absolute inset-0 opacity-15 mix-blend-multiply pointer-events-none"
-                                                    style={{backgroundImage: "url('/assets/textures/wood-grain.svg')"}}
-                                                />
-                                            )}
+                                            <BoardTextureLayer theme={activeTheme} where="square" isDark={isDark}/>
 
                                             {isLastMoveSquare && (
                                                 <div
-                                                    className="absolute inset-0 bg-amber-300/40 z-10 pointer-events-none"/>
+                                                    className="absolute inset-0 z-10 pointer-events-none" style={{backgroundColor: lastMoveColor(activeTheme)}}/>
                                             )}
 
                                             {isCoachTarget && !isNoted && (

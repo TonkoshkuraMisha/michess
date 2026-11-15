@@ -80,8 +80,12 @@ def test_no_recorded_audio_or_unlisted_textures():
         if path.suffix.lower() in {".mp3", ".ogg", ".wav", ".m4a", ".flac"}
     ]
     assert audio == []
-    assert {path.name for path in (ASSETS / "textures").iterdir()} == {"wood-grain.svg"}
-    assert "wood-grain.svg" in ATTRIBUTION
+    # Текстуры — только собственные процедурные SVG (таск 18.1), каждая записана в ATTRIBUTION.md.
+    textures = sorted((ASSETS / "textures").iterdir())
+    assert textures and all(path.suffix == ".svg" for path in textures)
+    for path in textures:
+        assert f"assets/textures/{path.name}" in ATTRIBUTION, path.name
+        assert "собственная работа проекта michess, CC0" in path.read_text(encoding="utf-8"), path.name
 
 
 @pytest.mark.parametrize(("license_name", "is_free"), [
