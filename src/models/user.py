@@ -78,6 +78,9 @@ class User(Base):
     # перевода» — кнопка «Предложить исправление текста».
     language: Mapped[str | None] = mapped_column(String(2), nullable=True)
     translation_helper: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    # Оформление (таск 18.3): выбранная тема-комплект (код из frontend/src/config/themePresets.ts) — переходит между
+    # устройствами; гость хранит её в браузере.
+    theme_preset: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

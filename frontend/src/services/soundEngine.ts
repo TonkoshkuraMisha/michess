@@ -18,14 +18,57 @@ export type SoundEventType =
     | 'low_time';
 
 const MUTE_STORAGE_KEY = 'michess_sound_muted';
+const SOUND_SET_STORAGE_KEY = 'michess_sound_set';
+
+/**
+ * Наборы звуков (таск 18.3) — профили синтеза, а не записи: высота и громкость стука, высота и тембр сигналов.
+ * Предупреждающие сигналы (нелегальный ход, мало времени) тембр не меняют — их нужно узнавать в любом наборе.
+ */
+export interface SoundSet {
+    knock: number;
+    volume: number;
+    pitch: number;
+    wave: OscillatorType | null;
+}
+
+export const SOUND_SETS = {
+    wood: {knock: 1, volume: 1, pitch: 1, wave: null},
+    marble: {knock: 1.6, volume: 0.85, pitch: 1.12, wave: 'sine'},
+    soft: {knock: 0.7, volume: 0.6, pitch: 0.85, wave: 'sine'},
+    bright: {knock: 1.25, volume: 1, pitch: 1.25, wave: 'triangle'},
+} satisfies Record<string, SoundSet>;
+
+export type SoundSetId = keyof typeof SOUND_SETS;
+
+export function isSoundSetId(value: unknown): value is SoundSetId {
+    return typeof value === 'string' && Object.prototype.hasOwnProperty.call(SOUND_SETS, value);
+}
 
 class SoundEngine {
     private ctx: AudioContext | null = null;
     private muted: boolean = false;
+    private soundSet: SoundSetId = 'wood';
 
     constructor() {
         if (typeof window !== 'undefined') {
             this.muted = localStorage.getItem(MUTE_STORAGE_KEY) === 'true';
+            const saved = localStorage.getItem(SOUND_SET_STORAGE_KEY);
+            if (isSoundSetId(saved)) this.soundSet = saved;
+        }
+    }
+
+    public getSoundSet(): SoundSetId {
+        return this.soundSet;
+    }
+
+    public setSoundSet(id: SoundSetId): void {
+        this.soundSet = id;
+        if (typeof window !== 'undefined') {
+            try {
+                localStorage.setItem(SOUND_SET_STORAGE_KEY, id);
+            } catch {
+                // Хранилище недоступно — набор действует до перезагрузки.
+            }
         }
     }
 
@@ -75,6 +118,13 @@ class SoundEngine {
 
         const startTime = ctx.currentTime + delaySec;
         const stopTime = startTime + durationSec;
+        const profile: SoundSet = SOUND_SETS[this.soundSet];
+        if (type === 'sine' || type === 'triangle') {
+            freq *= profile.pitch;
+            if (endFreq !== undefined) endFreq *= profile.pitch;
+            type = profile.wave ?? type;
+            peakGain *= profile.volume;
+        }
 
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
@@ -105,6 +155,9 @@ class SoundEngine {
         const ctx = this.getContext();
         if (!ctx) return;
 
+        const profile: SoundSet = SOUND_SETS[this.soundSet];
+        centerFreq *= profile.knock;
+        volume *= profile.volume;
         const durationSec = 0.07;
         const frameCount = Math.max(1, Math.floor(ctx.sampleRate * durationSec));
         const buffer = ctx.createBuffer(1, frameCount, ctx.sampleRate);

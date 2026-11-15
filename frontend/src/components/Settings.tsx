@@ -15,6 +15,11 @@ import {
 import {readApiErrorOr} from '../services/apiErrors';
 import {PAGE_PALETTES, PAGE_PATTERNS, applyPageBackground, getSavedPagePalette, getSavedPagePattern, pageBackgroundStyle} from '../config/pageBackground';
 import type {PagePalette, PagePattern} from '../config/pageBackground';
+import {THEME_PRESETS, applyPreset} from '../config/themePresets';
+import type {ThemePreset} from '../config/themePresets';
+import {ThemePreview} from './settings/ThemePreview';
+import {SOUND_SETS} from '../services/soundEngine';
+import type {SoundSetId} from '../services/soundEngine';
 import {gameSocket} from '../services/gameSocket';
 import {soundEngine} from '../services/soundEngine';
 import {useI18n} from '../i18n';
@@ -60,6 +65,24 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
     };
     const [pieceSetKey, setPieceSetKey] = useState(() => getSavedPieceSetKey());
     const [isMuted, setIsMuted] = useState(() => soundEngine.isMuted());
+    // Темы-комплекты (таск 18.3): комплект «выбран», пока все его части совпадают с текущими настройками.
+    const [soundSet, setSoundSetState] = useState<SoundSetId>(() => soundEngine.getSoundSet());
+    const activePreset = THEME_PRESETS.find((p) => p.board === boardThemeKey && p.pieces === pieceSetKey
+        && p.pattern === pagePattern && p.palette === pagePalette && p.sound === soundSet);
+    const choosePreset = (preset: ThemePreset) => {
+        applyPreset(preset);
+        setBoardThemeKey(preset.board);
+        setPieceSetKey(preset.pieces);
+        setPagePattern(preset.pattern);
+        setPagePalette(preset.palette);
+        setSoundSetState(preset.sound);
+        if (token) saveProfileSettings({theme_preset: preset.id}).catch(() => undefined);
+    };
+    const chooseSoundSet = (id: SoundSetId) => {
+        soundEngine.setSoundSet(id);
+        setSoundSetState(id);
+        soundEngine.play('move');
+    };
 
     const [currentPassword, setCurrentPassword] = useState('');
     const [newPassword, setNewPassword] = useState('');
@@ -258,6 +281,27 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                 </Link>
             </div>
 
+            <section className={sectionClass} data-testid="theme-presets">
+                <h2 className={headingClass}><Palette size={18} className="text-amber-400"/> {t('settings.presets')}</h2>
+                <p className="text-sm text-boxwood/75 mb-3">{t('settings.presetsHint')}</p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {THEME_PRESETS.map((preset) => (
+                        <button
+                            key={preset.id}
+                            type="button"
+                            aria-pressed={activePreset?.id === preset.id}
+                            data-testid={`preset-${preset.id}`}
+                            onClick={() => choosePreset(preset)}
+                            className={`${optionClass(activePreset?.id === preset.id)} flex-col items-stretch`}
+                        >
+                            <ThemePreview preset={preset}/>
+                            <span className="font-bold">{t(`settings.presetNames.${preset.id}.name`)}</span>
+                            <span className="text-xs text-boxwood/70">{t(`settings.presetNames.${preset.id}.description`)}</span>
+                        </button>
+                    ))}
+                </div>
+            </section>
+
             <section className={sectionClass}>
                 <h2 className={headingClass}><Palette size={18} className="text-amber-400"/> {t('settings.boardAndPieces')}</h2>
 
@@ -382,6 +426,14 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                     >
                         {t('settings.soundTest')}
                     </button>
+                </div>
+                <div className="flex flex-wrap gap-2 mt-3" data-testid="sound-sets">
+                    {(Object.keys(SOUND_SETS) as SoundSetId[]).map((id) => (
+                        <button key={id} type="button" aria-pressed={soundSet === id} disabled={isMuted}
+                                onClick={() => chooseSoundSet(id)} className={`${optionClass(soundSet === id)} disabled:opacity-40`}>
+                            {t(`settings.soundSets.${id}`)}
+                        </button>
+                    ))}
                 </div>
             </section>
 

@@ -17,7 +17,8 @@ vi.mock('../services/soundEngine', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../services/soundEngine')>();
     return {
         ...actual,
-        soundEngine: {play: vi.fn(), isMuted: vi.fn(() => false), toggleMute: vi.fn(() => true), setMuted: vi.fn()},
+        soundEngine: {play: vi.fn(), isMuted: vi.fn(() => false), toggleMute: vi.fn(() => true), setMuted: vi.fn(),
+            getSoundSet: vi.fn(() => 'wood'), setSoundSet: vi.fn()},
     };
 });
 

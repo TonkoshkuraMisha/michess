@@ -14,15 +14,22 @@ vi.mock('../../services/gameSocket', () => ({
     gameSocket: {connect: vi.fn(), disconnect: vi.fn(), send: vi.fn(), on: vi.fn(), off: vi.fn()},
 }));
 
-vi.mock('../../services/soundEngine', () => {
+vi.mock('../../services/soundEngine', async (importOriginal) => {
+    const original = await importOriginal<typeof import('../../services/soundEngine')>();
     let muted = false;
+    let soundSet = 'wood';
     return {
+        SOUND_SETS: original.SOUND_SETS,
         soundEngine: {
             play: vi.fn(),
             isMuted: vi.fn(() => muted),
             toggleMute: vi.fn(() => {
                 muted = !muted;
                 return muted;
+            }),
+            getSoundSet: vi.fn(() => soundSet),
+            setSoundSet: vi.fn((id: string) => {
+                soundSet = id;
             }),
         },
     };
@@ -86,6 +93,33 @@ describe('Settings: оформление и звук', () => {
         expect(soundEngine.toggleMute).toHaveBeenCalled();
         expect(toggle).toHaveAttribute('aria-checked', 'false');
         expect(screen.getByRole('button', {name: 'Проверить'})).toBeDisabled();
+    });
+
+    it('тема-комплект в один клик: все части выбраны, выбор уходит в профиль; ручная смена снимает отметку', async () => {
+        const fetchMock = vi.fn(async () => response(200, {}));
+        vi.stubGlobal('fetch', fetchMock);
+        setToken('old-token');
+        renderSettings();
+        fireEvent.click(screen.getByTestId('preset-marble_hall'));
+        expect(localStorage.getItem('michess_board_theme')).toBe('marble');
+        expect(localStorage.getItem('michess_piece_set')).toBe('celtic');
+        expect(localStorage.getItem('michess_page_pattern')).toBe('marble');
+        expect(soundEngine.setSoundSet).toHaveBeenCalledWith('marble');
+        expect(screen.getByTestId('preset-marble_hall')).toHaveAttribute('aria-pressed', 'true');
+        await waitFor(() => expect((fetchMock.mock.calls as unknown as [string, RequestInit][])
+            .some(([url, init]) => url.endsWith('/profile/me/settings') && init.body === JSON.stringify({theme_preset: 'marble_hall'}))).toBe(true));
+        fireEvent.click(screen.getByRole('button', {name: 'Графит'}));
+        expect(screen.getByTestId('preset-marble_hall')).toHaveAttribute('aria-pressed', 'false');
+        setToken(null);
+    });
+
+    it('набор звуков выбирается отдельно', () => {
+        renderSettings();
+        // Звук мог остаться выключенным предыдущим тестом (общий мок) — наборы при выключенном звуке недоступны.
+        if (screen.getByRole('switch').getAttribute('aria-checked') === 'false') fireEvent.click(screen.getByRole('switch'));
+        fireEvent.click(screen.getByRole('button', {name: 'Звонкие'}));
+        expect(soundEngine.setSoundSet).toHaveBeenCalledWith('bright');
+        expect(screen.getByRole('button', {name: 'Звонкие'})).toHaveAttribute('aria-pressed', 'true');
     });
 });
 
