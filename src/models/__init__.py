@@ -5,6 +5,7 @@ from src.models.email_token import EmailToken
 from src.models.game import Game
 from src.models.guess import GuessPosition
 from src.models.lesson import LessonProgress
+from src.models.moderation import Report
 from src.models.move import Move
 from src.models.personality import BotPersonality
 from src.models.position import PositionGame, PositionStat
@@ -35,6 +36,7 @@ __all__ = [
     "PositionStat",
     "LessonProgress",
     "Move",
+    "Report",
     "PersonalPuzzle",
     "ProductEvent",
     "Puzzle",

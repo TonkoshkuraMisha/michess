@@ -1,6 +1,8 @@
 // --- FILE: frontend/src/components/chessboard/GameChatPanel.tsx ---
 
-import {MessageSquare, Send} from 'lucide-react';
+import {useState} from 'react';
+import {Flag, MessageSquare, Send} from 'lucide-react';
+import {moderationApi} from '../../services/moderation';
 import {useI18n} from '../../i18n';
 import {QUICK_CHAT_PRESETS} from './types';
 import type {ChatMessageItem, ChatPresetId} from './types';
@@ -14,13 +16,22 @@ export interface GameChatPanelProps {
     /** Кнопка «выйти из просмотра» видна только зрителю, не участникам партии. */
     isSpectator: boolean;
     onLeaveSpectate: () => void;
+    /** Своё имя и партия — для жалобы на сообщение соперника (таск 17.4). */
+    myName?: string;
+    gameId?: number | null;
 }
 
 /** Чат партии: лента сообщений, быстрые реплики и поле ввода. Виден только в PvP/просмотре. */
 export function GameChatPanel({
-    messages, chatInput, onChatInputChange, onSendMessage, onSendPreset, isSpectator, onLeaveSpectate,
+    messages, chatInput, onChatInputChange, onSendMessage, onSendPreset, isSpectator, onLeaveSpectate, myName, gameId,
 }: GameChatPanelProps) {
     const {t} = useI18n();
+    const [reported, setReported] = useState<Set<number>>(new Set());
+    const report = (index: number, sender: string, text: string) => {
+        moderationApi.report({target: sender, kind: 'message', reason: 'abuse', message_text: text, game_id: gameId ?? null})
+            .catch(() => undefined)
+            .finally(() => setReported((s) => new Set(s).add(index)));
+    };
     return (
         <div className="bg-acacia-dark p-2 rounded-md border border-amber-900/50 flex flex-col gap-1.5 shrink-0">
             <div className="flex items-center justify-between text-xs uppercase tracking-wider text-amber-400 font-bold">
@@ -49,6 +60,14 @@ export function GameChatPanel({
                         <div key={i} className="leading-snug wrap-break-word">
                             <span className="font-bold text-amber-300 mr-1.5">{msg.sender}:</span>
                             <span className="text-boxwood-light">{msg.preset ? t(`chat.presets.${msg.preset}`) : msg.text}</span>
+                            {!msg.preset && msg.text && myName && msg.sender !== myName && (
+                                reported.has(i)
+                                    ? <span className="ml-1 text-boxwood/50">{t('moderation.reportSent')}</span>
+                                    : <button type="button" onClick={() => report(i, msg.sender, msg.text)} aria-label={t('moderation.reportMessage')}
+                                              data-testid={`report-message-${i}`} className="ml-1 text-rose-300/70 hover:text-rose-300 align-middle">
+                                        <Flag size={10} className="inline"/>
+                                    </button>
+                            )}
                         </div>
                     ))
                 )}

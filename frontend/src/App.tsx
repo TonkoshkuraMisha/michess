@@ -23,6 +23,8 @@ import {WatchPage} from './components/watch/WatchPage';
 import {ArenaPage, ArenasPage} from './components/arena/ArenaPages';
 import {TeamsPage} from './components/social/TeamsPage';
 import {StudyLobby, StudyRoomPage} from './components/study/StudyPages';
+import {ModerationPage} from './components/social/ModerationPage';
+import {moderationApi} from './services/moderation';
 import {TrainerPage, TrainersPage} from './components/trainers/TrainersPage';
 import {NotificationBell, PlayerSearch} from './components/social/SocialHeader';
 import {TournamentView, TournamentsPage} from './components/tournaments/TournamentsPage';
@@ -47,7 +49,8 @@ import {
     Wrench,
     Dumbbell,
     Shield,
-    Presentation
+    Presentation,
+    Gavel
 } from 'lucide-react';
 import {useI18n} from './i18n';
 import LanguageSwitcher from './components/LanguageSwitcher';
@@ -72,6 +75,15 @@ export default function App() {
     const [profileRetry, setProfileRetry] = useState(0);
 
     const [isProfileOpen, setIsProfileOpen] = useState(false);
+    // Пункт «Модерация» (17.4) — только модератору и игроку с флагом нечестной игры (там — апелляция).
+    const [showModeration, setShowModeration] = useState(false);
+    useEffect(() => {
+        if (!token || !userProfile) {
+            setShowModeration(false);
+            return;
+        }
+        moderationApi.me().then((m) => setShowModeration(m.is_moderator || m.is_cheater)).catch(() => setShowModeration(false));
+    }, [token, userProfile]);
     const [isChampionsMenuOpen, setIsChampionsMenuOpen] = useState(false);
 
     const [showAuthModal, setShowAuthModal] = useState(false);
@@ -462,6 +474,17 @@ export default function App() {
                                         >
                                             <Presentation size={16} className="text-amber-500"/> {t('study.title')}
                                         </button>
+                                        {showModeration && (
+                                            <button
+                                                onClick={() => {
+                                                    setIsProfileOpen(false);
+                                                    navigate('/moderation');
+                                                }}
+                                                className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
+                                            >
+                                                <Gavel size={16} className="text-amber-500"/> {t('moderation.title')}
+                                            </button>
+                                        )}
                                         <button
                                             onClick={() => {
                                                 setIsProfileOpen(false);
@@ -557,6 +580,7 @@ export default function App() {
                         <Route path="/teams" element={<TeamsPage/>}/>
                         <Route path="/study" element={<StudyLobby/>}/>
                         <Route path="/study/:code" element={<StudyRoomPage/>}/>
+                        <Route path="/moderation" element={<ModerationPage/>}/>
                         <Route path="/train" element={<TrainersPage/>}/>
                         <Route path="/train/:trainerId" element={<TrainerPage/>}/>
                         <Route path="/guess" element={<GuessPage/>}/>

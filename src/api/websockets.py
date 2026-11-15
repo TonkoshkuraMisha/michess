@@ -18,7 +18,7 @@ from src.core import observability as obs
 from src.core.errors import error_payload
 from src.db.session import get_session_factory
 from src.models.user import User
-from src.services import notifications
+from src.services import moderation, notifications
 from src.services.anticheat import trusted_premove
 from src.services.connection_manager import manager
 from src.services.game_state import is_rated_state, pending_draw_offer, state_manager
@@ -355,6 +355,10 @@ async def _chat_message(ctx: ActionContext, data: dict) -> None:
         raw_text = ""
     elif not raw_text:
         raise _Ignore
+    if moderation.chat_banned(await _fresh_current_user(ctx.db, ctx.user)):
+        # Модератор отключил чат игроку (таск 17.4).
+        await ctx.error("chat_banned")
+        return
     game = await _load_game(data)
     if ctx.user.id not in (game.white_id, game.black_id):
         # Писать в чат партии могут только игроки: зрители (и кто угодно, знающий id партии)

@@ -170,6 +170,10 @@ async def evaluate_game_telemetry(db: AsyncSession, game_id: int, force: bool = 
         if penalty > 0:
             user.trust_factor = max(0, int(user.trust_factor) - penalty)
             if user.trust_factor < CHEATER_TRUST_THRESHOLD:
+                if not user.is_cheater:
+                    # Флаг ставит автоматика, но решение проверяет модератор (таск 17.4): заявка в очередь.
+                    from src.services.moderation import flag_for_review
+                    await flag_for_review(db, user, game_id)
                 user.is_cheater = True
                 logger.warning(
                     "Fair Play Alert: user %s (id=%s) flagged in game %s (trust_factor=%s, blur=%.2f, cv=%.2f)",
