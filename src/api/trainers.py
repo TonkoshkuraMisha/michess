@@ -18,8 +18,10 @@ from src.models.user import User
 
 router = APIRouter(dependencies=[Depends(rate_limit("trainers", "RATE_LIMIT_PUZZLES"))])
 
-# Известные тренажёры: «Тихая тропа», «Двойной удар», «Маршрут коня», «Хвост» (таск 16.5); новые (спринт 19) — сюда же.
-TRAINERS = ("quiet_path", "double_strike", "knight_route", "tail")
+# Известные тренажёры: «Тихая тропа», «Двойной удар», «Маршрут коня», «Хвост» (таск 16.5); координаты (19.2):
+# уровень у них — сочетание настроек (сторона, координаты на доске, 30/60 с), см. frontend/src/trainers/coordinates.ts.
+TRAINERS = ("quiet_path", "double_strike", "knight_route", "tail",
+            "coord_find", "coord_name", "coord_color", "coord_diagonal")
 MAX_LEVEL = 20
 HISTORY = 50
 

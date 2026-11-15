@@ -10,6 +10,9 @@ import {getToken} from '../../services/authToken';
 import {TRAINER_IDS, trainersApi} from '../../services/trainers';
 import type {TrainerId, TrainerRecord} from '../../services/trainers';
 import {ForkGame, PathGame, TailGame} from './VisionGames';
+import {CoordOptionsPicker, CoordinateGame} from './CoordinateGames';
+import {COORD_TRAINERS, levelToOptions, optionsToLevel} from '../../trainers/coordinates';
+import type {CoordTrainer} from '../../trainers/coordinates';
 
 const LEVELS = 10;
 
@@ -78,6 +81,7 @@ export function TrainerPage() {
     }, [id]);
 
     if (!id) return <p className="p-4 text-rose-300">{t('trainers.notFound')}</p>;
+    const isCoord = (COORD_TRAINERS as readonly string[]).includes(id);
 
     const start = () => {
         setOutcome(null);
@@ -107,6 +111,9 @@ export function TrainerPage() {
             </div>
             {seed === null && (
                 <div className="flex flex-wrap items-center gap-3">
+                    {isCoord ? (
+                        <CoordOptionsPicker value={levelToOptions(level)} onChange={(o) => setLevel(optionsToLevel(o))}/>
+                    ) : (
                     <label className="flex items-center gap-2 text-sm">
                         {t('trainers.level')}
                         <select value={level} onChange={(e) => setLevel(Number(e.target.value))} data-testid="trainer-level"
@@ -114,6 +121,7 @@ export function TrainerPage() {
                             {Array.from({length: LEVELS}, (_, i) => i + 1).map((n) => <option key={n} value={n}>{n}</option>)}
                         </select>
                     </label>
+                    )}
                     <button type="button" onClick={start} data-testid="trainer-start"
                             className="px-4 py-2 rounded bg-amber-700 text-white font-bold">
                         {t(outcome ? 'trainers.again' : 'trainers.start')}
@@ -129,6 +137,7 @@ export function TrainerPage() {
             )}
             {seed !== null && id === 'double_strike' && <ForkGame level={level} seed={seed} onFinish={finish}/>}
             {seed !== null && id === 'tail' && <TailGame level={level} seed={seed} onFinish={finish}/>}
+            {seed !== null && isCoord && <CoordinateGame trainer={id as CoordTrainer} level={level} seed={seed} onFinish={finish}/>}
             {seed !== null && (id === 'quiet_path' || id === 'knight_route') && (
                 <PathGame kind={id === 'knight_route' ? 'knight' : 'quiet'} level={level} seed={seed} onFinish={finish}/>
             )}
