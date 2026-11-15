@@ -38,7 +38,8 @@ async def test_schedule_is_created_once(db_session):
     first = await db_session.scalar(select(func.count()).select_from(Arena))
     await arena.ensure_schedule(db_session, now)
     assert await db_session.scalar(select(func.count()).select_from(Arena)) == first > 0
-    blitz = (await db_session.execute(select(Arena).where(Arena.schedule_key == "blitz-3+2").order_by(Arena.starts_at))).scalars().all()
+    query = select(Arena).where(Arena.schedule_key == "blitz-3+2").order_by(Arena.starts_at)
+    blitz = (await db_session.execute(query)).scalars().all()
     assert arena.status(blitz[0], now) == "running"           # началась в 10:00, идёт 45 минут
     assert all(b.increment_ms == 2_000 for b in blitz)
 
