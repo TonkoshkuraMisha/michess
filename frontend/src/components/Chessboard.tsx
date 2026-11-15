@@ -1755,6 +1755,8 @@ export default function Chessboard() {
                         onSendPreset={handleSendChatPreset}
                         isSpectator={!!spectatingGameId}
                         onLeaveSpectate={handleLeaveSpectate}
+                        myName={currentUsername}
+                        gameId={gameId || spectatingGameId}
                     />
                 )}
 

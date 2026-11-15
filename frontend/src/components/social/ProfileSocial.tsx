@@ -9,6 +9,7 @@ import {useI18n} from '../../i18n';
 import {getToken} from '../../services/authToken';
 import {socialApi} from '../../services/social';
 import type {Relation} from '../../services/social';
+import {ReportButton} from './ModerationPage';
 
 export function ProfileSocial({username}: { username: string }) {
     const {t} = useI18n();
@@ -41,6 +42,7 @@ export function ProfileSocial({username}: { username: string }) {
                     className="px-2.5 py-1 rounded bg-amber-700 text-white font-bold flex items-center gap-1">
                 <Swords size={14}/> {t('social.challenge')}
             </button>
+            <ReportButton username={username}/>
         </div>
     );
 }

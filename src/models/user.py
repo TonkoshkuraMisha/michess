@@ -71,6 +71,9 @@ class User(Base):
     # Anti-cheat specific fields
     is_cheater: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     trust_factor: Mapped[int] = mapped_column(Integer, default=100)
+    # Модерация (таск 17.4): роль модератора (scripts/make_moderator.py) и отключённый чат до момента.
+    is_moderator: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    chat_banned_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
