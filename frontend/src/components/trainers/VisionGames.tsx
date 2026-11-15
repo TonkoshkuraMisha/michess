@@ -8,6 +8,7 @@ import {useI18n} from '../../i18n';
 import type {MessageKey} from '../../i18n';
 import {starsMove} from '../../content/basics/rules';
 import {forkCount, forkLevel, isSafe, knightTargets, pathLevel, pathScore} from '../../trainers/vision';
+import {boardFen, legalMoves, newGame, step} from '../../trainers/tail';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 
 export const ROUNDS = 5;
@@ -123,6 +124,50 @@ export function ForkGame({level, seed, onFinish}: GameProps) {
                 <p className="font-mono text-2xl text-amber-300" data-testid="fork-clock">{left}</p>
                 <p data-testid="fork-solved">{t('trainers.double_strike.solved', {n: solved})} · {t('trainers.mistakes', {n: mistakes})}</p>
                 {feedback && <p role="status" className="text-rose-300" data-testid="fork-feedback">{t(feedback)}</p>}
+            </div>
+        </div>
+    );
+}
+
+export function TailGame({level, seed, onFinish}: GameProps) {
+    const {t} = useI18n();
+    const [state, setState] = useState(() => newGame(level, seed));
+    const [mistakes, setMistakes] = useState(0);
+    const finished = useRef(false);
+
+    useEffect(() => {
+        if (!state.over || finished.current) return;
+        finished.current = true;
+        onFinish(state.eaten * 10, mistakes);
+    }, [state.over]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    const onSquare = (square: string) => {
+        if (state.over) return;
+        const next = step(state, square);
+        if (next) setState(next);
+        else setMistakes((n) => n + 1);
+    };
+
+    const stop = () => {
+        if (finished.current) return;
+        finished.current = true;
+        onFinish(state.eaten * 10, mistakes);
+    };
+
+    return (
+        <div className="flex flex-col md:flex-row gap-5 items-start" data-testid="tail-game">
+            <div className="w-full max-w-[560px]">
+                <PuzzleBoard fen={boardFen(state)} orientation="white" interactive={!state.over} onMove={() => undefined}
+                             onSquare={onSquare} highlights={[state.head]}/>
+            </div>
+            <div className="flex flex-col gap-2 text-sm">
+                <p className="text-amber-200">{t('trainers.tail.task')}</p>
+                <p data-testid="tail-score">{t('trainers.tail.eaten', {n: state.eaten})} · {t('trainers.tail.length', {n: state.tail.length})}</p>
+                <p className="text-xs text-boxwood/70">{t('trainers.tail.movesLeft', {n: legalMoves(state).length})} · {t('trainers.mistakes', {n: mistakes})}</p>
+                {state.over && <p className="text-rose-300" data-testid="tail-over">{t('trainers.tail.over')}</p>}
+                {!state.over && (
+                    <button type="button" onClick={stop} className="self-start text-amber-400 hover:underline">{t('trainers.tail.stop')}</button>
+                )}
             </div>
         </div>
     );

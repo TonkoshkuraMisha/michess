@@ -1369,6 +1369,16 @@ export const en = {
             rules: 'Bring the knight to the star by the shortest path past the attacked squares. Only the shortest route counts.',
             task: 'Knight to the star by the shortest path, avoiding attacked squares.',
         },
+        tail: {
+            title: 'Tail',
+            rules: 'Your piece eats black pawns, and a tail of copies grows behind it. You may not step on the tail or pass through it. Enemy pieces appear: never stand where they attack, and they bite off any tail they hit. How many pawns can you eat?',
+            task: 'Click the square the head (highlighted) moves to.',
+            eaten: 'Eaten: {n}',
+            length: 'tail: {n}',
+            movesLeft: 'moves available: {n}',
+            over: 'No moves left — game over.',
+            stop: 'Finish',
+        },
         double_strike: {
             title: 'Double strike',
             rules: 'In one minute, find as many squares as you can where the knight jumps with a fork — attacking two valuable pieces at once. From level 4 the square must be safe.',

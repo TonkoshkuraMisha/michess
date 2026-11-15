@@ -7,7 +7,8 @@ import {Chess} from 'chess.js';
 import {setToken} from '../../../services/authToken';
 import {starsSolution} from '../../../content/basics/rules';
 import {forkLevel, knightTargets, pathLevel} from '../../../trainers/vision';
-import {ForkGame, PathGame, ROUNDS} from '../VisionGames';
+import {ForkGame, PathGame, ROUNDS, TailGame} from '../VisionGames';
+import {legalMoves, newGame} from '../../../trainers/tail';
 import {TrainerPage, TrainersPage} from '../TrainersPage';
 
 const cell = (name: string) => document.querySelector(`[data-square="${name}"]`) as HTMLElement;
@@ -101,5 +102,21 @@ describe('страница тренажёров', () => {
         view.unmount();
         render(<MemoryRouter initialEntries={['/train/nope']}><Routes><Route path="/train/:trainerId" element={<TrainerPage/>}/></Routes></MemoryRouter>);
         expect(screen.getByText('Такого тренажёра нет.')).toBeInTheDocument();
+    });
+});
+
+describe('Хвост', () => {
+    it('щелчок по допустимому полю двигает голову, по недопустимому — ошибка; «Закончить» отдаёт итог', () => {
+        const onFinish = vi.fn();
+        render(<TailGame level={1} seed={4} onFinish={onFinish}/>);
+        const start = newGame(1, 4);
+        const [target] = legalMoves(start);
+        const blocked = ['a1', 'h8', 'a8', 'h1'].find((s) => !legalMoves(start).includes(s) && s !== start.head)!;
+        fireEvent.click(cell(blocked));
+        expect(screen.getByTestId('tail-game')).toHaveTextContent('ошибок: 1');
+        fireEvent.click(cell(target));
+        expect(cell(target).querySelector('img')).not.toBeNull();
+        fireEvent.click(screen.getByRole('button', {name: 'Закончить'}));
+        expect(onFinish).toHaveBeenCalledWith(target === start.food ? 10 : 0, 1);
     });
 });

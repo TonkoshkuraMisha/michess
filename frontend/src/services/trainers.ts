@@ -7,7 +7,7 @@ import {readApiErrorOr, UiError} from './apiErrors';
 import {uiMessage} from '../i18n';
 import {getToken} from './authToken';
 
-export const TRAINER_IDS = ['quiet_path', 'knight_route', 'double_strike'] as const;
+export const TRAINER_IDS = ['quiet_path', 'knight_route', 'double_strike', 'tail'] as const;
 export type TrainerId = typeof TRAINER_IDS[number];
 
 export interface TrainerAttempt {
