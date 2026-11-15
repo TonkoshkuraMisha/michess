@@ -7,7 +7,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, UniqueConstraint, func
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.models.base import Base
@@ -35,3 +35,24 @@ class RepertoireMove(Base):
     position: Mapped[str] = mapped_column(String(100))
     move_uci: Mapped[str] = mapped_column(String(5))
     comment: Mapped[str] = mapped_column(String(300), default="", server_default="")
+
+
+class RepertoireCard(Base):
+    """
+    Карточка повторения (таск 20.2): позиция репертуара, где ход за игроком, — «найди свой ход». Расписание по SM-2:
+    лёгкость, интервал в днях, число верных ответов подряд, срок следующего показа.
+    """
+
+    __tablename__ = "repertoire_cards"
+    __table_args__ = (UniqueConstraint("repertoire_id", "position", name="uq_repertoire_card"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    repertoire_id: Mapped[int] = mapped_column(ForeignKey("repertoires.id", ondelete="CASCADE"), index=True)
+    position: Mapped[str] = mapped_column(String(100))
+    ease: Mapped[float] = mapped_column(Float, default=2.5, server_default="2.5")
+    interval_days: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    repetitions: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    lapses: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    due_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    first_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

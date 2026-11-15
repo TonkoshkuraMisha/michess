@@ -1,23 +1,26 @@
 """
 Дебютный репертуар (таск 20.1): свои репертуары за белых и за чёрных, шесть стартовых наборов, добавление линий
 (из справочника дебютов, из просмотра партии — линией UCI; из текста PGN), комментарии к ходам и удаление хода
-вместе с ветками, которые после него стали недостижимы.
+вместе с ветками, которые после него стали недостижимы. Повторение и игра против репертуара (таск 20.2) — в конце
+файла: карточки по SM-2 и ответы соперника по популярности ходов у людей.
 """
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Path
+from fastapi import APIRouter, Depends, Path, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.deps import get_current_user
+from src.api.fair_play import forbid_engine_help_during_game
 from src.api.rate_limit import rate_limit
 from src.core.errors import ApiError, DomainError
 from src.db.session import get_db
-from src.models.repertoire import Repertoire, RepertoireMove
+from src.models.repertoire import Repertoire, RepertoireCard, RepertoireMove
 from src.models.user import User
 from src.services import repertoire as service
+from src.services import repertoire_drill as drill
 from src.services.repertoire_starters import BY_ID, STARTERS
 
 router = APIRouter(dependencies=[Depends(rate_limit("repertoire", "RATE_LIMIT_PUZZLES"))])
@@ -136,6 +139,7 @@ async def remove(repertoire_id: int = RepertoireId, db: AsyncSession = Depends(g
                  user: User = Depends(get_current_user)):
     repertoire = await _own(db, repertoire_id, user)
     await db.execute(delete(RepertoireMove).where(RepertoireMove.repertoire_id == repertoire.id))
+    await db.execute(delete(RepertoireCard).where(RepertoireCard.repertoire_id == repertoire.id))
     await db.delete(repertoire)
     await db.commit()
     return {"deleted": True}
@@ -193,3 +197,46 @@ async def remove_move(payload: MoveRef, repertoire_id: int = RepertoireId, db: A
         raise _http(exc) from None
     await db.commit()
     return {"removed": removed, **await _full(db, repertoire)}
+
+
+class OpponentIn(BaseModel):
+    moves: list[str] = Field(default_factory=list, max_length=service.MAX_LINE_PLIES)  # пусто — первый ход белых
+
+
+class AnswerIn(BaseModel):
+    position: str = Field(..., max_length=100)
+    uci: str = Field(..., max_length=5)
+    retry: bool = False
+
+
+@router.get("/{repertoire_id}/drill")
+async def drill_session(repertoire_id: int = RepertoireId, mode: Literal["review", "learn"] = Query("review"),
+                        db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Карточки сессии: review — по расписанию и новые в пределах дневной нормы, learn — новые линии."""
+    result = await drill.session(db, await _own(db, repertoire_id, user), mode, drill.utcnow())
+    await db.commit()
+    return result
+
+
+@router.post("/{repertoire_id}/drill/answer")
+async def drill_answer(payload: AnswerIn, repertoire_id: int = RepertoireId, db: AsyncSession = Depends(get_db),
+                       user: User = Depends(get_current_user)):
+    """Ответ на карточку; retry — повтор после ошибки в той же сессии, расписание не меняет."""
+    repertoire = await _own(db, repertoire_id, user)
+    try:
+        result = await drill.answer(db, repertoire, payload.position, payload.uci, payload.retry, drill.utcnow())
+    except DomainError as exc:
+        raise _http(exc) from None
+    await db.commit()
+    return result
+
+
+@router.post("/{repertoire_id}/opponent", dependencies=[Depends(forbid_engine_help_during_game)])
+async def opponent(payload: OpponentIn, repertoire_id: int = RepertoireId, db: AsyncSession = Depends(get_db),
+                   user: User = Depends(get_current_user)):
+    """«Игра против репертуара»: ответ соперника после линии игрока (статистика ходов — как у справочника)."""
+    repertoire = await _own(db, repertoire_id, user)
+    try:
+        return await drill.opponent_reply(db, repertoire, payload.moves)
+    except DomainError as exc:
+        raise _http(exc) from None

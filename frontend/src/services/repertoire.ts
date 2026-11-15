@@ -65,6 +65,44 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 const json = (method: string, body: object): RequestInit => ({method, body: JSON.stringify(body)});
 
+// --- Повторение (таск 20.2) ---
+
+export type CardStatus = 'new' | 'learning' | 'learned';
+
+export interface DrillStats {
+    total: number;
+    new: number;
+    learning: number;
+    learned: number;
+    /** Просрочено к повторению сейчас. */
+    due: number;
+    /** Сколько новых карточек ещё можно взять сегодня. */
+    new_left: number;
+}
+
+export interface DrillAnswerOption {
+    uci: string;
+    san: string;
+    comment: string;
+}
+
+export interface DrillCard {
+    position: string;
+    /** Ходы из начальной позиции до карточки. */
+    line: string[];
+    fen: string;
+    answers: DrillAnswerOption[];
+    status: CardStatus;
+}
+
+export interface DrillAnswer {
+    correct: boolean;
+    answers: DrillAnswerOption[];
+    status: CardStatus;
+    due_at: string | null;
+    stats: DrillStats;
+}
+
 export const repertoireApi = {
     starters: () => call<{ starters: Starter[] }>('/starters'),
     list: () => call<{ repertoires: RepertoireSummary[] }>(''),
@@ -78,6 +116,11 @@ export const repertoireApi = {
         call<{ comment: string }>(`/${id}/comment`, json('PUT', {position, uci, comment})),
     removeMove: (id: number, position: string, uci: string) =>
         call<Repertoire & { removed: number }>(`/${id}/remove`, json('POST', {position, uci})),
+    drill: (id: number, mode: 'review' | 'learn') => call<{ stats: DrillStats; cards: DrillCard[] }>(`/${id}/drill?mode=${mode}`),
+    answer: (id: number, position: string, uci: string, retry: boolean) =>
+        call<DrillAnswer>(`/${id}/drill/answer`, json('POST', {position, uci, retry})),
+    opponent: (id: number, moves: string[]) =>
+        call<{ reply: string | null; san: string | null }>(`/${id}/opponent`, json('POST', {moves})),
 };
 
 /** Рёбра из позиции: свои ходы — первыми. */
