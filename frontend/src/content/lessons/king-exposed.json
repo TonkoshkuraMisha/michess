@@ -1,0 +1,197 @@
+{
+  "id": "king-exposed",
+  "course": "king-attack",
+  "order": 6,
+  "title": {
+    "en": "Attacking an exposed king",
+    "uk": "Атака на оголеного короля",
+    "ru": "Атака на незащищённого короля"
+  },
+  "summary": {
+    "en": "A king without pawn cover or stuck in the centre is a target: open lines and checks reach it, and every check gains time for the next piece to join.",
+    "uk": "Король без пішакового прикриття або застряглий у центрі — мішень: до нього ведуть відкриті лінії й шахи, а кожен шах дає час підтягнути наступну фігуру.",
+    "ru": "Король без пешечного прикрытия или застрявший в центре — мишень: к нему ведут открытые линии и шахи, а каждый шах даёт время подтянуть следующую фигуру."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "7k/5rbr/p7/6RP/3p2R1/6Q1/P5PK/3q4 w - - 6 44",
+      "arrows": [
+        {
+          "from": "g3",
+          "to": "b8",
+          "color": "green"
+        },
+        {
+          "from": "g4",
+          "to": "g8",
+          "color": "green"
+        }
+      ],
+      "text": {
+        "en": "The black king h8 has no pawns in front of it. The eighth rank is open for the queen, and the doubled white rooks press on the g-file — only the bishop g7 holds it.",
+        "uk": "Перед чорним королем h8 немає жодного пішака. Восьма горизонталь відкрита для ферзя, а здвоєні білі тури тиснуть вертикаллю g — її тримає лише слон g7.",
+        "ru": "Перед чёрным королём h8 нет ни одной пешки. Восьмая горизонталь открыта для ферзя, а сдвоенные белые ладьи давят по вертикали g — её держит только слон g7."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "7k/5rbr/p7/6RP/3p2R1/6Q1/P5PK/3q4 w - - 6 44",
+      "text": {
+        "en": "White to move. Mate in three.",
+        "uk": "Хід білих. Мат у три ходи.",
+        "ru": "Ход белых. Мат в три хода."
+      },
+      "hint": {
+        "en": "Start with a check along the open eighth rank.",
+        "uk": "Почніть із шаху відкритою восьмою горизонталлю.",
+        "ru": "Начните с шаха по открытой восьмой горизонтали."
+      },
+      "line": [
+        {
+          "answers": [
+            "g3b8"
+          ],
+          "reply": "f7f8",
+          "correct": {
+            "en": "The rook has to block.",
+            "uk": "Тура мусить закритися.",
+            "ru": "Ладья вынуждена закрыться."
+          }
+        },
+        {
+          "answers": [
+            "b8f8"
+          ],
+          "reply": "g7f8",
+          "correct": {
+            "en": "The queen is sacrificed so that the bishop leaves g7.",
+            "uk": "Ферзя віддано, щоб слон пішов із g7.",
+            "ru": "Ферзь отдан, чтобы слон ушёл с g7."
+          }
+        },
+        {
+          "answers": [
+            "g5g8"
+          ],
+          "correct": {
+            "en": "Mate: the rook g4 protects g8.",
+            "uk": "Мат: тура g4 захищає g8.",
+            "ru": "Мат: ладья g4 защищает g8."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "3R4/5p1k/p7/1p3qpp/5P2/P1P2QKP/1P4P1/4r1b1 w - - 2 37",
+      "text": {
+        "en": "White to move. The pawn h5 is the king's last cover. Mate in three.",
+        "uk": "Хід білих. Пішак h5 — останнє прикриття короля. Мат у три ходи.",
+        "ru": "Ход белых. Пешка h5 — последнее прикрытие короля. Мат в три хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "f3h5"
+          ],
+          "reply": "h7g7",
+          "correct": {
+            "en": "The cover is gone, the king must step out.",
+            "uk": "Прикриття немає, король мусить вийти.",
+            "ru": "Прикрытия нет, король вынужден выйти."
+          }
+        },
+        {
+          "answers": [
+            "h5h8"
+          ],
+          "reply": "g7g6",
+          "correct": {
+            "en": "Each check pushes the king further forward.",
+            "uk": "Кожен шах виганяє короля далі вперед.",
+            "ru": "Каждый шах выгоняет короля дальше вперёд."
+          }
+        },
+        {
+          "answers": [
+            "d8g8"
+          ],
+          "correct": {
+            "en": "Mate: the rook joins with the last check.",
+            "uk": "Мат: тура включається останнім шахом.",
+            "ru": "Мат: ладья включается последним шахом."
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "3R4/5p1k/p7/1p3qpp/5P2/P1P2QKP/1P4P1/4r1b1 w - - 2 37",
+      "text": {
+        "en": "Against an exposed king look first at checks: they leave the opponent no time for defence, and every one of them brings another of your pieces closer.",
+        "uk": "Проти оголеного короля спершу дивіться на шахи: вони не лишають суперникові часу на захист, і кожен із них наближає ще одну вашу фігуру.",
+        "ru": "Против незащищённого короля сначала смотрите на шахи: они не оставляют сопернику времени на защиту, и каждый из них приближает ещё одну вашу фигуру."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "3krr2/ppn3pb/n2P1q1p/2P3p1/1PQ2N2/P3PP1B/5K2/R6R w - - 0 32",
+      "text": {
+        "en": "White to move. Win material.",
+        "uk": "Хід білих. Виграйте матеріал.",
+        "ru": "Ход белых. Выиграйте материал."
+      },
+      "line": [
+        {
+          "answers": [
+            "d6c7"
+          ],
+          "reply": "d8c7"
+        },
+        {
+          "answers": [
+            "f4d5"
+          ],
+          "reply": "c7b8"
+        },
+        {
+          "answers": [
+            "d5f6"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "rnbqk2r/ppp2ppp/8/2bQP3/4nP2/2N2N2/PPP3PP/R1B1KB1R b KQkq - 0 8",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. The white king is still in the centre. Win material.",
+        "uk": "Хід чорних. Білий король досі в центрі. Виграйте матеріал.",
+        "ru": "Ход чёрных. Белый король всё ещё в центре. Выиграйте материал."
+      },
+      "line": [
+        {
+          "answers": [
+            "c5f2"
+          ],
+          "reply": "e1e2"
+        },
+        {
+          "answers": [
+            "e4c3"
+          ],
+          "reply": "b2c3"
+        },
+        {
+          "answers": [
+            "d8d5"
+          ]
+        }
+      ]
+    }
+  ]
+}
