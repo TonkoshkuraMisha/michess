@@ -4,6 +4,7 @@
 import json
 
 import chess
+import pytest
 from sqlalchemy import select
 
 from src.api.bots import BOT_METADATA
@@ -35,15 +36,19 @@ async def play(db, tournament_id: int, outcome) -> None:
 # --- мастера прошлого ---------------------------------------------------------------------------------------------
 
 def test_guests_are_well_formed():
-    assert len(GUESTS) == len(GUESTS_BY_ID) == 40
+    assert len(GUESTS) == len(GUESTS_BY_ID) >= 40
     for guest in GUESTS:
         assert guest.id.isascii() and guest.id == guest.id.lower()
         assert guest.key == f"guest:{guest.id}"
         # Имя в турнире — в колонке на 30 знаков; в PGN — «Фамилия, Имя» латиницей.
         assert len(guest.pgn_name) <= 30 and ", " in guest.pgn_name and guest.pgn_name.isascii(), guest.pgn_name
         assert guest.config.target_elo == guest.rating and 1500 <= guest.rating <= 2500
-        born, died = (int(part) for part in guest.era.split("–"))
-        assert 1750 < born < died <= 1995, guest.id  # правило 1: только умершие мастера
+        if guest.era is None:
+            # Годы жизни неизвестны — допустимо только для участника турнира XIX века (правило 1 соблюдено и так).
+            assert min(event.year for event in EVENTS if guest.id in {entry.id for entry in event.field}) < 1900, guest.id
+        else:
+            born, died = (int(part) for part in guest.era.split("–"))
+            assert 1750 < born < died <= 1995 and 15 <= died - born <= 100, guest.id  # правило 1: только умершие мастера
         # Характер проходит ту же проверку, что и соперник мастерской.
         assert BotPersonalityConfig.model_validate_json(guest.config.model_dump_json()) == guest.config
     # Мастер прошлого не дублирует бота с книгой и портретом.
@@ -66,19 +71,27 @@ def test_guest_plays_a_legal_move():
 # --- реестр турниров ----------------------------------------------------------------------------------------------
 
 def test_events_are_in_order_and_complete():
-    assert [event.key for event in EVENTS] == ["london_1851", "hastings_1895", "st_petersburg_1914", "new_york_1924",
-                                               "avro_1938"]
+    keys = [event.key for event in EVENTS]
+    assert len(keys) == len(set(keys)) >= 5 and all(len(key) <= 32 and key.isascii() for key in keys)
+    assert {"london_1851", "hastings_1895", "st_petersburg_1914", "new_york_1924", "avro_1938"} <= set(keys)
     assert [event.year for event in EVENTS] == sorted(event.year for event in EVENTS)
+    assert all(event.year <= 1948 for event in EVENTS)  # решение спринта: турниры до 1948 года
     sizes = {event.key: (len(event.field), event.format, event.cycles, event.player_games) for event in EVENTS}
-    assert sizes == {
+    for key, expected in {
         "london_1851": (16, "knockout", 1, None),
         "hastings_1895": (22, "round_robin", 1, 22),
         "st_petersburg_1914": (11, "round_robin", 1, 11),
         "new_york_1924": (11, "round_robin", 2, 22),
         "avro_1938": (8, "round_robin", 2, 16),
-    }
-    assert {event.key: event.rounds for event in EVENTS} == {
-        "london_1851": 5, "hastings_1895": 23, "st_petersburg_1914": 11, "new_york_1924": 22, "avro_1938": 18}
+        # Четверо в шесть кругов и шестеро в четыре: у игрока по 24 партии.
+        "st_petersburg_1895": (4, "round_robin", 6, 24),
+        "new_york_1927": (6, "round_robin", 4, 24),
+    }.items():
+        assert sizes[key] == expected, key
+    rounds = {event.key: event.rounds for event in EVENTS}
+    assert (rounds["london_1851"], rounds["hastings_1895"], rounds["new_york_1924"], rounds["avro_1938"]) == (5, 23, 22, 18)
+    # Пятеро (четверо мастеров и игрок) в шесть кругов: 30 туров, в каждом один свободен.
+    assert rounds["st_petersburg_1895"] == 30
     for event in EVENTS:
         ids = [entry.id for entry in event.field]
         assert len(ids) == len(set(ids)), event.key
@@ -109,13 +122,76 @@ def test_real_results_match_the_sources():
     assert [e.place for e in london[:8]] == list(range(1, 9)) and all(e.place is None for e in london[8:])
 
 
+@pytest.mark.parametrize("event", EVENTS, ids=lambda event: event.key)
+def test_every_event_has_a_consistent_real_table(event):
+    field = event.field
+    if event.format == "knockout":
+        placed = [entry.place for entry in field if entry.place is not None]
+        assert placed == list(range(1, len(placed) + 1)) and placed[0] == 1
+        assert all(entry.score is None for entry in field)
+        return
+    scores = [entry.score for entry in field]
+    assert all(score is not None and score >= 0 for score in scores)
+    assert scores == sorted(scores, reverse=True)  # таблица — по убыванию очков
+    for index, entry in enumerate(field):
+        # Место — номер первой строки с такими же очками: делёж даёт одно место на всех.
+        assert entry.place == 1 + next(i for i, other in enumerate(field) if other.score == entry.score), entry.id
+        assert index == 0 or entry.place >= field[index - 1].place
+    games = len(field) * (len(field) - 1) // 2 * event.cycles
+    # Сумма очков — число партий; в старых турнирах бывала несыгранная партия без очков обоим.
+    assert games - 2 <= sum(scores) <= games, (event.key, sum(scores), games)
+    assert max(scores) <= (len(field) - 1) * event.cycles
+
+
+@pytest.mark.parametrize("event", EVENTS, ids=lambda event: event.key)
+async def test_every_event_can_be_entered(event, db_session, test_user_1):
+    tournament = await time_machine.start(db_session, test_user_1, event.key, 600_000, 0)
+    players = await service.players_of(db_session, tournament.id)
+    games = await service.games_of(db_session, tournament.id)
+    assert (tournament.event_key, tournament.size, len(players)) == (event.key, event.size, len(event.field) + 1)
+    assert sorted(p.seat for p in players) == list(range(1, event.size + 1))
+    assert sum(1 for p in players if p.kind == "user") == 1
+    # Каждый участник реестра сидит за доской: бот — по id, мастер прошлого — персоналией с ключом и характером.
+    keys = {p.bot_key for p in players if p.kind != "user"}
+    assert keys == {entry.id if entry.id in BOT_METADATA else f"guest:{entry.id}" for entry in event.field}
+    assert all(p.config_json and p.personality_name for p in players if (p.bot_key or "").startswith("guest:"))
+    if event.format == "round_robin":
+        assert len(games) == event.size * (event.size - 1) // 2 * event.cycles
+        mine = next(p.seat for p in players if p.kind == "user")
+        assert sum(1 for g in games if mine in (g.white_seat, g.black_seat)) == event.player_games
+        assert max(g.round for g in games) == event.rounds
+    else:
+        assert len(games) == event.size - (2 ** (event.rounds - 1))  # матчи первого круга, остальные проходят без игры
+
+
+def test_client_catalogs_have_names_and_texts_for_everything():
+    """Имена мастеров и тексты о турнирах — на клиенте, на трёх языках: без них на странице были бы голые ключи."""
+    import pathlib
+    import re
+
+    root = pathlib.Path(__file__).resolve().parent.parent / "frontend" / "src" / "i18n" / "messages"
+    for language in ("en", "uk", "ru"):
+        text = (root / f"{language}.ts").read_text(encoding="utf-8")
+        guests = text[text.index("        guests: {\n"):]
+        guests = guests[:guests.index("\n        },\n")]
+        found = set(re.findall(r"^            (\w+): \{name: '.+', shortName: '.+', about: '.+'\},$", guests, flags=re.M))
+        assert found == set(GUESTS_BY_ID), (language, found ^ set(GUESTS_BY_ID))
+        events = text[text.index("        events: {\n", text.index("    timeMachine: {\n")):]
+        events = events[:events.index("\n        },\n    },\n")]
+        keys = re.findall(r"^            (\w+): \{$", events, flags=re.M)
+        assert sorted(keys) == sorted(EVENTS_BY_KEY), (language, set(keys) ^ set(EVENTS_BY_KEY))
+        for part in ("title", "place", "story", "real"):
+            assert len(re.findall(rf"^                {part}: '.+',$", events, flags=re.M)) == len(EVENTS), (language, part)
+
+
 # --- API ----------------------------------------------------------------------------------------------------------
 
 def test_overview_lists_events_with_field_and_history(client, token_user_1):
     assert client.get(f"{API}/time-machine").status_code == 401
     events = client.get(f"{API}/time-machine", headers=auth(token_user_1)).json()["events"]
     assert [e["key"] for e in events] == [event.key for event in EVENTS]
-    hastings = events[1]
+    by_key = {e["key"]: e for e in events}
+    hastings = by_key["hastings_1895"]
     assert (hastings["year"], hastings["format"], hastings["size"], hastings["rounds"], hastings["player_games"]) == (
         1895, "round_robin", 23, 23, 22)
     assert (hastings["active_id"], hastings["best_place"], hastings["played"]) == (None, None, 0)
@@ -123,7 +199,7 @@ def test_overview_lists_events_with_field_and_history(client, token_user_1):
     assert first == {"id": "pillsbury", "kind": "bot", "rating": first["rating"], "place": 1, "score": 16.5}
     kinds = {p["id"]: p["kind"] for p in hastings["field"]}
     assert kinds["schlechter"] == "guest" and kinds["lasker"] == "bot"
-    assert events[0]["player_games"] is None and events[0]["field"][8]["place"] is None
+    assert by_key["london_1851"]["player_games"] is None and by_key["london_1851"]["field"][8]["place"] is None
 
 
 def test_unknown_event_and_time_control_limits(client, token_user_1):
@@ -155,7 +231,7 @@ def test_player_joins_avro_as_the_ninth(client, token_user_1):
     summary = client.get(API, headers=auth(token_user_1)).json()
     assert summary[0]["event_key"] == "avro_1938"
     events = client.get(f"{API}/time-machine", headers=auth(token_user_1)).json()["events"]
-    assert events[-1]["active_id"] == t["id"]
+    assert {e["key"]: e["active_id"] for e in events if e["active_id"]} == {"avro_1938": t["id"]}
 
 
 def test_time_machine_has_its_own_slot_next_to_a_regular_tournament(client, token_user_1):
@@ -192,7 +268,8 @@ async def test_london_1851_knockout_to_the_end(client, db_session, token_user_1,
     places = {p["seat"]: p["place"] for p in done["players"]}
     assert places[1] == 1 and places[2] == 2 and sorted(places.values()).count(9) == 8
     events = client.get(f"{API}/time-machine", headers=auth(token_user_1)).json()["events"]
-    assert events[0]["active_id"] is None and events[0]["played"] == 1 and events[0]["best_place"] == places[t["my_seat"]]
+    london = next(e for e in events if e["key"] == "london_1851")
+    assert london["active_id"] is None and london["played"] == 1 and london["best_place"] == places[t["my_seat"]]
     # Закончив, можно войти в тот же турнир снова.
     assert client.post(f"{API}/time-machine/london_1851", json={}, headers=auth(token_user_1)).status_code == 201
 

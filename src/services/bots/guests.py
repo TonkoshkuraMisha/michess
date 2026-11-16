@@ -9,7 +9,8 @@
 участник сохраняется как персоналия с ключом «guest:<id>»: симуляция и партия игрока работают как с любым
 соперником мастерской, а имя на языке игрока берёт клиент (bots.guests.<id>).
 
-Все — умершие шахматисты (правило 1). Портретов и своих дебютных книг у них пока нет: это следующий шаг.
+Все — умершие шахматисты (правило 1). Годы жизни сверены с открытыми источниками (17.11); у кого надёжных дат
+нет — не указаны. Портретов и своих дебютных книг у мастеров прошлого пока нет: это следующий шаг.
 """
 
 from dataclasses import dataclass
@@ -24,7 +25,9 @@ class Guest:
     id: str
     # Латинское имя для PGN и архива: «Фамилия, Имя».
     pgn_name: str
-    era: str
+    # Годы жизни — только сверенные с источниками; None — надёжных дат найти не удалось (трое малоизвестных
+    # участников Лондона 1851).
+    era: str | None
     rating: int
     config: BotPersonalityConfig
 
@@ -33,7 +36,7 @@ class Guest:
         return f"{GUEST_PREFIX}{self.id}"
 
 
-def _guest(guest_id: str, pgn_name: str, era: str, rating: int, **style) -> Guest:
+def _guest(guest_id: str, pgn_name: str, era: str | None, rating: int, **style) -> Guest:
     return Guest(guest_id, pgn_name, era, rating, BotPersonalityConfig(target_elo=rating, **style))
 
 
@@ -63,10 +66,10 @@ GUESTS: tuple[Guest, ...] = (
     _guest("mayet", "Mayet, Carl", "1810–1868", 1800, aggression=40, mobility=130, randomness=35),
     _guest("kennedy_h", "Kennedy, Hugh Alexander", "1809–1878", 1800, aggression=20, mobility=120, randomness=35),
     _guest("lowe", "Loewe, Edward", "1794–1880", 1750, aggression=-10, king_safety=120, randomness=40),
-    _guest("newham", "Newham, Samuel", "1796–1875", 1700, aggression=0, randomness=40),
+    _guest("newham", "Newham, Samuel", None, 1700, aggression=0, randomness=40),
     _guest("kennedy_e", "Kennedy, Edward Shirley", "1817–1898", 1650, aggression=10, randomness=45),
-    _guest("brodie", "Brodie, Alfred", "1814–1862", 1650, aggression=0, randomness=45),
-    _guest("mucklow", "Mucklow, James R.", "1808–1864", 1600, aggression=0, randomness=50, habits=["pawn_grabber"]),
+    _guest("brodie", "Brodie, Alfred", None, 1650, aggression=0, randomness=45),
+    _guest("mucklow", "Mucklow, James R.", None, 1600, aggression=0, randomness=50, habits=["pawn_grabber"]),
 
     # --- Гастингс 1895 ------------------------------------------------------------------------------------------
     # Безупречная защита, ничья как оружие.
@@ -141,5 +144,42 @@ GUESTS: tuple[Guest, ...] = (
     # Позиционная игра и эндшпиль.
     _guest("flohr", "Flohr, Salo", "1908–1983", 2350, aggression=-40, pawn_structure=170, passed_pawns=150,
            king_safety=140, randomness=8, blunder_guard_cp=60, draw_attitude=40),
+
+    # --- Вторая партия турниров (28.4): Баден-Баден 1870, Лондон 1883, Сан-Себастьян 1911, Нью-Йорк 1927, Ноттингем 1936 ---
+    # Классическая ясная игра.
+    _guest("neumann", "Neumann, Gustav", "1838–1881", 2050, aggression=10, center_control=140, randomness=15),
+    # Природный талант, лёгкая фигурная игра.
+    _guest("de_vere", "De Vere, Cecil Valentine", "1846–1875", 1950, aggression=0, mobility=140, randomness=25),
+    # Находчивость в атаке и в эндшпиле.
+    _guest("winawer", "Winawer, Szymon", "1838–1919", 2100, aggression=50, mobility=150, randomness=25),
+    # Открытая игра.
+    _guest("rosenthal", "Rosenthal, Samuel", "1837–1902", 2000, aggression=30, mobility=130, randomness=25),
+    _guest("minckwitz", "Minckwitz, Johannes", "1843–1901", 1950, aggression=20, randomness=30),
+    # Атака на короля.
+    _guest("mackenzie", "Mackenzie, George Henry", "1837–1891", 2100,
+           aggression=70, mobility=150, king_safety=80, randomness=20, draw_attitude=-40),
+    # Прочность: его очень трудно обыграть.
+    _guest("englisch", "Englisch, Berthold", "1851–1897", 2050,
+           aggression=-40, king_safety=160, pawn_structure=140, randomness=12, draw_attitude=60),
+    _guest("noa", "Noa, Josef", "1856–1903", 1900, aggression=0, randomness=35),
+    _guest("sellman", "Sellman, Alexander", "1856–1888", 1850, aggression=10, randomness=35),
+    _guest("mortimer", "Mortimer, James", "1832–1911", 1750, aggression=20, randomness=45),
+    _guest("skipworth", "Skipworth, Arthur", "1830–1898", 1750, aggression=0, randomness=45),
+    # Прочная позиционная игра.
+    _guest("vidmar", "Vidmar, Milan", "1885–1962", 2250,
+           aggression=-10, pawn_structure=150, center_control=140, randomness=10),
+    # Атака и жертва.
+    _guest("spielmann", "Spielmann, Rudolf", "1883–1942", 2250,
+           aggression=90, mobility=160, king_safety=60, randomness=20, opening_style="gambit", draw_attitude=-50),
+    # Находчивый боец, автор этюдов.
+    _guest("duras", "Duras, Oldrich", "1882–1957", 2200, aggression=50, mobility=150, passed_pawns=130, randomness=20),
+    # Теоретик дебютов.
+    _guest("leonhardt", "Leonhardt, Paul Saladin", "1877–1934", 2100, aggression=40, center_control=140, randomness=25),
+    _guest("tylor", "Tylor, Theodore", "1900–1968", 2050, aggression=-10, king_safety=130, randomness=20),
+    # Атакующий стиль.
+    _guest("alexander", "Alexander, Conel Hugh O'Donel", "1909–1974", 2150,
+           aggression=70, mobility=150, randomness=20, draw_attitude=-40),
+    _guest("thomas", "Thomas, George Alan", "1881–1972", 2100, aggression=-10, pawn_structure=140, randomness=20),
+    _guest("winter", "Winter, William", "1897–1955", 2050, aggression=30, mobility=130, randomness=25),
 )
 GUESTS_BY_ID = {guest.id: guest for guest in GUESTS}
