@@ -5,6 +5,9 @@
 экзамен на 30 позиций. Вопрос — позиция задачи базы после хода соперника, ответ — один ход (первый ход решения или
 любой мат). Подсказок и ответов во время теста нет; итог — оценка силы по разделу максимальным правдоподобием по
 формуле Эло и уровень по разрядам. Игровой рейтинг и рейтинг задач не меняются.
+
+Экзамены уровней Большого курса (level0 … level5, таск 27.12) идут тем же протоколом, но позиции — из фиксированного
+набора src/services/level_exam.py.
 """
 
 import math
@@ -18,6 +21,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.core.errors import DomainValueError
 from src.models.puzzle import Puzzle, PuzzleTheme
 from src.models.trainer import ExamResult
+from src.services import level_exam
 from src.services.themes import THEMES
 
 EXAM_SECTIONS = ("F", "A", "B", "C", "D", "E", "G", "H", "I", "J")
@@ -48,6 +52,8 @@ def question_position(puzzle: Puzzle) -> chess.Board:
 
 async def build(db: AsyncSession, section: str, rng: random.Random | None = None) -> list[dict]:
     """Вопросы теста: на каждую целевую силу — одна из ближайших по рейтингу задач раздела, без повторов."""
+    if level_exam.is_level_section(section):
+        return level_exam.questions(section)
     if section != ENDGAME and section not in EXAM_SECTIONS:
         raise DomainValueError("exam_section_unknown")
     rng = rng or random.Random()
@@ -105,9 +111,31 @@ class Graded:
     total: int
     estimate: int
     review: list[dict]
+    branches: dict[str, dict] | None = None
+
+
+def _grade_level(user_id: int, section: str, answers: list[tuple[int, str]]) -> tuple[Graded, ExamResult]:
+    review, scored = [], []
+    for qid, uci in answers:
+        item = level_exam.question(section, qid)
+        if item is None:
+            raise DomainValueError("exam_question_unknown")
+        ok = level_exam.is_correct(item, uci)
+        scored.append((item["rating"], ok))
+        board = chess.Board(item["fen"])
+        review.append({"id": qid, "answer": uci, "correct": ok, "solution": item["answer"], "branch": item["branch"],
+                       "solution_san": board.san(chess.Move.from_uci(item["answer"])), "rating": item["rating"]})
+    result = Graded(section, sum(ok for _, ok in scored), len(scored), estimate(scored), review,
+                    level_exam.branch_profile(review))
+    return result, ExamResult(user_id=user_id, section=section, correct=result.correct, total=result.total,
+                              estimate=result.estimate)
 
 
 async def grade(db: AsyncSession, user_id: int, section: str, answers: list[tuple[int, str]]) -> Graded:
+    if level_exam.is_level_section(section):
+        graded, row = _grade_level(user_id, section, answers)
+        db.add(row)
+        return graded
     if section != ENDGAME and section not in EXAM_SECTIONS:
         raise DomainValueError("exam_section_unknown")
     codes = set(themes_of(section))

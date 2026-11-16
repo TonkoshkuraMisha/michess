@@ -19,12 +19,12 @@ const GRADED = {correct: 1, total: 2, estimate: 1300, level: 'third', review: [
     {id: 2, answer: '0000', correct: false, solution: 'd1d8', solution_san: 'Qd8#', rating: 1600},
 ]};
 
-function stub() {
+function stub(graded: object = GRADED) {
     const calls: [string, unknown][] = [];
     vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
         const u = String(url);
         calls.push([u, init?.body ? JSON.parse(String(init.body)) : null]);
-        const body = u.endsWith('/questions') ? {section: 'F', questions: QUESTIONS} : u.endsWith('/submit') ? GRADED : SUMMARY;
+        const body = u.endsWith('/questions') ? {section: 'F', questions: QUESTIONS} : u.endsWith('/submit') ? graded : SUMMARY;
         return {ok: true, json: async () => body} as Response;
     }));
     return calls;
@@ -63,5 +63,18 @@ describe('диагностический экзамен', () => {
         setToken(null);
         render(<MemoryRouter><ExamPage/></MemoryRouter>);
         expect(screen.getByTestId('exam-login')).toBeInTheDocument();
+    });
+
+    it('экзамен уровня курса (27.12): старт по ссылке ?test=, итог по ветвям', async () => {
+        const calls = stub({...GRADED, branches: {T: {correct: 1, total: 1}, E: {correct: 0, total: 1}}});
+        await act(async () => render(<MemoryRouter initialEntries={['/exam?test=level2']}><ExamPage/></MemoryRouter>));
+        expect(calls.some(([u]) => u.endsWith('/level2/questions'))).toBe(true);
+        expect(screen.getByTestId('exam-question')).toHaveTextContent('Экзамен уровня 2');
+        click('d1');
+        await act(async () => click('d8'));
+        await act(async () => fireEvent.click(screen.getByTestId('exam-skip')));
+        expect(calls.some(([u]) => u.endsWith('/level2/submit'))).toBe(true);
+        expect(screen.getByTestId('exam-branches')).toHaveTextContent('Тактика: 1/1');
+        expect(screen.getByTestId('exam-branches')).toHaveTextContent('Эндшпиль: 0/1');
     });
 });

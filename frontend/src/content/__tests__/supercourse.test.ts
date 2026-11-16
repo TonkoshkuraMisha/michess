@@ -12,7 +12,8 @@ import {MINI_GAMES} from '../../components/trainers/MiniGames';
 import {STRUCTURES} from '../../services/library';
 import {hasMessage} from '../../i18n';
 
-const EXAM = ['F', 'A', 'B', 'C', 'D', 'E', 'G', 'H', 'I', 'J', 'endgame'];
+const EXAM = ['F', 'A', 'B', 'C', 'D', 'E', 'G', 'H', 'I', 'J', 'endgame',
+    'level0', 'level1', 'level2', 'level3', 'level4', 'level5'];  // экзамены уровней — 27.12
 
 function exists(activity: Activity): boolean {
     switch (activity.kind) {
@@ -65,12 +66,12 @@ describe('Обязательные позиции (27.9)', () => {
 });
 
 describe('экзамены уровней (27.12)', () => {
-    it('уровень пройден, когда каждый раздел не ниже порога', async () => {
+    it('уровень пройден, когда оценка своего экзамена уровня не ниже порога', async () => {
         const {examSections, levelExamPassed} = await import('../supercourse');
-        expect(examSections(1)).toEqual(['A', 'B']);
-        expect(levelExamPassed(1, {A: {estimate: 1000}, B: {estimate: 1100}})).toBe(true);
-        expect(levelExamPassed(1, {A: {estimate: 1000}})).toBe(false);
-        expect(levelExamPassed(2, {C: {estimate: 1500}, D: {estimate: 1500}, E: {estimate: 1199}})).toBe(false);
-        for (let level = 0; level < LEVEL_COUNT; level++) expect(examSections(level).length).toBeGreaterThan(0);
+        expect(examSections(1)).toEqual(['level1']);
+        expect(levelExamPassed(1, {level1: {estimate: 1000}})).toBe(true);
+        expect(levelExamPassed(1, {level1: {estimate: 999}})).toBe(false);
+        expect(levelExamPassed(2, {A: {estimate: 2000}, B: {estimate: 2000}})).toBe(false);  // диагностика не в счёт
+        for (let level = 0; level < LEVEL_COUNT; level++) expect(examSections(level)).toEqual([`level${level}`]);
     });
 });

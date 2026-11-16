@@ -3,7 +3,7 @@
 // оценка силы, уровень по разрядам и разбор. Игровой рейтинг не меняется; итоги — стартовые данные карты навыков.
 
 import {useEffect, useState} from 'react';
-import {Link} from 'react-router-dom';
+import {Link, useSearchParams} from 'react-router-dom';
 import {ArrowLeft, CheckCircle2, ClipboardCheck, XCircle} from 'lucide-react';
 import {renderUiMessage, useI18n} from '../i18n';
 import type {MessageKey, UiMessage} from '../i18n';
@@ -16,6 +16,8 @@ export type ExamLevel = 'novice' | 'fourth' | 'third' | 'second' | 'first' | 'ca
 
 export interface ExamSummary {
     tests: string[];
+    /** Экзамены уровней Большого курса (27.12): level0 … level5. */
+    level_tests?: string[];
     results: Record<string, { correct: number; total: number; estimate: number; level: ExamLevel; at: string | null }>;
     overall: number | null;
     level: ExamLevel | null;
@@ -28,6 +30,7 @@ interface Question {
     fen: string;
     color: 'white' | 'black';
     previous_move: string;
+    branch?: string;
 }
 
 interface Graded {
@@ -36,6 +39,17 @@ interface Graded {
     estimate: number;
     level: ExamLevel;
     review: { id: number; answer: string; correct: boolean; solution: string; solution_san: string; rating: number }[];
+    /** Экзамен уровня: верно / всего по ветвям курса. */
+    branches?: Record<string, { correct: number; total: number }> | null;
+}
+
+const LEVEL_TEST = /^level(\d)$/;
+
+/** Название теста: раздел диагностики, эндшпильный экзамен или экзамен уровня курса. */
+export function examTitle(t: (key: string, params?: Record<string, string | number>) => string, section: string): string {
+    const level = LEVEL_TEST.exec(section);
+    if (level) return t('exam.levelTest', {n: Number(level[1])});
+    return section === 'endgame' ? t('exam.endgameTest') : `${section}. ${t(`puzzles.sections.${section}`)}`;
 }
 
 async function call<T>(path: string, body?: object): Promise<T> {
@@ -53,7 +67,7 @@ async function call<T>(path: string, body?: object): Promise<T> {
 export const fetchExamSummary = () => call<ExamSummary>('');
 
 const sectionLabel = (t: (key: MessageKey, params?: Record<string, string | number>) => string, section: string) =>
-    section === 'endgame' ? t('exam.endgameTest') : `${section}. ${t(`puzzles.sections.${section}` as MessageKey)}`;
+    examTitle(t as unknown as (key: string, params?: Record<string, string | number>) => string, section);
 
 export function ExamPage() {
     const {t} = useI18n();
@@ -72,6 +86,10 @@ export function ExamPage() {
     };
     useEffect(loadSummary, [logged]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // Переход из курса или программы: /exam?test=level3 — сразу начать этот тест.
+    const [search] = useSearchParams();
+    const requested = search.get('test');
+
     const start = async (next: string) => {
         setBusy(true);
         setError(null);
@@ -87,6 +105,10 @@ export function ExamPage() {
             setBusy(false);
         }
     };
+
+    useEffect(() => {
+        if (logged && requested && !section) void start(requested);
+    }, [logged, requested]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const answer = async (move: string) => {
         const next = [...answers, move];
@@ -147,6 +169,29 @@ export function ExamPage() {
                             );
                         })}
                     </ul>
+                    {summary.level_tests && summary.level_tests.length > 0 && (
+                        <>
+                            <h2 className="font-bold text-amber-300 mt-1">{t('exam.levelTests')}</h2>
+                            <ul className="grid sm:grid-cols-3 gap-2">
+                                {summary.level_tests.map((test) => {
+                                    const result = summary.results[test];
+                                    return (
+                                        <li key={test} className="bg-acacia rounded-lg border-2 border-acacia-dark p-3 flex flex-col gap-1.5 text-sm" data-testid={`exam-test-${test}`}>
+                                            <span className="font-bold text-amber-200">{sectionLabel(t, test)}</span>
+                                            <span className="text-xs text-boxwood/80">
+                                                {result ? t('exam.lastResult', {correct: result.correct, total: result.total, level: t(`exam.levels.${result.level}`)})
+                                                    : t('exam.notTaken')}
+                                            </span>
+                                            <button type="button" disabled={busy} onClick={() => void start(test)} data-testid={`exam-start-${test}`}
+                                                    className="self-start px-3 py-1 rounded bg-amber-700 text-white font-bold text-xs disabled:opacity-50">
+                                                {t(result ? 'exam.retake' : 'exam.start')}
+                                            </button>
+                                        </li>
+                                    );
+                                })}
+                            </ul>
+                        </>
+                    )}
                 </>
             )}
 
@@ -178,6 +223,15 @@ export function ExamPage() {
                     <p className="text-lg font-bold text-amber-200">
                         {t('exam.result', {correct: graded.correct, total: graded.total, level: t(`exam.levels.${graded.level}`), rating: graded.estimate})}
                     </p>
+                    {graded.branches && (
+                        <ul className="flex flex-wrap gap-2 text-sm" data-testid="exam-branches">
+                            {Object.entries(graded.branches).map(([branch, score]) => (
+                                <li key={branch} className="px-2 py-1 rounded bg-black/30 border border-amber-900/50">
+                                    {t(`supercourse.branches.${branch}` as MessageKey)}: {score.correct}/{score.total}
+                                </li>
+                            ))}
+                        </ul>
+                    )}
                     <ol className="flex flex-col gap-1 text-sm">
                         {graded.review.map((r, i) => (
                             <li key={r.id} className="flex items-center gap-2">
