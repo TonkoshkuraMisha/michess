@@ -1,0 +1,239 @@
+{
+  "id": "endgame-key-squares",
+  "course": "endgame",
+  "order": 4,
+  "title": {
+    "en": "Key squares and outflanking",
+    "uk": "Ключові поля й обхід",
+    "ru": "Ключевые поля и обход"
+  },
+  "summary": {
+    "en": "Put your king on a key square of the pawn — and the pawn will promote whatever the defence.",
+    "uk": "Поставте короля на ключове поле пішака — і пішак пройде за будь-якого захисту.",
+    "ru": "Поставьте короля на ключевое поле пешки — и пешка пройдёт при любой защите."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "8/5k2/8/3K4/4P3/8/8/8 w - - 0 1",
+      "highlights": [
+        "d6",
+        "e6",
+        "f6"
+      ],
+      "text": {
+        "en": "Key squares are the squares where your king wins regardless of whose move it is. For a pawn on the second, third or fourth rank they are the three squares two ranks ahead of it: for e4 — d6, e6 and f6.",
+        "uk": "Ключові поля — це поля, на яких король виграє незалежно від черговості ходу. Для пішака на другій, третій чи четвертій горизонталі це три поля через одну горизонталь перед ним: для e4 — d6, e6 і f6.",
+        "ru": "Ключевые поля — это поля, на которых король выигрывает независимо от очереди хода. Для пешки на второй, третьей или четвёртой горизонтали это три поля через одну горизонталь перед ней: для e4 — d6, e6 и f6."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "8/5k2/8/3K4/4P3/8/8/8 w - - 0 1",
+      "text": {
+        "en": "Your move. Only one move wins: put the king on a key square.",
+        "uk": "Ваш хід. Виграє лише один хід: поставте короля на ключове поле.",
+        "ru": "Ваш ход. Выигрывает только один ход: поставьте короля на ключевое поле."
+      },
+      "hint": {
+        "en": "The key squares of the e4 pawn are d6, e6 and f6.",
+        "uk": "Ключові поля пішака e4 — d6, e6 і f6.",
+        "ru": "Ключевые поля пешки e4 — d6, e6 и f6."
+      },
+      "line": [
+        {
+          "answers": [
+            "d5d6"
+          ],
+          "correct": {
+            "en": "Right! The king is on a key square: next comes e6 or the pawn advances under its cover.",
+            "uk": "Правильно! Король на ключовому полі: далі e6 або пішак іде вперед під його прикриттям.",
+            "ru": "Верно! Король на ключевом поле: дальше e6 или пешка идёт вперёд под его прикрытием."
+          },
+          "wrong": {
+            "d5e5": {
+              "en": "Not a key square: the black king stands opposite on e7, and it is a draw.",
+              "uk": "Це не ключове поле: чорний король стає навпроти на e7, і це нічия.",
+              "ru": "Это не ключевое поле: чёрный король встаёт напротив на e7, и это ничья."
+            },
+            "e4e5": {
+              "en": "The pawn went ahead of the king too early — Black blockades it: a draw.",
+              "uk": "Пішак випередив короля завчасно — чорні стають перед ним: нічия.",
+              "ru": "Пешка обогнала короля раньше времени — чёрные встают перед ней: ничья."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/8/2k5/8/4K3/3P4/8/8 w - - 0 1",
+      "text": {
+        "en": "Your move. The pawn is on d3: its key squares are c5, d5 and e5. Which one can the king reach right now?",
+        "uk": "Ваш хід. Пішак на d3: його ключові поля — c5, d5 і e5. На яке з них король може стати просто зараз?",
+        "ru": "Ваш ход. Пешка на d3: её ключевые поля — c5, d5 и e5. На какое из них король может встать прямо сейчас?"
+      },
+      "line": [
+        {
+          "answers": [
+            "e4e5"
+          ],
+          "correct": {
+            "en": "Right! From e5 the king goes on to the key squares of the next ranks, and the pawn follows.",
+            "uk": "Правильно! З e5 король іде далі на ключові поля наступних горизонталей, а пішак рушить слідом.",
+            "ru": "Верно! С e5 король идёт дальше на ключевые поля следующих горизонталей, а пешка двинется следом."
+          },
+          "wrong": {
+            "e4d4": {
+              "en": "d4 is not a key square: the black king takes the opposition on d6 — a draw.",
+              "uk": "d4 — не ключове поле: чорний король займає опозицію на d6 — нічия.",
+              "ru": "d4 — не ключевое поле: чёрный король занимает оппозицию на d6 — ничья."
+            },
+            "d3d4": {
+              "en": "The pawn moved and its key squares moved too — now the king cannot reach them in time: a draw.",
+              "uk": "Пішак пішов — і ключові поля зсунулися, тепер король до них не встигає: нічия.",
+              "ru": "Пешка пошла — и ключевые поля сдвинулись, теперь король к ним не успевает: ничья."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "8/2k5/8/8/4P3/4K3/8/8 w - - 0 1",
+      "highlights": [
+        "d6",
+        "e6",
+        "f6"
+      ],
+      "text": {
+        "en": "Outflanking: when the enemy king guards the key squares on one side, go round on the other. Here the black king is on the queenside — so the white king heads for f5.",
+        "uk": "Обхід: коли ворожий король стереже ключові поля з одного боку, обходьте з іншого. Тут чорний король на ферзевому фланзі — тож білий король рушає на f5.",
+        "ru": "Обход: когда неприятельский король сторожит ключевые поля с одной стороны, обходите с другой. Здесь чёрный король на ферзевом фланге — значит, белый король идёт на f5."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "8/2k5/8/8/4P3/4K3/8/8 w - - 0 1",
+      "text": {
+        "en": "Your move. Find the only winning move.",
+        "uk": "Ваш хід. Знайдіть єдиний виграшний хід.",
+        "ru": "Ваш ход. Найдите единственный выигрывающий ход."
+      },
+      "hint": {
+        "en": "Go round the black king from the side where it is not.",
+        "uk": "Обійдіть чорного короля з того боку, де його немає.",
+        "ru": "Обойдите чёрного короля с той стороны, где его нет."
+      },
+      "line": [
+        {
+          "answers": [
+            "e3f4"
+          ],
+          "correct": {
+            "en": "Right! The king reaches f5 and then f6 or e6, and Black is too late to stop it.",
+            "uk": "Правильно! Король виходить на f5, а потім на f6 чи e6, і чорні не встигають завадити.",
+            "ru": "Верно! Король выходит на f5, а затем на f6 или e6, и чёрные не успевают помешать."
+          },
+          "wrong": {
+            "e3d4": {
+              "en": "Straight at the black king: it answers on d6 with the opposition — a draw.",
+              "uk": "Просто на чорного короля: він відповідає на d6 з опозицією — нічия.",
+              "ru": "Прямо на чёрного короля: он отвечает на d6 с оппозицией — ничья."
+            },
+            "e4e5": {
+              "en": "The pawn ran ahead without the king — Black stops it: a draw.",
+              "uk": "Пішак побіг без короля — чорні його зупиняють: нічия.",
+              "ru": "Пешка убежала без короля — чёрные её останавливают: ничья."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "8/2k5/8/8/4P3/4K3/8/8 w - - 0 1",
+      "text": {
+        "en": "Remember: first count the key squares of the pawn, then look for the way to one of them. If the direct road is guarded, go round — the pawn moves only when the king is already there.",
+        "uk": "Запам’ятайте: спершу визначте ключові поля пішака, потім шукайте шлях до одного з них. Якщо прямий шлях стережуть — обходьте; пішак рушає, лише коли король уже там.",
+        "ru": "Запомните: сначала найдите ключевые поля пешки, потом ищите путь к одному из них. Если прямой путь стерегут — обходите; пешка идёт, только когда король уже там."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "8/2k5/8/8/2KP4/8/8/8 w - - 0 1",
+      "text": {
+        "en": "Your move. Find the winning move.",
+        "uk": "Ваш хід. Знайдіть виграшний хід.",
+        "ru": "Ваш ход. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "c4c5"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/1k6/8/8/K1P5/8/8/8 w - - 0 1",
+      "text": {
+        "en": "Your move. Find the winning move.",
+        "uk": "Ваш хід. Знайдіть виграшний хід.",
+        "ru": "Ваш ход. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "a4b5"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "Which squares are the key squares of a pawn on e3?",
+        "uk": "Які поля ключові для пішака на e3?",
+        "ru": "Какие поля ключевые для пешки на e3?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "d5, e5 and f5.",
+            "uk": "d5, e5 і f5.",
+            "ru": "d5, e5 и f5."
+          }
+        },
+        {
+          "text": {
+            "en": "d4, e4 and f4.",
+            "uk": "d4, e4 і f4.",
+            "ru": "d4, e4 и f4."
+          },
+          "feedback": {
+            "en": "Those are right in front of the pawn; the key squares are two ranks ahead of it.",
+            "uk": "Це поля просто перед пішаком; ключові — через одну горизонталь.",
+            "ru": "Это поля прямо перед пешкой; ключевые — через одну горизонталь."
+          }
+        },
+        {
+          "text": {
+            "en": "e8 and the squares next to it.",
+            "uk": "e8 і сусідні поля.",
+            "ru": "e8 и соседние поля."
+          },
+          "feedback": {
+            "en": "The promotion square is the goal, not a key square of the king.",
+            "uk": "Поле перетворення — мета, а не ключове поле для короля.",
+            "ru": "Поле превращения — цель, а не ключевое поле для короля."
+          }
+        }
+      ]
+    }
+  ]
+}
