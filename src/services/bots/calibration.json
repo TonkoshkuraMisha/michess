@@ -1,7 +1,7 @@
 {
   "meta": {
     "date": "2026-11-15",
-    "games": 260,
+    "games": 112,
     "anchors": [
       1350,
       1600,
@@ -10,7 +10,7 @@
       2400
     ],
     "anchor_movetime_s": 1.0,
-    "minutes": 46.7,
+    "minutes": 34.8,
     "scale": "Stockfish UCI_Elo anchors at our time control (not FIDE)"
   },
   "players": {
@@ -216,6 +216,41 @@
       "score": 5.0,
       "ci95": 185,
       "declared": 650
+    },
+    "steinitz": {
+      "rating": 2144,
+      "games": 28,
+      "score": 14.5,
+      "ci95": 142,
+      "declared": 2050
+    },
+    "alekhine": {
+      "rating": 2190,
+      "games": 20,
+      "score": 10.5,
+      "ci95": 170,
+      "declared": 2300
+    },
+    "capablanca": {
+      "rating": 2163,
+      "games": 24,
+      "score": 11.5,
+      "ci95": 152,
+      "declared": 2300
+    },
+    "lasker": {
+      "rating": 2268,
+      "games": 28,
+      "score": 18.0,
+      "ci95": 143,
+      "declared": 2250
+    },
+    "rubinstein": {
+      "rating": 2146,
+      "games": 28,
+      "score": 13.0,
+      "ci95": 141,
+      "declared": 2200
     }
   }
 }

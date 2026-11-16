@@ -14,7 +14,7 @@ from src.core.errors import ApiError
 from src.db.session import get_db
 from src.models.library import LibraryCollection, LibraryGame, LibraryGameCollection
 from src.models.user import User
-from src.services import library
+from src.services import library, pawn_structures
 
 router = APIRouter(dependencies=[Depends(rate_limit("library", "RATE_LIMIT_PUZZLES"))])
 
@@ -32,7 +32,7 @@ async def optional_user(request: Request, db: AsyncSession = Depends(get_db)) ->
 def _row(game: LibraryGame) -> dict:
     return {"id": game.id, "white": game.white, "black": game.black, "event": game.event, "site": game.site,
             "date": game.date, "year": game.year, "result": game.result, "eco": game.eco, "opening": game.opening,
-            "plies": game.plies}
+            "plies": game.plies, "structure": game.structure}
 
 
 def _visible_game(user: User | None):
@@ -88,6 +88,7 @@ async def collection_games(collection_id: int = Path(..., ge=1), offset: int = Q
 async def search(player: str = Query("", max_length=60), eco: str = Query("", max_length=3),
                  year_from: int | None = Query(None, ge=1400, le=2200), year_to: int | None = Query(None, ge=1400, le=2200),
                  result: str = Query("", max_length=7), max_plies: int | None = Query(None, ge=1, le=1000),
+                 structure: str = Query("", max_length=20),
                  offset: int = Query(0, ge=0), limit: int = Query(PAGE, ge=1, le=200),
                  db: AsyncSession = Depends(get_db), user: User | None = Depends(optional_user)):
     """Поиск по видимым партиям: игрок (часть имени), код дебюта (начало), годы, результат, длина."""
@@ -105,6 +106,8 @@ async def search(player: str = Query("", max_length=60), eco: str = Query("", ma
         conditions.append(LibraryGame.result == result)
     if max_plies is not None:
         conditions.append(LibraryGame.plies <= max_plies)
+    if structure in pawn_structures.STRUCTURES:
+        conditions.append(LibraryGame.structure == structure)
     total = await db.scalar(select(func.count()).select_from(LibraryGame).where(*conditions)) or 0
     games = (await db.execute(
         select(LibraryGame).where(*conditions)

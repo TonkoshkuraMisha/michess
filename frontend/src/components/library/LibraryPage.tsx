@@ -7,7 +7,7 @@ import {ChevronDown, ChevronRight, Library, Lock} from 'lucide-react';
 import {renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
 import {errorMessage} from '../../services/apiErrors';
-import {childrenOf, LIBRARY_PAGE, libraryApi, totalGames} from '../../services/library';
+import {childrenOf, LIBRARY_PAGE, libraryApi, STRUCTURES, totalGames} from '../../services/library';
 import type {LibraryCollection, LibraryPage as Page, LibrarySearch} from '../../services/library';
 
 type View = { kind: 'collection'; id: number; name: string } | { kind: 'search'; search: LibrarySearch };
@@ -129,6 +129,13 @@ export function LibraryPage() {
                         <option value="1/2-1/2">½-½</option>
                     </select>
                 </label>
+                <label className="flex flex-col gap-1">{t('library.structure')}
+                    <select value={draft.structure ?? ''} onChange={(e) => set('structure', e.target.value)} data-testid="library-structure"
+                            className="bg-black/40 rounded px-2 py-1 max-w-[12rem]">
+                        <option value="">{t('watch.anyResult')}</option>
+                        {STRUCTURES.map((code) => <option key={code} value={code}>{t(`structures.${code}`)}</option>)}
+                    </select>
+                </label>
                 <button type="submit" className="px-3 py-1.5 rounded bg-amber-700 text-white font-bold" data-testid="library-search-submit">
                     {t('watch.search')}
                 </button>
@@ -162,8 +169,11 @@ export function LibraryPage() {
                                             <span className="text-xs text-boxwood/70 font-mono shrink-0">
                                                 {[g.eco, g.year, g.result].filter(Boolean).join(' · ')}
                                             </span>
-                                            {(g.event || g.opening) && (
-                                                <span className="w-full text-xs text-boxwood/60 truncate">{[g.event, g.opening].filter(Boolean).join(' · ')}</span>
+                                            {(g.event || g.opening || g.structure) && (
+                                                <span className="w-full text-xs text-boxwood/60 truncate">
+                                                    {[g.event, g.opening, g.structure && (STRUCTURES as readonly string[]).includes(g.structure)
+                                                        ? t(`structures.${g.structure as typeof STRUCTURES[number]}`) : ''].filter(Boolean).join(' · ')}
+                                                </span>
                                             )}
                                         </Link>
                                     </li>

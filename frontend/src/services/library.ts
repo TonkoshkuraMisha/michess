@@ -26,7 +26,12 @@ export interface LibraryGameRow {
     eco: string;
     opening: string;
     plies: number;
+    /** Пешечная структура (таск 27.5) — код из STRUCTURES. */
+    structure?: string | null;
 }
+
+export const STRUCTURES = ['hedgehog', 'maroczy', 'wedge', 'kid_chain', 'modern_benoni', 'stonewall', 'saw', 'french_chain',
+    'french_exchange', 'carlsbad', 'hanging_pawns', 'isolated_pawn', 'spanish', 'symmetry'] as const;
 
 export interface LibraryPage {
     total: number;
@@ -40,6 +45,7 @@ export interface LibrarySearch {
     year_to?: number;
     result?: string;
     max_plies?: number;
+    structure?: string;
     offset?: number;
 }
 

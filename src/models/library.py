@@ -53,6 +53,8 @@ class LibraryGame(Base):
     opening: Mapped[str] = mapped_column(String(200), default="", server_default="")
     start_fen: Mapped[str | None] = mapped_column(String(100), nullable=True)
     plies: Mapped[int] = mapped_column(Integer, default=0, server_default="0", index=True)
+    # Пешечная структура партии (таск 27.5, src/services/pawn_structures.py); None — не определена.
+    structure: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
     moves: Mapped[str] = mapped_column(Text, default="", server_default="")  # UCI через пробел
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
