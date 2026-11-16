@@ -22,6 +22,11 @@ PGN = """[White "A"]
 """
 
 
+def test_import_marks_games_ending_in_mate():
+    games = [library.parse_game(g) for g in library.read_text(PGN)]
+    assert [library.ends_in_mate(g.start_fen, g.moves) for g in games] == [True, False]
+
+
 def test_miniature_needs_mate_on_board():
     m = mini.miniature(1, "e2e4 e7e5 d1h5 b8c6 f1c4 g8f6 h5f7")
     assert m is not None and m.answer == "h5f7" and len(m.moves) == 6

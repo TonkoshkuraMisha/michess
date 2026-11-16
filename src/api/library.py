@@ -148,9 +148,9 @@ async def miniatures(count: int = Query(10, ge=1, le=20), seed: int | None = Que
     """«Миниатюры» (27.9): короткие публичные партии, закончившиеся матом, — найти последний ход."""
     rows = (await db.execute(
         select(LibraryGame.id, LibraryGame.moves)
-        .where(LibraryGame.plies <= miniatures_service.MAX_PLIES, LibraryGame.result.in_(("1-0", "0-1")),
+        .where(LibraryGame.mate_finish.is_(True), LibraryGame.plies <= miniatures_service.MAX_PLIES,
                LibraryGame.start_fen.is_(None), _visible_game(None))
-        .order_by(func.random()).limit(count * 20)
+        .order_by(func.random()).limit(count * 2)
     )).all()
     found = miniatures_service.pick([(r[0], r[1]) for r in rows], count, random.Random(seed))
     ids = [m.game_id for m in found]
