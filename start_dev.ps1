@@ -193,7 +193,10 @@ $frontendShell = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } 
 # хвост лога здесь, а не только в отдельном окне, которое легко потерять за другими.
 $viteLog = Join-Path $frontendDir "vite-dev.log"
 Remove-Item $viteLog -Force -ErrorAction SilentlyContinue
-Start-Process $frontendShell -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "cd '$frontendDir'; npm.cmd run dev 2>&1 | Tee-Object -FilePath '$viteLog'"
+# Папку задаём через -WorkingDirectory, а не через cd внутри -Command: из терминала PyCharm окно открывалось в корне
+# проекта, и npm падал с ENOENT на package.json. Путь к package.json передаём ещё и явно (--prefix) — на случай, если
+# оболочка всё же сменит каталог при старте.
+Start-Process $frontendShell -WorkingDirectory $frontendDir -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "Set-Location -LiteralPath '$frontendDir'; npm.cmd --prefix '$frontendDir' run dev 2>&1 | Tee-Object -FilePath '$viteLog'"
 
 # 9. Ожидание фактического открытия портов 3000 (Vite) и 8000 (backend) перед запуском браузера.
 # Первый старт Vite (оптимизация зависимостей) и uvicorn --reload может занять заметно больше 15 секунд.
