@@ -31,3 +31,15 @@ describe('Узнай структуру', () => {
         expect(onFinish).toHaveBeenCalledWith(10, 1);
     });
 });
+
+describe('Найди план (27.9)', () => {
+    it('варианты — планы структур, после ответа — название структуры', async () => {
+        vi.stubGlobal('fetch', vi.fn(async () => ({ok: true, json: async () => ({questions: QUESTIONS})}) as Response));
+        await act(async () => render(<MemoryRouter><StructureQuiz seed={3} onFinish={vi.fn()} variant="plan"/></MemoryRouter>));
+        expect(screen.getByText('Какой план подходит к этой позиции?')).toBeInTheDocument();
+        expect(screen.getByTestId('quiz-option-isolated_pawn')).toHaveTextContent('С изолятором');
+        expect(screen.getByTestId('quiz-option-isolated_pawn')).not.toHaveTextContent('Изолированная пешка');
+        fireEvent.click(screen.getByTestId('quiz-option-carlsbad'));
+        expect(screen.getByTestId('plan-verdict')).toHaveTextContent('Структура: Изолированная пешка.');
+    });
+});

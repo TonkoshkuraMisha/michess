@@ -30,7 +30,7 @@ TRAINERS = ("quiet_path", "double_strike", "knight_route", "tail",
             "blind_move", "blind_where",
             # Счёт и внимание (19.7): уровней нет (всегда 1).
             "calc_checks", "calc_exchange", "calc_distance", "calc_square", "calc_eval", "calc_compare",
-            "structure_quiz")
+            "structure_quiz", "plan_quiz")
 MAX_LEVEL = 20
 HISTORY = 50
 
