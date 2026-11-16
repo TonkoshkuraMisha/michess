@@ -1762,6 +1762,7 @@ export const en = {
             challenge: '{from} challenges you to a game ({base}+{inc})',
             rematch: '{from} offers a rematch',
             tournamentRound: 'Round {round}: your game is ready',
+            workoutReminder: 'The warm-up of the day is waiting — keep your {streak}-day streak going.',
             reportAnswer: 'An answer to your report',
         },
     },

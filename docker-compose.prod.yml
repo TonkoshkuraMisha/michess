@@ -109,6 +109,17 @@ services:
       redis:
         condition: service_healthy
 
+  # Плановые задачи Celery (напоминание о разминке раз в день, таск 22.2): один процесс beat на весь стек.
+  beat:
+    <<: *backend
+    command: ["celery", "-A", "src.worker.celery_app", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule"]
+    cpus: 0.1
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+
   # Резервные копии БД: pg_dump сразу при старте и затем каждые BACKUP_INTERVAL_HOURS часов
   # в папку хоста BACKUP_DIR; копии старше BACKUP_KEEP_DAYS дней удаляются (DEPLOY.md, раздел 5).
   backup:

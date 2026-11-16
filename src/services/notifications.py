@@ -14,7 +14,7 @@ from src.models.social import Notification
 
 logger = logging.getLogger(__name__)
 
-KINDS = ("challenge", "rematch", "tournament_round", "report_answer")
+KINDS = ("challenge", "rematch", "tournament_round", "report_answer", "workout_reminder")
 KEEP = 50
 
 

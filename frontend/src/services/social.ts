@@ -23,7 +23,7 @@ export interface Relation {
     online: boolean;
 }
 
-export type NotificationKind = 'challenge' | 'rematch' | 'tournament_round' | 'report_answer';
+export type NotificationKind = 'challenge' | 'rematch' | 'tournament_round' | 'report_answer' | 'workout_reminder';
 
 export interface AppNotification {
     id: number;

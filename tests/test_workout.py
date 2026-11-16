@@ -69,3 +69,40 @@ async def test_api_requires_login(client, token_user_1):
     assert client.get("/api/v1/workout").status_code == 401
     body = client.get("/api/v1/workout", headers={"Authorization": f"Bearer {token_user_1}"}).json()
     assert [s["kind"] for s in body["steps"]] == ["puzzles", "trainer", "repertoire", "mistake"]
+
+
+async def test_reminders_for_running_streaks_once_a_day(db_session, test_user_1, test_user_2, puzzle, monkeypatch):
+    """Напоминание (Celery beat): серия идёт, сегодня разминки нет — одно уведомление в день; выполнившим — нет."""
+    from sqlalchemy import select
+
+    from src.models.social import Notification
+    from src.services import notifications
+
+    delivered = []
+
+    async def fake_deliver(user_id, notification):
+        delivered.append((user_id, notification["kind"], notification["payload"]))
+
+    monkeypatch.setattr(notifications, "deliver", fake_deliver)
+    yesterday = NOW - timedelta(days=1, hours=1)
+    for uid in (test_user_1.id, test_user_2.id):
+        attempts(db_session, uid, puzzle.id, yesterday, 5)
+        db_session.add(TrainerResult(user_id=uid, trainer="coord_find", level=1, score=5, time_ms=1, created_at=yesterday))
+    attempts(db_session, test_user_2.id, puzzle.id, NOW - timedelta(hours=1), 5)  # второй уже размялся сегодня
+    db_session.add(TrainerResult(user_id=test_user_2.id, trainer="tail", level=1, score=5, time_ms=1,
+                                 created_at=NOW - timedelta(hours=1)))
+    await db_session.commit()
+
+    assert await workout.send_reminders(db_session, NOW) == 1
+    assert delivered == [(test_user_1.id, "workout_reminder", {"streak": 1})]
+    assert await workout.send_reminders(db_session, NOW + timedelta(hours=2)) == 0  # уже напомнили сегодня
+    kinds = (await db_session.execute(select(Notification.kind).where(Notification.user_id == test_user_1.id))).scalars().all()
+    assert kinds == ["workout_reminder"]
+
+
+def test_beat_schedule_has_the_reminder():
+    import src.worker.tasks  # noqa: F401 — регистрирует задачи
+    from src.worker.celery_app import celery_app
+
+    assert celery_app.conf.beat_schedule["workout-reminders"]["task"] == "workout_reminders"
+    assert "workout_reminders" in celery_app.tasks
