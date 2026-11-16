@@ -1,7 +1,7 @@
 {
   "meta": {
-    "date": "2026-11-15",
-    "games": 112,
+    "date": "2026-11-16",
+    "games": 116,
     "anchors": [
       1350,
       1600,
@@ -10,7 +10,7 @@
       2400
     ],
     "anchor_movetime_s": 1.0,
-    "minutes": 34.8,
+    "minutes": 35.4,
     "scale": "Stockfish UCI_Elo anchors at our time control (not FIDE)"
   },
   "players": {
@@ -251,6 +251,76 @@
       "score": 13.0,
       "ci95": 141,
       "declared": 2200
+    },
+    "botvinnik": {
+      "rating": 2151,
+      "games": 14,
+      "score": 6.5,
+      "ci95": 202,
+      "declared": 2400
+    },
+    "nimzowitsch": {
+      "rating": 2169,
+      "games": 14,
+      "score": 8.5,
+      "ci95": 208,
+      "declared": 2250
+    },
+    "marshall": {
+      "rating": 2117,
+      "games": 14,
+      "score": 6.5,
+      "ci95": 199,
+      "declared": 2200
+    },
+    "tarrasch": {
+      "rating": 2158,
+      "games": 14,
+      "score": 8.0,
+      "ci95": 201,
+      "declared": 2200
+    },
+    "petrosian": {
+      "rating": 2370,
+      "games": 12,
+      "score": 9.0,
+      "ci95": 243,
+      "declared": 2400
+    },
+    "tal": {
+      "rating": 2166,
+      "games": 10,
+      "score": 4.5,
+      "ci95": 246,
+      "declared": 2450
+    },
+    "tartakower": {
+      "rating": 2015,
+      "games": 14,
+      "score": 6.0,
+      "ci95": 203,
+      "declared": 2150
+    },
+    "reti": {
+      "rating": 2199,
+      "games": 14,
+      "score": 8.5,
+      "ci95": 207,
+      "declared": 2200
+    },
+    "pillsbury": {
+      "rating": 2077,
+      "games": 14,
+      "score": 6.5,
+      "ci95": 205,
+      "declared": 2250
+    },
+    "chigorin": {
+      "rating": 1833,
+      "games": 14,
+      "score": 3.5,
+      "ci95": 221,
+      "declared": 2150
     }
   }
 }

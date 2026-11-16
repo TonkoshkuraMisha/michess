@@ -1,0 +1,224 @@
+{
+  "id": "endgame-rook-vs-pawn",
+  "course": "endgame",
+  "order": 7,
+  "title": {
+    "en": "Rook against pawn",
+    "uk": "Тура проти пішака",
+    "ru": "Ладья против пешки"
+  },
+  "summary": {
+    "en": "The rook wins only together with its king: bring the king, stand in the pawn's way, drive the enemy king off with checks.",
+    "uk": "Тура виграє лише разом із королем: підведіть короля, станьте на шляху пішака, відженіть ворожого короля шахами.",
+    "ru": "Ладья выигрывает только вместе с королём: подведите короля, встаньте на пути пешки, отгоните неприятельского короля шахами."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "8/5K2/8/6k1/5p2/8/8/2R5 w - - 0 1",
+      "text": {
+        "en": "A rook is much stronger than a pawn, but alone it cannot stop a pawn supported by its king: in the end it has to be given up for the pawn. So the main rule is: the king must hurry towards the pawn.",
+        "uk": "Тура набагато сильніша за пішака, але сама не зупинить пішака, якого підтримує король: зрештою її доведеться віддати за пішака. Тому головне правило — король мусить поспішати до пішака.",
+        "ru": "Ладья гораздо сильнее пешки, но одна не остановит пешку, которую поддерживает король: в конце концов её придётся отдать за пешку. Поэтому главное правило — король должен спешить к пешке."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "8/5K2/8/6k1/5p2/8/8/2R5 w - - 0 1",
+      "text": {
+        "en": "Your move. Only one move wins. Which one?",
+        "uk": "Ваш хід. Виграє лише один хід. Який?",
+        "ru": "Ваш ход. Выигрывает только один ход. Какой?"
+      },
+      "hint": {
+        "en": "Every tempo counts: bring the king closer to the pawn.",
+        "uk": "Кожен темп важливий: наблизьте короля до пішака.",
+        "ru": "Каждый темп на счету: приблизьте короля к пешке."
+      },
+      "line": [
+        {
+          "answers": [
+            "f7e6"
+          ],
+          "correct": {
+            "en": "Right! The king comes in time, and together with the rook it wins the pawn.",
+            "uk": "Правильно! Король встигає, і разом із турою він забирає пішака.",
+            "ru": "Верно! Король успевает, и вместе с ладьёй он забирает пешку."
+          },
+          "wrong": {
+            "c1f1": {
+              "en": "The rook stands in front of the pawn, but the white king is too far: the black king supports the pawn, and it is a draw.",
+              "uk": "Тура стала перед пішаком, але білий король надто далеко: чорний король підтримує пішака, і це нічия.",
+              "ru": "Ладья встала перед пешкой, но белый король слишком далеко: чёрный король поддерживает пешку, и это ничья."
+            },
+            "c1c2": {
+              "en": "A rook move wastes a tempo: the white king does not get there in time — a draw.",
+              "uk": "Хід турою втрачає темп: білий король не встигає — нічия.",
+              "ru": "Ход ладьёй теряет темп: белый король не успевает — ничья."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/1K6/8/1k6/2p5/8/8/R7 w - - 0 1",
+      "text": {
+        "en": "Your move. The black pawn is heading for c1. How do you stop it?",
+        "uk": "Ваш хід. Чорний пішак іде на c1. Як його зупинити?",
+        "ru": "Ваш ход. Чёрная пешка идёт на c1. Как её остановить?"
+      },
+      "line": [
+        {
+          "answers": [
+            "a1c1"
+          ],
+          "correct": {
+            "en": "Right! The rook stands on the pawn's path, on the promotion square, and the pawn cannot get past it.",
+            "uk": "Правильно! Тура стала на шляху пішака, на полі перетворення, і пішак повз неї не пройде.",
+            "ru": "Верно! Ладья встала на пути пешки, на поле превращения, и пешка мимо неё не пройдёт."
+          },
+          "wrong": {
+            "a1b1": {
+              "en": "A check gains nothing: the black king steps aside and keeps supporting the pawn — a draw.",
+              "uk": "Шах нічого не дає: чорний король відходить убік і далі підтримує пішака — нічия.",
+              "ru": "Шах ничего не даёт: чёрный король отходит в сторону и продолжает поддерживать пешку — ничья."
+            },
+            "a1d1": {
+              "en": "The rook does not block the pawn's path — it reaches c2 with its king's support: a draw.",
+              "uk": "Тура не перекриває шлях пішака — він доходить до c2 під захистом короля: нічия.",
+              "ru": "Ладья не перекрывает путь пешки — она доходит до c2 под защитой короля: ничья."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "5R2/3K4/8/4k3/4p3/8/8/8 w - - 0 1",
+      "text": {
+        "en": "Another weapon is a check that drives the enemy king away from its pawn. The king that has been cut off from the pawn cannot support it any more.",
+        "uk": "Ще одна зброя — шах, що відганяє ворожого короля від його пішака. Король, відрізаний від пішака, вже не підтримає його.",
+        "ru": "Ещё одно оружие — шах, который отгоняет неприятельского короля от его пешки. Король, отрезанный от пешки, уже не поддержит её."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "5R2/3K4/8/4k3/4p3/8/8/8 w - - 0 1",
+      "text": {
+        "en": "Your move. Find the only winning move.",
+        "uk": "Ваш хід. Знайдіть єдиний виграшний хід.",
+        "ru": "Ваш ход. Найдите единственный выигрывающий ход."
+      },
+      "hint": {
+        "en": "A check along the file of the pawn.",
+        "uk": "Шах по вертикалі пішака.",
+        "ru": "Шах по вертикали пешки."
+      },
+      "line": [
+        {
+          "answers": [
+            "f8e8"
+          ],
+          "correct": {
+            "en": "Right! The check drives the king off the e-file, and the rook stays behind the pawn.",
+            "uk": "Правильно! Шах зганяє короля з вертикалі e, а тура залишається позаду пішака.",
+            "ru": "Верно! Шах сгоняет короля с вертикали e, а ладья остаётся позади пешки."
+          },
+          "wrong": {
+            "f8f1": {
+              "en": "The black king stays next to the pawn and supports it — a draw.",
+              "uk": "Чорний король лишається поруч із пішаком і підтримує його — нічия.",
+              "ru": "Чёрный король остаётся рядом с пешкой и поддерживает её — ничья."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "5R2/3K4/8/4k3/4p3/8/8/8 w - - 0 1",
+      "text": {
+        "en": "Remember: first the king — it must come to the pawn in time; the rook stands in the pawn's way or behind it and cuts off the enemy king with checks.",
+        "uk": "Запам’ятайте: спершу король — він мусить вчасно підійти до пішака; тура стає на шляху пішака або позаду нього і шахами відрізає ворожого короля.",
+        "ru": "Запомните: сначала король — он должен вовремя подойти к пешке; ладья встаёт на пути пешки или позади неё и шахами отрезает неприятельского короля."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "8/8/2K1R3/8/2pk4/8/8/8 w - - 0 1",
+      "text": {
+        "en": "Your move. Find the winning move.",
+        "uk": "Ваш хід. Знайдіть виграшний хід.",
+        "ru": "Ваш ход. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "c6b5"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/8/6K1/4k3/4p3/R7/8/8 w - - 0 1",
+      "text": {
+        "en": "Your move. Find the winning move.",
+        "uk": "Ваш хід. Знайдіть виграшний хід.",
+        "ru": "Ваш ход. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "g6g5"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "Why does a lone rook often fail to beat a pawn?",
+        "uk": "Чому сама тура часто не виграє в пішака?",
+        "ru": "Почему одна ладья часто не выигрывает у пешки?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "The pawn is supported by its king, and the rook has to be given up for it.",
+            "uk": "Пішака підтримує король, і туру доводиться віддати за нього.",
+            "ru": "Пешку поддерживает король, и ладью приходится отдать за неё."
+          }
+        },
+        {
+          "text": {
+            "en": "A rook cannot move along files.",
+            "uk": "Тура не вміє ходити вертикалями.",
+            "ru": "Ладья не умеет ходить по вертикалям."
+          },
+          "feedback": {
+            "en": "It can — the problem is the enemy king next to the pawn.",
+            "uk": "Уміє — справа в ворожому королі поруч із пішаком.",
+            "ru": "Умеет — дело в неприятельском короле рядом с пешкой."
+          }
+        },
+        {
+          "text": {
+            "en": "Because of stalemate in every such position.",
+            "uk": "Через пат у кожній такій позиції.",
+            "ru": "Из-за пата в каждой такой позиции."
+          },
+          "feedback": {
+            "en": "Stalemate is a trick in some positions, not the general reason.",
+            "uk": "Пат — хитрість лише в деяких позиціях, а не загальна причина.",
+            "ru": "Пат — уловка лишь в некоторых позициях, а не общая причина."
+          }
+        }
+      ]
+    }
+  ]
+}
