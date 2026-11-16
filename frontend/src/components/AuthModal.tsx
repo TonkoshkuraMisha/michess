@@ -21,9 +21,11 @@ interface AuthModalProps {
     onClose?: () => void;
     /** «Сыграть первую партию» после регистрации (таск 17.8): стартовый рейтинг игрока. */
     onFirstGame?: (rating: number) => void;
+    /** Новичку («только начинаю») — переход в азбуку (14.5). */
+    onBasics?: () => void;
 }
 
-export default function AuthModal({onSuccess, onClose: onCloseProp, onFirstGame}: AuthModalProps) {
+export default function AuthModal({onSuccess, onClose: onCloseProp, onFirstGame, onBasics}: AuthModalProps) {
     const {t, tp, language} = useI18n();
     const [isLogin, setIsLogin] = useState(true);
     const [experience, setExperience] = useState<Experience | ''>('');
@@ -204,6 +206,20 @@ export default function AuthModal({onSuccess, onClose: onCloseProp, onFirstGame}
                         <p className="text-sm text-center text-boxwood-light">
                             {tp('auth.welcomeRating', PROVISIONAL_GAMES, {rating: welcome.rating})}
                         </p>
+                        {experience === 'new' && onBasics && (
+                            // Только узнал правила (17.8): сначала азбука 14.5, партия — по желанию следом.
+                            <>
+                                <p className="text-sm text-center text-boxwood/85">{t('auth.basicsHint')}</p>
+                                <button type="button" data-testid="auth-start-basics"
+                                        onClick={() => {
+                                            onSuccess(welcome.token);
+                                            onBasics();
+                                        }}
+                                        className="py-2.5 bg-amber-700 text-white font-bold rounded hover:bg-amber-600 transition shadow">
+                                    {t('auth.startBasics')}
+                                </button>
+                            </>
+                        )}
                         <button type="button" data-testid="auth-first-game"
                                 onClick={() => {
                                     onSuccess(welcome.token);

@@ -683,6 +683,7 @@ export default function App() {
                     }}
                     onClose={() => setShowAuthModal(false)}
                     onFirstGame={(rating) => navigate('/', {state: {firstGame: {rating}}})}
+                    onBasics={() => navigate('/learn/basics')}
                 />
             )}
         </div>

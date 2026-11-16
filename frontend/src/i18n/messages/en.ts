@@ -117,6 +117,8 @@ export const en = {
         strength: {under_1000: 'Below 1000', '1000_1400': '1000–1400', '1400_1800': '1400–1800', over_1800: 'Above 1800'},
         notAnswered: 'Skip the question',
         welcomeTitle: 'Welcome, {name}!',
+        startBasics: 'Start with the basics',
+        basicsHint: 'You have just learned the rules — the basics course will take you from the board to your first mate in a few minutes.',
         welcomeRating: plural({
             one: 'Your starting rating is {rating}. It is provisional for the first {count} game and will quickly settle at your real strength.',
             other: 'Your starting rating is {rating}. It is provisional for the first {count} games and will quickly settle at your real strength.',
