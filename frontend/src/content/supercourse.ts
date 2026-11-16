@@ -4,7 +4,7 @@
 // Названия модулей — в каталогах i18n: supercourse.modules.<код, точка заменена на «_»>.
 
 import type {Activity} from './programs';
-import {MUST_KNOW} from './mustKnow';
+import {MUST_KNOW, STUDIES} from './mustKnow';
 
 export const BRANCHES = ['T', 'M', 'E', 'S', 'O', 'C', 'G'] as const;  // тактика, мат, эндшпиль, стратегия, дебют, расчёт, партии
 export type Branch = typeof BRANCHES[number];
@@ -141,7 +141,7 @@ export const COURSE: CourseModule[] = [
     mod('E4.1', 'E', [l('endgame-active-king')]),
     mod('E4.2', 'E', [th('exchange_choice')]),
     mod('E4.3', 'E', [e('rook_vs_bishop_def'), e('rook_vs_knight_def'), e('q_vs_rook')]),
-    mod('E4.4', 'E'),
+    mod('E4.4', 'E', STUDIES.map(e)),
     mod('S4.1', 'S', [lib('hanging_pawns')]),
     mod('S4.2', 'S', [lib('carlsbad')]),
     mod('S4.3', 'S', [lib('stonewall')]),
@@ -181,6 +181,20 @@ export const COURSE: CourseModule[] = [
 ];
 
 export const LEVEL_COUNT = 6;
+
+// Экзамен уровня (таск 27.12): модуль X<n> — разделы диагностики 22.0; уровень пройден, когда по каждому разделу
+// последняя оценка не ниже порога разряда уровня (азбука — 800, IV разряд — 1000 … КМС — 1800).
+export const LEVEL_EXAM_TARGET = [800, 1000, 1200, 1400, 1600, 1800] as const;
+
+export function examSections(level: number): string[] {
+    const module = COURSE.find((m) => m.code === `X${level}`);
+    return (module?.steps ?? []).flatMap((s) => (s.kind === 'exam' ? [s.id] : []));
+}
+
+export function levelExamPassed(level: number, results: Record<string, { estimate: number }>): boolean {
+    const sections = examSections(level);
+    return sections.length > 0 && sections.every((s) => (results[s]?.estimate ?? 0) >= LEVEL_EXAM_TARGET[level]);
+}
 
 export const moduleTitleKey = (code: string) => `supercourse.modules.${code.replace('.', '_')}`;
 

@@ -55,6 +55,9 @@ EXERCISES = [
     ("q_vs_a_pawn_def", "8/6K1/8/8/Q7/8/p1k5/8 b - - 0 1", "draw"),
     ("opposite_bishops_def", "8/8/2b1k3/4P3/3K4/3B4/8/8 b - - 0 1", "draw"),
     ("vancura", "R7/6k1/P4r2/8/8/8/8/K7 b - - 0 1", "draw"),
+    # Этюды давно умерших составителей (27.9, записи в ATTRIBUTION.md).
+    ("study_saavedra", "8/8/1KP5/3r4/8/8/8/k7 w - - 0 1", "promote"),
+    ("study_reti", "7K/8/k1P5/7p/8/8/8/8 w - - 0 1", "draw"),
 ]
 LIMITS = {"promote": 30, "convert": 30, "draw": 15}
 MATE_SLACK = 8

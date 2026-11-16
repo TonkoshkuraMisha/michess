@@ -11,3 +11,6 @@ export const MUST_KNOW: readonly (readonly string[])[] = [
     // III — уровень 5: слон и конь, ферзь против ладьи и коня, защиты против ладьи, разноцветные слоны, Ванчура.
     ['bn_corner', 'q_vs_rook', 'q_vs_knight', 'rook_vs_bishop_def', 'rook_vs_knight_def', 'opposite_bishops_def', 'vancura'],
 ];
+
+// Этюды (27.9) — только давно умерших составителей, каждый с записью в ATTRIBUTION.md; модуль курса E4.4.
+export const STUDIES: readonly string[] = ['study_saavedra', 'study_reti'];

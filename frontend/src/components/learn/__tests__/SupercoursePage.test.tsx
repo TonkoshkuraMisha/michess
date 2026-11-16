@@ -18,11 +18,14 @@ describe('Большой курс', () => {
         vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
             calls.push([String(url), init]);
             const body = init?.method === 'PUT' ? {lesson_id: 'course-t1-1', step: 0, steps_total: 1, completed: true}
-                : [{lesson_id: 'course-t1-2', step: 0, steps_total: 1, completed: true}];
+                : String(url).includes('/exam') ? {results: {F: {estimate: 900}, A: {estimate: 1300}, B: {estimate: 950}}}
+                    : [{lesson_id: 'course-t1-2', step: 0, steps_total: 1, completed: true}];
             return {ok: true, json: async () => body} as Response;
         }));
         await act(async () => render(<MemoryRouter><SupercoursePage/></MemoryRouter>));
         expect(screen.getByTestId('course-module-T0.0')).toHaveTextContent('Доска, фигуры и взятие');
+        // Экзамен уровня 0 сдан (F ≥ 800), уровня 1 — нет (B < 1000).
+        expect(screen.getByTestId('course-exam-target-0')).toHaveTextContent('Уровень пройден');
         await act(async () => fireEvent.click(screen.getByTestId('course-level-1')));
         expect(screen.getByTestId('course-level-1')).toHaveTextContent('1/');
         await act(async () => fireEvent.click(screen.getByTestId('course-level-3')));
@@ -30,6 +33,7 @@ describe('Большой курс', () => {
         fireEvent.click(screen.getByTestId('course-skeleton'));
         expect(screen.getByTestId('course-module-T3.2')).toHaveTextContent('скоро');
         await act(async () => fireEvent.click(screen.getByTestId('course-level-1')));
+        expect(screen.getByTestId('course-exam-target-1')).toHaveTextContent('не ниже 1000');
         await act(async () => fireEvent.click(screen.getByTestId('course-done-T1.1')));
         const put = calls.find(([, init]) => init?.method === 'PUT')!;
         expect(put[0]).toContain('/learn/progress/course-t1-1');

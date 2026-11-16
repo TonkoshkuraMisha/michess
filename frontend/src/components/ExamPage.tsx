@@ -49,6 +49,9 @@ async function call<T>(path: string, body?: object): Promise<T> {
     return res.json() as Promise<T>;
 }
 
+/** Последние результаты по разделам — для отметки «уровень пройден» в Большом курсе (27.12). */
+export const fetchExamSummary = () => call<ExamSummary>('');
+
 const sectionLabel = (t: (key: MessageKey, params?: Record<string, string | number>) => string, section: string) =>
     section === 'endgame' ? t('exam.endgameTest') : `${section}. ${t(`puzzles.sections.${section}` as MessageKey)}`;
 

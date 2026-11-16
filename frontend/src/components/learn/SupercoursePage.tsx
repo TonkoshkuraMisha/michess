@@ -4,11 +4,12 @@
 
 import {useEffect, useMemo, useState} from 'react';
 import {useNavigate} from 'react-router-dom';
-import {CheckCircle2, Circle, Layers} from 'lucide-react';
+import {CheckCircle2, Circle, Layers, Trophy} from 'lucide-react';
 import {useI18n} from '../../i18n';
 import {getToken} from '../../services/authToken';
 import {fetchLessonProgress, saveLessonProgress} from '../../services/lessonProgress';
-import {BRANCHES, COURSE, courseProgressId, LEVEL_COUNT, moduleTitleKey} from '../../content/supercourse';
+import {BRANCHES, COURSE, courseProgressId, LEVEL_COUNT, LEVEL_EXAM_TARGET, levelExamPassed, moduleTitleKey} from '../../content/supercourse';
+import {fetchExamSummary} from '../ExamPage';
 import {activityLink} from '../../content/programs';
 import {activityLabel} from '../ProgramsPage';
 
@@ -18,6 +19,7 @@ export function SupercoursePage() {
     const [level, setLevel] = useState(0);
     const [skeleton, setSkeleton] = useState(false);
     const [done, setDone] = useState<Set<string>>(new Set());
+    const [examPassed, setExamPassed] = useState<Set<number>>(new Set());
     const logged = Boolean(getToken());
 
     useEffect(() => {
@@ -25,7 +27,12 @@ export function SupercoursePage() {
         if (!token) return;
         fetchLessonProgress(token).then((rows) => {
             const ids = new Set(rows.filter((r) => r.completed).map((r) => r.lesson_id));
-            setDone(new Set(COURSE.filter((m) => ids.has(courseProgressId(m.code))).map((m) => m.code)));
+            setDone((prev) => new Set([...prev, ...COURSE.filter((m) => ids.has(courseProgressId(m.code))).map((m) => m.code)]));
+        }).catch(() => undefined);
+        fetchExamSummary().then((summary) => {
+            const passed = Array.from({length: LEVEL_COUNT}, (_, n) => n).filter((n) => levelExamPassed(n, summary.results));
+            setExamPassed(new Set(passed));
+            setDone((prev) => new Set([...prev, ...passed.map((n) => `X${n}`)]));
         }).catch(() => undefined);
     }, []);
 
@@ -52,6 +59,7 @@ export function SupercoursePage() {
                 {Array.from({length: LEVEL_COUNT}, (_, n) => (
                     <button key={n} type="button" role="tab" aria-selected={level === n} onClick={() => setLevel(n)} data-testid={`course-level-${n}`}
                             className={`px-3 py-1.5 rounded text-sm border ${level === n ? 'bg-amber-800 border-amber-400 text-white' : 'bg-black/30 border-amber-900/50 hover:border-amber-600'}`}>
+                        {examPassed.has(n) && <Trophy size={13} className="inline mr-1 text-amber-300" aria-label={t('supercourse.levelPassed')}/>}
                         {t(`supercourse.levels.l${n}` as 'supercourse.levels.l0')} <span className="text-xs opacity-70">{levelDone(n)}/{levelTotal(n)}</span>
                     </button>
                 ))}
@@ -75,7 +83,12 @@ export function SupercoursePage() {
                                         <span className="font-mono text-xs text-amber-300">{module.code}</span>
                                         <span className="font-bold text-amber-100 min-w-0 break-words">{t(moduleTitleKey(module.code) as 'supercourse.title')}</span>
                                         {module.steps.length === 0 && <span className="text-xs text-boxwood/60">{t('supercourse.soon')}</span>}
-                                        {module.steps.length > 0 && logged && !done.has(module.code) && (
+                                        {module.code.startsWith('X') && (
+                                            <span className="text-xs text-boxwood/70" data-testid={`course-exam-target-${module.level}`}>
+                                                {t(examPassed.has(module.level) ? 'supercourse.levelPassed' : 'supercourse.examTarget', {rating: LEVEL_EXAM_TARGET[module.level]})}
+                                            </span>
+                                        )}
+                                        {module.steps.length > 0 && logged && !done.has(module.code) && !module.code.startsWith('X') && (
                                             <button type="button" onClick={() => void markDone(module.code)} data-testid={`course-done-${module.code}`}
                                                     className="ml-auto px-2 py-0.5 rounded bg-amber-700 text-white text-xs font-bold">{t('supercourse.markDone')}</button>
                                         )}

@@ -246,5 +246,21 @@
   "limit": 15,
   "optimum": null,
   "side": "black"
+ },
+ {
+  "id": "study_saavedra",
+  "fen": "8/8/1KP5/3r4/8/8/8/k7 w - - 0 1",
+  "goal": "promote",
+  "limit": 30,
+  "optimum": null,
+  "side": "white"
+ },
+ {
+  "id": "study_reti",
+  "fen": "7K/8/k1P5/7p/8/8/8/8 w - - 0 1",
+  "goal": "draw",
+  "limit": 15,
+  "optimum": null,
+  "side": "white"
  }
 ]
