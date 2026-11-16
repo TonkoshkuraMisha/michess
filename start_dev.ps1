@@ -189,7 +189,11 @@ Write-Host "[+] Запуск Vite Frontend (порт 3000 в новом окне
 # ними обёртка npm.ps1, по умолчанию запрещены: поэтому npm.cmd и -ExecutionPolicy Bypass только для этого процесса
 # (системные настройки не меняются).
 $frontendShell = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell" }
-Start-Process $frontendShell -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "cd '$frontendDir'; npm.cmd run dev"
+# Вывод Vite дублируется в frontend/vite-dev.log (*.log в .gitignore): если окно не поднимет сервер, скрипт покажет
+# хвост лога здесь, а не только в отдельном окне, которое легко потерять за другими.
+$viteLog = Join-Path $frontendDir "vite-dev.log"
+Remove-Item $viteLog -Force -ErrorAction SilentlyContinue
+Start-Process $frontendShell -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "cd '$frontendDir'; npm.cmd run dev 2>&1 | Tee-Object -FilePath '$viteLog'"
 
 # 9. Ожидание фактического открытия портов 3000 (Vite) и 8000 (backend) перед запуском браузера.
 # Первый старт Vite (оптимизация зависимостей) и uvicorn --reload может занять заметно больше 15 секунд.
@@ -216,6 +220,15 @@ if ($frontendReady)
 else
 {
     Write-Host "[!] Порт 3000 не ответил за $waitSeconds секунд. Проверьте открывшееся окно терминала Vite." -ForegroundColor Red
+    if (Test-Path $viteLog)
+    {
+        Write-Host "    Последние строки frontend/vite-dev.log:" -ForegroundColor Red
+        Get-Content $viteLog -Tail 20 | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkGray }
+    }
+    else
+    {
+        Write-Host "    Лог Vite пуст: окно не запустило npm (нет npm.cmd в PATH или окно закрылось сразу)." -ForegroundColor Red
+    }
 }
 if (-not $backendReady)
 {
