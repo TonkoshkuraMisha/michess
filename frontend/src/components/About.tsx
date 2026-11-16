@@ -11,6 +11,8 @@ import portraitCredits from '../config/portraitCredits.json';
 import {CHAMPIONS_LIST, HISTORICAL_BOTS_LIST} from '../config/champions';
 import {API_BASE_URL} from '../config/api';
 import {useI18n} from '../i18n';
+import {CommunityLink} from './beta/ReportProblem';
+import {useSiteConfig} from '../services/beta';
 import type {MessageKey} from '../i18n';
 
 interface PortraitCredit {
@@ -64,6 +66,7 @@ export default function About() {
             .then(setEngine)
             .catch(() => undefined);
     }, []);
+    const {communityUrl} = useSiteConfig();
     return (
         <div className="w-full max-w-4xl flex flex-col gap-5 text-boxwood-light select-text">
             <div className={`${sectionClass} flex items-center justify-between gap-4`}>
@@ -89,6 +92,14 @@ export default function About() {
                 <span className="font-bold text-amber-200">{t('transparency.title')}</span>
                 <span className="text-sm text-boxwood/85">{t('transparency.aboutLink')}</span>
             </Link>
+
+            {communityUrl && (
+                <section className={sectionClass} data-testid="about-community">
+                    <h2 className={headingClass}>{t('beta.community.title')}</h2>
+                    <p className="text-sm leading-relaxed mb-2">{t('beta.community.text')}</p>
+                    <CommunityLink className="text-sm"/>
+                </section>
+            )}
 
             <section className={sectionClass}>
                 <h2 className={headingClass}>{t('about.engineTitle')}</h2>

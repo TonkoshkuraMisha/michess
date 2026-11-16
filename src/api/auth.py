@@ -17,7 +17,7 @@ from src.db import redis as redis_module
 from src.db.session import get_db
 from src.models.user import RATING_CATEGORIES, User
 from src.schemas.user import UserCreate, UserResponse, username_key
-from src.services import auth_sessions, product_metrics
+from src.services import auth_sessions, beta, product_metrics
 from src.services.onboarding import starting_rating
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -58,6 +58,14 @@ async def register_user(user_in: UserCreate, request: Request, db: AsyncSession 
         "too_many_registrations",
     )
 
+    # Закрытая регистрация (таск 24.4): без кода-приглашения дальше не идём — и занятость имён не раскрываем.
+    invite_code = beta.normalize_code(user_in.invite_code)
+    if settings.REGISTRATION_INVITE_ONLY:
+        if not invite_code:
+            raise ApiError(status.HTTP_403_FORBIDDEN, "registration_invite_required")
+        if not await beta.invite_usable(db, invite_code):
+            raise ApiError(status.HTTP_403_FORBIDDEN, "registration_invite_invalid")
+
     if _is_reserved(user_in.username):
         raise ApiError(status.HTTP_400_BAD_REQUEST, "username_reserved")
 
@@ -84,6 +92,11 @@ async def register_user(user_in: UserCreate, request: Request, db: AsyncSession 
         **ratings,
     )
     db.add(new_user)
+    # Код списывается в той же транзакции, что и создание аккаунта. При открытой регистрации код необязателен:
+    # действующий засчитывается (видно, кто пришёл по приглашению), недействительный — не мешает.
+    if not await beta.consume_invite(db, invite_code) and settings.REGISTRATION_INVITE_ONLY:
+        await db.rollback()  # код исчерпали или отозвали между проверкой и списанием
+        raise ApiError(status.HTTP_403_FORBIDDEN, "registration_invite_invalid")
     try:
         await db.commit()
     except IntegrityError:
