@@ -30,7 +30,8 @@ export function activityLabel(t: (key: never) => string, language: Language, act
         case 'exam': return activity.id === 'endgame' ? tr('exam.endgameTest')
             : `${tr('exam.title')}: ${activity.id}. ${safe(`puzzles.sections.${activity.id}`, '')}`;
         case 'library': return activity.structure
-            ? `${tr('library.title')}: ${safe(`structures.${activity.structure}`, activity.structure)}` : tr('library.title');
+            ? `${tr('library.title')}: ${safe(`structures.${activity.structure}`, activity.structure)}`
+            : activity.moves ? `${tr('library.title')}: ${activity.moves}` : tr('library.title');
         case 'workout': return tr('workout.title');
         case 'repertoire': return tr('repertoire.title');
         case 'classics': return tr('programs.activities.classics');

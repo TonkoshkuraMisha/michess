@@ -13,7 +13,7 @@ export type Activity =
     | { kind: 'mini'; id: string }
     | { kind: 'exam'; id: string }
     /** Библиотека партий (27.1), с фильтром по пешечной структуре (27.5) — для модулей Большого курса. */
-    | { kind: 'library'; structure?: string }
+    | { kind: 'library'; structure?: string; moves?: string }
     | { kind: 'workout' | 'repertoire' | 'classics' | 'guess' | 'play' };
 
 export type Session = Activity[];
@@ -111,7 +111,13 @@ export function activityLink(activity: Activity): { to: string; state?: unknown 
         case 'trainer': return {to: `/train/${activity.id}`};
         case 'mini': return {to: `/train/games/${activity.id}`};
         case 'exam': return {to: '/exam'};
-        case 'library': return {to: activity.structure ? `/library?structure=${activity.structure}` : '/library'};
+        case 'library': {
+            const query = new URLSearchParams();
+            if (activity.structure) query.set('structure', activity.structure);
+            if (activity.moves) query.set('moves', activity.moves);
+            const text = query.toString();
+            return {to: text ? `/library?${text}` : '/library'};
+        }
         case 'workout': return {to: '/workout'};
         case 'repertoire': return {to: '/repertoire'};
         case 'classics': return {to: '/learn/classics'};
