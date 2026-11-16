@@ -26,6 +26,12 @@ def test_set_is_fixed_valid_and_covers_every_branch():
             board = chess.Board(q["fen"])
             assert board.is_valid() and not board.is_game_over()
             assert chess.Move.from_uci(q["answer"]) in board.legal_moves
+            # Решение целиком: начинается с ответа, нечётной длины (последний ход — игрока), все ходы легальны.
+            line = q["moves"]
+            assert line[0] == q["answer"] and len(line) % 2 == 1
+            for uci in line:
+                board.push_uci(uci)
+            assert level_exam.progress(q, line[::2]).solved
             assert abs(q["rating"] - item["target"]) <= 400  # около порога разряда уровня
             assert q["fen"] not in seen  # позиции не повторяются между уровнями
             seen.add(q["fen"])
@@ -49,10 +55,16 @@ async def test_level_exam_through_the_exam_api(client, token_user_1):
     body = client.get("/api/v1/exam/level2/questions", headers=headers).json()
     questions = body["questions"]
     assert [q["id"] for q in questions] == list(range(1, 13)) and questions[0]["branch"] in level_exam.BRANCHES
-    answers = [{"id": q["id"], "move": level_exam.question("level2", q["id"])["answer"]} for q in questions]
-    answers[0]["move"] = "0000"
+    answers = [{"id": q["id"], "moves": level_exam.question("level2", q["id"])["moves"][::2]} for q in questions]
+    answers[0]["moves"] = ["0000"]
     graded = client.post("/api/v1/exam/level2/submit", json={"answers": answers}, headers=headers).json()
     assert graded["correct"] == 11 and graded["total"] == 12 and graded["estimate"] >= 1200
+    assert graded["max_points"] == sum((len(level_exam.question("level2", q["id"])["moves"]) + 1) // 2 for q in questions)
+    assert graded["points"] == graded["max_points"] - graded["review"][0]["max_points"]
+    # Ход во время теста: верный первый ход — ответ соперника из решения (или конец, если решение в один ход).
+    second = level_exam.question("level2", 2)
+    step = client.post("/api/v1/exam/level2/move", json={"id": 2, "moves": [second["answer"]]}, headers=headers).json()
+    assert step["correct"] is True and step["reply"] == (second["moves"][1] if len(second["moves"]) > 1 else None)
     assert sum(b["total"] for b in graded["branches"].values()) == 12
     assert client.get("/api/v1/exam", headers=headers).json()["results"]["level2"]["correct"] == 11
     bad = client.post("/api/v1/exam/level2/submit", json={"answers": [{"id": 99, "move": "e2e4"}]}, headers=headers)

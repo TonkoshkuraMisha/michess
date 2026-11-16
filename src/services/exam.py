@@ -2,9 +2,12 @@
 Диагностический экзамен (таск 22.0). Десять тестов по разделам каталога тем — мат (F), двойной удар (A), линейные
 удары (B), устранение защиты (C), ловля и особые позиции (D), пешки (E), атака на короля (G), дебютные ловушки (H),
 защита (I), эндшпиль (J) — по 10 вопросов от лёгкого к трудному (рейтинг задач 600 → 2400); отдельно — эндшпильный
-экзамен на 30 позиций. Вопрос — позиция задачи базы после хода соперника, ответ — один ход (первый ход решения или
-любой мат). Подсказок и ответов во время теста нет; итог — оценка силы по разделу максимальным правдоподобием по
-формуле Эло и уровень по разрядам. Игровой рейтинг и рейтинг задач не меняются.
+экзамен на 30 позиций. Вопрос — позиция задачи базы после хода соперника. Решение доигрывается до конца: после верного
+хода соперник отвечает ходом из решения, и игрок продолжает — до мата или последнего хода комбинации; за каждый верный
+ход — очко. Ошибка заканчивает позицию (очки за уже найденные ходы остаются); любой мат засчитывается как полное
+решение. Подсказок нет. Итог — оценка силы по разделу максимальным правдоподобием по формуле Эло (доля найденных ходов
+решения — как дробный результат «партии» с задачей) и уровень по разрядам. Игровой рейтинг и рейтинг задач не
+меняются.
 
 Экзамены уровней Большого курса (level0 … level5, таск 27.12) идут тем же протоколом, но позиции — из фиксированного
 набора src/services/level_exam.py.
@@ -74,27 +77,67 @@ async def build(db: AsyncSession, section: str, rng: random.Random | None = None
              "previous_move": p.moves.split()[0]} for p in chosen]
 
 
+@dataclass(frozen=True)
+class Progress:
+    """Как далеко игрок прошёл решение: верных ходов из скольких, доиграно ли, ошибся ли, чем ответит соперник."""
+    correct: int
+    total: int
+    solved: bool
+    failed: bool
+    reply: str | None = None
+
+    @property
+    def share(self) -> float:
+        return self.correct / self.total if self.total else 0.0
+
+
+def play(start: chess.Board, line: list[str], played: list[str]) -> Progress:
+    """
+    Сверяет ходы игрока с решением. line — решение от позиции вопроса: ход игрока, ответ соперника, ход игрока…
+    Ход, дающий мат, — полное решение, даже если в базе другой. Первый неверный ход заканчивает позицию.
+    """
+    board = start.copy(stack=False)
+    total = (len(line) + 1) // 2
+    correct = 0
+    for index, uci in enumerate(played[:total]):
+        try:
+            move = chess.Move.from_uci(uci)
+        except ValueError:
+            return Progress(correct, total, False, True)
+        if move not in board.legal_moves:
+            return Progress(correct, total, False, True)
+        board.push(move)
+        if uci != line[2 * index]:
+            if board.is_checkmate():
+                return Progress(total, total, True, False)
+            return Progress(correct, total, False, True)
+        correct += 1
+        if 2 * index + 1 >= len(line):
+            return Progress(total, total, True, False)
+        board.push_uci(line[2 * index + 1])
+    reply = line[2 * correct - 1] if 0 < correct < total else None
+    return Progress(correct, total, correct == total, False, reply)
+
+
+def puzzle_progress(puzzle: Puzzle, played: list[str]) -> Progress:
+    return play(question_position(puzzle), puzzle.moves.split()[1:], played)
+
+
 def is_correct(puzzle: Puzzle, uci: str) -> bool:
-    board = question_position(puzzle)
-    try:
-        move = chess.Move.from_uci(uci)
-    except ValueError:
-        return False
-    if move not in board.legal_moves:
-        return False
-    if uci == puzzle.moves.split()[1]:
-        return True
-    board.push(move)
-    return board.is_checkmate()
+    """Первый ход решения (или любой мат) — для обратной совместимости с ответом «один ход»."""
+    return puzzle_progress(puzzle, [uci]).correct > 0
 
 
-def estimate(answers: list[tuple[int, bool]]) -> int:
-    """Сила по ответам: максимум правдоподобия P(верно) = 1 / (1 + 10^((r_задачи − r)/400)) с «ничьей» против 1500."""
+def estimate(answers: list[tuple[int, float]]) -> int:
+    """
+    Сила по ответам: максимум правдоподобия P(верно) = 1 / (1 + 10^((r_задачи − r)/400)) с «ничьей» против 1500.
+    Результат по задаче — доля найденных ходов решения (0…1; True/False — частные случаи).
+    """
     def log_likelihood(r: float) -> float:
         total = 0.0
-        for rating, ok in [*answers, (1500, True), (1500, False)]:
+        for rating, score in [*answers, (1500, 1.0), (1500, 0.0)]:
             p = 1 / (1 + 10 ** ((rating - r) / 400))
-            total += math.log(p if ok else 1 - p)
+            total += float(score) * math.log(p) + (1 - float(score)) * math.log(1 - p)
         return total
 
     return max(range(300, 3001, 10), key=log_likelihood)
@@ -112,26 +155,60 @@ class Graded:
     estimate: int
     review: list[dict]
     branches: dict[str, dict] | None = None
+    # Очки: верные ходы по всем позициям из возможных (таск B.4 — решение доигрывается до конца).
+    points: int = 0
+    max_points: int = 0
 
 
-def _grade_level(user_id: int, section: str, answers: list[tuple[int, str]]) -> tuple[Graded, ExamResult]:
-    review, scored = [], []
-    for qid, uci in answers:
+def _review_row(qid: int, played: list[str], progress: Progress, board: chess.Board, solution: str, rating: int) -> dict:
+    return {"id": qid, "answer": played[0] if played else "0000", "correct": progress.solved, "solution": solution,
+            "solution_san": board.san(chess.Move.from_uci(solution)), "rating": rating,
+            "points": progress.correct, "max_points": progress.total}
+
+
+def _graded(section: str, review: list[dict], scored: list[tuple[int, float]],
+            branches: dict[str, dict] | None = None) -> Graded:
+    return Graded(section, sum(int(row["correct"]) for row in review), len(review), estimate(scored), review, branches,
+                  points=sum(row["points"] for row in review), max_points=sum(row["max_points"] for row in review))
+
+
+def _grade_level(user_id: int, section: str, answers: list[tuple[int, list[str]]]) -> tuple[Graded, ExamResult]:
+    review: list[dict] = []
+    scored: list[tuple[int, float]] = []
+    for qid, played in answers:
         item = level_exam.question(section, qid)
         if item is None:
             raise DomainValueError("exam_question_unknown")
-        ok = level_exam.is_correct(item, uci)
-        scored.append((item["rating"], ok))
-        board = chess.Board(item["fen"])
-        review.append({"id": qid, "answer": uci, "correct": ok, "solution": item["answer"], "branch": item["branch"],
-                       "solution_san": board.san(chess.Move.from_uci(item["answer"])), "rating": item["rating"]})
-    result = Graded(section, sum(ok for _, ok in scored), len(scored), estimate(scored), review,
-                    level_exam.branch_profile(review))
+        progress = level_exam.progress(item, played)
+        scored.append((item["rating"], progress.share))
+        review.append({**_review_row(qid, played, progress, chess.Board(item["fen"]), item["answer"], item["rating"]),
+                       "branch": item["branch"]})
+    result = _graded(section, review, scored, level_exam.branch_profile(review))
     return result, ExamResult(user_id=user_id, section=section, correct=result.correct, total=result.total,
                               estimate=result.estimate)
 
 
-async def grade(db: AsyncSession, user_id: int, section: str, answers: list[tuple[int, str]]) -> Graded:
+async def _section_puzzle(db: AsyncSession, section: str, puzzle_id: int) -> Puzzle:
+    if section != ENDGAME and section not in EXAM_SECTIONS:
+        raise DomainValueError("exam_section_unknown")
+    puzzle = await db.get(Puzzle, puzzle_id)
+    themes = set((await db.scalars(select(PuzzleTheme.theme).where(PuzzleTheme.puzzle_id == puzzle_id))).all())
+    if puzzle is None or not themes & set(themes_of(section)):
+        raise DomainValueError("exam_question_unknown")
+    return puzzle
+
+
+async def check_moves(db: AsyncSession, section: str, question_id: int, played: list[str]) -> Progress:
+    """Ход игрока во время теста: верен ли и чем отвечает соперник (решение целиком клиенту не отдаётся)."""
+    if level_exam.is_level_section(section):
+        item = level_exam.question(section, question_id)
+        if item is None:
+            raise DomainValueError("exam_question_unknown")
+        return level_exam.progress(item, played)
+    return puzzle_progress(await _section_puzzle(db, section, question_id), played)
+
+
+async def grade(db: AsyncSession, user_id: int, section: str, answers: list[tuple[int, list[str]]]) -> Graded:
     if level_exam.is_level_section(section):
         graded, row = _grade_level(user_id, section, answers)
         db.add(row)
@@ -145,18 +222,17 @@ async def grade(db: AsyncSession, user_id: int, section: str, answers: list[tupl
     for pid, theme in (await db.execute(select(PuzzleTheme.puzzle_id, PuzzleTheme.theme)
                                         .where(PuzzleTheme.puzzle_id.in_(ids)))).tuples():
         themes.setdefault(pid, set()).add(theme)
-    review, scored = [], []
-    for pid, uci in answers:
+    review: list[dict] = []
+    scored: list[tuple[int, float]] = []
+    for pid, played in answers:
         puzzle = puzzles.get(pid)
         if puzzle is None or not themes.get(pid, set()) & codes:
             raise DomainValueError("exam_question_unknown")
-        ok = is_correct(puzzle, uci)
-        scored.append((puzzle.rating, ok))
-        board = question_position(puzzle)
-        solution = puzzle.moves.split()[1]
-        review.append({"id": pid, "answer": uci, "correct": ok, "solution": solution,
-                       "solution_san": board.san(chess.Move.from_uci(solution)), "rating": puzzle.rating})
-    result = Graded(section, sum(ok for _, ok in scored), len(scored), estimate(scored), review)
+        progress = puzzle_progress(puzzle, played)
+        scored.append((puzzle.rating, progress.share))
+        review.append(_review_row(pid, played, progress, question_position(puzzle), puzzle.moves.split()[1],
+                                  puzzle.rating))
+    result = _graded(section, review, scored)
     db.add(ExamResult(user_id=user_id, section=section, correct=result.correct, total=result.total,
                       estimate=result.estimate))
     return result

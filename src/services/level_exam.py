@@ -2,9 +2,10 @@
 Экзамены уровней Большого курса (таск 27.12): «тест на разряд». На каждый уровень 0–5 — фиксированный набор позиций по
 ветвям курса (тактика T, мат и атака M, эндшпиль E, стратегия S, расчёт C) из src/services/data/level_exams.json
 (собирает scripts/build_level_exams.py: задачи базы CC0 около порога разряда, ответ проверен движком — единственный).
-Тест идёт через тот же протокол, что диагностика 22.0 (/exam/level<n>/questions и /submit): вопрос — id по порядку в
-наборе, ответ — один ход (ход решения или любой мат). Итог — оценка силы по формуле Эло (src/services/exam.estimate),
-уровень пройден, когда она не ниже порога (клиент, supercourse.levelExamPassed), плюс профиль по ветвям.
+Тест идёт через тот же протокол, что диагностика 22.0 (/exam/level<n>/questions, /move и /submit): вопрос — id по
+порядку в наборе, решение (поле moves, если оно длиннее одного хода) доигрывается до конца, любой мат засчитывается.
+Итог — оценка силы по формуле Эло (src/services/exam.estimate), уровень пройден, когда она не ниже порога
+(клиент, supercourse.levelExamPassed), плюс профиль по ветвям.
 """
 
 import json
@@ -43,18 +44,15 @@ def question(section: str, question_id: int) -> dict | None:
     return items[question_id - 1] if 1 <= question_id <= len(items) else None
 
 
+def progress(item: dict, played: list[str]):
+    """Сверка ходов игрока с решением вопроса (src/services/exam.play); без поля moves решение — один ход."""
+    from src.services.exam import play
+
+    return play(chess.Board(item["fen"]), item.get("moves") or [item["answer"]], played)
+
+
 def is_correct(item: dict, uci: str) -> bool:
-    board = chess.Board(item["fen"])
-    try:
-        move = chess.Move.from_uci(uci)
-    except ValueError:
-        return False
-    if move not in board.legal_moves:
-        return False
-    if uci == item["answer"]:
-        return True
-    board.push(move)
-    return board.is_checkmate()
+    return progress(item, [uci]).correct > 0
 
 
 def branch_profile(review: list[dict]) -> dict[str, dict]:
