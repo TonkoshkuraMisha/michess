@@ -9,6 +9,7 @@ import type {CustomOpponent} from '../config/archetypes';
 import {ladderOpponentName} from '../config/players';
 import type {I18n, MessageKey} from '../i18n';
 import {getToken} from './authToken';
+import {GUEST_PREFIX, guestShortName} from './timeMachine';
 
 export type TournamentFormat = 'round_robin' | 'knockout' | 'swiss';
 /** Швейцарская система (таск 15.4): число туров по размеру — как на сервере (tournament_rules.SWISS_ROUNDS). */
@@ -62,6 +63,8 @@ export interface Tournament {
     my_seat: number | null;
     /** Игрок сдал турнир: боты доигрывают, сам он больше не играет. */
     withdrawn: boolean;
+    /** «Машина времени»: ключ знаменитого турнира; у обычного турнира его нет. */
+    event_key?: string | null;
     players: TournamentPlayer[];
     games: TournamentGame[];
     standings: Standing[];
@@ -75,6 +78,7 @@ export interface TournamentSummary {
     created_at: string;
     my_place: number | null;
     career_stage?: string | null;
+    event_key?: string | null;
 }
 
 export interface TournamentCreate {
@@ -151,9 +155,17 @@ export const startCareerStage = (key: string) =>
 export const createTournament = (body: TournamentCreate) =>
     call<Tournament>(BASE, {method: 'POST', body: JSON.stringify(body)}, 'tournaments.createFailed');
 
-/** Имя участника на языке игрока: «Вы», бот, архетип или имя персоналии. */
+/** id мастера прошлого («Машина времени»), если участник — он; в турнире такой участник — персоналия с ключом. */
+export function guestIdOf(player: Pick<TournamentPlayer, 'kind' | 'bot_key'>): string | null {
+    return player.kind === 'personality' && player.bot_key?.startsWith(GUEST_PREFIX)
+        ? player.bot_key.slice(GUEST_PREFIX.length) : null;
+}
+
+/** Имя участника на языке игрока: «Вы», бот, архетип, мастер прошлого или имя персоналии. */
 export function participantName(player: TournamentPlayer, t: I18n['t'], myName?: string): string {
     if (player.kind === 'user') return myName || t('tournaments.you');
+    const guest = guestIdOf(player);
+    if (guest) return guestShortName(guest, t);
     if (player.kind === 'bot' && player.bot_key) return ladderOpponentName('historical', player.bot_key, t);
     if (player.kind === 'archetype' && player.bot_key) {
         return ladderOpponentName('archetype', player.bot_key.slice(ARCHETYPE_PREFIX.length), t);
@@ -175,8 +187,11 @@ export function gameStart(t: Tournament, game: TournamentGame, name: string): To
     const opponent = t.players.find((p) => p.seat === (color === 'white' ? game.black_seat : game.white_seat))!;
     const archetypeId = opponent.kind === 'archetype' && opponent.bot_key
         ? opponent.bot_key.slice(ARCHETYPE_PREFIX.length) : null;
+    // Мастер прошлого: на доске — имя на языке игрока, сохраняется партия под именем из турнира.
+    const guest = guestIdOf(opponent) !== null;
     const custom: CustomOpponent | null = opponent.kind === 'bot' || !opponent.config ? null : {
-        name: opponent.personality_name ?? name,
+        name: guest ? name : opponent.personality_name ?? name,
+        ...(guest && opponent.personality_name ? {savedName: opponent.personality_name} : {}),
         config: opponent.config,
         ...(isArchetypeId(archetypeId) ? {archetypeId} : {}),
     };
@@ -184,6 +199,15 @@ export function gameStart(t: Tournament, game: TournamentGame, name: string): To
         tournamentId: t.id, gameId: game.id, color, baseTimeMs: game.base_time_ms, incrementMs: game.increment_ms,
         botId: opponent.kind === 'bot' ? opponent.bot_key : null, custom,
     };
+}
+
+/** Сколько всего туров (кругов сетки): у больших исторических турниров размер и число кругов любые. */
+export function totalRounds(t: Tournament): number {
+    if (t.format === 'swiss') return SWISS_ROUNDS[t.size] ?? Math.max(1, ...t.games.map((g) => g.round));
+    // Один круг — на тур меньше числа участников (при нечётном числе — столько же); расписание в несколько кругов
+    // создаётся целиком, и последний тур виден по партиям.
+    if (t.format === 'round_robin') return Math.max(t.size % 2 === 0 ? t.size - 1 : t.size, ...t.games.map((g) => g.round));
+    return Math.max(1, Math.ceil(Math.log2(t.size)));
 }
 
 /** Есть ли партии ботов, которые сейчас считает сервер (страница обновляет состояние, пока они идут). */

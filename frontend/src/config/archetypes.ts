@@ -15,6 +15,11 @@ import type {Messages} from '../i18n';
 /** Соперник из мастерской в партии: имя, конфиг и (если сохранён на сервере) его id. */
 export interface CustomOpponent {
     name: string;
+    /**
+     * Имя, под которым партия сохраняется на сервере, если оно отличается от показанного: у мастера прошлого
+     * («Машина времени») на доске — имя на языке игрока, в турнире и PGN — латинское.
+     */
+    savedName?: string;
     config: PersonalityConfig;
     personalityId?: number;
     bio?: string;
