@@ -17,6 +17,7 @@ from src.db.session import get_db
 from src.models.library import LibraryCollection, LibraryGame, LibraryGameCollection
 from src.models.user import User
 from src.services import library, pawn_structures
+from src.services import miniatures as miniatures_service
 from src.services import structure_quiz as structure_quiz_service
 
 router = APIRouter(dependencies=[Depends(rate_limit("library", "RATE_LIMIT_PUZZLES"))])
@@ -132,6 +133,22 @@ async def structure_quiz(count: int = Query(10, ge=1, le=20), seed: int | None =
     questions = structure_quiz_service.build([(r[0], r[1], r[2]) for r in rows], count, rng)
     return {"questions": [{"fen": q.fen, "answer": q.answer, "options": q.options, "game_id": q.game_id, "ply": q.ply}
                           for q in questions]}
+
+
+@router.get("/miniatures")
+async def miniatures(count: int = Query(10, ge=1, le=20), seed: int | None = Query(None),
+                     db: AsyncSession = Depends(get_db)):
+    """«Миниатюры» (27.9): короткие публичные партии, закончившиеся матом, — найти последний ход."""
+    rows = (await db.execute(
+        select(LibraryGame.id, LibraryGame.moves)
+        .where(LibraryGame.plies <= miniatures_service.MAX_PLIES, LibraryGame.result.in_(("1-0", "0-1")),
+               LibraryGame.start_fen.is_(None), _visible_game(None))
+        .order_by(func.random()).limit(count * 20)
+    )).all()
+    found = miniatures_service.pick([(r[0], r[1]) for r in rows], count, random.Random(seed))
+    ids = [m.game_id for m in found]
+    games = {g.id: g for g in (await db.execute(select(LibraryGame).where(LibraryGame.id.in_(ids)))).scalars()}
+    return {"miniatures": [{**_row(games[m.game_id]), "fen": m.fen, "moves": m.moves, "answer": m.answer} for m in found]}
 
 
 @router.get("/games/{game_id}")

@@ -25,9 +25,11 @@ describe('Большой курс', () => {
         expect(screen.getByTestId('course-module-T0.0')).toHaveTextContent('Доска, фигуры и взятие');
         await act(async () => fireEvent.click(screen.getByTestId('course-level-1')));
         expect(screen.getByTestId('course-level-1')).toHaveTextContent('1/');
-        expect(screen.queryByTestId('course-module-G1.1')).toBeNull();  // миниатюр ещё нет — модуль пустой
+        await act(async () => fireEvent.click(screen.getByTestId('course-level-2')));
+        expect(screen.queryByTestId('course-module-T2.8')).toBeNull();  // модуль без шагов скрыт
         fireEvent.click(screen.getByTestId('course-skeleton'));
-        expect(screen.getByTestId('course-module-G1.1')).toHaveTextContent('скоро');
+        expect(screen.getByTestId('course-module-T2.8')).toHaveTextContent('скоро');
+        await act(async () => fireEvent.click(screen.getByTestId('course-level-1')));
         await act(async () => fireEvent.click(screen.getByTestId('course-done-T1.1')));
         const put = calls.find(([, init]) => init?.method === 'PUT')!;
         expect(put[0]).toContain('/learn/progress/course-t1-1');

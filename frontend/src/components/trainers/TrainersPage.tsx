@@ -16,6 +16,7 @@ import {KnightTourGame, PlacementGame} from './BoardPuzzleGames';
 import {BlindGame} from './BlindGames';
 import {ChecksGame, QuizGame} from './CalcGames';
 import {StructureQuiz} from './StructureQuiz';
+import {MiniatureGame} from './MiniatureGame';
 import type {QuizKind} from './CalcGames';
 import {PLACEMENT_PUZZLES, TOUR_SIZES} from '../../trainers/boardPuzzles';
 import {COORD_TRAINERS, levelToOptions, optionsToLevel} from '../../trainers/coordinates';
@@ -120,7 +121,7 @@ export function TrainerPage() {
     if (!id) return <p className="p-4 text-rose-300">{t('trainers.notFound')}</p>;
     const isCoord = (COORD_TRAINERS as readonly string[]).includes(id);
     // У тренажёров счёта (19.7) уровней нет.
-    const noLevels = id.startsWith('calc_') || id === 'structure_quiz';
+    const noLevels = id.startsWith('calc_') || id === 'structure_quiz' || id === 'miniatures';
 
     const start = () => {
         setOutcome(null);
@@ -190,6 +191,7 @@ export function TrainerPage() {
             )}
             {seed !== null && id === 'calc_checks' && <ChecksGame level={1} seed={seed} onFinish={finish}/>}
             {seed !== null && id === 'structure_quiz' && <StructureQuiz seed={seed} onFinish={finish}/>}
+            {seed !== null && id === 'miniatures' && <MiniatureGame seed={seed} onFinish={finish}/>}
             {seed !== null && id.startsWith('calc_') && id !== 'calc_checks' && <QuizGame kind={id as QuizKind} level={1} seed={seed} onFinish={finish}/>}
             {seed !== null && (id === 'quiet_path' || id === 'knight_route') && (
                 <PathGame kind={id === 'knight_route' ? 'knight' : 'quiet'} level={level} seed={seed} onFinish={finish}/>

@@ -120,6 +120,22 @@
   "side": "white"
  },
  {
+  "id": "kp_sixth",
+  "fen": "3k4/8/2KP4/8/8/8/8/8 w - - 0 1",
+  "goal": "promote",
+  "limit": 30,
+  "optimum": null,
+  "side": "white"
+ },
+ {
+  "id": "rook_behind_pawn",
+  "fen": "8/8/8/P7/8/6k1/8/R5K1 w - - 0 1",
+  "goal": "promote",
+  "limit": 30,
+  "optimum": null,
+  "side": "white"
+ },
+ {
   "id": "q_vs_pawn",
   "fen": "8/8/8/8/8/1K6/5kp1/7Q w - - 0 1",
   "goal": "convert",
@@ -194,6 +210,38 @@
  {
   "id": "rook_vs_knight_def",
   "fen": "8/8/8/8/4k3/4n3/8/1K1R4 b - - 0 1",
+  "goal": "draw",
+  "limit": 15,
+  "optimum": null,
+  "side": "black"
+ },
+ {
+  "id": "q_vs_c_pawn_def",
+  "fen": "8/6K1/8/Q7/8/8/2pk4/8 b - - 0 1",
+  "goal": "draw",
+  "limit": 15,
+  "optimum": null,
+  "side": "black"
+ },
+ {
+  "id": "q_vs_a_pawn_def",
+  "fen": "8/6K1/8/8/Q7/8/p1k5/8 b - - 0 1",
+  "goal": "draw",
+  "limit": 15,
+  "optimum": null,
+  "side": "black"
+ },
+ {
+  "id": "opposite_bishops_def",
+  "fen": "8/8/2b1k3/4P3/3K4/3B4/8/8 b - - 0 1",
+  "goal": "draw",
+  "limit": 15,
+  "optimum": null,
+  "side": "black"
+ },
+ {
+  "id": "vancura",
+  "fen": "R7/6k1/P4r2/8/8/8/8/K7 b - - 0 1",
   "goal": "draw",
   "limit": 15,
   "optimum": null,

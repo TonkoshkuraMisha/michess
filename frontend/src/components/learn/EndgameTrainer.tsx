@@ -1,5 +1,5 @@
 // --- FILE: frontend/src/components/learn/EndgameTrainer.tsx ---
-// Эндшпильный тренажёр (таск 14.4): /learn/endgames — 25 упражнений, /learn/endgames/:id — игра против идеальной
+// Эндшпильный тренажёр (таск 14.4): /learn/endgames — 31 упражнение (с «обязательными позициями» 27.9), /learn/endgames/:id — игра против идеальной
 // защиты по эндшпильным таблицам (POST /analysis/tablebase). Цели: мат (счётчик ходов против оптимума по таблицам),
 // провести пешку или реализовать перевес не упустив выигрыш, удержать ничью заданное число ходов. После каждого хода
 // игрока таблицы проверяют, не упущен ли результат.
@@ -15,6 +15,7 @@ import {getToken} from '../../services/authToken';
 import {fetchLessonProgress, saveLessonProgress} from '../../services/lessonProgress';
 import {probeTablebase} from '../../services/tablebase';
 import exercisesData from '../../content/endgames.json';
+import {MUST_KNOW} from '../../content/mustKnow';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 
 export type EndgameGoal = 'mate' | 'promote' | 'convert' | 'draw';
@@ -55,6 +56,25 @@ export function EndgamesPage() {
             <Link to="/learn" className="text-sm text-amber-400 hover:underline flex items-center gap-1"><ArrowLeft size={14}/> {t('learn.title')}</Link>
             <h1 className="text-2xl font-bold text-amber-200">{t('endgames.title')}</h1>
             <p className="text-boxwood/85">{t('endgames.intro')}</p>
+            <section className="flex flex-col gap-2 bg-amber-900/20 border border-amber-800/60 rounded-lg p-3" data-testid="must-know">
+                <h2 className="font-bold text-amber-200">{t('endgames.mustKnow.title')}</h2>
+                <p className="text-sm text-boxwood/80">{t('endgames.mustKnow.intro')}</p>
+                {MUST_KNOW.map((ids, stage) => (
+                    <div key={stage} className="flex flex-col gap-1" data-testid={`must-know-${stage + 1}`}>
+                        <h3 className="text-sm font-bold text-amber-300">
+                            {t('endgames.mustKnow.stage', {n: stage + 1, done: ids.filter((id) => done.has(progressId(id))).length, total: ids.length})}
+                        </h3>
+                        <div className="flex flex-wrap gap-1.5">
+                            {ids.map((id) => (
+                                <Link key={id} to={`/learn/endgames/${id}`}
+                                      className={`text-xs px-2 py-1 rounded border flex items-center gap-1 ${done.has(progressId(id)) ? 'border-emerald-600 text-emerald-200' : 'border-amber-800 hover:border-amber-500'}`}>
+                                    {done.has(progressId(id)) && <Check size={12}/>}{t(`endgames.items.${id}` as MessageKey)}
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </section>
             {GOALS.map((goal) => (
                 <section key={goal} className="flex flex-col gap-2">
                     <h2 className="font-bold text-amber-200">{t(`endgames.goals.${goal}.section`)}</h2>

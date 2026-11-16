@@ -39,6 +39,8 @@ EXERCISES = [
     ("two_pawns", "8/8/8/4k3/8/8/3PP3/4K3 w - - 0 1", "promote"),
     ("two_pawns_connected", "8/8/3k4/8/8/8/5PP1/6K1 w - - 0 1", "promote"),
     ("lucena", "1K1k4/1P6/8/8/8/8/r7/2R5 w - - 0 1", "promote"),
+    ("kp_sixth", "3k4/8/2KP4/8/8/8/8/8 w - - 0 1", "promote"),
+    ("rook_behind_pawn", "8/8/8/P7/8/6k1/8/R5K1 w - - 0 1", "promote"),
     ("q_vs_pawn", "8/8/8/8/8/1K6/5kp1/7Q w - - 0 1", "convert"),
     ("rook_vs_pawn", "8/8/8/8/8/3k4/2p5/K5R1 w - - 0 1", "convert"),
     ("q_vs_knight", "8/8/8/3k4/3n4/8/8/KQ6 w - - 0 1", "convert"),
@@ -49,6 +51,10 @@ EXERCISES = [
     ("philidor", "4k3/8/r7/4PK2/8/8/8/4R3 b - - 0 1", "draw"),
     ("rook_vs_bishop_def", "8/8/8/3k4/8/3b4/8/K2R4 b - - 0 1", "draw"),
     ("rook_vs_knight_def", "8/8/8/8/4k3/4n3/8/1K1R4 b - - 0 1", "draw"),
+    ("q_vs_c_pawn_def", "8/6K1/8/Q7/8/8/2pk4/8 b - - 0 1", "draw"),
+    ("q_vs_a_pawn_def", "8/6K1/8/8/Q7/8/p1k5/8 b - - 0 1", "draw"),
+    ("opposite_bishops_def", "8/8/2b1k3/4P3/3K4/3B4/8/8 b - - 0 1", "draw"),
+    ("vancura", "R7/6k1/P4r2/8/8/8/8/K7 b - - 0 1", "draw"),
 ]
 LIMITS = {"promote": 30, "convert": 30, "draw": 15}
 MATE_SLACK = 8
