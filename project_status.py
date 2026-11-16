@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -177,4 +178,7 @@ def build_status(root: Path) -> str:
 
 
 if __name__ == "__main__":
+    # Консоль Windows по умолчанию в cp1251 и не печатает эмодзи-статусы (✅, ⏳).
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
     print(build_status(Path(__file__).resolve().parent))
