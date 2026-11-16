@@ -140,6 +140,30 @@ describe('AuthModal: регистрация', () => {
         expect(onFirstGame).toHaveBeenCalledWith(600);
     });
 
+    it('новичку («только начинаю») — сначала азбука (17.8 → 14.5)', async () => {
+        stubAuth(response(200, {access_token: 'jwt-new'}), {id: 1, username: 'alice', blitz_rating: 600});
+        const onSuccess = vi.fn();
+        const onBasics = vi.fn();
+        render(<AuthModal onSuccess={onSuccess} onFirstGame={vi.fn()} onBasics={onBasics}/>);
+        switchToRegistration();
+        fireEvent.change(screen.getByLabelText('Как давно вы играете? (необязательно)'), {target: {value: 'new'}});
+        fillAndSubmit('alice', 'secret-pass', /Зарегистрироваться/);
+        fireEvent.click(await screen.findByTestId('auth-start-basics'));
+        expect(onSuccess).toHaveBeenCalledWith('jwt-new');
+        expect(onBasics).toHaveBeenCalled();
+        expect(screen.getByTestId('auth-first-game')).toBeInTheDocument();  // партия — по желанию
+    });
+
+    it('опытному игроку кнопки азбуки нет', async () => {
+        stubAuth(response(200, {access_token: 'jwt-new'}));
+        render(<AuthModal onSuccess={vi.fn()} onFirstGame={vi.fn()} onBasics={vi.fn()}/>);
+        switchToRegistration();
+        fireEvent.change(screen.getByLabelText('Как давно вы играете? (необязательно)'), {target: {value: 'regular'}});
+        fillAndSubmit('alice', 'secret-pass', /Зарегистрироваться/);
+        expect(await screen.findByTestId('auth-welcome')).toBeInTheDocument();
+        expect(screen.queryByTestId('auth-start-basics')).toBeNull();
+    });
+
     it('без ответов на вопросы — регистрация как раньше; «Позже» просто входит', async () => {
         const fetchMock = stubAuth(response(200, {access_token: 'jwt-new'}));
         const onSuccess = vi.fn();
