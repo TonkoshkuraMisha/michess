@@ -3,8 +3,8 @@
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Request, status
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Depends, Query, Request, status
+from fastapi.responses import JSONResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -78,6 +78,16 @@ async def export_my_data(user: User = Depends(get_current_user), db: AsyncSessio
     """Все данные игрока одним файлом JSON (GDPR, право на переносимость)."""
     data = await service.export_data(db, user)
     return JSONResponse(data, headers={"Content-Disposition": f'attachment; filename="michess-{user.id}.json"'})
+
+
+@router.get("/games.pgn", response_class=PlainTextResponse)
+async def export_my_games_pgn(offset: int = Query(0, ge=0), user: User = Depends(get_current_user),
+                              db: AsyncSession = Depends(get_db)):
+    """Все свои завершённые партии одним файлом PGN (таск 24.3) — открыть в любой шахматной программе."""
+    text, total = await service.games_pgn(db, user, offset)
+    return PlainTextResponse(text, media_type="application/x-chess-pgn", headers={
+        "Content-Disposition": f'attachment; filename="michess-games-{user.id}.pgn"', "X-Total-Count": str(total),
+    })
 
 
 @router.post("/delete", status_code=status.HTTP_204_NO_CONTENT)

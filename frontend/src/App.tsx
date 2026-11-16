@@ -21,6 +21,7 @@ import {EndgamesPage, EndgameTrainerPage} from './components/learn/EndgameTraine
 import {ToolsPage} from './components/tools/ToolsPage';
 import {WatchPage} from './components/watch/WatchPage';
 import {ImportPage} from './components/gameImport/ImportPage';
+import {TransparencyPage} from './components/TransparencyPage';
 import {ArenaPage, ArenasPage} from './components/arena/ArenaPages';
 import {TeamsPage} from './components/social/TeamsPage';
 import {StudyLobby, StudyRoomPage} from './components/study/StudyPages';
@@ -672,6 +673,7 @@ export default function App() {
                     <Route path="/library/game/:gameId" element={<GameViewer key="library" library/>}/>
                     <Route path="/champions/:championId" element={<ChampionGames/>}/>
                     <Route path="/about" element={<About/>}/>
+                    <Route path="/transparency" element={<TransparencyPage username={username}/>}/>
                     <Route path="/verify-email" element={<VerifyEmailPage/>}/>
                     <Route path="/reset-password" element={<ResetPasswordPage/>}/>
                     <Route

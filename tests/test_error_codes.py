@@ -89,6 +89,14 @@ def _codes_used_in_source() -> set[str]:
                 for keyword in node.keywords:
                     if keyword.arg == "reason" and isinstance(keyword.value, ast.Constant) and name == "SkippedPersonality":
                         used.add(keyword.value.value)
+                    # rate_limit(..., code="…") — свой код 429 у эндпоинтов без движка.
+                    if keyword.arg == "code" and isinstance(keyword.value, ast.Constant) and name == "rate_limit":
+                        used.add(keyword.value.value)
+            if isinstance(node, ast.FunctionDef) and node.name == "rate_limit":
+                # Код 429 по умолчанию — значение параметра code.
+                for arg, default in zip(reversed(node.args.args), reversed(node.args.defaults), strict=False):
+                    if arg.arg == "code" and isinstance(default, ast.Constant):
+                        used.add(default.value)
             if isinstance(node, ast.Dict):
                 for key, value in zip(node.keys, node.values, strict=True):
                     if getattr(key, "value", None) == "code" and isinstance(value, ast.Constant):

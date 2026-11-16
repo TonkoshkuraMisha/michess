@@ -12,13 +12,14 @@ from __future__ import annotations
 import secrets
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, or_, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.errors import ApiError
 from src.core.security import get_password_hash
 from src.models.email_token import EmailToken
 from src.models.game import Game, GameStatus
+from src.models.imported_game import ImportedGame
 from src.models.lesson import LessonProgress
 from src.models.personality import BotPersonality
 from src.models.product_event import ProductEvent
@@ -54,6 +55,8 @@ async def export_data(db: AsyncSession, user: User) -> dict:
     personal = (await db.execute(select(PersonalPuzzle).where(PersonalPuzzle.user_id == user.id))).scalars().all()
     records = (await db.execute(select(DrillRecord).where(DrillRecord.user_id == user.id))).scalars().all()
     tournaments = (await db.execute(select(Tournament).where(Tournament.owner_id == user.id))).scalars().all()
+    imported = (await db.execute(select(ImportedGame).where(ImportedGame.user_id == user.id)
+                                 .order_by(ImportedGame.id))).scalars().all()
 
     return {
         "format": EXPORT_FORMAT,
@@ -98,9 +101,16 @@ async def export_data(db: AsyncSession, user: User) -> dict:
             for a in attempts
         ],
         "personal_puzzles": [
-            {"game_id": pp.game_id, "ply": pp.ply, "fen": pp.fen, "played": pp.played, "solution": pp.solution,
-             "done": pp.done}
+            {"game_id": pp.game_id, "imported_game_id": pp.imported_game_id, "ply": pp.ply, "fen": pp.fen,
+             "played": pp.played, "solution": pp.solution, "done": pp.done}
             for pp in personal
+        ],
+        # Партии с других сайтов (таск 24.1): принесены игроком — возвращаются ему же.
+        "imported_games": [
+            {"id": g.id, "source": g.source, "external_id": g.external_id, "color": g.color, "white": g.white_name,
+             "black": g.black_name, "result": g.result, "speed": g.speed, "played_at": _iso(g.played_at),
+             "imported_at": _iso(g.created_at), "pgn": g.pgn}
+            for g in imported
         ],
         "drill_records": [{"combo": r.combo, "best": r.best} for r in records],
         "tournaments": [
@@ -109,6 +119,26 @@ async def export_data(db: AsyncSession, user: User) -> dict:
             for t in tournaments
         ],
     }
+
+
+GAMES_PGN_LIMIT = 5000
+
+
+async def games_pgn(db: AsyncSession, user: User, offset: int = 0) -> tuple[str, int]:
+    """
+    Все завершённые партии игрока одним PGN-документом (таск 24.3), от старых к новым; не больше GAMES_PGN_LIMIT за
+    раз (дальше — offset). Возвращает текст и общее число партий.
+    """
+    conditions = (
+        or_(Game.white_player_id == user.id, Game.black_player_id == user.id),
+        Game.status == GameStatus.COMPLETED, Game.pgn.is_not(None), Game.pgn != "",
+    )
+    total = await db.scalar(select(func.count(Game.id)).where(*conditions)) or 0
+    rows = (await db.scalars(
+        select(Game.pgn).where(*conditions).order_by(Game.finished_at, Game.id).offset(offset).limit(GAMES_PGN_LIMIT)
+    )).all()
+    text = "\n\n".join((pgn or "").strip() for pgn in rows)
+    return (text + "\n" if text else ""), total
 
 
 async def delete_account(db: AsyncSession, user: User) -> None:
@@ -123,7 +153,8 @@ async def delete_account(db: AsyncSession, user: User) -> None:
     for model, column in (
             (BotPersonality, BotPersonality.owner_id), (LessonProgress, LessonProgress.user_id),
             (ThemeProgress, ThemeProgress.user_id), (PuzzleAttempt, PuzzleAttempt.user_id),
-            (PersonalPuzzle, PersonalPuzzle.user_id), (DrillRecord, DrillRecord.user_id),
+            (PersonalPuzzle, PersonalPuzzle.user_id), (ImportedGame, ImportedGame.user_id),
+            (DrillRecord, DrillRecord.user_id),
             (Tournament, Tournament.owner_id), (EmailToken, EmailToken.user_id),
             (ProductEvent, ProductEvent.user_id),
     ):
