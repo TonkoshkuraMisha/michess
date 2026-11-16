@@ -1,6 +1,6 @@
 // Курс матовых конструкций (таск 14.6): список, конструкция (объяснение → задачи), проверка на время.
 
-import {act, fireEvent, render, screen} from '@testing-library/react';
+import {act, fireEvent, render, screen, waitFor} from '@testing-library/react';
 import {MemoryRouter, Route, Routes} from 'react-router-dom';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {setToken} from '../../../services/authToken';
@@ -86,7 +86,11 @@ describe('Курс матовых конструкций', () => {
         fireEvent.click(await screen.findByTestId('mates-start', {}, {timeout: 5000}));
         expect(await screen.findByTestId('course-puzzle', {}, {timeout: 5000})).toBeInTheDocument();
         expect(screen.getByText('Белые начинают и ставят мат.')).toBeInTheDocument();
+        // Ходы — только после ходов соперника на доске: под нагрузкой их задержка растягивается.
+        const occupied = (sq: string) => waitFor(() => expect(cell(sq).querySelector('img')).not.toBeNull(), {timeout: 5000});
+        await occupied('e2');
         await drag('d2', 'd8');
+        await occupied('e8');
         await drag('d8', 'e8');
         expect(await screen.findByTestId('course-solved', {}, {timeout: 5000})).toBeInTheDocument();
         const put = (fetchMock.mock.calls as unknown as [string, RequestInit][]).find(([url]) => url.includes('/learn/progress/'))!;
