@@ -199,6 +199,25 @@ describe('GameViewer', () => {
         await expectPiece('h4', 'b q');
     });
 
+    it('листание стрелками не двигает страницу: прокручивается только окно списка ходов', async () => {
+        // Раньше текущий ход подводился через scrollIntoView, и вместе со списком ехала вся страница с доской.
+        const intoView = vi.spyOn(Element.prototype, 'scrollIntoView');
+        stubApi({pgn: {ok: true, text: FOOLS_MATE_PGN}});
+        renderViewer();
+        await waitFor(() => expect(pieceOn('h4')).toBe('b q'));
+
+        for (const key of ['ArrowUp', 'ArrowRight', 'ArrowRight', 'ArrowDown', 'ArrowLeft']) {
+            // Клавиша обработана: браузер не прокручивает страницу сам.
+            expect(fireEvent.keyDown(window, {key})).toBe(false);
+        }
+        await expectPiece('h4', null);
+        expect(intoView).not.toHaveBeenCalled();
+        // Список ходов — окно со своей прокруткой и ограниченной высотой.
+        expect(screen.getByTestId('move-list').className).toMatch(/max-h-\[50dvh\]/);
+        expect(screen.getByTestId('move-list').querySelector('.overflow-y-auto .active-move')).not.toBeNull();
+        intoView.mockRestore();
+    });
+
     it('обработчик клавиш регистрируется один раз и видит загруженную партию без перерегистрации', async () => {
         // Раньше обработчик перерегистрировался после каждого рендера и читал историю из замыкания:
         // нажатие между отрисовкой загруженной партии и запуском эффекта видело пустую историю и терялось.

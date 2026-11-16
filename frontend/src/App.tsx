@@ -157,7 +157,9 @@ export default function App() {
     const isSingleScreenRoute =
         location.pathname === '/' ||
         location.pathname.startsWith('/challenge/') ||
-        location.pathname.startsWith('/game/');
+        // Просмотр партии — тот же экран с доской и для библиотеки, и для партий с других сайтов: иначе панель
+        // с ходами растягивается на всю партию, и страница едет вслед за текущим ходом.
+        /^\/(game|library\/game|import\/game)\//.test(location.pathname);
 
     useEffect(() => {
         const unsubscribe = auth.onTokenChange((current) => {
