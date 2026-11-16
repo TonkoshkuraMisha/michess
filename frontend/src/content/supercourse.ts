@@ -156,7 +156,7 @@ export const COURSE: CourseModule[] = [
     mod('O4.1', 'O'),
     mod('O4.2', 'O', [REPERTOIRE]),
     mod('C4.1', 'C', [tr('calc_eval')]),
-    mod('C4.2', 'C'),
+    mod('C4.2', 'C', [tr('calc_compare')]),
     mod('G4.1', 'G', [{kind: 'library'}]),
     mod('G4.2', 'G', [{kind: 'workout'}]),
     mod('X4', 'G', [ex('J'), ex('endgame')]),

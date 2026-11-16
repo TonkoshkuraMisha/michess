@@ -214,6 +214,42 @@ export interface EvalQuestion {
     answer: EvalAnswer;
 }
 
+/** «Сравни два хода» (27.9): ход мастера на остановке классики против другой линии движка, слабее ≥ 1 пешки. */
+export interface CompareQuestion {
+    fen: string;
+    best: string;
+    other: string;
+    bestCp: number;
+    otherCp: number;
+    /** Порядок вариантов на экране (UCI). */
+    options: [string, string];
+}
+
+export function compareQuestion(
+    games: { moves: string[]; stops: { ply: number; move: string; lines: [string, number][] }[] }[], seed: number,
+): CompareQuestion | null {
+    const next = rng(seed);
+    for (let attempt = 0; attempt < 300; attempt++) {
+        const game = games[Math.floor(next() * games.length)];
+        const stop = game?.stops[Math.floor(next() * (game?.stops.length ?? 0))];
+        if (!stop || stop.lines.length < 2) continue;
+        const [best, bestCp] = stop.lines[0];
+        const others = stop.lines.slice(1).filter(([, cp]) => bestCp - cp >= 100);
+        if (best !== stop.move || others.length === 0) continue;
+        const [other, otherCp] = others[Math.floor(next() * others.length)];
+        const board = new Chess();
+        for (const uci of game.moves.slice(0, stop.ply)) board.move({from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4]});
+        const options: [string, string] = next() < 0.5 ? [best, other] : [other, best];
+        return {fen: board.fen(), best, other, bestCp, otherCp, options};
+    }
+    return null;
+}
+
+/** SAN хода UCI в позиции FEN. */
+export function sanOf(fen: string, uci: string): string {
+    return new Chess(fen).move({from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4]}).san;
+}
+
 export function evalQuestion(games: { moves: string[]; evals: number[] }[], seed: number): EvalQuestion | null {
     const next = rng(seed);
     for (let attempt = 0; attempt < 300; attempt++) {

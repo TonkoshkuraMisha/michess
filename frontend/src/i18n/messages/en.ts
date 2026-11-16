@@ -1671,6 +1671,7 @@ export const en = {
         calc_distance: {title: 'How many moves?', rules: 'How many moves does the knight or king need to reach the marked square?'},
         calc_square: {title: 'Does the king catch it?', rules: 'The rule of the square: will the black king catch the white pawn before it queens?'},
         calc_eval: {title: 'Judge the position', rules: 'Who is better: White, Black, or is it equal? Checked against the engine evaluation of real games.'},
+        calc_compare: {title: 'Compare two moves', rules: 'A position from a master game and two moves: which one is stronger? The answer comes from the engine evaluation prepared in advance; one of the two is the move played in the game.'},
         miniatures: {title: 'Miniatures', rules: 'A short game from the library that ended in mate. Find the mating move — any mate counts; then open the whole game.'},
         miniaturePromptWhite: 'Move {moves}, White to play: mate!',
         miniaturePromptBlack: 'Move {moves}, Black to play: mate!',
@@ -1680,6 +1681,9 @@ export const en = {
         structurePrompt: 'Which pawn structure is this?',
         structureGame: 'Open the game',
         calc: {
+            comparePromptWhite: 'White to move: which move is stronger?',
+            comparePromptBlack: 'Black to move: which move is stronger?',
+            compareVerdict: '{best} is stronger: {bestCp} against {otherCp} after {other} (engine, in pawns). {best} was played in the game.',
             question: 'Question {n} of {total}',
             exchangePrompt: 'Capture on {square}: what is the result?',
             knightPrompt: 'Knight from {from} to {to}: how many moves?',
