@@ -41,8 +41,8 @@ function open(id: string) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('данные упражнений', () => {
-    it('33 законные позиции, у матов — оптимум не больше лимита', () => {
-        expect(EXERCISES).toHaveLength(33);
+    it('34 законные позиции, у матов — оптимум не больше лимита', () => {
+        expect(EXERCISES).toHaveLength(34);
         for (const e of EXERCISES) {
             const game = new Chess(e.fen);
             expect(game.isGameOver(), e.id).toBe(false);
@@ -53,7 +53,7 @@ describe('данные упражнений', () => {
 
     it('список по целям', () => {
         render(<MemoryRouter><EndgamesPage/></MemoryRouter>);
-        expect(screen.getAllByTestId(/^endgame-/)).toHaveLength(33);
+        expect(screen.getAllByTestId(/^endgame-/)).toHaveLength(34);
         expect(screen.getByTestId('endgame-lucena')).toHaveTextContent('Лусены');
     });
 });

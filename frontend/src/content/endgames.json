@@ -168,6 +168,14 @@
   "side": "white"
  },
  {
+  "id": "bishop_vs_knight",
+  "fen": "6B1/8/8/n7/4P2K/8/5k2/8 w - - 0 1",
+  "goal": "promote",
+  "limit": 30,
+  "optimum": null,
+  "side": "white"
+ },
+ {
   "id": "kp_opposition_def",
   "fen": "4k3/8/8/4K3/4P3/8/8/8 b - - 0 1",
   "goal": "draw",

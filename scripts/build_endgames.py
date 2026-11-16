@@ -45,6 +45,7 @@ EXERCISES = [
     ("rook_vs_pawn", "8/8/8/8/8/3k4/2p5/K5R1 w - - 0 1", "convert"),
     ("q_vs_knight", "8/8/8/3k4/3n4/8/8/KQ6 w - - 0 1", "convert"),
     ("q_vs_rook", "8/8/8/3k4/8/2r5/8/KQ6 w - - 0 1", "convert"),
+    ("bishop_vs_knight", "6B1/8/8/n7/4P2K/8/5k2/8 w - - 0 1", "promote"),
     ("kp_opposition_def", "4k3/8/8/4K3/4P3/8/8/8 b - - 0 1", "draw"),
     ("rook_pawn_def", "7k/8/6K1/7P/8/8/8/8 b - - 0 1", "draw"),
     ("wrong_bishop", "7k/8/5K2/7P/8/3B4/8/8 b - - 0 1", "draw"),

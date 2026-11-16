@@ -98,7 +98,7 @@ export const COURSE: CourseModule[] = [
     mod('X2', 'G', [ex('C'), ex('D'), ex('E')]),
     // --- Уровень 3. III–II разряд ---
     mod('T3.1', 'T', [th('clearance')]),
-    mod('T3.2', 'T'),
+    mod('T3.2', 'T', [l('tactics-square-conquest'), th('remove_defender'), th('decoy')]),
     mod('T3.3', 'T', [th('clearance')]),
     mod('T3.4', 'T', [th('interference')]),
     mod('T3.5', 'T', [th('blockade')]),
@@ -109,7 +109,7 @@ export const COURSE: CourseModule[] = [
     mod('M3.2', 'M', [th('pawn_storm'), th('rook_lift')]),
     mod('M3.3', 'M', [th('kingside_attack'), th('queenside_attack')]),
     mod('M3.4', 'M', [th('sacrifice')]),
-    mod('E3.1', 'E'),
+    mod('E3.1', 'E', [l('endgame-bishop-vs-knight'), e('bishop_vs_knight')]),
     mod('E3.2', 'E', [e('opposite_bishops_def')]),
     mod('E3.3', 'E', [e('q_vs_knight'), e('q_vs_rook')]),
     mod('E3.4', 'E', [l('endgame-rook-vs-pawn'), e('rook_vs_pawn'), l('endgame-passed-pawn')]),
