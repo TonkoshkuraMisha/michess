@@ -34,6 +34,8 @@ class Tournament(Base):
     withdrawn_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Турнир карьеры (таск 15.4): ключ этапа лестницы (src/services/tournament_career.py); пусто — свой турнир.
     career_stage: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    # «Машина времени» (таск 28.2): ключ знаменитого турнира из src/services/time_machine.py; пусто — обычный турнир.
+    event_key: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
 
 
 class TournamentPlayer(Base):

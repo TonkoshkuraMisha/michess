@@ -53,6 +53,7 @@ ERROR_MESSAGES: dict[str, str] = {
     "puzzle_not_found": "Puzzle not found",
     "guess_position_not_found": "Position not found",
     "career_stage_unknown": "Unknown career tournament",
+    "time_machine_event_unknown": "There is no such historical tournament",
     "career_stage_locked": "This career tournament is not open yet",
     "trainer_not_found": "Unknown trainer",
     "cannot_follow_self": "You cannot follow yourself",

@@ -928,6 +928,7 @@ export const ru: Messages = {
         puzzle_not_found: 'Задача не найдена',
         guess_position_not_found: 'Позиция не найдена',
         career_stage_unknown: 'Такого турнира в карьере нет',
+        time_machine_event_unknown: 'Такого исторического турнира нет',
         career_stage_locked: 'Этот турнир карьеры ещё закрыт',
         trainer_not_found: 'Такого тренажёра нет',
         arena_not_found: 'Арена не найдена',
