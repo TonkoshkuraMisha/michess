@@ -7,7 +7,8 @@
 (BotPersonalityConfig): стиль — по известной манере игры, сила — по историческим оценкам относительно уже
 откалиброванных мастеров (bots/masters.py: Стаунтон 2000, Андерсен 2100, Ласкер 2250, Капабланка 2300). В турнире
 участник сохраняется как персоналия с ключом «guest:<id>»: симуляция и партия игрока работают как с любым
-соперником мастерской, а имя на языке игрока берёт клиент (bots.guests.<id>).
+соперником мастерской, а имя на языке игрока берёт клиент (bots.guests.<id>). У кого за историю закрепился свой
+дебют — играет его (SIGNATURE_OPENINGS): Винавер — вариант Винавера, Грюнфельд — защиту Грюнфельда, Бёрд — дебют Бёрда.
 
 Все — умершие шахматисты (правило 1). Годы жизни сверены с открытыми источниками (17.11); у кого надёжных дат
 нет — не указаны. Портретов и своих дебютных книг у мастеров прошлого пока нет: это следующий шаг.
@@ -15,6 +16,7 @@
 
 from dataclasses import dataclass
 
+from src.services import openings
 from src.services.bots.personality import BotPersonalityConfig
 
 GUEST_PREFIX = "guest:"
@@ -36,8 +38,74 @@ class Guest:
         return f"{GUEST_PREFIX}{self.id}"
 
 
+QGD = "Queen's Gambit Declined"
+RUY_LOPEZ = "Ruy Lopez"
+KINGS_GAMBIT = "King's Gambit Accepted"
+VIENNA = "Vienna Game"
+FRENCH = "French Defense"
+
+# Фирменные дебюты мастеров: (белыми, чёрными), до трёх на цвет. Названия — из открытой таблицы дебютов
+# (src/services/openings.py); только то, что за мастером закрепила история: дебют его имени или его постоянное
+# оружие. В партии мастер идёт в эти линии, когда соперник это позволяет, и называет дебют в реплике.
+SIGNATURE_OPENINGS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
+    "kieseritzky": (("King's Gambit Accepted: Kieseritzky Gambit",), (KINGS_GAMBIT,)),
+    "bird": (("Bird Opening",), ()),
+    "wyvill": (("English Opening",), ()),
+    "winawer": ((), ("French Defense: Winawer Variation",)),
+    "albin": ((), ("Queen's Gambit Declined: Albin Countergambit",)),
+    "alapin": (("Sicilian Defense: Alapin Variation",), ()),
+    "grunfeld": ((QGD,), ("Grünfeld Defense",)),
+    "pirc": ((), ("Pirc Defense",)),
+    "caro": ((), ("Caro-Kann Defense",)),
+    "colle": (("Queen's Pawn Game: Colle System",), ()),
+    "samisch": (("Nimzo-Indian Defense: Sämisch Variation", "King's Indian Defense: Sämisch Variation"), ()),
+    "torre": (("Queen's Pawn Game: Torre Attack",), ()),
+    "ware": (("Ware Opening",), ("Dutch Defense: Stonewall Variation",)),
+    "mieses": ((VIENNA, "Danish Gambit", "Center Game"), ()),
+    "spielmann": ((VIENNA, KINGS_GAMBIT), ()),
+    "charousek": ((KINGS_GAMBIT,), ()),
+    "schlechter": ((RUY_LOPEZ,), ("Slav Defense",)),
+    "maroczy": ((RUY_LOPEZ,), (FRENCH,)),
+    "burn": ((), (FRENCH,)),
+    "carls": (("English Opening",), ()),
+    "blackburne": (("Scotch Game",), ()),
+    "janowski": ((QGD,), ()),
+    "bogoljubow": ((QGD,), ("Bogo-Indian Defense",)),
+    "euwe": ((QGD,), ("Ruy Lopez: Open",)),
+    "flohr": ((QGD,), ("Caro-Kann Defense",)),
+    "fine": ((QGD,), ()),
+    "reshevsky": ((QGD,), ("Nimzo-Indian Defense",)),
+    "vidmar": ((QGD,), ("Queen's Gambit Declined: Orthodox Defense",)),
+    "keres": ((RUY_LOPEZ,), ()),
+    "kashdan": ((RUY_LOPEZ,), ()),
+    "duras": ((RUY_LOPEZ,), ()),
+    "teichmann": ((RUY_LOPEZ,), ("Queen's Gambit Declined: Orthodox Defense",)),
+    "showalter": ((RUY_LOPEZ,), ()),
+    "thomas": ((RUY_LOPEZ,), ()),
+    "yates": ((RUY_LOPEZ,), ("King's Indian Defense",)),
+    "canal": (("Italian Game: Giuoco Piano",), ()),
+    "menchik": ((QGD,), (FRENCH,)),
+    "becker": ((QGD,), ()),
+    "alexander": ((), ("Dutch Defense",)),
+    "dus_chotimirsky": ((QGD,), ()),
+}
+
+
+def opening_position(name: str) -> str:
+    """Позиция (EPD) дебюта по названию из открытой таблицы: самая короткая линия с таким названием."""
+    found = [line for line in openings.lines().values() if line.name == name]
+    if not found:
+        raise KeyError(f"no opening named {name!r} in the table")
+    return min(found, key=lambda line: len(line.moves)).epd
+
+
 def _guest(guest_id: str, pgn_name: str, era: str | None, rating: int, **style) -> Guest:
-    return Guest(guest_id, pgn_name, era, rating, BotPersonalityConfig(target_elo=rating, **style))
+    white, black = SIGNATURE_OPENINGS.get(guest_id, ((), ()))
+    config = BotPersonalityConfig(
+        target_elo=rating, openings_white=[opening_position(name) for name in white],
+        openings_black=[opening_position(name) for name in black], **style,
+    )
+    return Guest(guest_id, pgn_name, era, rating, config)
 
 
 GUESTS: tuple[Guest, ...] = (
