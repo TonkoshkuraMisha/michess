@@ -251,3 +251,50 @@ describe('solutionSan', () => {
         expect(solutionSan('8/P7/8/8/8/8/k7/4K3 w - - 0 1', ['a7a8n'])).toBe('1. a8=♘');
     });
 });
+
+describe('«Кандидаты» (27.9)', () => {
+    async function startWithCandidates() {
+        renderPage();
+        fireEvent.click(await screen.findByTestId('candidates-toggle'));
+        await act(async () => {
+            fireEvent.click(await screen.findByTestId('puzzle-next'));
+        });
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(600);
+        });
+    }
+
+    it('щелчки отмечают кандидатов, а не ходят; верный ход среди них — отмечено', async () => {
+        const calls = stub((url, init) => {
+            if (url.includes('/next')) return PUZZLE;
+            const move = JSON.parse(String(init?.body)).move;
+            return move === 'd2d8'
+                ? {correct: true, done: false, reply: 'e2e8', solution: null, result: null}
+                : {correct: true, done: true, reply: null, solution: null, result: RESULT};
+        });
+        await startWithCandidates();
+        expect(screen.getByTestId('candidates-ready')).toBeDisabled();
+        await play('d2', 'd8');
+        await play('g1', 'f1');
+        expect(calls.some((c) => c.url.includes('/move'))).toBe(false);  // это отметки, не ходы
+        expect(screen.getByTestId('candidates-panel')).toHaveTextContent('отмечено 2');
+        await act(async () => fireEvent.click(screen.getByTestId('candidates-ready')));
+        await play('d2', 'd8');
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(500);
+        });
+        await play('d8', 'e8');
+        expect(await screen.findByTestId('candidates-verdict')).toHaveTextContent('был среди ваших кандидатов');
+    });
+
+    it('неверный первый ход: лучший ход берётся из решения, его не было среди кандидатов', async () => {
+        stub((url) => (url.includes('/next') ? PUZZLE
+            : {correct: false, done: true, reply: null, solution: ['d2d8', 'e2e8', 'd8e8'], result: {...RESULT, solved: false, delta: -10}}));
+        await startWithCandidates();
+        await play('g1', 'f1');
+        await play('h2', 'h3');
+        await act(async () => fireEvent.click(screen.getByTestId('candidates-ready')));
+        await play('h2', 'h3');
+        expect(await screen.findByTestId('candidates-verdict')).toHaveTextContent('не было среди кандидатов');
+    });
+});

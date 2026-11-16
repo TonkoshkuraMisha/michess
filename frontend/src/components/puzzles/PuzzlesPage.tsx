@@ -81,6 +81,12 @@ export default function PuzzlesPage() {
     const [fen, setFen] = useState(new Chess().fen());
     const [startFen, setStartFen] = useState<string | null>(null);
     const [phase, setPhase] = useState<Phase>('idle');
+    // «Кандидаты» (27.9): перед ходом отметить 2–3 хода-кандидата; после решения — был ли верный ход среди них.
+    const [candidatesOn, setCandidatesOn] = useState(false);
+    const [candidates, setCandidates] = useState<string[]>([]);
+    const [candidateFrom, setCandidateFrom] = useState<string | null>(null);
+    const [candidatesReady, setCandidatesReady] = useState(false);
+    const [bestFirst, setBestFirst] = useState<string | null>(null);
     const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
     const [hint, setHint] = useState<HintResponse | null>(null);
     const [mark, setMark] = useState<{ square: string; ok: boolean } | null>(null);
@@ -134,6 +140,10 @@ export default function PuzzlesPage() {
         setMark(null);
         setResult(null);
         setSolution(null);
+        setCandidates([]);
+        setCandidateFrom(null);
+        setCandidatesReady(false);
+        setBestFirst(null);
         setPhase('opponent');
         later(() => {
             apply(view.first_move);
@@ -211,6 +221,7 @@ export default function PuzzlesPage() {
     const onResult = (res: PuzzleResult, line: string[] | null, fenBefore: string) => {
         setResult(res);
         setPhase('done');
+        if (line?.length) setBestFirst((first) => first ?? line[0]);
         if (line) {
             // Неверный ход снимается, решение показывается на доске ход за ходом.
             later(() => {
@@ -263,12 +274,14 @@ export default function PuzzlesPage() {
         }
         if (!puzzle || phase !== 'solving') return;
         const fenBefore = gameRef.current.fen();
+        const firstMove = fenBefore === startFen;
         apply(uci);
         setPhase('waiting');
         setHint(null);
         try {
             const answer = await puzzlesApi.move(puzzle.id, uci);
             setMark({square: uci.slice(2, 4), ok: answer.correct});
+            if (firstMove && answer.correct) setBestFirst(uci);
             if (answer.done && answer.result) {
                 onResult(answer.result, answer.correct ? null : answer.solution, fenBefore);
             } else if (answer.reply) {
@@ -300,6 +313,7 @@ export default function PuzzlesPage() {
         if (!puzzle) return;
         try {
             const body = await puzzlesApi.giveUp(puzzle.id);
+            if (gameRef.current.fen() === startFen && body.solution.length) setBestFirst((first) => first ?? body.solution[0]);
             setResult(body.result);
             setSolution(solutionSan(gameRef.current.fen(), body.solution));
             setPhase('done');
@@ -394,6 +408,20 @@ export default function PuzzlesPage() {
         return <GeneratedDrills key={drillKind} header={header} initialKind={drillKind} onAnalyze={analyzePosition}/>;
     }
 
+    const candidatesAllowed = mode === 'rated' || mode === 'themes' || mode === 'daily';
+    // Пока кандидаты не отмечены, щелчки по доске отмечают ход «откуда → куда», а не делают его.
+    const marking = candidatesOn && candidatesAllowed && phase === 'solving' && !candidatesReady && fen === startFen;
+    const markCandidate = (square: string) => {
+        if (!candidateFrom) {
+            setCandidateFrom(square);
+            return;
+        }
+        const uci = `${candidateFrom}${square}`;
+        setCandidateFrom(null);
+        if (candidateFrom === square) return;
+        setCandidates((list) => (list.includes(uci) ? list.filter((c) => c !== uci) : list.length >= 3 ? list : [...list, uci]));
+    };
+
     if (mode === 'defense') {
         return (
             <DefenseTrainer key={defenseKind} header={header} initialKind={defenseKind}
@@ -408,8 +436,31 @@ export default function PuzzlesPage() {
                 <PuzzleBoard fen={personalReplay?.fen ?? fen} orientation={personal?.color ?? puzzle?.color ?? 'white'}
                              interactive={phase === 'solving'}
                              lastMove={personalReplay ? personalReplay.lastMove : lastMove} hint={personalReplay ? null : hint}
-                             mark={personalReplay ? null : mark} arrows={personalReplay?.arrows}
+                             mark={personalReplay ? null : mark}
+                             arrows={personalReplay?.arrows ?? (candidatesOn && candidatesAllowed
+                                 ? candidates.map((c) => ({from: c.slice(0, 2), to: c.slice(2, 4), color: c === bestFirst ? 'green' as const : 'blue' as const}))
+                                 : undefined)}
+                             highlights={marking && candidateFrom ? [candidateFrom] : undefined}
+                             onSquare={marking ? markCandidate : undefined}
                              onMove={(uci) => void onMove(uci)}/>
+                {candidatesOn && candidatesAllowed && puzzle && (
+                    <div className="flex flex-wrap items-center gap-2 text-sm" data-testid="candidates-panel">
+                        {marking ? (
+                            <>
+                                <span>{t('puzzles.candidates.mark', {n: candidates.length})}</span>
+                                <button type="button" disabled={candidates.length < 2} onClick={() => setCandidatesReady(true)}
+                                        data-testid="candidates-ready"
+                                        className="px-3 py-1 rounded bg-amber-700 text-white font-bold disabled:opacity-50">{t('puzzles.candidates.solve')}</button>
+                            </>
+                        ) : phase === 'done' && bestFirst ? (
+                            <span className={candidates.includes(bestFirst) ? 'text-emerald-300' : 'text-amber-300'} data-testid="candidates-verdict">
+                                {t(candidates.includes(bestFirst) ? 'puzzles.candidates.found' : 'puzzles.candidates.missed')}
+                            </span>
+                        ) : (
+                            <span className="text-boxwood/80">{t('puzzles.candidates.marked', {n: candidates.length})}</span>
+                        )}
+                    </div>
+                )}
                 <div className="flex flex-wrap items-center gap-2 text-sm" role="status" data-testid="puzzle-status">
                     {phase === 'opponent' && <span className="text-boxwood/80">{t('puzzles.opponentMoving')}</span>}
                     {(phase === 'solving' || phase === 'waiting') && personal && (
@@ -430,6 +481,13 @@ export default function PuzzlesPage() {
                 <section className="bg-acacia-dark p-3 rounded-md border border-amber-700/40 flex flex-col gap-2">
                     {header}
 
+                    {candidatesAllowed && (
+                        <label className="flex items-center gap-1.5 cursor-pointer" title={t('puzzles.candidates.hint')}>
+                            <input type="checkbox" className="accent-amber-600" checked={candidatesOn} data-testid="candidates-toggle"
+                                   onChange={(e) => setCandidatesOn(e.target.checked)}/>
+                            {t('puzzles.candidates.toggle')}
+                        </label>
+                    )}
                     {mode === 'rated' && (
                         <label className="flex flex-col gap-1">
                             <span>{t('puzzles.theme')}</span>

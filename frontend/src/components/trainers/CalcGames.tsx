@@ -12,12 +12,13 @@ import {loadAllClassics} from '../../content/classics';
 import type {ClassicGame} from '../../content/classics';
 import {positionPool} from '../../trainers/memory';
 import {
-    checksAndCaptures, checksPosition, distanceQuestion, evalQuestion, exchangeQuestion, squareFen, squareQuestion,
+    checksAndCaptures, checksPosition, compareQuestion, distanceQuestion, evalQuestion, exchangeQuestion, sanOf, squareFen,
+    squareQuestion,
 } from '../../trainers/calculation';
 
 export const QUIZ_ROUNDS = 10;
 export const CHECKS_ROUNDS = 3;
-export type QuizKind = 'calc_exchange' | 'calc_distance' | 'calc_square' | 'calc_eval';
+export type QuizKind = 'calc_exchange' | 'calc_distance' | 'calc_square' | 'calc_eval' | 'calc_compare';
 
 interface GameProps {
     level: number;
@@ -33,7 +34,11 @@ interface Quiz {
     params?: Record<string, string | number>;
     options: { id: string; label: MessageKey | string }[];
     answer: string;
+    /** Разбор после ответа (например, оценки обоих ходов). */
+    explain?: { key: MessageKey; params: Record<string, string | number> };
 }
+
+const pawns = (cp: number) => `${cp > 0 ? '+' : ''}${(cp / 100).toFixed(1)}`;
 
 function useClassics(): ClassicGame[] | null {
     const [games, setGames] = useState<ClassicGame[] | null>(null);
@@ -74,6 +79,19 @@ function makeQuiz(kind: QuizKind, games: ClassicGame[], pool: string[], seed: nu
             fen: squareFen(q), orientation: 'white', highlights: [`${q.pawn[0]}8`],
             prompt: q.toMove === 'w' ? 'trainers.calc.squareWhite' : 'trainers.calc.squareBlack', answer: q.answer ? 'yes' : 'no',
             options: [{id: 'yes', label: 'trainers.calc.catches'}, {id: 'no', label: 'trainers.calc.escapes'}],
+        };
+    }
+    if (kind === 'calc_compare') {
+        const q = compareQuestion(games, seed * 71 + index);
+        if (!q) return null;
+        const white = q.fen.split(' ')[1] === 'w';
+        return {
+            fen: q.fen, orientation: white ? 'white' : 'black', highlights: [], answer: q.best,
+            prompt: white ? 'trainers.calc.comparePromptWhite' : 'trainers.calc.comparePromptBlack',
+            options: q.options.map((uci) => ({id: uci, label: sanOf(q.fen, uci)})),
+            explain: {key: 'trainers.calc.compareVerdict', params: {
+                best: sanOf(q.fen, q.best), bestCp: pawns(q.bestCp), other: sanOf(q.fen, q.other), otherCp: pawns(q.otherCp),
+            }},
         };
     }
     const q = evalQuestion(games, seed * 53 + index);
@@ -123,7 +141,7 @@ export function QuizGame({kind, seed, onFinish}: GameProps & { kind: QuizKind })
         setIndex((i) => i + 1);
         setPicked(null);
     };
-    const label = (l: string) => (l.includes('.') ? t(l as MessageKey) : l);
+    const label = (l: string) => (l.startsWith('trainers.') ? t(l as MessageKey) : l);
 
     return (
         <div className="flex flex-col gap-3" data-testid={`quiz-${kind}`}>
@@ -145,6 +163,7 @@ export function QuizGame({kind, seed, onFinish}: GameProps & { kind: QuizKind })
                     );
                 })}
             </div>
+            {picked && quiz.explain && <p className="text-sm text-boxwood/85" data-testid="quiz-explain">{t(quiz.explain.key, quiz.explain.params)}</p>}
             {picked && (
                 <button type="button" onClick={next} data-testid="quiz-next" className="self-start px-4 py-2 rounded bg-amber-700 text-white font-bold">
                     {t(index + 1 >= QUIZ_ROUNDS ? 'trainers.memory.finish' : 'trainers.memory.next')}

@@ -6,14 +6,14 @@ import {ChecksGame, QUIZ_ROUNDS, QuizGame} from '../CalcGames';
 import type {QuizKind} from '../CalcGames';
 import {loadAllClassics} from '../../../content/classics';
 import {positionPool} from '../../../trainers/memory';
-import {checksAndCaptures, checksPosition, distanceQuestion, evalQuestion, exchangeQuestion, squareQuestion} from '../../../trainers/calculation';
+import {checksAndCaptures, checksPosition, compareQuestion, distanceQuestion, evalQuestion, exchangeQuestion, squareQuestion} from '../../../trainers/calculation';
 
 async function settle() {
     for (let i = 0; i < 5; i++) await act(async () => Promise.resolve());
 }
 
 describe('викторины счёта', () => {
-    it.each(['calc_exchange', 'calc_distance', 'calc_square', 'calc_eval'] as QuizKind[])('%s: верные ответы — 100 очков', async (kind) => {
+    it.each(['calc_exchange', 'calc_distance', 'calc_square', 'calc_eval', 'calc_compare'] as QuizKind[])('%s: верные ответы — 100 очков', async (kind) => {
         const games = await loadAllClassics();
         const pool = positionPool(games, []);
         const onFinish = vi.fn();
@@ -23,7 +23,8 @@ describe('викторины счёта', () => {
             const answer = kind === 'calc_exchange' ? exchangeQuestion(pool, 8 * 97 + i)!.answer
                 : kind === 'calc_distance' ? String(distanceQuestion(8, i).answer)
                     : kind === 'calc_square' ? (squareQuestion(8, i).answer ? 'yes' : 'no')
-                        : evalQuestion(games, 8 * 53 + i)!.answer;
+                        : kind === 'calc_compare' ? compareQuestion(games, 8 * 71 + i)!.best
+                            : evalQuestion(games, 8 * 53 + i)!.answer;
             fireEvent.click(screen.getByTestId(`quiz-option-${answer}`));
             fireEvent.click(screen.getByTestId('quiz-next'));
         }
@@ -59,5 +60,22 @@ describe('шахи и взятия', () => {
             fireEvent.click(screen.getByTestId('checks-next'));
         }
         expect(onFinish).toHaveBeenCalledWith(300, 0);
+    }, 30_000);
+});
+
+describe('«Сравни два хода» (27.9)', () => {
+    it('ход мастера против линии слабее на пешку и больше, разбор после ответа', async () => {
+        const games = await loadAllClassics();
+        for (let seed = 0; seed < 40; seed++) {
+            const q = compareQuestion(games, seed)!;
+            expect(q.bestCp - q.otherCp).toBeGreaterThanOrEqual(100);
+            expect(new Set(q.options)).toEqual(new Set([q.best, q.other]));
+        }
+        render(<QuizGame kind="calc_compare" level={1} seed={3} onFinish={vi.fn()}/>);
+        await settle();
+        const q = compareQuestion(games, 3 * 71)!;
+        fireEvent.click(screen.getByTestId(`quiz-option-${q.other}`));
+        expect(screen.getByTestId('quiz-explain')).toHaveTextContent('сильнее');
+        expect(screen.getByTestId(`quiz-option-${q.best}`).className).toContain('emerald');
     }, 30_000);
 });
