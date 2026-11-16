@@ -14,7 +14,7 @@ import time
 
 from src.db.session import AsyncSessionLocal
 from src.services.defense_drills import import_drills, read_drills
-from src.services.puzzle_import import import_rows, read_subset, retag_outdated
+from src.services.puzzle_import import EXTRA, import_rows, read_subset, retag_outdated
 
 
 async def main() -> None:
@@ -22,6 +22,8 @@ async def main() -> None:
     parser.add_argument("--limit", type=int, default=None, help="загрузить не больше N задач (для проверки)")
     args = parser.parse_args()
     rows = read_subset()
+    if EXTRA.exists():  # дополнение для тем без тегов базы (scripts/dev/build_theme_extra.py, таск 27.8)
+        rows = itertools.chain(rows, read_subset(EXTRA))
     if args.limit:
         rows = itertools.islice(rows, args.limit)
     started = time.monotonic()

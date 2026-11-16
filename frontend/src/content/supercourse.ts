@@ -111,7 +111,7 @@ export const COURSE: CourseModule[] = [
     mod('E3.1', 'E'),
     mod('E3.2', 'E'),
     mod('E3.3', 'E', [e('q_vs_knight'), e('q_vs_rook')]),
-    mod('E3.4', 'E', [e('rook_vs_pawn'), l('endgame-passed-pawn')]),
+    mod('E3.4', 'E', [l('endgame-rook-vs-pawn'), e('rook_vs_pawn'), l('endgame-passed-pawn')]),
     mod('E3.5', 'E', MUST_KNOW[1].map(e)),
     mod('S3.1', 'S', [lib('spanish')]),
     mod('S3.2', 'S', [lib('french_chain')]),

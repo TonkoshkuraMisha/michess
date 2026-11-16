@@ -20,13 +20,15 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.puzzle import Puzzle, PuzzleTheme
+from src.services import theme_detectors
 from src.services.mate_patterns import patterns_for_solution
 from src.services.mentor_service import analyze_move
 from src.services.themes import themes_for_lichess_tags, themes_for_motif
 
 SOURCE = "lichess"
-TAG_VERSION = 2  # 2: ступень — по уточнённой формуле (приём с продолжением — ступень 1)
+TAG_VERSION = 3  # 2: ступень — по уточнённой формуле; 3: темы без тегов базы (src/services/theme_detectors.py)
 SUBSET = pathlib.Path(__file__).resolve().parents[2] / "data" / "puzzles" / "lichess_subset.csv.gz"
+EXTRA = SUBSET.with_name("lichess_themes_extra.csv.gz")
 BATCH = 500
 
 
@@ -78,7 +80,8 @@ def detected_themes(fen: str, moves: list[str]) -> list[str]:
 def themes_for_row(row: dict) -> list[str]:
     moves = row["Moves"].split()
     codes = themes_for_lichess_tags(row["Themes"].split())
-    for code in [*detected_themes(row["FEN"], moves), *patterns_for_solution(row["FEN"], moves)]:
+    extra = theme_detectors.detect(row["FEN"], moves, row["Themes"].split())
+    for code in [*detected_themes(row["FEN"], moves), *patterns_for_solution(row["FEN"], moves), *extra]:
         if code not in codes:
             codes.append(code)
     return codes

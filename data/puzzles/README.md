@@ -8,4 +8,8 @@
 Колонки: `PuzzleId, FEN, Moves, Rating, RatingDeviation, Popularity, NbPlays, Themes` — как в исходной базе:
 FEN — позиция до хода соперника, первый ход в `Moves` — ход соперника, дальше чередуются решение и ответы.
 
+`lichess_themes_extra.csv.gz` — дополнение из той же базы (CC0) для тем без тегов lichess (таск 27.8): темы считают
+распознаватели `src/services/theme_detectors.py` и классификатор матов, квота — нехватка темы до минимума ступени в
+основной выборке. Сборка: `uv run --with zstandard python -m scripts.dev.build_theme_extra <база.csv.zst>`.
+
 Загрузка в базу сервера: `python -m scripts.import_puzzles` (после миграций; повторный запуск безопасен).
