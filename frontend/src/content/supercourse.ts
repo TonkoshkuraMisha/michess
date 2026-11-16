@@ -43,7 +43,7 @@ export const COURSE: CourseModule[] = [
     mod('T0.2', 'T', [th('hanging_piece')]),
     mod('O0.1', 'O', [b('special'), th('early_queen')]),
     mod('G0.1', 'G', [mini('pawn_war'), mini('king_pawns'), mini('capture_flag')]),
-    mod('X0', 'G', [ex('F')]),
+    mod('X0', 'G', [ex('level0')]),
     // --- Уровень 1. Новичок ---
     mod('T1.1', 'T', [l('tactics-double-attack'), th('fork'), th('fork_knight'), th('fork_pawn')]),
     mod('T1.2', 'T', [l('tactics-pin'), th('pin')]),
@@ -63,7 +63,7 @@ export const COURSE: CourseModule[] = [
     mod('C1.2', 'C', [tr('calc_checks')]),
     mod('C1.3', 'C', [tr('calc_distance'), tr('knight_route')]),
     mod('G1.1', 'G', [tr('miniatures')]),
-    mod('X1', 'G', [ex('A'), ex('B')]),
+    mod('X1', 'G', [ex('level1')]),
     // --- Уровень 2. IV–III разряд ---
     mod('T2.1', 'T', [th('double_check'), th('windmill')]),
     mod('T2.2', 'T', [th('intermezzo')]),
@@ -95,7 +95,7 @@ export const COURSE: CourseModule[] = [
     mod('G2.1', 'G', [CLASSICS]),
     mod('G2.2', 'G', [GUESS]),
     mod('G2.3', 'G', [{kind: 'library'}]),
-    mod('X2', 'G', [ex('C'), ex('D'), ex('E')]),
+    mod('X2', 'G', [ex('level2')]),
     // --- Уровень 3. III–II разряд ---
     mod('T3.1', 'T', [th('clearance')]),
     mod('T3.2', 'T', [l('tactics-square-conquest'), th('remove_defender'), th('decoy')]),
@@ -131,7 +131,7 @@ export const COURSE: CourseModule[] = [
     mod('C3.2', 'C', [tr('calc_checks'), tr('calc_square')]),
     mod('C3.3', 'C', [tr('blind_move'), tr('memory_game')]),
     mod('G3.1', 'G', [{kind: 'library'}]),
-    mod('X3', 'G', [ex('G'), ex('H'), ex('I')]),
+    mod('X3', 'G', [ex('level3')]),
     // --- Уровень 4. II–I разряд ---
     mod('T4.1', 'T', [th('combination'), th('long_calculation')]),
     mod('T4.2', 'T', [th('promotion'), th('pawn_race')]),
@@ -160,7 +160,7 @@ export const COURSE: CourseModule[] = [
     mod('C4.2', 'C', [tr('calc_compare')]),
     mod('G4.1', 'G', [{kind: 'library'}]),
     mod('G4.2', 'G', [{kind: 'workout'}]),
-    mod('X4', 'G', [ex('J'), ex('endgame')]),
+    mod('X4', 'G', [ex('level4')]),
     // --- Уровень 5. I разряд — КМС ---
     mod('T5.1', 'T', [th('combination')]),
     mod('T5.2', 'T', [th('equality'), th('fortress'), th('save_by_perpetual')]),
@@ -178,13 +178,14 @@ export const COURSE: CourseModule[] = [
     mod('C5.2', 'C', [tr('calc_checks'), tr('calc_exchange')]),
     mod('G5.1', 'G', [CLASSICS]),
     mod('G5.2', 'G', [{kind: 'workout'}, GUESS]),
-    mod('X5', 'G', [ex('F'), ex('J'), ex('endgame')]),
+    mod('X5', 'G', [ex('level5')]),
 ];
 
 export const LEVEL_COUNT = 6;
 
-// Экзамен уровня (таск 27.12): модуль X<n> — разделы диагностики 22.0; уровень пройден, когда по каждому разделу
-// последняя оценка не ниже порога разряда уровня (азбука — 800, IV разряд — 1000 … КМС — 1800).
+// Экзамен уровня (таск 27.12): модуль X<n> — свой фиксированный экзамен level<n> (12 позиций по ветвям курса,
+// src/services/level_exam.py); уровень пройден, когда последняя оценка не ниже порога разряда уровня
+// (азбука — 800, IV разряд — 1000 … КМС — 1800).
 export const LEVEL_EXAM_TARGET = [800, 1000, 1200, 1400, 1600, 1800] as const;
 
 export function examSections(level: number): string[] {

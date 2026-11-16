@@ -110,7 +110,7 @@ export function activityLink(activity: Activity): { to: string; state?: unknown 
         case 'theme': return {to: '/puzzles', state: {train: {theme: activity.id, blind: false}}};
         case 'trainer': return {to: `/train/${activity.id}`};
         case 'mini': return {to: `/train/games/${activity.id}`};
-        case 'exam': return {to: '/exam'};
+        case 'exam': return {to: `/exam?test=${activity.id}`};
         case 'library': {
             const query = new URLSearchParams();
             if (activity.structure) query.set('structure', activity.structure);

@@ -2,6 +2,7 @@
 // по 5 занятий, текущее занятие отмечено, упражнения ведут в готовые разделы. Прогресс — запись урока
 // «program-<id>» (шаг — последнее пройденное занятие), без входа план виден, но не сохраняется.
 
+import {examTitle} from './ExamPage';
 import {useEffect, useState} from 'react';
 import {Link, useNavigate, useParams} from 'react-router-dom';
 import {ArrowLeft, CalendarCheck, CheckCircle2, Circle} from 'lucide-react';
@@ -27,8 +28,7 @@ export function activityLabel(t: (key: never) => string, language: Language, act
         case 'theme': return `${tr('programs.activities.puzzles')}: ${safe(`themes.${activity.id}.name`, activity.id)}`;
         case 'trainer': return `${tr('programs.activities.trainer')}: ${safe(`trainers.${activity.id}.title`, activity.id)}`;
         case 'mini': return safe(`miniGames.games.${activity.id}.title`, activity.id);
-        case 'exam': return activity.id === 'endgame' ? tr('exam.endgameTest')
-            : `${tr('exam.title')}: ${activity.id}. ${safe(`puzzles.sections.${activity.id}`, '')}`;
+        case 'exam': return examTitle(tr, activity.id);
         case 'library': return activity.structure
             ? `${tr('library.title')}: ${safe(`structures.${activity.structure}`, activity.structure)}`
             : activity.moves ? `${tr('library.title')}: ${activity.moves}` : tr('library.title');
