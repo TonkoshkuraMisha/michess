@@ -5,6 +5,8 @@
 // (партия с ботом использует те же game/history/gameOverResult/... поля), и порядок вызова
 // хуков не позволяет кому-то одному быть единственным владельцем без цикла зависимостей.
 
+import {inviteOddsFields} from '../odds';
+import type {OddsChoice} from '../odds';
 import {useCallback, useEffect, useRef, useState} from 'react';
 import type {NavigateFunction} from 'react-router-dom';
 import {Chess} from 'chess.js';
@@ -43,6 +45,8 @@ export interface UseGameSocketOptions {
     effectiveWhiteBaseMinutes: number;
     effectiveIncSeconds: number;
     inviteColorPref: 'white' | 'black' | 'random';
+    /** Фора в партии по ссылке (21.1): сервер строит позицию или время после распределения цветов. */
+    inviteOdds?: OddsChoice;
     /** Тип новых партий, выбранный игроком: рейтинговая или товарищеская. */
     ratedChoice: boolean;
     /** Тип партии, которая сейчас на доске (приходит с сервера). */
@@ -111,7 +115,7 @@ export interface UseGameSocketResult {
 export function useGameSocket({
     gameId, gameIdRef, myColorRef, spectatingGameId, stateVersionRef,
     gameOverResult, gameOverResultRef, activeBot, currentUsernameRef, inviteCode, navigate,
-    effectiveWhiteBaseMinutes, effectiveIncSeconds, inviteColorPref,
+    effectiveWhiteBaseMinutes, effectiveIncSeconds, inviteColorPref, inviteOdds,
     ratedChoice, setIsRatedGame,
     setGame, setHistory, setViewIndex, setGameId, setMyColor, setSpectatingGameId,
     setStateVersion, setWhitePlayer, setBlackPlayer, setRatingInfo, setGameOverResult,
@@ -741,9 +745,10 @@ export function useGameSocket({
             base_time_ms: Math.round(effectiveWhiteBaseMinutes * 60 * 1000),
             increment_ms: Math.round(effectiveIncSeconds * 1000),
             color_pref: inviteColorPref,
-            rated: ratedChoice
+            rated: ratedChoice,
+            ...(inviteOdds ? inviteOddsFields(inviteOdds) : {}),
         });
-    }, [effectiveWhiteBaseMinutes, effectiveIncSeconds, inviteColorPref, ratedChoice]);
+    }, [effectiveWhiteBaseMinutes, effectiveIncSeconds, inviteColorPref, ratedChoice, inviteOdds]);
 
     const handleCopyInviteLink = useCallback(() => {
         if (!createdInviteCode) return;

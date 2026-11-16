@@ -2,7 +2,7 @@
 
 import {Chess} from 'chess.js';
 import {describe, expect, it} from 'vitest';
-import {giverColor, ODDS, oddsFen, oddsTimes} from '../odds';
+import {giverColor, inviteOddsFields, ODDS, oddsFen, oddsTimes} from '../odds';
 
 describe('форы', () => {
     it('материальные форы: позиция легальна, фигуры нет, рокировка с убранной ладьёй пропадает', () => {
@@ -26,5 +26,19 @@ describe('форы', () => {
         expect(oddsTimes('knight', 'white', 300_000, 300_000)).toEqual({white: 300_000, black: 300_000});
         expect(giverColor('me', 'black')).toBe('black');
         expect(giverColor('opponent', 'black')).toBe('white');
+    });
+});
+
+describe('партия с форой по сети (21.1)', () => {
+    it('доска клиента восстанавливается из PGN сервера с заголовками SetUp/FEN', () => {
+        const fen = oddsFen('queen', 'white')!;
+        const start = new Chess();
+        start.loadPgn(`[SetUp "1"]\n[FEN "${fen}"]`);
+        expect(start.fen()).toBe(fen);
+        const played = new Chess();
+        played.loadPgn(`[SetUp "1"]\n[FEN "${fen}"]\n\n1. e4 e5`);
+        expect(played.history()).toEqual(['e4', 'e5']);
+        expect(inviteOddsFields({kind: 'queen', giver: 'me'})).toEqual({odds_kind: 'queen', odds_giver: 'creator'});
+        expect(inviteOddsFields({kind: 'hourglass', giver: 'me'}).odds_kind).toBe('');
     });
 });

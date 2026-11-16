@@ -236,7 +236,9 @@ class GameEngine:
             move_token = f"{fullmove_number}. {san}"
         else:
             move_token = san if pgn_base else f"{fullmove_number}... {san}"
-        new_pgn = f"{pgn_base} {move_token}".strip()
+        # После заголовков партии с позиции (SetUp/FEN) ходы — с новой строки, как в PGN-документе.
+        separator = "\n\n" if pgn_base.endswith("]") else " "
+        new_pgn = f"{pgn_base}{separator}{move_token}".strip()
 
         # 3. Применяем ход на доске
         board.push(move)

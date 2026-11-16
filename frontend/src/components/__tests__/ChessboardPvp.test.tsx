@@ -301,6 +301,20 @@ describe('товарищеские партии', () => {
         expect(sendMock).toHaveBeenCalledWith('create_invite', expect.objectContaining({rated: false}));
     });
 
+    it('приглашение с форой (21.1): вид форы и кто даёт уходят серверу', async () => {
+        renderBoard();
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', {name: /С другом/}));
+        });
+        fireEvent.change(screen.getByTestId('invite-odds-kind'), {target: {value: 'knight'}});
+        expect(screen.getByTestId('invite-odds')).toHaveTextContent('не меняет рейтинг');
+        fireEvent.change(screen.getByTestId('invite-odds-giver'), {target: {value: 'opponent'}});
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', {name: /Сгенерировать и скопировать ссылку/}));
+        });
+        expect(sendMock).toHaveBeenCalledWith('create_invite', expect.objectContaining({odds_kind: 'knight', odds_giver: 'acceptor'}));
+    });
+
     it('тип идущей партии берётся из снимка сервера, изменение рейтинга не показывается', async () => {
         const casual = {...MATCH, is_rated: false};
         renderBoard({'/profile/games/my-active': () => ({...casual, active: true})});

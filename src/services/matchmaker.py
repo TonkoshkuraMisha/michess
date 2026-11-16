@@ -31,6 +31,7 @@ from src.core.errors import DomainError
 from src.db.session import AsyncSessionLocal
 from src.models.game import Game, GameStatus
 from src.models.user import RatingCategory, User
+from src.services.odds import pgn_header
 from src.services.rating import classify_time_control
 
 logger = logging.getLogger(__name__)
@@ -81,6 +82,21 @@ def _prefs_rated(prefs: dict) -> bool:
 
 def _ratings_compatible(rating_a: int, window_a: tuple[int, int], rating_b: int, window_b: tuple[int, int]) -> bool:
     return window_a[0] <= rating_b <= window_a[1] and window_b[0] <= rating_a <= window_b[1]
+
+
+
+def _odds_start(invite: dict, creator_id: int, white_id: int) -> dict | None:
+    """Начальная позиция и время партии с форой из приглашения — когда цвета уже распределены."""
+    from src.services.odds import odds_fen, odds_times
+
+    kind = invite.get("odds_kind") or ""
+    if not kind:
+        return None
+    creator_white = creator_id == white_id
+    giver_white = creator_white if invite.get("odds_giver", "creator") == "creator" else not creator_white
+    giver = chess.WHITE if giver_white else chess.BLACK
+    white_ms, black_ms = odds_times(kind, giver, int(invite.get("base_time_ms", 180000)))
+    return {"start_fen": odds_fen(kind, giver), "white_time_ms": white_ms, "black_time_ms": black_ms, "kind": kind}
 
 
 class Matchmaker:
@@ -259,11 +275,15 @@ class Matchmaker:
             inc_time: int,
             now_ms: int,
             is_rated: bool = True,
+            odds: dict | None = None,
     ) -> dict | None:
         white_user = await self._fresh_user(session, white_id)
         black_user = await self._fresh_user(session, black_id)
         if not white_user or not black_user:
             return None
+        odds = odds or {}
+        start_fen = odds.get("start_fen")
+        white_ms, black_ms = odds.get("white_time_ms", base_time), odds.get("black_time_ms", base_time)
 
         category = classify_time_control(base_time, inc_time)
         white_rating = white_user.rating_for(category)
@@ -278,9 +298,10 @@ class Matchmaker:
             is_rated=is_rated,
             state_version=0,
             turn="w",
-            board_fen=chess.STARTING_FEN,
-            white_time_ms=base_time,
-            black_time_ms=base_time,
+            board_fen=start_fen or chess.STARTING_FEN,
+            initial_fen=start_fen,
+            white_time_ms=white_ms,
+            black_time_ms=black_ms,
             last_move_at=now_ms,
             white_initial_rating=white_rating,
             black_initial_rating=black_rating,
@@ -298,6 +319,9 @@ class Matchmaker:
             "black_username": black_user.username,
             "black_rating": black_rating,
             "is_rated": is_rated,
+            "start_fen": start_fen,
+            "white_time_ms": white_ms,
+            "black_time_ms": black_ms,
         }
 
     async def _create_match_record(
@@ -327,10 +351,10 @@ class Matchmaker:
             "is_rated": created.get("is_rated", True),
             "base_time_ms": base_time,
             "increment_ms": inc_time,
-            "white_time_ms": base_time,
-            "black_time_ms": base_time,
-            "fen": chess.STARTING_FEN,
-            "pgn": "",
+            "white_time_ms": created.get("white_time_ms", base_time),
+            "black_time_ms": created.get("black_time_ms", base_time),
+            "fen": created.get("start_fen") or chess.STARTING_FEN,
+            "pgn": pgn_header(created["start_fen"]) if created.get("start_fen") else "",
             "state_version": 0,
         }
         await connection_manager.send_personal_message(
@@ -368,13 +392,17 @@ class Matchmaker:
             base_time_ms=base_time,
             increment_ms=inc_time,
             is_rated=created.get("is_rated", True),
+            start_fen=created.get("start_fen"),
+            white_time_ms=created.get("white_time_ms"),
+            black_time_ms=created.get("black_time_ms"),
         )
         await self._notify_match_found(connection_manager, created, base_time, inc_time)
         logger.info(
             "Match started: White(%s) vs Black(%s) in game %s",
             created["white_id"], created["black_id"], created["game_id"],
         )
-        return {**created, "base_time_ms": base_time, "increment_ms": inc_time, "fen": chess.STARTING_FEN}
+        return {**created, "base_time_ms": base_time, "increment_ms": inc_time,
+                "fen": created.get("start_fen") or chess.STARTING_FEN}
 
     async def start_pvp_game(
             self,
@@ -386,9 +414,11 @@ class Matchmaker:
             db: AsyncSession | None = None,
             initiator_id: int | None = None,
             is_rated: bool = True,
+            odds: dict | None = None,
     ) -> dict:
         """
-        Стартует партию с заданными цветами (приглашение, реванш).
+        Стартует партию с заданными цветами (приглашение, реванш). odds — начальная позиция и время партии с форой
+        (``_odds_start``).
         initiator_id — кто инициировал старт (для текста ошибки «вы уже играете»).
         """
         white_id, black_id = int(white_id), int(black_id)
@@ -406,7 +436,7 @@ class Matchmaker:
                 started = await self._start_reserved_game(
                     session,
                     lambda s, now_ms: self._create_game_record(
-                        s, white_id, black_id, base_ms, inc_ms, now_ms, is_rated,
+                        s, white_id, black_id, base_ms, inc_ms, now_ms, is_rated and not odds, odds=odds,
                     ),
                     base_ms, inc_ms, connection_manager, (white_id, black_id),
                 )
@@ -489,9 +519,17 @@ class Matchmaker:
             increment_ms: int = 2000,
             color_pref: str = "random",
             rated: bool = True,
+            odds_kind: str = "",
+            odds_giver: str = "creator",
     ) -> dict:
+        from src.services.odds import GIVERS, KINDS
+
         await self._ensure_not_in_game(user_id, is_self=True)
         base_ms, inc_ms = validate_time_control(base_time_ms, increment_ms)
+        if odds_kind not in KINDS:
+            odds_kind = ""
+        if odds_giver not in GIVERS:
+            odds_giver = "creator"
 
         code = secrets.token_urlsafe(6).replace("-", "").replace("_", "")[:8]
         if color_pref not in ("white", "black", "random"):
@@ -505,7 +543,10 @@ class Matchmaker:
             "base_time_ms": base_ms,
             "increment_ms": inc_ms,
             "color_pref": color_pref,
-            "rated": bool(rated),
+            # Партия с форой рейтинга не меняет (как с ботом).
+            "rated": bool(rated) and not odds_kind,
+            "odds_kind": odds_kind,
+            "odds_giver": odds_giver,
         }
         await self.redis.set(f"invite:{code}", json.dumps(payload), ex=INVITE_TTL_S)
         return payload
@@ -552,6 +593,7 @@ class Matchmaker:
             "base_time_ms": int(invite.get("base_time_ms", 180000)),
             "increment_ms": int(invite.get("increment_ms", 0)),
             "rated": bool(invite.get("rated", True)),
+            "odds": _odds_start(invite, creator_id, white_id),
             "_raw": raw,
         }
 
@@ -577,7 +619,7 @@ class Matchmaker:
                 accepted["white_id"], accepted["black_id"],
                 accepted["base_time_ms"], accepted["increment_ms"],
                 connection_manager=connection_manager, db=db, initiator_id=acceptor_id,
-                is_rated=accepted["rated"],
+                is_rated=accepted["rated"], odds=accepted["odds"],
             )
         except MatchmakingError:
             await self.redis.set(f"invite:{code}", accepted["_raw"], ex=INVITE_TTL_S)

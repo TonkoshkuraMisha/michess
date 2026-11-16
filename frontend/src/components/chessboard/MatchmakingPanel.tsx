@@ -2,6 +2,8 @@
 
 import {Loader2, Users, Link2, Check, Copy} from 'lucide-react';
 import {useI18n} from '../../i18n';
+import {PVP_ODDS} from './odds';
+import type {OddsChoice, OddsGiver, OddsKind} from './odds';
 
 export interface MatchmakingPanelProps {
     gameId: number | null;
@@ -18,6 +20,9 @@ export interface MatchmakingPanelProps {
     onToggleInvitePanel: () => void;
     inviteColorPref: 'white' | 'black' | 'random';
     onInviteColorPrefChange: (pref: 'white' | 'black' | 'random') => void;
+    /** Фора в партии по ссылке (21.1); без этих пропсов выбора нет. */
+    inviteOdds?: OddsChoice;
+    onInviteOddsChange?: (odds: OddsChoice) => void;
     createdInviteCode: string | null;
     inviteCopied: boolean;
     onCreatePrivateInvite: () => void;
@@ -28,7 +33,7 @@ export interface MatchmakingPanelProps {
 export function MatchmakingPanel({
     gameId, gameOverResult, isRatedGame, ratedChoice, onRatedChoiceChange,
     isSearching, onStartMatchmaking, onCancelMatchmaking,
-    showInvitePanel, onToggleInvitePanel, inviteColorPref, onInviteColorPrefChange,
+    showInvitePanel, onToggleInvitePanel, inviteColorPref, onInviteColorPrefChange, inviteOdds, onInviteOddsChange,
     createdInviteCode, inviteCopied, onCreatePrivateInvite, onCopyInviteLink,
 }: MatchmakingPanelProps) {
     const {t} = useI18n();
@@ -114,6 +119,28 @@ export function MatchmakingPanel({
                             ))}
                         </div>
                     </div>
+
+                    {inviteOdds && onInviteOddsChange && !createdInviteCode && (
+                        <div className="flex flex-wrap items-center gap-1.5 text-xs text-amber-200" data-testid="invite-odds">
+                            <label className="flex items-center gap-1.5 min-w-0">
+                                {t('odds.label')}
+                                <select value={inviteOdds.kind} data-testid="invite-odds-kind"
+                                        onChange={(e) => onInviteOddsChange({...inviteOdds, kind: e.target.value as OddsKind})}
+                                        className="bg-black/40 rounded px-1 py-0.5 min-w-0 max-w-[11rem]">
+                                    {PVP_ODDS.map((kind) => <option key={kind} value={kind}>{t(`odds.kinds.${kind}`)}</option>)}
+                                </select>
+                            </label>
+                            {inviteOdds.kind !== 'none' && (
+                                <select value={inviteOdds.giver} aria-label={t('odds.giver')} data-testid="invite-odds-giver"
+                                        onChange={(e) => onInviteOddsChange({...inviteOdds, giver: e.target.value as OddsGiver})}
+                                        className="bg-black/40 rounded px-1 py-0.5">
+                                    <option value="me">{t('odds.iGive')}</option>
+                                    <option value="opponent">{t('odds.opponentGives')}</option>
+                                </select>
+                            )}
+                            {inviteOdds.kind !== 'none' && <span className="w-full text-boxwood/70">{t('odds.unrated')}</span>}
+                        </div>
+                    )}
 
                     {!createdInviteCode ? (
                         <button
