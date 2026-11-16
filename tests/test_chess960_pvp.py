@@ -67,3 +67,24 @@ async def test_unknown_variant_is_standard(db_session):
     a, _ = await _users(db_session, 1500, 1500)
     invite = await matchmaker.create_private_invite(a.id, "a", 1500, *TC, variant="crazyhouse")
     assert invite["variant"] == "standard" and invite["rated"] is True
+
+
+class _Recorder:
+    def __init__(self):
+        self.sent: list[tuple[int, dict]] = []
+
+    async def send_personal_message(self, message: dict, user_id: int) -> None:
+        self.sent.append((user_id, message))
+
+    async def is_user_online(self, user_id: int) -> bool:
+        return True
+
+
+async def test_match_found_tells_the_client_it_is_chess960(db_session):
+    a, b = await _users(db_session, 1500, 1500)
+    recorder = _Recorder()
+    invite = await matchmaker.create_private_invite(a.id, "a", 1500, *TC, variant="chess960")
+    await matchmaker.start_game_from_invite(invite["code"], b.id, connection_manager=recorder, db=db_session)
+    found = [m for _, m in recorder.sent if m.get("event") == "match_found"]
+    assert len(found) == 2 and {m["variant"] for m in found} == {"chess960"}
+    assert is_chess960_fen(found[0]["fen"]) and found[0]["pgn"].startswith('[Variant "Chess960"]')

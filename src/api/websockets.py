@@ -21,6 +21,7 @@ from src.models.user import User
 from src.services import moderation, notifications
 from src.services.anticheat import trusted_premove
 from src.services.connection_manager import manager
+from src.services.game_engine import game_variant
 from src.services.game_state import is_rated_state, pending_draw_offer, state_manager
 from src.services.matchmaker import MatchmakingError, matchmaker
 from src.services.rating import classify_time_control
@@ -76,6 +77,7 @@ async def _send_active_game_snapshot_if_exists(db: AsyncSession, user: User):
         "black_time_ms": black_time,
         "fen": state.get("board_fen"),
         "pgn": state.get("pgn", ""),
+        "variant": game_variant(state.get("board_fen"), state.get("pgn", "")),
         "state_version": int(state.get("state_version", 0)),
         # Предложение ничьей, сделанное до переподключения, иначе пропадало бы с экрана.
         "draw_offer_from": pending_draw_offer(state),
