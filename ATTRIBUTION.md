@@ -78,6 +78,13 @@ CC BY-NC-SA 4.0), а также набор без известного прои�
 | `Anand.jpg` | [Viswanathan Anand (2016).jpeg](https://commons.wikimedia.org/wiki/File:Viswanathan_Anand_(2016).jpeg) | Wolfgang Jekel | CC BY 2.0 |
 | `Carlsen.jpg` | [Magnus Carlsen in 2025.jpg](https://commons.wikimedia.org/wiki/File:Magnus_Carlsen_in_2025.jpg) | Miroslav.vajdic | CC BY 4.0 |
 | `Ding.jpg` | [DingLiren24a.jpg](https://commons.wikimedia.org/wiki/File:DingLiren24a.jpg) | Stefan64 | CC BY-SA 3.0 |
+| `Chigorin.jpg` | [Михаил Иванович Чигорин.jpg](https://commons.wikimedia.org/wiki/File:%D0%9C%D0%B8%D1%85%D0%B0%D0%B8%D0%BB_%D0%98%D0%B2%D0%B0%D0%BD%D0%BE%D0%B2%D0%B8%D1%87_%D0%A7%D0%B8%D0%B3%D0%BE%D1%80%D0%B8%D0%BD.jpg) | Unknown author | Public domain |
+| `Tarrasch.jpg` | [Tarrasch, Siegbert-2 - DPLA - 224f35dc323734bf355cc7c94d0ded68 (cropped).jpg](https://commons.wikimedia.org/wiki/File:Tarrasch,_Siegbert-2_-_DPLA_-_224f35dc323734bf355cc7c94d0ded68_(cropped).jpg) | Unknown author | Public domain |
+| `Pillsbury.jpg` | [Pillsbury, Harry Nelson, as a Young Man - DPLA - bcd01a18c987fea609e21f290ce181be (cropped).jpg](https://commons.wikimedia.org/wiki/File:Pillsbury,_Harry_Nelson,_as_a_Young_Man_-_DPLA_-_bcd01a18c987fea609e21f290ce181be_(cropped).jpg) | Unknown author | Public domain |
+| `Marshall.jpg` | [Frank Marshall (chess player).jpg](https://commons.wikimedia.org/wiki/File:Frank_Marshall_(chess_player).jpg) | Oxford and Dilhoff | Public domain |
+| `Nimzowitsch.jpg` | [Aron Nimzowitsch.jpg](https://commons.wikimedia.org/wiki/File:Aron_Nimzowitsch.jpg) | Not mentioned | Public domain |
+| `Reti.jpg` | [RichardReti.jpg](https://commons.wikimedia.org/wiki/File:RichardReti.jpg) | Unknown author | Public domain |
+| `Tartakower.jpg` | [Ksawery Tartakower.jpg](https://commons.wikimedia.org/wiki/File:Ksawery_Tartakower.jpg) | Unknown author | Public domain |
 
 ## Звуки и текстуры
 
@@ -119,6 +126,7 @@ CC BY-NC-SA 4.0), а также набор без известного прои�
 | Таблица дебютов (`src/services/data/openings.tsv`) | [lichess-org/chess-openings](https://github.com/lichess-org/chess-openings) — коды ECO и названия; преобразована `scripts/build_openings.py` (позиция вместо ходов) | CC0-1.0 (лицензия репозитория проверена 15.11.2026). |
 | Дебютные книги ботов (`src/services/bots/books/*.json`) | Построены `scripts/build_opening_books.py` из тех же партий | Статистика ходов, собственная обработка. |
 | Этюды эндшпильного тренажёра (`frontend/src/content/endgames.json`: `study_saavedra`, `study_reti`, таск 27.9) | Позиция Ф. Сааведры (1895, по партии Барбье) и этюд Р. Рети (1921); составители умерли в 1922 и 1929 годах | Позиция — факт; тексты объяснений свои, проверка — эндшпильными таблицами. |
+| Коллекция библиотеки «Партии мастеров» и дебютные книги мастеров 21.5 (`src/services/bots/books/*.json`) | Файлы игроков pgnmentor.com (Чигорин, Тарраш, Пильсбери, Маршалл, Нимцович, Рети, Тартаковер, Ботвинник, Таль, Петросян), загрузка `scripts/import_library.py` | Ходы партий — факт; условия сайта-источника — см. «Открытые вопросы», как для архива исторических партий. |
 | Библиотека партий (`library_*`, таски 27.1–27.3) | Подборки и базы владельца проекта: собранные им PGN и учебные базы из его библиотеки; загружаются `scripts/import_library.py` (и `scripts/cbh_to_pgn.py`), в репозиторий не входят | Только заголовки и главная линия — факты; комментарии, варианты и упражнения из изданий не берутся. Подборки «Красивые партии» и дебютного репертуара составлены владельцем. |
 
 ## Программные библиотеки

@@ -194,5 +194,54 @@
     "license_url": "https://creativecommons.org/licenses/by-sa/3.0",
     "author": "Stefan64",
     "source_url": "https://commons.wikimedia.org/wiki/File:DingLiren24a.jpg"
+  },
+  "Chigorin": {
+    "file": "Михаил_Иванович_Чигорин.jpg",
+    "license": "Public domain",
+    "license_url": "",
+    "author": "Unknown author",
+    "source_url": "https://commons.wikimedia.org/wiki/File:%D0%9C%D0%B8%D1%85%D0%B0%D0%B8%D0%BB_%D0%98%D0%B2%D0%B0%D0%BD%D0%BE%D0%B2%D0%B8%D1%87_%D0%A7%D0%B8%D0%B3%D0%BE%D1%80%D0%B8%D0%BD.jpg"
+  },
+  "Tarrasch": {
+    "file": "Tarrasch,_Siegbert-2_-_DPLA_-_224f35dc323734bf355cc7c94d0ded68_(cropped).jpg",
+    "license": "Public domain",
+    "license_url": "",
+    "author": "Unknown author",
+    "source_url": "https://commons.wikimedia.org/wiki/File:Tarrasch,_Siegbert-2_-_DPLA_-_224f35dc323734bf355cc7c94d0ded68_(cropped).jpg"
+  },
+  "Pillsbury": {
+    "file": "Pillsbury,_Harry_Nelson,_as_a_Young_Man_-_DPLA_-_bcd01a18c987fea609e21f290ce181be_(cropped).jpg",
+    "license": "Public domain",
+    "license_url": "",
+    "author": "Unknown author",
+    "source_url": "https://commons.wikimedia.org/wiki/File:Pillsbury,_Harry_Nelson,_as_a_Young_Man_-_DPLA_-_bcd01a18c987fea609e21f290ce181be_(cropped).jpg"
+  },
+  "Marshall": {
+    "file": "Frank_Marshall_(chess_player).jpg",
+    "license": "Public domain",
+    "license_url": "",
+    "author": "Oxford and Dilhoff",
+    "source_url": "https://commons.wikimedia.org/wiki/File:Frank_Marshall_(chess_player).jpg"
+  },
+  "Nimzowitsch": {
+    "file": "Aron_Nimzowitsch.jpg",
+    "license": "Public domain",
+    "license_url": "",
+    "author": "Not mentioned",
+    "source_url": "https://commons.wikimedia.org/wiki/File:Aron_Nimzowitsch.jpg"
+  },
+  "Reti": {
+    "file": "RichardReti.jpg",
+    "license": "Public domain",
+    "license_url": "",
+    "author": "Unknown author",
+    "source_url": "https://commons.wikimedia.org/wiki/File:RichardReti.jpg"
+  },
+  "Tartakower": {
+    "file": "Ksawery_Tartakower.jpg",
+    "license": "Public domain",
+    "license_url": "",
+    "author": "Unknown author",
+    "source_url": "https://commons.wikimedia.org/wiki/File:Ksawery_Tartakower.jpg"
   }
 }

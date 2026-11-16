@@ -1,6 +1,7 @@
 """
-Исторические мастера второй волны (таск 21.5): Стейниц, Ласкер, Рубинштейн, Капабланка, Алехин — давно умершие
-шахматисты (правило 1), портреты уже есть со свободной лицензией (ATTRIBUTION.md, раздел портретов).
+Исторические мастера (таск 21.5): Стейниц, Ласкер, Рубинштейн, Капабланка, Алехин, затем Чигорин, Тарраш,
+Пильсбери, Маршалл, Нимцович, Рети, Тартаковер, Ботвинник, Таль, Петросян — умершие шахматисты (правило 1; последних
+трёх — решение владельца 16.11), портреты со свободной лицензией (ATTRIBUTION.md, раздел портретов).
 
 Каждый — соперник с характером мастерской (src/services/bots/personality.py: ползунки задают стиль, сила — по
 target_elo) и своей дебютной книгой из его партий архива и библиотеки (scripts/build_master_books.py →
@@ -54,6 +55,44 @@ MASTERS: tuple[Master, ...] = (
     Master("alekhine", "Alekhine, Alexander", "1892–1946", 2300,
            _cfg(2300, aggression=80, mobility=170, center_control=150, king_safety=80, randomness=15,
                 draw_attitude=-60), "alekhine"),
+    # Третья волна (16.11): мастера из списка 21.5 и чемпионы мира 1948–1969 (решение владельца 16.11). Партии для
+    # книг — архив и библиотека (коллекция «Партии мастеров»).
+    # Фигурная игра и атака: кони против слонов, борьба против догм.
+    Master("chigorin", "Chigorin, Mikhail", "1850–1908", 2150,
+           _cfg(2150, aggression=60, mobility=160, king_safety=90, randomness=25, draw_attitude=-50), "chigorin", ()),
+    # Классика: центр, подвижные фигуры, простор.
+    Master("tarrasch", "Tarrasch, Siegbert", "1862–1934", 2200,
+           _cfg(2200, aggression=0, center_control=170, mobility=160, pawn_structure=120, randomness=10),
+           "tarrasch", ()),
+    # Атака на короля по ферзевому гамбиту, острая игра.
+    Master("pillsbury", "Pillsbury, Harry Nelson", "1872–1906", 2250,
+           _cfg(2250, aggression=60, mobility=150, king_safety=90, randomness=15, draw_attitude=-40), "pillsbury", ()),
+    # Гамбиты и ловушки: инициатива любой ценой.
+    Master("marshall", "Marshall, Frank James", "1877–1944", 2200,
+           _cfg(2200, aggression=90, mobility=150, king_safety=70, randomness=25, draw_attitude=-60), "marshall", ()),
+    # Блокада, сверхзащита и контроль центра фигурами издалека.
+    Master("nimzowitsch", "Nimzowitsch, Aron", "1886–1935", 2250,
+           _cfg(2250, aggression=-30, pawn_structure=170, king_safety=140, center_control=110, randomness=15),
+           "nimzowitsch", ()),
+    # Гипермодерн: фланговые начала и давление на центр.
+    Master("reti", "Reti, Richard", "1889–1929", 2200,
+           _cfg(2200, aggression=-10, center_control=130, mobility=140, randomness=15), "reti,", ()),
+    # Неожиданные дебюты и практичная игра.
+    Master("tartakower", "Tartakower, Savielly", "1887–1956", 2150,
+           _cfg(2150, aggression=20, mobility=130, randomness=30, draw_attitude=0), "tartakower", ()),
+    # Глубокий план, подготовка и техника.
+    Master("botvinnik", "Botvinnik, Mikhail", "1911–1995", 2400,
+           _cfg(2400, aggression=10, pawn_structure=160, center_control=150, king_safety=130, randomness=5,
+                blunder_guard_cp=60),
+           "botvinnik", ()),
+    # Жертвы и атака: позиция в огне.
+    Master("tal", "Tal, Mikhail", "1936–1992", 2450,
+           _cfg(2450, aggression=100, mobility=180, king_safety=60, randomness=30, draw_attitude=-80), "tal,", ()),
+    # Профилактика и безопасность: сначала отнять у соперника всё.
+    Master("petrosian", "Petrosian, Tigran", "1929–1984", 2400,
+           _cfg(2400, aggression=-60, king_safety=180, pawn_structure=160, randomness=5, blunder_guard_cp=80,
+                draw_attitude=40),
+           "petrosian", ("arshak",)),
 )
 MASTERS_BY_ID = {m.id: m for m in MASTERS}
 
