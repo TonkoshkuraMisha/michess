@@ -97,3 +97,22 @@ def simulate_tournament_game_task(self, tournament_game_id: int):
         return
     for game_id in follow_up:
         simulate_tournament_game_task.apply_async(args=(game_id,), retry=False)
+
+
+async def _workout_reminders_async() -> int:
+    engine = create_async_engine(_task_database_url(), poolclass=NullPool)
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+            from src.services import workout
+
+            return await workout.send_reminders(db, workout.utcnow())
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="workout_reminders", ignore_result=True)
+def workout_reminders() -> int:
+    """Напоминания о разминке (таск 22.2) — по расписанию celery beat."""
+    sent = asyncio.run(_workout_reminders_async())
+    logger.info("Workout reminders sent: %s", sent)
+    return sent

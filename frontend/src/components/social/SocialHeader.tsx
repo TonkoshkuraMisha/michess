@@ -24,6 +24,7 @@ export function notificationText(n: AppNotification, t: ReturnType<typeof useI18
     }
     if (n.kind === 'rematch') return t('social.notify.rematch', {from: String(p.from)});
     if (n.kind === 'tournament_round') return t('social.notify.tournamentRound', {round: Number(p.round)});
+    if (n.kind === 'workout_reminder') return t('social.notify.workoutReminder', {streak: Number(p.streak)});
     return t('social.notify.reportAnswer');
 }
 

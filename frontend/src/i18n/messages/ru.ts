@@ -1766,6 +1766,7 @@ export const ru: Messages = {
             challenge: '{from} вызывает вас на партию ({base}+{inc})',
             rematch: '{from} предлагает реванш',
             tournamentRound: 'Тур {round}: ваша партия готова',
+            workoutReminder: 'Разминка дня ждёт — не прерывайте серию ({streak} дн.).',
             reportAnswer: 'Ответ на вашу жалобу',
         },
     },

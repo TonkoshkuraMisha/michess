@@ -39,6 +39,25 @@ async def _days(db: AsyncSession, column, user_column, user_id: int, since: date
     return Counter(_day(moment) for moment in rows if moment is not None)
 
 
+async def streak_status(db: AsyncSession, user_id: int, now: datetime) -> tuple[bool, int]:
+    """Выполнена ли разминка сегодня и длина серии (дни подряд, включая сегодня, если выполнена)."""
+    today = _day(now)
+    start = datetime(today.year, today.month, today.day, tzinfo=UTC)
+    since = start - timedelta(days=STREAK_DAYS)
+    puzzle_days = await _days(db, PuzzleAttempt.created_at, PuzzleAttempt.user_id, user_id, since)
+    trainer_days = await _days(db, TrainerResult.created_at, TrainerResult.user_id, user_id, since)
+
+    def complete(day: date) -> bool:
+        return puzzle_days[day] >= PUZZLES and trainer_days[day] >= 1
+
+    streak = 0
+    day = today if complete(today) else today - timedelta(days=1)
+    while complete(day):
+        streak += 1
+        day -= timedelta(days=1)
+    return complete(today), streak
+
+
 async def plan(db: AsyncSession, user: User, now: datetime) -> dict:
     today = _day(now)
     start = datetime(today.year, today.month, today.day, tzinfo=UTC)
@@ -91,3 +110,29 @@ async def plan(db: AsyncSession, user: User, now: datetime) -> dict:
 
 def utcnow() -> datetime:
     return datetime.now(UTC)
+
+
+async def send_reminders(db: AsyncSession, now: datetime) -> int:
+    """
+    Напоминание о разминке (плановая задача Celery beat, раз в день): игрокам с идущей серией, которые сегодня ещё
+    не размялись; не больше одного напоминания в день. Возвращает число отправленных.
+    """
+    from src.models.social import Notification
+    from src.services import notifications
+
+    today = _day(now)
+    start = datetime(today.year, today.month, today.day, tzinfo=UTC)
+    recent = start - timedelta(days=1)
+    active = set((await db.execute(select(PuzzleAttempt.user_id).where(PuzzleAttempt.created_at >= recent))).scalars())
+    active &= set((await db.execute(select(TrainerResult.user_id).where(TrainerResult.created_at >= recent))).scalars())
+    reminded = set((await db.execute(select(Notification.user_id).where(
+        Notification.kind == "workout_reminder", Notification.created_at >= start))).scalars())
+    sent = 0
+    for user_id in sorted(active - reminded):
+        done, streak = await streak_status(db, user_id, now)
+        if done or streak == 0:
+            continue
+        notification = await notifications.record(db, user_id, "workout_reminder", {"streak": streak})
+        await notifications.deliver(user_id, notification)
+        sent += 1
+    return sent
