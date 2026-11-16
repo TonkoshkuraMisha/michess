@@ -181,5 +181,33 @@ GUESTS: tuple[Guest, ...] = (
            aggression=70, mobility=150, randomness=20, draw_attitude=-40),
     _guest("thomas", "Thomas, George Alan", "1881–1972", 2100, aggression=-10, pawn_structure=140, randomness=20),
     _guest("winter", "Winter, William", "1897–1955", 2050, aggression=30, mobility=130, randomness=25),
+
+    # --- Третья партия турниров (28.4): Вена 1882, Нюрнберг 1896, Лондон 1899, Монте-Карло 1903 ------------------
+    _guest("wittek", "Wittek, Alexander", "1852–1894", 2050, aggression=30, mobility=130, randomness=25),
+    # Осторожная позиционная игра.
+    _guest("weiss", "Weiss, Max", "1857–1927", 2100,
+           aggression=-30, king_safety=150, pawn_structure=150, randomness=12, draw_attitude=40),
+    _guest("hruby", "Hruby, Vincenz", "1856–1917", 2000, aggression=10, randomness=25),
+    _guest("schwarz", "Schwarz, Adolf", "1836–1910", 2000, aggression=-20, king_safety=140, randomness=20),
+    _guest("meitner", "Meitner, Philipp", "1839–1910", 1950, aggression=20, randomness=30),
+    # Причудливые дебюты.
+    _guest("ware", "Ware, Preston", "1821–1890", 1850, aggression=10, randomness=40),
+    _guest("fleissig", "Fleissig, Bernhard", "1853–1931", 1900, aggression=0, randomness=30),
+    # Яркий атакующий талант, гамбиты.
+    _guest("charousek", "Charousek, Rudolf", "1873–1900", 2200,
+           aggression=80, mobility=160, randomness=20, opening_style="gambit", draw_attitude=-50),
+    _guest("showalter", "Showalter, Jackson Whipps", "1859–1935", 2100, aggression=50, mobility=140, randomness=25),
+    _guest("porges", "Porges, Moritz", "1857–1909", 2000, aggression=0, center_control=130, randomness=25),
+    # Живая атакующая игра.
+    _guest("schallopp", "Schallopp, Emil", "1843–1919", 2000, aggression=60, mobility=140, randomness=30),
+    _guest("cohn", "Cohn, Wilhelm", "1859–1913", 2050, aggression=10, randomness=25),
+    _guest("lee", "Lee, Francis Joseph", "1858–1909", 1950, aggression=-10, king_safety=130, randomness=25),
+    # Прочная игра.
+    _guest("wolf", "Wolf, Heinrich", "1875–1943", 2100,
+           aggression=-20, king_safety=140, randomness=15, draw_attitude=40),
+    _guest("taubenhaus", "Taubenhaus, Jean", "1850–1919", 2000, aggression=20, randomness=30),
+    _guest("reggio", "Reggio, Arturo", "1863–1917", 1900, aggression=0, randomness=35),
+    # Проиграл в Монте-Карло 1903 все 26 партий.
+    _guest("moreau", "Moreau, Charles", "1837–1916", 1500, aggression=0, randomness=60, habits=["hangs_pieces"]),
 )
 GUESTS_BY_ID = {guest.id: guest for guest in GUESTS}

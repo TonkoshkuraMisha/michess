@@ -137,6 +137,32 @@ _EVENTS: tuple[Event, ...] = (
         ("flohr", 8.5), ("lasker", 8.5), ("vidmar", 6), ("bogoljubow", 5.5), ("tartakower", 5.5), ("tylor", 4.5),
         ("alexander", 3.5), ("thomas", 3), ("winter", 2.5),
     )),
+    # Восемнадцать участников в два круга. Первое место разделили Стейниц и Винавер.
+    Event("vienna_1882", 1882, "round_robin", _table(
+        ("steinitz", 24), ("winawer", 24), ("mason", 23), ("zukertort", 22.5), ("mackenzie", 22.5),
+        ("blackburne", 21.5), ("englisch", 19.5), ("paulsen", 18.5), ("wittek", 18), ("weiss", 16.5), ("hruby", 16),
+        ("chigorin", 14), ("schwarz", 14), ("meitner", 13), ("bird", 12), ("ware", 11), ("noa", 9), ("fleissig", 7),
+    ), cycles=2),
+    # Девятнадцать участников в один круг. Победил Ласкер.
+    Event("nuremberg_1896", 1896, "round_robin", _table(
+        ("lasker", 13.5), ("maroczy", 12.5), ("tarrasch", 12), ("pillsbury", 12), ("janowski", 11.5),
+        ("steinitz", 11), ("walbrodt", 10.5), ("schlechter", 10.5), ("schiffers", 9.5), ("chigorin", 9.5),
+        ("blackburne", 9), ("charousek", 8.5), ("marco", 8), ("albin", 7), ("winawer", 6.5), ("showalter", 5.5),
+        ("porges", 5.5), ("schallopp", 4.5), ("teichmann", 4),
+    )),
+    # Пятнадцать участников в два круга; Тейхман выбыл после четырёх туров (в таблице — последним, с набранными
+    # двумя очками). Победил Ласкер.
+    Event("london_1899", 1899, "round_robin", _table(
+        ("lasker", 23.5), ("maroczy", 19), ("pillsbury", 19), ("janowski", 19), ("schlechter", 18),
+        ("blackburne", 16.5), ("chigorin", 16), ("showalter", 13.5), ("mason", 13), ("steinitz", 12.5),
+        ("cohn", 12.5), ("lee", 10.5), ("bird", 8), ("tinsley", 7), ("teichmann", 2),
+    ), cycles=2),
+    # Четырнадцать участников в два круга. Победил Тарраш; полковник Моро проиграл все 26 партий.
+    Event("monte_carlo_1903", 1903, "round_robin", _table(
+        ("tarrasch", 20), ("maroczy", 19), ("pillsbury", 18.5), ("schlechter", 17), ("teichmann", 16.5),
+        ("marco", 15.5), ("wolf", 14), ("mieses", 13), ("marshall", 12), ("taubenhaus", 10.5), ("mason", 10.5),
+        ("albin", 8), ("reggio", 7.5), ("moreau", 0),
+    ), cycles=2),
 )
 # Лента — по годам; турниры одного года — по ключу.
 EVENTS: tuple[Event, ...] = tuple(sorted(_EVENTS, key=lambda event: (event.year, event.key)))
