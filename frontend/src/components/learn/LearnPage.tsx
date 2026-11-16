@@ -44,6 +44,11 @@ export function LearnPage() {
             </header>
             <p className="text-boxwood/85">{t('learn.intro')}</p>
             {!getToken() && <p className="text-sm text-amber-300">{t('learn.loginToSave')}</p>}
+            <Link to="/learn/course" data-testid="learn-course-link"
+                  className="bg-amber-900/40 p-4 rounded-lg border-2 border-amber-500 hover:border-amber-300 text-amber-100 font-bold flex flex-col gap-1">
+                <span>{t('supercourse.title')}</span>
+                <span className="text-sm font-normal text-boxwood/85">{t('supercourse.card')}</span>
+            </Link>
             <Link to="/learn/basics" data-testid="learn-basics-link"
                   className="bg-acacia p-4 rounded-lg border-2 border-amber-700 hover:border-amber-500 text-amber-200 font-bold">{t('basics.card')}</Link>
             <Link to="/learn/mates" data-testid="learn-mates-link"

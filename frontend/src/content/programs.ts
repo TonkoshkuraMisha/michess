@@ -12,6 +12,8 @@ export type Activity =
     | { kind: 'trainer'; id: string }
     | { kind: 'mini'; id: string }
     | { kind: 'exam'; id: string }
+    /** Библиотека партий (27.1), с фильтром по пешечной структуре (27.5) — для модулей Большого курса. */
+    | { kind: 'library'; structure?: string }
     | { kind: 'workout' | 'repertoire' | 'classics' | 'guess' | 'play' };
 
 export type Session = Activity[];
@@ -109,6 +111,7 @@ export function activityLink(activity: Activity): { to: string; state?: unknown 
         case 'trainer': return {to: `/train/${activity.id}`};
         case 'mini': return {to: `/train/games/${activity.id}`};
         case 'exam': return {to: '/exam'};
+        case 'library': return {to: activity.structure ? `/library?structure=${activity.structure}` : '/library'};
         case 'workout': return {to: '/workout'};
         case 'repertoire': return {to: '/repertoire'};
         case 'classics': return {to: '/learn/classics'};
