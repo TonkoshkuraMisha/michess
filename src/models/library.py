@@ -10,7 +10,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.models.base import Base
@@ -69,3 +69,23 @@ class LibraryGameCollection(Base):
     collection_id: Mapped[int] = mapped_column(ForeignKey("library_collections.id", ondelete="CASCADE"), index=True)
     game_id: Mapped[int] = mapped_column(ForeignKey("library_games.id", ondelete="CASCADE"), index=True)
     sort: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+
+
+class LibraryAnnotation(Base):
+    """
+    Аннотация партии библиотеки (таск 27.4, docs/research/library-annotations.md): одна на партию. body — документ
+    {"evals": [...], "comments": {ply: {"comment": [{key, params}], "arrows": [...]}}, "notes": {...}} — комментарии
+    наставника кодами coach.* (как в «Классике» 14.7) и, позже, свои тексты на трёх языках. Статус: auto — черновик
+    наставника (виден всем с пометкой), draft / review — у авторов, approved — проверено владельцем.
+    """
+
+    __tablename__ = "library_annotations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    game_id: Mapped[int] = mapped_column(ForeignKey("library_games.id", ondelete="CASCADE"), unique=True, index=True)
+    status: Mapped[str] = mapped_column(String(10), default="auto", server_default="auto", index=True)
+    body: Mapped[dict] = mapped_column(JSON, default=dict)
+    author_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

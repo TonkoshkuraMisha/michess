@@ -14,7 +14,7 @@ from src.api.deps import user_from_token
 from src.api.rate_limit import rate_limit
 from src.core.errors import ApiError
 from src.db.session import get_db
-from src.models.library import LibraryCollection, LibraryGame, LibraryGameCollection
+from src.models.library import LibraryAnnotation, LibraryCollection, LibraryGame, LibraryGameCollection
 from src.models.user import User
 from src.services import library, pawn_structures
 from src.services import miniatures as miniatures_service
@@ -168,8 +168,10 @@ async def game(game_id: int = Path(..., ge=1), db: AsyncSession = Depends(get_db
         .where(LibraryGameCollection.game_id == found.id, library.visible_clause(user))
         .order_by(LibraryCollection.path)
     )).all()
+    annotation = await db.scalar(select(LibraryAnnotation).where(LibraryAnnotation.game_id == found.id))
     return {**_row(found), "start_fen": found.start_fen, "moves": found.moves.split(),
-            "collections": [{"id": cid, "name": name} for cid, name in in_collections]}
+            "collections": [{"id": cid, "name": name} for cid, name in in_collections],
+            "annotation": library.annotation_view(annotation, user)}
 
 
 @router.get("/games/{game_id}/pgn")

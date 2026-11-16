@@ -2383,6 +2383,14 @@ export const en = {
         branches: {T: 'Tactics', M: 'Mate and attack', E: 'Endgame', S: 'Strategy and pawn structures', O: 'Openings', C: 'Calculation, vision and thinking', G: 'Games, history and exams'},
     },
     library: {
+        annotation: {
+            title: 'Coach’s comments',
+            auto: 'draft, assembled automatically · {n} comments',
+            approved: 'checked · {n} comments',
+            none: 'No comment on this move.',
+            prev: 'Previous',
+            next: 'Next',
+        },
         structure: 'Pawn structure',
         title: 'Game library',
         intro: 'Collections of master games, model games for pawn structures and opening lines, and selected beautiful games.',
