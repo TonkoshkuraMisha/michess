@@ -6,6 +6,10 @@ import {plural} from '../core';
 
 export const en = {
     common: {
+        pageError: 'Something went wrong on this page',
+        pageErrorHint: 'The rest of the site works: reload the page or go to the main page. If it happens again, tell us what you did.',
+        pageReload: 'Reload',
+        pageHome: 'Main page',
         white: 'White',
         black: 'Black',
         win: 'Win',

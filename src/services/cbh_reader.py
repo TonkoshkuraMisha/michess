@@ -294,7 +294,9 @@ def _text(raw: bytes, encoding: str) -> str:
     try:
         return raw.decode("utf-8").strip()
     except UnicodeDecodeError:
-        return raw.decode(encoding, errors="replace").strip()
+        # Кодировка базы угадана по всем именам, но в учебных базах русские названия глав соседствуют с латинскими
+        # именами: строка, где старшие байты — почти все буквы, — кириллица (cp1251).
+        return raw.decode(guess_encoding([raw]) if encoding != "cp1251" else encoding, errors="replace").strip()
 
 
 def _record_base(data: bytes) -> int:

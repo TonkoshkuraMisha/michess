@@ -6,6 +6,10 @@ import type {Messages} from './en';
 
 export const uk: Messages = {
     common: {
+        pageError: 'На цій сторінці сталася помилка',
+        pageErrorHint: 'Решта сайту працює: оновіть сторінку або перейдіть на головну. Якщо помилка повториться, напишіть нам, що ви робили.',
+        pageReload: 'Оновити',
+        pageHome: 'На головну',
         white: 'Білі',
         black: 'Чорні',
         win: 'Перемога',

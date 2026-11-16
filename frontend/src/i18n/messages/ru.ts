@@ -6,6 +6,10 @@ import type {Messages} from './en';
 
 export const ru: Messages = {
     common: {
+        pageError: 'На этой странице произошла ошибка',
+        pageErrorHint: 'Остальной сайт работает: обновите страницу или перейдите на главную. Если ошибка повторится, напишите нам, что вы делали.',
+        pageReload: 'Обновить',
+        pageHome: 'На главную',
         white: 'Белые',
         black: 'Чёрные',
         win: 'Победа',
