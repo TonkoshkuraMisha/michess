@@ -112,9 +112,9 @@ for (const language of LANGUAGES) {
 // Шапка гостя (без входа): кнопок в ней больше, чем у вошедшего игрока, а название сайта появляется только с
 // определённой ширины — на границе шапка однажды вылезла за экран (380–407 px). Основной прогон идёт со входом и
 // этого не видит, поэтому гость проверяется отдельно, по всем ширинам телефона.
-test('вёрстка: шапка гостя на телефонах 360–430 px', async ({browser}, testInfo) => {
+test('вёрстка: шапка гостя на телефонах 360–480 px', async ({browser}, testInfo) => {
     const failures: string[] = [];
-    for (const width of [360, 375, 380, 390, 400, 412, 420, 430]) {
+    for (const width of [360, 375, 380, 390, 400, 412, 420, 430, 440, 460, 480]) {
         const context = await browser.newContext({viewport: {width, height: 800}, locale: 'ru-RU'});
         const page = await context.newPage();
         for (const route of ['/about', '/time-machine']) {

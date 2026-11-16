@@ -304,7 +304,7 @@ export default function App() {
                             ♞
                         </div>
                         <span
-                            className={`hidden ${token && userProfile ? "sm:inline" : "min-[420px]:inline"} text-2xl font-extrabold tracking-wide text-boxwood-light group-hover:text-white transition`}>
+                            className={`hidden ${token && userProfile ? "sm:inline" : "min-[440px]:inline"} text-2xl font-extrabold tracking-wide text-boxwood-light group-hover:text-white transition`}>
                             michess
                         </span>
                     </Link>
