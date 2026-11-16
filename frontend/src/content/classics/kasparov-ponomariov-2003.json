@@ -1,0 +1,709 @@
+{
+ "id": "kasparov-ponomariov-2003",
+ "white": "Kasparov,G",
+ "black": "Ponomariov,R",
+ "event": "XX SuperGM",
+ "year": "2003",
+ "result": "1-0",
+ "moves": [
+  "g1f3",
+  "g8f6",
+  "d2d4",
+  "e7e6",
+  "g2g3",
+  "b7b6",
+  "f1g2",
+  "c8b7",
+  "c2c4",
+  "f8e7",
+  "b1c3",
+  "f6e4",
+  "c1d2",
+  "e7f6",
+  "e1g1",
+  "e8g8",
+  "a1c1",
+  "d7d5",
+  "c4d5",
+  "e6d5",
+  "d2f4",
+  "e4c3",
+  "b2c3",
+  "b8a6",
+  "e2e4",
+  "d5e4",
+  "f3d2",
+  "g7g5",
+  "f4e3",
+  "f8e8",
+  "f2f4",
+  "e4f3",
+  "g2f3",
+  "b7d5",
+  "f3d5",
+  "d8d5",
+  "f1f6",
+  "e8e3",
+  "d1g4",
+  "e3e6",
+  "f6f5",
+  "d5c6",
+  "g4g5",
+  "e6g6",
+  "g5h5",
+  "a8f8",
+  "d2f3",
+  "f7f6",
+  "f3h4",
+  "g6g7",
+  "h5h6",
+  "a6b8",
+  "f5h5",
+  "f6f5",
+  "h6f4",
+  "c6e4",
+  "c1f1",
+  "e4f4",
+  "f1f4",
+  "g7g4",
+  "f4f5",
+  "b8d7",
+  "f5f8",
+  "d7f8",
+  "g1f2",
+  "f8d7",
+  "h4f5",
+  "g8h8",
+  "f2f3",
+  "g4g8",
+  "h5h6",
+  "g8f8",
+  "g3g4",
+  "d7f6",
+  "c3c4",
+  "h8g8",
+  "f3f4",
+  "f8f7",
+  "g4g5",
+  "f6e8",
+  "f4e5",
+  "f7d7",
+  "e5e6",
+  "d7f7",
+  "h6f6",
+  "e8f6"
+ ],
+ "evals": [
+  16,
+  17,
+  23,
+  25,
+  30,
+  33,
+  31,
+  31,
+  31,
+  41,
+  32,
+  43,
+  28,
+  49,
+  47,
+  39,
+  26,
+  59,
+  62,
+  57,
+  57,
+  49,
+  51,
+  83,
+  67,
+  67,
+  77,
+  161,
+  122,
+  117,
+  83,
+  207,
+  232,
+  232,
+  231,
+  254,
+  305,
+  311,
+  239,
+  354,
+  462,
+  417,
+  251,
+  266,
+  295,
+  326,
+  333,
+  366,
+  365,
+  410,
+  315,
+  300,
+  219,
+  392,
+  253,
+  255,
+  289,
+  287,
+  274,
+  288,
+  300,
+  267,
+  283,
+  280,
+  278,
+  339,
+  376,
+  356,
+  344,
+  381,
+  315,
+  367,
+  369,
+  369,
+  369,
+  508,
+  488,
+  566,
+  559,
+  579,
+  572,
+  596,
+  576,
+  572,
+  633,
+  679
+ ],
+ "comments": {
+  "27": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "g5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♜e8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f8",
+     "to": "e8",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "31": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "exf3"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "c5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c7",
+     "to": "c5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "38": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♕g4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♕h5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d1",
+     "to": "h5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "39": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♜e6"
+     }
+    },
+    {
+     "key": "coach.best.pos_open_file.v2",
+     "params": {
+      "move": "♜ae8",
+      "file": "e"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a8",
+     "to": "e8",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "42": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♕xg5+"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♖cf1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c1",
+     "to": "f1",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "49": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v1",
+     "params": {
+      "attacker": "♜g7",
+      "front": "♙g3",
+      "behind": "♔g1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g7",
+     "to": "g1",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "g3",
+     "kind": "target"
+    },
+    {
+     "square": "g1",
+     "kind": "target"
+    }
+   ]
+  },
+  "50": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♕h6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♖f3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f5",
+     "to": "f3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "52": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♖h5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♖f3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f5",
+     "to": "f3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "53": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "f5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♜gf7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g7",
+     "to": "f7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "54": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♕f4"
+     }
+    },
+    {
+     "key": "coach.best.capture.v1",
+     "params": {
+      "move": "♕xc6",
+      "piece": "♛c6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "h6",
+     "to": "c6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "65": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♞d7"
+     }
+    },
+    {
+     "key": "coach.best.pos_open_file.v2",
+     "params": {
+      "move": "♜e4",
+      "file": "e"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g4",
+     "to": "e4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "70": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v2",
+     "params": {
+      "attacker": "♖h6",
+      "front": "♟h7",
+      "behind": "♚h8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "h6",
+     "to": "h8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "h7",
+     "kind": "target"
+    },
+    {
+     "square": "h8",
+     "kind": "target"
+    }
+   ]
+  },
+  "71": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v2",
+     "params": {
+      "attacker": "♜f8",
+      "front": "♘f5",
+      "behind": "♔f3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f8",
+     "to": "f3",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "f5",
+     "kind": "target"
+    },
+    {
+     "square": "f3",
+     "kind": "target"
+    }
+   ]
+  },
+  "75": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♚g8"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "a6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a7",
+     "to": "a6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "77": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♜f7"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "c5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c7",
+     "to": "c5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "79": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v1",
+     "params": {
+      "attacker": "♜f7",
+      "front": "♘f5",
+      "behind": "♔f4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f7",
+     "to": "f4",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "f5",
+     "kind": "target"
+    },
+    {
+     "square": "f4",
+     "kind": "target"
+    }
+   ]
+  },
+  "85": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♞xf6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♜f8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f7",
+     "to": "f8",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  }
+ },
+ "stops": [
+  {
+   "ply": 34,
+   "move": "f3d5",
+   "best_cp": 326,
+   "gap_cp": 282,
+   "lines": [
+    [
+     "f3d5",
+     326
+    ],
+    [
+     "d1e2",
+     44
+    ],
+    [
+     "f1f2",
+     24
+    ]
+   ]
+  },
+  {
+   "ply": 40,
+   "move": "f6f5",
+   "best_cp": 460,
+   "gap_cp": 263,
+   "lines": [
+    [
+     "f6f5",
+     460
+    ],
+    [
+     "c3c4",
+     197
+    ],
+    [
+     "f6e6",
+     190
+    ]
+   ]
+  },
+  {
+   "ply": 46,
+   "move": "d2f3",
+   "best_cp": 368,
+   "gap_cp": 184,
+   "lines": [
+    [
+     "d2f3",
+     368
+    ],
+    [
+     "a2a3",
+     184
+    ],
+    [
+     "h5h4",
+     177
+    ]
+   ]
+  },
+  {
+   "ply": 48,
+   "move": "f3h4",
+   "best_cp": 401,
+   "gap_cp": 160,
+   "lines": [
+    [
+     "f3h4",
+     401
+    ],
+    [
+     "f5f4",
+     241
+    ],
+    [
+     "a2a3",
+     222
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Супертурнир в Линаресе, 2003. Новоиндийская защита: чёрные рано выводят коня 6...Ne4 и отвечают на 7.Bd2 ходом 7...Bf6.",
+  "uk": "Супертурнір у Лінаресі, 2003. Новоіндійський захист: чорні рано виводять коня 6...Ne4 і відповідають на 7.Bd2 ходом 7...Bf6.",
+  "en": "The 2003 Linares super-tournament. A Queen's Indian Defence: Black brings the knight out early with 6...Ne4 and answers 7.Bd2 with 7...Bf6."
+ },
+ "summary": {
+  "ru": "Активная игра фигурами (18.Bxd5, 21.Rf5, 25.Nh4) приносит белым перевес, затем король идёт вперёд — 39.Kf4, 41.Ke5, 42.Ke6, — и размен 43.Rf6 переводит партию в выигранный коневой эндшпиль. Урок: в эндшпиле король — полноценная фигура, ведите его в центр и вперёд.",
+  "uk": "Активна гра фігурами (18.Bxd5, 21.Rf5, 25.Nh4) дає білим перевагу, потім король іде вперед — 39.Kf4, 41.Ke5, 42.Ke6, — і розмін 43.Rf6 переводить партію у виграний кінний ендшпіль. Урок: в ендшпілі король — повноцінна фігура, ведіть його в центр і вперед.",
+  "en": "Active piece play (18.Bxd5, 21.Rf5, 25.Nh4) gives White the edge, then the king marches — 39.Kf4, 41.Ke5, 42.Ke6 — and the exchange 43.Rf6 leads into a won knight endgame. Lesson: in the endgame the king is a full piece — bring it to the centre and forward."
+ }
+}

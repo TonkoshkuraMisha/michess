@@ -1,0 +1,667 @@
+{
+ "id": "goldin-geller-1989",
+ "white": "Goldin, Alexander",
+ "black": "Geller, Efim P",
+ "event": "Sochi-A",
+ "year": "1989",
+ "result": "1-0",
+ "moves": [
+  "d2d4",
+  "d7d5",
+  "c2c4",
+  "e7e6",
+  "b1c3",
+  "f8e7",
+  "g1f3",
+  "g8f6",
+  "c1f4",
+  "e8g8",
+  "e2e3",
+  "c7c5",
+  "d4c5",
+  "d8a5",
+  "d1c2",
+  "b8c6",
+  "a2a3",
+  "a5c5",
+  "e1c1",
+  "c8d7",
+  "g2g4",
+  "f8c8",
+  "c1b1",
+  "d7e8",
+  "f3d2",
+  "e7f8",
+  "g4g5",
+  "f6h5",
+  "c4d5",
+  "h5f4",
+  "e3f4",
+  "c6d4",
+  "c2d3",
+  "d4f5",
+  "f1h3",
+  "b7b5",
+  "h3f5",
+  "e6f5",
+  "d2b3",
+  "c5b6",
+  "d3e3",
+  "b5b4",
+  "e3b6",
+  "a7b6",
+  "a3b4",
+  "f8b4",
+  "d1d3",
+  "c8c4",
+  "d5d6",
+  "b4c3",
+  "d3c3",
+  "c4f4",
+  "h1c1",
+  "e8d7",
+  "c3c7",
+  "d7e6",
+  "d6d7",
+  "a8f8",
+  "c1d1",
+  "e6d7",
+  "d1d7",
+  "f4f2",
+  "h2h4"
+ ],
+ "evals": [
+  23,
+  23,
+  25,
+  27,
+  28,
+  41,
+  21,
+  24,
+  33,
+  36,
+  34,
+  47,
+  40,
+  82,
+  5,
+  29,
+  29,
+  115,
+  -203,
+  52,
+  -35,
+  90,
+  -78,
+  133,
+  -90,
+  37,
+  -1,
+  6,
+  -10,
+  -10,
+  -10,
+  -10,
+  -10,
+  17,
+  45,
+  61,
+  74,
+  104,
+  -97,
+  -24,
+  -103,
+  9,
+  8,
+  7,
+  0,
+  5,
+  1,
+  45,
+  50,
+  77,
+  66,
+  117,
+  104,
+  328,
+  322,
+  329,
+  329,
+  329,
+  329,
+  305,
+  364,
+  345,
+  336
+ ],
+ "comments": {
+  "13": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v2",
+     "params": {
+      "attacker": "♛a5",
+      "front": "♘c3",
+      "behind": "♔e1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a5",
+     "to": "e1",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "c3",
+     "kind": "target"
+    },
+    {
+     "square": "e1",
+     "kind": "target"
+    }
+   ]
+  },
+  "14": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♕c2"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "a3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a2",
+     "to": "a3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "17": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♛xc5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♞e4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f6",
+     "to": "e4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "18": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v1",
+     "params": {
+      "move": "O-O-O"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "b4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b2",
+     "to": "b4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "19": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v1",
+     "params": {
+      "move": "♝d7"
+     }
+    },
+    {
+     "key": "coach.missed.hanging.v2",
+     "params": {
+      "piece": "♙c4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d5",
+     "to": "c4",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "c4",
+     "kind": "target"
+    }
+   ]
+  },
+  "20": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "g4"
+     }
+    },
+    {
+     "key": "coach.best.capture.v2",
+     "params": {
+      "move": "cxd5",
+      "piece": "♟d5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c4",
+     "to": "d5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "21": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♜fc8"
+     }
+    },
+    {
+     "key": "coach.missed.hanging.v2",
+     "params": {
+      "piece": "♙c4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d5",
+     "to": "c4",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "c4",
+     "kind": "target"
+    }
+   ]
+  },
+  "22": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♔b1"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "g5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g4",
+     "to": "g5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "23": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v1",
+     "params": {
+      "move": "♝e8"
+     }
+    },
+    {
+     "key": "coach.missed.hanging.v2",
+     "params": {
+      "piece": "♙c4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d5",
+     "to": "c4",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "c4",
+     "kind": "target"
+    }
+   ]
+  },
+  "24": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v2",
+     "params": {
+      "move": "♘d2"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "g5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g4",
+     "to": "g5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "25": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♝f8"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "a5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a7",
+     "to": "a5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "38": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v2",
+     "params": {
+      "move": "♘b3"
+     }
+    },
+    {
+     "key": "coach.missed.hanging.v1",
+     "params": {
+      "piece": "♟f5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d3",
+     "to": "f5",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "f5",
+     "kind": "target"
+    }
+   ]
+  },
+  "39": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♛b6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♛d6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c5",
+     "to": "d6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "40": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♕e3"
+     }
+    },
+    {
+     "key": "coach.best.pos_passed_push.v2",
+     "params": {
+      "move": "d6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d5",
+     "to": "d6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "41": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "b4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♛b8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b6",
+     "to": "b8",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "51": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♜xf4"
+     }
+    },
+    {
+     "key": "coach.best.pos_open_file.v2",
+     "params": {
+      "move": "♜e4",
+      "file": "e"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c4",
+     "to": "e4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "53": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v2",
+     "params": {
+      "move": "♝d7"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "f6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f7",
+     "to": "f6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  }
+ },
+ "stops": [
+  {
+   "ply": 42,
+   "move": "e3b6",
+   "best_cp": 4,
+   "gap_cp": 150,
+   "lines": [
+    [
+     "e3b6",
+     4
+    ],
+    [
+     "a3b4",
+     -146
+    ],
+    [
+     "c3e2",
+     -254
+    ]
+   ]
+  },
+  {
+   "ply": 44,
+   "move": "a3b4",
+   "best_cp": 0,
+   "gap_cp": 165,
+   "lines": [
+    [
+     "a3b4",
+     0
+    ],
+    [
+     "c3e2",
+     -165
+    ],
+    [
+     "c3a2",
+     -324
+    ]
+   ]
+  },
+  {
+   "ply": 54,
+   "move": "c3c7",
+   "best_cp": 391,
+   "gap_cp": 303,
+   "lines": [
+    [
+     "c3c7",
+     391
+    ],
+    [
+     "c3c4",
+     88
+    ],
+    [
+     "c1c2",
+     15
+    ]
+   ]
+  },
+  {
+   "ply": 56,
+   "move": "d6d7",
+   "best_cp": 389,
+   "gap_cp": 173,
+   "lines": [
+    [
+     "d6d7",
+     389
+    ],
+    [
+     "c1c6",
+     216
+    ],
+    [
+     "g5g6",
+     0
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Сочи, 1989. Отказанный ферзевый гамбит с 5.Bf4: чёрные сразу бьют по центру 6...c5 и после 7.dxc5 отвечают 7...Qa5, а белые рокируют в длинную сторону.",
+  "uk": "Сочі, 1989. Відхилений ферзевий гамбіт із 5.Bf4: чорні одразу б’ють по центру 6...c5 і після 7.dxc5 відповідають 7...Qa5, а білі рокіруються в довгий бік.",
+  "en": "Sochi 1989. A Queen's Gambit Declined with 5.Bf4: Black strikes at the centre with 6...c5 and after 7.dxc5 answers 7...Qa5, while White castles queenside."
+ },
+ "summary": {
+  "ru": "Белые захватывают седьмую горизонталь: 28.Rc7 и 29.d7, затем 30.Rd1 и 31.Rdxd7 — две ладьи на седьмой. Урок: сдвоенные ладьи на седьмой горизонтали — почти всегда решающее преимущество.",
+  "uk": "Білі захоплюють сьому горизонталь: 28.Rc7 і 29.d7, потім 30.Rd1 і 31.Rdxd7 — дві тури на сьомій. Урок: здвоєні тури на сьомій горизонталі — майже завжди вирішальна перевага.",
+  "en": "White seizes the seventh rank: 28.Rc7 and 29.d7, then 30.Rd1 and 31.Rdxd7 — two rooks on the seventh. Lesson: doubled rooks on the seventh rank are almost always a decisive advantage."
+ }
+}

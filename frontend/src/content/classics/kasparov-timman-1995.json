@@ -1,0 +1,336 @@
+{
+ "id": "kasparov-timman-1995",
+ "white": "Kasparov, Gary",
+ "black": "Timman, Jan H",
+ "event": "Tal mem",
+ "year": "1995",
+ "result": "1-0",
+ "moves": [
+  "d2d4",
+  "d7d5",
+  "c2c4",
+  "c7c6",
+  "g1f3",
+  "g8f6",
+  "b1c3",
+  "d5c4",
+  "a2a4",
+  "c8f5",
+  "f3e5",
+  "b8d7",
+  "e5c4",
+  "d7b6",
+  "c4e5",
+  "b6d7",
+  "d1b3",
+  "d7e5",
+  "d4e5",
+  "f6g4",
+  "b3b7",
+  "g4e5",
+  "f2f4",
+  "e5g6",
+  "e2e4",
+  "f5d7",
+  "f4f5",
+  "g6e5",
+  "c1f4",
+  "f7f6",
+  "f4e5",
+  "f6e5",
+  "a1d1",
+  "a8b8",
+  "b7a7",
+  "b8b4",
+  "f1e2",
+  "g7g6",
+  "h1f1",
+  "f8g7",
+  "f5g6",
+  "b4d4",
+  "e2h5"
+ ],
+ "evals": [
+  23,
+  23,
+  25,
+  35,
+  30,
+  29,
+  25,
+  40,
+  35,
+  35,
+  47,
+  47,
+  44,
+  65,
+  65,
+  65,
+  65,
+  126,
+  144,
+  146,
+  176,
+  218,
+  153,
+  184,
+  147,
+  297,
+  335,
+  368,
+  418,
+  420,
+  464,
+  517,
+  473,
+  435,
+  470,
+  467,
+  455,
+  516,
+  513,
+  617,
+  592,
+  619,
+  631
+ ],
+ "comments": {
+  "16": {
+   "comment": [
+    {
+     "key": "coach.good.mate_threat.v2",
+     "params": {
+      "piece": "♕b3",
+      "square": "f7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b3",
+     "to": "f7",
+     "kind": "idea"
+    }
+   ],
+   "highlights": []
+  },
+  "17": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♞xe5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "e6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e7",
+     "to": "e6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "22": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "f4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♗f4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c1",
+     "to": "f4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "25": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♝d7"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♛c8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d8",
+     "to": "c8",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "32": {
+   "comment": [
+    {
+     "key": "coach.good.pin_relative.v2",
+     "params": {
+      "attacker": "♖d1",
+      "front": "♝d7",
+      "behind": "♛d8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d1",
+     "to": "d8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "d7",
+     "kind": "target"
+    },
+    {
+     "square": "d8",
+     "kind": "target"
+    }
+   ]
+  },
+  "39": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♝g7"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♝h6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f8",
+     "to": "h6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  }
+ },
+ "stops": [
+  {
+   "ply": 28,
+   "move": "c1f4",
+   "best_cp": 358,
+   "gap_cp": 280,
+   "lines": [
+    [
+     "c1f4",
+     358
+    ],
+    [
+     "f1e2",
+     78
+    ],
+    [
+     "a4a5",
+     65
+    ]
+   ]
+  },
+  {
+   "ply": 30,
+   "move": "f4e5",
+   "best_cp": 504,
+   "gap_cp": 270,
+   "lines": [
+    [
+     "f4e5",
+     504
+    ],
+    [
+     "e1c1",
+     234
+    ],
+    [
+     "a4a5",
+     201
+    ]
+   ]
+  },
+  {
+   "ply": 34,
+   "move": "b7a7",
+   "best_cp": 467,
+   "gap_cp": 413,
+   "lines": [
+    [
+     "b7a7",
+     467
+    ],
+    [
+     "b7a6",
+     54
+    ],
+    [
+     "d1d7",
+     -190
+    ]
+   ]
+  },
+  {
+   "ply": 42,
+   "move": "e2h5",
+   "best_cp": 674,
+   "gap_cp": 170,
+   "lines": [
+    [
+     "e2h5",
+     674
+    ],
+    [
+     "f1f7",
+     504
+    ],
+    [
+     "g6h7",
+     377
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Мемориал Таля, Рига, 1995. Славянская защита, чешский вариант: после 4...dxc4 5.a4 Bf5 белые выбирают острое 6.Ne5.",
+  "uk": "Меморіал Таля, Рига, 1995. Слов’янський захист, чеський варіант: після 4...dxc4 5.a4 Bf5 білі обирають гостре 6.Ne5.",
+  "en": "The Tal Memorial, Riga 1995. A Slav Defence, Czech Variation: after 4...dxc4 5.a4 Bf5 White chooses the sharp 6.Ne5."
+ },
+ "summary": {
+  "ru": "Белые ломают укрытие чёрного короля: 16.Bxe5 и 18.Qxa7 вскрывают линии, а 21.fxg6 и 22.Bh5 направляют фигуры против короля, застрявшего в центре. Урок: король, не успевший рокироваться, — главная мишень атаки.",
+  "uk": "Білі ламають укриття чорного короля: 16.Bxe5 і 18.Qxa7 розкривають лінії, а 21.fxg6 і 22.Bh5 спрямовують фігури проти короля, що застряг у центрі. Урок: король, який не встиг рокіруватися, — головна мішень атаки.",
+  "en": "White breaks the black king's shelter: 16.Bxe5 and 18.Qxa7 open lines, while 21.fxg6 and 22.Bh5 aim the pieces at the king stuck in the centre. Lesson: a king that has not castled is the main target of the attack."
+ }
+}

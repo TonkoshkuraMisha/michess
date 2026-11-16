@@ -1,0 +1,329 @@
+{
+ "id": "reti-rubinstein-1928",
+ "white": "Reti, Richard",
+ "black": "Rubinstein, Akiba",
+ "event": "Berlin Tageblatt",
+ "year": "1928",
+ "result": "1-0",
+ "moves": [
+  "d2d4",
+  "d7d5",
+  "c2c4",
+  "e7e6",
+  "b1c3",
+  "c7c6",
+  "e2e3",
+  "g8f6",
+  "g1f3",
+  "b8d7",
+  "f1d3",
+  "d5c4",
+  "d3c4",
+  "a7a6",
+  "a2a4",
+  "c6c5",
+  "e1g1",
+  "f8e7",
+  "d1e2",
+  "e8g8",
+  "f1d1",
+  "d8c7",
+  "c4a2",
+  "b7b6",
+  "e3e4",
+  "c8b7",
+  "e4e5",
+  "f6g4",
+  "c1f4",
+  "c5d4",
+  "f3d4",
+  "g4e5",
+  "a1c1",
+  "e5f3",
+  "e2f3",
+  "b7f3",
+  "f4c7",
+  "f3d1",
+  "c1d1",
+  "f8c8",
+  "d4e6"
+ ],
+ "evals": [
+  23,
+  23,
+  25,
+  27,
+  28,
+  56,
+  30,
+  18,
+  18,
+  18,
+  17,
+  26,
+  25,
+  45,
+  39,
+  39,
+  43,
+  67,
+  59,
+  71,
+  55,
+  53,
+  27,
+  69,
+  21,
+  182,
+  224,
+  249,
+  183,
+  185,
+  173,
+  212,
+  210,
+  378,
+  339,
+  342,
+  338,
+  264,
+  359,
+  359,
+  359
+ ],
+ "comments": {
+  "24": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "e4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "d5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d4",
+     "to": "d5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "25": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♝b7"
+     }
+    },
+    {
+     "key": "coach.best.capture.v2",
+     "params": {
+      "move": "cxd4",
+      "piece": "♙d4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c5",
+     "to": "d4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "28": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♗f4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "d5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d4",
+     "to": "d5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "30": {
+   "comment": [
+    {
+     "key": "coach.good.discovered_attack.v2",
+     "params": {
+      "attacker": "♕e2",
+      "target": "♞g4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e2",
+     "to": "g4",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "g4",
+     "kind": "target"
+    }
+   ]
+  },
+  "33": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♞f3+"
+     }
+    },
+    {
+     "key": "coach.threat.hanging.v1",
+     "params": {
+      "piece": "♞f3"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♝c5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e2",
+     "to": "f3",
+     "kind": "threat"
+    },
+    {
+     "from": "e7",
+     "to": "c5",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "f3",
+     "kind": "target"
+    }
+   ]
+  },
+  "40": {
+   "comment": [
+    {
+     "key": "coach.good.discovered_attack.v1",
+     "params": {
+      "attacker": "♖d1",
+      "target": "♞d7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d1",
+     "to": "d7",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "d7",
+     "kind": "target"
+    }
+   ]
+  }
+ },
+ "stops": [
+  {
+   "ply": 26,
+   "move": "e4e5",
+   "best_cp": 219,
+   "gap_cp": 185,
+   "lines": [
+    [
+     "e4e5",
+     219
+    ],
+    [
+     "d4d5",
+     34
+    ],
+    [
+     "c1g5",
+     20
+    ]
+   ]
+  },
+  {
+   "ply": 34,
+   "move": "e2f3",
+   "best_cp": 357,
+   "gap_cp": 444,
+   "lines": [
+    [
+     "e2f3",
+     357
+    ],
+    [
+     "d4f3",
+     -87
+    ],
+    [
+     "g2f3",
+     -144
+    ]
+   ]
+  },
+  {
+   "ply": 40,
+   "move": "d4e6",
+   "best_cp": 396,
+   "gap_cp": 319,
+   "lines": [
+    [
+     "d4e6",
+     396
+    ],
+    [
+     "c7f4",
+     77
+    ],
+    [
+     "c7g3",
+     69
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Берлин, 1928. Полуславянская защита: чёрные берут на c4 (6...dxc4) и сразу бьют по центру 8...c5.",
+  "uk": "Берлін, 1928. Напівслов’янський захист: чорні беруть на c4 (6...dxc4) і одразу б’ють по центру 8...c5.",
+  "en": "Berlin 1928. A Semi-Slav Defence: Black takes on c4 (6...dxc4) and strikes at the centre at once with 8...c5."
+ },
+ "summary": {
+  "ru": "Прорыв 14.e5 и точный расчёт: на 17...Nf3+ белые отвечают 18.Qxf3!, после 18...Bxf3 возвращают материал ходом 19.Bxc7, и удар 21.Nxe6 даёт им решающий перевес. Урок: прежде чем отдать ферзя, посчитайте, как вы вернёте материал.",
+  "uk": "Прорив 14.e5 і точний розрахунок: на 17...Nf3+ білі відповідають 18.Qxf3!, після 18...Bxf3 повертають матеріал ходом 19.Bxc7, і удар 21.Nxe6 дає їм вирішальну перевагу. Урок: перш ніж віддати ферзя, порахуйте, як ви повернете матеріал.",
+  "en": "The break 14.e5 and precise calculation: White answers 17...Nf3+ with 18.Qxf3!, after 18...Bxf3 wins the material back with 19.Bxc7, and the blow 21.Nxe6 gives a decisive advantage. Lesson: before giving up the queen, count how you will get the material back."
+ }
+}

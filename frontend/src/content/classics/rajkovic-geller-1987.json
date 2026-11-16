@@ -1,0 +1,764 @@
+{
+ "id": "rajkovic-geller-1987",
+ "white": "Rajkovic, Dusan",
+ "black": "Geller, Efim P",
+ "event": "Vrsac",
+ "year": "1987",
+ "result": "1-0",
+ "moves": [
+  "d2d4",
+  "d7d5",
+  "c2c4",
+  "e7e6",
+  "g1f3",
+  "f8e7",
+  "g2g3",
+  "g8f6",
+  "f1g2",
+  "e8g8",
+  "e1g1",
+  "d5c4",
+  "d1c2",
+  "a7a6",
+  "b1d2",
+  "b7b5",
+  "f3g5",
+  "a8a7",
+  "b2b3",
+  "c4c3",
+  "d2e4",
+  "f6e4",
+  "g5e4",
+  "b8c6",
+  "e2e3",
+  "b5b4",
+  "e4c3",
+  "c6d4",
+  "e3d4",
+  "b4c3",
+  "c1e3",
+  "c8b7",
+  "d4d5",
+  "d8a8",
+  "c2c3",
+  "b7d5",
+  "g2d5",
+  "e6d5",
+  "e3a7",
+  "a8a7",
+  "c3c6",
+  "d5d4",
+  "a1c1",
+  "e7d6",
+  "f1d1",
+  "f8d8",
+  "c1c4",
+  "d6e5",
+  "c6c5",
+  "a7c5",
+  "c4c5",
+  "f7f6",
+  "g1f1",
+  "g7g5",
+  "f1e2",
+  "g8f7",
+  "e2d3",
+  "g5g4",
+  "c5c6",
+  "d8a8",
+  "d1c1",
+  "f7e7",
+  "c1c4",
+  "e7d7",
+  "c6c5",
+  "h7h5",
+  "c5d5",
+  "d7e7",
+  "d5a5",
+  "h5h4",
+  "b3b4",
+  "a8h8",
+  "c4c1",
+  "h8h5",
+  "c1c7",
+  "e7e6",
+  "a5a6",
+  "e6f5",
+  "c7c2",
+  "f5g6",
+  "a6a3",
+  "h4g3",
+  "f2g3",
+  "h5f5",
+  "a3b3",
+  "f5f1",
+  "b4b5",
+  "g6f5",
+  "b5b6",
+  "f1f3",
+  "d3c4",
+  "f5e4",
+  "c2e2",
+  "f3e3",
+  "b3e3",
+  "d4e3",
+  "a2a4",
+  "e5d4",
+  "a4a5",
+  "f6f5"
+ ],
+ "evals": [
+  23,
+  23,
+  25,
+  27,
+  25,
+  35,
+  44,
+  31,
+  31,
+  31,
+  30,
+  26,
+  34,
+  38,
+  -67,
+  -46,
+  -60,
+  -47,
+  -82,
+  -76,
+  -108,
+  -34,
+  -33,
+  19,
+  17,
+  56,
+  58,
+  63,
+  63,
+  60,
+  59,
+  375,
+  375,
+  349,
+  438,
+  422,
+  429,
+  459,
+  417,
+  402,
+  449,
+  440,
+  393,
+  513,
+  515,
+  518,
+  520,
+  523,
+  435,
+  439,
+  436,
+  444,
+  437,
+  387,
+  388,
+  395,
+  403,
+  484,
+  367,
+  379,
+  389,
+  384,
+  384,
+  356,
+  330,
+  377,
+  369,
+  387,
+  389,
+  383,
+  405,
+  376,
+  376,
+  554,
+  557,
+  620,
+  617,
+  635,
+  635,
+  618,
+  640,
+  630,
+  635,
+  644,
+  627,
+  629,
+  644,
+  623,
+  707,
+  698,
+  699,
+  751,
+  753,
+  776,
+  712,
+  730,
+  772,
+  752,
+  780,
+  782
+ ],
+ "comments": {
+  "14": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♘bd2"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "a4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a2",
+     "to": "a4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "16": {
+   "comment": [
+    {
+     "key": "coach.good.discovered_attack.v2",
+     "params": {
+      "attacker": "♗g2",
+      "target": "♜a8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g2",
+     "to": "a8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "a8",
+     "kind": "target"
+    }
+   ]
+  },
+  "21": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♞xe4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♞d5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f6",
+     "to": "d5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "23": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♞c6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "b4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b5",
+     "to": "b4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "26": {
+   "comment": [
+    {
+     "key": "coach.good.discovered_attack.v2",
+     "params": {
+      "attacker": "♗g2",
+      "target": "♞c6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g2",
+     "to": "c6",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "c6",
+     "kind": "target"
+    }
+   ]
+  },
+  "31": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v1",
+     "params": {
+      "move": "♝b7"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♜b7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a7",
+     "to": "b7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "32": {
+   "comment": [
+    {
+     "key": "coach.good.discovered_attack.v1",
+     "params": {
+      "attacker": "♗e3",
+      "target": "♜a7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e3",
+     "to": "a7",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "a7",
+     "kind": "target"
+    }
+   ]
+  },
+  "39": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v2",
+     "params": {
+      "attacker": "♛a7",
+      "front": "♙f2",
+      "behind": "♔g1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a7",
+     "to": "g1",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "f2",
+     "kind": "target"
+    },
+    {
+     "square": "g1",
+     "kind": "target"
+    }
+   ]
+  },
+  "42": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♖ac1"
+     }
+    },
+    {
+     "key": "coach.best.pos_open_file.v2",
+     "params": {
+      "move": "♖ae1",
+      "file": "e"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a1",
+     "to": "e1",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "43": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♝d6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♝b4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e7",
+     "to": "b4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "48": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♕c5"
+     }
+    },
+    {
+     "key": "coach.best.pin_relative.v1",
+     "params": {
+      "move": "♖a4",
+      "attacker": "♖a4",
+      "front": "♟a6",
+      "behind": "♛a7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c4",
+     "to": "a4",
+     "kind": "best"
+    },
+    {
+     "from": "a4",
+     "to": "a7",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "a6",
+     "kind": "target"
+    },
+    {
+     "square": "a7",
+     "kind": "target"
+    }
+   ]
+  },
+  "57": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "g4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "h5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "h7",
+     "to": "h5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "58": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♖c6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♖dc1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "d1",
+     "to": "c1",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "73": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "♜h5"
+     }
+    },
+    {
+     "key": "coach.best.capture.v1",
+     "params": {
+      "move": "hxg3",
+      "piece": "♙g3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "h4",
+     "to": "g3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "75": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♚e6"
+     }
+    },
+    {
+     "key": "coach.threat.hanging.v1",
+     "params": {
+      "piece": "♟a6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♚d6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a5",
+     "to": "a6",
+     "kind": "threat"
+    },
+    {
+     "from": "e7",
+     "to": "d6",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "a6",
+     "kind": "target"
+    }
+   ]
+  },
+  "89": {
+   "comment": [
+    {
+     "key": "coach.good.skewer.v1",
+     "params": {
+      "attacker": "♜f3",
+      "front": "♔d3",
+      "behind": "♖b3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f3",
+     "to": "b3",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "d3",
+     "kind": "target"
+    },
+    {
+     "square": "b3",
+     "kind": "target"
+    }
+   ]
+  },
+  "92": {
+   "comment": [
+    {
+     "key": "coach.good.skewer.v2",
+     "params": {
+      "attacker": "♖e2",
+      "front": "♚e4",
+      "behind": "♝e5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e2",
+     "to": "e5",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "e4",
+     "kind": "target"
+    },
+    {
+     "square": "e5",
+     "kind": "target"
+    }
+   ]
+  }
+ },
+ "stops": [
+  {
+   "ply": 32,
+   "move": "d4d5",
+   "best_cp": 347,
+   "gap_cp": 259,
+   "lines": [
+    [
+     "d4d5",
+     347
+    ],
+    [
+     "g2b7",
+     88
+    ],
+    [
+     "c2c3",
+     -3
+    ]
+   ]
+  },
+  {
+   "ply": 38,
+   "move": "e3a7",
+   "best_cp": 484,
+   "gap_cp": 457,
+   "lines": [
+    [
+     "e3a7",
+     484
+    ],
+    [
+     "c3a5",
+     27
+    ],
+    [
+     "a1c1",
+     22
+    ]
+   ]
+  },
+  {
+   "ply": 90,
+   "move": "d3c4",
+   "best_cp": 792,
+   "gap_cp": 233,
+   "lines": [
+    [
+     "d3c4",
+     792
+    ],
+    [
+     "d3e2",
+     559
+    ],
+    [
+     "d3d2",
+     528
+    ]
+   ]
+  },
+  {
+   "ply": 96,
+   "move": "a2a4",
+   "best_cp": 833,
+   "gap_cp": 193,
+   "lines": [
+    [
+     "a2a4",
+     833
+    ],
+    [
+     "e2e1",
+     640
+    ],
+    [
+     "e2c2",
+     576
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Вршац, 1987. Каталонское начало, открытый вариант: чёрные берут пешку 6...dxc4 и защищают её ходами 7...a6 и 8...b5.",
+  "uk": "Вршац, 1987. Каталонський початок, відкритий варіант: чорні беруть пішака 6...dxc4 і захищають його ходами 7...a6 і 8...b5.",
+  "en": "Vrsac 1987. A Catalan Opening, Open Variation: Black takes the pawn with 6...dxc4 and defends it with 7...a6 and 8...b5."
+ },
+ "summary": {
+  "ru": "Прорыв 17.d5 и 20.Bxa7 приносят белым пешку, а в эндшпиле решают проходные на ферзевом фланге: 44.b5, 45.b6, 49.a4 и 50.a5. Урок: две связанные проходные на краю доски часто сильнее фигуры соперника.",
+  "uk": "Прорив 17.d5 і 20.Bxa7 дають білим пішака, а в ендшпілі вирішують прохідні на ферзевому фланзі: 44.b5, 45.b6, 49.a4 і 50.a5. Урок: два зв’язані прохідні на краю дошки часто сильніші за фігуру суперника.",
+  "en": "The break 17.d5 and 20.Bxa7 win a pawn, and in the endgame the queenside passers decide: 44.b5, 45.b6, 49.a4 and 50.a5. Lesson: two connected passed pawns on the edge are often stronger than an enemy piece."
+ }
+}

@@ -19,9 +19,9 @@ function sans(game: ClassicGame): string[] {
 }
 
 describe('партии мастеров с объяснениями', () => {
-    it('тридцать партий', () => {
-        expect(GAMES).toHaveLength(30);
-        expect(new Set(GAMES.map((g) => g.id)).size).toBe(30);
+    it('сорок пять партий', () => {
+        expect(GAMES).toHaveLength(45);
+        expect(new Set(GAMES.map((g) => g.id)).size).toBe(45);
     });
 
     for (const game of GAMES) {
