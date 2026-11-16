@@ -29,7 +29,8 @@ TRAINERS = ("quiet_path", "double_strike", "knight_route", "tail",
             # Визуализация (19.6): ход вслепую и «Где фигура?», уровень — число полуходов вслепую (1–10).
             "blind_move", "blind_where",
             # Счёт и внимание (19.7): уровней нет (всегда 1).
-            "calc_checks", "calc_exchange", "calc_distance", "calc_square", "calc_eval")
+            "calc_checks", "calc_exchange", "calc_distance", "calc_square", "calc_eval",
+            "structure_quiz")
 MAX_LEVEL = 20
 HISTORY = 50
 

@@ -3,6 +3,8 @@
 только публичные коллекции; свои закрытые — владельцу, служебные — модераторам. Движок не вызывается.
 """
 
+import random
+
 from fastapi import APIRouter, Depends, Path, Query, Request
 from fastapi.responses import PlainTextResponse
 from sqlalchemy import exists, func, select
@@ -15,6 +17,7 @@ from src.db.session import get_db
 from src.models.library import LibraryCollection, LibraryGame, LibraryGameCollection
 from src.models.user import User
 from src.services import library, pawn_structures
+from src.services import structure_quiz as structure_quiz_service
 
 router = APIRouter(dependencies=[Depends(rate_limit("library", "RATE_LIMIT_PUZZLES"))])
 
@@ -114,6 +117,21 @@ async def search(player: str = Query("", max_length=60), eco: str = Query("", ma
         .order_by(LibraryGame.year.desc().nulls_last(), LibraryGame.id).offset(offset).limit(limit)
     )).scalars().all()
     return {"total": total, "games": [_row(g) for g in games]}
+
+
+@router.get("/structure-quiz")
+async def structure_quiz(count: int = Query(10, ge=1, le=20), seed: int | None = Query(None),
+                         db: AsyncSession = Depends(get_db)):
+    """«Узнай структуру» (27.9): позиции из публичных размеченных партий, недостающее — учебные скелеты."""
+    rng = random.Random(seed)
+    rows = (await db.execute(
+        select(LibraryGame.id, LibraryGame.structure, LibraryGame.moves)
+        .where(LibraryGame.structure.is_not(None), LibraryGame.start_fen.is_(None), _visible_game(None))
+        .order_by(func.random()).limit(count * 4)
+    )).all()
+    questions = structure_quiz_service.build([(r[0], r[1], r[2]) for r in rows], count, rng)
+    return {"questions": [{"fen": q.fen, "answer": q.answer, "options": q.options, "game_id": q.game_id, "ply": q.ply}
+                          for q in questions]}
 
 
 @router.get("/games/{game_id}")
