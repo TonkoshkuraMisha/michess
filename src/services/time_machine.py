@@ -73,7 +73,7 @@ def _table(*rows: tuple[str, float]) -> tuple[Entry, ...]:
     return tuple(entries)
 
 
-EVENTS: tuple[Event, ...] = (
+_EVENTS: tuple[Event, ...] = (
     # Первый международный турнир: шестнадцать участников, матчи на выбывание. Победил Андерсен.
     Event("london_1851", 1851, "knockout", (
         Entry("anderssen", 1), Entry("wyvill", 2), Entry("williams", 3), Entry("staunton", 4),
@@ -105,7 +105,95 @@ EVENTS: tuple[Event, ...] = (
         ("keres", 8.5), ("fine", 8.5), ("botvinnik", 7.5), ("euwe", 7), ("reshevsky", 7), ("alekhine", 7),
         ("capablanca", 6), ("flohr", 4.5),
     ), cycles=2),
+    # Девять участников в два круга (десятый, Штерн, выбыл после четырёх туров, его партии не засчитаны). Победил Андерсен.
+    Event("baden_baden_1870", 1870, "round_robin", _table(
+        ("anderssen", 11), ("steinitz", 10.5), ("neumann", 10), ("blackburne", 10), ("paulsen", 7.5),
+        ("de_vere", 6.5), ("winawer", 6.5), ("rosenthal", 5), ("minckwitz", 5),
+    ), cycles=2),
+    # Четырнадцать участников в два круга (в истории ничьи переигрывались). Победил Цукерторт, на три очка опередив Стейница.
+    Event("london_1883", 1883, "round_robin", _table(
+        ("zukertort", 22), ("steinitz", 19), ("blackburne", 16.5), ("chigorin", 16), ("mackenzie", 15.5),
+        ("englisch", 15.5), ("mason", 15.5), ("rosenthal", 14), ("winawer", 13), ("bird", 12), ("noa", 9.5),
+        ("sellman", 6.5), ("mortimer", 3), ("skipworth", 3),
+    ), cycles=2),
+    # Четверо сильнейших в шесть кругов. Победил Ласкер.
+    Event("st_petersburg_1895", 1895, "round_robin", _table(
+        ("lasker", 11.5), ("steinitz", 9.5), ("pillsbury", 8), ("chigorin", 7),
+    ), cycles=6),
+    # Пятнадцать участников в один круг. Победил Капабланка — в первом своём большом европейском турнире.
+    Event("san_sebastian_1911", 1911, "round_robin", _table(
+        ("capablanca", 9.5), ("rubinstein", 9), ("vidmar", 9), ("marshall", 8.5), ("tarrasch", 7.5),
+        ("schlechter", 7.5), ("nimzowitsch", 7.5), ("bernstein", 7), ("spielmann", 7), ("teichmann", 6.5),
+        ("maroczy", 6), ("janowski", 6), ("burn", 5), ("duras", 5), ("leonhardt", 4),
+    )),
+    # Шестеро в четыре круга. Победил Капабланка, не проиграв ни одной партии.
+    Event("new_york_1927", 1927, "round_robin", _table(
+        ("capablanca", 14), ("alekhine", 11.5), ("nimzowitsch", 10.5), ("vidmar", 10), ("spielmann", 8),
+        ("marshall", 6),
+    ), cycles=4),
+    # Пятнадцать участников в один круг. Первое место разделили Ботвинник и Капабланка.
+    Event("nottingham_1936", 1936, "round_robin", _table(
+        ("botvinnik", 10), ("capablanca", 10), ("euwe", 9.5), ("fine", 9.5), ("reshevsky", 9.5), ("alekhine", 9),
+        ("flohr", 8.5), ("lasker", 8.5), ("vidmar", 6), ("bogoljubow", 5.5), ("tartakower", 5.5), ("tylor", 4.5),
+        ("alexander", 3.5), ("thomas", 3), ("winter", 2.5),
+    )),
+    # Восемнадцать участников в два круга. Первое место разделили Стейниц и Винавер.
+    Event("vienna_1882", 1882, "round_robin", _table(
+        ("steinitz", 24), ("winawer", 24), ("mason", 23), ("zukertort", 22.5), ("mackenzie", 22.5),
+        ("blackburne", 21.5), ("englisch", 19.5), ("paulsen", 18.5), ("wittek", 18), ("weiss", 16.5), ("hruby", 16),
+        ("chigorin", 14), ("schwarz", 14), ("meitner", 13), ("bird", 12), ("ware", 11), ("noa", 9), ("fleissig", 7),
+    ), cycles=2),
+    # Девятнадцать участников в один круг. Победил Ласкер.
+    Event("nuremberg_1896", 1896, "round_robin", _table(
+        ("lasker", 13.5), ("maroczy", 12.5), ("tarrasch", 12), ("pillsbury", 12), ("janowski", 11.5),
+        ("steinitz", 11), ("walbrodt", 10.5), ("schlechter", 10.5), ("schiffers", 9.5), ("chigorin", 9.5),
+        ("blackburne", 9), ("charousek", 8.5), ("marco", 8), ("albin", 7), ("winawer", 6.5), ("showalter", 5.5),
+        ("porges", 5.5), ("schallopp", 4.5), ("teichmann", 4),
+    )),
+    # Пятнадцать участников в два круга; Тейхман выбыл после четырёх туров (в таблице — последним, с набранными
+    # двумя очками). Победил Ласкер.
+    Event("london_1899", 1899, "round_robin", _table(
+        ("lasker", 23.5), ("maroczy", 19), ("pillsbury", 19), ("janowski", 19), ("schlechter", 18),
+        ("blackburne", 16.5), ("chigorin", 16), ("showalter", 13.5), ("mason", 13), ("steinitz", 12.5),
+        ("cohn", 12.5), ("lee", 10.5), ("bird", 8), ("tinsley", 7), ("teichmann", 2),
+    ), cycles=2),
+    # Четырнадцать участников в два круга. Победил Тарраш; полковник Моро проиграл все 26 партий.
+    Event("monte_carlo_1903", 1903, "round_robin", _table(
+        ("tarrasch", 20), ("maroczy", 19), ("pillsbury", 18.5), ("schlechter", 17), ("teichmann", 16.5),
+        ("marco", 15.5), ("wolf", 14), ("mieses", 13), ("marshall", 12), ("taubenhaus", 10.5), ("mason", 10.5),
+        ("albin", 8), ("reggio", 7.5), ("moreau", 0),
+    ), cycles=2),
+    # Двадцать один участник в один круг. Победил Рубинштейн; последний турнир Чигорина.
+    Event("carlsbad_1907", 1907, "round_robin", _table(
+        ("rubinstein", 15), ("maroczy", 14.5), ("leonhardt", 13.5), ("nimzowitsch", 12.5), ("schlechter", 12.5),
+        ("vidmar", 12), ("teichmann", 11.5), ("duras", 11.5), ("salwe", 11), ("wolf", 10.5), ("marshall", 10),
+        ("dus_chotimirsky", 10), ("spielmann", 9.5), ("tartakower", 9), ("janowski", 8.5), ("berger", 7.5),
+        ("chigorin", 7.5), ("mieses", 7.5), ("olland", 6.5), ("cohn_erich", 5), ("johner_paul", 4.5),
+    )),
+    # Двадцать один участник в один круг. Победил Боголюбов, опередив Ласкера и Капабланку.
+    Event("moscow_1925", 1925, "round_robin", _table(
+        ("bogoljubow", 15.5), ("lasker", 14), ("capablanca", 13.5), ("marshall", 12.5), ("tartakower", 12),
+        ("torre", 12), ("reti", 11.5), ("romanovsky", 11.5), ("grunfeld", 10.5), ("ilyin_zhenevsky", 10.5),
+        ("bohatyrchuk", 10), ("verlinsky", 9.5), ("spielmann", 9.5), ("rubinstein", 9.5), ("levenfish", 9),
+        ("rabinovich", 8.5), ("yates", 7), ("samisch", 6.5), ("gotthilf", 6.5), ("dus_chotimirsky", 6),
+        ("zubarev", 4.5),
+    )),
+    # Двадцать два участника в один круг. Победил Нимцович — главный успех его карьеры.
+    Event("carlsbad_1929", 1929, "round_robin", _table(
+        ("nimzowitsch", 15), ("capablanca", 14.5), ("spielmann", 14.5), ("rubinstein", 13.5), ("becker", 12),
+        ("vidmar", 12), ("euwe", 12), ("bogoljubow", 11.5), ("grunfeld", 11), ("canal", 10.5), ("mattison", 10.5),
+        ("tartakower", 10), ("maroczy", 10), ("colle", 10), ("treybal", 10), ("samisch", 9.5), ("yates", 9.5),
+        ("johner_paul", 9), ("marshall", 9), ("gilg", 8), ("thomas", 6), ("menchik", 3),
+    )),
+    # Четырнадцать участников в два круга. Алехин не проиграл ни одной партии и опередил второго призёра на 5½ очка.
+    Event("bled_1931", 1931, "round_robin", _table(
+        ("alekhine", 20.5), ("bogoljubow", 15), ("nimzowitsch", 14), ("kashdan", 13.5), ("vidmar", 13.5),
+        ("flohr", 13.5), ("stoltz", 13.5), ("tartakower", 13), ("spielmann", 12.5), ("kostic", 12.5), ("maroczy", 12),
+        ("colle", 10.5), ("asztalos", 9.5), ("pirc", 8.5),
+    ), cycles=2),
 )
+# Лента — по годам; турниры одного года — по ключу.
+EVENTS: tuple[Event, ...] = tuple(sorted(_EVENTS, key=lambda event: (event.year, event.key)))
 EVENTS_BY_KEY = {event.key: event for event in EVENTS}
 
 
