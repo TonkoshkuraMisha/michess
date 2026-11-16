@@ -24,7 +24,7 @@
 - `_project_snapshot/` больше не в git — генерируется локально (`python make_snapshot.py`, сводка `--status`).
 - E2E локально: `HTTP_PORT=8081 docker compose -p michess-e2e -f docker-compose.prod.yml up -d --build`; в CI e2e идёт
   в «Production images smoke test» на каждом PR.
-- Проверка (на PR #88, после #90–#97 не перепроверялось): pytest 1719 passed,
+- Проверка (числа — на PR #88; CI `dev` после слияния #97 зелёный): pytest 1719 passed,
   4 skipped; vitest 3931 passed; e2e 28 сценариев зелёные в CI.
 
 # ♟️ Линейный план разработки Michess (PvP Self-Product Roadmap)
