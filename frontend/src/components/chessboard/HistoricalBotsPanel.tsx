@@ -2,6 +2,7 @@
 
 import {ODDS} from './odds';
 import type {OddsChoice, OddsGiver, OddsKind} from './odds';
+import {Link} from 'react-router-dom';
 import {MessageSquareQuote} from 'lucide-react';
 import {HISTORICAL_BOTS_LIST} from '../../config/champions';
 import type {BotOpponentId, HistoricalBotId, HistoricalBotProfile} from '../../config/champions';
@@ -112,7 +113,11 @@ export function HistoricalBotsPanel({
                                 era: selectedBotProfile.era,
                                 rating: measured[selectedBotProfile.id] ?? selectedBotProfile.rating,
                             })}
-                            {measured[selectedBotProfile.id] ? t('bots.ratingMeasured') : ''}
+                            {t(measured[selectedBotProfile.id] ? 'bots.ratingMeasured' : 'bots.ratingDeclared')}
+                            {' '}
+                            <Link to="/transparency" className="underline hover:text-amber-300" data-testid="bot-strength-how">
+                                {t('bots.howMeasured')}
+                            </Link>
                         </div>
                     </div>
                 </div>

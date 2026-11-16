@@ -7,7 +7,8 @@ from typing import Literal
 
 import chess
 import chess.pgn
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, Path, Query, Request
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field, model_validator
 from pydantic_core import PydanticCustomError
 from sqlalchemy import select
@@ -447,6 +448,23 @@ async def get_engine_info():
     Сведения без опасности для честной игры — ни оценок, ни ходов.
     """
     return await asyncio.to_thread(engine_info.describe, resolve_stockfish_path())
+
+
+PUBLIC_LIMIT = Depends(rate_limit("public_api", "RATE_LIMIT_PUBLIC_API", code="public_api_rate_limited"))
+
+
+@router.get("/calibration/runs", dependencies=[PUBLIC_LIMIT])
+async def get_calibration_runs():
+    """Журналы прогонов калибровки (таск 24.3): протоколы матчей и партии — как записаны при прогоне."""
+    return {"calibration": bot_calibration.load_calibration().get("meta"), "runs": bot_calibration.runs()}
+
+
+@router.get("/calibration/runs/{name}", response_class=PlainTextResponse, dependencies=[PUBLIC_LIMIT])
+async def get_calibration_run(name: str = Path(..., max_length=80)):
+    text = await asyncio.to_thread(bot_calibration.read_run, name)
+    if text is None:
+        raise ApiError(404, "calibration_run_not_found")
+    return PlainTextResponse(text, media_type="application/x-chess-pgn" if name.endswith(".pgn") else "text/plain")
 
 
 @router.get("/catalog")

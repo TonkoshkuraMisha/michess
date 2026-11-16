@@ -143,11 +143,13 @@ class DailyQuota:
             await record_attempt(self.scope, _client_identity(request), DAY_S)
 
 
-def rate_limit(scope: str, limit_setting: str, guest_limit_setting: str | None = None):
+def rate_limit(scope: str, limit_setting: str, guest_limit_setting: str | None = None,
+               code: str = "engine_rate_limited"):
     """
     Фабрика зависимости FastAPI для эндпоинтов движка. limit_setting — имя поля Settings
     с лимитом на окно, читается при каждом запросе (удобно переопределять в тестах и через .env).
-    guest_limit_setting — отдельный (более жёсткий) лимит для запросов без токена.
+    guest_limit_setting — отдельный (более жёсткий) лимит для запросов без токена. code — код ошибки 429 (по
+    умолчанию — про движок; у эндпоинтов без движка свой текст).
     """
 
     async def _dependency(request: Request) -> None:
@@ -158,7 +160,7 @@ def rate_limit(scope: str, limit_setting: str, guest_limit_setting: str | None =
             identity,
             int(getattr(settings, setting)),
             int(settings.RATE_LIMIT_WINDOW_S),
-            "engine_rate_limited",
+            code,
         )
 
     return _dependency

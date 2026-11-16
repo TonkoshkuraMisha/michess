@@ -187,6 +187,9 @@ ERROR_MESSAGES: dict[str, str] = {
     "import_pgn_empty": "No standard chess games with moves were found in the PGN",
     "import_player_not_in_pgn": "No game in the PGN has a player named “{player}”",
     "imported_game_not_found": "Imported game not found",
+    # --- открытые данные (таск 24.3) ---------------------------------------------------------------------
+    "public_api_rate_limited": "Too many requests to the public API, please try again in {retry_after} s",
+    "calibration_run_not_found": "Calibration log not found",
 }
 
 

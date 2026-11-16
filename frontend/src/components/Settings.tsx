@@ -15,7 +15,7 @@ import {
     getAnalysisBoardThemeKey,
     setAnalysisAppearance,
 } from '../config/boardAppearance';
-import {readApiErrorOr} from '../services/apiErrors';
+import {errorMessage, readApiErrorOr} from '../services/apiErrors';
 import {PAGE_PALETTES, PAGE_PATTERNS, applyPageBackground, getSavedPagePalette, getSavedPagePattern, pageBackgroundStyle} from '../config/pageBackground';
 import type {PagePalette, PagePattern} from '../config/pageBackground';
 import {THEME_PRESETS, applyPreset} from '../config/themePresets';
@@ -34,6 +34,7 @@ import {renderUiMessage} from '../i18n';
 import type {UiMessage} from '../i18n';
 import LanguageSwitcher from './LanguageSwitcher';
 import {InstallAppSection} from './settings/InstallAppSection';
+import {downloadMyGamesPgn} from '../services/transparency';
 import {saveProfileSettings, setTranslationHelper} from '../services/profileSettings';
 import {clearToken, setToken} from '../services/authToken';
 
@@ -657,6 +658,18 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
                         <button type="button" onClick={() => void downloadMyData()} data-testid="settings-export"
                                 className="px-4 py-2 rounded-md bg-amber-800 hover:bg-amber-700 text-white text-sm font-bold transition cursor-pointer flex items-center gap-1.5">
                             <Download size={15}/> {t('settings.exportData')}
+                        </button>
+                        <button type="button" data-testid="settings-export-games"
+                                onClick={() => {
+                                    setDataError(null);
+                                    downloadMyGamesPgn(username ?? null)
+                                        .then((count) => {
+                                            if (!count) setDataError({key: 'transparency.exportEmpty'});
+                                        })
+                                        .catch((err) => setDataError(errorMessage(err, 'settings.exportFailed')));
+                                }}
+                                className="mt-2 px-4 py-2 rounded-md bg-black/40 border border-amber-800 hover:border-amber-500 text-sm font-bold transition cursor-pointer flex items-center gap-1.5">
+                            <Download size={15}/> {t('settings.exportGames')}
                         </button>
                         <form onSubmit={(e) => void deleteAccount(e)} className="mt-5 flex flex-col gap-2 max-w-sm">
                             <p className="text-sm text-red-200 font-bold flex items-center gap-1.5">

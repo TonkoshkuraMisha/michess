@@ -25,6 +25,7 @@ from src.api import (
     mini_games,
     moderation,
     personalities,
+    public,
     puzzles,
     repertoire,
     skills,
@@ -132,6 +133,7 @@ def create_app() -> FastAPI:
     app.include_router(repertoire.router, prefix="/api/v1/repertoires", tags=["repertoire"])
     app.include_router(library.router, prefix="/api/v1/library", tags=["library"])
     app.include_router(game_import.router, prefix="/api/v1/imports", tags=["library"])
+    app.include_router(public.router, prefix="/api/v1/public", tags=["public"])
     app.include_router(skills.router, prefix="/api/v1/skills", tags=["training"])
     app.include_router(workout.router, prefix="/api/v1/workout", tags=["training"])
     app.include_router(exam.router, prefix="/api/v1/exam", tags=["training"])

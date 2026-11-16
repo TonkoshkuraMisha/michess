@@ -114,6 +114,9 @@ class Settings(BaseSettings):
     FREE_GAME_ANALYSES_PER_DAY: int = 3
     FREE_COACH_REQUESTS_PER_DAY: int = 300
 
+    # Открытое API только для чтения (таск 24.3, /api/v1/public) и журналы калибровки: запросов за окно.
+    RATE_LIMIT_PUBLIC_API: int = 60
+
     # Импорт партий с lichess и chess.com (таск 24.1): адреса открытых API, лимиты на игрока.
     GAME_IMPORT_LICHESS_URL: str = "https://lichess.org"
     GAME_IMPORT_CHESSCOM_URL: str = "https://api.chess.com"

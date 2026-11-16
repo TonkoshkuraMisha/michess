@@ -84,6 +84,12 @@ export default function About() {
                 </Link>
             </div>
 
+            <Link to="/transparency" data-testid="about-transparency"
+                  className={`${sectionClass} hover:border-amber-500 transition flex flex-col gap-1`}>
+                <span className="font-bold text-amber-200">{t('transparency.title')}</span>
+                <span className="text-sm text-boxwood/85">{t('transparency.aboutLink')}</span>
+            </Link>
+
             <section className={sectionClass}>
                 <h2 className={headingClass}>{t('about.engineTitle')}</h2>
                 <p className="text-sm leading-relaxed">
