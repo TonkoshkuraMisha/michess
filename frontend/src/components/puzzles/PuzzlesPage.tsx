@@ -8,7 +8,7 @@
 // «Разобрать с наставником» — позиция задачи на свободной доске с включённым наставником.
 
 import {useCallback, useEffect, useRef, useState} from 'react';
-import {useLocation, useNavigate} from 'react-router-dom';
+import {Link, useLocation, useNavigate} from 'react-router-dom';
 import {Chess} from 'chess.js';
 import {format, parseISO} from 'date-fns';
 import {Puzzle as PuzzleIcon, Lightbulb, Flag, ArrowRight, GraduationCap, Timer, CalendarDays} from 'lucide-react';
@@ -592,6 +592,14 @@ export default function PuzzlesPage() {
                                         : t('puzzles.personal.allDone', {days: dueDays(personalSummary.next_due_at)})}
                                 </p>
                             )}
+                            {!personal && phase === 'idle' && (
+                                <p className="text-sm text-boxwood/85" data-testid="personal-import-hint">
+                                    {t('puzzles.personal.importHint')}{' '}
+                                    <Link to="/import" className="underline text-amber-300 hover:text-amber-200">
+                                        {t('puzzles.personal.importLink')}
+                                    </Link>
+                                </p>
+                            )}
                             {personalAnswer && (
                                 <p className={personalAnswer.correct ? 'text-emerald-300' : 'text-rose-300'}
                                    data-testid="personal-result">
@@ -641,7 +649,8 @@ export default function PuzzlesPage() {
                                     </button>
                                 )}
                                 {personal && (
-                                    <button type="button" onClick={() => navigate(`/game/${personal.game_id}`)}
+                                    <button type="button" onClick={() => navigate(personal.imported_game_id
+                                        ? `/import/game/${personal.imported_game_id}` : `/game/${personal.game_id}`)}
                                             data-testid="personal-open-game"
                                             className="px-3 py-1.5 rounded bg-black/40 border border-amber-900/50 hover:border-amber-500 cursor-pointer">
                                         {t('puzzles.personal.openGame')}

@@ -114,6 +114,14 @@ class Settings(BaseSettings):
     FREE_GAME_ANALYSES_PER_DAY: int = 3
     FREE_COACH_REQUESTS_PER_DAY: int = 300
 
+    # Импорт партий с lichess и chess.com (таск 24.1): адреса открытых API, лимиты на игрока.
+    GAME_IMPORT_LICHESS_URL: str = "https://lichess.org"
+    GAME_IMPORT_CHESSCOM_URL: str = "https://api.chess.com"
+    GAME_IMPORT_MAX_GAMES: int = 20
+    GAME_IMPORT_MAX_STORED: int = 300
+    RATE_LIMIT_GAME_IMPORT: int = 10
+    RATE_LIMIT_GAME_IMPORT_WINDOW_S: int = 3600
+
     # Authentication: attempts per IP, failed logins per account, registrations per IP
     RATE_LIMIT_LOGIN_PER_IP: int = 20
     RATE_LIMIT_LOGIN_WINDOW_S: int = 60

@@ -78,7 +78,9 @@ export interface TrainingTarget {
 /** «Ваши ошибки» (таск 13.5): позиция перед ошибкой в партии игрока. */
 export interface PersonalView {
     id: number;
-    game_id: number;
+    /** Партия на сайте или партия с другого сайта (таск 24.1) — заполнено ровно одно. */
+    game_id: number | null;
+    imported_game_id?: number | null;
     ply: number;
     fen: string;
     previous_move: string | null;

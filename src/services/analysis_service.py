@@ -319,6 +319,11 @@ def is_current_analysis(data: object, pgn_text: str) -> bool:
     )
 
 
+async def evaluate_pgn(pgn_text: str) -> dict:
+    """Полный разбор PGN вне таблицы games (партии с других сайтов, таск 24.1); движок — из пула."""
+    return await asyncio.to_thread(_evaluate_board_sequence_sync, pgn_text, 10)
+
+
 class AnalysisService:
     async def analyze_position(self, db: AsyncSession, moves: list[str], start_fen: str | None = None) -> dict:
         board = board_from_start_fen(start_fen)  # InvalidStartPositionError для невозможной позиции
@@ -389,7 +394,7 @@ class AnalysisService:
             except Exception:
                 pass
 
-        report = await asyncio.to_thread(_evaluate_board_sequence_sync, game.pgn, 10)
+        report = await evaluate_pgn(game.pgn)
         report["game_id"] = game_id
 
         if hasattr(game, "analysis_json"):

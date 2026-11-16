@@ -38,6 +38,7 @@ celery_app.conf.update(
     task_default_queue=ANALYSIS_QUEUE,
     task_routes={
         "analyze_game": {"queue": ANALYSIS_QUEUE},
+        "analyze_imported_game": {"queue": ANALYSIS_QUEUE},
         "simulate_tournament_game": {"queue": SIMULATION_QUEUE},
         "workout_reminders": {"queue": ANALYSIS_QUEUE},
     },

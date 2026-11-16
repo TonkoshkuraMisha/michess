@@ -20,7 +20,7 @@ import logging
 import time
 
 from src.core.config import settings
-from src.worker.tasks import analyze_game_task, simulate_tournament_game_task
+from src.worker.tasks import analyze_game_task, analyze_imported_game_task, simulate_tournament_game_task
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +98,41 @@ def schedule_tournament_simulations_in_background(tournament_game_ids: list[int]
     if not tournament_game_ids:
         return None
     task = asyncio.create_task(schedule_tournament_simulations(tournament_game_ids))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+    return task
+
+
+def _publish_imported_analysis(imported_id: int) -> None:
+    analyze_imported_game_task.apply_async(args=(imported_id,), retry=False)
+
+
+async def schedule_imported_analyses(imported_ids: list[int]) -> int:
+    """
+    Разбор партий с других сайтов (таск 24.1). Возвращает число опубликованных. При недоступном брокере партии не
+    теряются: разбор можно запустить со страницы партии, а список импорта покажет «не разобрана».
+    """
+    global _broker_down_until
+
+    published = 0
+    for imported_id in imported_ids:
+        if time.monotonic() < _broker_down_until:
+            break
+        try:
+            await asyncio.wait_for(
+                asyncio.to_thread(_publish_imported_analysis, imported_id), timeout=settings.CELERY_PUBLISH_TIMEOUT_S,
+            )
+            published += 1
+        except Exception as exc:
+            _broker_down_until = time.monotonic() + settings.CELERY_BROKER_COOLDOWN_S
+            logger.error("Could not schedule imported game %s (%s)", imported_id, exc.__class__.__name__)
+    return published
+
+
+def schedule_imported_analyses_in_background(imported_ids: list[int]) -> asyncio.Task | None:
+    if not imported_ids:
+        return None
+    task = asyncio.create_task(schedule_imported_analyses(imported_ids))
     _background_tasks.add(task)
     task.add_done_callback(_background_tasks.discard)
     return task
