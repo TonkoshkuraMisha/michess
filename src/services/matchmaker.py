@@ -85,10 +85,27 @@ def _ratings_compatible(rating_a: int, window_a: tuple[int, int], rating_b: int,
 
 
 
+VARIANTS = ("standard", "chess960")
+
+
+def chess960_start(number: int | None = None) -> str:
+    """Начальная позиция партии Фишера (21.3) в Shredder-FEN: случайная из 960 или по номеру."""
+    from src.services.game_engine import fen_of
+
+    board = chess.Board.from_chess960_pos(random.randrange(960) if number is None else number)
+    return fen_of(board)
+
+
 def _odds_start(invite: dict, creator_id: int, white_id: int) -> dict | None:
-    """Начальная позиция и время партии с форой из приглашения — когда цвета уже распределены."""
+    """
+    Начальная позиция и время партии с форой или партии Фишера из приглашения — когда цвета уже распределены.
+    Партия 960 — без форы и без рейтинга; расстановку выбирает сервер в момент старта (одна на обоих игроков).
+    """
     from src.services.odds import odds_fen, odds_times
 
+    if invite.get("variant") == "chess960":
+        base_ms = int(invite.get("base_time_ms", 180000))
+        return {"start_fen": chess960_start(), "white_time_ms": base_ms, "black_time_ms": base_ms, "kind": "chess960"}
     kind = invite.get("odds_kind") or ""
     if not kind:
         return None
@@ -521,6 +538,7 @@ class Matchmaker:
             rated: bool = True,
             odds_kind: str = "",
             odds_giver: str = "creator",
+            variant: str = "standard",
     ) -> dict:
         from src.services.odds import GIVERS, KINDS
 
@@ -530,6 +548,10 @@ class Matchmaker:
             odds_kind = ""
         if odds_giver not in GIVERS:
             odds_giver = "creator"
+        if variant not in VARIANTS:
+            variant = "standard"
+        if variant == "chess960":
+            odds_kind = ""  # фора и 960 вместе не бывают
 
         code = secrets.token_urlsafe(6).replace("-", "").replace("_", "")[:8]
         if color_pref not in ("white", "black", "random"):
@@ -543,10 +565,11 @@ class Matchmaker:
             "base_time_ms": base_ms,
             "increment_ms": inc_ms,
             "color_pref": color_pref,
-            # Партия с форой рейтинга не меняет (как с ботом).
-            "rated": bool(rated) and not odds_kind,
+            # Партия с форой или партия Фишера рейтинга не меняет (как с ботом).
+            "rated": bool(rated) and not odds_kind and variant == "standard",
             "odds_kind": odds_kind,
             "odds_giver": odds_giver,
+            "variant": variant,
         }
         await self.redis.set(f"invite:{code}", json.dumps(payload), ex=INVITE_TTL_S)
         return payload

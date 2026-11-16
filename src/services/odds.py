@@ -32,5 +32,11 @@ def odds_times(kind: str, giver: chess.Color, base_ms: int) -> tuple[int, int]:
 
 
 def pgn_header(start_fen: str) -> str:
-    """Начало PGN партии с позиции: заголовки SetUp/FEN — их понимают проверка ходов на сервере и клиент."""
-    return f'[SetUp "1"]\n[FEN "{start_fen}"]'
+    """
+    Начало PGN партии с позиции: заголовки SetUp/FEN — их понимают проверка ходов на сервере и клиент. Партия Фишера
+    (позиция в Shredder-FEN, game_engine.is_chess960_fen) получает и заголовок Variant.
+    """
+    from src.services.game_engine import CHESS960_HEADER, is_chess960_fen
+
+    variant = f"{CHESS960_HEADER}\n" if is_chess960_fen(start_fen) else ""
+    return f'{variant}[SetUp "1"]\n[FEN "{start_fen}"]'

@@ -37,6 +37,30 @@ def board_from_start_fen(start_fen: str | None) -> chess.Board:
     return board
 
 
+_CHESS960_CASTLING = set("ABCDEFGHabcdefgh")
+CHESS960_HEADER = '[Variant "Chess960"]'
+
+
+def is_chess960_fen(fen: str | None) -> bool:
+    """
+    Позиция партии Фишера (21.3): права на рокировку записаны буквами вертикалей (Shredder-FEN, «HAha»). Партии 960
+    хранят позиции только так — в обычных шахматах такой записи не бывает, поэтому по FEN видно, по каким правилам
+    идёт партия.
+    """
+    parts = (fen or "").split()
+    return len(parts) > 2 and any(c in _CHESS960_CASTLING for c in parts[2])
+
+
+def board_from_fen(fen: str, chess960: bool = False) -> chess.Board:
+    """Доска по FEN партии: в режиме 960, если так сказано или если FEN записан по-960-ному."""
+    return chess.Board(fen, chess960=chess960 or is_chess960_fen(fen))
+
+
+def fen_of(board: chess.Board) -> str:
+    """FEN для хранения: у партии 960 — Shredder-FEN (см. is_chess960_fen)."""
+    return board.fen(shredder=True) if board.chess960 else board.fen()
+
+
 def validate_start_fen(start_fen: str | None) -> str:
     """
     Каноническая запись начальной позиции: STARTING_FEN для пустого значения, иначе FEN после
@@ -101,9 +125,10 @@ def restore_board(fen: str, pgn_movetext: str = "", start_fen: str | None = None
     safe_fen = fen.strip() if fen and fen.strip() else STARTING_FEN
     movetext = (pgn_movetext or "").strip()
 
+    chess960 = CHESS960_HEADER in movetext or is_chess960_fen(safe_fen)
     if movetext and "[FEN " in movetext:
         replayed = _replay_pgn_document(movetext)
-        if replayed is not None and replayed.fen() == safe_fen:
+        if replayed is not None and fen_of(replayed) == safe_fen:
             return replayed
         logger.warning("PGN document does not lead to the stored FEN, falling back to FEN-only board")
     elif movetext:
@@ -121,7 +146,7 @@ def restore_board(fen: str, pgn_movetext: str = "", start_fen: str | None = None
                 return board
             logger.warning("Replayed PGN does not match stored FEN, falling back to FEN-only board")
 
-    return chess.Board(safe_fen)
+    return board_from_fen(safe_fen, chess960)
 
 
 def terminal_outcome(board: chess.Board) -> tuple[str, str] | None:
@@ -242,7 +267,7 @@ class GameEngine:
 
         # 3. Применяем ход на доске
         board.push(move)
-        new_fen = board.fen()
+        new_fen = fen_of(board)
 
         # 4. Проверяем условия завершения партии
         outcome = terminal_outcome(board)
