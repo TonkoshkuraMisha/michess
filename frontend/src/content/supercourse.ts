@@ -4,7 +4,7 @@
 // Названия модулей — в каталогах i18n: supercourse.modules.<код, точка заменена на «_»>.
 
 import type {Activity} from './programs';
-import {MUST_KNOW} from './mustKnow';
+import {MUST_KNOW, STUDIES} from './mustKnow';
 
 export const BRANCHES = ['T', 'M', 'E', 'S', 'O', 'C', 'G'] as const;  // тактика, мат, эндшпиль, стратегия, дебют, расчёт, партии
 export type Branch = typeof BRANCHES[number];
@@ -141,7 +141,7 @@ export const COURSE: CourseModule[] = [
     mod('E4.1', 'E', [l('endgame-active-king')]),
     mod('E4.2', 'E', [th('exchange_choice')]),
     mod('E4.3', 'E', [e('rook_vs_bishop_def'), e('rook_vs_knight_def'), e('q_vs_rook')]),
-    mod('E4.4', 'E'),
+    mod('E4.4', 'E', STUDIES.map(e)),
     mod('S4.1', 'S', [lib('hanging_pawns')]),
     mod('S4.2', 'S', [lib('carlsbad')]),
     mod('S4.3', 'S', [lib('stonewall')]),
