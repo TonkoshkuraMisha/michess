@@ -42,6 +42,8 @@ class UserCreate(BaseModel):
     # Первый вход (таск 17.8): необязательные ответы для стартового рейтинга (src/services/onboarding.py).
     experience: Experience | None = None
     strength: StrengthBand | None = None
+    # Код-приглашение (таск 24.4): обязателен при закрытой регистрации (REGISTRATION_INVITE_ONLY).
+    invite_code: str | None = Field(None, max_length=64)
 
     @field_validator("username")
     @classmethod

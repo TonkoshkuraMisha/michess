@@ -67,6 +67,40 @@ afterEach(() => {
     vi.unstubAllGlobals();
 });
 
+describe('App: программа беты (таск 24.4)', () => {
+    it('гость открывает «Сообщить о проблеме» из шапки', () => {
+        renderApp('/puzzles');
+        fireEvent.click(within(screen.getByRole('banner')).getByRole('button', {name: 'Сообщить о проблеме'}));
+        expect(screen.getByTestId('report-problem')).toBeInTheDocument();
+        expect(screen.getByTestId('report-problem-context')).toHaveTextContent('/puzzles');
+        fireEvent.click(screen.getByRole('button', {name: 'Закрыть'}));
+        expect(screen.queryByTestId('report-problem')).not.toBeInTheDocument();
+    });
+
+    it('вошедший игрок открывает «Сообщить о проблеме» из меню профиля', async () => {
+        setToken('test-token');
+        renderApp();
+        fireEvent.click(await within(screen.getByRole('banner')).findByText('alice'));
+        fireEvent.click(screen.getByTestId('report-problem-menu'));
+        expect(screen.getByTestId('report-problem')).toBeInTheDocument();
+        // Меню профиля при этом закрылось.
+        expect(screen.queryByTestId('report-problem-menu')).not.toBeInTheDocument();
+        setToken(null);
+    });
+
+    it('ссылка-приглашение открывает гостю регистрацию с вписанным кодом', async () => {
+        renderApp('/?invite=K7QF2MXN9B');
+        expect(await screen.findByTestId('auth-invite')).toHaveValue('K7QF2MXN9B');
+        expect(screen.getByRole('heading', {name: 'Регистрация аккаунта'})).toBeInTheDocument();
+    });
+
+    it('без приглашения окно входа само не открывается', async () => {
+        renderApp('/leaderboard');
+        await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
+        expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    });
+});
+
 describe('App: навигация', () => {
     it('в шапке гостя нет элементов без действия', () => {
         renderApp();

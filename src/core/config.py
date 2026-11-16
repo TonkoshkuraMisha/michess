@@ -132,6 +132,14 @@ class Settings(BaseSettings):
     RATE_LIMIT_LOGIN_FAILURES_WINDOW_S: int = 900
     RATE_LIMIT_REGISTER_PER_IP: int = 5
     RATE_LIMIT_REGISTER_WINDOW_S: int = 3600
+    # Программа беты (таск 24.4). REGISTRATION_INVITE_ONLY — регистрация только по коду-приглашению (коды выдаёт
+    # модератор); по умолчанию регистрация открыта. COMMUNITY_URL — ссылка на канал сообщества: пусто — не показывается.
+    REGISTRATION_INVITE_ONLY: bool = False
+    COMMUNITY_URL: str = ""
+    # «Сообщить о проблеме»: сообщений за окно с адреса (или на игрока); проверок кода-приглашения — с адреса.
+    RATE_LIMIT_FEEDBACK: int = 5
+    RATE_LIMIT_FEEDBACK_WINDOW_S: int = 3600
+    RATE_LIMIT_INVITE_CHECK: int = 20
     # Письма со ссылками (подтверждение e-mail, сброс пароля): не больше N запросов на адрес и на IP за окно.
     RATE_LIMIT_EMAIL_PER_ADDRESS: int = 3
     RATE_LIMIT_EMAIL_PER_IP: int = 10

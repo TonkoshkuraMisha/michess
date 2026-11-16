@@ -9,6 +9,7 @@ import {renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
 import {errorMessage} from '../../services/apiErrors';
 import {moderationApi} from '../../services/moderation';
+import {FeedbackPanel, InvitesPanel} from '../beta/BetaAdmin';
 import type {ModerationAction, ModerationMe, QueueItem, ReportReason} from '../../services/moderation';
 
 const REASONS: ReportReason[] = ['cheating', 'abuse', 'spam', 'other'];
@@ -126,7 +127,9 @@ export function ModerationPage() {
                     ))}
                 </section>
             )}
-            {me && !me.is_moderator && !me.is_cheater && <p className="text-sm text-boxwood/70">{t('moderation.nothing')}</p>}
+            {me?.is_moderator && <FeedbackPanel/>}
+            {me?.is_moderator && <InvitesPanel/>}
+            {me && !me.is_moderator && !me.is_cheater &&<p className="text-sm text-boxwood/70">{t('moderation.nothing')}</p>}
         </div>
     );
 }

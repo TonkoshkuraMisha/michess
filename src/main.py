@@ -14,6 +14,7 @@ from sqlalchemy import text
 from src.api import (
     account,
     arenas,
+    beta,
     bots,
     chess960,
     exam,
@@ -134,6 +135,7 @@ def create_app() -> FastAPI:
     app.include_router(library.router, prefix="/api/v1/library", tags=["library"])
     app.include_router(game_import.router, prefix="/api/v1/imports", tags=["library"])
     app.include_router(public.router, prefix="/api/v1/public", tags=["public"])
+    app.include_router(beta.router, prefix="/api/v1/beta", tags=["beta"])
     app.include_router(skills.router, prefix="/api/v1/skills", tags=["training"])
     app.include_router(workout.router, prefix="/api/v1/workout", tags=["training"])
     app.include_router(exam.router, prefix="/api/v1/exam", tags=["training"])

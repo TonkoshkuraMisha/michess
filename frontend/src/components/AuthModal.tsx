@@ -11,6 +11,7 @@ import {useI18n} from '../i18n';
 import {renderUiMessage, uiMessage} from '../i18n';
 import type {UiMessage} from '../i18n';
 import {setToken} from '../services/authToken';
+import {betaApi} from '../services/beta';
 
 /** Сообщение под заголовком: ошибка (ответ сервера по коду или своя) или успех регистрации. */
 type Feedback = { tone: 'error' | 'success'; message: UiMessage };
@@ -23,11 +24,29 @@ interface AuthModalProps {
     onFirstGame?: (rating: number) => void;
     /** Новичку («только начинаю») — переход в азбуку (14.5). */
     onBasics?: () => void;
+    /** Закрытая регистрация (таск 24.4): без кода-приглашения аккаунт не создать. */
+    inviteOnly?: boolean;
+    /** Код из ссылки-приглашения: окно открывается сразу на регистрации, код уже вписан. */
+    inviteCode?: string;
 }
 
-export default function AuthModal({onSuccess, onClose: onCloseProp, onFirstGame, onBasics}: AuthModalProps) {
+export default function AuthModal({onSuccess, onClose: onCloseProp, onFirstGame, onBasics, inviteOnly = false, inviteCode}: AuthModalProps) {
     const {t, tp, language} = useI18n();
-    const [isLogin, setIsLogin] = useState(true);
+    const [isLogin, setIsLogin] = useState(!inviteCode);
+    const [invite, setInvite] = useState(inviteCode ?? '');
+    // Код из ссылки проверяется сразу: о недействительном приглашении лучше узнать до заполнения формы.
+    const [inviteValid, setInviteValid] = useState<boolean | null>(null);
+    useEffect(() => {
+        if (!inviteCode) return;
+        let cancelled = false;
+        betaApi.checkInvite(inviteCode).then((valid) => {
+            if (!cancelled) setInviteValid(valid);
+        }).catch(() => undefined);
+        return () => {
+            cancelled = true;
+        };
+    }, [inviteCode]);
+    const showInvite = inviteOnly || Boolean(inviteCode);
     const [experience, setExperience] = useState<Experience | ''>('');
     const [strength, setStrength] = useState<StrengthBand | ''>('');
     // После регистрации игрок уже вошёл: окно приветствия, закрытие окна — тоже вход.
@@ -127,6 +146,7 @@ export default function AuthModal({onSuccess, onClose: onCloseProp, onFirstGame,
                         username, password,
                         ...(experience ? {experience} : {}),
                         ...(strength && experience !== 'new' ? {strength} : {}),
+                        ...(showInvite && invite.trim() ? {invite_code: invite.trim()} : {}),
                     }),
                 });
 
@@ -275,6 +295,25 @@ export default function AuthModal({onSuccess, onClose: onCloseProp, onFirstGame,
                             placeholder="••••••••"
                         />
                     </div>
+
+                    {!isLogin && showInvite && (
+                        <div>
+                            <label htmlFor="auth-invite" className="block text-xs text-boxwood/80 mb-1">{t('auth.inviteCode')}</label>
+                            <input id="auth-invite" type="text" autoComplete="off" autoCapitalize="characters" spellCheck={false}
+                                   required={inviteOnly} maxLength={32} value={invite} data-testid="auth-invite"
+                                   onChange={(e) => {
+                                       setInvite(e.target.value);
+                                       setInviteValid(null);
+                                   }}
+                                   className="w-full px-3 py-2 bg-black/40 border border-amber-900/60 rounded text-amber-100 text-sm font-mono uppercase focus:outline-none focus:border-amber-600"/>
+                            {inviteValid !== null && (
+                                <p className={`text-xs mt-1 ${inviteValid ? 'text-emerald-300' : 'text-rose-300'}`} data-testid="auth-invite-status">
+                                    {t(inviteValid ? 'auth.inviteValid' : 'auth.inviteNotValid')}
+                                </p>
+                            )}
+                            {inviteOnly && <p className="text-xs text-boxwood/65 mt-1" data-testid="auth-invite-only">{t('auth.inviteOnlyNote')}</p>}
+                        </div>
+                    )}
 
                     {!isLogin && (
                         <>

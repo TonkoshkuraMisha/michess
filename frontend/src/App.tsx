@@ -38,6 +38,8 @@ import {RepertoireEditorPage, RepertoireListPage} from './components/repertoire/
 import {LibraryPage} from './components/library/LibraryPage';
 import {RepertoireDrillPage} from './components/repertoire/RepertoireDrill';
 import {moderationApi} from './services/moderation';
+import {ReportProblem} from './components/beta/ReportProblem';
+import {useSiteConfig} from './services/beta';
 import {TrainerPage, TrainersPage} from './components/trainers/TrainersPage';
 import {NotificationBell, PlayerSearch} from './components/social/SocialHeader';
 import {TournamentView, TournamentsPage} from './components/tournaments/TournamentsPage';
@@ -48,6 +50,7 @@ import * as auth from './services/authToken';
 
 import {
     Swords,
+    Bug,
     LogOut,
     User,
     Settings as SettingsIcon,
@@ -147,12 +150,17 @@ export default function App() {
     const [isChampionsMenuOpen, setIsChampionsMenuOpen] = useState(false);
 
     const [showAuthModal, setShowAuthModal] = useState(false);
+    // Программа беты (таск 24.4): «Сообщить о проблеме» — с любой страницы; закрыта ли регистрация — с сервера.
+    const [showReport, setShowReport] = useState(false);
+    const siteConfig = useSiteConfig();
     const [serverPing, setServerPing] = useState<number | null>(null);
 
     const dropdownRef = useRef<HTMLDivElement>(null);
     const championsMenuRef = useRef<HTMLDivElement>(null);
     const navigate = useNavigate();
     const location = useLocation();
+    // Ссылка-приглашение (/?invite=КОД): код запоминается, из адреса убирается, гостю сразу открывается регистрация.
+    const [inviteCode] = useState(() => new URLSearchParams(location.search).get('invite')?.trim() || undefined);
 
     const isSingleScreenRoute =
         location.pathname === '/' ||
@@ -167,9 +175,17 @@ export default function App() {
                 gameSocket.disconnect();
             }
         });
-        void auth.restoreSession();
+        void Promise.resolve(auth.restoreSession()).then((restored) => {
+            if (inviteCode && !restored) setShowAuthModal(true);
+        });
         return unsubscribe;
-    }, []);
+    }, [inviteCode]);
+
+    useEffect(() => {
+        if (inviteCode && new URLSearchParams(location.search).has('invite')) {
+            navigate(location.pathname, {replace: true});
+        }
+    }, [inviteCode, location.pathname, location.search, navigate]);
 
     useEffect(() => {
         if (!token) {
@@ -418,6 +434,17 @@ export default function App() {
                     >
                         <Scale size={19}/>
                     </Link>
+                    {/* Вошедшему на узком экране — пункт в меню профиля: в шапке не хватает места. */}
+                    <button
+                        type="button"
+                        onClick={() => setShowReport(true)}
+                        data-testid="report-problem-open"
+                        className={`${token && userProfile ? 'hidden sm:block' : ''} p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300 cursor-pointer`}
+                        title={t('nav.reportProblem')}
+                        aria-label={t('nav.reportProblem')}
+                    >
+                        <Bug size={19}/>
+                    </button>
                     {!(token && userProfile) && (
                         <Link
                             to="/settings"
@@ -577,6 +604,16 @@ export default function App() {
                                             <SettingsIcon size={16} className="text-amber-500"/> {t('nav.settings')}
                                         </button>
                                         <button
+                                            onClick={() => {
+                                                setIsProfileOpen(false);
+                                                setShowReport(true);
+                                            }}
+                                            data-testid="report-problem-menu"
+                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
+                                        >
+                                            <Bug size={16} className="text-amber-500"/> {t('nav.reportProblem')}
+                                        </button>
+                                        <button
                                             onClick={handleLogout}
                                             className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-red-950/40 transition text-red-300 hover:text-red-200 cursor-pointer"
                                         >
@@ -692,6 +729,7 @@ export default function App() {
                 </PageErrorBoundary>
             </main>
             <TranslationHelper/>
+            {showReport && <ReportProblem onClose={() => setShowReport(false)}/>}
 
             {showAuthModal && (
                 <AuthModal
@@ -702,6 +740,8 @@ export default function App() {
                     onClose={() => setShowAuthModal(false)}
                     onFirstGame={(rating) => navigate('/', {state: {firstGame: {rating}}})}
                     onBasics={() => navigate('/learn/basics')}
+                    inviteOnly={siteConfig.inviteOnly}
+                    inviteCode={inviteCode}
                 />
             )}
         </div>
