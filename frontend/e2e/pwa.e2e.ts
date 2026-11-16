@@ -40,7 +40,11 @@ test('сервис-воркер и офлайн-страница', async ({page,
     } finally {
         await context.setOffline(false);
     }
-    await page.goto('/puzzles');
-    await expect(page.locator('#offline-title')).toHaveCount(0);
-    await expect(page.locator('#root')).not.toBeEmpty();
+    // Связь вернулась: офлайн-страница перезагружается сама (событие online в offline.js). Свой переход может
+    // столкнуться с этой перезагрузкой («navigation interrupted»), поэтому повторяем, пока сайт не откроется.
+    await expect(async () => {
+        await page.goto('/puzzles');
+        await expect(page.locator('#offline-title')).toHaveCount(0, {timeout: 2000});
+        await expect(page.locator('#root')).not.toBeEmpty({timeout: 2000});
+    }).toPass({timeout: 20_000});
 });
