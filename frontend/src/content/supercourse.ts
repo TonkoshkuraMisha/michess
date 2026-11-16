@@ -182,6 +182,20 @@ export const COURSE: CourseModule[] = [
 
 export const LEVEL_COUNT = 6;
 
+// Экзамен уровня (таск 27.12): модуль X<n> — разделы диагностики 22.0; уровень пройден, когда по каждому разделу
+// последняя оценка не ниже порога разряда уровня (азбука — 800, IV разряд — 1000 … КМС — 1800).
+export const LEVEL_EXAM_TARGET = [800, 1000, 1200, 1400, 1600, 1800] as const;
+
+export function examSections(level: number): string[] {
+    const module = COURSE.find((m) => m.code === `X${level}`);
+    return (module?.steps ?? []).flatMap((s) => (s.kind === 'exam' ? [s.id] : []));
+}
+
+export function levelExamPassed(level: number, results: Record<string, { estimate: number }>): boolean {
+    const sections = examSections(level);
+    return sections.length > 0 && sections.every((s) => (results[s]?.estimate ?? 0) >= LEVEL_EXAM_TARGET[level]);
+}
+
 export const moduleTitleKey = (code: string) => `supercourse.modules.${code.replace('.', '_')}`;
 
 export const courseProgressId = (code: string) => `course-${code.toLowerCase().replace('.', '-')}`;

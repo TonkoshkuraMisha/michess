@@ -2255,6 +2255,8 @@ export const en = {
         intro: 'Six levels by rating category; in each — tactics, mates and attack, endgame, strategy and pawn structures, openings, calculation and master games. Every module leads into the trainings on the site; the course is being filled step by step.',
         skeleton: 'Show the course skeleton (filled modules: {filled} of {total})',
         soon: 'coming soon',
+        examTarget: 'Pass: an estimate of at least {rating} in every section',
+        levelPassed: 'Level passed',
         markDone: 'Module done',
         levels: {l0: '0 · ABC', l1: '1 · Beginner', l2: '2 · 4th–3rd category', l3: '3 · 3rd–2nd category', l4: '4 · 2nd–1st category', l5: '5 · 1st category – CM'},
         branches: {T: 'Tactics', M: 'Mate and attack', E: 'Endgame', S: 'Strategy and pawn structures', O: 'Openings', C: 'Calculation, vision and thinking', G: 'Games, history and exams'},

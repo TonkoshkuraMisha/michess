@@ -63,3 +63,14 @@ describe('Обязательные позиции (27.9)', () => {
         expect(all.every((id) => hasMessage(`endgames.items.${id}`))).toBe(true);
     });
 });
+
+describe('экзамены уровней (27.12)', () => {
+    it('уровень пройден, когда каждый раздел не ниже порога', async () => {
+        const {examSections, levelExamPassed} = await import('../supercourse');
+        expect(examSections(1)).toEqual(['A', 'B']);
+        expect(levelExamPassed(1, {A: {estimate: 1000}, B: {estimate: 1100}})).toBe(true);
+        expect(levelExamPassed(1, {A: {estimate: 1000}})).toBe(false);
+        expect(levelExamPassed(2, {C: {estimate: 1500}, D: {estimate: 1500}, E: {estimate: 1199}})).toBe(false);
+        for (let level = 0; level < LEVEL_COUNT; level++) expect(examSections(level).length).toBeGreaterThan(0);
+    });
+});
