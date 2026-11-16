@@ -68,7 +68,8 @@ if (-not (Test-Path (Join-Path $frontendDir "node_modules")))
 {
     Write-Host "[*] Устанавливаем npm-зависимости фронтенда..." -ForegroundColor Yellow
     Set-Location $frontendDir
-    npm install
+    # npm.cmd, а не npm: обёртка npm.ps1 не запускается при запрете скриптов (политика выполнения по умолчанию).
+    npm.cmd install
     Set-Location $root
 }
 
@@ -116,7 +117,9 @@ Start-Job -Name "MichessWorker" -ScriptBlock {
 
 # 8.1. Запуск Vite Frontend в отдельном видимом окне терминала
 Write-Host "[+] Запуск Vite Frontend (порт 3000 в новом окне)..." -ForegroundColor Green
-Start-Process powershell -ArgumentList "-NoExit", "-Command", "cd '$frontendDir'; npm run dev"
+# Новое окно — Windows PowerShell, где скрипты (и обёртка npm.ps1) по умолчанию запрещены: зовём npm.cmd и снимаем
+# запрет только для этого процесса (-ExecutionPolicy Bypass), системные настройки не меняются.
+Start-Process powershell -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "cd '$frontendDir'; npm.cmd run dev"
 
 # 9. Ожидание фактического открытия порта 3000 перед запуском браузера
 $ready = $false
