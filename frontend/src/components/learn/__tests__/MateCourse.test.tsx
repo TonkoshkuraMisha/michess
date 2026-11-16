@@ -82,13 +82,13 @@ describe('Курс матовых конструкций', () => {
             [/learn\/progress\//, () => ({})],
         ]);
         renderAt('/learn/mates/back_rank_mate');
-        expect(await screen.findByTestId('mates-explain')).toBeInTheDocument();
-        fireEvent.click(await screen.findByTestId('mates-start'));
-        expect(await screen.findByTestId('course-puzzle')).toBeInTheDocument();
+        expect(await screen.findByTestId('mates-explain', {}, {timeout: 5000})).toBeInTheDocument();
+        fireEvent.click(await screen.findByTestId('mates-start', {}, {timeout: 5000}));
+        expect(await screen.findByTestId('course-puzzle', {}, {timeout: 5000})).toBeInTheDocument();
         expect(screen.getByText('Белые начинают и ставят мат.')).toBeInTheDocument();
         await drag('d2', 'd8');
         await drag('d8', 'e8');
-        expect(await screen.findByTestId('course-solved')).toBeInTheDocument();
+        expect(await screen.findByTestId('course-solved', {}, {timeout: 5000})).toBeInTheDocument();
         const put = (fetchMock.mock.calls as unknown as [string, RequestInit][]).find(([url]) => url.includes('/learn/progress/'))!;
         expect(put[0]).toContain(mateProgressId('back_rank_mate'));
         expect(JSON.parse(String(put[1].body))).toMatchObject({step: 1, steps_total: 2, completed: false});

@@ -4,6 +4,7 @@
 // Названия модулей — в каталогах i18n: supercourse.modules.<код, точка заменена на «_»>.
 
 import type {Activity} from './programs';
+import {MUST_KNOW} from './mustKnow';
 
 export const BRANCHES = ['T', 'M', 'E', 'S', 'O', 'C', 'G'] as const;  // тактика, мат, эндшпиль, стратегия, дебют, расчёт, партии
 export type Branch = typeof BRANCHES[number];
@@ -60,7 +61,7 @@ export const COURSE: CourseModule[] = [
     mod('C1.1', 'C', [tr('coord_find'), tr('coord_name'), tr('coord_color'), tr('quiet_path')]),
     mod('C1.2', 'C', [tr('calc_checks')]),
     mod('C1.3', 'C', [tr('calc_distance'), tr('knight_route')]),
-    mod('G1.1', 'G'),
+    mod('G1.1', 'G', [tr('miniatures')]),
     mod('X1', 'G', [ex('A'), ex('B')]),
     // --- Уровень 2. IV–III разряд ---
     mod('T2.1', 'T', [th('double_check'), th('windmill')]),
@@ -79,7 +80,7 @@ export const COURSE: CourseModule[] = [
     mod('E2.1', 'E', [th('triangulation'), th('outflanking'), th('shouldering'), e('two_pawns'), e('two_pawns_connected')]),
     mod('E2.2', 'E', [e('lucena'), e('philidor'), th('rook_behind_passer')]),
     mod('E2.3', 'E', [e('wrong_bishop'), e('rook_pawn_def')]),
-    mod('E2.4', 'E'),
+    mod('E2.4', 'E', MUST_KNOW[0].map(e)),
     mod('S2.1', 'S', [th('open_file'), th('seventh_rank')]),
     mod('S2.2', 'S', [th('outpost')]),
     mod('S2.3', 'S', [th('bad_bishop')]),
@@ -111,7 +112,7 @@ export const COURSE: CourseModule[] = [
     mod('E3.2', 'E'),
     mod('E3.3', 'E', [e('q_vs_knight'), e('q_vs_rook')]),
     mod('E3.4', 'E', [e('rook_vs_pawn'), l('endgame-passed-pawn')]),
-    mod('E3.5', 'E'),
+    mod('E3.5', 'E', MUST_KNOW[1].map(e)),
     mod('S3.1', 'S', [lib('spanish')]),
     mod('S3.2', 'S', [lib('french_chain')]),
     mod('S3.3', 'S', [lib('symmetry')]),
@@ -165,7 +166,7 @@ export const COURSE: CourseModule[] = [
     mod('M5.1', 'M', [th('sacrifice')]),
     mod('E5.1', 'E'),
     mod('E5.2', 'E', [{kind: 'library'}]),
-    mod('E5.3', 'E'),
+    mod('E5.3', 'E', MUST_KNOW[2].map(e)),
     mod('S5.1', 'S'),
     mod('S5.2', 'S'),
     mod('S5.3', 'S'),

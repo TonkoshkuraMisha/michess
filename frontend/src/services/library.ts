@@ -34,6 +34,13 @@ export const STRUCTURES = ['hedgehog', 'maroczy', 'wedge', 'kid_chain', 'modern_
     'french_exchange', 'carlsbad', 'hanging_pawns', 'isolated_pawn', 'spanish', 'symmetry'] as const;
 export type StructureCode = typeof STRUCTURES[number];
 
+/** «Миниатюра» (27.9): партия, закончившаяся матом; fen — позиция перед матом, answer — ход партии. */
+export interface LibraryMiniature extends LibraryGameRow {
+    fen: string;
+    moves: string[];
+    answer: string;
+}
+
 /** Вопрос «Узнай структуру» (27.9): game_id = null — учебный скелет. */
 export interface StructureQuestion {
     fen: string;
@@ -88,6 +95,8 @@ export const libraryApi = {
         call<LibraryPage & { id: number; name: string }>(`/collections/${id}/games?offset=${offset}&limit=${LIBRARY_PAGE}`),
     search: (search: LibrarySearch) => call<LibraryPage>(`/games?${searchQuery(search)}`),
     pgnUrl: (id: number | string) => `${API_BASE_URL}/api/v1/library/games/${id}/pgn`,
+    miniatures: (count: number, seed: number) =>
+        call<{ miniatures: LibraryMiniature[] }>(`/miniatures?count=${count}&seed=${seed}`),
     structureQuiz: (count: number, seed: number) =>
         call<{ questions: StructureQuestion[] }>(`/structure-quiz?count=${count}&seed=${seed}`),
 };

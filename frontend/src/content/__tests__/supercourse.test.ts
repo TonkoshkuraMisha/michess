@@ -52,3 +52,14 @@ describe('Большой курс', () => {
         }
     });
 });
+
+describe('Обязательные позиции (27.9)', () => {
+    it('три ступени из существующих упражнений, без повторов', async () => {
+        const {MUST_KNOW} = await import('../mustKnow');
+        const all = MUST_KNOW.flat();
+        expect(MUST_KNOW).toHaveLength(3);
+        expect(new Set(all).size).toBe(all.length);
+        expect(all.filter((id) => !EXERCISES.some((e) => e.id === id))).toEqual([]);
+        expect(all.every((id) => hasMessage(`endgames.items.${id}`))).toBe(true);
+    });
+});
