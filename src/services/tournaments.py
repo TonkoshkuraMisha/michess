@@ -103,8 +103,20 @@ async def create_tournament(
         base_time_ms: int,
         increment_ms: int,
         career_stage: str | None = None,
+        cycles: int = 1,
+        open_size: bool = False,
 ) -> Tournament:
-    if size not in SIZES[fmt]:
+    """
+    open_size — турнир в историческом составе («Машина времени», 28.1): круговой или сетка на любое число
+    участников в границах rules.OPEN_*; cycles — число кругов кругового турнира. Свои турниры игрока создаются без
+    них: размеры — из SIZES.
+    """
+    allowed: tuple[int, ...] | range = SIZES[fmt]
+    if open_size and fmt == "round_robin":
+        allowed = rules.OPEN_ROUND_ROBIN_SIZES
+    elif open_size and fmt == "knockout":
+        allowed = rules.OPEN_KNOCKOUT_SIZES
+    if size not in allowed or not 1 <= cycles <= rules.MAX_CYCLES or (cycles > 1 and fmt != "round_robin"):
         raise DomainError("tournament_size_invalid", sizes=", ".join(map(str, SIZES[fmt])))
     if len(participants) != size - 1:
         raise DomainError("tournament_participants_count", expected=size - 1)
@@ -134,15 +146,17 @@ async def create_tournament(
         ))
 
     if fmt == "round_robin":
-        for rnd, pairs in enumerate(rules.berger_rounds(size), 1):
+        for rnd, pairs in enumerate(rules.round_robin_schedule(size, cycles), 1):
             for board, (white, black) in enumerate(pairs, 1):
                 _add_game(db, tournament, rnd, board, rules.MatchGame("main", white, black, False))
     elif fmt == "swiss":
         for board, (white, black) in enumerate(rules.swiss_pairings(list(range(1, size + 1)), []), 1):
             _add_game(db, tournament, 1, board, rules.MatchGame("main", white, black, False))
     else:
-        for board, (high, low) in enumerate(rules.knockout_first_round(size), 1):
-            _add_game(db, tournament, 1, board, rules.match_game(high, low, "main"))
+        # Номер доски — место матча в сетке; у прошедших первый круг без игры партии нет.
+        for board, (high, low) in enumerate(rules.bracket_slots(size), 1):
+            if low is not None:
+                _add_game(db, tournament, 1, board, rules.match_game(high, low, "main"))
     await product_metrics.record_event(db, owner.id, product_metrics.TOURNAMENT_CREATED)
     await db.commit()
     await db.refresh(tournament)
@@ -264,7 +278,7 @@ async def _advance_swiss(db: AsyncSession, tournament: Tournament) -> None:
 async def _advance_knockout(db: AsyncSession, tournament: Tournament) -> None:
     games = [g for g in await games_of(db, tournament.id) if g.round == tournament.current_round]
     boards = sorted({g.board for g in games})
-    winners: list[int] = []
+    won: dict[int, int] = {}
     pending = False
     for board in boards:
         match = [g for g in games if g.board == board]
@@ -279,9 +293,15 @@ async def _advance_knockout(db: AsyncSession, tournament: Tournament) -> None:
             _add_game(db, tournament, tournament.current_round, board, state.next_game)
             pending = True
         else:
-            winners.append(state.winner)
+            won[board] = state.winner
     if pending:
         return
+    if tournament.current_round == 1:
+        # Победители по порядку сетки; прошедшие первый круг без игры стоят на своих местах.
+        winners = [won[slot] if low is not None else high
+                   for slot, (high, low) in enumerate(rules.bracket_slots(tournament.size), 1)]
+    else:
+        winners = [won[board] for board in boards]
 
     players = {p.seat: p for p in await players_of(db, tournament.id)}
     for board in boards:

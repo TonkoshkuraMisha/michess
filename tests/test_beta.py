@@ -37,6 +37,13 @@ async def moderator(db_session):
     return user, create_user_token(user)
 
 
+@pytest.fixture(autouse=True)
+def default_beta_settings(monkeypatch):
+    """Настройки беты — по умолчанию, что бы ни стояло в локальном .env (там бывает задан адрес канала)."""
+    monkeypatch.setattr(settings, "REGISTRATION_INVITE_ONLY", False)
+    monkeypatch.setattr(settings, "COMMUNITY_URL", "")
+
+
 @pytest.fixture
 def invite_only(monkeypatch):
     monkeypatch.setattr(settings, "REGISTRATION_INVITE_ONLY", True)
