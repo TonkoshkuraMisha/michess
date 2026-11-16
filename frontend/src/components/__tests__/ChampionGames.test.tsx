@@ -44,7 +44,9 @@ function stubGames(reply: (url: string) => Reply) {
 }
 
 const okPage = (total: number, items = TAL_GAMES) => () => ({ok: true, body: {total, items}});
-const urls = (fetchMock: ReturnType<typeof stubGames>) => fetchMock.mock.calls.map(([url]) => url.toString());
+// Запросы архива партий (запрос кнопок «Угадай ход» к /guess/games идёт следом и здесь не нужен).
+const urls = (fetchMock: ReturnType<typeof stubGames>) => fetchMock.mock.calls.map(([url]) => url.toString())
+    .filter((url) => !url.includes('/guess/'));
 
 function GameStub() {
     const {id} = useParams();
@@ -126,6 +128,17 @@ describe('ChampionGames', () => {
         fireEvent.click(await screen.findByText('Tseshkovsky, Vitaly'));
 
         expect(await screen.findByText('Партия 3 (Tseshkovsky, Vitaly)')).toBeInTheDocument();
+    });
+
+    it('кнопка «Угадай ход мастера» — только у партий с отобранными моментами (14.3)', async () => {
+        const fetchMock = stubGames((url) => url.includes('/guess/games')
+            ? {ok: true, body: {games: {'3': 77}}} : {ok: true, body: {total: 6, items: TAL_GAMES}});
+        renderChampion();
+        const link = await screen.findByTestId('champion-guess-3');
+        expect(link.getAttribute('href')).toBe('/guess/77');
+        expect(screen.queryByTestId('champion-guess-1')).not.toBeInTheDocument();
+        const guessCall = fetchMock.mock.calls.map(([url]) => url.toString()).find((url) => url.includes('/guess/games'));
+        expect(guessCall).toMatch(/ids=1,2,3,4,5,6$/);
     });
 
     it('скачивание PGN не открывает разбор партии', async () => {

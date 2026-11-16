@@ -2534,6 +2534,7 @@ export const en = {
         miss: 'The master found a stronger move.',
         masterMove: 'Master\'s move: {san}',
         engineLines: 'Engine evaluation',
+        themes: 'Themes',
         next: 'Next position',
         continueSeries: 'Continue the game',
         toGame: 'Open the game',

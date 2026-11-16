@@ -17,6 +17,7 @@ from src.services import guess as guess_service
 router = APIRouter(dependencies=[Depends(rate_limit("guess", "RATE_LIMIT_PUZZLES"))])
 
 DEFAULT_TARGET = 1500
+MAX_GAMES = 100
 
 
 class AnswerRequest(BaseModel):
@@ -56,8 +57,20 @@ async def positions_of_game(game_id: int, db: AsyncSession = Depends(get_db)):
     return {"positions": [{"id": p.id, "ply": p.ply, "series_id": p.series_id} for p in positions]}
 
 
+@router.get("/games")
+async def games_with_positions(
+        ids: str = Query(..., max_length=2000, description="id партий через запятую"),
+        db: AsyncSession = Depends(get_db),
+):
+    """Какие из партий имеют отобранные моменты: {game_id: id первой позиции} (до MAX_GAMES партий за запрос)."""
+    game_ids = [int(part) for part in ids.split(",") if part.strip().isdigit()][:MAX_GAMES]  # прочее — пропуск
+    found = await guess_service.first_positions(db, game_ids)
+    return {"games": {str(game_id): position_id for game_id, position_id in found.items()}}
+
+
 @router.post("/position/{position_id}/answer")
-async def answer(position_id: int, payload: AnswerRequest, db: AsyncSession = Depends(get_db)):
+async def answer(position_id: int, payload: AnswerRequest, request: Request, db: AsyncSession = Depends(get_db)):
+    """Ответ игрока; ответ вошедшего игрока меняет рейтинг позиции (src/services/guess.py)."""
     position = await _position(db, position_id)
     board = chess.Board(position.fen)
     try:
@@ -66,4 +79,6 @@ async def answer(position_id: int, payload: AnswerRequest, db: AsyncSession = De
         move = None
     if move is None or move not in board.legal_moves:
         raise ApiError(400, "illegal_move", move=payload.move)
-    return await guess_service.answer(db, position, payload.move)
+    user_id = await optional_user_id(request, db)
+    user = await db.get(User, user_id) if user_id else None
+    return await guess_service.answer(db, position, payload.move, user)

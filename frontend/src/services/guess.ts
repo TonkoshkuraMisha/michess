@@ -33,6 +33,8 @@ export interface GuessAnswer extends CoachComment {
     master_move: string;
     master_san: string;
     lines: { uci: string; san: string; cp: number }[];
+    /** Коды тем реестра 13.0 (themes.<код>.name); пусто — темы не определены. */
+    themes?: string[];
     next_id: number | null;
 }
 
@@ -62,6 +64,8 @@ export const guessApi = {
     answer: (id: number, move: string) => request<GuessAnswer>(`/position/${id}/answer`, {
         method: 'POST', body: JSON.stringify({move}),
     }),
+    /** Партии с отобранными моментами: {id партии: id первой позиции}. */
+    ofGames: (gameIds: number[]) => request<{ games: Record<string, number> }>(`/games?ids=${gameIds.join(',')}`),
     ofGame: (gameId: number) => request<{ positions: { id: number; ply: number; series_id: number | null }[] }>(`/game/${gameId}`),
 };
 

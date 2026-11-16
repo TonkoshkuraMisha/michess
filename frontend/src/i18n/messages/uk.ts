@@ -2538,6 +2538,7 @@ export const uk: Messages = {
         miss: 'Майстер знайшов сильніший хід.',
         masterMove: 'Хід майстра: {san}',
         engineLines: 'Оцінка рушія',
+        themes: 'Теми',
         next: 'Наступна позиція',
         continueSeries: 'Далі в партії',
         toGame: 'Відкрити партію',
