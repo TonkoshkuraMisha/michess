@@ -1,0 +1,201 @@
+{
+  "id": "tactics-decoy",
+  "course": "tactics",
+  "order": 9,
+  "title": {
+    "en": "Decoy",
+    "uk": "Завлікання",
+    "ru": "Завлечение"
+  },
+  "summary": {
+    "en": "A sacrifice that drags an enemy piece — most often the king — onto a square where the next blow hits it: a fork, a check that wins material, or mate.",
+    "uk": "Жертва, що затягує фігуру суперника — найчастіше короля — на поле, де її чекає наступний удар: вилка, шах із виграшем матеріалу або мат.",
+    "ru": "Жертва, которая затягивает фигуру соперника — чаще всего короля — на поле, где её ждёт следующий удар: вилка, шах с выигрышем материала или мат."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "r1q1r1k1/ppp1nbp1/5n1p/2b5/4P3/1BP5/PP2QPPP/R1BR1NK1 w - - 0 17",
+      "arrows": [
+        {
+          "from": "b3",
+          "to": "f7",
+          "color": "green"
+        },
+        {
+          "from": "e2",
+          "to": "c4",
+          "color": "green"
+        }
+      ],
+      "highlights": [
+        "f7",
+        "c5"
+      ],
+      "text": {
+        "en": "The bishop c5 is undefended, but the queen cannot attack it with tempo yet. If the black king stood on f7, a queen check from c4 would hit the king and the bishop at once. So first bring the king to f7 — with a sacrifice.",
+        "uk": "Слон c5 без захисту, але ферзь поки не може напасти на нього з темпом. Якби чорний король стояв на f7, шах ферзем із c4 ударив би одразу по королю й слону. Тож спершу заведіть короля на f7 — жертвою.",
+        "ru": "Слон c5 без защиты, но ферзь пока не может напасть на него с темпом. Если бы чёрный король стоял на f7, шах ферзём с c4 ударил бы сразу по королю и слону. Значит, сначала заведите короля на f7 — жертвой."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "r1q1r1k1/ppp1nbp1/5n1p/2b5/4P3/1BP5/PP2QPPP/R1BR1NK1 w - - 0 17",
+      "text": {
+        "en": "White to move. Win material.",
+        "uk": "Хід білих. Виграйте матеріал.",
+        "ru": "Ход белых. Выиграйте материал."
+      },
+      "line": [
+        {
+          "answers": [
+            "b3f7"
+          ],
+          "reply": "g8f7",
+          "correct": {
+            "en": "The king took the bait and stands on f7.",
+            "uk": "Король узяв приманку і стоїть на f7.",
+            "ru": "Король взял приманку и стоит на f7."
+          }
+        },
+        {
+          "answers": [
+            "e2c4"
+          ],
+          "reply": "f7g6",
+          "correct": {
+            "en": "A fork: check and an attack on c5.",
+            "uk": "Вилка: шах і удар по c5.",
+            "ru": "Вилка: шах и удар по c5."
+          }
+        },
+        {
+          "answers": [
+            "c4c5"
+          ],
+          "correct": {
+            "en": "The bishop is won back with interest: White is a pawn up and Black's king is exposed.",
+            "uk": "Слона відіграно з лишком: у білих зайвий пішак, а чорний король голий.",
+            "ru": "Слон отыгран с лихвой: у белых лишняя пешка, а чёрный король раскрыт."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "r3kr2/4ppQ1/p2p2p1/q7/1p1N4/1Pn5/PKP2R1P/4R3 w q - 12 32",
+      "text": {
+        "en": "White to move. The queen a5 and the king are on a knight fork's distance — almost. Win the queen.",
+        "uk": "Хід білих. Ферзь a5 і король майже на відстані конячої вилки. Виграйте ферзя.",
+        "ru": "Ход белых. Ферзь a5 и король почти на расстоянии вилки конём. Выиграйте ферзя."
+      },
+      "hint": {
+        "en": "Which square must the king stand on for Nc6 to be a fork?",
+        "uk": "На якому полі має стояти король, щоб Кc6 став вилкою?",
+        "ru": "На каком поле должен стоять король, чтобы Кc6 стал вилкой?"
+      },
+      "line": [
+        {
+          "answers": [
+            "e1e7"
+          ],
+          "reply": "e8e7",
+          "correct": {
+            "en": "The king is lured to e7.",
+            "uk": "Короля заманено на e7.",
+            "ru": "Король заманен на e7."
+          }
+        },
+        {
+          "answers": [
+            "d4c6"
+          ],
+          "reply": "e7d7",
+          "correct": {
+            "en": "Check from c6 — and the queen a5 is attacked too.",
+            "uk": "Шах із c6 — і ферзь a5 теж під ударом.",
+            "ru": "Шах с c6 — и ферзь a5 тоже под ударом."
+          }
+        },
+        {
+          "answers": [
+            "c6a5"
+          ],
+          "correct": {
+            "en": "The queen is won.",
+            "uk": "Ферзя виграно.",
+            "ru": "Ферзь выигран."
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "r3kr2/4ppQ1/p2p2p1/q7/1p1N4/1Pn5/PKP2R1P/4R3 w q - 12 32",
+      "text": {
+        "en": "The idea of a decoy: first see the blow — the fork or the mate — that only needs the enemy king or piece on one particular square. Then look for a sacrifice that forces it there.",
+        "uk": "Ідея завлікання: спершу побачте удар — вилку чи мат, — якому бракує лише короля чи фігури суперника на певному полі. Потім шукайте жертву, що змусить її туди стати.",
+        "ru": "Идея завлечения: сначала увидьте удар — вилку или мат, — которому не хватает только короля или фигуры соперника на определённом поле. Потом ищите жертву, которая заставит её туда встать."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "5r1k/p1p1Nbpp/5p2/8/7Q/4PR2/Pqr3PP/5RK1 w - - 2 22",
+      "text": {
+        "en": "White to move. Mate in three.",
+        "uk": "Хід білих. Мат у три ходи.",
+        "ru": "Ход белых. Мат в три хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "h4h7"
+          ],
+          "reply": "h8h7"
+        },
+        {
+          "answers": [
+            "f3h3"
+          ],
+          "reply": "f7h5"
+        },
+        {
+          "answers": [
+            "h3h5"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "q5k1/1p4p1/2p1pn1p/4p3/2P1P3/3P4/1RPQ1PPP/r4BK1 b - - 1 24",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Win material.",
+        "uk": "Хід чорних. Виграйте матеріал.",
+        "ru": "Ход чёрных. Выиграйте материал."
+      },
+      "line": [
+        {
+          "answers": [
+            "a1f1"
+          ],
+          "reply": "g1f1"
+        },
+        {
+          "answers": [
+            "a8a1"
+          ],
+          "reply": "d2e1"
+        },
+        {
+          "answers": [
+            "a1b2"
+          ]
+        }
+      ]
+    }
+  ]
+}
