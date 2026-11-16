@@ -343,6 +343,8 @@ def no_celery_publish(monkeypatch):
     monkeypatch.setattr(task_dispatch, "_publish_analysis", published.append)
     # Партии турниров (таск 15.2) — отдельный список: published_simulations.
     monkeypatch.setattr(task_dispatch, "_publish_simulation", _PUBLISHED_SIMULATIONS.append)
+    # Разбор партий с других сайтов (таск 24.1) — тоже в фоне; тесты вызывают его напрямую.
+    monkeypatch.setattr(task_dispatch, "_publish_imported_analysis", lambda imported_id: None)
     _PUBLISHED_SIMULATIONS.clear()
     task_dispatch.reset_broker_cooldown()
     yield published

@@ -5,6 +5,7 @@ from src.models.collection import CollectionEntry
 from src.models.email_token import EmailToken
 from src.models.game import Game
 from src.models.guess import GuessPosition
+from src.models.imported_game import ImportedGame
 from src.models.lesson import LessonProgress
 from src.models.library import LibraryCollection, LibraryGame, LibraryGameCollection
 from src.models.moderation import Report
@@ -34,6 +35,7 @@ __all__ = [
     "CollectionEntry",
     "Follow",
     "GuessPosition",
+    "ImportedGame",
     "Notification",
     "PositionGame",
     "PositionStat",

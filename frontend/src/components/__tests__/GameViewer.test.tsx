@@ -121,6 +121,36 @@ describe('GameViewer', () => {
         expect(screen.queryByRole('button', {name: 'Компьютерный анализ'})).toBeNull();
     });
 
+    it('партия с другого сайта (24.1): PGN, разбор и значки задач из /imports с токеном, без запросов про партии сайта', async () => {
+        setToken('tok');
+        const fetchMock = vi.fn(async (input: string | URL | Request, _init?: RequestInit) => {
+            const url = input.toString();
+            const body = url.endsWith('/imports/games/7') ? {id: 7, puzzle_plies: [4]}
+                : url.endsWith('/imports/games/7/analysis') ? ANALYSIS : {};
+            return {ok: true, status: 200, json: async () => body, text: async () => FOOLS_MATE_PGN} as Response;
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        try {
+            render(
+                <MemoryRouter initialEntries={['/import/game/7']}>
+                    <Routes>
+                        <Route path="/import/game/:gameId" element={<GameViewer imported/>}/>
+                    </Routes>
+                </MemoryRouter>,
+            );
+            await waitFor(() => expect(pieceOn('h4')).toBe('b q'));
+            expect(await screen.findByTestId('personal-badge-4')).toBeTruthy();
+            const calls = fetchMock.mock.calls.map(([url, init]) => [url.toString(), init as RequestInit | undefined] as const);
+            const pgnCall = calls.find(([url]) => url.endsWith('/api/v1/imports/games/7/pgn'));
+            expect(pgnCall?.[1]?.headers).toMatchObject({Authorization: 'Bearer tok'});
+            expect(calls.some(([url]) => url.endsWith('/api/v1/imports/games/7/analysis'))).toBe(true);
+            expect(calls.some(([url]) => url.includes('/analysis/game/') || url.includes('/guess/game/')
+                || url.includes('/profile/games/') || url.includes('/puzzles/personal/game/'))).toBe(false);
+        } finally {
+            clearToken();
+        }
+    });
+
     it('показывает игроков из PGN и финальную позицию', async () => {
         stubApi({pgn: {ok: true, text: FOOLS_MATE_PGN}});
         renderViewer();

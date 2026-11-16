@@ -175,6 +175,18 @@ ERROR_MESSAGES: dict[str, str] = {
     "tournament_game_closed": "This tournament game is already finished",
     "tournament_game_mismatch": "The game does not match your tournament game",
     "tournament_game_not_started": "Start your tournament game from the tournament page",
+    # --- импорт партий с других сайтов (таск 24.1) ----------------------------------------------------
+    "import_rate_limited": "Too many imports, please try again in {retry_after} s",
+    "import_source_unknown": "Unknown site",
+    "import_username_invalid": "Enter a username from the site: letters, digits, “_” and “-”",
+    "import_player_not_found": "No player with this username was found on the site",
+    "import_source_busy": "The site limits requests right now, please try again in {retry_after} s",
+    "import_source_unavailable": "The site did not respond, please try again later",
+    "import_limit_reached": "You already have {max} imported games — delete some to import new ones",
+    "import_pgn_too_large": "The PGN is too large (up to {max_kb} KB)",
+    "import_pgn_empty": "No standard chess games with moves were found in the PGN",
+    "import_player_not_in_pgn": "No game in the PGN has a player named “{player}”",
+    "imported_game_not_found": "Imported game not found",
 }
 
 

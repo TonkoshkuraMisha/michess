@@ -117,6 +117,7 @@ CC BY-NC-SA 4.0), а также набор без известного прои�
 | Что | Автор | Условия | Примечание |
 |---|---|---|---|
 | Эндшпильные таблицы — открытый API [lichess](https://tablebase.lichess.ovh) (`TABLEBASE_URL`) | lichess.org (сервер lila-tablebase; таблицы Syzygy и др.) | Открытый сервис | Только в разработке: на сервер уходит одна позиция (FEN), без данных игрока. В продакшене — свой сервер таблиц (решение владельца, DEPLOY). |
+| Импорт партий игрока (таск 24.1): открытый API [lichess](https://lichess.org/api) (`GAME_IMPORT_LICHESS_URL`, `/api/games/user/{ник}`) и Published-Data API [chess.com](https://www.chess.com/news/view/published-data-api) (`GAME_IMPORT_CHESSCOM_URL`, `/pub/player/{ник}/games/…`) | lichess.org; Chess.com | Открытые API без ключа; запрос делает игрок за свои партии | На сайт уходит только ник, введённый игроком; клиент представляется общим именем `michess-game-import`, без входа и токенов. Один запрос к сайту за раз, ответ 429 ставит сайт на паузу 60 с. Хранятся ходы и заголовки партии без комментариев и чужих оценок (`imported_games`). |
 
 ## Данные
 

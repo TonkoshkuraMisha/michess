@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from src.core.config import settings
-from src.services import personal_puzzles, position_index, tournament_simulation
+from src.services import game_import, personal_puzzles, position_index, tournament_simulation
 from src.services.analysis_service import analysis_service
 from src.services.engine_pool import EngineBusyError, engine_work
 
@@ -72,6 +72,34 @@ def analyze_game_task(self, game_id: int):
     except Exception:
         logger.exception("Background analysis task failed for game %s", game_id)
         return {"game_id": game_id, "status": "error"}
+
+
+async def _analyze_imported_game_async(imported_id: int) -> int:
+    """Разбор партии с другого сайта (таск 24.1) и личные задачи из неё; возвращает число новых задач."""
+    from src.models.imported_game import ImportedGame
+
+    engine = create_async_engine(_task_database_url(), poolclass=NullPool)
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+            game = await db.get(ImportedGame, imported_id)
+            if game is None:
+                return 0
+            await game_import.analyze(db, game)
+            return await personal_puzzles.extract_for_imported(db, imported_id)
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="analyze_imported_game", bind=True, max_retries=5, ignore_result=True)
+def analyze_imported_game_task(self, imported_id: int):
+    try:
+        with engine_work("analysis"):
+            return asyncio.run(_analyze_imported_game_async(imported_id))
+    except EngineBusyError as exc:
+        raise self.retry(exc=exc, countdown=ENGINE_BUSY_RETRY_S) from exc
+    except Exception:
+        logger.exception("Imported game analysis failed for %s", imported_id)
+        return 0
 
 
 async def _simulate_tournament_game_async(tournament_game_id: int) -> list[int]:

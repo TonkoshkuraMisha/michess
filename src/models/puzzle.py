@@ -7,7 +7,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, func
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.models.base import Base
@@ -73,11 +73,19 @@ class PersonalPuzzle(Base):
     интервалами: нерешённая возвращается через 1, 3, 7, 21 день, пока не решится дважды подряд (тогда done).
     """
     __tablename__ = "personal_puzzles"
-    __table_args__ = (UniqueConstraint("user_id", "game_id", "ply", name="uq_personal_puzzles_move"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "game_id", "ply", name="uq_personal_puzzles_move"),
+        UniqueConstraint("user_id", "imported_game_id", "ply", name="uq_personal_puzzles_imported_move"),
+        CheckConstraint("(game_id IS NULL) <> (imported_game_id IS NULL)", name="ck_personal_puzzles_one_source"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    game_id: Mapped[int] = mapped_column(ForeignKey("games.id", ondelete="CASCADE"), nullable=False, index=True)
+    # Партия на сайте или партия с другого сайта (таск 24.1) — ровно одно из двух.
+    game_id: Mapped[int | None] = mapped_column(ForeignKey("games.id", ondelete="CASCADE"), nullable=True, index=True)
+    imported_game_id: Mapped[int | None] = mapped_column(
+        ForeignKey("imported_games.id", ondelete="CASCADE"), nullable=True, index=True,
+    )
     # Полуход ошибки (1 — первый ход партии) и позиция перед ним; предыдущий ход — для подсветки.
     ply: Mapped[int] = mapped_column(Integer, nullable=False)
     fen: Mapped[str] = mapped_column(String(100), nullable=False)

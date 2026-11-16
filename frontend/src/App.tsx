@@ -20,6 +20,7 @@ import {ClassicGamePage, ClassicsPage} from './components/learn/ClassicsPage';
 import {EndgamesPage, EndgameTrainerPage} from './components/learn/EndgameTrainer';
 import {ToolsPage} from './components/tools/ToolsPage';
 import {WatchPage} from './components/watch/WatchPage';
+import {ImportPage} from './components/gameImport/ImportPage';
 import {ArenaPage, ArenasPage} from './components/arena/ArenaPages';
 import {TeamsPage} from './components/social/TeamsPage';
 import {StudyLobby, StudyRoomPage} from './components/study/StudyPages';
@@ -55,6 +56,7 @@ import {
     Trophy,
     Scale,
     Puzzle,
+    CloudDownload,
     GraduationCap,
     Eye,
     Wrench,
@@ -483,6 +485,16 @@ export default function App() {
                                         <button
                                             onClick={() => {
                                                 setIsProfileOpen(false);
+                                                navigate('/import');
+                                            }}
+                                            data-testid="nav-import"
+                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
+                                        >
+                                            <CloudDownload size={16} className="text-amber-500"/> {t('nav.importGames')}
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setIsProfileOpen(false);
                                                 navigate('/learn');
                                             }}
                                             className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
@@ -654,6 +666,8 @@ export default function App() {
                     <Route path="/tournaments/:tournamentId" element={<TournamentView/>}/>
                     <Route path="/profile/:targetUsername" element={<Profile/>}/>
                     <Route path="/game/:gameId" element={<GameViewer/>}/>
+                    <Route path="/import" element={<ImportPage/>}/>
+                    <Route path="/import/game/:gameId" element={<GameViewer key="imported" imported/>}/>
                     <Route path="/library" element={<LibraryPage/>}/>
                     <Route path="/library/game/:gameId" element={<GameViewer key="library" library/>}/>
                     <Route path="/champions/:championId" element={<ChampionGames/>}/>

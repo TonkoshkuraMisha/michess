@@ -44,6 +44,7 @@ import {XrayPanel} from './xray/XrayPanel';
 import {useXraySettings} from './xray/useXraySettings';
 import {getToken} from '../services/authToken';
 import {libraryApi} from '../services/library';
+import {importApi} from '../services/gameImport';
 import type {LibraryAnnotation} from '../services/library';
 import {LibraryAnnotationPanel} from './library/LibraryAnnotationPanel';
 
@@ -59,8 +60,10 @@ import {ViewerAppearancePanel} from './gameViewer/ViewerAppearancePanel';
 /**
  * library — партия библиотеки (таск 27.1): PGN из /library, без разбора движком, «Угадай ход» и своих ошибок —
  * они привязаны к партиям игроков и ботов.
+ * imported — партия игрока с другого сайта (таск 24.1): PGN и разбор из /imports (только владельцу, с токеном),
+ * значки «из этого хода сделана задача»; без «Угадай ход» и отклонений от репертуара по партиям сайта.
  */
-export default function GameViewer({library = false}: { library?: boolean }) {
+export default function GameViewer({library = false, imported = false}: { library?: boolean; imported?: boolean }) {
     const {t, dateLocale} = useI18n();
     const {gameId} = useParams<{ gameId: string }>();
     const location = useLocation();
@@ -83,8 +86,12 @@ export default function GameViewer({library = false}: { library?: boolean }) {
 
     // Пометки правой кнопкой — общий слой досок (таск B.1). В разборе они переживают листание ходов (план на
     // несколько ходов вперёд) и снимаются со сменой партии, левым щелчком по доске или Escape.
-    const notes = useBoardAnnotations(library ? `library-${gameId ?? ''}` : gameId ?? '');
-    const pgnUrl = library ? libraryApi.pgnUrl(gameId ?? '') : `${API_BASE_URL}/api/v1/profile/games/${gameId}/pgn`;
+    const notes = useBoardAnnotations(library ? `library-${gameId ?? ''}` : imported ? `imported-${gameId ?? ''}` : gameId ?? '');
+    const pgnUrl = library ? libraryApi.pgnUrl(gameId ?? '')
+        : imported ? importApi.pgnUrl(gameId ?? '') : `${API_BASE_URL}/api/v1/profile/games/${gameId}/pgn`;
+    const analysisUrl = imported ? importApi.analysisUrl(gameId ?? '') : `${API_BASE_URL}/api/v1/analysis/game/${gameId}`;
+    // Партии с других сайтов видит только владелец: запросы — с токеном.
+    const ownerHeaders = imported ? importApi.headers() : undefined;
     const clearNotes = notes.clear;
 
     // Тема разбора (таск 18.3): своя, если задана в настройках, иначе — как в игре.
@@ -210,8 +217,8 @@ export default function GameViewer({library = false}: { library?: boolean }) {
             setAnalysisReport(null);
             try {
                 const [pgnRes, cachedAnalysisRes] = await Promise.all([
-                    fetch(pgnUrl),
-                    library ? Promise.resolve(null) : fetch(`${API_BASE_URL}/api/v1/analysis/game/${gameId}`).catch(() => null)
+                    fetch(pgnUrl, {headers: ownerHeaders}),
+                    library ? Promise.resolve(null) : fetch(analysisUrl, {headers: ownerHeaders}).catch(() => null)
                 ]);
 
                 if (!pgnRes.ok) {
@@ -250,7 +257,7 @@ export default function GameViewer({library = false}: { library?: boolean }) {
         if (gameId) loadGame();
         setLibraryAnnotation(null);
         if (gameId && library) libraryApi.annotation(gameId).then(setLibraryAnnotation).catch(() => undefined);
-    }, [gameId, library]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [gameId, library, imported]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleRunFullAnalysis = async () => {
         if (!gameId || isAnalyzing) return;
@@ -258,7 +265,7 @@ export default function GameViewer({library = false}: { library?: boolean }) {
         setAnalysisError(null);
         try {
             const authToken = getToken();
-            const res = await fetch(`${API_BASE_URL}/api/v1/analysis/game/${gameId}`, {
+            const res = await fetch(analysisUrl, {
                 method: 'POST',
                 // С токеном лимит запросов считается на пользователя, а не на общий IP.
                 headers: authToken ? {'Authorization': `Bearer ${authToken}`} : undefined,
@@ -374,7 +381,7 @@ export default function GameViewer({library = false}: { library?: boolean }) {
     // Справочник дебютов к показанной позиции (таск 16.2): открывается по кнопке — запрос только тогда.
     const [showExplorer, setShowExplorer] = useState(false);
     useEffect(() => {
-        if (!gameId || library) return;
+        if (!gameId || library || imported) return;
         guessApi.ofGame(Number(gameId))
             .then((r) => setGuessFirstId(r.positions[0]?.id ?? null))
             .catch(() => setGuessFirstId(null));
@@ -383,9 +390,10 @@ export default function GameViewer({library = false}: { library?: boolean }) {
     const [personalPlies, setPersonalPlies] = useState<Set<number>>(new Set());
     useEffect(() => {
         if (!gameId || library || !getToken()) return;
-        puzzlesApi.personalPlies(Number(gameId))
-            .then((body) => setPersonalPlies(new Set(body.plies)))
-            .catch(() => undefined);
+        const plies = imported
+            ? importApi.game(gameId).then((body) => body.puzzle_plies)
+            : puzzlesApi.personalPlies(Number(gameId)).then((body) => body.plies);
+        plies.then((list) => setPersonalPlies(new Set(list))).catch(() => undefined);
     }, [gameId]);
     const currentCoach = viewIndex >= 0 ? analysisReport?.moves[viewIndex]?.coach ?? null : null;
     const currentCoachText = coachText(currentCoach, t);
@@ -864,7 +872,7 @@ export default function GameViewer({library = false}: { library?: boolean }) {
                                             playAudio(index >= 0 ? resolveMoveSound(history[index].san) : 'move');
                                         }}/>
 
-                    {!library && !startFen && gameId && <RepertoireDeviations gameId={gameId}/>}
+                    {!library && !imported && !startFen && gameId && <RepertoireDeviations gameId={gameId}/>}
                     {!startFen && (
                         <button type="button" onClick={() => setShowExplorer((v) => !v)} aria-expanded={showExplorer}
                                 data-testid="explorer-toggle"

@@ -55,11 +55,11 @@ class OpeningExplorerRequest(BaseModel):
 
 # game_id -> [lock, число запросов, ожидающих или держащих лок]. Запись удаляется, когда
 # счётчик падает до нуля, поэтому словарь не растёт с каждой когда-либо анализированной партией.
-_ANALYSIS_LOCKS: dict[int, list] = {}
+_ANALYSIS_LOCKS: dict[int | str, list] = {}
 
 
 @asynccontextmanager
-async def _game_analysis_lock(game_id: int):
+async def _game_analysis_lock(game_id: int | str):
     entry = _ANALYSIS_LOCKS.setdefault(game_id, [asyncio.Lock(), 0])
     entry[1] += 1
     try:

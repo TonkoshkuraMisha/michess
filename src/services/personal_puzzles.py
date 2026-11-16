@@ -25,6 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.errors import DomainValueError
 from src.models.game import Game
+from src.models.imported_game import ImportedGame
 from src.models.puzzle import PersonalPuzzle
 from src.models.user import User
 from src.services.bots.base import resolve_stockfish_path
@@ -99,22 +100,41 @@ async def extract_for_game(db: AsyncSession, game_id: int) -> int:
     game = await db.get(Game, game_id)
     if game is None or not game.analysis_json or not game.pgn:
         return 0
-    try:
-        moves_report = json.loads(game.analysis_json).get("moves", [])
-    except ValueError:
-        return 0
     players: dict[str, User] = {}
     for color, user_id in (("white", game.white_player_id), ("black", game.black_player_id)):
         user = await db.get(User, user_id)
         if user is not None and not user.is_bot:
             players[color] = user
-    if not players:
-        return 0
     existing = set((await db.execute(
         select(PersonalPuzzle.user_id, PersonalPuzzle.ply).where(PersonalPuzzle.game_id == game_id)
     )).all())
+    return await _extract(db, game.pgn, game.analysis_json, players, existing, {"game_id": game_id}, f"game {game_id}")
 
-    pgn_game = read_pgn_game(game.pgn)
+
+async def extract_for_imported(db: AsyncSession, imported_id: int) -> int:
+    """То же для партии с другого сайта (таск 24.1): задачи только для стороны игрока — соперник не наш."""
+    game = await db.get(ImportedGame, imported_id)
+    if game is None or not game.analysis_json:
+        return 0
+    user = await db.get(User, game.user_id)
+    if user is None:
+        return 0
+    existing = set((await db.execute(
+        select(PersonalPuzzle.user_id, PersonalPuzzle.ply).where(PersonalPuzzle.imported_game_id == imported_id)
+    )).all())
+    return await _extract(db, game.pgn, game.analysis_json, {game.color: user}, existing,
+                          {"imported_game_id": imported_id}, f"imported game {imported_id}")
+
+
+async def _extract(db: AsyncSession, pgn: str, analysis_json: str, players: dict[str, User],
+                   existing: set, source: dict[str, int], label: str) -> int:
+    if not players:
+        return 0
+    try:
+        moves_report = json.loads(analysis_json).get("moves", [])
+    except ValueError:
+        return 0
+    pgn_game = read_pgn_game(pgn)
     if pgn_game is None:
         return 0
     board = pgn_game.board()
@@ -155,16 +175,16 @@ async def extract_for_game(db: AsyncSession, game_id: int) -> int:
                 with engine_work("puzzles"):
                     top = await asyncio.to_thread(top_two, position.copy(stack=False))
             except EngineUnavailableError as exc:
-                logger.warning("Stockfish недоступен для задач из партии %s: %s", game_id, exc)
+                logger.warning("Stockfish недоступен для задач из партии (%s): %s", label, exc)
                 return added
             if top is None:
                 return added
             if not is_solvable(position, best, top):
                 continue
             db.add(PersonalPuzzle(
-                user_id=user.id, game_id=game_id, ply=ply, fen=position.fen(), previous_move=previous_move,
+                user_id=user.id, ply=ply, fen=position.fen(), previous_move=previous_move,
                 solution=best.uci(), played=played.uci(), cp_loss=int(item.get("cp_loss", 0)),
-                themes=",".join(themes_of(position, best)),
+                themes=",".join(themes_of(position, best)), **source,
             ))
             chosen += 1
             added += 1
@@ -185,7 +205,8 @@ def _aware(value: dt.datetime) -> dt.datetime:
 def view(puzzle: PersonalPuzzle) -> dict:
     board = chess.Board(puzzle.fen)
     return {
-        "id": puzzle.id, "game_id": puzzle.game_id, "ply": puzzle.ply, "fen": puzzle.fen,
+        "id": puzzle.id, "game_id": puzzle.game_id, "imported_game_id": puzzle.imported_game_id,
+        "ply": puzzle.ply, "fen": puzzle.fen,
         "previous_move": puzzle.previous_move, "color": "white" if board.turn == chess.WHITE else "black",
         "themes": [code for code in puzzle.themes.split(",") if code],
         "attempts": puzzle.attempts, "solved_streak": puzzle.solved_streak,
@@ -196,9 +217,18 @@ async def game_context(db: AsyncSession, puzzle: PersonalPuzzle, user: User) -> 
     """
     Откуда ошибка (таск B.3): соперник (бот — его id, клиент переводит имя; своя персоналия — её имя) и дата партии.
     """
-    game = await db.get(Game, puzzle.game_id)
+    if puzzle.imported_game_id is not None:
+        imported = await db.get(ImportedGame, puzzle.imported_game_id)
+        if imported is None:
+            return {"opponent": None, "opponent_is_bot": False, "played_at": None, "source": None}
+        return {
+            "opponent": imported.black_name if imported.color == "white" else imported.white_name,
+            "opponent_is_bot": False, "played_at": _aware(imported.played_at).isoformat() if imported.played_at else None,
+            "source": imported.source,
+        }
+    game = await db.get(Game, puzzle.game_id) if puzzle.game_id is not None else None
     if game is None:
-        return {"opponent": None, "opponent_is_bot": False, "played_at": None}
+        return {"opponent": None, "opponent_is_bot": False, "played_at": None, "source": None}
     opponent_id = game.black_player_id if game.white_player_id == user.id else game.white_player_id
     opponent = await db.get(User, opponent_id)
     name = game.personality_name if game.personality_name and opponent is not None and opponent.is_bot else None
@@ -207,6 +237,7 @@ async def game_context(db: AsyncSession, puzzle: PersonalPuzzle, user: User) -> 
         "opponent": name or (opponent.username if opponent is not None else None),
         "opponent_is_bot": bool(opponent is not None and opponent.is_bot and not name),
         "played_at": _aware(when).isoformat() if when else None,
+        "source": None,
     }
 
 
@@ -272,5 +303,11 @@ async def plies_for_game(db: AsyncSession, game_id: int, user: User | None) -> l
     if user is None:
         return []
     rows = await db.execute(select(PersonalPuzzle.ply).where(PersonalPuzzle.game_id == game_id,
+                                                              PersonalPuzzle.user_id == user.id))
+    return sorted(set(rows.scalars()))
+
+
+async def plies_for_imported(db: AsyncSession, imported_id: int, user: User) -> list[int]:
+    rows = await db.execute(select(PersonalPuzzle.ply).where(PersonalPuzzle.imported_game_id == imported_id,
                                                               PersonalPuzzle.user_id == user.id))
     return sorted(set(rows.scalars()))
