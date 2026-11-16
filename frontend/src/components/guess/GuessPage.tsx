@@ -6,7 +6,7 @@
 import {useCallback, useEffect, useState} from 'react';
 import {Link, useNavigate, useParams} from 'react-router-dom';
 import {Crown, ArrowRight} from 'lucide-react';
-import {renderUiMessage, useI18n} from '../../i18n';
+import {hasMessage, renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
 import {errorMessage} from '../../services/apiErrors';
 import {coachText} from '../../services/coach';
@@ -148,6 +148,14 @@ export function GuessPage() {
                                 </div>
                                 <div className="text-sm">{t('guess.masterMove', {san: answer.master_san})}</div>
                                 {coachText(answer, t) && <p className="text-sm text-boxwood/90">{coachText(answer, t)}</p>}
+                                {answer.themes && answer.themes.some((code) => hasMessage(`themes.${code}.name`)) && (
+                                    <div className="flex flex-wrap items-center gap-1.5 text-xs" data-testid="guess-themes">
+                                        <span className="text-boxwood/70">{t('guess.themes')}:</span>
+                                        {answer.themes.map((code) => `themes.${code}.name`).filter(hasMessage).map((key) => (
+                                            <span key={key} className="px-1.5 py-0.5 rounded bg-amber-900/40 border border-amber-900/60">{t(key)}</span>
+                                        ))}
+                                    </div>
+                                )}
                                 <div className="text-xs text-boxwood/70">
                                     {t('guess.engineLines')}: {answer.lines.map((l) => `${l.san} ${evalText(l.cp)}`).join(', ')}
                                 </div>

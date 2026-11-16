@@ -2539,6 +2539,7 @@ export const ru: Messages = {
         miss: 'Мастер нашёл ход сильнее.',
         masterMove: 'Ход мастера: {san}',
         engineLines: 'Оценка движка',
+        themes: 'Темы',
         next: 'Следующая позиция',
         continueSeries: 'Дальше в партии',
         toGame: 'Открыть партию',

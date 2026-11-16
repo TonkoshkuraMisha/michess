@@ -3,12 +3,16 @@
 Отбор позиций для «Угадай ход мастера» (таск 14.3). Не для CI: нужен Stockfish и время.
 
 Партии — архив мастеров в базе (оба игрока из PGN-архива). Два прохода движком:
-1. быстрый (MultiPV 2, --shallow-depth) по каждому ходу партии с MIN_PLY-го: кандидаты — ход мастера лучший и отрыв
-   близок к порогу; заодно — ошибки соперника для обрыва серий;
-2. глубокий (MultiPV 3, --deep-time с на позицию) только по кандидатам: правила src/services/guess_selection.py.
+1. быстрый (MultiPV 2, --shallow-depth) по каждому ходу партии после книжного дебюта (таблица 16.1) и до
+   технического эндшпиля: кандидаты — ход мастера лучший и отрыв близок к порогу; заодно — ошибки соперника для
+   обрыва серий;
+2. глубокий (MultiPV 3, --deep-time с на позицию) только по кандидатам: правила src/services/guess_selection.py,
+   темы позиции — по ходу мастера и продолжению движка.
 Прошедшие позиции и серии пишутся в guess_positions (повторный запуск пропускает уже отобранные партии).
 
     python scripts/build_guess_positions.py --games 300 --workers 8
+    python scripts/build_guess_positions.py --refilter   # отобранные раньше: убрать дебют и технический эндшпиль,
+                                                         # проставить темы (без движка, по ходу мастера)
 """
 
 import argparse
@@ -30,12 +34,15 @@ sys.path.insert(0, str(ROOT))
 from src.services.guess_selection import (  # noqa: E402
     EQUAL_CP,
     GAP_CP,
-    MIN_PLY,
     OPPONENT_ERROR_CP,
     WIN_CP,
     Line,
+    book_plies,
     build_series,
     difficulty,
+    in_opening,
+    is_technical_endgame,
+    position_themes,
     qualifies,
 )
 
@@ -56,9 +63,16 @@ def _open_engine() -> chess.engine.SimpleEngine:
     return engine
 
 
-def _lines(engine, board: chess.Board, limit: chess.engine.Limit, multipv: int) -> list[Line]:
+def _analyse(engine, board: chess.Board, limit: chess.engine.Limit, multipv: int) -> tuple[list[Line], list[chess.Move]]:
+    """Строки движка (первый ход, оценка) и линия лучшей из них."""
     infos = engine.analyse(board, limit, multipv=min(multipv, board.legal_moves.count()))
-    return [(i["pv"][0], i["score"].pov(board.turn).score(mate_score=MATE)) for i in infos if i.get("pv")]
+    infos = [i for i in infos if i.get("pv")]
+    lines = [(i["pv"][0], i["score"].pov(board.turn).score(mate_score=MATE)) for i in infos]
+    return lines, list(infos[0]["pv"]) if infos else []
+
+
+def _lines(engine, board: chess.Board, limit: chess.engine.Limit, multipv: int) -> list[Line]:
+    return _analyse(engine, board, limit, multipv)[0]
 
 
 def _move_cp(engine, board: chess.Board, move: chess.Move, limit: chess.engine.Limit) -> int:
@@ -94,8 +108,12 @@ def analyse_game(game_id: int, pgn: str, shallow_depth: int, deep_time: float) -
 
 
 def _scan(engine, game, board, shallow, deep, passing: dict[int, dict], errors: set[int]) -> None:
-    for ply, move in enumerate(game.mainline_moves()):
-        if ply >= MIN_PLY and board.legal_moves.count() > 1:
+    moves = list(game.mainline_moves())
+    book = book_plies(moves)
+    for ply, move in enumerate(moves):
+        if is_technical_endgame(board):
+            break  # фигуры только уходят с доски: дальше — техника по таблицам
+        if not in_opening(board, book) and board.legal_moves.count() > 1:
             lines = _lines(engine, board, shallow, 2)
             if len(lines) == 2:
                 (best_move, best), (_, second) = lines
@@ -104,13 +122,14 @@ def _scan(engine, game, board, shallow, deep, passing: dict[int, dict], errors: 
                     if best - played > OPPONENT_ERROR_CP:
                         errors.add(ply)
                 elif _candidate(best, second):
-                    deep_lines = _lines(engine, board, deep, 3)
-                    verdict = qualifies(board, move, deep_lines)
+                    deep_lines, pv = _analyse(engine, board, deep, 3)
+                    verdict = qualifies(board, move, deep_lines, book)
                     if verdict is not None:
                         passing[ply] = {
                             "ply": ply, "fen": board.fen(), "move": move.uci(), "best_cp": verdict.best_cp,
                             "gap_cp": verdict.gap_cp, "lines": [[m.uci(), cp] for m, cp in deep_lines],
                             "difficulty": difficulty(board, move, verdict),
+                            "themes": position_themes(board, move, pv),
                         }
         board.push(move)
 
@@ -184,11 +203,22 @@ async def _save(results: list[tuple[int, list[dict]]]) -> tuple[int, int]:
                     game_id=game_id, ply=item["ply"], fen=item["fen"], move_uci=item["move"],
                     best_cp=item["best_cp"], gap_cp=item["gap_cp"], lines=item["lines"],
                     series_id=series_id, series_index=item.get("series_index", 0), difficulty=item["difficulty"],
+                    themes=item.get("themes", []),
                 ))
                 positions += 1
         await db.commit()
     await engine.dispose()
     return positions, series_count
+
+
+async def _refilter() -> tuple[int, int]:
+    from src.services.guess import refilter
+
+    engine, sessions = _sessions()
+    async with sessions() as db:
+        result = await refilter(db)
+    await engine.dispose()
+    return result
 
 
 def main() -> None:
@@ -198,7 +228,13 @@ def main() -> None:
     parser.add_argument("--shallow-depth", type=int, default=10)
     parser.add_argument("--deep-time", type=float, default=1.0, help="Секунд на позицию во втором проходе")
     parser.add_argument("--seed", type=int, default=20261115)
+    parser.add_argument("--refilter", action="store_true",
+                        help="Только привести отобранные позиции к нынешним правилам (без движка)")
     args = parser.parse_args()
+    if args.refilter:
+        removed, tagged = asyncio.run(_refilter())
+        print(f"Удалено {removed} позиций (дебют, технический эндшпиль), темы проставлены у {tagged}", flush=True)
+        return
 
     started = time.monotonic()
     games = asyncio.run(_load_games(args.games, args.seed))

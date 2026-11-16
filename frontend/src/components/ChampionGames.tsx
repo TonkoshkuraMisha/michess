@@ -10,6 +10,7 @@ import {
 import {CHAMPIONS_LIST} from '../config/champions';
 import {API_BASE_URL} from '../config/api';
 import {readApiErrorOr} from '../services/apiErrors';
+import {guessApi} from '../services/guess';
 import type {Locale} from 'date-fns';
 import {renderUiMessage, uiMessage, useI18n} from '../i18n';
 import type {UiMessage} from '../i18n';
@@ -58,6 +59,8 @@ export default function ChampionGames() {
     const [totalGames, setTotalGames] = useState<number>(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<UiMessage | null>(null);
+    // Партии страницы с отобранными моментами «Угадай ход мастера» (14.3): id партии → первая позиция.
+    const [guessStarts, setGuessStarts] = useState<Record<string, number>>({});
 
     const [page, setPage] = useState(1);
     const [limit, setLimit] = useState(25);
@@ -80,6 +83,11 @@ export default function ChampionGames() {
                 const data = await res.json();
                 setTotalGames(data.total || 0);
                 setGames(data.items || []);
+                const ids = (data.items || []).map((g: GameData) => g.game_id);
+                setGuessStarts({});
+                if (ids.length) {
+                    guessApi.ofGames(ids).then((r) => setGuessStarts(r?.games ?? {})).catch(() => undefined);  // кнопки — не главное
+                }
 
             } catch {
                 setError(uiMessage('common.networkError'));
@@ -258,7 +266,16 @@ export default function ChampionGames() {
                                         <td className="px-4 py-4 text-center text-boxwood/70 font-mono">
                                             {displayDate(game, dateLocale)}
                                         </td>
-                                        <td className="px-4 py-4 text-right">
+                                        <td className="px-4 py-4 text-right whitespace-nowrap">
+                                            {guessStarts[String(game.game_id)] !== undefined && (
+                                                <Link to={`/guess/${guessStarts[String(game.game_id)]}`}
+                                                      onClick={(e) => e.stopPropagation()}
+                                                      data-testid={`champion-guess-${game.game_id}`}
+                                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 mr-2 bg-black/30 hover:bg-amber-900/60 text-amber-400 rounded transition border border-amber-900/40 text-xs font-bold"
+                                                      title={t('guess.openFromGame')} aria-label={t('guess.openFromGame')}>
+                                                    <Crown size={14}/>
+                                                </Link>
+                                            )}
                                             <a
                                                 href={`${API_BASE_URL}/api/v1/profile/games/${game.game_id}/pgn`}
                                                 download

@@ -5,6 +5,9 @@
 Баллы: ход мастера — 100; другой ход не хуже лучшего на NEAR_CP — 80; хуже — по потере: 80 − (потеря − NEAR_CP) / 5,
 не меньше нуля. Оценка — по сохранённым строкам движка (до трёх лучших ходов), без запуска движка: ход вне этих строк
 не лучше второй строки (отбор гарантирует её отставание), поэтому его потеря — отрыв лучшего хода плюс запас.
+
+Сложность позиции — её рейтинг: ответ вошедшего игрока меняет его, как партия задачи с решающим (Эло против рейтинга
+задач игрока): нашёл ход мастера — позиция «проиграла», нет — «выиграла». Рейтинг игрока при этом не меняется.
 """
 
 import io
@@ -17,7 +20,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.game import Game
 from src.models.guess import GuessPosition
+from src.models.user import User
 from src.services.coach import advice_for_position
+from src.services.guess_selection import book_plies, in_opening, is_technical_endgame, position_themes
 
 MASTER_SCORE = 100
 NEAR_SCORE = 80
@@ -25,6 +30,9 @@ NEAR_CP = 30
 UNKNOWN_EXTRA_CP = 50
 CONTEXT_MOVES = 8
 DIFFICULTY_BAND = 300
+PROVISIONAL_PLAYS = 20
+K_PROVISIONAL, K_STABLE = 32, 12
+MIN_DIFFICULTY, MAX_DIFFICULTY = 600, 3000
 
 
 def score_answer(position: GuessPosition, move_uci: str) -> tuple[int, int]:
@@ -106,10 +114,35 @@ async def game_positions(db: AsyncSession, game_id: int) -> list[GuessPosition]:
     )).scalars())
 
 
-async def answer(db: AsyncSession, position: GuessPosition, move_uci: str) -> dict:
-    """Баллы, ход мастера, строки движка и объяснение наставника к ходу мастера."""
+def rating_after(position_rating: int, solver_rating: int, plays: int, solved: bool) -> int:
+    """Новый рейтинг позиции после ответа игрока с рейтингом solver_rating (Эло, позиция — «соперник»)."""
+    k = K_PROVISIONAL if plays < PROVISIONAL_PLAYS else K_STABLE
+    expected = 1 / (1 + 10 ** ((solver_rating - position_rating) / 400))  # ожидание «победы» позиции
+    value = position_rating + round(k * ((0 if solved else 1) - expected))
+    return max(MIN_DIFFICULTY, min(MAX_DIFFICULTY, value))
+
+
+async def first_positions(db: AsyncSession, game_ids: list[int]) -> dict[int, int]:
+    """Партия → первая отобранная позиция (по полуходу): кнопки «Угадай ход» в списке партий мастера."""
+    if not game_ids:
+        return {}
+    rows = await db.execute(
+        select(GuessPosition.game_id, GuessPosition.id).where(GuessPosition.game_id.in_(game_ids))
+        .order_by(GuessPosition.game_id, GuessPosition.ply)
+    )
+    result: dict[int, int] = {}
+    for game_id, position_id in rows:
+        result.setdefault(game_id, position_id)
+    return result
+
+
+async def answer(db: AsyncSession, position: GuessPosition, move_uci: str, user: User | None = None) -> dict:
+    """Баллы, ход мастера, строки движка, темы и объяснение наставника к ходу мастера."""
     board = chess.Board(position.fen)
     score, loss = score_answer(position, move_uci)
+    if user is not None:
+        position.difficulty = rating_after(position.difficulty, user.puzzle_rating, position.plays,
+                                           score == MASTER_SCORE)
     position.plays += 1
     if score == MASTER_SCORE:
         position.solved += 1
@@ -120,6 +153,60 @@ async def answer(db: AsyncSession, position: GuessPosition, move_uci: str) -> di
     return {
         "score": score, "loss_cp": loss, "master_move": position.move_uci, "master_san": board.san(master),
         "lines": [{"uci": uci, "san": board.san(chess.Move.from_uci(uci)), "cp": cp} for uci, cp in position.lines],
-        "comment": advice["comment"], "arrows": advice["arrows"],
+        "comment": advice["comment"], "arrows": advice["arrows"], "themes": position.themes or [],
         "next_id": next_in_series.id if next_in_series else None,
     }
+
+
+def _boards(pgn: str) -> tuple[list[chess.Board], int]:
+    """Позиции партии со стеком ходов (индекс — полуход) и длина книжного дебюта."""
+    parsed = chess.pgn.read_game(io.StringIO(pgn))
+    if parsed is None:
+        return [], 0
+    moves = list(parsed.mainline_moves())
+    board = parsed.board()
+    boards = [board.copy()]
+    for move in moves:
+        board.push(move)
+        boards.append(board.copy())
+    return boards, book_plies(moves)
+
+
+def _renumber_series(positions: list[GuessPosition]) -> None:
+    """После удаления части позиций: серии короче двух ходов распускаются, номера внутри серии — подряд."""
+    groups: dict[int, list[GuessPosition]] = {}
+    for position in positions:
+        if position.series_id is not None:
+            groups.setdefault(position.series_id, []).append(position)
+    for members in groups.values():
+        members.sort(key=lambda p: p.ply)
+        for index, position in enumerate(members):
+            position.series_id = position.series_id if len(members) > 1 else None
+            position.series_index = index if len(members) > 1 else 0
+
+
+async def refilter(db: AsyncSession) -> tuple[int, int]:
+    """
+    Отобранные по прежним правилам позиции → нынешние: убрать книжный дебют (таблица 16.1) и технический эндшпиль,
+    проставить темы там, где их нет (по ходу мастера, без движка). Возвращает (удалено, получили темы).
+    """
+    removed = tagged = 0
+    game_ids = (await db.execute(select(GuessPosition.game_id).distinct())).scalars().all()
+    for game_id in game_ids:
+        game = await db.get(Game, game_id)
+        positions = await game_positions(db, game_id)
+        boards, book = _boards(game.pgn or "") if game else ([], 0)
+        kept = []
+        for position in positions:
+            board = boards[position.ply] if position.ply < len(boards) else None
+            if board is None or in_opening(board, book) or is_technical_endgame(board):
+                await db.delete(position)
+                removed += 1
+                continue
+            if not position.themes:
+                position.themes = position_themes(board, chess.Move.from_uci(position.move_uci), [])
+                tagged += bool(position.themes)
+            kept.append(position)
+        _renumber_series(kept)
+        await db.commit()
+    return removed, tagged

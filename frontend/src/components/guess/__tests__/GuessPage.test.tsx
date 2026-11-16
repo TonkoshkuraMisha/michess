@@ -15,7 +15,7 @@ const POSITION = {
 const ANSWER = {
     score: 100, loss_cp: 0, master_move: 'f3e5', master_san: 'Nxe5',
     lines: [{uci: 'f3e5', san: 'Nxe5', cp: 300}, {uci: 'h2h3', san: 'h3', cp: 50}],
-    comment: [], arrows: [], next_id: 6,
+    comment: [], arrows: [], themes: ['fork', 'unknown_code'], next_id: 6,
 };
 
 const cell = (name: string) => document.querySelector(`[data-square="${name}"]`) as HTMLElement;
@@ -72,6 +72,7 @@ describe('Угадай ход мастера', () => {
         expect(JSON.parse(String(post[1].body))).toEqual({move: 'f3e5'});
         expect(screen.getByText('Как мастер!')).toBeInTheDocument();
         expect(screen.getByText('Ход мастера: Nxe5')).toBeInTheDocument();
+        expect(screen.getByTestId('guess-themes')).toHaveTextContent('Темы:Вилка');  // неизвестный код не показывается
         expect(screen.getByRole('button', {name: /Дальше в партии/})).toBeInTheDocument();
         expect(screen.getByTestId('guess-session')).toHaveTextContent('Баллы: 100 из 100 · точность понимания 100%');
     });

@@ -31,7 +31,10 @@ class GuessPosition(Base):
     series_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
     series_index: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     # Сложность: отрыв лучшего хода, глубина, длина серии → число, как рейтинг задачи (src/services/guess.py).
+    # Меняется по ответам вошедших игроков, как рейтинг задачи (src/services/guess.py, update_rating).
     difficulty: Mapped[int] = mapped_column(Integer, index=True)
+    # Коды тем реестра 13.0 (guess_selection.position_themes) — показываются после ответа.
+    themes: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")
     plays: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     solved: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

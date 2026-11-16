@@ -4,10 +4,11 @@
 import chess
 import chess.pgn
 import pytest
+from sqlalchemy import select
 
 from src.models.game import Game, GameStatus
 from src.models.guess import GuessPosition
-from src.services.guess import score_answer
+from src.services.guess import rating_after, refilter, score_answer
 
 PGN = """[Event "Paris"]
 [White "Legal"]
@@ -81,6 +82,70 @@ async def test_answer_counts_plays(client, seeded, db_session):
     assert (first.plays, first.solved) == (2, 1)
 
 
+async def test_answer_returns_themes(client, seeded, db_session):
+    _, first, _ = seeded
+    first.themes = ["fork", "fork_knight"]
+    await db_session.commit()
+    res = client.post(f"/api/v1/guess/position/{first.id}/answer", json={"move": "c3d5"}).json()
+    assert res["themes"] == ["fork", "fork_knight"]
+
+
+def test_position_rating_moves_like_a_puzzle():
+    assert rating_after(1500, 1500, plays=0, solved=True) == 1484    # нашли ход — позиция легче
+    assert rating_after(1500, 1500, plays=0, solved=False) == 1516   # не нашли — труднее
+    assert rating_after(1500, 1500, plays=50, solved=True) == 1494   # устоявшаяся меняется медленнее
+    assert rating_after(610, 600, plays=0, solved=True) == 600       # не ниже минимума
+
+
+async def test_answer_of_a_signed_in_player_changes_position_rating(client, seeded, db_session, token_user_1):
+    _, first, _ = seeded
+    headers = {"Authorization": f"Bearer {token_user_1}"}
+    client.post(f"/api/v1/guess/position/{first.id}/answer", json={"move": "h2h3"}, headers=headers)
+    await db_session.refresh(first)
+    assert first.difficulty > 1500
+    before = first.difficulty
+    client.post(f"/api/v1/guess/position/{first.id}/answer", json={"move": "h2h3"})  # гость — без изменений
+    await db_session.refresh(first)
+    assert first.difficulty == before and first.plays == 2
+
+
+async def test_refilter_drops_book_positions_and_tags_the_rest(seeded, db_session):
+    game, first, second = seeded
+    # Партия Легаля: позиция 8 — ещё дебют (до порога) и удаляется; 10 (Bxf7+) — уже нет и остаётся. Без линии
+    # движка у одного хода Bxf7+ тем нет (мат в 2 виден только с продолжением — см. test_guess_selection).
+    removed, tagged = await refilter(db_session)
+    assert (removed, tagged) == (1, 0)
+    rest = (await db_session.execute(select(GuessPosition).where(GuessPosition.game_id == game.id))).scalars().all()
+    assert [p.ply for p in rest] == [10]
+    assert rest[0].series_id is None and rest[0].series_index == 0  # от серии остался один ход
+
+
+async def test_refilter_tags_kept_positions_and_dissolves_short_series(db_session, test_user_1, test_user_2):
+    sans = [
+        "e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Ba4", "Nf6", "O-O", "Be7", "Re1",
+        "b5", "Bb3", "d6", "c3", "O-O", "h3", "Nb8", "d4", "Nbd7", "c4", "c6",
+    ]
+    board = chess.Board()
+    fens = []
+    for san in sans:
+        fens.append(board.fen())
+        board.push_san(san)
+    game = Game(white_player_id=test_user_1.id, black_player_id=test_user_2.id, status=GameStatus.COMPLETED,
+                pgn=str(chess.pgn.Game.from_board(board)), result="*")
+    db_session.add(game)
+    await db_session.flush()
+    book = GuessPosition(game_id=game.id, ply=12, fen=fens[12], move_uci="a4b3", best_cp=50, gap_cp=200,
+                         lines=[], series_id=91, series_index=0, difficulty=1500)
+    kept = GuessPosition(game_id=game.id, ply=20, fen=fens[20], move_uci="c3c4", best_cp=50, gap_cp=200,
+                         lines=[], series_id=91, series_index=1, difficulty=1500)
+    db_session.add_all([book, kept])
+    await db_session.commit()
+    removed, _ = await refilter(db_session)
+    assert removed == 1
+    await db_session.refresh(kept)
+    assert kept.series_id is None and kept.series_index == 0  # от серии остался один ход — это уже не серия
+
+
 async def test_errors(client, seeded):
     _, first, _ = seeded
     illegal = client.post(f"/api/v1/guess/position/{first.id}/answer", json={"move": "e1e3"})
@@ -94,6 +159,12 @@ async def test_positions_of_a_game(client, seeded):
     body = client.get(f"/api/v1/guess/game/{game.id}").json()
     assert [p["ply"] for p in body["positions"]] == [8, 10]
     assert client.get("/api/v1/guess/game/424242").json() == {"positions": []}
+
+
+async def test_games_with_positions_for_the_champion_list(client, seeded):
+    game, first, _ = seeded
+    body = client.get("/api/v1/guess/games", params={"ids": f"{game.id},424242,x"}).json()
+    assert body == {"games": {str(game.id): first.id}}  # первая позиция по полуходу; без моментов — нет в ответе
 
 
 def test_empty_pool(client):
