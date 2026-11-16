@@ -67,6 +67,20 @@ afterEach(() => {
     vi.unstubAllGlobals();
 });
 
+describe('App: просмотр партии на одном экране', () => {
+    // Доска и панель с ходами занимают ровно экран: страница не прокручивается, прокручивается список ходов.
+    it.each(['/game/5', '/library/game/17321', '/import/game/3'])('%s', (path) => {
+        const {container} = renderApp(path);
+        expect(container.firstElementChild?.className).toContain('xl:h-dvh');
+        expect(screen.getByRole('main').className).toContain('xl:overflow-hidden');
+    });
+
+    it('обычная страница прокручивается целиком', () => {
+        const {container} = renderApp('/library');
+        expect(container.firstElementChild?.className).not.toContain('xl:h-dvh');
+    });
+});
+
 describe('App: программа беты (таск 24.4)', () => {
     it('гость открывает «Сообщить о проблеме» из шапки', () => {
         renderApp('/puzzles');

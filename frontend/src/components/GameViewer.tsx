@@ -54,6 +54,7 @@ import {
 import type {FullGameAnalysisReport} from './gameViewer/viewerModel';
 import {CoachCommentBox, CriticalMoments, EvalChart, SideStatsCard} from './gameViewer/AnalysisSummary';
 import {MoveList} from './gameViewer/MoveList';
+import {scrollMoveIntoList} from './chessboard/scrollMove';
 import {NavigationControls} from './gameViewer/NavigationControls';
 import {ViewerAppearancePanel} from './gameViewer/ViewerAppearancePanel';
 
@@ -336,12 +337,12 @@ export default function GameViewer({library = false, imported = false}: { librar
     }, [playAudio, clearNotes]);
 
     useEffect(() => {
-        if (notationScrollRef.current) {
-            const activeElement = notationScrollRef.current.querySelector('.active-move');
-            if (activeElement) {
-                activeElement.scrollIntoView({behavior: 'smooth', block: 'nearest'});
-            }
-        }
+        // Прокручивается только окно списка ходов — страница и доска остаются на месте (scrollMove.ts).
+        const list = notationScrollRef.current;
+        if (!list) return;
+        const activeElement = list.querySelector<HTMLElement>('.active-move');
+        if (activeElement) scrollMoveIntoList(list, activeElement);
+        else if (viewIndex === -1) list.scrollTop = 0;
     }, [viewIndex]);
 
     const currentGame = useMemo(() => {
@@ -795,7 +796,7 @@ export default function GameViewer({library = false, imported = false}: { librar
                 )}
 
                 <div
-                    className="bg-acacia-dark p-3 rounded-md border border-amber-800/50 flex flex-col gap-2.5 shrink-0">
+                    className="bg-acacia-dark p-3 rounded-md border border-amber-800/50 flex flex-col gap-2.5 xl:shrink xl:min-h-0 xl:overflow-y-auto shrink-0 [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-thumb]:bg-amber-900/50">
                     {library ? (libraryAnnotation && (
                         <LibraryAnnotationPanel annotation={libraryAnnotation} viewIndex={viewIndex} onSelect={setViewIndex}/>
                     )) : !analysisReport ? (

@@ -54,6 +54,7 @@ import type {BotCatalog} from '../services/botCatalog';
 import {useGameSocket} from './chessboard/hooks/useGameSocket';
 import {PromotionDialog} from './chessboard/PromotionDialog';
 import {MoveList} from './chessboard/MoveList';
+import {scrollMoveIntoList} from './chessboard/scrollMove';
 import {BoardNavigationControls} from './chessboard/BoardNavigationControls';
 import {GameChatPanel} from './chessboard/GameChatPanel';
 import {PlayerInfoBar} from './chessboard/PlayerInfoBar';
@@ -481,9 +482,10 @@ export default function Chessboard() {
 
     useEffect(() => {
         if (notationScrollRef.current) {
-            const activeEl = notationScrollRef.current.querySelector('.active-move-btn');
+            const activeEl = notationScrollRef.current.querySelector<HTMLElement>('.active-move-btn');
             if (activeEl) {
-                activeEl.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+                // Только окно списка ходов: страница и доска не двигаются (scrollMove.ts).
+                scrollMoveIntoList(notationScrollRef.current, activeEl);
             } else if (viewIndex === -1) {
                 notationScrollRef.current.scrollTop = notationScrollRef.current.scrollHeight;
             }

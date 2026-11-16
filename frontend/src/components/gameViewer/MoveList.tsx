@@ -59,7 +59,7 @@ export function MoveList({pairs, viewIndex, moves, personalPlies, scrollRef, onS
 }) {
     const {t} = useI18n();
     return (
-        <div className="flex-1 min-h-0 flex flex-col bg-room-dark/90 rounded-md border border-amber-900/50 overflow-hidden shadow-inner">
+        <div data-testid="move-list" className="flex-1 min-h-36 max-h-[50dvh] xl:max-h-none flex flex-col bg-room-dark/90 rounded-md border border-amber-900/50 overflow-hidden shadow-inner">
             <div className="grid grid-cols-[44px_1fr_1fr] px-3 py-1.5 bg-black/55 border-b border-amber-900/40 text-xs uppercase tracking-wider text-boxwood/65 font-bold shrink-0">
                 <span>{t('board.moveNumber')}</span>
                 <span>{t('common.white')}</span>
