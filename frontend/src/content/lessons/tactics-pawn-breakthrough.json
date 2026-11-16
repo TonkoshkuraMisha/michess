@@ -1,0 +1,153 @@
+{
+  "id": "tactics-pawn-breakthrough",
+  "course": "tactics",
+  "order": 12,
+  "title": {
+    "en": "Pawn breakthrough",
+    "uk": "Пішаковий прорив",
+    "ru": "Пешечный прорыв"
+  },
+  "summary": {
+    "en": "Advanced pawns can break through a pawn wall: one pawn is sacrificed, and whatever the opponent takes, another pawn runs through to promotion. Far from the kings this decides the game.",
+    "uk": "Просунуті пішаки можуть прорвати пішакову стіну: один пішак жертвується, і хоч би що взяв суперник, інший пішак проходить у ферзі. Далеко від королів це вирішує партію.",
+    "ru": "Продвинутые пешки могут прорвать пешечную стену: одна пешка жертвуется, и что бы ни взял соперник, другая пешка проходит в ферзи. Вдали от королей это решает партию."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "8/7p/7P/p2k2P1/P4p2/1p6/2p5/2K5 w - - 0 50",
+      "arrows": [
+        {
+          "from": "g5",
+          "to": "g6",
+          "color": "green"
+        }
+      ],
+      "text": {
+        "en": "The white pawns g5 and h6 stand against one black pawn h7, and both kings are far away. One push creates a passed pawn: if the h-pawn takes on g6, the h6-pawn walks through; if not, the g-pawn takes or advances.",
+        "uk": "Білі пішаки g5 і h6 стоять проти одного чорного h7, а обидва королі далеко. Один хід створює прохідного: якщо пішак h візьме на g6, пройде h6; якщо ні — пішак g бере або йде вперед.",
+        "ru": "Белые пешки g5 и h6 стоят против одной чёрной h7, а оба короля далеко. Один ход создаёт проходную: если пешка h возьмёт на g6, пройдёт h6; если нет — пешка g берёт или идёт вперёд."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "8/7p/7P/p2k2P1/P4p2/1p6/2p5/2K5 w - - 0 50",
+      "text": {
+        "en": "White to move. Black's pawns are also close to promotion — be faster.",
+        "uk": "Хід білих. Чорні пішаки теж близько до перетворення — будьте швидшими.",
+        "ru": "Ход белых. Чёрные пешки тоже близки к превращению — будьте быстрее."
+      },
+      "line": [
+        {
+          "answers": [
+            "g5g6"
+          ],
+          "reply": "f4f3",
+          "correct": {
+            "en": "Black runs too, but White is one move ahead.",
+            "uk": "Чорні теж біжать, але білі на хід попереду.",
+            "ru": "Чёрные тоже бегут, но белые на ход впереди."
+          }
+        },
+        {
+          "answers": [
+            "g6g7"
+          ],
+          "reply": "f3f2"
+        },
+        {
+          "answers": [
+            "g7g8q"
+          ],
+          "correct": {
+            "en": "Promotion with check: White wins the race.",
+            "uk": "Перетворення з шахом: білі виграють перегони.",
+            "ru": "Превращение с шахом: белые выигрывают гонку."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/6pp/8/5P1P/pk4K1/8/8/8 w - - 0 47",
+      "text": {
+        "en": "White to move. Two pawns against two: break through.",
+        "uk": "Хід білих. Два пішаки проти двох: прорвіться.",
+        "ru": "Ход белых. Две пешки против двух: прорвитесь."
+      },
+      "hint": {
+        "en": "Attack the g7-pawn so that any capture opens the way for the other pawn.",
+        "uk": "Нападіть на пішака g7 так, щоб будь-яке взяття відкрило шлях іншому пішакові.",
+        "ru": "Нападите на пешку g7 так, чтобы любое взятие открыло путь другой пешке."
+      },
+      "line": [
+        {
+          "answers": [
+            "h5h6"
+          ],
+          "reply": "a4a3",
+          "correct": {
+            "en": "If gxh6, the f-pawn runs: f6–f7–f8.",
+            "uk": "Якщо gxh6, біжить пішак f: f6–f7–f8.",
+            "ru": "Если gxh6, бежит пешка f: f6–f7–f8."
+          }
+        },
+        {
+          "answers": [
+            "h6g7"
+          ],
+          "reply": "a3a2"
+        },
+        {
+          "answers": [
+            "g7g8q"
+          ],
+          "correct": {
+            "en": "White queens first.",
+            "uk": "Білі перетворюють першими.",
+            "ru": "Белые превращают первыми."
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "8/6pp/8/5P1P/pk4K1/8/8/8 w - - 0 47",
+      "text": {
+        "en": "Count before the breakthrough: how many moves to promotion for you and for your opponent, and where the kings are. A breakthrough works when the enemy king cannot catch the new passed pawn.",
+        "uk": "Рахуйте перед проривом: скільки ходів до перетворення у вас і в суперника і де королі. Прорив спрацьовує, коли чужий король не встигає за новим прохідним.",
+        "ru": "Считайте перед прорывом: сколько ходов до превращения у вас и у соперника и где короли. Прорыв срабатывает, когда чужой король не успевает за новой проходной."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "8/p5p1/3k2P1/1p1p1P2/1P1K3p/8/P7/8 w - - 0 37",
+      "text": {
+        "en": "White to move. Win.",
+        "uk": "Хід білих. Виграйте.",
+        "ru": "Ход белых. Выиграйте."
+      },
+      "line": [
+        {
+          "answers": [
+            "f5f6"
+          ],
+          "reply": "h4h3"
+        },
+        {
+          "answers": [
+            "f6g7"
+          ],
+          "reply": "h3h2"
+        },
+        {
+          "answers": [
+            "g7g8q"
+          ]
+        }
+      ]
+    }
+  ]
+}

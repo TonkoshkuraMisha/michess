@@ -1,0 +1,161 @@
+{
+  "id": "tactics-trapped-piece",
+  "course": "tactics",
+  "order": 11,
+  "title": {
+    "en": "Trapping a piece",
+    "uk": "Ловля фігури",
+    "ru": "Ловля фигуры"
+  },
+  "summary": {
+    "en": "Before attacking a piece, count its retreats. If every square it can go to is covered, a simple attack wins it — even the queen.",
+    "uk": "Перш ніж нападати на фігуру, порахуйте її відступи. Якщо всі поля, куди вона може піти, під ударом, звичайний напад її виграє — навіть ферзя.",
+    "ru": "Прежде чем нападать на фигуру, посчитайте её отступления. Если все поля, куда она может пойти, под ударом, простое нападение её выигрывает — даже ферзя."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "r4rk1/pppb1pbp/3p1qp1/3Pp2n/2P1P3/1N3N1P/PP3PP1/R1BQR1K1 w - - 3 14",
+      "highlights": [
+        "d8",
+        "e7",
+        "g5"
+      ],
+      "text": {
+        "en": "Count where the black queen f6 can go safely. e6 and f5 are covered by the pawns d5 and e4, f4, g5 and h4 by the bishop c1 and the knight f3. Only e7 and d8 remain — and they lie on one diagonal with g5. A bishop on g5 attacks the queen and covers both.",
+        "uk": "Порахуйте, куди чорний ферзь f6 може безпечно піти. e6 і f5 б’ють пішаки d5 і e4, f4, g5 і h4 — слон c1 і кінь f3. Лишаються e7 і d8 — а вони лежать на одній діагоналі з g5. Слон на g5 нападає на ферзя й закриває обидва.",
+        "ru": "Посчитайте, куда чёрный ферзь f6 может безопасно уйти. e6 и f5 бьют пешки d5 и e4, f4, g5 и h4 — слон c1 и конь f3. Остаются e7 и d8 — а они лежат на одной диагонали с g5. Слон на g5 нападает на ферзя и закрывает оба."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "r4rk1/pppb1pbp/3p1qp1/3Pp2n/2P1P3/1N3N1P/PP3PP1/R1BQR1K1 w - - 3 14",
+      "text": {
+        "en": "White to move. Trap the queen.",
+        "uk": "Хід білих. Спіймайте ферзя.",
+        "ru": "Ход белых. Поймайте ферзя."
+      },
+      "line": [
+        {
+          "answers": [
+            "c1g5"
+          ],
+          "reply": "f6g5",
+          "correct": {
+            "en": "The queen has nowhere to go: Black gives it up for the bishop.",
+            "uk": "Ферзю нікуди йти: чорні віддають його за слона.",
+            "ru": "Ферзю некуда идти: чёрные отдают его за слона."
+          }
+        },
+        {
+          "answers": [
+            "f3g5"
+          ],
+          "correct": {
+            "en": "A queen for a bishop.",
+            "uk": "Ферзь за слона.",
+            "ru": "Ферзь за слона."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "3k2r1/pp1b4/8/r2pPp2/8/2P1P3/P2Q1PPP/qNR3K1 w - - 4 27",
+      "text": {
+        "en": "White to move. The black queen has gone deep into your camp. Shut the door.",
+        "uk": "Хід білих. Чорний ферзь заліз глибоко у ваш табір. Зачиніть двері.",
+        "ru": "Ход белых. Чёрный ферзь забрался глубоко в ваш лагерь. Закройте дверь."
+      },
+      "hint": {
+        "en": "The knight b1 is in the way of your rook. Move it so that it also covers the queen's exits.",
+        "uk": "Кінь b1 заважає вашій турі. Переставте його так, щоб він заодно закрив ферзеві виходи.",
+        "ru": "Конь b1 мешает вашей ладье. Переставьте его так, чтобы он заодно закрыл ферзю выходы."
+      },
+      "line": [
+        {
+          "answers": [
+            "b1a3"
+          ],
+          "reply": "a1c1",
+          "correct": {
+            "en": "The rook c1 now attacks the queen, and it has no square: it can only take the rook.",
+            "uk": "Тура c1 тепер нападає на ферзя, а йому нікуди: лише взяти туру.",
+            "ru": "Ладья c1 теперь нападает на ферзя, а ему некуда: только взять ладью."
+          }
+        },
+        {
+          "answers": [
+            "d2c1"
+          ],
+          "correct": {
+            "en": "A queen for a rook.",
+            "uk": "Ферзь за туру.",
+            "ru": "Ферзь за ладью."
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "3k2r1/pp1b4/8/r2pPp2/8/2P1P3/P2Q1PPP/qNR3K1 w - - 4 27",
+      "text": {
+        "en": "A piece is most often trapped on the edge, in the corner or behind enemy lines. When the opponent's queen or bishop grabs material far from home, count its squares — maybe one quiet move locks it in.",
+        "uk": "Найчастіше фігуру ловлять на краю, в куті або в тилу суперника. Коли ферзь чи слон суперника хапає матеріал далеко від дому, порахуйте його поля — можливо, один тихий хід замкне його.",
+        "ru": "Чаще всего фигуру ловят на краю, в углу или в тылу соперника. Когда ферзь или слон соперника хватает материал далеко от дома, посчитайте его поля — может быть, один тихий ход запрёт его."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "r4rk1/p3nppp/2p1p3/3p4/3PP1PP/2R1BP2/n1PK2Q1/q5NR w - - 6 19",
+      "text": {
+        "en": "White to move. Win the queen.",
+        "uk": "Хід білих. Виграйте ферзя.",
+        "ru": "Ход белых. Выиграйте ферзя."
+      },
+      "line": [
+        {
+          "answers": [
+            "g1e2"
+          ],
+          "reply": "a1b2"
+        },
+        {
+          "answers": [
+            "c3b3"
+          ],
+          "reply": "a8b8"
+        },
+        {
+          "answers": [
+            "b3b2"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "r1b2rk1/pp3pbp/2n1pqp1/3p4/3P1B2/NPPB4/P2Q1PPP/R3R1K1 w - - 2 14",
+      "text": {
+        "en": "White to move. Trap the queen.",
+        "uk": "Хід білих. Спіймайте ферзя.",
+        "ru": "Ход белых. Поймайте ферзя."
+      },
+      "line": [
+        {
+          "answers": [
+            "f4g5"
+          ],
+          "reply": "f6g5"
+        },
+        {
+          "answers": [
+            "d2g5"
+          ]
+        }
+      ]
+    }
+  ]
+}
