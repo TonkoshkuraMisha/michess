@@ -1,0 +1,214 @@
+{
+  "id": "endgame-queen-vs-pawn",
+  "course": "endgame",
+  "order": 8,
+  "title": {
+    "en": "Queen against pawn: pin and check",
+    "uk": "Ферзь проти пішака: зв’язка і шах",
+    "ru": "Ферзь против пешки: связка и шах"
+  },
+  "summary": {
+    "en": "A pawn one step from promotion is stopped by pinning it to its king or by checks that gain time for your own king.",
+    "uk": "Пішака за крок до перетворення зупиняє зв’язка з його королем або шахи, що виграють час для власного короля.",
+    "ru": "Пешку в шаге от превращения останавливает связка с её королём или шахи, которые выигрывают время для своего короля."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "1Q6/8/8/2K5/8/8/3p4/2k5 w - - 0 1",
+      "text": {
+        "en": "The black pawn is about to promote and its king supports it. A queen wins only if it gains time for the white king to come closer. The strongest tool is a pin: a pawn standing between the queen and its own king cannot move.",
+        "uk": "Чорний пішак ось-ось перетвориться, і його підтримує король. Ферзь виграє, лише якщо виграє час, щоб наблизився білий король. Найсильніший засіб — зв’язка: пішак між ферзем і своїм королем не може рушити.",
+        "ru": "Чёрная пешка вот-вот превратится, и её поддерживает король. Ферзь выигрывает, только если выиграет время, чтобы подошёл белый король. Сильнейшее средство — связка: пешка между ферзём и своим королём не может двинуться."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "1Q6/8/8/2K5/8/8/3p4/2k5 w - - 0 1",
+      "text": {
+        "en": "Your move. Only one move wins: pin the pawn.",
+        "uk": "Ваш хід. Виграє лише один хід: зв’яжіть пішака.",
+        "ru": "Ваш ход. Выигрывает только один ход: свяжите пешку."
+      },
+      "hint": {
+        "en": "The pawn d2 and the king c1 stand on one diagonal.",
+        "uk": "Пішак d2 і король c1 стоять на одній діагоналі.",
+        "ru": "Пешка d2 и король c1 стоят на одной диагонали."
+      },
+      "line": [
+        {
+          "answers": [
+            "b8f4"
+          ],
+          "correct": {
+            "en": "Right! The pawn is pinned to its king and cannot promote; the white king gets time to approach.",
+            "uk": "Правильно! Пішак зв’язаний зі своїм королем і не перетвориться; білий король має час підійти.",
+            "ru": "Верно! Пешка связана со своим королём и не превратится; у белого короля есть время подойти."
+          },
+          "wrong": {
+            "b8h2": {
+              "en": "The pawn is not pinned: Black promotes or holds the draw.",
+              "uk": "Пішак не зв’язаний: чорні перетворюють його або тримають нічию.",
+              "ru": "Пешка не связана: чёрные превращают её или удерживают ничью."
+            },
+            "b8b3": {
+              "en": "The queen controls the wrong squares — Black holds the draw.",
+              "uk": "Ферзь контролює не ті поля — чорні тримають нічию.",
+              "ru": "Ферзь контролирует не те поля — чёрные удерживают ничью."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "6Q1/8/5K2/8/8/8/4pk2/8 w - - 0 1",
+      "text": {
+        "en": "Your move. The same idea, on another line.",
+        "uk": "Ваш хід. Та сама ідея, на іншій лінії.",
+        "ru": "Ваш ход. Та же идея, на другой линии."
+      },
+      "line": [
+        {
+          "answers": [
+            "g8a2"
+          ],
+          "correct": {
+            "en": "Right! The pin along the second rank: the e2 pawn cannot move while the king stands behind it.",
+            "uk": "Правильно! Зв’язка по другій горизонталі: пішак e2 не рушить, поки король стоїть позаду нього.",
+            "ru": "Верно! Связка по второй горизонтали: пешка e2 не двинется, пока король стоит позади неё."
+          },
+          "wrong": {
+            "g8g4": {
+              "en": "There is no pin — Black has time to promote or to hide the king: a draw.",
+              "uk": "Зв’язки немає — чорні встигають перетворити пішака або сховати короля: нічия.",
+              "ru": "Связки нет — чёрные успевают превратить пешку или спрятать короля: ничья."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "4Q3/8/5K2/8/8/8/6p1/5k2 w - - 0 1",
+      "text": {
+        "en": "When there is no pin, a check helps: it forces the enemy king to move, and a king driven in front of its pawn blocks it. Every such tempo is a step for your own king.",
+        "uk": "Коли зв’язки немає, допомагає шах: він змушує ворожого короля рушити, а король, загнаний перед свого пішака, його заступає. Кожен такий темп — крок для вашого короля.",
+        "ru": "Когда связки нет, помогает шах: он заставляет неприятельского короля двигаться, а король, загнанный перед своей пешкой, её загораживает. Каждый такой темп — шаг для вашего короля."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "4Q3/8/5K2/8/8/8/6p1/5k2 w - - 0 1",
+      "text": {
+        "en": "Your move. Find the only winning move.",
+        "uk": "Ваш хід. Знайдіть єдиний виграшний хід.",
+        "ru": "Ваш ход. Найдите единственный выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "e8b5"
+          ],
+          "correct": {
+            "en": "Right! The check along the diagonal drives the king, and the queen comes closer with tempo.",
+            "uk": "Правильно! Шах по діагоналі зганяє короля, і ферзь наближається з темпом.",
+            "ru": "Верно! Шах по диагонали сгоняет короля, и ферзь приближается с темпом."
+          },
+          "wrong": {
+            "e8e3": {
+              "en": "Without a check Black has time — the pawn promotes or the position is a draw.",
+              "uk": "Без шаху чорні мають час — пішак перетворюється або позиція нічийна.",
+              "ru": "Без шаха у чёрных есть время — пешка превращается или позиция ничейная."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "4Q3/8/5K2/8/8/8/6p1/5k2 w - - 0 1",
+      "text": {
+        "en": "Remember: first look for a pin of the pawn to its king; if there is none, check so that the king has to stand in front of its pawn — and bring your own king closer with the tempi you win.",
+        "uk": "Запам’ятайте: спершу шукайте зв’язку пішака з його королем; якщо її немає — шахуйте так, щоб король мусив стати перед своїм пішаком, і виграними темпами підводьте свого короля.",
+        "ru": "Запомните: сначала ищите связку пешки с её королём; если её нет — шахуйте так, чтобы король встал перед своей пешкой, и выигранными темпами подводите своего короля."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "1Q6/8/8/2K5/8/8/2kp4/8 w - - 0 1",
+      "text": {
+        "en": "Your move. Find the winning move.",
+        "uk": "Ваш хід. Знайдіть виграшний хід.",
+        "ru": "Ваш ход. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "b8h2"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "7Q/8/5K2/8/8/8/6p1/5k2 w - - 0 1",
+      "text": {
+        "en": "Your move. Find the winning move.",
+        "uk": "Ваш хід. Знайдіть виграшний хід.",
+        "ru": "Ваш ход. Найдите выигрывающий ход."
+      },
+      "line": [
+        {
+          "answers": [
+            "h8h3"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "Why can a pinned pawn not promote?",
+        "uk": "Чому зв’язаний пішак не може перетворитися?",
+        "ru": "Почему связанная пешка не может превратиться?"
+      },
+      "options": [
+        {
+          "correct": true,
+          "text": {
+            "en": "Its move would expose its own king to the queen — an illegal move.",
+            "uk": "Її хід відкрив би власного короля під удар ферзя — це неможливий хід.",
+            "ru": "Её ход открыл бы собственного короля под удар ферзя — это невозможный ход."
+          }
+        },
+        {
+          "text": {
+            "en": "Pawns may not promote while the queen is on the board.",
+            "uk": "Пішаки не перетворюються, поки ферзь на дошці.",
+            "ru": "Пешки не превращаются, пока ферзь на доске."
+          },
+          "feedback": {
+            "en": "There is no such rule — the pin is what stops it.",
+            "uk": "Такого правила немає — зупиняє саме зв’язка.",
+            "ru": "Такого правила нет — останавливает именно связка."
+          }
+        },
+        {
+          "text": {
+            "en": "Because the queen attacks the promotion square.",
+            "uk": "Бо ферзь атакує поле перетворення.",
+            "ru": "Потому что ферзь атакует поле превращения."
+          },
+          "feedback": {
+            "en": "Attacking the square is not enough: the pawn may still promote if the new queen is defended.",
+            "uk": "Атаки поля замало: пішак може перетворитися, якщо новий ферзь захищений.",
+            "ru": "Атаки поля мало: пешка может превратиться, если новый ферзь защищён."
+          }
+        }
+      ]
+    }
+  ]
+}

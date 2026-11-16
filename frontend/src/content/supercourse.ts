@@ -53,7 +53,7 @@ export const COURSE: CourseModule[] = [
     mod('M1.2', 'M', [l('king-back-rank'), m('back_rank_mate'), l('king-smothered-mate'), m('smothered_mate')]),
     mod('M1.3', 'M', [l('king-f7-weakness'), th('f7_f2_attack')]),
     mod('E1.1', 'E', [l('endgame-square'), e('square_win'), e('square_race'), e('kp_key_square'), l('endgame-opposition'), e('kp_opposition_def')]),
-    mod('E1.2', 'E', [e('q_vs_pawn')]),
+    mod('E1.2', 'E', [l('endgame-queen-vs-pawn'), e('q_vs_pawn')]),
     mod('E1.3', 'E', [l('endgame-simplify'), l('endgame-active-king')]),
     mod('O1.1', 'O', [th('development_lag')]),
     mod('O1.2', 'O', [th('opening_trap'), th('trap_scholars_mate'), th('trap_noahs_ark')]),
