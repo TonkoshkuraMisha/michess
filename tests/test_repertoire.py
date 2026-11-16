@@ -20,10 +20,11 @@ def create(client, token, **body) -> dict:
 
 
 def test_starters_are_consistent():
-    """Шесть наборов: белыми и чёрными, оба уровня; ходы легальны, свой ход в позиции один, у линии есть дебют."""
-    assert len(STARTERS) == 6
+    """Восемь наборов: белыми и чёрными, три уровня; ходы легальны, свой ход в позиции один, у линии есть дебют."""
+    assert len(STARTERS) == 8
     assert {(s.color, s.level) for s in STARTERS} == {
-        (c, lvl) for c in ("white", "black") for lvl in ("beginner", "intermediate")}
+        (c, lvl) for c in ("white", "black") for lvl in ("beginner", "intermediate", "advanced")}
+    assert {s.style for s in STARTERS} == {"attacking", "positional"}
     for starter in STARTERS:
         own: dict[str, str] = {}
         side = chess.WHITE if starter.color == "white" else chess.BLACK

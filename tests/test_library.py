@@ -93,6 +93,10 @@ async def test_collection_games_search_and_pgn(client, seeded, token_user_2):
     assert client.get(f"{API}/games", params={"max_plies": 4}).json()["total"] == 1
     assert client.get(f"{API}/games", params={"player": "secret"}).json()["total"] == 0
     assert client.get(f"{API}/games", params={"structure": "isolated_pawn"}).json()["total"] == 0  # таск 27.5
+    by_moves = client.get(f"{API}/games", params={"moves": "e2e4 e7e5 d1h5"}).json()  # таск 27.10
+    assert [g["white"] for g in by_moves["games"]] == ["Anon"]
+    assert client.get(f"{API}/games", params={"moves": "e2e4 e7e"}).json()["total"] == 0  # только целые ходы
+    assert client.get(f"{API}/games", params={"moves": "e2e4%"}).status_code == 422
     assert listed["games"][0]["structure"] is None  # короткие партии — без структуры
     assert client.get(f"{API}/games", params={"player": "secret"}, headers=auth(token_user_2)).json()["total"] == 1
 

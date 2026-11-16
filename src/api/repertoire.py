@@ -86,7 +86,8 @@ async def _full(db: AsyncSession, repertoire: Repertoire) -> dict:
 async def starters():
     """Стартовые репертуары: коды, сторона и уровень; названия и вводные тексты — на клиенте."""
     return {"starters": [
-        {"id": s.id, "color": s.color, "level": s.level, "lines": [service.san_line_to_uci(line) for line in s.lines]}
+        {"id": s.id, "color": s.color, "level": s.level, "style": s.style,
+         "lines": [service.san_line_to_uci(line) for line in s.lines]}
         for s in STARTERS
     ]}
 
