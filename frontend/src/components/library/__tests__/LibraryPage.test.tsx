@@ -58,9 +58,10 @@ describe('библиотека партий', () => {
         const mock = stub();
         await act(async () => render(<MemoryRouter><LibraryPage/></MemoryRouter>));
         fireEvent.change(screen.getByTestId('library-player'), {target: {value: 'Botvinnik'}});
+        fireEvent.change(screen.getByTestId('library-structure'), {target: {value: 'isolated_pawn'}});
         await act(async () => fireEvent.click(screen.getByTestId('library-search-submit')));
         expect(screen.getByTestId('library-game-99')).toBeInTheDocument();
-        expect(mock.mock.calls.some(([u]) => String(u).includes('/games?player=Botvinnik'))).toBe(true);
+        expect(mock.mock.calls.some(([u]) => String(u).includes('/games?player=Botvinnik&structure=isolated_pawn'))).toBe(true);
     });
 
     it('ошибка сети показывается', async () => {

@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.library import LibraryCollection, LibraryGame, LibraryGameCollection
 from src.models.user import User
-from src.services import openings
+from src.services import openings, pawn_structures
 
 STANDARD_FEN = chess.STARTING_FEN
 RESULTS = ("1-0", "0-1", "1/2-1/2", "*")
@@ -186,7 +186,8 @@ async def import_games(db: AsyncSession, collection: LibraryCollection, games: I
                                   site=parsed.site, date=parsed.date, year=parsed.year, round=parsed.round,
                                   result=parsed.result, white_elo=parsed.white_elo, black_elo=parsed.black_elo,
                                   eco=parsed.eco, opening=parsed.opening, start_fen=parsed.start_fen,
-                                  plies=len(parsed.moves), moves=" ".join(parsed.moves))
+                                  plies=len(parsed.moves), moves=" ".join(parsed.moves),
+                                  structure=structure_of(parsed))
                 db.add(row)
                 await db.flush()
                 known[key] = game_id = row.id
@@ -211,6 +212,13 @@ async def import_games(db: AsyncSession, collection: LibraryCollection, games: I
     if pending:
         await flush()
     return stats
+
+
+def structure_of(parsed: ParsedGame) -> str | None:
+    """Пешечная структура партии (27.5) — только из начальной позиции."""
+    if parsed.start_fen is not None:
+        return None
+    return pawn_structures.game_structure(chess.Move.from_uci(uci) for uci in parsed.moves)
 
 
 def visible_clause(user: User | None) -> ColumnElement[bool]:
