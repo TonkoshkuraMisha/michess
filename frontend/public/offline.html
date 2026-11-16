@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta name="theme-color" content="#1A120B"/>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+    <title>michess</title>
+    <style>
+        :root { color-scheme: dark; }
+        html, body { margin: 0; height: 100%; }
+        body {
+            background: #1A120B; color: #F5DEB3; font-family: Georgia, 'Times New Roman', serif;
+            display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box;
+        }
+        main { max-width: 420px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+        img { width: 96px; height: 96px; }
+        h1 { margin: 0; font-size: 1.5rem; color: #FCD34D; }
+        p { margin: 0; line-height: 1.5; color: #E7D3B0; }
+        button {
+            margin-top: 6px; padding: 10px 22px; border-radius: 8px; border: 1px solid #F59E0B; background: #92400E;
+            color: #fff; font: inherit; font-weight: bold; cursor: pointer;
+        }
+        button:hover { background: #B45309; }
+    </style>
+</head>
+<body>
+<main>
+    <img src="/icons/icon-192.png" alt=""/>
+    <h1 id="offline-title">No connection</h1>
+    <p id="offline-text">michess needs the internet: games, puzzles and analysis live on the server. Check the connection and try again.</p>
+    <button type="button" id="offline-retry">Try again</button>
+</main>
+<script src="/offline.js"></script>
+</body>
+</html>

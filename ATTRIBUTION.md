@@ -39,6 +39,9 @@
 Аватары игроков (таск 18.4) — фигуры набора `lewis` на цветном фоне (`frontend/src/components/PlayerAvatar.tsx`);
 внешний сервис аватаров (DiceBear) больше не используется.
 
+Иконки приложения (таск 24.2, `frontend/public/icons/`: `icon.svg`, PNG 192/512, maskable, `apple-touch-icon.png`) —
+конь набора `rhosgfx` (CC0-1.0) на собственном фоне и рамке michess; собираются `scripts/dev/build_pwa_icons.mjs`.
+
 Убраны как несвободные: `alpha` (Eric Bentzen, «free for personal non commercial use»), `maestro` (sadsnake1,
 CC BY-NC-SA 4.0), а также набор без известного происхождения, лежавший в корне папки и в `classic/`.
 
