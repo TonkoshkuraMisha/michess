@@ -13,9 +13,11 @@ export const STRUCTURE_ROUNDS = 10;
 interface Props {
     seed: number;
     onFinish: (score: number, mistakes: number) => void;
+    /** «Найди план» (27.9): варианты — типовые планы структур, а не их названия. */
+    variant?: 'name' | 'plan';
 }
 
-export function StructureQuiz({seed, onFinish}: Props) {
+export function StructureQuiz({seed, onFinish, variant = 'name'}: Props) {
     const {t} = useI18n();
     const [questions, setQuestions] = useState<StructureQuestion[] | null>(null);
     const [failed, setFailed] = useState(false);
@@ -52,6 +54,7 @@ export function StructureQuiz({seed, onFinish}: Props) {
         setPicked(null);
     };
     const name = (code: StructureCode) => t(`structures.${code}`);
+    const option = (code: StructureCode) => (variant === 'plan' ? t(`structurePlans.${code}`) : name(code));
 
     return (
         <div className="flex flex-col gap-3" data-testid="structure-quiz">
@@ -59,20 +62,23 @@ export function StructureQuiz({seed, onFinish}: Props) {
                 <span className="font-bold text-amber-200">{t('trainers.calc.question', {n: index + 1, total: questions.length})}</span>
                 <span className="text-sm" data-testid="quiz-score">{t('trainers.coord.score', {score: score.correct, mistakes: score.wrong})}</span>
             </div>
-            <p className="text-lg">{t('trainers.structurePrompt')}</p>
+            <p className="text-lg">{t(variant === 'plan' ? 'trainers.planPrompt' : 'trainers.structurePrompt')}</p>
             <div className="w-full max-w-[420px]">
                 <PuzzleBoard fen={quiz.fen} orientation="white" interactive={false} onMove={() => undefined} sound={false}/>
             </div>
-            <div className="grid sm:grid-cols-2 gap-2">
+            <div className={`grid gap-2 ${variant === 'plan' ? '' : 'sm:grid-cols-2'}`}>
                 {quiz.options.map((code) => {
                     const tone = !picked ? 'bg-black/40 border-amber-800/60 hover:border-amber-400'
                         : code === quiz.answer ? 'bg-emerald-800 border-emerald-400' : code === picked ? 'bg-rose-900 border-rose-500' : 'bg-black/30 border-transparent opacity-60';
                     return (
                         <button key={code} type="button" onClick={() => answer(code)} data-testid={`quiz-option-${code}`}
-                                className={`px-3 py-2 rounded-lg border font-bold text-left ${tone}`}>{name(code)}</button>
+                                className={`px-3 py-2 rounded-lg border text-left ${variant === 'plan' ? 'text-sm' : 'font-bold'} ${tone}`}>{option(code)}</button>
                     );
                 })}
             </div>
+            {picked && variant === 'plan' && (
+                <p className="text-sm text-amber-200" data-testid="plan-verdict">{t('trainers.planVerdict', {name: name(quiz.answer)})}</p>
+            )}
             {picked && (
                 <div className="flex flex-wrap items-center gap-3">
                     <button type="button" onClick={next} data-testid="quiz-next" className="px-4 py-2 rounded bg-amber-700 text-white font-bold">
