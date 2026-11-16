@@ -3149,6 +3149,7 @@ export const uk: Messages = {
         stages: {main: 'Партія', rematch: 'Перегравання', armageddon: 'Вирішальна (нічия — перемога чорних)'},
         crosstable: 'Турнірна таблиця',
         bracket: 'Сітка',
+        byes: 'Проходять без гри: {names}',
         schedule: 'Партії',
         points: 'Очки',
         sonnebornBerger: 'КЗБ',

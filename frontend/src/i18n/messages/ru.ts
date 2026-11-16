@@ -3149,6 +3149,7 @@ export const ru: Messages = {
         stages: {main: 'Партия', rematch: 'Переигровка', armageddon: 'Решающая (ничья — победа чёрных)'},
         crosstable: 'Турнирная таблица',
         bracket: 'Сетка',
+        byes: 'Проходят без игры: {names}',
         schedule: 'Партии',
         points: 'Очки',
         sonnebornBerger: 'КЗБ',

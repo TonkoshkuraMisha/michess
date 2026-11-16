@@ -3133,6 +3133,7 @@ export const en = {
         stages: {main: 'Game', rematch: 'Rematch', armageddon: 'Decider (draw = Black wins)'},
         crosstable: 'Crosstable',
         bracket: 'Bracket',
+        byes: 'Through without playing: {names}',
         schedule: 'Games',
         points: 'Pts',
         sonnebornBerger: 'SB',
