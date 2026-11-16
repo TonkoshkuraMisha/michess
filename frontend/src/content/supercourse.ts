@@ -103,7 +103,7 @@ export const COURSE: CourseModule[] = [
     mod('T3.5', 'T', [th('blockade')]),
     mod('T3.6', 'T', [th('quiet_move')]),
     mod('T3.7', 'T', [th('combination')]),
-    mod('T3.8', 'T', [th('save_by_perpetual'), th('save_by_stalemate'), th('perpetual_check'), th('stalemate_trick'), th('fortress'), th('desperado')]),
+    mod('T3.8', 'T', [th('equality'), th('save_by_perpetual'), th('save_by_stalemate'), th('perpetual_check'), th('stalemate_trick'), th('fortress'), th('desperado')]),
     mod('M3.1', 'M', [th('greek_gift'), th('double_bishop_sacrifice')]),
     mod('M3.2', 'M', [th('pawn_storm'), th('rook_lift')]),
     mod('M3.3', 'M', [th('kingside_attack'), th('queenside_attack')]),
@@ -162,7 +162,7 @@ export const COURSE: CourseModule[] = [
     mod('X4', 'G', [ex('J'), ex('endgame')]),
     // --- Уровень 5. I разряд — КМС ---
     mod('T5.1', 'T', [th('combination')]),
-    mod('T5.2', 'T', [th('fortress'), th('save_by_perpetual')]),
+    mod('T5.2', 'T', [th('equality'), th('fortress'), th('save_by_perpetual')]),
     mod('M5.1', 'M', [th('sacrifice')]),
     mod('E5.1', 'E'),
     mod('E5.2', 'E', [{kind: 'library'}]),

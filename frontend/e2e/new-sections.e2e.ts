@@ -77,9 +77,10 @@ test('мастерская: соперник сохраняется в проф�
     await expect(page.getByText('Сохранено в профиле')).toBeVisible();
 
     await page.getByTestId('personality-workshop').getByRole('button', {name: /Чёрными/}).click();
-    // Соперник ходит первым через /bots/custom-move: на доске больше нет начальной позиции белых.
-    await expect.poll(async () => page.locator('[data-square="e2"] img, [data-square="d2"] img, [data-square="c2"] img, [data-square="g1"] img').count(),
-        {timeout: 30_000}).toBeLessThan(4);
+    // Соперник ходит первым через /bots/custom-move: любой первый ход белых освобождает одно из 16 полей первых двух
+    // горизонталей (раньше ждали ход пешкой c/d/e или конём g1 — у слабого соперника со своим дебютом бывает иначе).
+    const homeSquares = [...'abcdefgh'].flatMap((file) => [`${file}1`, `${file}2`]).map((sq) => `[data-square="${sq}"] img`).join(', ');
+    await expect.poll(async () => page.locator(homeSquares).count(), {timeout: 30_000}).toBeLessThan(16);
 });
 
 test('лестница: партия с соперником, выбранным сервером, итог в статусе', async ({page, request}) => {
