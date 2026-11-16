@@ -286,6 +286,7 @@ async def _create_invite(ctx: ActionContext, data: dict) -> None:
         rated=_rated_flag(data),
         odds_kind=str(data.get("odds_kind", "") or ""),
         odds_giver=str(data.get("odds_giver", "creator") or "creator"),
+        variant=str(data.get("variant", "standard") or "standard"),
     )
     await ctx.send({"event": "invite_created", **invite_data})
 

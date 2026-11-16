@@ -25,6 +25,7 @@ from src.services.anticheat import evaluate_game_telemetry
 from src.services.game_engine import (  # noqa: F401  (flag_outcome реэкспортируется для тестов)
     FLAG_DRAW_TERMINATION,
     STARTING_FEN,
+    board_from_fen,
     engine,
     flag_outcome,
     side_has_mating_material,
@@ -711,8 +712,8 @@ class GameStateManager:
 
             node: chess.pgn.GameNode = pgn_game
             if db_game.initial_fen:
-                pgn_game.setup(chess.Board(db_game.initial_fen))
-            board_for_pgn = chess.Board(db_game.initial_fen) if db_game.initial_fen else chess.Board()
+                pgn_game.setup(board_from_fen(db_game.initial_fen))  # у партии 960 — и заголовок Variant
+            board_for_pgn = board_from_fen(db_game.initial_fen) if db_game.initial_fen else chess.Board()
             for m in moves_telemetry:
                 try:
                     move_obj = chess.Move.from_uci(m["notation"])
