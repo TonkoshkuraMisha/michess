@@ -10,6 +10,7 @@ import {getToken} from '../../services/authToken';
 import {fetchLessonProgress, saveLessonProgress} from '../../services/lessonProgress';
 import {BRANCHES, COURSE, courseProgressId, LEVEL_COUNT, LEVEL_EXAM_TARGET, levelExamPassed, moduleTitleKey} from '../../content/supercourse';
 import {fetchExamSummary} from '../ExamPage';
+import {puzzlesApi} from '../../services/puzzles';
 import {activityLink} from '../../content/programs';
 import {activityLabel} from '../ProgramsPage';
 
@@ -20,6 +21,8 @@ export function SupercoursePage() {
     const [skeleton, setSkeleton] = useState(false);
     const [done, setDone] = useState<Set<string>>(new Set());
     const [examPassed, setExamPassed] = useState<Set<number>>(new Set());
+    // Темы, в которых пока нет ни одной задачи: шаг не ведёт в пустую тренировку, а помечен «задач пока нет».
+    const [emptyThemes, setEmptyThemes] = useState<Set<string>>(new Set());
     const logged = Boolean(getToken());
 
     useEffect(() => {
@@ -28,6 +31,9 @@ export function SupercoursePage() {
         fetchLessonProgress(token).then((rows) => {
             const ids = new Set(rows.filter((r) => r.completed).map((r) => r.lesson_id));
             setDone((prev) => new Set([...prev, ...COURSE.filter((m) => ids.has(courseProgressId(m.code))).map((m) => m.code)]));
+        }).catch(() => undefined);
+        puzzlesApi.training().then((overview) => {
+            setEmptyThemes(new Set(overview.themes.filter((th) => th.available.every((n) => n === 0)).map((th) => th.code)));
         }).catch(() => undefined);
         fetchExamSummary().then((summary) => {
             const passed = Array.from({length: LEVEL_COUNT}, (_, n) => n).filter((n) => levelExamPassed(n, summary.results));
@@ -97,6 +103,14 @@ export function SupercoursePage() {
                                         <div className="flex flex-wrap gap-x-3 gap-y-0.5 pl-6">
                                             {module.steps.map((step, i) => {
                                                 const link = activityLink(step);
+                                                if ((step.kind === 'theme' || step.kind === 'mates') && emptyThemes.has(step.id)) {
+                                                    return (
+                                                        <span key={i} className="text-xs text-boxwood/50" title={t('supercourse.noPuzzlesYet')}
+                                                              data-testid={`course-step-empty-${step.id}`}>
+                                                            {activityLabel(t as never, language, step)} · {t('supercourse.noPuzzlesYet')}
+                                                        </span>
+                                                    );
+                                                }
                                                 return (
                                                     <button key={i} type="button" onClick={() => navigate(link.to, {state: link.state})}
                                                             className="text-left text-xs text-amber-200 hover:underline">

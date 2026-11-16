@@ -30,6 +30,7 @@ import {WorkoutPage} from './components/WorkoutPage';
 import {ExamPage} from './components/ExamPage';
 import {ProgramPage, ProgramsPage} from './components/ProgramsPage';
 import {SupercoursePage} from './components/learn/SupercoursePage';
+import {PageErrorBoundary} from './components/PageErrorBoundary';
 import {RepertoireEditorPage, RepertoireListPage} from './components/repertoire/RepertoirePages';
 import {LibraryPage} from './components/library/LibraryPage';
 import {RepertoireDrillPage} from './components/repertoire/RepertoireDrill';
@@ -607,6 +608,7 @@ export default function App() {
                         : 'items-start p-4 sm:p-6 overflow-y-auto'
                 }`}
             >
+                <PageErrorBoundary resetKey={location.pathname}>
                 <Routes>
                     <Route path="/" element={<Chessboard key={token ? token : 'guest'}/>}/>
                     <Route path="/challenge/:inviteCode" element={<Chessboard key={token ? token : 'guest'}/>}/>
@@ -669,6 +671,7 @@ export default function App() {
                         }
                     />
                 </Routes>
+                </PageErrorBoundary>
             </main>
             <TranslationHelper/>
 

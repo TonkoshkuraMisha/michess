@@ -6,6 +6,10 @@ import {plural} from '../core';
 
 export const en = {
     common: {
+        pageError: 'Something went wrong on this page',
+        pageErrorHint: 'The rest of the site works: reload the page or go to the main page. If it happens again, tell us what you did.',
+        pageReload: 'Reload',
+        pageHome: 'Main page',
         white: 'White',
         black: 'Black',
         win: 'Win',
@@ -2259,6 +2263,7 @@ export const en = {
         soon: 'coming soon',
         examTarget: 'Pass: an estimate of at least {rating} in every section',
         levelPassed: 'Level passed',
+        noPuzzlesYet: 'no puzzles yet',
         markDone: 'Module done',
         levels: {l0: '0 · ABC', l1: '1 · Beginner', l2: '2 · 4th–3rd category', l3: '3 · 3rd–2nd category', l4: '4 · 2nd–1st category', l5: '5 · 1st category – CM'},
         branches: {T: 'Tactics', M: 'Mate and attack', E: 'Endgame', S: 'Strategy and pawn structures', O: 'Openings', C: 'Calculation, vision and thinking', G: 'Games, history and exams'},
@@ -2742,9 +2747,9 @@ export const en = {
             explain: 'Find a forced sequence that mates in 4 moves against any defence. Start with checks, then captures, then threats, and check every reply of the opponent. In such positions the solution is usually the most forcing move, even if it gives up material.',
         },
         mate_in_5: {
-            name: 'Mate in 5',
-            short: 'Find a forced mate in 5 moves.',
-            explain: 'Find a forced sequence that mates in 5 moves against any defence. Start with checks, then captures, then threats, and check every reply of the opponent. In such positions the solution is usually the most forcing move, even if it gives up material.',
+            name: 'Mate in 5+',
+            short: 'Find a forced mate in 5 moves or more.',
+            explain: 'Find a forced sequence that mates in 5 moves or more against any defence. Start with checks, then captures, then threats, and check every reply of the opponent. In such positions the solution is usually the most forcing move, even if it gives up material.',
         },
         back_rank_mate: {
             name: 'Back-rank mate',

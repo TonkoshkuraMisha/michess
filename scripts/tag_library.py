@@ -3,6 +3,7 @@
 Импорт размечает новые партии сам; скрипт — для уже загруженных и после правки правил.
 
     python scripts/tag_library.py [--all]   # --all — пересчитать и уже размеченные
+    python scripts/tag_library.py --texts   # починить заголовки: cp1251, прочитанная как латиница, фигурки шрифтов
 """
 
 import argparse
@@ -12,6 +13,32 @@ from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+
+async def repair_texts() -> None:
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from sqlalchemy.pool import NullPool
+
+    from src.core.config import settings
+    from src.models.library import LibraryGame
+    from src.services.library import repair_text
+
+    engine = create_async_engine(settings.async_database_url, poolclass=NullPool)
+    fixed = 0
+    async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+        for game in (await db.execute(select(LibraryGame))).scalars():
+            changed = False
+            for field in ("white", "black", "event", "site", "opening"):
+                value = getattr(game, field) or ""
+                repaired = repair_text(value)
+                if repaired != value:
+                    setattr(game, field, repaired)
+                    changed = True
+            fixed += changed
+        await db.commit()
+    await engine.dispose()
+    print(f"repaired games: {fixed}")
 
 
 async def run(recompute: bool) -> None:
@@ -46,7 +73,9 @@ async def run(recompute: bool) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--all", action="store_true")
-    asyncio.run(run(parser.parse_args().all))
+    parser.add_argument("--texts", action="store_true")
+    args = parser.parse_args()
+    asyncio.run(repair_texts() if args.texts else run(args.all))
 
 
 if __name__ == "__main__":

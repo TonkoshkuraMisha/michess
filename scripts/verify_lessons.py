@@ -36,6 +36,9 @@ def evaluate(engine: chess.engine.SimpleEngine, board: chess.Board, move: chess.
     return score(info, board.turn)
 
 
+DECISIVE = 1500  # сп: дальше — выигрыш, сравнивать «насколько» бессмысленно
+
+
 def check_position(engine, board: chess.Board, task: dict, limit, tolerance: int, margin: int) -> list[str]:
     problems = []
     infos = engine.analyse(board, limit, multipv=min(5, board.legal_moves.count()))
@@ -44,10 +47,13 @@ def check_position(engine, board: chess.Board, task: dict, limit, tolerance: int
     answers = [chess.Move.from_uci(u) for u in task["answers"]]
 
     answer_scores = {}
+    multipv = dict(lines)
     for move in answers:
-        value = evaluate(engine, board, move, limit)
+        # Ход из MultiPV — его оценка из той же линии (отдельный поиск после хода бывает мельче и «теряет» мат).
+        value = multipv[move] if move in multipv else evaluate(engine, board, move, limit)
         answer_scores[move] = value
-        if value < best - tolerance:
+        # Обе оценки решающие (выигрыш при любом из ходов) — результат тот же, ход урока не хуже по сути.
+        if value < best - tolerance and not (value >= DECISIVE and best >= DECISIVE):
             problems.append(f"ответ {move.uci()} хуже лучшего {best_move.uci()} ({value} против {best} сп)")
 
     top_answer = max(answer_scores.values())

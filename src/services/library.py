@@ -52,8 +52,43 @@ class ParsedGame:
         return hashlib.sha256(key.encode("utf-8")).hexdigest()
 
 
+# Фигурки шрифтов старых шахматных программ в тексте (¢ король … § пешка) — перед полем или взятием.
+FIGURINES = {"¢": "K", "£": "Q", "¤": "N", "¥": "B", "¦": "R", "§": "P"}
+_FIGURINE = re.compile(r"[¢£¤¥¦§](?=[a-hx])")
+_LATIN_HIGH = re.compile(r"[\u00c0-\u00ff]")
+_CYRILLIC = re.compile(r"[\u0400-\u04ff]")
+_HIGH_WORD = re.compile(r"[\u00c0-\u00ff]{3,}")
+
+
+def repair_text(value: str) -> str:
+    """
+    Текст в cp1251, прочитанный как однобайтовая латиница («Ñèöèëèàíñêàÿ» вместо «Сицилианская»), — обратно в
+    кириллицу; фигурки шрифта — в буквы ходов. Латиница с диакритикой (Müller, Réti) не трогается: в ней старших
+    букв мало, а в кириллице, прочитанной не так, — почти все.
+    """
+    value = _FIGURINE.sub(lambda m: FIGURINES[m.group(0)], value)
+    if _CYRILLIC.search(value):
+        return value
+    high = len(_LATIN_HIGH.findall(value))
+    letters = high + sum(ch.isascii() and ch.isalpha() for ch in value)
+    if high >= 2 and high / letters > 0.5:
+        return _to_cp1251(value)
+    # Латинский префикс разбавляет долю («KID_AverbakhVar-Ñòàðîèíäèéñêàÿ»): слово из трёх и более старших букв
+    # подряд в настоящих западных именах не встречается.
+    return _HIGH_WORD.sub(lambda m: _to_cp1251(m.group(0)), value)
+
+
+def _to_cp1251(value: str) -> str:
+    for single_byte in ("cp1252", "latin-1"):
+        try:
+            return value.encode(single_byte).decode("cp1251")
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            continue
+    return value
+
+
 def _header(game: chess.pgn.Game, name: str, limit: int) -> str:
-    value = game.headers.get(name, "").strip()
+    value = repair_text(game.headers.get(name, "").strip())
     return "" if value in ("?", "????.??.??") else value[:limit]
 
 
