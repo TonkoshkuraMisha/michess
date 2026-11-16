@@ -77,7 +77,7 @@ export const COURSE: CourseModule[] = [
     mod('M2.1', 'M', [m('anastasia_mate'), m('arabian_mate'), m('boden_mate'), m('double_bishop_mate'), m('epaulette_mate'), m('hook_mate')]),
     mod('M2.2', 'M', [l('king-rook-knight-mates'), l('king-bishop-mates')]),
     mod('M2.3', 'M', [th('exposed_king')]),
-    mod('E2.1', 'E', [th('triangulation'), th('outflanking'), th('shouldering'), e('two_pawns'), e('two_pawns_connected')]),
+    mod('E2.1', 'E', [l('endgame-key-squares'), th('triangulation'), th('outflanking'), th('shouldering'), e('two_pawns'), e('two_pawns_connected')]),
     mod('E2.2', 'E', [e('lucena'), e('philidor'), th('rook_behind_passer')]),
     mod('E2.3', 'E', [e('wrong_bishop'), e('rook_pawn_def')]),
     mod('E2.4', 'E', MUST_KNOW[0].map(e)),
