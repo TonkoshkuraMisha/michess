@@ -117,9 +117,11 @@ Start-Job -Name "MichessWorker" -ScriptBlock {
 
 # 8.1. Запуск Vite Frontend в отдельном видимом окне терминала
 Write-Host "[+] Запуск Vite Frontend (порт 3000 в новом окне)..." -ForegroundColor Green
-# Новое окно — Windows PowerShell, где скрипты (и обёртка npm.ps1) по умолчанию запрещены: зовём npm.cmd и снимаем
-# запрет только для этого процесса (-ExecutionPolicy Bypass), системные настройки не меняются.
-Start-Process powershell -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "cd '$frontendDir'; npm.cmd run dev"
+# Окно — PowerShell 7 (pwsh), если он есть; иначе Windows PowerShell 5.1 (powershell — всегда 5.1). В 5.1 скрипты, а с
+# ними обёртка npm.ps1, по умолчанию запрещены: поэтому npm.cmd и -ExecutionPolicy Bypass только для этого процесса
+# (системные настройки не меняются).
+$frontendShell = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell" }
+Start-Process $frontendShell -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "cd '$frontendDir'; npm.cmd run dev"
 
 # 9. Ожидание фактического открытия порта 3000 перед запуском браузера
 $ready = $false
