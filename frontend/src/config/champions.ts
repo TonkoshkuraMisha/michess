@@ -11,6 +11,16 @@ import morphyAvatar from '../assets/champions/morphy.jpg';
 import paulsenAvatar from '../assets/champions/paulsen.jpg';
 import zukertortAvatar from '../assets/champions/zukertort.jpg';
 import steinitzAvatar from '../assets/champions/Steinitz.jpg';
+import chigorinAvatar from '../assets/champions/Chigorin.jpg';
+import tarraschAvatar from '../assets/champions/Tarrasch.jpg';
+import pillsburyAvatar from '../assets/champions/Pillsbury.jpg';
+import marshallAvatar from '../assets/champions/Marshall.jpg';
+import nimzowitschAvatar from '../assets/champions/Nimzowitsch.jpg';
+import retiAvatar from '../assets/champions/Reti.jpg';
+import tartakowerAvatar from '../assets/champions/Tartakower.jpg';
+import botvinnikAvatar from '../assets/champions/Botvinnik.jpg';
+import talAvatar from '../assets/champions/Tal.jpg';
+import petrosianAvatar from '../assets/champions/Petrosian.jpg';
 import laskerAvatar from '../assets/champions/Lasker.jpg';
 import rubinsteinAvatar from '../assets/champions/Rubinstein.jpg';
 import capablancaAvatar from '../assets/champions/Capablanca.jpg';
@@ -30,7 +40,9 @@ export type HistoricalBotId =
     | 'lasker'
     | 'rubinstein'
     | 'capablanca'
-    | 'alekhine';
+    | 'alekhine'
+    | 'chigorin' | 'tarrasch' | 'pillsbury' | 'marshall' | 'nimzowitsch' | 'reti' | 'tartakower'
+    | 'botvinnik' | 'tal' | 'petrosian';
 
 /** Исторический бот или соперник из мастерской (персоналия с ползунками). */
 export type BotOpponentId = HistoricalBotId | 'custom';
@@ -86,6 +98,16 @@ export const HISTORICAL_BOTS: Record<HistoricalBotId, HistoricalBotProfile> = {
     rubinstein: historicalBot('rubinstein', '1880–1961', 2200, rubinsteinAvatar, '/assets/champions/Rubinstein.jpg'),
     capablanca: historicalBot('capablanca', '1888–1942', 2300, capablancaAvatar, '/assets/champions/Capablanca.jpg'),
     alekhine: historicalBot('alekhine', '1892–1946', 2300, alekhineAvatar, '/assets/champions/Alekhine.jpg'),
+    chigorin: historicalBot('chigorin', '1850–1908', 2150, chigorinAvatar, '/assets/champions/Chigorin.jpg'),
+    tarrasch: historicalBot('tarrasch', '1862–1934', 2200, tarraschAvatar, '/assets/champions/Tarrasch.jpg'),
+    pillsbury: historicalBot('pillsbury', '1872–1906', 2250, pillsburyAvatar, '/assets/champions/Pillsbury.jpg'),
+    marshall: historicalBot('marshall', '1877–1944', 2200, marshallAvatar, '/assets/champions/Marshall.jpg'),
+    nimzowitsch: historicalBot('nimzowitsch', '1886–1935', 2250, nimzowitschAvatar, '/assets/champions/Nimzowitsch.jpg'),
+    reti: historicalBot('reti', '1889–1929', 2200, retiAvatar, '/assets/champions/Reti.jpg'),
+    tartakower: historicalBot('tartakower', '1887–1956', 2150, tartakowerAvatar, '/assets/champions/Tartakower.jpg'),
+    botvinnik: historicalBot('botvinnik', '1911–1995', 2400, botvinnikAvatar, '/assets/champions/Botvinnik.jpg'),
+    tal: historicalBot('tal', '1936–1992', 2450, talAvatar, '/assets/champions/Tal.jpg'),
+    petrosian: historicalBot('petrosian', '1929–1984', 2400, petrosianAvatar, '/assets/champions/Petrosian.jpg'),
 };
 
 export const HISTORICAL_BOTS_LIST: (HistoricalBotProfile & {id: HistoricalBotId})[] =

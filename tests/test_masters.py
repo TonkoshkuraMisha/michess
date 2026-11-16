@@ -13,7 +13,9 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 
 def test_masters_are_registered_with_books():
-    assert [m.id for m in MASTERS] == ["steinitz", "lasker", "rubinstein", "capablanca", "alekhine"]
+    assert [m.id for m in MASTERS] == ["steinitz", "lasker", "rubinstein", "capablanca", "alekhine", "chigorin",
+                                       "tarrasch", "pillsbury", "marshall", "nimzowitsch", "reti", "tartakower",
+                                       "botvinnik", "tal", "petrosian"]
     for master in MASTERS:
         bot = BOT_INSTANCES[master.id]
         assert bot is MASTER_BOTS[master.id] and bot.bot_id == master.id
