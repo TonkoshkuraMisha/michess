@@ -96,6 +96,15 @@ async def test_bad_training_requests(client, token_user_1, fork_puzzles, params,
     assert response.status_code == 400 and response.json()["detail"]["code"] == code
 
 
+async def test_save_the_game_is_a_mix_by_goal(client, token_user_1, db_session, fork_puzzles):
+    """«Спасите партию» (27.9): только цель draw — задачи на ничью из любых тем, задачи других целей не попадают."""
+    await import_rows(db_session, [_row("DRAW1", 950, tags="equality defensiveMove short")])
+    for _ in range(3):
+        view = client.get(f"{API}/train", params={"goal": "draw"}, headers=_auth(token_user_1)).json()
+        assert view["goal"] == "draw" and "equality" in view["themes"]
+    assert client.get(f"{API}/train", params={"goal": "promotion"}, headers=_auth(token_user_1)).status_code == 404
+
+
 async def test_theme_without_puzzles_at_stage(client, token_user_1, fork_puzzles):
     response = client.get(f"{API}/train", params={"theme": "fork_knight", "stage": 4}, headers=_auth(token_user_1))
     assert response.status_code == 404 and response.json()["detail"]["code"] == "no_puzzles_available"

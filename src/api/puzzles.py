@@ -59,7 +59,10 @@ async def train(
         user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
 ):
-    """Тренировка по приёмам (таск 13.4): задача темы на ступени игрока или смешанная по разделу."""
+    """
+    Тренировка по приёмам (таск 13.4): задача темы на ступени игрока, смешанная по разделу или — одной целью без темы
+    и раздела — смешанная по цели («Спасите партию», 27.9: goal=draw).
+    """
     try:
         puzzle, chosen_stage = await service.pick_training(db, user, theme=theme, section=section, stage=stage,
                                                            goal=goal)

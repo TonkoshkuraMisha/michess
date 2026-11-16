@@ -31,8 +31,10 @@ import {TrainingPanel} from './TrainingPanel';
 import {SolutionReplay} from './SolutionReplay';
 import type {ReplayView} from './SolutionReplay';
 
-type Mode = 'rated' | 'themes' | 'defense' | 'drills' | 'personal' | 'daily' | 'timed';
-const MODES: Mode[] = ['rated', 'themes', 'defense', 'drills', 'personal', 'daily', 'timed'];
+// save — «Спасите партию» (27.9): смешанная подборка задач с целью «ничья» (вечный шах, пат, крепость, равенство).
+type Mode = 'rated' | 'themes' | 'defense' | 'save' | 'drills' | 'personal' | 'daily' | 'timed';
+const MODES: Mode[] = ['rated', 'themes', 'defense', 'save', 'drills', 'personal', 'daily', 'timed'];
+const SAVE_TARGET: TrainingTarget = {goal: 'draw', blind: false};
 type Phase = 'idle' | 'loading' | 'opponent' | 'solving' | 'waiting' | 'done';
 
 const OPPONENT_DELAY_MS = 500;
@@ -182,6 +184,8 @@ export default function PuzzlesPage() {
             } else if (nextMode === 'themes') {
                 if (nextTarget) present(await puzzlesApi.train(nextTarget));
                 else setPhase('idle');
+            } else if (nextMode === 'save') {
+                present(await puzzlesApi.train(SAVE_TARGET));
             } else if (nextMode === 'timed') {
                 const view = await puzzlesApi.timedNext();
                 setRun(view.run);
@@ -535,6 +539,10 @@ export default function PuzzlesPage() {
                             {t('puzzles.timedOver', {score: timedResult.score, best: timedResult.best})}
                             {timedResult.new_record && ` ${t('puzzles.newRecord')}`}
                         </p>
+                    )}
+
+                    {mode === 'save' && (
+                        <p className="text-amber-200 leading-snug" data-testid="save-intro">{t('puzzles.save.intro')}</p>
                     )}
 
                     {mode === 'themes' && target && (

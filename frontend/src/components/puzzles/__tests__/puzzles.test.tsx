@@ -175,6 +175,22 @@ describe('PuzzlesPage', () => {
         await waitFor(() => expect(screen.getByTestId('puzzle-info').textContent).toContain('задача дня'));
     });
 
+    it('«Спасите партию» (27.9): задачи с целью «ничья» без выбора темы', async () => {
+        const calls = stub(() => ({...PUZZLE, goal: 'draw', themes: ['perpetual_check']}));
+        renderPage();
+        await screen.findByTestId('puzzle-theme');
+        await act(async () => {
+            fireEvent.click(screen.getByTestId('puzzle-mode-save'));
+        });
+        await waitFor(() => expect(calls.some((c) => c.url.endsWith('/train?goal=draw'))).toBe(true));
+        expect(screen.getByTestId('save-intro')).toHaveTextContent('Найдите ничью');
+        await waitFor(() => expect(screen.getByTestId('puzzle-next')).not.toBeDisabled());  // ход соперника сыгран
+        await act(async () => {
+            fireEvent.click(screen.getByTestId('puzzle-next'));
+        });
+        expect(calls.filter((c) => c.url.endsWith('/train?goal=draw')).length).toBe(2);
+    });
+
     it('режим на время: таймер, счёт с сервера, рекорд', async () => {
         const run = {run_id: 'r1', minutes: 3, solved: 0, mistakes: 0, seconds_left: 180, over: false};
         const calls = stub((url) => {

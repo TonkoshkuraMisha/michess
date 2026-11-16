@@ -226,9 +226,12 @@ async def pick_training(
 ) -> tuple[Puzzle, int | None]:
     """
     Задача тренировки: по теме (ступень — из прогресса, если не задана) или смешанная по разделу; goal — только
-    задачи с этой целью («отвлечение с целью мата», 27.8).
+    задачи с этой целью («отвлечение с целью мата», 27.8). Одна цель без темы и раздела — смешанная подборка по
+    цели из всех тем: так устроен режим «Спасите партию» (27.9, goal=draw).
     """
-    if (theme is None) == (section is None):
+    if theme is not None and section is not None:
+        raise PuzzleError("training_target_required", 400)
+    if theme is None and section is None and goal is None:
         raise PuzzleError("training_target_required", 400)
     if theme is not None and theme not in THEMES_BY_CODE:
         raise PuzzleError("unknown_theme", 400, theme=theme)
@@ -241,7 +244,7 @@ async def pick_training(
     if theme is not None and stage is None:
         progress = await _progress(db, user.id, theme)
         stage = min(progress.stage, STAGES[-1]) if progress else 1
-    codes = [theme] if theme is not None else [t.code for t in THEMES if t.section == section]
+    codes = [theme] if theme is not None else [t.code for t in THEMES if section is None or t.section == section]
     recent = await _recent_ids(db, user.id)
     # Смешанная подборка — под рейтинг игрока, окно расширяется; по теме сложность задаёт ступень.
     windows: tuple[int | None, ...] = (None,) if stage is not None else (300, 600, None)
