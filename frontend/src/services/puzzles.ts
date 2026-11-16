@@ -64,10 +64,15 @@ export interface DemoExample {
 }
 
 /** Что тренируем: тему (на ступени игрока) или раздел (смешанная подборка); «без названия темы». */
+/** Цели задачи (таск 27.8): итог решения, выводится сервером из тем задачи. */
+export const PUZZLE_GOALS = ['mate', 'draw', 'promotion', 'material'] as const;
+export type PuzzleGoal = typeof PUZZLE_GOALS[number];
+
 export interface TrainingTarget {
     theme?: string;
     section?: string;
     blind: boolean;
+    goal?: PuzzleGoal;
 }
 
 /** «Ваши ошибки» (таск 13.5): позиция перед ошибкой в партии игрока. */
@@ -299,6 +304,7 @@ export const puzzlesApi = {
         if (target.theme) params.set('theme', target.theme);
         if (target.section) params.set('section', target.section);
         if (target.blind) params.set('blind', 'true');
+        if (target.goal) params.set('goal', target.goal);
         return request<PuzzleView>(`/train?${params.toString()}`);
     },
     training: () => request<TrainingOverview>('/training'),

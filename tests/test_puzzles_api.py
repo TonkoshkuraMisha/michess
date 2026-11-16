@@ -47,7 +47,7 @@ def _move(client, token, puzzle_id: int, move: str):
 
 async def test_solution_is_not_sent_and_moves_are_checked_one_by_one(client, token_user_1, puzzles, db_session):
     puzzle = _start(client, token_user_1, "back_rank_mate")
-    assert set(puzzle) == {"id", "fen", "first_move", "rating", "themes", "color", "solution_length"}
+    assert set(puzzle) == {"id", "fen", "first_move", "rating", "themes", "goal", "color", "solution_length"}
     assert puzzle["first_move"] == "e8e2" and puzzle["color"] == "white" and puzzle["solution_length"] == 2
     assert "back_rank_mate" in puzzle["themes"]
 

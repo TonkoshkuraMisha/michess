@@ -885,6 +885,7 @@ export const en = {
         timed_run_over: 'The timed run is over',
         training_target_required: 'Choose either a theme or a section',
         unknown_section: 'Unknown section: {section}',
+        unknown_goal: 'Unknown goal: {goal}',
         invalid_stage: 'A stage is from 1 to 4',
         unknown_drill_kind: 'Unknown exercise type: {kind}',
         drill_not_active: 'This exercise is no longer active: open the next one',
@@ -2098,6 +2099,16 @@ export const en = {
         spanish: 'Spanish (e4 against d6)',
         symmetry: 'Symmetrical centre (e4 against e5)',
     },
+    themeGoals: {
+        title: 'Goal',
+        any: 'Any goal',
+        mate: 'Mate',
+        material: 'Win material',
+        promotion: 'Promotion',
+        invasion: 'Invasion',
+        draw: 'Draw',
+        tempo: 'Tempo',
+    },
     supercourse: {
         modules: {
             T0_0: 'Board, pieces and captures',
@@ -3066,6 +3077,56 @@ export const en = {
             name: 'Which exchange is right?',
             short: 'Trade the pieces that help the opponent most.',
             explain: 'Every exchange changes the position: trade your bad pieces for his good ones, trade attackers when you defend, keep pieces when you attack. Before capturing, ask what remains on the board afterwards and who benefits. The right exchange is often the whole plan.',
+        },
+        perpetual_attack: {
+            name: 'Perpetual attack',
+            short: 'Chase a piece endlessly so the opponent cannot escape the repetition.',
+            explain: 'Perpetual attack is like perpetual check, but the target is a piece: you attack the queen or a rook again and again, and it has no quiet square. The opponent must either repeat moves or give up material. Look for it when you are worse and the enemy queen is short of squares.',
+        },
+        tempo_gain: {
+            name: 'Gaining a tempo',
+            short: 'Make a useful move that also creates a threat the opponent must answer.',
+            explain: 'A tempo is one move of time. When your developing move attacks something, the opponent spends a move defending, and you are a step ahead. Develop with threats, attack loose pieces and an exposed queen — every forced reply is a move the opponent did not use for their own plan.',
+        },
+        unstoppable_threat: {
+            name: 'Unstoppable threat',
+            short: 'Create a threat that no defence can parry, then carry it out.',
+            explain: 'Sometimes the strongest move is not a check or a capture but a quiet move that creates a threat with no answer. Before playing it, check every defence: moving away, blocking, counter-attacking. If none works, the threat decides the game even if it takes a few moves to execute.',
+        },
+        critical_position: {
+            name: 'Critical position',
+            short: 'The moment when the game is decided: think longest here.',
+            explain: 'A critical position is a turning point: an exchange, a pawn break, a sacrifice or a change of plan that cannot be undone. Recognise it by the tension on the board and by the number of sharp options. Spend your thinking time here, not on obvious moves.',
+        },
+        blockade: {
+            name: 'Blockade',
+            short: 'Stop a passed or isolated pawn by placing a piece right in front of it.',
+            explain: 'A pawn that cannot move is no danger, and the square in front of it is a good post. The best blockader is a knight: it keeps its activity while standing in the way. Blockade the enemy passed pawn first, then attack it or play on the other side.',
+        },
+        overprotection: {
+            name: 'Overprotection',
+            short: 'Defend a key point more times than it is attacked, in advance.',
+            explain: 'Overprotection means guarding an important square or pawn with several pieces before the opponent attacks it. The defenders then stand well and are free to act, because none of them is tied down. It works best for central strong points and the base of a pawn chain.',
+        },
+        centralization: {
+            name: 'Centralisation',
+            short: 'Bring pieces to the centre, where they control the most squares.',
+            explain: 'A knight or a queen in the centre reaches far more squares than on the edge, and can switch quickly to either wing. In the endgame the king too belongs in the centre. When you have no clear plan, improve a piece by moving it towards the centre.',
+        },
+        pawn_chain: {
+            name: 'Pawn chain',
+            short: 'Attack the base of the enemy pawn chain, not its head.',
+            explain: 'A pawn chain is a diagonal line of pawns defending each other. The front pawn is protected, so the target is the base — the last pawn of the chain. Undermine it with your own pawn, and play on the side where your chain points.',
+        },
+        restriction: {
+            name: 'Restriction',
+            short: 'Take squares away from enemy pieces and pawns before attacking.',
+            explain: 'Restriction is a quiet strategy: you control the squares the opponent needs, so their pieces stay passive and their pawn breaks are prevented. Often a single pawn move or a well-placed piece paralyses a whole wing. Only then do you start the attack.',
+        },
+        bishop_pair: {
+            name: 'The bishop pair',
+            short: 'Two bishops against bishop and knight: open the position.',
+            explain: 'Two bishops together cover squares of both colours and grow stronger as the board opens up. Keep them, open lines with pawn breaks and avoid blocking them with your own pawns. Against the bishop pair, keep the position closed and look for exchanges.',
         },
     },
     xray: {

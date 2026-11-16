@@ -109,6 +109,7 @@ ERROR_MESSAGES: dict[str, str] = {
     "timed_run_over": "The timed run is over",
     "training_target_required": "Choose either a theme or a section",
     "unknown_section": "Unknown section: {section}",
+    "unknown_goal": "Unknown goal: {goal}",
     "invalid_stage": "A stage is from 1 to 4",
     "unknown_drill_kind": "Unknown exercise type: {kind}",
     "drill_not_active": "This exercise is no longer active: open the next one",

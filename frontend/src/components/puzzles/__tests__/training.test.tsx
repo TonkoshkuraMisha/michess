@@ -123,6 +123,16 @@ describe('режим «Приёмы»', () => {
         expect(screen.queryByTestId('puzzle-themes')).toBeNull();
     });
 
+    it('цель задачи (27.8) уходит в запрос тренировки', async () => {
+        const calls = stub((url) => (url.includes('/train?') ? {...PUZZLE, stage: null} : null));
+        await openThemes();
+        fireEvent.change(screen.getByTestId('training-goal'), {target: {value: 'mate'}});
+        await act(async () => {
+            fireEvent.click(screen.getByTestId('training-mixed-A'));
+        });
+        expect(calls.some((u) => u.endsWith('/train?section=A&goal=mate'))).toBe(true);
+    });
+
     it('переход на следующую ступень и освоение темы', async () => {
         stub((url) => (url.includes('/move')
             ? {correct: true, done: true, reply: null, solution: null, result: {
