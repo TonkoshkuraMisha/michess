@@ -44,6 +44,16 @@ export function oddsTimes(kind: OddsKind, giver: 'white' | 'black', whiteMs: num
     return giver === 'white' ? {white: cut(whiteMs), black: blackMs} : {white: whiteMs, black: cut(blackMs)};
 }
 
+/** Форы для партии с человеком по ссылке (сервер, src/services/odds.py): материальные и по времени. */
+export const PVP_ODDS = ['none', 'knight', 'rook', 'queen', 'pawn', 'time'] as const;
+export type PvpOddsKind = typeof PVP_ODDS[number];
+
+/** Поля приглашения для сервера: giver «me» — фору даёт создатель ссылки. */
+export function inviteOddsFields(odds: OddsChoice): { odds_kind: string; odds_giver: 'creator' | 'acceptor' } {
+    return {odds_kind: odds.kind === 'none' || odds.kind === 'hourglass' ? '' : odds.kind,
+        odds_giver: odds.giver === 'me' ? 'creator' : 'acceptor'};
+}
+
 /** Кто даёт фору по цвету: «я» — мой цвет, «соперник» — противоположный. */
 export function giverColor(giver: OddsGiver, myColor: 'white' | 'black'): 'white' | 'black' {
     if (giver === 'me') return myColor;

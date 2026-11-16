@@ -29,6 +29,7 @@ from src.services.game_engine import (  # noqa: F401  (flag_outcome реэксп
     flag_outcome,
     side_has_mating_material,
 )
+from src.services.odds import pgn_header
 from src.services.rating import classify_time_control, elo_calculator
 from src.services.task_dispatch import schedule_game_analysis_in_background
 
@@ -200,18 +201,20 @@ class GameStateManager:
 
     async def initialize_game(
             self, game_id: int, white_id: int, black_id: int, base_time_ms: int, increment_ms: int,
-            is_rated: bool = True,
+            is_rated: bool = True, start_fen: str | None = None, white_time_ms: int | None = None,
+            black_time_ms: int | None = None,
     ):
         now_ms = int(time.time() * 1000)
         state = {
             "white_id": str(white_id),
             "black_id": str(black_id),
             "is_rated": "1" if is_rated else "0",
-            "board_fen": STARTING_FEN,
-            "pgn": "",
+            "board_fen": start_fen or STARTING_FEN,
+            # Партия с позиции (фора): PGN начинается с заголовков SetUp/FEN.
+            "pgn": pgn_header(start_fen) if start_fen else "",
             "state_version": "0",
-            "white_time_ms": str(base_time_ms),
-            "black_time_ms": str(base_time_ms),
+            "white_time_ms": str(white_time_ms if white_time_ms is not None else base_time_ms),
+            "black_time_ms": str(black_time_ms if black_time_ms is not None else base_time_ms),
             "base_time_ms": str(base_time_ms),
             "increment_ms": str(increment_ms),
             "last_move_at": str(now_ms),
@@ -334,7 +337,7 @@ class GameStateManager:
                     "black_id": str(db_game.black_player_id),
                     "is_rated": "1" if db_game.is_rated else "0",
                     "board_fen": db_game.board_fen or STARTING_FEN,
-                    "pgn": db_game.pgn or "",
+                    "pgn": db_game.pgn or (pgn_header(db_game.initial_fen) if db_game.initial_fen else ""),
                     "state_version": str(db_game.state_version or 0),
                     "white_time_ms": str(white_time),
                     "black_time_ms": str(black_time),
@@ -707,7 +710,9 @@ class GameStateManager:
             pgn_game.headers["Termination"] = termination
 
             node: chess.pgn.GameNode = pgn_game
-            board_for_pgn = chess.Board()
+            if db_game.initial_fen:
+                pgn_game.setup(chess.Board(db_game.initial_fen))
+            board_for_pgn = chess.Board(db_game.initial_fen) if db_game.initial_fen else chess.Board()
             for m in moves_telemetry:
                 try:
                     move_obj = chess.Move.from_uci(m["notation"])

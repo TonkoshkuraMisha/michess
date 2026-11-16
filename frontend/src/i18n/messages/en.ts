@@ -2102,6 +2102,7 @@ export const en = {
         draw: 'Draw: no moves left.',
     },
     odds: {
+        unrated: 'A game with odds does not change ratings.',
         label: 'Odds',
         giver: 'Who gives the odds',
         opponentGives: 'the opponent gives',

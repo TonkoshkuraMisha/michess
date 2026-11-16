@@ -284,6 +284,8 @@ async def _create_invite(ctx: ActionContext, data: dict) -> None:
         increment_ms=increment_ms,
         color_pref=str(data.get("color_pref", "random")),
         rated=_rated_flag(data),
+        odds_kind=str(data.get("odds_kind", "") or ""),
+        odds_giver=str(data.get("odds_giver", "creator") or "creator"),
     )
     await ctx.send({"event": "invite_created", **invite_data})
 

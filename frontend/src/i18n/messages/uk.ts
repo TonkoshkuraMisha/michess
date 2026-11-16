@@ -2106,6 +2106,7 @@ export const uk: Messages = {
         draw: 'Нічия: ходів більше немає.',
     },
     odds: {
+        unrated: 'Партія з форою не змінює рейтингу.',
         label: 'Фора',
         giver: 'Хто дає фору',
         opponentGives: 'дає суперник',

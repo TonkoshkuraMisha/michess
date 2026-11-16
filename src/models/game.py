@@ -37,6 +37,8 @@ class Game(Base):
 
     state_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     turn: Mapped[str] = mapped_column(String(1), default="w", server_default="w", nullable=False)
+    # Начальная позиция партии с форой (21.1, сеть); None — обычная расстановка.
+    initial_fen: Mapped[str | None] = mapped_column(String(100), nullable=True)
     board_fen: Mapped[str] = mapped_column(
         String,
         default="rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",

@@ -2106,6 +2106,7 @@ export const ru: Messages = {
         draw: 'Ничья: ходов больше нет.',
     },
     odds: {
+        unrated: 'Партия с форой не меняет рейтинг.',
         label: 'Фора',
         giver: 'Кто даёт фору',
         opponentGives: 'даёт соперник',

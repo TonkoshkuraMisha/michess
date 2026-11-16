@@ -102,6 +102,7 @@ export default function Chessboard() {
 
     const [spectatingGameId, setSpectatingGameId] = useState<number | null>(null);
     const [inviteColorPref, setInviteColorPref] = useState<'white' | 'black' | 'random'>('random');
+    const [inviteOdds, setInviteOdds] = useState<OddsChoice>({kind: 'none', giver: 'me'});
     // Тип новых партий (вызов в лобби и приглашение по ссылке) и тип партии, идущей на доске.
     const [ratedChoice, setRatedChoice] = useState<boolean>(true);
     const [isRatedGame, setIsRatedGame] = useState<boolean>(true);
@@ -333,7 +334,7 @@ export default function Chessboard() {
         gameId, gameIdRef, myColorRef, spectatingGameId, stateVersionRef,
         gameOverResult, gameOverResultRef, activeBot, currentUsernameRef, inviteCode, navigate,
         effectiveWhiteBaseMinutes, effectiveIncSeconds,
-        inviteColorPref, ratedChoice, setIsRatedGame,
+        inviteColorPref, inviteOdds, ratedChoice, setIsRatedGame,
         setGame, setHistory, setViewIndex, setGameId, setMyColor, setSpectatingGameId, setActiveBot,
         setStateVersion, setWhitePlayer, setBlackPlayer, setRatingInfo, setGameOverResult,
         setDrawOfferStatus, setRematchStatus, isSearching, setIsSearching, setIsManualFlip, setSelectedSquare,
@@ -1359,6 +1360,8 @@ export default function Chessboard() {
                         showInvitePanel={showInvitePanel}
                         onToggleInvitePanel={() => setShowInvitePanel(prev => !prev)}
                         inviteColorPref={inviteColorPref}
+                        inviteOdds={inviteOdds}
+                        onInviteOddsChange={setInviteOdds}
                         onInviteColorPrefChange={setInviteColorPref}
                         createdInviteCode={createdInviteCode}
                         inviteCopied={inviteCopied}
