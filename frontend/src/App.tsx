@@ -29,6 +29,7 @@ import {Chess960Page} from './components/chess960/Chess960Page';
 import {WorkoutPage} from './components/WorkoutPage';
 import {ExamPage} from './components/ExamPage';
 import {ProgramPage, ProgramsPage} from './components/ProgramsPage';
+import {SupercoursePage} from './components/learn/SupercoursePage';
 import {RepertoireEditorPage, RepertoireListPage} from './components/repertoire/RepertoirePages';
 import {LibraryPage} from './components/library/LibraryPage';
 import {RepertoireDrillPage} from './components/repertoire/RepertoireDrill';
@@ -612,6 +613,7 @@ export default function App() {
                     <Route path="/leaderboard" element={<Leaderboard/>}/>
                     <Route path="/puzzles" element={<PuzzlesPage/>}/>
                     <Route path="/learn" element={<LearnPage/>}/>
+                        <Route path="/learn/course" element={<SupercoursePage/>}/>
                         <Route path="/learn/basics" element={<BasicsPage/>}/>
                         <Route path="/learn/basics/:sectionId" element={<BasicsSectionPage/>}/>
                         <Route path="/learn/mates" element={<MateCoursePage/>}/>

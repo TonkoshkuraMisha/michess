@@ -2,7 +2,7 @@
 // справа; партия открывается в обычном просмотре (/library/game/:id, GameViewer в режиме библиотеки).
 
 import {useEffect, useState} from 'react';
-import {Link} from 'react-router-dom';
+import {Link, useSearchParams} from 'react-router-dom';
 import {ChevronDown, ChevronRight, Library, Lock} from 'lucide-react';
 import {renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
@@ -53,10 +53,14 @@ export function LibraryPage() {
     const {t} = useI18n();
     const [collections, setCollections] = useState<LibraryCollection[]>([]);
     const [open, setOpen] = useState<Set<number>>(new Set());
-    const [view, setView] = useState<View | null>(null);
+    // ?structure=… — сразу поиск партий с этой пешечной структурой (модули Большого курса, 27.6).
+    const [params] = useSearchParams();
+    const initialStructure = params.get('structure') ?? '';
+    const [view, setView] = useState<View | null>(
+        (STRUCTURES as readonly string[]).includes(initialStructure) ? {kind: 'search', search: {structure: initialStructure}} : null);
     const [offset, setOffset] = useState(0);
     const [page, setPage] = useState<Page | null>(null);
-    const [draft, setDraft] = useState<LibrarySearch>({});
+    const [draft, setDraft] = useState<LibrarySearch>(initialStructure ? {structure: initialStructure} : {});
     const [error, setError] = useState<UiMessage | null>(null);
 
     useEffect(() => {
