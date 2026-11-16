@@ -34,6 +34,11 @@ def _client_identity(request: Request) -> str:
     return f"ip:{client_ip(request)}"
 
 
+def client_identity(request: Request) -> str:
+    """Игрок по токену, а без входа — адрес: общий ключ лимитов для эндпоинтов, открытых гостям."""
+    return _client_identity(request)
+
+
 def client_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 

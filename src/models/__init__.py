@@ -1,6 +1,7 @@
 from src.models.achievement import UserAchievement
 from src.models.arena import Arena, ArenaGame, ArenaPlayer
 from src.models.base import Base
+from src.models.beta import Feedback, Invite
 from src.models.collection import CollectionEntry
 from src.models.email_token import EmailToken
 from src.models.game import Game
@@ -31,6 +32,8 @@ __all__ = [
     "DefenseDrill",
     "DrillRecord",
     "EmailToken",
+    "Feedback",
+    "Invite",
     "Game",
     "CollectionEntry",
     "Follow",
