@@ -23,7 +23,20 @@ if (-not (Test-Path (Join-Path $frontendDir ".env")) -and (Test-Path (Join-Path 
 # 2. Остановка старых фоновых задач, процессов node и освобождение портов 8000 и 3000
 Get-Job -Name "MichessBackend", "MichessWorker", "MichessFrontend" -ErrorAction SilentlyContinue | Stop-Job -PassThru | Remove-Job -Force -ErrorAction SilentlyContinue
 
-Stop-Process -Name "node" -Force -ErrorAction SilentlyContinue
+# Процессы, оставшиеся от прошлых запусков из ДРУГИХ окон (Get-Job видит задания только своей сессии):
+# Celery-воркер этого проекта (порта у него нет) и Vite из папки frontend. Чужие процессы node
+# (например, сам Claude Code или другие проекты) не трогаем — только те, чья командная строка указывает сюда.
+$stale = Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | Where-Object {
+    $_.CommandLine -and (
+        ($_.Name -like "python*" -and $_.CommandLine -like "*celery*src.worker.celery_app*") -or
+        ($_.Name -eq "node.exe" -and $_.CommandLine -like "*$frontendDir*vite*")
+    )
+}
+foreach ($p in $stale)
+{
+    Write-Host "[*] Останавливаем старый процесс $( $p.Name ) (PID: $( $p.ProcessId ))..." -ForegroundColor DarkYellow
+    Stop-Process -Id $p.ProcessId -Force -ErrorAction SilentlyContinue
+}
 
 foreach ($port in @(8000, 3000))
 {
@@ -75,19 +88,74 @@ if (-not (Test-Path (Join-Path $frontendDir "node_modules")))
 
 # 6. Поднятие базы данных и Redis через Docker
 Write-Host "[*] Проверяем Docker и контейнеры (PostgreSQL: 15432, Redis: 6379)..." -ForegroundColor Cyan
+if (-not (Get-Command docker -ErrorAction SilentlyContinue))
+{
+    Write-Host "[!] Команда docker не найдена. Установите Docker Desktop и запустите скрипт снова." -ForegroundColor Red
+    exit 1
+}
+docker info *> $null
+if ($LASTEXITCODE -ne 0)
+{
+    $dockerDesktop = Join-Path $env:ProgramFiles "Docker\Docker\Docker Desktop.exe"
+    if (Test-Path $dockerDesktop)
+    {
+        Write-Host "[*] Docker Desktop не запущен — запускаем и ждём (до 120 с)..." -ForegroundColor Yellow
+        Start-Process $dockerDesktop
+        for ($i = 0; $i -lt 60; $i++)
+        {
+            Start-Sleep -Seconds 2
+            docker info *> $null
+            if ($LASTEXITCODE -eq 0) { break }
+        }
+    }
+    if ($LASTEXITCODE -ne 0)
+    {
+        Write-Host "[!] Docker недоступен. Запустите Docker Desktop, дождитесь статуса 'Engine running' и повторите." -ForegroundColor Red
+        exit 1
+    }
+}
 docker compose up -d db redis
 if ($LASTEXITCODE -ne 0)
 {
-    Write-Host "[!] Внимание: Docker Desktop не запущен или недоступен!" -ForegroundColor Red
+    Write-Host "[!] Не удалось поднять контейнеры db и redis (docker compose up). Запуск прерван." -ForegroundColor Red
+    exit 1
+}
+
+# 6.1. Ожидание готовности PostgreSQL: порт контейнера открывается раньше, чем база принимает подключения
+$dbReady = $false
+for ($i = 0; $i -lt 30; $i++)
+{
+    docker compose exec -T db pg_isready *> $null
+    if ($LASTEXITCODE -eq 0)
+    {
+        $dbReady = $true
+        break
+    }
+    Start-Sleep -Seconds 1
+}
+if (-not $dbReady)
+{
+    Write-Host "[!] PostgreSQL не стал принимать подключения за 30 секунд. Смотрите: docker compose logs db" -ForegroundColor Red
+    exit 1
 }
 
 # 7. Применение миграций БД
 Write-Host "[*] Применяем миграции базы данных (Alembic)..." -ForegroundColor Cyan
 & $pythonExe -m alembic upgrade head
+if ($LASTEXITCODE -ne 0)
+{
+    Write-Host "[!] Миграции Alembic завершились с ошибкой (см. вывод выше). Запуск прерван." -ForegroundColor Red
+    exit 1
+}
 
 # 7.0. База задач (выборка из открытой базы lichess, data/puzzles); уже загруженные задачи пропускаются
 Write-Host "[*] Загружаем базу задач..." -ForegroundColor Cyan
 & $pythonExe -m scripts.import_puzzles
+if ($LASTEXITCODE -ne 0)
+{
+    Write-Host "[!] Загрузка базы задач завершилась с ошибкой (см. вывод выше). Запуск прерван." -ForegroundColor Red
+    exit 1
+}
 
 # 7.1. Автопроверка и докачка архивов партий 21 чемпиона мира
 $steinitzPgn = Join-Path $root "src\db\data\pgns\Steinitz.pgn"
@@ -123,30 +191,52 @@ Write-Host "[+] Запуск Vite Frontend (порт 3000 в новом окне
 $frontendShell = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } else { "powershell" }
 Start-Process $frontendShell -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "cd '$frontendDir'; npm.cmd run dev"
 
-# 9. Ожидание фактического открытия порта 3000 перед запуском браузера
-$ready = $false
-for ($i = 0; $i -lt 30; $i++)
+# 9. Ожидание фактического открытия портов 3000 (Vite) и 8000 (backend) перед запуском браузера.
+# Первый старт Vite (оптимизация зависимостей) и uvicorn --reload может занять заметно больше 15 секунд.
+$waitSeconds = 60
+$frontendReady = $false
+$backendReady = $false
+for ($i = 0; $i -lt $waitSeconds * 2; $i++)
 {
-    if (Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue)
-    {
-        $ready = $true
-        break
-    }
+    if (-not $frontendReady -and (Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue)) { $frontendReady = $true }
+    if (-not $backendReady -and (Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue)) { $backendReady = $true }
+    if ($frontendReady -and $backendReady) { break }
+    # Задание бэкенда упало сразу (ошибка импорта и т.п.) — ждать порт дальше бессмысленно
+    if (-not $backendReady -and (Get-Job -Name "MichessBackend" -ErrorAction SilentlyContinue).State -in @("Failed", "Completed", "Stopped")) { break }
     Start-Sleep -Milliseconds 500
 }
+$workerJob = Get-Job -Name "MichessWorker" -ErrorAction SilentlyContinue
+$workerAlive = $workerJob -and $workerJob.State -eq "Running"
 
-if ($ready)
+if ($frontendReady)
 {
     Write-Host "[+] Открываем браузер на http://127.0.0.1:3000 ..." -ForegroundColor Magenta
     Start-Process "http://127.0.0.1:3000"
 }
 else
 {
-    Write-Host "[!] Порт 3000 не ответил за 15 секунд. Проверьте открывшееся окно терминала Vite." -ForegroundColor Red
+    Write-Host "[!] Порт 3000 не ответил за $waitSeconds секунд. Проверьте открывшееся окно терминала Vite." -ForegroundColor Red
+}
+if (-not $backendReady)
+{
+    Write-Host "[!] Backend не открыл порт 8000. Логи: Receive-Job -Name MichessBackend -Keep" -ForegroundColor Red
+}
+if (-not $workerAlive)
+{
+    Write-Host "[!] Celery-воркер остановился. Логи: Receive-Job -Name MichessWorker -Keep" -ForegroundColor Red
 }
 
-Write-Host "========================================================" -ForegroundColor Green
-Write-Host " Все сервисы запущены! Локальный сервер работает." -ForegroundColor Green
+$allOk = $frontendReady -and $backendReady -and $workerAlive
+$statusColor = if ($allOk) { "Green" } else { "Yellow" }
+Write-Host "========================================================" -ForegroundColor $statusColor
+if ($allOk)
+{
+    Write-Host " Все сервисы запущены! Локальный сервер работает." -ForegroundColor Green
+}
+else
+{
+    Write-Host " Запуск завершён с проблемами — см. сообщения [!] выше." -ForegroundColor Yellow
+}
 Write-Host " Фронтенд: http://127.0.0.1:3000" -ForegroundColor Cyan
 Write-Host " API Docs: http://127.0.0.1:8000/docs" -ForegroundColor Cyan
 Write-Host " Просмотр логов бэкенда: Receive-Job -Name MichessBackend -Keep" -ForegroundColor Gray
