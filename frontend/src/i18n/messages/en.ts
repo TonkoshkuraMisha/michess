@@ -1223,6 +1223,15 @@ export const en = {
     // Наставник (src/services/coach.py): фигуры и поля приходят фигурной нотацией («♘f7»), поэтому
     // фразы не склоняют названия фигур. У каждого шаблона две формулировки (v1, v2).
     puzzles: {
+        candidates: {
+            toggle: 'Candidates first',
+            hint: 'Before moving, mark 2–3 candidate moves (click “from”, then “to”); after the puzzle you will see whether the best move was among them.',
+            mark: 'Mark 2–3 candidate moves: {n} marked',
+            solve: 'Solve',
+            marked: 'Candidates: {n}',
+            found: 'The best move was among your candidates.',
+            missed: 'The best move was not among your candidates — look wider: checks, captures, threats.',
+        },
         title: 'Puzzles',
         profile: 'Puzzle rating {rating} · solved {games} · streak {streak}',
         theme: 'Theme',
