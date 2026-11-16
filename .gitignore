@@ -61,3 +61,6 @@ _project_snapshot/
 .venv/
 # Партии калибровки — для метрик стиля (scripts/style_metrics.py), небольшие.
 !scripts/calibration_runs/*.pgn
+
+# Claude Code: личные настройки на этом хосте
+.claude/settings.local.json
