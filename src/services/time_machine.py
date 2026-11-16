@@ -163,6 +163,34 @@ _EVENTS: tuple[Event, ...] = (
         ("marco", 15.5), ("wolf", 14), ("mieses", 13), ("marshall", 12), ("taubenhaus", 10.5), ("mason", 10.5),
         ("albin", 8), ("reggio", 7.5), ("moreau", 0),
     ), cycles=2),
+    # Двадцать один участник в один круг. Победил Рубинштейн; последний турнир Чигорина.
+    Event("carlsbad_1907", 1907, "round_robin", _table(
+        ("rubinstein", 15), ("maroczy", 14.5), ("leonhardt", 13.5), ("nimzowitsch", 12.5), ("schlechter", 12.5),
+        ("vidmar", 12), ("teichmann", 11.5), ("duras", 11.5), ("salwe", 11), ("wolf", 10.5), ("marshall", 10),
+        ("dus_chotimirsky", 10), ("spielmann", 9.5), ("tartakower", 9), ("janowski", 8.5), ("berger", 7.5),
+        ("chigorin", 7.5), ("mieses", 7.5), ("olland", 6.5), ("cohn_erich", 5), ("johner_paul", 4.5),
+    )),
+    # Двадцать один участник в один круг. Победил Боголюбов, опередив Ласкера и Капабланку.
+    Event("moscow_1925", 1925, "round_robin", _table(
+        ("bogoljubow", 15.5), ("lasker", 14), ("capablanca", 13.5), ("marshall", 12.5), ("tartakower", 12),
+        ("torre", 12), ("reti", 11.5), ("romanovsky", 11.5), ("grunfeld", 10.5), ("ilyin_zhenevsky", 10.5),
+        ("bohatyrchuk", 10), ("verlinsky", 9.5), ("spielmann", 9.5), ("rubinstein", 9.5), ("levenfish", 9),
+        ("rabinovich", 8.5), ("yates", 7), ("samisch", 6.5), ("gotthilf", 6.5), ("dus_chotimirsky", 6),
+        ("zubarev", 4.5),
+    )),
+    # Двадцать два участника в один круг. Победил Нимцович — главный успех его карьеры.
+    Event("carlsbad_1929", 1929, "round_robin", _table(
+        ("nimzowitsch", 15), ("capablanca", 14.5), ("spielmann", 14.5), ("rubinstein", 13.5), ("becker", 12),
+        ("vidmar", 12), ("euwe", 12), ("bogoljubow", 11.5), ("grunfeld", 11), ("canal", 10.5), ("mattison", 10.5),
+        ("tartakower", 10), ("maroczy", 10), ("colle", 10), ("treybal", 10), ("samisch", 9.5), ("yates", 9.5),
+        ("johner_paul", 9), ("marshall", 9), ("gilg", 8), ("thomas", 6), ("menchik", 3),
+    )),
+    # Четырнадцать участников в два круга. Алехин не проиграл ни одной партии и опередил второго призёра на 5½ очка.
+    Event("bled_1931", 1931, "round_robin", _table(
+        ("alekhine", 20.5), ("bogoljubow", 15), ("nimzowitsch", 14), ("kashdan", 13.5), ("vidmar", 13.5),
+        ("flohr", 13.5), ("stoltz", 13.5), ("tartakower", 13), ("spielmann", 12.5), ("kostic", 12.5), ("maroczy", 12),
+        ("colle", 10.5), ("asztalos", 9.5), ("pirc", 8.5),
+    ), cycles=2),
 )
 # Лента — по годам; турниры одного года — по ключу.
 EVENTS: tuple[Event, ...] = tuple(sorted(_EVENTS, key=lambda event: (event.year, event.key)))

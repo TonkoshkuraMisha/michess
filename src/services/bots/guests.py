@@ -209,5 +209,53 @@ GUESTS: tuple[Guest, ...] = (
     _guest("reggio", "Reggio, Arturo", "1863–1917", 1900, aggression=0, randomness=35),
     # Проиграл в Монте-Карло 1903 все 26 партий.
     _guest("moreau", "Moreau, Charles", "1837–1916", 1500, aggression=0, randomness=60, habits=["hangs_pieces"]),
+
+    # --- Четвёртая партия турниров (28.4): Карлсбад 1907, Москва 1925, Карлсбад 1929, Блед 1931 ------------------
+    # Прочная позиционная игра.
+    _guest("salwe", "Salwe, Georg", "1862–1920", 2150, aggression=-10, pawn_structure=140, randomness=15),
+    # Атака и риск.
+    _guest("dus_chotimirsky", "Dus-Chotimirsky, Fyodor", "1881–1965", 2050, aggression=60, mobility=150, randomness=30),
+    # Теоретик эндшпиля.
+    _guest("berger", "Berger, Johann", "1845–1933", 2050,
+           aggression=-30, pawn_structure=150, passed_pawns=160, randomness=15, draw_attitude=40),
+    _guest("olland", "Olland, Adolf", "1867–1933", 1950, aggression=10, randomness=25),
+    _guest("cohn_erich", "Cohn, Erich", "1884–1918", 2050, aggression=30, randomness=25),
+    _guest("johner_paul", "Johner, Paul", "1887–1938", 2100, aggression=10, mobility=130, randomness=20),
+    # Острая тактическая игра.
+    _guest("torre", "Torre Repetto, Carlos", "1904–1978", 2250, aggression=50, mobility=160, randomness=20),
+    _guest("romanovsky", "Romanovsky, Peter", "1892–1964", 2200, aggression=40, mobility=150, randomness=20),
+    # Знаток дебютов, осторожная игра.
+    _guest("grunfeld", "Gruenfeld, Ernst", "1893–1962", 2250,
+           aggression=-30, center_control=140, pawn_structure=150, randomness=10, draw_attitude=40),
+    _guest("ilyin_zhenevsky", "Ilyin-Zhenevsky, Alexander", "1894–1941", 2150, aggression=30, randomness=25),
+    _guest("bohatyrchuk", "Bohatyrchuk, Fedir", "1892–1984", 2250, aggression=20, center_control=140, randomness=15),
+    _guest("verlinsky", "Verlinsky, Boris", "1888–1950", 2200, aggression=50, mobility=150, randomness=25),
+    _guest("levenfish", "Levenfish, Grigory", "1889–1961", 2300,
+           aggression=30, mobility=150, center_control=130, randomness=15),
+    _guest("rabinovich", "Rabinovich, Ilya", "1891–1942", 2200, aggression=-10, pawn_structure=150, randomness=15),
+    _guest("samisch", "Saemisch, Friedrich", "1896–1975", 2200, aggression=20, center_control=140, randomness=20),
+    _guest("gotthilf", "Gotthilf, Solomon", "1903–1967", 2100, aggression=0, randomness=25),
+    _guest("zubarev", "Zubarev, Nikolai", "1894–1951", 2100, aggression=10, randomness=25),
+    _guest("becker", "Becker, Albert", "1896–1984", 2200,
+           aggression=-20, pawn_structure=140, randomness=15, draw_attitude=30),
+    # Комбинационная игра.
+    _guest("canal", "Canal, Esteban", "1896–1981", 2200, aggression=60, mobility=150, randomness=25),
+    # Автор этюдов, сильный эндшпиль.
+    _guest("mattison", "Matisons, Hermanis", "1894–1932", 2200,
+           aggression=0, passed_pawns=150, pawn_structure=140, randomness=15),
+    # Атака по своей системе.
+    _guest("colle", "Colle, Edgard", "1897–1932", 2200, aggression=50, mobility=140, king_safety=90, randomness=20),
+    _guest("treybal", "Treybal, Karel", "1885–1941", 2150, aggression=40, randomness=25),
+    _guest("gilg", "Gilg, Karl", "1901–1981", 2150, aggression=10, randomness=25),
+    # Первая чемпионка мира; позиционный стиль.
+    _guest("menchik", "Menchik, Vera", "1906–1944", 2050,
+           aggression=-10, pawn_structure=140, king_safety=130, randomness=20),
+    # Техника и эндшпиль.
+    _guest("kashdan", "Kashdan, Isaac", "1905–1985", 2350,
+           aggression=10, mobility=150, pawn_structure=140, randomness=10),
+    _guest("stoltz", "Stoltz, Goesta", "1904–1963", 2250, aggression=60, mobility=150, randomness=20),
+    _guest("kostic", "Kostic, Boris", "1887–1963", 2200, aggression=30, mobility=140, randomness=20),
+    _guest("asztalos", "Asztalos, Lajos", "1889–1956", 2150, aggression=0, randomness=20),
+    _guest("pirc", "Pirc, Vasja", "1907–1980", 2250, aggression=10, center_control=120, mobility=140, randomness=15),
 )
 GUESTS_BY_ID = {guest.id: guest for guest in GUESTS}
