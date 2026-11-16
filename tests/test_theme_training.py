@@ -67,7 +67,7 @@ async def test_stage_advances_after_eight_clean_of_ten(client, token_user_1, for
 async def test_overview_lists_progress_and_availability(client, token_user_1, fork_puzzles):
     _solve(client, token_user_1)
     body = client.get(f"{API}/training", headers=_auth(token_user_1)).json()
-    assert body["window"] == 10 and body["pass"] == 8 and len(body["themes"]) == 115
+    assert body["window"] == 10 and body["pass"] == 8 and len(body["themes"]) == 125
     fork_knight = next(t for t in body["themes"] if t["code"] == "fork_knight")
     assert fork_knight["stage"] == 1 and fork_knight["recent"] == "1" and fork_knight["solved"] == 1
     assert fork_knight["available"] == [12, 3, 0, 0] and fork_knight["ready"] is False
@@ -89,6 +89,7 @@ async def test_mixed_section_and_blind_mode(client, token_user_1, fork_puzzles):
     ({"theme": "nope"}, "unknown_theme"),
     ({"section": "Z"}, "unknown_section"),
     ({"theme": "fork", "stage": 7}, "invalid_stage"),
+    ({"theme": "fork", "goal": "tempo"}, "unknown_goal"),  # у задачи цель — итог решения (27.8)
 ])
 async def test_bad_training_requests(client, token_user_1, fork_puzzles, params, code):
     response = client.get(f"{API}/train", params=params, headers=_auth(token_user_1))
@@ -119,3 +120,16 @@ async def test_demo_shows_solutions_without_an_attempt(client, token_user_1, for
     assert body["examples"][0]["moves"] == ["g8h8", "e5f7"] and body["examples"][0]["color"] == "white"
     assert await db_session.scalar(select(func.count()).select_from(PuzzleAttempt)) == 0
     assert client.get(f"{API}/demo", params={"theme": "nope"}, headers=_auth(token_user_1)).status_code == 400
+
+
+async def test_training_by_goal(client, token_user_1, db_session, fork_puzzles):
+    """«Вилка с целью мата» (27.8): цель задачи — по её темам, мат старше материала."""
+    await import_rows(db_session, [_row("MATE1", 950, tags="fork mateIn2 short")])
+    view = client.get(f"{API}/train", params={"theme": "fork", "stage": 1, "goal": "mate"}, headers=_auth(token_user_1)).json()
+    assert view["goal"] == "mate" and "mate_in_2" in view["themes"]
+    for _ in range(5):
+        other = client.get(f"{API}/train", params={"theme": "fork", "stage": 1, "goal": "material"},
+                           headers=_auth(token_user_1)).json()
+        assert other["goal"] == "material" and "mate_in_2" not in other["themes"]
+    missing = client.get(f"{API}/train", params={"theme": "pin", "stage": 1, "goal": "draw"}, headers=_auth(token_user_1))
+    assert missing.status_code == 404

@@ -8,8 +8,8 @@ import {BookOpen, CheckCircle2, Dumbbell, Shuffle} from 'lucide-react';
 import {renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
 import {UiError} from '../../services/apiErrors';
-import {DEFENSE_DRILL_THEMES, THEME_DRILLS, puzzlesApi} from '../../services/puzzles';
-import type {DrillKind} from '../../services/puzzles';
+import {DEFENSE_DRILL_THEMES, PUZZLE_GOALS, THEME_DRILLS, puzzlesApi} from '../../services/puzzles';
+import type {DrillKind, PuzzleGoal} from '../../services/puzzles';
 import type {DemoExample, ThemeOverview, TrainingOverview, TrainingTarget} from '../../services/puzzles';
 import {themeText} from '../../services/themes';
 import type {ThemeSection} from '../../services/themes';
@@ -96,6 +96,7 @@ export function TrainingPanel({onTrain, onDrill, refreshKey}: Props) {
     const [overview, setOverview] = useState<TrainingOverview | null>(null);
     const [selected, setSelected] = useState<string | null>(null);
     const [blind, setBlind] = useState(false);
+    const [goal, setGoal] = useState<PuzzleGoal | ''>('');
     const [demo, setDemo] = useState<DemoExample[] | null>(null);
     const [error, setError] = useState<UiMessage | null>(null);
 
@@ -132,6 +133,14 @@ export function TrainingPanel({onTrain, onDrill, refreshKey}: Props) {
                        onChange={(e) => setBlind(e.target.checked)}/>
                 {t('puzzles.training.blind')}
             </label>
+            <label className="flex items-center gap-1.5 text-sm">
+                {t('themeGoals.title')}
+                <select value={goal} onChange={(e) => setGoal(e.target.value as PuzzleGoal | '')} data-testid="training-goal"
+                        className="bg-black/40 rounded px-2 py-1">
+                    <option value="">{t('themeGoals.any')}</option>
+                    {PUZZLE_GOALS.map((g) => <option key={g} value={g}>{t(`themeGoals.${g}`)}</option>)}
+                </select>
+            </label>
 
             {current && (
                 <article className="p-2 rounded bg-black/30 border border-amber-800/50 flex flex-col gap-1.5"
@@ -156,7 +165,7 @@ export function TrainingPanel({onTrain, onDrill, refreshKey}: Props) {
                                     <BookOpen size={14}/> {t('puzzles.training.demo')}
                                 </button>
                             )}
-                            <button type="button" onClick={() => onTrain({theme: current.code, blind})}
+                            <button type="button" onClick={() => onTrain({theme: current.code, blind, goal: goal || undefined})}
                                     data-testid="theme-train"
                                     className="flex items-center gap-1 px-2 py-1 rounded bg-amber-800 hover:bg-amber-700 text-white font-bold cursor-pointer">
                                 <Dumbbell size={14}/> {t('puzzles.training.train')}
@@ -179,7 +188,7 @@ export function TrainingPanel({onTrain, onDrill, refreshKey}: Props) {
                     <section key={section} data-testid={`training-section-${section}`}>
                         <div className="flex items-center justify-between gap-2">
                             <h3 className="font-bold text-amber-400">{t(`puzzles.sections.${section as ThemeSection}`)}</h3>
-                            <button type="button" onClick={() => onTrain({section, blind})}
+                            <button type="button" onClick={() => onTrain({section, blind, goal: goal || undefined})}
                                     data-testid={`training-mixed-${section}`}
                                     className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-black/40 border border-amber-900/50 hover:border-amber-500 cursor-pointer">
                                 <Shuffle size={12}/> {t('puzzles.training.mixed')}

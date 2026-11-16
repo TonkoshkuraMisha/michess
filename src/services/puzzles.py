@@ -26,15 +26,16 @@ import zlib
 from dataclasses import asdict, dataclass
 
 import chess
-from sqlalchemy import ColumnElement, func, select
+from sqlalchemy import ColumnElement, and_, exists, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
 from src.core.errors import DomainError, DomainValueError
 from src.db import redis as redis_module
 from src.models.puzzle import Puzzle, PuzzleAttempt, PuzzleTheme, ThemeProgress
 from src.models.user import User
 from src.services import product_metrics
-from src.services.themes import SECTIONS, THEMES, THEMES_BY_CODE
+from src.services.themes import GOAL_THEMES, PUZZLE_GOALS, SECTIONS, THEMES, THEMES_BY_CODE, puzzle_goal
 
 SESSION_TTL_S = 2 * 60 * 60
 RECENT_EXCLUDED = 300
@@ -105,6 +106,7 @@ def public_view(puzzle: Puzzle, *, show_themes: bool = True) -> dict:
         "first_move": moves[0],
         "rating": puzzle.rating,
         "themes": puzzle.theme_codes if show_themes else [],
+        "goal": puzzle_goal(puzzle.theme_codes) if show_themes else None,
         "color": solver_color(puzzle),
         "solution_length": len(moves[1::2]),
     }
@@ -204,11 +206,28 @@ async def _progress(db: AsyncSession, user_id: int, theme: str) -> ThemeProgress
     return await db.get(ThemeProgress, (user_id, theme))
 
 
+def goal_clause(goal: str) -> ColumnElement[bool]:
+    """Задачи с этой целью (27.8): есть тема цели и нет тем старших целей; «материал» — ни одной из старших."""
+    other = aliased(PuzzleTheme)
+
+    def has(codes: tuple[str, ...]) -> ColumnElement[bool]:
+        return exists().where(other.puzzle_id == Puzzle.id, other.theme.in_(codes))
+
+    higher = PUZZLE_GOALS[:PUZZLE_GOALS.index(goal)]
+    conditions = [~has(GOAL_THEMES[g]) for g in higher]
+    if goal != "material":
+        conditions.append(has(GOAL_THEMES[goal]))
+    return and_(*conditions)
+
+
 async def pick_training(
         db: AsyncSession, user: User, *, theme: str | None = None, section: str | None = None,
-        stage: int | None = None,
+        stage: int | None = None, goal: str | None = None,
 ) -> tuple[Puzzle, int | None]:
-    """Задача тренировки: по теме (ступень — из прогресса, если не задана) или смешанная по разделу."""
+    """
+    Задача тренировки: по теме (ступень — из прогресса, если не задана) или смешанная по разделу; goal — только
+    задачи с этой целью («отвлечение с целью мата», 27.8).
+    """
     if (theme is None) == (section is None):
         raise PuzzleError("training_target_required", 400)
     if theme is not None and theme not in THEMES_BY_CODE:
@@ -217,6 +236,8 @@ async def pick_training(
         raise PuzzleError("unknown_section", 400, section=section)
     if stage is not None and stage not in STAGES:
         raise PuzzleError("invalid_stage", 400, stage=stage)
+    if goal is not None and goal not in PUZZLE_GOALS:
+        raise PuzzleError("unknown_goal", 400, goal=goal)
     if theme is not None and stage is None:
         progress = await _progress(db, user.id, theme)
         stage = min(progress.stage, STAGES[-1]) if progress else 1
@@ -226,6 +247,8 @@ async def pick_training(
     windows: tuple[int | None, ...] = (None,) if stage is not None else (300, 600, None)
     for exclude, window in ((e, w) for e in (True, False) for w in windows):
         query = select(Puzzle).join(PuzzleTheme).where(PuzzleTheme.theme.in_(codes))
+        if goal is not None:
+            query = query.where(goal_clause(goal))
         if stage is not None:
             query = query.where(Puzzle.stage == stage)
         elif window is not None:

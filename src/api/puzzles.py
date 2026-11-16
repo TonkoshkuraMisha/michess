@@ -55,12 +55,14 @@ async def train(
         section: str | None = Query(default=None, max_length=1, description="Раздел каталога (смешанная подборка)"),
         stage: int | None = Query(default=None, description="Ступень 1–4; по умолчанию — текущая ступень игрока"),
         blind: bool = Query(default=False, description="Не показывать темы задачи до конца решения"),
+        goal: str | None = Query(default=None, max_length=12, description="Цель: mate / draw / promotion / material"),
         user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
 ):
     """Тренировка по приёмам (таск 13.4): задача темы на ступени игрока или смешанная по разделу."""
     try:
-        puzzle, chosen_stage = await service.pick_training(db, user, theme=theme, section=section, stage=stage)
+        puzzle, chosen_stage = await service.pick_training(db, user, theme=theme, section=section, stage=stage,
+                                                           goal=goal)
     except service.PuzzleError as exc:
         raise _http(exc) from exc
     await service.start(user, puzzle, training=theme, stage=chosen_stage)

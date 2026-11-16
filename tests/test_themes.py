@@ -45,7 +45,7 @@ def _theme_texts(lang: str) -> dict[str, dict[str, str]]:
 
 def test_registry_is_consistent():
     codes = [t.code for t in THEMES]
-    assert len(codes) == len(set(codes)) == 115
+    assert len(codes) == len(set(codes)) == 125
     for theme in THEMES:
         assert CODE.match(theme.code), theme.code
         assert theme.section in SECTIONS, theme.code
@@ -111,7 +111,21 @@ def test_motifs_map_to_themes():
 def test_api_lists_the_registry(client):
     body = client.get("/api/v1/themes").json()
     assert body["sections"] == list(SECTIONS)
-    assert len(body["themes"]) == 115
+    assert len(body["themes"]) == 125
     fork_knight = next(t for t in body["themes"] if t["code"] == "fork_knight")
     assert fork_knight == {"code": "fork_knight", "section": "A", "parent": "fork", "sources": ["D"],
-                           "minimums": [25, 25, 20, 15]}
+                           "minimums": [25, 25, 20, 15], "goal": None}
+
+
+def test_goals():
+    from src.services.themes import GOALS, PUZZLE_GOALS, puzzle_goal
+    assert set(PUZZLE_GOALS) <= set(GOALS)
+    for theme in THEMES:
+        assert theme.goal is None or theme.goal in GOALS, theme.code
+        if theme.section == "F":
+            assert theme.goal == "mate", theme.code
+    assert THEMES_BY_CODE["save_by_perpetual"].goal == "draw" and THEMES_BY_CODE["fork"].goal is None
+    assert puzzle_goal(["fork", "mate_in_2"]) == "mate"
+    assert puzzle_goal(["deflection", "promotion"]) == "promotion"
+    assert puzzle_goal(["equality", "promotion"]) == "draw"
+    assert puzzle_goal(["fork"]) == "material"
