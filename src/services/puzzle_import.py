@@ -10,9 +10,13 @@ puzzle_themes. Темы задачи — коды реестра: по тега�
 импорт переразмечает уже загруженные задачи (``retag_outdated``) — без повторной загрузки.
 
 Запускает загрузку scripts/import_puzzles.py (при развёртывании — сервис migrate): основная выборка SUBSET, затем,
-если файл есть, дополнение EXTRA для тем без тегов базы, затем переразметка. Колонки строки — как в выгрузке
-lichess: PuzzleId, FEN, Moves, Rating, RatingDeviation, Popularity, NbPlays, Themes. Исходные теги базы сохраняются
-в puzzles.source_tags (первые 300 знаков) — по ним и идёт переразметка.
+если файл есть, дополнение EXTRA для тем без тегов базы и свои задачи ENDGAME, затем переразметка. Колонки строки —
+как в выгрузке lichess: PuzzleId, FEN, Moves, Rating, RatingDeviation, Popularity, NbPlays, Themes. Исходные теги
+базы сохраняются в puzzles.source_tags (первые 300 знаков) — по ним и идёт переразметка.
+
+Свои задачи (источник GENERATED_SOURCE) — эндшпильная техника из эндшпильных таблиц
+(scripts/dev/build_endgame_puzzles.py, data/puzzles/endgame_generated.csv.gz): в открытой базе её почти нет. Тема у
+них задана тегом «michess:<код реестра>» (own_themes).
 """
 
 import csv
@@ -28,12 +32,15 @@ from src.models.puzzle import Puzzle, PuzzleTheme
 from src.services import theme_detectors
 from src.services.mate_patterns import patterns_for_solution
 from src.services.mentor_service import analyze_move
-from src.services.themes import themes_for_lichess_tags, themes_for_motif
+from src.services.themes import THEMES_BY_CODE, themes_for_lichess_tags, themes_for_motif
 
 SOURCE = "lichess"  # значение puzzles.source; вместе с puzzles.source_id (PuzzleId) отличает уже загруженные задачи
+GENERATED_SOURCE = "michess"  # puzzles.source своих задач (эндшпильная техника из таблиц)
+OWN_TAG = "michess:"  # префикс тега темы своей задачи: «michess:<код реестра>»
 TAG_VERSION = 3  # 2: ступень — по уточнённой формуле; 3: темы без тегов базы (src/services/theme_detectors.py)
 SUBSET = pathlib.Path(__file__).resolve().parents[2] / "data" / "puzzles" / "lichess_subset.csv.gz"
 EXTRA = SUBSET.with_name("lichess_themes_extra.csv.gz")  # собирает scripts/dev/build_theme_extra.py
+ENDGAME = SUBSET.with_name("endgame_generated.csv.gz")  # собирает scripts/dev/build_endgame_puzzles.py
 BATCH = 500  # задач в одной транзакции при загрузке и переразметке
 
 
@@ -86,6 +93,11 @@ def detected_themes(fen: str, moves: list[str]) -> list[str]:
     return result
 
 
+def own_themes(tags: list[str]) -> list[str]:
+    """Темы своих задач: теги «michess:<код>» с кодом из реестра (неизвестные пропускаются)."""
+    return [code for tag in tags if tag.startswith(OWN_TAG) and (code := tag[len(OWN_TAG):]) in THEMES_BY_CODE]
+
+
 def themes_for_row(row: dict) -> list[str]:
     """
     Все темы задачи без повторов, из четырёх источников по порядку: теги базы (``themes_for_lichess_tags``), мотивы
@@ -93,7 +105,10 @@ def themes_for_row(row: dict) -> list[str]:
     детекторы тем без тегов (``theme_detectors.detect``).
     """
     moves = row["Moves"].split()
-    codes = themes_for_lichess_tags(row["Themes"].split())
+    codes = own_themes(row["Themes"].split())
+    for code in themes_for_lichess_tags(row["Themes"].split()):
+        if code not in codes:
+            codes.append(code)
     extra = theme_detectors.detect(row["FEN"], moves, row["Themes"].split())
     for code in [*detected_themes(row["FEN"], moves), *patterns_for_solution(row["FEN"], moves), *extra]:
         if code not in codes:
@@ -149,13 +164,13 @@ async def retag_outdated(db: AsyncSession) -> int:
     return count
 
 
-async def import_rows(db: AsyncSession, rows: Iterable[dict]) -> tuple[int, int]:
+async def import_rows(db: AsyncSession, rows: Iterable[dict], source: str = SOURCE) -> tuple[int, int]:
     """
     Загружает строки; возвращает (добавлено, пропущено — уже есть или некорректны). «Уже есть» — по паре
-    puzzles.source и puzzles.source_id; повтор PuzzleId внутри одного запуска тоже пропускается. Commit — каждые
-    BATCH задач.
+    puzzles.source (source: SOURCE или GENERATED_SOURCE) и puzzles.source_id; повтор PuzzleId внутри одного запуска
+    тоже пропускается. Commit — каждые BATCH задач.
     """
-    existing = set((await db.execute(select(Puzzle.source_id).where(Puzzle.source == SOURCE))).scalars())
+    existing = set((await db.execute(select(Puzzle.source_id).where(Puzzle.source == source))).scalars())
     added = skipped = 0
     pending = 0
     for row in rows:
@@ -163,7 +178,7 @@ async def import_rows(db: AsyncSession, rows: Iterable[dict]) -> tuple[int, int]
             skipped += 1
             continue
         puzzle = Puzzle(
-            source=SOURCE, source_id=row["PuzzleId"], fen=row["FEN"], moves=row["Moves"],
+            source=source, source_id=row["PuzzleId"], fen=row["FEN"], moves=row["Moves"],
             rating=int(row["Rating"]), rating_deviation=int(row["RatingDeviation"]),
             popularity=int(row["Popularity"]), plays=int(row["NbPlays"]), source_tags=row["Themes"][:300],
             stage=stage_for(int(row["Rating"]), row["Moves"].split()), tag_version=TAG_VERSION,

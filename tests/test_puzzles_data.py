@@ -3,10 +3,20 @@
 
 import collections
 
+import chess
 from sqlalchemy import func, select
 
 from src.models.puzzle import Puzzle, PuzzleTheme
-from src.services.puzzle_import import detected_themes, import_rows, read_subset, themes_for_row, validate_row
+from src.services.puzzle_import import (
+    ENDGAME,
+    GENERATED_SOURCE,
+    detected_themes,
+    import_rows,
+    own_themes,
+    read_subset,
+    themes_for_row,
+    validate_row,
+)
 from src.services.themes import THEMES
 
 ROWS = list(read_subset())
@@ -69,3 +79,43 @@ async def test_import_is_idempotent_and_attaches_themes(db_session):
     assert set(puzzle.theme_codes) >= {"fork", "fork_knight"}
     by_theme = await db_session.scalar(select(func.count()).select_from(PuzzleTheme).where(PuzzleTheme.theme == "fork_knight"))
     assert by_theme >= 1
+
+
+# --- своя эндшпильная техника из таблиц (scripts/dev/build_endgame_puzzles.py) ---------------------------------
+
+OWN_ROW = {"PuzzleId": "tb00034kp", "FEN": "4k3/8/6K1/8/4P3/8/8/8 b - - 0 1", "Moves": "e8f8 g6f6", "Rating": "870",
+           "RatingDeviation": "80", "Popularity": "90", "NbPlays": "0", "Themes": "endgame pawnEndgame michess:opposition"}
+OWN_THEMES = {"opposition", "key_squares", "outflanking", "square_rule", "wrong_bishop"}
+
+
+def test_own_tag_gives_the_registry_theme_and_unknown_codes_are_ignored():
+    assert own_themes(["endgame", "michess:opposition", "michess:no_such_theme"]) == ["opposition"]
+    assert themes_for_row(OWN_ROW)[0] == "opposition"
+
+
+def test_generated_endgame_puzzles_are_legal_small_and_tagged():
+    rows = list(read_subset(ENDGAME))
+    assert len(rows) >= 150
+    assert len({r["PuzzleId"] for r in rows}) == len(rows)
+    assert len({r["FEN"] for r in rows}) == len(rows)
+    counts = collections.Counter()
+    for row in rows:
+        assert validate_row(row), row["PuzzleId"]
+        themes = own_themes(row["Themes"].split())
+        assert len(themes) == 1 and themes[0] in OWN_THEMES, row["PuzzleId"]
+        counts[themes[0]] += 1
+        board = chess.Board(row["FEN"])
+        assert len(board.piece_map()) <= 4, row["PuzzleId"]
+        assert 800 <= int(row["Rating"]) <= 2400
+    assert set(counts) == OWN_THEMES and min(counts.values()) >= 20, counts
+
+
+async def test_own_puzzles_are_imported_under_their_own_source(db_session):
+    lichess_twin = {**OWN_ROW, "Themes": "endgame pawnEndgame"}
+    assert await import_rows(db_session, [OWN_ROW], GENERATED_SOURCE) == (1, 0)
+    assert await import_rows(db_session, [OWN_ROW], GENERATED_SOURCE) == (0, 1)
+    # Тот же номер в базе lichess — другая задача: источники не пересекаются.
+    assert await import_rows(db_session, [lichess_twin]) == (1, 0)
+    own = await db_session.scalar(select(Puzzle).where(Puzzle.source == GENERATED_SOURCE))
+    themes = set((await db_session.scalars(select(PuzzleTheme.theme).where(PuzzleTheme.puzzle_id == own.id))).all())
+    assert "opposition" in themes
