@@ -67,9 +67,9 @@ export const COURSE: CourseModule[] = [
     // --- Уровень 2. IV–III разряд ---
     mod('T2.1', 'T', [l('tactics-double-check'), th('double_check'), th('windmill')]),
     mod('T2.2', 'T', [l('tactics-intermezzo'), th('intermezzo')]),
-    mod('T2.3', 'T', [th('x_ray'), th('battery')]),
+    mod('T2.3', 'T', [l('tactics-x-ray'), th('x_ray'), th('battery')]),
     mod('T2.4', 'T', [l('tactics-deflection'), th('deflection')]),
-    mod('T2.5', 'T', [th('decoy')]),
+    mod('T2.5', 'T', [l('tactics-decoy'), th('decoy')]),
     mod('T2.6', 'T', [th('remove_defender'), th('overload')]),
     mod('T2.7', 'T', [th('counterattack'), th('unstoppable_threat')]),
     mod('T2.8', 'T', [th('tempo_gain'), th('seventh_rank')]),

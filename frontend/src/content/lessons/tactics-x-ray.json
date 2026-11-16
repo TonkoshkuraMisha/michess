@@ -1,0 +1,165 @@
+{
+  "id": "tactics-x-ray",
+  "course": "tactics",
+  "order": 10,
+  "title": {
+    "en": "X-ray",
+    "uk": "Рентген",
+    "ru": "Рентген"
+  },
+  "summary": {
+    "en": "A long-range piece keeps working through another piece standing on its line. A square guarded twice by the opponent can be yours if your rook or queen guards it 'through' an enemy piece.",
+    "uk": "Далекобійна фігура діє крізь іншу фігуру на своїй лінії. Поле, яке суперник захищає двічі, може стати вашим, якщо ваша тура чи ферзь б’є його «крізь» фігуру суперника.",
+    "ru": "Дальнобойная фигура действует сквозь другую фигуру на своей линии. Поле, которое соперник защищает дважды, может стать вашим, если ваша ладья или ферзь бьёт его «сквозь» фигуру соперника."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "3r2k1/1p3ppb/1Qprp2p/7P/2q3n1/6P1/PPP3P1/3RR2K w - - 0 25",
+      "arrows": [
+        {
+          "from": "d1",
+          "to": "d8",
+          "color": "green"
+        },
+        {
+          "from": "b6",
+          "to": "d8",
+          "color": "green"
+        }
+      ],
+      "text": {
+        "en": "The rook d8 is defended by the rook d6, and it seems that White attacks it only once. But the rook d1 looks along the d-file through d6: as soon as the black rook leaves d6 to take on d8, the white rook joins in.",
+        "uk": "Туру d8 захищає тура d6, і здається, що білі б’ють її лише раз. Але тура d1 дивиться вертикаллю d крізь d6: щойно чорна тура піде з d6 брати на d8, біла тура включиться в гру.",
+        "ru": "Ладью d8 защищает ладья d6, и кажется, что белые бьют её только раз. Но ладья d1 смотрит по вертикали d сквозь d6: как только чёрная ладья уйдёт с d6 брать на d8, белая ладья включится в игру."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "3r2k1/1p3ppb/1Qprp2p/7P/2q3n1/6P1/PPP3P1/3RR2K w - - 0 25",
+      "text": {
+        "en": "White to move. Mate in two.",
+        "uk": "Хід білих. Мат у два ходи.",
+        "ru": "Ход белых. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "b6d8"
+          ],
+          "reply": "d6d8",
+          "correct": {
+            "en": "The rook d6 had to take — and opened the d-file.",
+            "uk": "Тура d6 мусила взяти — і відкрила вертикаль d.",
+            "ru": "Ладья d6 вынуждена взять — и открыла вертикаль d."
+          }
+        },
+        {
+          "answers": [
+            "d1d8"
+          ],
+          "correct": {
+            "en": "Mate on the back rank: the rook d1 worked through d6 all along.",
+            "uk": "Мат на останній горизонталі: тура d1 весь час діяла крізь d6.",
+            "ru": "Мат на последней горизонтали: ладья d1 всё время действовала сквозь d6."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "3r2k1/p4pbp/2p3p1/7q/2Q2B2/6PP/PPP1Bn1R/2K5 b - - 1 21",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Mate in two: the queen h5 also looks at d1 — through the bishop e2.",
+        "uk": "Хід чорних. Мат у два ходи: ферзь h5 теж дивиться на d1 — крізь слона e2.",
+        "ru": "Ход чёрных. Мат в два хода: ферзь h5 тоже смотрит на d1 — сквозь слона e2."
+      },
+      "line": [
+        {
+          "answers": [
+            "d8d1"
+          ],
+          "reply": "e2d1",
+          "correct": {
+            "en": "The bishop takes and leaves the diagonal.",
+            "uk": "Слон бере й залишає діагональ.",
+            "ru": "Слон берёт и уходит с диагонали."
+          }
+        },
+        {
+          "answers": [
+            "h5d1"
+          ],
+          "correct": {
+            "en": "Mate!",
+            "uk": "Мат!",
+            "ru": "Мат!"
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "3r2k1/p4pbp/2p3p1/7q/2Q2B2/6PP/PPP1Bn1R/2K5 b - - 1 21",
+      "orientation": "black",
+      "text": {
+        "en": "When counting attackers and defenders of a square, count the pieces standing behind others on the same line too — yours and your opponent's.",
+        "uk": "Рахуючи нападників і захисників поля, враховуйте й фігури, що стоять позаду інших на тій самій лінії, — і свої, і суперника.",
+        "ru": "Считая нападающих и защитников поля, учитывайте и фигуры, которые стоят позади других на той же линии, — и свои, и соперника."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "6k1/pp1r1ppp/2p5/8/1P5Q/6Pb/q4P1P/3R2KB w - - 0 27",
+      "text": {
+        "en": "White to move. Mate in two.",
+        "uk": "Хід білих. Мат у два ходи.",
+        "ru": "Ход белых. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "h4d8"
+          ],
+          "reply": "d7d8"
+        },
+        {
+          "answers": [
+            "d1d8"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "1k2r3/ppp5/5b2/4r3/Q7/P5qP/1PP3P1/3RRK2 w - - 0 28",
+      "text": {
+        "en": "White to move. Mate in three.",
+        "uk": "Хід білих. Мат у три ходи.",
+        "ru": "Ход белых. Мат в три хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "a4e8"
+          ],
+          "reply": "e5e8"
+        },
+        {
+          "answers": [
+            "e1e8"
+          ],
+          "reply": "f6d8"
+        },
+        {
+          "answers": [
+            "d1d8"
+          ]
+        }
+      ]
+    }
+  ]
+}
