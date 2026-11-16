@@ -17,9 +17,11 @@ import type {BotStrength, CatalogArchetype} from '../../services/botCatalog';
 import {listPersonalities} from '../../services/personalities';
 import type {Personality} from '../../services/personalities';
 import {
-    SWISS_ROUNDS, botGamesRunning, createTournament, gameStart, getTournament, listTournaments, myPendingGame, participantName,
-    startMyGame, withdrawTournament,
+    botGamesRunning, createTournament, gameStart, getTournament, listTournaments, myPendingGame, participantName,
+    startMyGame, totalRounds as roundsTotal, withdrawTournament,
 } from '../../services/tournaments';
+import {eventTitle} from '../../services/timeMachine';
+import {RealResult} from './TimeMachine';
 import type {
     ParticipantKind, RandomOpponents, Tournament, TournamentFormat, TournamentGame, TournamentSummary,
 } from '../../services/tournaments';
@@ -195,6 +197,11 @@ export function TournamentsPage() {
                     </ul>
                 )}
             </section>
+            <Link to="/time-machine" data-testid="time-machine-link"
+                  className="bg-acacia p-4 rounded-lg border-2 border-acacia-dark hover:border-amber-500 transition flex flex-col gap-1">
+                <span className="font-bold text-amber-200">{t('timeMachine.title')}</span>
+                <span className="text-sm text-boxwood/85">{t('timeMachine.teaser')}</span>
+            </Link>
             <Career/>
             <CreateTournament/>
         </div>
@@ -209,7 +216,8 @@ function resultFor(game: TournamentGame, seat: number): string {
 }
 
 function knockoutRoundName(t: ReturnType<typeof useI18n>['t'], size: number, round: number): string {
-    const fromEnd = (size === 4 ? 2 : 3) - round;
+    const fromEnd = Math.max(1, Math.ceil(Math.log2(size))) - round;
+    if (fromEnd > 2) return t('tournaments.knockoutRounds.round', {n: round});
     return t(`tournaments.knockoutRounds.${fromEnd === 0 ? 'final' : fromEnd === 1 ? 'semifinal' : 'quarterfinal'}`);
 }
 
@@ -253,8 +261,10 @@ export function TournamentView() {
 
     const name = (seat: number) => participantName(tournament.players.find((p) => p.seat === seat)!, t);
     const rounds = Array.from(new Set(tournament.games.map((g) => g.round))).sort((a, b) => a - b);
-    const totalRounds = tournament.format === 'round_robin' ? tournament.size - 1
-        : tournament.format === 'swiss' ? SWISS_ROUNDS[tournament.size] : (tournament.size === 4 ? 2 : 3);
+    const totalRounds = roundsTotal(tournament);
+    const historic = Boolean(tournament.event_key);
+    // В большом турнире расписание длинное: туры свёрнуты, открыт текущий.
+    const foldRounds = rounds.length > 8;
     const pending = myPendingGame(tournament);
     const me = tournament.players.find((p) => p.seat === tournament.my_seat);
     const winner = tournament.players.find((p) => p.place === 1);
@@ -290,9 +300,14 @@ export function TournamentView() {
 
     return (
         <div className="w-full max-w-5xl mx-auto p-3 flex flex-col gap-4 text-boxwood-light" data-testid="tournament-view">
-            <nav className="text-sm"><Link to="/tournaments" className="underline text-amber-300">{t('tournaments.title')}</Link></nav>
+            <nav className="text-sm">
+                {historic
+                    ? <Link to="/time-machine" className="underline text-amber-300">{t('timeMachine.title')}</Link>
+                    : <Link to="/tournaments" className="underline text-amber-300">{t('tournaments.title')}</Link>}
+            </nav>
             <header className="flex flex-wrap items-baseline justify-between gap-2">
-                <h1 className="text-2xl font-bold text-amber-200">
+                <h1 className="text-2xl font-bold text-amber-200" data-testid="tournament-title">
+                    {historic && tournament.event_key ? `${eventTitle(tournament.event_key, t)} · ` : ''}
                     {t(`tournaments.formats.${tournament.format}`)} · {tournament.size}
                 </h1>
                 <span className="text-sm text-amber-300" data-testid="tournament-status">
@@ -346,10 +361,15 @@ export function TournamentView() {
                                     <td className="px-1 whitespace-nowrap">{name(row.seat)}</td>
                                     {tournament.standings.map((col) => {
                                         if (col.seat === row.seat) return <td key={col.seat} className="px-1 bg-black/40"/>;
-                                        const game = tournament.games.find((g) => g.result
+                                        // В турнире в несколько кругов пара встречается несколько раз: все итоги подряд.
+                                        const games = tournament.games.filter((g) => g.result
                                             && ((g.white_seat === row.seat && g.black_seat === col.seat)
                                                 || (g.white_seat === col.seat && g.black_seat === row.seat)));
-                                        return <td key={col.seat} className="px-1 text-center font-mono">{game ? resultFor(game, row.seat) : ''}</td>;
+                                        return (
+                                            <td key={col.seat} className="px-1 text-center font-mono whitespace-nowrap">
+                                                {games.map((g) => resultFor(g, row.seat)).join(' ')}
+                                            </td>
+                                        );
                                     })}
                                     <td className="px-1 text-center font-bold">{row.points}</td>
                                     <td className="px-1 text-center font-mono text-boxwood/80">{row.sonneborn_berger}</td>
@@ -416,12 +436,13 @@ export function TournamentView() {
             <section className="bg-acacia p-3 rounded-lg border-2 border-acacia-dark">
                 <h2 className="font-bold text-amber-200 mb-2">{t('tournaments.schedule')}</h2>
                 {rounds.map((round) => (
-                    <div key={round} className="mb-2">
-                        <h3 className="text-xs text-boxwood/70">
+                    <details key={round} className="mb-2" data-testid={`round-${round}`}
+                             open={!foldRounds || round === tournament.current_round}>
+                        <summary className={`text-xs text-boxwood/70 ${foldRounds ? 'cursor-pointer' : 'list-none'}`}>
                             {tournament.format !== 'knockout'
                                 ? t('tournaments.roundOf', {round, total: totalRounds})
                                 : knockoutRoundName(t, tournament.size, round)}
-                        </h3>
+                        </summary>
                         <ul className="text-sm">
                             {tournament.games.filter((g) => g.round === round).map((g) => (
                                 <li key={g.id} className="flex flex-wrap gap-2 items-baseline" data-testid={`tgame-${g.id}`}>
@@ -432,9 +453,13 @@ export function TournamentView() {
                                 </li>
                             ))}
                         </ul>
-                    </div>
+                    </details>
                 ))}
             </section>
+
+            {historic && tournament.event_key && (
+                <RealResult eventKey={tournament.event_key} finished={tournament.status === 'finished'} myPlace={me?.place ?? null}/>
+            )}
 
             {tournament.status === 'finished' && me?.place != null && me.place <= 3 && (
                 <Diploma name={myName || t('tournaments.you')} place={me.place}

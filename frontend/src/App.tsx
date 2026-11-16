@@ -43,6 +43,7 @@ import {useSiteConfig} from './services/beta';
 import {TrainerPage, TrainersPage} from './components/trainers/TrainersPage';
 import {NotificationBell, PlayerSearch} from './components/social/SocialHeader';
 import {TournamentView, TournamentsPage} from './components/tournaments/TournamentsPage';
+import {TimeMachinePage} from './components/tournaments/TimeMachine';
 import {CHAMPIONS_LIST} from './config/champions';
 import {API_BASE_URL} from './config/api';
 import {gameSocket} from './services/gameSocket';
@@ -303,7 +304,7 @@ export default function App() {
                             ♞
                         </div>
                         <span
-                            className={`hidden ${token && userProfile ? "sm:inline" : "min-[380px]:inline"} text-2xl font-extrabold tracking-wide text-boxwood-light group-hover:text-white transition`}>
+                            className={`hidden ${token && userProfile ? "sm:inline" : "min-[440px]:inline"} text-2xl font-extrabold tracking-wide text-boxwood-light group-hover:text-white transition`}>
                             michess
                         </span>
                     </Link>
@@ -704,6 +705,7 @@ export default function App() {
                     <Route path="/learn/:lessonId" element={<LessonPage/>}/>
                     <Route path="/tournaments" element={<TournamentsPage/>}/>
                     <Route path="/tournaments/:tournamentId" element={<TournamentView/>}/>
+                    <Route path="/time-machine" element={<TimeMachinePage/>}/>
                     <Route path="/profile/:targetUsername" element={<Profile/>}/>
                     <Route path="/game/:gameId" element={<GameViewer/>}/>
                     <Route path="/import" element={<ImportPage/>}/>

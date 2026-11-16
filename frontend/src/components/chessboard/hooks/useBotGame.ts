@@ -265,7 +265,7 @@ export function useBotGame({
                             // Архетип без изменений — ключом: в архиве его имя будет на языке игрока.
                             : {personality_name: customOpponentRef.current.archetypeId
                                 ? archetypeKey(customOpponentRef.current.archetypeId)
-                                : customOpponentRef.current.name})
+                                : customOpponentRef.current.savedName ?? customOpponentRef.current.name})
                         : {}),
                     termination: termination ?? null, moves_uci: movesUci,
                     // Партия с произвольной позиции: сервер проверяет ходы от неё же.
