@@ -17,6 +17,7 @@ from src.core.errors import ApiError, DomainError
 from src.db.session import get_db
 from src.models.tournament import Tournament, TournamentGame, TournamentPlayer
 from src.models.user import User
+from src.services import time_machine
 from src.services import tournament_career as career
 from src.services import tournament_rules as rules
 from src.services import tournaments as service
@@ -94,6 +95,8 @@ class TournamentOut(BaseModel):
     # Игрок сдал турнир (таск A.3): боты доигрывают, сам он больше не играет.
     withdrawn: bool = False
     career_stage: str | None = None
+    # «Машина времени»: ключ знаменитого турнира и число кругов.
+    event_key: str | None = None
     players: list[PlayerOut]
     games: list[GameOut]
     standings: list[StandingOut]
@@ -107,6 +110,7 @@ class TournamentSummary(BaseModel):
     created_at: str
     my_place: int | None
     career_stage: str | None = None
+    event_key: str | None = None
 
 
 def _player(p: TournamentPlayer) -> PlayerOut:
@@ -143,6 +147,7 @@ async def view(db: AsyncSession, tournament: Tournament, user: User) -> Tourname
         finished_at=tournament.finished_at.isoformat() if tournament.finished_at else None,
         my_seat=next((p.seat for p in players if p.user_id == user.id), None),
         withdrawn=tournament.withdrawn_at is not None, career_stage=tournament.career_stage,
+        event_key=tournament.event_key,
         players=[_player(p) for p in players], games=[_game(g) for g in games], standings=standings,
     )
 
@@ -183,7 +188,8 @@ async def list_tournaments(db: AsyncSession = Depends(get_db), user: User = Depe
     )).all()
     return [
         TournamentSummary(id=t.id, format=t.format, size=t.size, status=t.status,
-                          created_at=t.created_at.isoformat(), my_place=place, career_stage=t.career_stage)
+                          created_at=t.created_at.isoformat(), my_place=place, career_stage=t.career_stage,
+                          event_key=t.event_key)
         for t, place in rows
     ]
 
@@ -201,6 +207,31 @@ async def start_career_stage(stage_key: str, db: AsyncSession = Depends(get_db),
         tournament = await career.start_stage(db, user, stage_key)
     except DomainError as exc:
         code = {"career_stage_unknown": status.HTTP_404_NOT_FOUND, "career_stage_locked": status.HTTP_403_FORBIDDEN}
+        raise exc.to_http(code.get(exc.code, status.HTTP_409_CONFLICT if exc.code in _CONFLICTS
+                                   else status.HTTP_400_BAD_REQUEST)) from None
+    await _schedule_bot_games(db, tournament)
+    return await view(db, tournament, user)
+
+
+class TimeMachineStart(BaseModel):
+    base_time_ms: int = Field(600_000, ge=60_000, le=3_600_000)
+    increment_ms: int = Field(0, ge=0, le=60_000)
+
+
+@router.get("/time-machine")
+async def time_machine_overview(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """«Машина времени» (таск 28.2): знаменитые турниры по годам — состав, настоящий итог, что уже сыграл игрок."""
+    return {"events": await time_machine.overview(db, user)}
+
+
+@router.post("/time-machine/{event_key}", response_model=TournamentOut, status_code=status.HTTP_201_CREATED)
+async def start_time_machine(event_key: str, payload: TimeMachineStart, db: AsyncSession = Depends(get_db),
+                             user: User = Depends(get_current_user)):
+    """Игрок входит в турнир в полном историческом составе; партии мастеров между собой разыгрывает сервер."""
+    try:
+        tournament = await time_machine.start(db, user, event_key, payload.base_time_ms, payload.increment_ms)
+    except DomainError as exc:
+        code = {"time_machine_event_unknown": status.HTTP_404_NOT_FOUND}
         raise exc.to_http(code.get(exc.code, status.HTTP_409_CONFLICT if exc.code in _CONFLICTS
                                    else status.HTTP_400_BAD_REQUEST)) from None
     await _schedule_bot_games(db, tournament)

@@ -23,6 +23,7 @@ from src.services import product_metrics
 from src.services import tournament_rules as rules
 from src.services.bots.archetypes import ARCHETYPE_PREFIX, ARCHETYPES_BY_KEY
 from src.services.bots.calibration import strength_of
+from src.services.bots.guests import GUESTS_BY_ID
 from src.services.rating import classify_time_control, elo_calculator
 
 Format = Literal["round_robin", "knockout", "swiss"]
@@ -39,9 +40,12 @@ SIZES: dict[str, tuple[int, ...]] = {
 
 @dataclass(frozen=True)
 class ParticipantSpec:
-    """Соперник в турнире: исторический бот (id), архетип (id) или персоналия игрока (id в базе)."""
+    """
+    Соперник в турнире: исторический бот (id), архетип (id), персоналия игрока (id в базе) или мастер прошлого
+    из bots/guests.py (id) — он участвует как персоналия с ключом «guest:<id>» («Машина времени», 28.2).
+    """
 
-    kind: Literal["bot", "archetype", "personality"]
+    kind: Literal["bot", "archetype", "personality", "guest"]
     id: str | int
 
 
@@ -75,6 +79,14 @@ async def _entrant(db: AsyncSession, owner: User, spec: ParticipantSpec, order: 
             raise DomainError("tournament_participant_unknown", participant=label)
         rating = strength_of(archetype.key, archetype.config.target_elo).rating
         return _Entrant("archetype", rating, bot_key=archetype.key, order=order)
+    if spec.kind == "guest":
+        guest = GUESTS_BY_ID.get(str(spec.id))
+        if guest is None:
+            raise DomainError("tournament_participant_unknown", participant=label)
+        # Мастер прошлого играет как персоналия: симуляция и партия игрока идут по его характеру, а ключ
+        # позволяет клиенту показать имя на языке игрока.
+        return _Entrant("personality", guest.rating, bot_key=guest.key, personality_name=guest.pgn_name,
+                        config_json=guest.config.model_dump_json(), order=order)
     personality = await db.get(BotPersonality, int(spec.id)) if str(spec.id).isdigit() else None
     if personality is None or personality.owner_id != owner.id:
         raise DomainError("tournament_participant_unknown", participant=label)
@@ -85,11 +97,15 @@ async def _entrant(db: AsyncSession, owner: User, spec: ParticipantSpec, order: 
     )
 
 
-async def active_tournament(db: AsyncSession, owner_id: int) -> Tournament | None:
-    """Идущий турнир игрока; сданный (боты ещё доигрывают) новому турниру не мешает."""
+async def active_tournament(db: AsyncSession, owner_id: int, historic: bool = False) -> Tournament | None:
+    """
+    Идущий турнир игрока; сданный (боты ещё доигрывают) новому турниру не мешает. У «Машины времени» (historic)
+    своё место: исторический турнир и обычный идут независимо, по одному каждого вида.
+    """
+    kind = Tournament.event_key.is_not(None) if historic else Tournament.event_key.is_(None)
     return (await db.execute(
         select(Tournament).where(
-            Tournament.owner_id == owner_id, Tournament.status == "active", Tournament.withdrawn_at.is_(None),
+            Tournament.owner_id == owner_id, Tournament.status == "active", Tournament.withdrawn_at.is_(None), kind,
         ).limit(1)
     )).scalar_one_or_none()
 
@@ -105,6 +121,7 @@ async def create_tournament(
         career_stage: str | None = None,
         cycles: int = 1,
         open_size: bool = False,
+        event_key: str | None = None,
 ) -> Tournament:
     """
     open_size — турнир в историческом составе («Машина времени», 28.1): круговой или сетка на любое число
@@ -124,7 +141,7 @@ async def create_tournament(
     for key in keys:
         if keys.count(key) > 1:
             raise DomainError("tournament_participant_duplicate", participant=key)
-    if await active_tournament(db, owner.id) is not None:
+    if await active_tournament(db, owner.id, historic=event_key is not None) is not None:
         raise DomainError("tournament_active_exists")
 
     category = classify_time_control(base_time_ms, increment_ms)
@@ -136,6 +153,7 @@ async def create_tournament(
     tournament = Tournament(
         owner_id=owner.id, format=fmt, size=size, status="active",
         base_time_ms=base_time_ms, increment_ms=increment_ms, current_round=1, career_stage=career_stage,
+        event_key=event_key,
     )
     db.add(tournament)
     await db.flush()

@@ -4,6 +4,13 @@
 это 28 партий. Глубина и время поиска понижены, длина партии ограничена: незавершённую к SIM_MAX_PLIES партию
 решает оценка движка (статическая — без движка).
 
+Сила в симуляции (таск 28.2). Обычный ход бота ограничивает силу опорным ходом Stockfish с UCI_Elo, но тому нужно
+время: при 0,1 с на ход рейтинг переставал что-либо значить (замер 17.11: 2400 против 1600 — 3,5 из 8, 2200 против
+1700 — 4,5 из 8), а на полном времени партия идёт больше минуты — турнир на 23 участника так не сыграть. Поэтому
+у симуляции своя модель (SimulatedPlayer): лучшие ходы оцениваются на полной силе, а участник выбирает среди них
+случайно, с весом, который падает с потерей в оценке; чем ниже рейтинг, тем медленнее падает (temperature_cp).
+Дебютная книга и стиль участника при этом сохраняются.
+
 Каждая партия сохраняется с настоящим PGN, без рейтинга, с пометкой is_simulation: она не попадает в Live,
 архив и статистику профилей и открывается в GameViewer по ссылке из турнира. Одну партию турнира забирает один
 воркер (tournament_games.started_at); если воркер упал посреди партии, через CLAIM_TIMEOUT её можно забрать снова.
@@ -11,6 +18,8 @@
 
 import asyncio
 import logging
+import math
+import random
 from collections.abc import Callable
 from datetime import UTC, datetime
 
@@ -21,15 +30,102 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.game import Game, GameStatus
 from src.models.tournament import Tournament, TournamentGame, TournamentPlayer
 from src.services import tournaments
-from src.services.bots.base import HistoricalBot, analyse_with_stockfish, resolve_stockfish_path, static_board_eval_cp
+from src.services.bots.base import (
+    HistoricalBot,
+    analyse_with_stockfish,
+    fallback_scores,
+    resolve_stockfish_path,
+    static_board_eval_cp,
+)
 from src.services.engine_pool import engine_work
 
 logger = logging.getLogger(__name__)
 
 SIM_MAX_PLIES = 200
-SIM_MAX_DEPTH = 4
+SIM_MAX_DEPTH = 6
 SIM_TIME_LIMIT_S = 0.1
 ADJUDICATE_CP = 300
+# Сколько лучших ходов оценивается: участник выбирает только среди них, поэтому в позиции с единственным ходом
+# число плохих вариантов ограничено.
+SIM_CANDIDATES = 8
+# «Температура» выбора хода по рейтингу, сп: ход с потерей T выбирается в e раз реже лучшего, дальше вес падает
+# круче (степень LOSS_POWER) — зевок фигуры редок даже у слабого. Замер 17.11 (16 партий на пару, партия ≈ 1 с):
+# разница 200 пунктов — 69–78 % очков сильному (по Эло 76 %), 400 — 94–97 % (91 %), 800 — 100 % (99 %).
+SIM_TEMPERATURE: tuple[tuple[int, float], ...] = ((800, 260.0), (1200, 170.0), (1600, 110.0), (2000, 65.0),
+                                                  (2400, 32.0), (2800, 12.0))
+LOSS_POWER = 1.5
+
+
+def temperature_cp(rating: int) -> float:
+    """Температура выбора хода для рейтинга: линейно между опорными точками SIM_TEMPERATURE."""
+    points = SIM_TEMPERATURE
+    if rating <= points[0][0]:
+        return points[0][1]
+    for (lo_elo, lo_t), (hi_elo, hi_t) in zip(points, points[1:], strict=False):
+        if rating <= hi_elo:
+            return lo_t + (hi_t - lo_t) * (rating - lo_elo) / (hi_elo - lo_elo)
+    return points[-1][1]
+
+
+def move_weights(
+        scores: dict[chess.Move, float], style: dict[chess.Move, float], temperature: float,
+) -> dict[chess.Move, float]:
+    """
+    Веса ходов: exp(−(потеря / T)^LOSS_POWER), потеря — отставание оценки от лучшего хода. Стиль сдвигает потерю
+    не больше чем на половину температуры: характер виден, но плохой ход хорошим не делает.
+    """
+    best = max(scores.values())
+    weights = {}
+    for move, cp in scores.items():
+        bonus = max(-temperature / 2, min(temperature / 2, style.get(move, 0.0)))
+        loss = max(0.0, best - cp - bonus)
+        weights[move] = math.exp(-((loss / temperature) ** LOSS_POWER))
+    return weights
+
+
+class SimulatedPlayer:
+    """Участник партии ботов: ходит из своей дебютной книги, дальше — по модели силы симуляции (см. модуль)."""
+
+    def __init__(self, bot: HistoricalBot, rating: int, rng: random.Random | None = None):
+        self.bot = bot
+        self.rating = rating
+        self.temperature = temperature_cp(rating)
+        self.rng = rng or random.Random()
+
+    def choose_move(self, fen: str) -> dict:
+        board = chess.Board(fen)
+        book = self.bot._book_move(board)
+        if book is not None:
+            return {"uci": book[0].uci(), "source": "opening_book"}
+        engine_path = self.bot._get_active_engine_path() if self.bot.stockfish_path is not None else None
+        scores = analyse_with_stockfish(
+            board=board, engine_path=engine_path, depth=self.bot.search_depth, time_limit=self.bot.time_limit,
+            multipv=SIM_CANDIDATES,
+        ) or fallback_scores(board)
+        style = {move: self.bot.evaluate_style_bonus(board, move)[0] for move in scores}
+        weights = move_weights(scores, style, self.temperature)
+        moves = list(weights)
+        move = self.rng.choices(moves, weights=[weights[m] for m in moves], k=1)[0]
+        return {"uci": move.uci(), "source": "simulation"}
+
+
+def simulation_rating(player: TournamentPlayer, historic: bool = False) -> int:
+    """
+    Сила участника в партиях ботов. Обычно — сила на старте турнира (у бота — измеренная калибровкой: такой он и в
+    партии с игроком). В турнире «Машины времени» (historic) у исторического бота берётся заявленная сила: она
+    отражает место мастера в истории, а измеренная бывает заметно ниже (Чигорин — 1833 при заявленных 2150), и
+    второй призёр Гастингса занимал бы последнее место. Рейтинг игрока по-прежнему считается от измеренной силы.
+    """
+    from src.api.bots import BOT_METADATA
+
+    if historic and player.kind == "bot" and player.bot_key in BOT_METADATA:
+        return int(str(BOT_METADATA[player.bot_key]["rating"]))
+    return player.rating
+
+
+def player_for(player: TournamentPlayer, historic: bool = False) -> SimulatedPlayer:
+    """Участник симуляции: его бот (книга, стиль) и сила (simulation_rating)."""
+    return SimulatedPlayer(bot_for(player), simulation_rating(player, historic))
 
 
 def bot_for(player: TournamentPlayer) -> HistoricalBot:
@@ -71,7 +167,7 @@ def adjudicate(board: chess.Board) -> str:
 
 
 def play_game(
-        white: HistoricalBot, black: HistoricalBot,
+        white: HistoricalBot | SimulatedPlayer, black: HistoricalBot | SimulatedPlayer,
         max_plies: int = SIM_MAX_PLIES, judge: Callable[[chess.Board], str] = adjudicate,
 ) -> tuple[list[str], str, str]:
     """Партия бот против бота: (ходы uci, результат, причина завершения)."""
@@ -161,10 +257,11 @@ async def simulate(db: AsyncSession, tournament_game_id: int, play: Callable = p
     if tgame is None or tournament is None or tournament.status != "active":
         return []
     seats = {p.seat: p for p in await tournaments.players_of(db, tournament.id)}
+    historic = tournament.event_key is not None
     # Партия — работа процессора: в отдельном потоке, чтобы не держать цикл событий.
     with engine_work("simulation"):
         moves, result, termination = await asyncio.to_thread(
-            play, bot_for(seats[tgame.white_seat]), bot_for(seats[tgame.black_seat]),
+            play, player_for(seats[tgame.white_seat], historic), player_for(seats[tgame.black_seat], historic),
         )
     logger.info("Tournament %s game %s: %s in %d plies", tournament.id, tgame.id, result, len(moves))
     return await save_and_record(db, tournament, tgame, moves, result, termination)

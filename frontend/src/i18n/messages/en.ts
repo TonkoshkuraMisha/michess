@@ -924,6 +924,7 @@ export const en = {
         puzzle_not_found: 'Puzzle not found',
         guess_position_not_found: 'Position not found',
         career_stage_unknown: 'There is no such career tournament',
+        time_machine_event_unknown: 'There is no such historical tournament',
         career_stage_locked: 'This career tournament is not open yet',
         trainer_not_found: 'There is no such trainer',
         arena_not_found: 'Arena not found',

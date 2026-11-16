@@ -928,6 +928,7 @@ export const uk: Messages = {
         puzzle_not_found: 'Задачу не знайдено',
         guess_position_not_found: 'Позицію не знайдено',
         career_stage_unknown: 'Такого турніру в кар\'єрі немає',
+        time_machine_event_unknown: 'Такого історичного турніру немає',
         career_stage_locked: 'Цей турнір кар\'єри ще закритий',
         trainer_not_found: 'Такого тренажера немає',
         arena_not_found: 'Арену не знайдено',
