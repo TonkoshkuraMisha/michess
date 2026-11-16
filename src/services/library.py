@@ -222,7 +222,7 @@ async def import_games(db: AsyncSession, collection: LibraryCollection, games: I
                                   result=parsed.result, white_elo=parsed.white_elo, black_elo=parsed.black_elo,
                                   eco=parsed.eco, opening=parsed.opening, start_fen=parsed.start_fen,
                                   plies=len(parsed.moves), moves=" ".join(parsed.moves),
-                                  structure=structure_of(parsed))
+                                  structure=structure_of(parsed), mate_finish=ends_in_mate(parsed.start_fen, parsed.moves))
                 db.add(row)
                 await db.flush()
                 known[key] = game_id = row.id
@@ -254,6 +254,17 @@ def structure_of(parsed: ParsedGame) -> str | None:
     if parsed.start_fen is not None:
         return None
     return pawn_structures.game_structure(chess.Move.from_uci(uci) for uci in parsed.moves)
+
+
+def ends_in_mate(start_fen: str | None, moves: list[str]) -> bool:
+    """Партия закончилась матом на доске (метка для «Миниатюр», 27.9)."""
+    board = chess.Board(start_fen) if start_fen else chess.Board()
+    try:
+        for uci in moves:
+            board.push(chess.Move.from_uci(uci))
+    except (ValueError, AssertionError):
+        return False
+    return board.is_checkmate()
 
 
 def visible_clause(user: User | None) -> ColumnElement[bool]:

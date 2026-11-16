@@ -1,5 +1,6 @@
 """
-Разметка библиотеки партий (таск 27.5): пешечная структура каждой партии (src/services/pawn_structures.py).
+Разметка библиотеки партий (таск 27.5): пешечная структура каждой партии (src/services/pawn_structures.py) и метка
+«закончилась матом» (миниатюры 27.9).
 Импорт размечает новые партии сам; скрипт — для уже загруженных и после правки правил.
 
     python scripts/tag_library.py [--all]   # --all — пересчитать и уже размеченные
@@ -50,6 +51,7 @@ async def run(recompute: bool) -> None:
     from src.core.config import settings
     from src.models.library import LibraryGame
     from src.services import pawn_structures
+    from src.services.library import ends_in_mate
 
     engine = create_async_engine(settings.async_database_url, poolclass=NullPool)
     counts: Counter[str | None] = Counter()
@@ -60,6 +62,7 @@ async def run(recompute: bool) -> None:
         games = (await db.execute(query)).scalars().all()
         for index, game in enumerate(games, start=1):
             game.structure = pawn_structures.game_structure(chess.Move.from_uci(u) for u in game.moves.split())
+            game.mate_finish = ends_in_mate(game.start_fen, game.moves.split())
             counts[game.structure] += 1
             if index % 1000 == 0:
                 await db.commit()
