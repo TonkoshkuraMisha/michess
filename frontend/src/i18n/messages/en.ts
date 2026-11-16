@@ -1358,7 +1358,11 @@ export const en = {
             daily: 'Of the day',
             timed: 'Timed',
             defense: 'Defense',
+            save: 'Save the game',
             drills: 'Drills',
+        },
+        save: {
+            intro: 'You are worse. Find the draw: perpetual check, stalemate, a fortress, a desperado piece or simply the only move that keeps the balance.',
         },
         drills: {
             intro: 'Generated drills: a fresh position every time and exactly one right move.',
