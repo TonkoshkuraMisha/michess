@@ -73,7 +73,8 @@ def _verified(engine: chess.engine.SimpleEngine, fen: str, moves: str, limit: ch
         gap = best.score(mate_score=MATE) - infos[1]["score"].pov(board.turn).score(mate_score=MATE)
         if gap < GAP_CP:
             return None
-    return {"fen": board.fen(), "previous_move": first, "answer": answer.uci(), "mate": bool(mate)}
+    # moves — решение целиком (ход игрока, ответ соперника, …): в тесте оно доигрывается до конца.
+    return {"fen": board.fen(), "previous_move": first, "answer": answer.uci(), "moves": rest, "mate": bool(mate)}
 
 
 def main() -> None:
