@@ -32,6 +32,16 @@ export interface LibraryGameRow {
 
 export const STRUCTURES = ['hedgehog', 'maroczy', 'wedge', 'kid_chain', 'modern_benoni', 'stonewall', 'saw', 'french_chain',
     'french_exchange', 'carlsbad', 'hanging_pawns', 'isolated_pawn', 'spanish', 'symmetry'] as const;
+export type StructureCode = typeof STRUCTURES[number];
+
+/** Вопрос «Узнай структуру» (27.9): game_id = null — учебный скелет. */
+export interface StructureQuestion {
+    fen: string;
+    answer: StructureCode;
+    options: StructureCode[];
+    game_id: number | null;
+    ply: number | null;
+}
 
 export interface LibraryPage {
     total: number;
@@ -78,6 +88,8 @@ export const libraryApi = {
         call<LibraryPage & { id: number; name: string }>(`/collections/${id}/games?offset=${offset}&limit=${LIBRARY_PAGE}`),
     search: (search: LibrarySearch) => call<LibraryPage>(`/games?${searchQuery(search)}`),
     pgnUrl: (id: number | string) => `${API_BASE_URL}/api/v1/library/games/${id}/pgn`,
+    structureQuiz: (count: number, seed: number) =>
+        call<{ questions: StructureQuestion[] }>(`/structure-quiz?count=${count}&seed=${seed}`),
 };
 
 /** Дети коллекции по порядку сервера; корни — parent_id = null. */

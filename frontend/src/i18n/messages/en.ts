@@ -1666,6 +1666,9 @@ export const en = {
         calc_distance: {title: 'How many moves?', rules: 'How many moves does the knight or king need to reach the marked square?'},
         calc_square: {title: 'Does the king catch it?', rules: 'The rule of the square: will the black king catch the white pawn before it queens?'},
         calc_eval: {title: 'Judge the position', rules: 'Who is better: White, Black, or is it equal? Checked against the engine evaluation of real games.'},
+        structure_quiz: {title: 'Name the structure', rules: 'A position from a master game: which pawn structure is on the board? Four options; after the answer you can open the game.'},
+        structurePrompt: 'Which pawn structure is this?',
+        structureGame: 'Open the game',
         calc: {
             question: 'Question {n} of {total}',
             exchangePrompt: 'Capture on {square}: what is the result?',
@@ -2163,6 +2166,7 @@ export const en = {
             S3_5: 'The “saw”',
             S3_6: 'Maróczy bind',
             S3_7: 'Isolated pawn',
+            S3_10: 'Name the structure',
             S3_8: 'Positional elements: blockade, overprotection, centralisation',
             S3_9: 'Minority attack, the bishop pair',
             O3_1: 'Closed openings',

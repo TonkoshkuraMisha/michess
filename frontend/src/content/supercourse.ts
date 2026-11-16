@@ -119,6 +119,7 @@ export const COURSE: CourseModule[] = [
     mod('S3.5', 'S', [lib('saw')]),
     mod('S3.6', 'S', [lib('maroczy')]),
     mod('S3.7', 'S', [th('isolated_pawn'), lib('isolated_pawn')]),
+    mod('S3.10', 'S', [tr('structure_quiz')]),
     mod('S3.8', 'S'),
     mod('S3.9', 'S', [th('minority_attack')]),
     mod('O3.1', 'O', [REPERTOIRE]),
