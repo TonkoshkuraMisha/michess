@@ -1,0 +1,177 @@
+{
+  "id": "tactics-intermezzo",
+  "course": "tactics",
+  "order": 8,
+  "title": {
+    "en": "The in-between move",
+    "uk": "Проміжний хід",
+    "ru": "Промежуточный ход"
+  },
+  "summary": {
+    "en": "Before the 'obvious' recapture, check whether there is a stronger move first — a check or a capture that the opponent must answer. The recapture will still be there.",
+    "uk": "Перш ніж «очевидно» відбити, перевірте, чи немає спершу сильнішого ходу — шаху чи взяття, на які суперник мусить відповісти. Відбити встигнете й потім.",
+    "ru": "Прежде чем «очевидно» отбить, проверьте, нет ли сначала более сильного хода — шаха или взятия, на которые соперник обязан ответить. Отбить успеете и потом."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "r4rk1/pp1B1ppp/3q1b2/2p1n3/2PpRB2/5N2/PP3PPP/R3Q1K1 b - - 0 16",
+      "orientation": "black",
+      "highlights": [
+        "d7"
+      ],
+      "text": {
+        "en": "White has just taken on d7, and the hand reaches for the recapture with the queen. But the recapture can wait one move: a check comes first, White must answer it, and the bishop stays where it is.",
+        "uk": "Білі щойно взяли на d7, і рука тягнеться відбити ферзем. Але відбиття може зачекати хід: спершу шах, білі мусять на нього відповісти, і слон лишиться на місці.",
+        "ru": "Белые только что взяли на d7, и рука тянется отбить ферзём. Но отбить можно и через ход: сначала шах, белые обязаны на него ответить, и слон останется на месте."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "r4rk1/pp1B1ppp/3q1b2/2p1n3/2PpRB2/5N2/PP3PPP/R3Q1K1 b - - 0 16",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Win a piece.",
+        "uk": "Хід чорних. Виграйте фігуру.",
+        "ru": "Ход чёрных. Выиграйте фигуру."
+      },
+      "hint": {
+        "en": "The knight e5 can take on f3 with check.",
+        "uk": "Кінь e5 може взяти на f3 із шахом.",
+        "ru": "Конь e5 может взять на f3 с шахом."
+      },
+      "line": [
+        {
+          "answers": [
+            "e5f3"
+          ],
+          "reply": "g2f3",
+          "correct": {
+            "en": "A knight taken with check: White has to recapture.",
+            "uk": "Коня взято з шахом: білі мусять відбити.",
+            "ru": "Конь взят с шахом: белые обязаны отбить."
+          },
+          "wrong": {
+            "d6d7": {
+              "en": "You only win back the bishop. Take the knight with check first.",
+              "uk": "Ви лише відіграли слона. Спершу візьміть коня з шахом.",
+              "ru": "Вы только отыграли слона. Сначала возьмите коня с шахом."
+            }
+          }
+        },
+        {
+          "answers": [
+            "d6d7"
+          ],
+          "correct": {
+            "en": "And now the recapture: Black is a knight up.",
+            "uk": "А тепер відбиваємо: у чорних зайвий кінь.",
+            "ru": "А теперь отбиваем: у чёрных лишний конь."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "r2q1r2/4b3/4p2k/p3P3/b1p2R2/2P2N2/3QBPP1/1R2K3 b - - 0 26",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. The rook f4 is hanging, but your queen is attacked too. Win the rook.",
+        "uk": "Хід чорних. Тура f4 висить, але й ваш ферзь під ударом. Виграйте туру.",
+        "ru": "Ход чёрных. Ладья f4 висит, но и ваш ферзь под ударом. Выиграйте ладью."
+      },
+      "hint": {
+        "en": "Remove the danger to your queen with check first.",
+        "uk": "Спершу приберіть загрозу своєму ферзю — із шахом.",
+        "ru": "Сначала уберите угрозу своему ферзю — с шахом."
+      },
+      "line": [
+        {
+          "answers": [
+            "d8d2"
+          ],
+          "reply": "f3d2",
+          "correct": {
+            "en": "The queens are exchanged with check — no counter-blow on d8 any more.",
+            "uk": "Ферзі розміняні з шахом — удару по d8 більше немає.",
+            "ru": "Ферзи разменяны с шахом — удара по d8 больше нет."
+          }
+        },
+        {
+          "answers": [
+            "f8f4"
+          ],
+          "correct": {
+            "en": "And the rook is won.",
+            "uk": "І туру виграно.",
+            "ru": "И ладья выиграна."
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "r2q1r2/4b3/4p2k/p3P3/b1p2R2/2P2N2/3QBPP1/1R2K3 b - - 0 26",
+      "orientation": "black",
+      "text": {
+        "en": "Before every recapture ask: does my opponent have to answer anything first? A check, a capture or a threat inserted in between often wins material or saves it.",
+        "uk": "Перед кожним відбиттям питайте: чи немає ходу, на який суперник мусить відповісти? Шах, взяття чи загроза, вставлені між ходами, часто виграють матеріал або рятують його.",
+        "ru": "Перед каждым отбиванием спрашивайте: нет ли хода, на который соперник обязан ответить? Шах, взятие или угроза, вставленные между ходами, часто выигрывают материал или спасают его."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "rn1qk2r/p1pp1pbp/1p2pnp1/6B1/2PPN3/5N2/PP1Q1PPP/R3KB1R b KQkq - 0 8",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Your knight f6 is pinned to the queen. Win material.",
+        "uk": "Хід чорних. Ваш кінь f6 зв’язаний із ферзем. Виграйте матеріал.",
+        "ru": "Ход чёрных. Ваш конь f6 связан с ферзём. Выиграйте материал."
+      },
+      "line": [
+        {
+          "answers": [
+            "f6e4"
+          ],
+          "reply": "g5d8"
+        },
+        {
+          "answers": [
+            "e4d2"
+          ],
+          "reply": "e1d2"
+        },
+        {
+          "answers": [
+            "e8d8"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "r1bQ1rk1/ppp3bp/6p1/4np2/4n3/1P2PNP1/PBP2PBP/R3K2R b KQ - 0 12",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. White has just taken your queen. Find the best reply.",
+        "uk": "Хід чорних. Білі щойно взяли вашого ферзя. Знайдіть найкращу відповідь.",
+        "ru": "Ход чёрных. Белые только что взяли вашего ферзя. Найдите лучший ответ."
+      },
+      "line": [
+        {
+          "answers": [
+            "e5f3"
+          ],
+          "reply": "g2f3"
+        },
+        {
+          "answers": [
+            "f8d8"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -65,8 +65,8 @@ export const COURSE: CourseModule[] = [
     mod('G1.1', 'G', [tr('miniatures')]),
     mod('X1', 'G', [ex('level1')]),
     // --- Уровень 2. IV–III разряд ---
-    mod('T2.1', 'T', [th('double_check'), th('windmill')]),
-    mod('T2.2', 'T', [th('intermezzo')]),
+    mod('T2.1', 'T', [l('tactics-double-check'), th('double_check'), th('windmill')]),
+    mod('T2.2', 'T', [l('tactics-intermezzo'), th('intermezzo')]),
     mod('T2.3', 'T', [th('x_ray'), th('battery')]),
     mod('T2.4', 'T', [l('tactics-deflection'), th('deflection')]),
     mod('T2.5', 'T', [th('decoy')]),

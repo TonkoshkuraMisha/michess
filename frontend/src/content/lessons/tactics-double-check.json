@@ -1,0 +1,175 @@
+{
+  "id": "tactics-double-check",
+  "course": "tactics",
+  "order": 7,
+  "title": {
+    "en": "Double check",
+    "uk": "Подвійний шах",
+    "ru": "Двойной шах"
+  },
+  "summary": {
+    "en": "Two pieces give check at once. You cannot block two lines or capture two pieces in one move — the king has to run, and often there is nowhere to run.",
+    "uk": "Дві фігури оголошують шах одночасно. Закрити дві лінії чи взяти дві фігури одним ходом не можна — королю лишається тікати, а тікати часто нікуди.",
+    "ru": "Две фигуры объявляют шах одновременно. Закрыть две линии или взять две фигуры одним ходом нельзя — королю остаётся только уходить, а уходить часто некуда."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "2rqrbk1/5p1n/3p2Np/p1pb1P2/Pp6/1P4QR/6PP/5R1K w - - 0 29",
+      "arrows": [
+        {
+          "from": "g6",
+          "to": "e7",
+          "color": "green"
+        },
+        {
+          "from": "g3",
+          "to": "g8",
+          "color": "red"
+        }
+      ],
+      "text": {
+        "en": "The knight g6 stands on the g-file between the queen g3 and the black king. When the knight jumps away with check, the queen checks too: a double check. Against it neither a block nor a capture helps — only a king move.",
+        "uk": "Кінь g6 стоїть на вертикалі g між ферзем g3 і чорним королем. Коли кінь відскакує з шахом, шах дає і ферзь: подвійний шах. Від нього не рятує ні закриття, ні взяття — лише хід королем.",
+        "ru": "Конь g6 стоит на вертикали g между ферзём g3 и чёрным королём. Когда конь отскакивает с шахом, шах даёт и ферзь: двойной шах. От него не спасает ни закрытие, ни взятие — только ход королём."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "2rqrbk1/5p1n/3p2Np/p1pb1P2/Pp6/1P4QR/6PP/5R1K w - - 0 29",
+      "text": {
+        "en": "White to move. Mate in two.",
+        "uk": "Хід білих. Мат у два ходи.",
+        "ru": "Ход белых. Мат в два хода."
+      },
+      "hint": {
+        "en": "Where can the knight jump with check?",
+        "uk": "Куди кінь може стрибнути з шахом?",
+        "ru": "Куда конь может прыгнуть с шахом?"
+      },
+      "line": [
+        {
+          "answers": [
+            "g6e7"
+          ],
+          "reply": "g8h8",
+          "correct": {
+            "en": "Double check: the knight and the queen. The king must go to the corner.",
+            "uk": "Подвійний шах: кінь і ферзь. Король мусить іти в кут.",
+            "ru": "Двойной шах: конь и ферзь. Король вынужден идти в угол."
+          }
+        },
+        {
+          "answers": [
+            "g3g8"
+          ],
+          "correct": {
+            "en": "Mate! The queen is protected by the knight e7, the rook cannot take it.",
+            "uk": "Мат! Ферзя захищає кінь e7, тура взяти його не може.",
+            "ru": "Мат! Ферзя защищает конь e7, ладья взять его не может."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "r4r2/p4b1k/2pb1Bp1/qp3n1P/2pP4/2N2P2/PPP1N3/2K3RR w - - 0 22",
+      "text": {
+        "en": "White to move. Mate in two: open the h-file with check.",
+        "uk": "Хід білих. Мат у два ходи: відкрийте вертикаль h із шахом.",
+        "ru": "Ход белых. Мат в два хода: откройте вертикаль h с шахом."
+      },
+      "hint": {
+        "en": "The pawn h5 can capture — and the rook h1 stands behind it.",
+        "uk": "Пішак h5 може взяти — а позаду нього стоїть тура h1.",
+        "ru": "Пешка h5 может взять — а за ней стоит ладья h1."
+      },
+      "line": [
+        {
+          "answers": [
+            "h5g6"
+          ],
+          "reply": "h7g8",
+          "correct": {
+            "en": "The pawn checks from g6 and the rook h1 checks along the open file.",
+            "uk": "Пішак шахує з g6, а тура h1 — по відкритій вертикалі.",
+            "ru": "Пешка шахует с g6, а ладья h1 — по открытой вертикали."
+          }
+        },
+        {
+          "answers": [
+            "h1h8"
+          ],
+          "correct": {
+            "en": "Mate on the h-file.",
+            "uk": "Мат по вертикалі h.",
+            "ru": "Мат по вертикали h."
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "r4r2/p4b1k/2pb1Bp1/qp3n1P/2pP4/2N2P2/PPP1N3/2K3RR w - - 0 22",
+      "text": {
+        "en": "Look for a piece that stands between your long-range piece and the enemy king. If it can move away with check of its own, you get a double check — the strongest check in chess.",
+        "uk": "Шукайте фігуру, що стоїть між вашою далекобійною фігурою і королем суперника. Якщо вона може відійти з власним шахом, вийде подвійний шах — найсильніший шах у шахах.",
+        "ru": "Ищите фигуру, которая стоит между вашей дальнобойной фигурой и королём соперника. Если она может уйти с собственным шахом, получится двойной шах — самый сильный шах в шахматах."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "r4rk1/1pp2ppp/p1p5/6B1/2N1P2q/3P1Qbb/PPP3P1/RN3R1K b - - 1 15",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Mate in two.",
+        "uk": "Хід чорних. Мат у два ходи.",
+        "ru": "Ход чёрных. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "h3g2"
+          ],
+          "reply": "h1g1"
+        },
+        {
+          "answers": [
+            "h4h2"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "5Q2/8/2P1p3/pP1pkppB/P6p/4P2P/3K1nq1/R7 b - - 5 46",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Mate in three.",
+        "uk": "Хід чорних. Мат у три ходи.",
+        "ru": "Ход чёрных. Мат в три хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "f2e4"
+          ],
+          "reply": "d2c1"
+        },
+        {
+          "answers": [
+            "g2d2"
+          ],
+          "reply": "c1b1"
+        },
+        {
+          "answers": [
+            "e4c3"
+          ]
+        }
+      ]
+    }
+  ]
+}
