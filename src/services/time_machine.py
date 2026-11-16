@@ -191,6 +191,37 @@ _EVENTS: tuple[Event, ...] = (
         ("flohr", 13.5), ("stoltz", 13.5), ("tartakower", 13), ("spielmann", 12.5), ("kostic", 12.5), ("maroczy", 12),
         ("colle", 10.5), ("asztalos", 9.5), ("pirc", 8.5),
     ), cycles=2),
+    # Первый американский шахматный конгресс: шестнадцать участников, матчи на выбывание. Победил Морфи.
+    Event("new_york_1857", 1857, "knockout", (
+        Entry("morphy", 1), Entry("paulsen", 2), Entry("lichtenhein", 3), Entry("raphael", 4), Entry("meek", None),
+        Entry("perrin", None), Entry("montgomery", None), Entry("marache", None), Entry("thompson", None),
+        Entry("fuller", None), Entry("stanley", None), Entry("knott", None), Entry("calthrop", None),
+        Entry("allison", None), Entry("kennicott", None), Entry("fiske", None),
+    )),
+    # Двенадцать участников в два круга. Винавер и Цукерторт поделили первое место; дополнительный матч выиграл Цукерторт.
+    Event("paris_1878", 1878, "round_robin", _table(
+        ("winawer", 16.5), ("zukertort", 16.5), ("blackburne", 14.5), ("mackenzie", 13), ("bird", 13),
+        ("anderssen", 12.5), ("englisch", 11.5), ("rosenthal", 11.5), ("clerc", 8.5), ("mason", 8.5),
+        ("gifford", 3.5), ("pitschel", 2.5),
+    ), cycles=2),
+    # Семнадцать участников в один круг (в истории ничья один раз переигрывалась). Победил Ласкер.
+    Event("paris_1900", 1900, "round_robin", _table(
+        ("lasker", 14.5), ("pillsbury", 12.5), ("marshall", 12), ("maroczy", 12), ("burn", 11), ("chigorin", 10.5),
+        ("schlechter", 10), ("marco", 10), ("mieses", 10), ("showalter", 9), ("janowski", 9), ("mason", 4.5),
+        ("brody", 4), ("rosen", 3), ("mortimer", 2), ("sterling", 1), ("didier", 1),
+    )),
+    # Мемориал Чигорина: девятнадцать участников в один круг. Первое место разделили Рубинштейн и Ласкер.
+    Event("st_petersburg_1909", 1909, "round_robin", _table(
+        ("rubinstein", 14.5), ("lasker", 14.5), ("spielmann", 11), ("duras", 11), ("bernstein", 10.5),
+        ("teichmann", 10), ("perlis", 9.5), ("cohn_erich", 9), ("schlechter", 9), ("salwe", 9), ("tartakower", 8.5),
+        ("mieses", 8.5), ("dus_chotimirsky", 8), ("forgacs", 7.5), ("burn", 7), ("vidmar", 7), ("speijer", 6),
+        ("freymann", 5.5), ("znosko_borovsky", 5),
+    )),
+    # Двенадцать ведущих мастеров в один круг. Победил Боголюбов, опередив Капабланку.
+    Event("bad_kissingen_1928", 1928, "round_robin", _table(
+        ("bogoljubow", 8), ("capablanca", 7), ("euwe", 6.5), ("rubinstein", 6.5), ("nimzowitsch", 6), ("reti", 5.5),
+        ("tartakower", 5), ("marshall", 5), ("yates", 5), ("spielmann", 4.5), ("tarrasch", 4), ("mieses", 3),
+    )),
 )
 # Лента — по годам; турниры одного года — по ключу.
 EVENTS: tuple[Event, ...] = tuple(sorted(_EVENTS, key=lambda event: (event.year, event.key)))

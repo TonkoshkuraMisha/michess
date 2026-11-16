@@ -44,8 +44,9 @@ def test_guests_are_well_formed():
         assert len(guest.pgn_name) <= 30 and ", " in guest.pgn_name and guest.pgn_name.isascii(), guest.pgn_name
         assert guest.config.target_elo == guest.rating and 1500 <= guest.rating <= 2500
         if guest.era is None:
-            # Годы жизни неизвестны — допустимо только для участника турнира XIX века (правило 1 соблюдено и так).
-            assert min(event.year for event in EVENTS if guest.id in {entry.id for entry in event.field}) < 1900, guest.id
+            # Годы жизни неизвестны — допустимо только для участника турнира не позже 1900 года: правило 1
+            # («давно умершие») для него соблюдено и так.
+            assert min(event.year for event in EVENTS if guest.id in {entry.id for entry in event.field}) <= 1900, guest.id
         else:
             born, died = (int(part) for part in guest.era.split("–"))
             assert 1750 < born < died <= 1995 and 15 <= died - born <= 100, guest.id  # правило 1: только умершие мастера
