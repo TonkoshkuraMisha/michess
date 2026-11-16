@@ -1903,6 +1903,7 @@ export const ru: Messages = {
             rook_vs_pawn: 'Ладья против пешки',
             q_vs_knight: 'Ферзь против коня',
             q_vs_rook: 'Ферзь против ладьи',
+            bishop_vs_knight: 'Слон против коня: доминация',
             kp_opposition_def: 'Защита: оппозиция',
             rook_pawn_def: 'Защита: крайняя пешка',
             wrong_bishop: 'Защита: «не тот» слон',

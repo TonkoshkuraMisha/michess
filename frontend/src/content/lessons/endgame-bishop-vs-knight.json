@@ -1,0 +1,206 @@
+{
+  "id": "endgame-bishop-vs-knight",
+  "course": "endgame",
+  "order": 9,
+  "title": {
+    "en": "Bishop against knight",
+    "uk": "Слон проти коня",
+    "ru": "Слон против коня"
+  },
+  "summary": {
+    "en": "The bishop is a long-range piece: it fights on both wings at once and stops pawns from afar. The knight is slow, and on the edge of the board it can lose all its squares.",
+    "uk": "Слон — далекобійна фігура: він воює на обох флангах одразу й зупиняє пішаків здалеку. Кінь повільний, а на краю дошки може втратити всі поля.",
+    "ru": "Слон — дальнобойная фигура: он воюет на обоих флангах сразу и останавливает пешки издалека. Конь медленный, а на краю доски может лишиться всех полей."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "6B1/8/8/n7/4P2K/8/5k2/8 w - - 0 1",
+      "highlights": [
+        "b3",
+        "c4",
+        "c6",
+        "b7"
+      ],
+      "text": {
+        "en": "A knight on the edge controls only four squares, here b3, c4, c6 and b7. A bishop sees the whole diagonal. If one bishop move covers every square of the knight, the knight is dominated: it cannot move without being lost.",
+        "uk": "Кінь на краю контролює лише чотири поля, тут b3, c4, c6 і b7. Слон бачить усю діагональ. Якщо один хід слона накриває всі поля коня, кінь у домінації: він не може рушити, щоб не загинути.",
+        "ru": "Конь на краю контролирует всего четыре поля, здесь b3, c4, c6 и b7. Слон видит всю диагональ. Если один ход слона накрывает все поля коня, конь в доминации: он не может двинуться, не погибнув."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "6B1/8/8/n7/4P2K/8/5k2/8 w - - 0 1",
+      "text": {
+        "en": "White to move. Only one move wins: take every square from the knight.",
+        "uk": "Хід білих. Виграє лише один хід: заберіть у коня всі поля.",
+        "ru": "Ход белых. Выигрывает только один ход: отнимите у коня все поля."
+      },
+      "hint": {
+        "en": "All four squares of the knight lie on two diagonals that cross in the centre.",
+        "uk": "Усі чотири поля коня лежать на двох діагоналях, що перетинаються в центрі.",
+        "ru": "Все четыре поля коня лежат на двух диагоналях, которые пересекаются в центре."
+      },
+      "line": [
+        {
+          "answers": [
+            "g8d5"
+          ],
+          "correct": {
+            "en": "Right! From d5 the bishop covers b3, c4, c6 and b7: the knight has nowhere to go.",
+            "uk": "Правильно! З d5 слон б’є b3, c4, c6 і b7: коневі нікуди піти.",
+            "ru": "Верно! С d5 слон бьёт b3, c4, c6 и b7: коню некуда идти."
+          },
+          "wrong": {
+            "e4e5": {
+              "en": "The knight runs out through c4 or c6 and catches the pawn: a draw.",
+              "uk": "Кінь вибігає через c4 або c6 і ловить пішака: нічия.",
+              "ru": "Конь выбегает через c4 или c6 и ловит пешку: ничья."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "7n/3B4/3K4/8/4P2k/8/8/8 w - - 0 1",
+      "text": {
+        "en": "White to move. A knight in the corner has only two squares. Take them both.",
+        "uk": "Хід білих. У коня в куті лише два поля. Заберіть обидва.",
+        "ru": "Ход белых. У коня в углу всего два поля. Отнимите оба."
+      },
+      "line": [
+        {
+          "answers": [
+            "d7e8"
+          ],
+          "correct": {
+            "en": "Right! The bishop e8 covers f7 and g6: the knight is locked in the corner.",
+            "uk": "Правильно! Слон e8 б’є f7 і g6: кінь замкнений у куті.",
+            "ru": "Верно! Слон e8 бьёт f7 и g6: конь заперт в углу."
+          },
+          "wrong": {
+            "e4e5": {
+              "en": "The knight escapes via f7 or g6 and joins the defence: a draw.",
+              "uk": "Кінь утікає через f7 або g6 і встигає захищатися: нічия.",
+              "ru": "Конь уходит через f7 или g6 и успевает защищаться: ничья."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "8/2P2Bk1/8/8/7K/8/5p2/3n4 w - - 0 1",
+      "arrows": [
+        {
+          "from": "f7",
+          "to": "c4",
+          "color": "green"
+        },
+        {
+          "from": "c4",
+          "to": "f1",
+          "color": "green"
+        }
+      ],
+      "text": {
+        "en": "The second strength of the bishop is range. Black's pawn is one step from promotion, and the white pawn too. A knight would have to run back, but the bishop holds the promotion square from the other side of the board, while the c-pawn runs on.",
+        "uk": "Друга сила слона — далекобійність. Чорний пішак за крок до перетворення, білий теж. Коневі довелося б бігти назад, а слон тримає поле перетворення з іншого боку дошки, поки пішак c біжить уперед.",
+        "ru": "Вторая сила слона — дальнобойность. Чёрная пешка в шаге от превращения, белая тоже. Коню пришлось бы бежать назад, а слон держит поле превращения с другого края доски, пока пешка c бежит вперёд."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "8/2P2Bk1/8/8/7K/8/5p2/3n4 w - - 0 1",
+      "text": {
+        "en": "White to move. Stop the f-pawn and keep the win.",
+        "uk": "Хід білих. Зупиніть пішака f і збережіть виграш.",
+        "ru": "Ход белых. Остановите пешку f и сохраните выигрыш."
+      },
+      "hint": {
+        "en": "Guard f1 on a diagonal the knight cannot block in time.",
+        "uk": "Тримайте f1 по діагоналі, яку кінь не встигне перекрити.",
+        "ru": "Держите f1 по диагонали, которую конь не успеет перекрыть."
+      },
+      "line": [
+        {
+          "answers": [
+            "f7c4"
+          ],
+          "correct": {
+            "en": "Right! The bishop c4 guards f1, and the knight cannot block the diagonal: the c-pawn promotes.",
+            "uk": "Правильно! Слон c4 тримає f1, і кінь не перекриє діагональ: пішак c перетвориться.",
+            "ru": "Верно! Слон c4 держит f1, и конь не перекроет диагональ: пешка c превратится."
+          },
+          "wrong": {
+            "c7c8q": {
+              "en": "Black promotes too: f1=Q, and the queens cancel out — a draw.",
+              "uk": "Чорні теж перетворюють пішака: f1=Ф, і ферзі гасять один одного — нічия.",
+              "ru": "Чёрные тоже превращают пешку: f1=Ф, и ферзи гасят друг друга — ничья."
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "8/2P2Bk1/8/8/7K/8/5p2/3n4 w - - 0 1",
+      "text": {
+        "en": "Remember: with pawns on both wings or a pawn far from the knight, the bishop is usually stronger. Push the knight to the edge, take its squares away with the bishop, and stop enemy pawns from afar.",
+        "uk": "Запам’ятайте: з пішаками на обох флангах або з пішаком далеко від коня слон зазвичай сильніший. Відтісніть коня на край, заберіть у нього поля слоном і зупиняйте пішаків суперника здалеку.",
+        "ru": "Запомните: при пешках на обоих флангах или пешке далеко от коня слон обычно сильнее. Оттесните коня на край, отнимите у него поля слоном и останавливайте пешки соперника издалека."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "KB6/3k2P1/8/8/8/n7/2p5/8 w - - 0 1",
+      "text": {
+        "en": "White to move. Win.",
+        "uk": "Хід білих. Виграйте.",
+        "ru": "Ход белых. Выиграйте."
+      },
+      "line": [
+        {
+          "answers": [
+            "b8f4"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "3K4/3P1B2/8/5k2/8/6p1/2n5/8 w - - 0 1",
+      "text": {
+        "en": "White to move. Win.",
+        "uk": "Хід білих. Виграйте.",
+        "ru": "Ход белых. Выиграйте."
+      },
+      "line": [
+        {
+          "answers": [
+            "f7d5"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/8/5k2/8/5K2/4BP2/8/3n4 w - - 0 1",
+      "text": {
+        "en": "White to move. Win: the knight on the edge must lose its squares.",
+        "uk": "Хід білих. Виграйте: кінь на краю має втратити поля.",
+        "ru": "Ход белых. Выиграйте: конь на краю должен лишиться полей."
+      },
+      "line": [
+        {
+          "answers": [
+            "e3d4"
+          ]
+        }
+      ]
+    }
+  ]
+}

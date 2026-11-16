@@ -1899,6 +1899,7 @@ export const en = {
             rook_vs_pawn: 'Rook against pawn',
             q_vs_knight: 'Queen against knight',
             q_vs_rook: 'Queen against rook',
+            bishop_vs_knight: 'Bishop against knight: domination',
             kp_opposition_def: 'Defence: the opposition',
             rook_pawn_def: 'Defence: the rook\'s pawn',
             wrong_bishop: 'Defence: the wrong bishop',

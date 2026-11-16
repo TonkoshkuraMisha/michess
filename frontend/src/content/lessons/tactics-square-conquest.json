@@ -1,0 +1,300 @@
+{
+  "id": "tactics-square-conquest",
+  "course": "tactics",
+  "order": 6,
+  "title": {
+    "en": "Conquering a square",
+    "uk": "Завоювання поля",
+    "ru": "Завоевание поля"
+  },
+  "summary": {
+    "en": "Your piece needs a square, but an enemy piece guards it. Capture the guard, lure it away or force it to move — and the square is yours.",
+    "uk": "Вашій фігурі потрібне поле, але його охороняє фігура суперника. Візьміть охоронця, відвлечіть або примусьте піти — і поле ваше.",
+    "ru": "Вашей фигуре нужно поле, но его охраняет фигура соперника. Возьмите охранника, отвлеките или заставьте уйти — и поле ваше."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "r2q1rk1/ppp1bppp/5n2/4P3/3BP1b1/1PNP1N2/1PP3PP/R2Q1RK1 b - - 0 12",
+      "orientation": "black",
+      "highlights": [
+        "d4"
+      ],
+      "arrows": [
+        {
+          "from": "d8",
+          "to": "d4",
+          "color": "green"
+        },
+        {
+          "from": "f3",
+          "to": "d4",
+          "color": "red"
+        }
+      ],
+      "text": {
+        "en": "Often the winning square is already in sight: the queen d8 looks at the bishop d4. But one guard stands in the way — the knight f3. Conquering a square means first removing the piece that guards it, and only then occupying the square.",
+        "uk": "Часто виграшне поле вже на виду: ферзь d8 дивиться на слона d4. Але на заваді один охоронець — кінь f3. Завоювати поле — означає спершу прибрати фігуру, що його охороняє, і лише потім зайняти поле.",
+        "ru": "Часто выигрывающее поле уже на виду: ферзь d8 смотрит на слона d4. Но мешает один охранник — конь f3. Завоевать поле — значит сначала убрать фигуру, которая его охраняет, и только потом занять поле."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "r2q1rk1/ppp1bppp/5n2/4P3/3BP1b1/1PNP1N2/1PP3PP/R2Q1RK1 b - - 0 12",
+      "orientation": "black",
+      "text": {
+        "en": "Black to move. Win the bishop d4.",
+        "uk": "Хід чорних. Виграйте слона d4.",
+        "ru": "Ход чёрных. Выиграйте слона d4."
+      },
+      "hint": {
+        "en": "Who defends d4? Take that piece.",
+        "uk": "Хто захищає d4? Візьміть цю фігуру.",
+        "ru": "Кто защищает d4? Возьмите эту фигуру."
+      },
+      "line": [
+        {
+          "answers": [
+            "g4f3"
+          ],
+          "reply": "g2f3",
+          "correct": {
+            "en": "Right! The only guard of d4 is gone.",
+            "uk": "Правильно! Єдиного охоронця d4 більше нема.",
+            "ru": "Верно! Единственного охранника d4 больше нет."
+          },
+          "wrong": {
+            "d8d4": {
+              "en": "The knight f3 still guards d4: the knight takes on d4 and Black loses the queen.",
+              "uk": "Кінь f3 усе ще охороняє d4: кінь бере на d4, і чорні втрачають ферзя.",
+              "ru": "Конь f3 всё ещё охраняет d4: конь берёт на d4, и чёрные теряют ферзя."
+            }
+          }
+        },
+        {
+          "answers": [
+            "d8d4"
+          ],
+          "correct": {
+            "en": "The square d4 is yours: the queen takes the bishop with check.",
+            "uk": "Поле d4 ваше: ферзь бере слона з шахом.",
+            "ru": "Поле d4 ваше: ферзь берёт слона с шахом."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "3r1rk1/pb3ppp/4p3/4B3/4q3/6P1/PP3Q1P/3R1RK1 w - - 3 24",
+      "highlights": [
+        "d8"
+      ],
+      "text": {
+        "en": "White to move. The rook d1 wants the square d8, but the rook f8 guards it. Mate in three.",
+        "uk": "Хід білих. Тура d1 хоче на поле d8, але його охороняє тура f8. Мат у три ходи.",
+        "ru": "Ход белых. Ладья d1 хочет на поле d8, но его охраняет ладья f8. Мат в три хода."
+      },
+      "hint": {
+        "en": "Lure the rook f8 away from the back rank — even at the cost of the queen.",
+        "uk": "Відвлечіть туру f8 з останньої горизонталі — навіть ціною ферзя.",
+        "ru": "Отвлеките ладью f8 с последней горизонтали — даже ценой ферзя."
+      },
+      "line": [
+        {
+          "answers": [
+            "f2f7"
+          ],
+          "reply": "f8f7",
+          "correct": {
+            "en": "The rook had to take — and left the back rank.",
+            "uk": "Тура мусила взяти — і покинула останню горизонталь.",
+            "ru": "Ладья вынуждена взять — и покинула последнюю горизонталь."
+          }
+        },
+        {
+          "answers": [
+            "d1d8"
+          ],
+          "reply": "f7f8",
+          "correct": {
+            "en": "Now d8 is unguarded: the rook takes with check.",
+            "uk": "Тепер d8 без охорони: тура бере з шахом.",
+            "ru": "Теперь d8 без охраны: ладья берёт с шахом."
+          }
+        },
+        {
+          "answers": [
+            "f1f8"
+          ],
+          "correct": {
+            "en": "Mate! The guard was lured away, and the square d8 decided the game.",
+            "uk": "Мат! Охоронця відвели, і поле d8 вирішило партію.",
+            "ru": "Мат! Охранника увели, и поле d8 решило партию."
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "1rr3k1/1p3pp1/p1nqpn2/3pN3/P7/2P4R/1P3PPP/1Q2R1K1 w - - 2 22",
+      "highlights": [
+        "f7"
+      ],
+      "arrows": [
+        {
+          "from": "e5",
+          "to": "f7",
+          "color": "green"
+        },
+        {
+          "from": "g8",
+          "to": "f7",
+          "color": "red"
+        }
+      ],
+      "text": {
+        "en": "The guard can also be the king. Here a knight on f7 would attack the king and the queen d6 at once, but the king g8 guards f7. A check that drags the king to another square conquers f7.",
+        "uk": "Охоронцем може бути й король. Тут кінь на f7 напав би одразу на короля й ферзя d6, але король g8 охороняє f7. Шах, що затягує короля на інше поле, завойовує f7.",
+        "ru": "Охранником может быть и король. Здесь конь на f7 напал бы сразу на короля и ферзя d6, но король g8 охраняет f7. Шах, который затягивает короля на другое поле, завоёвывает f7."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "1rr3k1/1p3pp1/p1nqpn2/3pN3/P7/2P4R/1P3PPP/1Q2R1K1 w - - 2 22",
+      "text": {
+        "en": "White to move. Win the queen.",
+        "uk": "Хід білих. Виграйте ферзя.",
+        "ru": "Ход белых. Выиграйте ферзя."
+      },
+      "hint": {
+        "en": "The rook h3 can give check on h8.",
+        "uk": "Тура h3 може дати шах на h8.",
+        "ru": "Ладья h3 может дать шах на h8."
+      },
+      "line": [
+        {
+          "answers": [
+            "h3h8"
+          ],
+          "reply": "g8h8",
+          "correct": {
+            "en": "The king had to take and left f7.",
+            "uk": "Король мусив узяти й покинув f7.",
+            "ru": "Король вынужден взять и покинул f7."
+          },
+          "wrong": {
+            "e5f7": {
+              "en": "The king simply takes the knight: f7 is still guarded.",
+              "uk": "Король просто бере коня: f7 досі під охороною.",
+              "ru": "Король просто берёт коня: f7 всё ещё под охраной."
+            }
+          }
+        },
+        {
+          "answers": [
+            "e5f7"
+          ],
+          "reply": "h8g8",
+          "correct": {
+            "en": "A fork from the conquered square: the king and the queen are attacked.",
+            "uk": "Вилка із завойованого поля: під ударом король і ферзь.",
+            "ru": "Вилка с завоёванного поля: под ударом король и ферзь."
+          }
+        },
+        {
+          "answers": [
+            "f7d6"
+          ],
+          "correct": {
+            "en": "The queen is won: a rook for a queen.",
+            "uk": "Ферзя виграно: тура за ферзя.",
+            "ru": "Ферзь выигран: ладья за ферзя."
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "1rr3k1/1p3pp1/p1nqpn2/3pN3/P7/2P4R/1P3PPP/1Q2R1K1 w - - 2 22",
+      "text": {
+        "en": "Ask before every move: which square would decide the game, and who guards it? The guard can be captured, lured away with a sacrifice or driven off with a check — the square becomes yours.",
+        "uk": "Перед кожним ходом запитуйте: яке поле вирішило б партію і хто його охороняє? Охоронця можна взяти, відвести жертвою або прогнати шахом — і поле стане вашим.",
+        "ru": "Перед каждым ходом спрашивайте: какое поле решило бы партию и кто его охраняет? Охранника можно взять, увести жертвой или прогнать шахом — и поле станет вашим."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "r2qrk2/5pb1/p3b2p/3p2R1/P7/3B4/1P2Q1PP/R1B3K1 w - - 3 20",
+      "text": {
+        "en": "White to move. Win material.",
+        "uk": "Хід білих. Виграйте матеріал.",
+        "ru": "Ход белых. Выиграйте материал."
+      },
+      "line": [
+        {
+          "answers": [
+            "g5g7"
+          ],
+          "reply": "f8g7"
+        },
+        {
+          "answers": [
+            "e2e5"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/ppr2kb1/2p5/2N1p3/4P3/1P6/P3K1R1/8 w - - 9 37",
+      "text": {
+        "en": "White to move. Win the rook.",
+        "uk": "Хід білих. Виграйте туру.",
+        "ru": "Ход белых. Выиграйте ладью."
+      },
+      "line": [
+        {
+          "answers": [
+            "g2g7"
+          ],
+          "reply": "f7g7"
+        },
+        {
+          "answers": [
+            "c5e6"
+          ],
+          "reply": "g7f6"
+        },
+        {
+          "answers": [
+            "e6c7"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "8/pp4R1/5k2/P4q2/8/3Q4/1Pr3rP/1K6 w - - 6 48",
+      "text": {
+        "en": "White to move. Win the queen.",
+        "uk": "Хід білих. Виграйте ферзя.",
+        "ru": "Ход белых. Выиграйте ферзя."
+      },
+      "line": [
+        {
+          "answers": [
+            "g7f7"
+          ],
+          "reply": "f6f7"
+        },
+        {
+          "answers": [
+            "d3f5"
+          ]
+        }
+      ]
+    }
+  ]
+}

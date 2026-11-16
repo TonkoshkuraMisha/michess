@@ -6,6 +6,12 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {SupercoursePage} from '../SupercoursePage';
 import {setToken} from '../../../services/authToken';
 
+// Все модули курса наполнены; чтобы проверить режим «каркас», модуль T3.2 подменяется пустым.
+vi.mock('../../../content/supercourse', async (importOriginal) => {
+    const original = await importOriginal<typeof import('../../../content/supercourse')>();
+    return {...original, COURSE: original.COURSE.map((m) => (m.code === 'T3.2' ? {...m, steps: []} : m))};
+});
+
 beforeEach(() => setToken('jwt'));
 afterEach(() => {
     vi.unstubAllGlobals();
