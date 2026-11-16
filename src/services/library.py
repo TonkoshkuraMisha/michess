@@ -277,6 +277,22 @@ def visible_clause(user: User | None) -> ColumnElement[bool]:
     return or_(*conditions)
 
 
+# Статусы аннотации (таск 27.4): auto и approved видны всем, draft и review — модераторам.
+ANNOTATION_STATUSES = ("auto", "draft", "review", "approved")
+PUBLIC_ANNOTATION = ("auto", "approved")
+
+
+def annotation_view(annotation, user: User | None) -> dict | None:
+    """Аннотация для просмотра партии — если её можно показать этому пользователю."""
+    if annotation is None:
+        return None
+    if annotation.status not in PUBLIC_ANNOTATION and not (user is not None and user.is_moderator):
+        return None
+    body = annotation.body or {}
+    return {"status": annotation.status, "version": annotation.version, "comments": body.get("comments", {}),
+            "evals": body.get("evals", [])}
+
+
 def to_pgn(game: LibraryGame) -> str:
     """PGN партии библиотеки: заголовки и ходы, без комментариев."""
     pgn = chess.pgn.Game()

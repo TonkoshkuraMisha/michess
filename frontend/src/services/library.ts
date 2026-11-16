@@ -1,6 +1,7 @@
 // Библиотека партий (таск 27.1): /api/v1/library — дерево коллекций, партии коллекции, поиск и PGN для просмотра.
 // Без входа видны публичные коллекции; с токеном — ещё свои закрытые (и служебные у модераторов).
 
+import type {CoachComment} from './coach';
 import {API_BASE_URL} from '../config/api';
 import {readApiErrorOr, UiError} from './apiErrors';
 import {uiMessage} from '../i18n';
@@ -68,6 +69,14 @@ export interface LibrarySearch {
     offset?: number;
 }
 
+/** Аннотация партии (таск 27.4): комментарии наставника кодами coach.* по полуходам. */
+export interface LibraryAnnotation {
+    status: 'auto' | 'draft' | 'review' | 'approved';
+    version: number;
+    comments: Record<string, CoachComment>;
+    evals: number[];
+}
+
 export const LIBRARY_PAGE = 50;
 
 async function call<T>(path: string): Promise<T> {
@@ -97,6 +106,8 @@ export const libraryApi = {
         call<LibraryPage & { id: number; name: string }>(`/collections/${id}/games?offset=${offset}&limit=${LIBRARY_PAGE}`),
     search: (search: LibrarySearch) => call<LibraryPage>(`/games?${searchQuery(search)}`),
     pgnUrl: (id: number | string) => `${API_BASE_URL}/api/v1/library/games/${id}/pgn`,
+    annotation: (id: number | string) =>
+        call<{ annotation: LibraryAnnotation | null }>(`/games/${id}`).then((body) => body.annotation ?? null),
     miniatures: (count: number, seed: number) =>
         call<{ miniatures: LibraryMiniature[] }>(`/miniatures?count=${count}&seed=${seed}`),
     structureQuiz: (count: number, seed: number) =>

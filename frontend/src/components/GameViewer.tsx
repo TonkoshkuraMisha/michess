@@ -44,6 +44,8 @@ import {XrayPanel} from './xray/XrayPanel';
 import {useXraySettings} from './xray/useXraySettings';
 import {getToken} from '../services/authToken';
 import {libraryApi} from '../services/library';
+import type {LibraryAnnotation} from '../services/library';
+import {LibraryAnnotationPanel} from './library/LibraryAnnotationPanel';
 
 import {
     COACH_ARROW_COLORS, FILES, RANKS, annotatedMoves, chartPoints, computeStaticWhiteEvalCp, evalCpToWhitePercentage,
@@ -70,6 +72,7 @@ export default function GameViewer({library = false}: { library?: boolean }) {
     // восстанавливаются от неё.
     const [startFen, setStartFen] = useState<string | null>(null);
     const [viewIndex, setViewIndex] = useState<number>(-1);
+    const [libraryAnnotation, setLibraryAnnotation] = useState<LibraryAnnotation | null>(null);
     const [isFlipped, setIsFlipped] = useState(false);
     const [showAppearancePanel, setShowAppearancePanel] = useState(false);
     const [isSoundMuted, setIsSoundMuted] = useState<boolean>(() => soundEngine.isMuted());
@@ -245,6 +248,8 @@ export default function GameViewer({library = false}: { library?: boolean }) {
         };
 
         if (gameId) loadGame();
+        setLibraryAnnotation(null);
+        if (gameId && library) libraryApi.annotation(gameId).then(setLibraryAnnotation).catch(() => undefined);
     }, [gameId, library]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const handleRunFullAnalysis = async () => {
@@ -783,7 +788,9 @@ export default function GameViewer({library = false}: { library?: boolean }) {
 
                 <div
                     className="bg-acacia-dark p-3 rounded-md border border-amber-800/50 flex flex-col gap-2.5 shrink-0">
-                    {library ? null : !analysisReport ? (
+                    {library ? (libraryAnnotation && (
+                        <LibraryAnnotationPanel annotation={libraryAnnotation} viewIndex={viewIndex} onSelect={setViewIndex}/>
+                    )) : !analysisReport ? (
                         <div className="flex items-center justify-between gap-3">
                             <div className="text-xs text-boxwood/85 leading-snug">
                                 <div className="font-bold text-amber-200 flex items-center gap-1.5">
