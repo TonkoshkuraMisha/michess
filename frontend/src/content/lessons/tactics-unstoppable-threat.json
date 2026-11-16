@@ -1,0 +1,168 @@
+{
+  "id": "tactics-unstoppable-threat",
+  "course": "tactics",
+  "order": 13,
+  "title": {
+    "en": "The unstoppable threat",
+    "uk": "Невідворотна загроза",
+    "ru": "Неотразимая угроза"
+  },
+  "summary": {
+    "en": "Not every winning move is a check or a capture. A quiet move that creates a threat the opponent cannot parry decides the game just as surely.",
+    "uk": "Не кожен виграшний хід — шах чи взяття. Тихий хід, що створює загрозу, від якої суперник не може захиститися, вирішує партію так само певно.",
+    "ru": "Не каждый выигрывающий ход — шах или взятие. Тихий ход, создающий угрозу, от которой соперник не может защититься, решает партию так же верно."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "r2q1rk1/ppp2pp1/4np2/7Q/P7/R7/2PP1PPP/5RK1 w - - 2 18",
+      "arrows": [
+        {
+          "from": "a3",
+          "to": "h3",
+          "color": "green"
+        },
+        {
+          "from": "h5",
+          "to": "h7",
+          "color": "red"
+        }
+      ],
+      "text": {
+        "en": "The white queen h5 already eyes the h7-pawn. If the rook a3 swings to the h-file, the queen is supported and two mates appear at once: on h7 and on h8. Black has only one move to answer — not enough.",
+        "uk": "Білий ферзь h5 уже дивиться на пішака h7. Якщо тура a3 перейде на вертикаль h, ферзь отримає підтримку і з’являться одразу два мати: на h7 і на h8. У чорних лише один хід — цього замало.",
+        "ru": "Белый ферзь h5 уже смотрит на пешку h7. Если ладья a3 перейдёт на вертикаль h, ферзь получит поддержку и появятся сразу два мата: на h7 и на h8. У чёрных только один ход — этого мало."
+      }
+    },
+    {
+      "type": "find_move",
+      "fen": "r2q1rk1/ppp2pp1/4np2/7Q/P7/R7/2PP1PPP/5RK1 w - - 2 18",
+      "text": {
+        "en": "White to move. Mate in two.",
+        "uk": "Хід білих. Мат у два ходи.",
+        "ru": "Ход белых. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "a3h3"
+          ],
+          "reply": "f6f5",
+          "correct": {
+            "en": "A quiet move — and there is no defence against both mates.",
+            "uk": "Тихий хід — і від обох матів захисту немає.",
+            "ru": "Тихий ход — и от обоих матов защиты нет."
+          }
+        },
+        {
+          "answers": [
+            "h5h7"
+          ],
+          "correct": {
+            "en": "Mate: the rook h3 protects the queen.",
+            "uk": "Мат: тура h3 захищає ферзя.",
+            "ru": "Мат: ладья h3 защищает ферзя."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "4r1k1/pp3p2/1qp3p1/3pP3/1P1P2PB/3n1PK1/P7/7R w - - 0 37",
+      "text": {
+        "en": "White to move. Mate in two: close the king's last door.",
+        "uk": "Хід білих. Мат у два ходи: зачиніть королю останні двері.",
+        "ru": "Ход белых. Мат в два хода: закройте королю последнюю дверь."
+      },
+      "hint": {
+        "en": "The bishop h4 blocks your rook's way to h8. Move it so that it also takes g7 from the king.",
+        "uk": "Слон h4 закриває турі шлях на h8. Переставте його так, щоб він заодно забрав у короля g7.",
+        "ru": "Слон h4 закрывает ладье путь на h8. Переставьте его так, чтобы он заодно отнял у короля g7."
+      },
+      "line": [
+        {
+          "answers": [
+            "h4f6"
+          ],
+          "reply": "c6c5",
+          "correct": {
+            "en": "The h-file is open and the bishop f6 covers g7: the mate on h8 cannot be stopped.",
+            "uk": "Вертикаль h відкрита, а слон f6 тримає g7: мат на h8 не відвернути.",
+            "ru": "Вертикаль h открыта, а слон f6 держит g7: мат на h8 не предотвратить."
+          }
+        },
+        {
+          "answers": [
+            "h1h8"
+          ],
+          "correct": {
+            "en": "Mate on h8.",
+            "uk": "Мат на h8.",
+            "ru": "Мат на h8."
+          }
+        }
+      ]
+    },
+    {
+      "type": "text",
+      "fen": "4r1k1/pp3p2/1qp3p1/3pP3/1P1P2PB/3n1PK1/P7/7R w - - 0 37",
+      "text": {
+        "en": "When there is no forcing move, ask: what would I play if it were my move again? If the answer is a mate or a big win, look for a quiet move that prepares it so that no defence helps.",
+        "uk": "Коли форсованого ходу немає, запитайте: що б я зіграв, якби знову був мій хід? Якщо відповідь — мат чи великий виграш, шукайте тихий хід, що готує його так, щоб жоден захист не допоміг.",
+        "ru": "Когда форсированного хода нет, спросите: что бы я сыграл, если бы снова был мой ход? Если ответ — мат или большой выигрыш, ищите тихий ход, который готовит его так, чтобы никакая защита не помогла."
+      }
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "r6r/p6p/2R3p1/3kp3/3p4/3P4/PP3P2/1K5R w - - 1 33",
+      "text": {
+        "en": "White to move. Mate in two.",
+        "uk": "Хід білих. Мат у два ходи.",
+        "ru": "Ход белых. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "h1c1"
+          ],
+          "reply": "e5e4"
+        },
+        {
+          "answers": [
+            "c1c5"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "6k1/2p5/pp4KP/5N2/8/1n6/2p5/8 w - - 0 40",
+      "text": {
+        "en": "White to move. Mate in three.",
+        "uk": "Хід білих. Мат у три ходи.",
+        "ru": "Ход белых. Мат в три хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "h6h7"
+          ],
+          "reply": "g8h8"
+        },
+        {
+          "answers": [
+            "f5h6"
+          ],
+          "reply": "a6a5"
+        },
+        {
+          "answers": [
+            "h6f7"
+          ]
+        }
+      ]
+    }
+  ]
+}

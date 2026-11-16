@@ -71,7 +71,7 @@ export const COURSE: CourseModule[] = [
     mod('T2.4', 'T', [l('tactics-deflection'), th('deflection')]),
     mod('T2.5', 'T', [l('tactics-decoy'), th('decoy')]),
     mod('T2.6', 'T', [th('remove_defender'), th('overload')]),
-    mod('T2.7', 'T', [th('counterattack'), th('unstoppable_threat')]),
+    mod('T2.7', 'T', [l('tactics-unstoppable-threat'), th('counterattack'), th('unstoppable_threat')]),
     mod('T2.8', 'T', [th('tempo_gain'), th('seventh_rank')]),
     mod('T2.9', 'T', [l('tactics-trapped-piece'), th('trapped_piece'), th('domination')]),
     mod('T2.10', 'T', [l('tactics-pawn-breakthrough'), th('pawn_breakthrough'), th('promotion'), th('underpromotion'), th('advanced_pawn')]),
