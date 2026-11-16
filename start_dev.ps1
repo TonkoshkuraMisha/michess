@@ -76,13 +76,36 @@ if (-not (Test-Path $stockfishBin))
     & $pythonExe (Join-Path $root "scripts\setup_stockfish.py")
 }
 
+# 4.1. Поиск Node.js. Терминал PyCharm может унаследовать PATH без папки Node.js (IDE запущена до установки Node
+# или со старым окружением) — тогда ищем в стандартных местах и добавляем папку в PATH этого процесса и дочерних окон.
+$npmCmd = (Get-Command npm.cmd -ErrorAction SilentlyContinue).Source
+if (-not $npmCmd)
+{
+    $npmCmd = @(
+        (Join-Path $env:ProgramFiles "nodejs\npm.cmd"),
+        (Join-Path ${env:ProgramFiles(x86)} "nodejs\npm.cmd"),
+        (Join-Path $env:APPDATA "nvm\nodejs\npm.cmd"),
+        (Join-Path $env:LOCALAPPDATA "Programs\nodejs\npm.cmd")
+    ) | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+}
+if (-not $npmCmd)
+{
+    Write-Host "[!] Node.js (npm.cmd) не найден. Установите Node.js LTS и перезапустите PyCharm." -ForegroundColor Red
+    exit 1
+}
+$nodeDir = Split-Path $npmCmd -Parent
+if (($env:Path -split ";") -notcontains $nodeDir)
+{
+    $env:Path = "$nodeDir;$env:Path"
+}
+
 # 5. Автопроверка node_modules во фронтенде
 if (-not (Test-Path (Join-Path $frontendDir "node_modules")))
 {
     Write-Host "[*] Устанавливаем npm-зависимости фронтенда..." -ForegroundColor Yellow
     Set-Location $frontendDir
     # npm.cmd, а не npm: обёртка npm.ps1 не запускается при запрете скриптов (политика выполнения по умолчанию).
-    npm.cmd install
+    & $npmCmd install
     Set-Location $root
 }
 
@@ -193,7 +216,10 @@ $frontendShell = if (Get-Command pwsh -ErrorAction SilentlyContinue) { "pwsh" } 
 # хвост лога здесь, а не только в отдельном окне, которое легко потерять за другими.
 $viteLog = Join-Path $frontendDir "vite-dev.log"
 Remove-Item $viteLog -Force -ErrorAction SilentlyContinue
-Start-Process $frontendShell -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "cd '$frontendDir'; npm.cmd run dev 2>&1 | Tee-Object -FilePath '$viteLog'"
+# Папку задаём через -WorkingDirectory, а не через cd внутри -Command: из терминала PyCharm окно открывалось в корне
+# проекта, и npm падал с ENOENT на package.json. Путь к package.json передаём ещё и явно (--prefix) — на случай, если
+# оболочка всё же сменит каталог при старте.
+Start-Process $frontendShell -WorkingDirectory $frontendDir -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", "`$env:Path = '$nodeDir;' + `$env:Path; Set-Location -LiteralPath '$frontendDir'; & '$npmCmd' --prefix '$frontendDir' run dev 2>&1 | Tee-Object -FilePath '$viteLog'"
 
 # 9. Ожидание фактического открытия портов 3000 (Vite) и 8000 (backend) перед запуском браузера.
 # Первый старт Vite (оптимизация зависимостей) и uvicorn --reload может занять заметно больше 15 секунд.
