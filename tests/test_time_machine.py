@@ -139,8 +139,12 @@ def test_every_event_has_a_consistent_real_table(event):
         assert entry.place == 1 + next(i for i, other in enumerate(field) if other.score == entry.score), entry.id
         assert index == 0 or entry.place >= field[index - 1].place
     games = len(field) * (len(field) - 1) // 2 * event.cycles
-    # Сумма очков — число партий; в старых турнирах бывала несыгранная партия без очков обоим.
-    assert games - 2 <= sum(scores) <= games, (event.key, sum(scores), games)
+    if event.partial:
+        # Турнир не доиграли или ничьи не давали очков: очков заметно меньше, чем партий.
+        assert sum(scores) < games - 2, (event.key, sum(scores), games)
+    else:
+        # Сумма очков — число партий; в старых турнирах бывала несыгранная партия без очков обоим.
+        assert games - 2 <= sum(scores) <= games, (event.key, sum(scores), games)
     assert max(scores) <= (len(field) - 1) * event.cycles
 
 

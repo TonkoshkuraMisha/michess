@@ -45,6 +45,9 @@ class Event:
     format: tournaments_service.Format
     field: tuple[Entry, ...]
     cycles: int = 1
+    # Настоящая таблица неполная: турнир не доиграли (Мангейм 1914 прервала война) или ничьи не давали очков —
+    # сумма очков меньше числа партий. У игрока турнир идёт до конца.
+    partial: bool = False
 
     @property
     def size(self) -> int:
@@ -222,6 +225,34 @@ _EVENTS: tuple[Event, ...] = (
         ("bogoljubow", 8), ("capablanca", 7), ("euwe", 6.5), ("rubinstein", 6.5), ("nimzowitsch", 6), ("reti", 5.5),
         ("tartakower", 5), ("marshall", 5), ("yates", 5), ("spielmann", 4.5), ("tarrasch", 4), ("mieses", 3),
     )),
+    # Девятнадцать участников в два круга (выбывший Шварц в таблицу не вошёл). Первое место — Тарраш и Пильсбери.
+    Event("vienna_1898", 1898, "round_robin", _table(
+        ("tarrasch", 27.5), ("pillsbury", 27.5), ("janowski", 25.5), ("steinitz", 23.5), ("schlechter", 21.5),
+        ("chigorin", 20), ("burn", 20), ("lipke", 19.5), ("maroczy", 19.5), ("alapin", 18), ("blackburne", 17),
+        ("schiffers", 17), ("marco", 16.5), ("showalter", 15), ("walbrodt", 14.5), ("halprin", 14), ("caro", 12.5),
+        ("baird", 8), ("trenchard", 5),
+    ), cycles=2),
+    # Двадцать шесть участников в один круг. Победил Тейхман. У Видмара 15: в опубликованной таблице опечатка (15½).
+    Event("carlsbad_1911", 1911, "round_robin", _table(
+        ("teichmann", 18), ("rubinstein", 17), ("schlechter", 17), ("rotlewi", 16), ("marshall", 15.5),
+        ("nimzowitsch", 15.5), ("vidmar", 15), ("leonhardt", 13.5), ("tartakower", 13.5), ("duras", 13.5),
+        ("alekhine", 13.5), ("spielmann", 13), ("perlis", 12), ("cohn_erich", 11.5), ("levenfish", 11.5),
+        ("suchting", 11.5), ("burn", 11), ("salwe", 11), ("johner_paul", 10.5), ("rabinovich_abram", 10.5),
+        ("kostic", 10.5), ("dus_chotimirsky", 10), ("alapin", 8.5), ("chajes", 8.5), ("fahrni", 8.5), ("jaffe", 8.5),
+    )),
+    # Турнир прерван войной после 11 туров из 17: настоящая таблица — на момент остановки. Первый приз получил Алехин.
+    Event("mannheim_1914", 1914, "round_robin", _table(
+        ("alekhine", 9.5), ("vidmar", 8.5), ("spielmann", 8), ("breyer", 7), ("marshall", 7), ("reti", 7),
+        ("janowski", 6.5), ("bogoljubow", 5.5), ("tarrasch", 5.5), ("duras", 5), ("john", 5), ("tartakower", 4.5),
+        ("fahrni", 4), ("post", 4), ("carls", 3.5), ("kruger", 3.5), ("flamberg", 3), ("mieses", 2),
+    ), partial=True),
+    # Восемнадцать участников в один круг. Первое место разделили Алехин, Боголюбов и Мароци.
+    Event("carlsbad_1923", 1923, "round_robin", _table(
+        ("alekhine", 11.5), ("bogoljubow", 11.5), ("maroczy", 11.5), ("reti", 10.5), ("grunfeld", 10.5),
+        ("nimzowitsch", 10), ("treybal", 10), ("yates", 9.5), ("teichmann", 9), ("tartakower", 8.5), ("tarrasch", 8),
+        ("rubinstein", 7.5), ("bernstein_jacob", 7), ("wolf", 6.5), ("samisch", 6), ("thomas", 5.5), ("spielmann", 5),
+        ("chajes", 5),
+    )),
 )
 # Лента — по годам; турниры одного года — по ключу.
 EVENTS: tuple[Event, ...] = tuple(sorted(_EVENTS, key=lambda event: (event.year, event.key)))
@@ -272,7 +303,7 @@ async def overview(db: AsyncSession, user: User) -> list[dict]:
         mine = history.get(event.key, {})
         result.append({
             "key": event.key, "year": event.year, "format": event.format, "cycles": event.cycles, "size": event.size,
-            "rounds": event.rounds, "player_games": event.player_games, "field": field,
+            "rounds": event.rounds, "player_games": event.player_games, "partial": event.partial, "field": field,
             "active_id": mine.get("active_id"), "best_place": mine.get("best_place"), "played": mine.get("played", 0),
         })
     return result

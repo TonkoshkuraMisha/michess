@@ -286,5 +286,29 @@ GUESTS: tuple[Guest, ...] = (
     _guest("speijer", "Speijer, Abraham", "1873–1956", 2000, aggression=0, randomness=25),
     _guest("freymann", "Freymann, Sergey von", "1882–1946", 2050, aggression=10, randomness=25),
     _guest("znosko_borovsky", "Znosko-Borovsky, Eugene", "1884–1954", 2100, aggression=30, mobility=140, randomness=25),
+
+    # --- Шестая партия турниров (28.4): Вена 1898, Карлсбад 1911, Мангейм 1914, Карлсбад 1923 --------------------
+    _guest("lipke", "Lipke, Paul", "1870–1955", 2100, aggression=20, mobility=130, randomness=20),
+    # Теоретик дебютов.
+    _guest("alapin", "Alapin, Simon", "1856–1923", 2100, aggression=20, center_control=130, randomness=25),
+    _guest("halprin", "Halprin, Alexander", "1868–1921", 2000, aggression=50, randomness=30),
+    _guest("caro", "Caro, Horatio", "1862–1920", 2000, aggression=10, randomness=25),
+    _guest("baird", "Baird, David Graham", "1854–1913", 1850, aggression=0, randomness=35),
+    _guest("trenchard", "Trenchard, Herbert William", "1857–1934", 1800, aggression=0, randomness=40),
+    _guest("rotlewi", "Rotlewi, Gersz", "1889–1920", 2200, aggression=40, mobility=150, randomness=20),
+    _guest("suchting", "Suechting, Hugo", "1874–1916", 2050, aggression=-20, king_safety=140, randomness=20),
+    _guest("rabinovich_abram", "Rabinovich, Abram", "1878–1943", 2050, aggression=30, randomness=25),
+    _guest("chajes", "Chajes, Oscar", "1873–1928", 2050, aggression=40, randomness=25),
+    _guest("fahrni", "Fahrni, Hans", "1874–1939", 2050, aggression=10, randomness=25),
+    _guest("jaffe", "Jaffe, Charles", "1879–1941", 2050, aggression=30, randomness=30),
+    # Один из зачинателей гипермодернизма.
+    _guest("breyer", "Breyer, Gyula", "1893–1921", 2200,
+           aggression=30, center_control=120, mobility=150, randomness=20),
+    _guest("john", "John, Walter", "1879–1940", 2050, aggression=0, randomness=25),
+    _guest("post", "Post, Ehrhardt", "1881–1947", 2100, aggression=10, randomness=20),
+    _guest("carls", "Carls, Carl", "1880–1958", 2100, aggression=-10, center_control=130, randomness=20),
+    _guest("kruger", "Krueger, Paul", "1871–1939", 2000, aggression=0, randomness=30),
+    _guest("flamberg", "Flamberg, Alexander", "1880–1926", 2100, aggression=30, randomness=25),
+    _guest("bernstein_jacob", "Bernstein, Jacob", "1885–1959", 2000, aggression=10, randomness=25),
 )
 GUESTS_BY_ID = {guest.id: guest for guest in GUESTS}

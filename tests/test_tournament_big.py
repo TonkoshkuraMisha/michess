@@ -45,7 +45,7 @@ def test_schedule_equals_fide_tables_for_classic_sizes(n):
     assert round_robin_schedule(n) == berger_rounds(n)
 
 
-@pytest.mark.parametrize("n", [10, 12, 16, 18, 22, 24, 26])
+@pytest.mark.parametrize("n", [10, 12, 16, 18, 22, 24, 26, 28])
 def test_even_field_everyone_meets_once(n):
     rounds = round_robin_schedule(n)
     assert len(rounds) == n - 1
@@ -56,7 +56,7 @@ def test_even_field_everyone_meets_once(n):
     assert max(whites) - min(whites) <= 1
 
 
-@pytest.mark.parametrize("n", [3, 5, 9, 17, 23])
+@pytest.mark.parametrize("n", [3, 5, 9, 17, 23, 27])
 def test_odd_field_gives_everyone_one_free_round(n):
     rounds = round_robin_schedule(n)
     assert len(rounds) == n
@@ -83,7 +83,7 @@ def test_second_cycle_repeats_pairs_with_colours_reversed():
         assert sum(1 for rnd in four for pair in rnd if pair == (a, b)) == 2  # цвета поровну
 
 
-@pytest.mark.parametrize(("n", "cycles"), [(2, 1), (27, 1), (8, 0), (8, 7)])
+@pytest.mark.parametrize(("n", "cycles"), [(2, 1), (29, 1), (8, 0), (8, 7)])
 def test_schedule_limits(n, cycles):
     with pytest.raises(ValueError):
         round_robin_schedule(n, cycles)
