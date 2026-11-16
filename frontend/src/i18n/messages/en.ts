@@ -1568,8 +1568,8 @@ export const en = {
     },
     classics: {
         title: 'Master games explained',
-        intro: 'Thirty classical-time-control games by world champions — from Steinitz to Carlsen. The coach explains the idea or the error behind key moves, and in stop mode you can try to find an important move yourself before it is played.',
-        card: 'Master games explained — 30 champions\' games with "what would you play?" stops.',
+        intro: 'Forty-five classical-time-control games by world champions and leading masters — from Steinitz to Carlsen. The coach explains the idea or the error behind key moves, and in stop mode you can try to find an important move yourself before it is played.',
+        card: 'Master games explained — 45 games by champions and masters with "what would you play?" stops.',
         first: 'To the start',
         prev: 'Move back',
         next: 'Move forward',

@@ -35,10 +35,10 @@ function renderAt(path: string) {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('Партии мастеров', () => {
-    it('список из тридцати партий', async () => {
+    it('список из сорока пяти партий', async () => {
         renderAt('/learn/classics');
         expect(await screen.findByTestId('classic-botvinnik-tal-1961')).toHaveTextContent('Botvinnik');
-        expect(screen.getAllByTestId(/^classic-[a-z]/)).toHaveLength(30);
+        expect(screen.getAllByTestId(/^classic-[a-z]/)).toHaveLength(45);
     });
 
     it('вводный текст, затем остановка перед ключевым ходом и баллы за ход мастера', async () => {

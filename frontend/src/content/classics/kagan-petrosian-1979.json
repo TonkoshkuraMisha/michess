@@ -1,0 +1,630 @@
+{
+ "id": "kagan-petrosian-1979",
+ "white": "Kagan, Shimon",
+ "black": "Petrosian, Tigran V",
+ "event": "Rio de Janeiro Interzonal",
+ "year": "1979",
+ "result": "0-1",
+ "moves": [
+  "e2e4",
+  "c7c5",
+  "g1f3",
+  "d7d6",
+  "d2d4",
+  "c5d4",
+  "f3d4",
+  "g8f6",
+  "b1c3",
+  "e7e6",
+  "g2g4",
+  "b8c6",
+  "g4g5",
+  "f6d7",
+  "c1e3",
+  "a7a6",
+  "h2h4",
+  "f8e7",
+  "h1g1",
+  "c6a5",
+  "d1d2",
+  "d8c7",
+  "e1c1",
+  "g7g6",
+  "f2f4",
+  "b7b5",
+  "f4f5",
+  "d7e5",
+  "d2f2",
+  "a5c4",
+  "f1c4",
+  "e5c4",
+  "g1f1",
+  "e8g8",
+  "f5f6",
+  "e7d8",
+  "h4h5",
+  "b5b4",
+  "c3e2",
+  "e6e5",
+  "d4b3",
+  "c8g4",
+  "h5g6",
+  "f7g6",
+  "c1b1",
+  "a8c8",
+  "d1c1",
+  "a6a5",
+  "c2c3",
+  "c7b7",
+  "e2g3",
+  "a5a4",
+  "b3a1",
+  "g4e6",
+  "c3b4",
+  "b7b4",
+  "b2b3",
+  "a4b3",
+  "a1b3",
+  "c8a8"
+ ],
+ "evals": [
+  27,
+  36,
+  38,
+  43,
+  36,
+  26,
+  39,
+  26,
+  25,
+  55,
+  66,
+  130,
+  128,
+  134,
+  139,
+  132,
+  151,
+  158,
+  156,
+  190,
+  198,
+  234,
+  251,
+  225,
+  239,
+  275,
+  208,
+  213,
+  202,
+  203,
+  142,
+  166,
+  140,
+  161,
+  73,
+  107,
+  3,
+  0,
+  -53,
+  -93,
+  -104,
+  -58,
+  -155,
+  -167,
+  -167,
+  -167,
+  -217,
+  -238,
+  -481,
+  -504,
+  -508,
+  -508,
+  -589,
+  -511,
+  -512,
+  -525,
+  -555,
+  -473,
+  -490,
+  -562
+ ],
+ "comments": {
+  "11": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♞c6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "h6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "h7",
+     "to": "h6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "26": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "f5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "a3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a2",
+     "to": "a3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "30": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♗xc4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♗f4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e3",
+     "to": "f4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "34": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "f6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "a3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a2",
+     "to": "a3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "36": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "h5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "b3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b2",
+     "to": "b3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "38": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♘ce2"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♘a4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c3",
+     "to": "a4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "41": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♝g4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♝e6"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c8",
+     "to": "e6",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "42": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "hxg6"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♔b1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c1",
+     "to": "b1",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "43": {
+   "comment": [
+    {
+     "key": "coach.good.pin_relative.v2",
+     "params": {
+      "attacker": "♜f8",
+      "front": "♙f6",
+      "behind": "♕f2"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f8",
+     "to": "f2",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "f6",
+     "kind": "target"
+    },
+    {
+     "square": "f2",
+     "kind": "target"
+    }
+   ]
+  },
+  "46": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♖c1"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♗c1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e3",
+     "to": "c1",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "48": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v2",
+     "params": {
+      "move": "c3"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "♘d2"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b3",
+     "to": "d2",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "52": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♘a1"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♘d2"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b3",
+     "to": "d2",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "53": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♝e6"
+     }
+    },
+    {
+     "key": "coach.best.pin_absolute.v1",
+     "params": {
+      "move": "bxc3",
+      "attacker": "♛b7",
+      "front": "♙b2",
+      "behind": "♔b1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b4",
+     "to": "c3",
+     "kind": "best"
+    },
+    {
+     "from": "b7",
+     "to": "b1",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "b2",
+     "kind": "target"
+    },
+    {
+     "square": "b1",
+     "kind": "target"
+    }
+   ]
+  },
+  "55": {
+   "comment": [
+    {
+     "key": "coach.good.pin_absolute.v1",
+     "params": {
+      "attacker": "♛b4",
+      "front": "♙b2",
+      "behind": "♔b1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b4",
+     "to": "b1",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "b2",
+     "kind": "target"
+    },
+    {
+     "square": "b1",
+     "kind": "target"
+    }
+   ]
+  },
+  "57": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "axb3"
+     }
+    },
+    {
+     "key": "coach.best.pin_absolute.v1",
+     "params": {
+      "move": "♛b7",
+      "attacker": "♛b7",
+      "front": "♙b3",
+      "behind": "♔b1"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b4",
+     "to": "b7",
+     "kind": "best"
+    },
+    {
+     "from": "b7",
+     "to": "b1",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "b3",
+     "kind": "target"
+    },
+    {
+     "square": "b1",
+     "kind": "target"
+    }
+   ]
+  }
+ },
+ "stops": [
+  {
+   "ply": 35,
+   "move": "e7d8",
+   "best_cp": -70,
+   "gap_cp": 285,
+   "lines": [
+    [
+     "e7d8",
+     -70
+    ],
+    [
+     "b5b4",
+     -355
+    ],
+    [
+     "e7f6",
+     -531
+    ]
+   ]
+  },
+  {
+   "ply": 37,
+   "move": "b5b4",
+   "best_cp": -30,
+   "gap_cp": 139,
+   "lines": [
+    [
+     "b5b4",
+     -30
+    ],
+    [
+     "c4e3",
+     -169
+    ],
+    [
+     "a8b8",
+     -209
+    ]
+   ]
+  },
+  {
+   "ply": 49,
+   "move": "c7b7",
+   "best_cp": 527,
+   "gap_cp": 254,
+   "lines": [
+    [
+     "c7b7",
+     527
+    ],
+    [
+     "a5a4",
+     273
+    ],
+    [
+     "c7c6",
+     263
+    ]
+   ]
+  },
+  {
+   "ply": 51,
+   "move": "a5a4",
+   "best_cp": 564,
+   "gap_cp": 159,
+   "lines": [
+    [
+     "a5a4",
+     564
+    ],
+    [
+     "b4c3",
+     405
+    ],
+    [
+     "c4e3",
+     346
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Межзональный турнир в Рио-де-Жанейро, 1979. Сицилианская защита, атака Кереса в схевенингенском варианте: белые сразу двигают пешку «g» — 6.g4 и 7.g5.",
+  "uk": "Міжзональний турнір у Ріо-де-Жанейро, 1979. Сицилійський захист, атака Кереса в шевенінгенському варіанті: білі одразу рушають пішака «g» — 6.g4 і 7.g5.",
+  "en": "The 1979 Rio de Janeiro Interzonal. A Sicilian Defence, Keres Attack against the Scheveningen: White pushes the g-pawn at once — 6.g4 and 7.g5."
+ },
+ "summary": {
+  "ru": "Чёрные отвечают на атаку пешек контрударом на ферзевом фланге: 19...b4, 25...Qb7, 26...a4 и 28...Qxb4 — линии «a» и «b» открываются к белому королю, и 30...Ra8 готовит решающее вторжение. Урок: при атаках на разных флангах решает скорость — кто первым вскрыл линии к королю, тот и атакует.",
+  "uk": "Чорні відповідають на атаку пішаків контрударом на ферзевому фланзі: 19...b4, 25...Qb7, 26...a4 і 28...Qxb4 — лінії «a» і «b» відкриваються до білого короля, і 30...Ra8 готує вирішальне вторгнення. Урок: коли атакують на різних флангах, вирішує швидкість — хто першим розкрив лінії до короля, той і атакує.",
+  "en": "Black meets the pawn storm with a counter-strike on the queenside: 19...b4, 25...Qb7, 26...a4 and 28...Qxb4 — the a- and b-files open towards the white king, and 30...Ra8 prepares the decisive invasion. Lesson: when both sides attack on opposite wings, speed decides — whoever opens lines to the king first is the attacker."
+ }
+}

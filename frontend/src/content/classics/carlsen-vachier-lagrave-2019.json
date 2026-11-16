@@ -1,0 +1,725 @@
+{
+ "id": "carlsen-vachier-lagrave-2019",
+ "white": "Carlsen,M",
+ "black": "Vachier Lagrave,M",
+ "event": "11th London Classic 2019",
+ "year": "2019",
+ "result": "0-1",
+ "moves": [
+  "d2d4",
+  "g8f6",
+  "g1f3",
+  "g7g6",
+  "b1d2",
+  "d7d5",
+  "b2b3",
+  "f8g7",
+  "c1b2",
+  "a7a5",
+  "a2a4",
+  "e8g8",
+  "e2e3",
+  "c8f5",
+  "f1e2",
+  "b8c6",
+  "e1g1",
+  "c6b4",
+  "f3e1",
+  "f6e4",
+  "c2c3",
+  "e4d2",
+  "d1d2",
+  "b4c6",
+  "e1d3",
+  "e7e5",
+  "d3e5",
+  "c6e5",
+  "d4e5",
+  "g7e5",
+  "f1d1",
+  "d8d6",
+  "b2a3",
+  "c7c5",
+  "d2d5",
+  "d6d5",
+  "d1d5",
+  "e5c3",
+  "a1d1",
+  "c3b4",
+  "a3b4",
+  "c5b4",
+  "e2c4",
+  "f5e6",
+  "d5b5",
+  "f8d8",
+  "d1d4",
+  "a8c8",
+  "d4d8",
+  "c8d8",
+  "g1f1",
+  "e6c4",
+  "b3c4",
+  "d8d2",
+  "b5b7",
+  "d2a2",
+  "c4c5",
+  "a2a4",
+  "f1e2",
+  "a4a3",
+  "c5c6",
+  "a3c3",
+  "c6c7",
+  "g8g7",
+  "b7a7",
+  "b4b3",
+  "a7a5",
+  "c3c7",
+  "a5b5",
+  "c7c2",
+  "e2f3",
+  "b3b2",
+  "b5b6",
+  "h7h5",
+  "h2h3",
+  "g7f8",
+  "g2g4",
+  "h5h4",
+  "g4g5",
+  "f8e7",
+  "e3e4",
+  "e7d7",
+  "f3e3",
+  "d7c7",
+  "b6b5",
+  "c7c6",
+  "b5b8",
+  "c6c5",
+  "f2f4",
+  "c5c4",
+  "f4f5",
+  "c4c3",
+  "e3f4",
+  "c2g2",
+  "f5g6",
+  "f7g6",
+  "e4e5",
+  "g2e2",
+  "b8b6",
+  "c3c2",
+  "b6c6",
+  "c2d1",
+  "c6d6",
+  "d1c1",
+  "d6c6",
+  "e2c2",
+  "c6b6",
+  "c2c4"
+ ],
+ "evals": [
+  23,
+  19,
+  24,
+  35,
+  4,
+  11,
+  5,
+  20,
+  14,
+  21,
+  7,
+  11,
+  11,
+  16,
+  13,
+  8,
+  19,
+  19,
+  4,
+  26,
+  26,
+  64,
+  69,
+  85,
+  25,
+  27,
+  -7,
+  -1,
+  -2,
+  -6,
+  -6,
+  8,
+  8,
+  8,
+  8,
+  7,
+  -6,
+  -1,
+  -1,
+  1,
+  -15,
+  -6,
+  -6,
+  -5,
+  -4,
+  0,
+  0,
+  0,
+  1,
+  0,
+  0,
+  0,
+  -1,
+  0,
+  -7,
+  -4,
+  -1,
+  0,
+  -5,
+  -10,
+  -6,
+  -2,
+  -11,
+  0,
+  -5,
+  -15,
+  -78,
+  -77,
+  -156,
+  -128,
+  -138,
+  -120,
+  -145,
+  -21,
+  -47,
+  -57,
+  -58,
+  6,
+  -149,
+  -94,
+  -81,
+  -103,
+  -101,
+  -109,
+  -413,
+  -443,
+  -462,
+  -455,
+  -529,
+  -521,
+  -710,
+  -421,
+  -491,
+  -483,
+  -495,
+  -495,
+  -550,
+  -598,
+  -618,
+  -597,
+  -636,
+  -694,
+  -736,
+  -687,
+  -769,
+  -794,
+  -794,
+  -625
+ ],
+ "comments": {
+  "24": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♘d3"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "g4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g2",
+     "to": "g4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "32": {
+   "comment": [
+    {
+     "key": "coach.good.skewer.v1",
+     "params": {
+      "attacker": "♗a3",
+      "front": "♛d6",
+      "behind": "♜f8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "a3",
+     "to": "f8",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "d6",
+     "kind": "target"
+    },
+    {
+     "square": "f8",
+     "kind": "target"
+    }
+   ]
+  },
+  "43": {
+   "comment": [
+    {
+     "key": "coach.good.skewer.v1",
+     "params": {
+      "attacker": "♝e6",
+      "front": "♖d5",
+      "behind": "♗c4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e6",
+     "to": "c4",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "d5",
+     "kind": "target"
+    },
+    {
+     "square": "c4",
+     "kind": "target"
+    }
+   ]
+  },
+  "66": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "♖xa5"
+     }
+    },
+    {
+     "key": "coach.threat.hanging.v1",
+     "params": {
+      "piece": "♙c7"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "h3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c3",
+     "to": "c7",
+     "kind": "threat"
+    },
+    {
+     "from": "h2",
+     "to": "h3",
+     "kind": "best"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "c7",
+     "kind": "target"
+    }
+   ]
+  },
+  "68": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♖b5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "e4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e3",
+     "to": "e4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "73": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "h5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♚f8"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "g7",
+     "to": "f8",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "77": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v1",
+     "params": {
+      "move": "h4"
+     }
+    },
+    {
+     "key": "coach.best.pos_king_active.v1",
+     "params": {
+      "move": "♚e7"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f8",
+     "to": "e7",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "78": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "g5"
+     }
+    },
+    {
+     "key": "coach.best.pos_king_active.v1",
+     "params": {
+      "move": "♔f4"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f3",
+     "to": "f4",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "84": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v1",
+     "params": {
+      "move": "♖b5"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♖b3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b6",
+     "to": "b3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "88": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "f4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♔f3"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e3",
+     "to": "f3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "90": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v2",
+     "params": {
+      "move": "f5"
+     }
+    },
+    {
+     "key": "coach.best.skewer.v2",
+     "params": {
+      "move": "♖c8+",
+      "attacker": "♖c8",
+      "front": "♚c4",
+      "behind": "♜c2"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b8",
+     "to": "c8",
+     "kind": "best"
+    },
+    {
+     "from": "c8",
+     "to": "c2",
+     "kind": "idea"
+    }
+   ],
+   "highlights": [
+    {
+     "square": "c4",
+     "kind": "target"
+    },
+    {
+     "square": "c2",
+     "kind": "target"
+    }
+   ]
+  },
+  "91": {
+   "comment": [
+    {
+     "key": "coach.verdict.blunder.v1",
+     "params": {
+      "move": "♚c3"
+     }
+    },
+    {
+     "key": "coach.best.generic.v2",
+     "params": {
+      "move": "♜c3+"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "c2",
+     "to": "c3",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "92": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "♔f4"
+     }
+    },
+    {
+     "key": "coach.best.generic.v1",
+     "params": {
+      "move": "e5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "e4",
+     "to": "e5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "96": {
+   "comment": [
+    {
+     "key": "coach.verdict.inaccuracy.v2",
+     "params": {
+      "move": "e5"
+     }
+    },
+    {
+     "key": "coach.best.pos_king_active.v2",
+     "params": {
+      "move": "♔e5"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "f4",
+     "to": "e5",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  },
+  "107": {
+   "comment": [
+    {
+     "key": "coach.verdict.mistake.v1",
+     "params": {
+      "move": "♜c4+"
+     }
+    },
+    {
+     "key": "coach.best.pos_passed_push.v2",
+     "params": {
+      "move": "b1=♛"
+     }
+    }
+   ],
+   "arrows": [
+    {
+     "from": "b2",
+     "to": "b1",
+     "kind": "best"
+    }
+   ],
+   "highlights": []
+  }
+ },
+ "stops": [
+  {
+   "ply": 33,
+   "move": "c7c5",
+   "best_cp": -28,
+   "gap_cp": 152,
+   "lines": [
+    [
+     "c7c5",
+     -28
+    ],
+    [
+     "d6b6",
+     -180
+    ],
+    [
+     "e5h2",
+     -197
+    ]
+   ]
+  },
+  {
+   "ply": 37,
+   "move": "e5c3",
+   "best_cp": 3,
+   "gap_cp": 236,
+   "lines": [
+    [
+     "e5c3",
+     3
+    ],
+    [
+     "e5g7",
+     -233
+    ],
+    [
+     "e5f6",
+     -243
+    ]
+   ]
+  },
+  {
+   "ply": 85,
+   "move": "c7c6",
+   "best_cp": 505,
+   "gap_cp": 277,
+   "lines": [
+    [
+     "c7c6",
+     505
+    ],
+    [
+     "c7d7",
+     228
+    ],
+    [
+     "c7d6",
+     178
+    ]
+   ]
+  },
+  {
+   "ply": 87,
+   "move": "c6c5",
+   "best_cp": 471,
+   "gap_cp": 168,
+   "lines": [
+    [
+     "c6c5",
+     471
+    ],
+    [
+     "c6d6",
+     303
+    ],
+    [
+     "c6c7",
+     225
+    ]
+   ]
+  }
+ ],
+ "intro": {
+  "ru": "Лондонская шахматная классика 2019 года. Индийское начало с фианкетто: белые выбирают спокойную систему 3.Nbd2 и 4.b3 со слоном на b2, чёрные отвечают 3...d5 и 4...Bg7.",
+  "uk": "Лондонська шахова класика 2019 року. Індійський початок із фіанкетто: білі обирають спокійну систему 3.Nbd2 і 4.b3 зі слоном на b2, чорні відповідають 3...d5 і 4...Bg7.",
+  "en": "The 2019 London Chess Classic. An Indian opening with fianchettoes: White chooses the quiet set-up 3.Nbd2 and 4.b3 with the bishop on b2, Black answers 3...d5 and 4...Bg7."
+ },
+ "summary": {
+  "ru": "В ладейном эндшпиле чёрный король идёт вперёд — 43...Kc6, 44...Kc5 и дальше к своей пешке «b». Шахи белой ладьи (51.Rc6+, 52.Rd6+, 53.Rc6+) не помогают: 53...Rc2 закрывает короля, и пешка b2 становится ферзём. Урок: активный король, сопровождающий проходную, сильнее ладейных шахов.",
+  "uk": "У туровому ендшпілі чорний король іде вперед — 43...Kc6, 44...Kc5 і далі до свого пішака «b». Шахи білої тури (51.Rc6+, 52.Rd6+, 53.Rc6+) не допомагають: 53...Rc2 закриває короля, і пішак b2 стає ферзем. Урок: активний король, що супроводжує прохідного, сильніший за турові шахи.",
+  "en": "In the rook endgame the black king marches forward — 43...Kc6, 44...Kc5 and on towards its b-pawn. The white rook's checks (51.Rc6+, 52.Rd6+, 53.Rc6+) do not help: 53...Rc2 shields the king, and the b2 pawn queens. Lesson: an active king escorting a passed pawn is stronger than rook checks."
+ }
+}
