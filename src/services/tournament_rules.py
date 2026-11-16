@@ -11,6 +11,11 @@
 Матч — одна партия, сеяный выше играет белыми. Ничья — переигровка с переменой цвета и вдвое коротким контролем;
 снова ничья — решающая партия, в которой чёрным достаточно ничьей; чёрными играет сеяный выше (награда за посев).
 Места: победитель — 1, финалист — 2, проигравшие в полуфинале делят 3-е, в четвертьфинале — 5-е.
+
+Большие турниры («Машина времени», таск 28.1 — знаменитые турниры прошлого в полном составе): круговой на любое
+число участников (при нечётном каждый один тур свободен) и в несколько кругов с переменой цвета
+(round_robin_schedule); сетка на любое число участников — сильнейшие по посеву проходят первый круг без игры
+(bracket_slots). Обычные турниры игрока по-прежнему ограничены размерами ниже.
 """
 
 from dataclasses import dataclass
@@ -25,6 +30,10 @@ KNOCKOUT_SIZES = (4, 8)
 SWISS_SIZES = (6, 8)
 SWISS_ROUNDS = {6: 4, 8: 5}
 MIN_SHORTENED_BASE_MS = 60_000
+# Турниры в историческом составе: границы размера и числа кругов.
+OPEN_ROUND_ROBIN_SIZES = range(3, 27)
+OPEN_KNOCKOUT_SIZES = range(3, 34)
+MAX_CYCLES = 6
 
 
 # --- Круговой турнир ---------------------------------------------------------------------------------
@@ -36,6 +45,11 @@ def berger_rounds(n: int) -> list[list[tuple[int, int]]]:
     """
     if n not in ROUND_ROBIN_SIZES:
         raise ValueError(f"round robin needs {ROUND_ROBIN_SIZES} players, got {n}")
+    return _berger(n)
+
+
+def _berger(n: int) -> list[list[tuple[int, int]]]:
+    """Таблица Бергера для любого чётного n: шаг вращения n/2 взаимно прост с n − 1, поэтому встречаются все."""
     m = n - 1
 
     def cyc(x: int) -> int:
@@ -47,6 +61,23 @@ def berger_rounds(n: int) -> list[list[tuple[int, int]]]:
         pairs = [(fixed, n) if r % 2 == 0 else (n, fixed)]
         pairs += [(cyc(fixed + k), cyc(fixed - k)) for k in range(1, n // 2)]
         rounds.append(pairs)
+    return rounds
+
+
+def round_robin_schedule(n: int, cycles: int = 1) -> list[list[tuple[int, int]]]:
+    """
+    Расписание кругового турнира на любое число участников и кругов. При нечётном n таблица строится на n + 1:
+    кому достался несуществующий номер, в этом туре свободен. Каждый следующий круг повторяет пары с переменой цвета.
+    """
+    if n not in OPEN_ROUND_ROBIN_SIZES:
+        raise ValueError(f"round robin needs {OPEN_ROUND_ROBIN_SIZES.start}–{OPEN_ROUND_ROBIN_SIZES[-1]} players, got {n}")
+    if not 1 <= cycles <= MAX_CYCLES:
+        raise ValueError(f"round robin has 1–{MAX_CYCLES} cycles, got {cycles}")
+    table = _berger(n + n % 2)
+    single = [[pair for pair in rnd if max(pair) <= n] for rnd in table]
+    rounds = []
+    for cycle in range(cycles):
+        rounds += single if cycle % 2 == 0 else [[(black, white) for white, black in rnd] for rnd in single]
     return rounds
 
 
@@ -188,6 +219,29 @@ def knockout_first_round(n: int) -> list[tuple[int, int]]:
     raise ValueError(f"knockout needs {KNOCKOUT_SIZES} players, got {n}")
 
 
+def bracket_size(n: int) -> int:
+    """Размер сетки: ближайшая степень двойки не меньше числа участников."""
+    size = 2
+    while size < n:
+        size *= 2
+    return size
+
+
+def bracket_slots(n: int) -> list[tuple[int, int | None]]:
+    """
+    Первый круг сетки на любое число участников: пары (сеяный выше, соперник) по порядку сетки. Соперника нет
+    (None) — участник проходит круг без игры; так проходят сильнейшие по посеву. Сетка — классическая: первый и
+    второй номера встречаются только в финале, для 4 и 8 совпадает с knockout_first_round.
+    """
+    if n not in OPEN_KNOCKOUT_SIZES:
+        raise ValueError(f"knockout needs {OPEN_KNOCKOUT_SIZES.start}–{OPEN_KNOCKOUT_SIZES[-1]} players, got {n}")
+    order = [1, 2]
+    while len(order) < bracket_size(n):
+        full = len(order) * 2
+        order = [seat for high in order for seat in (high, full + 1 - high)]
+    return [(high, low if low <= n else None) for high, low in zip(order[::2], order[1::2], strict=True)]
+
+
 @dataclass(frozen=True)
 class MatchGame:
     stage: Stage
@@ -240,12 +294,12 @@ def knockout_next_round(winners: list[int]) -> list[tuple[int, int]]:
 
 def knockout_places(n: int, eliminated_in_round: dict[int, int], champion: int) -> dict[int, int]:
     """
-    Места: победитель — 1, проигравший финал — 2, проигравшие в полуфинале делят 3-е, в четвертьфинале — 5-е.
-    eliminated_in_round: номер участника → круг (с 1), в котором он выбыл.
+    Места: победитель — 1, проигравший финал — 2, проигравшие в полуфинале делят 3-е, в четвертьфинале — 5-е,
+    кругом раньше — 9-е и так далее. eliminated_in_round: номер участника → круг (с 1), в котором он выбыл.
     """
-    rounds_total = 2 if n == 4 else 3
+    rounds_total = bracket_size(n).bit_length() - 1
     places = {champion: 1}
     for seat, rnd in eliminated_in_round.items():
         from_end = rounds_total - rnd  # 0 — финал, 1 — полуфинал, 2 — четвертьфинал
-        places[seat] = 2 if from_end == 0 else 3 if from_end == 1 else 5
+        places[seat] = 2 if from_end == 0 else 2 ** from_end + 1
     return places
