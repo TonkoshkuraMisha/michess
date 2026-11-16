@@ -11,9 +11,8 @@ test('Большой курс: уровни, ветви, каркас и пер�
     await expect(page.getByTestId('course-module-T0.0')).toContainText('Доска, фигуры и взятие');
     await page.getByTestId('course-level-3').click();
     await expect(page.getByTestId('course-module-S3.5')).toContainText('«Пила»');
-    await expect(page.getByTestId('course-module-T3.2')).toHaveCount(0);
-    await page.getByTestId('course-skeleton').check();
-    await expect(page.getByTestId('course-module-T3.2')).toContainText('скоро');
+    // Все модули наполнены (27.6): бывший пустой T3.2 виден и без режима «каркас»; сам режим проверяет юнит-тест.
+    await expect(page.getByTestId('course-module-T3.2')).toContainText('Завоевание поля');
     await page.getByTestId('course-module-S3.5').getByRole('button').first().click();
     await expect(page).toHaveURL(/\/library\?structure=saw/);
     await expect(page.getByTestId('library-structure')).toHaveValue('saw');
