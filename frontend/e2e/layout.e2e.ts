@@ -9,16 +9,19 @@ import type {Page, TestInfo} from '@playwright/test';
 import {API, loginNewPlayer} from './helpers.ts';
 
 const LANGUAGES = ['ru', 'en', 'uk'] as const;
+// Телефоны — от самого узкого распространённого (360 px) до крупного (430 px, таск 24.2). Длиннее всего тексты на
+// узком экране, поэтому 360 — на всех языках; 430 — на русском, чтобы поймать то, что ломается на границе раскладки.
 const VIEWPORTS = [
-    {name: 'phone', width: 390, height: 844},
-    {name: 'wide', width: 1600, height: 900},
+    {name: 'phone', width: 360, height: 780, languages: LANGUAGES},
+    {name: 'phone', width: 430, height: 932, languages: ['ru'] as const},
+    {name: 'wide', width: 1600, height: 900, languages: LANGUAGES},
 ];
 // Страницы без параметров и разделы, у которых есть своя первая страница.
 const ROUTES = [
     '/', '/puzzles', '/learn', '/learn/basics', '/learn/classics', '/learn/endgames', '/learn/mates', '/train', '/tools',
     '/watch', '/guess', '/train/games', '/tournaments', '/arenas', '/teams', '/study', '/leaderboard', '/about', '/settings', '/moderation',
     '/learn/course', '/library', '/programs', '/exam', '/workout', '/repertoire', '/play/960', '/train/structure_quiz',
-    'PROFILE',
+    '/import', 'PROFILE',
 ];
 
 interface Problem {
@@ -79,7 +82,7 @@ async function check(page: Page, testInfo: TestInfo, label: string, route: strin
 }
 
 for (const language of LANGUAGES) {
-    for (const viewport of VIEWPORTS) {
+    for (const viewport of VIEWPORTS.filter((v) => (v.languages as readonly string[]).includes(language))) {
         test(`вёрстка: ${language}, ${viewport.name} ${viewport.width}px`, async ({page, request}, testInfo) => {
             test.setTimeout(240_000);
             await page.setViewportSize({width: viewport.width, height: viewport.height});

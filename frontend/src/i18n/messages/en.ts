@@ -145,6 +145,14 @@ export const en = {
         toHome: 'To the main page',
     },
     settings: {
+        app: {
+            title: 'App on your phone',
+            intro: 'Install michess on the home screen: it opens in its own window, without the browser bar, like a regular app. Games, puzzles and analysis still need the internet.',
+            install: 'Install the app',
+            installed: 'The app is installed — you are in it or can open it from the home screen.',
+            ios: 'On iPhone and iPad: tap “Share” in Safari, then “Add to Home Screen”.',
+            browserMenu: 'If there is no button here, install from the browser menu: “Install app” or “Add to Home screen”.',
+        },
         email: 'E-mail',
         emailNote: 'Optional. Needed to recover access if you forget your password; never shown to anyone.',
         emailCurrent: 'Linked: {email}',
