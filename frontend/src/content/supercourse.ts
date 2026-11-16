@@ -25,6 +25,7 @@ const tr = (id: string): Activity => ({kind: 'trainer', id});
 const mini = (id: string): Activity => ({kind: 'mini', id});
 const ex = (id: string): Activity => ({kind: 'exam', id});
 const lib = (structure: string): Activity => ({kind: 'library', structure});
+const games = (moves: string): Activity => ({kind: 'library', moves});
 const REPERTOIRE: Activity = {kind: 'repertoire'};
 const CLASSICS: Activity = {kind: 'classics'};
 const GUESS: Activity = {kind: 'guess'};
@@ -85,7 +86,7 @@ export const COURSE: CourseModule[] = [
     mod('S2.2', 'S', [th('outpost')]),
     mod('S2.3', 'S', [th('bad_bishop')]),
     mod('S2.4', 'S', [th('weak_squares'), th('isolated_pawn')]),
-    mod('S2.5', 'S'),
+    mod('S2.5', 'S', [lib('symmetry'), lib('french_chain'), lib('kid_chain'), tr('structure_quiz')]),
     mod('O2.1', 'O', [REPERTOIRE]),
     mod('O2.2', 'O', [REPERTOIRE]),
     mod('C2.1', 'C', [tr('blind_move'), tr('blind_where')]),
@@ -109,7 +110,7 @@ export const COURSE: CourseModule[] = [
     mod('M3.3', 'M', [th('kingside_attack'), th('queenside_attack')]),
     mod('M3.4', 'M', [th('sacrifice')]),
     mod('E3.1', 'E'),
-    mod('E3.2', 'E'),
+    mod('E3.2', 'E', [e('opposite_bishops_def')]),
     mod('E3.3', 'E', [e('q_vs_knight'), e('q_vs_rook')]),
     mod('E3.4', 'E', [l('endgame-rook-vs-pawn'), e('rook_vs_pawn'), l('endgame-passed-pawn')]),
     mod('E3.5', 'E', MUST_KNOW[1].map(e)),
@@ -124,7 +125,7 @@ export const COURSE: CourseModule[] = [
     mod('S3.8', 'S', [th('blockade'), th('overprotection'), th('centralization'), th('pawn_chain')]),
     mod('S3.9', 'S', [th('minority_attack'), th('bishop_pair')]),
     mod('O3.1', 'O', [REPERTOIRE]),
-    mod('O3.2', 'O'),
+    mod('O3.2', 'O', [games('e2e4 c7c5'), lib('maroczy'), lib('hedgehog'), REPERTOIRE]),
     mod('O3.3', 'O', [REPERTOIRE]),
     mod('C3.1', 'C', [th('long_calculation')]),
     mod('C3.2', 'C', [tr('calc_checks'), tr('calc_square')]),
@@ -153,7 +154,7 @@ export const COURSE: CourseModule[] = [
     mod('S4.9', 'S', [th('piece_improvement'), th('prophylaxis')]),
     mod('S4.10', 'S', [th('exchange_choice')]),
     mod('S4.11', 'S', [tr('plan_quiz')]),
-    mod('O4.1', 'O'),
+    mod('O4.1', 'O', [tr('plan_quiz'), tr('structure_quiz'), lib('isolated_pawn')]),
     mod('O4.2', 'O', [REPERTOIRE]),
     mod('C4.1', 'C', [tr('calc_eval')]),
     mod('C4.2', 'C', [tr('calc_compare')]),
@@ -164,19 +165,19 @@ export const COURSE: CourseModule[] = [
     mod('T5.1', 'T', [th('combination')]),
     mod('T5.2', 'T', [th('equality'), th('fortress'), th('save_by_perpetual')]),
     mod('M5.1', 'M', [th('sacrifice')]),
-    mod('E5.1', 'E'),
+    mod('E5.1', 'E', [e('vancura'), e('lucena'), e('philidor'), th('philidor_position'), th('rook_behind_passer')]),
     mod('E5.2', 'E', [{kind: 'library'}]),
     mod('E5.3', 'E', MUST_KNOW[2].map(e)),
     mod('S5.1', 'S', [th('critical_position')]),
-    mod('S5.2', 'S'),
-    mod('S5.3', 'S'),
-    mod('S5.4', 'S'),
-    mod('O5.1', 'O'),
+    mod('S5.2', 'S', [th('sacrifice'), th('development_lag'), CLASSICS]),
+    mod('S5.3', 'S', [th('greek_gift'), th('double_bishop_sacrifice'), th('sacrifice')]),
+    mod('S5.4', 'S', [CLASSICS, GUESS]),
+    mod('O5.1', 'O', [{kind: 'library'}, REPERTOIRE]),
     mod('O5.2', 'O', [REPERTOIRE]),
     mod('C5.1', 'C', [th('prophylaxis')]),
     mod('C5.2', 'C', [tr('calc_checks'), tr('calc_exchange')]),
     mod('G5.1', 'G', [CLASSICS]),
-    mod('G5.2', 'G'),
+    mod('G5.2', 'G', [{kind: 'workout'}, GUESS]),
     mod('X5', 'G', [ex('F'), ex('J'), ex('endgame')]),
 ];
 
