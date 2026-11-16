@@ -123,7 +123,7 @@ export function RepertoireListPage() {
                         <div key={s.id} className="bg-acacia p-4 rounded-lg border-2 border-acacia-dark flex flex-col gap-1.5" data-testid={`starter-${s.id}`}>
                             <span className="font-bold text-amber-200">{t(`repertoire.starters.${s.id}.name`)}</span>
                             <span className="text-xs text-amber-300">
-                                {t(`repertoire.colors.${s.color}`)} · {t(`repertoire.levels.${s.level}`)} · {tp('repertoire.linesCount', s.lines.length)}
+                                {t(`repertoire.colors.${s.color}`)} · {t(`repertoire.levels.${s.level}`)}{s.style ? ` · ${t(`repertoire.styles.${s.style}`)}` : ''} · {tp('repertoire.linesCount', s.lines.length)}
                             </span>
                             <span className="text-sm text-boxwood/85">{t(`repertoire.starters.${s.id}.intro`)}</span>
                             {logged && (
@@ -323,6 +323,10 @@ export function RepertoireEditorPage() {
                     )}
 
                     <OpeningExplorer moves={line} onPlay={play}/>
+                    {line.length > 0 && (
+                        <Link to={`/library?moves=${encodeURIComponent(line.join(' '))}`} data-testid="repertoire-library-link"
+                              className="self-start text-sm text-amber-300 hover:underline">{t('repertoire.libraryGames')}</Link>
+                    )}
 
                     <section className="bg-black/30 rounded-lg p-3 flex flex-col gap-2 text-sm">
                         <h3 className="font-bold text-amber-200">{t('repertoire.importPgn')}</h3>

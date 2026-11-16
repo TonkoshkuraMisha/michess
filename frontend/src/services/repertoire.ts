@@ -14,7 +14,9 @@ export type StarterId = typeof STARTER_IDS[number];
 export interface Starter {
     id: StarterId;
     color: RepertoireColor;
-    level: 'beginner' | 'intermediate';
+    level: 'beginner' | 'intermediate' | 'advanced';
+    /** Стиль набора (27.10); у старого сервера может не быть. */
+    style?: 'attacking' | 'positional';
     lines: string[][];
 }
 

@@ -72,3 +72,12 @@ describe('библиотека партий', () => {
         expect(screen.getByRole('alert')).toBeInTheDocument();
     });
 });
+
+describe('библиотека: ссылки из курса и репертуара', () => {
+    it('?moves= сразу ищет партии с этим началом, ?structure= — со структурой', async () => {
+        const mock = stub();
+        await act(async () => render(<MemoryRouter initialEntries={['/library?moves=e2e4%20e7e5&structure=saw']}><LibraryPage/></MemoryRouter>));
+        expect(mock.mock.calls.some(([u]) => String(u).includes('/games?structure=saw&moves=e2e4+e7e5'))).toBe(true);
+        expect(screen.getByTestId('library-game-99')).toBeInTheDocument();
+    });
+});

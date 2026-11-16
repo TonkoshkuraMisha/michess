@@ -53,14 +53,18 @@ export function LibraryPage() {
     const {t} = useI18n();
     const [collections, setCollections] = useState<LibraryCollection[]>([]);
     const [open, setOpen] = useState<Set<number>>(new Set());
-    // ?structure=… — сразу поиск партий с этой пешечной структурой (модули Большого курса, 27.6).
+    // ?structure=… — сразу поиск партий с этой пешечной структурой (модули Большого курса, 27.6);
+    // ?moves=… — партии с этим началом (узел репертуара, 27.10).
     const [params] = useSearchParams();
-    const initialStructure = params.get('structure') ?? '';
-    const [view, setView] = useState<View | null>(
-        (STRUCTURES as readonly string[]).includes(initialStructure) ? {kind: 'search', search: {structure: initialStructure}} : null);
+    const initial: LibrarySearch = {};
+    const paramStructure = params.get('structure') ?? '';
+    if ((STRUCTURES as readonly string[]).includes(paramStructure)) initial.structure = paramStructure;
+    const paramMoves = (params.get('moves') ?? '').trim();
+    if (/^[a-h1-8qrbn ]+$/.test(paramMoves)) initial.moves = paramMoves;
+    const [view, setView] = useState<View | null>(Object.keys(initial).length ? {kind: 'search', search: initial} : null);
     const [offset, setOffset] = useState(0);
     const [page, setPage] = useState<Page | null>(null);
-    const [draft, setDraft] = useState<LibrarySearch>(initialStructure ? {structure: initialStructure} : {});
+    const [draft, setDraft] = useState<LibrarySearch>(initial);
     const [error, setError] = useState<UiMessage | null>(null);
 
     useEffect(() => {

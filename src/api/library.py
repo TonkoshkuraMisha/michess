@@ -93,9 +93,13 @@ async def search(player: str = Query("", max_length=60), eco: str = Query("", ma
                  year_from: int | None = Query(None, ge=1400, le=2200), year_to: int | None = Query(None, ge=1400, le=2200),
                  result: str = Query("", max_length=7), max_plies: int | None = Query(None, ge=1, le=1000),
                  structure: str = Query("", max_length=20),
+                 moves: str = Query("", max_length=400, pattern=r"^[a-h1-8qrbn ]*$"),
                  offset: int = Query(0, ge=0), limit: int = Query(PAGE, ge=1, le=200),
                  db: AsyncSession = Depends(get_db), user: User | None = Depends(optional_user)):
-    """Поиск по видимым партиям: игрок (часть имени), код дебюта (начало), годы, результат, длина."""
+    """
+    Поиск по видимым партиям: игрок (часть имени), код дебюта (начало), годы, результат, длина, структура; moves —
+    начало партии в UCI через пробел (узел репертуара, 27.10; без перестановок).
+    """
     conditions = [_visible_game(user)]
     if player.strip():
         pattern = f"%{player.strip().lower()}%"
@@ -112,6 +116,9 @@ async def search(player: str = Query("", max_length=60), eco: str = Query("", ma
         conditions.append(LibraryGame.plies <= max_plies)
     if structure in pawn_structures.STRUCTURES:
         conditions.append(LibraryGame.structure == structure)
+    prefix = " ".join(moves.split())
+    if prefix:
+        conditions.append((LibraryGame.moves == prefix) | LibraryGame.moves.startswith(prefix + " ", autoescape=True))
     total = await db.scalar(select(func.count()).select_from(LibraryGame).where(*conditions)) or 0
     games = (await db.execute(
         select(LibraryGame).where(*conditions)

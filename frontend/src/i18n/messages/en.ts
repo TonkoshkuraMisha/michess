@@ -2272,6 +2272,7 @@ export const en = {
         next: 'Next',
     },
     repertoire: {
+        libraryGames: 'Games from this position in the library',
         title: 'Opening repertoire',
         intro: 'Your own lines for White and for Black: add them from the opening explorer, from a PGN or from a game, comment on the moves and keep them in one tree.',
         loginRequired: 'Log in to keep your repertoires. The starter repertoires below can be read without an account.',
@@ -2282,7 +2283,8 @@ export const en = {
         namePlaceholder: 'Repertoire name',
         side: 'Side',
         colors: {white: 'For White', black: 'For Black'},
-        levels: {beginner: 'For beginners', intermediate: 'Intermediate'},
+        levels: {beginner: 'For beginners', intermediate: 'Intermediate', advanced: 'Advanced'},
+        styles: {attacking: 'attacking', positional: 'positional'},
         create: 'Create',
         startersTitle: 'Starter repertoires',
         startersHint: 'Ready-made sets of main lines. Take one as a base — it becomes your own copy that you can change.',
@@ -2355,6 +2357,8 @@ export const en = {
             restart: 'New game',
         },
         starters: {
+            e4_advanced: {name: '1.e4 for White: advanced', intro: 'Main lines after 1.e4: the Four Pawns Attack against Alekhine, the Austrian Attack against the Pirc, 3.Nc3 against the French and Caro-Kann, the Spanish with the Marshall and the closed lines, the open Sicilian against the Sveshnikov, Taimanov, Dragon, Rauzer and Najdorf.'},
+            e5_slav_advanced: {name: '1…e5 and the Slav for Black: advanced', intro: 'Against 1.e4 — 1…e5 with the Breyer in the Spanish, the Two Knights and the Four Knights; against 1.d4 — the Slav and Semi-Slav (Moscow, Meran, Anti-Meran); against 1.c4 — 1…e5; against 1.Nf3 — 1…d5 and 2…c6.'},
             italian: {name: 'Italian Game with 1.e4', intro: 'Quick development, castling and a fight for the centre with c3 and d4. Calm answers to the Sicilian (c3), the French and the Caro-Kann (advance with e5) and the Scandinavian.'},
             london: {name: 'London System', intro: 'One setup against almost everything: d4, Bf4, e3, c3 and Nd2. Few forcing lines to memorise — a solid plan instead.'},
             open_games: {name: 'Classical replies: 1…e5 and 1…d5', intro: 'Answer 1.e4 with 1…e5 (Italian, Spanish, Scotch, gambits) and 1.d4 with 1…d5 (Queen\'s Gambit Declined and the London). Classical ideas: centre, development, castling.'},

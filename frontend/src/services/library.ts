@@ -63,6 +63,8 @@ export interface LibrarySearch {
     result?: string;
     max_plies?: number;
     structure?: string;
+    /** Начало партии в UCI через пробел (узел репертуара, 27.10). */
+    moves?: string;
     offset?: number;
 }
 
