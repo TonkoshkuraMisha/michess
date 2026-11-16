@@ -331,6 +331,8 @@ export const en = {
         },
     },
     matchmaking: {
+        variant: 'Variant',
+        variants: {standard: 'Standard chess', chess960: 'Chess960 (Fischer random)', chess960Note: 'A random start position for both players; no odds, no rating.'},
         gameType: 'Game type',
         ratedHint: 'The result changes your rating',
         casualHint: 'Your rating does not change',
@@ -2065,6 +2067,7 @@ export const en = {
         archiveBadge: 'Blindfold, level {level} · peeks: {peeks}',
     },
     chess960: {
+        live: {title: 'Chess960 against a person', noGame: 'No Chess960 game is running. Create a link for a friend on the main page and choose the Chess960 variant.', toLobby: 'To the main board', vsBot: 'Play Chess960 against the bot', yourMove: 'Your move.', opponentMove: 'Opponent to move.', unrated: 'The game is unrated.', drawOffered: 'Your opponent offers a draw.', acceptDraw: 'Accept', declineDraw: 'Decline', drawSent: 'Draw offer sent.', drawDeclined: 'The draw offer was declined.', abort: 'Abort', offerDraw: 'Offer a draw', resign: 'Resign', resignConfirm: 'Resign the game?', again: 'New game'},
         title: 'Fischer random chess',
         intro: 'Chess960: the pieces behind the pawns stand in one of 960 random orders, the same for both sides. Opening theory does not help — think from the first move. Against the bot, without rating.',
         loading: 'Setting up the pieces…',

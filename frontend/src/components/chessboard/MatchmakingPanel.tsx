@@ -23,6 +23,9 @@ export interface MatchmakingPanelProps {
     /** Фора в партии по ссылке (21.1); без этих пропсов выбора нет. */
     inviteOdds?: OddsChoice;
     onInviteOddsChange?: (odds: OddsChoice) => void;
+    /** Вариант партии по ссылке (21.3): обычные шахматы или Фишера; без этих пропсов выбора нет. */
+    inviteVariant?: 'standard' | 'chess960';
+    onInviteVariantChange?: (variant: 'standard' | 'chess960') => void;
     createdInviteCode: string | null;
     inviteCopied: boolean;
     onCreatePrivateInvite: () => void;
@@ -34,7 +37,7 @@ export function MatchmakingPanel({
     gameId, gameOverResult, isRatedGame, ratedChoice, onRatedChoiceChange,
     isSearching, onStartMatchmaking, onCancelMatchmaking,
     showInvitePanel, onToggleInvitePanel, inviteColorPref, onInviteColorPrefChange, inviteOdds, onInviteOddsChange,
-    createdInviteCode, inviteCopied, onCreatePrivateInvite, onCopyInviteLink,
+    inviteVariant = 'standard', onInviteVariantChange, createdInviteCode, inviteCopied, onCreatePrivateInvite, onCopyInviteLink,
 }: MatchmakingPanelProps) {
     const {t} = useI18n();
     return (
@@ -120,7 +123,20 @@ export function MatchmakingPanel({
                         </div>
                     </div>
 
-                    {inviteOdds && onInviteOddsChange && !createdInviteCode && (
+                    {onInviteVariantChange && !createdInviteCode && (
+                        <label className="flex flex-wrap items-center gap-1.5 text-xs text-amber-200" data-testid="invite-variant">
+                            {t('matchmaking.variant')}
+                            <select value={inviteVariant} data-testid="invite-variant-select"
+                                    onChange={(e) => onInviteVariantChange(e.target.value as 'standard' | 'chess960')}
+                                    className="bg-black/40 rounded px-1 py-0.5">
+                                <option value="standard">{t('matchmaking.variants.standard')}</option>
+                                <option value="chess960">{t('matchmaking.variants.chess960')}</option>
+                            </select>
+                            {inviteVariant === 'chess960' && <span className="w-full text-boxwood/70">{t('matchmaking.variants.chess960Note')}</span>}
+                        </label>
+                    )}
+
+                    {inviteOdds && onInviteOddsChange && !createdInviteCode && inviteVariant !== 'chess960' && (
                         <div className="flex flex-wrap items-center gap-1.5 text-xs text-amber-200" data-testid="invite-odds">
                             <label className="flex items-center gap-1.5 min-w-0">
                                 {t('odds.label')}

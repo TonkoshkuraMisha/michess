@@ -51,6 +51,11 @@ def is_chess960_fen(fen: str | None) -> bool:
     return len(parts) > 2 and any(c in _CHESS960_CASTLING for c in parts[2])
 
 
+def game_variant(fen: str | None, pgn: str | None = "") -> str:
+    """Вариант идущей партии для клиента: «chess960» (по заголовку PGN или Shredder-FEN) или «standard»."""
+    return "chess960" if CHESS960_HEADER in (pgn or "") or is_chess960_fen(fen) else "standard"
+
+
 def board_from_fen(fen: str, chess960: bool = False) -> chess.Board:
     """Доска по FEN партии: в режиме 960, если так сказано или если FEN записан по-960-ному."""
     return chess.Board(fen, chess960=chess960 or is_chess960_fen(fen))

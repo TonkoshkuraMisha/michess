@@ -3,7 +3,7 @@
 // потерянный game_over восстанавливается по HTTP, вызов возвращается в лобби после обрыва связи.
 
 import {act, fireEvent, render, screen, waitFor} from '@testing-library/react';
-import {MemoryRouter} from 'react-router-dom';
+import {MemoryRouter, Route, Routes} from 'react-router-dom';
 import {afterEach, beforeEach, describe, expect, it, vi, type Mock} from 'vitest';
 import Chessboard from '../Chessboard';
 import {gameSocket} from '../../services/gameSocket';
@@ -313,6 +313,34 @@ describe('товарищеские партии', () => {
             fireEvent.click(screen.getByRole('button', {name: /Сгенерировать и скопировать ссылку/}));
         });
         expect(sendMock).toHaveBeenCalledWith('create_invite', expect.objectContaining({odds_kind: 'knight', odds_giver: 'acceptor'}));
+    });
+
+    it('партия Фишера (21.3): вариант уходит серверу, фора скрыта; match_found 960 уводит на свою страницу', async () => {
+        vi.stubGlobal('fetch', mockFetchRouter({
+            '/profile/me': () => ({id: 1, username: 'TestPlayer', blitz_rating: 1500}),
+            '/profile/matchmaking/queue': () => [], '/profile/games/live': () => [],
+            '/profile/games/my-active': () => ({active: false}),
+        }));
+        render(
+            <MemoryRouter initialEntries={['/']}>
+                <Routes>
+                    <Route path="/" element={<Chessboard/>}/>
+                    <Route path="/play/960/live" element={<div data-testid="live-960-route"/>}/>
+                </Routes>
+            </MemoryRouter>,
+        );
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', {name: /С другом/}));
+        });
+        fireEvent.change(screen.getByTestId('invite-variant-select'), {target: {value: 'chess960'}});
+        expect(screen.queryByTestId('invite-odds')).toBeNull();
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', {name: /Сгенерировать и скопировать ссылку/}));
+        });
+        expect(sendMock).toHaveBeenCalledWith('create_invite', expect.objectContaining({variant: 'chess960'}));
+        expect(sendMock).not.toHaveBeenCalledWith('create_invite', expect.objectContaining({odds_kind: expect.anything()}));
+        await emitAct('match_found', {...MATCH, variant: 'chess960', fen: 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w HAha - 0 1'});
+        expect(screen.getByTestId('live-960-route')).toBeInTheDocument();
     });
 
     it('тип идущей партии берётся из снимка сервера, изменение рейтинга не показывается', async () => {

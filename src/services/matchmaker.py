@@ -31,6 +31,7 @@ from src.core.errors import DomainError
 from src.db.session import AsyncSessionLocal
 from src.models.game import Game, GameStatus
 from src.models.user import RatingCategory, User
+from src.services.game_engine import game_variant
 from src.services.odds import pgn_header
 from src.services.rating import classify_time_control
 
@@ -372,6 +373,8 @@ class Matchmaker:
             "black_time_ms": created.get("black_time_ms", base_time),
             "fen": created.get("start_fen") or chess.STARTING_FEN,
             "pgn": pgn_header(created["start_fen"]) if created.get("start_fen") else "",
+            # Партия Фишера (21.3) идёт на отдельной странице клиента: по этому полю он туда переходит.
+            "variant": game_variant(created.get("start_fen")),
             "state_version": 0,
         }
         await connection_manager.send_personal_message(

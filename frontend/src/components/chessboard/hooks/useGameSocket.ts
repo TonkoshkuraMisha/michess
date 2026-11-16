@@ -47,6 +47,8 @@ export interface UseGameSocketOptions {
     inviteColorPref: 'white' | 'black' | 'random';
     /** Фора в партии по ссылке (21.1): сервер строит позицию или время после распределения цветов. */
     inviteOdds?: OddsChoice;
+    /** Вариант партии по ссылке: обычные шахматы или Фишера (21.3; 960 идёт на отдельной странице). */
+    inviteVariant?: 'standard' | 'chess960';
     /** Тип новых партий, выбранный игроком: рейтинговая или товарищеская. */
     ratedChoice: boolean;
     /** Тип партии, которая сейчас на доске (приходит с сервера). */
@@ -115,7 +117,7 @@ export interface UseGameSocketResult {
 export function useGameSocket({
     gameId, gameIdRef, myColorRef, spectatingGameId, stateVersionRef,
     gameOverResult, gameOverResultRef, activeBot, currentUsernameRef, inviteCode, navigate,
-    effectiveWhiteBaseMinutes, effectiveIncSeconds, inviteColorPref, inviteOdds,
+    effectiveWhiteBaseMinutes, effectiveIncSeconds, inviteColorPref, inviteOdds, inviteVariant = 'standard',
     ratedChoice, setIsRatedGame,
     setGame, setHistory, setViewIndex, setGameId, setMyColor, setSpectatingGameId,
     setStateVersion, setWhitePlayer, setBlackPlayer, setRatingInfo, setGameOverResult,
@@ -189,6 +191,11 @@ export function useGameSocket({
 
     const applyMatchFoundSnapshot = useCallback((data: any) => {
         if (!data || !data.game_id) return;
+        // Партия Фишера (21.3): chess.js рокировку 960 не переиграет — партия идёт на своей странице.
+        if (data.variant === 'chess960') {
+            navigate('/play/960/live', {state: {match: data}});
+            return;
+        }
         const incomingGid = Number(data.game_id);
         const assignedColor: 'white' | 'black' = data.color === 'black' ? 'black' : 'white';
         const ver = Number(data.state_version || 0);
@@ -272,7 +279,7 @@ export function useGameSocket({
         } else {
             setDrawOfferStatus(prev => (hasStatusKey(prev, 'status.drawOffered') ? null : prev));
         }
-    }, [playAudio]);
+    }, [playAudio, navigate]);
 
     const applyMoveMadeSnapshot = useCallback((data: any) => {
         if (data.state_version !== undefined) {
@@ -746,9 +753,9 @@ export function useGameSocket({
             increment_ms: Math.round(effectiveIncSeconds * 1000),
             color_pref: inviteColorPref,
             rated: ratedChoice,
-            ...(inviteOdds ? inviteOddsFields(inviteOdds) : {}),
+            ...(inviteVariant === 'chess960' ? {variant: 'chess960'} : (inviteOdds ? inviteOddsFields(inviteOdds) : {})),
         });
-    }, [effectiveWhiteBaseMinutes, effectiveIncSeconds, inviteColorPref, ratedChoice, inviteOdds]);
+    }, [effectiveWhiteBaseMinutes, effectiveIncSeconds, inviteColorPref, ratedChoice, inviteOdds, inviteVariant]);
 
     const handleCopyInviteLink = useCallback(() => {
         if (!createdInviteCode) return;
