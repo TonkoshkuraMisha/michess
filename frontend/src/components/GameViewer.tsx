@@ -3,7 +3,7 @@
 import {useState, useEffect, useRef, useMemo, useCallback} from 'react';
 import {useParams, useLocation, Link} from 'react-router-dom';
 import {Chess} from 'chess.js';
-import {ArrowLeft, Download, Loader2, Sword, Palette, Cpu, Sparkles, Volume2, VolumeX, Crown} from 'lucide-react';
+import {ArrowLeft, Download, Loader2, Sword, Palette, Cpu, Sparkles, Volume2, VolumeX, Crown, Share2} from 'lucide-react';
 import {format, parseISO} from 'date-fns';
 import {
     BOARD_THEMES,
@@ -912,6 +912,13 @@ export default function GameViewer({library = false, imported = false}: { librar
                     >
                         <Download size={16}/> {t('viewer.downloadPgnFile')}
                     </a>
+                    {/* Поделиться в ленте (таск 30.2): своя или чужая партия портала, партия библиотеки; импортированные — личные. */}
+                    {!imported && gameId && getToken() && (
+                        <Link to="/feed" state={{attach: {kind: library ? 'library' : 'game', ref: gameId}}} data-testid="share-to-feed"
+                              className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-room-dark text-amber-400 font-bold text-sm rounded-md hover:bg-black transition shadow border border-amber-800/60">
+                            <Share2 size={16}/> {t('feed.share')}
+                        </Link>
+                    )}
                 </div>
 
             </div>

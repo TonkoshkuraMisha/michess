@@ -27,6 +27,7 @@ import {TeamsPage} from './components/social/TeamsPage';
 import {StudyLobby, StudyRoomPage} from './components/study/StudyPages';
 import {ModerationPage} from './components/social/ModerationPage';
 import {MessagesPage} from './components/social/MessagesPage';
+import {FeedPage, PostPage} from './components/social/FeedPage';
 import {MiniGamePage, MiniGamesPage} from './components/trainers/MiniGames';
 import {Chess960Page} from './components/chess960/Chess960Page';
 import {Chess960LiveGame} from './components/chess960/Chess960LiveGame';
@@ -71,7 +72,9 @@ import {
     Dumbbell,
     Shield,
     Presentation,
-    Gavel
+    Gavel,
+    Newspaper,
+    MessageSquare
 } from 'lucide-react';
 import {isLanguage, useI18n} from './i18n';
 import {saveProfileSettings, setTranslationHelper} from './services/profileSettings';
@@ -611,6 +614,24 @@ export default function App() {
                                         <button
                                             onClick={() => {
                                                 setIsProfileOpen(false);
+                                                navigate('/feed');
+                                            }}
+                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
+                                        >
+                                            <Newspaper size={16} className="text-amber-500"/> {t('feed.title')}
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setIsProfileOpen(false);
+                                                navigate('/messages');
+                                            }}
+                                            className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
+                                        >
+                                            <MessageSquare size={16} className="text-amber-500"/> {t('dm.title')}
+                                        </button>
+                                        <button
+                                            onClick={() => {
+                                                setIsProfileOpen(false);
                                                 navigate('/study');
                                             }}
                                             className="w-full px-4 py-2 text-left flex items-center gap-3 hover:bg-black/30 transition text-boxwood/90 hover:text-amber-300 cursor-pointer"
@@ -742,6 +763,8 @@ export default function App() {
                         <Route path="/moderation" element={<ModerationPage/>}/>
                         <Route path="/messages" element={<MessagesPage/>}/>
                         <Route path="/messages/:username" element={<MessagesPage/>}/>
+                        <Route path="/feed" element={<FeedPage/>}/>
+                        <Route path="/feed/post/:postId" element={<PostPage/>}/>
                         <Route path="/train" element={<TrainersPage/>}/>
                         <Route path="/train/games" element={<MiniGamesPage/>}/>
                         <Route path="/play/960" element={<Chess960Page/>}/>

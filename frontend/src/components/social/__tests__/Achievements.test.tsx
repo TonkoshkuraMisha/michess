@@ -1,6 +1,7 @@
 // Достижения и звание клуба в профиле (таск 17.6).
 
 import {render, screen} from '@testing-library/react';
+import {MemoryRouter} from 'react-router-dom';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {Achievements} from '../Achievements';
 
@@ -18,7 +19,7 @@ describe('достижения', () => {
             }),
         } as Response));
         vi.stubGlobal('fetch', fetchMock);
-        render(<Achievements username="magnus"/>);
+        render(<MemoryRouter><Achievements username="magnus"/></MemoryRouter>);
         expect(await screen.findByTestId('club-title')).toHaveTextContent('Любитель');
         expect(String((fetchMock.mock.calls as unknown as [string][])[0][0])).toContain('/profile/magnus/achievements');
         const items = screen.getAllByRole('listitem');

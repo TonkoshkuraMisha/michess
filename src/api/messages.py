@@ -27,7 +27,7 @@ def _http(exc: DomainError):
 
 
 class AttachmentIn(BaseModel):
-    kind: str = Field(..., pattern="^(game|position|puzzle|lesson|tournament)$")
+    kind: str = Field(..., pattern="^(game|position|puzzle|lesson|tournament|library)$")
     ref: str = Field(..., min_length=1, max_length=100)
 
 

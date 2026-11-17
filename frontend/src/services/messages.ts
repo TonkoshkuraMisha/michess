@@ -7,7 +7,8 @@ import {readApiErrorOr, UiError} from './apiErrors';
 import {uiMessage} from '../i18n';
 import {getToken} from './authToken';
 
-export type AttachmentKind = 'game' | 'position' | 'puzzle' | 'lesson' | 'tournament';
+/** Вложения личных сообщений; в ленте ещё партия библиотеки и своё достижение (таск 30.2). */
+export type AttachmentKind = 'game' | 'position' | 'puzzle' | 'lesson' | 'tournament' | 'library' | 'achievement';
 export type DmPolicy = 'all' | 'following' | 'nobody';
 
 /** Карточка вложения: вид, ссылка и снимок данных на момент отправки. */
@@ -25,6 +26,9 @@ export interface Attachment {
     owner?: string | null;
     event_key?: string | null;
     career_stage?: string | null;
+    year?: number | null;
+    event?: string | null;
+    earned_at?: string | null;
 }
 
 export interface DirectMessage {
@@ -101,6 +105,8 @@ export function detectAttachment(raw: string): { kind: AttachmentKind; ref: stri
     const text = raw.trim();
     if (!text) return null;
     if (FEN_RE.test(text)) return {kind: 'position', ref: text};
+    const library = text.match(/\/library\/game\/(\d+)(?:[/?#]|$)/);
+    if (library) return {kind: 'library', ref: library[1]};
     const game = text.match(/\/game\/(\d+)(?:[/?#]|$)/);
     if (game) return {kind: 'game', ref: game[1]};
     const tournament = text.match(/\/tournaments\/(\d+)(?:[/?#]|$)/);
@@ -115,5 +121,6 @@ export function attachmentLink(a: Attachment): string | null {
     if (a.kind === 'game') return `/game/${a.ref}`;
     if (a.kind === 'tournament') return `/tournaments/${a.ref}`;
     if (a.kind === 'lesson') return `/learn/${a.ref}`;
+    if (a.kind === 'library') return `/library/game/${a.ref}`;
     return null;
 }

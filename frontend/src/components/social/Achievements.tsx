@@ -2,7 +2,10 @@
 // Достижения и звание клуба в профиле (таск 17.6): открытые — с датой, остальные — с прогрессом.
 
 import {useEffect, useState} from 'react';
-import {Award, Lock} from 'lucide-react';
+import {useNavigate} from 'react-router-dom';
+import {Award, Lock, Share2} from 'lucide-react';
+import {getToken} from '../../services/authToken';
+import {socialApi} from '../../services/social';
 import {API_BASE_URL} from '../../config/api';
 import {useI18n} from '../../i18n';
 import type {MessageKey} from '../../i18n';
@@ -22,7 +25,15 @@ export interface AchievementsData {
 
 export function Achievements({username}: { username: string }) {
     const {t} = useI18n();
+    const navigate = useNavigate();
     const [data, setData] = useState<AchievementsData | null>(null);
+    // Своими открытыми достижениями можно поделиться в ленте (таск 30.2).
+    const [own, setOwn] = useState(false);
+
+    useEffect(() => {
+        if (!getToken()) return;
+        socialApi.relation(username).then((r) => setOwn(r.self)).catch(() => setOwn(false));
+    }, [username]);
 
     useEffect(() => {
         let alive = true;
@@ -54,6 +65,13 @@ export function Achievements({username}: { username: string }) {
                             {a.earned_at ? <Award size={13} className="text-amber-400"/> : <Lock size={12}/>}
                             {t(`achievements.items.${a.code}.name` as MessageKey)}
                             {a.new && <span className="text-xs text-emerald-300">{t('achievements.new')}</span>}
+                            {own && a.earned_at && (
+                                <button type="button" aria-label={t('feed.share')} title={t('feed.share')} data-testid={`ach-share-${a.code}`}
+                                        onClick={() => navigate('/feed', {state: {attach: {kind: 'achievement', ref: a.code}}})}
+                                        className="ml-auto text-amber-300 hover:text-amber-100 font-normal">
+                                    <Share2 size={13}/>
+                                </button>
+                            )}
                         </div>
                         <div className="text-xs">{t(`achievements.items.${a.code}.hint` as MessageKey)}</div>
                         {!a.earned_at && a.target > 1 && (
