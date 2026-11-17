@@ -16,7 +16,8 @@ class PositionStat(Base):
     __table_args__ = (UniqueConstraint("position_hash", "move_uci", name="uq_position_stats_move"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    position_hash: Mapped[int] = mapped_column(BigInteger, index=True)
+    # Отдельный индекс не нужен: колонка — первая в уникальном индексе (ревизия 29.1).
+    position_hash: Mapped[int] = mapped_column(BigInteger)
     move_uci: Mapped[str] = mapped_column(String(5))
     white_wins: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     draws: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
@@ -30,6 +31,7 @@ class PositionGame(Base):
     __table_args__ = (UniqueConstraint("position_hash", "game_id", name="uq_position_games_game"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    position_hash: Mapped[int] = mapped_column(BigInteger, index=True)
+    # Отдельный индекс не нужен: колонка — первая в уникальном индексе (ревизия 29.1).
+    position_hash: Mapped[int] = mapped_column(BigInteger)
     game_id: Mapped[int] = mapped_column(ForeignKey("games.id", ondelete="CASCADE"), index=True)
     ply: Mapped[int] = mapped_column(Integer)
