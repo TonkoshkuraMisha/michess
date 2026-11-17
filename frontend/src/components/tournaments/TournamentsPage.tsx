@@ -3,7 +3,7 @@
 // партии по турам, «Играть мою партию», диплом призёра. Партии ботов между собой играет сервер — страница
 // обновляет состояние, пока они идут.
 
-import {useEffect, useMemo, useState} from 'react';
+import {useCallback, useEffect, useMemo, useState} from 'react';
 import {Link, useNavigate, useParams} from 'react-router-dom';
 import {Trophy} from 'lucide-react';
 import {API_BASE_URL} from '../../config/api';
@@ -28,6 +28,8 @@ import type {
 } from '../../services/tournaments';
 import {ladderOpponentName} from '../../config/players';
 import {Diploma} from './Diploma';
+import {markCelebrated, shouldCelebrate, TournamentCelebration} from './TournamentCelebration';
+import {tournamentTitle} from './TournamentGameBar';
 import {Career} from './Career';
 import {getToken} from '../../services/authToken';
 
@@ -231,6 +233,17 @@ export function TournamentView() {
     const [myName, setMyName] = useState('');
     const [notice, setNotice] = useState<UiMessage | null>(null);
     const [reloadKey, setReloadKey] = useState(0);
+    // Праздник призёра (17.11): при первом взгляде на законченный турнир с местом в тройке; повтор — кнопкой.
+    const [celebrating, setCelebrating] = useState(false);
+    const finishedPlace = tournament?.status === 'finished'
+        ? tournament.players.find((p) => p.seat === tournament.my_seat)?.place ?? null : null;
+    useEffect(() => {
+        if (tournament && finishedPlace !== null && finishedPlace <= 3 && shouldCelebrate(tournament.id)) setCelebrating(true);
+    }, [tournament, finishedPlace]);
+    const closeCelebration = useCallback(() => {
+        markCelebrated(id);
+        setCelebrating(false);
+    }, [id]);
 
     useEffect(() => {
         let alive = true;
@@ -500,6 +513,16 @@ export function TournamentView() {
                          format={historic && tournament.event_key ? eventTitle(tournament.event_key, t)
                              : t(`tournaments.formats.${tournament.format}`)} size={tournament.size}
                          date={new Date(tournament.finished_at ?? tournament.created_at).toLocaleDateString(dateLocale.code)}/>
+            )}
+            {tournament.status === 'finished' && me?.place != null && me.place <= 3 && (
+                <button type="button" onClick={() => setCelebrating(true)} data-testid="celebrate-again"
+                        className="self-center px-4 py-2 rounded-full bg-amber-700 text-white font-bold hover:bg-amber-600 cursor-pointer">
+                    {t('celebration.again')}
+                </button>
+            )}
+            {celebrating && me?.place != null && (
+                <TournamentCelebration place={me.place} title={tournamentTitle(tournament, t)} size={tournament.size}
+                                       onClose={closeCelebration}/>
             )}
         </div>
     );

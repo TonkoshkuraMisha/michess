@@ -2317,6 +2317,14 @@ export const ru: Messages = {
         noneBlocked: 'Никто не заблокирован.',
         newCount: 'новых: {count}',
     },
+    celebration: {
+        first: 'Чемпион!',
+        second: 'Серебро!',
+        third: 'Бронза!',
+        place: 'Место {place} из {size}',
+        continue: 'Продолжить',
+        again: 'Отпраздновать ещё раз',
+    },
     social: {
         search: 'Найти игрока',
         searchPlaceholder: 'Имя игрока',

@@ -2313,6 +2313,14 @@ export const en = {
         noneBlocked: 'Nobody is blocked.',
         newCount: '{count} new',
     },
+    celebration: {
+        first: 'Champion!',
+        second: 'Silver!',
+        third: 'Bronze!',
+        place: 'Place {place} of {size}',
+        continue: 'Continue',
+        again: 'Celebrate again',
+    },
     social: {
         search: 'Find a player',
         searchPlaceholder: 'Player name',

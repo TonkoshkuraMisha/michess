@@ -17,10 +17,11 @@ import {
 } from '../../services/tournaments';
 import type {Tournament, TournamentSummary} from '../../services/tournaments';
 import {eventTitle} from '../../services/timeMachine';
+import {markCelebrated, shouldCelebrate, TournamentCelebration} from './TournamentCelebration';
 
 export const BAR_POLL_MS = 3000;
 
-function tournamentTitle(t: Pick<Tournament, 'event_key' | 'format' | 'size'>, tr: I18n['t']): string {
+export function tournamentTitle(t: Pick<Tournament, 'event_key' | 'format' | 'size'>, tr: I18n['t']): string {
     return t.event_key ? eventTitle(t.event_key, tr) : `${tr(`tournaments.formats.${t.format}`)} · ${t.size}`;
 }
 
@@ -87,6 +88,19 @@ export function TournamentGameBar({tournamentId, tournamentGameId, gameOver}: {
         return () => window.clearTimeout(timer);
     }, [waiting, tournament, load]);
 
+    // Последняя партия сыграна, турнир закончен, игрок в тройке — праздник прямо у доски (один раз на турнир).
+    const myPlace = tournament?.players.find((p) => p.seat === tournament.my_seat)?.place ?? null;
+    const [celebrating, setCelebrating] = useState(false);
+    useEffect(() => {
+        if (gameOver && tournament?.status === 'finished' && myPlace !== null && myPlace <= 3 && shouldCelebrate(tournament.id)) {
+            setCelebrating(true);
+        }
+    }, [gameOver, tournament, myPlace]);
+    const closeCelebration = useCallback(() => {
+        if (tournament) markCelebrated(tournament.id);
+        setCelebrating(false);
+    }, [tournament]);
+
     if (!tournament) return null;
     const opponentSeat = current ? (current.white_seat === tournament.my_seat ? current.black_seat : current.white_seat) : null;
     const opponent = opponentSeat !== null ? tournament.players.find((p) => p.seat === opponentSeat) : undefined;
@@ -149,6 +163,10 @@ export function TournamentGameBar({tournamentId, tournamentGameId, gameOver}: {
             )}
             {notice && <p role="status" className="text-amber-200">{renderUiMessage(notice, t)}</p>}
             {showTable && <StandingsOverlay tournament={tournament} onClose={() => setShowTable(false)}/>}
+            {celebrating && myPlace !== null && (
+                <TournamentCelebration place={myPlace} title={tournamentTitle(tournament, t)} size={tournament.size}
+                                       onClose={closeCelebration}/>
+            )}
         </div>
     );
 }

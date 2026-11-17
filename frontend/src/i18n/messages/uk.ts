@@ -2317,6 +2317,14 @@ export const uk: Messages = {
         noneBlocked: 'Нікого не заблоковано.',
         newCount: 'нових: {count}',
     },
+    celebration: {
+        first: 'Чемпіон!',
+        second: 'Срібло!',
+        third: 'Бронза!',
+        place: 'Місце {place} із {size}',
+        continue: 'Продовжити',
+        again: 'Відсвяткувати ще раз',
+    },
     social: {
         search: 'Знайти гравця',
         searchPlaceholder: 'Ім\'я гравця',
