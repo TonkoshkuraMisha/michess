@@ -540,6 +540,10 @@ async def standings(db: AsyncSession, arena_id: int) -> list[dict]:
 
 
 def view(arena: Arena, now: datetime | None = None, open_games: int = 0) -> dict:
+    """
+    Карточка арены для клиента: контроль времени, начало и конец, статус, последний старт, доступен ли берсерк,
+    конференция, вечерняя ли это арена, группа по силе и деление.
+    """
     out = {"id": arena.id, "schedule_key": arena.schedule_key, "format": arena.format, "rounds": arena.rounds,
            "current_round": arena.current_round, "base_time_ms": arena.base_time_ms,
            "increment_ms": arena.increment_ms, "starts_at": _aware(arena.starts_at).isoformat(),

@@ -90,6 +90,10 @@ def _lexicon() -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...], tuple
     return tuple(prefixes), tuple(exact), tuple(roots), tuple(phrases)
 
 def offensive(text: str | None) -> bool:
+    """
+    Есть ли в тексте оскорбление: слова после нормализации сверяются со словарём — точные слова, начала слов, корни и
+    фразы.
+    """
     tokens = normalize(text or "")
     if not tokens:
         return False
@@ -117,6 +121,10 @@ def _aware(value: datetime | None) -> datetime | None:
 
 
 async def restricted(db: AsyncSession, user: User) -> bool:
+    """
+    Действуют ли для игрока квоты: аккаунт моложе NEWCOMER_DAYS или за последние VIOLATOR_DAYS модератор вынес по
+    жалобе на него взыскание.
+    """
     now = datetime.now(UTC)
     created = _aware(user.created_at)
     if created is not None and created > now - timedelta(days=NEWCOMER_DAYS):

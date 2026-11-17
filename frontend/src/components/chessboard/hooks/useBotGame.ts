@@ -1,4 +1,8 @@
 // --- FILE: frontend/src/components/chessboard/hooks/useBotGame.ts ---
+// Партия с ботом. Идёт на клиенте: позицию и часы ведёт браузер, ход бота запрашивается у сервера (/bots/move или
+// /bots/custom-move) с повтором при временном сбое, пауза «раздумья» — по времени, которое прислал сервер. После
+// окончания партия сохраняется целиком (/bots/save-game), и итог определяет сервер. Здесь же особые партии: клубная
+// лестница, партия турнира, фора.
 
 import {giverColor, oddsFen, oddsTimes} from '../odds';
 import type {OddsChoice} from '../odds';

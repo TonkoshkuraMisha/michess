@@ -102,6 +102,7 @@ async def unlike(post_id: int, db: AsyncSession = Depends(get_db), user: User = 
 @router.post("/posts/{post_id}/comments", status_code=status.HTTP_201_CREATED)
 async def add_comment(post_id: int, payload: CommentIn, db: AsyncSession = Depends(get_db),
                       user: User = Depends(get_current_user)):
+    """Комментарий к публикации; автору публикации уходит уведомление (кроме своих комментариев)."""
     try:
         comment, note = await feed.add_comment(db, post_id, user, payload.body, payload.send_anyway)
     except DomainError as exc:

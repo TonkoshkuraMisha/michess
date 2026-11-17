@@ -75,6 +75,10 @@ async def current_arena(db: AsyncSession = Depends(get_db)):
 
 @router.get("/{arena_id}")
 async def get_arena(arena_id: int, request: Request, db: AsyncSession = Depends(get_db)):
+    """
+    Страница арены: карточка, таблица, зачёт конференций и — вошедшему игроку — его состояние (участвует ли, ждёт ли
+    пару, идущая партия, напоминание). Заодно продвигает швейцарку: тур мог закончиться.
+    """
     user_id = await optional_user_id(request, db)
     try:
         arena = await service.get(db, arena_id)

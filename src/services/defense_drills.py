@@ -184,6 +184,10 @@ def read_drills(path: pathlib.Path = DRILLS_FILE) -> Iterator[dict]:
 
 
 def write_drills(rows: Iterable[dict], path: pathlib.Path = DRILLS_FILE) -> int:
+    """
+    Записывает защитные упражнения в сжатый CSV (по умолчанию data/puzzles/defense_drills.csv.gz) и возвращает число
+    строк. Вызывается скриптом сборки.
+    """
     count = 0
     with gzip.open(path, "wt", encoding="utf-8", newline="") as target:
         writer = csv.DictWriter(target, fieldnames=FIELDS)

@@ -1,4 +1,5 @@
 // --- FILE: frontend/src/components/chessboard/GameHallHeader.tsx ---
+// Заголовок левой колонки главной доски: название раздела, счёт текущей сессии, звук и переворот доски.
 
 import {Sword, RefreshCw, Volume2, VolumeX} from 'lucide-react';
 import {useI18n} from '../../i18n';

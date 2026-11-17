@@ -101,6 +101,10 @@ async def sync_cards(db: AsyncSession, repertoire: Repertoire) -> tuple[dict[str
 
 
 def stats(cards: dict[str, RepertoireCard], now: datetime) -> dict:
+    """
+    Сводка карточек репертуара: всего, новых, в работе, выученных, к повторению сейчас и сколько новых ещё можно взять
+    сегодня (NEW_PER_DAY).
+    """
     counts = {"new": 0, "learning": 0, "learned": 0}
     due = new_today = 0
     for card in cards.values():
@@ -143,6 +147,10 @@ async def session(db: AsyncSession, repertoire: Repertoire, mode: str, now: date
 
 async def answer(db: AsyncSession, repertoire: Repertoire, position: str, uci: str, retry: bool,
                  now: datetime) -> dict:
+    """
+    Ответ на карточку: верен любой свой ход из этой позиции. Расписание повторений меняет только первый ответ; повтор
+    в той же сессии (retry) его не трогает.
+    """
     found, cards = await sync_cards(db, repertoire)
     if position not in found:
         raise DomainValueError("repertoire_move_not_found")

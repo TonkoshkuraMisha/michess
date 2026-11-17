@@ -6,7 +6,7 @@
 
 ### Шаг 1. Клонирование и переменные окружения
 
-    git clone [https://github.com/TonkoshkuraMisha/michess.git](https://github.com/TonkoshkuraMisha/michess.git) michess
+    git clone https://github.com/TonkoshkuraMisha/michess.git michess
     cd michess
     git checkout dev
 
@@ -22,9 +22,11 @@
 
     uv sync                       # создаёт .venv: Python 3.14 из .python-version, пакеты строго по uv.lock
     .\.venv\Scripts\Activate.ps1
-    python scripts/setup_stockfish.py
-    python scripts/download_champions.py
-    alembic upgrade head
+    python scripts/setup_stockfish.py     # движок Stockfish в bin/ (без него работают все тесты, но не боты и разбор)
+    python scripts/download_champions.py  # портреты шахматистов со свободной лицензией (Викисклад)
+    alembic upgrade head                  # схема базы
+    python -m scripts.import_puzzles      # задачи из data/puzzles/ в базу (повторный запуск безопасен)
+    python -m src.db.seed                 # по желанию: архив партий чемпионов мира
 
 ### Шаг 4. Установка пакетов Фронтенда
 
@@ -56,12 +58,18 @@
     alembic upgrade head
     python -m uvicorn src.main:app --host 127.0.0.1 --port 8000 --reload
 
-**Терминал 3 — Celery-воркер (фоновый анализ партий):**
+**Терминал 3 — Celery-воркер (разбор партий и партии ботов в турнирах):**
 
     .\.venv\Scripts\Activate.ps1
-    celery -A src.worker.celery_app worker --loglevel=INFO --pool=solo
+    celery -A src.worker.celery_app worker --loglevel=INFO --pool=solo -Q analysis,simulation
 
-`--pool=solo` нужен на Windows: пул prefork у Celery там не работает.
+`--pool=solo` нужен на Windows: пул prefork у Celery там не работает. Очередей две: `analysis` (разбор партий,
+индекс позиций, напоминания) и `simulation` (партии ботов между собой) — в разработке их слушает один воркер.
+
+Плановые задачи (напоминания о разминке и о начале арены, самоигра ботов) запускает отдельный процесс; в обычной
+разработке он не нужен, `start_dev.ps1` его не поднимает:
+
+    celery -A src.worker.celery_app beat --loglevel=INFO
 
 **Терминал 4 — Фронтенд (Vite):**
 
@@ -88,6 +96,9 @@
     ruff check .                          # линтер (правила — pyproject.toml)
     mypy                                  # проверка типов src/
     python -m pytest --cov                # тесты и покрытие (порог — pyproject.toml)
+
+Тестам не нужны ни PostgreSQL, ни Redis, ни Stockfish: база — SQLite в памяти, Redis и движок подменены. Один
+раздел: `python -m pytest tests/test_arena.py -q`. Какой тест какой раздел проверяет — `docs/ARCHITECTURE.md`, §4.
 
 **Фронтенд:**
 

@@ -21,6 +21,10 @@ MASTER_GAMES = 12
 
 
 def board_after(moves_uci: list[str]) -> tuple[chess.Board, list[chess.Move]]:
+    """
+    Доска после списка ходов UCI от начальной позиции (учитывается не больше MAX_MOVES ходов); нелегальный ход —
+    отказ.
+    """
     board = chess.Board()
     played = []
     for uci in moves_uci[:MAX_MOVES]:
@@ -53,6 +57,10 @@ async def master_games(db: AsyncSession, board: chess.Board, limit: int = MASTER
 
 
 async def explore(db: AsyncSession, moves_uci: list[str]) -> dict:
+    """
+    Справочник по позиции: название дебюта, ходы из позиции со статистикой партий (индекс позиций) и партии мастеров,
+    прошедшие через неё.
+    """
     board, played = board_after(moves_uci)
     opening = openings.classify_board_line(chess.Board(), played)
     stats = await position_index.moves_from(db, board)

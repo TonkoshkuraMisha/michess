@@ -109,7 +109,8 @@ services:
       redis:
         condition: service_healthy
 
-  # Плановые задачи Celery (напоминание о разминке раз в день, таск 22.2): один процесс beat на весь стек.
+  # Плановые задачи Celery (DEPLOY.md, раздел 8в): напоминание о разминке раз в день, самоигра ботов каждые
+  # 6 часов, напоминания о начале арен каждую минуту. Один процесс beat на весь стек.
   beat:
     <<: *backend
     command: ["celery", "-A", "src.worker.celery_app", "beat", "--loglevel=INFO", "--schedule=/tmp/celerybeat-schedule"]

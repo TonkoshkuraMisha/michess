@@ -39,6 +39,10 @@ class DrillGenerationError(Exception):
 
 @dataclass(frozen=True)
 class Drill:
+    """
+    Упражнение-генератор: вид, фигура, уровень, seed, позиция и верный ход. key — «вид.фигура.уровень.seed»: по нему
+    сервер восстанавливает упражнение при проверке ответа.
+    """
     kind: str
     piece: str      # q/r/b/n — по запросу; x уже заменён на конкретную фигуру
     level: int

@@ -1,3 +1,14 @@
+"""
+Игрок (таблица users). В той же таблице лежат боты и архивные игроки из PGN — у них is_bot и нет username_key.
+
+Что хранится: имя и ключ имени без учёта регистра, хэш пароля и версия токенов (src/core/security.py),
+необязательный подтверждённый e-mail, четыре рейтинга по категориям контроля времени и счётчики партий к ним
+(src/services/rating.py), рейтинг лестницы и рейтинг решателя задач, признаки античита (trust_factor, is_cheater —
+src/services/anticheat.py), роль модератора, настройки интерфейса (язык, тема, аватар), страна для конференций
+(src/services/conferences.py). При удалении аккаунта строка не стирается, а обезличивается
+(src/services/account.py).
+"""
+
 from datetime import datetime
 from typing import Literal
 

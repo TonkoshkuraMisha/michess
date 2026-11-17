@@ -1,3 +1,15 @@
+"""
+Приложение Celery: очереди и расписание фоновых задач. Брокер и хранилище результатов — Redis (базы 0 и 1).
+
+Очередей две, чтобы долгие партии ботов не задерживали разбор партий игроков: analysis (по умолчанию — разбор
+партий, напоминания) и simulation (партии ботов между собой, самоигра). В продакшене их слушают разные воркеры
+(docker-compose.prod.yml), в разработке — один. Расписание (beat_schedule) исполняет отдельный процесс celery beat —
+он должен быть один на всю установку. Сами задачи — src/worker/tasks.py; список с расписанием — DEPLOY.md, 8в.
+
+Публикация задач из API не должна задерживать игру, поэтому таймауты соединения с брокером короткие, а повторов
+публикации нет (см. src/services/task_dispatch.py).
+"""
+
 from celery import Celery
 from celery.schedules import crontab
 
@@ -44,8 +56,8 @@ celery_app.conf.update(
         "arena_reminders": {"queue": ANALYSIS_QUEUE},
         "bot_selfplay": {"queue": SIMULATION_QUEUE},
     },
-    # Плановые задачи (процесс celery beat, сервис beat в docker-compose.prod.yml): напоминание о разминке 22.2
-    # раз в день, в 16:00 UTC — вечер в Европе.
+    # Плановые задачи (процесс celery beat, сервис beat в docker-compose.prod.yml; список — DEPLOY.md, раздел 8в).
+    # Напоминание о разминке 22.2 — раз в день, в 16:00 UTC: вечер в Европе.
     beat_schedule={
         "workout-reminders": {"task": "workout_reminders", "schedule": crontab(hour=16, minute=0)},
         # Самоигра архетипов (таск 32.3): каждые 6 часов, в минуту 17 — не вместе с другими плановыми задачами.

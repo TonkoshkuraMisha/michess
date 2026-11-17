@@ -107,6 +107,10 @@ async def lessons_done(db: AsyncSession, user_id: int, prefix: str) -> int:
 
 
 async def skill_map(db: AsyncSession, user: User) -> dict:
+    """
+    Карта навыков игрока: тактика по разделам каталога, слабые темы, свои ошибки, тренажёры, дебюты, эндшпиль и
+    матовые конструкции.
+    """
     sections, weakest = await tactics(db, user.id)
     return {
         "username": user.username,

@@ -1,4 +1,17 @@
 # --- FILE: src/services/bots/staunton.py ---
+"""
+Исторический бот «Говард Стаунтон»: дебютная книга и правила стиля.
+
+Дебют — книга из партий прототипа (books/staunton.json, собирает scripts/build_opening_books.py) и несколько
+«фирменных» начал, заданных здесь (DEFAULT_STAUNTON_BOOK).
+
+Стиль (STAUNTON_STYLE) — бонусы в сантипешках кандидатам движка: фланговый контроль центра пешкой «c», развитие и
+рокировка, после дебюта — профилактика и сохранение пешечной структуры. Бонусы только выбирают среди ходов, близких
+по оценке к лучшему (окно — blunder_guard_cp); оценку позиции они не меняют.
+
+Сила: заявленный рейтинг и ограничение движка UCI_Elo — 2000; измеренная матчами — calibration.json. Порядок выбора
+хода — base.HistoricalBot; реплики бота — ключи каталога botComments.staunton.* на клиенте.
+"""
 
 import chess
 
@@ -76,7 +89,7 @@ evaluate_staunton_style_bonus = STAUNTON_STYLE.evaluate
 
 
 class StauntonBot(HistoricalBot):
-    """Говард Стаунтон (~1750 UCI Эло, depth=6, skill=7)."""
+    """Говард Стаунтон: UCI_Elo 2000, глубина 6, уровень 7."""
 
     bot_id = "staunton"
     engine_source_name = "staunton_style_engine"

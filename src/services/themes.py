@@ -25,6 +25,10 @@ PUZZLE_GOALS = ("mate", "draw", "promotion", "material")
 
 @dataclass(frozen=True)
 class Theme:
+    """
+    Тема реестра: неизменный код, раздел A–L, источники разметки, родитель, теги базы lichess, коды детектора мотивов,
+    минимумы задач по ступеням и цель приёма.
+    """
     code: str
     section: str
     sources: tuple[str, ...]

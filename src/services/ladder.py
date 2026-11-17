@@ -60,6 +60,10 @@ SCOPES: tuple[Scope, ...] = ("ladder", "tournament")
 
 
 def rungs() -> list[Rung]:
+    """
+    Ступени лестницы — исторические боты и архетипы мастерской — по возрастанию силы: измеренной, если бот калиброван,
+    иначе заявленной.
+    """
     from src.api.bots import AVAILABLE_BOTS
 
     items = [

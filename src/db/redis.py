@@ -1,3 +1,11 @@
+"""
+Клиент Redis — общий для API и сервисов (redis_client).
+
+Адрес — настройки REDIS_HOST и REDIS_PORT. Таймауты короткие, повторов мало (REDIS_CONNECT_TIMEOUT_S,
+REDIS_SOCKET_TIMEOUT_S, REDIS_RETRIES): при недоступном Redis вызов должен быстро вернуть ошибку, а не держать
+вход, ходы и WebSocket по пятнадцать секунд. Что именно хранится в Redis — docs/ARCHITECTURE.md, раздел 3.
+"""
+
 from typing import Any
 
 import redis.asyncio as redis

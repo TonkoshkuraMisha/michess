@@ -1,4 +1,9 @@
 # --- FILE: src/models/move.py ---
+"""
+Ход партии с телеметрией (таблица moves): время на ход по часам сервера, потеря фокуса окна, предход, задержка
+сети. Пишется при завершении партии между людьми из журнала ходов в Redis (src/services/game_state.finish_game) и
+читается античитом (src/services/anticheat.py). Сами ходы для просмотра берутся из games.pgn, не отсюда.
+"""
 
 from datetime import datetime
 

@@ -1,4 +1,5 @@
 // --- FILE: frontend/src/components/chessboard/PromotionDialog.tsx ---
+// Выбор фигуры при превращении пешки: окно рядом с полем превращения.
 
 import {X} from 'lucide-react';
 import {PROMOTION_OPTIONS} from './boardUtils';

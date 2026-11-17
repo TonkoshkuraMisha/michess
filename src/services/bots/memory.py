@@ -205,6 +205,10 @@ async def live_strength(db: AsyncSession) -> dict[str, BotRating]:
     return {r.bot_id: r for r in (await db.execute(select(BotRating))).scalars().all()}
 
 async def load_rival(db: AsyncSession, bot_id: str, user_id: int | None) -> Rival | None:
+    """
+    Что бот помнит об игроке: сколько партий сыграно и чем кончались ходы, сыгранные против него. None — игрок не
+    вошёл или партий с ним ещё не было.
+    """
     if user_id is None:
         return None
     summary = await db.scalar(select(BotRival).where(BotRival.bot_id == bot_id, BotRival.user_id == user_id))

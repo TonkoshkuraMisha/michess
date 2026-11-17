@@ -1,4 +1,6 @@
 // --- FILE: frontend/src/main.tsx ---
+// Точка входа клиента: подключает стили, ставит фон страницы до первой отрисовки, регистрирует установку на телефон
+// и рисует приложение (App) внутри маршрутизатора.
 
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'

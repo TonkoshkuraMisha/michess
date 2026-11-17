@@ -1,4 +1,17 @@
 # --- FILE: src/services/bots/morphy.py ---
+"""
+Исторический бот «Пол Морфи»: дебютная книга и правила стиля.
+
+Дебют — книга из партий прототипа (books/morphy.json, собирает scripts/build_opening_books.py) и несколько
+«фирменных» начал, заданных здесь (DEFAULT_MORPHY_BOOK).
+
+Стиль (MORPHY_STYLE) — бонусы в сантипешках кандидатам движка: ранняя рокировка и развитие всех фигур, ладьи на
+центральные вертикали, открытый центр, затем атака на короля. Бонусы только выбирают среди ходов, близких по оценке
+к лучшему (окно — blunder_guard_cp); оценку позиции они не меняют.
+
+Сила: заявленный рейтинг и ограничение движка UCI_Elo — 2150; измеренная матчами — calibration.json. Порядок выбора
+хода — base.HistoricalBot; реплики бота — ключи каталога botComments.morphy.* на клиенте.
+"""
 
 import chess
 
@@ -72,7 +85,7 @@ evaluate_morphy_style_bonus = MORPHY_STYLE.evaluate
 
 
 class MorphyBot(HistoricalBot):
-    """Пол Морфи (~1850 UCI Эло, depth=6, skill=8)."""
+    """Пол Морфи: UCI_Elo 2150, глубина 6, уровень 8."""
 
     bot_id = "morphy"
     engine_source_name = "morphy_style_engine"

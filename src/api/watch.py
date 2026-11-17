@@ -54,6 +54,7 @@ async def archive(
         offset: int = Query(0, ge=0),
         db: AsyncSession = Depends(get_db),
 ):
+    """Архив партий мастеров с фильтрами: часть имени игрока, годы, код дебюта и результат; постранично."""
     query, white, black = _archive_query()
     if player:
         pattern = f"%{player.strip().lower()}%"

@@ -1,4 +1,22 @@
 # --- FILE: src/api/profile.py ---
+"""
+Профиль игрока и всё, что страницы читают о партиях по HTTP (/profile).
+
+* /me и /me/settings — свой профиль: рейтинги, признак временного рейтинга, язык, тема, аватар, страна.
+* /leaderboard — таблица лидеров по категории контроля времени: без ботов и архивных игроков, без удалённых
+  аккаунтов и игроков с флагом нечестной игры.
+* /{username}, /stats, /rating-history, /games, /achievements — публичный профиль. История рейтинга берётся из
+  значений, сохранённых при завершении каждой партии (games.*_initial_rating и *_rating_delta), а не
+  пересчитывается.
+* /games/my-active — снимок идущей партии (позиция, часы, цвет, берсерк): клиент берёт его при загрузке страницы
+  и опросом — на случай, если событие WebSocket не дошло. /games/{id}/summary — итог партии для клиента,
+  пропустившего game_over. /games/live — партии, идущие сейчас (для зрителей).
+* /matchmaking/* — те же действия лобби, что и по WebSocket (вызов, отмена, принятие), на случай обрыва сокета;
+  защищены от гонки с сообщением WebSocket — партию создаёт src/services/matchmaker.py.
+* /games/{id}/pgn — запись партии файлом.
+
+Страницы архивных чемпионов подгружают их партии при первом обращении (src/db/seed.ensure_champion_seeded).
+"""
 
 import time
 from typing import Any, Literal
@@ -123,6 +141,10 @@ async def _build_active_game_payload(db: AsyncSession, game_id: int, user_id: in
 
 @router.get("/me")
 async def get_my_profile(current_user: User = Depends(get_current_user)):
+    """
+    Свой профиль: рейтинги, флаг нечестной игры (числовой фактор доверия не отдаётся), почта, категории с временным
+    рейтингом, язык, тема, аватар, страна и конференция.
+    """
     return {
         "id": current_user.id,
         "username": current_user.username,
@@ -188,6 +210,10 @@ async def get_leaderboard(
         limit: int = Query(50, ge=1, le=100, description="Количество игроков в топе"),
         db: AsyncSession = Depends(get_db),
 ):
+    """
+    Таблица лидеров категории: без ботов и архивных игроков, без удалённых аккаунтов и игроков с флагом нечестной
+    игры.
+    """
     rating_column = _LEADERBOARD_RATING_COLUMN[category]
     query = (
         select(User)
@@ -390,6 +416,7 @@ async def get_user_achievements(username: str, db: AsyncSession = Depends(get_db
 
 @router.get("/{username}")
 async def get_user_profile(username: str, db: AsyncSession = Depends(get_db)):
+    """Публичный профиль игрока: рейтинги, аватар, лестница. Личного (почта, настройки) в нём нет."""
     user = await _resolve_user(db, username)
     if not user:
         raise ApiError(404, "user_not_found", username=username)
@@ -524,6 +551,10 @@ async def get_user_games(
         sort: str = Query("desc"),
         db: AsyncSession = Depends(get_db),
 ):
+    """
+    История партий игрока, постранично: законченные партии с записью ходов — с человеком, с ботом и архивные, с
+    именами соперников и изменением рейтинга.
+    """
     user = await _resolve_user(db, username)
     if not user:
         raise ApiError(404, "user_not_found", username=username)

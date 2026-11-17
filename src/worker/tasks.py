@@ -1,4 +1,17 @@
 # --- FILE: src/worker/tasks.py ---
+"""
+Фоновые задачи Celery.
+
+* analyze_game — разбор только что законченной партии движком (результат — в games.analysis_json), личные задачи
+  из ошибок игроков (src/services/personal_puzzles.py) и раскладка партии в индекс позиций
+  (src/services/position_index.py). analyze_imported_game — разбор и задачи для партии с другого сайта.
+* simulate_tournament_game — партия ботов между собой в турнире; после неё в очередь ставятся следующие партии.
+* workout_reminders, arena_reminders, bot_selfplay — плановые (расписание — src/worker/celery_app.py).
+
+Каждая задача запускается в своём цикле событий и создаёт своё подключение к базе (соединения asyncpg привязаны
+к циклу, в котором созданы). Задачам с движком нужен свободный процесс Stockfish из пула: если пул занят,
+задача откладывается на ENGINE_BUSY_RETRY_S и повторяется. Ставит задачи в очередь src/services/task_dispatch.py.
+"""
 
 import asyncio
 import logging
@@ -92,6 +105,10 @@ async def _analyze_imported_game_async(imported_id: int) -> int:
 
 @celery_app.task(name="analyze_imported_game", bind=True, max_retries=5, ignore_result=True)
 def analyze_imported_game_task(self, imported_id: int):
+    """
+    Задача Celery: разбор импортированной партии. При занятом пуле движков откладывается на ENGINE_BUSY_RETRY_S и
+    повторяется.
+    """
     try:
         with engine_work("analysis"):
             return asyncio.run(_analyze_imported_game_async(imported_id))

@@ -26,6 +26,10 @@ MIN_PEACEFUL_PLIES = 40   # короткая партия без взятий �
 
 @dataclass(frozen=True)
 class Metrics:
+    """
+    Показатели одной партии для подборок: длина, шахи, взятия и самая длинная их серия, превращения, проходные пешки,
+    мат или пат.
+    """
     plies: int
     decisive: bool
     checks: int
@@ -55,6 +59,7 @@ def passed_pawns(board: chess.Board) -> int:
 
 
 def game_metrics(pgn: str) -> Metrics | None:
+    """Показатели партии по её PGN. None — партия из своей позиции или без результата: в подборки она не идёт."""
     game = chess.pgn.read_game(io.StringIO(pgn))
     if game is None or "FEN" in game.headers or game.headers.get("Result") not in ("1-0", "0-1", "1/2-1/2"):
         return None
@@ -83,6 +88,7 @@ def rank_collections(metrics: dict[int, Metrics], size: int = PER_COLLECTION) ->
     items = list(metrics.items())
 
     def top(candidates, key, value) -> list[tuple[int, int]]:
+        """Первые size партий по ключу сортировки; одна и та же партия (в архиве есть дубли) берётся один раз."""
         chosen: list[tuple[int, int]] = []
         seen: set[int] = set()
         for gid, m in sorted(candidates, key=lambda item: (key(item[1]), item[0])):

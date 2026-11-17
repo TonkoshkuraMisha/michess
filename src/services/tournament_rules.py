@@ -193,6 +193,10 @@ def swiss_pairings(seats: list[int], games: list[GameRecord]) -> list[tuple[int,
     played = {frozenset((g.white, g.black)) for g in games}
 
     def search(rest: list[int], allow_repeat: bool) -> list[tuple[int, int]] | None:
+        """
+        Перебор с возвратом: разбивает участников на пары. allow_repeat разрешает повторные встречи — когда без них
+        пары не составить.
+        """
         if not rest:
             return []
         first = rest[0]

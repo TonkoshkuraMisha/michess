@@ -68,6 +68,10 @@ async def conversation(username: str, before_id: int | None = Query(None, ge=1),
 @router.post("/with/{username}")
 async def send_message(username: str, payload: MessageIn, db: AsyncSession = Depends(get_db),
                        user: User = Depends(get_current_user)):
+    """
+    Отправка личного сообщения: текст и/или карточка-вложение; после записи сообщение доставляется в открытые вкладки
+    собеседника.
+    """
     other = await _player(db, username)
     attachment = (payload.attachment.kind, payload.attachment.ref) if payload.attachment else None
     try:

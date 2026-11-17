@@ -54,6 +54,7 @@ def _color(fen: str) -> str:
 
 
 def view(drill: gen.Drill) -> dict:
+    """Упражнение для клиента: позиция, чей ход, какой фигурой решать и сколько ходов в решении. Ответ не отдаётся."""
     board = chess.Board(drill.fen)
     moved = board.piece_at(chess.parse_square(drill.solutions[0][:2]))
     return {
@@ -170,6 +171,7 @@ async def start_run(user: User, kind: str, piece: str, level: int) -> dict:
 
 
 async def next_in_run(user: User) -> tuple[gen.Drill, dict]:
+    """Следующее упражнение забега на время. Забега нет или он закончился — отказ."""
     run = await _load_run(user.id)
     if run is None:
         raise PuzzleError("timed_run_not_active", 409)
@@ -199,6 +201,7 @@ async def answer(user: User, key: str, moves: list[str], *, in_run: bool) -> dic
 
 
 async def finish_run(db: AsyncSession, user: User) -> dict:
+    """Конец забега: счёт, ошибки и личный рекорд по сочетанию «вид.фигура.уровень» (обновляется, если побит)."""
     run = await _load_run(user.id)
     if run is None:
         raise PuzzleError("timed_run_not_active", 409)

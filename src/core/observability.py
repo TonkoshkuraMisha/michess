@@ -152,6 +152,10 @@ def route_template(scope) -> str:
 async def http_metrics_middleware(
         request: Request, call_next: Callable[[Request], Awaitable[Response]],
 ) -> Response:
+    """
+    Считает HTTP-запросы и их длительность по шаблону маршрута и коду ответа; сам запрос метрик (/metrics) не
+    учитывается.
+    """
     start = time.perf_counter()
     status = 500
     try:

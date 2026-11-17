@@ -1,3 +1,11 @@
+"""
+Все модели базы данных в одном месте.
+
+Импорт каждой модели здесь обязателен: по этому списку Alembic видит таблицы (migrations/env.py) и тесты создают
+схему. Новая модель, не добавленная сюда, не попадёт ни в миграцию, ни в проверку `alembic check`. Какие таблицы
+к какому разделу сайта относятся — docs/ARCHITECTURE.md, раздел 3.
+"""
+
 from src.models.achievement import UserAchievement
 from src.models.arena import Arena, ArenaGame, ArenaPlayer, ArenaReminder
 from src.models.base import Base

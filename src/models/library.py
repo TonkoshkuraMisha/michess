@@ -19,6 +19,7 @@ VISIBILITIES = ("public", "owner", "staff")
 
 
 class LibraryCollection(Base):
+    """Коллекция библиотеки — узел дерева папок, со своей видимостью: публичная, только владельцу или служебная."""
     __tablename__ = "library_collections"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -35,6 +36,10 @@ class LibraryCollection(Base):
 
 
 class LibraryGame(Base):
+    """
+    Партия библиотеки: заголовки и главная линия ходов; метки для поиска (пешечная структура, «закончилась матом»)
+    ставит разметка.
+    """
     __tablename__ = "library_games"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -62,6 +67,7 @@ class LibraryGame(Base):
 
 
 class LibraryGameCollection(Base):
+    """Связь «партия — коллекция»: одна партия может лежать в нескольких коллекциях."""
     __tablename__ = "library_game_collections"
     __table_args__ = (UniqueConstraint("collection_id", "game_id", name="uq_library_game_collection"),)
 

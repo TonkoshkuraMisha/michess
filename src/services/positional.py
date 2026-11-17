@@ -86,6 +86,10 @@ def pawn_can_attack(board: chess.Board, square: chess.Square, by: chess.Color) -
 
 
 def is_outpost(board: chess.Board, square: chess.Square, color: chess.Color) -> bool:
+    """
+    Форпост для коня: поле в половине соперника, защищённое своей пешкой, на которое пешки соперника уже не смогут
+    напасть.
+    """
     if not 3 <= _relative_rank(square, color) <= 5:
         return False
     occupant = board.piece_at(square)

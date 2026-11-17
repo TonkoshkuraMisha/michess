@@ -1,4 +1,10 @@
 // --- FILE: frontend/src/components/Chessboard.tsx ---
+// Главная доска (маршрут «/»): партия с человеком, партия с ботом и свободный анализ — на одной доске. Здесь
+// состояние позиции и разметка; логика вынесена в хуки chessboard/hooks/: useGameSocket (события партии с человеком
+// и лобби), useBotGame (партия с ботом), useClock (часы), usePremoves (предходы), useCoachMode (игра с наставником).
+// В партии с человеком источник правды — сервер: клиент показывает свой ход сразу, но позицию, часы и итог берёт из
+// ответа (move_made, game_over); отклонённый ход возвращается на место. Панели вокруг доски — компоненты папки
+// chessboard/.
 
 import type {OddsChoice} from './chessboard/odds';
 import {useState, useEffect, useRef, useCallback} from 'react';

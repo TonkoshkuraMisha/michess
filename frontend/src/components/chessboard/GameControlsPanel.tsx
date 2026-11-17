@@ -1,4 +1,7 @@
 // --- FILE: frontend/src/components/chessboard/GameControlsPanel.tsx ---
+// Кнопки управления партией под списком ходов. Три режима с разным набором действий: партия с человеком (отмена до
+// первых ходов, сдача, ничья, берсерк в арене, реванш), партия с ботом и свободная доска (сброс, возврат хода,
+// позиция из FEN).
 
 import {useState} from 'react';
 import {Flag, Handshake, X, RefreshCw, RotateCcw, Undo2, Eye, Download, Grid3x3, Zap} from 'lucide-react';

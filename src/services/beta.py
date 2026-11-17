@@ -116,6 +116,7 @@ async def list_invites(db: AsyncSession, moderator: User) -> list[dict]:
 
 
 async def revoke_invite(db: AsyncSession, moderator: User, invite_id: int) -> dict:
+    """Отзыв кода-приглашения модератором: код перестаёт приниматься. Повторный отзыв ничего не меняет."""
     _moderator(moderator)
     invite = await db.get(Invite, invite_id)
     if invite is None:
@@ -166,6 +167,10 @@ def _clip(value: str | None, limit: int) -> str | None:
 async def submit_feedback(db: AsyncSession, user_id: int | None, message: str, page: str | None,
                           language: str | None, screen: str | None) -> Feedback:
     # Переводы строк в тексте сохраняются (шаги воспроизведения), лишние пробелы по краям — нет.
+    """
+    Сообщение «Сообщить о проблеме»: текст короче MESSAGE_MIN — отказ, длиннее MESSAGE_MAX — обрезается; к тексту
+    прикладываются страница, версия приложения, язык и размер экрана.
+    """
     text = "\n".join(line.rstrip() for line in message.strip().splitlines())[:MESSAGE_MAX]
     if len(text) < MESSAGE_MIN:
         raise DomainError("feedback_invalid")
@@ -209,6 +214,10 @@ async def feedback_queue(db: AsyncSession, moderator: User, status: str | None =
 
 
 async def set_feedback_status(db: AsyncSession, moderator: User, feedback_id: int, status: str) -> Feedback:
+    """
+    Статус сообщения о проблеме меняет модератор (значения — FEEDBACK_STATUSES); запоминается, кто и когда его
+    поставил.
+    """
     _moderator(moderator)
     if status not in FEEDBACK_STATUSES:
         raise DomainError("feedback_invalid")
@@ -224,6 +233,7 @@ async def set_feedback_status(db: AsyncSession, moderator: User, feedback_id: in
 
 @dataclass
 class DigestItem:
+    """Одно сообщение в сводке отзывов."""
     id: int
     created_at: datetime
     status: str
@@ -237,6 +247,10 @@ class DigestItem:
 
 @dataclass
 class Digest:
+    """
+    Сводка отзывов за период: сообщения, счёт по статусам и по разделам сайта, остаток неразобранных и сведения о
+    приглашениях.
+    """
     since: datetime
     until: datetime
     items: list[DigestItem] = field(default_factory=list)
@@ -259,6 +273,7 @@ def page_section(page: str | None) -> str:
 
 
 async def build_digest(db: AsyncSession, since: datetime, until: datetime) -> Digest:
+    """Собирает сводку отзывов за период [since, until) — для scripts/feedback_digest.py."""
     rows = (await db.execute(
         select(Feedback, User.username).outerjoin(User, Feedback.user_id == User.id)
         .where(Feedback.created_at >= since, Feedback.created_at < until).order_by(Feedback.created_at, Feedback.id)

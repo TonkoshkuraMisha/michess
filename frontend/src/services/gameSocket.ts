@@ -1,4 +1,9 @@
 // --- FILE: frontend/src/services/gameSocket.ts ---
+// Соединение WebSocket с сервером (/api/v1/ws/matchmaking) — одно на вкладку: партии, лобби, уведомления. Вход — по
+// одноразовому тикету (POST /auth/ws-ticket), токен в адрес не попадает. При обрыве соединение восстанавливается
+// само (пауза RECONNECT_DELAY_MS; после отказа «слишком часто» — дольше); сообщения, отправленные без связи, уходят
+// после подключения. Компоненты подписываются на события по имени (on / off), действия отправляют через send(имя,
+// данные).
 
 import {API_BASE_URL, WS_BASE_URL} from '../config/api';
 import {clearToken, getToken} from './authToken';

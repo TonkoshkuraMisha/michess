@@ -11,6 +11,10 @@ from src.models.base import Base
 
 
 class CollectionEntry(Base):
+    """
+    Место партии архива в одной из «забавных подборок»: код подборки, место и показатель, по которому партия в неё
+    попала. Таблицу целиком заменяет scripts/build_collections.py.
+    """
     __tablename__ = "collection_entries"
     __table_args__ = (UniqueConstraint("collection", "rank", name="uq_collection_rank"),)
 

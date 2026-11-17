@@ -40,6 +40,9 @@ class Entry:
 
 @dataclass(frozen=True)
 class Event:
+    """
+    Турнир «Машины времени»: ключ, год, формат, число кругов и исторический состав с настоящими местами и очками.
+    """
     key: str
     year: int
     format: tournaments_service.Format
@@ -461,6 +464,7 @@ async def overview(db: AsyncSession, user_id: int | None) -> list[dict]:
 
 
 async def start(db: AsyncSession, user: User, key: str, base_time_ms: int, increment_ms: int) -> Tournament:
+    """Создаёт турнир игрока по историческому событию: весь исторический состав плюс сам игрок."""
     event = EVENTS_BY_KEY.get(key)
     if event is None:
         raise DomainError("time_machine_event_unknown", event=key)

@@ -243,6 +243,10 @@ class Matchmaker:
         return None
 
     async def leave_queue(self, user_id: int):
+        """
+        Снимает вызов игрока из лобби: из очереди его контроля времени, из настроек вызова и — на случай
+        рассогласования — из всех активных очередей.
+        """
         uid = int(user_id)
         prefs = await self.redis.hgetall(f"queue:prefs:{uid}")
         if prefs:
@@ -551,6 +555,10 @@ class Matchmaker:
             odds_giver: str = "creator",
             variant: str = "standard",
     ) -> dict:
+        """
+        Приглашение по ссылке: код с параметрами партии (контроль времени, цвет, тип, фора, вариант) хранится в Redis
+        до принятия или истечения срока; прежнее приглашение игрока заменяется.
+        """
         from src.services.odds import GIVERS, KINDS
 
         await self._ensure_not_in_game(user_id, is_self=True)

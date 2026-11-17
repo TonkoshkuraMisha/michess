@@ -30,6 +30,10 @@ YEAR = re.compile(r"^(\d{4})")
 
 @dataclass
 class ParsedGame:
+    """
+    Партия, прочитанная из PGN: поля заголовков, главная линия ходов и её хэш — по нему одинаковые партии из разных
+    файлов сливаются.
+    """
     white: str
     black: str
     event: str
@@ -162,6 +166,7 @@ def read_text(text: str) -> Iterator[chess.pgn.Game]:
 
 @dataclass
 class ImportStats:
+    """Счётчики импорта: прочитано партий, добавлено, найдено дублей, привязано к коллекции, пропущено."""
     games: int = 0
     added: int = 0
     duplicates: int = 0
@@ -202,6 +207,10 @@ async def import_games(db: AsyncSession, collection: LibraryCollection, games: I
     pending: list[ParsedGame] = []
 
     async def flush() -> None:
+        """
+        Записывает накопленную пачку партий: уже известные (по хэшу ходов) только привязываются к коллекции, новые
+        добавляются в библиотеку.
+        """
         nonlocal sort
         hashes = {game.moves_hash for game in pending}
         known = dict((await db.execute(

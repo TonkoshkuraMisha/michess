@@ -73,6 +73,7 @@ async def index():
 
 @router.get("/players/{username}")
 async def player(username: str, db: AsyncSession = Depends(get_db)):
+    """Открытый API: профиль игрока — рейтинги по категориям, лестница, число партий."""
     user = await _player(db, username)
     games = await db.scalar(select(func.count(Game.id)).where(*profile._archive_conditions(user.id))) or 0
     return {

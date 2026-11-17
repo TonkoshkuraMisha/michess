@@ -14,6 +14,10 @@ from src.models.base import Base
 
 
 class EmailToken(Base):
+    """
+    Одноразовая ссылка из письма — подтверждение адреса или сброс пароля. Хранится хэш токена, срок действия и отметка
+    об использовании.
+    """
     __tablename__ = "email_tokens"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

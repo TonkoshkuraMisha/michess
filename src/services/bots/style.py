@@ -78,6 +78,9 @@ class MoveContext:
 
 @dataclass(frozen=True)
 class Cond:
+    """
+    Условие правила стиля — проверка хода в его контексте. Условия сочетаются операторами: & — и, | — или, ~ — не.
+    """
     test: Callable[[MoveContext], bool]
 
     def __call__(self, ctx: MoveContext) -> bool:
@@ -180,6 +183,10 @@ class _Accumulator:
         self._note_weight = 0.0
 
     def apply(self, rule: Rule, ctx: MoveContext) -> None:
+        """
+        Учитывает сработавшее правило: прибавляет его бонус и решает, чья реплика останется у хода (правила SET
+        перезаписывают её, FILL — только заполняют пустую; у персоналий — реплика самого весомого признака).
+        """
         value = rule.value(ctx)
         self.bonus += value
         if rule.note is None:

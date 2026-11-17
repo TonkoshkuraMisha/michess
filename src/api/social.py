@@ -58,6 +58,9 @@ async def search(q: str = Query(..., min_length=2, max_length=30), db: AsyncSess
 
 @router.post("/follow/{username}")
 async def follow(username: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """
+    Подписка на игрока; повторная ничего не меняет, на себя — отказ. Возвращает отношение (подписан ли, друзья ли).
+    """
     target = await _player(db, username)
     if target.id == user.id:
         raise ApiError(400, "cannot_follow_self")

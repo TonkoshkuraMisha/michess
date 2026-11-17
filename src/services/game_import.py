@@ -309,6 +309,10 @@ async def _save(db: AsyncSession, user: User, source: str,
 
 
 async def import_from_site(db: AsyncSession, user: User, source: str, username: str, limit: int) -> dict:
+    """
+    Импорт последних партий игрока с lichess или chess.com по нику. Партии, в которых этот ник не играл, пропускаются;
+    уже загруженные считаются дублями.
+    """
     fetched = await fetch_games(source, username, limit)
     items: ToSave = []
     skipped = 0
@@ -373,6 +377,9 @@ async def get_own(db: AsyncSession, user: User, imported_id: int) -> ImportedGam
 
 
 async def list_games(db: AsyncSession, user: User, offset: int, limit: int) -> dict:
+    """
+    Импортированные партии игрока (новые первыми) с числом личных задач, сделанных из каждой, и пределом хранения.
+    """
     total = await db.scalar(select(func.count()).select_from(ImportedGame).where(ImportedGame.user_id == user.id)) or 0
     games = (await db.scalars(
         select(ImportedGame).where(ImportedGame.user_id == user.id)

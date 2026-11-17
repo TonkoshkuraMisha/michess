@@ -1,4 +1,19 @@
 # --- FILE: src/services/analysis_service.py ---
+"""
+Разбор партии движком: оценка каждого хода, классификация, точность сторон.
+
+Как считается: партия проходится по ходам, позиция до и после хода оценивается Stockfish из пула
+(src/services/engine_pool.py); без движка — статическим оценщиком. Потеря хода в сантипешках даёт класс: до 10 —
+лучший, до 45 — хороший, до 95 — неточность (?!), до 199 — ошибка (?), от 200 — грубая ошибка (??). Точность
+стороны (0–100 %) — по потерям её ходов. К ходам добавляются комментарии наставника (src/services/coach.py).
+
+Где хранится: готовый разбор — games.analysis_json; он действителен, пока совпадают версия формата
+(ANALYSIS_FORMAT_VERSION) и число ходов. Считается в фоне после партии (src/worker/tasks.py) или по кнопке.
+Разбор идущей партии запрещён — он работал бы как подсказка (GameNotFinishedError).
+
+Здесь же — вход для совета, подсказки и проверки хода наставником (AnalysisService.advise / hint / check_move),
+которые пользуются общим кэшем оценок src/services/move_check.py.
+"""
 
 import asyncio
 import contextlib
@@ -136,6 +151,10 @@ def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
     best_moves_uci: list[str | None] = []
 
     def eval_single_board(b: chess.Board) -> tuple[int, int | None, str | None]:
+        """
+        Оценка одной позиции за белых: сантипешки, «мат в N» (или None) и лучший ход. Мат и конец партии определяются
+        без движка; иначе считает движок, а без него — статический оценщик.
+        """
         if b.is_checkmate():
             mate_val = -1 if b.turn == chess.WHITE else 1
             cp_val = -10000 if b.turn == chess.WHITE else 10000
@@ -257,6 +276,7 @@ def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
         return result
 
     def build_side_summary(losses: list[int], side_counts: dict[str, int], color: str) -> dict:
+        """Итог стороны: точность за партию и по фазам, число ходов каждого класса и средняя потеря в сантипешках."""
         avg_loss = round(sum(losses) / len(losses), 1) if losses else 0.0
         return {
             "accuracy": calculate_accuracy(losses),
@@ -325,7 +345,15 @@ async def evaluate_pgn(pgn_text: str) -> dict:
 
 
 class AnalysisService:
+    """
+    Разбор по запросу: оценка позиции, совет, подсказка, проверка хода и полный разбор партии. Единственный экземпляр
+    — analysis_service в конце модуля.
+    """
     async def analyze_position(self, db: AsyncSession, moves: list[str], start_fen: str | None = None) -> dict:
+        """
+        Оценка позиции после списка ходов (SAN или UCI) от обычной расстановки или от start_fen: оценка за белых и
+        лучший ход. Считает Stockfish из пула; без движка — статическая оценка без лучшего хода.
+        """
         board = board_from_start_fen(start_fen)  # InvalidStartPositionError для невозможной позиции
         for move_str in moves:
             try:
@@ -375,6 +403,11 @@ class AnalysisService:
         return await move_check.check_move(fen, move_uci)
 
     async def analyze_full_game(self, db: AsyncSession, game_id: int, force: bool = False) -> dict:
+        """
+        Полный разбор законченной партии. Готовый разбор берётся из games.analysis_json, если он актуален
+        (is_current_analysis) и пересчёт не запрошен; иначе партия разбирается заново и результат сохраняется. Идущая
+        партия — отказ GameNotFinishedError.
+        """
         result = await db.execute(select(Game).where(Game.id == game_id))
         game = result.scalars().first()
         if not game or not game.pgn:

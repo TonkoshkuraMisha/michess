@@ -78,6 +78,10 @@ async def move(payload: MoveIn, section: str = Section, db: AsyncSession = Depen
 @router.post("/{section}/submit")
 async def submit(payload: SubmitIn, section: str = Section, db: AsyncSession = Depends(get_db),
                  user: User = Depends(get_current_user)):
+    """
+    Сдача экзамена раздела: ответы проверяются на сервере; возвращаются число верных, оценка силы, уровень, разбор по
+    позициям и очки за ходы.
+    """
     try:
         graded = await exam.grade(db, user.id, section, [(a.id, a.played()) for a in payload.answers])
     except DomainError as exc:

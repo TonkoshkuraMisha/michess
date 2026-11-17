@@ -30,6 +30,9 @@ MAX_LESSON_RECORDS = 300
 
 
 class ProgressUpdate(BaseModel):
+    """
+    Прогресс урока от клиента: дальний пройденный шаг, число шагов, завершён ли урок и результат контрольных вопросов.
+    """
     step: int = Field(..., ge=0, lt=MAX_STEPS, description="Дальний пройденный шаг (с нуля)")
     steps_total: int = Field(..., ge=1, le=MAX_STEPS)
     completed: bool = False
@@ -78,6 +81,10 @@ async def save_progress(
         db: AsyncSession = Depends(get_db),
         user: User = Depends(get_current_user),
 ):
+    """
+    Сохраняет прогресс урока. Повторное прохождение пройденного не сбрасывает: шаг только растёт, результат
+    контрольных хранится лучший.
+    """
     progress = (await db.execute(
         select(LessonProgress).where(LessonProgress.user_id == user.id, LessonProgress.lesson_id == lesson_id)
     )).scalar_one_or_none()

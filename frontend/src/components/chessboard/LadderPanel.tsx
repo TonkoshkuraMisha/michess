@@ -1,4 +1,6 @@
 // --- FILE: frontend/src/components/chessboard/LadderPanel.tsx ---
+// Клубная лестница: ступени от слабого соперника к сильному, рейтинг лестницы игрока и кнопка партии со следующим
+// соперником (GET и POST /bots/ladder). Честность партии проверяет сервер (src/services/ladder.py).
 
 import {useCallback, useEffect, useState} from 'react';
 import {CheckCircle2, Lock, Swords} from 'lucide-react';

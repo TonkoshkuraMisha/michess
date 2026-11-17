@@ -13,6 +13,7 @@ from src.models.base import Base
 
 
 class Follow(Base):
+    """Подписка одного игрока на другого. Взаимная подписка означает «друзья»."""
     __tablename__ = "follows"
     __table_args__ = (UniqueConstraint("follower_id", "followee_id", name="uq_follow_pair"),)
 
@@ -23,6 +24,10 @@ class Follow(Base):
 
 
 class Notification(Base):
+    """
+    Уведомление игроку: вид (kind) и параметры (payload), по которым клиент собирает текст на своём языке; read_at —
+    когда прочитано.
+    """
     __tablename__ = "notifications"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -81,6 +86,7 @@ class Post(Base):
 
 
 class PostComment(Base):
+    """Комментарий к публикации в ленте; текст — ввод игрока."""
     __tablename__ = "post_comments"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -92,6 +98,7 @@ class PostComment(Base):
 
 
 class PostLike(Base):
+    """Отметка «нравится»: один игрок — одна отметка на публикацию."""
     __tablename__ = "post_likes"
     __table_args__ = (UniqueConstraint("post_id", "user_id", name="uq_post_like"),)
 

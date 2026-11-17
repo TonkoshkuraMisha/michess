@@ -59,6 +59,10 @@ async def streak_status(db: AsyncSession, user_id: int, now: datetime) -> tuple[
 
 
 async def plan(db: AsyncSession, user: User, now: datetime) -> dict:
+    """
+    План разминки на сегодня: шаги (задачи по слабым темам, тренажёр, повторение дебютов, своя ошибка), что уже
+    выполнено и сколько дней подряд разминка сделана.
+    """
     today = _day(now)
     start = datetime(today.year, today.month, today.day, tzinfo=UTC)
     since = start - timedelta(days=STREAK_DAYS)

@@ -127,6 +127,10 @@ class DailyQuota:
         return int(getattr(settings, self.limit_setting)) if settings.FREE_TIER_LIMITS else 0
 
     async def check(self, request: Request) -> None:
+        """
+        Отказ 429 daily_limit_reached, если дневная квота уже исчерпана. При недоступном Redis запрос пропускается:
+        сбой учёта не должен останавливать сайт.
+        """
         limit = self.limit()
         if limit <= 0:
             return

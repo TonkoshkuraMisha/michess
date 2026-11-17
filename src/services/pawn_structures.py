@@ -19,6 +19,10 @@ FIRST_PLY, LAST_PLY, MIN_PLIES = 12, 80, 8
 
 
 class Pawns:
+    """
+    Пешки сторон как множества полей — для коротких проверок структуры: «свои пешки на …», «пешки соперника на …», «на
+    вертикали нет своих пешек».
+    """
     def __init__(self, board: chess.Board, color: chess.Color):
         self.ours = {chess.square_name(s) for s in board.pieces(chess.PAWN, color)}
         self.theirs = {chess.square_name(s) for s in board.pieces(chess.PAWN, not color)}

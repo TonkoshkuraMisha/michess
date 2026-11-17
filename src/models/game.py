@@ -1,4 +1,17 @@
 # --- FILE: src/models/game.py ---
+"""
+Партия (таблица games) — общая для всех видов игры: с человеком, с ботом, архив мастеров, симуляция турнира.
+
+Кто пишет: старт партии с человеком — src/services/matchmaker.py; ходы и часы по ходу игры и итог —
+src/services/game_state.py (источник правды во время партии — Redis, сюда состояние копируется); партия с ботом
+целиком после окончания — src/api/bots.py (save-game); архив — src/db/seed.py; партии ботов между собой —
+src/services/tournament_simulation.py (is_simulation).
+
+Главные поля: pgn — запись ходов; board_fen, turn, часы и state_version — состояние идущей партии (по ним оно
+восстанавливается, если пропало из Redis); result и termination — итог и его причина; рейтинги игроков на начало
+и изменение после партии; analysis_json — сохранённый разбор движком; positions_indexed — партия уже разложена в
+индекс позиций.
+"""
 
 import enum
 from datetime import datetime
@@ -10,6 +23,10 @@ from src.models.base import Base
 
 
 class GameStatus(str, enum.Enum):
+    """
+    Статус партии: PENDING — создана, ещё не началась; IN_PROGRESS — идёт; COMPLETED — закончена с результатом;
+    ABORTED — отменена до первых ходов, рейтинг не меняется.
+    """
     PENDING = "PENDING"
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
@@ -17,6 +34,7 @@ class GameStatus(str, enum.Enum):
 
 
 class Game(Base):
+    """Одна партия любого вида. Что в каких полях и кто их пишет — в описании модуля выше."""
     __tablename__ = "games"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

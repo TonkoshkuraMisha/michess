@@ -181,6 +181,7 @@ async def import_pgn(payload: PgnIn, repertoire_id: int = RepertoireId, db: Asyn
 @router.put("/{repertoire_id}/comment")
 async def set_comment(payload: CommentIn, repertoire_id: int = RepertoireId, db: AsyncSession = Depends(get_db),
                       user: User = Depends(get_current_user)):
+    """Свой комментарий к ходу репертуара."""
     repertoire = await _own(db, repertoire_id, user)
     row = await db.scalar(select(RepertoireMove).where(
         RepertoireMove.repertoire_id == repertoire.id, RepertoireMove.position == payload.position,

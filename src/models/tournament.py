@@ -15,6 +15,9 @@ from src.models.base import Base
 
 
 class Tournament(Base):
+    """
+    Турнир игрока с ботами: формат (круговой или на выбывание), контроль времени, статус и итоговое место игрока.
+    """
     __tablename__ = "tournaments"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -39,6 +42,10 @@ class Tournament(Base):
 
 
 class TournamentPlayer(Base):
+    """
+    Участник турнира под номером посева (seat): сам игрок или бот. Имя и настройки бота скопированы в турнир и не
+    зависят от последующих правок.
+    """
     __tablename__ = "tournament_players"
     __table_args__ = (UniqueConstraint("tournament_id", "seat", name="uq_tournament_players_seat"),)
 
@@ -63,6 +70,10 @@ class TournamentPlayer(Base):
 
 
 class TournamentGame(Base):
+    """
+    Партия турнира: тур, участники по номерам посева и результат. Партию игрока записывает сохранение сыгранной
+    партии, партию ботов между собой — симуляция.
+    """
     __tablename__ = "tournament_games"
 
     id: Mapped[int] = mapped_column(primary_key=True)

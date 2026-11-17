@@ -1,4 +1,7 @@
 // --- FILE: frontend/src/services/soundEngine.ts ---
+// Звуки интерфейса. Все звуки синтезируются в браузере (Web Audio) — готовых записей в проекте нет; наборы звуков
+// (SOUND_SETS) — это профили синтеза. Какой звук у хода, определяется по его записи (resolveMoveSound); звук шаха —
+// только в учебных разделах (isLearningPath), в партиях — обычный звук хода.
 
 export type SoundEventType =
     | 'move'

@@ -58,6 +58,10 @@ async def _taken(db: AsyncSession, email: str, user_id: int) -> bool:
 
 
 async def request_verification(db: AsyncSession, user: User, email: str, language: str) -> None:
+    """
+    Письмо с одноразовой ссылкой для подтверждения адреса. Адрес, уже подтверждённый другим игроком, — отказ
+    email_taken.
+    """
     email = normalize(email)
     if await _taken(db, email, user.id):
         raise ApiError(409, "email_taken")
@@ -78,6 +82,10 @@ async def _consume(db: AsyncSession, token: str, purpose: str) -> EmailToken:
 
 
 async def confirm_verification(db: AsyncSession, token: str) -> User:
+    """
+    Переход по ссылке из письма: адрес записывается в профиль. Недействительная, просроченная или уже использованная
+    ссылка — отказ.
+    """
     row = await _consume(db, token, VERIFY)
     user = await db.get(User, row.user_id)
     if user is None or user.deleted_at is not None:
@@ -104,6 +112,10 @@ async def request_reset(db: AsyncSession, email: str, language: str) -> None:
 
 
 async def confirm_reset(db: AsyncSession, token: str, new_password: str) -> User:
+    """
+    Новый пароль по ссылке из письма: хэш заменяется, все токены и остальные ссылки сброса игрока отзываются, открытые
+    соединения закрываются.
+    """
     row = await _consume(db, token, RESET)
     user = await db.get(User, row.user_id)
     if user is None or user.deleted_at is not None:

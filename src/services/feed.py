@@ -71,6 +71,10 @@ def _not_deleted_author():
 
 async def create(db: AsyncSession, author: User, body: str | None, attachment: tuple[str, str] | None,
                  send_anyway: bool = False) -> dict:
+    """
+    Новая публикация: текст и/или карточка-вложение. Запрещена при отключённом чате; действуют квота и фильтр
+    оскорблений (сработал — публикация придерживается до решения модератора).
+    """
     if moderation.chat_banned(author):
         raise DomainError("posting_banned")
     text = clean_text(body, BODY_MAX)
@@ -130,6 +134,7 @@ async def remove(db: AsyncSession, post_id: int, viewer: User) -> None:
 
 
 async def set_like(db: AsyncSession, post_id: int, viewer: User, liked: bool) -> dict:
+    """Поставить или снять «нравится»; повтор ничего не меняет. Возвращает публикацию с новым счётчиком."""
     post = await _post(db, post_id, viewer)
     exists = await db.scalar(select(PostLike.id).where(PostLike.post_id == post.id, PostLike.user_id == viewer.id))
     if liked and exists is None:
@@ -186,6 +191,7 @@ async def add_comment(db: AsyncSession, post_id: int, viewer: User, body: str | 
 
 
 async def remove_comment(db: AsyncSession, comment_id: int, viewer: User) -> None:
+    """Удаление комментария — его автором, автором публикации или модератором."""
     row = (await db.execute(select(PostComment, Post).join(Post, Post.id == PostComment.post_id)
                             .where(PostComment.id == comment_id))).first()
     if row is None:

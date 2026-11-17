@@ -50,6 +50,10 @@ async def overview(db: AsyncSession) -> dict:
 
 
 async def start_task(db: AsyncSession, user: User, theme: str, index: int) -> Puzzle:
+    """
+    Открывает задачу курса матовых конструкций по её номеру в наборе темы. Решается обычным ходом задачи
+    (/puzzles/{id}/move), но рейтинг решателя не меняет.
+    """
     if theme not in COURSE:
         raise puzzles_service.PuzzleError("unknown_theme", 400, theme=theme)
     ids = await task_ids(db, theme)

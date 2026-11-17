@@ -149,6 +149,9 @@ def level(rating: int) -> str:
 
 @dataclass
 class Graded:
+    """
+    Итог экзамена: сколько позиций решено, оценка силы, разбор по позициям, профиль по ветвям и очки за верные ходы.
+    """
     section: str
     correct: int
     total: int
@@ -209,6 +212,10 @@ async def check_moves(db: AsyncSession, section: str, question_id: int, played: 
 
 
 async def grade(db: AsyncSession, user_id: int, section: str, answers: list[tuple[int, list[str]]]) -> Graded:
+    """
+    Проверка ответов экзамена раздела: решение каждой позиции доигрывается до конца, считаются очки за верные ходы и
+    оценка силы. Возвращает итог (Graded).
+    """
     if level_exam.is_level_section(section):
         graded, row = _grade_level(user_id, section, answers)
         db.add(row)

@@ -1,4 +1,7 @@
 // --- FILE: frontend/src/components/chessboard/GameChatPanel.tsx ---
+// Чат партии: лента сообщений, быстрые реплики и поле ввода; виден в партии с человеком и при просмотре. Сообщения
+// идут через WebSocket (действие chat_message), частоту ограничивает сервер; на сообщение соперника можно
+// пожаловаться.
 
 import {useState} from 'react';
 import {Flag, MessageSquare, Send} from 'lucide-react';

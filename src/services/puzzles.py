@@ -65,6 +65,10 @@ class PuzzleError(DomainError):
 
 @dataclass
 class PuzzleSession:
+    """
+    Активная задача игрока (хранится в Redis): какая задача, какой ход решающего ожидается, сколько взято подсказок и
+    в каком режиме она решается.
+    """
     puzzle_id: int
     index: int = 1          # индекс ожидаемого хода решающего в moves
     hints: int = 0
@@ -361,6 +365,10 @@ async def start_run(user: User, minutes: int) -> dict:
 
 
 async def next_in_run(db: AsyncSession, user: User) -> tuple[Puzzle, dict]:
+    """
+    Следующая задача забега на время: её сложность растёт с числом решённых (TIMED_STEP). Забега нет или он закончился
+    — отказ.
+    """
     run = await _load_run(user.id)
     if run is None:
         raise PuzzleError("timed_run_not_active", 409)

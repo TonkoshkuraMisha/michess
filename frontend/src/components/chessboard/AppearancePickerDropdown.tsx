@@ -1,4 +1,6 @@
 // --- FILE: frontend/src/components/chessboard/AppearancePickerDropdown.tsx ---
+// Выбор оформления доски: набор фигур, тема доски и её размер. Варианты — config/boardAppearance.ts; закрытые за
+// достижения помечены замком (config/unlocks.ts).
 
 import {Palette, ChevronDown, ChevronUp, X} from 'lucide-react';
 import {BOARD_THEMES, PIECE_SETS, getPieceSvgUrl} from '../../config/boardAppearance';

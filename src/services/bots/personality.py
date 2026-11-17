@@ -218,6 +218,10 @@ def _material_perception(values: PieceValues):
     def bonus(c: MoveContext) -> float:
         # Сдвиг относительно стандартной шкалы: взятие фигуры, которую персоналия ценит выше,
         # привлекательнее; поставить под бой «дорогую» для неё фигуру — менее привлекательно.
+        """
+        Бонус за отношение персоналии к фигурам: взять фигуру, которую она ценит выше обычного, привлекательнее, а
+        поставить под бой свою «дорогую» фигуру — менее привлекательно.
+        """
         total = 0.0
         if c.captured_piece_type is not None:
             total += 100.0 * (values.of(c.captured_piece_type) - STANDARD_VALUES[c.captured_piece_type])

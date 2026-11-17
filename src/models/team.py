@@ -13,6 +13,7 @@ from src.models.base import Base
 
 
 class Team(Base):
+    """Команда сезонной лиги: название и владелец."""
     __tablename__ = "teams"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -23,6 +24,7 @@ class Team(Base):
 
 
 class TeamMember(Base):
+    """Участник команды. Игрок состоит не больше чем в одной команде."""
     __tablename__ = "team_members"
 
     id: Mapped[int] = mapped_column(primary_key=True)

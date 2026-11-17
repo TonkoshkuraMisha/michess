@@ -54,6 +54,7 @@ async def push(db: AsyncSession, user_id: int, kind: str, payload: dict) -> dict
 
 
 async def latest(db: AsyncSession, user_id: int) -> dict:
+    """Последние KEEP уведомлений игрока (новые первыми) и число непрочитанных."""
     rows = (await db.execute(
         select(Notification).where(Notification.user_id == user_id)
         .order_by(Notification.created_at.desc(), Notification.id.desc()).limit(KEEP)

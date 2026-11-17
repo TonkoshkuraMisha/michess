@@ -1,3 +1,15 @@
+"""
+Пароли и токены входа.
+
+* Пароль хранится только как хэш bcrypt (users.hashed_password). У ботов и архивных игроков вместо хэша стоит
+  метка, которая не совпадает ни с одним паролем, — войти под ними нельзя.
+* Access-токен — JWT, подписанный SECRET_KEY: sub — id игрока (имя можно сменить, id — нет), ver — версия токенов
+  (users.token_version). Смена пароля и «выйти везде» увеличивают версию, и все выданные раньше токены перестают
+  приниматься (проверка — src/api/deps.user_from_token). Срок жизни — ACCESS_TOKEN_EXPIRE_MINUTES.
+
+Долгий вход (refresh-токен в cookie) — src/services/auth_sessions.py.
+"""
+
 from datetime import UTC, datetime, timedelta
 
 import jwt

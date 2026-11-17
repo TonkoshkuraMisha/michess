@@ -1,4 +1,18 @@
 # --- FILE: src/services/bots/philidor.py ---
+"""
+Исторический бот «Франсуа-Андре Филидор»: дебютная книга и правила стиля.
+
+Дебют — книга из партий прототипа (books/philidor.json, собирает scripts/build_opening_books.py) и несколько
+«фирменных» начал, заданных здесь (DEFAULT_PHILIDOR_BOOK).
+
+Стиль (PHILIDOR_STYLE) — бонусы в сантипешках кандидатам движка: ходы пешками в центр и за пространством («пешки —
+душа шахмат»), конь не встаёт перед своей пешкой «c» или «f», пока она не пошла, сохранение пешечной структуры.
+Бонусы только выбирают среди ходов, близких по оценке к лучшему (окно — blunder_guard_cp); оценку позиции они не
+меняют.
+
+Сила: заявленный рейтинг и ограничение движка UCI_Elo — 1850; измеренная матчами — calibration.json. Порядок выбора
+хода — base.HistoricalBot; реплики бота — ключи каталога botComments.philidor.* на клиенте.
+"""
 
 import chess
 
@@ -95,7 +109,7 @@ evaluate_philidor_style_bonus = PHILIDOR_STYLE.evaluate
 
 
 class PhilidorBot(HistoricalBot):
-    """Франсуа-Андре Филидор (~1850 Эло, depth=6, skill=7)."""
+    """Франсуа-Андре Филидор: UCI_Elo 1850, глубина 6, уровень 7 (значения базового класса)."""
 
     bot_id = "philidor"
     engine_source_name = "philidor_style_engine_deep"

@@ -15,6 +15,10 @@ from src.models.base import Base
 
 
 class ImportedGame(Base):
+    """
+    Партия игрока, принесённая с другого сайта или вставленная как PGN: принадлежит одному игроку, хранит запись
+    ходов, сведения из заголовков и разбор движком.
+    """
     __tablename__ = "imported_games"
     __table_args__ = (UniqueConstraint("user_id", "source", "external_id", name="uq_imported_games_source_id"),)
 

@@ -1,4 +1,14 @@
 # --- FILE: scripts/build_opening_books.py ---
+"""
+Дебютные книги семи исторических ботов: из партий прототипа — в src/services/bots/books/<бот>.json.
+
+Откуда партии: PGN-файлы игрока в папках проекта с архивом (find_pgn_files_for_bot). Берутся только партии
+самого игрока (BOT_BOOK_CONFIG: фамилия и исключения для однофамильцев) и только его ходы на первых MAX_BOOK_PLY
+полуходах: для каждой позиции считается, сколько раз он сыграл каждый ход, — это и есть вес хода в книге.
+
+Запуск из корня проекта: `python scripts/build_opening_books.py`. Книги мастеров второй волны собирает
+scripts/build_master_books.py.
+"""
 
 import json
 import shutil

@@ -1,4 +1,17 @@
 # --- FILE: src/services/bots/paulsen.py ---
+"""
+Исторический бот «Луи Паульсен»: дебютная книга и правила стиля.
+
+Дебют — книга из партий прототипа (books/paulsen.json, собирает scripts/build_opening_books.py) и несколько
+«фирменных» начал, заданных здесь (DEFAULT_PAULSEN_BOOK).
+
+Стиль (PAULSEN_STYLE) — бонусы в сантипешках кандидатам движка: гибкая пешечная структура без раннего занятия
+центра, слоны на длинные диагонали, профилактика и сохранение структуры. Бонусы только выбирают среди ходов, близких
+по оценке к лучшему (окно — blunder_guard_cp); оценку позиции они не меняют.
+
+Сила: заявленный рейтинг и ограничение движка UCI_Elo — 2080; измеренная матчами — calibration.json. Порядок выбора
+хода — base.HistoricalBot; реплики бота — ключи каталога botComments.paulsen.* на клиенте.
+"""
 
 import chess
 
@@ -81,7 +94,7 @@ evaluate_paulsen_style_bonus = PAULSEN_STYLE.evaluate
 
 
 class PaulsenBot(HistoricalBot):
-    """Луи Паульсен (~1800 UCI Эло, depth=6, skill=8)."""
+    """Луи Паульсен: UCI_Elo 2080, глубина 6, уровень 8."""
 
     bot_id = "paulsen"
     engine_source_name = "paulsen_style_engine"
