@@ -1,0 +1,941 @@
+{
+ "guests_header": "Шестая партия турниров (28.4): Вена 1898, Карлсбад 1911, Мангейм 1914, Карлсбад 1923",
+ "guests": [
+  {
+   "id": "lipke",
+   "pgn": "Lipke, Paul",
+   "era": "1870–1955",
+   "rating": 2100,
+   "style": {
+    "aggression": 20,
+    "mobility": 130,
+    "randomness": 20
+   },
+   "note": "",
+   "en": [
+    "Paul Lipke",
+    "Lipke",
+    "German master"
+   ],
+   "uk": [
+    "Пауль Ліпке",
+    "Ліпке",
+    "Німецький майстер"
+   ],
+   "ru": [
+    "Пауль Липке",
+    "Липке",
+    "Немецкий мастер"
+   ]
+  },
+  {
+   "id": "alapin",
+   "pgn": "Alapin, Simon",
+   "era": "1856–1923",
+   "rating": 2100,
+   "style": {
+    "aggression": 20,
+    "center_control": 130,
+    "randomness": 25
+   },
+   "note": "Теоретик дебютов.",
+   "en": [
+    "Simon Alapin",
+    "Alapin",
+    "Opening theorist; the Alapin Variation bears his name"
+   ],
+   "uk": [
+    "Семен Алапін",
+    "Алапін",
+    "Теоретик дебютів; його ім’я носить варіант Алапіна"
+   ],
+   "ru": [
+    "Семён Алапин",
+    "Алапин",
+    "Теоретик дебютов; его имя носит вариант Алапина"
+   ]
+  },
+  {
+   "id": "halprin",
+   "pgn": "Halprin, Alexander",
+   "era": "1868–1921",
+   "rating": 2000,
+   "style": {
+    "aggression": 50,
+    "randomness": 30
+   },
+   "note": "",
+   "en": [
+    "Alexander Halprin",
+    "Halprin",
+    "Viennese master"
+   ],
+   "uk": [
+    "Александр Гальпрін",
+    "Гальпрін",
+    "Віденський майстер"
+   ],
+   "ru": [
+    "Александр Гальприн",
+    "Гальприн",
+    "Венский мастер"
+   ]
+  },
+  {
+   "id": "caro",
+   "pgn": "Caro, Horatio",
+   "era": "1862–1920",
+   "rating": 2000,
+   "style": {
+    "aggression": 10,
+    "randomness": 25
+   },
+   "note": "",
+   "en": [
+    "Horatio Caro",
+    "Caro",
+    "Co-author of the Caro-Kann Defence"
+   ],
+   "uk": [
+    "Гораціо Каро",
+    "Каро",
+    "Співавтор захисту Каро — Канн"
+   ],
+   "ru": [
+    "Горацио Каро",
+    "Каро",
+    "Соавтор защиты Каро — Канн"
+   ]
+  },
+  {
+   "id": "baird",
+   "pgn": "Baird, David Graham",
+   "era": "1854–1913",
+   "rating": 1850,
+   "style": {
+    "aggression": 0,
+    "randomness": 35
+   },
+   "note": "",
+   "en": [
+    "David Graham Baird",
+    "Baird",
+    "New York master"
+   ],
+   "uk": [
+    "Девід Грем Берд",
+    "Д. Берд",
+    "Нью-йоркський майстер"
+   ],
+   "ru": [
+    "Дэвид Грэм Бэрд",
+    "Бэрд",
+    "Нью-йоркский мастер"
+   ]
+  },
+  {
+   "id": "trenchard",
+   "pgn": "Trenchard, Herbert William",
+   "era": "1857–1914",
+   "rating": 1800,
+   "style": {
+    "aggression": 0,
+    "randomness": 40
+   },
+   "note": "",
+   "en": [
+    "Herbert Trenchard",
+    "Trenchard",
+    "English master"
+   ],
+   "uk": [
+    "Герберт Тренчард",
+    "Тренчард",
+    "Англійський майстер"
+   ],
+   "ru": [
+    "Герберт Тренчард",
+    "Тренчард",
+    "Английский мастер"
+   ]
+  },
+  {
+   "id": "rotlewi",
+   "pgn": "Rotlewi, Gersz",
+   "era": "1889–1920",
+   "rating": 2200,
+   "style": {
+    "aggression": 40,
+    "mobility": 150,
+    "randomness": 20
+   },
+   "note": "",
+   "en": [
+    "Gersz Rotlewi",
+    "Rotlewi",
+    "Talent from Łódź; illness ended his career at 22"
+   ],
+   "uk": [
+    "Герш Ротлеві",
+    "Ротлеві",
+    "Талант із Лодзі; хвороба обірвала його кар’єру у 22 роки"
+   ],
+   "ru": [
+    "Георгий Ротлеви",
+    "Ротлеви",
+    "Талант из Лодзи; болезнь оборвала его карьеру в 22 года"
+   ]
+  },
+  {
+   "id": "suchting",
+   "pgn": "Suechting, Hugo",
+   "era": "1874–1916",
+   "rating": 2050,
+   "style": {
+    "aggression": -20,
+    "king_safety": 140,
+    "randomness": 20
+   },
+   "note": "",
+   "en": [
+    "Hugo Süchting",
+    "Süchting",
+    "German master"
+   ],
+   "uk": [
+    "Гуго Зюхтінг",
+    "Зюхтінг",
+    "Німецький майстер"
+   ],
+   "ru": [
+    "Гуго Зюхтинг",
+    "Зюхтинг",
+    "Немецкий мастер"
+   ]
+  },
+  {
+   "id": "rabinovich_abram",
+   "pgn": "Rabinovich, Abram",
+   "era": "1878–1943",
+   "rating": 2050,
+   "style": {
+    "aggression": 30,
+    "randomness": 25
+   },
+   "note": "",
+   "en": [
+    "Abram Rabinovich",
+    "A. Rabinovich",
+    "Master from Vilnius, later champion of Moscow"
+   ],
+   "uk": [
+    "Абрам Рабинович",
+    "А. Рабинович",
+    "Майстер із Вільнюса, згодом чемпіон Москви"
+   ],
+   "ru": [
+    "Абрам Рабинович",
+    "А. Рабинович",
+    "Мастер из Вильнюса, позже чемпион Москвы"
+   ]
+  },
+  {
+   "id": "chajes",
+   "pgn": "Chajes, Oscar",
+   "era": "1873–1928",
+   "rating": 2050,
+   "style": {
+    "aggression": 40,
+    "randomness": 25
+   },
+   "note": "",
+   "en": [
+    "Oscar Chajes",
+    "Chajes",
+    "New York master; beat Capablanca in 1916, his last loss for eight years"
+   ],
+   "uk": [
+    "Оскар Чаєс",
+    "Чаєс",
+    "Нью-йоркський майстер; у 1916 обіграв Капабланку — його остання поразка на вісім років"
+   ],
+   "ru": [
+    "Оскар Чайес",
+    "Чайес",
+    "Нью-йоркский мастер; в 1916 обыграл Капабланку — его последнее поражение на восемь лет"
+   ]
+  },
+  {
+   "id": "fahrni",
+   "pgn": "Fahrni, Hans",
+   "era": "1874–1939",
+   "rating": 2050,
+   "style": {
+    "aggression": 10,
+    "randomness": 25
+   },
+   "note": "",
+   "en": [
+    "Hans Fahrni",
+    "Fahrni",
+    "Swiss master, the first to play a simultaneous display on 100 boards"
+   ],
+   "uk": [
+    "Ганс Фарні",
+    "Фарні",
+    "Швейцарський майстер, перший дав сеанс на 100 дошках"
+   ],
+   "ru": [
+    "Ганс Фарни",
+    "Фарни",
+    "Швейцарский мастер, первым дал сеанс на 100 досках"
+   ]
+  },
+  {
+   "id": "jaffe",
+   "pgn": "Jaffe, Charles",
+   "era": "1879–1941",
+   "rating": 2050,
+   "style": {
+    "aggression": 30,
+    "randomness": 30
+   },
+   "note": "",
+   "en": [
+    "Charles Jaffe",
+    "Jaffe",
+    "New York master"
+   ],
+   "uk": [
+    "Чарлз Яффе",
+    "Яффе",
+    "Нью-йоркський майстер"
+   ],
+   "ru": [
+    "Чарлз Яффе",
+    "Яффе",
+    "Нью-йоркский мастер"
+   ]
+  },
+  {
+   "id": "breyer",
+   "pgn": "Breyer, Gyula",
+   "era": "1893–1921",
+   "rating": 2200,
+   "style": {
+    "aggression": 30,
+    "center_control": 120,
+    "mobility": 150,
+    "randomness": 20
+   },
+   "note": "Один из зачинателей гипермодернизма.",
+   "en": [
+    "Gyula Breyer",
+    "Breyer",
+    "Pioneer of hypermodern chess who died at 28"
+   ],
+   "uk": [
+    "Дьюла Бреєр",
+    "Бреєр",
+    "Один із зачинателів гіпермодернізму; помер у 28 років"
+   ],
+   "ru": [
+    "Дьюла Брейер",
+    "Брейер",
+    "Один из зачинателей гипермодернизма; умер в 28 лет"
+   ]
+  },
+  {
+   "id": "john",
+   "pgn": "John, Walter",
+   "era": "1879–1940",
+   "rating": 2050,
+   "style": {
+    "aggression": 0,
+    "randomness": 25
+   },
+   "note": "",
+   "en": [
+    "Walter John",
+    "John",
+    "German master"
+   ],
+   "uk": [
+    "Вальтер Йон",
+    "Йон",
+    "Німецький майстер"
+   ],
+   "ru": [
+    "Вальтер Йон",
+    "Йон",
+    "Немецкий мастер"
+   ]
+  },
+  {
+   "id": "post",
+   "pgn": "Post, Ehrhardt",
+   "era": "1881–1947",
+   "rating": 2100,
+   "style": {
+    "aggression": 10,
+    "randomness": 20
+   },
+   "note": "",
+   "en": [
+    "Ehrhardt Post",
+    "Post",
+    "German champion and chess official"
+   ],
+   "uk": [
+    "Ерхардт Пост",
+    "Пост",
+    "Чемпіон Німеччини й шаховий функціонер"
+   ],
+   "ru": [
+    "Эрхардт Пост",
+    "Пост",
+    "Чемпион Германии и шахматный функционер"
+   ]
+  },
+  {
+   "id": "carls",
+   "pgn": "Carls, Carl",
+   "era": "1880–1958",
+   "rating": 2100,
+   "style": {
+    "aggression": -10,
+    "center_control": 130,
+    "randomness": 20
+   },
+   "note": "",
+   "en": [
+    "Carl Carls",
+    "Carls",
+    "German champion, devotee of the English Opening"
+   ],
+   "uk": [
+    "Карл Карльс",
+    "Карльс",
+    "Чемпіон Німеччини, прихильник англійського початку"
+   ],
+   "ru": [
+    "Карл Карльс",
+    "Карльс",
+    "Чемпион Германии, приверженец английского начала"
+   ]
+  },
+  {
+   "id": "kruger",
+   "pgn": "Krueger, Paul",
+   "era": "1871–1939",
+   "rating": 2000,
+   "style": {
+    "aggression": 0,
+    "randomness": 30
+   },
+   "note": "",
+   "en": [
+    "Paul Krüger",
+    "Krüger",
+    "German master"
+   ],
+   "uk": [
+    "Пауль Крюгер",
+    "Крюгер",
+    "Німецький майстер"
+   ],
+   "ru": [
+    "Пауль Крюгер",
+    "Крюгер",
+    "Немецкий мастер"
+   ]
+  },
+  {
+   "id": "flamberg",
+   "pgn": "Flamberg, Alexander",
+   "era": "1880–1926",
+   "rating": 2100,
+   "style": {
+    "aggression": 30,
+    "randomness": 25
+   },
+   "note": "",
+   "en": [
+    "Alexander Flamberg",
+    "Flamberg",
+    "Champion of Warsaw"
+   ],
+   "uk": [
+    "Александр Фламберг",
+    "Фламберг",
+    "Чемпіон Варшави"
+   ],
+   "ru": [
+    "Александр Фламберг",
+    "Фламберг",
+    "Чемпион Варшавы"
+   ]
+  },
+  {
+   "id": "bernstein_jacob",
+   "pgn": "Bernstein, Jacob",
+   "era": "1885–1959",
+   "rating": 2000,
+   "style": {
+    "aggression": 10,
+    "randomness": 25
+   },
+   "note": "",
+   "en": [
+    "Jacob Bernstein",
+    "J. Bernstein",
+    "New York State champion"
+   ],
+   "uk": [
+    "Джейкоб Бернштейн",
+    "Дж. Бернштейн",
+    "Чемпіон штату Нью-Йорк"
+   ],
+   "ru": [
+    "Джейкоб Бернштейн",
+    "Дж. Бернштейн",
+    "Чемпион штата Нью-Йорк"
+   ]
+  }
+ ],
+ "events": [
+  {
+   "key": "vienna_1898",
+   "year": 1898,
+   "format": "round_robin",
+   "cycles": 2,
+   "note": "Девятнадцать участников в два круга (выбывший Шварц в таблицу не вошёл). Первое место — Тарраш и Пильсбери.",
+   "table": [
+    [
+     "tarrasch",
+     27.5
+    ],
+    [
+     "pillsbury",
+     27.5
+    ],
+    [
+     "janowski",
+     25.5
+    ],
+    [
+     "steinitz",
+     23.5
+    ],
+    [
+     "schlechter",
+     21.5
+    ],
+    [
+     "chigorin",
+     20
+    ],
+    [
+     "burn",
+     20
+    ],
+    [
+     "lipke",
+     19.5
+    ],
+    [
+     "maroczy",
+     19.5
+    ],
+    [
+     "alapin",
+     18
+    ],
+    [
+     "blackburne",
+     17
+    ],
+    [
+     "schiffers",
+     17
+    ],
+    [
+     "marco",
+     16.5
+    ],
+    [
+     "showalter",
+     15
+    ],
+    [
+     "walbrodt",
+     14.5
+    ],
+    [
+     "halprin",
+     14
+    ],
+    [
+     "caro",
+     12.5
+    ],
+    [
+     "baird",
+     8
+    ],
+    [
+     "trenchard",
+     5
+    ]
+   ],
+   "en": {
+    "title": "Vienna 1898",
+    "place": "Vienna, 1 June – 25 July 1898",
+    "story": "The Kaiser Jubilee tournament: nineteen masters, two games against each, thirty-six games apiece. It is one of the longest tournaments ever played. Tarrasch and Pillsbury tied for first, and Tarrasch won the play-off match 2½–1½.",
+    "real": "Tarrasch and Pillsbury tied with 27½ out of 36; Tarrasch won the play-off. Janowski was third with 25½."
+   },
+   "uk": {
+    "title": "Відень 1898",
+    "place": "Відень, 1 червня – 25 липня 1898",
+    "story": "Ювілейний турнір на честь імператора: дев’ятнадцять майстрів, по дві партії з кожним — тридцять шість партій у кожного. Один із найдовших турнірів в історії. Тарраш і Пільсбері поділили перше місце, додатковий матч Тарраш виграв 2½:1½.",
+    "real": "Тарраш і Пільсбері набрали по 27½ із 36; додатковий матч виграв Тарраш. Третім був Яновський (25½)."
+   },
+   "ru": {
+    "title": "Вена 1898",
+    "place": "Вена, 1 июня – 25 июля 1898",
+    "story": "Юбилейный турнир в честь императора: девятнадцать мастеров, по две партии с каждым — тридцать шесть партий у каждого. Один из самых длинных турниров в истории. Тарраш и Пильсбери разделили первое место, дополнительный матч Тарраш выиграл 2½:1½.",
+    "real": "Тарраш и Пильсбери набрали по 27½ из 36; дополнительный матч выиграл Тарраш. Третьим был Яновский (25½)."
+   }
+  },
+  {
+   "key": "carlsbad_1911",
+   "year": 1911,
+   "format": "round_robin",
+   "cycles": 1,
+   "note": "Двадцать шесть участников в один круг. Победил Тейхман. У Видмара 15: в опубликованной таблице опечатка (15½).",
+   "table": [
+    [
+     "teichmann",
+     18
+    ],
+    [
+     "rubinstein",
+     17
+    ],
+    [
+     "schlechter",
+     17
+    ],
+    [
+     "rotlewi",
+     16
+    ],
+    [
+     "marshall",
+     15.5
+    ],
+    [
+     "nimzowitsch",
+     15.5
+    ],
+    [
+     "vidmar",
+     15
+    ],
+    [
+     "leonhardt",
+     13.5
+    ],
+    [
+     "tartakower",
+     13.5
+    ],
+    [
+     "duras",
+     13.5
+    ],
+    [
+     "alekhine",
+     13.5
+    ],
+    [
+     "spielmann",
+     13
+    ],
+    [
+     "perlis",
+     12
+    ],
+    [
+     "cohn_erich",
+     11.5
+    ],
+    [
+     "levenfish",
+     11.5
+    ],
+    [
+     "suchting",
+     11.5
+    ],
+    [
+     "burn",
+     11
+    ],
+    [
+     "salwe",
+     11
+    ],
+    [
+     "johner_paul",
+     10.5
+    ],
+    [
+     "rabinovich_abram",
+     10.5
+    ],
+    [
+     "kostic",
+     10.5
+    ],
+    [
+     "dus_chotimirsky",
+     10
+    ],
+    [
+     "alapin",
+     8.5
+    ],
+    [
+     "chajes",
+     8.5
+    ],
+    [
+     "fahrni",
+     8.5
+    ],
+    [
+     "jaffe",
+     8.5
+    ]
+   ],
+   "en": {
+    "title": "Carlsbad 1911",
+    "place": "Carlsbad, 20 August – 24 September 1911",
+    "story": "Twenty-six masters in a single round robin, 325 games in all. Richard Teichmann, nicknamed 'Richard the Fifth' for his many fifth places, won the tournament of his life. Among the debutants was the 18-year-old Alexander Alekhine.",
+    "real": "Winner: Richard Teichmann with 18 out of 25, ahead of Rubinstein and Schlechter (17 each)."
+   },
+   "uk": {
+    "title": "Карлсбад 1911",
+    "place": "Карлсбад, 20 серпня – 24 вересня 1911",
+    "story": "Двадцять шість майстрів в одне коло, загалом 325 партій. Ріхард Тейхман, якого за численні п’яті місця прозвали «Ріхардом П’ятим», виграв головний турнір свого життя. Серед дебютантів був 18-річний Олександр Алехін.",
+    "real": "Переможець — Ріхард Тейхман, 18 із 25; за ним Рубінштейн і Шлехтер (по 17)."
+   },
+   "ru": {
+    "title": "Карлсбад 1911",
+    "place": "Карлсбад, 20 августа – 24 сентября 1911",
+    "story": "Двадцать шесть мастеров в один круг, всего 325 партий. Рихард Тейхман, прозванный за многочисленные пятые места «Рихардом Пятым», выиграл главный турнир своей жизни. Среди дебютантов был 18-летний Александр Алехин.",
+    "real": "Победитель — Рихард Тейхман, 18 из 25; за ним Рубинштейн и Шлехтер (по 17)."
+   }
+  },
+  {
+   "key": "mannheim_1914",
+   "year": 1914,
+   "format": "round_robin",
+   "cycles": 1,
+   "partial": true,
+   "note": "Турнир прерван войной после 11 туров из 17: настоящая таблица — на момент остановки. Первый приз получил Алехин.",
+   "table": [
+    [
+     "alekhine",
+     9.5
+    ],
+    [
+     "vidmar",
+     8.5
+    ],
+    [
+     "spielmann",
+     8
+    ],
+    [
+     "breyer",
+     7
+    ],
+    [
+     "marshall",
+     7
+    ],
+    [
+     "reti",
+     7
+    ],
+    [
+     "janowski",
+     6.5
+    ],
+    [
+     "bogoljubow",
+     5.5
+    ],
+    [
+     "tarrasch",
+     5.5
+    ],
+    [
+     "duras",
+     5
+    ],
+    [
+     "john",
+     5
+    ],
+    [
+     "tartakower",
+     4.5
+    ],
+    [
+     "fahrni",
+     4
+    ],
+    [
+     "post",
+     4
+    ],
+    [
+     "carls",
+     3.5
+    ],
+    [
+     "kruger",
+     3.5
+    ],
+    [
+     "flamberg",
+     3
+    ],
+    [
+     "mieses",
+     2
+    ]
+   ],
+   "en": {
+    "title": "Mannheim 1914",
+    "place": "Mannheim, 20 July – 1 August 1914",
+    "story": "The tournament the war stopped. After eleven of seventeen rounds Germany declared war on Russia and play was abandoned; Alekhine was leading and received the first prize. The players from Russia, Alekhine among them, were interned. Here you play it to the end.",
+    "real": "When play stopped after 11 rounds, Alekhine led with 9½, ahead of Vidmar (8½) and Spielmann (8)."
+   },
+   "uk": {
+    "title": "Мангайм 1914",
+    "place": "Мангайм, 20 липня – 1 серпня 1914",
+    "story": "Турнір, який зупинила війна. Після одинадцяти турів із сімнадцяти Німеччина оголосила війну Росії, і гру припинили; лідирував Алехін, йому й присудили перший приз. Учасників із Росії, зокрема Алехіна, інтернували. Тут ви дограєте турнір до кінця.",
+    "real": "На момент зупинки, після 11 турів, лідирував Алехін (9½); за ним Відмар (8½) і Шпільман (8)."
+   },
+   "ru": {
+    "title": "Мангейм 1914",
+    "place": "Мангейм, 20 июля – 1 августа 1914",
+    "story": "Турнир, который остановила война. После одиннадцати туров из семнадцати Германия объявила войну России, и игру прекратили; лидировал Алехин, ему и присудили первый приз. Участников из России, в том числе Алехина, интернировали. Здесь вы доиграете турнир до конца.",
+    "real": "На момент остановки, после 11 туров, лидировал Алехин (9½); за ним Видмар (8½) и Шпильман (8)."
+   }
+  },
+  {
+   "key": "carlsbad_1923",
+   "year": 1923,
+   "format": "round_robin",
+   "cycles": 1,
+   "note": "Восемнадцать участников в один круг. Первое место разделили Алехин, Боголюбов и Мароци.",
+   "table": [
+    [
+     "alekhine",
+     11.5
+    ],
+    [
+     "bogoljubow",
+     11.5
+    ],
+    [
+     "maroczy",
+     11.5
+    ],
+    [
+     "reti",
+     10.5
+    ],
+    [
+     "grunfeld",
+     10.5
+    ],
+    [
+     "nimzowitsch",
+     10
+    ],
+    [
+     "treybal",
+     10
+    ],
+    [
+     "yates",
+     9.5
+    ],
+    [
+     "teichmann",
+     9
+    ],
+    [
+     "tartakower",
+     8.5
+    ],
+    [
+     "tarrasch",
+     8
+    ],
+    [
+     "rubinstein",
+     7.5
+    ],
+    [
+     "bernstein_jacob",
+     7
+    ],
+    [
+     "wolf",
+     6.5
+    ],
+    [
+     "samisch",
+     6
+    ],
+    [
+     "thomas",
+     5.5
+    ],
+    [
+     "spielmann",
+     5
+    ],
+    [
+     "chajes",
+     5
+    ]
+   ],
+   "en": {
+    "title": "Carlsbad 1923",
+    "place": "Carlsbad, 27 April – 22 May 1923",
+    "story": "Eighteen masters in a single round robin. Three players shared first place: Alekhine, Bogoljubow and the veteran Géza Maróczy, who was fifty-three.",
+    "real": "Alekhine, Bogoljubow and Maróczy shared first place with 11½ out of 17."
+   },
+   "uk": {
+    "title": "Карлсбад 1923",
+    "place": "Карлсбад, 27 квітня – 22 травня 1923",
+    "story": "Вісімнадцять майстрів в одне коло. Перше місце поділили троє: Алехін, Боголюбов і ветеран Геза Мароці, якому було п’ятдесят три роки.",
+    "real": "Перше місце поділили Алехін, Боголюбов і Мароці, по 11½ із 17."
+   },
+   "ru": {
+    "title": "Карлсбад 1923",
+    "place": "Карлсбад, 27 апреля – 22 мая 1923",
+    "story": "Восемнадцать мастеров в один круг. Первое место разделили трое: Алехин, Боголюбов и ветеран Геза Мароци, которому было пятьдесят три года.",
+    "real": "Первое место разделили Алехин, Боголюбов и Мароци, по 11½ из 17."
+   }
+  }
+ ]
+}
