@@ -126,7 +126,7 @@ describe('страница сообщений', () => {
     it('ошибка отправки показывается текстом из каталога', async () => {
         stubFetch((url, init) => {
             if (url.endsWith('/settings')) return {dm_policy: 'all', blocked: []};
-            if (url.includes('/with/magnus') && init?.method === 'POST') return new Error('dm_attachment_invalid');
+            if (url.includes('/with/magnus') && init?.method === 'POST') return new Error('attachment_invalid');
             if (url.includes('/with/magnus')) return {username: 'magnus', avatar: null, can_write: true, reason: null, blocked: false, messages: []};
             return {unread: 0, conversations: []};
         });

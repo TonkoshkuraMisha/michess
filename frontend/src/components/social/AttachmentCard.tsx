@@ -5,14 +5,17 @@
 import {useMemo} from 'react';
 import {Link} from 'react-router-dom';
 import {Chess} from 'chess.js';
-import {BookOpen, Crown, Puzzle, Swords, Trophy} from 'lucide-react';
+import {Award, BookOpen, Crown, Library, Puzzle, Swords, Trophy} from 'lucide-react';
 import {useI18n} from '../../i18n';
+import type {MessageKey} from '../../i18n';
 import {BOARD_THEMES, getPieceSvgUrl, getSavedBoardThemeKey, getSavedPieceSetKey} from '../../config/boardAppearance';
 import {lessonById, localized} from '../../content/lessons';
 import {attachmentLink} from '../../services/messages';
 import type {Attachment, AttachmentKind} from '../../services/messages';
 
-const ICONS: Record<AttachmentKind, typeof Swords> = {game: Swords, position: Crown, puzzle: Puzzle, lesson: BookOpen, tournament: Trophy};
+const ICONS: Record<AttachmentKind, typeof Swords> = {
+    game: Swords, position: Crown, puzzle: Puzzle, lesson: BookOpen, tournament: Trophy, library: Library, achievement: Award,
+};
 
 /** Диаграмма позиции без взаимодействия; некорректный FEN — пустая доска не рисуется вовсе. */
 export function MiniDiagram({fen, size = 160}: { fen: string; size?: number }) {
@@ -54,6 +57,11 @@ export function AttachmentCard({attachment}: { attachment: Attachment }) {
         line = t('dm.card.puzzle', {rating: attachment.rating});
     } else if (attachment.kind === 'tournament' && attachment.size) {
         line = t('dm.card.tournament', {size: attachment.size});
+    } else if (attachment.kind === 'library' && (attachment.white || attachment.black)) {
+        line = `${t('dm.card.game', {white: attachment.white ?? '?', black: attachment.black ?? '?'})}`
+            + `${attachment.result && attachment.result !== '*' ? ` · ${attachment.result}` : ''}${attachment.year ? ` · ${attachment.year}` : ''}`;
+    } else if (attachment.kind === 'achievement') {
+        line = `${t('dm.kinds.achievement')}: ${t(`achievements.items.${attachment.ref}.name` as MessageKey)}`;
     } else if (attachment.kind === 'lesson') {
         const lesson = lessonById(attachment.ref);
         if (lesson) line = `${t('dm.kinds.lesson')}: ${localized(lesson.title, language)}`;

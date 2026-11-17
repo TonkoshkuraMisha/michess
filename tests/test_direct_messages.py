@@ -79,7 +79,7 @@ async def test_attachments_are_cards(client, token_user_1, test_user_1, test_use
     for kind, ref in (("game", "999999"), ("game", "abc"), ("position", "not a fen"),
                       ("position", "8/8/8/8/8/8/8/8 w - - 0 1"), ("lesson", "../etc"), ("tournament", "424242")):
         bad = send(kind, ref)
-        assert bad.status_code == 400 and bad.json()["detail"]["code"] == "dm_attachment_invalid", (kind, ref)
+        assert bad.status_code == 400 and bad.json()["detail"]["code"] == "attachment_invalid", (kind, ref)
     assert send("video", "1").status_code == 422
 
 

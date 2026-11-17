@@ -18,6 +18,7 @@ from src.api import (
     bots,
     chess960,
     exam,
+    feed,
     game_import,
     guess,
     ladder,
@@ -130,6 +131,7 @@ def create_app() -> FastAPI:
     app.include_router(trainers.router, prefix="/api/v1/trainers", tags=["training"])
     app.include_router(social.router, prefix="/api/v1/social", tags=["social"])
     app.include_router(messages.router, prefix="/api/v1/messages", tags=["social"])
+    app.include_router(feed.router, prefix="/api/v1/feed", tags=["social"])
     app.include_router(moderation.router, prefix="/api/v1/moderation", tags=["social"])
     app.include_router(mini_games.router, prefix="/api/v1/mini-games", tags=["trainers"])
     app.include_router(chess960.router, prefix="/api/v1/chess960", tags=["bots"])

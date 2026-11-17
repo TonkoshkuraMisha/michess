@@ -9,29 +9,23 @@
 """
 
 import logging
-import re
 from datetime import UTC, datetime
 
-import chess
 from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.errors import DomainError
-from src.models.game import Game
-from src.models.puzzle import Puzzle
 from src.models.social import Block, DirectMessage, Follow
-from src.models.tournament import Tournament
 from src.models.user import User
 from src.services import moderation
+from src.services.attachments import build_attachment, clean_text
 
 logger = logging.getLogger(__name__)
 
 POLICIES = ("all", "following", "nobody")
-ATTACHMENT_KINDS = ("game", "position", "puzzle", "lesson", "tournament")
 BODY_MAX = 1000
 PAGE = 50
 CONVERSATIONS = 50
-LESSON_ID = re.compile(r"^[A-Za-z0-9_.:-]{1,64}$")
 
 
 def pair_key(a: int, b: int) -> str:
@@ -40,62 +34,7 @@ def pair_key(a: int, b: int) -> str:
 
 
 def clean_body(text: str | None) -> str:
-    """Обрезка краёв и лишних пустых строк; переносы внутри сохраняются."""
-    lines = [line.rstrip() for line in (text or "").strip().splitlines()]
-    out: list[str] = []
-    for line in lines:
-        if line or (out and out[-1]):
-            out.append(line)
-    return "\n".join(out)[:BODY_MAX]
-
-
-async def _usernames(db: AsyncSession, ids: set[int]) -> dict[int, str]:
-    if not ids:
-        return {}
-    rows = await db.execute(select(User.id, User.username).where(User.id.in_(ids)))
-    return {uid: name for uid, name in rows.all()}
-
-
-async def build_attachment(db: AsyncSession, kind: str, ref: str) -> dict:
-    """Проверяет ссылку и снимает карточку. Ошибка — dm_attachment_invalid."""
-    ref = (ref or "").strip()
-    if kind not in ATTACHMENT_KINDS or not ref or len(ref) > 100:
-        raise DomainError("dm_attachment_invalid")
-    if kind in ("game", "puzzle", "tournament"):
-        if not ref.isdigit():
-            raise DomainError("dm_attachment_invalid")
-        key = int(ref)
-        if kind == "game":
-            game = await db.get(Game, key)
-            if game is None:
-                raise DomainError("dm_attachment_invalid")
-            names = await _usernames(db, {game.white_player_id, game.black_player_id})
-            return {"kind": kind, "ref": str(game.id), "white": names.get(game.white_player_id),
-                    "black": names.get(game.black_player_id), "result": game.result,
-                    "status": game.status.value if hasattr(game.status, "value") else str(game.status)}
-        if kind == "puzzle":
-            puzzle = await db.get(Puzzle, key)
-            if puzzle is None:
-                raise DomainError("dm_attachment_invalid")
-            return {"kind": kind, "ref": str(puzzle.id), "fen": puzzle.fen, "rating": puzzle.rating}
-        tournament = await db.get(Tournament, key)
-        if tournament is None:
-            raise DomainError("dm_attachment_invalid")
-        owner = (await _usernames(db, {tournament.owner_id})).get(tournament.owner_id)
-        return {"kind": kind, "ref": str(tournament.id), "format": tournament.format, "size": tournament.size,
-                "status": tournament.status, "owner": owner, "event_key": tournament.event_key,
-                "career_stage": tournament.career_stage}
-    if kind == "position":
-        try:
-            board = chess.Board(ref)
-        except ValueError:
-            raise DomainError("dm_attachment_invalid") from None
-        if not board.is_valid():
-            raise DomainError("dm_attachment_invalid")
-        return {"kind": kind, "ref": board.fen()}
-    if not LESSON_ID.match(ref):
-        raise DomainError("dm_attachment_invalid")
-    return {"kind": kind, "ref": ref}
+    return clean_text(text, BODY_MAX)
 
 
 async def is_blocked(db: AsyncSession, blocker_id: int, blocked_id: int) -> bool:
@@ -140,7 +79,7 @@ async def send(db: AsyncSession, sender: User, recipient: User, body: str | None
                attachment: tuple[str, str] | None) -> DirectMessage:
     await check_write(db, sender, recipient)
     text = clean_body(body)
-    card = await build_attachment(db, *attachment) if attachment else None
+    card = await build_attachment(db, *attachment, author=sender) if attachment else None
     if not text and card is None:
         raise DomainError("dm_empty")
     message = DirectMessage(pair_key=pair_key(sender.id, recipient.id), sender_id=sender.id,

@@ -19,7 +19,7 @@ import {AttachmentCard} from './AttachmentCard';
 import {ReportButton} from './ModerationPage';
 
 export const POLL_MS = 15_000;
-const KINDS: AttachmentKind[] = ['game', 'position', 'puzzle', 'lesson', 'tournament'];
+const KINDS: AttachmentKind[] = ['game', 'position', 'puzzle', 'lesson', 'tournament', 'library'];
 const POLICIES: DmPolicy[] = ['all', 'following', 'nobody'];
 
 interface Draft {
