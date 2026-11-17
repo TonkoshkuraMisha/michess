@@ -1,0 +1,294 @@
+{
+  "id": "structure-isolated-pawn",
+  "course": "strategy",
+  "order": 1,
+  "title": {
+    "en": "The isolated queen's pawn",
+    "uk": "Ізольований ферзевий пішак",
+    "ru": "Изолированная ферзевая пешка"
+  },
+  "summary": {
+    "en": "A pawn on d4 with no neighbours: active pieces and an attack for its owner, a blockade and trades for the other side.",
+    "uk": "Пішак d4 без сусідів: активні фігури й атака для власника, блокада й розміни — для суперника.",
+    "ru": "Пешка d4 без соседей: активные фигуры и атака для владельца, блокада и размены — для соперника."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "r1bq1rk1/pp2bppp/2n1p3/3n4/3P4/2NB1N2/PP3PPP/R1BQR1K1 b - - 4 10",
+      "highlights": [
+        "d4"
+      ],
+      "text": {
+        "en": "White's d4 pawn is isolated: there are no white pawns on the c- and e-files, so no pawn can ever defend it. It is both a strength and a weakness. It gives White space and two strong squares — e5 and c5 — and the open c- and e-files for the rooks. But in an endgame it is a target, and the square in front of it, d5, can never be attacked by a white pawn.",
+        "uk": "Пішак d4 у білих ізольований: на лініях c та e немає білих пішаків, тож жоден пішак його не захистить. Це і сила, і слабкість. Він дає білим простір і два сильні поля — e5 та c5 — і відкриті лінії c та e для тур. Але в ендшпілі він стає мішенню, а поле перед ним, d5, білий пішак уже ніколи не атакує.",
+        "ru": "Пешка d4 у белых изолирована: на вертикалях c и e нет белых пешек, поэтому ни одна пешка её не защитит. Это и сила, и слабость. Она даёт белым простор и два сильных поля — e5 и c5 — и открытые вертикали c и e для ладей. Но в эндшпиле она становится мишенью, а поле перед ней, d5, белая пешка уже никогда не атакует."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "r1bq1rk1/pp2bppp/2n1p3/3n4/3P4/2NB1N2/PP3PPP/R1BQR1K1 b - - 4 10",
+      "text": {
+        "en": "The plan for the side with the isolated pawn: keep the pieces and attack. The knight jumps to e5, the bishop and queen line up against h7, a rook swings along the third rank to the kingside. When the pieces are ready, the break d4–d5 opens lines at the right moment.",
+        "uk": "План сторони з ізольованим пішаком — зберегти фігури й атакувати. Кінь стрибає на e5, слон і ферзь шикуються проти h7, тура по третій горизонталі переходить на королівський фланг. Коли фігури готові, прорив d4–d5 вчасно відкриває лінії.",
+        "ru": "План стороны с изолированной пешкой — сохранить фигуры и атаковать. Конь прыгает на e5, слон и ферзь выстраиваются против h7, ладья по третьей горизонтали переходит на королевский фланг. Когда фигуры готовы, прорыв d4–d5 вовремя вскрывает линии."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "f3",
+          "to": "e5",
+          "color": "green"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "d3",
+          "to": "h7",
+          "color": "green"
+        },
+        {
+          "do": "arrow",
+          "from": "d1",
+          "to": "c2",
+          "color": "blue"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "e1",
+          "to": "e3",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "e3",
+          "to": "h3",
+          "color": "blue"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "d4",
+          "to": "d5",
+          "color": "yellow"
+        }
+      ]
+    },
+    {
+      "type": "demo",
+      "fen": "r1bq1rk1/pp2bppp/2n1p3/3n4/3P4/2NB1N2/PP3PPP/R1BQR1K1 b - - 4 10",
+      "text": {
+        "en": "The plan for the other side: blockade and simplify. A knight on d5 cannot be driven away by a pawn — it is the ideal blockader. Every exchange of minor pieces brings the endgame closer, where the isolated pawn is just weak; then the pieces turn against d4.",
+        "uk": "План другої сторони — блокада й спрощення. Коня на d5 жоден пішак не прожене — це ідеальний блокувальник. Кожен розмін легких фігур наближає ендшпіль, де ізольований пішак просто слабкий; тоді фігури беруться за d4.",
+        "ru": "План другой стороны — блокада и упрощение. Коня на d5 ни одна пешка не прогонит — это идеальный блокёр. Каждый размен лёгких фигур приближает эндшпиль, где изолированная пешка просто слаба; тогда фигуры берутся за d4."
+      },
+      "actions": [
+        {
+          "do": "highlight",
+          "squares": [
+            "d5"
+          ]
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "d5",
+          "to": "c3",
+          "color": "blue"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "d8",
+          "to": "d4",
+          "color": "red"
+        },
+        {
+          "do": "arrow",
+          "from": "c6",
+          "to": "d4",
+          "color": "red"
+        },
+        {
+          "do": "arrow",
+          "from": "e7",
+          "to": "f6",
+          "color": "red"
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "r1bq1rk1/pp2bppp/2n1p3/3n4/3P4/2NB1N2/PP3PPP/R1BQR1K1 b - - 4 10",
+      "text": {
+        "en": "Black to move. Which general plan suits Black here?",
+        "uk": "Хід чорних. Який загальний план тут пасує чорним?",
+        "ru": "Ход чёрных. Какой общий план здесь подходит чёрным?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "Trade pieces, keep the knight on d5 and later attack the d4 pawn.",
+            "uk": "Розмінювати фігури, тримати коня на d5, а згодом атакувати пішака d4.",
+            "ru": "Разменивать фигуры, держать коня на d5, а позже атаковать пешку d4."
+          },
+          "correct": true,
+          "feedback": {
+            "en": "Right: the fewer pieces, the weaker the isolated pawn.",
+            "uk": "Так: що менше фігур, то слабший ізольований пішак.",
+            "ru": "Верно: чем меньше фигур, тем слабее изолированная пешка."
+          }
+        },
+        {
+          "text": {
+            "en": "Avoid all trades and attack the white king.",
+            "uk": "Уникати будь-яких розмінів і атакувати білого короля.",
+            "ru": "Избегать любых разменов и атаковать белого короля."
+          },
+          "feedback": {
+            "en": "That is White's plan: with many pieces on the board the isolated pawn gives activity.",
+            "uk": "Це план білих: коли на дошці багато фігур, ізольований пішак дає активність.",
+            "ru": "Это план белых: когда на доске много фигур, изолированная пешка даёт активность."
+          }
+        },
+        {
+          "text": {
+            "en": "Leave d5 and let White play d4–d5.",
+            "uk": "Звільнити d5 і дати білим зіграти d4–d5.",
+            "ru": "Освободить d5 и дать белым сыграть d4–d5."
+          },
+          "feedback": {
+            "en": "The break d4–d5 is exactly what White wants: the blockade on d5 must hold.",
+            "uk": "Прорив d4–d5 — саме те, чого хочуть білі: блокада на d5 має триматися.",
+            "ru": "Прорыв d4–d5 — именно то, чего хотят белые: блокада на d5 должна держаться."
+          }
+        }
+      ]
+    }
+  ],
+  "exam": [
+    {
+      "type": "choice",
+      "fen": "r1bq1rk1/pp2bppp/2n1p3/3n4/3P4/2NB1N2/PP3PPP/R1BQR1K1 b - - 4 10",
+      "text": {
+        "en": "Which square is the best outpost for a white knight in this structure?",
+        "uk": "Яке поле — найкращий форпост для білого коня в цій структурі?",
+        "ru": "Какое поле — лучший форпост для белого коня в этой структуре?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "e5",
+            "uk": "e5",
+            "ru": "e5"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "d5",
+            "uk": "d5",
+            "ru": "d5"
+          },
+          "feedback": {
+            "en": "d5 is Black's blockade square.",
+            "uk": "d5 — поле блокади чорних.",
+            "ru": "d5 — поле блокады чёрных."
+          }
+        },
+        {
+          "text": {
+            "en": "h4",
+            "uk": "h4",
+            "ru": "h4"
+          },
+          "feedback": {
+            "en": "A knight on the rim does little here.",
+            "uk": "Кінь на краю тут мало що робить.",
+            "ru": "Конь на краю здесь мало что делает."
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "Who usually benefits from trading queens when one side has an isolated queen's pawn?",
+        "uk": "Кому зазвичай вигідний розмін ферзів, коли в однієї сторони ізольований ферзевий пішак?",
+        "ru": "Кому обычно выгоден размен ферзей, когда у одной стороны изолированная ферзевая пешка?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "The side playing against the isolated pawn.",
+            "uk": "Стороні, що грає проти ізольованого пішака.",
+            "ru": "Стороне, играющей против изолированной пешки."
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "The side with the isolated pawn.",
+            "uk": "Стороні з ізольованим пішаком.",
+            "ru": "Стороне с изолированной пешкой."
+          }
+        },
+        {
+          "text": {
+            "en": "Nobody: the structure does not depend on trades.",
+            "uk": "Нікому: структура не залежить від розмінів.",
+            "ru": "Никому: структура не зависит от разменов."
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "What is the typical pawn break for the side with the isolated d-pawn?",
+        "uk": "Який типовий прорив для сторони з ізольованим пішаком d?",
+        "ru": "Какой типичный прорыв у стороны с изолированной пешкой d?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "d4–d5",
+            "uk": "d4–d5",
+            "ru": "d4–d5"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "b2–b4",
+            "uk": "b2–b4",
+            "ru": "b2–b4"
+          }
+        },
+        {
+          "text": {
+            "en": "f2–f3",
+            "uk": "f2–f3",
+            "ru": "f2–f3"
+          }
+        }
+      ]
+    }
+  ]
+}
