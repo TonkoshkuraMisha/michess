@@ -7,7 +7,7 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import type {FormEvent, KeyboardEvent} from 'react';
 import {Link, useLocation, useNavigate, useParams} from 'react-router-dom';
-import {ArrowLeft, Ban, MessageSquare, Paperclip, Send, X} from 'lucide-react';
+import {ArrowLeft, Ban, EyeOff, MessageSquare, Paperclip, Send, X} from 'lucide-react';
 import {renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
 import {errorMessage, serverErrorMessage} from '../../services/apiErrors';
@@ -16,7 +16,7 @@ import {gameSocket} from '../../services/gameSocket';
 import {detectAttachment, messagesApi} from '../../services/messages';
 import type {AttachmentKind, Conversation, DmPolicy, DmSettings, Thread} from '../../services/messages';
 import {AttachmentCard} from './AttachmentCard';
-import {ReportButton} from './ModerationPage';
+import {FlaggedNotice, HeldNote, isTextFlagged, RulesLink, TextReportButton} from './Civility';
 
 export const POLL_MS = 15_000;
 const KINDS: AttachmentKind[] = ['game', 'position', 'puzzle', 'lesson', 'tournament', 'library'];
@@ -104,6 +104,8 @@ function ThreadView({username, initialAttach, onChanged}: {
     const [attachOpen, setAttachOpen] = useState(Boolean(initialAttach));
     const [sending, setSending] = useState(false);
     const [hasEarlier, setHasEarlier] = useState(false);
+    const [flagged, setFlagged] = useState(false);
+    const navigate = useNavigate();
     const bottom = useRef<HTMLDivElement>(null);
     // Колбэк родителя — через ref: иначе каждая его перерисовка заново запускала бы загрузку переписки.
     const changed = useRef(onChanged);
@@ -156,20 +158,29 @@ function ThreadView({username, initialAttach, onChanged}: {
         }).catch(() => undefined);
     };
 
-    const submit = (e?: FormEvent) => {
+    const submit = (e?: FormEvent, sendAnyway = false) => {
         e?.preventDefault();
         const attachment = draft && draft.ref.trim() ? {kind: draft.kind, ref: draft.ref.trim()} : null;
         if (sending || (!body.trim() && !attachment)) return;
         setSending(true);
-        messagesApi.send(username, body, attachment).then((message) => {
+        setFlagged(false);
+        messagesApi.send(username, body, attachment, sendAnyway).then((message) => {
             setThread((prev) => prev && {...prev, messages: [...prev.messages, message]});
             setBody('');
             setDraft(null);
             setAttachOpen(false);
             setError(null);
             notifyChanged();
-        }).catch((err) => setError(errorMessage(err, 'common.networkError'))).finally(() => setSending(false));
+        }).catch((err) => {
+            if (isTextFlagged(err)) setFlagged(true);
+            else setError(errorMessage(err, 'common.networkError'));
+        }).finally(() => setSending(false));
     };
+
+    const hideConversation = () => messagesApi.hide(username).then(() => {
+        notifyChanged();
+        navigate('/messages');
+    }).catch(() => undefined);
 
     const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
         if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) submit();
@@ -201,10 +212,16 @@ function ThreadView({username, initialAttach, onChanged}: {
                 <Link to={`/profile/${encodeURIComponent(thread?.username ?? username)}`} className="font-bold truncate hover:underline">
                     {thread?.username ?? username}
                 </Link>
-                <button type="button" onClick={toggleBlock} data-testid="dm-block"
-                        className="text-xs flex items-center gap-1 text-rose-300 hover:underline shrink-0">
-                    <Ban size={12}/> {t(thread?.blocked ? 'dm.unblock' : 'dm.block')}
-                </button>
+                <span className="flex items-center gap-3 shrink-0">
+                    <button type="button" onClick={() => void hideConversation()} data-testid="dm-hide"
+                            className="text-xs flex items-center gap-1 text-boxwood/80 hover:underline">
+                        <EyeOff size={12}/> {t('dm.hide')}
+                    </button>
+                    <button type="button" onClick={toggleBlock} data-testid="dm-block"
+                            className="text-xs flex items-center gap-1 text-rose-300 hover:underline">
+                        <Ban size={12}/> {t(thread?.blocked ? 'dm.unblock' : 'dm.block')}
+                    </button>
+                </span>
             </header>
             <div className="flex-1 overflow-y-auto py-2 flex flex-col gap-2 min-h-[200px]" data-testid="dm-messages">
                 {hasEarlier && (
@@ -224,8 +241,9 @@ function ThreadView({username, initialAttach, onChanged}: {
                         {m.attachment && <AttachmentCard attachment={m.attachment}/>}
                         <span className="flex items-center gap-2 text-[10px] text-boxwood/60 mt-0.5">
                             {m.created_at && new Date(m.created_at).toLocaleString(dateLocale.code, {dateStyle: 'short', timeStyle: 'short'})}
-                            {!m.mine && <ReportButton username={thread.username} messageText={m.body}/>}
+                            {!m.mine && <TextReportButton subject={`dm:${m.id}`}/>}
                         </span>
+                        {m.held && <HeldNote/>}
                     </div>
                 ))}
                 <div ref={bottom}/>
@@ -234,7 +252,8 @@ function ThreadView({username, initialAttach, onChanged}: {
             {refusal ? (
                 <p className="text-sm text-boxwood/70 border-t border-amber-900/40 pt-2" data-testid="dm-refusal">{renderUiMessage(refusal, t)}</p>
             ) : (
-                <form onSubmit={submit} className="border-t border-amber-900/40 pt-2 flex flex-col gap-2" data-testid="dm-composer">
+                <form onSubmit={(e) => submit(e)} className="border-t border-amber-900/40 pt-2 flex flex-col gap-2" data-testid="dm-composer">
+                    {flagged && <FlaggedNotice onRephrase={() => setFlagged(false)} onSendAnyway={() => submit(undefined, true)}/>}
                     {attachOpen && (
                         <div className="flex flex-wrap items-center gap-1.5 text-sm" data-testid="dm-attach">
                             <select value={draft?.kind ?? 'game'} className="bg-black/40 rounded px-1.5 py-1" data-testid="dm-attach-kind"
@@ -304,7 +323,10 @@ export function MessagesPage() {
 
     return (
         <div className="max-w-5xl mx-auto w-full px-4 py-4" data-testid="messages-page">
-            <h1 className="text-xl font-bold mb-3 flex items-center gap-2"><MessageSquare size={20}/> {t('dm.title')}</h1>
+            <div className="flex items-center justify-between gap-2 mb-3">
+                <h1 className="text-xl font-bold flex items-center gap-2"><MessageSquare size={20}/> {t('dm.title')}</h1>
+                <RulesLink/>
+            </div>
             <div className="grid md:grid-cols-[260px_1fr] gap-4 bg-[#1A120B]/80 border border-amber-900/50 rounded-lg p-3 min-h-[60vh]">
                 <aside className={username ? 'hidden md:block' : 'block'}>
                     <ConversationList items={items} active={username}/>

@@ -15,9 +15,9 @@ from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.errors import DomainError
-from src.models.social import Block, DirectMessage, Follow
+from src.models.social import Block, DirectMessage, Follow, HiddenConversation
 from src.models.user import User
-from src.services import moderation
+from src.services import civility, moderation
 from src.services.attachments import build_attachment, clean_text
 
 logger = logging.getLogger(__name__)
@@ -72,26 +72,39 @@ async def write_refusal(db: AsyncSession, sender: User, recipient: User) -> str 
 def view(message: DirectMessage, me_id: int) -> dict:
     created = message.created_at.isoformat() if message.created_at else None
     return {"id": message.id, "mine": message.sender_id == me_id, "body": message.body,
-            "attachment": message.attachment, "created_at": created, "read": message.read_at is not None}
+            "attachment": message.attachment, "created_at": created, "read": message.read_at is not None,
+            "held": message.held}
+
+
+def _seen_by(me_id: int):
+    """Придержанное фильтром видит только отправитель (таск 30.3)."""
+    return or_(DirectMessage.held.is_(False), DirectMessage.sender_id == me_id)
 
 
 async def send(db: AsyncSession, sender: User, recipient: User, body: str | None,
-               attachment: tuple[str, str] | None) -> DirectMessage:
+               attachment: tuple[str, str] | None, send_anyway: bool = False) -> DirectMessage:
     await check_write(db, sender, recipient)
     text = clean_body(body)
     card = await build_attachment(db, *attachment, author=sender) if attachment else None
     if not text and card is None:
         raise DomainError("dm_empty")
+    await civility.check_quota(db, sender, "dm")
+    held = civility.screen(text, send_anyway)
     message = DirectMessage(pair_key=pair_key(sender.id, recipient.id), sender_id=sender.id,
-                            recipient_id=recipient.id, body=text, attachment=card)
+                            recipient_id=recipient.id, body=text, attachment=card, held=held)
     db.add(message)
+    await db.flush()
+    if held:
+        await civility.hold(db, sender.id, f"dm:{message.id}", text)
     await db.commit()
     await db.refresh(message)
     return message
 
 
 async def deliver(message: DirectMessage, sender_name: str) -> None:
-    """Открытые вкладки получателя и другие вкладки отправителя."""
+    """Открытые вкладки получателя; придержанное не доставляется."""
+    if message.held:
+        return
     try:
         from src.services.connection_manager import manager
 
@@ -104,7 +117,7 @@ async def deliver(message: DirectMessage, sender_name: str) -> None:
 
 async def thread(db: AsyncSession, me: User, other: User, before_id: int | None = None) -> list[dict]:
     """Последние PAGE сообщений переписки (старые — первыми); before_id — страница раньше."""
-    query = select(DirectMessage).where(DirectMessage.pair_key == pair_key(me.id, other.id))
+    query = select(DirectMessage).where(DirectMessage.pair_key == pair_key(me.id, other.id), _seen_by(me.id))
     if before_id:
         query = query.where(DirectMessage.id < before_id)
     rows = (await db.execute(query.order_by(DirectMessage.id.desc()).limit(PAGE))).scalars().all()
@@ -114,20 +127,28 @@ async def thread(db: AsyncSession, me: User, other: User, before_id: int | None 
 async def mark_read(db: AsyncSession, me: User, other: User) -> None:
     await db.execute(update(DirectMessage).where(
         DirectMessage.pair_key == pair_key(me.id, other.id), DirectMessage.recipient_id == me.id,
-        DirectMessage.read_at.is_(None)).values(read_at=datetime.now(UTC)))
+        DirectMessage.held.is_(False), DirectMessage.read_at.is_(None)).values(read_at=datetime.now(UTC)))
     await db.commit()
 
 
+def _unread_for(me_id: int):
+    return (DirectMessage.recipient_id == me_id, DirectMessage.read_at.is_(None), DirectMessage.held.is_(False))
+
+
 async def unread_total(db: AsyncSession, me_id: int) -> int:
+    hidden = select(HiddenConversation.other_id).where(HiddenConversation.user_id == me_id,
+                                                       HiddenConversation.up_to_id >= DirectMessage.id,
+                                                       HiddenConversation.other_id == DirectMessage.sender_id)
     return await db.scalar(select(func.count()).select_from(DirectMessage).where(
-        DirectMessage.recipient_id == me_id, DirectMessage.read_at.is_(None))) or 0
+        *_unread_for(me_id), ~hidden.exists())) or 0
 
 
 async def conversations(db: AsyncSession, me: User) -> list[dict]:
-    """Собеседники: последнее сообщение, сколько непрочитанных; свежие — первыми."""
+    """Собеседники: последнее сообщение, сколько непрочитанных; свежие — первыми. Скрытые мной переписки
+    не показываются, пока собеседник не напишет снова."""
     mine = or_(DirectMessage.sender_id == me.id, DirectMessage.recipient_id == me.id)
     last_ids = (await db.execute(
-        select(func.max(DirectMessage.id)).where(mine).group_by(DirectMessage.pair_key)
+        select(func.max(DirectMessage.id)).where(mine, _seen_by(me.id)).group_by(DirectMessage.pair_key)
         .order_by(func.max(DirectMessage.id).desc()).limit(CONVERSATIONS)
     )).scalars().all()
     if not last_ids:
@@ -135,23 +156,39 @@ async def conversations(db: AsyncSession, me: User) -> list[dict]:
     lasts = (await db.execute(select(DirectMessage).where(DirectMessage.id.in_(last_ids))
                               .order_by(DirectMessage.id.desc()))).scalars().all()
     unread: dict[int, int] = {sender: count for sender, count in (await db.execute(
-        select(DirectMessage.sender_id, func.count()).where(
-            DirectMessage.recipient_id == me.id, DirectMessage.read_at.is_(None)).group_by(DirectMessage.sender_id)
+        select(DirectMessage.sender_id, func.count()).where(*_unread_for(me.id)).group_by(DirectMessage.sender_id)
     )).all()}
     others = {m.recipient_id if m.sender_id == me.id else m.sender_id for m in lasts}
     users = {u.id: u for u in (await db.execute(select(User).where(User.id.in_(others)))).scalars().all()}
     blocked = set((await db.execute(select(Block.blocked_id).where(
         Block.blocker_id == me.id, Block.blocked_id.in_(others)))).scalars().all())
+    hidden: dict[int, int] = {other: up_to for other, up_to in (await db.execute(
+        select(HiddenConversation.other_id, HiddenConversation.up_to_id).where(HiddenConversation.user_id == me.id)
+    )).all()}
     out = []
     for m in lasts:
         other_id = m.recipient_id if m.sender_id == me.id else m.sender_id
         other = users.get(other_id)
-        if other is None or other.deleted_at is not None:
+        if other is None or other.deleted_at is not None or m.id <= hidden.get(other_id, 0):
             continue
         out.append({"username": other.username, "avatar": other.avatar, "last": view(m, me.id),
                     "unread": unread.get(other_id, 0), "blocked": other_id in blocked})
     return out
 
+
+async def hide_conversation(db: AsyncSession, me: User, other: User) -> None:
+    """Скрыть переписку до нового сообщения собеседника; непрочитанное в ней считается прочитанным."""
+    last = await db.scalar(select(func.max(DirectMessage.id)).where(DirectMessage.pair_key == pair_key(me.id, other.id)))
+    if last is None:
+        return
+    row = await db.scalar(select(HiddenConversation).where(HiddenConversation.user_id == me.id,
+                                                           HiddenConversation.other_id == other.id))
+    if row is None:
+        db.add(HiddenConversation(user_id=me.id, other_id=other.id, up_to_id=last))
+    else:
+        row.up_to_id = last
+    await db.flush()
+    await mark_read(db, me, other)
 
 async def block(db: AsyncSession, me: User, other: User) -> None:
     if me.id == other.id:

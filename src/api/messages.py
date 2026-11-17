@@ -19,7 +19,8 @@ from src.services import direct_messages as dm
 router = APIRouter(dependencies=[Depends(rate_limit("messages", "RATE_LIMIT_PUZZLES"))])
 
 _CODES = {"dm_closed": status.HTTP_403_FORBIDDEN, "dm_you_blocked": status.HTTP_403_FORBIDDEN,
-          "dm_chat_banned": status.HTTP_403_FORBIDDEN}
+          "dm_chat_banned": status.HTTP_403_FORBIDDEN, "text_flagged": status.HTTP_409_CONFLICT,
+          "posting_limited": status.HTTP_429_TOO_MANY_REQUESTS}
 
 
 def _http(exc: DomainError):
@@ -34,6 +35,8 @@ class AttachmentIn(BaseModel):
 class MessageIn(BaseModel):
     body: str = Field("", max_length=dm.BODY_MAX * 2)
     attachment: AttachmentIn | None = None
+    # Фильтр оскорблений сработал, а игрок всё равно отправляет: сообщение придерживается до модератора (30.3).
+    send_anyway: bool = False
 
 
 class SettingsIn(BaseModel):
@@ -68,7 +71,7 @@ async def send_message(username: str, payload: MessageIn, db: AsyncSession = Dep
     other = await _player(db, username)
     attachment = (payload.attachment.kind, payload.attachment.ref) if payload.attachment else None
     try:
-        message = await dm.send(db, user, other, payload.body, attachment)
+        message = await dm.send(db, user, other, payload.body, attachment, payload.send_anyway)
     except DomainError as exc:
         raise _http(exc) from exc
     await dm.deliver(message, user.username)
@@ -79,6 +82,14 @@ async def send_message(username: str, payload: MessageIn, db: AsyncSession = Dep
 async def read(username: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     other = await _player(db, username)
     await dm.mark_read(db, user, other)
+    return {"unread": await dm.unread_total(db, user.id)}
+
+
+@router.post("/with/{username}/hide")
+async def hide(username: str, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Скрыть собеседника: переписка уходит из списка до его нового сообщения (без блокировки)."""
+    other = await _player(db, username)
+    await dm.hide_conversation(db, user, other)
     return {"unread": await dm.unread_total(db, user.id)}
 
 

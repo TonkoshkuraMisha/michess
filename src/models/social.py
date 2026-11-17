@@ -6,7 +6,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, func
+from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.models.base import Base
@@ -49,6 +49,8 @@ class DirectMessage(Base):
     attachment: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Придержано фильтром оскорблений (таск 30.3): видно только отправителю до решения модератора.
+    held: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
 
 class Block(Base):
@@ -75,6 +77,7 @@ class Post(Base):
     attachment: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     hidden_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    held: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
 
 class PostComment(Base):
@@ -85,6 +88,7 @@ class PostComment(Base):
     author_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True)
     body: Mapped[str] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    held: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
 
 class PostLike(Base):
@@ -95,3 +99,16 @@ class PostLike(Base):
     post_id: Mapped[int] = mapped_column(Integer, ForeignKey("posts.id", ondelete="CASCADE"), index=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class HiddenConversation(Base):
+    """«Скрыть собеседника» (таск 30.3): переписка не показывается в моём списке, пока он не напишет снова
+    (новое сообщение с id больше up_to_id). Без блокировки: писать он по-прежнему может."""
+
+    __tablename__ = "hidden_conversations"
+    __table_args__ = (UniqueConstraint("user_id", "other_id", name="uq_hidden_conversation"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    other_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    up_to_id: Mapped[int] = mapped_column(Integer)

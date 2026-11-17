@@ -7,11 +7,11 @@ import {uiMessage} from '../i18n';
 import {getToken} from './authToken';
 
 export type ReportReason = 'cheating' | 'abuse' | 'spam' | 'other';
-export type ModerationAction = 'dismiss' | 'warn' | 'chat_ban' | 'mark_cheater' | 'clear_cheater' | 'accept';
+export type ModerationAction = 'dismiss' | 'warn' | 'chat_ban' | 'mark_cheater' | 'clear_cheater' | 'accept' | 'hide' | 'release';
 
 export interface QueueItem {
     id: number;
-    kind: 'player' | 'message' | 'cheat_review' | 'appeal' | 'translation';
+    kind: 'player' | 'message' | 'cheat_review' | 'appeal' | 'translation' | 'content' | 'held';
     reason: string;
     comment: string | null;
     message_text: string | null;
@@ -60,6 +60,9 @@ export const moderationApi = {
         call<{ id: number }>('/translations', {method: 'POST', body: JSON.stringify(body)}),
     appeal: (comment: string) => call<{ id: number }>('/appeal', {method: 'POST', body: JSON.stringify({comment})}),
     queue: () => call<{ reports: QueueItem[] }>('/queue'),
+    /** Жалоба на сообщение, публикацию или комментарий (таск 30.3): subject — «dm:12», «post:5», «comment:7». */
+    reportText: (subject: string, reason: ReportReason) =>
+        call<{ id: number }>('/reports/text', {method: 'POST', body: JSON.stringify({subject, reason})}),
     resolve: (id: number, action: ModerationAction) =>
         call<{ id: number; action: string }>(`/reports/${id}/resolve`, {method: 'POST', body: JSON.stringify({action})}),
 };

@@ -19,6 +19,9 @@ const ACTIONS: Record<QueueItem['kind'], ModerationAction[]> = {
     cheat_review: ['mark_cheater', 'clear_cheater'],
     appeal: ['mark_cheater', 'clear_cheater'],
     translation: ['accept', 'dismiss'],
+    // Таск 30.3: жалоба на текст и придержанное фильтром; warn и chat_ban по тексту тоже убирают его.
+    content: ['dismiss', 'hide', 'warn', 'chat_ban'],
+    held: ['release', 'hide', 'chat_ban'],
 };
 
 /** «Пожаловаться» на игрока; с messageText — на его сообщение (личное сообщение, таск 30.1). */

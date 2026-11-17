@@ -9,6 +9,10 @@
 * Решения модератора: dismiss — отклонить; warn — предупреждение; chat_ban — отключить чат на CHAT_BAN_HOURS;
   mark_cheater — подтвердить флаг; clear_cheater — снять флаг (и вернуть доверие). Автор жалобы или апелляции получает
   уведомление «ответ на жалобу» (центр уведомлений, 17.1).
+* Таск 30.3: жалоба на конкретный текст — личное сообщение, публикацию, комментарий (kind="content", subject
+  «dm:id» / «post:id» / «comment:id», копия текста) в один шаг; придержанное фильтром — заявка kind="held".
+  Решения по тексту: hide — убрать (публикацию скрыть, сообщение и комментарий удалить), release — выпустить
+  придержанное; warn и chat_ban по тексту тоже убирают его. Все открытые заявки на тот же текст закрываются вместе.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -18,11 +22,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.errors import DomainError
 from src.models.moderation import Report
+from src.models.social import DirectMessage, Post, PostComment
 from src.models.user import User
 from src.services import notifications
 
 REASONS = ("cheating", "abuse", "spam", "other")
-ACTIONS = ("dismiss", "warn", "chat_ban", "mark_cheater", "clear_cheater", "accept")
+ACTIONS = ("dismiss", "warn", "chat_ban", "mark_cheater", "clear_cheater", "accept", "hide", "release")
+TEXT_KINDS = ("content", "held")
+SUBJECT_KINDS = ("dm", "post", "comment")
 LANGUAGES = ("en", "uk", "ru")
 CHAT_BAN_HOURS = 24
 RESTORED_TRUST = 100
@@ -111,7 +118,8 @@ async def queue(db: AsyncSession) -> list[dict]:
         select(User).where(User.id.in_({r.target_id for r in rows} | {r.reporter_id for r in rows if r.reporter_id}))
     )).scalars()}
     counts: dict[int, int] = {target: count for target, count in (await db.execute(
-        select(Report.target_id, func.count()).where(Report.kind.in_(("player", "message"))).group_by(Report.target_id)
+        select(Report.target_id, func.count()).where(Report.kind.in_(("player", "message", *TEXT_KINDS)))
+        .group_by(Report.target_id)
     )).all()}
     result = []
     for r in rows:
@@ -146,6 +154,12 @@ async def resolve(db: AsyncSession, moderator: User, report_id: int, action: str
         elif action == "clear_cheater":
             target.is_cheater = False
             target.trust_factor = max(target.trust_factor, RESTORED_TRUST)
+    if item.kind in TEXT_KINDS and item.subject:
+        await _apply_to_text(db, item.subject, action)
+        for other in (await db.execute(select(Report).where(
+                Report.subject == item.subject, Report.kind.in_(TEXT_KINDS), Report.status == "open",
+                Report.id != item.id))).scalars():
+            other.status, other.action, other.moderator_id, other.resolved_at = "resolved", action, moderator.id, _now()
     item.status, item.action, item.moderator_id, item.resolved_at = "resolved", action, moderator.id, _now()
     # Остальные открытые заявки по тому же флагу закрываются этим же решением.
     if action in ("mark_cheater", "clear_cheater"):
@@ -157,3 +171,75 @@ async def resolve(db: AsyncSession, moderator: User, report_id: int, action: str
     if item.reporter_id is not None:
         await notifications.push(db, item.reporter_id, "report_answer", {"report_id": item.id, "action": action})
     return item
+
+def _parse_subject(subject: str) -> tuple[str, int]:
+    kind, _, raw = (subject or "").partition(":")
+    if kind not in SUBJECT_KINDS or not raw.isdigit():
+        raise DomainError("report_invalid")
+    return kind, int(raw)
+
+
+async def load_text(db: AsyncSession, subject: str) -> DirectMessage | Post | PostComment:
+    kind, key = _parse_subject(subject)
+    item: DirectMessage | Post | PostComment | None
+    if kind == "dm":
+        item = await db.get(DirectMessage, key)
+    elif kind == "post":
+        item = await db.get(Post, key)
+    else:
+        item = await db.get(PostComment, key)
+    if item is None:
+        raise DomainError("report_not_found")
+    return item
+
+
+def _author(item: DirectMessage | Post | PostComment) -> int:
+    return item.sender_id if isinstance(item, DirectMessage) else item.author_id
+
+
+async def _can_see(db: AsyncSession, item: DirectMessage | Post | PostComment, user: User) -> bool:
+    if isinstance(item, DirectMessage):
+        return item.recipient_id == user.id and not item.held
+    if isinstance(item, Post):
+        return item.hidden_at is None and not item.held
+    post = await db.get(Post, item.post_id)
+    return not item.held and post is not None and post.hidden_at is None and not post.held
+
+
+async def report_text(db: AsyncSession, reporter: User, subject: str, reason: str) -> Report:
+    """Жалоба на сообщение, публикацию или комментарий в один шаг: текст копируется в заявку."""
+    if reason not in REASONS:
+        raise DomainError("report_invalid")
+    item = await load_text(db, subject)
+    author_id = _author(item)
+    if author_id == reporter.id:
+        raise DomainError("report_self")
+    if not await _can_see(db, item, reporter):
+        raise DomainError("report_not_found")
+    kind, key = _parse_subject(subject)
+    normalized = f"{kind}:{key}"
+    exists = await db.scalar(select(Report.id).where(
+        Report.reporter_id == reporter.id, Report.subject == normalized, Report.status == "open"))
+    if exists is not None:
+        raise DomainError("report_duplicate")
+    report = Report(kind="content", reporter_id=reporter.id, target_id=author_id, reason=reason, subject=normalized,
+                    message_text=(item.body or "")[:300] or None)
+    db.add(report)
+    await db.commit()
+    await db.refresh(report)
+    return report
+
+
+async def _apply_to_text(db: AsyncSession, subject: str, action: str) -> None:
+    try:
+        item = await load_text(db, subject)
+    except DomainError:
+        return  # текст уже удалён автором — решение касается только игрока
+    if action == "release":
+        item.held = False
+    elif action in ("hide", "warn", "chat_ban"):
+        if isinstance(item, Post):
+            item.hidden_at = _now()
+            item.held = False
+        else:
+            await db.delete(item)

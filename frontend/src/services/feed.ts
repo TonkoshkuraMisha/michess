@@ -19,6 +19,7 @@ export interface Post {
     comments: number;
     mine: boolean;
     hidden: boolean;
+    held?: boolean;
 }
 
 export interface PostComment {
@@ -28,6 +29,7 @@ export interface PostComment {
     created_at: string | null;
     mine: boolean;
     can_delete: boolean;
+    held?: boolean;
 }
 
 export interface FeedPage {
@@ -58,12 +60,12 @@ const before = (id?: number) => (id ? `?before_id=${id}` : '');
 export const feedApi = {
     following: (beforeId?: number) => call<FeedPage>(before(beforeId)),
     ofUser: (name: string, beforeId?: number) => call<FeedPage>(`/user/${encodeURIComponent(name)}${before(beforeId)}`),
-    create: (body: string, attachment?: { kind: AttachmentKind; ref: string } | null) =>
-        call<Post>('', {method: 'POST', body: JSON.stringify({body, attachment: attachment ?? null})}),
+    create: (body: string, attachment?: { kind: AttachmentKind; ref: string } | null, sendAnyway = false) =>
+        call<Post>('', {method: 'POST', body: JSON.stringify({body, attachment: attachment ?? null, send_anyway: sendAnyway})}),
     get: (id: number) => call<{ post: Post; comments: PostComment[] }>(`/posts/${id}`),
     remove: (id: number) => call<{ deleted: boolean }>(`/posts/${id}`, {method: 'DELETE'}),
     like: (id: number, liked: boolean) => call<Post>(`/posts/${id}/like`, {method: liked ? 'POST' : 'DELETE'}),
-    comment: (id: number, body: string) =>
-        call<PostComment>(`/posts/${id}/comments`, {method: 'POST', body: JSON.stringify({body})}),
+    comment: (id: number, body: string, sendAnyway = false) =>
+        call<PostComment>(`/posts/${id}/comments`, {method: 'POST', body: JSON.stringify({body, send_anyway: sendAnyway})}),
     removeComment: (id: number) => call<{ deleted: boolean }>(`/comments/${id}`, {method: 'DELETE'}),
 };

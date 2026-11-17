@@ -71,7 +71,7 @@ describe('лента', () => {
         expect(screen.getByTestId('feed-attach-kind')).toHaveValue('library');
         await act(async () => fireEvent.click(screen.getByTestId('feed-publish')));
         const sent = fetchMock.mock.calls.find(([u, i]) => String(u).endsWith('/api/v1/feed') && i?.method === 'POST');
-        expect(JSON.parse(String(sent?.[1]?.body))).toEqual({body: 'Бессмертная!', attachment: {kind: 'library', ref: '5'}});
+        expect(JSON.parse(String(sent?.[1]?.body))).toEqual({body: 'Бессмертная!', attachment: {kind: 'library', ref: '5'}, send_anyway: false});
         const cards = await screen.findAllByTestId('feed-post');
         expect(cards[0]).toHaveTextContent('Бессмертная!');
         expect(cards[0]).toHaveTextContent('Anderssen — Kieseritzky · 1-0 · 1851');

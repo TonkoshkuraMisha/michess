@@ -16,6 +16,7 @@ import type {Post, PostComment} from '../../services/feed';
 import {detectAttachment} from '../../services/messages';
 import type {AttachmentKind} from '../../services/messages';
 import {AttachmentCard} from './AttachmentCard';
+import {FlaggedNotice, HeldNote, isTextFlagged, RulesLink, TextReportButton} from './Civility';
 
 const KINDS: AttachmentKind[] = ['game', 'position', 'puzzle', 'lesson', 'tournament', 'library'];
 
@@ -35,23 +36,29 @@ export function Composer({initial, onPosted}: { initial: Draft | null; onPosted:
     const [attachOpen, setAttachOpen] = useState(Boolean(initial));
     const [sending, setSending] = useState(false);
     const [error, setError] = useState<UiMessage | null>(null);
+    const [flagged, setFlagged] = useState(false);
 
-    const submit = (e: FormEvent) => {
-        e.preventDefault();
+    const submit = (e?: FormEvent, sendAnyway = false) => {
+        e?.preventDefault();
         const attachment = draft && draft.ref.trim() ? {kind: draft.kind, ref: draft.ref.trim()} : null;
         if (sending || (!body.trim() && !attachment)) return;
         setSending(true);
-        feedApi.create(body, attachment).then((post) => {
+        setFlagged(false);
+        feedApi.create(body, attachment, sendAnyway).then((post) => {
             setBody('');
             setDraft(null);
             setAttachOpen(false);
             setError(null);
             onPosted(post);
-        }).catch((err) => setError(errorMessage(err, 'common.networkError'))).finally(() => setSending(false));
+        }).catch((err) => {
+            if (isTextFlagged(err)) setFlagged(true);
+            else setError(errorMessage(err, 'common.networkError'));
+        }).finally(() => setSending(false));
     };
 
     return (
-        <form onSubmit={submit} className="flex flex-col gap-2 bg-black/20 rounded-md p-2 border border-amber-900/40" data-testid="feed-composer">
+        <form onSubmit={(e) => submit(e)} className="flex flex-col gap-2 bg-black/20 rounded-md p-2 border border-amber-900/40" data-testid="feed-composer">
+            {flagged && <FlaggedNotice onRephrase={() => setFlagged(false)} onSendAnyway={() => submit(undefined, true)}/>}
             <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} maxLength={2000} placeholder={t('feed.placeholder')}
                       data-testid="feed-input" className="w-full bg-black/40 rounded px-2 py-1 text-sm resize-y"/>
             {attachOpen && (
@@ -117,6 +124,7 @@ export function PostCard({post, onChange, onRemoved, linkToPost = true}: {
                 <span className="text-xs text-boxwood/60 shrink-0">{when(post.created_at, dateLocale.code)}</span>
             </header>
             {post.hidden && <p className="text-xs text-rose-300" data-testid="feed-hidden">{t('feed.hidden')}</p>}
+            {post.held && <HeldNote/>}
             {post.body && <p className="whitespace-pre-wrap break-words text-sm">{post.body}</p>}
             {post.attachment && <AttachmentCard attachment={post.attachment}/>}
             <footer className="flex items-center gap-4 text-sm text-boxwood/80 mt-1">
@@ -133,6 +141,7 @@ export function PostCard({post, onChange, onRemoved, linkToPost = true}: {
                 ) : (
                     <span className="flex items-center gap-1"><MessageCircle size={15}/> {t('feed.comments', {count: post.comments})}</span>
                 )}
+                {!post.mine && loggedIn && <span className="ml-auto"><TextReportButton subject={`post:${post.id}`}/></span>}
                 {post.mine && (
                     <button type="button" onClick={remove} className="ml-auto flex items-center gap-1 text-xs text-rose-300 hover:underline"
                             data-testid="feed-delete">
@@ -204,7 +213,7 @@ export function FeedPage() {
     return (
         <div className="max-w-2xl mx-auto w-full px-4 py-4 flex flex-col gap-3" data-testid="feed-page">
             <h1 className="text-xl font-bold flex items-center gap-2"><Newspaper size={20}/> {t('feed.title')}</h1>
-            <p className="text-sm text-boxwood/70">{t('feed.intro')}</p>
+            <p className="text-sm text-boxwood/70 flex flex-wrap items-center justify-between gap-2">{t('feed.intro')} <RulesLink/></p>
             <Composer initial={initial} onPosted={(post) => {
                 list.prepend(post);
                 if (initial) navigate(location.pathname, {replace: true, state: null});
@@ -222,6 +231,7 @@ export function PostPage() {
     const [comments, setComments] = useState<PostComment[]>([]);
     const [error, setError] = useState<UiMessage | null>(null);
     const [body, setBody] = useState('');
+    const [flagged, setFlagged] = useState(false);
     const id = Number(postId);
 
     useEffect(() => {
@@ -231,15 +241,19 @@ export function PostPage() {
         }).catch((err) => setError(errorMessage(err, 'common.networkError')));
     }, [id]);
 
-    const send = (e: FormEvent) => {
-        e.preventDefault();
+    const send = (e?: FormEvent, sendAnyway = false) => {
+        e?.preventDefault();
         if (!body.trim()) return;
-        feedApi.comment(id, body).then((c) => {
+        setFlagged(false);
+        feedApi.comment(id, body, sendAnyway).then((c) => {
             setComments((prev) => [...prev, c]);
-            setPost((prev) => prev && {...prev, comments: prev.comments + 1});
+            if (!c.held) setPost((prev) => prev && {...prev, comments: prev.comments + 1});
             setBody('');
             setError(null);
-        }).catch((err) => setError(errorMessage(err, 'common.networkError')));
+        }).catch((err) => {
+            if (isTextFlagged(err)) setFlagged(true);
+            else setError(errorMessage(err, 'common.networkError'));
+        });
     };
 
     const removeComment = (commentId: number) => feedApi.removeComment(commentId).then(() => {
@@ -267,10 +281,13 @@ export function PostPage() {
                                 </span>
                             </div>
                             <p className="whitespace-pre-wrap break-words">{c.body}</p>
+                            {c.held && <HeldNote/>}
+                            {!c.mine && getToken() && <TextReportButton subject={`comment:${c.id}`}/>}
                         </div>
                     ))}
+                    {flagged && <FlaggedNotice onRephrase={() => setFlagged(false)} onSendAnyway={() => send(undefined, true)}/>}
                     {getToken() && (
-                        <form onSubmit={send} className="flex items-end gap-2" data-testid="comment-form">
+                        <form onSubmit={(e) => send(e)} className="flex items-end gap-2" data-testid="comment-form">
                             <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} maxLength={500}
                                       placeholder={t('feed.commentPlaceholder')} data-testid="comment-input"
                                       className="flex-1 min-w-0 bg-black/40 rounded px-2 py-1 text-sm resize-none"/>
