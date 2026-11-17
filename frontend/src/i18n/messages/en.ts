@@ -3292,6 +3292,12 @@ export const en = {
                 story: 'The Third All-Russian Masters\' Tournament was played in the rooms of the Kiev Chess Society at 29 Khreshchatyk. Mikhail Chigorin won it, and right behind him came a new generation: Ossip Bernstein was second, Akiba Rubinstein fifth. Six of the nineteen players were from Kyiv.',
                 real: 'Winner: Mikhail Chigorin with 15 points from 18 games, ahead of Ossip Bernstein (14) and Vladimir Yurevich (13½).',
             },
+            st_petersburg_1914_final: {
+                title: 'St. Petersburg 1914: the final',
+                place: 'St. Petersburg, 1914',
+                story: 'The final of the five winners of the preliminary tournament: Lasker, Capablanca, Alekhine, Tarrasch and Marshall play each other twice. In history the preliminary scores carried over, so Capablanca started with a lead of a point and a half — but Lasker scored 7 out of 8 and overtook him by half a point. Here everyone starts from zero, and you are the sixth player.',
+                real: 'The final: Lasker 7 out of 8, Capablanca 5, Alekhine 4, Tarrasch and Marshall 2 each. With the preliminary scores: Lasker 13½, Capablanca 13.',
+            },
         },
     },
     tournaments: {

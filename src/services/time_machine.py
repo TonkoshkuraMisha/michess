@@ -357,6 +357,11 @@ _EVENTS: tuple[Event, ...] = (
         ("rabinovich_abram", 8.5), ("schiffers", 8.5), ("kulomzin", 8), ("kalinsky", 7.5), ("dus_chotimirsky", 7),
         ("benko", 6.5), ("nikolaev", 4.5), ("stamm", 2), ("breev", 0),
     )),
+    # Финал пяти победителей предварительного турнира в два круга. В истории очки предварительного турнира шли в
+    # зачёт; здесь — очки только финала. Победил Ласкер.
+    Event("st_petersburg_1914_final", 1914, "round_robin", _table(
+        ("lasker", 7), ("capablanca", 5), ("alekhine", 4), ("tarrasch", 2), ("marshall", 2),
+    ), cycles=2),
 )
 # Лента — по годам; турниры одного года — по ключу.
 EVENTS: tuple[Event, ...] = tuple(sorted(_EVENTS, key=lambda event: (event.year, event.key)))
