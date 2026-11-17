@@ -104,7 +104,10 @@ describe('жалоба и скрытие', () => {
         render(<MemoryRouter><CommunityRulesPage/></MemoryRouter>);
         const page = screen.getByTestId('rules-page');
         expect(page).toHaveTextContent('Правила общения');
-        expect(page).toHaveTextContent('Критикуйте ходы, а не игроков.');
+        // Либеральная редакция (решение владельца 17.11.2026): запреты защищают человека, а не тон.
+        expect(page).toHaveTextContent('Здесь говорят свободно.');
+        expect(page).toHaveTextContent('Мы не оцениваем вкус и тон.');
+        expect(page).toHaveTextContent('Нельзя травить человека');
         expect(screen.getAllByRole('listitem')).toHaveLength(6);
     });
 });
