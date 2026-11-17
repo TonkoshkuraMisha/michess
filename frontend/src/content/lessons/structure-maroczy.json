@@ -1,0 +1,227 @@
+{
+  "id": "structure-maroczy",
+  "course": "strategy",
+  "order": 8,
+  "title": {
+    "en": "The Maróczy bind",
+    "uk": "Зажим Мароці",
+    "ru": "Зажим Мароци"
+  },
+  "summary": {
+    "en": "Pawns on c4 and e4 clamp d5. White keeps the bind; Black trades pieces and prepares ...b5 or ...d5.",
+    "uk": "Пішаки c4 і e4 затискають d5. Білі тримають зажим; чорні розмінюють фігури й готують …b5 чи …d5.",
+    "ru": "Пешки c4 и e4 зажимают d5. Белые держат зажим; чёрные разменивают фигуры и готовят …b5 или …d5."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "r1bq1rk1/pp2ppbp/2np1np1/8/2PNP3/2N1B3/PP2BPPP/R2Q1RK1 b - - 1 9",
+      "highlights": [
+        "c4",
+        "e4",
+        "d5",
+        "b5"
+      ],
+      "text": {
+        "en": "White's pawns on c4 and e4 control d5 and b5 — the squares Black needs for the freeing breaks ...d5 and ...b5. Black has no weaknesses but less space. Such positions arise in the Sicilian with ...g6; the bind is named after Géza Maróczy.",
+        "uk": "Пішаки білих c4 і e4 контролюють d5 і b5 — поля, потрібні чорним для звільнювальних проривів …d5 та …b5. У чорних немає слабкостей, але менше простору. Такі позиції виникають у сицилійському захисті з …g6; зажим названо на честь Ґези Мароці.",
+        "ru": "Пешки белых c4 и e4 контролируют d5 и b5 — поля, нужные чёрным для освобождающих прорывов …d5 и …b5. У чёрных нет слабостей, но меньше простора. Такие позиции возникают в сицилианской защите с …g6; зажим назван в честь Гезы Мароци."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "r1bq1rk1/pp2ppbp/2np1np1/8/2PNP3/2N1B3/PP2BPPP/R2Q1RK1 b - - 1 9",
+      "text": {
+        "en": "White's plan: keep the bind and avoid exchanges. f3 or Qd2 supports the centre, b3 protects c4, rooks go to c1 and d1. Every trade gives Black more room, so White keeps the pieces and slowly expands.",
+        "uk": "План білих: тримати зажим і уникати розмінів. f3 чи Qd2 підтримують центр, b3 захищає c4, тури йдуть на c1 і d1. Кожен розмін дає чорним більше місця, тож білі зберігають фігури й повільно наступають.",
+        "ru": "План белых: держать зажим и избегать разменов. f3 или Qd2 поддерживают центр, b3 защищает c4, ладьи идут на c1 и d1. Каждый размен даёт чёрным больше места, поэтому белые сохраняют фигуры и медленно наступают."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "f2",
+          "to": "f3",
+          "color": "green"
+        },
+        {
+          "do": "arrow",
+          "from": "b2",
+          "to": "b3",
+          "color": "green"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "a1",
+          "to": "c1",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "d1",
+          "to": "d2",
+          "color": "blue"
+        }
+      ]
+    },
+    {
+      "type": "demo",
+      "fen": "r1bq1rk1/pp2ppbp/2np1np1/8/2PNP3/2N1B3/PP2BPPP/R2Q1RK1 b - - 1 9",
+      "text": {
+        "en": "Black's plan: trade pieces and hit the c4 pawn. ...Nxd4 and ...Be6 remove the central knight and attack c4; ...Qa5, ...a5 and ...Nd7–c5 add pressure on the queenside. Only when the pieces are ready does Black try ...b5 or ...d5.",
+        "uk": "План чорних: розмінювати фігури й бити по пішаку c4. …Nxd4 і …Be6 прибирають центрального коня й атакують c4; …Qa5, …a5 і …Nd7–c5 посилюють тиск на ферзевому фланзі. Лише коли фігури готові, чорні пробують …b5 чи …d5.",
+        "ru": "План чёрных: разменивать фигуры и бить по пешке c4. …Nxd4 и …Be6 убирают центрального коня и атакуют c4; …Qa5, …a5 и …Nd7–c5 усиливают давление на ферзевом фланге. Только когда фигуры готовы, чёрные пробуют …b5 или …d5."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "c6",
+          "to": "d4",
+          "color": "red"
+        },
+        {
+          "do": "arrow",
+          "from": "c8",
+          "to": "e6",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "e6",
+          "to": "c4",
+          "color": "red"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "d8",
+          "to": "a5",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "f6",
+          "to": "d7",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "d7",
+          "to": "c5",
+          "color": "blue"
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "r1bq1rk1/pp2ppbp/2np1np1/8/2PNP3/2N1B3/PP2BPPP/R2Q1RK1 b - - 1 9",
+      "text": {
+        "en": "Who should avoid piece exchanges in the Maróczy bind?",
+        "uk": "Кому слід уникати розмінів фігур у зажимі Мароці?",
+        "ru": "Кому следует избегать разменов фигур в зажиме Мароци?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "White: trades free the cramped side.",
+            "uk": "Білим: розміни звільняють стиснуту сторону.",
+            "ru": "Белым: размены освобождают стеснённую сторону."
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "Black: trades lose the endgame.",
+            "uk": "Чорним: розміни програють ендшпіль.",
+            "ru": "Чёрным: размены проигрывают эндшпиль."
+          },
+          "feedback": {
+            "en": "The opposite: Black has no weaknesses and welcomes simpler positions.",
+            "uk": "Навпаки: у чорних немає слабкостей, і спрощення їм на руку.",
+            "ru": "Наоборот: у чёрных нет слабостей, и упрощения им на руку."
+          }
+        },
+        {
+          "text": {
+            "en": "Both equally.",
+            "uk": "Обом однаково.",
+            "ru": "Обоим одинаково."
+          }
+        }
+      ]
+    }
+  ],
+  "exam": [
+    {
+      "type": "choice",
+      "fen": "r1bq1rk1/pp2ppbp/2np1np1/8/2PNP3/2N1B3/PP2BPPP/R2Q1RK1 b - - 1 9",
+      "text": {
+        "en": "Which squares does the bind take away from Black?",
+        "uk": "Які поля зажим забирає в чорних?",
+        "ru": "Какие поля зажим отнимает у чёрных?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "d5 and b5",
+            "uk": "d5 і b5",
+            "ru": "d5 и b5"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "e5 and f5",
+            "uk": "e5 і f5",
+            "ru": "e5 и f5"
+          }
+        },
+        {
+          "text": {
+            "en": "c5 and a5",
+            "uk": "c5 і a5",
+            "ru": "c5 и a5"
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "Which pawn is the usual target of Black's queenside play?",
+        "uk": "Який пішак — звична мішень гри чорних на ферзевому фланзі?",
+        "ru": "Какая пешка — обычная мишень игры чёрных на ферзевом фланге?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "c4",
+            "uk": "c4",
+            "ru": "c4"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "a2",
+            "uk": "a2",
+            "ru": "a2"
+          }
+        },
+        {
+          "text": {
+            "en": "g2",
+            "uk": "g2",
+            "ru": "g2"
+          }
+        }
+      ]
+    }
+  ]
+}

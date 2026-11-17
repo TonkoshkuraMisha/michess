@@ -1,0 +1,189 @@
+{
+  "id": "structure-french-exchange",
+  "course": "strategy",
+  "order": 6,
+  "title": {
+    "en": "The exchange French: a fight for the e-file",
+    "uk": "Розмінна французька: боротьба за лінію e",
+    "ru": "Разменная французская: борьба за вертикаль e"
+  },
+  "summary": {
+    "en": "Symmetrical pawns, one open file. Whoever controls the e-file and the e4/e5 squares sets the tone.",
+    "uk": "Симетричні пішаки, одна відкрита лінія. Хто контролює лінію e й поля e4/e5 — той задає тон.",
+    "ru": "Симметричные пешки, одна открытая вертикаль. Кто контролирует вертикаль e и поля e4/e5 — тот задаёт тон."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "rnbq1rk1/pp3ppp/2pb1n2/3p4/3P4/2PB1N2/PP3PPP/RNBQ1RK1 w - - 0 8",
+      "highlights": [
+        "e4",
+        "e5"
+      ],
+      "text": {
+        "en": "d4 against d5, no e-pawns: the structure is symmetrical and solid. The only open file is e, and the key squares are e5 (for White's pieces) and e4 (for Black's). With symmetry, small things decide: the rooks on the e-file and a knight that reaches its outpost first.",
+        "uk": "d4 проти d5, пішаків e немає: структура симетрична й міцна. Єдина відкрита лінія — e, а ключові поля — e5 (для фігур білих) і e4 (для фігур чорних). За симетрії вирішують дрібниці: тури на лінії e і кінь, що першим стане на форпост.",
+        "ru": "d4 против d5, пешек e нет: структура симметрична и прочна. Единственная открытая вертикаль — e, а ключевые поля — e5 (для фигур белых) и e4 (для фигур чёрных). При симметрии решают мелочи: ладьи на вертикали e и конь, первым вставший на форпост."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "rnbq1rk1/pp3ppp/2pb1n2/3p4/3P4/2PB1N2/PP3PPP/RNBQ1RK1 w - - 0 8",
+      "text": {
+        "en": "Plans for both sides look alike: put a rook on e1 (or e8), bring a knight to e5 (or e4), and double the rooks on the open file. A side that wants more can change the structure: c4 (or ...c5) creates an isolated pawn and an unbalanced game.",
+        "uk": "Плани обох сторін схожі: тура на e1 (або e8), кінь на e5 (або e4) і здвоєння тур на відкритій лінії. Хто хоче більшого, може змінити структуру: c4 (або …c5) створює ізольованого пішака й гостру нерівновагу.",
+        "ru": "Планы обеих сторон похожи: ладья на e1 (или e8), конь на e5 (или e4) и сдвоение ладей на открытой вертикали. Кто хочет большего, может изменить структуру: c4 (или …c5) создаёт изолированную пешку и острое неравновесие."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "f1",
+          "to": "e1",
+          "color": "green"
+        },
+        {
+          "do": "arrow",
+          "from": "f3",
+          "to": "e5",
+          "color": "green"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "f8",
+          "to": "e8",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "f6",
+          "to": "e4",
+          "color": "blue"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "c3",
+          "to": "c4",
+          "color": "yellow"
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "rnbq1rk1/pp3ppp/2pb1n2/3p4/3P4/2PB1N2/PP3PPP/RNBQ1RK1 w - - 0 8",
+      "text": {
+        "en": "What is the most natural first goal for both sides here?",
+        "uk": "Яка найприродніша перша мета для обох сторін тут?",
+        "ru": "Какая самая естественная первая цель для обеих сторон здесь?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "Control the open e-file with the rooks.",
+            "uk": "Контролювати відкриту лінію e турами.",
+            "ru": "Контролировать открытую вертикаль e ладьями."
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "Push the g- and h-pawns.",
+            "uk": "Просувати пішаків g і h.",
+            "ru": "Продвигать пешки g и h."
+          },
+          "feedback": {
+            "en": "Without a reason it only weakens the king.",
+            "uk": "Без причини це лише послаблює короля.",
+            "ru": "Без причины это только ослабляет короля."
+          }
+        },
+        {
+          "text": {
+            "en": "Trade all the pawns on the queenside.",
+            "uk": "Розміняти всіх пішаків на ферзевому фланзі.",
+            "ru": "Разменять все пешки на ферзевом фланге."
+          },
+          "feedback": {
+            "en": "The queenside is closed and not the point.",
+            "uk": "Ферзевий фланг закритий і тут не головний.",
+            "ru": "Ферзевый фланг закрыт и здесь не главный."
+          }
+        }
+      ]
+    }
+  ],
+  "exam": [
+    {
+      "type": "choice",
+      "fen": "rnbq1rk1/pp3ppp/2pb1n2/3p4/3P4/2PB1N2/PP3PPP/RNBQ1RK1 w - - 0 8",
+      "text": {
+        "en": "Which square is the natural outpost for a white knight?",
+        "uk": "Яке поле — природний форпост білого коня?",
+        "ru": "Какое поле — естественный форпост белого коня?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "e5",
+            "uk": "e5",
+            "ru": "e5"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "d5",
+            "uk": "d5",
+            "ru": "d5"
+          }
+        },
+        {
+          "text": {
+            "en": "g5",
+            "uk": "g5",
+            "ru": "g5"
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "Which move changes the symmetrical structure into an isolated-pawn position for White?",
+        "uk": "Який хід перетворює симетричну структуру на позицію з ізольованим пішаком білих?",
+        "ru": "Какой ход превращает симметричную структуру в позицию с изолированной пешкой белых?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "c3–c4 and an exchange on d5",
+            "uk": "c3–c4 і розмін на d5",
+            "ru": "c3–c4 и размен на d5"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "h2–h3",
+            "uk": "h2–h3",
+            "ru": "h2–h3"
+          }
+        },
+        {
+          "text": {
+            "en": "a2–a4",
+            "uk": "a2–a4",
+            "ru": "a2–a4"
+          }
+        }
+      ]
+    }
+  ]
+}
