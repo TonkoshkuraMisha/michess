@@ -38,7 +38,8 @@ async def history(db_session, test_user_1, test_user_2):
     game = Game(white_player_id=uid, black_player_id=test_user_2.id, status=GameStatus.COMPLETED, result="0-1")
     db_session.add(game)
     await db_session.flush()
-    for ply, (themes, done) in enumerate((("fork pin", False), ("fork", True), ("unknown_theme", False)), start=10):
+    # Темы личной задачи хранятся так, как их пишет personal_puzzles.extract_for_game: коды через запятую.
+    for ply, (themes, done) in enumerate((("fork,pin", False), ("fork", True), ("unknown_theme", False)), start=10):
         db_session.add(PersonalPuzzle(user_id=uid, game_id=game.id, ply=ply, fen="x", solution="a1a2", played="a1b1",
                                       cp_loss=300, themes=themes, done=done))
     db_session.add_all([TrainerResult(user_id=uid, trainer="coord_find", level=1, score=s, time_ms=1000) for s in (5, 9)])
