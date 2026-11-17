@@ -736,6 +736,50 @@ describe('партия турнира', () => {
     });
 });
 
+describe('партия с мастером прошлого из каталога (таск 28.5)', () => {
+    it('играет характером мастера, на доске — его имя, в архив — имя из PGN', async () => {
+        vi.spyOn(window, 'confirm').mockReturnValue(true);
+        const fetchMock = mockFetchRouter({
+            '/profile/me': () => ({id: 1, username: 'TestPlayer', blitz_rating: 1500}),
+            '/profile/matchmaking/queue': () => [],
+            '/profile/games/live': () => [],
+            '/profile/games/my-active': () => ({active: false}),
+            '/bots/personalities': () => [],
+            '/bots/catalog': () => ({calibration: null, historical: [], archetypes: []}),
+            '/bots/custom-move': () => ({...BOT_MOVE_DEFAULT, uci: 'e7e5', san: 'e5'}),
+            '/bots/save-game': () => ({game_id: 1003, status: 'finished', result: '0-1', tournament_id: null}),
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        const guestGame = {
+            name: 'Пауль Керес', savedName: 'Keres, Paul', config: {...DEFAULT_CONFIG, target_elo: 2400}, color: 'white',
+        };
+        render(
+            <MemoryRouter initialEntries={[{pathname: '/', state: {guestGame}}]}>
+                <Chessboard/>
+            </MemoryRouter>,
+        );
+
+        await waitFor(() => expect(screen.getAllByText('Пауль Керес').length).toBeGreaterThan(0));
+        clickSquare('e2');
+        clickSquare('e4');
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(200);
+        });
+        const calls = fetchMock.mock.calls as unknown as [string, RequestInit][];
+        const moveCall = calls.find(([url]) => String(url).includes('/bots/custom-move'));
+        expect(JSON.parse(String(moveCall?.[1].body)).config.target_elo).toBe(2400);
+
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', {name: /Сдаться/}));
+        });
+        const saveCall = calls.find(([url]) => String(url).includes('/bots/save-game'));
+        // Сервер узнаёт мастера по имени из PGN; партия — вне турнира.
+        const saved = JSON.parse(String(saveCall?.[1].body));
+        expect(saved).toMatchObject({bot_id: 'custom', personality_name: 'Keres, Paul', player_color: 'white'});
+        expect(saved.tournament_game_id).toBeUndefined();
+    });
+});
+
 describe('пометки правой кнопкой (таск B.1)', () => {
     function rightDrag(from: string, to: string, init: Record<string, unknown> = {}) {
         document.elementsFromPoint = () => [squareEl(from)];

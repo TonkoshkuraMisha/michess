@@ -44,6 +44,7 @@ import {TrainerPage, TrainersPage} from './components/trainers/TrainersPage';
 import {NotificationBell, PlayerSearch} from './components/social/SocialHeader';
 import {TournamentView, TournamentsPage} from './components/tournaments/TournamentsPage';
 import {TimeMachinePage} from './components/tournaments/TimeMachine';
+import {MastersPage} from './components/tournaments/MastersPage';
 import {CHAMPIONS_LIST} from './config/champions';
 import {API_BASE_URL} from './config/api';
 import {gameSocket} from './services/gameSocket';
@@ -410,6 +411,12 @@ export default function App() {
                                             </div>
                                         </Link>
                                     ))}
+                                    {/* Каталог мастеров прошлого (таск 28.5): участники исторических турниров. */}
+                                    <Link to="/masters" onClick={() => setIsChampionsMenuOpen(false)} data-testid="nav-masters"
+                                          className="flex flex-col gap-0.5 px-4 py-2.5 hover:bg-black/40 transition outline-none">
+                                        <span className="font-bold text-amber-200 text-[15px]">{t('masters.title')}</span>
+                                        <span className="text-xs text-boxwood/70">{t('masters.teaser')}</span>
+                                    </Link>
                                 </div>
                             )}
                         </div>
@@ -706,6 +713,7 @@ export default function App() {
                     <Route path="/tournaments" element={<TournamentsPage/>}/>
                     <Route path="/tournaments/:tournamentId" element={<TournamentView/>}/>
                     <Route path="/time-machine" element={<TimeMachinePage/>}/>
+                    <Route path="/masters" element={<MastersPage/>}/>
                     <Route path="/profile/:targetUsername" element={<Profile/>}/>
                     <Route path="/game/:gameId" element={<GameViewer/>}/>
                     <Route path="/import" element={<ImportPage/>}/>

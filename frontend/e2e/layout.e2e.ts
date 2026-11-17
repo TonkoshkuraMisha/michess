@@ -21,7 +21,7 @@ const ROUTES = [
     '/', '/puzzles', '/learn', '/learn/basics', '/learn/classics', '/learn/endgames', '/learn/mates', '/train', '/tools',
     '/watch', '/guess', '/train/games', '/tournaments', '/arenas', '/teams', '/study', '/leaderboard', '/about', '/settings', '/moderation',
     '/learn/course', '/library', '/programs', '/exam', '/workout', '/repertoire', '/play/960', '/train/structure_quiz',
-    '/import', '/transparency', '/time-machine', 'PROFILE',
+    '/import', '/transparency', '/time-machine', '/masters', 'PROFILE',
 ];
 
 interface Problem {

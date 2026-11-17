@@ -27,6 +27,7 @@ import {ALL_TIME_CONTROLS, DEFAULT_TIME_CONTROL, TIME_CONTROLS, timeControlCateg
 import type {TournamentGameStart} from '../services/tournaments';
 import {pickFirstOpponent} from '../services/onboarding';
 import type {FirstGameStart} from '../services/onboarding';
+import type {MasterGameStart} from '../services/masters';
 import type {TimeControlOption, TimeControlGroup} from '../config/timeControls';
 import {
     FILES, RANKS, MIN_BOARD_SIZE, MAX_BOARD_SIZE,
@@ -1139,6 +1140,16 @@ export default function Chessboard() {
         setTournamentLinkId(pendingTournament.tournamentId);
         setPendingTournament(null);
     }, [pendingTournament, effectiveWhiteBaseMinutes, effectiveIncSeconds]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Партия с мастером прошлого из каталога (таск 28.5): тот же характер, что в «Машине времени», но вне турнира.
+    // На доске — имя на языке игрока, в архив партия уходит под именем из PGN.
+    const guestGame = (routeLocation.state as { guestGame?: MasterGameStart } | null)?.guestGame;
+    useEffect(() => {
+        if (!guestGame || gameId || (activeBot && !gameOverResult)) return;
+        navigate('.', {replace: true, state: null});
+        setActiveOdds(null);
+        startCustomBotGame({name: guestGame.name, savedName: guestGame.savedName, config: guestGame.config}, guestGame.color, null);
+    }, [guestGame]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Первая партия после регистрации (таск 17.8): архетип по стартовому рейтингу, игрок — белыми.
     const firstGame = (routeLocation.state as { firstGame?: FirstGameStart } | null)?.firstGame;

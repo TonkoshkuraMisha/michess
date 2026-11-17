@@ -157,6 +157,11 @@ export function TimeMachinePage() {
                     <Hourglass className="text-amber-400"/> {t('timeMachine.title')}
                 </h1>
                 <p className="text-sm text-boxwood/85 max-w-3xl">{t('timeMachine.intro')}</p>
+                {/* Каталог мастеров прошлого (таск 28.5): отдельная партия с любым участником. */}
+                <p className="text-sm">
+                    <Link to="/masters" data-testid="masters-link" className="underline text-amber-300">{t('masters.title')}</Link>
+                    <span className="text-boxwood/75"> — {t('masters.teaser')}</span>
+                </p>
             </header>
             {error && <p role="alert" className="text-sm text-rose-300">{renderUiMessage(error, t)}</p>}
             <div className={`${sectionClass} flex flex-wrap items-center gap-3`}>
