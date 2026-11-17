@@ -21,6 +21,7 @@ from src.models.repertoire import Repertoire, RepertoireCard
 from src.models.trainer import TrainerResult
 from src.models.user import User
 from src.services import exam
+from src.services.personal_puzzles import split_themes
 from src.services.themes import SECTIONS, THEMES
 
 MIN_ATTEMPTS = 5  # меньше — оценки раздела или темы нет («мало данных»)
@@ -60,13 +61,16 @@ async def tactics(db: AsyncSession, user_id: int) -> tuple[list[dict], list[dict
 
 
 async def mistakes(db: AsyncSession, user_id: int) -> dict:
-    """Ошибки в своих партиях: сколько личных задач всего, сколько исправлено и какие темы встречаются чаще других."""
+    """
+    Ошибки в своих партиях: сколько личных задач всего, сколько исправлено и какие темы встречаются чаще других.
+    У задачи может быть несколько тем — каждая считается; коды вне реестра тем пропускаются.
+    """
     rows = (await db.execute(
         select(PersonalPuzzle.themes, PersonalPuzzle.done).where(PersonalPuzzle.user_id == user_id)
     )).all()
     counter: Counter[str] = Counter()
     for themes, _ in rows:
-        counter.update(t for t in themes.split() if t in SECTION_OF)
+        counter.update(code for code in split_themes(themes) if code in SECTION_OF)
     return {"total": len(rows), "fixed": sum(1 for _, done in rows if done),
             "themes": [{"theme": theme, "count": count} for theme, count in counter.most_common(WEAK_THEMES)]}
 
