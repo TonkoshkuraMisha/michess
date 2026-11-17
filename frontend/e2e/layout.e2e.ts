@@ -124,3 +124,48 @@ test('вёрстка: шапка гостя на телефонах 360–480 px
     }
     expect(failures).toEqual([]);
 });
+
+// Шапка на планшетах и ноутбуках (768–1440 px): между телефоном и широким экраном её раньше никто не проверял,
+// и она не помещалась — гостю до ~1200 px, вошедшему игроку с длинным именем до 1366 px (кнопка входа и меню
+// профиля уезжали за экран, страница прокручивалась вбок). Теперь на этих ширинах в меню — значки с подсказками,
+// подписи появляются с 1360 px (у вошедшего игрока самая длинная — с 1500 px). Шрифт интерфейса системный: в
+// сборке для CI (Linux) он шире, чем на Windows, поэтому пороги подобраны по широкому шрифту, а этот тест —
+// их настоящая проверка. Гость и вошедший игрок проверяются отдельно: состав шапки у них разный.
+// 640–720 px — граница, где у вошедшего игрока появляются имя и название сайта.
+const HEADER_WIDTHS = [640, 700, 720, 768, 820, 1024, 1180, 1280, 1340, 1360, 1366, 1440, 1500, 1536];
+
+test('вёрстка: шапка гостя на планшетах и ноутбуках 640–1440 px', async ({browser}, testInfo) => {
+    test.setTimeout(240_000);
+    const failures: string[] = [];
+    for (const locale of ['ru-RU', 'en-US', 'uk-UA']) {
+        for (const width of HEADER_WIDTHS) {
+            const context = await browser.newContext({viewport: {width, height: 800}, locale});
+            const page = await context.newPage();
+            failures.push(...await check(page, testInfo, `гость ${locale} ${width}`, '/about'));
+            await context.close();
+        }
+    }
+    expect(failures).toEqual([]);
+});
+
+test('вёрстка: шапка вошедшего игрока на планшетах и ноутбуках 640–1440 px', async ({page, request}, testInfo) => {
+    test.setTimeout(240_000);
+    const token = await loginNewPlayer(page, request, 'layout');
+    const failures: string[] = [];
+    try {
+        for (const language of ['en', 'ru']) {
+            await page.request.patch(`${API}/api/v1/profile/me/settings`, {
+                data: {language}, headers: {Authorization: `Bearer ${token}`},
+            });
+            for (const width of HEADER_WIDTHS) {
+                await page.setViewportSize({width, height: 800});
+                failures.push(...await check(page, testInfo, `игрок ${language} ${width}`, '/about'));
+            }
+        }
+    } finally {
+        await page.request.patch(`${API}/api/v1/profile/me/settings`, {
+            data: {language: 'ru'}, headers: {Authorization: `Bearer ${token}`},
+        });
+    }
+    expect(failures).toEqual([]);
+});

@@ -58,6 +58,7 @@ import {
     Settings as SettingsIcon,
     LogIn,
     Crown,
+    Medal,
     ChevronDown,
     Trophy,
     Scale,
@@ -290,6 +291,14 @@ export default function App() {
     const ratingProvisional = Boolean(userProfile?.provisional?.includes('blitz'));
     const ratingLabel = ratingProvisional ? `${userRating}?` : String(userRating);
 
+    // Подписи пунктов меню видны с той ширины, где шапка помещается целиком; уже — остаются значки с подсказками.
+    // Шрифт интерфейса системный, и ширина текста зависит от системы игрока: на Linux (и там, где установлен Inter)
+    // он на 9–10 % шире, чем Segoe UI на Windows. Пороги взяты по широкому шрифту (замер 17.11 с Verdana, которая
+    // ещё на 15–25 px шире шрифта сборки в CI): гостю с подписями нужно до 1335 px, вошедшему игроку без самой
+    // длинной подписи («Легенды шахмат») — до 1340 px, со всеми подписями — до 1465 px.
+    const navLabel = 'hidden min-[1360px]:inline';
+    const legendsLabel = token && userProfile ? 'hidden min-[1500px]:inline' : navLabel;
+
     return (
         <div
             className={`w-full flex flex-col text-paper font-sans select-none ${
@@ -298,85 +307,101 @@ export default function App() {
         >
             <header
                 className="h-14 shrink-0 bg-acacia-dark border-b-2 border-amber-900/60 px-3 sm:px-5 flex items-center justify-between shadow-heavy relative z-30">
-                <div className="flex items-center gap-7">
+                <div className="flex items-center gap-4 2xl:gap-7">
+                    {/* Название у вошедшего игрока — с 720 px: на 640 px оно появлялось вместе с именем игрока, и шапке
+                        с длинным именем не хватало места (на Windows — 8 px, с широким шрифтом — больше). */}
                     <Link to="/" className="flex items-center gap-2.5 cursor-pointer group outline-none">
                         <div
                             className="w-9 h-9 rounded-md bg-boxwood flex items-center justify-center shadow-inner border border-amber-600/40 text-acacia-dark font-bold text-xl">
                             ♞
                         </div>
                         <span
-                            className={`hidden ${token && userProfile ? "sm:inline" : "min-[440px]:inline"} text-2xl font-extrabold tracking-wide text-boxwood-light group-hover:text-white transition`}>
+                            className={`hidden ${token && userProfile ? "min-[720px]:inline md:hidden lg:inline" : "min-[440px]:inline"} text-2xl font-extrabold tracking-wide text-boxwood-light group-hover:text-white transition`}>
                             michess
                         </span>
                     </Link>
 
-                    <nav className="hidden md:flex items-center gap-4 lg:gap-6 text-[15px] font-semibold text-boxwood/90">
+                    <nav className="hidden md:flex items-center gap-3 2xl:gap-4 whitespace-nowrap text-[15px] font-semibold text-boxwood/90">
                         <Link
                             to="/"
-                            className={`flex items-center gap-2 transition ${
+                            title={t('nav.play')}
+                            aria-label={t('nav.play')}
+                            className={`flex items-center gap-1.5 transition ${
                                 location.pathname === '/' ? 'text-amber-300' : 'hover:text-amber-300'
                             }`}
                         >
-                            <Swords size={17}/> {t('nav.play')}
+                            <Swords size={17}/> <span className={navLabel}>{t('nav.play')}</span>
                         </Link>
 
                         <Link
                             to="/puzzles"
-                            className={`flex items-center gap-2 transition ${
+                            title={t('nav.puzzles')}
+                            aria-label={t('nav.puzzles')}
+                            className={`flex items-center gap-1.5 transition ${
                                 location.pathname === '/puzzles' ? 'text-amber-300' : 'hover:text-amber-300'
                             }`}
                         >
-                            <Puzzle size={17}/> {t('nav.puzzles')}
+                            <Puzzle size={17}/> <span className={navLabel}>{t('nav.puzzles')}</span>
                         </Link>
 
                         {/* Школа (14.2): три курса готовы — пункт вернулся в шапку (23.6). */}
                         <Link
                             to="/learn"
-                            className={`flex items-center gap-2 transition ${
+                            title={t('learn.title')}
+                            aria-label={t('learn.title')}
+                            className={`flex items-center gap-1.5 transition ${
                                 location.pathname.startsWith('/learn') ? 'text-amber-300' : 'hover:text-amber-300'
                             }`}
                         >
-                            <GraduationCap size={17}/> {t('learn.title')}
+                            <GraduationCap size={17}/> <span className={navLabel}>{t('learn.title')}</span>
                         </Link>
 
                         <Link
                             to="/tournaments"
-                            className={`flex items-center gap-2 transition ${
+                            title={t('nav.tournaments')}
+                            aria-label={t('nav.tournaments')}
+                            className={`flex items-center gap-1.5 transition ${
                                 location.pathname.startsWith('/tournaments') ? 'text-amber-300' : 'hover:text-amber-300'
                             }`}
                         >
-                            <Trophy size={17}/> {t('nav.tournaments')}
+                            <Trophy size={17}/> <span className={navLabel}>{t('nav.tournaments')}</span>
                         </Link>
 
                         {/* Тренажёры (19.1). */}
                         <Link
                             to="/train"
-                            className={`flex items-center gap-2 transition ${
+                            title={t('trainers.title')}
+                            aria-label={t('trainers.title')}
+                            className={`flex items-center gap-1.5 transition ${
                                 location.pathname.startsWith('/train') ? 'text-amber-300' : 'hover:text-amber-300'
                             }`}
                         >
-                            <Dumbbell size={17}/> {t('trainers.title')}
+                            <Dumbbell size={17}/> <span className={navLabel}>{t('trainers.title')}</span>
                         </Link>
 
                         <Link
                             to="/leaderboard"
-                            className={`flex items-center gap-2 transition ${
+                            title={t('nav.leaderboard')}
+                            aria-label={t('nav.leaderboard')}
+                            className={`flex items-center gap-1.5 transition ${
                                 location.pathname === '/leaderboard' ? 'text-amber-300' : 'hover:text-amber-300'
                             }`}
                         >
-                            <Trophy size={17}/> {t('nav.leaderboard')}
+                            <Medal size={17}/> <span className={navLabel}>{t('nav.leaderboard')}</span>
                         </Link>
 
                         <div className="relative" ref={championsMenuRef}>
                             <button
                                 onClick={() => setIsChampionsMenuOpen(!isChampionsMenuOpen)}
-                                className={`flex items-center gap-2 transition outline-none cursor-pointer ${
+                                title={t('nav.legends')}
+                                aria-label={t('nav.legends')}
+                                className={`flex items-center gap-1.5 transition outline-none cursor-pointer ${
                                     isChampionsMenuOpen || location.pathname.startsWith('/champions')
                                         ? 'text-amber-300'
                                         : 'hover:text-amber-300'
                                 }`}
                             >
-                                <Crown size={17}/> {t('nav.legends')}
+                                <Crown size={17}/> <span className={legendsLabel}>{t('nav.legends')}</span>
                                 <ChevronDown
                                     size={15}
                                     className={`transition-transform ${isChampionsMenuOpen ? 'rotate-180' : ''}`}
@@ -474,8 +499,9 @@ export default function App() {
                             >
                                 <PlayerAvatar username={username} avatar={userProfile.avatar}
                                               className="w-8 h-8 rounded border border-amber-900/50 shadow"/>
-                                <div className="flex flex-col items-start hidden sm:flex">
-                                    <span className="font-bold text-sm text-amber-200 leading-tight">{username}</span>
+                                <div className="flex-col items-start hidden sm:flex md:hidden lg:flex">
+                                    <span className="font-bold text-sm text-amber-200 leading-tight max-w-[7rem] truncate"
+                                          title={username}>{username}</span>
                                     <span
                                         className="text-xs text-amber-400 font-mono font-semibold"
                                         title={ratingProvisional ? t('nav.provisional') : undefined}>({ratingLabel})</span>
