@@ -89,7 +89,7 @@ describe('App: просмотр партии на одном экране', () =
 });
 
 describe('App: меню в шапке на средних ширинах', () => {
-    // На 768–1320 px подписи пунктов скрыты (остаются значки): у каждого пункта должны быть подсказка и доступное
+    // На 768–1360 px подписи пунктов скрыты (остаются значки): у каждого пункта должны быть подсказка и доступное
     // имя, а сама подпись — в отдельном элементе, который показывается с ширины, где шапка помещается.
     it('у каждого пункта меню — подсказка, доступное имя и подпись, скрываемая на узкой шапке', () => {
         renderApp('/library');
@@ -101,7 +101,7 @@ describe('App: меню в шапке на средних ширинах', () =>
             expect(name, item.textContent ?? '').toBeTruthy();
             expect(item.getAttribute('title')).toBe(name);
             const label = within(item).getByText(name!);
-            expect(label.className).toMatch(/^hidden min-\[1(320|440)px\]:inline$/);
+            expect(label.className).toMatch(/^hidden min-\[1(360|500)px\]:inline$/);
         }
         // Турниры и таблица лидеров различимы и без подписей: значки у них разные.
         const icon = (name: string) => within(nav).getByRole('link', {name}).querySelector('svg')?.getAttribute('class');

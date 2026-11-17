@@ -292,11 +292,12 @@ export default function App() {
     const ratingLabel = ratingProvisional ? `${userRating}?` : String(userRating);
 
     // Подписи пунктов меню видны с той ширины, где шапка помещается целиком; уже — остаются значки с подсказками.
-    // Замер 17.11 (без переносов, имя игрока обрезано до 7rem): гостю с подписями нужно до 1245 px, вошедшему
-    // игроку — до 1385 px: у него справа ещё поиск, уведомления и имя. Поэтому самая длинная подпись («Легенды
-    // шахмат», около 125 px) у игрока появляется позже остальных. Запас — не меньше 40 px: шрифты в сборке шире.
-    const navLabel = 'hidden min-[1320px]:inline';
-    const legendsLabel = token && userProfile ? 'hidden min-[1440px]:inline' : navLabel;
+    // Шрифт интерфейса системный, и ширина текста зависит от системы игрока: на Linux (и там, где установлен Inter)
+    // он на 9–10 % шире, чем Segoe UI на Windows. Пороги взяты по широкому шрифту (замер 17.11 с Verdana, которая
+    // ещё на 15–25 px шире шрифта сборки в CI): гостю с подписями нужно до 1335 px, вошедшему игроку без самой
+    // длинной подписи («Легенды шахмат») — до 1340 px, со всеми подписями — до 1465 px.
+    const navLabel = 'hidden min-[1360px]:inline';
+    const legendsLabel = token && userProfile ? 'hidden min-[1500px]:inline' : navLabel;
 
     return (
         <div
@@ -306,24 +307,26 @@ export default function App() {
         >
             <header
                 className="h-14 shrink-0 bg-acacia-dark border-b-2 border-amber-900/60 px-3 sm:px-5 flex items-center justify-between shadow-heavy relative z-30">
-                <div className="flex items-center gap-4 lg:gap-7">
+                <div className="flex items-center gap-4 2xl:gap-7">
+                    {/* Название у вошедшего игрока — с 720 px: на 640 px оно появлялось вместе с именем игрока, и шапке
+                        с длинным именем не хватало места (на Windows — 8 px, с широким шрифтом — больше). */}
                     <Link to="/" className="flex items-center gap-2.5 cursor-pointer group outline-none">
                         <div
                             className="w-9 h-9 rounded-md bg-boxwood flex items-center justify-center shadow-inner border border-amber-600/40 text-acacia-dark font-bold text-xl">
                             ♞
                         </div>
                         <span
-                            className={`hidden ${token && userProfile ? "sm:inline md:hidden lg:inline" : "min-[440px]:inline"} text-2xl font-extrabold tracking-wide text-boxwood-light group-hover:text-white transition`}>
+                            className={`hidden ${token && userProfile ? "min-[720px]:inline md:hidden lg:inline" : "min-[440px]:inline"} text-2xl font-extrabold tracking-wide text-boxwood-light group-hover:text-white transition`}>
                             michess
                         </span>
                     </Link>
 
-                    <nav className="hidden md:flex items-center gap-4 whitespace-nowrap text-[15px] font-semibold text-boxwood/90">
+                    <nav className="hidden md:flex items-center gap-3 2xl:gap-4 whitespace-nowrap text-[15px] font-semibold text-boxwood/90">
                         <Link
                             to="/"
                             title={t('nav.play')}
                             aria-label={t('nav.play')}
-                            className={`flex items-center gap-2 transition ${
+                            className={`flex items-center gap-1.5 transition ${
                                 location.pathname === '/' ? 'text-amber-300' : 'hover:text-amber-300'
                             }`}
                         >
@@ -334,7 +337,7 @@ export default function App() {
                             to="/puzzles"
                             title={t('nav.puzzles')}
                             aria-label={t('nav.puzzles')}
-                            className={`flex items-center gap-2 transition ${
+                            className={`flex items-center gap-1.5 transition ${
                                 location.pathname === '/puzzles' ? 'text-amber-300' : 'hover:text-amber-300'
                             }`}
                         >
@@ -346,7 +349,7 @@ export default function App() {
                             to="/learn"
                             title={t('learn.title')}
                             aria-label={t('learn.title')}
-                            className={`flex items-center gap-2 transition ${
+                            className={`flex items-center gap-1.5 transition ${
                                 location.pathname.startsWith('/learn') ? 'text-amber-300' : 'hover:text-amber-300'
                             }`}
                         >
@@ -357,7 +360,7 @@ export default function App() {
                             to="/tournaments"
                             title={t('nav.tournaments')}
                             aria-label={t('nav.tournaments')}
-                            className={`flex items-center gap-2 transition ${
+                            className={`flex items-center gap-1.5 transition ${
                                 location.pathname.startsWith('/tournaments') ? 'text-amber-300' : 'hover:text-amber-300'
                             }`}
                         >
@@ -369,7 +372,7 @@ export default function App() {
                             to="/train"
                             title={t('trainers.title')}
                             aria-label={t('trainers.title')}
-                            className={`flex items-center gap-2 transition ${
+                            className={`flex items-center gap-1.5 transition ${
                                 location.pathname.startsWith('/train') ? 'text-amber-300' : 'hover:text-amber-300'
                             }`}
                         >
@@ -380,7 +383,7 @@ export default function App() {
                             to="/leaderboard"
                             title={t('nav.leaderboard')}
                             aria-label={t('nav.leaderboard')}
-                            className={`flex items-center gap-2 transition ${
+                            className={`flex items-center gap-1.5 transition ${
                                 location.pathname === '/leaderboard' ? 'text-amber-300' : 'hover:text-amber-300'
                             }`}
                         >
@@ -392,7 +395,7 @@ export default function App() {
                                 onClick={() => setIsChampionsMenuOpen(!isChampionsMenuOpen)}
                                 title={t('nav.legends')}
                                 aria-label={t('nav.legends')}
-                                className={`flex items-center gap-2 transition outline-none cursor-pointer ${
+                                className={`flex items-center gap-1.5 transition outline-none cursor-pointer ${
                                     isChampionsMenuOpen || location.pathname.startsWith('/champions')
                                         ? 'text-amber-300'
                                         : 'hover:text-amber-300'
