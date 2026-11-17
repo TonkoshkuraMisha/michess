@@ -343,6 +343,35 @@ export const BOARD_THEMES: Record<string, BoardTheme> = {
         lastMove: 'rgba(90, 160, 255, 0.35)',
         isDarkBoard: false
     },
+    // Таск 31.1 (идея владельца): осенний парк и клуб пятидесятых. Цвета — свои, текстура дерева — та же, что у «Ореха».
+    autumn: {
+        id: 'autumn',
+        get name() {
+            return t('appearance.themes.autumn');
+        },
+        // Золото липы и ржавчина кленового листа; рамка — каштан.
+        light: '#EFD79A',
+        dark: '#A4552B',
+        coordLight: '#7A3D1C',
+        coordDark: '#FBEBC4',
+        border: '#3A2212',
+        texture: {file: 'wood-grain.svg', frame: 0.3, square: 0.12, blend: 'multiply'},
+        isDarkBoard: true
+    },
+    club50: {
+        id: 'club50',
+        get name() {
+            return t('appearance.themes.club50');
+        },
+        // Клубная доска середины века: кремовые поля и бутылочно-зелёное сукно в ореховой раме.
+        light: '#EADFC4',
+        dark: '#4F6B53',
+        coordLight: '#3A5240',
+        coordDark: '#F7F0DC',
+        border: '#3B2A1C',
+        texture: {file: 'wood-grain.svg', frame: 0.35, square: 0.06, blend: 'multiply'},
+        isDarkBoard: true
+    },
 };
 
 // Только наборы со свободной лицензией, допускающей любое использование. Список должен совпадать
