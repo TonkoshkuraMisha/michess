@@ -8,6 +8,7 @@
 """
 
 import json
+from collections.abc import Collection
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Literal
@@ -97,15 +98,16 @@ async def _entrant(db: AsyncSession, owner: User, spec: ParticipantSpec, order: 
     )
 
 
-async def active_tournament(db: AsyncSession, owner_id: int, historic: bool = False) -> Tournament | None:
+async def active_in_branch(db: AsyncSession, owner_id: int, stages: Collection[str]) -> Tournament | None:
     """
-    Идущий турнир игрока; сданный (боты ещё доигрывают) новому турниру не мешает. У «Машины времени» (historic)
-    своё место: исторический турнир и обычный идут независимо, по одному каждого вида.
+    Идущий турнир игрока в той же ветке прогресса (этапы карьеры stages); сданный (боты ещё доигрывают) не мешает.
+    Решение владельца (17.11): блокирует только своя ветка — свои турниры и «Машина времени» идут параллельно
+    с чем угодно, сколько угодно сразу.
     """
-    kind = Tournament.event_key.is_not(None) if historic else Tournament.event_key.is_(None)
     return (await db.execute(
         select(Tournament).where(
-            Tournament.owner_id == owner_id, Tournament.status == "active", Tournament.withdrawn_at.is_(None), kind,
+            Tournament.owner_id == owner_id, Tournament.status == "active", Tournament.withdrawn_at.is_(None),
+            Tournament.career_stage.in_(list(stages)),
         ).limit(1)
     )).scalar_one_or_none()
 
@@ -122,11 +124,12 @@ async def create_tournament(
         cycles: int = 1,
         open_size: bool = False,
         event_key: str | None = None,
+        progress_branch: Collection[str] = (),
 ) -> Tournament:
     """
     open_size — турнир в историческом составе («Машина времени», 28.1): круговой или сетка на любое число
     участников в границах rules.OPEN_*; cycles — число кругов кругового турнира. Свои турниры игрока создаются без
-    них: размеры — из SIZES.
+    них: размеры — из SIZES. progress_branch — этапы карьеры той же ветки: пока один из них идёт, новый не начать.
     """
     allowed: tuple[int, ...] | range = SIZES[fmt]
     if open_size and fmt == "round_robin":
@@ -141,7 +144,7 @@ async def create_tournament(
     for key in keys:
         if keys.count(key) > 1:
             raise DomainError("tournament_participant_duplicate", participant=key)
-    if await active_tournament(db, owner.id, historic=event_key is not None) is not None:
+    if progress_branch and await active_in_branch(db, owner.id, progress_branch) is not None:
         raise DomainError("tournament_active_exists")
 
     category = classify_time_control(base_time_ms, increment_ms)

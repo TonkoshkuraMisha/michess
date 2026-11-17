@@ -302,16 +302,14 @@ def test_player_joins_avro_as_the_ninth(client, token_user_1):
     assert {e["key"]: e["active_id"] for e in events if e["active_id"]} == {"avro_1938": t["id"]}
 
 
-def test_time_machine_has_its_own_slot_next_to_a_regular_tournament(client, token_user_1):
+def test_time_machine_is_never_blocked(client, token_user_1):
     regular = {"format": "round_robin", "size": 4, "base_time_ms": 300_000,
                "participants": [{"kind": "bot", "id": b} for b in ("morphy", "philidor", "staunton")]}
     assert client.post(API, headers=auth(token_user_1), json=regular).status_code == 201
-    # Обычный турнир идёт — исторический всё равно можно начать, и наоборот; второй того же вида — нельзя.
+    # Решение владельца (17.11): исторические турниры не блокируются ничем — ни своим турниром, ни друг другом.
     assert client.post(f"{API}/time-machine/london_1851", json={}, headers=auth(token_user_1)).status_code == 201
-    second = client.post(f"{API}/time-machine/avro_1938", json={}, headers=auth(token_user_1))
-    assert second.status_code == 409 and second.json()["detail"]["code"] == "tournament_active_exists"
-    again = client.post(API, headers=auth(token_user_1), json=regular)
-    assert again.status_code == 409 and again.json()["detail"]["code"] == "tournament_active_exists"
+    assert client.post(f"{API}/time-machine/avro_1938", json={}, headers=auth(token_user_1)).status_code == 201
+    assert client.post(API, headers=auth(token_user_1), json=regular).status_code == 201
 
 
 def test_regular_tournaments_cannot_invite_guests_directly(client, token_user_1):

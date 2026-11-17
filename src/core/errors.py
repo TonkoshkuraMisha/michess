@@ -191,7 +191,7 @@ ERROR_MESSAGES: dict[str, str] = {
     "too_many_emails": "Too many letters requested, try again later",
     "lesson_progress_limit": "Too many lessons in progress (limit {max})",
     "tournament_not_found": "Tournament not found",
-    "tournament_active_exists": "You already have a tournament in progress — finish it first",
+    "tournament_active_exists": "This career step already has a tournament in progress — finish it first",
     "tournament_size_invalid": "This format needs {sizes} participants",
     "tournament_participants_count": "Choose {expected} opponents",
     "tournament_participant_unknown": "Unknown participant: {participant}",
