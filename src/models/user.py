@@ -83,6 +83,8 @@ class User(Base):
     theme_preset: Mapped[str | None] = mapped_column(String(32), nullable=True)
     # Аватар (таск 18.4) из собственного набора: фигура «Льюис» и цвет фона, например «wN-3»; нет — по имени.
     avatar: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    # Кто может писать личные сообщения (таск 30.1): all | following (только те, на кого подписан я) | nobody.
+    dm_policy: Mapped[str] = mapped_column(String(16), default="all", server_default="all", nullable=False)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

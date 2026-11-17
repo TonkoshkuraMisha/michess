@@ -21,7 +21,8 @@ const ACTIONS: Record<QueueItem['kind'], ModerationAction[]> = {
     translation: ['accept', 'dismiss'],
 };
 
-export function ReportButton({username}: { username: string }) {
+/** «Пожаловаться» на игрока; с messageText — на его сообщение (личное сообщение, таск 30.1). */
+export function ReportButton({username, messageText}: { username: string; messageText?: string }) {
     const {t} = useI18n();
     const [open, setOpen] = useState(false);
     const [reason, setReason] = useState<ReportReason>('abuse');
@@ -36,7 +37,9 @@ export function ReportButton({username}: { username: string }) {
             {open && (
                 <form className="flex flex-wrap gap-1.5 items-center text-xs" data-testid="report-form" onSubmit={(e) => {
                     e.preventDefault();
-                    moderationApi.report({target: username, kind: 'player', reason, comment}).then(() => setDone(true))
+                    moderationApi.report(messageText === undefined
+                        ? {target: username, kind: 'player', reason, comment}
+                        : {target: username, kind: 'message', reason, comment, message_text: messageText.slice(0, 300)}).then(() => setDone(true))
                         .catch((err) => setError(errorMessage(err, 'common.networkError')));
                 }}>
                     <select value={reason} onChange={(e) => setReason(e.target.value as ReportReason)} className="bg-black/40 rounded px-1 py-0.5"

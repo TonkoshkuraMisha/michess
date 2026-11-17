@@ -44,9 +44,10 @@ afterEach(() => {
 
 describe('колокольчик', () => {
     it('счётчик непрочитанных, тексты, отметка прочитанным и переход по уведомлению', async () => {
-        const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => ({
+        const fetchMock = vi.fn(async (url: string, init?: RequestInit) => ({
             ok: true, status: 200,
-            json: async () => (init?.method === 'POST' ? {...INBOX, unread: 0, items: INBOX.items.map((n) => ({...n, read: true}))} : INBOX),
+            json: async () => (String(url).endsWith('/messages/unread') ? {unread: 0}
+                : init?.method === 'POST' ? {...INBOX, unread: 0, items: INBOX.items.map((n) => ({...n, read: true}))} : INBOX),
         } as Response));
         vi.stubGlobal('fetch', fetchMock);
         render(routes(<NotificationBell/>));

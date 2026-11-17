@@ -1,10 +1,10 @@
 // --- FILE: frontend/src/components/social/ProfileSocial.tsx ---
-// Профиль чужого игрока (таск 17.1): в сети ли он, подписка (взаимная — «друзья») и прямой вызов. Вызов создаётся на
+// Профиль чужого игрока (таск 17.1): в сети ли он, подписка (взаимная — «друзья»), прямой вызов и личное сообщение (30.1). Вызов создаётся на
 // главной доске (там открыт сокет и выбран контроль времени): страница передаёт имя через location.state.challenge.
 
 import {useEffect, useState} from 'react';
 import {useNavigate} from 'react-router-dom';
-import {Swords, UserCheck, UserPlus} from 'lucide-react';
+import {MessageSquare, Swords, UserCheck, UserPlus} from 'lucide-react';
 import {useI18n} from '../../i18n';
 import {getToken} from '../../services/authToken';
 import {socialApi} from '../../services/social';
@@ -41,6 +41,10 @@ export function ProfileSocial({username}: { username: string }) {
             <button type="button" onClick={() => navigate('/', {state: {challenge: username}})} data-testid="profile-challenge"
                     className="px-2.5 py-1 rounded bg-amber-700 text-white font-bold flex items-center gap-1">
                 <Swords size={14}/> {t('social.challenge')}
+            </button>
+            <button type="button" onClick={() => navigate(`/messages/${encodeURIComponent(username)}`)} data-testid="profile-message"
+                    className="px-2.5 py-1 rounded bg-black/40 border border-amber-800/60 flex items-center gap-1 hover:border-amber-500">
+                <MessageSquare size={14}/> {t('dm.write')}
             </button>
             <ReportButton username={username}/>
         </div>
