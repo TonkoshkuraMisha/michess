@@ -12,13 +12,13 @@
 
 from collections.abc import Sequence
 
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.errors import DomainError
 from src.models.social import Block, Follow, Post, PostComment, PostLike
 from src.models.user import User
-from src.services import moderation, notifications
+from src.services import civility, moderation, notifications
 from src.services.attachments import POST_KINDS, build_attachment, clean_text
 
 BODY_MAX = 2000
@@ -38,7 +38,7 @@ async def _views(db: AsyncSession, posts: Sequence[Post], viewer: User | None) -
     likes = dict((await db.execute(
         select(PostLike.post_id, func.count()).where(PostLike.post_id.in_(ids)).group_by(PostLike.post_id))).tuples().all())
     comments = dict((await db.execute(
-        select(PostComment.post_id, func.count()).where(PostComment.post_id.in_(ids))
+        select(PostComment.post_id, func.count()).where(PostComment.post_id.in_(ids), PostComment.held.is_(False))
         .group_by(PostComment.post_id))).tuples().all())
     liked: set[int] = set()
     if viewer is not None:
@@ -53,30 +53,37 @@ async def _views(db: AsyncSession, posts: Sequence[Post], viewer: User | None) -
                     "avatar": author.avatar if author else None, "body": p.body, "attachment": p.attachment,
                     "created_at": _iso(p.created_at), "likes": likes.get(p.id, 0), "liked": p.id in liked,
                     "comments": comments.get(p.id, 0), "mine": viewer is not None and p.author_id == viewer.id,
-                    "hidden": p.hidden_at is not None})
+                    "hidden": p.hidden_at is not None, "held": p.held})
     return out
 
 
 def _visible(viewer: User | None):
-    """Скрытые модератором — только автору."""
+    """Скрытые модератором и придержанные фильтром — только автору."""
+    public = and_(Post.hidden_at.is_(None), Post.held.is_(False))
     if viewer is None:
-        return Post.hidden_at.is_(None)
-    return or_(Post.hidden_at.is_(None), Post.author_id == viewer.id)
+        return public
+    return or_(public, Post.author_id == viewer.id)
 
 
 def _not_deleted_author():
     return select(User.id).where(User.deleted_at.is_(None))
 
 
-async def create(db: AsyncSession, author: User, body: str | None, attachment: tuple[str, str] | None) -> dict:
+async def create(db: AsyncSession, author: User, body: str | None, attachment: tuple[str, str] | None,
+                 send_anyway: bool = False) -> dict:
     if moderation.chat_banned(author):
         raise DomainError("posting_banned")
     text = clean_text(body, BODY_MAX)
     card = await build_attachment(db, *attachment, author=author, kinds=POST_KINDS) if attachment else None
     if not text and card is None:
         raise DomainError("post_empty")
-    post = Post(author_id=author.id, body=text, attachment=card)
+    await civility.check_quota(db, author, "post")
+    held = civility.screen(text, send_anyway)
+    post = Post(author_id=author.id, body=text, attachment=card, held=held)
     db.add(post)
+    await db.flush()
+    if held:
+        await civility.hold(db, author.id, f"post:{post.id}", text)
     await db.commit()
     await db.refresh(post)
     return (await _views(db, [post], author))[0]
@@ -138,19 +145,20 @@ def _comment_view(c: PostComment, author: User | None, viewer: User | None, post
     can_delete = viewer is not None and (c.author_id == viewer.id or post.author_id == viewer.id or viewer.is_moderator)
     return {"id": c.id, "author": author.username if author else None, "body": c.body,
             "created_at": _iso(c.created_at), "mine": viewer is not None and c.author_id == viewer.id,
-            "can_delete": can_delete}
+            "can_delete": can_delete, "held": c.held}
 
 
 async def comments(db: AsyncSession, post_id: int, viewer: User | None) -> list[dict]:
     post = await _post(db, post_id, viewer)
     rows = (await db.execute(select(PostComment, User).join(User, User.id == PostComment.author_id)
-                             .where(PostComment.post_id == post.id, User.deleted_at.is_(None))
+                             .where(PostComment.post_id == post.id, User.deleted_at.is_(None),
+                                    or_(PostComment.held.is_(False), PostComment.author_id == (viewer.id if viewer else 0)))
                              .order_by(PostComment.id).limit(COMMENTS_PAGE))).all()
     return [_comment_view(c, u, viewer, post) for c, u in rows]
 
 
-async def add_comment(db: AsyncSession, post_id: int, viewer: User,
-                      body: str | None) -> tuple[dict, tuple[int, dict] | None]:
+async def add_comment(db: AsyncSession, post_id: int, viewer: User, body: str | None,
+                      send_anyway: bool = False) -> tuple[dict, tuple[int, dict] | None]:
     """Комментарий и (если пишет не автор) (автор, записанное уведомление) — доставку делает API после коммита."""
     post = await _post(db, post_id, viewer)
     if moderation.chat_banned(viewer):
@@ -161,11 +169,15 @@ async def add_comment(db: AsyncSession, post_id: int, viewer: User,
     text = clean_text(body, COMMENT_MAX)
     if not text:
         raise DomainError("comment_empty")
-    comment = PostComment(post_id=post.id, author_id=viewer.id, body=text)
+    await civility.check_quota(db, viewer, "comment")
+    held = civility.screen(text, send_anyway)
+    comment = PostComment(post_id=post.id, author_id=viewer.id, body=text, held=held)
     db.add(comment)
     await db.flush()
     note = None
-    if post.author_id != viewer.id:
+    if held:
+        await civility.hold(db, viewer.id, f"comment:{comment.id}", text)
+    elif post.author_id != viewer.id:
         note = (post.author_id, await notifications.record(db, post.author_id, "post_comment",
                                                            {"from": viewer.username, "post_id": post.id}, commit=False))
     await db.commit()

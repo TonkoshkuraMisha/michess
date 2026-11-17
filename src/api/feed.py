@@ -20,7 +20,8 @@ from src.services import feed, notifications
 router = APIRouter(dependencies=[Depends(rate_limit("feed", "RATE_LIMIT_PUZZLES"))])
 
 _CODES = {"post_not_found": status.HTTP_404_NOT_FOUND, "comment_not_found": status.HTTP_404_NOT_FOUND,
-          "posting_banned": status.HTTP_403_FORBIDDEN, "comment_closed": status.HTTP_403_FORBIDDEN}
+          "posting_banned": status.HTTP_403_FORBIDDEN, "comment_closed": status.HTTP_403_FORBIDDEN,
+          "text_flagged": status.HTTP_409_CONFLICT, "posting_limited": status.HTTP_429_TOO_MANY_REQUESTS}
 
 
 def _http(exc: DomainError):
@@ -35,10 +36,12 @@ class AttachmentIn(BaseModel):
 class PostIn(BaseModel):
     body: str = Field("", max_length=feed.BODY_MAX * 2)
     attachment: AttachmentIn | None = None
+    send_anyway: bool = False   # фильтр сработал, игрок настаивает — публикация ждёт модератора (30.3)
 
 
 class CommentIn(BaseModel):
     body: str = Field(..., max_length=feed.COMMENT_MAX * 2)
+    send_anyway: bool = False
 
 
 @router.get("")
@@ -58,7 +61,7 @@ async def user_feed(username: str, before_id: int | None = Query(None, ge=1), db
 async def create_post(payload: PostIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     attachment = (payload.attachment.kind, payload.attachment.ref) if payload.attachment else None
     try:
-        return await feed.create(db, user, payload.body, attachment)
+        return await feed.create(db, user, payload.body, attachment, payload.send_anyway)
     except DomainError as exc:
         raise _http(exc) from exc
 
@@ -100,7 +103,7 @@ async def unlike(post_id: int, db: AsyncSession = Depends(get_db), user: User = 
 async def add_comment(post_id: int, payload: CommentIn, db: AsyncSession = Depends(get_db),
                       user: User = Depends(get_current_user)):
     try:
-        comment, note = await feed.add_comment(db, post_id, user, payload.body)
+        comment, note = await feed.add_comment(db, post_id, user, payload.body, payload.send_anyway)
     except DomainError as exc:
         raise _http(exc) from exc
     if note is not None:

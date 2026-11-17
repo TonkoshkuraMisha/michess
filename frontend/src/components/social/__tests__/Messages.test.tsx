@@ -102,7 +102,7 @@ describe('страница сообщений', () => {
         await act(async () => fireEvent.keyDown(screen.getByTestId('dm-input'), {key: 'Enter'}));
 
         const post = fetchMock.mock.calls.find(([u, i]) => String(u).includes('/with/magnus') && i?.method === 'POST');
-        expect(JSON.parse(String(post?.[1]?.body))).toEqual({body: 'Смотри партию', attachment: {kind: 'game', ref: '42'}});
+        expect(JSON.parse(String(post?.[1]?.body))).toEqual({body: 'Смотри партию', attachment: {kind: 'game', ref: '42'}, send_anyway: false});
         const card = await screen.findByTestId('attachment-game');
         expect(card).toHaveTextContent('me — magnus · 1-0');
         expect(card.querySelector('a')).toHaveAttribute('href', '/game/42');

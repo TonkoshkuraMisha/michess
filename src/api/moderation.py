@@ -47,7 +47,13 @@ class AppealIn(BaseModel):
 
 
 class ResolveIn(BaseModel):
-    action: str = Field(..., pattern="^(dismiss|warn|chat_ban|mark_cheater|clear_cheater|accept)$")
+    action: str = Field(..., pattern="^(dismiss|warn|chat_ban|mark_cheater|clear_cheater|accept|hide|release)$")
+
+
+class TextReportIn(BaseModel):
+    """Жалоба на сообщение, публикацию или комментарий (таск 30.3): «dm:12», «post:5», «comment:7»."""
+    subject: str = Field(..., pattern=r"^(dm|post|comment):\d{1,12}$")
+    reason: str = Field("abuse", pattern="^(cheating|abuse|spam|other)$")
 
 
 def _moderator(user: User) -> None:
@@ -73,6 +79,15 @@ async def create_report(payload: ReportIn, db: AsyncSession = Depends(get_db), u
     try:
         item = await moderation.report(db, user, target, payload.kind, payload.reason, payload.comment,
                                        payload.message_text, payload.game_id)
+    except DomainError as exc:
+        raise _http(exc) from None
+    return {"id": item.id}
+
+
+@router.post("/reports/text", status_code=status.HTTP_201_CREATED)
+async def report_text(payload: TextReportIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    try:
+        item = await moderation.report_text(db, user, payload.subject, payload.reason)
     except DomainError as exc:
         raise _http(exc) from None
     return {"id": item.id}

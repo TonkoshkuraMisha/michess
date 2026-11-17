@@ -28,6 +28,7 @@ import {StudyLobby, StudyRoomPage} from './components/study/StudyPages';
 import {ModerationPage} from './components/social/ModerationPage';
 import {MessagesPage} from './components/social/MessagesPage';
 import {FeedPage, PostPage} from './components/social/FeedPage';
+import {CommunityRulesPage} from './components/social/Civility';
 import {MiniGamePage, MiniGamesPage} from './components/trainers/MiniGames';
 import {Chess960Page} from './components/chess960/Chess960Page';
 import {Chess960LiveGame} from './components/chess960/Chess960LiveGame';
@@ -765,6 +766,7 @@ export default function App() {
                         <Route path="/messages/:username" element={<MessagesPage/>}/>
                         <Route path="/feed" element={<FeedPage/>}/>
                         <Route path="/feed/post/:postId" element={<PostPage/>}/>
+                        <Route path="/rules" element={<CommunityRulesPage/>}/>
                         <Route path="/train" element={<TrainersPage/>}/>
                         <Route path="/train/games" element={<MiniGamesPage/>}/>
                         <Route path="/play/960" element={<Chess960Page/>}/>

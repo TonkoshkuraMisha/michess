@@ -38,6 +38,8 @@ export interface DirectMessage {
     attachment: Attachment | null;
     created_at: string | null;
     read: boolean;
+    /** Придержано фильтром оскорблений до решения модератора (таск 30.3), видно только отправителю. */
+    held?: boolean;
 }
 
 export interface Conversation {
@@ -87,8 +89,11 @@ export const messagesApi = {
     unread: () => call<{ unread: number }>('/unread'),
     thread: (name: string, beforeId?: number) =>
         call<Thread>(`/with/${user(name)}${beforeId ? `?before_id=${beforeId}` : ''}`),
-    send: (name: string, body: string, attachment?: { kind: AttachmentKind; ref: string } | null) =>
-        call<DirectMessage>(`/with/${user(name)}`, {method: 'POST', body: JSON.stringify({body, attachment: attachment ?? null})}),
+    send: (name: string, body: string, attachment?: { kind: AttachmentKind; ref: string } | null, sendAnyway = false) =>
+        call<DirectMessage>(`/with/${user(name)}`, {
+            method: 'POST', body: JSON.stringify({body, attachment: attachment ?? null, send_anyway: sendAnyway}),
+        }),
+    hide: (name: string) => call<{ unread: number }>(`/with/${user(name)}/hide`, {method: 'POST'}),
     markRead: (name: string) => call<{ unread: number }>(`/with/${user(name)}/read`, {method: 'POST'}),
     settings: () => call<DmSettings>('/settings'),
     setPolicy: (policy: DmPolicy) => call<DmSettings>('/settings', {method: 'PUT', body: JSON.stringify({dm_policy: policy})}),

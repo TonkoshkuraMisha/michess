@@ -71,6 +71,8 @@ ERROR_MESSAGES: dict[str, str] = {
     "comment_empty": "The comment is empty",
     "comment_closed": "The author does not accept comments from you",
     "comment_not_found": "Comment not found",
+    "text_flagged": "This text looks offensive. Please rephrase it — or send it for a moderator to review",
+    "posting_limited": "New players and players warned by a moderator can send at most {limit} of these per hour",
     "arena_not_found": "Arena not found",
     "team_not_found": "Team not found",
     "report_invalid": "Invalid report",
