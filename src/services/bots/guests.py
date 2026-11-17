@@ -126,6 +126,7 @@ SIGNATURE_OPENINGS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "levitsky": (("Queen's Pawn Game: Levitsky Attack",), ()),
     "macleod": (("King's Pawn Game: MacLeod Attack",), ()),
     "hanham": ((), ("Philidor Defense: Hanham Variation",)),
+    "moller": ((), ("Ruy Lopez: Morphy Defense, Møller Variation",)),
 }
 
 
@@ -515,6 +516,24 @@ GUESTS: tuple[Guest, ...] = (
     _guest("stamm", "Stamm, Wilhelm von", None, 1700, aggression=0, randomness=40),
     # Киевлянин; выбыл из турнира 1903 года. Годы жизни неизвестны.
     _guest("breev", "Breev, V. V.", None, 1600, aggression=0, randomness=45),
+
+    # --- Двенадцатая партия турниров (28.4): Лондон 1922, Баден-Баден 1925, Земмеринг 1926 -----------------------
+    _guest("atkins", "Atkins, Henry Ernest", "1872–1955", 2150, aggression=-10, pawn_structure=140, randomness=20),
+    _guest("wahltuch", "Wahltuch, Victor", "1875–1953", 1950, aggression=20, randomness=30),
+    _guest("watson", "Watson, Charles G. M.", "1878–1961", 1950, aggression=10, randomness=30),
+    _guest("morrison", "Morrison, John Stuart", "1889–1975", 1950, aggression=0, randomness=30),
+    _guest("marotti", "Marotti, Davide", "1881–1940", 1850, aggression=0, randomness=35),
+    _guest("rosselli", "Rosselli del Turco, Stefano", "1877–1947", 2000, aggression=10, randomness=30),
+    _guest("kolste", "Kolste, Jan Willem te", "1874–1936", 1850, aggression=0, randomness=35),
+    _guest("vajda", "Vajda, Arpad", "1896–1967", 2100, aggression=-10, king_safety=130, randomness=20),
+    _guest("davidson", "Davidson, Jacques", "1890–1969", 2000, aggression=20, randomness=30),
+    _guest("michel", "Michel, Walter", "1888–1969", 1950, aggression=0, randomness=30),
+
+    # --- Тринадцатая партия турниров (28.4): Гётеборг 1920, Вена 1922 --------------------------------------------
+    _guest("moller", "Moeller, Joergen", "1873–1944", 2000, aggression=30, mobility=130, randomness=30),
+    _guest("vukovic", "Vukovic, Vladimir", "1898–1975", 2050, aggression=40, mobility=130, randomness=25),
+    _guest("takacs", "Takacs, Sandor", "1893–1932", 2050, aggression=10, randomness=25),
+    _guest("konig", "Koenig, Imre", "1901–1992", 2000, aggression=0, randomness=30),
 )
 GUESTS_BY_ID = {guest.id: guest for guest in GUESTS}
 # По имени из PGN («Фамилия, Имя»): под ним партия с мастером сохраняется и показывается в архиве.
