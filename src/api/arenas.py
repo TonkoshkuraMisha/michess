@@ -39,7 +39,8 @@ async def list_arenas(db: AsyncSession = Depends(get_db)):
         select(Arena).where(Arena.ends_at > now - RECENT, Arena.starts_at < now + service.LOOKAHEAD)
         .order_by(Arena.starts_at, Arena.id)
     )).scalars().all()
-    return {"arenas": [{**service.view(a, now), "players": await _players_count(db, a.id)} for a in rows]}
+    return {"arenas": [{**service.view(a, now, await service.open_games(db, a.id)), "players": await _players_count(db, a.id)}
+                       for a in rows]}
 
 
 @router.get("/current")
@@ -52,13 +53,14 @@ async def current_arena(db: AsyncSession = Depends(get_db)):
     )).scalars().all()
     if not rows:
         return {"arena": None}
-    running = [a for a in rows if service.status(a, now) == "running"]
+    running = [a for a in rows if service.status(a, now) in ("running", "closing")]
     if running:
         counts = {a.id: await _players_count(db, a.id) for a in running}
         chosen = max(running, key=lambda a: (counts[a.id], -a.id))
     else:
         chosen = rows[0]
-    return {"arena": {**service.view(chosen, now), "players": await _players_count(db, chosen.id)}}
+    return {"arena": {**service.view(chosen, now, await service.open_games(db, chosen.id)),
+                      "players": await _players_count(db, chosen.id)}}
 
 
 @router.get("/{arena_id}")
@@ -76,7 +78,8 @@ async def get_arena(arena_id: int, request: Request, db: AsyncSession = Depends(
         joined = await service._player(db, arena.id, user_id) is not None
         me = {"joined": joined, "waiting": user_id in await service.waiting_ids(arena.id),
               "current_game_id": await service.current_game(db, arena.id, user_id) if joined else None}
-    return {**service.view(arena), "standings": await service.standings(db, arena.id), "me": me}
+    return {**service.view(arena, None, await service.open_games(db, arena.id)),
+            "standings": await service.standings(db, arena.id), "me": me}
 
 
 @router.post("/{arena_id}/join")

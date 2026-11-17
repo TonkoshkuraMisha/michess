@@ -7,7 +7,12 @@
   по очкам и рейтингу, по возможности не с прошлым соперником; партия — обычная рейтинговая PvP-партия
   (matchmaker.start_pvp_game), цвета — тому, кто реже играл белыми;
 * очки: победа 2, ничья 1, поражение 0; с FIRE_AFTER побед подряд («огонь») — вдвое; серию рвёт ничья или поражение;
-* после конца новые пары не создаются, начатые партии доигрываются и засчитываются.
+* честный конец (таск 33.1, docs/research/arenas.md): новые пары — только до «последнего старта» (конец минус
+  длительность партии: 2 × (база + GAME_MOVES × добавка)); итоги — когда закончилась последняя партия (до этого
+  статус closing); каждая сыгранная партия засчитывается;
+* неявка: первый ход не сделан и партия отменена по таймауту — поражение тому, чья очередь ходить, сопернику —
+  победа; добровольная отмена в арене запрещена; договорная ничья до EARLY_DRAW_PLIES полуходов — 0 очков обоим;
+* таблица при равенстве очков: перформанс в арене, затем меньше партий, затем раньше вошедший.
 
 Швейцарка между людьми (format="swiss"): заданное число туров; тур составляется по правилам швейцарки
 (tournament_rules.swiss_pairings, посев — по рейтингу на входе), партии всех пар создаются сразу (неявка — поражение по
@@ -28,6 +33,8 @@ from src.models.user import User
 from src.services.rating import classify_time_control
 
 FIRE_AFTER = 2
+GAME_MOVES = 40
+EARLY_DRAW_PLIES = 20
 LOOKAHEAD = timedelta(hours=6)
 WAIT_TTL_S = 120
 
@@ -59,13 +66,39 @@ def _aware(moment: datetime) -> datetime:
     return moment.replace(tzinfo=UTC) if moment.tzinfo is None else moment
 
 
-def status(arena: Arena, now: datetime | None = None) -> str:
+def game_length(arena: Arena) -> timedelta:
+    """Сколько длится партия контроля арены: оба игрока тратят базу и добавку на GAME_MOVES ходов."""
+    return timedelta(milliseconds=2 * (arena.base_time_ms + GAME_MOVES * arena.increment_ms))
+
+
+def last_start(arena: Arena) -> datetime:
+    """Последний момент, когда арена ещё создаёт пары: партия успевает закончиться к объявленному концу."""
+    return max(_aware(arena.starts_at), _aware(arena.ends_at) - game_length(arena))
+
+
+def pairing_open(arena: Arena, now: datetime | None = None) -> bool:
+    now = now or _now()
+    return (arena.format or "arena") == "arena" and _aware(arena.starts_at) <= now < last_start(arena)
+
+
+def status(arena: Arena, now: datetime | None = None, open_games: int = 0) -> str:
+    """
+    scheduled → running (пары создаются) → closing (пар больше нет: доигрываются партии или идёт время до конца) →
+    finished (конец наступил и все партии сыграны — итоги окончательные).
+    """
     now = now or _now()
     if now < _aware(arena.starts_at):
         return "scheduled"
     if arena.format == "swiss":
         return "finished" if arena.finished_at is not None else "running"
-    return "running" if now < _aware(arena.ends_at) else "finished"
+    if now < last_start(arena):
+        return "running"
+    return "closing" if open_games > 0 or now < _aware(arena.ends_at) else "finished"
+
+
+async def open_games(db: AsyncSession, arena_id: int) -> int:
+    return await db.scalar(select(func.count()).select_from(ArenaGame).where(
+        ArenaGame.arena_id == arena_id, ArenaGame.result.is_(None))) or 0
 
 
 async def ensure_schedule(db: AsyncSession, now: datetime | None = None) -> None:
@@ -160,8 +193,11 @@ async def ready(db: AsyncSession, arena: Arena, user: User) -> dict:
     from src.services.connection_manager import manager
     from src.services.matchmaker import matchmaker
 
-    if status(arena) != "running" or arena.format != "arena":
+    now = _now()
+    if arena.format != "arena" or now < _aware(arena.starts_at) or now >= _aware(arena.ends_at):
         raise DomainError("arena_not_running")
+    if not pairing_open(arena, now):
+        raise DomainError("arena_pairing_closed")
     me = await _player(db, arena.id, user.id)
     if me is None:
         raise DomainError("arena_not_joined")
@@ -193,12 +229,34 @@ async def ready(db: AsyncSession, arena: Arena, user: User) -> dict:
     return {"game_id": started["game_id"]}
 
 
-async def on_game_finished(db: AsyncSession, game_id: int, result: str) -> bool:
+async def is_arena_game(db: AsyncSession, game_id: int) -> bool:
+    return await db.scalar(select(ArenaGame.id).where(ArenaGame.game_id == game_id)) is not None
+
+
+async def on_game_aborted(db: AsyncSession, game_id: int, no_show: str | None) -> bool:
+    """
+    Партия арены отменена до первых ходов (без commit). no_show — сторона, не сделавшая первый ход: ей поражение,
+    сопернику победа с очками. None (сторона неизвестна, например сверка после сбоя) — партия закрыта без очков, чтобы
+    итоги арены не ждали её вечно.
+    """
+    if no_show in ("white", "black"):
+        return await on_game_finished(db, game_id, "0-1" if no_show == "white" else "1-0")
+    game = (await db.execute(select(ArenaGame).where(ArenaGame.game_id == game_id))).scalar_one_or_none()
+    if game is None or game.result is not None:
+        return False
+    game.result, game.white_points, game.black_points = "*", 0, 0
+    return True
+
+
+async def on_game_finished(db: AsyncSession, game_id: int, result: str, termination: str | None = None,
+                           plies: int | None = None) -> bool:
     """Партия арены закончилась: очки, серии, счётчики (без commit). False — это не партия арены."""
     game = (await db.execute(select(ArenaGame).where(ArenaGame.game_id == game_id))).scalar_one_or_none()
     if game is None or game.result is not None:
         return False
     white_score = {"1-0": 1.0, "0-1": 0.0}.get(result, 0.5)
+    # Договорная ничья в самом начале очков не приносит (и рвёт серию): таблица — за сыгранные партии.
+    early_draw = result == "1/2-1/2" and termination == "agreement" and plies is not None and plies < EARLY_DRAW_PLIES
     game.result = result
     sides = ((game.white_id, white_score, "white_points"), (game.black_id, 1.0 - white_score, "black_points"))
     arena = await db.get(Arena, game.arena_id)
@@ -207,7 +265,8 @@ async def on_game_finished(db: AsyncSession, game_id: int, result: str) -> bool:
         player = await _player(db, game.arena_id, user_id)
         if player is None:
             continue
-        earned = points(score, 0 if swiss else player.streak)
+        # Правило ранней ничьей — для арены (в швейцарке тур есть тур, ничья в нём считается как обычно).
+        earned = 0 if early_draw and not swiss else points(score, 0 if swiss else player.streak)
         setattr(game, field, earned)
         player.score += earned
         player.games += 1
@@ -304,21 +363,56 @@ async def _start_swiss_game(db: AsyncSession, arena: Arena, white: int, black: i
         record.white_points = record.black_points = points(0.5, 0)
 
 
+def performance(results: list[tuple[int, float]]) -> int | None:
+    """Перформанс: средний рейтинг соперников ± 400 × (победы − поражения) / партии; без партий — None."""
+    if not results:
+        return None
+    total = sum(rating for rating, _ in results)
+    balance = sum(1 if score == 1.0 else -1 if score == 0.0 else 0 for _, score in results)
+    return round((total + 400 * balance) / len(results))
+
+
 async def standings(db: AsyncSession, arena_id: int) -> list[dict]:
+    """
+    Таблица: очки; при равенстве — перформанс в арене, затем меньше партий (те же очки быстрее), затем раньше
+    вошедший. Партии, закрытые без очков («*»), в перформанс не идут.
+    """
     rows = (await db.execute(
         select(ArenaPlayer, User.username).join(User, User.id == ArenaPlayer.user_id)
         .where(ArenaPlayer.arena_id == arena_id)
-        .order_by(ArenaPlayer.score.desc(), ArenaPlayer.wins.desc(), ArenaPlayer.rating.desc(), ArenaPlayer.joined_at)
     )).all()
+    rating_of = {p.user_id: p.rating for p, _ in rows}
+    results: dict[int, list[tuple[int, float]]] = {uid: [] for uid in rating_of}
+    finished = await db.execute(select(ArenaGame).where(
+        ArenaGame.arena_id == arena_id, ArenaGame.result.in_(("1-0", "0-1", "1/2-1/2"))))
+    for g in finished.scalars():
+        white_score = {"1-0": 1.0, "0-1": 0.0}.get(g.result or "", 0.5)
+        if g.white_id in results:
+            results[g.white_id].append((rating_of.get(g.black_id, 1500), white_score))
+        if g.black_id in results:
+            results[g.black_id].append((rating_of.get(g.white_id, 1500), 1.0 - white_score))
+    perf = {uid: performance(items) for uid, items in results.items()}
+
+    def key(row) -> tuple:
+        p = row[0]
+        joined = _aware(p.joined_at) if p.joined_at else _now()
+        return (-p.score, -(perf[p.user_id] or 0), p.games, joined)
+
+    ordered = sorted(rows, key=key)
     return [{"place": i + 1, "username": name, "score": p.score, "games": p.games, "wins": p.wins,
-             "fire": p.streak >= FIRE_AFTER, "rating": p.rating} for i, (p, name) in enumerate(rows)]
+             "fire": p.streak >= FIRE_AFTER, "rating": p.rating, "performance": perf[p.user_id]}
+            for i, (p, name) in enumerate(ordered)]
 
 
-def view(arena: Arena, now: datetime | None = None) -> dict:
-    return {"id": arena.id, "schedule_key": arena.schedule_key, "format": arena.format, "rounds": arena.rounds,
-            "current_round": arena.current_round, "base_time_ms": arena.base_time_ms,
-            "increment_ms": arena.increment_ms, "starts_at": _aware(arena.starts_at).isoformat(),
-            "ends_at": _aware(arena.ends_at).isoformat(), "status": status(arena, now)}
+def view(arena: Arena, now: datetime | None = None, open_games: int = 0) -> dict:
+    out = {"id": arena.id, "schedule_key": arena.schedule_key, "format": arena.format, "rounds": arena.rounds,
+           "current_round": arena.current_round, "base_time_ms": arena.base_time_ms,
+           "increment_ms": arena.increment_ms, "starts_at": _aware(arena.starts_at).isoformat(),
+           "ends_at": _aware(arena.ends_at).isoformat(), "status": status(arena, now, open_games),
+           "open_games": open_games}
+    if arena.format == "arena":
+        out["last_start_at"] = last_start(arena).isoformat()
+    return out
 
 
 async def current_game(db: AsyncSession, arena_id: int, user_id: int) -> int | None:

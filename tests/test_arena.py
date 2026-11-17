@@ -97,6 +97,6 @@ async def test_finished_arena_rejects_join_and_play(client, db_session, token_us
 
 def test_list_and_current(client):
     arenas = client.get(API).json()["arenas"]
-    assert arenas and {a["status"] for a in arenas} <= {"running", "scheduled", "finished"}
+    assert arenas and {a["status"] for a in arenas} <= {"running", "closing", "scheduled", "finished"}
     current = client.get(f"{API}/current").json()["arena"]
-    assert current is not None and current["status"] in ("running", "scheduled")
+    assert current is not None and current["status"] in ("running", "closing", "scheduled")
