@@ -99,6 +99,9 @@ interface UserProfile {
     avatar?: string | null;
 }
 
+/** Сколько ждать восстановления входа, прежде чем показать страницу без него. */
+export const SESSION_RESTORE_WAIT_MS = 3000;
+
 export default function App() {
     const {t, language, setLanguage} = useI18n();
     // Токен — в памяти (services/authToken): при загрузке вход восстанавливается по httpOnly-cookie (таск 17.5).
@@ -184,11 +187,18 @@ export default function App() {
                 gameSocket.disconnect();
             }
         });
+        // Страховка: если сервер не отвечает на восстановление входа, страницы не ждут его дольше трёх секунд —
+        // гость должен видеть хотя бы то, что не требует сервера.
+        const giveUp = setTimeout(() => setSessionChecked(true), SESSION_RESTORE_WAIT_MS);
         void Promise.resolve(auth.restoreSession()).then((restored) => {
+            clearTimeout(giveUp);
             setSessionChecked(true);
             if (inviteCode && !restored) setShowAuthModal(true);
         });
-        return unsubscribe;
+        return () => {
+            clearTimeout(giveUp);
+            unsubscribe();
+        };
     }, [inviteCode]);
 
     useEffect(() => {

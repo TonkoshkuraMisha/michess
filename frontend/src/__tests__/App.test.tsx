@@ -5,7 +5,7 @@
 import {act, fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import {MemoryRouter} from 'react-router-dom';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
-import App from '../App';
+import App, {SESSION_RESTORE_WAIT_MS} from '../App';
 import {mockFetchRouter} from '../test/mocks';
 import {setToken} from '../services/authToken';
 
@@ -236,6 +236,31 @@ describe('App: вход восстанавливается до первой с�
         const list = requests.filter((r) => r.url.includes('/tournaments/time-machine'));
         expect(list.length).toBeGreaterThan(0);
         expect(list.every((r) => r.authorized)).toBe(true);
+    });
+
+    it('сервер не отвечает на восстановление входа — страница открывается сама через три секунды', async () => {
+        vi.useFakeTimers();
+        try {
+            vi.stubGlobal('fetch', vi.fn((url: string) => String(url).includes('/auth/refresh')
+                ? new Promise<Response>(() => undefined)
+                : Promise.resolve({ok: true, status: 200, json: async () => []} as Response)));
+            render(
+                <MemoryRouter initialEntries={['/about']}>
+                    <App/>
+                </MemoryRouter>,
+            );
+            expect(screen.getByTestId('session-restoring')).toBeInTheDocument();
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(SESSION_RESTORE_WAIT_MS - 100);
+            });
+            expect(screen.getByTestId('session-restoring')).toBeInTheDocument();
+            await act(async () => {
+                await vi.advanceTimersByTimeAsync(200);
+            });
+            expect(screen.queryByTestId('session-restoring')).toBeNull();
+        } finally {
+            vi.useRealTimers();
+        }
     });
 
     it('у вошедшего игрока страница рисуется сразу', () => {
