@@ -1,10 +1,11 @@
 // --- FILE: frontend/src/components/tournaments/MastersPage.tsx ---
 // Каталог мастеров прошлого (таск 28.5): /masters — все участники турниров «Машины времени». С любым можно сыграть
 // отдельную партию: мастер играет тем же характером, что и в историческом турнире, а партия уходит в архив под
-// его именем. Имена, строки о мастерах и названия турниров — из каталогов по ключам.
+// его именем. Имена, строки о мастерах и названия турниров — из каталогов по ключам. /masters?master=<id> — карточка
+// одного мастера (переход «к сопернику» из турнира).
 
 import {useEffect, useMemo, useState} from 'react';
-import {Link, useNavigate} from 'react-router-dom';
+import {Link, useNavigate, useSearchParams} from 'react-router-dom';
 import {Users} from 'lucide-react';
 import {renderUiMessage, uiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
@@ -62,6 +63,8 @@ export function MastersPage() {
     const [order, setOrder] = useState<MasterOrder>('strength');
     const [onlyOpening, setOnlyOpening] = useState(false);
     const [busy, setBusy] = useState(false);
+    const [params] = useSearchParams();
+    const focus = params.get('master');
 
     useEffect(() => {
         let alive = true;
@@ -74,11 +77,12 @@ export function MastersPage() {
 
     const shown = useMemo(() => {
         if (!masters) return [];
+        if (focus) return masters.filter((master) => master.id === focus);
         const nameOf = (master: Master) => guestName(master.id, t);
         const found = masters.filter((master) => matchesQuery(master, nameOf(master), query)
             && (!onlyOpening || master.openings.white.length + master.openings.black.length > 0));
         return sortMasters(found, order, nameOf, language);
-    }, [masters, query, order, onlyOpening, t, language]);
+    }, [masters, query, order, onlyOpening, t, language, focus]);
 
     const play = (master: Master, color: MasterColor) => {
         // Партия с ботом сохраняется в архив игрока: гостю сначала нужно войти.
@@ -106,7 +110,10 @@ export function MastersPage() {
                     <Users className="text-amber-400"/> {t('masters.title')}
                 </h1>
                 <p className="text-sm text-boxwood/85 max-w-3xl">{t('masters.intro')}</p>
-                <Link to="/time-machine" className="text-sm underline text-amber-300 self-start">{t('timeMachine.title')}</Link>
+                <span className="flex flex-wrap gap-3">
+                    <Link to="/time-machine" className="text-sm underline text-amber-300">{t('timeMachine.title')}</Link>
+                    {focus && <Link to="/masters" className="text-sm underline text-amber-300" data-testid="masters-all">{t('masters.allMasters')}</Link>}
+                </span>
             </header>
             {error && <p role="alert" className="text-sm text-rose-300">{renderUiMessage(error, t)}</p>}
             <div className={`${sectionClass} flex flex-wrap items-center gap-x-4 gap-y-2`}>

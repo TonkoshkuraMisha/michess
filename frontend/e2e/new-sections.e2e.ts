@@ -38,10 +38,13 @@ test('турнир: партии ботов играет воркер, своя 
         {timeout: 150_000, intervals: [2_000]}).toBeGreaterThan(0);
 
     await page.getByRole('button', {name: 'Играть мою партию'}).click();
-    const back = page.getByTestId('back-to-tournament');
-    await expect(back).toBeVisible();
+    // Во время партии — плашка турнира (тур, соперник, таблица поверх доски), после неё — путь в турнир.
+    await expect(page.getByTestId('tournament-bar')).toBeVisible();
     await resign(page);
     await expect(page.getByText(/Результат записан в турнир/)).toBeVisible();
+    const back = page.getByTestId('back-to-tournament');
+    await expect(back).toBeVisible();
+    await expect(page.getByRole('button', {name: /Реванш/})).toHaveCount(0);
     await back.click();
 
     // Тур закрыт партией игрока: в таблице у игрока поражение, тур — второй.

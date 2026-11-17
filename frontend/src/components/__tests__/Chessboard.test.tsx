@@ -702,6 +702,19 @@ describe('партия турнира', () => {
             '/bots/move': () => BOT_MOVE_DEFAULT,
             '/bots/save-game': () => ({game_id: 1002, status: 'finished', result: '0-1', tournament_id: 7,
                 rating_before: 1500, rating_after: 1488, rating_delta: -12}),
+            '/tournaments/7': () => ({
+                id: 7, format: 'round_robin', size: 2, status: 'active', base_time_ms: 150000, increment_ms: 1000,
+                current_round: 1, created_at: '2026-11-17T10:00:00Z', finished_at: null, my_seat: 1, withdrawn: false,
+                event_key: null,
+                players: [{seat: 1, kind: 'user', user_id: 1, bot_key: null, personality_name: null, rating: 1500, place: null,
+                    eliminated_round: null, config: null},
+                {seat: 2, kind: 'bot', user_id: null, bot_key: 'morphy', personality_name: null, rating: 2100, place: null,
+                    eliminated_round: null, config: null}],
+                games: [{id: 31, round: 1, board: 1, stage: 'main', white_seat: 1, black_seat: 2, base_time_ms: 150000,
+                    increment_ms: 1000, result: null, game_id: null}],
+                standings: [{seat: 1, points: 0, head_to_head: 0, sonneborn_berger: 0, place: 1},
+                    {seat: 2, points: 0, head_to_head: 0, sonneborn_berger: 0, place: 2}],
+            }),
         });
         vi.stubGlobal('fetch', fetchMock);
         const tournamentGame = {
@@ -713,7 +726,11 @@ describe('партия турнира', () => {
             </MemoryRouter>,
         );
 
-        expect(await screen.findByTestId('back-to-tournament')).toHaveAttribute('href', '/tournaments/7');
+        // Плашка турнира над партией: тур и соперник; таблица — поверх доски, без ухода со страницы.
+        expect(await screen.findByTestId('tournament-bar')).toHaveTextContent('против');
+        fireEvent.click(screen.getByTestId('tournament-bar-table'));
+        expect(screen.getByTestId('tournament-standings-overlay')).toBeInTheDocument();
+        expect(screen.queryByTestId('back-to-tournament')).toBeNull();
         expect(screen.getAllByText('02:30').length).toBeGreaterThan(0);  // 2,5 минуты — укороченный контроль переигровки
 
         clickSquare('e2');
@@ -733,6 +750,9 @@ describe('партия турнира', () => {
         });
         // Все турниры рейтинговые (15.4): игрок видит изменение рейтинга.
         expect(await screen.findByText(/Рейтинг: 1500 → 1488 \(-12\)/)).toBeInTheDocument();
+        // После партии — путь в турнир; реванша в турнире нет.
+        expect(await screen.findByTestId('back-to-tournament')).toHaveAttribute('href', '/tournaments/7');
+        expect(screen.queryByRole('button', {name: /Реванш/})).toBeNull();
     });
 });
 

@@ -172,3 +172,15 @@ describe('страница мастеров', () => {
         expect(await screen.findByTestId('master-mucklow')).toHaveTextContent('роки життя невідомі');
     });
 });
+
+describe('карточка одного мастера (переход «к сопернику» из турнира)', () => {
+    it('/masters?master=<id> показывает только его и ссылку на всех', async () => {
+        stub(() => ({guests: MASTERS}));
+        render(<MemoryRouter initialEntries={['/masters?master=keres']}>
+            <Routes><Route path="/masters" element={<MastersPage/>}/></Routes>
+        </MemoryRouter>);
+        expect(await screen.findByTestId('master-keres')).toBeInTheDocument();
+        expect(screen.queryByTestId('master-kieseritzky')).toBeNull();
+        expect(screen.getByTestId('masters-all')).toHaveAttribute('href', '/masters');
+    });
+});

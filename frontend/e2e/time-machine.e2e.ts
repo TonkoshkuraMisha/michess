@@ -55,12 +55,14 @@ test('машина времени: партия с мастером прошло
     expect(opponent.personality_name).toContain(', ');
 
     await page.getByRole('button', {name: 'Играть мою партию'}).click();
-    const back = page.getByTestId('back-to-tournament');
-    await expect(back).toBeVisible();
+    await expect(page.getByTestId('tournament-bar')).toBeVisible();
     // На доске — имя мастера на языке игрока, а не латинское имя из PGN.
     await expect(page.getByText(/Керес|Файн|Решевский|Эйве|Флор/).first()).toBeVisible();
     await resign(page);
     await expect(page.getByText(/Результат записан в турнир/)).toBeVisible();
+    // После партии: путь в турнир и карточка соперника — мастера прошлого.
+    await expect(page.getByTestId('back-to-tournament')).toBeVisible();
+    await expect(page.getByTestId('tournament-bar-opponent-card')).toHaveAttribute('href', /\/masters\?master=/);
 
     // Сервер принял партию: у неё есть результат и запись в архиве.
     await expect.poll(async () => (await state()).games.find((g) => g.id === mine!.id)?.result ?? null, {timeout: 20_000})
