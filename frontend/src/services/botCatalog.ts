@@ -19,6 +19,8 @@ export interface BotStrength {
     measured: boolean;
     games: number;
     ci95: number | null;
+    /** Исторические боты (таск 32.1): рейтинг по партиям с людьми, их число и поправка силы движка. */
+    live?: { rating: number; games: number; offset: number } | null;
 }
 
 /** Архетип мастерской: имя и описание на языке игрока — в каталоге (archetypes.<id>). */

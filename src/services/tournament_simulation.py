@@ -30,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.game import Game, GameStatus
 from src.models.tournament import Tournament, TournamentGame, TournamentPlayer
 from src.services import tournaments
+from src.services.bots import memory as bot_memory
 from src.services.bots.base import (
     HistoricalBot,
     analyse_with_stockfish,
@@ -258,10 +259,38 @@ async def simulate(db: AsyncSession, tournament_game_id: int, play: Callable = p
         return []
     seats = {p.seat: p for p in await tournaments.players_of(db, tournament.id)}
     historic = tournament.event_key is not None
+    white_seat, black_seat = seats[tgame.white_seat], seats[tgame.black_seat]
+    for seat in (white_seat, black_seat):
+        if _historical_bot_key(seat):
+            await bot_memory.refresh(db, seat.bot_key or "")
     # Партия — работа процессора: в отдельном потоке, чтобы не держать цикл событий.
     with engine_work("simulation"):
         moves, result, termination = await asyncio.to_thread(
-            play, player_for(seats[tgame.white_seat], historic), player_for(seats[tgame.black_seat], historic),
+            play, player_for(white_seat, historic), player_for(black_seat, historic),
         )
     logger.info("Tournament %s game %s: %s in %d plies", tournament.id, tgame.id, result, len(moves))
-    return await save_and_record(db, tournament, tgame, moves, result, termination)
+    following = await save_and_record(db, tournament, tgame, moves, result, termination)
+    await _remember_openings(db, white_seat, black_seat, moves, result)
+    return following
+
+
+def _historical_bot_key(player: TournamentPlayer) -> str | None:
+    from src.services.bots import BOT_INSTANCES
+
+    return player.bot_key if player.kind == "bot" and player.bot_key in BOT_INSTANCES else None
+
+
+async def _remember_openings(db: AsyncSession, white: TournamentPlayer, black: TournamentPlayer, moves: list[str],
+                             result: str) -> None:
+    """Опыт турнира ботов (таск 32.1): итог партии — дебютным ходам исторических ботов; на рейтинг не влияет."""
+    from src.services.bots import BOT_INSTANCES
+
+    for player, color in ((white, chess.WHITE), (black, chess.BLACK)):
+        key = _historical_bot_key(player)
+        if key is None:
+            continue
+        try:
+            await bot_memory.record_book(db, key, BOT_INSTANCES[key].opening_book, moves, color, result)
+        except Exception as exc:  # партия уже записана в турнир — опыт не критичен
+            await db.rollback()
+            logger.warning("Bot memory update failed for %s: %s", key, exc)

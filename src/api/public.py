@@ -155,13 +155,13 @@ async def leaderboard(category: RatingCategory = Query("blitz"), limit: int = Qu
 
 
 @router.get("/bots")
-async def bots():
+async def bots(db: AsyncSession = Depends(get_db)):
     """Сила ботов: заявленная и измеренная (с ±95 % и числом партий), сведения о калибровке и её журналы."""
-    catalog = await bots_api.get_bot_catalog()
-    fields = ("id", "declared_rating", "rating", "measured", "games", "ci95")
+    catalog = await bots_api.get_bot_catalog(db)
+    fields = ("id", "declared_rating", "rating", "measured", "games", "ci95", "live")
     return {
         "calibration": catalog["calibration"],
-        "bots": [{"kind": kind, **{field: item[field] for field in fields}}
+        "bots": [{"kind": kind, **{field: item.get(field) for field in fields}}
                  for kind, key in (("historical", "historical"), ("archetype", "archetypes")) for item in catalog[key]],
         "runs": calibration.runs(),
     }

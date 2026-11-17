@@ -143,6 +143,8 @@ export default function Chessboard() {
     const [botsView, setBotsView] = useState<'historical' | 'workshop' | 'ladder'>('historical');
     // Измеренная сила исторических ботов (калибровка матчами), если она есть.
     const [measuredBotRatings, setMeasuredBotRatings] = useState<Record<string, number>>({});
+    // Сила по партиям с людьми (таск 32.1).
+    const [liveBotStrength, setLiveBotStrength] = useState<Record<string, { rating: number; games: number }>>({});
     // Каталог целиком — для рекомендации следующего соперника в итоге партии (таск 11.5).
     const [botCatalog, setBotCatalog] = useState<BotCatalog | null>(null);
     useEffect(() => {
@@ -152,6 +154,8 @@ export default function Chessboard() {
                 setMeasuredBotRatings(Object.fromEntries(
                     catalog.historical.filter((h) => h.measured).map((h) => [h.id, h.rating]),
                 ));
+                setLiveBotStrength(Object.fromEntries(catalog.historical.flatMap((h) => (h.live && h.live.games > 0
+                    ? [[h.id, {rating: h.live.rating, games: h.live.games}]] : []))));
             })
             .catch(() => undefined);
     }, []);
@@ -1480,6 +1484,7 @@ export default function Chessboard() {
                         startFromPosition={startFromPosition}
                         onStartFromPositionChange={setStartFromPosition}
                         measured={measuredBotRatings}
+                        live={liveBotStrength}
                         odds={oddsChoice}
                         onOddsChange={setOddsChoice}
                     />
