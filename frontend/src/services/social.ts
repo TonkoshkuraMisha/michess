@@ -23,7 +23,8 @@ export interface Relation {
     online: boolean;
 }
 
-export type NotificationKind = 'challenge' | 'rematch' | 'tournament_round' | 'report_answer' | 'workout_reminder' | 'post_comment';
+export type NotificationKind = 'challenge' | 'rematch' | 'tournament_round' | 'report_answer' | 'workout_reminder' | 'post_comment'
+    | 'arena_reminder';
 
 export interface AppNotification {
     id: number;
@@ -76,5 +77,6 @@ export function notificationLink(n: AppNotification): string {
     if (n.kind === 'challenge') return `/challenge/${n.payload.code}`;
     if (n.kind === 'tournament_round') return `/tournaments/${n.payload.tournament_id}`;
     if (n.kind === 'post_comment') return `/feed/post/${n.payload.post_id}`;
+    if (n.kind === 'arena_reminder') return `/arenas/${n.payload.arena_id}`;
     return '/';
 }

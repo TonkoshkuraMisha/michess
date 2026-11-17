@@ -110,6 +110,8 @@ async def test_schedule_adds_rating_bands_only_when_enabled(db_session, monkeypa
     assert (await db_session.execute(select(Arena).where(Arena.max_rating.is_not(None)))).scalars().first() is None
     monkeypatch.setattr(settings, "ARENA_RATING_BANDS", True)
     await arena.ensure_schedule(db_session, now)
-    bands = (await db_session.execute(select(Arena).where(Arena.schedule_key.like("blitz-3+2-u%")))).scalars().all()
+    bands = (await db_session.execute(select(Arena).where(Arena.max_rating.is_not(None)))).scalars().all()
     assert {a.max_rating for a in bands} == {1300, 1700, 2100}
-    assert {a.schedule_key for a in bands} == {"blitz-3+2-u1300", "blitz-3+2-u1700", "blitz-3+2-u2100"}
+    assert {a.schedule_key for a in bands if a.conference == "central"} == {
+        "central:blitz-3+2-u1300", "central:blitz-3+2-u1700", "central:blitz-3+2-u2100"}
+    assert all(a.increment_ms == 2_000 and a.base_time_ms == 180_000 for a in bands)   # группы — только у блица 3+2

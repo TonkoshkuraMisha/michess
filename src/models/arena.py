@@ -33,6 +33,8 @@ class Arena(Base):
     # Деления при переполнении (33.2): второе и дальше — арены с parent_id первой: те же время и правила, своя таблица.
     division: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("arenas.id", ondelete="CASCADE"), nullable=True, index=True)
+    # Конференция, по расписанию которой идёт арена (33.4, src/services/arena_schedule.py); пусто — разовая арена.
+    conference: Mapped[str | None] = mapped_column(String(16), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -53,6 +55,19 @@ class ArenaPlayer(Base):
     # Швейцарка: свободных туров при нечётном числе игроков (каждому — не больше одного).
     byes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ArenaReminder(Base):
+    """Напоминание о начале арены (33.4): игрок нажал «напомнить» — незадолго до старта придёт уведомление."""
+    __tablename__ = "arena_reminders"
+    __table_args__ = (UniqueConstraint("arena_id", "user_id", name="uq_arena_reminder"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    arena_id: Mapped[int] = mapped_column(ForeignKey("arenas.id", ondelete="CASCADE"), index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    # Момент отправки уведомления; пусто — ещё не отправлено.
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class ArenaGame(Base):

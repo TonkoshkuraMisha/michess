@@ -2,7 +2,10 @@
 """
 Арены (таск 17.2): турниры между людьми по времени. Правила:
 
-* расписание: арены по SCHEDULE создаются заранее на LOOKAHEAD вперёд (лениво — при запросе списка);
+* расписание — по конференциям (таск 33.4, src/services/arena_schedule.py): арены создаются заранее на LOOKAHEAD
+  вперёд (лениво — при запросе списка); пустые будущие арены, которых в расписании больше нет, убираются;
+* напоминание (33.4): игрок нажал «напомнить» у ещё не начавшейся арены — за REMIND_BEFORE до старта ему приходит
+  уведомление (плановая задача arena_reminders, раз в минуту);
 * вход — пока арена не кончилась; «Играть» ставит игрока в ожидание (Redis), пара — с другим ожидающим, ближайшим
   по очкам и рейтингу, по возможности не с прошлым соперником; партия — обычная рейтинговая PvP-партия
   (matchmaker.start_pvp_game), цвета — тому, кто реже играл белыми;
@@ -29,17 +32,16 @@
 сыграны все партии текущего; «огня» нет. Ход турнира продвигается при каждом завершении партии и при запросе страницы.
 """
 
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.core.config import settings
 from src.core.errors import DomainError
 from src.db import redis as redis_module
-from src.models.arena import Arena, ArenaGame, ArenaPlayer
+from src.models.arena import Arena, ArenaGame, ArenaPlayer, ArenaReminder
 from src.models.user import User
+from src.services import arena_schedule
 from src.services.rating import classify_time_control
 
 FIRE_AFTER = 2
@@ -47,31 +49,13 @@ GAME_MOVES = 40
 MIN_RATED_GAMES = 10
 PEAK_DAYS = 7
 DIVISION_SIZE = 500
-RATING_BANDS = (1300, 1700, 2100)
+RATING_BANDS = arena_schedule.RATING_BANDS
 EARLY_DRAW_PLIES = 20
 BERSERK_BONUS = 1
 BERSERK_MIN_BASE_MS = 60_000
 LOOKAHEAD = timedelta(hours=6)
+REMIND_BEFORE = timedelta(minutes=5)
 WAIT_TTL_S = 120
-
-
-@dataclass(frozen=True)
-class Slot:
-    key: str
-    base_time_ms: int
-    increment_ms: int
-    every: timedelta
-    duration: timedelta
-    format: str = "arena"
-    rounds: int = 0
-
-
-SCHEDULE = (
-    Slot("bullet-1+0", 60_000, 0, timedelta(hours=2), timedelta(minutes=30)),
-    Slot("blitz-3+2", 180_000, 2_000, timedelta(hours=1), timedelta(minutes=45)),
-    Slot("rapid-10+0", 600_000, 0, timedelta(hours=3), timedelta(minutes=60)),
-    Slot("swiss-rapid-10+5", 600_000, 5_000, timedelta(hours=12), timedelta(hours=3), "swiss", 5),
-)
 
 
 def _now() -> datetime:
@@ -125,26 +109,30 @@ async def open_games(db: AsyncSession, arena_id: int) -> int:
 
 
 async def ensure_schedule(db: AsyncSession, now: datetime | None = None) -> None:
-    """Создаёт арены расписания, которые начнутся в ближайшие LOOKAHEAD (каждая — один раз)."""
+    """
+    Приводит арены ближайших LOOKAHEAD к расписанию конференций: недостающие создаёт (каждую — один раз), а ещё не
+    начавшиеся арены, которых в расписании больше нет (его поменяли или конференцию отключили), убирает — если в них
+    никто не вошёл.
+    """
     now = now or _now()
-    epoch = datetime(2026, 1, 1, tzinfo=UTC)
-    for slot in SCHEDULE:
-        step = int((now - epoch) / slot.every)
-        start = epoch + slot.every * step
-        # Группы по силе (33.2) — копии блиц-арен с потолком рейтинга; включаются настройкой, когда аудитория вырастет.
-        bands: list[int | None] = [None]
-        if settings.ARENA_RATING_BANDS and slot.format == "arena" and slot.key.startswith("blitz"):
-            bands += list(RATING_BANDS)
-        while start < now + LOOKAHEAD:
-            if start + slot.duration > now:
-                for limit in bands:
-                    key = slot.key if limit is None else f"{slot.key}-u{limit}"
-                    exists = await db.scalar(select(Arena.id).where(Arena.schedule_key == key, Arena.starts_at == start))
-                    if exists is None:
-                        db.add(Arena(schedule_key=key, base_time_ms=slot.base_time_ms, increment_ms=slot.increment_ms,
-                                     starts_at=start, ends_at=start + slot.duration, format=slot.format,
-                                     rounds=slot.rounds, max_rating=limit))
-            start += slot.every
+    plan = {(item.schedule_key, item.starts_at): item for item in arena_schedule.planned(now, LOOKAHEAD)}
+    rows = (await db.execute(select(Arena.id, Arena.schedule_key, Arena.starts_at).where(
+        Arena.schedule_key.is_not(None), Arena.ends_at > now, Arena.starts_at < now + LOOKAHEAD))).all()
+    existing = {(key, _aware(starts_at)) for _, key, starts_at in rows}
+    for slot_key, item in plan.items():
+        if slot_key not in existing:
+            db.add(Arena(schedule_key=item.schedule_key, conference=item.conference,
+                         base_time_ms=item.slot.base_time_ms, increment_ms=item.slot.increment_ms,
+                         starts_at=item.starts_at, ends_at=item.ends_at, format=item.slot.format,
+                         rounds=item.slot.rounds, max_rating=item.max_rating))
+    stale = [arena_id for arena_id, key, starts_at in rows
+             if _aware(starts_at) > now and (key, _aware(starts_at)) not in plan]
+    if stale:
+        taken = set((await db.execute(select(ArenaPlayer.arena_id).where(ArenaPlayer.arena_id.in_(stale)))).scalars())
+        empty = [arena_id for arena_id in stale if arena_id not in taken]
+        if empty:
+            await db.execute(delete(ArenaReminder).where(ArenaReminder.arena_id.in_(empty)))
+            await db.execute(delete(Arena).where(Arena.id.in_(empty)))
     await db.commit()
 
 
@@ -230,7 +218,8 @@ async def join(db: AsyncSession, arena: Arena, user: User) -> ArenaPlayer:
         root = family[0]
         target = Arena(schedule_key=None, base_time_ms=root.base_time_ms, increment_ms=root.increment_ms,
                        starts_at=root.starts_at, ends_at=root.ends_at, format=root.format, rounds=root.rounds,
-                       max_rating=root.max_rating, division=family[-1].division + 1, parent_id=root.id)
+                       max_rating=root.max_rating, division=family[-1].division + 1, parent_id=root.id,
+                       conference=root.conference)
         db.add(target)
         await db.flush()
     category = classify_time_control(arena.base_time_ms, arena.increment_ms)
@@ -552,6 +541,8 @@ def view(arena: Arena, now: datetime | None = None, open_games: int = 0) -> dict
     if arena.format == "arena":
         out["last_start_at"] = last_start(arena).isoformat()
     out["berserk"] = berserk_allowed(arena)
+    out["conference"] = arena.conference
+    out["evening"] = arena_schedule.is_evening(arena.schedule_key)
     out["max_rating"] = arena.max_rating
     out["division"] = arena.division or 1
     out["parent_id"] = arena.parent_id
@@ -568,3 +559,59 @@ async def current_game(db: AsyncSession, arena_id: int, user_id: int) -> int | N
     )
     return row
 
+
+async def counts(db: AsyncSession, arena_ids: list[int]) -> tuple[dict[int, int], dict[int, int]]:
+    """Число участников и идущих партий по аренам — двумя запросами на весь список."""
+    if not arena_ids:
+        return {}, {}
+    players = dict((await db.execute(select(ArenaPlayer.arena_id, func.count()).where(
+        ArenaPlayer.arena_id.in_(arena_ids)).group_by(ArenaPlayer.arena_id))).tuples().all())
+    unfinished = dict((await db.execute(select(ArenaGame.arena_id, func.count()).where(
+        ArenaGame.arena_id.in_(arena_ids), ArenaGame.result.is_(None)).group_by(ArenaGame.arena_id))).tuples().all())
+    return players, unfinished
+
+
+# --- Напоминания о начале арены (33.4) ---------------------------------------------------------------------
+
+async def has_reminder(db: AsyncSession, arena_id: int, user_id: int) -> bool:
+    return await db.scalar(select(ArenaReminder.id).where(
+        ArenaReminder.arena_id == arena_id, ArenaReminder.user_id == user_id)) is not None
+
+
+async def set_reminder(db: AsyncSession, arena: Arena, user_id: int, on: bool) -> bool:
+    """«Напомнить» / «не напоминать». Включить можно только до начала арены. Возвращает, включено ли напоминание."""
+    if on and status(arena) != "scheduled":
+        raise DomainError("arena_reminder_too_late")
+    exists = await has_reminder(db, arena.id, user_id)
+    if on and not exists:
+        db.add(ArenaReminder(arena_id=arena.id, user_id=user_id))
+    elif not on and exists:
+        await db.execute(delete(ArenaReminder).where(
+            ArenaReminder.arena_id == arena.id, ArenaReminder.user_id == user_id))
+    await db.commit()
+    return on
+
+
+async def send_reminders(db: AsyncSession, now: datetime | None = None) -> int:
+    """
+    Уведомления тем, кто просил напомнить: арена начинается не позже чем через REMIND_BEFORE (или уже идёт — если
+    плановая задача опоздала) и ещё не кончилась. Каждому — один раз. Возвращает число отправленных.
+    """
+    from src.services import notifications
+
+    now = now or _now()
+    rows = (await db.execute(
+        select(ArenaReminder, Arena).join(Arena, Arena.id == ArenaReminder.arena_id)
+        .where(ArenaReminder.sent_at.is_(None), Arena.starts_at <= now + REMIND_BEFORE, Arena.ends_at > now)
+        .order_by(ArenaReminder.id)
+    )).all()
+    sent = 0
+    for reminder, arena in rows:
+        reminder.sent_at = now
+        notification = await notifications.record(db, reminder.user_id, "arena_reminder", {
+            "arena_id": arena.id, "base_time_ms": arena.base_time_ms, "increment_ms": arena.increment_ms,
+            "starts_at": _aware(arena.starts_at).isoformat(),
+        })
+        await notifications.deliver(reminder.user_id, notification)
+        sent += 1
+    return sent

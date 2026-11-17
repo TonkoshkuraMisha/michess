@@ -145,6 +145,29 @@ def workout_reminders() -> int:
     logger.info("Workout reminders sent: %s", sent)
     return sent
 
+
+async def _arena_reminders_async() -> int:
+    engine = create_async_engine(_task_database_url(), poolclass=NullPool)
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+            from src.services import arena
+
+            sent = await arena.send_reminders(db)
+            await db.commit()
+            return sent
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="arena_reminders", ignore_result=True)
+def arena_reminders() -> int:
+    """Напоминания о начале арен (таск 33.4) — по расписанию celery beat, раз в минуту."""
+    sent = asyncio.run(_arena_reminders_async())
+    if sent:
+        logger.info("Arena reminders sent: %s", sent)
+    return sent
+
+
 async def _bot_selfplay_async() -> int:
     engine = create_async_engine(_task_database_url(), poolclass=NullPool)
     try:

@@ -6,6 +6,10 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {setToken} from '../../../services/authToken';
 import {clock, controlLabel, secondsUntil} from '../../../services/arenas';
 import {ArenaBanner, ArenaPage, ArenasPage, WAIT_POLL_MS} from '../ArenaPages';
+import {notificationText} from '../../social/SocialHeader';
+import {notificationLink} from '../../../services/social';
+import type {AppNotification} from '../../../services/social';
+import {makeI18n} from '../../../i18n';
 
 const SOON = new Date(Date.now() + 40 * 60_000).toISOString();
 const RUNNING = {id: 3, schedule_key: 'blitz-3+2', base_time_ms: 180000, increment_ms: 2000, starts_at: new Date().toISOString(),
@@ -139,6 +143,70 @@ describe('берсерк (33.3)', () => {
         routes('/arenas/3');
         await screen.findByTestId('arena-timing');
         expect(screen.queryByTestId('arena-berserk-rule')).toBeNull();
+    });
+});
+
+describe('расписание по конференциям и напоминания (33.4)', () => {
+    const IN_TEN_MINUTES = new Date(Date.now() + 10 * 60_000).toISOString();
+    const EVENING = {...RUNNING, id: 4, schedule_key: 'central:evening-5+3', base_time_ms: 300000, increment_ms: 3000,
+        status: 'scheduled', starts_at: IN_TEN_MINUTES, conference: 'central', evening: true};
+
+    it('в списке — конференция арены и «вечерняя»; неизвестная конференция в название не попадает', async () => {
+        const arenas = [{...EVENING, players: 0}, {...RUNNING, conference: 'northern', players: 3},
+            {...RUNNING, id: 5, conference: 'lunar', players: 0}];
+        vi.stubGlobal('fetch', vi.fn(async () => ({ok: true, status: 200, json: async () => ({arenas})} as Response)));
+        routes('/arenas');
+        expect(await screen.findByTestId('arena-4')).toHaveTextContent('Вечерняя арена 5+3 · Центральная конференция');
+        expect(screen.getByTestId('arena-3')).toHaveTextContent('Арена 3+2 · Северная конференция');
+        expect(screen.getByTestId('arena-5')).toHaveTextContent(/^Арена 3\+2(?! ·)/);
+        expect(screen.getByTestId('arenas-conference-note')).toHaveTextContent('пяти конференций');
+    });
+
+    it('анонс в лобби: короткое название и таймер до начала', async () => {
+        vi.stubGlobal('fetch', vi.fn(async () => ({ok: true, status: 200, json: async () => ({arena: EVENING})} as Response)));
+        render(<MemoryRouter><ArenaBanner/></MemoryRouter>);
+        const banner = await screen.findByTestId('arena-banner');
+        expect(banner).toHaveTextContent('Вечерняя арена 5+3');
+        expect(banner).not.toHaveTextContent('конференция');
+        expect(banner).toHaveTextContent(/начнётся через (10:00|9:5\d)/);
+    });
+
+    it('«напомнить» у ещё не начавшейся арены: запрос, отметка и отмена', async () => {
+        let reminder = false;
+        const calls: string[] = [];
+        vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+            const u = String(url);
+            if (u.endsWith('/remind')) {
+                calls.push(init?.method ?? 'GET');
+                reminder = init?.method === 'POST';
+                return {ok: true, status: 200, json: async () => ({reminder})} as Response;
+            }
+            return {ok: true, status: 200, json: async () => ({...EVENING, standings: [],
+                me: {joined: false, waiting: false, current_game_id: null, reminder}})} as Response;
+        }));
+        routes('/arenas/4');
+        const button = await screen.findByTestId('arena-remind');
+        await act(async () => fireEvent.click(button));
+        expect(await screen.findByTestId('arena-reminder-on')).toHaveTextContent('Напомним перед началом');
+        expect(screen.queryByTestId('arena-remind')).toBeNull();
+        await act(async () => fireEvent.click(screen.getByTestId('arena-reminder-off')));
+        expect(await screen.findByTestId('arena-remind')).toBeInTheDocument();
+        expect(calls).toEqual(['POST', 'DELETE']);
+    });
+
+    it('у идущей арены напоминания нет; уведомление ведёт на страницу арены', async () => {
+        vi.stubGlobal('fetch', vi.fn(async () => ({ok: true, status: 200, json: async () => ({...RUNNING, standings: [],
+            me: {joined: true, waiting: false, current_game_id: null, reminder: false}})} as Response)));
+        routes('/arenas/3');
+        await screen.findByTestId('arena-play');
+        expect(screen.queryByTestId('arena-remind')).toBeNull();
+
+        const n = {id: 1, kind: 'arena_reminder', payload: {arena_id: 4, base_time_ms: 300000, increment_ms: 3000,
+            starts_at: IN_TEN_MINUTES}, created_at: null, read: false} as AppNotification;
+        expect(notificationLink(n)).toBe('/arenas/4');
+        expect(notificationText(n, makeI18n('ru').t)).toBe('Арена 5+3 скоро начнётся');
+        expect(notificationText(n, makeI18n('uk').t)).toBe('Арена 5+3 скоро почнеться');
+        expect(notificationText(n, makeI18n('en').t)).toBe('Arena 5+3 is about to start');
     });
 });
 
