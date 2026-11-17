@@ -189,6 +189,70 @@ class SoundEngine {
         this.playTone(centerFreq / 5.5, 0.06, delaySec, 'triangle', volume * 0.3, centerFreq / 11);
     }
 
+    /** Медный голос фанфар: пила через фильтр с лёгким вибрато — «труба» синтезом, без записей. */
+    private brass(freq: number, start: number, duration: number, gain = 0.07): void {
+        const ctx = this.getContext();
+        if (!ctx) return;
+        const t0 = ctx.currentTime + start;
+        const osc = ctx.createOscillator();
+        const filter = ctx.createBiquadFilter();
+        const amp = ctx.createGain();
+        const vibrato = ctx.createOscillator();
+        const depth = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(freq, t0);
+        vibrato.frequency.setValueAtTime(5.5, t0);
+        depth.gain.setValueAtTime(freq * 0.006, t0);
+        vibrato.connect(depth);
+        depth.connect(osc.frequency);
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(900, t0);
+        filter.frequency.linearRampToValueAtTime(2600, t0 + 0.08);
+        filter.frequency.linearRampToValueAtTime(1500, t0 + duration);
+        amp.gain.setValueAtTime(0.0001, t0);
+        amp.gain.linearRampToValueAtTime(gain, t0 + 0.04);
+        amp.gain.setValueAtTime(gain * 0.85, t0 + duration * 0.7);
+        amp.gain.exponentialRampToValueAtTime(0.0001, t0 + duration);
+        osc.connect(filter);
+        filter.connect(amp);
+        amp.connect(ctx.destination);
+        osc.start(t0);
+        vibrato.start(t0);
+        osc.stop(t0 + duration + 0.05);
+        vibrato.stop(t0 + duration + 0.05);
+    }
+
+    /**
+     * Фанфары призёру турнира (решение владельца, 17.11): победителю — торжественный сигнал с аккордом в конце,
+     * серебру и бронзе — короче. Звук выключен — тишина.
+     */
+    public playFanfare(place: number): void {
+        if (this.muted) return;
+        const chord = (notes: number[], start: number, duration: number) =>
+            notes.forEach((freq) => this.brass(freq, start, duration, 0.05));
+        // До мажор: C5 E5 G5 C6.
+        const [c5, e5, g5, c6] = [523.25, 659.25, 783.99, 1046.5];
+        if (place === 1) {
+            this.brass(g5 / 2, 0, 0.16);
+            this.brass(g5 / 2, 0.18, 0.16);
+            this.brass(g5 / 2, 0.36, 0.16);
+            this.brass(c5, 0.54, 0.55);
+            this.brass(g5 / 2, 1.12, 0.16);
+            this.brass(c5, 1.3, 0.16);
+            this.brass(e5, 1.48, 0.16);
+            chord([c5, e5, g5, c6], 1.66, 1.6);
+        } else if (place === 2) {
+            this.brass(g5 / 2, 0, 0.16);
+            this.brass(c5, 0.18, 0.16);
+            this.brass(e5, 0.36, 0.16);
+            chord([c5, e5, g5], 0.54, 1.3);
+        } else {
+            this.brass(c5, 0, 0.18);
+            this.brass(e5, 0.2, 0.18);
+            chord([c5, g5], 0.4, 1.1);
+        }
+    }
+
     public play(event: SoundEventType): void {
         if (this.muted) return;
 
