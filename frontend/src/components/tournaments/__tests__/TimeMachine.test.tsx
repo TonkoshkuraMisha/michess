@@ -179,6 +179,16 @@ describe('лента турниров', () => {
         expect(await screen.findByTestId('tournament-opened')).toBeInTheDocument();
     });
 
+    it('гость видит ленту, а при входе в турнир получает подсказку войти — без запроса к серверу', async () => {
+        setToken(null);
+        const fetchMock = stub(() => ({events: [AVRO]}));
+        renderPage();
+        fireEvent.click(await screen.findByTestId('start-avro_1938'));
+        expect(screen.getByRole('alert')).toHaveTextContent('Войдите, чтобы стать участником турнира');
+        expect(posts(fetchMock)).toHaveLength(0);
+        expect(screen.queryByTestId('tournament-opened')).toBeNull();
+    });
+
     it('пуля и свой контроль не предлагаются', async () => {
         stub(() => ({events: [AVRO]}));
         renderPage();

@@ -3018,6 +3018,7 @@ export const en = {
         loading: 'Loading tournaments…',
         loadFailed: 'Could not load the tournaments',
         startFailed: 'Could not start the tournament',
+        loginToEnter: 'Sign in to enter a tournament: your games and your place are saved to your profile.',
         control: 'Time control',
         controlHint: 'The same for all your games in the tournament. You can play one game a day: the tournament waits for you.',
         formats: {round_robin: 'Round robin', knockout: 'Knockout', swiss: 'Swiss'},

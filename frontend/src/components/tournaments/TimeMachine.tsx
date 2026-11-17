@@ -6,9 +6,10 @@
 import {useEffect, useState} from 'react';
 import {Link, useNavigate} from 'react-router-dom';
 import {Hourglass} from 'lucide-react';
-import {renderUiMessage, useI18n} from '../../i18n';
+import {renderUiMessage, uiMessage, useI18n} from '../../i18n';
 import type {MessageKey, UiMessage} from '../../i18n';
 import {errorMessage} from '../../services/apiErrors';
+import {getToken} from '../../services/authToken';
 import {ALL_TIME_CONTROLS} from '../../config/timeControls';
 import {
     eventTitle, fieldName, fieldShortName, getTimeMachine, guestAbout, scoreText, startHistoricEvent,
@@ -160,6 +161,11 @@ export function TimeMachinePage() {
     const controls = ALL_TIME_CONTROLS.filter((c) => !c.isManual && c.base >= 3);
     const chosen = controls.find((c) => c.id === control) ?? controls[0];
     const start = (event: HistoricEvent) => {
+        // Лента открыта и гостю, но участником турнира становится игрок: партии и место пишутся в его профиль.
+        if (!getToken()) {
+            setError(uiMessage('timeMachine.loginToEnter'));
+            return;
+        }
         setBusy(true);
         setError(null);
         startHistoricEvent(event.key, chosen.base * 60_000, chosen.inc * 1000)
