@@ -82,3 +82,60 @@ async def test_a_name_with_a_comma_that_is_not_a_master_is_still_rejected():
     with pytest.raises(ApiError) as caught:
         await _resolve_personality_for_save(None, None, payload)  # type: ignore[arg-type]
     assert caught.value.status_code == 400
+
+
+SCHOLARS_MATE = ["e2e4", "e7e5", "d1h5", "b8c6", "f1c4", "g8f6", "h5f7"]  # мат чёрным: побеждают белые
+
+
+def test_knockout_win_against_a_master_takes_the_player_to_the_next_round(client, token_user_1, published_simulations):
+    """Лондон 1851 на выбывание: победа игрока над мастером, присланная настоящим запросом, выводит его дальше."""
+    headers = auth(token_user_1)
+    t = client.post(f"{API}/time-machine/london_1851", json={}, headers=headers).json()
+    assert (t["format"], t["size"], t["current_round"]) == ("knockout", 17, 1)
+    game, color, opponent = my_game(t)
+    # Новичок — младший по посеву: он играет единственный стыковой матч первого круга, и его соперник — мастер прошлого.
+    assert len(t["games"]) == 1 and opponent["kind"] == "personality"
+    guest = GUESTS_BY_ID[opponent["bot_key"].removeprefix("guest:")]
+
+    assert client.post(f"{API}/{t['id']}/games/{game['id']}/start", headers=headers).status_code == 200
+    moves, result = (SCHOLARS_MATE, "1-0") if color == "white" else (FOOLS_MATE, "0-1")
+    saved = client.post(SAVE, headers=headers, json={
+        "bot_id": "custom", "personality_name": guest.pgn_name, "player_color": color, "result": result,
+        "moves_uci": moves, "base_time_ms": game["base_time_ms"], "increment_ms": game["increment_ms"],
+        "tournament_game_id": game["id"],
+    })
+    assert saved.status_code == 200, saved.text
+
+    state = client.get(f"{API}/{t['id']}", headers=headers).json()
+    assert next(g for g in state["games"] if g["id"] == game["id"])["result"] == result
+    # Игрок прошёл в круг шестнадцати, мастер выбыл; у игрока новая партия с другим соперником.
+    assert (state["status"], state["current_round"]) == ("active", 2)
+    players = {p["seat"]: p for p in state["players"]}
+    assert players[opponent["seat"]]["eliminated_round"] == 1
+    assert players[state["my_seat"]]["eliminated_round"] is None
+    next_game, _, next_opponent = my_game(state)
+    assert next_game["round"] == 2 and next_opponent["seat"] != opponent["seat"]
+    assert len([g for g in state["games"] if g["round"] == 2]) == 8
+
+
+def test_knockout_loss_to_a_master_ends_the_tournament_for_the_player(client, token_user_1, published_simulations):
+    headers = auth(token_user_1)
+    t = client.post(f"{API}/time-machine/london_1851", json={}, headers=headers).json()
+    game, color, opponent = my_game(t)
+    guest = GUESTS_BY_ID[opponent["bot_key"].removeprefix("guest:")]
+    assert client.post(f"{API}/{t['id']}/games/{game['id']}/start", headers=headers).status_code == 200
+    # Игрок сдаётся первым же ходом: партия без ходов, засчитывается поражение.
+    lost = "0-1" if color == "white" else "1-0"
+    saved = client.post(SAVE, headers=headers, json={
+        "bot_id": "custom", "personality_name": guest.pgn_name, "player_color": color, "result": lost,
+        "termination": "resignation", "moves_uci": [], "base_time_ms": game["base_time_ms"],
+        "increment_ms": game["increment_ms"], "tournament_game_id": game["id"],
+    })
+    assert saved.status_code == 200, saved.text
+    state = client.get(f"{API}/{t['id']}", headers=headers).json()
+    players = {p["seat"]: p for p in state["players"]}
+    assert players[state["my_seat"]]["eliminated_round"] == 1
+    assert players[opponent["seat"]]["eliminated_round"] is None
+    # Турнир продолжается без игрока: дальше мастера играют между собой.
+    assert not [g for g in state["games"] if g["round"] == state["current_round"] and g["result"] is None
+                and state["my_seat"] in (g["white_seat"], g["black_seat"])]

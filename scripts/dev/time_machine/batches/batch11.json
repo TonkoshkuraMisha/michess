@@ -1,0 +1,18 @@
+{
+  "guests_header": "",
+  "guests": [],
+  "events": [
+    {"key": "st_petersburg_1914_final", "year": 1914, "format": "round_robin", "cycles": 2,
+     "note": "Финал пяти победителей предварительного турнира в два круга. В истории очки предварительного турнира шли в зачёт; здесь — очки только финала. Победил Ласкер.",
+     "table": [["lasker", 7], ["capablanca", 5], ["alekhine", 4], ["tarrasch", 2], ["marshall", 2]],
+     "en": {"title": "St. Petersburg 1914: the final", "place": "St. Petersburg, 1914",
+            "story": "The final of the five winners of the preliminary tournament: Lasker, Capablanca, Alekhine, Tarrasch and Marshall play each other twice. In history the preliminary scores carried over, so Capablanca started with a lead of a point and a half — but Lasker scored 7 out of 8 and overtook him by half a point. Here everyone starts from zero, and you are the sixth player.",
+            "real": "The final: Lasker 7 out of 8, Capablanca 5, Alekhine 4, Tarrasch and Marshall 2 each. With the preliminary scores: Lasker 13½, Capablanca 13."},
+     "uk": {"title": "Санкт-Петербург 1914: фінал", "place": "Санкт-Петербург, 1914",
+            "story": "Фінал п’яти переможців попереднього турніру: Ласкер, Капабланка, Алехін, Тарраш і Маршалл грають у два кола. В історії очки попереднього турніру йшли в залік, і Капабланка починав фінал із відривом у півтора очка — але Ласкер набрав 7 із 8 і випередив його на пів очка. Тут усі починають з нуля, а ви — шостий учасник.",
+            "real": "Фінал: Ласкер — 7 із 8, Капабланка — 5, Алехін — 4, Тарраш і Маршалл — по 2. З очками попереднього турніру: Ласкер 13½, Капабланка 13."},
+     "ru": {"title": "Санкт-Петербург 1914: финал", "place": "Санкт-Петербург, 1914",
+            "story": "Финал пяти победителей предварительного турнира: Ласкер, Капабланка, Алехин, Тарраш и Маршалл играют в два круга. В истории очки предварительного турнира шли в зачёт, и Капабланка начинал финал с отрывом в полтора очка — но Ласкер набрал 7 из 8 и обошёл его на пол-очка. Здесь все начинают с нуля, а вы — шестой участник.",
+            "real": "Финал: Ласкер — 7 из 8, Капабланка — 5, Алехин — 4, Тарраш и Маршалл — по 2. С очками предварительного турнира: Ласкер 13½, Капабланка 13."}}
+  ]
+}
