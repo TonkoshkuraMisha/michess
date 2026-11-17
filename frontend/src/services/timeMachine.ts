@@ -33,6 +33,8 @@ export interface HistoricEvent {
     rounds: number;
     /** Сколько партий сыграет игрок; null — зависит от него самого (на выбывание). */
     player_games: number | null;
+    /** Настоящая таблица неполная: турнир не доиграли или ничьи не давали очков. */
+    partial?: boolean;
     field: FieldEntry[];
     active_id: number | null;
     best_place: number | null;

@@ -260,6 +260,34 @@ describe('турнир в историческом составе', () => {
         expect(withBot.custom).toBeNull();
     });
 
+    it('сетка с проходами: кто не играл в первом круге, перечислен; ранний круг назван по номеру', async () => {
+        // Лондон 1851 с игроком: пятеро в сетке на восемь — играют только 4-й и 5-й номера.
+        const base = doubleRoundRobin();
+        const knockout: Tournament = {
+            ...base, format: 'knockout', size: 5, event_key: 'london_1851', current_round: 1, standings: [],
+            players: [
+                player(1, {kind: 'bot', bot_key: 'anderssen', rating: 2100}),
+                player(2, {kind: 'personality', bot_key: 'guest:wyvill', personality_name: 'Wyvill, Marmaduke', config: CONFIG}),
+                player(3, {kind: 'bot', bot_key: 'staunton'}),
+                player(4, {kind: 'personality', bot_key: 'guest:mucklow', personality_name: 'Mucklow, James R.', config: CONFIG}),
+                player(5, {kind: 'user', user_id: 1, rating: 1500}),
+            ],
+            my_seat: 5,
+            games: [{id: 1, round: 1, board: 4, stage: 'main', white_seat: 4, black_seat: 5, base_time_ms: 600_000,
+                increment_ms: 0, result: null, game_id: null}],
+        };
+        stub((url) => (url.includes('/time-machine') ? {events: []} : url.includes('/profile/me') ? {username: 'alice'} : knockout));
+        render(
+            <MemoryRouter initialEntries={['/tournaments/5']}>
+                <Routes><Route path="/tournaments/:tournamentId" element={<TournamentView/>}/></Routes>
+            </MemoryRouter>,
+        );
+        expect(await screen.findByTestId('bracket-byes')).toHaveTextContent('Проходят без игры: Андерсен, Уайвилл, Стаунтон');
+        // Сетка на пятерых — три круга: первый из них четвертьфинал.
+        expect(screen.getByTestId('bracket')).toHaveTextContent('Четвертьфинал');
+        expect(screen.getByTestId('bracket')).toHaveTextContent('Маклоу');
+    });
+
     it('страница турнира: название события, обе партии пары в таблице, ссылка на «Машину времени»', async () => {
         stub((url) => (url.includes('/time-machine') ? {events: [AVRO]}
             : url.includes('/profile/me') ? {username: 'alice'} : doubleRoundRobin()));

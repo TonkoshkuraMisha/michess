@@ -263,6 +263,10 @@ export function TournamentView() {
     const rounds = Array.from(new Set(tournament.games.map((g) => g.round))).sort((a, b) => a - b);
     const totalRounds = roundsTotal(tournament);
     const historic = Boolean(tournament.event_key);
+    // Сетка на выбывание: кто в первом круге не играл — прошёл дальше без игры (по порядку посева).
+    const firstRoundSeats = new Set(tournament.games.filter((g) => g.round === 1).flatMap((g) => [g.white_seat, g.black_seat]));
+    const byes = tournament.format === 'knockout'
+        ? tournament.players.filter((p) => !firstRoundSeats.has(p.seat)).sort((a, b) => a.seat - b.seat) : [];
     // В большом турнире расписание длинное: туры свёрнуты, открыт текущий.
     const foldRounds = rounds.length > 8;
     const pending = myPendingGame(tournament);
@@ -413,6 +417,12 @@ export function TournamentView() {
                             return (
                                 <div key={round} className="flex flex-col gap-3 justify-around min-w-[180px]">
                                     <h3 className="text-xs text-boxwood/70">{knockoutRoundName(t, tournament.size, round)}</h3>
+                                    {round === 1 && byes.length > 0 && (
+                                        // Большая сетка: сильнейшие по посеву проходят первый круг без игры.
+                                        <p className="text-xs text-boxwood/70" data-testid="bracket-byes">
+                                            {t('tournaments.byes', {names: byes.map((p) => name(p.seat)).join(', ')})}
+                                        </p>
+                                    )}
                                     {boards.map((board) => {
                                         const match = tournament.games.filter((g) => g.round === round && g.board === board);
                                         const main = match.find((g) => g.stage === 'main')!;
@@ -463,7 +473,8 @@ export function TournamentView() {
 
             {tournament.status === 'finished' && me?.place != null && me.place <= 3 && (
                 <Diploma name={myName || t('tournaments.you')} place={me.place}
-                         format={t(`tournaments.formats.${tournament.format}`)} size={tournament.size}
+                         format={historic && tournament.event_key ? eventTitle(tournament.event_key, t)
+                             : t(`tournaments.formats.${tournament.format}`)} size={tournament.size}
                          date={new Date(tournament.finished_at ?? tournament.created_at).toLocaleDateString(dateLocale.code)}/>
             )}
         </div>
