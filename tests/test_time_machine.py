@@ -37,6 +37,8 @@ async def play(db, tournament_id: int, outcome) -> None:
 
 def test_guests_are_well_formed():
     assert len(GUESTS) == len(GUESTS_BY_ID) >= 40
+    # Имя из PGN — ключ, по которому сервер узнаёт мастера при сохранении партии: двух одинаковых быть не может.
+    assert len({guest.pgn_name for guest in GUESTS}) == len(GUESTS)
     for guest in GUESTS:
         assert guest.id.isascii() and guest.id == guest.id.lower()
         assert guest.key == f"guest:{guest.id}"
