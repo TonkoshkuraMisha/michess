@@ -33,6 +33,17 @@ export interface ArenaInfo {
     /** Деление при переполнении (33.2): 1 — основное. */
     division?: number;
     parent_id?: number | null;
+    /** Конференция, по расписанию которой идёт арена (33.4): central | western | northern | southern | eastern. */
+    conference?: string | null;
+    /** Вечерняя арена 5+3 — главная арена дня своей конференции (33.4). */
+    evening?: boolean;
+}
+
+export const CONFERENCES = ['central', 'western', 'northern', 'southern', 'eastern'] as const;
+export type ConferenceKey = typeof CONFERENCES[number];
+
+export function conferenceKey(value: string | null | undefined): ConferenceKey | null {
+    return (CONFERENCES as readonly string[]).includes(value ?? '') ? value as ConferenceKey : null;
 }
 
 export interface ArenaStanding {
@@ -50,7 +61,11 @@ export interface ArenaStanding {
 export interface ArenaDetail extends ArenaInfo {
     standings: ArenaStanding[];
     /** division_arena_id: игрок в другом делении этой арены — клиент переходит туда (33.2). */
-    me: { joined: boolean; waiting: boolean; current_game_id: number | null; division_arena_id?: number | null } | null;
+    /** reminder: игрок просил напомнить о начале этой арены (33.4). */
+    me: {
+        joined: boolean; waiting: boolean; current_game_id: number | null; division_arena_id?: number | null;
+        reminder?: boolean;
+    } | null;
 }
 
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -76,6 +91,9 @@ export const arenasApi = {
     join: (id: number) => call<{ joined: boolean; arena_id?: number }>(`/${id}/join`, {method: 'POST'}),
     ready: (id: number) => call<{ waiting?: boolean; game_id?: number }>(`/${id}/ready`, {method: 'POST'}),
     leaveWaiting: (id: number) => call<{ waiting: boolean }>(`/${id}/leave-waiting`, {method: 'POST'}),
+    /** «Напомнить»: незадолго до начала арены придёт уведомление; forgetReminder — отменить. */
+    remind: (id: number) => call<{ reminder: boolean }>(`/${id}/remind`, {method: 'POST'}),
+    forgetReminder: (id: number) => call<{ reminder: boolean }>(`/${id}/remind`, {method: 'DELETE'}),
 };
 
 export function controlLabel(a: Pick<ArenaInfo, 'base_time_ms' | 'increment_ms'>): string {

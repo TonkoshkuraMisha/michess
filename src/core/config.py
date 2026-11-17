@@ -21,6 +21,9 @@ class Settings(BaseSettings):
 
     # Арены по группам рейтинга (таск 33.2): включить, когда в средней арене стабильно больше 40 участников.
     ARENA_RATING_BANDS: bool = False
+    # Конференции, по расписанию которых создаются арены (таск 33.4), через запятую. Пока игроков мало, список можно
+    # сократить (например, "central"), чтобы не дробить их по аренам пяти поясов.
+    ARENA_CONFERENCES: str = "central,western,northern,southern,eastern"
 
     # "production" включает строгие проверки при старте (SECRET_KEY) и прячет /docs.
     ENVIRONMENT: str = "development"

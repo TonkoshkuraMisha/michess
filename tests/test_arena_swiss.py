@@ -87,4 +87,5 @@ async def test_lonely_swiss_ends_without_games(db_session, test_user_1):
 async def test_schedule_has_a_swiss_slot(db_session):
     await arena.ensure_schedule(db_session, datetime(2026, 11, 15, 11, 0, tzinfo=UTC))
     swiss = (await db_session.execute(select(Arena).where(Arena.format == "swiss"))).scalars().all()
-    assert swiss and all(s.rounds == 5 and s.increment_ms == 5_000 for s in swiss)
+    # Воскресенье: ежедневная швейцарка 10+5 и еженедельная 15+10, обе по 5 туров.
+    assert {(s.rounds, s.base_time_ms, s.increment_ms) for s in swiss} == {(5, 600_000, 5_000), (5, 900_000, 10_000)}

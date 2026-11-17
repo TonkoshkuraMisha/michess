@@ -1,17 +1,20 @@
 # --- FILE: src/api/arenas.py ---
-"""Арены — турниры между людьми (таск 17.2): расписание, вход, «Играть», таблица. Правила — src/services/arena.py."""
+"""
+Арены — турниры между людьми (таск 17.2): расписание, вход, «Играть», таблица, напоминание о начале. Правила —
+src/services/arena.py, расписание по конференциям — src/services/arena_schedule.py.
+"""
 
 from datetime import timedelta
 
 from fastapi import APIRouter, Depends, Request, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.deps import get_current_user
 from src.api.fair_play import optional_user_id
 from src.core.errors import DomainError
 from src.db.session import get_db
-from src.models.arena import Arena, ArenaPlayer
+from src.models.arena import Arena
 from src.models.user import User
 from src.services import arena as service
 from src.services.matchmaker import MatchmakingError
@@ -27,41 +30,46 @@ def _http(exc: DomainError):
     return exc.to_http(_CODES.get(exc.code, status.HTTP_409_CONFLICT))
 
 
-async def _players_count(db: AsyncSession, arena_id: int) -> int:
-    return await db.scalar(select(func.count()).select_from(ArenaPlayer).where(ArenaPlayer.arena_id == arena_id)) or 0
+async def _views(db: AsyncSession, rows: list[Arena], now) -> list[dict]:
+    """Карточки арен списка: число участников и идущих партий — двумя запросами на весь список."""
+    players, unfinished = await service.counts(db, [a.id for a in rows])
+    return [{**service.view(a, now, unfinished.get(a.id, 0)), "players": players.get(a.id, 0)} for a in rows]
 
 
 @router.get("")
 async def list_arenas(db: AsyncSession = Depends(get_db)):
-    """Идущие, ближайшие (на 6 часов вперёд) и недавно законченные арены; расписание дополняется при запросе."""
+    """
+    Идущие, ближайшие (на 6 часов вперёд) и недавно законченные арены; расписание дополняется при запросе.
+    Законченные арены, в которые никто не вошёл, не показываются: при расписании пяти конференций они засоряли бы список.
+    """
     await service.ensure_schedule(db)
     now = service._now()
-    rows = (await db.execute(
+    rows = list((await db.execute(
         select(Arena).where(Arena.ends_at > now - RECENT, Arena.starts_at < now + service.LOOKAHEAD)
         .order_by(Arena.starts_at, Arena.id)
-    )).scalars().all()
-    return {"arenas": [{**service.view(a, now, await service.open_games(db, a.id)), "players": await _players_count(db, a.id)}
-                       for a in rows]}
+    )).scalars().all())
+    views = await _views(db, rows, now)
+    return {"arenas": [v for v in views if v["status"] != "finished" or v["players"] > 0]}
 
 
 @router.get("/current")
 async def current_arena(db: AsyncSession = Depends(get_db)):
-    """Для лобби: идущая арена с наибольшим числом игроков, иначе ближайшая."""
+    """
+    Для лобби: арена, в которую можно войти и играть прямо сейчас (пары ещё создаются), — та, где больше игроков;
+    иначе ближайшая по времени начала. Арена, которая только доигрывает партии, в анонс не идёт.
+    """
     await service.ensure_schedule(db)
     now = service._now()
-    rows = (await db.execute(
-        select(Arena).where(Arena.ends_at > now, Arena.starts_at < now + service.LOOKAHEAD).order_by(Arena.starts_at)
-    )).scalars().all()
-    if not rows:
-        return {"arena": None}
-    running = [a for a in rows if service.status(a, now) in ("running", "closing")]
+    rows = list((await db.execute(
+        select(Arena).where(Arena.ends_at > now, Arena.starts_at < now + service.LOOKAHEAD)
+        .order_by(Arena.starts_at, Arena.id)
+    )).scalars().all())
+    views = await _views(db, rows, now)
+    running = [v for v in views if v["status"] == "running"]
     if running:
-        counts = {a.id: await _players_count(db, a.id) for a in running}
-        chosen = max(running, key=lambda a: (counts[a.id], -a.id))
-    else:
-        chosen = rows[0]
-    return {"arena": {**service.view(chosen, now, await service.open_games(db, chosen.id)),
-                      "players": await _players_count(db, chosen.id)}}
+        return {"arena": max(running, key=lambda v: (v["players"], -v["id"]))}
+    upcoming = [v for v in views if v["status"] == "scheduled"]
+    return {"arena": upcoming[0] if upcoming else None}
 
 
 @router.get("/{arena_id}")
@@ -85,7 +93,8 @@ async def get_arena(arena_id: int, request: Request, db: AsyncSession = Depends(
                     division_id = item.id
         me = {"joined": joined, "waiting": user_id in await service.waiting_ids(arena.id),
               "current_game_id": await service.current_game(db, arena.id, user_id) if joined else None,
-              "division_arena_id": division_id}
+              "division_arena_id": division_id,
+              "reminder": await service.has_reminder(db, arena.id, user_id)}
     return {**service.view(arena, None, await service.open_games(db, arena.id)),
             "standings": await service.standings(db, arena.id), "me": me}
 
@@ -98,6 +107,23 @@ async def join_arena(arena_id: int, db: AsyncSession = Depends(get_db), user: Us
     except DomainError as exc:
         raise _http(exc) from None
     return {"joined": True, "arena_id": player.arena_id}
+
+
+@router.post("/{arena_id}/remind")
+async def remind(arena_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """«Напомнить»: незадолго до начала арены игроку придёт уведомление (33.4). Только до её начала."""
+    try:
+        return {"reminder": await service.set_reminder(db, await service.get(db, arena_id), user.id, True)}
+    except DomainError as exc:
+        raise _http(exc) from None
+
+
+@router.delete("/{arena_id}/remind")
+async def forget_reminder(arena_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    try:
+        return {"reminder": await service.set_reminder(db, await service.get(db, arena_id), user.id, False)}
+    except DomainError as exc:
+        raise _http(exc) from None
 
 
 @router.post("/{arena_id}/ready")

@@ -129,6 +129,7 @@ ERROR_MESSAGES: dict[str, str] = {
     "arena_not_joined": "Join the arena first",
     "berserk_unavailable": "Berserk is not available in this game",
     "berserk_too_late": "Berserk is only possible before your first move",
+    "arena_reminder_too_late": "This arena has already started",
     "tablebase_unavailable": "Endgame tables are unavailable, please try again later",
     "tablebase_too_many_pieces": "Endgame tables cover at most {max} pieces",
     "puzzle_not_active": "This puzzle is no longer active: open the next one",

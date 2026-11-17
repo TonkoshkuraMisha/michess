@@ -38,9 +38,9 @@ async def test_schedule_is_created_once(db_session):
     first = await db_session.scalar(select(func.count()).select_from(Arena))
     await arena.ensure_schedule(db_session, now)
     assert await db_session.scalar(select(func.count()).select_from(Arena)) == first > 0
-    query = select(Arena).where(Arena.schedule_key == "blitz-3+2").order_by(Arena.starts_at)
+    query = select(Arena).where(Arena.schedule_key == "central:blitz-3+2").order_by(Arena.starts_at)
     blitz = (await db_session.execute(query)).scalars().all()
-    assert arena.status(blitz[0], now) == "running"           # началась в 10:00, идёт 45 минут
+    assert arena.status(blitz[0], now) == "running"           # началась в 12:00 по Киеву (10:00 UTC), идёт час
     assert all(b.increment_ms == 2_000 for b in blitz)
 
 
@@ -50,7 +50,8 @@ async def test_pairing_and_scores(client, db_session, running, test_user_1, test
         assert client.post(f"{API}/{running.id}/join", headers=auth(token)).status_code == 200
     assert client.post(f"{API}/{running.id}/ready", headers=auth(token_user_1)).json() == {"waiting": True}
     view = client.get(f"{API}/{running.id}", headers=auth(token_user_1)).json()
-    assert view["me"] == {"joined": True, "waiting": True, "current_game_id": None, "division_arena_id": None}
+    assert view["me"] == {"joined": True, "waiting": True, "current_game_id": None, "division_arena_id": None,
+                          "reminder": False}
 
     started = client.post(f"{API}/{running.id}/ready", headers=auth(token_user_2)).json()
     game_id = started["game_id"]

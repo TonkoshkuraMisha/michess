@@ -1,16 +1,17 @@
 // --- FILE: frontend/src/components/arena/ArenaPages.tsx ---
 // Арены (таск 17.2): /arenas — идущие и ближайшие арены; /arenas/:id — таблица, вход и «Играть». Пока игрок ждёт
 // пару, страница повторяет «Играть» раз в WAIT_POLL_MS; как только партия создана — переход на главную доску (она
-// сама подхватывает идущую партию). ArenaBanner — анонс в лобби главной доски.
+// сама подхватывает идущую партию). ArenaBanner — анонс в лобби главной доски. Арены идут по расписанию конференций
+// (33.4): в названии — конференция; у ещё не начавшейся арены — «напомнить перед началом».
 
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Link, useNavigate, useParams} from 'react-router-dom';
-import {Flame, Swords, Trophy} from 'lucide-react';
+import {Bell, Flame, Swords, Trophy} from 'lucide-react';
 import {renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
 import {errorMessage} from '../../services/apiErrors';
 import {getToken} from '../../services/authToken';
-import {arenasApi, clock, controlLabel, secondsUntil} from '../../services/arenas';
+import {arenasApi, clock, conferenceKey, controlLabel, secondsUntil} from '../../services/arenas';
 import type {ArenaDetail, ArenaInfo} from '../../services/arenas';
 
 export const WAIT_POLL_MS = 2000;
@@ -25,14 +26,18 @@ function useNow(intervalMs = 1000): number {
     return now;
 }
 
-function arenaName(a: ArenaInfo, t: ReturnType<typeof useI18n>['t']): string {
+/** Название арены; withConference: false — короткое, для узкого анонса в лобби. */
+function arenaName(a: ArenaInfo, t: ReturnType<typeof useI18n>['t'], withConference = true): string {
     const base = a.format === 'swiss'
         ? t('arenas.swissName', {control: controlLabel(a), rounds: a.rounds ?? 0})
-        : t('arenas.name', {control: controlLabel(a)});
+        : t(a.evening ? 'arenas.eveningName' : 'arenas.name', {control: controlLabel(a)});
+    // Конференция, по расписанию которой идёт арена (33.4).
+    const key = withConference ? conferenceKey(a.conference) : null;
+    const conference = key ? ` · ${t(`arenas.conferences.${key}`)}` : '';
     // Группа по силе и деление (33.2).
     const band = a.max_rating ? ` · ${t('arenas.band', {limit: a.max_rating})}` : '';
     const division = (a.division ?? 1) > 1 ? ` · ${t('arenas.division', {n: a.division ?? 1})}` : '';
-    return `${base}${band}${division}`;
+    return `${base}${conference}${band}${division}`;
 }
 
 function timing(a: ArenaInfo, now: number, t: ReturnType<typeof useI18n>['t']): string {
@@ -62,6 +67,7 @@ export function ArenasPage() {
                 <h1 className="text-2xl font-bold text-amber-200">{t('arenas.title')}</h1>
             </header>
             <p className="text-boxwood/85">{t('arenas.intro')}</p>
+            <p className="text-sm text-boxwood/75" data-testid="arenas-conference-note">{t('arenas.conferenceNote')}</p>
             <ul className="flex flex-col gap-2">
                 {arenas.map((a) => (
                     <li key={a.id}>
@@ -135,6 +141,8 @@ export function ArenaPage() {
         setSearching(false);
         arenasApi.leaveWaiting(id).catch(() => undefined);
     };
+    const remind = (on: boolean) => (on ? arenasApi.remind(id) : arenasApi.forgetReminder(id))
+        .then(load).catch((err) => setError(errorMessage(err, 'common.networkError')));
 
     return (
         <div className="w-full max-w-4xl mx-auto p-3 flex flex-col gap-4 text-boxwood-light" data-testid="arena-page">
@@ -165,6 +173,19 @@ export function ArenaPage() {
                         </>
                     )}
                     {arena.me?.joined && arena.status === 'scheduled' && <span className="text-sm">{t('arenas.joinedWait')}</span>}
+                    {arena.status === 'scheduled' && !arena.me?.reminder && (
+                        <button type="button" onClick={() => void remind(true)} data-testid="arena-remind"
+                                className="flex items-center gap-1.5 px-3 py-2 rounded border border-amber-600 text-sm text-amber-200 hover:border-amber-400">
+                            <Bell size={14}/> {t('arenas.remind')}
+                        </button>
+                    )}
+                    {arena.status === 'scheduled' && arena.me?.reminder && (
+                        <span className="flex flex-wrap items-center gap-2 text-sm" data-testid="arena-reminder-on">
+                            <Bell size={14} className="text-amber-400"/> {t('arenas.reminderOn')}
+                            <button type="button" onClick={() => void remind(false)} data-testid="arena-reminder-off"
+                                    className="text-amber-400 hover:underline">{t('arenas.reminderOff')}</button>
+                        </span>
+                    )}
                     {arena.status === 'closing' && arena.format !== 'swiss' && (
                         <span className="text-sm" data-testid="arena-closing">{t('arenas.pairingClosed')}</span>
                     )}
@@ -217,7 +238,7 @@ export function ArenaBanner() {
     return (
         <Link to={`/arenas/${arena.id}`} data-testid="arena-banner"
               className="flex items-center justify-between gap-2 px-2 py-1.5 mb-2 rounded bg-amber-900/40 border border-amber-700/60 text-xs hover:border-amber-400">
-            <span className="flex items-center gap-1 font-bold text-amber-200"><Swords size={13}/> {arenaName(arena, t)}</span>
+            <span className="flex items-center gap-1 font-bold text-amber-200"><Swords size={13}/> {arenaName(arena, t, false)}</span>
             <span className="text-boxwood/80">{timing(arena, now, t)}</span>
         </Link>
     );

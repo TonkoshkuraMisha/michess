@@ -7,6 +7,7 @@ import {useCallback, useEffect, useRef, useState} from 'react';
 import {Link, useNavigate} from 'react-router-dom';
 import {Bell, MessageSquare, Search} from 'lucide-react';
 import {useI18n} from '../../i18n';
+import {controlLabel} from '../../services/arenas';
 import {gameSocket} from '../../services/gameSocket';
 import {messagesApi} from '../../services/messages';
 import {notificationLink, socialApi} from '../../services/social';
@@ -28,6 +29,11 @@ export function notificationText(n: AppNotification, t: ReturnType<typeof useI18
     if (n.kind === 'tournament_round') return t('social.notify.tournamentRound', {round: Number(p.round)});
     if (n.kind === 'workout_reminder') return t('social.notify.workoutReminder', {streak: Number(p.streak)});
     if (n.kind === 'post_comment') return t('social.notify.postComment', {from: String(p.from)});
+    if (n.kind === 'arena_reminder') {
+        return t('social.notify.arenaReminder', {
+            control: controlLabel({base_time_ms: Number(p.base_time_ms), increment_ms: Number(p.increment_ms)}),
+        });
+    }
     return t('social.notify.reportAnswer');
 }
 
