@@ -2,7 +2,7 @@
 
 import {describe, it, expect} from 'vitest';
 import {gameSocket} from '../gameSocket';
-import {soundEngine, resolveMoveSound} from '../soundEngine';
+import {isLearningPath, resolveMoveSound, setCheckSounds, soundEngine} from '../soundEngine';
 import {API_BASE_URL, WS_BASE_URL} from '../../config/api';
 import {
     BOARD_THEMES,
@@ -22,15 +22,35 @@ describe('GameWebSocketService, SoundEngine & API Config', () => {
         gameSocket.off('test_event', noop);
     });
 
+    it('звук шаха — только в обучающих разделах', () => {
+        for (const path of ['/learn', '/learn/course', '/learn/basics/check', '/puzzles', '/train/forks', '/workout',
+            '/programs/beginner', '/guess/12', '/repertoire/5/drill']) {
+            expect(isLearningPath(path), path).toBe(true);
+        }
+        for (const path of ['/', '/challenge/abc', '/play/960', '/play/960/live', '/tournaments/7', '/arenas/3', '/watch',
+            '/game/42', '/repertoire/5', '/learners', '/trainers']) {
+            expect(isLearningPath(path), path).toBe(false);
+        }
+    });
+
     it('should classify chess SAN notation into accurate sound events', () => {
         expect(resolveMoveSound('Nf3')).toBe('move');
         expect(resolveMoveSound('exd5')).toBe('capture');
         expect(resolveMoveSound('O-O')).toBe('castle');
         expect(resolveMoveSound('O-O-O')).toBe('castle');
+        // В партиях звука шаха нет: ход с шахом звучит как обычный ход, взятие или превращение.
+        setCheckSounds(false);
+        expect(resolveMoveSound('Qh4#')).toBe('move');
+        expect(resolveMoveSound('Bb5+')).toBe('move');
+        expect(resolveMoveSound('Qxf7#')).toBe('capture');
+        expect(resolveMoveSound('a8=N+')).toBe('promote');
+        expect(resolveMoveSound('e8=Q')).toBe('promote');
+        // В обучении — есть.
+        setCheckSounds(true);
         expect(resolveMoveSound('Qh4#')).toBe('check');
         expect(resolveMoveSound('Bb5+')).toBe('check');
-        expect(resolveMoveSound('e8=Q')).toBe('promote');
         expect(resolveMoveSound('a8=N+')).toBe('check');
+        setCheckSounds(false);
 
         const initialMute = soundEngine.isMuted();
         expect(soundEngine.toggleMute()).toBe(!initialMute);

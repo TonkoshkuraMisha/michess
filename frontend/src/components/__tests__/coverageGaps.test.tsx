@@ -175,7 +175,7 @@ describe('звуковой движок', () => {
 
     it('звук хода по нотации', () => {
         expect(resolveMoveSound(null)).toBe('move');
-        expect(resolveMoveSound('Qh7#')).toBe('check');
+        expect(resolveMoveSound('Qh7#')).toBe('move');   // вне обучения звука шаха нет
         expect(resolveMoveSound('e8=Q')).toBe('promote');
         expect(resolveMoveSound('O-O-O')).toBe('castle');
         expect(resolveMoveSound('Nxe5')).toBe('capture');
