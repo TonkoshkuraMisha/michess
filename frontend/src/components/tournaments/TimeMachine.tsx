@@ -173,8 +173,8 @@ export function TimeMachinePage() {
             .catch((err) => setError(errorMessage(err, 'timeMachine.startFailed')))
             .finally(() => setBusy(false));
     };
-    // Идущий исторический турнир — один: пока он не закончен, в другой войти нельзя.
-    const active = events?.find((e) => e.active_id !== null) ?? null;
+    // Исторические турниры не блокируют друг друга (решение владельца, 17.11): идущие — со своей кнопкой «Продолжить».
+    const active = events?.filter((e) => e.active_id !== null) ?? [];
     const shown = events?.filter((e) => period === null || periodOf(e.year) === period) ?? null;
     const lastYear = events?.length ? Math.max(...events.map((e) => e.year)) : PERIOD_STARTS[PERIOD_STARTS.length - 1];
     const chip = (on: boolean) => `px-3 py-1.5 rounded-md text-sm font-semibold cursor-pointer transition ${
@@ -202,7 +202,11 @@ export function TimeMachinePage() {
                 </select>
                 <span className="text-xs text-boxwood/65">{t('timeMachine.controlHint')}</span>
             </div>
-            {active && <p className="text-sm text-amber-300" data-testid="tm-active">{t('timeMachine.oneAtATime', {title: eventTitle(active.key, t)})}</p>}
+            {active.length > 0 && (
+                <p className="text-sm text-amber-300" data-testid="tm-active">
+                    {t('timeMachine.inProgress', {titles: active.map((e) => eventTitle(e.key, t)).join(', ')})}
+                </p>
+            )}
             {events === null && !error && <p className="text-sm text-boxwood/70">{t('timeMachine.loading')}</p>}
             {events !== null && events.length > 0 && (
                 <div role="group" aria-label={t('timeMachine.period')} className="flex flex-wrap items-center gap-2" data-testid="tm-periods">
@@ -223,7 +227,7 @@ export function TimeMachinePage() {
                 </div>
             )}
             {shown?.map((event) => (
-                <EventCard key={event.key} event={event} control={chosen.label} busy={busy || (active !== null && active.key !== event.key)}
+                <EventCard key={event.key} event={event} control={chosen.label} busy={busy}
                            onStart={start}/>
             ))}
         </div>

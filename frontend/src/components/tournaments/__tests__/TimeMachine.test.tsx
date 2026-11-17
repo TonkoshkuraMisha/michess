@@ -197,24 +197,25 @@ describe('лента турниров', () => {
         expect(options.some((value) => value.startsWith('bullet') || value.endsWith('manual'))).toBe(false);
     });
 
-    it('идущий турнир продолжается, в другой войти нельзя; лучшее место показано', async () => {
+    it('идущий турнир продолжается, другие начинаются параллельно; лучшее место показано', async () => {
         stub(() => ({events: [{...LONDON, best_place: 3, played: 2}, {...AVRO, active_id: 12}]}));
         renderPage();
         expect(await screen.findByTestId('continue-avro_1938')).toHaveAttribute('href', '/tournaments/12');
         expect(screen.queryByTestId('start-avro_1938')).toBeNull();
-        expect(screen.getByTestId('start-london_1851')).toBeDisabled();
-        expect(screen.getByTestId('tm-active')).toHaveTextContent('Вы играете турнир «АВРО 1938»');
+        // Решение владельца (17.11): исторические турниры друг друга не блокируют.
+        expect(screen.getByTestId('start-london_1851')).toBeEnabled();
+        expect(screen.getByTestId('tm-active')).toHaveTextContent('Вы играете: АВРО 1938. Другие турниры можно начинать параллельно.');
         expect(screen.getByTestId('best-london_1851')).toHaveTextContent('Ваше лучшее место: 3');
         expect(screen.getByTestId('event-london_1851')).toHaveTextContent('сыгран 2 раза');
     });
 
     it('отказ сервера показан игроку', async () => {
         stub((_url, init) => (init?.method === 'POST'
-            ? {status: 409, body: {detail: {code: 'tournament_active_exists', params: {}, message: '…'}}} : {events: [AVRO]}));
+            ? {status: 404, body: {detail: {code: 'time_machine_event_unknown', params: {}, message: '…'}}} : {events: [AVRO]}));
         renderPage();
         const start = await screen.findByTestId('start-avro_1938');
         await act(async () => fireEvent.click(start));
-        expect(screen.getByRole('alert')).toHaveTextContent('У вас уже есть незавершённый турнир');
+        expect(screen.getByRole('alert')).toHaveTextContent('Такого исторического турнира нет');
     });
 
     it('чужой ответ сервера не ломает страницу', async () => {
