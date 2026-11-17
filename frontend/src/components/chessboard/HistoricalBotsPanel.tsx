@@ -25,6 +25,8 @@ export interface HistoricalBotsPanelProps {
     onStartFromPositionChange: (value: boolean) => void;
     /** Измеренная сила (GET /bots/catalog): id бота → рейтинг; без калибровки — заявленный. */
     measured?: Record<string, number>;
+    /** Сила по партиям с людьми (таск 32.1): id бота → рейтинг и число партий. */
+    live?: Record<string, { rating: number; games: number }>;
     /** Фора (таск 21.1); без обработчика выбор не показывается. */
     odds?: OddsChoice;
     onOddsChange?: (odds: OddsChoice) => void;
@@ -34,7 +36,7 @@ export interface HistoricalBotsPanelProps {
 export function HistoricalBotsPanel({
     selectedBotId, onSelectBot, selectedBotProfile, activeBot, activeBotProfile, gameId,
     gameOverResult, isBotThinking, botComment, onStartBotGame,
-    canStartFromPosition, startFromPosition, onStartFromPositionChange, measured = {}, odds, onOddsChange,
+    canStartFromPosition, startFromPosition, onStartFromPositionChange, measured = {}, live = {}, odds, onOddsChange,
 }: HistoricalBotsPanelProps) {
     const {t} = useI18n();
     return (
@@ -119,6 +121,11 @@ export function HistoricalBotsPanel({
                                 {t('bots.howMeasured')}
                             </Link>
                         </div>
+                        {live[selectedBotProfile.id] && (
+                            <div className="text-[11px] text-boxwood/75 font-mono" data-testid="bot-live-strength">
+                                {t('bots.liveStrength', live[selectedBotProfile.id])}
+                            </div>
+                        )}
                     </div>
                 </div>
 

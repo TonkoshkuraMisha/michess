@@ -2,6 +2,7 @@ from src.models.achievement import UserAchievement
 from src.models.arena import Arena, ArenaGame, ArenaPlayer
 from src.models.base import Base
 from src.models.beta import Feedback, Invite
+from src.models.bot_memory import BotOpeningStat, BotRating
 from src.models.collection import CollectionEntry
 from src.models.email_token import EmailToken
 from src.models.game import Game
@@ -33,6 +34,8 @@ from src.models.trainer import ExamResult, TrainerResult
 from src.models.user import User
 
 __all__ = [
+    "BotOpeningStat",
+    "BotRating",
     "Arena",
     "ArenaGame",
     "ArenaPlayer",

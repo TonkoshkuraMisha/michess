@@ -11,6 +11,7 @@ from pathlib import Path
 import chess
 import chess.engine
 
+from src.services.bots import memory
 from src.services.bots.style import CENTER_SQUARES, EXTENDED_CENTER, Style
 from src.services.engine_pool import EngineLease, get_engine_pool
 
@@ -350,7 +351,8 @@ class HistoricalBot:
         return bot_comment(note)
 
     def _book_move(self, board: chess.Board) -> tuple[chess.Move, dict] | None:
-        candidates = self.opening_book.get(normalize_fen_key(board))
+        key = normalize_fen_key(board)
+        candidates = self.opening_book.get(key)
         if not candidates:
             return None
         valid_book_moves = []
@@ -363,7 +365,9 @@ class HistoricalBot:
             except ValueError:
                 continue
             if move in board.legal_moves:
-                valid_book_moves.append((move, max(weight, 1), comment))
+                # Опыт бота (таск 32.1): удачный в его партиях вариант — чаще, проигрышный — реже.
+                factor = memory.book_factor(self.bot_id, key, uci_str)
+                valid_book_moves.append((move, max(weight, 1) * factor, comment))
         if not valid_book_moves:
             return None
         moves, weights, comments = zip(*valid_book_moves, strict=True)
@@ -374,12 +378,14 @@ class HistoricalBot:
         """Кандидаты MultiPV на полной силе и опорный ход силы (ход Stockfish с ограничением UCI_Elo)."""
         engine_path = self._get_active_engine_path() if self.stockfish_path is not None else None
         # Один движок на все шаги хода: в очередь пула ход встаёт один раз.
+        # Поправка силы по партиям с людьми (таск 32.1) возвращает бота к заявленной силе.
+        uci_elo = None if self.uci_elo is None else self.uci_elo + memory.strength_offset(self.bot_id)
         with EngineLease(engine_path) as lease:
             scores = analyse_with_stockfish(
                 board=board,
                 engine_path=engine_path,
                 skill_level=self.skill_level,
-                uci_elo=self.uci_elo,
+                uci_elo=uci_elo,
                 depth=self.search_depth,
                 time_limit=self.time_limit,
                 multipv=self.multipv,
@@ -387,7 +393,7 @@ class HistoricalBot:
             )
             if not scores:
                 return Candidates(fallback_scores(board), None, False, engine_path)
-            reference = strength_reference_move(board, engine_path, self.uci_elo, self.time_limit, lease=lease)
+            reference = strength_reference_move(board, engine_path, uci_elo, self.time_limit, lease=lease)
             if reference is not None and reference not in scores and engine_path:
                 value = score_move(board, engine_path, reference, self.search_depth, self.time_limit, lease=lease)
                 if value is None:

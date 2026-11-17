@@ -11,7 +11,8 @@ import {setToken} from '../../services/authToken';
 const CATALOG = {
     calibration: {date: '2026-11-16', games: 116},
     historical: [
-        {id: 'morphy', declared_rating: 2100, rating: 2143, measured: true, games: 56, ci95: 98},
+        {id: 'morphy', declared_rating: 2100, rating: 2143, measured: true, games: 56, ci95: 98,
+            live: {rating: 1980, games: 64, offset: 30}},
         {id: 'philidor', declared_rating: 1850, rating: 1850, measured: false, games: 0, ci95: null},
     ],
     archetypes: [{id: 'blunderer', config: {}, declared_rating: 900, rating: 848, measured: true, games: 96, ci95: 109}],
@@ -57,6 +58,15 @@ afterEach(() => {
 });
 
 describe('прозрачность', () => {
+    it('память ботов: рейтинг по партиям с людьми и поправка силы (таск 32.1)', async () => {
+        stub();
+        await renderPage();
+        expect(screen.getByTestId('live-morphy')).toHaveTextContent('1980 (64)');
+        expect(screen.getByTestId('live-morphy')).toHaveTextContent('поправка +30');
+        expect(screen.getByTestId('live-philidor')).toHaveTextContent('—');
+        expect(screen.getByTestId('transparency-memory')).toHaveTextContent('Боты также учатся на своих партиях');
+    });
+
     it('таблица: измеренные — с погрешностью и числом партий, остальные — «заявлено»; сортировка по силе', async () => {
         stub();
         await renderPage();
