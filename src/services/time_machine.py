@@ -253,6 +253,18 @@ _EVENTS: tuple[Event, ...] = (
         ("rubinstein", 7.5), ("bernstein_jacob", 7), ("wolf", 6.5), ("samisch", 6), ("thomas", 5.5), ("spielmann", 5),
         ("chajes", 5),
     )),
+    # Четырнадцать участников в один круг; ничьи переигрывались — в настоящей таблице только победы. Победил Андерсен.
+    Event("london_1862", 1862, "round_robin", _table(
+        ("anderssen", 11), ("paulsen", 9), ("owen", 7), ("macdonnell", 7), ("dubois", 6), ("steinitz", 6),
+        ("barnes", 6), ("hannah", 4), ("blackburne", 3), ("lowenthal", 3), ("robey", 2), ("deacon", 2),
+        ("mongredien", 2), ("green", 2),
+    ), partial=True),
+    # Тринадцать участников в два круга; ничья не давала очков никому — в настоящей таблице только победы. Победил Колиш.
+    Event("paris_1867", 1867, "round_robin", _table(
+        ("kolisch", 20), ("winawer", 19), ("steinitz", 18), ("neumann", 17), ("de_vere", 14), ("riviere", 11),
+        ("golmayo", 10), ("czarnowski", 9), ("rosenthal", 6), ("loyd", 6), ("dandre", 6), ("from", 5),
+        ("rousseau", 5),
+    ), cycles=2, partial=True),
 )
 # Лента — по годам; турниры одного года — по ключу.
 EVENTS: tuple[Event, ...] = tuple(sorted(_EVENTS, key=lambda event: (event.year, event.key)))

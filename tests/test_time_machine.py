@@ -87,6 +87,7 @@ def test_signature_openings_exist_and_are_played():
     assert book("albin", "d2d4", "d7d5", "c2c4") == "e7e5"
     assert book("alapin", "e2e4", "c7c5") == "c2c3"
     assert book("kieseritzky", "e2e4", "e7e5") == "f2f4"
+    assert book("owen", "e2e4") == "b7b6" and book("from", "f2f4") == "e7e5"
     # У мастера без фирменного дебюта книги нет — он играет по характеру.
     assert "mucklow" not in SIGNATURE_OPENINGS and book("mucklow") is None
 

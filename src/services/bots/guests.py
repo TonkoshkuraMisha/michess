@@ -88,6 +88,8 @@ SIGNATURE_OPENINGS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "becker": ((QGD,), ()),
     "alexander": ((), ("Dutch Defense",)),
     "dus_chotimirsky": ((QGD,), ()),
+    "owen": ((), ("Owen Defense",)),
+    "from": (("Danish Gambit",), ("Bird Opening: From's Gambit",)),
 }
 
 
@@ -378,5 +380,29 @@ GUESTS: tuple[Guest, ...] = (
     _guest("kruger", "Krueger, Paul", "1871–1939", 2000, aggression=0, randomness=30),
     _guest("flamberg", "Flamberg, Alexander", "1880–1926", 2100, aggression=30, randomness=25),
     _guest("bernstein_jacob", "Bernstein, Jacob", "1885–1959", 2000, aggression=10, randomness=25),
+
+    # --- Седьмая партия турниров (28.4): Лондон 1862, Париж 1867 -------------------------------------------------
+    _guest("owen", "Owen, John", "1827–1901", 1950, aggression=0, pawn_structure=130, randomness=30),
+    _guest("macdonnell", "MacDonnell, George Alcock", "1830–1899", 1950, aggression=30, mobility=130, randomness=30),
+    _guest("dubois", "Dubois, Serafino", "1817–1899", 2000, aggression=30, mobility=140, randomness=25),
+    _guest("barnes", "Barnes, Thomas Wilson", "1825–1874", 1950, aggression=10, randomness=30),
+    _guest("hannah", "Hannah, James", None, 1800, aggression=10, randomness=40),
+    _guest("robey", "Robey, James", None, 1750, aggression=0, randomness=45),
+    _guest("deacon", "Deacon, Frederick", "1829–1875", 1800, aggression=10, randomness=40),
+    _guest("mongredien", "Mongredien, Augustus", "1807–1888", 1750, aggression=0, randomness=45),
+    _guest("green", "Green, Valentine", None, 1750, aggression=0, randomness=45),
+    # Комбинационный игрок.
+    _guest("kolisch", "Kolisch, Ignatz von", "1837–1889", 2100,
+           aggression=60, mobility=150, randomness=20, draw_attitude=-40),
+    _guest("riviere", "Riviere, Jules Arnous de", "1830–1905", 1950, aggression=30, mobility=130, randomness=30),
+    _guest("golmayo", "Golmayo Zupide, Celso", "1820–1898", 1900, aggression=20, randomness=30),
+    _guest("czarnowski", "Czarnowski, Hieronim", "1834–1902", 1850, aggression=10, randomness=35),
+    # Изобретатель головоломок; в практической игре рискован.
+    _guest("loyd", "Loyd, Samuel", "1841–1911", 1850, aggression=40, mobility=130, randomness=40),
+    _guest("dandre", "d'Andre, Emile", None, 1800, aggression=0, randomness=40),
+    # Гамбитный стиль.
+    _guest("from", "From, Martin Severin", "1828–1895", 1850,
+           aggression=50, mobility=130, randomness=35, opening_style="gambit"),
+    _guest("rousseau", "Rousseau, Eugene", "1805–1877", 1800, aggression=20, randomness=40),
 )
 GUESTS_BY_ID = {guest.id: guest for guest in GUESTS}
