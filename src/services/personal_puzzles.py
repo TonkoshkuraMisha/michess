@@ -17,6 +17,7 @@ import asyncio
 import datetime as dt
 import json
 import logging
+from collections.abc import Iterable
 
 import chess
 import chess.engine
@@ -43,6 +44,8 @@ ENGINE_DEPTH = 14
 MATE_CP = 10_000
 INTERVALS_DAYS = (1, 3, 7, 21)
 SOLVES_TO_MASTER = 2
+# Разделитель кодов тем в колонке personal_puzzles.themes (см. join_themes / split_themes).
+THEMES_SEPARATOR = ","
 
 
 def _score(info: chess.engine.InfoDict, turn: chess.Color) -> int:
@@ -80,6 +83,16 @@ def is_solvable(board: chess.Board, best: chess.Move, candidates: list[tuple[str
     if first >= MATE_CP - 100 and second < MATE_CP - 100:
         return True
     return first - second >= MIN_GAP
+
+
+def join_themes(codes: Iterable[str]) -> str:
+    """Темы личной задачи в виде, в котором они хранятся (personal_puzzles.themes): коды реестра через запятую."""
+    return THEMES_SEPARATOR.join(codes)
+
+
+def split_themes(stored: str | None) -> list[str]:
+    """Коды тем из personal_puzzles.themes — обратная к join_themes; пустое значение — тем нет."""
+    return [code for code in (stored or "").split(THEMES_SEPARATOR) if code]
 
 
 def themes_of(board: chess.Board, move: chess.Move) -> list[str]:
@@ -184,7 +197,7 @@ async def _extract(db: AsyncSession, pgn: str, analysis_json: str, players: dict
             db.add(PersonalPuzzle(
                 user_id=user.id, ply=ply, fen=position.fen(), previous_move=previous_move,
                 solution=best.uci(), played=played.uci(), cp_loss=int(item.get("cp_loss", 0)),
-                themes=",".join(themes_of(position, best)), **source,
+                themes=join_themes(themes_of(position, best)), **source,
             ))
             chosen += 1
             added += 1
@@ -208,7 +221,7 @@ def view(puzzle: PersonalPuzzle) -> dict:
         "id": puzzle.id, "game_id": puzzle.game_id, "imported_game_id": puzzle.imported_game_id,
         "ply": puzzle.ply, "fen": puzzle.fen,
         "previous_move": puzzle.previous_move, "color": "white" if board.turn == chess.WHITE else "black",
-        "themes": [code for code in puzzle.themes.split(",") if code],
+        "themes": split_themes(puzzle.themes),
         "attempts": puzzle.attempts, "solved_streak": puzzle.solved_streak,
     }
 

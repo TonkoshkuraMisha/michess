@@ -93,6 +93,7 @@ class PersonalPuzzle(Base):
     solution: Mapped[str] = mapped_column(String(5), nullable=False)
     played: Mapped[str] = mapped_column(String(5), nullable=False)
     cp_loss: Mapped[int] = mapped_column(Integer, nullable=False)
+    # Коды тем реестра через запятую; читать и писать — personal_puzzles.split_themes / join_themes.
     themes: Mapped[str] = mapped_column(String(300), nullable=False, default="")
     interval_index: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     solved_streak: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
