@@ -1,0 +1,240 @@
+{
+  "id": "structure-stonewall",
+  "course": "strategy",
+  "order": 10,
+  "title": {
+    "en": "The Stonewall",
+    "uk": "Кам'яна стіна",
+    "ru": "Каменная стена"
+  },
+  "summary": {
+    "en": "Pawns on d5, e6, f5: a solid wall, a strong knight on e4 and a kingside attack — at the price of a hole on e5 and a bad bishop.",
+    "uk": "Пішаки d5, e6, f5: міцна стіна, сильний кінь на e4 й атака на королівському фланзі — ціною дірки на e5 і поганого слона.",
+    "ru": "Пешки d5, e6, f5: прочная стена, сильный конь на e4 и атака на королевском фланге — ценой дыры на e5 и плохого слона."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "rnb1k2r/pp2q1pp/2pbpn2/3p1p2/2PP4/1P3NP1/P3PPBP/RNBQ1RK1 w kq - 1 8",
+      "highlights": [
+        "d5",
+        "e6",
+        "f5",
+        "e4",
+        "e5"
+      ],
+      "text": {
+        "en": "Black has built a wall: d5, e6, f5 (with c6 behind). It gives a superb square on e4 for a knight that no white pawn can attack, and room for a kingside attack. The cost: the square e5 is just as safe for a white knight, and the bishop on c8 is locked behind its own pawns.",
+        "uk": "Чорні збудували стіну: d5, e6, f5 (і c6 позаду). Вона дає чудове поле e4 для коня, якого жоден білий пішак не атакує, і простір для атаки на королівському фланзі. Ціна: поле e5 так само безпечне для білого коня, а слон c8 замкнений власними пішаками.",
+        "ru": "Чёрные построили стену: d5, e6, f5 (и c6 позади). Она даёт отличное поле e4 для коня, которого ни одна белая пешка не атакует, и простор для атаки на королевском фланге. Цена: поле e5 так же безопасно для белого коня, а слон c8 заперт собственными пешками."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "rnb1k2r/pp2q1pp/2pbpn2/3p1p2/2PP4/1P3NP1/P3PPBP/RNBQ1RK1 w kq - 1 8",
+      "text": {
+        "en": "Black's plan: a knight to e4, the queen to h5 via e8, a rook lift via f6, sometimes ...g5. The bishop from c8 can come out via d7 and e8 to h5. Black's good bishop is the one on d6 — keep it.",
+        "uk": "План чорних: кінь на e4, ферзь на h5 через e8, тура по f6, інколи …g5. Слон із c8 може вийти через d7 і e8 на h5. Добрий слон чорних — той, що на d6, його варто зберегти.",
+        "ru": "План чёрных: конь на e4, ферзь на h5 через e8, подъём ладьи по f6, иногда …g5. Слон с c8 может выйти через d7 и e8 на h5. Хороший слон чёрных — тот, что на d6, его стоит сохранить."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "f6",
+          "to": "e4",
+          "color": "blue"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "e7",
+          "to": "e8",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "e8",
+          "to": "h5",
+          "color": "red"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "c8",
+          "to": "d7",
+          "color": "yellow"
+        },
+        {
+          "do": "arrow",
+          "from": "d7",
+          "to": "e8",
+          "color": "yellow"
+        }
+      ]
+    },
+    {
+      "type": "demo",
+      "fen": "rnb1k2r/pp2q1pp/2pbpn2/3p1p2/2PP4/1P3NP1/P3PPBP/RNBQ1RK1 w kq - 1 8",
+      "text": {
+        "en": "White's plan: exchange Black's good bishop with Ba3, put a knight on e5, and play on the queenside with c5 and b4–b5. Black's light-squared bishop and the hole on e5 are long-term targets.",
+        "uk": "План білих: розміняти доброго слона чорних ходом Ba3, поставити коня на e5 і грати на ферзевому фланзі через c5 і b4–b5. Білопольний слон чорних і дірка на e5 — довгострокові цілі.",
+        "ru": "План белых: разменять хорошего слона чёрных ходом Ba3, поставить коня на e5 и играть на ферзевом фланге через c5 и b4–b5. Белопольный слон чёрных и дыра на e5 — долгосрочные цели."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "c1",
+          "to": "a3",
+          "color": "green"
+        },
+        {
+          "do": "arrow",
+          "from": "a3",
+          "to": "d6",
+          "color": "red"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "f3",
+          "to": "e5",
+          "color": "green"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "c4",
+          "to": "c5",
+          "color": "green"
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "rnb1k2r/pp2q1pp/2pbpn2/3p1p2/2PP4/1P3NP1/P3PPBP/RNBQ1RK1 w kq - 1 8",
+      "text": {
+        "en": "Why does White often play b3 and Ba3 against the Stonewall?",
+        "uk": "Навіщо білі проти кам'яної стіни часто грають b3 і Ba3?",
+        "ru": "Зачем белые против каменной стены часто играют b3 и Ba3?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "To exchange Black's good dark-squared bishop.",
+            "uk": "Щоб розміняти доброго чорнопольного слона чорних.",
+            "ru": "Чтобы разменять хорошего чернопольного слона чёрных."
+          },
+          "correct": true,
+          "feedback": {
+            "en": "Yes: without it Black's dark squares, starting with e5, are weak.",
+            "uk": "Так: без нього чорні поля чорних, починаючи з e5, слабкі.",
+            "ru": "Да: без него чёрные поля чёрных, начиная с e5, слабы."
+          }
+        },
+        {
+          "text": {
+            "en": "To attack the f5 pawn.",
+            "uk": "Щоб атакувати пішака f5.",
+            "ru": "Чтобы атаковать пешку f5."
+          },
+          "feedback": {
+            "en": "The bishop on a3 does not touch f5.",
+            "uk": "Слон на a3 не дістає f5.",
+            "ru": "Слон на a3 не достаёт f5."
+          }
+        },
+        {
+          "text": {
+            "en": "To prepare kingside castling.",
+            "uk": "Щоб підготувати коротку рокіровку.",
+            "ru": "Чтобы подготовить короткую рокировку."
+          },
+          "feedback": {
+            "en": "White has already castled.",
+            "uk": "Білі вже рокірувалися.",
+            "ru": "Белые уже рокировались."
+          }
+        }
+      ]
+    }
+  ],
+  "exam": [
+    {
+      "type": "choice",
+      "fen": "rnb1k2r/pp2q1pp/2pbpn2/3p1p2/2PP4/1P3NP1/P3PPBP/RNBQ1RK1 w kq - 1 8",
+      "text": {
+        "en": "Which is the best square for a black knight in this structure?",
+        "uk": "Яке поле найкраще для чорного коня в цій структурі?",
+        "ru": "Какое поле лучшее для чёрного коня в этой структуре?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "e4",
+            "uk": "e4",
+            "ru": "e4"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "e5",
+            "uk": "e5",
+            "ru": "e5"
+          }
+        },
+        {
+          "text": {
+            "en": "a6",
+            "uk": "a6",
+            "ru": "a6"
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "Which black piece is the problem child of the Stonewall?",
+        "uk": "Яка чорна фігура — проблема кам'яної стіни?",
+        "ru": "Какая чёрная фигура — проблема каменной стены?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "The light-squared bishop",
+            "uk": "Білопольний слон",
+            "ru": "Белопольный слон"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "The dark-squared bishop",
+            "uk": "Чорнопольний слон",
+            "ru": "Чернопольный слон"
+          }
+        },
+        {
+          "text": {
+            "en": "The king's knight",
+            "uk": "Королівський кінь",
+            "ru": "Королевский конь"
+          }
+        }
+      ]
+    }
+  ]
+}
