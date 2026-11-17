@@ -139,6 +139,7 @@ ERROR_MESSAGES: dict[str, str] = {
     "user_not_found": "User {username} not found",
     # --- боты, мастерская, лестница ----------------------------------------------------------------
     "bot_not_found": "Bot '{bot_id}' not found",
+    "guest_not_found": "There is no such master of the past",
     "config_or_personality": "Specify either config or personality_id, not both",
     "bot_opening_unknown": "This opening is not in the openings table",
     "login_required_for_personality": "Log in to play against a saved opponent",

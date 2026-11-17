@@ -28,7 +28,7 @@ from src.services import tournaments as tournament_service
 from src.services.bots import calibration as bot_calibration
 from src.services.bots.anderssen import anderssen_bot
 from src.services.bots.archetypes import ARCHETYPES, ARCHETYPES_BY_ID, ARCHETYPES_BY_KEY
-from src.services.bots.guests import GUESTS_BY_PGN_NAME
+from src.services.bots.guests import GUESTS, GUESTS_BY_ID, GUESTS_BY_PGN_NAME, SIGNATURE_OPENINGS
 from src.services.bots.labourdonnais import labourdonnais_bot
 from src.services.bots.masters import MASTER_BOTS, MASTERS
 from src.services.bots.morphy import morphy_bot
@@ -487,6 +487,38 @@ async def get_bot_catalog():
             for a in ARCHETYPES
         ],
     }
+
+
+@router.get("/guests", dependencies=[PUBLIC_LIMIT])
+async def get_guests():
+    """
+    Мастера прошлого — каталог соперников (таск 28.5): участники турниров «Машины времени», с каждым можно сыграть
+    отдельную партию. Сервер отдаёт ключи и числа: имя и строку о мастере клиент берёт из каталога по id, названия
+    турниров — по ключам; фирменные дебюты — названия из открытой таблицы дебютов.
+    """
+    from src.services import time_machine
+
+    events_of: dict[str, list[str]] = {}
+    for event in time_machine.EVENTS:
+        for entry in event.field:
+            events_of.setdefault(entry.id, []).append(event.key)
+    guests = []
+    for guest in GUESTS:
+        white, black = SIGNATURE_OPENINGS.get(guest.id, ((), ()))
+        guests.append({
+            "id": guest.id, "pgn_name": guest.pgn_name, "era": guest.era, "rating": guest.rating,
+            "events": events_of.get(guest.id, []), "openings": {"white": list(white), "black": list(black)},
+        })
+    return {"guests": guests}
+
+
+@router.get("/guests/{guest_id}", dependencies=[PUBLIC_LIMIT])
+async def get_guest(guest_id: str = Path(..., max_length=40)):
+    """Характер мастера прошлого — чтобы начать с ним партию: тот же, с которым он играет в историческом турнире."""
+    guest = GUESTS_BY_ID.get(guest_id)
+    if guest is None:
+        raise ApiError(404, "guest_not_found")
+    return {"id": guest.id, "pgn_name": guest.pgn_name, "rating": guest.rating, "config": guest.config.model_dump()}
 
 
 class DrawOfferRequest(BaseModel):
