@@ -3223,7 +3223,7 @@ export const en = {
             cambridge_springs_1904: {
                 title: 'Cambridge Springs 1904',
                 place: 'Cambridge Springs, Pennsylvania, April – May 1904',
-                story: 'The first major international tournament in America in the twentieth century was played in a resort hotel halfway between New York and Chicago: eight Europeans against eight Americans. Frank Marshall, aged 26, went through undefeated and left world champion Lasker two points behind. It was the last tournament of Harry Pillsbury, and the Cambridge Springs Defence takes its name from it.',
+                story: 'The first major international tournament in America in the twentieth century was played in a resort hotel halfway between New York and Chicago: eight Europeans and eight Americans. Frank Marshall, aged 26, went through undefeated and left world champion Lasker two points behind. It was the last tournament of Harry Pillsbury, and the Cambridge Springs Defence takes its name from it.',
                 real: 'Winner: Frank Marshall, undefeated, with 13 points from 15 games; Dawid Janowski and Emanuel Lasker shared second place (11).',
             },
             monte_carlo_1904: {
