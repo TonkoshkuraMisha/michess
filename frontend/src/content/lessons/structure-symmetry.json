@@ -1,0 +1,215 @@
+{
+  "id": "structure-symmetry",
+  "course": "strategy",
+  "order": 5,
+  "title": {
+    "en": "Symmetry in the centre: e4 against e5",
+    "uk": "Симетрія в центрі: e4 проти e5",
+    "ru": "Симметрия в центре: e4 против e5"
+  },
+  "summary": {
+    "en": "The d-pawns are gone. Count the majorities: a healthy kingside majority favours the endgame, the bishop pair favours pieces.",
+    "uk": "Пішаки d розміняні. Порахуйте більшості: здорова більшість на королівському фланзі тягне в ендшпіль, пара слонів — до фігур.",
+    "ru": "Пешки d разменены. Посчитайте большинства: здоровое большинство на королевском фланге тянет в эндшпиль, пара слонов — к фигурам."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "r2qkbnr/1pp3pp/p1p5/4p3/4P1b1/5N2/PPP2PPP/RNBQ1RK1 w kq - 0 8",
+      "highlights": [
+        "e4",
+        "e5",
+        "c6",
+        "c7"
+      ],
+      "text": {
+        "en": "e4 stands against e5 and the d-file is open. This comes from the exchange line of the Spanish: Black has doubled c-pawns but the two bishops. Count the pawns by wing: on the kingside White has four against three and they are healthy; Black's queenside majority is crippled by the doubled pawns.",
+        "uk": "e4 стоїть проти e5, лінія d відкрита. Так виходить у розмінному варіанті іспанської партії: у чорних здвоєні пішаки c, зате два слони. Порахуйте пішаків за флангами: на королівському в білих чотири проти трьох, і вони здорові; більшість чорних на ферзевому фланзі зіпсована здвоєнням.",
+        "ru": "e4 стоит против e5, вертикаль d открыта. Так получается в разменном варианте испанской партии: у чёрных сдвоенные пешки c, зато два слона. Посчитайте пешки по флангам: на королевском у белых четыре против трёх, и они здоровы; большинство чёрных на ферзевом фланге испорчено сдвоением."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "r2qkbnr/1pp3pp/p1p5/4p3/4P1b1/5N2/PPP2PPP/RNBQ1RK1 w kq - 0 8",
+      "text": {
+        "en": "White's plan: trade pieces. In a pure pawn ending the healthy kingside majority makes a passed pawn, while Black's extra queenside pawn cannot. The queen trade on d8 is the first step; then f4 opens the kingside.",
+        "uk": "План білих — розмінювати фігури. У чисто пішаковому ендшпілі здорова більшість на королівському фланзі створює прохідного, а зайвий пішак чорних на ферзевому — ні. Розмін ферзів на d8 — перший крок; далі f4 відкриває королівський фланг.",
+        "ru": "План белых — разменивать фигуры. В чисто пешечном эндшпиле здоровое большинство на королевском фланге создаёт проходную, а лишняя пешка чёрных на ферзевом — нет. Размен ферзей на d8 — первый шаг; дальше f4 вскрывает королевский фланг."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "d1",
+          "to": "d8",
+          "color": "green"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "f2",
+          "to": "f4",
+          "color": "green"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "highlight",
+          "squares": [
+            "e4",
+            "f2",
+            "g2",
+            "h2"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "demo",
+      "fen": "r2qkbnr/1pp3pp/p1p5/4p3/4P1b1/5N2/PPP2PPP/RNBQ1RK1 w kq - 0 8",
+      "text": {
+        "en": "Black's plan: keep pieces and use the bishops. The two bishops become stronger as the position opens; the light-squared bishop pins the f3 knight, the dark-squared one aims at the white king. Black avoids a pure pawn ending and looks for activity.",
+        "uk": "План чорних — зберігати фігури й використати слонів. Два слони сильнішають, коли позиція відкривається; білопольний зв'язує коня f3, чорнопольний цілить у білого короля. Чорні уникають чисто пішакового ендшпілю й шукають активності.",
+        "ru": "План чёрных — сохранять фигуры и использовать слонов. Два слона усиливаются, когда позиция вскрывается; белопольный связывает коня f3, чернопольный целит в белого короля. Чёрные избегают чисто пешечного эндшпиля и ищут активности."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "g4",
+          "to": "f3",
+          "color": "red"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "f8",
+          "to": "c5",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "c5",
+          "to": "f2",
+          "color": "red"
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "r2qkbnr/1pp3pp/p1p5/4p3/4P1b1/5N2/PPP2PPP/RNBQ1RK1 w kq - 0 8",
+      "text": {
+        "en": "Who is happier to trade queens here?",
+        "uk": "Кому тут вигідніше розміняти ферзів?",
+        "ru": "Кому здесь выгоднее разменять ферзей?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "White: the healthy kingside majority decides the endgame.",
+            "uk": "Білим: здорова більшість на королівському фланзі вирішує ендшпіль.",
+            "ru": "Белым: здоровое большинство на королевском фланге решает эндшпиль."
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "Black: the bishop pair is stronger without queens.",
+            "uk": "Чорним: пара слонів сильніша без ферзів.",
+            "ru": "Чёрным: пара слонов сильнее без ферзей."
+          },
+          "feedback": {
+            "en": "The bishops help, but in the long endgame the doubled pawns are a real minus.",
+            "uk": "Слони допомагають, але в довгому ендшпілі здвоєні пішаки — справжній мінус.",
+            "ru": "Слоны помогают, но в долгом эндшпиле сдвоенные пешки — настоящий минус."
+          }
+        },
+        {
+          "text": {
+            "en": "Nobody: the position is symmetrical.",
+            "uk": "Нікому: позиція симетрична.",
+            "ru": "Никому: позиция симметрична."
+          },
+          "feedback": {
+            "en": "Only the centre is symmetrical; the pawn majorities are not.",
+            "uk": "Симетричний лише центр; більшості пішаків — ні.",
+            "ru": "Симметричен только центр; пешечные большинства — нет."
+          }
+        }
+      ]
+    }
+  ],
+  "exam": [
+    {
+      "type": "choice",
+      "fen": "r2qkbnr/1pp3pp/p1p5/4p3/4P1b1/5N2/PPP2PPP/RNBQ1RK1 w kq - 0 8",
+      "text": {
+        "en": "How many pawns does White have on the kingside (e- to h-files) against Black's?",
+        "uk": "Скільки пішаків у білих на королівському фланзі (лінії e–h) проти чорних?",
+        "ru": "Сколько пешек у белых на королевском фланге (вертикали e–h) против чёрных?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "Four against three",
+            "uk": "Чотири проти трьох",
+            "ru": "Четыре против трёх"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "Three against three",
+            "uk": "Три проти трьох",
+            "ru": "Три против трёх"
+          }
+        },
+        {
+          "text": {
+            "en": "Three against four",
+            "uk": "Три проти чотирьох",
+            "ru": "Три против четырёх"
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "What compensates Black for the doubled c-pawns?",
+        "uk": "Що компенсує чорним здвоєні пішаки c?",
+        "ru": "Что компенсирует чёрным сдвоенные пешки c?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "The bishop pair",
+            "uk": "Пара слонів",
+            "ru": "Пара слонов"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "An extra pawn",
+            "uk": "Зайвий пішак",
+            "ru": "Лишняя пешка"
+          }
+        },
+        {
+          "text": {
+            "en": "A safer king",
+            "uk": "Безпечніший король",
+            "ru": "Более безопасный король"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,244 @@
+{
+  "id": "structure-spanish",
+  "course": "strategy",
+  "order": 4,
+  "title": {
+    "en": "e4 against d6: space against solidity",
+    "uk": "e4 проти d6: простір проти міцності",
+    "ru": "e4 против d6: простор против прочности"
+  },
+  "summary": {
+    "en": "White's pawn on e4 gives space; Black's d6 is solid but passive. Who frees the game wins the plan.",
+    "uk": "Пішак e4 дає білим простір; d6 у чорних міцний, але пасивний. Хто звільнить гру — той і виграє план.",
+    "ru": "Пешка e4 даёт белым простор; d6 у чёрных прочна, но пассивна. Кто освободит игру — тот и выигрывает план."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "rnbqr1k1/ppp1bppp/3p1n2/8/3NP3/2N2P2/PPP1B1PP/R1BQ1RK1 b - - 0 8",
+      "highlights": [
+        "e4",
+        "d6",
+        "d5"
+      ],
+      "text": {
+        "en": "White has a pawn on e4, Black on d6, and both other central pawns are gone. White controls more space and the d5 square; Black's d6 pawn stands on a half-open file and can become a target. But Black's position is compact: no weaknesses yet, and pressure on e4 is ready along the e-file.",
+        "uk": "У білих пішак e4, у чорних — d6, інші центральні пішаки розміняні. Білі контролюють більше простору й поле d5; пішак d6 стоїть на напіввідкритій лінії й може стати мішенню. Але позиція чорних компактна: слабкостей поки немає, а тиск на e4 по лінії e уже готовий.",
+        "ru": "У белых пешка e4, у чёрных — d6, остальные центральные пешки разменены. Белые контролируют больше простора и поле d5; пешка d6 стоит на полуоткрытой вертикали и может стать мишенью. Но позиция чёрных компактна: слабостей пока нет, а давление на e4 по вертикали e уже готово."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "rnbqr1k1/ppp1bppp/3p1n2/8/3NP3/2N2P2/PPP1B1PP/R1BQ1RK1 b - - 0 8",
+      "text": {
+        "en": "White's plan: use the space. A knight on d5 is strong: only ...c6 can drive it away, and that move weakens d6 further. f3 holds e4, the queen and rook can double on the d-file against d6, and kingside expansion with g4 is possible.",
+        "uk": "План білих — використати простір. Кінь на d5 сильний: прогнати його може лише …c6, а цей хід ще більше послаблює d6. f3 тримає e4, ферзь і тура можуть здвоїтися по лінії d проти d6, можливе й розширення на королівському фланзі ходом g4.",
+        "ru": "План белых — использовать простор. Конь на d5 силён: прогнать его может только …c6, а этот ход ещё больше ослабляет d6. f3 держит e4, ферзь и ладья могут сдвоиться по вертикали d против d6, возможно и расширение на королевском фланге ходом g4."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "c3",
+          "to": "d5",
+          "color": "green"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "d1",
+          "to": "d2",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "f1",
+          "to": "d1",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "d1",
+          "to": "d6",
+          "color": "red"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "g2",
+          "to": "g4",
+          "color": "green"
+        }
+      ]
+    },
+    {
+      "type": "demo",
+      "fen": "rnbqr1k1/ppp1bppp/3p1n2/8/3NP3/2N2P2/PPP1B1PP/R1BQ1RK1 b - - 0 8",
+      "text": {
+        "en": "Black's plan: press on e4 and free the game. The rook on e8, the knight on f6 and the bishop from f8 hit e4. The freeing break ...d5 removes Black's only weakness; ...c6 takes d5 from the white knight.",
+        "uk": "План чорних — тиснути на e4 і звільнити гру. Тура e8, кінь f6 і слон з f8 б'ють по e4. Звільнювальний прорив …d5 прибирає єдину слабкість чорних; …c6 забирає поле d5 у білого коня.",
+        "ru": "План чёрных — давить на e4 и освободить игру. Ладья e8, конь f6 и слон с f8 бьют по e4. Освобождающий прорыв …d5 убирает единственную слабость чёрных; …c6 отнимает поле d5 у белого коня."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "e8",
+          "to": "e4",
+          "color": "red"
+        },
+        {
+          "do": "arrow",
+          "from": "f6",
+          "to": "e4",
+          "color": "red"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "e7",
+          "to": "f8",
+          "color": "blue"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "d6",
+          "to": "d5",
+          "color": "yellow"
+        },
+        {
+          "do": "arrow",
+          "from": "c7",
+          "to": "c6",
+          "color": "yellow"
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "rnbqr1k1/ppp1bppp/3p1n2/8/3NP3/2N2P2/PPP1B1PP/R1BQ1RK1 b - - 0 8",
+      "text": {
+        "en": "Which pawn move frees Black's game in this structure?",
+        "uk": "Який хід пішаком звільняє гру чорних у цій структурі?",
+        "ru": "Какой ход пешкой освобождает игру чёрных в этой структуре?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "...d5",
+            "uk": "…d5",
+            "ru": "…d5"
+          },
+          "correct": true,
+          "feedback": {
+            "en": "Yes: the d6 pawn disappears and Black's pieces breathe.",
+            "uk": "Так: пішак d6 зникає, і фігури чорних дихають вільно.",
+            "ru": "Да: пешка d6 исчезает, и фигуры чёрных дышат свободно."
+          }
+        },
+        {
+          "text": {
+            "en": "...g5",
+            "uk": "…g5",
+            "ru": "…g5"
+          },
+          "feedback": {
+            "en": "That only weakens Black's king.",
+            "uk": "Це лише послаблює чорного короля.",
+            "ru": "Это только ослабляет чёрного короля."
+          }
+        },
+        {
+          "text": {
+            "en": "...a5",
+            "uk": "…a5",
+            "ru": "…a5"
+          },
+          "feedback": {
+            "en": "Useful at times, but it does not change the centre.",
+            "uk": "Іноді корисно, але центру не змінює.",
+            "ru": "Иногда полезно, но центра не меняет."
+          }
+        }
+      ]
+    }
+  ],
+  "exam": [
+    {
+      "type": "choice",
+      "fen": "rnbqr1k1/ppp1bppp/3p1n2/8/3NP3/2N2P2/PPP1B1PP/R1BQ1RK1 b - - 0 8",
+      "text": {
+        "en": "Which square is White's main outpost here?",
+        "uk": "Яке поле тут головний форпост білих?",
+        "ru": "Какое поле здесь главный форпост белых?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "d5",
+            "uk": "d5",
+            "ru": "d5"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "e6",
+            "uk": "e6",
+            "ru": "e6"
+          }
+        },
+        {
+          "text": {
+            "en": "b5",
+            "uk": "b5",
+            "ru": "b5"
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "What does Black usually play to take the d5 square away from a white knight?",
+        "uk": "Що зазвичай грають чорні, щоб забрати в білого коня поле d5?",
+        "ru": "Что обычно играют чёрные, чтобы отнять у белого коня поле d5?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "...c6",
+            "uk": "…c6",
+            "ru": "…c6"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "...h6",
+            "uk": "…h6",
+            "ru": "…h6"
+          }
+        },
+        {
+          "text": {
+            "en": "...b5",
+            "uk": "…b5",
+            "ru": "…b5"
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,213 @@
+{
+  "id": "structure-saw",
+  "course": "strategy",
+  "order": 7,
+  "title": {
+    "en": "d4 against c6 and e6: the 'saw'",
+    "uk": "d4 проти c6 і e6: «пила»",
+    "ru": "d4 против c6 и e6: «пила»"
+  },
+  "summary": {
+    "en": "White has space and the e5 outpost; Black is solid and waits for the breaks ...c5 and ...e5.",
+    "uk": "У білих простір і форпост e5; чорні міцні й чекають проривів …c5 та …e5.",
+    "ru": "У белых простор и форпост e5; чёрные прочны и ждут прорывов …c5 и …e5."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "r2qkb1r/pp1n1pp1/2p1pn1p/7P/3P4/3Q1NN1/PPPB1PP1/2KR3R b kq - 3 12",
+      "highlights": [
+        "d4",
+        "c6",
+        "e6",
+        "e5"
+      ],
+      "text": {
+        "en": "A white pawn on d4 faces Black's c6 and e6 — a jagged line, like the teeth of a saw. It arises in the Caro-Kann and the Slav. White has more space and the e5 square for a knight; Black has no weaknesses and two pawn breaks in reserve: ...c5 and ...e5.",
+        "uk": "Білий пішак d4 проти чорних c6 і e6 — зубчаста лінія, як зуби пили. Так буває в захисті Каро-Канн і слов'янському захисті. У білих більше простору й поле e5 для коня; у чорних немає слабкостей і два прориви в запасі: …c5 та …e5.",
+        "ru": "Белая пешка d4 против чёрных c6 и e6 — зубчатая линия, как зубья пилы. Так бывает в защите Каро-Канн и славянской защите. У белых больше простора и поле e5 для коня; у чёрных нет слабостей и два прорыва в запасе: …c5 и …e5."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "r2qkb1r/pp1n1pp1/2p1pn1p/7P/3P4/3Q1NN1/PPPB1PP1/2KR3R b kq - 3 12",
+      "text": {
+        "en": "White's plan: a knight to e5, space on the kingside (the h5 pawn already cramps Black), and at the right moment the break d4–d5 against the c6/e6 pawns. Castling long lets White's rooks join a kingside attack.",
+        "uk": "План білих: кінь на e5, простір на королівському фланзі (пішак h5 уже стискає чорних) і вчасно прорив d4–d5 проти пішаків c6/e6. Довга рокіровка дає турам білих змогу долучитися до атаки на королівському фланзі.",
+        "ru": "План белых: конь на e5, простор на королевском фланге (пешка h5 уже стесняет чёрных) и вовремя прорыв d4–d5 против пешек c6/e6. Длинная рокировка позволяет ладьям белых подключиться к атаке на королевском фланге."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "f3",
+          "to": "e5",
+          "color": "green"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "highlight",
+          "squares": [
+            "h5",
+            "g6"
+          ]
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "d4",
+          "to": "d5",
+          "color": "yellow"
+        }
+      ]
+    },
+    {
+      "type": "demo",
+      "fen": "r2qkb1r/pp1n1pp1/2p1pn1p/7P/3P4/3Q1NN1/PPPB1PP1/2KR3R b kq - 3 12",
+      "text": {
+        "en": "Black's plan: finish development and free the game with ...c5 (often after castling long or short) or ...e5. A knight on d5 is a good post, and exchanges help the side with less space.",
+        "uk": "План чорних: завершити розвиток і звільнити гру проривом …c5 (часто після рокіровки) або …e5. Кінь на d5 стоїть добре, а розміни допомагають стороні з меншим простором.",
+        "ru": "План чёрных: завершить развитие и освободить игру прорывом …c5 (часто после рокировки) или …e5. Конь на d5 стоит хорошо, а размены помогают стороне с меньшим простором."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "c6",
+          "to": "c5",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "e6",
+          "to": "e5",
+          "color": "blue"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "f6",
+          "to": "d5",
+          "color": "blue"
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "r2qkb1r/pp1n1pp1/2p1pn1p/7P/3P4/3Q1NN1/PPPB1PP1/2KR3R b kq - 3 12",
+      "text": {
+        "en": "Which breaks free Black's game in this structure?",
+        "uk": "Які прориви звільняють гру чорних у цій структурі?",
+        "ru": "Какие прорывы освобождают игру чёрных в этой структуре?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "...c5 and ...e5",
+            "uk": "…c5 та …e5",
+            "ru": "…c5 и …e5"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "...g5 and ...f5",
+            "uk": "…g5 та …f5",
+            "ru": "…g5 и …f5"
+          },
+          "feedback": {
+            "en": "They weaken Black's own king instead.",
+            "uk": "Вони радше послаблюють власного короля.",
+            "ru": "Они скорее ослабляют собственного короля."
+          }
+        },
+        {
+          "text": {
+            "en": "...b5 and ...a5",
+            "uk": "…b5 та …a5",
+            "ru": "…b5 и …a5"
+          },
+          "feedback": {
+            "en": "They gain space but do not touch d4.",
+            "uk": "Вони захоплюють простір, але не чіпають d4.",
+            "ru": "Они захватывают простор, но не трогают d4."
+          }
+        }
+      ]
+    }
+  ],
+  "exam": [
+    {
+      "type": "choice",
+      "fen": "r2qkb1r/pp1n1pp1/2p1pn1p/7P/3P4/3Q1NN1/PPPB1PP1/2KR3R b kq - 3 12",
+      "text": {
+        "en": "Which square is the white knight's outpost here?",
+        "uk": "Яке поле тут форпост білого коня?",
+        "ru": "Какое поле здесь форпост белого коня?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "e5",
+            "uk": "e5",
+            "ru": "e5"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "c5",
+            "uk": "c5",
+            "ru": "c5"
+          }
+        },
+        {
+          "text": {
+            "en": "d5",
+            "uk": "d5",
+            "ru": "d5"
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "Who usually benefits from exchanges in this structure?",
+        "uk": "Кому зазвичай вигідні розміни в цій структурі?",
+        "ru": "Кому обычно выгодны размены в этой структуре?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "Black, the side with less space",
+            "uk": "Чорним — стороні з меншим простором",
+            "ru": "Чёрным — стороне с меньшим простором"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "White, the side with more space",
+            "uk": "Білим — стороні з більшим простором",
+            "ru": "Белым — стороне с большим простором"
+          }
+        },
+        {
+          "text": {
+            "en": "Neither",
+            "uk": "Нікому",
+            "ru": "Никому"
+          }
+        }
+      ]
+    }
+  ]
+}
