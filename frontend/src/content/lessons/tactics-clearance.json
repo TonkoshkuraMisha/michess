@@ -1,0 +1,252 @@
+{
+  "id": "tactics-clearance",
+  "course": "tactics",
+  "order": 14,
+  "title": {
+    "en": "Clearance: moving your own piece out of the way",
+    "uk": "Звільнення лінії: прибрати власну фігуру з дороги",
+    "ru": "Освобождение линии: убрать собственную фигуру с дороги"
+  },
+  "summary": {
+    "en": "Sometimes your own piece blocks the decisive line or square. Move it away with tempo — a check, a capture, a threat — and the line opens.",
+    "uk": "Іноді власна фігура заступає вирішальну лінію чи поле. Приберіть її з темпом — шахом, взяттям, загрозою — і лінія відкриється.",
+    "ru": "Иногда собственная фигура загораживает решающую линию или поле. Уберите её с темпом — шахом, взятием, угрозой — и линия откроется."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "r3k3/pp3pp1/3qp1p1/3p1PB1/8/3P1Qnr/BPP2P2/R4RK1 b q - 1 20",
+      "highlights": [
+        "g3",
+        "h2"
+      ],
+      "arrows": [
+        {
+          "from": "d6",
+          "to": "h2",
+          "color": "red"
+        }
+      ],
+      "text": {
+        "en": "Black would love to play ...Qh2 mate: the queen on d6 aims at h2 along the diagonal. But Black's own knight on g3 stands in the way. That is the idea of clearance: the piece that blocks the line must leave — and best of all with a move the opponent has to answer.",
+        "uk": "Чорні залюбки зіграли б …Qh2 з матом: ферзь d6 дивиться на h2 по діагоналі. Але на дорозі стоїть власний кінь g3. У цьому ідея звільнення: фігура, що заступає лінію, має піти — найкраще ходом, на який суперник мусить відповісти.",
+        "ru": "Чёрные с удовольствием сыграли бы …Qh2 с матом: ферзь d6 смотрит на h2 по диагонали. Но на пути стоит собственный конь g3. В этом идея освобождения: фигура, загораживающая линию, должна уйти — лучше всего ходом, на который соперник обязан ответить."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "r3k3/pp3pp1/3qp1p1/3p1PB1/8/3P1Qnr/BPP2P2/R4RK1 b q - 1 20",
+      "text": {
+        "en": "The knight leaves with check: ...Ne2+. White has to deal with the check — here by taking — and the diagonal d6–h2 is open: ...Qh2 is mate.",
+        "uk": "Кінь іде з шахом: …Ne2+. Білі мусять відповісти на шах — тут взяттям, — і діагональ d6–h2 відкрита: …Qh2 — мат.",
+        "ru": "Конь уходит с шахом: …Ne2+. Белые обязаны ответить на шах — здесь взятием, — и диагональ d6–h2 открыта: …Qh2 — мат."
+      },
+      "actions": [
+        {
+          "do": "move",
+          "uci": "g3e2"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "move",
+          "uci": "f3e2"
+        },
+        {
+          "do": "pause",
+          "ms": 700
+        },
+        {
+          "do": "arrow",
+          "from": "d6",
+          "to": "h2",
+          "color": "green"
+        },
+        {
+          "do": "pause",
+          "ms": 700
+        },
+        {
+          "do": "move",
+          "uci": "d6h2"
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "4r1k1/5pp1/p2p3p/1p6/3p1PP1/PB3R1P/1PP1qQ2/6K1 b - - 2 32",
+      "text": {
+        "en": "Black to move. The rook would like to stand on e2 — where the queen is now. Win material.",
+        "uk": "Хід чорних. Тура хотіла б стати на e2 — туди, де зараз ферзь. Виграйте матеріал.",
+        "ru": "Ход чёрных. Ладья хотела бы встать на e2 — туда, где сейчас ферзь. Выиграйте материал."
+      },
+      "hint": {
+        "en": "Free e2 with a check.",
+        "uk": "Звільніть e2 із шахом.",
+        "ru": "Освободите e2 с шахом."
+      },
+      "line": [
+        {
+          "answers": [
+            "e2d1"
+          ],
+          "reply": "g1g2",
+          "correct": {
+            "en": "The queen leaves e2 with check. Now the rook takes its place.",
+            "uk": "Ферзь звільняє e2 із шахом. Тепер тура займає його місце.",
+            "ru": "Ферзь освобождает e2 с шахом. Теперь ладья занимает его место."
+          }
+        },
+        {
+          "answers": [
+            "e8e2"
+          ],
+          "correct": {
+            "en": "Re2 pins the white queen to the king on g2 — White loses the queen.",
+            "uk": "Re2 зв'язує білого ферзя з королем на g2 — білі втрачають ферзя.",
+            "ru": "Re2 связывает белого ферзя с королём на g2 — белые теряют ферзя."
+          }
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "5rk1/ppp1Qppp/8/6P1/2B2n2/1P3q2/P1b4P/4R1K1 w - - 2 24",
+      "text": {
+        "en": "White to move. Black's back rank is weak, but the queen on e7 blocks the e-file. Mate in two.",
+        "uk": "Хід білих. Остання горизонталь чорних слабка, але ферзь e7 заступає лінію e. Мат у два ходи.",
+        "ru": "Ход белых. Последняя горизонталь чёрных слаба, но ферзь e7 загораживает вертикаль e. Мат в два хода."
+      },
+      "hint": {
+        "en": "The queen leaves e7 with check — even at the cost of itself.",
+        "uk": "Ферзь іде з e7 із шахом — навіть ціною себе.",
+        "ru": "Ферзь уходит с e7 с шахом — даже ценой себя."
+      },
+      "line": [
+        {
+          "answers": [
+            "e7f7"
+          ],
+          "reply": "f8f7",
+          "correct": {
+            "en": "A queen sacrifice with check: the e-file is open and the f8 rook has been pulled away.",
+            "uk": "Жертва ферзя з шахом: лінія e відкрита, а туру f8 відтягнуто.",
+            "ru": "Жертва ферзя с шахом: вертикаль e открыта, а ладья f8 оттянута."
+          }
+        },
+        {
+          "answers": [
+            "e1e8"
+          ],
+          "correct": {
+            "en": "Mate on the back rank.",
+            "uk": "Мат на останній горизонталі.",
+            "ru": "Мат на последней горизонтали."
+          }
+        }
+      ]
+    }
+  ],
+  "exam": [
+    {
+      "type": "find_move",
+      "fen": "r1bq1rk1/pp2pp1N/3p2pQ/4n3/4P1n1/2PB4/PP3P2/RN2K2R w KQ - 0 16",
+      "text": {
+        "en": "White to move. Mate in two.",
+        "uk": "Хід білих. Мат у два ходи.",
+        "ru": "Ход белых. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "h7f6"
+          ],
+          "reply": "e7f6"
+        },
+        {
+          "answers": [
+            "h6h7"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "r6k/p1pp2R1/1p5P/3PPb2/5q2/8/PP4Q1/4K3 w - - 0 35",
+      "text": {
+        "en": "White to move. Mate in two.",
+        "uk": "Хід білих. Мат у два ходи.",
+        "ru": "Ход белых. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "g7h7"
+          ],
+          "reply": "f5h7"
+        },
+        {
+          "answers": [
+            "g2g7"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "find_move",
+      "fen": "4r1r1/ppp2Q2/2kp4/8/2PP4/4bP1P/PP5K/7R b - - 2 24",
+      "text": {
+        "en": "Black to move. Mate in two.",
+        "uk": "Хід чорних. Мат у два ходи.",
+        "ru": "Ход чёрных. Мат в два хода."
+      },
+      "line": [
+        {
+          "answers": [
+            "e3f4"
+          ],
+          "reply": "f7f4"
+        },
+        {
+          "answers": [
+            "e8e2"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "What makes a clearance move strongest?",
+        "uk": "Що робить хід звільнення найсильнішим?",
+        "ru": "Что делает ход освобождения сильнейшим?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "It comes with tempo — a check, a capture or a threat.",
+            "uk": "Він робиться з темпом — шахом, взяттям чи загрозою.",
+            "ru": "Он делается с темпом — шахом, взятием или угрозой."
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "The piece goes back to its starting square.",
+            "uk": "Фігура повертається на початкове поле.",
+            "ru": "Фигура возвращается на исходное поле."
+          }
+        },
+        {
+          "text": {
+            "en": "It is played as slowly as possible.",
+            "uk": "Його грають якомога повільніше.",
+            "ru": "Его играют как можно медленнее."
+          }
+        }
+      ]
+    }
+  ]
+}

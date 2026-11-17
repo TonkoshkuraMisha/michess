@@ -97,9 +97,9 @@ export const COURSE: CourseModule[] = [
     mod('G2.3', 'G', [{kind: 'library'}]),
     mod('X2', 'G', [ex('level2')]),
     // --- Уровень 3. III–II разряд ---
-    mod('T3.1', 'T', [th('clearance')]),
+    mod('T3.1', 'T', [l('tactics-clearance'), th('clearance')]),
     mod('T3.2', 'T', [l('tactics-square-conquest'), th('remove_defender'), th('decoy')]),
-    mod('T3.3', 'T', [th('clearance')]),
+    mod('T3.3', 'T', [l('tactics-clearance'), th('clearance')]),
     mod('T3.4', 'T', [th('interference')]),
     mod('T3.5', 'T', [th('blockade')]),
     mod('T3.6', 'T', [th('quiet_move')]),
