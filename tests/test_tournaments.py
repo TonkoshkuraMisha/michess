@@ -179,3 +179,19 @@ async def test_finished_game_cannot_be_recorded_twice(client, db_session, token_
     with pytest.raises(service.DomainError) as error:
         await service.record_result(db_session, tournament, game, "0-1")
     assert error.value.code == "tournament_game_closed"
+
+
+# --- навигация: «Продолжить турнир» ---------------------------------------------------------------
+
+async def test_summary_says_when_my_game_is_ready(client, token_user_1, db_session):
+    created = client.post(API, headers=auth(token_user_1), json=body()).json()
+    [summary] = client.get(API, headers=auth(token_user_1)).json()
+    assert (summary["id"], summary["current_round"], summary["my_game_ready"]) == (created["id"], 1, True)
+    mine = next(g for g in created["games"] if g["round"] == 1 and created["my_seat"] in (g["white_seat"], g["black_seat"]))
+    tournament = await db_session.get(Tournament, created["id"])
+    game = next(g for g in await service.games_of(db_session, created["id"]) if g.id == mine["id"])
+    await service.record_result(db_session, tournament, game, "1/2-1/2")
+    # Своя партия тура сыграна, остальные ещё нет — ждать нечего.
+    assert client.get(API, headers=auth(token_user_1)).json()[0]["my_game_ready"] is False
+    client.post(f"{API}/{created['id']}/withdraw", headers=auth(token_user_1))
+    assert client.get(API, headers=auth(token_user_1)).json()[0]["my_game_ready"] is False

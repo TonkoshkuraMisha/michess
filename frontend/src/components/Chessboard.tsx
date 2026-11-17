@@ -3,7 +3,7 @@
 import type {OddsChoice} from './chessboard/odds';
 import {useState, useEffect, useRef, useCallback} from 'react';
 import {socialApi} from '../services/social';
-import {Link, useLocation, useNavigate, useParams} from 'react-router-dom';
+import {useLocation, useNavigate, useParams} from 'react-router-dom';
 import {Chess} from 'chess.js';
 import {ListOrdered, Bot, Zap, Radio} from 'lucide-react';
 import {gameSocket} from '../services/gameSocket';
@@ -25,6 +25,7 @@ import {HISTORICAL_BOTS} from '../config/champions';
 import type {BotOpponentId, HistoricalBotId, HistoricalBotProfile} from '../config/champions';
 import {ALL_TIME_CONTROLS, DEFAULT_TIME_CONTROL, TIME_CONTROLS, timeControlCategory} from '../config/timeControls';
 import type {TournamentGameStart} from '../services/tournaments';
+import {ContinueTournaments, TournamentGameBar} from './tournaments/TournamentGameBar';
 import {pickFirstOpponent} from '../services/onboarding';
 import type {FirstGameStart} from '../services/onboarding';
 import type {MasterGameStart} from '../services/masters';
@@ -1116,6 +1117,8 @@ export default function Chessboard() {
     const tournamentStart = (routeLocation.state as { tournamentGame?: TournamentGameStart } | null)?.tournamentGame;
     const [pendingTournament, setPendingTournament] = useState<TournamentGameStart | null>(null);
     const [tournamentLinkId, setTournamentLinkId] = useState<number | null>(null);
+    const [tournamentGameRefId, setTournamentGameRefId] = useState<number | null>(null);
+    const inTournamentGame = Boolean(tournamentLinkId && (isTournamentGame || savedTournamentId));
     useEffect(() => {
         if (!tournamentStart || gameId || (activeBot && !gameOverResult)) return;
         const category = timeControlCategory(tournamentStart.baseTimeMs, tournamentStart.incrementMs);
@@ -1138,6 +1141,7 @@ export default function Chessboard() {
             startHistoricalBotGame(pendingTournament.botId as HistoricalBotId, pendingTournament.color, null, options);
         }
         setTournamentLinkId(pendingTournament.tournamentId);
+        setTournamentGameRefId(pendingTournament.gameId);
         setPendingTournament(null);
     }, [pendingTournament, effectiveWhiteBaseMinutes, effectiveIncSeconds]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1417,12 +1421,8 @@ export default function Chessboard() {
                     </button>
                 </div>
 
-                {tournamentLinkId && (isTournamentGame || savedTournamentId) && (
-                    <Link to={`/tournaments/${savedTournamentId ?? tournamentLinkId}`} data-testid="back-to-tournament"
-                          className="shrink-0 text-center text-xs font-bold py-1.5 rounded-md bg-amber-800/70 border border-amber-500/60 text-amber-100 hover:bg-amber-700">
-                        {t('tournaments.backToTournament')}
-                    </Link>
-                )}
+                {/* Турниры, где ждут партию игрока: путь назад — и после перезагрузки страницы. */}
+                {!inTournamentGame && !gameId && !(activeBot && !gameOverResult) && <ContinueTournaments/>}
                 {leftSectionTab === 'bots' ? (
                     <div className="flex-1 min-h-0 flex flex-col gap-1.5">
                     <div className="grid grid-cols-3 gap-1 text-xs font-bold" role="tablist">
@@ -1915,8 +1915,14 @@ export default function Chessboard() {
 
                 {/* Зрителю кнопки песочницы не показываем: «отменить ход» и «сбросить доску»
                     портили бы чужую партию на его экране. Выход — в панели чата. */}
+                {/* Турнирная партия: турнир, тур, соперник, таблица; после партии — следующая партия и путь в турнир. */}
+                {inTournamentGame && tournamentLinkId && (
+                    <TournamentGameBar tournamentId={savedTournamentId ?? tournamentLinkId} tournamentGameId={tournamentGameRefId}
+                                       gameOver={Boolean(gameOverResult)}/>
+                )}
                 {!spectatingGameId && <GameControlsPanel
                     mode={gameId ? 'pvp' : activeBot ? 'bot' : 'sandbox'}
+                    hideRematch={inTournamentGame}
                     gameId={gameId}
                     savedBotGameId={savedBotGameId}
                     historyLength={history.length}

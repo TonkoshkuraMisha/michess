@@ -34,6 +34,8 @@ export interface GameControlsPanelProps {
     hasCustomPosition?: boolean;
     /** Ставит на свободную доску позицию из FEN; возвращает текст ошибки или null. */
     onLoadFen?: (fen: string) => string | null;
+    /** Партия турнира: реванша нет — после партии ведёт плашка турнира (следующая партия, таблица). */
+    hideRematch?: boolean;
 }
 
 /**
@@ -44,6 +46,7 @@ export function GameControlsPanel({
     mode, gameId, savedBotGameId, historyLength, gameOverResult, rematchStatus, isBotThinking,
     whitePlayer, blackPlayer, navigate, onAbortGame, onResign, onOfferDraw, onAcceptRematch,
     onDeclineRematch, onOfferRematch, onResetSandbox, onUndoSandboxMove, undoLocked = false, hasCustomPosition = false, onLoadFen,
+    hideRematch = false,
 }: GameControlsPanelProps) {
     const {t} = useI18n();
     const [fenInput, setFenInput] = useState('');
@@ -181,7 +184,7 @@ export function GameControlsPanel({
         return (
             <div className="shrink-0 flex flex-col gap-1.5">
                 <div className="flex flex-col gap-1.5">
-                    <div className="grid grid-cols-2 gap-2">
+                    {!(hideRematch && gameOverResult) && <div className="grid grid-cols-2 gap-2">
                         <button
                             type="button"
                             disabled={historyLength === 0 || isBotThinking || !!gameOverResult || undoLocked}
@@ -208,7 +211,7 @@ export function GameControlsPanel({
                                 <RefreshCw size={15}/> {t('controls.rematch')}
                             </button>
                         )}
-                    </div>
+                    </div>}
                     {/* Ничья с ботом (таск 21.4): бот отвечает по оценке позиции и своему отношению к ничьей. */}
                     {!gameOverResult && historyLength >= 2 && (
                         <button

@@ -9,7 +9,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.deps import get_current_user
@@ -112,6 +112,9 @@ class TournamentSummary(BaseModel):
     my_place: int | None
     career_stage: str | None = None
     event_key: str | None = None
+    # Навигация по турнирам: текущий тур и готова ли партия игрока в нём («Продолжить турнир» на главной).
+    current_round: int = 1
+    my_game_ready: bool = False
 
 
 def _player(p: TournamentPlayer) -> PlayerOut:
@@ -187,10 +190,20 @@ async def list_tournaments(db: AsyncSession = Depends(get_db), user: User = Depe
         .where(Tournament.owner_id == user.id)
         .order_by(Tournament.id.desc())
     )).all()
+    # Турниры, где партия игрока текущего тура ещё не сыграна (та же логика, что myPendingGame на клиенте).
+    me = TournamentPlayer
+    ready = set((await db.execute(
+        select(TournamentGame.tournament_id)
+        .join(Tournament, Tournament.id == TournamentGame.tournament_id)
+        .join(me, (me.tournament_id == Tournament.id) & (me.user_id == user.id))
+        .where(Tournament.owner_id == user.id, Tournament.status == "active", Tournament.withdrawn_at.is_(None),
+               TournamentGame.result.is_(None), TournamentGame.round == Tournament.current_round,
+               or_(TournamentGame.white_seat == me.seat, TournamentGame.black_seat == me.seat))
+    )).scalars().all())
     return [
         TournamentSummary(id=t.id, format=t.format, size=t.size, status=t.status,
                           created_at=t.created_at.isoformat(), my_place=place, career_stage=t.career_stage,
-                          event_key=t.event_key)
+                          event_key=t.event_key, current_round=t.current_round, my_game_ready=t.id in ready)
         for t, place in rows
     ]
 
