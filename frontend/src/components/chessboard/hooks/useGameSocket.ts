@@ -89,7 +89,23 @@ export interface UseGameSocketOptions {
     updateSessionStats: (result: string) => void;
 }
 
+/** «Берсерк» в партии арены (33.3): доступен ли он в партии и кто его сыграл. */
+export interface BerserkState {
+    allowed: boolean;
+    white: boolean;
+    black: boolean;
+}
+
+const NO_BERSERK: BerserkState = {allowed: false, white: false, black: false};
+
+function berserkFrom(data: any): BerserkState {
+    return {allowed: data.berserk_allowed === true, white: data.white_berserk === true, black: data.black_berserk === true};
+}
+
 export interface UseGameSocketResult {
+    berserk: BerserkState;
+    /** Сыграть «берсерк»: половина своего времени без добавки ради лишнего очка за победу. */
+    handleBerserk: () => void;
     chatMessages: ChatMessageItem[];
     chatInput: string;
     setChatInput: (v: string) => void;
@@ -132,6 +148,7 @@ export function useGameSocket({
     const [queuePlayers, setQueuePlayers] = useState<QueuePlayer[]>([]);
     const [createdInviteCode, setCreatedInviteCode] = useState<string | null>(null);
     const [inviteCopied, setInviteCopied] = useState(false);
+    const [berserk, setBerserk] = useState<BerserkState>(NO_BERSERK);
 
     // Обработчики WebSocket живут дольше одного рендера, поэтому актуальные значения читают из ref.
     const spectatingRef = useRef<number | null>(spectatingGameId);
@@ -231,6 +248,8 @@ export function useGameSocket({
         gameIdRef.current = incomingGid;
         setGameId(incomingGid);
         setIsRatedGame(data.is_rated !== false);
+        // Снимок той же партии без полей берсерка (опрос по HTTP) уже известное не стирает.
+        if (isNewMatch || data.berserk_allowed !== undefined) setBerserk(berserkFrom(data));
         myColorRef.current = assignedColor;
         setMyColor(assignedColor);
         setStateVersion(ver);
@@ -364,6 +383,14 @@ export function useGameSocket({
             if (summary) setDrawOfferStatus(summary);
         };
 
+        // Берсерк (свой или соперника): новые часы и отметка у игрока.
+        const handleBerserkEvent = (data: any) => {
+            if (!isCurrentGameEvent(data) || gameOverResultRef.current) return;
+            if (data.white_time_ms !== undefined) setWhiteTimeMs(Number(data.white_time_ms));
+            if (data.black_time_ms !== undefined) setBlackTimeMs(Number(data.black_time_ms));
+            setBerserk(berserkFrom(data));
+        };
+
         const handleDrawOffered = (data: any) => {
             if (!isOwnGameEvent(data) || gameOverResultRef.current) return;
             setDrawOfferStatus(DRAW_OFFER_INCOMING);
@@ -424,6 +451,7 @@ export function useGameSocket({
             spectatingRef.current = Number(data.game_id);
             setSpectatingGameId(Number(data.game_id));
             setIsRatedGame(data.is_rated !== false);
+            setBerserk(berserkFrom(data));
             // Зритель всегда смотрит со стороны белых и не наследует состояние прошлой партии.
             myColorRef.current = 'white';
             setMyColor('white');
@@ -523,6 +551,7 @@ export function useGameSocket({
         gameSocket.on('match_found', handleMatchFound);
         gameSocket.on('move_made', handleMoveMade);
         gameSocket.on('game_over', handleGameOver);
+        gameSocket.on('berserk', handleBerserkEvent);
         gameSocket.on('draw_offered', handleDrawOffered);
         gameSocket.on('draw_declined', handleDrawDeclined);
         gameSocket.on('rematch_offered', handleRematchOffered);
@@ -537,6 +566,7 @@ export function useGameSocket({
             gameSocket.off('match_found', handleMatchFound);
             gameSocket.off('move_made', handleMoveMade);
             gameSocket.off('game_over', handleGameOver);
+            gameSocket.off('berserk', handleBerserkEvent);
             gameSocket.off('draw_offered', handleDrawOffered);
             gameSocket.off('draw_declined', handleDrawDeclined);
             gameSocket.off('rematch_offered', handleRematchOffered);
@@ -809,6 +839,11 @@ export function useGameSocket({
         playAudio('premove');
     }, [gameId, gameOverResult, setDrawOfferStatus, playAudio]);
 
+    const handleBerserk = useCallback(() => {
+        if (!gameId || gameOverResult) return;
+        gameSocket.send('berserk', {game_id: gameId});
+    }, [gameId, gameOverResult]);
+
     const acceptDraw = useCallback(() => {
         if (!gameId) return;
         gameSocket.send('accept_draw', {game_id: gameId});
@@ -827,5 +862,6 @@ export function useGameSocket({
         applyMatchFoundSnapshot, applyMoveMadeSnapshot, startMatchmaking, cancelMatchmaking, acceptChallenge,
         handleCreatePrivateInvite, handleCopyInviteLink, handleSpectateGame, handleSendChatMessage, handleSendChatPreset,
         handleAcceptRematch, handleDeclineRematch, handleOfferDraw, acceptDraw, declineDraw,
+        berserk, handleBerserk,
     };
 }

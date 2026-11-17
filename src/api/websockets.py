@@ -15,14 +15,14 @@ from src.api.deps import get_current_user_ws
 from src.api.fair_play import remember_player_ip
 from src.api.rate_limit import try_consume
 from src.core import observability as obs
-from src.core.errors import error_payload
+from src.core.errors import DomainError, error_payload
 from src.db.session import get_session_factory
 from src.models.user import User
 from src.services import moderation, notifications
 from src.services.anticheat import trusted_premove
 from src.services.connection_manager import manager
 from src.services.game_engine import game_variant
-from src.services.game_state import is_rated_state, pending_draw_offer, state_manager
+from src.services.game_state import berserk_fields, is_rated_state, pending_draw_offer, state_manager
 from src.services.matchmaker import MatchmakingError, matchmaker
 from src.services.rating import classify_time_control
 
@@ -81,7 +81,10 @@ async def _send_active_game_snapshot_if_exists(db: AsyncSession, user: User):
         "state_version": int(state.get("state_version", 0)),
         # Предложение ничьей, сделанное до переподключения, иначе пропадало бы с экрана.
         "draw_offer_from": pending_draw_offer(state),
+        **berserk_fields(state),
     }
+    if state.get("arena_id"):
+        payload["arena_id"] = int(state["arena_id"])
     await manager.send_personal_message(payload, user.id)
 
 
@@ -333,6 +336,7 @@ async def _spectate_game(ctx: ActionContext, data: dict) -> None:
         "fen": game.state.get("board_fen"),
         "pgn": game.state.get("pgn", ""),
         "state_version": int(game.state.get("state_version", 0)),
+        **berserk_fields(game.state),
     })
 
 
@@ -407,6 +411,30 @@ async def _abort_game(ctx: ActionContext, data: dict) -> None:
         "black_delta": 0,
         "white_new_rating": abort_res["white_new_rating"],
         "black_new_rating": abort_res["black_new_rating"],
+    })
+
+
+@action("berserk")
+async def _berserk(ctx: ActionContext, data: dict) -> None:
+    """«Берсерк» в партии арены (33.3): половина времени без добавки ради лишнего очка — до своего первого хода."""
+    game = await _participant_game(ctx, data, in_progress=True)
+    from src.services import arena as arena_service
+    try:
+        res = await arena_service.berserk(ctx.db, game.game_id, ctx.user.id)
+    except DomainError as exc:
+        await ctx.error(exc.code)
+        return
+    if res is None:
+        return
+    await ctx.release_db()
+    white_time, black_time = _compute_live_clocks(res["state"])
+    await game.broadcast({
+        "event": "berserk",
+        "game_id": game.game_id,
+        "color": res["color"],
+        "white_time_ms": white_time,
+        "black_time_ms": black_time,
+        **berserk_fields(res["state"]),
     })
 
 
@@ -599,12 +627,18 @@ async def _make_move(ctx: ActionContext, data: dict) -> None:
     if isinstance(expected_version, bool) or not isinstance(expected_version, int):
         expected_version = None
 
+    # Время обдумывания по часам клиента — для квоты лага (33.3); мусор вместо числа — возврата времени нет.
+    client_elapsed_ms = data.get("time_taken_ms")
+    if isinstance(client_elapsed_ms, bool) or not isinstance(client_elapsed_ms, int | float) or client_elapsed_ms < 0:
+        client_elapsed_ms = None
+
     res = await state_manager.process_atomic_move(
         game_id=gid,
         user_id=ctx.user.id,
         command_id=command_id,
         move_str=move_str,
         expected_version=expected_version,
+        client_elapsed_ms=int(client_elapsed_ms) if client_elapsed_ms is not None else None,
     )
     if res["status"] == "ignored":
         return

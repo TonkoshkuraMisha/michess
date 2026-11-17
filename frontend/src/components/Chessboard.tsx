@@ -346,6 +346,7 @@ export default function Chessboard() {
         startMatchmaking, cancelMatchmaking, acceptChallenge,
         handleCreatePrivateInvite, handleCopyInviteLink, handleSpectateGame, handleSendChatMessage, handleSendChatPreset,
         handleAcceptRematch, handleDeclineRematch, handleOfferDraw, acceptDraw, declineDraw,
+        berserk, handleBerserk,
     } = useGameSocket({
         gameId, gameIdRef, myColorRef, spectatingGameId, stateVersionRef,
         gameOverResult, gameOverResultRef, activeBot, currentUsernameRef, inviteCode, navigate,
@@ -1069,6 +1070,11 @@ export default function Chessboard() {
     const displayedFiles = isBoardFlipped ? [...FILES].reverse() : FILES;
 
     const topIsWhite = isBoardFlipped;
+    // Отметки берсерка относятся к партии между людьми (своей или просматриваемой), а не к боту или свободной доске.
+    const isLivePvp = Boolean(gameId || spectatingGameId);
+    // Берсерк возможен до своего первого хода: у белых ходов нет вовсе, у чёрных — не больше одного (ход белых).
+    const canBerserk = Boolean(gameId) && berserk.allowed && !gameOverResult && !berserk[myColor]
+        && history.length <= (myColor === 'white' ? 0 : 1);
     const topPlayerInfo = topIsWhite ? shownWhitePlayer : shownBlackPlayer;
     const bottomPlayerInfo = topIsWhite ? shownBlackPlayer : shownWhitePlayer;
     const topPlayerTime = topIsWhite ? whiteTimeMs : blackTimeMs;
@@ -1525,6 +1531,7 @@ export default function Chessboard() {
                     idleLabel={t(topIsWhite ? 'board.idleWhite' : 'board.idleBlack')}
                     showGameInfo={Boolean(gameId || activeBot || spectatingGameId)}
                     playerInfo={topPlayerInfo}
+                    berserk={isLivePvp && (topIsWhite ? berserk.white : berserk.black)}
                     hasRatingInfo={!!ratingInfo && isRatedGame}
                     ratingDelta={ratingInfo ? (topIsWhite ? ratingInfo.white_delta : ratingInfo.black_delta) : undefined}
                     capturedSymbols={topCaptured}
@@ -1753,6 +1760,7 @@ export default function Chessboard() {
                     idleLabel={t(!topIsWhite ? 'board.youWhite' : 'board.youBlack')}
                     showGameInfo={Boolean(gameId || activeBot || spectatingGameId)}
                     playerInfo={bottomPlayerInfo}
+                    berserk={isLivePvp && (topIsWhite ? berserk.black : berserk.white)}
                     hasRatingInfo={!!ratingInfo && isRatedGame}
                     ratingDelta={ratingInfo ? (!topIsWhite ? ratingInfo.white_delta : ratingInfo.black_delta) : undefined}
                     capturedSymbols={bottomCaptured}
@@ -1947,6 +1955,7 @@ export default function Chessboard() {
                     blackPlayer={shownBlackPlayer}
                     navigate={navigate}
                     onAbortGame={handleAbortGame}
+                    onBerserk={canBerserk ? handleBerserk : undefined}
                     onResign={handleResign}
                     onOfferDraw={activeBot ? () => void offerDrawToBot() : handleOfferDraw}
                     onAcceptRematch={handleAcceptRematch}

@@ -144,6 +144,7 @@ export function ArenaPage() {
                 <span className="font-mono text-amber-300" data-testid="arena-timing">{timing(arena, now, t)}</span>
             </div>
             <p className="text-sm text-boxwood/80">{t(arena.format === 'swiss' ? 'arenas.swissRules' : 'arenas.rules')}</p>
+            {arena.berserk && <p className="text-sm text-boxwood/80" data-testid="arena-berserk-rule">{t('arenas.berserkRule')}</p>}
             {error && <p role="alert" className="text-sm text-rose-300">{renderUiMessage(error, t)}</p>}
             {getToken() && arena.status !== 'finished' && (
                 <div className="flex flex-wrap items-center gap-3">

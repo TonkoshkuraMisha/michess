@@ -41,8 +41,14 @@ _INT_STATE_KEYS = (
     "white_id", "black_id", "white_time_ms", "black_time_ms",
     "base_time_ms", "increment_ms", "last_move_at",
     "white_disconnect_started_at", "black_disconnect_started_at",
-    "state_version",
+    "state_version", "white_lag_ms", "black_lag_ms",
 )
+
+# Квота лага (таск 33.3, docs/research/arenas.md): время, потерянное на пересылку хода по сети, возвращается игроку —
+# не больше LAG_PER_MOVE_MS за ход и LAG_PER_GAME_MS за партию. Лаг хода = время по часам сервера минус время
+# обдумывания, названное клиентом; клиенту верим только в пределах квоты, поэтому выгадать больше неё нельзя.
+LAG_PER_MOVE_MS = 300
+LAG_PER_GAME_MS = 2000
 
 FINISHED_STATE_TTL_S = 6 * 60 * 60
 ABANDON_TIMEOUT_MS = 3 * 60 * 1000
@@ -118,6 +124,33 @@ def live_clock_ms(state: dict, color: str, now_ms: int) -> int:
     return stored - max(0, now_ms - int(state["last_move_at"]))
 
 
+def lag_allowance_ms(state: dict, color: str) -> int:
+    """Сколько лага ещё можно вернуть стороне за один ход: остаток квоты партии, но не больше квоты хода."""
+    used = int(state.get(f"{color}_lag_ms") or 0)
+    return max(0, min(LAG_PER_MOVE_MS, LAG_PER_GAME_MS - used))
+
+
+def lag_credit_ms(state: dict, color: str, elapsed_ms: int, client_elapsed_ms: int | None) -> int:
+    """Возврат времени за ход: лаг (сервер насчитал больше, чем думал клиент) в пределах квоты; без данных — 0."""
+    if client_elapsed_ms is None:
+        return 0
+    return max(0, min(elapsed_ms - max(0, client_elapsed_ms), lag_allowance_ms(state, color)))
+
+
+def is_berserk(state: dict, color: str) -> bool:
+    """Сторона сыграла «берсерк» (33.3): половина базового времени, добавки нет."""
+    return str(state.get(f"{color}_berserk") or "") == "1"
+
+
+def berserk_fields(state: dict) -> dict:
+    """Поля снимка партии для клиента: доступен ли берсерк в этой партии и кто его уже сыграл."""
+    return {
+        "berserk_allowed": state.get("berserk_allowed") == "1",
+        "white_berserk": is_berserk(state, "white"),
+        "black_berserk": is_berserk(state, "black"),
+    }
+
+
 def abandon_wait_ms(state: dict, color: str, now_ms: int) -> int:
     """Сколько ещё отключённый игрок может отсутствовать до поражения (для отсчёта у соперника)."""
     wait = ABANDON_TIMEOUT_MS
@@ -132,13 +165,15 @@ def evaluate_clock_expiry(state: dict, now_ms: int) -> tuple[str, int | None, st
     Возвращает (result, winner_id, reason) или None, если партия продолжается.
 
     1. Флаг: у стороны, которая ходит, кончилось время — независимо от того, подключена ли она.
+       Флаг падает с отсрочкой на доступную квоту лага (33.3): ход, отправленный вовремя, но
+       задержавшийся в сети, ещё может прийти и быть засчитан (process_atomic_move).
     2. Брошенная партия: игрок отключён дольше ABANDON_TIMEOUT_MS (его часы при этом могут
        и не идти, если сейчас ход соперника).
     """
     white_id, black_id = int(state["white_id"]), int(state["black_id"])
 
     mover = side_to_move(state)
-    if live_clock_ms(state, mover, now_ms) <= 0:
+    if live_clock_ms(state, mover, now_ms) + lag_allowance_ms(state, mover) <= 0:
         result, termination = flag_outcome(state.get("board_fen"), mover)
         if result == "1/2-1/2":
             return result, None, termination
@@ -174,7 +209,7 @@ def next_timeout_deadline_ms(state: dict) -> int:
     """
     last_move_at = int(state.get("last_move_at", 0) or 0)
     mover = side_to_move(state)
-    deadlines = [last_move_at + int(state.get(f"{mover}_time_ms", 0) or 0)]
+    deadlines = [last_move_at + int(state.get(f"{mover}_time_ms", 0) or 0) + lag_allowance_ms(state, mover)]
 
     if int(state.get("state_version", 0) or 0) < 2:
         deadlines.append(last_move_at + 30000)
@@ -203,8 +238,9 @@ class GameStateManager:
     async def initialize_game(
             self, game_id: int, white_id: int, black_id: int, base_time_ms: int, increment_ms: int,
             is_rated: bool = True, start_fen: str | None = None, white_time_ms: int | None = None,
-            black_time_ms: int | None = None,
+            black_time_ms: int | None = None, arena: dict | None = None,
     ):
+        """arena — партия арены (33.3): {"arena_id": …, "berserk_allowed": bool} — попадает в состояние партии."""
         now_ms = int(time.time() * 1000)
         state = {
             "white_id": str(white_id),
@@ -228,6 +264,9 @@ class GameStateManager:
             "draw_offer": "",
             "rematch_offer": "",
         }
+        if arena:
+            state["arena_id"] = str(arena["arena_id"])
+            state["berserk_allowed"] = "1" if arena.get("berserk_allowed") else "0"
         await self.redis.hset(self._get_key(game_id), mapping=state)
         await self.redis.sadd("active_games", str(game_id))
         await self.redis.zadd(GAME_DEADLINES_KEY, {str(game_id): next_timeout_deadline_ms(state)})
@@ -352,6 +391,10 @@ class GameStateManager:
                     "white_disconnect_started_at": "0",
                     "black_disconnect_started_at": "0",
                 }
+                if status_str == "in_progress":
+                    # Партия арены: без этих полей берсерк после восстановления снова получал бы добавку.
+                    from src.services import arena as arena_service
+                    state.update(await arena_service.game_state_fields(db, game_id))
                 await self.redis.hset(self._get_key(game_id), mapping=state)
                 if status_str != "in_progress":
                     # Завершённую партию восстанавливают ради реванша и чата после игры —
@@ -405,7 +448,12 @@ class GameStateManager:
             command_id: str,
             move_str: str,
             expected_version: int | None = None,
+            client_elapsed_ms: int | None = None,
     ) -> dict:
+        """
+        client_elapsed_ms — время обдумывания хода по часам клиента: разница с часами сервера — лаг, который
+        возвращается игроку в пределах квоты (lag_credit_ms). None — возврата нет.
+        """
         game_key = self._get_key(game_id)
         cmd_key = f"game:{game_id}:commands"
 
@@ -447,11 +495,15 @@ class GameStateManager:
                     last_move_at = int(state["last_move_at"])
                     elapsed_ms = max(0, now_ms - last_move_at)
 
-                    increment = int(state["increment_ms"])
+                    mover = "white" if is_white_turn else "black"
+                    # Берсерк (33.3) играет без добавки.
+                    increment = 0 if is_berserk(state, mover) else int(state["increment_ms"])
                     white_time = int(state["white_time_ms"])
                     black_time = int(state["black_time_ms"])
 
-                    remaining_after_move = (white_time if is_white_turn else black_time) - elapsed_ms
+                    lag_credit = lag_credit_ms(state, mover, elapsed_ms, client_elapsed_ms)
+                    lag_used = int(state.get(f"{mover}_lag_ms") or 0) + lag_credit
+                    remaining_after_move = (white_time if is_white_turn else black_time) - elapsed_ms + lag_credit
                     if remaining_after_move <= 0:
                         # Флаг упал до хода: завершаем партию в той же транзакции, чтобы
                         # check_timeouts_loop или другой обработчик не завершили её повторно.
@@ -516,6 +568,7 @@ class GameStateManager:
                             "white_time_ms": str(new_white_time),
                             "black_time_ms": str(new_black_time),
                             "ended_at": str(now_ms),
+                            f"{mover}_lag_ms": str(lag_used),
                         }
                         pipe.hset(game_key, mapping=updates)
                         pipe.zadd(PENDING_FINISH_KEY, {str(game_id): now_ms})
@@ -544,6 +597,7 @@ class GameStateManager:
                         "last_move_at": str(now_ms),
                         "white_time_ms": str(new_white_time),
                         "black_time_ms": str(new_black_time),
+                        f"{mover}_lag_ms": str(lag_used),
                     }
                     # Предложение ничьей действует, пока соперник не ответил ходом (ФИДЕ 9.1.2):
                     # ход того, кому предложили, его отклоняет; свой ход предложившего — нет.
@@ -568,9 +622,53 @@ class GameStateManager:
                         "white_id": white_id,
                         "black_id": black_id,
                         "elapsed_ms": elapsed_ms,
+                        "lag_credit_ms": lag_credit,
                         "now_ms": now_ms,
                     }
 
+                except WatchError:
+                    continue
+
+    async def apply_berserk(self, game_id: int, user_id: int) -> dict:
+        """
+        «Берсерк» (33.3): до своего первого хода игрок партии арены оставляет себе половину базового времени и
+        отказывается от добавки (за победу арена даст лишнее очко — src/services/arena.py). Атомарно (WATCH/MULTI):
+        ход, сделанный в тот же момент, либо опередит берсерк (тогда отказ), либо увидит уже новые часы.
+
+        Возвращает {"status": "ok", "color", "state"} со свежим состоянием или {"status": "error", "code"};
+        повторный берсерк — {"status": "ignored"}.
+        """
+        game_key = self._get_key(game_id)
+        async with self.redis.pipeline(transaction=True) as pipe:
+            while True:
+                try:
+                    await pipe.watch(game_key)
+                    raw = await pipe.hgetall(game_key)
+                    if not raw or raw.get("status") != "in_progress":
+                        await pipe.unwatch()
+                        return {"status": "error", "code": "game_not_in_progress"}
+                    state = _coerce_state(raw)
+                    if user_id not in (state["white_id"], state["black_id"]) or state.get("berserk_allowed") != "1":
+                        await pipe.unwatch()
+                        return {"status": "error", "code": "berserk_unavailable"}
+                    color = "white" if user_id == state["white_id"] else "black"
+                    if is_berserk(state, color):
+                        await pipe.unwatch()
+                        return {"status": "ignored"}
+                    now_ms = int(time.time() * 1000)
+                    half = int(state["base_time_ms"]) // 2
+                    updates = {f"{color}_time_ms": str(half), f"{color}_berserk": "1"}
+                    fresh = {**state, f"{color}_time_ms": half, f"{color}_berserk": "1"}
+                    # Белые ещё не ходили при версии 0, чёрные — при версии не больше 1.
+                    moved = int(state.get("state_version", 0)) > (0 if color == "white" else 1)
+                    if moved or live_clock_ms(fresh, color, now_ms) <= 0:
+                        await pipe.unwatch()
+                        return {"status": "error", "code": "berserk_too_late"}
+                    pipe.multi()
+                    pipe.hset(game_key, mapping=updates)
+                    pipe.zadd(GAME_DEADLINES_KEY, {str(game_id): next_timeout_deadline_ms(fresh)})
+                    await pipe.execute()
+                    return {"status": "ok", "color": color, "state": fresh}
                 except WatchError:
                     continue
 

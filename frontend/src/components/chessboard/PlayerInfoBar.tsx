@@ -1,6 +1,8 @@
 // --- FILE: frontend/src/components/chessboard/PlayerInfoBar.tsx ---
 
+import {Zap} from 'lucide-react';
 import {formatTime} from './hooks/useClock';
+import {useI18n} from '../../i18n';
 import type {HistoricalBotProfile} from '../../config/champions';
 
 export interface PlayerInfoBarProps {
@@ -14,6 +16,8 @@ export interface PlayerInfoBarProps {
     /** Партия (PvP/бот/просмотр) идёт — иначе показываем idleLabel и превью времени вместо часов. */
     showGameInfo: boolean;
     playerInfo: { username: string; rating: string };
+    /** Игрок сыграл «берсерк» в партии арены (33.3): половина времени без добавки. */
+    berserk?: boolean;
     /** Партия только что завершилась и сервер прислал изменение рейтинга (может отсутствовать для конкретной стороны). */
     hasRatingInfo: boolean;
     ratingDelta?: number;
@@ -29,8 +33,9 @@ export interface PlayerInfoBarProps {
  */
 export function PlayerInfoBar({
     boardWidthPx, isResizing, botProfile, isWhiteSide, idleLabel, showGameInfo, playerInfo,
-    hasRatingInfo, ratingDelta, capturedSymbols, advantage, timeMs, idlePreviewMs,
+    hasRatingInfo, ratingDelta, capturedSymbols, advantage, timeMs, idlePreviewMs, berserk = false,
 }: PlayerInfoBarProps) {
+    const {t} = useI18n();
     return (
         <div
             style={{width: `${boardWidthPx}px`}}
@@ -72,6 +77,12 @@ export function PlayerInfoBar({
                                         ({Number(ratingDelta) >= 0 ? `+${ratingDelta}` : ratingDelta})
                                     </span>
                                 )}
+                            </span>
+                        )}
+                        {showGameInfo && berserk && (
+                            <span role="img" aria-label={t('board.berserk')} title={t('board.berserk')}
+                                  data-testid="berserk-mark" className="shrink-0 text-orange-400">
+                                <Zap size={15} aria-hidden="true"/>
                             </span>
                         )}
                     </div>

@@ -356,7 +356,8 @@ class Matchmaker:
         white_id, black_id = (c_id, a_id) if random.random() > 0.5 else (a_id, c_id)
         return await self._create_game_record(session, white_id, black_id, base_time, inc_time, now_ms, is_rated)
 
-    async def _notify_match_found(self, connection_manager, created: dict, base_time: int, inc_time: int) -> None:
+    async def _notify_match_found(self, connection_manager, created: dict, base_time: int, inc_time: int,
+                                  arena: dict | None = None) -> None:
         if connection_manager is None:
             return
         match_payload = {
@@ -377,6 +378,10 @@ class Matchmaker:
             "variant": game_variant(created.get("start_fen")),
             "state_version": 0,
         }
+        if arena:
+            # Партия арены (33.3): по этим полям клиент показывает «берсерк» до первого хода.
+            match_payload["arena_id"] = arena["arena_id"]
+            match_payload["berserk_allowed"] = bool(arena.get("berserk_allowed"))
         await connection_manager.send_personal_message(
             {**match_payload, "color": "white", "opponent_id": created["black_id"]}, created["white_id"],
         )
@@ -392,6 +397,7 @@ class Matchmaker:
             inc_time: int,
             connection_manager,
             players: tuple[int, int],
+            arena: dict | None = None,
     ) -> dict | None:
         """Общая часть старта: снять обоих с очереди, создать запись, Redis-состояние, оповестить."""
         from src.services.connection_manager import manager as ws_manager
@@ -415,8 +421,9 @@ class Matchmaker:
             start_fen=created.get("start_fen"),
             white_time_ms=created.get("white_time_ms"),
             black_time_ms=created.get("black_time_ms"),
+            arena=arena,
         )
-        await self._notify_match_found(connection_manager, created, base_time, inc_time)
+        await self._notify_match_found(connection_manager, created, base_time, inc_time, arena)
         logger.info(
             "Match started: White(%s) vs Black(%s) in game %s",
             created["white_id"], created["black_id"], created["game_id"],
@@ -435,10 +442,11 @@ class Matchmaker:
             initiator_id: int | None = None,
             is_rated: bool = True,
             odds: dict | None = None,
+            arena: dict | None = None,
     ) -> dict:
         """
         Стартует партию с заданными цветами (приглашение, реванш). odds — начальная позиция и время партии с форой
-        (``_odds_start``).
+        (``_odds_start``). arena — пометка партии арены (``arena._game_marker``): номер арены и доступен ли берсерк.
         initiator_id — кто инициировал старт (для текста ошибки «вы уже играете»).
         """
         white_id, black_id = int(white_id), int(black_id)
@@ -458,7 +466,7 @@ class Matchmaker:
                     lambda s, now_ms: self._create_game_record(
                         s, white_id, black_id, base_ms, inc_ms, now_ms, is_rated and not odds, odds=odds,
                     ),
-                    base_ms, inc_ms, connection_manager, (white_id, black_id),
+                    base_ms, inc_ms, connection_manager, (white_id, black_id), arena=arena,
                 )
             if not started:
                 raise MatchmakingError("player_not_found")
