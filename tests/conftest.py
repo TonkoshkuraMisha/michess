@@ -325,6 +325,18 @@ def no_strength_reference(monkeypatch):
     monkeypatch.setattr(bots_base, "strength_reference_move", lambda *args, **kwargs: None)
 
 
+@pytest.fixture(autouse=True)
+def arena_entry_without_games(monkeypatch):
+    """
+    Допуск в арену (таск 33.2) требует сыгранных рейтинговых партий; у тестовых игроков их нет, а подкручивать счётчики
+    партий значит менять поведение рейтинга в чужих тестах. Порог по умолчанию снят; tests/test_arena_groups.py
+    включает его сам.
+    """
+    from src.services import arena
+
+    monkeypatch.setattr(arena, "MIN_RATED_GAMES", 0)
+
+
 _PUBLISHED_SIMULATIONS: list[int] = []
 
 

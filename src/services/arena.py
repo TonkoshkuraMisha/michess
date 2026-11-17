@@ -12,7 +12,13 @@
   статус closing); каждая сыгранная партия засчитывается;
 * неявка: первый ход не сделан и партия отменена по таймауту — поражение тому, чья очередь ходить, сопернику —
   победа; добровольная отмена в арене запрещена; договорная ничья до EARLY_DRAW_PLIES полуходов — 0 очков обоим;
-* таблица при равенстве очков: перформанс в арене, затем меньше партий, затем раньше вошедший.
+* таблица при равенстве очков: перформанс в арене, затем меньше партий, затем раньше вошедший;
+* допуск (таск 33.2): не меньше MIN_RATED_GAMES рейтинговых партий в контроле арены, без флага нечестной игры;
+  вход — только пока арена не закрыта для пар (scheduled / running);
+* группа по силе: у арены max_rating — рейтинг в контроле на входе и его пик за PEAK_DAYS дней не выше потолка
+  (против «слива» рейтинга ради слабой группы);
+* деления: в делении не больше DIVISION_SIZE участников; следующий входящий попадает в первое неполное деление
+  той же арены (своя таблица, те же время и правила), а если таких нет — в новое.
 
 Швейцарка между людьми (format="swiss"): заданное число туров; тур составляется по правилам швейцарки
 (tournament_rules.swiss_pairings, посев — по рейтингу на входе), партии всех пар создаются сразу (неявка — поражение по
@@ -26,6 +32,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.core.config import settings
 from src.core.errors import DomainError
 from src.db import redis as redis_module
 from src.models.arena import Arena, ArenaGame, ArenaPlayer
@@ -34,6 +41,10 @@ from src.services.rating import classify_time_control
 
 FIRE_AFTER = 2
 GAME_MOVES = 40
+MIN_RATED_GAMES = 10
+PEAK_DAYS = 7
+DIVISION_SIZE = 500
+RATING_BANDS = (1300, 1700, 2100)
 EARLY_DRAW_PLIES = 20
 LOOKAHEAD = timedelta(hours=6)
 WAIT_TTL_S = 120
@@ -108,12 +119,19 @@ async def ensure_schedule(db: AsyncSession, now: datetime | None = None) -> None
     for slot in SCHEDULE:
         step = int((now - epoch) / slot.every)
         start = epoch + slot.every * step
+        # Группы по силе (33.2) — копии блиц-арен с потолком рейтинга; включаются настройкой, когда аудитория вырастет.
+        bands: list[int | None] = [None]
+        if settings.ARENA_RATING_BANDS and slot.format == "arena" and slot.key.startswith("blitz"):
+            bands += list(RATING_BANDS)
         while start < now + LOOKAHEAD:
             if start + slot.duration > now:
-                exists = await db.scalar(select(Arena.id).where(Arena.schedule_key == slot.key, Arena.starts_at == start))
-                if exists is None:
-                    db.add(Arena(schedule_key=slot.key, base_time_ms=slot.base_time_ms, increment_ms=slot.increment_ms,
-                                 starts_at=start, ends_at=start + slot.duration, format=slot.format, rounds=slot.rounds))
+                for limit in bands:
+                    key = slot.key if limit is None else f"{slot.key}-u{limit}"
+                    exists = await db.scalar(select(Arena.id).where(Arena.schedule_key == key, Arena.starts_at == start))
+                    if exists is None:
+                        db.add(Arena(schedule_key=key, base_time_ms=slot.base_time_ms, increment_ms=slot.increment_ms,
+                                     starts_at=start, ends_at=start + slot.duration, format=slot.format,
+                                     rounds=slot.rounds, max_rating=limit))
             start += slot.every
     await db.commit()
 
@@ -137,14 +155,74 @@ async def get(db: AsyncSession, arena_id: int) -> Arena:
     return arena
 
 
+async def peak_rating(db: AsyncSession, user: User, category: str, days: int = PEAK_DAYS) -> int:
+    """Наибольший рейтинг игрока в категории за последние days дней (по партиям) и сейчас."""
+    from sqlalchemy import case, or_
+
+    from src.models.game import Game, GameStatus
+    from src.services.rating import ESTIMATED_MOVES, category_duration_bounds_ms
+
+    since = _now() - timedelta(days=days)
+    after = case((Game.white_player_id == user.id, Game.white_initial_rating + Game.white_rating_delta),
+                 else_=Game.black_initial_rating + Game.black_rating_delta)
+    conditions = [or_(Game.white_player_id == user.id, Game.black_player_id == user.id),
+                  Game.status == GameStatus.COMPLETED, Game.is_rated.is_(True), Game.finished_at >= since,
+                  Game.white_rating_delta.is_not(None), Game.black_rating_delta.is_not(None)]
+    lower, upper = category_duration_bounds_ms(category)  # type: ignore[arg-type]
+    estimated = Game.base_time_ms + ESTIMATED_MOVES * Game.increment_ms
+    if lower is not None:
+        conditions.append(estimated >= lower)
+    if upper is not None:
+        conditions.append(estimated < upper)
+    best = await db.scalar(select(func.max(after)).where(*conditions))
+    current = user.rating_for(category)  # type: ignore[arg-type]
+    return max(current, int(best)) if best is not None else current
+
+
+async def check_entry(db: AsyncSession, arena: Arena, user: User) -> None:
+    """Допуск в арену (33.2): сыгранные партии, честная игра, потолок группы."""
+    category = classify_time_control(arena.base_time_ms, arena.increment_ms)
+    games = user.games_played_for(category)
+    if games < MIN_RATED_GAMES:
+        raise DomainError("arena_need_games", need=MIN_RATED_GAMES, have=games)
+    if user.is_cheater:
+        raise DomainError("arena_fair_play")
+    if arena.max_rating is not None and await peak_rating(db, user, category) > arena.max_rating:
+        raise DomainError("arena_rating_too_high", limit=arena.max_rating)
+
+
+async def divisions(db: AsyncSession, arena: Arena) -> list[Arena]:
+    root_id = arena.parent_id or arena.id
+    return list((await db.execute(select(Arena).where(
+        (Arena.id == root_id) | (Arena.parent_id == root_id)).order_by(Arena.division))).scalars().all())
+
+
 async def join(db: AsyncSession, arena: Arena, user: User) -> ArenaPlayer:
-    if status(arena) == "finished":
+    """Вход в арену: допуск, затем первое неполное деление (или новое). Уже участник — его место."""
+    now = _now()
+    if status(arena, now) == "finished":
         raise DomainError("arena_finished")
-    existing = await _player(db, arena.id, user.id)
+    if arena.format == "arena" and now >= last_start(arena):
+        raise DomainError("arena_pairing_closed")
+    family = await divisions(db, arena)
+    family_ids = [a.id for a in family]
+    existing = await db.scalar(select(ArenaPlayer).where(
+        ArenaPlayer.arena_id.in_(family_ids), ArenaPlayer.user_id == user.id))
     if existing:
         return existing
+    await check_entry(db, arena, user)
+    counts = dict((await db.execute(select(ArenaPlayer.arena_id, func.count()).where(
+        ArenaPlayer.arena_id.in_(family_ids)).group_by(ArenaPlayer.arena_id))).tuples().all())
+    target = next((a for a in family if counts.get(a.id, 0) < DIVISION_SIZE), None)
+    if target is None:
+        root = family[0]
+        target = Arena(schedule_key=None, base_time_ms=root.base_time_ms, increment_ms=root.increment_ms,
+                       starts_at=root.starts_at, ends_at=root.ends_at, format=root.format, rounds=root.rounds,
+                       max_rating=root.max_rating, division=family[-1].division + 1, parent_id=root.id)
+        db.add(target)
+        await db.flush()
     category = classify_time_control(arena.base_time_ms, arena.increment_ms)
-    player = ArenaPlayer(arena_id=arena.id, user_id=user.id, rating=user.rating_for(category))
+    player = ArenaPlayer(arena_id=target.id, user_id=user.id, rating=user.rating_for(category))
     db.add(player)
     await db.commit()
     await db.refresh(player)
@@ -412,6 +490,9 @@ def view(arena: Arena, now: datetime | None = None, open_games: int = 0) -> dict
            "open_games": open_games}
     if arena.format == "arena":
         out["last_start_at"] = last_start(arena).isoformat()
+    out["max_rating"] = arena.max_rating
+    out["division"] = arena.division or 1
+    out["parent_id"] = arena.parent_id
     return out
 
 

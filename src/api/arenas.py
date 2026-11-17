@@ -19,7 +19,8 @@ from src.services.matchmaker import MatchmakingError
 router = APIRouter()
 
 RECENT = timedelta(hours=6)
-_CODES = {"arena_not_found": status.HTTP_404_NOT_FOUND}
+_CODES = {"arena_not_found": status.HTTP_404_NOT_FOUND, "arena_need_games": status.HTTP_403_FORBIDDEN,
+          "arena_fair_play": status.HTTP_403_FORBIDDEN, "arena_rating_too_high": status.HTTP_403_FORBIDDEN}
 
 
 def _http(exc: DomainError):
@@ -76,19 +77,27 @@ async def get_arena(arena_id: int, request: Request, db: AsyncSession = Depends(
     me = None
     if user_id is not None:
         joined = await service._player(db, arena.id, user_id) is not None
+        # Игрок может быть в другом делении этой арены (33.2) — клиент перейдёт туда.
+        division_id = None
+        if not joined:
+            for item in await service.divisions(db, arena):
+                if item.id != arena.id and await service._player(db, item.id, user_id) is not None:
+                    division_id = item.id
         me = {"joined": joined, "waiting": user_id in await service.waiting_ids(arena.id),
-              "current_game_id": await service.current_game(db, arena.id, user_id) if joined else None}
+              "current_game_id": await service.current_game(db, arena.id, user_id) if joined else None,
+              "division_arena_id": division_id}
     return {**service.view(arena, None, await service.open_games(db, arena.id)),
             "standings": await service.standings(db, arena.id), "me": me}
 
 
 @router.post("/{arena_id}/join")
 async def join_arena(arena_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Вход: допуск и группа по силе (33.2); при переполнении игрок попадает в другое деление — его id в ответе."""
     try:
-        await service.join(db, await service.get(db, arena_id), user)
+        player = await service.join(db, await service.get(db, arena_id), user)
     except DomainError as exc:
         raise _http(exc) from None
-    return {"joined": True}
+    return {"joined": True, "arena_id": player.arena_id}
 
 
 @router.post("/{arena_id}/ready")

@@ -46,11 +46,13 @@ def test_last_start_leaves_time_for_one_game():
 async def test_no_pairs_after_last_start_but_open_games_still_count(client, db_session, test_user_1, test_user_2,
                                                                      token_user_1):
     now = datetime.now(UTC)
-    item = blitz(now, started=timedelta(minutes=55), left=timedelta(minutes=5))      # последний старт уже прошёл
+    item = blitz(now, started=timedelta(minutes=5), left=timedelta(minutes=50))
     db_session.add(item)
     await db_session.commit()
     for user in (test_user_1, test_user_2):
         await arena.join(db_session, item, user)
+    item.ends_at = now + timedelta(minutes=5)                                          # последний старт уже прошёл
+    await db_session.commit()
     closed = client.post(f"{API}/{item.id}/ready", headers=auth(token_user_1))
     assert closed.status_code == 409 and closed.json()["detail"]["code"] == "arena_pairing_closed"
 
