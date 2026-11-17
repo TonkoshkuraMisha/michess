@@ -517,3 +517,5 @@ GUESTS: tuple[Guest, ...] = (
     _guest("breev", "Breev, V. V.", None, 1600, aggression=0, randomness=45),
 )
 GUESTS_BY_ID = {guest.id: guest for guest in GUESTS}
+# По имени из PGN («Фамилия, Имя»): под ним партия с мастером сохраняется и показывается в архиве.
+GUESTS_BY_PGN_NAME = {guest.pgn_name: guest for guest in GUESTS}

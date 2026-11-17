@@ -28,6 +28,7 @@ from src.services import tournaments as tournament_service
 from src.services.bots import calibration as bot_calibration
 from src.services.bots.anderssen import anderssen_bot
 from src.services.bots.archetypes import ARCHETYPES, ARCHETYPES_BY_ID, ARCHETYPES_BY_KEY
+from src.services.bots.guests import GUESTS_BY_PGN_NAME
 from src.services.bots.labourdonnais import labourdonnais_bot
 from src.services.bots.masters import MASTER_BOTS, MASTERS
 from src.services.bots.morphy import morphy_bot
@@ -690,6 +691,11 @@ async def _resolve_personality_for_save(
     archetype = ARCHETYPES_BY_KEY.get(payload.personality_name)
     if archetype is not None:
         return archetype.key, archetype.config.target_elo
+    # Мастер прошлого («Машина времени») — под именем из PGN («Фамилия, Имя»): правила имён игроков к нему не
+    # применяются (запятая и пробел в них запрещены — занять такое имя персоналией нельзя), сила — из реестра.
+    guest = GUESTS_BY_PGN_NAME.get(payload.personality_name)
+    if guest is not None:
+        return guest.pgn_name, guest.rating
     try:
         return validate_personality_name(payload.personality_name), None
     except PydanticCustomError as exc:
