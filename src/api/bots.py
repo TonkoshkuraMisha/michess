@@ -501,6 +501,14 @@ async def get_bot_catalog(db: AsyncSession = Depends(get_db)):
     }
 
 
+@router.get("/rivalry")
+async def get_rivalry(db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """Какие исторические боты помнят игрока (таск 32.2): сколько партий и сколько очков в них набрал бот."""
+    rivals = await bot_memory.rivals_of(db, current_user.id)
+    return {"rivals": [{"bot_id": r.bot_id, "games": r.games, "bot_points": r.points,
+                        "remembers": r.games >= bot_memory.RIVAL_MIN_GAMES} for r in rivals]}
+
+
 @router.get("/guests", dependencies=[PUBLIC_LIMIT])
 async def get_guests():
     """
@@ -610,8 +618,12 @@ async def get_bot_move(payload: BotMoveRequest, request: Request, db: AsyncSessi
         raise ApiError(404, "bot_not_found", bot_id=payload.bot_id)
 
     board = _playable_board(payload.fen)
-    await ladder_service.note_bot_move_request(await optional_user_id(request, db), board, payload.bot_id)
+    user_id = await optional_user_id(request, db)
+    await ladder_service.note_bot_move_request(user_id, board, payload.bot_id)
     await bot_memory.refresh(db, payload.bot_id)
+    # Память о сопернике (таск 32.2) нужна только в дебюте — пока бот играет по книге.
+    in_opening = (board.fullmove_number - 1) * 2 + (board.turn == chess.BLACK) < bot_memory.BOOK_PLIES
+    bot_memory.use_rival(await bot_memory.load_rival(db, payload.bot_id, user_id) if in_opening else None)
     with engine_work("bot_move"):
         result = await asyncio.to_thread(bot.choose_move, payload.fen)
     thinking_time_ms = calculate_authentic_thinking_time_ms(
@@ -747,11 +759,15 @@ async def _resolve_personality_for_save(
         raise ApiError(400, exc.type, **(exc.context or {})) from None
 
 
-async def _remember_bot_game(db: AsyncSession, payload: BotGameSaveRequest, result: str, player_rating: int) -> None:
+async def _remember_bot_game(db: AsyncSession, payload: BotGameSaveRequest, result: str, player_rating: int,
+                             player_id: int) -> None:
     bot_color = chess.BLACK if payload.player_color == "white" else chess.WHITE
+    book = BOT_INSTANCES[payload.bot_id].opening_book
     try:
-        await bot_memory.record_book(db, payload.bot_id, BOT_INSTANCES[payload.bot_id].opening_book,
-                                     payload.moves_uci, bot_color, result)
+        await bot_memory.record_book(db, payload.bot_id, book, payload.moves_uci, bot_color, result)
+        # Память о сопернике (32.2): по завершённой партии без помощи — как игрок играет на самом деле.
+        if not payload.assisted and payload.moves_uci:
+            await bot_memory.record_rival(db, payload.bot_id, player_id, book, payload.moves_uci, bot_color, result)
         if not payload.assisted and not payload.blindfold and payload.moves_uci:
             await bot_memory.record_rating(
                 db, payload.bot_id, int(str(BOT_METADATA[payload.bot_id]["rating"])), player_rating,
@@ -888,7 +904,8 @@ async def save_bot_game(
     # игры вслепую и своей позиции. Сбой памяти партию не ломает: она уже сохранена.
     if payload.bot_id in BOT_INSTANCES and not personality_name and start_fen is None:
         await _remember_bot_game(db, payload, result,
-                                 rating_change.before if rating_change else current_user.rating_for(category))
+                                 rating_change.before if rating_change else current_user.rating_for(category),
+                                 current_user.id)
     # Фоновый разбор: итог партии готов заранее, а из ошибок игрока делаются личные задачи (таск 13.5).
     schedule_game_analysis_in_background(new_game.id)
 

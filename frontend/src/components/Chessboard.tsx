@@ -52,7 +52,7 @@ import {useXraySettings} from './xray/useXraySettings';
 import {GameSummaryPanel} from './chessboard/GameSummaryPanel';
 import {outcomeFor, recommendOpponent} from '../services/gameSummary';
 import type {PoolOpponent} from '../services/gameSummary';
-import type {BotCatalog} from '../services/botCatalog';
+import type {BotCatalog, BotRival} from '../services/botCatalog';
 import {useGameSocket} from './chessboard/hooks/useGameSocket';
 import {PromotionDialog} from './chessboard/PromotionDialog';
 import {MoveList} from './chessboard/MoveList';
@@ -72,7 +72,7 @@ import {ladderOutcomeMessage} from './chessboard/hooks/useBotGame';
 import {hasStatusKey, renderStatus, status} from './chessboard/status';
 import type {GameStatus} from './chessboard/status';
 import {useI18n} from '../i18n';
-import {fetchBotCatalog} from '../services/botCatalog';
+import {fetchBotCatalog, fetchRivalry} from '../services/botCatalog';
 import {isArchetypeId} from '../config/archetypes';
 import type {ArchetypeId} from '../config/archetypes';
 import type {CustomOpponent} from '../config/archetypes';
@@ -145,6 +145,8 @@ export default function Chessboard() {
     const [measuredBotRatings, setMeasuredBotRatings] = useState<Record<string, number>>({});
     // Сила по партиям с людьми (таск 32.1).
     const [liveBotStrength, setLiveBotStrength] = useState<Record<string, { rating: number; games: number }>>({});
+    // Какие боты помнят игрока (таск 32.2); обновляется после каждой партии.
+    const [botRivals, setBotRivals] = useState<Record<string, BotRival>>({});
     // Каталог целиком — для рекомендации следующего соперника в итоге партии (таск 11.5).
     const [botCatalog, setBotCatalog] = useState<BotCatalog | null>(null);
     useEffect(() => {
@@ -328,6 +330,12 @@ export default function Chessboard() {
     });
 
     const selectedBotProfile = HISTORICAL_BOTS[selectedBotId];
+    useEffect(() => {
+        const token = getToken();
+        if (!token) return;
+        fetchRivalry(token).then((list) => setBotRivals(Object.fromEntries(list.map((r) => [r.bot_id, r]))))
+            .catch(() => undefined);
+    }, [savedBotGameId]);
     // Партия «на счёт» — лестница или турнир (таск A.2): без наставника, рентгена и возврата хода — сервер такую
     // помощь всё равно засчитал бы поражением или не засчитал бы партию.
     const isRatedBotGame = isLadderGame || isTournamentGame;
@@ -1485,6 +1493,7 @@ export default function Chessboard() {
                         onStartFromPositionChange={setStartFromPosition}
                         measured={measuredBotRatings}
                         live={liveBotStrength}
+                        rivals={botRivals}
                         odds={oddsChoice}
                         onOddsChange={setOddsChoice}
                     />

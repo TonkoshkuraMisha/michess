@@ -117,3 +117,65 @@ async def test_tournament_games_teach_openings(db_session):
     [stat] = (await db_session.execute(select(BotOpeningStat))).scalars().all()
     assert (stat.bot_id, stat.uci, stat.points) == ("morphy", line[1], 0.5)
     assert await db_session.get(BotRating, "morphy") is None                    # турнир ботов на рейтинг не влияет
+
+
+# --- память о сопернике (таск 32.2) ---------------------------------------------------------------
+
+def test_rival_factor_prefers_lines_where_the_player_struggles():
+    rival = memory.Rival("probe", 3, {
+        (START_KEY, "e2e4"): (2, 2.0, False),     # игрок дважды проиграл — бот идёт туда охотнее
+        (START_KEY, "d2d4"): (1, 0.0, True),      # с этим ходом бот проиграл ему в последний раз
+    })
+    good, lost, unknown = (memory.rival_factor(rival, START_KEY, u) for u in ("e2e4", "d2d4", "c2c4"))
+    assert lost < 0.1 < unknown == 1.0 < good <= memory.RIVAL_MAX
+
+
+def test_rival_only_for_its_bot_and_regular_opponent():
+    memory.use_rival(memory.Rival("probe", 1, {(START_KEY, "d2d4"): (1, 0.0, True)}))
+    assert memory.book_factor("probe", START_KEY, "d2d4") == 1.0           # одна партия — ещё не постоянный соперник
+    memory.use_rival(memory.Rival("probe", 2, {(START_KEY, "d2d4"): (1, 0.0, True)}))
+    assert memory.book_factor("other", START_KEY, "d2d4") == 1.0           # чужой бот этого игрока не помнит
+    assert memory.book_factor("probe", START_KEY, "d2d4") < 0.1
+    memory.use_rival(None)
+
+
+async def test_bot_remembers_its_rival_through_the_api(client, token_user_1, test_user_1, db_session):
+    line = _morphy_line()
+    for _ in range(2):
+        response = client.post("/api/v1/bots/save-game", headers=auth(token_user_1), json={
+            "bot_id": "morphy", "player_color": "white", "result": "1-0", "moves_uci": line,
+            "termination": "resignation",
+        })
+        assert response.status_code == 200, response.text
+    # С помощью наставника партия о сопернике ничего не говорит.
+    client.post("/api/v1/bots/save-game", headers=auth(token_user_1), json={
+        "bot_id": "morphy", "player_color": "white", "result": "1-0", "moves_uci": line, "termination": "resignation",
+        "assisted": True,
+    })
+    rivalry = client.get("/api/v1/bots/rivalry", headers=auth(token_user_1)).json()["rivals"]
+    assert [(r["bot_id"], r["games"], r["remembers"]) for r in rivalry] == [("morphy", 2, True)]
+    rival = await memory.load_rival(db_session, "morphy", test_user_1.id)
+    assert rival is not None and rival.games == 2
+    assert rival.moves[(_after("e2e4"), line[1])][0] == 2
+    assert await memory.load_rival(db_session, "morphy", None) is None
+    assert client.get("/api/v1/bots/rivalry").status_code == 401
+
+
+async def test_move_request_passes_the_rival_into_the_move_thread(client, token_user_1, test_user_1, db_session,
+                                                                   monkeypatch):
+    from src.models.bot_memory import BotRival
+
+    db_session.add(BotRival(bot_id="morphy", user_id=test_user_1.id, games=3, points=0.0))
+    await db_session.commit()
+    seen = []
+
+    def fake_choose(fen):
+        seen.append(memory._rival.get())
+        return {"uci": "e7e5", "san": "e5", "fen_after": fen, "source": "opening_book",
+                "comment": {"key": "common.positional", "params": {}}}
+
+    monkeypatch.setattr(BOT_INSTANCES["morphy"], "choose_move", fake_choose)
+    fen = chess.Board().fen().replace(" w ", " b ")
+    client.post("/api/v1/bots/move", headers=auth(token_user_1), json={"bot_id": "morphy", "fen": fen})
+    client.post("/api/v1/bots/move", json={"bot_id": "morphy", "fen": fen})          # гость — соперника нет
+    assert [r.games if r else None for r in seen] == [3, None]

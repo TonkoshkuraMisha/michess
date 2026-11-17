@@ -15,17 +15,26 @@
 
 Память читается из базы в кэш процесса (refresh, не чаще раза в REFRESH_SECONDS на бота): выбор хода синхронный и
 базу не трогает.
+
+* Соперник (таск 32.2). По завершённым партиям с человеком бот помнит итог каждого своего хода книги против именно
+  этого игрока. С постоянным соперником (не меньше RIVAL_MIN_GAMES партий) вес хода дополнительно умножается на
+  rival_factor от RIVAL_MIN до RIVAL_MAX: варианты, где игрок набирал меньше, — чаще (там ему труднее), где бот
+  проигрывал — реже; ход, с которым бот проиграл этому игроку в последний раз, — ещё × LAST_LOSS. Память соперника
+  загружается на запрос хода (load_rival) и передаётся в синхронный выбор хода через contextvars: объекты ботов
+  общие на все запросы.
 """
 
 import logging
 import time
+from contextvars import ContextVar
+from dataclasses import dataclass, field
 
 import chess
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.models.bot_memory import BotOpeningStat, BotRating
+from src.models.bot_memory import BotOpeningStat, BotRating, BotRival, BotRivalStat
 
 logger = logging.getLogger(__name__)
 
@@ -38,19 +47,51 @@ OFFSET_EVERY = 25
 DRIFT = 100
 MAX_OFFSET = 150
 REFRESH_SECONDS = 300
+RIVAL_MIN_GAMES = 2
+RIVAL_MIN, RIVAL_MAX = 0.25, 1.75
+LAST_LOSS = 0.1
 
 _book: dict[str, dict[tuple[str, str], tuple[int, float]]] = {}
 _offset: dict[str, int] = {}
 _loaded_at: dict[str, float] = {}
 
 
-def book_factor(bot_id: str, fen_key: str, uci: str) -> float:
-    """Множитель веса хода книги по опыту бота; без опыта — 1."""
-    games, points = _book.get(bot_id, {}).get((fen_key, uci), (0, 0.0))
+@dataclass
+class Rival:
+    """Память бота об одном игроке на время запроса хода."""
+    bot_id: str
+    games: int
+    moves: dict[tuple[str, str], tuple[int, float, bool]] = field(default_factory=dict)
+
+
+_rival: ContextVar[Rival | None] = ContextVar("bot_rival", default=None)
+
+
+def use_rival(rival: Rival | None) -> None:
+    """Соперник текущего запроса (asyncio.to_thread копирует контекст в поток выбора хода)."""
+    _rival.set(rival)
+
+
+def rival_factor(rival: Rival, fen_key: str, uci: str) -> float:
+    games, points, last_lost = rival.moves.get((fen_key, uci), (0, 0.0, False))
     if games == 0:
         return 1.0
-    rate = (points + PRIOR * 0.5) / (games + PRIOR)
-    return FACTOR_MIN + (FACTOR_MAX - FACTOR_MIN) * rate
+    rate = (points + 1.0) / (games + 2.0)
+    factor = RIVAL_MIN + (RIVAL_MAX - RIVAL_MIN) * rate
+    return factor * LAST_LOSS if last_lost else factor
+
+
+def book_factor(bot_id: str, fen_key: str, uci: str) -> float:
+    """Множитель веса хода книги по опыту бота и, если он играет с постоянным соперником, — по партиям с ним."""
+    factor = 1.0
+    games, points = _book.get(bot_id, {}).get((fen_key, uci), (0, 0.0))
+    if games:
+        rate = (points + PRIOR * 0.5) / (games + PRIOR)
+        factor = FACTOR_MIN + (FACTOR_MAX - FACTOR_MIN) * rate
+    rival = _rival.get()
+    if rival is not None and rival.bot_id == bot_id and rival.games >= RIVAL_MIN_GAMES:
+        factor *= rival_factor(rival, fen_key, uci)
+    return factor
 
 
 def strength_offset(bot_id: str) -> int:
@@ -162,3 +203,45 @@ async def record_rating(db: AsyncSession, bot_id: str, declared: int, opponent_r
 
 async def live_strength(db: AsyncSession) -> dict[str, BotRating]:
     return {r.bot_id: r for r in (await db.execute(select(BotRating))).scalars().all()}
+
+async def load_rival(db: AsyncSession, bot_id: str, user_id: int | None) -> Rival | None:
+    if user_id is None:
+        return None
+    summary = await db.scalar(select(BotRival).where(BotRival.bot_id == bot_id, BotRival.user_id == user_id))
+    if summary is None:
+        return None
+    rows = (await db.execute(select(BotRivalStat).where(
+        BotRivalStat.bot_id == bot_id, BotRivalStat.user_id == user_id))).scalars().all()
+    return Rival(bot_id, summary.games, {(r.fen_key, r.uci): (r.games, r.points, r.last_lost) for r in rows})
+
+
+async def record_rival(db: AsyncSession, bot_id: str, user_id: int, opening_book: dict, moves_uci: list[str],
+                       bot_color: chess.Color, result: str) -> None:
+    """Завершённая партия с игроком: итог — в сводку соперника и ходам книги бота против него. Коммит — здесь."""
+    points = bot_points(result, bot_color)
+    summary = await db.scalar(select(BotRival).where(BotRival.bot_id == bot_id, BotRival.user_id == user_id))
+    if summary is None:
+        db.add(BotRival(bot_id=bot_id, user_id=user_id, games=1, points=points))
+    else:
+        summary.games += 1
+        summary.points += points
+    for fen_key, uci in book_moves_played(opening_book, moves_uci, bot_color):
+        row = await db.scalar(select(BotRivalStat).where(
+            BotRivalStat.bot_id == bot_id, BotRivalStat.user_id == user_id, BotRivalStat.fen_key == fen_key,
+            BotRivalStat.uci == uci))
+        if row is None:
+            db.add(BotRivalStat(bot_id=bot_id, user_id=user_id, fen_key=fen_key, uci=uci, games=1, points=points,
+                                last_lost=points == 0.0))
+        else:
+            row.games += 1
+            row.points += points
+            row.last_lost = points == 0.0
+    try:
+        await db.commit()
+    except IntegrityError:  # параллельная партия того же игрока с тем же ботом — опыт этой не критичен
+        await db.rollback()
+
+
+async def rivals_of(db: AsyncSession, user_id: int) -> list[BotRival]:
+    return list((await db.execute(select(BotRival).where(BotRival.user_id == user_id)
+                                  .order_by(BotRival.games.desc()))).scalars().all())

@@ -402,6 +402,8 @@ export const ru: Messages = {
         ratingDeclared: ' (заявлен)',
         howMeasured: 'Как мы измеряем',
         liveStrength: 'Против игроков: {rating} (партий: {games})',
+        remembersYou: '{name} помнит вас: партий {games}, счёт {you} : {bot}. В дебюте избегает вариантов, в которых вы его обыгрывали.',
+        metYou: 'Вы уже играли с {name}: партий {games}, счёт {you} : {bot}.',
         thought: 'Мысль ({name}):',
         thinking: 'обдумывает ход…',
         quote: '«{text}»',

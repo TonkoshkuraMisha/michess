@@ -7,6 +7,8 @@ import {MessageSquareQuote} from 'lucide-react';
 import {HISTORICAL_BOTS_LIST} from '../../config/champions';
 import type {BotOpponentId, HistoricalBotId, HistoricalBotProfile} from '../../config/champions';
 import {useI18n} from '../../i18n';
+import {scorePoints} from '../../services/botCatalog';
+import type {BotRival} from '../../services/botCatalog';
 
 export interface HistoricalBotsPanelProps {
     selectedBotId: HistoricalBotId;
@@ -27,6 +29,8 @@ export interface HistoricalBotsPanelProps {
     measured?: Record<string, number>;
     /** Сила по партиям с людьми (таск 32.1): id бота → рейтинг и число партий. */
     live?: Record<string, { rating: number; games: number }>;
+    /** Память о сопернике (таск 32.2): id бота → партии с игроком и очки бота. */
+    rivals?: Record<string, BotRival>;
     /** Фора (таск 21.1); без обработчика выбор не показывается. */
     odds?: OddsChoice;
     onOddsChange?: (odds: OddsChoice) => void;
@@ -36,7 +40,7 @@ export interface HistoricalBotsPanelProps {
 export function HistoricalBotsPanel({
     selectedBotId, onSelectBot, selectedBotProfile, activeBot, activeBotProfile, gameId,
     gameOverResult, isBotThinking, botComment, onStartBotGame,
-    canStartFromPosition, startFromPosition, onStartFromPositionChange, measured = {}, live = {}, odds, onOddsChange,
+    canStartFromPosition, startFromPosition, onStartFromPositionChange, measured = {}, live = {}, rivals = {}, odds, onOddsChange,
 }: HistoricalBotsPanelProps) {
     const {t} = useI18n();
     return (
@@ -126,6 +130,17 @@ export function HistoricalBotsPanel({
                                 {t('bots.liveStrength', live[selectedBotProfile.id])}
                             </div>
                         )}
+                        {rivals[selectedBotProfile.id] && (() => {
+                            const rival = rivals[selectedBotProfile.id];
+                            return (
+                                <div className="text-[11px] text-amber-300" data-testid="bot-rivalry">
+                                    {t(rival.remembers ? 'bots.remembersYou' : 'bots.metYou', {
+                                        name: selectedBotProfile.shortName, games: rival.games,
+                                        you: scorePoints(rival.games - rival.bot_points), bot: scorePoints(rival.bot_points),
+                                    })}
+                                </div>
+                            );
+                        })()}
                     </div>
                 </div>
 
