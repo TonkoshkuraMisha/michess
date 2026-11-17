@@ -1,0 +1,240 @@
+{
+  "id": "structure-hanging-pawns",
+  "course": "strategy",
+  "order": 9,
+  "title": {
+    "en": "Hanging pawns",
+    "uk": "Висячі пішаки",
+    "ru": "Висячие пешки"
+  },
+  "summary": {
+    "en": "Two pawns side by side with no neighbours: strong while they stand together, weak once one of them is forced to advance.",
+    "uk": "Два пішаки поруч без сусідів: сильні, поки стоять разом, і слабкі, щойно одного змусять піти вперед.",
+    "ru": "Две пешки рядом без соседей: сильны, пока стоят вместе, и слабы, как только одну заставят пойти вперёд."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "rnr3k1/4qpp1/4b2p/p1pp4/8/Q3PN2/PP2BPPP/2R2RK1 b - - 1 16",
+      "highlights": [
+        "c5",
+        "d5"
+      ],
+      "text": {
+        "en": "Black's pawns on c5 and d5 have no pawns on the b- and e-files: they are 'hanging'. Side by side they control b4, c4, d4 and e4 and give Black's pieces space. But they can only be defended by pieces, and if one of them advances, the other is left behind as a weak pawn.",
+        "uk": "Пішаки чорних c5 і d5 не мають пішаків на лініях b та e — вони «висячі». Поруч вони контролюють b4, c4, d4 і e4 та дають фігурам чорних простір. Але захистити їх можуть лише фігури, а коли один піде вперед, другий лишиться позаду слабким пішаком.",
+        "ru": "Пешки чёрных c5 и d5 не имеют пешек на вертикалях b и e — они «висячие». Рядом они контролируют b4, c4, d4 и e4 и дают фигурам чёрных простор. Но защитить их могут только фигуры, а если одна пойдёт вперёд, другая останется позади слабой пешкой."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "rnr3k1/4qpp1/4b2p/p1pp4/8/Q3PN2/PP2BPPP/2R2RK1 b - - 1 16",
+      "text": {
+        "en": "The plan against hanging pawns: press them with pieces so that one has to move. Rooks on c1 and d1, the queen on a3 against c5, a knight heading for b3 or f4. If Black answers ...c4, d5 is backward; if ...d4, the c5 pawn and the square d5 become weak — and the pawns lose their power.",
+        "uk": "План проти висячих пішаків — тиснути фігурами, щоб один мусив піти. Тури на c1 і d1, ферзь на a3 проти c5, кінь прямує на b3 чи f4. Якщо чорні відповідають …c4, пішак d5 відсталий; якщо …d4 — слабшають пішак c5 і поле d5, і пішаки втрачають силу.",
+        "ru": "План против висячих пешек — давить фигурами, чтобы одна была вынуждена пойти. Ладьи на c1 и d1, ферзь на a3 против c5, конь направляется на b3 или f4. Если чёрные отвечают …c4, пешка d5 отстала; если …d4 — слабеют пешка c5 и поле d5, и пешки теряют силу."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "a3",
+          "to": "c5",
+          "color": "red"
+        },
+        {
+          "do": "arrow",
+          "from": "c1",
+          "to": "c5",
+          "color": "red"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "f1",
+          "to": "d1",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "d1",
+          "to": "d5",
+          "color": "red"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "f3",
+          "to": "d2",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "d2",
+          "to": "b3",
+          "color": "blue"
+        }
+      ]
+    },
+    {
+      "type": "demo",
+      "fen": "rnr3k1/4qpp1/4b2p/p1pp4/8/Q3PN2/PP2BPPP/2R2RK1 b - - 1 16",
+      "text": {
+        "en": "The plan for the owner: keep the pawns together and active pieces behind them. The rooks support c5 and d5, the bishop guards from e6, the knight comes to d7 or c6. At the right moment a pawn advances with a purpose — ...d4 to open lines, ...c4 to win space — not because it was forced to.",
+        "uk": "План власника — тримати пішаків разом, а за ними активні фігури. Тури підтримують c5 і d5, слон стереже з e6, кінь іде на d7 чи c6. У слушну мить пішак іде вперед із метою — …d4, щоб відкрити лінії, …c4, щоб захопити простір, — а не тому, що його змусили.",
+        "ru": "План владельца — держать пешки вместе, а за ними активные фигуры. Ладьи поддерживают c5 и d5, слон стережёт с e6, конь идёт на d7 или c6. В нужный момент пешка идёт вперёд с целью — …d4, чтобы вскрыть линии, …c4, чтобы захватить простор, — а не потому, что её заставили."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "c8",
+          "to": "c5",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "e6",
+          "to": "d5",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "b8",
+          "to": "c6",
+          "color": "blue"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "d5",
+          "to": "d4",
+          "color": "yellow"
+        },
+        {
+          "do": "arrow",
+          "from": "c5",
+          "to": "c4",
+          "color": "yellow"
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "rnr3k1/4qpp1/4b2p/p1pp4/8/Q3PN2/PP2BPPP/2R2RK1 b - - 1 16",
+      "text": {
+        "en": "What is the main goal of the side playing against hanging pawns?",
+        "uk": "Яка головна мета сторони, що грає проти висячих пішаків?",
+        "ru": "Какова главная цель стороны, играющей против висячих пешек?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "Force one of the pawns to advance, then attack the one left behind.",
+            "uk": "Змусити одного з пішаків піти вперед, а потім атакувати того, що лишився позаду.",
+            "ru": "Заставить одну из пешек пойти вперёд, а затем атаковать оставшуюся позади."
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "Trade pawns on the kingside.",
+            "uk": "Розміняти пішаків на королівському фланзі.",
+            "ru": "Разменять пешки на королевском фланге."
+          },
+          "feedback": {
+            "en": "The kingside has nothing to do with it.",
+            "uk": "Королівський фланг тут ні до чого.",
+            "ru": "Королевский фланг тут ни при чём."
+          }
+        },
+        {
+          "text": {
+            "en": "Let them advance freely.",
+            "uk": "Дати їм вільно йти вперед.",
+            "ru": "Дать им свободно идти вперёд."
+          },
+          "feedback": {
+            "en": "Advancing with tempo and support is exactly what the owner wants.",
+            "uk": "Просуватися з темпом і підтримкою — саме те, чого хоче власник.",
+            "ru": "Продвигаться с темпом и поддержкой — именно то, чего хочет владелец."
+          }
+        }
+      ]
+    }
+  ],
+  "exam": [
+    {
+      "type": "choice",
+      "fen": "rnr3k1/4qpp1/4b2p/p1pp4/8/Q3PN2/PP2BPPP/2R2RK1 b - - 1 16",
+      "text": {
+        "en": "Which pawns are 'hanging' here?",
+        "uk": "Які пішаки тут «висячі»?",
+        "ru": "Какие пешки здесь «висячие»?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "c5, d5",
+            "uk": "c5, d5",
+            "ru": "c5, d5"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "a5, c5",
+            "uk": "a5, c5",
+            "ru": "a5, c5"
+          }
+        },
+        {
+          "text": {
+            "en": "f7, g7",
+            "uk": "f7, g7",
+            "ru": "f7, g7"
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "After ...c4 in this structure, which black pawn becomes weak?",
+        "uk": "Після …c4 у цій структурі який чорний пішак стає слабким?",
+        "ru": "После …c4 в этой структуре какая чёрная пешка становится слабой?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "d5, now backward",
+            "uk": "d5, тепер відсталий",
+            "ru": "d5, теперь отсталая"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "c4 itself",
+            "uk": "сам c4",
+            "ru": "сама c4"
+          }
+        },
+        {
+          "text": {
+            "en": "a5",
+            "uk": "a5",
+            "ru": "a5"
+          }
+        }
+      ]
+    }
+  ]
+}

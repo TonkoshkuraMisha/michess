@@ -1,0 +1,238 @@
+{
+  "id": "structure-wedge",
+  "course": "strategy",
+  "order": 12,
+  "title": {
+    "en": "The wedge: a fully closed centre",
+    "uk": "Клин: повністю закритий центр",
+    "ru": "Клин: полностью закрытый центр"
+  },
+  "summary": {
+    "en": "c4–d5–e4 against c5–d6–e5: no open files, slow manoeuvres, and a single question — who gets a pawn break.",
+    "uk": "c4–d5–e4 проти c5–d6–e5: жодної відкритої лінії, повільні маневри й одне питання — хто отримає прорив.",
+    "ru": "c4–d5–e4 против c5–d6–e5: ни одной открытой линии, медленные манёвры и один вопрос — кто получит прорыв."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "r1bq1rk1/pp1nbppp/3p1n2/2pPp3/2P1P3/2N2N2/PP2BPPP/R1BQ1RK1 b - - 6 8",
+      "highlights": [
+        "c4",
+        "d5",
+        "e4",
+        "c5",
+        "d6",
+        "e5"
+      ],
+      "text": {
+        "en": "The centre is completely locked: c4–d5–e4 against c5–d6–e5. Nothing happens quickly. Every plan is a pawn break on a wing — b2–b4 or f2–f4 for White, ...b7–b5 or ...f7–f5 for Black — prepared by slow piece moves. Knights love such positions; bishops behind their own pawns suffer.",
+        "uk": "Центр повністю замкнений: c4–d5–e4 проти c5–d6–e5. Швидко нічого не стається. Кожен план — пішаковий прорив на фланзі: b2–b4 чи f2–f4 у білих, …b7–b5 чи …f7–f5 у чорних, — підготовлений повільними ходами фігур. Коні люблять такі позиції; слони за власними пішаками страждають.",
+        "ru": "Центр полностью заперт: c4–d5–e4 против c5–d6–e5. Быстро ничего не происходит. Каждый план — пешечный прорыв на фланге: b2–b4 или f2–f4 у белых, …b7–b5 или …f7–f5 у чёрных, — подготовленный медленными ходами фигур. Кони любят такие позиции; слоны за собственными пешками страдают."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "r1bq1rk1/pp1nbppp/3p1n2/2pPp3/2P1P3/2N2N2/PP2BPPP/R1BQ1RK1 b - - 6 8",
+      "text": {
+        "en": "White's plan: prepare b2–b4 with a3, Rb1 and maybe Nd2–b3 to open the b-file, or prepare f2–f4 on the other wing. Before breaking, White improves every piece.",
+        "uk": "План білих: підготувати b2–b4 ходами a3, Rb1 і, можливо, Nd2–b3, щоб відкрити лінію b, або готувати f2–f4 на іншому фланзі. Перед проривом білі покращують кожну фігуру.",
+        "ru": "План белых: подготовить b2–b4 ходами a3, Rb1 и, возможно, Nd2–b3, чтобы вскрыть вертикаль b, или готовить f2–f4 на другом фланге. Перед прорывом белые улучшают каждую фигуру."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "a2",
+          "to": "a3",
+          "color": "green"
+        },
+        {
+          "do": "arrow",
+          "from": "a1",
+          "to": "b1",
+          "color": "green"
+        },
+        {
+          "do": "arrow",
+          "from": "b2",
+          "to": "b4",
+          "color": "green"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "f3",
+          "to": "e1",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "f2",
+          "to": "f4",
+          "color": "yellow"
+        }
+      ]
+    },
+    {
+      "type": "demo",
+      "fen": "r1bq1rk1/pp1nbppp/3p1n2/2pPp3/2P1P3/2N2N2/PP2BPPP/R1BQ1RK1 b - - 6 8",
+      "text": {
+        "en": "Black's plan: ...f7–f5 after the knight leaves f6 (to e8 or h5), or ...a6, ...Rb8 and ...b5 on the queenside. The dark-squared bishop on e7 is passive — Black often reroutes it or exchanges it.",
+        "uk": "План чорних: …f7–f5 після того, як кінь піде з f6 (на e8 чи h5), або …a6, …Rb8 і …b5 на ферзевому фланзі. Чорнопольний слон e7 пасивний — його часто перекидають або розмінюють.",
+        "ru": "План чёрных: …f7–f5 после того, как конь уйдёт с f6 (на e8 или h5), или …a6, …Rb8 и …b5 на ферзевом фланге. Чернопольный слон e7 пассивен — его часто перебрасывают или разменивают."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "f6",
+          "to": "e8",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "f7",
+          "to": "f5",
+          "color": "red"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "a7",
+          "to": "a6",
+          "color": "yellow"
+        },
+        {
+          "do": "arrow",
+          "from": "b7",
+          "to": "b5",
+          "color": "yellow"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "highlight",
+          "squares": [
+            "e7"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "r1bq1rk1/pp1nbppp/3p1n2/2pPp3/2P1P3/2N2N2/PP2BPPP/R1BQ1RK1 b - - 6 8",
+      "text": {
+        "en": "What decides the plans in a fully closed centre?",
+        "uk": "Що визначає плани в повністю закритому центрі?",
+        "ru": "Что определяет планы в полностью закрытом центре?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "Pawn breaks on the wings, prepared by piece manoeuvres.",
+            "uk": "Пішакові прориви на флангах, підготовлені маневрами фігур.",
+            "ru": "Пешечные прорывы на флангах, подготовленные манёврами фигур."
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "Quick tactics in the centre.",
+            "uk": "Швидка тактика в центрі.",
+            "ru": "Быстрая тактика в центре."
+          },
+          "feedback": {
+            "en": "The centre is locked: there is nothing to open there.",
+            "uk": "Центр замкнений: там нічого відкривати.",
+            "ru": "Центр заперт: там нечего вскрывать."
+          }
+        },
+        {
+          "text": {
+            "en": "Who castles first.",
+            "uk": "Хто перший рокірується.",
+            "ru": "Кто первым рокируется."
+          },
+          "feedback": {
+            "en": "In a closed centre the kings are rarely in a hurry.",
+            "uk": "У закритому центрі королі рідко поспішають.",
+            "ru": "В закрытом центре короли редко спешат."
+          }
+        }
+      ]
+    }
+  ],
+  "exam": [
+    {
+      "type": "choice",
+      "fen": "r1bq1rk1/pp1nbppp/3p1n2/2pPp3/2P1P3/2N2N2/PP2BPPP/R1BQ1RK1 b - - 6 8",
+      "text": {
+        "en": "Which pieces usually feel best in a fully closed centre?",
+        "uk": "Які фігури зазвичай почуваються найкраще в закритому центрі?",
+        "ru": "Какие фигуры обычно чувствуют себя лучше всего в закрытом центре?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "Knights",
+            "uk": "Коні",
+            "ru": "Кони"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "Bishops",
+            "uk": "Слони",
+            "ru": "Слоны"
+          }
+        },
+        {
+          "text": {
+            "en": "Queens",
+            "uk": "Ферзі",
+            "ru": "Ферзи"
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "Which break must Black prepare by moving the f6 knight away?",
+        "uk": "Який прорив чорні мають підготувати, прибравши коня з f6?",
+        "ru": "Какой прорыв чёрные должны подготовить, убрав коня с f6?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "…f7–f5",
+            "uk": "…f7–f5",
+            "ru": "…f7–f5"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "…b7–b5",
+            "uk": "…b7–b5",
+            "ru": "…b7–b5"
+          }
+        },
+        {
+          "text": {
+            "en": "…h7–h5",
+            "uk": "…h7–h5",
+            "ru": "…h7–h5"
+          }
+        }
+      ]
+    }
+  ]
+}

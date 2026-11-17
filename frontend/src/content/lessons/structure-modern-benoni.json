@@ -1,0 +1,229 @@
+{
+  "id": "structure-modern-benoni",
+  "course": "strategy",
+  "order": 13,
+  "title": {
+    "en": "The Modern Benoni",
+    "uk": "Сучасний Бенуа",
+    "ru": "Современный Бенони"
+  },
+  "summary": {
+    "en": "Majority against majority: White pushes e4–e5 in the centre, Black pushes ...b5 and ...c4 on the queenside.",
+    "uk": "Більшість проти більшості: білі просувають e4–e5 у центрі, чорні — …b5 і …c4 на ферзевому фланзі.",
+    "ru": "Большинство против большинства: белые продвигают e4–e5 в центре, чёрные — …b5 и …c4 на ферзевом фланге."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "rnbqr1k1/pp3pbp/3p1np1/2pP4/4P3/2N2N2/PP2BPPP/R1BQ1RK1 w - - 6 10",
+      "highlights": [
+        "d5",
+        "e4",
+        "c5",
+        "d6"
+      ],
+      "text": {
+        "en": "After the exchange on d5 White has a central majority (d5 and e4 against d6), Black a queenside majority (a, b, c against a, b). The bishop on g7 looks down the long diagonal, the e-file is half-open for Black, and the d6 pawn is the structure's weak point.",
+        "uk": "Після розміну на d5 у білих більшість у центрі (d5 і e4 проти d6), у чорних — на ферзевому фланзі (a, b, c проти a, b). Слон g7 дивиться вздовж довгої діагоналі, лінія e напіввідкрита для чорних, а пішак d6 — слабке місце структури.",
+        "ru": "После размена на d5 у белых большинство в центре (d5 и e4 против d6), у чёрных — на ферзевом фланге (a, b, c против a, b). Слон g7 смотрит вдоль длинной диагонали, вертикаль e полуоткрыта для чёрных, а пешка d6 — слабое место структуры."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "rnbqr1k1/pp3pbp/3p1np1/2pP4/4P3/2N2N2/PP2BPPP/R1BQ1RK1 w - - 6 10",
+      "text": {
+        "en": "White's plan: the central break e4–e5, prepared by f2–f4 or by pieces, and pressure on d6 — a knight from f3 via d2 to c4 is ideal. If e5 comes with force, Black's position cracks in the centre.",
+        "uk": "План білих: центральний прорив e4–e5, підготовлений ходом f2–f4 чи фігурами, і тиск на d6 — ідеальний маршрут коня f3–d2–c4. Якщо e5 вдається з силою, позиція чорних тріщить у центрі.",
+        "ru": "План белых: центральный прорыв e4–e5, подготовленный ходом f2–f4 или фигурами, и давление на d6 — идеальный маршрут коня f3–d2–c4. Если e5 удаётся с силой, позиция чёрных трещит в центре."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "f3",
+          "to": "d2",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "d2",
+          "to": "c4",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "c4",
+          "to": "d6",
+          "color": "red"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "e4",
+          "to": "e5",
+          "color": "green"
+        }
+      ]
+    },
+    {
+      "type": "demo",
+      "fen": "rnbqr1k1/pp3pbp/3p1np1/2pP4/4P3/2N2N2/PP2BPPP/R1BQ1RK1 w - - 6 10",
+      "text": {
+        "en": "Black's plan: the queenside majority. ...a6 and ...b5 (sometimes ...Nbd7–e5 first), then ...c4 and a knight on c5 or e5. The g7 bishop supports everything on the long diagonal.",
+        "uk": "План чорних — більшість на ферзевому фланзі. …a6 і …b5 (інколи спершу …Nbd7–e5), потім …c4 і кінь на c5 чи e5. Слон g7 підтримує все вздовж довгої діагоналі.",
+        "ru": "План чёрных — большинство на ферзевом фланге. …a6 и …b5 (иногда сначала …Nbd7–e5), потом …c4 и конь на c5 или e5. Слон g7 поддерживает всё вдоль длинной диагонали."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "a7",
+          "to": "a6",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "b7",
+          "to": "b5",
+          "color": "red"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "c5",
+          "to": "c4",
+          "color": "red"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "g7",
+          "to": "b2",
+          "color": "yellow"
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "rnbqr1k1/pp3pbp/3p1np1/2pP4/4P3/2N2N2/PP2BPPP/R1BQ1RK1 w - - 6 10",
+      "text": {
+        "en": "Which break is White's main idea in the Modern Benoni?",
+        "uk": "Який прорив — головна ідея білих у сучасному Бенуа?",
+        "ru": "Какой прорыв — главная идея белых в современном Бенони?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "e4–e5",
+            "uk": "e4–e5",
+            "ru": "e4–e5"
+          },
+          "correct": true,
+          "feedback": {
+            "en": "Yes: the central majority must move.",
+            "uk": "Так: більшість у центрі має рухатися.",
+            "ru": "Да: большинство в центре должно двигаться."
+          }
+        },
+        {
+          "text": {
+            "en": "b2–b4",
+            "uk": "b2–b4",
+            "ru": "b2–b4"
+          },
+          "feedback": {
+            "en": "That is Black's wing; b4 runs into ...c5xb4.",
+            "uk": "Це фланг чорних; b4 натрапляє на …c5xb4.",
+            "ru": "Это фланг чёрных; b4 натыкается на …c5xb4."
+          }
+        },
+        {
+          "text": {
+            "en": "g2–g4",
+            "uk": "g2–g4",
+            "ru": "g2–g4"
+          },
+          "feedback": {
+            "en": "Too slow and weakening.",
+            "uk": "Надто повільно й послаблює.",
+            "ru": "Слишком медленно и ослабляет."
+          }
+        }
+      ]
+    }
+  ],
+  "exam": [
+    {
+      "type": "choice",
+      "fen": "rnbqr1k1/pp3pbp/3p1np1/2pP4/4P3/2N2N2/PP2BPPP/R1BQ1RK1 w - - 6 10",
+      "text": {
+        "en": "Which black pawn is the structure's weak point?",
+        "uk": "Який чорний пішак — слабке місце структури?",
+        "ru": "Какая чёрная пешка — слабое место структуры?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "d6",
+            "uk": "d6",
+            "ru": "d6"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "c5",
+            "uk": "c5",
+            "ru": "c5"
+          }
+        },
+        {
+          "text": {
+            "en": "g6",
+            "uk": "g6",
+            "ru": "g6"
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "Where is Black's pawn majority?",
+        "uk": "Де більшість пішаків у чорних?",
+        "ru": "Где пешечное большинство у чёрных?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "On the queenside",
+            "uk": "На ферзевому фланзі",
+            "ru": "На ферзевом фланге"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "In the centre",
+            "uk": "У центрі",
+            "ru": "В центре"
+          }
+        },
+        {
+          "text": {
+            "en": "On the kingside",
+            "uk": "На королівському фланзі",
+            "ru": "На королевском фланге"
+          }
+        }
+      ]
+    }
+  ]
+}

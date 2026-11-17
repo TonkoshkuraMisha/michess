@@ -1,0 +1,237 @@
+{
+  "id": "structure-hedgehog",
+  "course": "strategy",
+  "order": 14,
+  "title": {
+    "en": "The Hedgehog",
+    "uk": "Їжак",
+    "ru": "Ёж"
+  },
+  "summary": {
+    "en": "Black curls up behind a6–b6–d6–e6 and waits for the moment to strike with ...b5 or ...d5.",
+    "uk": "Чорні згортаються за a6–b6–d6–e6 і чекають миті вдарити ходом …b5 чи …d5.",
+    "ru": "Чёрные сворачиваются за a6–b6–d6–e6 и ждут момента ударить ходом …b5 или …d5."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "r2qk2r/1b1nbppp/pp1ppn2/8/2PQP3/2N2NP1/PP3PBP/R1BR2K1 w kq - 1 11",
+      "highlights": [
+        "a6",
+        "b6",
+        "d6",
+        "e6",
+        "b5",
+        "d5"
+      ],
+      "text": {
+        "en": "White has space with c4 and e4; Black's pawns stand on a6, b6, d6, e6 — the spines of a hedgehog. Black has no weaknesses that are easy to reach and pieces ready behind the pawns. Everything turns on two breaks: ...b5 and ...d5.",
+        "uk": "У білих простір завдяки c4 і e4; пішаки чорних стоять на a6, b6, d6, e6 — голки їжака. Слабкостей, до яких легко дістатися, у чорних немає, а фігури готові позаду пішаків. Усе обертається навколо двох проривів: …b5 та …d5.",
+        "ru": "У белых простор благодаря c4 и e4; пешки чёрных стоят на a6, b6, d6, e6 — иголки ежа. Слабостей, до которых легко добраться, у чёрных нет, а фигуры готовы позади пешек. Всё вращается вокруг двух прорывов: …b5 и …d5."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "r2qk2r/1b1nbppp/pp1ppn2/8/2PQP3/2N2NP1/PP3PBP/R1BR2K1 w kq - 1 11",
+      "text": {
+        "en": "White's plan: keep the space and stop the breaks. b3 holds c4, a knight and rook watch d5, a4 can stop ...b5; then slow pressure on d6 and, sometimes, a kingside attack with f4–f5 or g4–g5.",
+        "uk": "План білих — зберегти простір і не дати проривів. b3 тримає c4, кінь і тура стежать за d5, a4 може завадити …b5; далі повільний тиск на d6 і часом атака на королівському фланзі через f4–f5 чи g4–g5.",
+        "ru": "План белых — сохранить простор и не дать прорывов. b3 держит c4, конь и ладья следят за d5, a4 может помешать …b5; дальше медленное давление на d6 и порой атака на королевском фланге через f4–f5 или g4–g5."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "b2",
+          "to": "b3",
+          "color": "green"
+        },
+        {
+          "do": "arrow",
+          "from": "a2",
+          "to": "a4",
+          "color": "green"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "d4",
+          "to": "d6",
+          "color": "red"
+        },
+        {
+          "do": "arrow",
+          "from": "c3",
+          "to": "d5",
+          "color": "blue"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "f2",
+          "to": "f4",
+          "color": "yellow"
+        }
+      ]
+    },
+    {
+      "type": "demo",
+      "fen": "r2qk2r/1b1nbppp/pp1ppn2/8/2PQP3/2N2NP1/PP3PBP/R1BR2K1 w kq - 1 11",
+      "text": {
+        "en": "Black's plan: improve the pieces patiently — the queen to c7, rooks to c8 and d8 — and strike with ...b5 or ...d5 the moment White's pieces are not ready. A well-timed break turns a passive position into an active one at once.",
+        "uk": "План чорних — терпляче покращувати фігури: ферзь на c7, тури на c8 і d8 — і вдарити …b5 чи …d5, щойно фігури білих не готові. Вчасний прорив одразу робить пасивну позицію активною.",
+        "ru": "План чёрных — терпеливо улучшать фигуры: ферзь на c7, ладьи на c8 и d8 — и ударить …b5 или …d5, как только фигуры белых не готовы. Своевременный прорыв сразу делает пассивную позицию активной."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "d8",
+          "to": "c7",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "a8",
+          "to": "c8",
+          "color": "blue"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "b6",
+          "to": "b5",
+          "color": "red"
+        },
+        {
+          "do": "arrow",
+          "from": "d6",
+          "to": "d5",
+          "color": "red"
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "r2qk2r/1b1nbppp/pp1ppn2/8/2PQP3/2N2NP1/PP3PBP/R1BR2K1 w kq - 1 11",
+      "text": {
+        "en": "What should Black avoid in the Hedgehog?",
+        "uk": "Чого чорним варто уникати в їжаку?",
+        "ru": "Чего чёрным стоит избегать в еже?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "Breaking with ...b5 or ...d5 before the pieces are ready.",
+            "uk": "Проривати …b5 чи …d5, поки фігури не готові.",
+            "ru": "Прорывать …b5 или …d5, пока фигуры не готовы."
+          },
+          "correct": true,
+          "feedback": {
+            "en": "Right: a premature break just loses a pawn or opens lines for White.",
+            "uk": "Так: передчасний прорив просто втрачає пішака чи відкриває лінії білим.",
+            "ru": "Верно: преждевременный прорыв просто теряет пешку или вскрывает линии белым."
+          }
+        },
+        {
+          "text": {
+            "en": "Waiting and improving the pieces.",
+            "uk": "Чекати й покращувати фігури.",
+            "ru": "Ждать и улучшать фигуры."
+          },
+          "feedback": {
+            "en": "That is exactly the Hedgehog's way.",
+            "uk": "Це саме шлях їжака.",
+            "ru": "Это и есть путь ежа."
+          }
+        },
+        {
+          "text": {
+            "en": "Putting the queen on c7.",
+            "uk": "Ставити ферзя на c7.",
+            "ru": "Ставить ферзя на c7."
+          },
+          "feedback": {
+            "en": "A typical and good square.",
+            "uk": "Типове й добре поле.",
+            "ru": "Типичное и хорошее поле."
+          }
+        }
+      ]
+    }
+  ],
+  "exam": [
+    {
+      "type": "choice",
+      "fen": "r2qk2r/1b1nbppp/pp1ppn2/8/2PQP3/2N2NP1/PP3PBP/R1BR2K1 w kq - 1 11",
+      "text": {
+        "en": "Which two breaks free Black's game in the Hedgehog?",
+        "uk": "Які два прориви звільняють гру чорних у їжаку?",
+        "ru": "Какие два прорыва освобождают игру чёрных в еже?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "…b5, …d5",
+            "uk": "…b5, …d5",
+            "ru": "…b5, …d5"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "…f5, …g5",
+            "uk": "…f5, …g5",
+            "ru": "…f5, …g5"
+          }
+        },
+        {
+          "text": {
+            "en": "…a5, …h5",
+            "uk": "…a5, …h5",
+            "ru": "…a5, …h5"
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "Which white pawns give White the space advantage?",
+        "uk": "Які білі пішаки дають білим перевагу в просторі?",
+        "ru": "Какие белые пешки дают белым преимущество в пространстве?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "c4, e4",
+            "uk": "c4, e4",
+            "ru": "c4, e4"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "a2, b2",
+            "uk": "a2, b2",
+            "ru": "a2, b2"
+          }
+        },
+        {
+          "text": {
+            "en": "f2, g3",
+            "uk": "f2, g3",
+            "ru": "f2, g3"
+          }
+        }
+      ]
+    }
+  ]
+}

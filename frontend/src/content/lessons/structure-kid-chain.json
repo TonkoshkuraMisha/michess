@@ -1,0 +1,230 @@
+{
+  "id": "structure-kid-chain",
+  "course": "strategy",
+  "order": 11,
+  "title": {
+    "en": "The King's Indian chain",
+    "uk": "Староіндійський ланцюг",
+    "ru": "Староиндийская цепь"
+  },
+  "summary": {
+    "en": "A closed centre d5–e4 against d6–e5: White attacks on the queenside, Black on the kingside — a race.",
+    "uk": "Закритий центр d5–e4 проти d6–e5: білі атакують на ферзевому фланзі, чорні — на королівському. Перегони.",
+    "ru": "Закрытый центр d5–e4 против d6–e5: белые атакуют на ферзевом фланге, чёрные — на королевском. Гонка."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "r1bq1rk1/pppnn1bp/3p2p1/3Ppp2/2P1P3/2NN4/PP2BPPP/R1BQ1RK1 w - - 0 11",
+      "highlights": [
+        "d5",
+        "e4",
+        "d6",
+        "e5"
+      ],
+      "text": {
+        "en": "The centre is locked: White's chain d5–e4 against Black's d6–e5. The rule is to attack the base of the opponent's chain. White hits d6 with c4–c5; Black hits e4 with ...f5–f4 and storms the kingside with ...g5–g4. Each side plays on the wing where its own pawn chain lets it gain space.",
+        "uk": "Центр замкнений: ланцюг білих d5–e4 і ланцюг чорних d6–e5. Правило — атакувати основу ланцюга суперника. Білі б'ють по d6 через c4–c5; чорні — по e4 через …f5–f4 і штурмують королівський фланг ходами …g5–g4. Кожен грає на тому фланзі, де його ланцюг дає здобути простір.",
+        "ru": "Центр заперт: цепь белых d5–e4 и цепь чёрных d6–e5. Правило — атаковать основание цепи соперника. Белые бьют по d6 через c4–c5; чёрные — по e4 через …f5–f4 и штурмуют королевский фланг ходами …g5–g4. Каждый играет на том фланге, где его цепь позволяет захватить простор."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "r1bq1rk1/pppnn1bp/3p2p1/3Ppp2/2P1P3/2NN4/PP2BPPP/R1BQ1RK1 w - - 0 11",
+      "text": {
+        "en": "White's plan: the queenside. The knight on d3 supports c4–c5, b2–b4 joins, and after cxd6 the c-file opens towards c7 — White's rooks break in there.",
+        "uk": "План білих — ферзевий фланг. Кінь d3 підтримує c4–c5, долучається b2–b4, а після cxd6 відкривається лінія c до c7 — туди й вриваються тури білих.",
+        "ru": "План белых — ферзевый фланг. Конь d3 поддерживает c4–c5, подключается b2–b4, а после cxd6 вскрывается вертикаль c к c7 — туда и врываются ладьи белых."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "d3",
+          "to": "c5",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "c4",
+          "to": "c5",
+          "color": "green"
+        },
+        {
+          "do": "arrow",
+          "from": "b2",
+          "to": "b4",
+          "color": "green"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "c5",
+          "to": "d6",
+          "color": "red"
+        },
+        {
+          "do": "highlight",
+          "squares": [
+            "c7"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "demo",
+      "fen": "r1bq1rk1/pppnn1bp/3p2p1/3Ppp2/2P1P3/2NN4/PP2BPPP/R1BQ1RK1 w - - 0 11",
+      "text": {
+        "en": "Black's plan: the kingside. ...f5–f4 shuts in White's dark-squared bishop and gains space, then ...g5–g4 and the pieces follow — the rook to f6 or h6, the knight to g6, the bishop from g7 sometimes reroutes. Speed matters more than material here.",
+        "uk": "План чорних — королівський фланг. …f5–f4 замикає чорнопольного слона білих і захоплює простір, далі …g5–g4, а за пішаками фігури — тура на f6 чи h6, кінь на g6. Тут швидкість важливіша за матеріал.",
+        "ru": "План чёрных — королевский фланг. …f5–f4 запирает чернопольного слона белых и захватывает простор, дальше …g5–g4, а за пешками фигуры — ладья на f6 или h6, конь на g6. Здесь скорость важнее материала."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "f5",
+          "to": "f4",
+          "color": "red"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "g6",
+          "to": "g5",
+          "color": "red"
+        },
+        {
+          "do": "arrow",
+          "from": "g5",
+          "to": "g4",
+          "color": "red"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "e7",
+          "to": "g6",
+          "color": "blue"
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "r1bq1rk1/pppnn1bp/3p2p1/3Ppp2/2P1P3/2NN4/PP2BPPP/R1BQ1RK1 w - - 0 11",
+      "text": {
+        "en": "Where does Black usually attack in this structure?",
+        "uk": "Де зазвичай атакують чорні в цій структурі?",
+        "ru": "Где обычно атакуют чёрные в этой структуре?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "On the kingside, with ...f4 and ...g5.",
+            "uk": "На королівському фланзі, ходами …f4 і …g5.",
+            "ru": "На королевском фланге, ходами …f4 и …g5."
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "On the queenside, with ...b5.",
+            "uk": "На ферзевому фланзі, ходом …b5.",
+            "ru": "На ферзевом фланге, ходом …b5."
+          },
+          "feedback": {
+            "en": "That is White's wing.",
+            "uk": "Це фланг білих.",
+            "ru": "Это фланг белых."
+          }
+        },
+        {
+          "text": {
+            "en": "In the centre, with ...c6 and ...cxd5.",
+            "uk": "У центрі, ходами …c6 і …cxd5.",
+            "ru": "В центре, ходами …c6 и …cxd5."
+          },
+          "feedback": {
+            "en": "Possible at times, but the main plan is the kingside storm.",
+            "uk": "Інколи можливо, але головний план — штурм на королівському фланзі.",
+            "ru": "Иногда возможно, но главный план — штурм на королевском фланге."
+          }
+        }
+      ]
+    }
+  ],
+  "exam": [
+    {
+      "type": "choice",
+      "fen": "r1bq1rk1/pppnn1bp/3p2p1/3Ppp2/2P1P3/2NN4/PP2BPPP/R1BQ1RK1 w - - 0 11",
+      "text": {
+        "en": "Which pawn break is White's main plan here?",
+        "uk": "Який прорив — головний план білих тут?",
+        "ru": "Какой прорыв — главный план белых здесь?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "c4–c5",
+            "uk": "c4–c5",
+            "ru": "c4–c5"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "f2–f4",
+            "uk": "f2–f4",
+            "ru": "f2–f4"
+          }
+        },
+        {
+          "text": {
+            "en": "h2–h4",
+            "uk": "h2–h4",
+            "ru": "h2–h4"
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "What does ...f5–f4 do for Black?",
+        "uk": "Що дає чорним хід …f5–f4?",
+        "ru": "Что даёт чёрным ход …f5–f4?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "Gains space and shuts in White's dark-squared bishop.",
+            "uk": "Захоплює простір і замикає чорнопольного слона білих.",
+            "ru": "Захватывает простор и запирает чернопольного слона белых."
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "Defends the d6 pawn.",
+            "uk": "Захищає пішака d6.",
+            "ru": "Защищает пешку d6."
+          }
+        },
+        {
+          "text": {
+            "en": "Opens the c-file.",
+            "uk": "Відкриває лінію c.",
+            "ru": "Вскрывает вертикаль c."
+          }
+        }
+      ]
+    }
+  ]
+}
