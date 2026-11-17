@@ -2,7 +2,8 @@
 // Арены (таск 17.2): /arenas — идущие и ближайшие арены; /arenas/:id — таблица, вход и «Играть». Пока игрок ждёт
 // пару, страница повторяет «Играть» раз в WAIT_POLL_MS; как только партия создана — переход на главную доску (она
 // сама подхватывает идущую партию). ArenaBanner — анонс в лобби главной доски. Арены идут по расписанию конференций
-// (33.4): в названии — конференция; у ещё не начавшейся арены — «напомнить перед началом».
+// (33.4): в названии — конференция; у ещё не начавшейся арены — «напомнить перед началом». Зачёт конференций
+// (33.6): у игрока в таблице — его конференция, под таблицей — очки конференций в этой арене.
 
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Link, useNavigate, useParams} from 'react-router-dom';
@@ -68,6 +69,7 @@ export function ArenasPage() {
             </header>
             <p className="text-boxwood/85">{t('arenas.intro')}</p>
             <p className="text-sm text-boxwood/75" data-testid="arenas-conference-note">{t('arenas.conferenceNote')}</p>
+            <Link to="/conferences" data-testid="conferences-link" className="self-start text-amber-300 hover:underline">{t('conferences.cta')}</Link>
             <ul className="flex flex-col gap-2">
                 {arenas.map((a) => (
                     <li key={a.id}>
@@ -209,6 +211,12 @@ export function ArenaPage() {
                                     <td>{s.place}</td>
                                     <td className="flex items-center gap-1">
                                         {s.username} <span className="text-xs text-boxwood/60">{s.rating}</span>
+                                        {conferenceKey(s.conference) && (
+                                            <span className="text-xs text-amber-300/80" data-testid={`arena-conf-${s.username}`}
+                                                  title={t(`arenas.conferences.${conferenceKey(s.conference)!}`)}>
+                                                {t(`arenas.conferenceShort.${conferenceKey(s.conference)!}`)}
+                                            </span>
+                                        )}
                                         {s.fire && <Flame size={14} className="text-orange-400" aria-label={t('arenas.fire')}/>}
                                     </td>
                                     <td className="text-right font-bold">{s.score}</td>
@@ -222,6 +230,33 @@ export function ArenaPage() {
                     </table>
                 )}
             </section>
+            {(arena.conferences ?? []).length > 0 && (
+                <section className="bg-acacia p-3 rounded-lg border-2 border-acacia-dark overflow-x-auto">
+                    <h2 className="font-bold text-amber-200 mb-2 flex flex-wrap items-baseline justify-between gap-2">
+                        <span>{t('arenas.conferenceStandings')}</span>
+                        <Link to="/conferences" className="text-sm font-normal text-amber-400 hover:underline">{t('conferences.title')}</Link>
+                    </h2>
+                    <table className="w-full text-sm" data-testid="arena-conferences">
+                        <thead>
+                            <tr className="text-boxwood/70 text-left">
+                                <th>#</th><th>{t('conferences.conference')}</th>
+                                <th className="text-right">{t('arenas.score')}</th>
+                                <th className="text-right">{t('arenas.conferenceCounted')}</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {(arena.conferences ?? []).map((row, index) => (
+                                <tr key={row.conference}>
+                                    <td>{index + 1}</td>
+                                    <td>{conferenceKey(row.conference) ? t(`arenas.conferences.${conferenceKey(row.conference)!}`) : row.conference}</td>
+                                    <td className="text-right font-bold">{row.score}</td>
+                                    <td className="text-right font-mono text-boxwood/80">{row.counted}/{row.players}</td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </section>
+            )}
         </div>
     );
 }

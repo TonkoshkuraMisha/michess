@@ -17,6 +17,7 @@ from src.db.session import get_db
 from src.models.arena import Arena
 from src.models.user import User
 from src.services import arena as service
+from src.services import conferences
 from src.services.matchmaker import MatchmakingError
 
 router = APIRouter()
@@ -96,7 +97,9 @@ async def get_arena(arena_id: int, request: Request, db: AsyncSession = Depends(
               "division_arena_id": division_id,
               "reminder": await service.has_reminder(db, arena.id, user_id)}
     return {**service.view(arena, None, await service.open_games(db, arena.id)),
-            "standings": await service.standings(db, arena.id), "me": me}
+            "standings": await service.standings(db, arena.id),
+            # Зачёт конференций арены (33.6): сумма очков лучших участников каждой конференции.
+            "conferences": await conferences.arena_table(db, arena.id), "me": me}
 
 
 @router.post("/{arena_id}/join")

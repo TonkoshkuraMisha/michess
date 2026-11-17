@@ -54,6 +54,8 @@ class ArenaPlayer(Base):
     rating: Mapped[int] = mapped_column(Integer)
     # Швейцарка: свободных туров при нечётном числе игроков (каждому — не больше одного).
     byes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    # Конференция игрока на момент входа (33.6): его очки идут в её зачёт; пусто — страна в профиле не указана.
+    conference: Mapped[str | None] = mapped_column(String(16), nullable=True)
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

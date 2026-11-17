@@ -4,6 +4,8 @@
 
 * расписание — по конференциям (таск 33.4, src/services/arena_schedule.py): арены создаются заранее на LOOKAHEAD
   вперёд (лениво — при запросе списка); пустые будущие арены, которых в расписании больше нет, убираются;
+* конференции (33.6, src/services/conferences.py): конференция игрока запоминается при входе в арену, его очки
+  идут и в её зачёт (сумма лучших участников конференции);
 * напоминание (33.4): игрок нажал «напомнить» у ещё не начавшейся арены — за REMIND_BEFORE до старта ему приходит
   уведомление (плановая задача arena_reminders, раз в минуту);
 * вход — пока арена не кончилась; «Играть» ставит игрока в ожидание (Redis), пара — с другим ожидающим, ближайшим
@@ -223,7 +225,11 @@ async def join(db: AsyncSession, arena: Arena, user: User) -> ArenaPlayer:
         db.add(target)
         await db.flush()
     category = classify_time_control(arena.base_time_ms, arena.increment_ms)
-    player = ArenaPlayer(arena_id=target.id, user_id=user.id, rating=user.rating_for(category))
+    from src.services import conferences
+
+    # Конференция запоминается на входе (33.6): поздняя смена страны зачёт этой арены не меняет.
+    player = ArenaPlayer(arena_id=target.id, user_id=user.id, rating=user.rating_for(category),
+                         conference=conferences.conference_of(user.country))
     db.add(player)
     await db.commit()
     await db.refresh(player)
@@ -528,7 +534,8 @@ async def standings(db: AsyncSession, arena_id: int) -> list[dict]:
 
     ordered = sorted(rows, key=key)
     return [{"place": i + 1, "username": name, "score": p.score, "games": p.games, "wins": p.wins,
-             "fire": p.streak >= FIRE_AFTER, "rating": p.rating, "performance": perf[p.user_id]}
+             "fire": p.streak >= FIRE_AFTER, "rating": p.rating, "performance": perf[p.user_id],
+             "conference": p.conference}
             for i, (p, name) in enumerate(ordered)]
 
 
