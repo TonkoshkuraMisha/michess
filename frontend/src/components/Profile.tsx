@@ -322,7 +322,9 @@ export default function Profile() {
                     className="bg-acacia-dark border border-amber-900/40 p-6 rounded shadow-heavy flex flex-col items-center justify-center text-center relative overflow-hidden">
                     <PlayerAvatar username={profile.username} avatar={profile.avatar}
                                   className="w-24 h-24 rounded-lg shadow-inner border-2 border-amber-600/40 mb-3 z-10"/>
-                    <h1 className="text-3xl font-bold text-amber-200 z-10">{displayPlayerName(profile.username, t)}</h1>
+                    {/* Длинное имя (до 30 знаков, без пробелов) переносится внутри карточки: на планшете колонка узкая,
+                        и имя в одну строку вылезало за её края. */}
+                    <h1 className="text-3xl font-bold text-amber-200 z-10 max-w-full break-all">{displayPlayerName(profile.username, t)}</h1>
                     <ProfileSocial username={profile.username}/>
 
                     <div className="flex items-center gap-2 mt-3 text-boxwood-light/80 text-sm z-10">
