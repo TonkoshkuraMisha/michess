@@ -402,6 +402,8 @@ export const uk: Messages = {
         ratingDeclared: ' (заявлений)',
         howMeasured: 'Як ми вимірюємо',
         liveStrength: 'Проти гравців: {rating} (партій: {games})',
+        remembersYou: '{name} пам’ятає вас: партій {games}, рахунок {you} : {bot}. У дебюті уникає варіантів, у яких ви його перемагали.',
+        metYou: 'Ви вже грали з {name}: партій {games}, рахунок {you} : {bot}.',
         thought: 'Думка ({name}):',
         thinking: 'обмірковує хід…',
         quote: '«{text}»',

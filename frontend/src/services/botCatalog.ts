@@ -66,3 +66,25 @@ export function resetBotCatalogCache(): void {
 export function strengthLabel(s: Pick<BotStrength, 'rating' | 'measured'>): string {
     return s.measured ? t('common.measuredShort', {rating: s.rating}) : String(s.rating);
 }
+
+/** Кого из исторических ботов игрок уже знает (таск 32.2): партий с ним и очков бота в них. */
+export interface BotRival {
+    bot_id: string;
+    games: number;
+    bot_points: number;
+    /** Постоянный соперник: бот учитывает партии с игроком при выборе дебюта. */
+    remembers: boolean;
+}
+
+export async function fetchRivalry(token: string): Promise<BotRival[]> {
+    const res = await fetch(`${API_BASE_URL}/api/v1/bots/rivalry`, {headers: {Authorization: `Bearer ${token}`}});
+    if (!res.ok) return [];
+    return ((await res.json()) as { rivals: BotRival[] }).rivals;
+}
+
+/** Очки в счёте: 2.5 → «2½», 0.5 → «½». */
+export function scorePoints(points: number): string {
+    const whole = Math.floor(points);
+    const half = points - whole >= 0.5;
+    return half ? `${whole || ''}½` : String(whole);
+}

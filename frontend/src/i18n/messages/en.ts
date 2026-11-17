@@ -398,6 +398,8 @@ export const en = {
         ratingDeclared: ' (declared)',
         howMeasured: 'How we measure',
         liveStrength: 'Against players: {rating} (games: {games})',
+        remembersYou: '{name} remembers you: games {games}, score {you} : {bot}. In the opening he avoids the lines you beat him in.',
+        metYou: 'You have played {name}: games {games}, score {you} : {bot}.',
         thought: 'Thought ({name}):',
         thinking: 'thinking about the move…',
         quote: '“{text}”',
