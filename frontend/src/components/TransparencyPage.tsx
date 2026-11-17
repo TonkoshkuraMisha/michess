@@ -106,6 +106,7 @@ export function TransparencyPage({username = null}: { username?: string | null }
                     ))}
                 </ol>
                 <p className="text-sm text-boxwood/85">{t('transparency.measuredVsDeclared')}</p>
+                <p className="text-sm text-boxwood/85" data-testid="transparency-memory">{t('transparency.memory')}</p>
             </section>
 
             <section className={sectionClass} data-testid="transparency-results">
@@ -126,6 +127,7 @@ export function TransparencyPage({username = null}: { username?: string | null }
                                 <th className="py-1 pr-3 font-normal">{t('transparency.col.declared')}</th>
                                 <th className="py-1 pr-3 font-normal">{t('transparency.col.measured')}</th>
                                 <th className="py-1 pr-3 font-normal">{t('transparency.col.games')}</th>
+                                <th className="py-1 pr-3 font-normal">{t('transparency.col.live')}</th>
                                 <th className="py-1 font-normal">{t('transparency.col.status')}</th>
                             </tr>
                         </thead>
@@ -138,6 +140,14 @@ export function TransparencyPage({username = null}: { username?: string | null }
                                         {row.measured ? `${row.rating}${row.ci95 ? ` ±${row.ci95}` : ''}` : '—'}
                                     </td>
                                     <td className="py-1 pr-3 font-mono">{row.measured ? row.games : '—'}</td>
+                                    <td className="py-1 pr-3 font-mono" data-testid={`live-${row.key}`}>
+                                        {row.live ? t('transparency.liveValue', {rating: row.live.rating, games: row.live.games}) : '—'}
+                                        {row.live?.offset ? (
+                                            <span className="block text-[11px] text-amber-300">
+                                                {t('transparency.offset', {offset: row.live.offset > 0 ? `+${row.live.offset}` : row.live.offset})}
+                                            </span>
+                                        ) : null}
+                                    </td>
                                     <td className="py-1">
                                         <span className={`px-1.5 py-0.5 rounded text-xs border whitespace-nowrap ${row.measured
                                             ? 'bg-emerald-950 text-emerald-300 border-emerald-700/60'

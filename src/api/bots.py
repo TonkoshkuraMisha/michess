@@ -1,6 +1,7 @@
 # --- FILE: src/api/bots.py ---
 
 import asyncio
+import logging
 import random
 from datetime import UTC, datetime
 from typing import Literal
@@ -26,6 +27,7 @@ from src.services import engine_info, move_check, openings, product_metrics
 from src.services import ladder as ladder_service
 from src.services import tournaments as tournament_service
 from src.services.bots import calibration as bot_calibration
+from src.services.bots import memory as bot_memory
 from src.services.bots.anderssen import anderssen_bot
 from src.services.bots.archetypes import ARCHETYPES, ARCHETYPES_BY_ID, ARCHETYPES_BY_KEY
 from src.services.bots.guests import GUESTS, GUESTS_BY_ID, GUESTS_BY_PGN_NAME, SIGNATURE_OPENINGS
@@ -104,6 +106,8 @@ AVAILABLE_BOTS = [
     *({"id": m.id, "pgn_name": m.pgn_name, "era": m.era, "rating": m.rating,
        "avatar": f"/assets/champions/{m.id.capitalize()}.jpg", "ladder": False} for m in MASTERS),
 ]
+
+logger = logging.getLogger(__name__)
 
 BOT_INSTANCES = {
     "philidor": philidor_bot,
@@ -469,19 +473,27 @@ async def get_calibration_run(name: str = Path(..., max_length=80)):
 
 
 @router.get("/catalog")
-async def get_bot_catalog():
+async def get_bot_catalog(db: AsyncSession = Depends(get_db)):
     """
     Сила ботов и архетипы мастерской: заявленный рейтинг и измеренный матчами с якорями Stockfish
-    (scripts/calibrate_bots.py), если калибровка уже была.
+    (scripts/calibrate_bots.py), если калибровка уже была. У исторических ботов — ещё live: рейтинг по партиям с
+    людьми, их число и поправка силы движка (таск 32.1).
     """
     def strength(key: str, declared: int) -> dict:
         s = bot_calibration.strength_of(key, declared)
         return {"declared_rating": declared, "rating": s.rating, "measured": s.measured,
                 "games": s.games, "ci95": s.ci95}
 
+    live = await bot_memory.live_strength(db)
+
+    def live_of(key: str) -> dict | None:
+        row = live.get(key)
+        return {"rating": round(row.rating), "games": row.games, "offset": row.offset} if row else None
+
     return {
         "calibration": bot_calibration.load_calibration().get("meta"),
-        "historical": [{"id": b["id"], **strength(str(b["id"]), int(str(b["rating"])))} for b in AVAILABLE_BOTS],
+        "historical": [{"id": b["id"], **strength(str(b["id"]), int(str(b["rating"]))), "live": live_of(str(b["id"]))}
+                       for b in AVAILABLE_BOTS],
         "archetypes": [
             {"id": a.id, "config": a.config.model_dump(), **strength(a.key, a.config.target_elo)}
             for a in ARCHETYPES
@@ -599,6 +611,7 @@ async def get_bot_move(payload: BotMoveRequest, request: Request, db: AsyncSessi
 
     board = _playable_board(payload.fen)
     await ladder_service.note_bot_move_request(await optional_user_id(request, db), board, payload.bot_id)
+    await bot_memory.refresh(db, payload.bot_id)
     with engine_work("bot_move"):
         result = await asyncio.to_thread(bot.choose_move, payload.fen)
     thinking_time_ms = calculate_authentic_thinking_time_ms(
@@ -734,6 +747,20 @@ async def _resolve_personality_for_save(
         raise ApiError(400, exc.type, **(exc.context or {})) from None
 
 
+async def _remember_bot_game(db: AsyncSession, payload: BotGameSaveRequest, result: str, player_rating: int) -> None:
+    bot_color = chess.BLACK if payload.player_color == "white" else chess.WHITE
+    try:
+        await bot_memory.record_book(db, payload.bot_id, BOT_INSTANCES[payload.bot_id].opening_book,
+                                     payload.moves_uci, bot_color, result)
+        if not payload.assisted and not payload.blindfold and payload.moves_uci:
+            await bot_memory.record_rating(
+                db, payload.bot_id, int(str(BOT_METADATA[payload.bot_id]["rating"])), player_rating,
+                bot_memory.bot_points(result, bot_color))
+    except Exception as exc:  # память — не главное: партия уже в архиве
+        await db.rollback()
+        logger.warning("Bot memory update failed for %s: %s", payload.bot_id, exc)
+
+
 @router.post("/save-game", response_model=BotGameSaveResponse)
 async def save_bot_game(
         payload: BotGameSaveRequest,
@@ -857,6 +884,11 @@ async def save_bot_game(
         schedule_tournament_simulations_in_background(
             await tournament_service.mark_for_queue(db, tournament_game.tournament)
         )
+    # Опыт бота (таск 32.1): дебютные варианты — по любой партии из начальной позиции; рейтинг — без помощи,
+    # игры вслепую и своей позиции. Сбой памяти партию не ломает: она уже сохранена.
+    if payload.bot_id in BOT_INSTANCES and not personality_name and start_fen is None:
+        await _remember_bot_game(db, payload, result,
+                                 rating_change.before if rating_change else current_user.rating_for(category))
     # Фоновый разбор: итог партии готов заранее, а из ошибок игрока делаются личные задачи (таск 13.5).
     schedule_game_analysis_in_background(new_game.id)
 
