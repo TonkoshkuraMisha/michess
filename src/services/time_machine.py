@@ -362,6 +362,40 @@ _EVENTS: tuple[Event, ...] = (
     Event("st_petersburg_1914_final", 1914, "round_robin", _table(
         ("lasker", 7), ("capablanca", 5), ("alekhine", 4), ("tarrasch", 2), ("marshall", 2),
     ), cycles=2),
+    # Шестнадцать участников в один круг: первый турнир Капабланки в звании чемпиона мира. Он победил без поражений.
+    Event("london_1922", 1922, "round_robin", _table(
+        ("capablanca", 13), ("alekhine", 11.5), ("vidmar", 11), ("rubinstein", 10.5), ("bogoljubow", 9),
+        ("reti", 8.5), ("tartakower", 8.5), ("maroczy", 8), ("yates", 8), ("atkins", 6), ("euwe", 5.5),
+        ("wahltuch", 5), ("znosko_borovsky", 5), ("watson", 4.5), ("morrison", 4.5), ("marotti", 1.5),
+    )),
+    # Двадцать один участник в один круг — сильнейшие шахматисты мира, кроме Капабланки и Ласкера. Алехин
+    # победил без поражений.
+    Event("baden_baden_1925", 1925, "round_robin", _table(
+        ("alekhine", 16), ("rubinstein", 14.5), ("samisch", 13.5), ("bogoljubow", 13), ("marshall", 12.5),
+        ("tartakower", 12.5), ("rabinovich", 12), ("grunfeld", 11.5), ("nimzowitsch", 11), ("torre", 10.5),
+        ("reti", 10), ("treybal", 10), ("spielmann", 10), ("carls", 9), ("yates", 8), ("rosselli", 7.5),
+        ("tarrasch", 7.5), ("colle", 7), ("mieses", 6.5), ("thomas", 6), ("kolste", 1.5),
+    )),
+    # Восемнадцать участников в один круг. Шпильман опередил Алехина на пол-очка.
+    Event("semmering_1926", 1926, "round_robin", _table(
+        ("spielmann", 13), ("alekhine", 12.5), ("vidmar", 12), ("nimzowitsch", 11.5), ("tartakower", 11.5),
+        ("rubinstein", 10), ("tarrasch", 10), ("reti", 9.5), ("grunfeld", 9), ("janowski", 8.5), ("treybal", 8),
+        ("vajda", 7.5), ("yates", 7), ("gilg", 6), ("kmoch", 6), ("davidson", 5.5), ("michel", 4.5), ("rosselli", 1),
+    )),
+    # Первый крупный международный турнир после Первой мировой войны: четырнадцать участников главного турнира в
+    # один круг. Победил Рети.
+    Event("goteborg_1920", 1920, "round_robin", _table(
+        ("reti", 9.5), ("rubinstein", 9), ("bogoljubow", 8), ("kostic", 7.5), ("mieses", 7.5), ("tarrasch", 7.5),
+        ("tartakower", 7.5), ("maroczy", 6), ("breyer", 5.5), ("marco", 5.5), ("spielmann", 5), ("nimzowitsch", 4.5),
+        ("moller", 4), ("selezniev", 4),
+    )),
+    # Пятнадцать участников в один круг. Рубинштейн победил без поражений; Шпильман из-за болезни не доиграл (в
+    # двух последних партиях ему засчитаны поражения).
+    Event("vienna_1922", 1922, "round_robin", _table(
+        ("rubinstein", 11.5), ("tartakower", 10), ("wolf", 9.5), ("alekhine", 9), ("maroczy", 9), ("tarrasch", 9),
+        ("grunfeld", 8), ("reti", 7.5), ("bogoljubow", 6.5), ("vukovic", 6), ("spielmann", 6), ("samisch", 5.5),
+        ("takacs", 4), ("konig", 2), ("kmoch", 1.5),
+    )),
 )
 # Лента — по годам; турниры одного года — по ключу.
 EVENTS: tuple[Event, ...] = tuple(sorted(_EVENTS, key=lambda event: (event.year, event.key)))
