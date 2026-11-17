@@ -18,7 +18,10 @@
 * группа по силе: у арены max_rating — рейтинг в контроле на входе и его пик за PEAK_DAYS дней не выше потолка
   (против «слива» рейтинга ради слабой группы);
 * деления: в делении не больше DIVISION_SIZE участников; следующий входящий попадает в первое неполное деление
-  той же арены (своя таблица, те же время и правила), а если таких нет — в новое.
+  той же арены (своя таблица, те же время и правила), а если таких нет — в новое;
+* «берсерк» (таск 33.3): до своего первого хода игрок берёт половину базового времени без добавки; победа приносит
+  BERSERK_BONUS сверх обычных очков (после удвоения «огня»). Недоступен в самой быстрой пуле без добавки (база не
+  больше BERSERK_MIN_BASE_MS — там это лотерея) и в швейцарке; за победу по неявке соперника бонуса нет.
 
 Швейцарка между людьми (format="swiss"): заданное число туров; тур составляется по правилам швейцарки
 (tournament_rules.swiss_pairings, посев — по рейтингу на входе), партии всех пар создаются сразу (неявка — поражение по
@@ -46,6 +49,8 @@ PEAK_DAYS = 7
 DIVISION_SIZE = 500
 RATING_BANDS = (1300, 1700, 2100)
 EARLY_DRAW_PLIES = 20
+BERSERK_BONUS = 1
+BERSERK_MIN_BASE_MS = 60_000
 LOOKAHEAD = timedelta(hours=6)
 WAIT_TTL_S = 120
 
@@ -85,6 +90,13 @@ def game_length(arena: Arena) -> timedelta:
 def last_start(arena: Arena) -> datetime:
     """Последний момент, когда арена ещё создаёт пары: партия успевает закончиться к объявленному концу."""
     return max(_aware(arena.starts_at), _aware(arena.ends_at) - game_length(arena))
+
+
+def berserk_allowed(arena: Arena) -> bool:
+    """Берсерк есть в аренах, кроме пули без добавки с базой до минуты (1+0): половина минуты без добавки — лотерея."""
+    if (arena.format or "arena") != "arena":
+        return False
+    return arena.increment_ms > 0 or arena.base_time_ms > BERSERK_MIN_BASE_MS
 
 
 def pairing_open(arena: Arena, now: datetime | None = None) -> bool:
@@ -301,14 +313,59 @@ async def ready(db: AsyncSession, arena: Arena, user: User) -> dict:
     await leave_waiting(arena.id, user.id)
     await leave_waiting(arena.id, opponent_id)
     started = await matchmaker.start_pvp_game(white, black, arena.base_time_ms, arena.increment_ms,
-                                              connection_manager=manager, db=db, initiator_id=user.id, is_rated=True)
+                                              connection_manager=manager, db=db, initiator_id=user.id, is_rated=True,
+                                              arena=_game_marker(arena))
     db.add(ArenaGame(arena_id=arena.id, game_id=started["game_id"], white_id=white, black_id=black))
     await db.commit()
     return {"game_id": started["game_id"]}
 
 
+def _game_marker(arena: Arena) -> dict:
+    """Пометка партии арены для состояния партии и события match_found: клиент показывает по ней «берсерк»."""
+    return {"arena_id": arena.id, "berserk_allowed": berserk_allowed(arena)}
+
+
 async def is_arena_game(db: AsyncSession, game_id: int) -> bool:
     return await db.scalar(select(ArenaGame.id).where(ArenaGame.game_id == game_id)) is not None
+
+
+async def game_state_fields(db: AsyncSession, game_id: int) -> dict[str, str]:
+    """Поля арены для состояния партии, восстановленного из базы (game_state._recover_state_from_db)."""
+    record = (await db.execute(select(ArenaGame).where(ArenaGame.game_id == game_id))).scalar_one_or_none()
+    arena = await db.get(Arena, record.arena_id) if record is not None else None
+    if record is None or arena is None:
+        return {}
+    fields = {"arena_id": str(arena.id), "berserk_allowed": "1" if berserk_allowed(arena) else "0"}
+    for color in ("white", "black"):
+        if getattr(record, f"{color}_berserk"):
+            fields[f"{color}_berserk"] = "1"
+    return fields
+
+
+async def berserk(db: AsyncSession, game_id: int, user_id: int) -> dict | None:
+    """
+    «Берсерк» игрока в партии арены: отметка в записи партии и новые часы в состоянии партии. Возвращает
+    {"color", "state"} (свежее состояние партии) или None, если берсерк уже был; отказ — DomainError.
+    """
+    from src.models.game import Game
+    from src.services.game_state import state_manager
+
+    record = (await db.execute(select(ArenaGame).where(ArenaGame.game_id == game_id))).scalar_one_or_none()
+    if record is None or user_id not in (record.white_id, record.black_id):
+        raise DomainError("berserk_unavailable")
+    res = await state_manager.apply_berserk(game_id, user_id)
+    if res["status"] == "error":
+        raise DomainError(res["code"])
+    if res["status"] != "ok":
+        return None
+    color = res["color"]
+    setattr(record, f"{color}_berserk", True)
+    # Копия часов в записи партии: до первого хода её больше никто не обновит, а из неё состояние восстанавливается.
+    game = await db.get(Game, game_id)
+    if game is not None:
+        setattr(game, f"{color}_time_ms", int(res["state"][f"{color}_time_ms"]))
+    await db.commit()
+    return {"color": color, "state": res["state"]}
 
 
 async def on_game_aborted(db: AsyncSession, game_id: int, no_show: str | None) -> bool:
@@ -318,7 +375,8 @@ async def on_game_aborted(db: AsyncSession, game_id: int, no_show: str | None) -
     итоги арены не ждали её вечно.
     """
     if no_show in ("white", "black"):
-        return await on_game_finished(db, game_id, "0-1" if no_show == "white" else "1-0")
+        # Победа по неявке — без бонуса берсерка: риска за доской не было.
+        return await on_game_finished(db, game_id, "0-1" if no_show == "white" else "1-0", berserk_bonus=False)
     game = (await db.execute(select(ArenaGame).where(ArenaGame.game_id == game_id))).scalar_one_or_none()
     if game is None or game.result is not None:
         return False
@@ -327,7 +385,7 @@ async def on_game_aborted(db: AsyncSession, game_id: int, no_show: str | None) -
 
 
 async def on_game_finished(db: AsyncSession, game_id: int, result: str, termination: str | None = None,
-                           plies: int | None = None) -> bool:
+                           plies: int | None = None, berserk_bonus: bool = True) -> bool:
     """Партия арены закончилась: очки, серии, счётчики (без commit). False — это не партия арены."""
     game = (await db.execute(select(ArenaGame).where(ArenaGame.game_id == game_id))).scalar_one_or_none()
     if game is None or game.result is not None:
@@ -336,16 +394,18 @@ async def on_game_finished(db: AsyncSession, game_id: int, result: str, terminat
     # Договорная ничья в самом начале очков не приносит (и рвёт серию): таблица — за сыгранные партии.
     early_draw = result == "1/2-1/2" and termination == "agreement" and plies is not None and plies < EARLY_DRAW_PLIES
     game.result = result
-    sides = ((game.white_id, white_score, "white_points"), (game.black_id, 1.0 - white_score, "black_points"))
+    sides = ((game.white_id, white_score, "white"), (game.black_id, 1.0 - white_score, "black"))
     arena = await db.get(Arena, game.arena_id)
     swiss = arena is not None and arena.format == "swiss"
-    for user_id, score, field in sides:
+    for user_id, score, color in sides:
         player = await _player(db, game.arena_id, user_id)
         if player is None:
             continue
         # Правило ранней ничьей — для арены (в швейцарке тур есть тур, ничья в нём считается как обычно).
         earned = 0 if early_draw and not swiss else points(score, 0 if swiss else player.streak)
-        setattr(game, field, earned)
+        if score == 1.0 and berserk_bonus and not swiss and getattr(game, f"{color}_berserk"):
+            earned += BERSERK_BONUS
+        setattr(game, f"{color}_points", earned)
         player.score += earned
         player.games += 1
         if score == 1.0:
@@ -421,7 +481,8 @@ async def _start_swiss_game(db: AsyncSession, arena: Arena, white: int, black: i
 
     try:
         started = await matchmaker.start_pvp_game(white, black, arena.base_time_ms, arena.increment_ms,
-                                                  connection_manager=manager, db=db, is_rated=True)
+                                                  connection_manager=manager, db=db, is_rated=True,
+                                                  arena=_game_marker(arena))
         db.add(ArenaGame(arena_id=arena.id, game_id=started["game_id"], white_id=white, black_id=black,
                          round=arena.current_round))
         await db.flush()
@@ -490,6 +551,7 @@ def view(arena: Arena, now: datetime | None = None, open_games: int = 0) -> dict
            "open_games": open_games}
     if arena.format == "arena":
         out["last_start_at"] = last_start(arena).isoformat()
+    out["berserk"] = berserk_allowed(arena)
     out["max_rating"] = arena.max_rating
     out["division"] = arena.division or 1
     out["parent_id"] = arena.parent_id

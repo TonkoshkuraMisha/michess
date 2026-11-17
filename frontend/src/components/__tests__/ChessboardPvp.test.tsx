@@ -137,6 +137,67 @@ describe('предложение ничьей', () => {
     });
 });
 
+describe('берсерк в партии арены (33.3)', () => {
+    const ARENA_MATCH = {...MATCH, increment_ms: 2000, arena_id: 3, berserk_allowed: true, white_berserk: false,
+        black_berserk: false};
+    const BERSERK = {game_id: 5, color: 'white', white_time_ms: 90000, black_time_ms: 180000, berserk_allowed: true,
+        white_berserk: true, black_berserk: false};
+
+    it('кнопка до первого хода шлёт действие; событие ставит отметку игроку и убирает кнопку', async () => {
+        renderBoard({'/profile/games/my-active': () => ({...ARENA_MATCH, active: true})});
+        await emitAct('match_found', ARENA_MATCH);
+        expect(screen.queryByTestId('berserk-mark')).toBeNull();
+
+        fireEvent.click(screen.getByTestId('berserk-button'));
+        expect(sendMock).toHaveBeenCalledWith('berserk', {game_id: 5});
+
+        await emitAct('berserk', BERSERK);
+        expect(screen.queryByTestId('berserk-button')).toBeNull();
+        expect(screen.getAllByTestId('berserk-mark')).toHaveLength(1);
+        expect(screen.getByRole('img', {name: 'Берсерк: половина времени, без добавки'})).toBeInTheDocument();
+    });
+
+    it('берсерк соперника виден, а своя кнопка остаётся; после своего первого хода её нет', async () => {
+        renderBoard({'/profile/games/my-active': () => ({...ARENA_MATCH, active: true})});
+        await emitAct('match_found', ARENA_MATCH);
+        await emitAct('berserk', {...BERSERK, color: 'black', white_time_ms: 180000, black_time_ms: 90000,
+            white_berserk: false, black_berserk: true});
+        expect(screen.getAllByTestId('berserk-mark')).toHaveLength(1);
+        expect(screen.getByTestId('berserk-button')).toBeInTheDocument();
+
+        await emitAct('move_made', {game_id: 5, state_version: 1, pgn: '1. e4', san: 'e4', game_over: false});
+        expect(screen.queryByTestId('berserk-button')).toBeNull();
+        expect(screen.getAllByTestId('berserk-mark')).toHaveLength(1);
+    });
+
+    it('чёрные могут сыграть берсерк после первого хода белых; в обычной партии кнопки нет', async () => {
+        const asBlack = {...ARENA_MATCH, color: 'black', opponent_id: 1, white_username: 'Rival',
+            black_username: 'TestPlayer', pgn: '1. e4', state_version: 1};
+        const view = renderBoard({'/profile/games/my-active': () => ({...asBlack, active: true})});
+        await emitAct('match_found', asBlack);
+        expect(screen.getByTestId('berserk-button')).toBeInTheDocument();
+        view.unmount();
+
+        renderBoard({'/profile/games/my-active': () => ({...MATCH, active: true})});
+        await emitAct('match_found', MATCH);
+        expect(screen.queryByTestId('berserk-button')).toBeNull();
+    });
+
+    it('чужое событие берсерка и снимок той же партии без полей берсерка ничего не меняют', async () => {
+        renderBoard({'/profile/games/my-active': () => ({...MATCH, active: true})});
+        await emitAct('match_found', ARENA_MATCH);
+        await emitAct('berserk', {...BERSERK, game_id: 7});
+        expect(screen.queryByTestId('berserk-mark')).toBeNull();
+
+        await emitAct('berserk', BERSERK);
+        // Опрос my-active отдаёт снимок без полей берсерка — отметка остаётся.
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(3500);
+        });
+        expect(screen.getAllByTestId('berserk-mark')).toHaveLength(1);
+    });
+});
+
 describe('потерянный game_over', () => {
     it('партия, которой на сервере уже нет, завершается по итогу из HTTP', async () => {
         renderBoard({

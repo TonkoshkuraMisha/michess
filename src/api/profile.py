@@ -72,7 +72,7 @@ async def _find_user(db: AsyncSession, username: str) -> User | None:
 
 async def _build_active_game_payload(db: AsyncSession, game_id: int, user_id: int) -> dict | None:
     """Формирует полный слепок активной партии для игрока (цвет, часы, FEN, PGN, версия стейта)."""
-    from src.services.game_state import is_rated_state, pending_draw_offer, state_manager
+    from src.services.game_state import berserk_fields, is_rated_state, pending_draw_offer, state_manager
 
     state = await state_manager.get_game_state(game_id)
     if not state or state.get("status") != "in_progress":
@@ -115,6 +115,8 @@ async def _build_active_game_payload(db: AsyncSession, game_id: int, user_id: in
         "pgn": state.get("pgn", ""),
         "state_version": int(state.get("state_version", 0)),
         "draw_offer_from": pending_draw_offer(state),
+        # Партия арены (33.3): кнопка и отметки берсерка у клиента, взявшего партию опросом, а не из WebSocket.
+        **berserk_fields(state),
     }
 
 

@@ -22,6 +22,8 @@ export interface ArenaInfo {
     ends_at: string;
     status: ArenaStatus;
     players?: number;
+    /** В партиях арены доступен «берсерк» (33.3): половина времени без добавки ради лишнего очка за победу. */
+    berserk?: boolean;
     /** Последний старт: до него создаются пары (только у формата arena). */
     last_start_at?: string;
     /** Идущих партий арены — итоги ждут их. */

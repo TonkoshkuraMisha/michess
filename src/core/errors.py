@@ -127,6 +127,8 @@ ERROR_MESSAGES: dict[str, str] = {
     "arena_fair_play": "Arenas are closed while your account is flagged by the fair-play system",
     "arena_rating_too_high": "This arena is for players rated up to {limit} (including the peak of the last week)",
     "arena_not_joined": "Join the arena first",
+    "berserk_unavailable": "Berserk is not available in this game",
+    "berserk_too_late": "Berserk is only possible before your first move",
     "tablebase_unavailable": "Endgame tables are unavailable, please try again later",
     "tablebase_too_many_pieces": "Endgame tables cover at most {max} pieces",
     "puzzle_not_active": "This puzzle is no longer active: open the next one",

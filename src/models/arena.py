@@ -6,7 +6,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint, false, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from src.models.base import Base
@@ -66,6 +66,9 @@ class ArenaGame(Base):
     result: Mapped[str | None] = mapped_column(String(8), nullable=True)
     white_points: Mapped[int | None] = mapped_column(Integer, nullable=True)
     black_points: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # «Берсерк» (33.3): сторона до своего первого хода взяла половину времени без добавки — победа даёт лишнее очко.
+    white_berserk: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
+    black_berserk: Mapped[bool] = mapped_column(Boolean, default=False, server_default=false())
     # Тур швейцарки (у арены — 0).
     round: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

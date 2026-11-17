@@ -127,6 +127,21 @@ describe('честный конец арены (33.1)', () => {
     });
 });
 
+describe('берсерк (33.3)', () => {
+    it('правило берсерка показано только там, где он доступен', async () => {
+        let current: Record<string, unknown> = {...RUNNING, berserk: true, open_games: 0, standings: [], me: null};
+        vi.stubGlobal('fetch', vi.fn(async () => ({ok: true, status: 200, json: async () => current} as Response)));
+        const view = routes('/arenas/3');
+        expect(await screen.findByTestId('arena-berserk-rule')).toHaveTextContent('Берсерк');
+        view.unmount();
+
+        current = {...current, berserk: false};
+        routes('/arenas/3');
+        await screen.findByTestId('arena-timing');
+        expect(screen.queryByTestId('arena-berserk-rule')).toBeNull();
+    });
+});
+
 describe('группы и деления (33.2)', () => {
     it('название с группой и делением; игрок в другом делении — переход туда', async () => {
         const fetchMock = vi.fn(async (url: string) => {

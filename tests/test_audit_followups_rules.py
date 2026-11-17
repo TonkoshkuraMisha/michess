@@ -282,6 +282,6 @@ def test_every_ws_action_has_a_handler():
         "join_queue", "leave_queue", "accept_challenge", "create_invite", "accept_invite",
         "spectate_game", "leave_spectate", "chat_message", "abort_game", "resign",
         "offer_draw", "accept_draw", "decline_draw", "offer_rematch", "accept_rematch",
-        "decline_rematch", "make_move",
+        "decline_rematch", "make_move", "berserk",
     }
     assert set(ACTION_HANDLERS) == expected

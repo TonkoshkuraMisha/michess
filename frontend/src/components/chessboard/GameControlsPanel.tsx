@@ -1,7 +1,7 @@
 // --- FILE: frontend/src/components/chessboard/GameControlsPanel.tsx ---
 
 import {useState} from 'react';
-import {Flag, Handshake, X, RefreshCw, RotateCcw, Undo2, Eye, Download, Grid3x3} from 'lucide-react';
+import {Flag, Handshake, X, RefreshCw, RotateCcw, Undo2, Eye, Download, Grid3x3, Zap} from 'lucide-react';
 import type {NavigateFunction} from 'react-router-dom';
 import {API_BASE_URL} from '../../config/api';
 import {useI18n} from '../../i18n';
@@ -21,6 +21,8 @@ export interface GameControlsPanelProps {
     blackPlayer: { username: string; rating: string };
     navigate: NavigateFunction;
     onAbortGame: () => void;
+    /** Партия арены до своего первого хода (33.3): «берсерк» — половина времени без добавки ради лишнего очка. */
+    onBerserk?: () => void;
     onResign: () => void;
     onOfferDraw: () => void;
     onAcceptRematch: () => void;
@@ -46,7 +48,7 @@ export function GameControlsPanel({
     mode, gameId, savedBotGameId, historyLength, gameOverResult, rematchStatus, isBotThinking,
     whitePlayer, blackPlayer, navigate, onAbortGame, onResign, onOfferDraw, onAcceptRematch,
     onDeclineRematch, onOfferRematch, onResetSandbox, onUndoSandboxMove, undoLocked = false, hasCustomPosition = false, onLoadFen,
-    hideRematch = false,
+    hideRematch = false, onBerserk,
 }: GameControlsPanelProps) {
     const {t} = useI18n();
     const [fenInput, setFenInput] = useState('');
@@ -78,6 +80,17 @@ export function GameControlsPanel({
     if (mode === 'pvp') {
         return (
             <div className="shrink-0 flex flex-col gap-1.5">
+                {onBerserk && !gameOverResult && (
+                    <button
+                        type="button"
+                        onClick={onBerserk}
+                        title={t('controls.berserkHint')}
+                        data-testid="berserk-button"
+                        className="flex items-center justify-center gap-1.5 px-3 py-2 bg-orange-950/90 text-orange-200 text-xs sm:text-sm font-bold rounded-md hover:bg-orange-900 transition shadow border border-orange-600/60 cursor-pointer"
+                    >
+                        <Zap size={15}/> {t('controls.berserk')}
+                    </button>
+                )}
                 <div className="grid grid-cols-2 gap-2">
                     {historyLength < 2 ? (
                         <button
