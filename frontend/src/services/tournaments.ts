@@ -79,6 +79,9 @@ export interface TournamentSummary {
     my_place: number | null;
     career_stage?: string | null;
     event_key?: string | null;
+    /** Текущий тур и готова ли в нём партия игрока («Продолжить турнир» на главной). */
+    current_round: number;
+    my_game_ready: boolean;
 }
 
 export interface TournamentCreate {
@@ -159,6 +162,19 @@ export const createTournament = (body: TournamentCreate) =>
 export function guestIdOf(player: Pick<TournamentPlayer, 'kind' | 'bot_key'>): string | null {
     return player.kind === 'personality' && player.bot_key?.startsWith(GUEST_PREFIX)
         ? player.bot_key.slice(GUEST_PREFIX.length) : null;
+}
+
+/** Страница соперника: мастер прошлого — его карточка в каталоге; у остальных отдельной страницы нет. */
+export function opponentPage(player: Pick<TournamentPlayer, 'kind' | 'bot_key'>): string | null {
+    const guest = guestIdOf(player);
+    return guest ? `/masters?master=${encodeURIComponent(guest)}` : null;
+}
+
+/** Последняя сыгранная партия игрока в турнире. */
+export function myLastGame(t: Tournament): TournamentGame | null {
+    if (t.my_seat == null) return null;
+    const mine = t.games.filter((g) => g.result && (g.white_seat === t.my_seat || g.black_seat === t.my_seat));
+    return mine.sort((a, b) => b.round - a.round || b.id - a.id)[0] ?? null;
 }
 
 /** Имя участника на языке игрока: «Вы», бот, архетип, мастер прошлого или имя персоналии. */

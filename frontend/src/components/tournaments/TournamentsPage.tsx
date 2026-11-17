@@ -17,7 +17,8 @@ import type {BotStrength, CatalogArchetype} from '../../services/botCatalog';
 import {listPersonalities} from '../../services/personalities';
 import type {Personality} from '../../services/personalities';
 import {
-    botGamesRunning, createTournament, gameStart, getTournament, listTournaments, myPendingGame, participantName,
+    botGamesRunning, createTournament, gameStart, getTournament, listTournaments, myLastGame, myPendingGame, opponentPage,
+    participantName,
     startMyGame, totalRounds as roundsTotal, withdrawTournament,
 } from '../../services/tournaments';
 import {eventTitle} from '../../services/timeMachine';
@@ -272,6 +273,7 @@ export function TournamentView() {
     const pending = myPendingGame(tournament);
     const me = tournament.players.find((p) => p.seat === tournament.my_seat);
     const winner = tournament.players.find((p) => p.place === 1);
+    const lastMine = myLastGame(tournament);
 
     const play = async () => {
         if (!pending) return;
@@ -341,6 +343,28 @@ export function TournamentView() {
                     )}
                 </div>
             )}
+            {lastMine && (() => {
+                const opponentSeat = lastMine.white_seat === tournament.my_seat ? lastMine.black_seat : lastMine.white_seat;
+                const page = opponentPage(tournament.players.find((p) => p.seat === opponentSeat)!);
+                return (
+                    <div className="bg-acacia p-3 rounded-lg border-2 border-acacia-dark flex flex-wrap items-center gap-3 text-sm"
+                         data-testid="my-last-game">
+                        <span>{t('tournaments.myLastGame', {
+                            round: lastMine.round, opponent: name(opponentSeat), result: resultFor(lastMine, tournament.my_seat!),
+                        })}</span>
+                        {lastMine.game_id && (
+                            <Link to={`/game/${lastMine.game_id}`} className="underline text-amber-300" data-testid="my-last-game-review">
+                                {t('tournaments.viewGame')}
+                            </Link>
+                        )}
+                        {page && (
+                            <Link to={page} className="underline text-amber-300" data-testid="my-last-game-opponent">
+                                {t('tournaments.opponentCard')}
+                            </Link>
+                        )}
+                    </div>
+                );
+            })()}
             {tournament.status === 'finished' && winner && (
                 <p className="text-lg text-amber-200" data-testid="tournament-winner">{t('tournaments.winner', {name: name(winner.seat)})}</p>
             )}
