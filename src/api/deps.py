@@ -1,3 +1,15 @@
+"""
+Проверка входа — зависимости маршрутов.
+
+* get_current_user — для HTTP: игрок по токену из заголовка «Authorization: Bearer». Токен принимается, только
+  пока его версия совпадает с users.token_version (user_from_token): смена пароля и «выйти везде» отзывают все
+  прежние токены. Попутно игрок отмечается активным за сутки — для метрик (src/core/observability.py,
+  src/services/product_metrics.py).
+* get_current_user_ws — для WebSocket: вход по одноразовому тикету. Тикет выдаёт POST /auth/ws-ticket и кладёт в
+  Redis (ключ ws_ticket:<тикет>, срок WS_TICKET_TTL_S); здесь он забирается командой GETDEL и поэтому срабатывает
+  ровно один раз. Токен в адресе WebSocket не используется: адреса попадают в журналы сервера и прокси.
+"""
+
 from fastapi import Depends, Query, WebSocketException, status
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker

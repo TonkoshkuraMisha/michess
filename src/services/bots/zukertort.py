@@ -1,5 +1,17 @@
 # --- FILE: src/services/bots/zukertort.py ---
+"""
+Исторический бот «Иоганн Цукерторт»: дебютная книга и правила стиля.
 
+Дебют — книга из партий прототипа (books/zukertort.json, собирает scripts/build_opening_books.py) и несколько
+«фирменных» начал, заданных здесь (DEFAULT_ZUKERTORT_BOOK).
+
+Стиль (ZUKERTORT_STYLE) — бонусы в сантипешках кандидатам движка: развитие и рокировка, центр, шахи, после дебюта —
+умеренное давление на короля соперника. Бонусы только выбирают среди ходов, близких по оценке к лучшему (окно —
+blunder_guard_cp); оценку позиции они не меняют.
+
+Сила: заявленный рейтинг и ограничение движка UCI_Elo — 2120; измеренная матчами — calibration.json. Порядок выбора
+хода — base.HistoricalBot; реплики бота — ключи каталога botComments.zukertort.* на клиенте.
+"""
 
 from src.services.bots.base import BookEntry, HistoricalBot, load_bot_opening_book
 from src.services.bots.style import (
@@ -67,7 +79,7 @@ evaluate_zukertort_style_bonus = ZUKERTORT_STYLE.evaluate
 
 
 class ZukertortBot(HistoricalBot):
-    """Иоганн Цукерторт (~1840 UCI Эло, depth=6, skill=8)."""
+    """Иоганн Цукерторт: UCI_Elo 2120, глубина 6, уровень 8."""
 
     bot_id = "zukertort"
     engine_source_name = "zukertort_style_engine"

@@ -1,4 +1,8 @@
 # --- FILE: src/models/personality.py ---
+"""
+Соперники, собранные игроками в мастерской (таблица bot_personalities): имя и настройки характера. Правила имён и
+лимиты — src/api/personalities.py, как из настроек получается стиль игры — src/services/bots/personality.py.
+"""
 
 from datetime import datetime
 

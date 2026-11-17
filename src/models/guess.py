@@ -1,3 +1,8 @@
+"""
+Позиции «Угадай ход мастера» (таблица guess_positions). Заполняет scripts/build_guess_positions.py по правилам
+src/services/guess_selection.py; выдаёт и оценивает ответы src/services/guess.py.
+"""
+
 from datetime import datetime
 
 from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, UniqueConstraint, func

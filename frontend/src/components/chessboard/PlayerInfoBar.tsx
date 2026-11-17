@@ -1,4 +1,6 @@
 // --- FILE: frontend/src/components/chessboard/PlayerInfoBar.tsx ---
+// Панель игрока над и под доской: аватар, имя, рейтинг (с изменением после партии), отметка берсерка, взятые фигуры,
+// перевес в материале и часы.
 
 import {Zap} from 'lucide-react';
 import {formatTime} from './hooks/useClock';

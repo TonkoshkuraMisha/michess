@@ -1,4 +1,6 @@
 // --- FILE: frontend/src/components/chessboard/HistoricalBotsPanel.tsx ---
+// Выбор соперника-бота: исторические боты и мастера с портретом, годами жизни и силой (измеренной, если бот
+// калиброван, — GET /bots/catalog), выбор цвета, форы и старта со своей позиции.
 
 import {ODDS} from './odds';
 import type {OddsChoice, OddsGiver, OddsKind} from './odds';

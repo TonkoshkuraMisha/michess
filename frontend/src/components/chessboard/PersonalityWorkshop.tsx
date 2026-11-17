@@ -1,4 +1,7 @@
 // --- FILE: frontend/src/components/chessboard/PersonalityWorkshop.tsx ---
+// Мастерская соперников: игрок собирает бота из ползунков характера и силы, выбирает ему дебюты, сохраняет и играет
+// с ним. Как ползунки превращаются в стиль игры — src/services/bots/personality.py; хранение —
+// services/personalities.ts.
 
 import {useCallback, useEffect, useState} from 'react';
 import {PolarAngleAxis, PolarGrid, Radar, RadarChart} from 'recharts';

@@ -1,4 +1,6 @@
 // --- FILE: frontend/src/components/chessboard/TimeControlPicker.tsx ---
+// Выбор контроля времени: готовые варианты по категориям (пуля, блиц, рапид, классика) и ручная настройка минут и
+// добавки. Варианты — config/timeControls.ts.
 
 import type {RefObject} from 'react';
 import {Clock, ChevronDown, ChevronUp, Sliders} from 'lucide-react';

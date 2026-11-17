@@ -1,4 +1,9 @@
 // --- FILE: frontend/src/components/GameViewer.tsx ---
+// Просмотр и разбор партии (/game/:id, /library/game/:id, /import/game/:id): доска с листанием ходов, полный разбор
+// движком (точность сторон, классификация ходов, шкала и график оценки), комментарии наставника, итог партии,
+// справочник дебютов, рентген доски, стрелки и пометки правой кнопкой, отклонения от своего репертуара, экспорт PGN.
+// Разбор считает сервер (/analysis/game/{id}) и хранит его; для партии библиотеки разбора движком нет, для
+// импортированной — он свой (/imports).
 
 import {useState, useEffect, useRef, useMemo, useCallback} from 'react';
 import {useParams, useLocation, Link} from 'react-router-dom';

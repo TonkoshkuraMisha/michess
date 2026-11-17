@@ -1,3 +1,8 @@
+"""
+События продуктовых метрик (таблица product_events). Пишет src/services/product_metrics.py, отчёт владельцу
+считает scripts/product_metrics.py.
+"""
+
 from datetime import date, datetime
 
 from sqlalchemy import Date, DateTime, ForeignKey, String, UniqueConstraint

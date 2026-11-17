@@ -1,4 +1,26 @@
 # --- FILE: src/api/websockets.py ---
+"""
+WebSocket партий и лобби (/ws/matchmaking): все действия игрока во время игры и доставка событий в его вкладки.
+
+Вход — по одноразовому тикету (src/api/deps.get_current_user_ws). При подключении игрок получает снимок своей
+идущей партии, если она есть (_send_active_game_snapshot_if_exists).
+
+Каждое сообщение клиента — {"action": имя, ...}; обработчик действия зарегистрирован в ACTION_HANDLERS:
+
+* лобби — join_queue, leave_queue, accept_challenge, create_invite, accept_invite;
+* зрители и чат — spectate_game, leave_spectate, chat_message;
+* партия — make_move, abort_game, resign, offer_draw, accept_draw, decline_draw, berserk;
+* реванш — offer_rematch, accept_rematch, decline_rematch.
+
+Общие правила: действие над партией принимается только от её участника и только в подходящем статусе
+(_participant_game), иначе молча игнорируется; отказ с объяснением уходит кодом ошибки (src/core/errors.py).
+Сессия базы открывается на одно действие и освобождается до отправки в сеть (ActionContext.release_db) — иначе
+медленный клиент держал бы соединение пула. Частота сообщений ограничена по группам (WS_RATE_LIMITS: ходы, чат,
+предложения, прочее), размер — WS_MAX_MESSAGE_CHARS; за поток отклонённых сообщений соединение закрывается.
+
+Состояние партии и часы — src/services/game_state.py, старт партий — src/services/matchmaker.py, рассылка в
+несколько процессов и вкладок — src/services/connection_manager.py.
+"""
 
 import json
 import logging

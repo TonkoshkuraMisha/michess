@@ -1,4 +1,6 @@
 // --- FILE: frontend/src/components/Leaderboard.tsx ---
+// Таблица лидеров (/leaderboard): лучшие игроки по каждой категории контроля времени — пуля, блиц, рапид, классика.
+// Данные — /profile/leaderboard; ботов, архивных игроков и удалённых аккаунтов в ней нет.
 
 import {useState, useEffect} from 'react';
 import {PlayerAvatar} from './PlayerAvatar';

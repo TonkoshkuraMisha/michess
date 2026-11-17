@@ -1,4 +1,6 @@
 // --- FILE: frontend/src/components/chessboard/MatchmakingPanel.tsx ---
+// Поиск соперника: тип партии (рейтинговая или товарищеская), кнопка вызова в лобби и приглашение по ссылке.
+// Контроль времени выбирается в TimeControlPicker.
 
 import {Loader2, Users, Link2, Check, Copy} from 'lucide-react';
 import {useI18n} from '../../i18n';

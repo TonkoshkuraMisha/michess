@@ -1,4 +1,8 @@
 // --- FILE: frontend/src/components/AuthModal.tsx ---
+// Окно входа и регистрации. Регистрация: имя и пароль (правила имени проверяет сервер, src/schemas/user.py), два
+// необязательных вопроса о стаже и силе — по ним сервер ставит стартовый рейтинг, код-приглашение, если регистрация
+// закрыта (программа беты). Отказы сервера приходят кодами и показываются текстом из каталога serverErrors. После
+// входа access-токен хранится только в памяти страницы (services/authToken.ts).
 
 import {useEffect, useState} from 'react';
 import {LogIn, UserPlus, X} from 'lucide-react';

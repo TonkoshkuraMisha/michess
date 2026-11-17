@@ -1,5 +1,17 @@
 # --- FILE: src/services/bots/labourdonnais.py ---
+"""
+Исторический бот «Луи-Шарль де Лабурдонне»: дебютная книга и правила стиля.
 
+Дебют — книга из партий прототипа (books/labourdonnais.json, собирает scripts/build_opening_books.py) и несколько
+«фирменных» начал, заданных здесь (DEFAULT_LABOURDONNAIS_BOOK).
+
+Стиль (LABOURDONNAIS_STYLE) — бонусы в сантипешках кандидатам движка: быстрое развитие лёгких фигур и рокировка,
+центр, шахи и взятия, после дебюта — фигуры к королю соперника и жертвы. Бонусы только выбирают среди ходов, близких
+по оценке к лучшему (окно — blunder_guard_cp); оценку позиции они не меняют.
+
+Сила: заявленный рейтинг и ограничение движка UCI_Elo — 1950; измеренная матчами — calibration.json. Порядок выбора
+хода — base.HistoricalBot; реплики бота — ключи каталога botComments.labourdonnais.* на клиенте.
+"""
 
 from src.services.bots.base import BookEntry, HistoricalBot, load_bot_opening_book
 from src.services.bots.style import (
@@ -66,7 +78,7 @@ evaluate_labourdonnais_style_bonus = LABOURDONNAIS_STYLE.evaluate
 
 
 class LabourdonnaisBot(HistoricalBot):
-    """Луи-Шарль Маэ де Лабурдонне (~1650 UCI Эло, depth=5, skill=5)."""
+    """Луи-Шарль Маэ де Лабурдонне: UCI_Elo 1950, глубина 5, уровень 5."""
 
     bot_id = "labourdonnais"
     engine_source_name = "labourdonnais_style_engine"

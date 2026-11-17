@@ -1,3 +1,18 @@
+"""
+Регистрация и вход (/auth).
+
+* Регистрация: правила имени — src/schemas/user.py; имена маршрутов, ботов и чемпионов зарезервированы
+  (RESERVED_USERNAMES, reserved_bot_usernames). При REGISTRATION_INVITE_ONLY нужен действующий код-приглашение
+  (src/services/beta.py). Ответы на два необязательных вопроса дают стартовый рейтинг (src/services/onboarding.py).
+* Вход: пароль сверяется с хэшем (src/core/security.py). Подбор ограничен дважды — все попытки с одного адреса и
+  неудачные попытки на один аккаунт (настройки RATE_LIMIT_LOGIN_*). Для несуществующего имени сверяется
+  пароль-пустышка, чтобы по времени ответа нельзя было узнать, есть ли такой аккаунт.
+* Сессия: короткий access-токен в ответе и refresh-токен в cookie HttpOnly (src/services/auth_sessions.py);
+  /refresh выдаёт новый access-токен, /logout снимает сессию на этом устройстве, /logout-all и смена пароля
+  отзывают все токены и закрывают открытые WebSocket игрока.
+* /ws-ticket — одноразовый тикет для подключения WebSocket (см. src/api/deps.py).
+"""
+
 import secrets
 
 from fastapi import APIRouter, Depends, Request, Response, status

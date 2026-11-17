@@ -1,3 +1,16 @@
+"""
+Подключение к PostgreSQL: асинхронный движок SQLAlchemy и фабрика сессий.
+
+Адрес базы собирается из настроек POSTGRES_* (settings.async_database_url), размер пула — DB_POOL_SIZE и
+DB_MAX_OVERFLOW на каждый процесс API. Два способа получить сессию:
+
+* get_db — зависимость FastAPI для HTTP-запроса: сессия живёт до конца запроса;
+* get_session_factory — фабрика для долгих соединений (WebSocket): обработчик открывает короткую сессию на одно
+  действие, иначе соединение пула было бы занято всё время, пока открыта вкладка игрока.
+
+Фоновые задачи Celery создают свой движок на каждую задачу (src/worker/tasks.py).
+"""
+
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from src.core.config import settings

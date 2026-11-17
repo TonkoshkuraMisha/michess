@@ -1,32 +1,45 @@
-# React + TypeScript + Vite
+<!-- --- FILE: frontend/README.md --- -->
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+# Клиент michess
 
-Currently, two official plugins are available:
+Одностраничное приложение: React 19, TypeScript, Vite 6, Tailwind CSS v4. Общее устройство проекта —
+[../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md); здесь — только то, что нужно для работы с клиентом.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Команды
 
-## React Compiler
+    npm install            # пакеты строго по package-lock.json
+    npm run dev            # Vite на http://127.0.0.1:3000 (API ожидается на 127.0.0.1:8000)
+    npm run lint           # Oxlint
+    npm run test           # Vitest, все тесты
+    npx vitest run src/components/arena --reporter=dot    # тесты одного раздела
+    npm run build          # проверка типов (tsc -b) и сборка — то же, что делает CI
+    npm run test:e2e       # Playwright: нужен запущенный стек; в CI идёт на собранных образах
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Перед отправкой ветки обязательно `npm run build`: он ловит ошибки типов, которые не видят линтер и Vitest.
 
-## Expanding the Oxlint configuration
+## Где что лежит
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+| Папка | Что в ней |
+|---|---|
+| `src/App.tsx` | Шапка, меню, все маршруты |
+| `src/components/Chessboard.tsx`, `src/components/chessboard/` | Главная доска (партия с человеком, с ботом, анализ) и её панели; логика — в хуках `chessboard/hooks/` |
+| `src/components/<раздел>/` | Страницы разделов: `arena`, `puzzles`, `learn`, `tournaments`, `library`, `repertoire`, `social`, `trainers` и другие |
+| `src/services/` | По файлу на раздел API (`arenas.ts`, `puzzles.ts`…), WebSocket (`gameSocket.ts`), звук, вход |
+| `src/config/` | Данные оформления, ботов, контролей времени |
+| `src/content/` | Учебное содержание: Большой курс, программы, эндшпильные упражнения |
+| `src/trainers/` | Логика тренажёров (чистые функции, проверяются тестами) |
+| `src/i18n/` | Каталоги сообщений `messages/{en,uk,ru}.ts` и функции перевода |
+| `e2e/` | Сценарии Playwright: партия двух игроков, задачи, вёрстка на телефоне и другие |
+| `public/` | Ассеты (фигуры, доски, звуки, портреты) и сервис-воркер; лицензии — `../ATTRIBUTION.md` |
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
+## Правила
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+* **Никаких строк для игрока в разметке.** Текст берётся из каталогов: `const {t} = useI18n(); t('arenas.title')`.
+  Новый ключ добавляется сразу в три каталога с одинаковыми параметрами — это проверяют тесты.
+* **Ошибки сервера приходят кодами** (`src/services/apiErrors.ts`): текст по коду — из раздела `serverErrors`
+  каталога, поэтому новый код сервера требует строки в трёх каталогах.
+* **Сервер — источник правды.** Часы, рейтинг, решение задачи, итог партии считает сервер; клиент показывает
+  присланное и не доверяет своим расчётам там, где от них зависит результат.
+* **Вёрстка проверяется на телефоне.** Новая страница без параметров добавляется в список `ROUTES` в
+  `e2e/layout.e2e.ts`. Локальные замеры ширины занижены: в CI (Linux) текст на 9–10 % шире.
+* **Ассеты** — только со свободной лицензией и записью в `../ATTRIBUTION.md`.

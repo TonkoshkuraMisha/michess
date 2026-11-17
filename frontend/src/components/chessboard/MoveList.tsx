@@ -1,4 +1,6 @@
 // --- FILE: frontend/src/components/chessboard/MoveList.tsx ---
+// Список ходов партии на главной доске: ход можно выбрать и посмотреть позицию после него, кнопка возвращает к живой
+// позиции.
 
 import type {RefObject} from 'react';
 

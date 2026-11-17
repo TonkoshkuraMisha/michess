@@ -1,4 +1,17 @@
 # --- FILE: src/models/game.py ---
+"""
+Партия (таблица games) — общая для всех видов игры: с человеком, с ботом, архив мастеров, симуляция турнира.
+
+Кто пишет: старт партии с человеком — src/services/matchmaker.py; ходы и часы по ходу игры и итог —
+src/services/game_state.py (источник правды во время партии — Redis, сюда состояние копируется); партия с ботом
+целиком после окончания — src/api/bots.py (save-game); архив — src/db/seed.py; партии ботов между собой —
+src/services/tournament_simulation.py (is_simulation).
+
+Главные поля: pgn — запись ходов; board_fen, turn, часы и state_version — состояние идущей партии (по ним оно
+восстанавливается, если пропало из Redis); result и termination — итог и его причина; рейтинги игроков на начало
+и изменение после партии; analysis_json — сохранённый разбор движком; positions_indexed — партия уже разложена в
+индекс позиций.
+"""
 
 import enum
 from datetime import datetime

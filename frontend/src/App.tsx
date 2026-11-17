@@ -1,4 +1,9 @@
 // --- FILE: frontend/src/App.tsx ---
+// Каркас приложения: шапка (разделы, язык, поиск игроков, уведомления, сообщения, меню профиля), окно входа и все
+// маршруты сайта (<Routes> в конце файла). При загрузке восстанавливает вход по refresh-cookie
+// (services/authToken.ts) и ждёт этого не дольше SESSION_RESTORE_WAIT_MS; профиль (/profile/me) задаёт язык
+// интерфейса, тему-комплект и аватар. Страницы разделов — в components/<раздел>/; новая страница добавляется сюда
+// маршрутом и, если она без параметров, — в список ROUTES проверки вёрстки (e2e/layout.e2e.ts).
 
 import {useState, useRef, useEffect} from 'react';
 import {Routes, Route, useNavigate, Link, useLocation} from 'react-router-dom';

@@ -1,4 +1,6 @@
 // --- FILE: frontend/src/components/chessboard/LobbyPanel.tsx ---
+// Вкладка «Лобби / Live»: открытые вызовы игроков, которые можно принять, и партии, идущие сейчас, — для просмотра.
+// Сверху — анонс ближайшей арены.
 
 import {Radio, Play, Eye} from 'lucide-react';
 import {ArenaBanner} from '../arena/ArenaPages';

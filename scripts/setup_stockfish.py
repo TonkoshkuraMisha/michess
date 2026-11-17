@@ -1,4 +1,12 @@
 # --- FILE: setup_stockfish.py ---
+"""
+Установка движка Stockfish в папку bin/ проекта.
+
+Скачивает последний официальный выпуск с GitHub (official-stockfish/Stockfish) и выбирает сборку под текущую
+систему и процессор (get_target_asset_url). Движок распространяется под GPL-3.0 (ATTRIBUTION.md); в репозиторий
+он не входит. Запуск: `python scripts/setup_stockfish.py`; его же вызывает start_dev.ps1, если движка ещё нет.
+Сервер находит движок сам: bin/, PATH, стандартные пути Linux (src/services/bots/base.resolve_stockfish_path).
+"""
 
 import io
 import os

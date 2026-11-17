@@ -1,4 +1,7 @@
 // --- FILE: frontend/src/components/chessboard/hooks/usePremoves.ts ---
+// Предходы: очередь ходов, заданных во время хода соперника (не больше MAX_PREMOVES). Доска показывает позицию «как
+// если бы предходы сыграны»; первый предход исполняется, как только соперник сходил, и если он стал нелегальным —
+// очередь снимается.
 
 import {useCallback, useEffect, useMemo, useState} from 'react';
 import {Chess} from 'chess.js';

@@ -1,5 +1,17 @@
 # --- FILE: src/services/bots/anderssen.py ---
+"""
+Исторический бот «Адольф Андерсен»: дебютная книга и правила стиля.
 
+Дебют — книга из партий прототипа (books/anderssen.json, собирает scripts/build_opening_books.py) и несколько
+«фирменных» начал, заданных здесь (DEFAULT_ANDERSSEN_BOOK).
+
+Стиль (ANDERSSEN_STYLE) — бонусы в сантипешках кандидатам движка: шахи, взятия ради открытия линий, развитие, после
+дебюта — жертвы и фигуры у короля соперника (окно выбора хода у него самое широкое из семи ботов). Бонусы только
+выбирают среди ходов, близких по оценке к лучшему (окно — blunder_guard_cp); оценку позиции они не меняют.
+
+Сила: заявленный рейтинг и ограничение движка UCI_Elo — 2100; измеренная матчами — calibration.json. Порядок выбора
+хода — base.HistoricalBot; реплики бота — ключи каталога botComments.anderssen.* на клиенте.
+"""
 
 from src.services.bots.base import BookEntry, HistoricalBot, load_bot_opening_book
 from src.services.bots.style import (
@@ -62,7 +74,7 @@ evaluate_anderssen_style_bonus = ANDERSSEN_STYLE.evaluate
 
 
 class AnderssenBot(HistoricalBot):
-    """Адольф Андерсен (~1820 UCI Эло, depth=6, skill=8)."""
+    """Адольф Андерсен: UCI_Elo 2100, глубина 6, уровень 8."""
 
     bot_id = "anderssen"
     engine_source_name = "anderssen_style_engine"

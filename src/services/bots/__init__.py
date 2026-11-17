@@ -1,4 +1,11 @@
 # --- FILE: src/services/bots/__init__.py ---
+"""
+Исторические боты первой волны: реестр BOT_INSTANCES (id → готовый бот).
+
+Каждый бот — свой модуль рядом (philidor.py … zukertort.py) с дебютной книгой и правилами стиля; общий порядок
+выбора хода — base.HistoricalBot. Мастера второй волны и остальные соперники собираются из настроек характера
+(masters.py, guests.py, archetypes.py, personality.py).
+"""
 
 from src.services.bots.anderssen import AnderssenBot, anderssen_bot
 from src.services.bots.base import HistoricalBot, normalize_fen_key, resolve_stockfish_path

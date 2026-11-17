@@ -1,4 +1,6 @@
 // --- FILE: frontend/src/components/ChampionGames.tsx ---
+// Страница архива чемпиона (/champions/:id): список его партий из архива мастеров (сервер подгружает их при первом
+// обращении — src/db/seed.py) с датой, соперником и результатом, переход к просмотру партии и скачивание PGN.
 
 import {useState, useEffect} from 'react';
 import {useParams, Link, useNavigate} from 'react-router-dom';
