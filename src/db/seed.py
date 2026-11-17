@@ -80,6 +80,10 @@ _SEED_LOCKS: dict[str, asyncio.Lock] = {}
 
 
 def extract_pgn_metadata(raw_pgn: str, fallback_result: str = "*") -> dict[str, str | None]:
+    """
+    Результат, дата, место и код дебюта из заголовков PGN; чего в заголовках нет — пустое значение (для результата —
+    fallback_result).
+    """
     result_str = fallback_result or "*"
     pgn_date: str | None = None
     site: str | None = None
@@ -129,6 +133,7 @@ def get_champion_meta(username_or_id: str) -> dict | None:
 
 
 def find_champion_pgn_file(champ_id: str) -> Path | None:
+    """Локальный файл PGN чемпиона в папках архива (PGNS_DIRS) или None, если его нет."""
     target_lower = f"{champ_id.lower()}.pgn"
     alt_lower = f"{champ_id.lower()}_all_games.pgn"
 
@@ -204,6 +209,10 @@ def _split_pgn_games(content: str) -> list[str]:
 
 
 async def ensure_champion_seeded(db: AsyncSession, username_or_id: str) -> User | None:
+    """
+    Гарантирует, что чемпион и его партии есть в базе: создаёт записи игроков, читает PGN (локальный или скачанный) и
+    добавляет партии, которых ещё нет. Одновременные вызовы для одного чемпиона выполняются по очереди (_SEED_LOCKS).
+    """
     meta = get_champion_meta(username_or_id)
     if not meta:
         return None
@@ -349,6 +358,7 @@ async def ensure_champion_seeded(db: AsyncSession, username_or_id: str) -> User 
 
 
 async def seed_all_champions() -> None:
+    """Полный импорт архива: все чемпионы из CHAMPIONS_META, с печатью числа партий каждого."""
     print(f"=== Полный импорт архивов 21 чемпиона мира (Корень: {PROJECT_ROOT}) ===")
     async with AsyncSessionLocal() as db:
         for _, meta in CHAMPIONS_META.items():

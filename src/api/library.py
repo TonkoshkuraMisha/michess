@@ -74,6 +74,10 @@ async def collections(db: AsyncSession = Depends(get_db), user: User | None = De
 async def collection_games(collection_id: int = Path(..., ge=1), offset: int = Query(0, ge=0),
                            limit: int = Query(PAGE, ge=1, le=200), db: AsyncSession = Depends(get_db),
                            user: User | None = Depends(optional_user)):
+    """
+    Партии коллекции библиотеки, постранично. Коллекция, которую этот посетитель видеть не должен, отвечает как
+    несуществующая.
+    """
     collection = await db.scalar(select(LibraryCollection).where(LibraryCollection.id == collection_id,
                                                                  library.visible_clause(user)))
     if collection is None:
@@ -161,6 +165,10 @@ async def miniatures(count: int = Query(10, ge=1, le=20), seed: int | None = Que
 @router.get("/games/{game_id}")
 async def game(game_id: int = Path(..., ge=1), db: AsyncSession = Depends(get_db),
                user: User | None = Depends(optional_user)):
+    """
+    Партия библиотеки для просмотра: заголовки, ходы, коллекции, в которых она лежит (только видимые посетителю), и
+    аннотация, если есть.
+    """
     found = await _visible_game_or_404(db, game_id, user)
     in_collections = (await db.execute(
         select(LibraryCollection.id, LibraryCollection.name)

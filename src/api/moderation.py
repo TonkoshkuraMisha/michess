@@ -73,6 +73,7 @@ async def my_status(db: AsyncSession = Depends(get_db), user: User = Depends(get
 
 @router.post("/reports", status_code=status.HTTP_201_CREATED)
 async def create_report(payload: ReportIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Жалоба на игрока или на сообщение в чате партии."""
     target = (await db.execute(select(User).where(func.lower(User.username) == payload.target.lower()))).scalar_one_or_none()
     if target is None:
         raise ApiError(404, "user_not_found", username=payload.target)

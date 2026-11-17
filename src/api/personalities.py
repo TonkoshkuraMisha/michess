@@ -141,6 +141,10 @@ async def list_personalities(db: AsyncSession = Depends(get_db), user: User = De
 async def create_personality(
         payload: PersonalityIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
+    """
+    Сохраняет соперника, собранного в мастерской. Ограничения: не больше MAX_PERSONALITIES_PER_USER на игрока, имя не
+    повторяется среди его соперников.
+    """
     if await _count(db, user.id) >= MAX_PERSONALITIES_PER_USER:
         raise ApiError(status.HTTP_409_CONFLICT, "personality_limit", max=MAX_PERSONALITIES_PER_USER)
     if await _name_taken(db, user.id, payload.name):
@@ -195,6 +199,7 @@ async def update_personality(
         db: AsyncSession = Depends(get_db),
         user: User = Depends(get_current_user),
 ):
+    """Меняет имя и/или настройки сохранённого соперника (только своего)."""
     personality = await get_owned_personality(db, user.id, personality_id)
     if payload.name is not None:
         if await _name_taken(db, user.id, payload.name, except_id=personality.id):

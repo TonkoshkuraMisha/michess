@@ -198,6 +198,10 @@ class BotMoveResponse(BaseModel):
 
 
 class CustomBotMoveRequest(BaseModel):
+    """
+    Запрос хода соперника мастерской: позиция и либо настройки характера, либо id сохранённой персоналии (не оба
+    сразу).
+    """
     config: BotPersonalityConfig | None = Field(
         default=None, description="Характер соперника (ползунки, веса фигур, сила); по умолчанию — сбалансированный",
     )
@@ -214,6 +218,10 @@ class CustomBotMoveRequest(BaseModel):
 
 
 class BotGameSaveRequest(BaseModel):
+    """
+    Сыгранная партия с ботом для сохранения: соперник, цвет игрока, ходы, заявленный итог, контроль времени и признаки
+    особой партии (лестница, турнир, наставник, вслепую, своя начальная позиция). Итог сервер определяет сам.
+    """
     bot_id: str = Field(..., description="ID исторического бота или 'custom' — персоналия из мастерской")
     personality_id: int | None = Field(default=None, description="Для bot_id='custom': сохранённая персоналия")
     personality_name: str | None = Field(
@@ -243,6 +251,10 @@ class BotGameSaveRequest(BaseModel):
 
 
 class BotGameSaveResponse(BaseModel):
+    """
+    Ответ на сохранение: id партии и её итог, исход для лестницы, турнир и причина технического поражения в нём,
+    изменение рейтинга.
+    """
     game_id: int
     status: str
     result: str

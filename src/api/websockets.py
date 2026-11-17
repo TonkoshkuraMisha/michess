@@ -160,6 +160,10 @@ class _Ignore(Exception):
 
 @dataclass
 class ActionContext:
+    """
+    Контекст одного действия WebSocket: игрок и короткая сессия базы. send и error сначала освобождают сессию, затем
+    отправляют ответ.
+    """
     user: User
     db: AsyncSession
 
@@ -197,6 +201,10 @@ class ActionContext:
 
 @dataclass
 class GameRef:
+    """
+    Партия, над которой выполняется действие: id, состояние и игроки; broadcast рассылает событие обоим игрокам и
+    зрителям.
+    """
     game_id: int
     state: dict
     white_id: int
@@ -845,6 +853,11 @@ async def matchmaking_endpoint(
         current_user: User = Depends(get_current_user_ws),
         session_factory: async_sessionmaker[AsyncSession] = Depends(get_session_factory),
 ):
+    """
+    Соединение игрока: регистрирует его, запоминает адрес (для правила честной игры), отправляет снимок идущей партии
+    и затем обрабатывает сообщения одно за другим, пока соединение открыто. За поток отклонённых сообщений соединение
+    закрывается.
+    """
     await manager.connect(websocket, current_user.id)
     # Адрес игрока нужен правилу честной игры: запрос движка без токена с этого же адреса
     # во время его партии отклоняется.

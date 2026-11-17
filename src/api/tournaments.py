@@ -49,6 +49,10 @@ class TournamentCreate(BaseModel):
 
 
 class PlayerOut(BaseModel):
+    """
+    Участник турнира для клиента: номер посева, кто это (игрок, бот, персоналия), рейтинг, место и настройки характера
+    соперника мастерской.
+    """
     seat: int
     kind: str
     user_id: int | None
@@ -62,6 +66,7 @@ class PlayerOut(BaseModel):
 
 
 class GameOut(BaseModel):
+    """Партия турнира для клиента: тур, доска, стадия, участники по номерам посева, контроль и результат."""
     id: int
     round: int
     board: int
@@ -84,6 +89,7 @@ class StandingOut(BaseModel):
 
 
 class TournamentOut(BaseModel):
+    """Турнир целиком: параметры, участники, партии, таблица и место игрока."""
     id: int
     format: str
     size: int
@@ -105,6 +111,10 @@ class TournamentOut(BaseModel):
 
 
 class TournamentSummary(BaseModel):
+    """
+    Строка списка турниров игрока: формат, статус, место, этап карьеры или историческое событие и готова ли его партия
+    текущего тура.
+    """
     id: int
     format: str
     size: int
@@ -138,6 +148,10 @@ def _game(g: TournamentGame) -> GameOut:
 
 
 async def view(db: AsyncSession, tournament: Tournament, user: User) -> TournamentOut:
+    """
+    Собирает турнир для клиента: участники, партии и таблица (для кругового и швейцарки — по правилам
+    tournament_rules).
+    """
     await bot_selfplay.refresh(db)
     players = await service.players_of(db, tournament.id)
     games = await service.games_of(db, tournament.id)
@@ -169,6 +183,10 @@ async def owned(db: AsyncSession, tournament_id: int, user: User) -> Tournament:
 async def create_tournament(
         payload: TournamentCreate, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user),
 ):
+    """
+    Создаёт турнир игрока: соперники заданы списком или подбираются случайно около его рейтинга; партии ботов первого
+    тура сразу ставятся в очередь симуляции.
+    """
     try:
         if payload.random is not None:
             category = classify_time_control(payload.base_time_ms, payload.increment_ms)
@@ -186,6 +204,7 @@ async def create_tournament(
 
 @router.get("", response_model=list[TournamentSummary])
 async def list_tournaments(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Турниры игрока, новые первыми, с отметкой, где его партия текущего тура ждёт хода."""
     rows = (await db.execute(
         select(Tournament, TournamentPlayer.place)
         .join(TournamentPlayer, (TournamentPlayer.tournament_id == Tournament.id) & (TournamentPlayer.user_id == user.id))
@@ -219,6 +238,7 @@ async def career_overview(db: AsyncSession = Depends(get_db), user: User = Depen
 @router.post("/career/{stage_key}", response_model=TournamentOut, status_code=status.HTTP_201_CREATED)
 async def start_career_stage(stage_key: str, db: AsyncSession = Depends(get_db),
                              user: User = Depends(get_current_user)):
+    """Начинает турнир этапа карьеры; закрытый этап — 403, неизвестный — 404."""
     try:
         tournament = await career.start_stage(db, user, stage_key)
     except DomainError as exc:
