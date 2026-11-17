@@ -1,12 +1,14 @@
 // --- FILE: frontend/src/components/social/SocialHeader.tsx ---
 // Шапка (таск 17.1): поиск игрока и центр уведомлений (колокольчик). Колокольчик спрашивает сервер раз в
-// POLL_MS и сразу — по событию "notification" из сокета (он открыт на главной доске).
+// POLL_MS и сразу — по событию "notification" из сокета (он открыт на главной доске). Непрочитанные личные сообщения
+// (таск 30.1) входят в число на колокольчике; первая строка списка ведёт в «Сообщения».
 
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Link, useNavigate} from 'react-router-dom';
-import {Bell, Search} from 'lucide-react';
+import {Bell, MessageSquare, Search} from 'lucide-react';
 import {useI18n} from '../../i18n';
 import {gameSocket} from '../../services/gameSocket';
+import {messagesApi} from '../../services/messages';
 import {notificationLink, socialApi} from '../../services/social';
 import type {AppNotification, Inbox, PlayerCard} from '../../services/social';
 
@@ -86,11 +88,13 @@ export function NotificationBell() {
     const {t} = useI18n();
     const navigate = useNavigate();
     const [inbox, setInbox] = useState<Inbox>({unread: 0, items: []});
+    const [dmUnread, setDmUnread] = useState(0);
     const [open, setOpen] = useState(false);
     const alive = useRef(true);
 
     const refresh = useCallback(() => {
         socialApi.notifications().then((r) => alive.current && setInbox(r)).catch(() => undefined);
+        messagesApi.unread().then((r) => alive.current && setDmUnread(r.unread)).catch(() => undefined);
     }, []);
 
     useEffect(() => {
@@ -99,10 +103,14 @@ export function NotificationBell() {
         const timer = window.setInterval(refresh, POLL_MS);
         const onNotification = () => refresh();
         gameSocket.on('notification', onNotification);
+        gameSocket.on('direct_message', onNotification);
+        window.addEventListener('michess:dm-changed', onNotification);
         return () => {
             alive.current = false;
             window.clearInterval(timer);
             gameSocket.off('notification', onNotification);
+            gameSocket.off('direct_message', onNotification);
+            window.removeEventListener('michess:dm-changed', onNotification);
         };
     }, [refresh]);
 
@@ -120,16 +128,21 @@ export function NotificationBell() {
                     data-testid="notification-bell"
                     className="relative p-2 hover:bg-black/30 rounded-md transition text-boxwood/85 hover:text-amber-300">
                 <Bell size={19}/>
-                {inbox.unread > 0 && (
+                {inbox.unread + dmUnread > 0 && (
                     <span data-testid="notification-badge"
                           className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 rounded-full bg-rose-600 text-white text-[10px] leading-4 text-center">
-                        {inbox.unread > 9 ? '9+' : inbox.unread}
+                        {inbox.unread + dmUnread > 9 ? '9+' : inbox.unread + dmUnread}
                     </span>
                 )}
             </button>
             {open && (
                 <div className="absolute right-0 top-11 w-72 max-h-96 overflow-y-auto bg-[#1A120B] border border-amber-900/60 rounded-md shadow-xl p-2 z-50"
                      data-testid="notification-list">
+                    <Link to="/messages" onClick={() => setOpen(false)} data-testid="notification-messages"
+                          className="flex items-center justify-between gap-2 px-2 py-1.5 mb-1 rounded hover:bg-black/40 text-sm border-b border-amber-900/40">
+                        <span className="flex items-center gap-1.5"><MessageSquare size={14}/> {t('dm.title')}</span>
+                        {dmUnread > 0 && <span className="text-xs text-rose-300">{t('dm.newCount', {count: dmUnread})}</span>}
+                    </Link>
                     {inbox.items.length === 0 && <p className="text-sm text-boxwood/70 px-2 py-1">{t('social.noNotifications')}</p>}
                     {inbox.items.map((n) => (
                         <button key={n.id} type="button" onClick={() => {
