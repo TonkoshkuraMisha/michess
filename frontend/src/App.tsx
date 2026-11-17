@@ -52,6 +52,7 @@ import {CHAMPIONS_LIST} from './config/champions';
 import {API_BASE_URL} from './config/api';
 import {gameSocket} from './services/gameSocket';
 import * as auth from './services/authToken';
+import {isLearningPath, setCheckSounds} from './services/soundEngine';
 
 import {
     Swords,
@@ -176,6 +177,11 @@ export default function App() {
     const location = useLocation();
     // Ссылка-приглашение (/?invite=КОД): код запоминается, из адреса убирается, гостю сразу открывается регистрация.
     const [inviteCode] = useState(() => new URLSearchParams(location.search).get('invite')?.trim() || undefined);
+
+    // Звук шаха — только в обучающих разделах; в партиях он отвлекает (решение владельца, 17.11).
+    useEffect(() => {
+        setCheckSounds(isLearningPath(location.pathname));
+    }, [location.pathname]);
 
     const isSingleScreenRoute =
         location.pathname === '/' ||

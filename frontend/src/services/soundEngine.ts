@@ -285,11 +285,34 @@ class SoundEngine {
 export const soundEngine = new SoundEngine();
 
 /**
+ * Звук шаха — только в обучении (решение владельца, 17.11): в уроках, задачах и тренажёрах он подсказывает, что
+ * король под ударом, а в партиях — рейтинговых, с ботами, турнирных, любых — раздражает и отвлекает. Режим
+ * переключает App по адресу страницы (isLearningPath); вне обучения ход с шахом звучит как обычный ход или взятие.
+ */
+let checkSounds = false;
+
+export function setCheckSounds(enabled: boolean): void {
+    checkSounds = enabled;
+}
+
+export function checkSoundsEnabled(): boolean {
+    return checkSounds;
+}
+
+const LEARNING_PATHS = ['/learn', '/puzzles', '/train', '/workout', '/programs', '/guess'];
+
+/** Обучающий раздел: школа и курс, задачи, тренажёры, разминка, программы, «Угадай ход»; и тренировка репертуара. */
+export function isLearningPath(pathname: string): boolean {
+    if (/^\/repertoire\/[^/]+\/drill\/?$/.test(pathname)) return true;
+    return LEARNING_PATHS.some((prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`));
+}
+
+/**
  * Определяет подходящий звуковой эффект хода по его нотации SAN.
  */
 export function resolveMoveSound(san?: string | null): SoundEventType {
     if (!san) return 'move';
-    if (san.includes('#') || san.includes('+')) return 'check';
+    if (checkSounds && (san.includes('#') || san.includes('+'))) return 'check';
     if (san.includes('=')) return 'promote';
     if (san.startsWith('O-O')) return 'castle';
     if (san.includes('x')) return 'capture';
