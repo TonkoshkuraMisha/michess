@@ -123,6 +123,9 @@ SIGNATURE_OPENINGS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "metger": ((), ("Four Knights Game: Spanish Variation, Symmetrical Variation, Metger Unpin",)),
     "kmoch": (("Nimzo-Indian Defense: Kmoch Variation",), ()),
     "romih": ((), ("Semi-Slav Defense: Romih Variation",)),
+    "levitsky": (("Queen's Pawn Game: Levitsky Attack",), ()),
+    "macleod": (("King's Pawn Game: MacLeod Attack",), ()),
+    "hanham": ((), ("Philidor Defense: Hanham Variation",)),
 }
 
 
@@ -481,5 +484,36 @@ GUESTS: tuple[Guest, ...] = (
     _guest("monticelli", "Monticelli, Mario", "1902–1995", 2150, aggression=30, mobility=130, randomness=25),
     _guest("grau", "Grau, Roberto", "1900–1944", 2100, aggression=10, center_control=130, randomness=25),
     _guest("romih", "Romih, Max", "1893–1979", 2000, aggression=10, randomness=30),
+
+    # --- Десятая партия турниров (28.4): Нью-Йорк 1889, Киев 1903 ------------------------------------------------
+    _guest("lipschutz", "Lipschuetz, Samuel", "1863–1905", 2150, aggression=10, pawn_structure=130, randomness=20),
+    _guest("judd", "Judd, Max", "1851–1906", 2050, aggression=20, randomness=25),
+    _guest("burille", "Burille, Constant Ferdinand", "1866–1914", 1950, aggression=10, randomness=30),
+    # Майор армии северян; вариант Ганема в защите Филидора.
+    _guest("hanham", "Hanham, James Moore", "1840–1923", 1950, aggression=-20, king_safety=130, randomness=30),
+    _guest("gossip", "Gossip, George H. D.", "1841–1907", 1900, aggression=20, randomness=35),
+    _guest("martinez", "Martinez, Dion", "1837–1928", 1950, aggression=20, randomness=30),
+    # Брат Дэвида Грэма Бэрда (baird).
+    _guest("baird_john", "Baird, John Washington", "1852–1923", 1850, aggression=0, randomness=35),
+    _guest("macleod", "MacLeod, Nicholas", "1870–1965", 1800, aggression=20, randomness=40),
+    # Годы жизни источником не подтверждены.
+    _guest("yurevich", "Yurevich, Vladimir", None, 2100, aggression=20, randomness=25),
+    _guest("lowtzky", "Lowtzky, Moishe", "1880–1940", 2100, aggression=20, mobility=130, randomness=25),
+    # Атака Левитского: 1.d4 d5 2.Сg5.
+    _guest("levitsky", "Levitsky, Stepan", "1876–1924", 2100, aggression=30, mobility=130, randomness=25),
+    _guest("izbinsky", "Izbinsky, Stefan", "1884–1912", 2000, aggression=20, randomness=30),
+    _guest("lebedev", "Lebedev, Sergey", "1868–1942", 2000, aggression=0, randomness=30),
+    # Годы жизни неизвестны.
+    _guest("kulomzin", "Kulomzin, Viacheslav", None, 1950, aggression=0, randomness=30),
+    # Годы жизни неизвестны.
+    _guest("kalinsky", "Kalinsky, N.", None, 1900, aggression=0, randomness=35),
+    # Киевлянин; годы жизни неизвестны.
+    _guest("benko", "Benko, P. P.", None, 1900, aggression=0, randomness=35),
+    # Киевлянин; годы жизни неизвестны.
+    _guest("nikolaev", "Nikolaev, Boris", None, 1800, aggression=0, randomness=40),
+    # Умер в 1905 году, год рождения неизвестен.
+    _guest("stamm", "Stamm, Wilhelm von", None, 1700, aggression=0, randomness=40),
+    # Киевлянин; выбыл из турнира 1903 года. Годы жизни неизвестны.
+    _guest("breev", "Breev, V. V.", None, 1600, aggression=0, randomness=45),
 )
 GUESTS_BY_ID = {guest.id: guest for guest in GUESTS}

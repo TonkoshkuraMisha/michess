@@ -341,6 +341,22 @@ _EVENTS: tuple[Event, ...] = (
         ("ahues", 8.5), ("spielmann", 8), ("vidmar", 8), ("maroczy", 7.5), ("tartakower", 7.5), ("colle", 6.5),
         ("kmoch", 6.5), ("araiza", 4.5), ("monticelli", 4), ("grau", 3.5), ("romih", 2.5),
     )),
+    # Шестой американский шахматный конгресс: двадцать участников в два круга — один из самых длинных турниров в
+    # истории. Чигорин и Вейс разделили первое место.
+    Event("new_york_1889", 1889, "round_robin", _table(
+        ("chigorin", 29), ("weiss", 29), ("gunsberg", 28.5), ("blackburne", 27), ("burn", 26), ("lipschutz", 25.5),
+        ("mason", 22), ("judd", 20), ("delmar", 18), ("showalter", 18), ("pollock", 17.5), ("bird", 17),
+        ("taubenhaus", 17), ("baird", 16), ("burille", 15), ("hanham", 14), ("gossip", 13.5), ("martinez", 13.5),
+        ("baird_john", 7), ("macleod", 6.5),
+    ), cycles=2),
+    # Третий Всероссийский турнир мастеров в Киеве: девятнадцать участников в один круг (несыгранные партии
+    # выбывшего Бреева засчитаны соперникам). Победил Чигорин.
+    Event("kyiv_1903", 1903, "round_robin", _table(
+        ("chigorin", 15), ("bernstein", 14), ("yurevich", 13.5), ("salwe", 13), ("rubinstein", 11.5),
+        ("znosko_borovsky", 11), ("lowtzky", 11), ("levitsky", 10.5), ("izbinsky", 9.5), ("lebedev", 9.5),
+        ("rabinovich_abram", 8.5), ("schiffers", 8.5), ("kulomzin", 8), ("kalinsky", 7.5), ("dus_chotimirsky", 7),
+        ("benko", 6.5), ("nikolaev", 4.5), ("stamm", 2), ("breev", 0),
+    )),
 )
 # Лента — по годам; турниры одного года — по ключу.
 EVENTS: tuple[Event, ...] = tuple(sorted(_EVENTS, key=lambda event: (event.year, event.key)))
