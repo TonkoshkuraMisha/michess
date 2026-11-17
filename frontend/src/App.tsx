@@ -103,6 +103,10 @@ export default function App() {
     const {t, language, setLanguage} = useI18n();
     // Токен — в памяти (services/authToken): при загрузке вход восстанавливается по httpOnly-cookie (таск 17.5).
     const [token, setToken] = useState<string | null>(() => auth.getToken());
+    // Страницы рисуются после первой попытки восстановить вход (cookie → токен). Иначе при прямом заходе и при
+    // обновлении страницы они запрашивали данные раньше, чем появлялся токен, и получали 401: «Машина времени»
+    // показывала «Не удалось загрузить турниры», страница турнира — ошибку, список турниров оставался пустым.
+    const [sessionChecked, setSessionChecked] = useState<boolean>(() => auth.getToken() !== null);
     const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
     const [profileRetry, setProfileRetry] = useState(0);
 
@@ -181,6 +185,7 @@ export default function App() {
             }
         });
         void Promise.resolve(auth.restoreSession()).then((restored) => {
+            setSessionChecked(true);
             if (inviteCode && !restored) setShowAuthModal(true);
         });
         return unsubscribe;
@@ -696,6 +701,10 @@ export default function App() {
                 }`}
             >
                 <PageErrorBoundary resetKey={location.pathname}>
+                {!sessionChecked ? (
+                    // Пока неизвестно, вошёл ли игрок: место страницы пустое (доли секунды), шапка уже на месте.
+                    <div className="flex-1" data-testid="session-restoring" aria-busy="true"/>
+                ) : (
                 <Routes>
                     <Route path="/" element={<Chessboard key={token ? token : 'guest'}/>}/>
                     <Route path="/challenge/:inviteCode" element={<Chessboard key={token ? token : 'guest'}/>}/>
@@ -764,6 +773,7 @@ export default function App() {
                         }
                     />
                 </Routes>
+                )}
                 </PageErrorBoundary>
             </main>
             <TranslationHelper/>
