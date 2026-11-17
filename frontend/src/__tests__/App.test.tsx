@@ -88,6 +88,35 @@ describe('App: просмотр партии на одном экране', () =
     });
 });
 
+describe('App: меню в шапке на средних ширинах', () => {
+    // На 768–1320 px подписи пунктов скрыты (остаются значки): у каждого пункта должны быть подсказка и доступное
+    // имя, а сама подпись — в отдельном элементе, который показывается с ширины, где шапка помещается.
+    it('у каждого пункта меню — подсказка, доступное имя и подпись, скрываемая на узкой шапке', () => {
+        renderApp('/library');
+        const nav = screen.getByRole('navigation');
+        const items = [...within(nav).getAllByRole('link'), within(nav).getByRole('button')];
+        expect(items).toHaveLength(7);
+        for (const item of items) {
+            const name = item.getAttribute('aria-label');
+            expect(name, item.textContent ?? '').toBeTruthy();
+            expect(item.getAttribute('title')).toBe(name);
+            const label = within(item).getByText(name!);
+            expect(label.className).toMatch(/^hidden min-\[1(320|440)px\]:inline$/);
+        }
+        // Турниры и таблица лидеров различимы и без подписей: значки у них разные.
+        const icon = (name: string) => within(nav).getByRole('link', {name}).querySelector('svg')?.getAttribute('class');
+        expect(icon('Турниры')).not.toBe(icon('Лидеры'));
+    });
+
+    it('длинное имя игрока в шапке обрезается, а не растягивает её', async () => {
+        setToken('jwt');
+        renderApp('/library');
+        const name = await screen.findByTitle('alice');
+        expect(name.className).toContain('truncate');
+        expect(name.className).toContain('max-w-[7rem]');
+    });
+});
+
 describe('App: программа беты (таск 24.4)', () => {
     it('гость открывает «Сообщить о проблеме» из шапки', () => {
         renderApp('/puzzles');

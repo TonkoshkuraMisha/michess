@@ -58,6 +58,7 @@ import {
     Settings as SettingsIcon,
     LogIn,
     Crown,
+    Medal,
     ChevronDown,
     Trophy,
     Scale,
@@ -290,6 +291,13 @@ export default function App() {
     const ratingProvisional = Boolean(userProfile?.provisional?.includes('blitz'));
     const ratingLabel = ratingProvisional ? `${userRating}?` : String(userRating);
 
+    // Подписи пунктов меню видны с той ширины, где шапка помещается целиком; уже — остаются значки с подсказками.
+    // Замер 17.11 (без переносов, имя игрока обрезано до 7rem): гостю с подписями нужно до 1245 px, вошедшему
+    // игроку — до 1385 px: у него справа ещё поиск, уведомления и имя. Поэтому самая длинная подпись («Легенды
+    // шахмат», около 125 px) у игрока появляется позже остальных. Запас — не меньше 40 px: шрифты в сборке шире.
+    const navLabel = 'hidden min-[1320px]:inline';
+    const legendsLabel = token && userProfile ? 'hidden min-[1440px]:inline' : navLabel;
+
     return (
         <div
             className={`w-full flex flex-col text-paper font-sans select-none ${
@@ -298,85 +306,99 @@ export default function App() {
         >
             <header
                 className="h-14 shrink-0 bg-acacia-dark border-b-2 border-amber-900/60 px-3 sm:px-5 flex items-center justify-between shadow-heavy relative z-30">
-                <div className="flex items-center gap-7">
+                <div className="flex items-center gap-4 lg:gap-7">
                     <Link to="/" className="flex items-center gap-2.5 cursor-pointer group outline-none">
                         <div
                             className="w-9 h-9 rounded-md bg-boxwood flex items-center justify-center shadow-inner border border-amber-600/40 text-acacia-dark font-bold text-xl">
                             ♞
                         </div>
                         <span
-                            className={`hidden ${token && userProfile ? "sm:inline" : "min-[440px]:inline"} text-2xl font-extrabold tracking-wide text-boxwood-light group-hover:text-white transition`}>
+                            className={`hidden ${token && userProfile ? "sm:inline md:hidden lg:inline" : "min-[440px]:inline"} text-2xl font-extrabold tracking-wide text-boxwood-light group-hover:text-white transition`}>
                             michess
                         </span>
                     </Link>
 
-                    <nav className="hidden md:flex items-center gap-4 lg:gap-6 text-[15px] font-semibold text-boxwood/90">
+                    <nav className="hidden md:flex items-center gap-4 whitespace-nowrap text-[15px] font-semibold text-boxwood/90">
                         <Link
                             to="/"
+                            title={t('nav.play')}
+                            aria-label={t('nav.play')}
                             className={`flex items-center gap-2 transition ${
                                 location.pathname === '/' ? 'text-amber-300' : 'hover:text-amber-300'
                             }`}
                         >
-                            <Swords size={17}/> {t('nav.play')}
+                            <Swords size={17}/> <span className={navLabel}>{t('nav.play')}</span>
                         </Link>
 
                         <Link
                             to="/puzzles"
+                            title={t('nav.puzzles')}
+                            aria-label={t('nav.puzzles')}
                             className={`flex items-center gap-2 transition ${
                                 location.pathname === '/puzzles' ? 'text-amber-300' : 'hover:text-amber-300'
                             }`}
                         >
-                            <Puzzle size={17}/> {t('nav.puzzles')}
+                            <Puzzle size={17}/> <span className={navLabel}>{t('nav.puzzles')}</span>
                         </Link>
 
                         {/* Школа (14.2): три курса готовы — пункт вернулся в шапку (23.6). */}
                         <Link
                             to="/learn"
+                            title={t('learn.title')}
+                            aria-label={t('learn.title')}
                             className={`flex items-center gap-2 transition ${
                                 location.pathname.startsWith('/learn') ? 'text-amber-300' : 'hover:text-amber-300'
                             }`}
                         >
-                            <GraduationCap size={17}/> {t('learn.title')}
+                            <GraduationCap size={17}/> <span className={navLabel}>{t('learn.title')}</span>
                         </Link>
 
                         <Link
                             to="/tournaments"
+                            title={t('nav.tournaments')}
+                            aria-label={t('nav.tournaments')}
                             className={`flex items-center gap-2 transition ${
                                 location.pathname.startsWith('/tournaments') ? 'text-amber-300' : 'hover:text-amber-300'
                             }`}
                         >
-                            <Trophy size={17}/> {t('nav.tournaments')}
+                            <Trophy size={17}/> <span className={navLabel}>{t('nav.tournaments')}</span>
                         </Link>
 
                         {/* Тренажёры (19.1). */}
                         <Link
                             to="/train"
+                            title={t('trainers.title')}
+                            aria-label={t('trainers.title')}
                             className={`flex items-center gap-2 transition ${
                                 location.pathname.startsWith('/train') ? 'text-amber-300' : 'hover:text-amber-300'
                             }`}
                         >
-                            <Dumbbell size={17}/> {t('trainers.title')}
+                            <Dumbbell size={17}/> <span className={navLabel}>{t('trainers.title')}</span>
                         </Link>
 
                         <Link
                             to="/leaderboard"
+                            title={t('nav.leaderboard')}
+                            aria-label={t('nav.leaderboard')}
                             className={`flex items-center gap-2 transition ${
                                 location.pathname === '/leaderboard' ? 'text-amber-300' : 'hover:text-amber-300'
                             }`}
                         >
-                            <Trophy size={17}/> {t('nav.leaderboard')}
+                            <Medal size={17}/> <span className={navLabel}>{t('nav.leaderboard')}</span>
                         </Link>
 
                         <div className="relative" ref={championsMenuRef}>
                             <button
                                 onClick={() => setIsChampionsMenuOpen(!isChampionsMenuOpen)}
+                                title={t('nav.legends')}
+                                aria-label={t('nav.legends')}
                                 className={`flex items-center gap-2 transition outline-none cursor-pointer ${
                                     isChampionsMenuOpen || location.pathname.startsWith('/champions')
                                         ? 'text-amber-300'
                                         : 'hover:text-amber-300'
                                 }`}
                             >
-                                <Crown size={17}/> {t('nav.legends')}
+                                <Crown size={17}/> <span className={legendsLabel}>{t('nav.legends')}</span>
                                 <ChevronDown
                                     size={15}
                                     className={`transition-transform ${isChampionsMenuOpen ? 'rotate-180' : ''}`}
@@ -474,8 +496,9 @@ export default function App() {
                             >
                                 <PlayerAvatar username={username} avatar={userProfile.avatar}
                                               className="w-8 h-8 rounded border border-amber-900/50 shadow"/>
-                                <div className="flex flex-col items-start hidden sm:flex">
-                                    <span className="font-bold text-sm text-amber-200 leading-tight">{username}</span>
+                                <div className="flex-col items-start hidden sm:flex md:hidden lg:flex">
+                                    <span className="font-bold text-sm text-amber-200 leading-tight max-w-[7rem] truncate"
+                                          title={username}>{username}</span>
                                     <span
                                         className="text-xs text-amber-400 font-mono font-semibold"
                                         title={ratingProvisional ? t('nav.provisional') : undefined}>({ratingLabel})</span>
