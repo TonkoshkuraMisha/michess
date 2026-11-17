@@ -608,7 +608,7 @@ export const en = {
             hanham: {name: 'James Moore Hanham', shortName: 'Hanham', about: 'A major of the Union army in the Civil War, remembered for his opening ideas'},
             gossip: {name: 'George Gossip', shortName: 'Gossip', about: 'American-English master and chess writer'},
             martinez: {name: 'Dión Martínez', shortName: 'Martínez', about: 'Cuban-born master, one of the strongest players in Philadelphia'},
-            baird_john: {name: 'John Washington Baird', shortName: 'J. W. Baird', about: 'New York master, brother of David Graham Baird'},
+            baird_john: {name: 'John Washington Baird', shortName: 'J. W. Baird', about: 'American master, brother of David Graham Baird'},
             macleod: {name: 'Nicholas MacLeod', shortName: 'MacLeod', about: 'Canadian master'},
             yurevich: {name: 'Vladimir Yurevich', shortName: 'Yurevich', about: 'Moscow master; third at the All-Russian tournament of 1903'},
             lowtzky: {name: 'Moishe Lowtzky', shortName: 'Lowtzky', about: 'Ukrainian-Polish master from Kyiv'},
