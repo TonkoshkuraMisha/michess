@@ -13,6 +13,10 @@ from src.models.base import Base
 
 
 class Report(Base):
+    """
+    Заявка в очереди модератора: жалоба игрока, автоматическая проверка флага нечестной игры, апелляция или
+    придержанный текст. Решение записывается кодом.
+    """
     __tablename__ = "reports"
 
     id: Mapped[int] = mapped_column(primary_key=True)

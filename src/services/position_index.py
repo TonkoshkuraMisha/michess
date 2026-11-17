@@ -88,6 +88,7 @@ async def index_game(db: AsyncSession, game: Game) -> bool:
 
 @dataclass(frozen=True)
 class MoveStat:
+    """Статистика хода из позиции: победы белых, ничьи и победы чёрных; games — всего партий."""
     move_uci: str
     white_wins: int
     draws: int

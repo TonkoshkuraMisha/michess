@@ -60,6 +60,7 @@ async def tactics(db: AsyncSession, user_id: int) -> tuple[list[dict], list[dict
 
 
 async def mistakes(db: AsyncSession, user_id: int) -> dict:
+    """Ошибки в своих партиях: сколько личных задач всего, сколько исправлено и какие темы встречаются чаще других."""
     rows = (await db.execute(
         select(PersonalPuzzle.themes, PersonalPuzzle.done).where(PersonalPuzzle.user_id == user_id)
     )).all()
@@ -102,6 +103,10 @@ async def lessons_done(db: AsyncSession, user_id: int, prefix: str) -> int:
 
 
 async def skill_map(db: AsyncSession, user: User) -> dict:
+    """
+    Карта навыков игрока: тактика по разделам каталога, слабые темы, свои ошибки, тренажёры, дебюты, эндшпиль и
+    матовые конструкции.
+    """
     sections, weakest = await tactics(db, user.id)
     return {
         "username": user.username,

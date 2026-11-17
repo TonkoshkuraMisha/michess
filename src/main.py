@@ -99,6 +99,7 @@ async def lifespan(app: FastAPI):
 
 def create_app() -> FastAPI:
     # Документация API в продакшене не публикуется: она раскрывает все эндпоинты и схемы.
+    """Собирает приложение: CORS, метрики HTTP, единый формат ошибок проверки запроса и маршруты всех разделов."""
     docs_enabled = not settings.is_production
     app = FastAPI(
         title=settings.PROJECT_NAME,

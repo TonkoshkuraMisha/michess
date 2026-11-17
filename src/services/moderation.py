@@ -49,6 +49,10 @@ def chat_banned(user: User, now: datetime | None = None) -> bool:
 
 async def report(db: AsyncSession, reporter: User, target: User, kind: str, reason: str, comment: str | None,
                  message_text: str | None = None, game_id: int | None = None) -> Report:
+    """
+    Жалоба на игрока или на сообщение чата. На себя жаловаться нельзя; от одного игрока на другого — одна открытая
+    жалоба.
+    """
     if kind not in ("player", "message") or reason not in REASONS:
         raise DomainError("report_invalid")
     if target.id == reporter.id:
@@ -96,6 +100,7 @@ async def suggest_translation(db: AsyncSession, user: User, language: str, key: 
 
 
 async def appeal(db: AsyncSession, user: User, comment: str | None) -> Report:
+    """Апелляция игрока, помеченного флагом нечестной игры; одновременно может быть открыта одна."""
     if not user.is_cheater:
         raise DomainError("appeal_not_flagged")
     exists = await db.scalar(select(Report.id).where(
@@ -138,6 +143,10 @@ async def queue(db: AsyncSession) -> list[dict]:
 
 
 async def resolve(db: AsyncSession, moderator: User, report_id: int, action: str) -> Report:
+    """
+    Решение модератора по заявке (значения — ACTIONS): отклонить, предупредить, отключить чат, подтвердить или снять
+    флаг нечестной игры, выпустить или скрыть придержанный текст. Автор заявки получает уведомление.
+    """
     if not moderator.is_moderator:
         raise DomainError("moderator_only")
     if action not in ACTIONS:
@@ -180,6 +189,9 @@ def _parse_subject(subject: str) -> tuple[str, int]:
 
 
 async def load_text(db: AsyncSession, subject: str) -> DirectMessage | Post | PostComment:
+    """
+    Текст, на который пожаловались: личное сообщение, публикация или комментарий — по ссылке subject вида «вид:id».
+    """
     kind, key = _parse_subject(subject)
     item: DirectMessage | Post | PostComment | None
     if kind == "dm":

@@ -14,6 +14,10 @@ from src.models.base import Base
 
 
 class LessonProgress(Base):
+    """
+    Прогресс игрока в одном уроке: докуда дошёл и как ответил на контрольные вопросы. Одна строка на пару «игрок —
+    урок».
+    """
     __tablename__ = "lesson_progress"
     __table_args__ = (UniqueConstraint("user_id", "lesson_id", name="uq_lesson_progress_user_lesson"),)
 

@@ -25,6 +25,7 @@ PROVISIONAL_GAMES = 30
 
 
 def classify_time_control(base_time_ms: int, increment_ms: int) -> RatingCategory:
+    """Категория контроля времени по оценке длительности партии (границы — в описании модуля)."""
     estimated_s = base_time_ms / 1000 + ESTIMATED_MOVES * (increment_ms / 1000)
     if estimated_s < _BLITZ_THRESHOLD_S:
         return "bullet"

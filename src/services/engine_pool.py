@@ -85,6 +85,10 @@ class EngineBusyError(RuntimeError):
 
 
 class EnginePool:
+    """
+    Пул процессов Stockfish одного бинарника: не больше size процессов, свободные переиспользуются. acquire выдаёт
+    движок на время расчёта; если свободного нет дольше acquire_timeout_s — EngineBusyError.
+    """
     def __init__(self, engine_path: str, size: int, acquire_timeout_s: float):
         self.engine_path = engine_path
         self.size = max(1, int(size))
@@ -209,6 +213,10 @@ class EngineLease:
 
     @contextmanager
     def use(self, options: dict | None = None) -> Iterator[chess.engine.SimpleEngine]:
+        """
+        Движок аренды: при первом обращении берётся из пула и остаётся за арендой до её конца, при следующих только
+        перенастраивается. Ошибка движка возвращает его в пул.
+        """
         fresh = self._engine is None
         if self._engine is None:
             stack = ExitStack()

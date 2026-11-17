@@ -37,6 +37,10 @@ RANDOM_SHIFT: dict[str, int] = {"my_level": 0, "stronger": 200, "weaker": -200}
 
 @dataclass(frozen=True)
 class Stage:
+    """
+    Этап карьеры: формат, число участников, контроль времени и целевая сила соперников. gate — основной турнир, место
+    в тройке которого открывает это приглашение.
+    """
     key: str
     number: int
     format: tournaments_service.Format
@@ -129,6 +133,10 @@ def unlocked(stage: Stage, best: dict[str, int]) -> bool:
 
 
 async def overview(db: AsyncSession, user: User) -> list[dict]:
+    """
+    Карьера игрока: этапы с лучшим занятым местом и признаком «открыт». Скрытое приглашение не раскрывает ни
+    соперников, ни условий.
+    """
     best = await best_places(db, user)
     result = []
     for stage in STAGES:
@@ -149,6 +157,7 @@ async def overview(db: AsyncSession, user: User) -> list[dict]:
 
 
 async def start_stage(db: AsyncSession, user: User, key: str) -> Tournament:
+    """Создаёт турнир этапа карьеры; закрытый этап — отказ."""
     stage = STAGES_BY_KEY.get(key)
     if stage is None:
         raise DomainError("career_stage_unknown", stage=key)

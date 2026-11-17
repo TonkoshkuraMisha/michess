@@ -95,6 +95,10 @@ class SimulatedPlayer:
         self.rng = rng or random.Random()
 
     def choose_move(self, fen: str) -> dict:
+        """
+        Ход участника симуляции: из дебютной книги, иначе — случайный среди лучших ходов с весом, который падает с
+        потерей в оценке (чем ниже рейтинг, тем слабее падает) и растёт с бонусом стиля.
+        """
         board = chess.Board(fen)
         book = self.bot._book_move(board)
         if book is not None:

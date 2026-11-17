@@ -23,6 +23,10 @@ from src.models.base import Base
 
 
 class GameStatus(str, enum.Enum):
+    """
+    Статус партии: PENDING — создана, ещё не началась; IN_PROGRESS — идёт; COMPLETED — закончена с результатом;
+    ABORTED — отменена до первых ходов, рейтинг не меняется.
+    """
     PENDING = "PENDING"
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
@@ -30,6 +34,7 @@ class GameStatus(str, enum.Enum):
 
 
 class Game(Base):
+    """Одна партия любого вида. Что в каких полях и кто их пишет — в описании модуля выше."""
     __tablename__ = "games"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

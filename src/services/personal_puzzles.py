@@ -70,6 +70,10 @@ def obvious_capture(board: chess.Board, move: chess.Move) -> bool:
 
 
 def is_solvable(board: chess.Board, best: chess.Move, candidates: list[tuple[str, int]]) -> bool:
+    """
+    Объективно ли решаема задача: лучший ход — не очевидное взятие, он не единственный легальный и опережает второй по
+    силе ход на MIN_GAP (или матует, а второй — нет).
+    """
     if obvious_capture(board, best):
         return False
     if not candidates or candidates[0][0] != best.uci():
@@ -83,6 +87,7 @@ def is_solvable(board: chess.Board, best: chess.Move, candidates: list[tuple[str
 
 
 def themes_of(board: chess.Board, move: chess.Move) -> list[str]:
+    """Коды тем реестра, которые ход создаёт на доске, — по мотивам детектора наставника."""
     facts = analyze_move(board, move)
     after = board.copy(stack=False)
     after.push(move)
@@ -203,6 +208,7 @@ def _aware(value: dt.datetime) -> dt.datetime:
 
 
 def view(puzzle: PersonalPuzzle) -> dict:
+    """Личная задача для клиента: позиция, предыдущий ход, чей ход, темы и счётчики попыток. Решение не отдаётся."""
     board = chess.Board(puzzle.fen)
     return {
         "id": puzzle.id, "game_id": puzzle.game_id, "imported_game_id": puzzle.imported_game_id,
@@ -242,6 +248,10 @@ async def game_context(db: AsyncSession, puzzle: PersonalPuzzle, user: User) -> 
 
 
 async def summary(db: AsyncSession, user: User) -> dict:
+    """
+    Сводка личных задач игрока: сколько к повторению сейчас, сколько в работе, сколько освоено и когда подойдёт
+    следующая.
+    """
     now = _now()
     total = await db.scalar(select(func.count()).select_from(PersonalPuzzle).where(
         PersonalPuzzle.user_id == user.id, PersonalPuzzle.done.is_(False))) or 0

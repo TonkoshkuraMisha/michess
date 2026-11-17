@@ -17,6 +17,7 @@ ARCHETYPE_PREFIX = "archetype:"
 
 @dataclass(frozen=True)
 class Archetype:
+    """Архетип мастерской — вымышленный соперник: id, английское имя для PGN и настройки характера."""
     id: str
     pgn_name: str
     config: BotPersonalityConfig

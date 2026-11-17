@@ -84,6 +84,10 @@ async def create(host_id: int, username: str) -> dict:
 
 
 def view(room: dict, user_id: int | None) -> dict:
+    """
+    Состояние комнаты для участника: доска, чат, присутствующие и вопрос без верного ответа (ответ виден после
+    раскрытия). Ведущий дополнительно видит ответы участников.
+    """
     now = time.time()
     present = sorted(name for name, seen in room.get("seen", {}).items() if now - seen < PRESENCE_S)
     question = room.get("question")
@@ -123,6 +127,7 @@ async def set_board(code: str, user_id: int, state: dict) -> dict:
 
 
 async def say(code: str, user_id: int, username: str, text: str) -> dict:
+    """Сообщение в чат комнаты; хранятся последние CHAT_KEEP сообщений."""
     room = await _load(code)
     message = " ".join(text.split())[:MAX_TEXT]
     if not message:
@@ -164,6 +169,7 @@ async def ask(code: str, user_id: int, question: dict) -> dict:
 
 
 async def answer(code: str, user_id: int, username: str, value: str | int) -> dict:
+    """Ответ участника на вопрос ведущего: один раз, пока идёт время и ответ не раскрыт."""
     room = await _load(code)
     question = room.get("question")
     if not question or question.get("revealed") or time.time() > question["deadline"]:
@@ -178,6 +184,7 @@ async def answer(code: str, user_id: int, username: str, value: str | int) -> di
 
 
 async def reveal(code: str, user_id: int) -> dict:
+    """Ведущий раскрывает верный ответ на вопрос."""
     room = await _load(code)
     _host(room, user_id)
     if not room.get("question"):

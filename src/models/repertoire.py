@@ -14,6 +14,7 @@ from src.models.base import Base
 
 
 class Repertoire(Base):
+    """Репертуар игрока: название и цвет, за который он составлен."""
     __tablename__ = "repertoires"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -27,6 +28,10 @@ class Repertoire(Base):
 
 
 class RepertoireMove(Base):
+    """
+    Ход репертуара — ребро графа позиций: из позиции (EPD) делается ход. Перестановки ходов приходят в одну и ту же
+    позицию.
+    """
     __tablename__ = "repertoire_moves"
     __table_args__ = (UniqueConstraint("repertoire_id", "position", "move_uci", name="uq_repertoire_move"),)
 

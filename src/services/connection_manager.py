@@ -62,6 +62,10 @@ def _now_ms() -> int:
 
 
 class ConnectionManager:
+    """
+    Соединения WebSocket этого процесса и общее для всех процессов состояние в Redis: присутствие игроков, зрители,
+    доставка сообщений (подробно — в описании модуля).
+    """
     def __init__(self):
         self.worker_id = WORKER_ID
         self.active_connections: dict[int, WebSocket] = {}
@@ -174,6 +178,10 @@ class ConnectionManager:
     # ------------------------------------------------------------------ соединения
 
     async def connect(self, websocket: WebSocket, user_id: int):
+        """
+        Новое соединение игрока: принять, отметить присутствие в Redis, подписаться на канал его сообщений и сообщить
+        идущей партии, что игрок вернулся.
+        """
         uid = int(user_id)
         await websocket.accept()
         conn_id = uuid.uuid4().hex

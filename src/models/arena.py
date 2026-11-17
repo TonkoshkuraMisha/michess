@@ -13,6 +13,10 @@ from src.models.base import Base
 
 
 class Arena(Base):
+    """
+    Турнир между людьми: арена по времени или швейцарка по турам. Создаётся по расписанию
+    (src/services/arena_schedule.py) или как следующее деление переполненной арены (parent_id).
+    """
     __tablename__ = "arenas"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -39,6 +43,10 @@ class Arena(Base):
 
 
 class ArenaPlayer(Base):
+    """
+    Участник арены: очки, число партий и побед, текущая серия побед, а также рейтинг и конференция на момент входа —
+    они не меняются до конца арены.
+    """
     __tablename__ = "arena_players"
     __table_args__ = (UniqueConstraint("arena_id", "user_id", name="uq_arena_player"),)
 
@@ -73,6 +81,10 @@ class ArenaReminder(Base):
 
 
 class ArenaGame(Base):
+    """
+    Партия арены: ссылка на партию в games, кто играл каким цветом, результат и очки сторон. Пока result пуст, партия
+    идёт — итоги арены её ждут.
+    """
     __tablename__ = "arena_games"
 
     id: Mapped[int] = mapped_column(primary_key=True)

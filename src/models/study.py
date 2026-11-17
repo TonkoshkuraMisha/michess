@@ -10,6 +10,7 @@ from src.models.base import Base
 
 
 class StudyMaterial(Base):
+    """Материал клуба: занятие, сохранённое ведущим как урок в формате школы."""
     __tablename__ = "study_materials"
 
     id: Mapped[int] = mapped_column(primary_key=True)

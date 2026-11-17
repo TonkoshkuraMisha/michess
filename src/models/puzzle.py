@@ -14,6 +14,10 @@ from src.models.base import Base
 
 
 class Puzzle(Base):
+    """
+    Задача: позиция, решение, рейтинг сложности и идентификатор в источнике (повторная загрузка той же задачи
+    пропускается).
+    """
     __tablename__ = "puzzles"
     __table_args__ = (UniqueConstraint("source", "source_id", name="uq_puzzles_source"),)
 
@@ -45,6 +49,10 @@ class Puzzle(Base):
 
 
 class PuzzleTheme(Base):
+    """
+    Тема задачи — код реестра src/services/themes.py. Отдельная строка на каждую тему, чтобы задачи по теме выбирались
+    индексом.
+    """
     __tablename__ = "puzzle_themes"
 
     puzzle_id: Mapped[int] = mapped_column(ForeignKey("puzzles.id", ondelete="CASCADE"), primary_key=True)
@@ -143,6 +151,9 @@ class DrillRecord(Base):
 
 
 class PuzzleAttempt(Base):
+    """
+    Попытка игрока решить задачу и её итог. По попыткам считаются рейтинг решателя, прогресс по темам и карта навыков.
+    """
     __tablename__ = "puzzle_attempts"
 
     id: Mapped[int] = mapped_column(primary_key=True)

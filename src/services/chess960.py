@@ -52,6 +52,10 @@ def replay(number: int, moves: list[str]) -> Game:
 
 
 def push(board: chess.Board, uci: str) -> str:
+    """
+    Применяет ход игрока (запись UCI режима 960) и возвращает его SAN. Нелегальный ход или уже законченная партия —
+    отказ.
+    """
     if outcome(board)[0] is not None:
         raise DomainValueError("mini_game_over")
     try:
@@ -79,6 +83,7 @@ def outcome(board: chess.Board) -> tuple[str | None, str | None]:
 
 
 def bot_move(board: chess.Board, level: int) -> chess.Move:
+    """Ход бота в партии Фишера: Stockfish из пула с ограничением силы и времени по уровню (LEVELS)."""
     elo, seconds = LEVELS.get(level, LEVELS[2])
     path = resolve_stockfish_path()
     if path is None:

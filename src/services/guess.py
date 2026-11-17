@@ -72,6 +72,10 @@ def _game_context(game: Game, ply: int) -> dict:
 
 
 async def payload(db: AsyncSession, position: GuessPosition) -> dict:
+    """
+    Позиция «Угадай ход мастера» для клиента: доска, чей ход, сложность, место в серии и сведения о партии. Ход
+    мастера не отдаётся.
+    """
     game = await db.get(Game, position.game_id)
     series_length = 0
     if position.series_id is not None:

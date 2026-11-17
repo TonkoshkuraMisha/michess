@@ -10,6 +10,10 @@ from src.models.base import Base
 
 
 class UserAchievement(Base):
+    """
+    Достижение, открытое игроком: код достижения и дата. Одно достижение записывается один раз; условия проверяет
+    src/services/achievements.py.
+    """
     __tablename__ = "user_achievements"
     __table_args__ = (UniqueConstraint("user_id", "code", name="uq_user_achievement"),)
 

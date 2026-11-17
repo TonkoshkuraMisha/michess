@@ -223,6 +223,10 @@ def flag_outcome(board_fen: str | None, flagged_color: str) -> tuple[str, str]:
 
 
 class GameEngine:
+    """
+    Проверка и применение хода (process_move) — единственная точка, через которую ход партии с человеком попадает в
+    позицию.
+    """
     @staticmethod
     def process_move(fen: str, move_str: str, current_pgn: str = "") -> tuple[bool, dict | None]:
         """

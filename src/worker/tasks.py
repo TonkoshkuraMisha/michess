@@ -105,6 +105,10 @@ async def _analyze_imported_game_async(imported_id: int) -> int:
 
 @celery_app.task(name="analyze_imported_game", bind=True, max_retries=5, ignore_result=True)
 def analyze_imported_game_task(self, imported_id: int):
+    """
+    Задача Celery: разбор импортированной партии. При занятом пуле движков откладывается на ENGINE_BUSY_RETRY_S и
+    повторяется.
+    """
     try:
         with engine_work("analysis"):
             return asyncio.run(_analyze_imported_game_async(imported_id))

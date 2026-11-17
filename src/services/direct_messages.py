@@ -83,6 +83,11 @@ def _seen_by(me_id: int):
 
 async def send(db: AsyncSession, sender: User, recipient: User, body: str | None,
                attachment: tuple[str, str] | None, send_anyway: bool = False) -> DirectMessage:
+    """
+    Отправка личного сообщения: право писать (настройка получателя, чёрный список), текст и/или карточка-вложение,
+    квота, фильтр оскорблений (сработал — сообщение придерживается и уходит на проверку модератору), запись и доставка
+    в открытые вкладки.
+    """
     await check_write(db, sender, recipient)
     text = clean_body(body)
     card = await build_attachment(db, *attachment, author=sender) if attachment else None

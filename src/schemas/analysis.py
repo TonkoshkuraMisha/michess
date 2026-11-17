@@ -45,6 +45,10 @@ class CoachComment(BaseModel):
 
 
 class MoveEvaluationItem(BaseModel):
+    """
+    Один ход в разборе партии: номер и сторона, запись хода, оценка позиции после него, лучший ход движка, потеря в
+    сантипешках, класс хода и комментарий наставника.
+    """
     ply: int
     move_number: int
     color: str

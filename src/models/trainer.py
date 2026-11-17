@@ -13,6 +13,7 @@ from src.models.base import Base
 
 
 class TrainerResult(Base):
+    """Результат одной попытки в тренажёре: тренажёр, уровень, очки, время, ошибки."""
     __tablename__ = "trainer_results"
 
     id: Mapped[int] = mapped_column(primary_key=True)

@@ -40,6 +40,9 @@ def engine_name(path: str) -> str | None:
 
 
 def describe(path: str | None) -> dict:
+    """
+    Сведения о движке для страницы «О проекте»: название версии, лицензия и ссылка на исходники именно этой версии.
+    """
     name = engine_name(path) if path else None
     return {
         "name": name,

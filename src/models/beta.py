@@ -16,6 +16,10 @@ from src.models.base import Base
 
 
 class Invite(Base):
+    """
+    Код-приглашение для закрытой регистрации: лимит использований, срок действия, отзыв; uses — сколько человек уже
+    зарегистрировалось по коду.
+    """
     __tablename__ = "invites"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -32,6 +36,10 @@ class Invite(Base):
 
 
 class Feedback(Base):
+    """
+    Сообщение «Сообщить о проблеме»: текст игрока или гостя, контекст (страница, версия, язык, размер экрана) и статус
+    разбора модератором.
+    """
     __tablename__ = "feedback"
 
     id: Mapped[int] = mapped_column(primary_key=True)

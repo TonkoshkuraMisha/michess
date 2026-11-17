@@ -31,6 +31,10 @@ def _search(board: chess.Board, moves: int) -> tuple[int | None, list[chess.Move
 
 
 async def find_mate(fen: str, moves: int) -> dict:
+    """
+    Ищет мат не длиннее moves ходов: найден ли он, за сколько ходов и сама линия (в записи UCI и SAN). Поиск идёт в
+    отдельном потоке под лимитом времени.
+    """
     board = board_from_start_fen(fen)  # InvalidStartPositionError — невозможная позиция
     if board.is_game_over():
         return {"found": False, "mate_in": None, "line": [], "san": []}

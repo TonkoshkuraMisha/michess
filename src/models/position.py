@@ -12,6 +12,10 @@ from src.models.base import Base
 
 
 class PositionStat(Base):
+    """
+    Статистика одного хода из позиции: сколько партий через него прошло и чем они закончились (победы белых, ничьи,
+    победы чёрных).
+    """
     __tablename__ = "position_stats"
     __table_args__ = (UniqueConstraint("position_hash", "move_uci", name="uq_position_stats_move"),)
 

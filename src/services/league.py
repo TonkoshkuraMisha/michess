@@ -51,6 +51,10 @@ async def team_of(db: AsyncSession, user_id: int) -> Team | None:
 
 
 async def create_team(db: AsyncSession, user: User, name: str) -> Team:
+    """
+    Создаёт команду: имя от NAME_MIN до NAME_MAX знаков, уникальное без учёта регистра; игрок не должен состоять в
+    другой команде. Создатель становится владельцем и первым участником.
+    """
     clean = " ".join(name.split())
     if not NAME_MIN <= len(clean) <= NAME_MAX:
         raise DomainError("team_name_invalid", min=NAME_MIN, max=NAME_MAX)
@@ -68,6 +72,7 @@ async def create_team(db: AsyncSession, user: User, name: str) -> Team:
 
 
 async def join_team(db: AsyncSession, user: User, team_id: int) -> Team:
+    """Вступление в команду; игрок, уже состоящий в какой-либо команде, получает отказ."""
     team = await db.get(Team, team_id)
     if team is None:
         raise DomainError("team_not_found")
@@ -129,6 +134,7 @@ async def season_points(db: AsyncSession, season: str | None = None) -> tuple[st
 
 
 async def table(db: AsyncSession, season: str | None = None) -> dict:
+    """Таблица лиги за сезон: команды по убыванию очков, с числом участников и местом."""
     key, team_points, _ = await season_points(db, season)
     rows = (await db.execute(
         select(Team.id, Team.name, func.count(TeamMember.id)).join(TeamMember, TeamMember.team_id == Team.id)
@@ -142,6 +148,7 @@ async def table(db: AsyncSession, season: str | None = None) -> dict:
 
 
 async def team_view(db: AsyncSession, team_id: int, season: str | None = None) -> dict:
+    """Страница команды: состав по убыванию очков за сезон и сумма очков команды."""
     team = await db.get(Team, team_id)
     if team is None:
         raise DomainError("team_not_found")

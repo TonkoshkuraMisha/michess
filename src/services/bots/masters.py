@@ -20,6 +20,10 @@ from src.services.bots.personality import BotPersonalityConfig, PersonalityBot
 
 @dataclass(frozen=True)
 class Master:
+    """
+    Исторический мастер второй волны: id, имя для PGN, годы жизни, сила, настройки характера и признаки, по которым
+    его партии находятся в PGN.
+    """
     id: str
     pgn_name: str
     era: str

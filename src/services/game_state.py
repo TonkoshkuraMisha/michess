@@ -246,6 +246,10 @@ def next_timeout_deadline_ms(state: dict) -> int:
 
 
 class GameStateManager:
+    """
+    Состояние идущих партий в Redis и их завершение (подробно — в описании модуля). Единственный экземпляр —
+    state_manager.
+    """
     def __init__(self):
         self.redis = redis_client
         # game_id -> (сбоев подряд, не проверять раньше чем, ms) — для проверки таймаутов
@@ -437,6 +441,10 @@ class GameStateManager:
         await self.redis.hset(self._get_key(game_id), mapping=str_updates)
 
     async def clear_game_state(self, game_id: int):
+        """
+        Убирает партию из Redis после записи итога: состояние, журналы команд и ходов, отметки «игрок в партии», срок
+        проверки часов.
+        """
         state = await self.redis.hgetall(self._get_key(game_id))
         if state:
             await self.redis.delete(f"user:{state.get('white_id')}:current_game")
@@ -695,6 +703,10 @@ class GameStateManager:
                     continue
 
     async def sync_authoritative_state_to_db(self, db, game_id: int, res: dict):
+        """
+        Копирует состояние после хода в таблицу games (позиция, запись ходов, версия, очередь хода, часы): по ней
+        партия восстановится, если пропадёт из Redis.
+        """
         db_game = await db.get(Game, game_id)
         if not db_game:
             return
@@ -892,6 +904,10 @@ class GameStateManager:
         }
 
     async def handle_player_disconnect(self, user_id: int, manager):
+        """
+        Игрок отключился во время партии: в состоянии ставится отметка и момент отключения, сопернику сообщается,
+        сколько осталось ждать до поражения отключившегося. Часы продолжают идти.
+        """
         game_id_str = await self.redis.get(f"user:{user_id}:current_game")
         if not game_id_str:
             return
@@ -922,6 +938,10 @@ class GameStateManager:
         )
 
     async def handle_player_reconnect(self, user_id: int, manager):
+        """
+        Игрок вернулся в партию: отметка отключения снимается, соперник получает уведомление. Часы не трогаются — они
+        шли всё это время.
+        """
         game_id_str = await self.redis.get(f"user:{user_id}:current_game")
         if not game_id_str:
             return
@@ -994,6 +1014,10 @@ class GameStateManager:
             return True
 
     async def check_timeouts_loop(self, manager):
+        """
+        Бесконечный цикл, раз в полсекунды: если этот процесс — лидер, проверяет партии с подошедшим сроком (флаг,
+        неявка, брошенная партия) и периодически сверяет Redis с базой.
+        """
         while True:
             try:
                 if await self._hold_timeouts_leadership():

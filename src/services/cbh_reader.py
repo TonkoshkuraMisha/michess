@@ -142,6 +142,10 @@ class PieceOrder:
 
     @classmethod
     def initial(cls) -> PieceOrder:
+        """
+        Порядок фигур в начальной позиции. Формат записывает ход номером фигуры своего вида (первая ладья, вторая
+        ладья…), поэтому нужно знать, на каком поле стоит каждая.
+        """
         order = cls()
         for color, rank in ((chess.WHITE, 0), (chess.BLACK, 7)):
             pawn_rank = 1 if color == chess.WHITE else 6
@@ -278,6 +282,7 @@ def decode_moves(data: bytes) -> list[chess.Move]:
 
 @dataclass(frozen=True)
 class Header:
+    """Заголовок партии учебной базы: игроки, турнир, место, дата, тур, результат, рейтинги."""
     white: str
     black: str
     event: str
@@ -335,6 +340,10 @@ class Stats:
 
 @dataclass
 class Database:
+    """
+    Открытая учебная база: содержимое файлов индекса (.cbh), партий (.cbg), игроков (.cbp) и турниров (.cbt),
+    кодировка имён и счётчики пропущенных записей.
+    """
     base: Path  # путь без расширения
     index: bytes = b""
     games: bytes = b""
@@ -376,6 +385,9 @@ class Database:
         return _text(record[9:49], self.encoding), _text(record[49:79], self.encoding)
 
     def header(self, record: bytes) -> Header:
+        """
+        Заголовок партии из записи индекса: номера игроков и турнира, упакованная дата, тур, результат и рейтинги.
+        """
         def u24(at: int) -> int:
             return int.from_bytes(record[at:at + 3], "big")
 

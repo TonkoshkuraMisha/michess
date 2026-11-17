@@ -460,6 +460,11 @@ class HistoricalBot:
         return bot_comment(note or self.default_comment)
 
     def choose_move(self, fen: str) -> dict:
+        """
+        Ход бота в позиции: из дебютной книги, а когда книга кончилась — выбор стилем среди кандидатов движка (порядок
+        — в описании модуля). Возвращает словарь: ход в записи UCI и SAN, позицию после него, источник хода и реплику
+        бота.
+        """
         board = chess.Board(fen)
         if board.is_game_over():
             raise ValueError("Game is already over")
