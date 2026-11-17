@@ -4,6 +4,10 @@
 рейтинг — из них автор выбирает позиции урока и пишет тексты. Дальше урок сверяет scripts/verify_lessons.py.
 
     python scripts/dev/lesson_candidates.py intermezzo --min 1100 --max 1700 --count 6
+    python scripts/dev/lesson_candidates.py clearance --csv data/puzzles/lichess_subset.csv.gz   # без базы
+
+С --csv задачи читаются из файла в формате Lichess (PuzzleId, FEN, Moves, Rating, …, Themes), тема — имя Lichess
+(clearance, interference, quietMove…); база не нужна.
 """
 
 import argparse
@@ -39,6 +43,24 @@ async def _puzzles(theme: str, low: int, high: int, max_plies: int) -> list[tupl
     return [tuple(r) for r in rows if len(r[2].split()) <= max_plies]  # type: ignore[misc]
 
 
+def _puzzles_from_csv(path: Path, theme: str, low: int, high: int, max_plies: int,
+                      seed: int) -> list[tuple[str, str, str, int]]:
+    import csv
+    import gzip
+    import random
+
+    opener = gzip.open if path.suffix == ".gz" else open
+    with opener(path, "rt", encoding="utf-8") as handle:  # type: ignore[operator]
+        rows = [
+            (row["PuzzleId"], row["FEN"], row["Moves"], int(row["Rating"]))
+            for row in csv.DictReader(handle)
+            if theme in row["Themes"].split() and low <= int(row["Rating"]) <= high
+            and len(row["Moves"].split()) <= max_plies
+        ]
+    random.Random(seed).shuffle(rows)
+    return rows[:200]
+
+
 def _unique_line(engine, fen: str, moves: list[str], limit, gap: int) -> bool:
     board = chess.Board(fen)
     board.push_uci(moves[0])
@@ -70,6 +92,8 @@ def main() -> None:
     parser.add_argument("--plies", type=int, default=6, help="Длина решения в базе (с ходом соперника), не больше")
     parser.add_argument("--gap", type=int, default=150)
     parser.add_argument("--time", type=float, default=0.7)
+    parser.add_argument("--csv", type=Path, default=None, help="Файл задач в формате Lichess вместо базы")
+    parser.add_argument("--seed", type=int, default=1, help="Порядок задач из файла (воспроизводимо)")
     args = parser.parse_args()
 
     from src.services.bots.base import resolve_stockfish_path
@@ -79,7 +103,9 @@ def main() -> None:
         raise SystemExit("Stockfish не найден: python scripts/setup_stockfish.py")
     found = 0
     with chess.engine.SimpleEngine.popen_uci(path) as engine:
-        for source_id, fen, moves, rating in asyncio.run(_puzzles(args.theme, args.min, args.max, args.plies)):
+        puzzles = (_puzzles_from_csv(args.csv, args.theme, args.min, args.max, args.plies, args.seed) if args.csv
+                   else asyncio.run(_puzzles(args.theme, args.min, args.max, args.plies)))
+        for source_id, fen, moves, rating in puzzles:
             line = moves.split()
             if not _unique_line(engine, fen, line, chess.engine.Limit(time=args.time), args.gap):
                 continue
