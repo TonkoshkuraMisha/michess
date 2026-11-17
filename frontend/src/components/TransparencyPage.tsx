@@ -13,7 +13,7 @@ import {getToken} from '../services/authToken';
 import {fetchBotCatalog} from '../services/botCatalog';
 import type {BotStrength} from '../services/botCatalog';
 import {downloadMyGamesPgn, runUrl, transparencyApi} from '../services/transparency';
-import type {CalibrationMeta, CalibrationRun, PublicApiInfo} from '../services/transparency';
+import type {CalibrationMeta, CalibrationRun, PublicApiInfo, TuningLog} from '../services/transparency';
 
 interface Row extends BotStrength {
     key: string;
@@ -40,6 +40,7 @@ export function TransparencyPage({username = null}: { username?: string | null }
     const [meta, setMeta] = useState<CalibrationMeta | null>(null);
     const [runs, setRuns] = useState<CalibrationRun[]>([]);
     const [api, setApi] = useState<PublicApiInfo | null>(null);
+    const [tuning, setTuning] = useState<TuningLog | null>(null);
     const [openRun, setOpenRun] = useState<{ name: string; text: string } | null>(null);
     const [error, setError] = useState<UiMessage | null>(null);
     const [exportNote, setExportNote] = useState<UiMessage | null>(null);
@@ -58,6 +59,7 @@ export function TransparencyPage({username = null}: { username?: string | null }
             setRuns(body.runs);
         }).catch(() => undefined);
         transparencyApi.publicApi().then(setApi).catch(() => undefined);
+        transparencyApi.tuningLog().then(setTuning).catch(() => undefined);
     }, []);
 
     const showRun = async (name: string) => {
@@ -160,6 +162,50 @@ export function TransparencyPage({username = null}: { username?: string | null }
                         </tbody>
                     </table>
                 </div>
+            </section>
+
+            <section className={sectionClass} data-testid="transparency-tuning">
+                <h2 className={headingClass}>{t('transparency.tuningTitle')}</h2>
+                <p className="text-sm text-boxwood/85">
+                    {t('transparency.tuningIntro', {games: tuning?.rules.games ?? 20, drift: tuning?.rules.drift ?? 75})}
+                </p>
+                {tuning && tuning.entries.length === 0 && (
+                    <p className="text-sm text-boxwood/70" data-testid="tuning-empty">{t('transparency.tuningEmpty')}</p>
+                )}
+                {tuning && tuning.entries.length > 0 && (
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm" data-testid="tuning-table">
+                            <thead>
+                                <tr className="text-left text-boxwood/75 border-b border-amber-900/50">
+                                    <th className="py-1 pr-3 font-normal">{t('transparency.tuningCol.date')}</th>
+                                    <th className="py-1 pr-3 font-normal">{t('transparency.col.bot')}</th>
+                                    <th className="py-1 pr-3 font-normal">{t('transparency.tuningCol.measured')}</th>
+                                    <th className="py-1 pr-3 font-normal">{t('transparency.tuningCol.randomness')}</th>
+                                    <th className="py-1 font-normal">{t('transparency.tuningCol.guard')}</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {tuning.entries.map((entry, index) => {
+                                    const id = entry.key.replace(/^archetype:/, '');
+                                    const nameKey = `archetypes.${id}.name`;
+                                    return (
+                                        <tr key={`${entry.key}-${index}`} className="border-b border-amber-900/20" data-testid={`tuning-${entry.key}`}>
+                                            <td className="py-1 pr-3 whitespace-nowrap">
+                                                {entry.created_at ? format(parseISO(entry.created_at), 'd MMM yyyy', {locale: dateLocale}) : '—'}
+                                            </td>
+                                            <td className="py-1 pr-3">{hasMessage(nameKey) ? t(nameKey as MessageKey) : id}</td>
+                                            <td className="py-1 pr-3 font-mono">
+                                                {t('transparency.tuningMeasured', {measured: entry.measured, target: entry.target, games: entry.games})}
+                                            </td>
+                                            <td className="py-1 pr-3 font-mono">{entry.randomness[0]} → {entry.randomness[1]}</td>
+                                            <td className="py-1 font-mono">{entry.blunder_guard_cp[0]} → {entry.blunder_guard_cp[1]}</td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </section>
 
             <section className={sectionClass} data-testid="transparency-runs">

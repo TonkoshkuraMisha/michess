@@ -24,6 +24,11 @@ const RUNS = {
         {name: '2026-11-14_style.pgn', date: '2026-11-14', title: 'style', kind: 'pgn', size: 254127},
     ],
 };
+const TUNING = {
+    entries: [{key: 'archetype:blunderer', created_at: '2026-11-17T12:00:00Z', games: 20, measured: 1012, target: 900,
+        randomness: [40, 45], blunder_guard_cp: [200, 220]}],
+    rules: {games: 20, drift: 75},
+};
 const PUBLIC = {
     version: 1, rate_limit: {requests: 60, window_s: 60},
     endpoints: ['/api/v1/public', '/api/v1/public/players/{username}/games.pgn', '/api/v1/public/new-thing'],
@@ -38,7 +43,8 @@ function stub(pgn = '[Event "a"]\n\n1. e4 *\n\n[Event "b"]\n\n1. d4 *\n') {
             return {ok: true, text: async () => pgn, headers: new Headers({'X-Total-Count': pgn ? '2' : '0'})} as Response;
         }
         if (u.includes('/calibration/runs/')) return {ok: true, text: async () => '[1/2] morphy — anchor:1850: 1-0'} as Response;
-        const body = u.endsWith('/bots/catalog') ? CATALOG : u.endsWith('/calibration/runs') ? RUNS : PUBLIC;
+        const body = u.endsWith('/bots/catalog') ? CATALOG : u.endsWith('/calibration/runs') ? RUNS
+            : u.endsWith('/bots/tuning-log') ? TUNING : PUBLIC;
         return {ok: true, json: async () => body} as Response;
     }));
     return calls;
@@ -58,6 +64,16 @@ afterEach(() => {
 });
 
 describe('прозрачность', () => {
+    it('журнал подстройки самоигрой (таск 32.3): что измерено и как сдвинуты ползунки', async () => {
+        stub();
+        await renderPage();
+        const row = screen.getByTestId('tuning-archetype:blunderer');
+        expect(row).toHaveTextContent('1012 против 900 (партий: 20)');
+        expect(row).toHaveTextContent('40 → 45');
+        expect(row).toHaveTextContent('200 → 220');
+        expect(screen.getByTestId('transparency-tuning')).toHaveTextContent('После 20 партий');
+    });
+
     it('память ботов: рейтинг по партиям с людьми и поправка силы (таск 32.1)', async () => {
         stub();
         await renderPage();

@@ -67,3 +67,34 @@ class BotRivalStat(Base):
     games: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     points: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
     last_lost: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+
+
+class BotTuning(Base):
+    """Подстройка характера архетипа самоигрой (таск 32.3): текущие ползунки силы и копилка партий до проверки."""
+
+    __tablename__ = "bot_tunings"
+
+    key: Mapped[str] = mapped_column(String(40), primary_key=True)
+    randomness: Mapped[int] = mapped_column(Integer)
+    blunder_guard_cp: Mapped[int] = mapped_column(Integer)
+    games: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
+    points: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    opponents_rating: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class BotTuningLog(Base):
+    """Открытый журнал подстройки (страница прозрачности): что измерено и как сдвинуты ползунки."""
+
+    __tablename__ = "bot_tuning_log"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    key: Mapped[str] = mapped_column(String(40), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
+    games: Mapped[int] = mapped_column(Integer)
+    measured: Mapped[int] = mapped_column(Integer)
+    target: Mapped[int] = mapped_column(Integer)
+    randomness_before: Mapped[int] = mapped_column(Integer)
+    randomness_after: Mapped[int] = mapped_column(Integer)
+    guard_before: Mapped[int] = mapped_column(Integer)
+    guard_after: Mapped[int] = mapped_column(Integer)

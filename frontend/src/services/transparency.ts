@@ -38,12 +38,29 @@ async function get(path: string): Promise<Response> {
     return res;
 }
 
+/** Журнал подстройки характера самоигрой (таск 32.3). */
+export interface TuningEntry {
+    key: string;
+    created_at: string | null;
+    games: number;
+    measured: number;
+    target: number;
+    randomness: [number, number];
+    blunder_guard_cp: [number, number];
+}
+
+export interface TuningLog {
+    entries: TuningEntry[];
+    rules: { games: number; drift: number };
+}
+
 export const runUrl = (name: string) => `${API_BASE_URL}/api/v1/bots/calibration/runs/${encodeURIComponent(name)}`;
 
 export const transparencyApi = {
     runs: async () => (await get('/api/v1/bots/calibration/runs')).json() as Promise<{ calibration: CalibrationMeta | null; runs: CalibrationRun[] }>,
     runText: async (name: string) => (await get(`/api/v1/bots/calibration/runs/${encodeURIComponent(name)}`)).text(),
     publicApi: async () => (await get('/api/v1/public')).json() as Promise<PublicApiInfo>,
+    tuningLog: async () => (await get('/api/v1/bots/tuning-log')).json() as Promise<TuningLog>,
 };
 
 /** Сохранить текст файлом (ссылка-однодневка: CSP разрешает blob:). */

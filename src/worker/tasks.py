@@ -144,3 +144,26 @@ def workout_reminders() -> int:
     sent = asyncio.run(_workout_reminders_async())
     logger.info("Workout reminders sent: %s", sent)
     return sent
+
+async def _bot_selfplay_async() -> int:
+    engine = create_async_engine(_task_database_url(), poolclass=NullPool)
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+            from src.services.bots import selfplay
+
+            return await selfplay.run(db)
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="bot_selfplay", ignore_result=True)
+def bot_selfplay() -> int:
+    """Самоигра архетипов (таск 32.3) — по расписанию celery beat, в очереди simulation (работа процессора)."""
+    try:
+        with engine_work("simulation"):
+            played = asyncio.run(_bot_selfplay_async())
+    except EngineBusyError:
+        logger.info("Bot self-play skipped: the engine pool is busy")
+        return 0
+    logger.info("Bot self-play games: %s", played)
+    return played

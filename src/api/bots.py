@@ -28,6 +28,7 @@ from src.services import ladder as ladder_service
 from src.services import tournaments as tournament_service
 from src.services.bots import calibration as bot_calibration
 from src.services.bots import memory as bot_memory
+from src.services.bots import selfplay as bot_selfplay
 from src.services.bots.anderssen import anderssen_bot
 from src.services.bots.archetypes import ARCHETYPES, ARCHETYPES_BY_ID, ARCHETYPES_BY_KEY
 from src.services.bots.guests import GUESTS, GUESTS_BY_ID, GUESTS_BY_PGN_NAME, SIGNATURE_OPENINGS
@@ -485,6 +486,8 @@ async def get_bot_catalog(db: AsyncSession = Depends(get_db)):
                 "games": s.games, "ci95": s.ci95}
 
     live = await bot_memory.live_strength(db)
+    # Архетипы — с ползунками силы, подстроенными самоигрой (таск 32.3).
+    await bot_selfplay.refresh(db)
 
     def live_of(key: str) -> dict | None:
         row = live.get(key)
@@ -495,10 +498,21 @@ async def get_bot_catalog(db: AsyncSession = Depends(get_db)):
         "historical": [{"id": b["id"], **strength(str(b["id"]), int(str(b["rating"]))), "live": live_of(str(b["id"]))}
                        for b in AVAILABLE_BOTS],
         "archetypes": [
-            {"id": a.id, "config": a.config.model_dump(), **strength(a.key, a.config.target_elo)}
+            {"id": a.id, "config": bot_selfplay.tuned_config(a).model_dump(), **strength(a.key, a.config.target_elo)}
             for a in ARCHETYPES
         ],
     }
+
+
+@router.get("/tuning-log", dependencies=[PUBLIC_LIMIT])
+async def get_tuning_log(db: AsyncSession = Depends(get_db)):
+    """Открытый журнал подстройки характера самоигрой (таск 32.3): что измерено и как сдвинуты ползунки силы."""
+    rows = await bot_selfplay.journal(db)
+    return {"entries": [{
+        "key": r.key, "created_at": r.created_at.isoformat() if r.created_at else None, "games": r.games,
+        "measured": r.measured, "target": r.target, "randomness": [r.randomness_before, r.randomness_after],
+        "blunder_guard_cp": [r.guard_before, r.guard_after],
+    } for r in rows], "rules": {"games": bot_selfplay.TUNE_GAMES, "drift": bot_selfplay.DRIFT}}
 
 
 @router.get("/rivalry")

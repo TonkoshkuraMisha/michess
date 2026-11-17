@@ -31,6 +31,7 @@ from src.models.game import Game, GameStatus
 from src.models.tournament import Tournament, TournamentGame, TournamentPlayer
 from src.services import tournaments
 from src.services.bots import memory as bot_memory
+from src.services.bots import selfplay
 from src.services.bots.base import (
     HistoricalBot,
     analyse_with_stockfish,
@@ -139,7 +140,7 @@ def bot_for(player: TournamentPlayer) -> HistoricalBot:
     if player.kind == "bot" and player.bot_key in BOT_INSTANCES:
         bot = type(BOT_INSTANCES[player.bot_key])()
     elif player.kind == "archetype" and player.bot_key in ARCHETYPES_BY_KEY:
-        bot = PersonalityBot(ARCHETYPES_BY_KEY[player.bot_key].config)
+        bot = PersonalityBot(selfplay.tuned_config(ARCHETYPES_BY_KEY[player.bot_key]))
     elif player.kind == "personality" and player.config_json:
         bot = PersonalityBot(BotPersonalityConfig.model_validate_json(player.config_json))
     else:
@@ -260,6 +261,7 @@ async def simulate(db: AsyncSession, tournament_game_id: int, play: Callable = p
     seats = {p.seat: p for p in await tournaments.players_of(db, tournament.id)}
     historic = tournament.event_key is not None
     white_seat, black_seat = seats[tgame.white_seat], seats[tgame.black_seat]
+    await selfplay.refresh(db)
     for seat in (white_seat, black_seat):
         if _historical_bot_key(seat):
             await bot_memory.refresh(db, seat.bot_key or "")
