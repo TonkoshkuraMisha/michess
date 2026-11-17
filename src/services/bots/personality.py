@@ -447,7 +447,10 @@ class PersonalityBot(HistoricalBot):
         options = [(move, name) for move, name in options if move in board.legal_moves]
         if not options:
             return None
-        move, name = random.choice(options)
+        # Названный (любимый) дебют важнее безымянных линий характера: мастер с дебютом своего имени идёт в него,
+        # а не в случайную гамбитную линию.
+        named = [option for option in options if option[1]]
+        move, name = random.choice(named or options)
         if not name:
             return move, bot_comment("personality.openingHabit")
         return move, bot_comment("personality.favoriteOpening", name=name)

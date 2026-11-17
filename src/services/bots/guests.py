@@ -7,7 +7,8 @@
 (BotPersonalityConfig): стиль — по известной манере игры, сила — по историческим оценкам относительно уже
 откалиброванных мастеров (bots/masters.py: Стаунтон 2000, Андерсен 2100, Ласкер 2250, Капабланка 2300). В турнире
 участник сохраняется как персоналия с ключом «guest:<id>»: симуляция и партия игрока работают как с любым
-соперником мастерской, а имя на языке игрока берёт клиент (bots.guests.<id>).
+соперником мастерской, а имя на языке игрока берёт клиент (bots.guests.<id>). У кого за историю закрепился свой
+дебют — играет его (SIGNATURE_OPENINGS): Винавер — вариант Винавера, Грюнфельд — защиту Грюнфельда, Бёрд — дебют Бёрда.
 
 Все — умершие шахматисты (правило 1). Годы жизни сверены с открытыми источниками (17.11); у кого надёжных дат
 нет — не указаны. Портретов и своих дебютных книг у мастеров прошлого пока нет: это следующий шаг.
@@ -15,6 +16,7 @@
 
 from dataclasses import dataclass
 
+from src.services import openings
 from src.services.bots.personality import BotPersonalityConfig
 
 GUEST_PREFIX = "guest:"
@@ -36,8 +38,76 @@ class Guest:
         return f"{GUEST_PREFIX}{self.id}"
 
 
+QGD = "Queen's Gambit Declined"
+RUY_LOPEZ = "Ruy Lopez"
+KINGS_GAMBIT = "King's Gambit Accepted"
+VIENNA = "Vienna Game"
+FRENCH = "French Defense"
+
+# Фирменные дебюты мастеров: (белыми, чёрными), до трёх на цвет. Названия — из открытой таблицы дебютов
+# (src/services/openings.py); только то, что за мастером закрепила история: дебют его имени или его постоянное
+# оружие. В партии мастер идёт в эти линии, когда соперник это позволяет, и называет дебют в реплике.
+SIGNATURE_OPENINGS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
+    "kieseritzky": (("King's Gambit Accepted: Kieseritzky Gambit",), (KINGS_GAMBIT,)),
+    "bird": (("Bird Opening",), ()),
+    "wyvill": (("English Opening",), ()),
+    "winawer": ((), ("French Defense: Winawer Variation",)),
+    "albin": ((), ("Queen's Gambit Declined: Albin Countergambit",)),
+    "alapin": (("Sicilian Defense: Alapin Variation",), ()),
+    "grunfeld": ((QGD,), ("Grünfeld Defense",)),
+    "pirc": ((), ("Pirc Defense",)),
+    "caro": ((), ("Caro-Kann Defense",)),
+    "colle": (("Queen's Pawn Game: Colle System",), ()),
+    "samisch": (("Nimzo-Indian Defense: Sämisch Variation", "King's Indian Defense: Sämisch Variation"), ()),
+    "torre": (("Queen's Pawn Game: Torre Attack",), ()),
+    "ware": (("Ware Opening",), ("Dutch Defense: Stonewall Variation",)),
+    "mieses": ((VIENNA, "Danish Gambit", "Center Game"), ()),
+    "spielmann": ((VIENNA, KINGS_GAMBIT), ()),
+    "charousek": ((KINGS_GAMBIT,), ()),
+    "schlechter": ((RUY_LOPEZ,), ("Slav Defense",)),
+    "maroczy": ((RUY_LOPEZ,), (FRENCH,)),
+    "burn": ((), (FRENCH,)),
+    "carls": (("English Opening",), ()),
+    "blackburne": (("Scotch Game",), ()),
+    "janowski": ((QGD,), ()),
+    "bogoljubow": ((QGD,), ("Bogo-Indian Defense",)),
+    "euwe": ((QGD,), ("Ruy Lopez: Open",)),
+    "flohr": ((QGD,), ("Caro-Kann Defense",)),
+    "fine": ((QGD,), ()),
+    "reshevsky": ((QGD,), ("Nimzo-Indian Defense",)),
+    "vidmar": ((QGD,), ("Queen's Gambit Declined: Orthodox Defense",)),
+    "keres": ((RUY_LOPEZ,), ()),
+    "kashdan": ((RUY_LOPEZ,), ()),
+    "duras": ((RUY_LOPEZ,), ()),
+    "teichmann": ((RUY_LOPEZ,), ("Queen's Gambit Declined: Orthodox Defense",)),
+    "showalter": ((RUY_LOPEZ,), ()),
+    "thomas": ((RUY_LOPEZ,), ()),
+    "yates": ((RUY_LOPEZ,), ("King's Indian Defense",)),
+    "canal": (("Italian Game: Giuoco Piano",), ()),
+    "menchik": ((QGD,), (FRENCH,)),
+    "becker": ((QGD,), ()),
+    "alexander": ((), ("Dutch Defense",)),
+    "dus_chotimirsky": ((QGD,), ()),
+    "owen": ((), ("Owen Defense",)),
+    "from": (("Danish Gambit",), ("Bird Opening: From's Gambit",)),
+}
+
+
+def opening_position(name: str) -> str:
+    """Позиция (EPD) дебюта по названию из открытой таблицы: самая короткая линия с таким названием."""
+    found = [line for line in openings.lines().values() if line.name == name]
+    if not found:
+        raise KeyError(f"no opening named {name!r} in the table")
+    return min(found, key=lambda line: len(line.moves)).epd
+
+
 def _guest(guest_id: str, pgn_name: str, era: str | None, rating: int, **style) -> Guest:
-    return Guest(guest_id, pgn_name, era, rating, BotPersonalityConfig(target_elo=rating, **style))
+    white, black = SIGNATURE_OPENINGS.get(guest_id, ((), ()))
+    config = BotPersonalityConfig(
+        target_elo=rating, openings_white=[opening_position(name) for name in white],
+        openings_black=[opening_position(name) for name in black], **style,
+    )
+    return Guest(guest_id, pgn_name, era, rating, config)
 
 
 GUESTS: tuple[Guest, ...] = (
@@ -310,5 +380,29 @@ GUESTS: tuple[Guest, ...] = (
     _guest("kruger", "Krueger, Paul", "1871–1939", 2000, aggression=0, randomness=30),
     _guest("flamberg", "Flamberg, Alexander", "1880–1926", 2100, aggression=30, randomness=25),
     _guest("bernstein_jacob", "Bernstein, Jacob", "1885–1959", 2000, aggression=10, randomness=25),
+
+    # --- Седьмая партия турниров (28.4): Лондон 1862, Париж 1867 -------------------------------------------------
+    _guest("owen", "Owen, John", "1827–1901", 1950, aggression=0, pawn_structure=130, randomness=30),
+    _guest("macdonnell", "MacDonnell, George Alcock", "1830–1899", 1950, aggression=30, mobility=130, randomness=30),
+    _guest("dubois", "Dubois, Serafino", "1817–1899", 2000, aggression=30, mobility=140, randomness=25),
+    _guest("barnes", "Barnes, Thomas Wilson", "1825–1874", 1950, aggression=10, randomness=30),
+    _guest("hannah", "Hannah, James", None, 1800, aggression=10, randomness=40),
+    _guest("robey", "Robey, James", None, 1750, aggression=0, randomness=45),
+    _guest("deacon", "Deacon, Frederick", "1829–1875", 1800, aggression=10, randomness=40),
+    _guest("mongredien", "Mongredien, Augustus", "1807–1888", 1750, aggression=0, randomness=45),
+    _guest("green", "Green, Valentine", None, 1750, aggression=0, randomness=45),
+    # Комбинационный игрок.
+    _guest("kolisch", "Kolisch, Ignatz von", "1837–1889", 2100,
+           aggression=60, mobility=150, randomness=20, draw_attitude=-40),
+    _guest("riviere", "Riviere, Jules Arnous de", "1830–1905", 1950, aggression=30, mobility=130, randomness=30),
+    _guest("golmayo", "Golmayo Zupide, Celso", "1820–1898", 1900, aggression=20, randomness=30),
+    _guest("czarnowski", "Czarnowski, Hieronim", "1834–1902", 1850, aggression=10, randomness=35),
+    # Изобретатель головоломок; в практической игре рискован.
+    _guest("loyd", "Loyd, Samuel", "1841–1911", 1850, aggression=40, mobility=130, randomness=40),
+    _guest("dandre", "d'Andre, Emile", None, 1800, aggression=0, randomness=40),
+    # Гамбитный стиль.
+    _guest("from", "From, Martin Severin", "1828–1895", 1850,
+           aggression=50, mobility=130, randomness=35, opening_style="gambit"),
+    _guest("rousseau", "Rousseau, Eugene", "1805–1877", 1800, aggression=20, randomness=40),
 )
 GUESTS_BY_ID = {guest.id: guest for guest in GUESTS}

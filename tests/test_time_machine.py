@@ -57,6 +57,41 @@ def test_guests_are_well_formed():
     assert not set(GUESTS_BY_ID) & set(MASTERS_BY_ID)
 
 
+def test_signature_openings_exist_and_are_played():
+    from src.services import openings
+    from src.services.bots.guests import SIGNATURE_OPENINGS, opening_position
+
+    table = openings.lines()
+    assert set(SIGNATURE_OPENINGS) <= set(GUESTS_BY_ID)
+    for guest_id, (white, black) in SIGNATURE_OPENINGS.items():
+        assert (white or black) and len(white) <= 3 and len(black) <= 3, guest_id
+        config = GUESTS_BY_ID[guest_id].config
+        # Каждое название есть в таблице дебютов, а характер мастера ссылается на его позицию.
+        assert config.openings_white == [opening_position(name) for name in white], guest_id
+        assert config.openings_black == [opening_position(name) for name in black], guest_id
+        assert all(table[epd].moves for epd in (*config.openings_white, *config.openings_black))
+    with pytest.raises(KeyError):
+        opening_position("No Such Opening")
+
+    def book(guest_id: str, *moves: str) -> str | None:
+        board = chess.Board()
+        for uci in moves:
+            board.push_uci(uci)
+        found = PersonalityBot(GUESTS_BY_ID[guest_id].config)._book_move(board)
+        return found[0].uci() if found else None
+
+    # Белыми — свой первый ход; чёрными — ответ в своём дебюте, если белые в него идут.
+    assert book("bird") == "f2f4" and book("wyvill") == "c2c4" and book("ware") == "a2a4"
+    assert book("winawer", "e2e4") == "e7e6" and book("winawer", "e2e4", "e7e6", "d2d4", "d7d5", "b1c3") == "f8b4"
+    assert book("grunfeld", "d2d4") == "g8f6" and book("grunfeld", "d2d4", "g8f6", "c2c4", "g7g6", "b1c3") == "d7d5"
+    assert book("albin", "d2d4", "d7d5", "c2c4") == "e7e5"
+    assert book("alapin", "e2e4", "c7c5") == "c2c3"
+    assert book("kieseritzky", "e2e4", "e7e5") == "f2f4"
+    assert book("owen", "e2e4") == "b7b6" and book("from", "f2f4") == "e7e5"
+    # У мастера без фирменного дебюта книги нет — он играет по характеру.
+    assert "mucklow" not in SIGNATURE_OPENINGS and book("mucklow") is None
+
+
 def test_guests_differ_in_strength_as_history_suggests():
     rating = {guest.id: guest.rating for guest in GUESTS}
     assert rating["keres"] > rating["schlechter"] > rating["blackburne"] > rating["kieseritzky"] > rating["mucklow"]
