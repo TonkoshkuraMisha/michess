@@ -327,6 +327,20 @@ _EVENTS: tuple[Event, ...] = (
         ("tarrasch", 6.5), ("bogoljubow", 6.5), ("spielmann", 6), ("rubinstein", 5.5), ("pokorny", 5),
         ("hromadka", 4.5), ("wolf", 4.5), ("walter", 2.5),
     )),
+    # Девятнадцать участников в один круг (двадцатый, Барделебен, выбыл после первой партии). Победил Харузек,
+    # на пол-очка впереди Вальбродта.
+    Event("berlin_1897", 1897, "round_robin", _table(
+        ("charousek", 13.5), ("walbrodt", 13), ("blackburne", 12), ("janowski", 11.5), ("burn", 11),
+        ("schlechter", 10.5), ("marco", 10.5), ("alapin", 10.5), ("caro", 10), ("chigorin", 9.5), ("schiffers", 9),
+        ("metger", 8.5), ("cohn", 7.5), ("winawer", 7.5), ("suchting", 7), ("teichmann", 6.5), ("englisch", 5.5),
+        ("zinkl", 5.5), ("albin", 2),
+    )),
+    # Шестнадцать участников в один круг. Алехин набрал 14 из 15 и опередил второго призёра на три с половиной очка.
+    Event("san_remo_1930", 1930, "round_robin", _table(
+        ("alekhine", 14), ("nimzowitsch", 10.5), ("rubinstein", 10), ("bogoljubow", 9.5), ("yates", 9),
+        ("ahues", 8.5), ("spielmann", 8), ("vidmar", 8), ("maroczy", 7.5), ("tartakower", 7.5), ("colle", 6.5),
+        ("kmoch", 6.5), ("araiza", 4.5), ("monticelli", 4), ("grau", 3.5), ("romih", 2.5),
+    )),
 )
 # Лента — по годам; турниры одного года — по ключу.
 EVENTS: tuple[Event, ...] = tuple(sorted(_EVENTS, key=lambda event: (event.year, event.key)))
