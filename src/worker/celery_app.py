@@ -41,11 +41,14 @@ celery_app.conf.update(
         "analyze_imported_game": {"queue": ANALYSIS_QUEUE},
         "simulate_tournament_game": {"queue": SIMULATION_QUEUE},
         "workout_reminders": {"queue": ANALYSIS_QUEUE},
+        "bot_selfplay": {"queue": SIMULATION_QUEUE},
     },
     # Плановые задачи (процесс celery beat, сервис beat в docker-compose.prod.yml): напоминание о разминке 22.2
     # раз в день, в 16:00 UTC — вечер в Европе.
     beat_schedule={
         "workout-reminders": {"task": "workout_reminders", "schedule": crontab(hour=16, minute=0)},
+        # Самоигра архетипов (таск 32.3): каждые 6 часов, в минуту 17 — не вместе с другими плановыми задачами.
+        "bot-selfplay": {"task": "bot_selfplay", "schedule": crontab(hour="*/6", minute=17)},
     },
     # Не брать впрок длинные партии симуляции: иначе один воркер набирает очередь и держит её.
     worker_prefetch_multiplier=1,

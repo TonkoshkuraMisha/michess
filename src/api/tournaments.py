@@ -22,6 +22,7 @@ from src.services import time_machine
 from src.services import tournament_career as career
 from src.services import tournament_rules as rules
 from src.services import tournaments as service
+from src.services.bots import selfplay as bot_selfplay
 from src.services.bots.archetypes import ARCHETYPES_BY_KEY
 from src.services.rating import classify_time_control
 from src.services.task_dispatch import schedule_tournament_simulations_in_background
@@ -122,7 +123,7 @@ def _player(p: TournamentPlayer) -> PlayerOut:
     if p.kind == "personality" and p.config_json:
         config = json.loads(p.config_json)
     elif p.kind == "archetype" and p.bot_key in ARCHETYPES_BY_KEY:
-        config = ARCHETYPES_BY_KEY[p.bot_key].config.model_dump()
+        config = bot_selfplay.tuned_config(ARCHETYPES_BY_KEY[p.bot_key]).model_dump()
     return PlayerOut(
         seat=p.seat, kind=p.kind, user_id=p.user_id, bot_key=p.bot_key, personality_name=p.personality_name,
         rating=p.rating, place=p.place, eliminated_round=p.eliminated_round, config=config,
@@ -137,6 +138,7 @@ def _game(g: TournamentGame) -> GameOut:
 
 
 async def view(db: AsyncSession, tournament: Tournament, user: User) -> TournamentOut:
+    await bot_selfplay.refresh(db)
     players = await service.players_of(db, tournament.id)
     games = await service.games_of(db, tournament.id)
     standings: list[StandingOut] = []
