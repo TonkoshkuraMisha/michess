@@ -19,6 +19,9 @@ class Settings(BaseSettings):
     VERSION: str = "1.2.2"
     API_V1_STR: str = "/api/v1"
 
+    # Арены по группам рейтинга (таск 33.2): включить, когда в средней арене стабильно больше 40 участников.
+    ARENA_RATING_BANDS: bool = False
+
     # "production" включает строгие проверки при старте (SECRET_KEY) и прячет /docs.
     ENVIRONMENT: str = "development"
 

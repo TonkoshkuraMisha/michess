@@ -26,9 +26,13 @@ function useNow(intervalMs = 1000): number {
 }
 
 function arenaName(a: ArenaInfo, t: ReturnType<typeof useI18n>['t']): string {
-    return a.format === 'swiss'
+    const base = a.format === 'swiss'
         ? t('arenas.swissName', {control: controlLabel(a), rounds: a.rounds ?? 0})
         : t('arenas.name', {control: controlLabel(a)});
+    // Группа по силе и деление (33.2).
+    const band = a.max_rating ? ` · ${t('arenas.band', {limit: a.max_rating})}` : '';
+    const division = (a.division ?? 1) > 1 ? ` · ${t('arenas.division', {n: a.division ?? 1})}` : '';
+    return `${base}${band}${division}`;
 }
 
 function timing(a: ArenaInfo, now: number, t: ReturnType<typeof useI18n>['t']): string {
@@ -87,6 +91,11 @@ export function ArenaPage() {
 
     const load = useCallback(() => {
         arenasApi.get(id).then((data) => {
+            // Игрок в другом делении этой арены (33.2) — его таблица и кнопка «Играть» там.
+            if (data.me?.division_arena_id) {
+                navigate(`/arenas/${data.me.division_arena_id}`, {replace: true});
+                return;
+            }
             setArena(data);
             // Партия уже идёт (началась в другой вкладке или пока страница ждала) — на доску.
             if (data.me?.current_game_id) navigate('/');
@@ -118,7 +127,10 @@ export function ArenaPage() {
 
     if (!arena) return error ? <p role="alert" className="p-4 text-rose-300">{renderUiMessage(error, t)}</p> : null;
 
-    const join = () => arenasApi.join(id).then(load).catch((err) => setError(errorMessage(err, 'common.networkError')));
+    const join = () => arenasApi.join(id).then((r) => {
+        if (r.arena_id && r.arena_id !== id) navigate(`/arenas/${r.arena_id}`);
+        else load();
+    }).catch((err) => setError(errorMessage(err, 'common.networkError')));
     const stop = () => {
         setSearching(false);
         arenasApi.leaveWaiting(id).catch(() => undefined);

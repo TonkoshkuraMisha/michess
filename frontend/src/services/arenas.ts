@@ -26,6 +26,11 @@ export interface ArenaInfo {
     last_start_at?: string;
     /** Идущих партий арены — итоги ждут их. */
     open_games?: number;
+    /** Группа по силе (33.2): потолок рейтинга; null — открытая арена. */
+    max_rating?: number | null;
+    /** Деление при переполнении (33.2): 1 — основное. */
+    division?: number;
+    parent_id?: number | null;
 }
 
 export interface ArenaStanding {
@@ -42,7 +47,8 @@ export interface ArenaStanding {
 
 export interface ArenaDetail extends ArenaInfo {
     standings: ArenaStanding[];
-    me: { joined: boolean; waiting: boolean; current_game_id: number | null } | null;
+    /** division_arena_id: игрок в другом делении этой арены — клиент переходит туда (33.2). */
+    me: { joined: boolean; waiting: boolean; current_game_id: number | null; division_arena_id?: number | null } | null;
 }
 
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -64,7 +70,8 @@ export const arenasApi = {
     list: () => call<{ arenas: ArenaInfo[] }>(''),
     current: () => call<{ arena: ArenaInfo | null }>('/current'),
     get: (id: number) => call<ArenaDetail>(`/${id}`),
-    join: (id: number) => call<{ joined: boolean }>(`/${id}/join`, {method: 'POST'}),
+    /** arena_id — деление, куда попал игрок (при переполнении — не та арена, что запрошена). */
+    join: (id: number) => call<{ joined: boolean; arena_id?: number }>(`/${id}/join`, {method: 'POST'}),
     ready: (id: number) => call<{ waiting?: boolean; game_id?: number }>(`/${id}/ready`, {method: 'POST'}),
     leaveWaiting: (id: number) => call<{ waiting: boolean }>(`/${id}/leave-waiting`, {method: 'POST'}),
 };

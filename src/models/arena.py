@@ -28,6 +28,11 @@ class Arena(Base):
     current_round: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     # Швейцарка закончена (все туры сыграны или участников не хватило) — момент окончания.
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Группа по силе (таск 33.2): потолок рейтинга в контроле арены на входе (и пика за неделю); пусто — открытая.
+    max_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Деления при переполнении (33.2): второе и дальше — арены с parent_id первой: те же время и правила, своя таблица.
+    division: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    parent_id: Mapped[int | None] = mapped_column(ForeignKey("arenas.id", ondelete="CASCADE"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
