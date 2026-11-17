@@ -80,10 +80,27 @@ def test_creation_is_validated(client, token_user_1, payload, code):
     assert response.json()["detail"]["code"] == code
 
 
-def test_one_active_tournament_per_player(client, token_user_1):
+def test_own_tournaments_run_in_parallel(client, token_user_1):
+    # Решение владельца (17.11): незаконченный свой турнир другим не мешает.
     assert client.post(API, headers=auth(token_user_1), json=body()).status_code == 201
-    second = client.post(API, headers=auth(token_user_1), json=body())
-    assert second.status_code == 409 and second.json()["detail"]["code"] == "tournament_active_exists"
+    assert client.post(API, headers=auth(token_user_1), json=body("swiss", 8, eight())).status_code == 201
+    assert len(client.get(API, headers=auth(token_user_1)).json()) == 2
+
+
+def test_career_blocks_only_its_own_branch(client, token_user_1):
+    from src.services import tournament_career as career
+
+    assert client.post(f"{API}/career/main-1", headers=auth(token_user_1)).status_code == 201
+    # Тот же этап (та же ветка — основная лестница) не начать, пока идёт.
+    again = client.post(f"{API}/career/main-1", headers=auth(token_user_1))
+    assert again.status_code == 409 and again.json()["detail"]["code"] == "tournament_active_exists"
+    # Свой турнир и «Машина времени» идут параллельно с карьерой.
+    assert client.post(API, headers=auth(token_user_1), json=body()).status_code == 201
+    assert client.post(f"{API}/time-machine/london_1851", json={}, headers=auth(token_user_1)).status_code == 201
+    # Ветки: основная лестница — все основные этапы; приглашение — само по себе.
+    main = career.branch_of(career.STAGES_BY_KEY["main-2"])
+    assert "main-1" in main and not any(key.startswith("invitational") for key in main)
+    assert career.branch_of(career.STAGES_BY_KEY["invitational-1"]) == ("invitational-1",)
 
 
 def test_personality_participant_is_copied(client, token_user_1):

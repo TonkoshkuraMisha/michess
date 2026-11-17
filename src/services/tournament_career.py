@@ -156,5 +156,15 @@ async def start_stage(db: AsyncSession, user: User, key: str) -> Tournament:
         raise DomainError("career_stage_locked", stage=key)
     return await tournaments_service.create_tournament(
         db, user, stage.format, stage.size, stage_opponents(stage), stage.base_time_ms, stage.increment_ms,
-        career_stage=stage.key,
+        career_stage=stage.key, progress_branch=branch_of(stage),
     )
+
+
+def branch_of(stage: Stage) -> tuple[str, ...]:
+    """
+    Ветка прогресса этапа: основная лестница — все основные этапы (пока идёт один, следующий не начать);
+    приглашение — само по себе (параллельно с лестницей, но не дважды сразу).
+    """
+    if stage.gate is not None:
+        return (stage.key,)
+    return tuple(s.key for s in STAGES if s.gate is None)
