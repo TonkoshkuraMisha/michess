@@ -404,5 +404,38 @@ GUESTS: tuple[Guest, ...] = (
     _guest("from", "From, Martin Severin", "1828–1895", 1850,
            aggression=50, mobility=130, randomness=35, opening_style="gambit"),
     _guest("rousseau", "Rousseau, Eugene", "1805–1877", 1800, aggression=20, randomness=40),
+
+    # --- Восьмая партия турниров (28.4): Берлин 1881 — Моравска-Острава 1923 -------------------------------------
+    # Старший брат Луи Паульсена.
+    _guest("paulsen_w", "Paulsen, Wilfried", "1828–1901", 1950, aggression=-10, king_safety=130, randomness=30),
+    _guest("riemann", "Riemann, Fritz", "1859–1932", 2000, aggression=40, mobility=130, randomness=25),
+    # Год рождения в источнике — «около 1845».
+    _guest("wemmers", "Wemmers, Carl", "1845–1882", 1900, aggression=10, randomness=35),
+    _guest("schmid", "Schmid, Carl Friedrich", "1840–1897", 1850, aggression=0, randomness=40),
+    # Годы жизни неизвестны.
+    _guest("schutz", "Schuetz, H. von", None, 1650, aggression=0, randomness=45),
+    # Не путать с Адольфом Шварцем (schwarz).
+    _guest("schwarz_jacques", "Schwarz, Jacques", "1856–1921", 1950, aggression=0, randomness=30),
+    _guest("fox", "Fox, Albert Whiting", "1881–1964", 2000, aggression=50, mobility=140, randomness=30),
+    # Годы жизни — по Викиданным (Q11727884).
+    _guest("barry", "Barry, John Finan", "1873–1940", 2000, aggression=40, randomness=30),
+    _guest("napier", "Napier, William Ewart", "1881–1952", 2050, aggression=50, mobility=140, randomness=25),
+    # Годы жизни источником не подтверждены; в 1904 году ему было 33.
+    _guest("lawrence", "Lawrence, Thomas", None, 1950, aggression=0, randomness=30),
+    _guest("hodges", "Hodges, Albert Beauregard", "1861–1944", 2000, aggression=10, randomness=30),
+    _guest("delmar", "Delmar, Eugene", "1841–1909", 1900, aggression=20, randomness=35),
+    _guest("swiderski", "Swiderski, Rudolf", "1878–1909", 2100, aggression=30, mobility=130, randomness=25),
+    # Автор этюдов.
+    _guest("prokes", "Prokes, Ladislav", "1884–1966", 1950, aggression=10, passed_pawns=150, randomness=30),
+    _guest("kvicala", "Kvicala, Jan", "1868–1939", 1900, aggression=0, randomness=35),
+    # Не путать с Карелом Трейбалом (treybal).
+    _guest("treybal_frantisek", "Treybal, Frantisek", "1882–1947", 2000, aggression=20, randomness=30),
+    _guest("kohnlein", "Koehnlein, Friedrich", "1879–1916", 2000, aggression=20, randomness=30),
+    # Автор этюдов.
+    _guest("selezniev", "Selezniev, Alexey", "1888–1967", 2150,
+           aggression=-10, passed_pawns=150, pawn_structure=130, randomness=20),
+    _guest("pokorny", "Pokorny, Amos", "1890–1949", 2050, aggression=10, randomness=25),
+    _guest("hromadka", "Hromadka, Karel", "1887–1956", 2050, aggression=50, mobility=140, randomness=30),
+    _guest("walter", "Walter, Max", "1899–1940", 1950, aggression=10, randomness=30),
 )
 GUESTS_BY_ID = {guest.id: guest for guest in GUESTS}

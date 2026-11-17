@@ -108,12 +108,14 @@ _EVENTS: tuple[Event, ...] = (
         ("keres", 8.5), ("fine", 8.5), ("botvinnik", 7.5), ("euwe", 7), ("reshevsky", 7), ("alekhine", 7),
         ("capablanca", 6), ("flohr", 4.5),
     ), cycles=2),
-    # Девять участников в два круга (десятый, Штерн, выбыл после четырёх туров, его партии не засчитаны). Победил Андерсен.
+    # Девять участников в два круга (десятый, Штерн, выбыл после четырёх туров, его партии не засчитаны).
+    # Победил Андерсен.
     Event("baden_baden_1870", 1870, "round_robin", _table(
         ("anderssen", 11), ("steinitz", 10.5), ("neumann", 10), ("blackburne", 10), ("paulsen", 7.5),
         ("de_vere", 6.5), ("winawer", 6.5), ("rosenthal", 5), ("minckwitz", 5),
     ), cycles=2),
-    # Четырнадцать участников в два круга (в истории ничьи переигрывались). Победил Цукерторт, на три очка опередив Стейница.
+    # Четырнадцать участников в два круга (в истории ничьи переигрывались). Победил Цукерторт, на три очка
+    # опередив Стейница.
     Event("london_1883", 1883, "round_robin", _table(
         ("zukertort", 22), ("steinitz", 19), ("blackburne", 16.5), ("chigorin", 16), ("mackenzie", 15.5),
         ("englisch", 15.5), ("mason", 15.5), ("rosenthal", 14), ("winawer", 13), ("bird", 12), ("noa", 9.5),
@@ -201,7 +203,8 @@ _EVENTS: tuple[Event, ...] = (
         Entry("fuller", None), Entry("stanley", None), Entry("knott", None), Entry("calthrop", None),
         Entry("allison", None), Entry("kennicott", None), Entry("fiske", None),
     )),
-    # Двенадцать участников в два круга. Винавер и Цукерторт поделили первое место; дополнительный матч выиграл Цукерторт.
+    # Двенадцать участников в два круга. Винавер и Цукерторт поделили первое место; дополнительный матч выиграл
+    # Цукерторт.
     Event("paris_1878", 1878, "round_robin", _table(
         ("winawer", 16.5), ("zukertort", 16.5), ("blackburne", 14.5), ("mackenzie", 13), ("bird", 13),
         ("anderssen", 12.5), ("englisch", 11.5), ("rosenthal", 11.5), ("clerc", 8.5), ("mason", 8.5),
@@ -259,12 +262,71 @@ _EVENTS: tuple[Event, ...] = (
         ("barnes", 6), ("hannah", 4), ("blackburne", 3), ("lowenthal", 3), ("robey", 2), ("deacon", 2),
         ("mongredien", 2), ("green", 2),
     ), partial=True),
-    # Тринадцать участников в два круга; ничья не давала очков никому — в настоящей таблице только победы. Победил Колиш.
+    # Тринадцать участников в два круга; ничья не давала очков никому — в настоящей таблице только победы.
+    # Победил Колиш.
     Event("paris_1867", 1867, "round_robin", _table(
         ("kolisch", 20), ("winawer", 19), ("steinitz", 18), ("neumann", 17), ("de_vere", 14), ("riviere", 11),
         ("golmayo", 10), ("czarnowski", 9), ("rosenthal", 6), ("loyd", 6), ("dandre", 6), ("from", 5),
         ("rousseau", 5),
     ), cycles=2, partial=True),
+    # Второй конгресс Германского шахматного союза: семнадцать участников в один круг (Питшель выбыл после трёх
+    # партий, они не засчитаны). Победил Блэкберн.
+    Event("berlin_1881", 1881, "round_robin", _table(
+        ("blackburne", 14), ("zukertort", 11), ("winawer", 10.5), ("chigorin", 10.5), ("mason", 9.5), ("wittek", 9.5),
+        ("minckwitz", 8.5), ("schwarz_jacques", 8.5), ("berger", 8), ("paulsen", 8), ("paulsen_w", 7.5),
+        ("schallopp", 7), ("riemann", 6.5), ("wemmers", 6.5), ("noa", 5.5), ("schmid", 3.5), ("schutz", 1.5),
+    )),
+    # Шестнадцать участников в один круг: восемь европейцев и восемь американцев. Маршалл победил без поражений;
+    # в честь турнира названа кембридж-спрингская защита.
+    Event("cambridge_springs_1904", 1904, "round_robin", _table(
+        ("marshall", 13), ("janowski", 11), ("lasker", 11), ("marco", 9), ("showalter", 8.5), ("schlechter", 7.5),
+        ("chigorin", 7.5), ("mieses", 7), ("pillsbury", 7), ("fox", 6.5), ("teichmann", 6.5), ("lawrence", 5.5),
+        ("napier", 5.5), ("barry", 5), ("hodges", 5), ("delmar", 4.5),
+    )),
+    # Последний из турниров в Монте-Карло 1901–1904 годов: шесть участников в два круга. Победил Мароци.
+    Event("monte_carlo_1904", 1904, "round_robin", _table(
+        ("maroczy", 7.5), ("schlechter", 7), ("marshall", 6.5), ("gunsberg", 4), ("marco", 3), ("swiderski", 2),
+    ), cycles=2),
+    # Чемпионский турнир в Остенде: шесть победителей международных турниров в четыре круга. Победил Тарраш.
+    Event("ostend_1907", 1907, "round_robin", _table(
+        ("tarrasch", 12.5), ("schlechter", 12), ("janowski", 11.5), ("marshall", 11.5), ("burn", 8),
+        ("chigorin", 4.5),
+    ), cycles=4),
+    # Первый международный турнир в Праге: двадцать участников в один круг. Первое место разделили Дурас и Шлехтер.
+    Event("prague_1908", 1908, "round_robin", _table(
+        ("duras", 13.5), ("schlechter", 13.5), ("vidmar", 13), ("rubinstein", 12.5), ("teichmann", 12),
+        ("maroczy", 11.5), ("leonhardt", 11), ("marshall", 11), ("salwe", 11), ("janowski", 10.5),
+        ("dus_chotimirsky", 9.5), ("alapin", 9), ("suchting", 8.5), ("mieses", 8.5), ("spielmann", 7.5),
+        ("prokes", 6.5), ("bardeleben", 6), ("kvicala", 5.5), ("rabinovich_abram", 5), ("treybal_frantisek", 4.5),
+    )),
+    # Двадцать участников в один круг. Первое место разделили Мароци, Шлехтер и Дурас; 18-летний Рети занял
+    # последнее место.
+    Event("vienna_1908", 1908, "round_robin", _table(
+        ("maroczy", 14), ("schlechter", 14), ("duras", 14), ("rubinstein", 13), ("teichmann", 12),
+        ("spielmann", 11.5), ("perlis", 11), ("tartakower", 11), ("leonhardt", 10), ("mieses", 10), ("marshall", 10),
+        ("swiderski", 9.5), ("salwe", 8.5), ("johner_paul", 7.5), ("berger", 7), ("suchting", 6.5),
+        ("bardeleben", 6.5), ("alapin", 6.5), ("cohn_erich", 6), ("reti", 1.5),
+    )),
+    # Семнадцатый конгресс Германского шахматного союза: семнадцать участников в один круг (Якоб выбыл после
+    # шести туров, его партии не засчитаны). Победил Шлехтер.
+    Event("hamburg_1910", 1910, "round_robin", _table(
+        ("schlechter", 11.5), ("duras", 11), ("nimzowitsch", 10.5), ("spielmann", 10), ("teichmann", 9.5),
+        ("marshall", 9.5), ("dus_chotimirsky", 8.5), ("alekhine", 8.5), ("tarrasch", 8), ("forgacs", 8),
+        ("leonhardt", 7), ("tartakower", 7), ("salwe", 7), ("kohnlein", 7), ("speijer", 5.5), ("john", 5),
+        ("yates", 2.5),
+    )),
+    # Одиннадцать участников в два круга; Форгач сыграл только первый круг, остальные десять его партий в
+    # настоящей таблице не засчитаны. Победил Рубинштейн.
+    Event("san_sebastian_1912", 1912, "round_robin", _table(
+        ("rubinstein", 12.5), ("nimzowitsch", 12), ("spielmann", 12), ("tarrasch", 11.5), ("perlis", 10),
+        ("marshall", 9.5), ("duras", 8.5), ("schlechter", 8), ("teichmann", 8), ("leonhardt", 5), ("forgacs", 3),
+    ), cycles=2, partial=True),
+    # Четырнадцать участников в один круг. Ласкер победил без поражений, опередив Рети на очко.
+    Event("moravska_ostrava_1923", 1923, "round_robin", _table(
+        ("lasker", 10.5), ("reti", 9.5), ("grunfeld", 8.5), ("selezniev", 7.5), ("tartakower", 7), ("euwe", 7),
+        ("tarrasch", 6.5), ("bogoljubow", 6.5), ("spielmann", 6), ("rubinstein", 5.5), ("pokorny", 5),
+        ("hromadka", 4.5), ("wolf", 4.5), ("walter", 2.5),
+    )),
 )
 # Лента — по годам; турниры одного года — по ключу.
 EVENTS: tuple[Event, ...] = tuple(sorted(_EVENTS, key=lambda event: (event.year, event.key)))
