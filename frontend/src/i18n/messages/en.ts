@@ -594,6 +594,14 @@ export const en = {
             pokorny: {name: 'Amos Pokorný', shortName: 'Pokorný', about: 'Czech legionnaire and chess master'},
             hromadka: {name: 'Karel Hromádka', shortName: 'Hromádka', about: 'Two-time Czech champion, in 1913 and 1921'},
             walter: {name: 'Max Walter', shortName: 'Walter', about: 'Slovak master from Pressburg, Czechoslovak champion of 1923'},
+            metger: {name: 'Johannes Metger', shortName: 'Metger', about: 'German master, born in Groothusen in East Frisia'},
+            zinkl: {name: 'Adolf Zinkl', shortName: 'Zinkl', about: 'Austrian master'},
+            ahues: {name: 'Carl Ahues', shortName: 'Ahues', about: 'German international master, born in Bremen'},
+            kmoch: {name: 'Hans Kmoch', shortName: 'Kmoch', about: 'International master, best known as a chess journalist and author'},
+            araiza: {name: 'José Joaquín Araiza', shortName: 'Araiza', about: 'Mexican master; second to Carlos Torre at Mexico City 1926'},
+            monticelli: {name: 'Mario Monticelli', shortName: 'Monticelli', about: 'Italian master; shared first place with Grünfeld at Budapest 1926'},
+            grau: {name: 'Roberto Grau', shortName: 'Grau', about: 'Argentina\'s strongest player of the late 1920s'},
+            romih: {name: 'Max Romih', shortName: 'Romih', about: 'Italian master, born in Istria'},
         },
         profiles: {
             philidor: {
@@ -3219,6 +3227,18 @@ export const en = {
                 place: 'Moravská Ostrava, 1923',
                 story: 'Emanuel Lasker, 54 years old and no longer world champion, showed that he had lost nothing of his strength: he won without losing a game, a point ahead of Richard Réti. The young Max Euwe shared fifth place with Tartakower.',
                 real: 'Winner: Emanuel Lasker, undefeated, with 10½ points from 13 games, ahead of Richard Réti (9½) and Ernst Grünfeld (8½).',
+            },
+            berlin_1897: {
+                title: 'Berlin 1897',
+                place: 'Berlin, September – October 1897',
+                story: 'The tournament celebrated seventy years of the Berlin Chess Society. Nineteen masters played in the Architektenhaus, and the event turned into a race between two young players, Rudolf Charousek and Carl Walbrodt. Neither had long to live: Charousek died in 1900, Walbrodt in 1902.',
+                real: 'Winner: Rudolf Charousek with 13½ points from 18 games, half a point ahead of Carl Walbrodt (13); Joseph Blackburne was third (12).',
+            },
+            san_remo_1930: {
+                title: 'San Remo 1930',
+                place: 'San Remo, January – February 1930',
+                story: 'The first international tournament in the Sanremo Casino: the games were played during the day, and in the evening the hall was used for dancing. World champion Alexander Alekhine dominated the field as few have ever done — 14 points from 15 games, three and a half points ahead of Nimzowitsch.',
+                real: 'Winner: Alexander Alekhine with 14 points from 15 games; Aron Nimzowitsch was second (10½), Akiba Rubinstein third (10).',
             },
         },
     },

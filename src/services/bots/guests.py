@@ -90,6 +90,39 @@ SIGNATURE_OPENINGS: dict[str, tuple[tuple[str, ...], tuple[str, ...]]] = {
     "dus_chotimirsky": ((QGD,), ()),
     "owen": ((), ("Owen Defense",)),
     "from": (("Danish Gambit",), ("Bird Opening: From's Gambit",)),
+    # Варианты, названные в честь самого мастера (партия 17.11, ночь).
+    "szen": (("Sicilian Defense: Taimanov Variation, Szén Variation",), ()),
+    "lowenthal": ((), ("Sicilian Defense: Löwenthal Variation",)),
+    "horwitz": ((), ("Horwitz Defense",)),
+    "mayet": (("Latvian Gambit: Mayet Attack",), ()),
+    "kennedy_h": ((), ("Nimzowitsch Defense: Kennedy Variation",)),
+    "gunsberg": (("Four Knights Game: Gunsberg Variation",), ()),
+    "pollock": ((), ("Ruy Lopez: Pollock Defense",)),
+    "mackenzie": (("Ruy Lopez: Morphy Defense, Mackenzie Variation",), ()),
+    "mortimer": ((), ("Ruy Lopez: Berlin Defense, Anti-Berlin Variation, Mortimer Variation",)),
+    "schallopp": ((), ("King's Gambit Accepted: Schallopp Defense",)),
+    "berger": ((), ("Center Game: Berger Variation",)),
+    "olland": (("French Defense: McCutcheon Variation, Dr. Olland Variation",), ()),
+    "leonhardt": ((), ("Ponziani Opening: Leonhardt Variation",)),
+    "levenfish": (("Sicilian Defense: Dragon Variation, Levenfish Variation",), ()),
+    "bardeleben": ((), ("Vienna Game: Vienna Gambit, Bardeleben Variation",)),
+    "bernstein": (("French Defense: McCutcheon Variation, Bernstein Variation",), ()),
+    "stoltz": (("Semi-Slav Defense: Stoltz Variation",), ()),
+    "stanley": (("Vienna Game: Stanley Variation",), ()),
+    "raphael": (("Dutch Defense: Raphael Variation",), ()),
+    "forgacs": (("Caro-Kann Defense: Forgacs Variation",), ()),
+    "suchting": ((), ("Slav Defense: Süchting Variation",)),
+    "breyer": (("King's Gambit Accepted: Breyer Gambit",), ()),
+    "barnes": (("Barnes Opening",), ("Barnes Defense",)),
+    "mongredien": (
+        (),
+        ("Modern Defense: Mongredien Defense, with Nc3", "Modern Defense: Mongredien Defense, with Nf3",),
+    ),
+    "rousseau": ((), ("Italian Game: Rousseau Gambit",)),
+    "hromadka": ((), ("Benoni Defense: Hromádka System",)),
+    "metger": ((), ("Four Knights Game: Spanish Variation, Symmetrical Variation, Metger Unpin",)),
+    "kmoch": (("Nimzo-Indian Defense: Kmoch Variation",), ()),
+    "romih": ((), ("Semi-Slav Defense: Romih Variation",)),
 }
 
 
@@ -437,5 +470,16 @@ GUESTS: tuple[Guest, ...] = (
     _guest("pokorny", "Pokorny, Amos", "1890–1949", 2050, aggression=10, randomness=25),
     _guest("hromadka", "Hromadka, Karel", "1887–1956", 2050, aggression=50, mobility=140, randomness=30),
     _guest("walter", "Walter, Max", "1899–1940", 1950, aggression=10, randomness=30),
+
+    # --- Девятая партия турниров (28.4): Берлин 1897, Сан-Ремо 1930 ----------------------------------------------
+    _guest("metger", "Metger, Johannes", "1850–1926", 2000, aggression=0, pawn_structure=130, randomness=30),
+    _guest("zinkl", "Zinkl, Adolf", "1871–1944", 1950, aggression=10, randomness=30),
+    _guest("ahues", "Ahues, Carl", "1883–1968", 2150, aggression=20, mobility=130, randomness=20),
+    # Шахматный литератор; известен книгами.
+    _guest("kmoch", "Kmoch, Hans", "1894–1973", 2150, aggression=-10, pawn_structure=150, randomness=20),
+    _guest("araiza", "Araiza, Jose Joaquin", "1900–1971", 2000, aggression=20, randomness=30),
+    _guest("monticelli", "Monticelli, Mario", "1902–1995", 2150, aggression=30, mobility=130, randomness=25),
+    _guest("grau", "Grau, Roberto", "1900–1944", 2100, aggression=10, center_control=130, randomness=25),
+    _guest("romih", "Romih, Max", "1893–1979", 2000, aggression=10, randomness=30),
 )
 GUESTS_BY_ID = {guest.id: guest for guest in GUESTS}

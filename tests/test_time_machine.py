@@ -88,6 +88,13 @@ def test_signature_openings_exist_and_are_played():
     assert book("alapin", "e2e4", "c7c5") == "c2c3"
     assert book("kieseritzky", "e2e4", "e7e5") == "f2f4"
     assert book("owen", "e2e4") == "b7b6" and book("from", "f2f4") == "e7e5"
+    # Варианты имени самого мастера: Барнс открывает партию 1.f3, Кмох идёт на 4.f3 в защите Нимцовича.
+    assert book("barnes") == "f2f3" and book("barnes", "e2e4") == "f7f6"
+    assert book("kmoch", "d2d4", "g8f6", "c2c4", "e7e6", "b1c3", "f8b4") == "f2f3"
+    assert book("pollock", "e2e4", "e7e5", "g1f3", "b8c6", "f1b5") == "c6a5"
+    assert book("rousseau", "e2e4", "e7e5", "g1f3", "b8c6", "f1c4") == "f7f5"
+    assert book("hromadka", "d2d4", "g8f6", "c2c4") == "c7c5" and book("raphael", "d2d4", "f7f5") == "b1c3"
+    assert book("breyer", "e2e4", "e7e5", "f2f4", "e5f4") == "d1f3"
     # У мастера без фирменного дебюта книги нет — он играет по характеру.
     assert "mucklow" not in SIGNATURE_OPENINGS and book("mucklow") is None
 
