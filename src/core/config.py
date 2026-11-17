@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     # Конференции, по расписанию которых создаются арены (таск 33.4), через запятую. Пока игроков мало, список можно
     # сократить (например, "central"), чтобы не дробить их по аренам пяти поясов.
     ARENA_CONFERENCES: str = "central,western,northern,southern,eastern"
+    # Заголовок, в котором прокси перед сервером называет страну посетителя (таск 33.6), например "CF-IPCountry"
+    # у Cloudflare. Страна из него только предлагается игроку при выборе; пусто — подсказки по адресу нет.
+    COUNTRY_HEADER: str = ""
 
     # "production" включает строгие проверки при старте (SECRET_KEY) и прячет /docs.
     ENVIRONMENT: str = "development"

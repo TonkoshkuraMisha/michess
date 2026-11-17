@@ -47,6 +47,7 @@ async def test_delete_anonymises_and_wipes_personal_data(client, db_session, tes
     profile = me(client, token_user_1)
     user_id, name = profile["id"], profile["username"]
     other = me(client, token_user_2)["id"]
+    assert client.put("/api/v1/conferences/me", headers=auth(token_user_1), json={"country": "UA"}).status_code == 200
     client.post("/api/v1/bots/personalities", headers=auth(token_user_1), json={"name": "Gambit", "config": {}})
     db_session.add(Game(white_player_id=user_id, black_player_id=other, status=GameStatus.COMPLETED, result="1-0"))
     await db_session.commit()
@@ -59,6 +60,7 @@ async def test_delete_anonymises_and_wipes_personal_data(client, db_session, tes
     db_session.expire_all()
     user = await db_session.get(User, user_id)
     assert user.username == f"deleted_{user_id}" and user.deleted_at is not None and user.email is None
+    assert user.country is None                                                 # страна из профиля — личные данные
     assert await db_session.scalar(select(func.count(BotPersonality.id)).where(BotPersonality.owner_id == user_id)) == 0
     # Партия осталась у соперника.
     assert await db_session.scalar(select(func.count(Game.id)).where(Game.white_player_id == user_id)) == 1

@@ -56,10 +56,22 @@ export interface ArenaStanding {
     rating: number;
     /** Перформанс в арене — первый показатель при равенстве очков. */
     performance?: number | null;
+    /** Конференция игрока на момент входа в арену (33.6); null — страна в профиле не указана. */
+    conference?: string | null;
+}
+
+/** Строка зачёта конференций арены (33.6): сумма очков лучших участников конференции. */
+export interface ArenaConferenceRow {
+    conference: string;
+    score: number;
+    /** Сколько игроков вошло в зачёт и сколько игроков конференции в арене всего. */
+    counted: number;
+    players: number;
 }
 
 export interface ArenaDetail extends ArenaInfo {
     standings: ArenaStanding[];
+    conferences?: ArenaConferenceRow[];
     /** division_arena_id: игрок в другом делении этой арены — клиент переходит туда (33.2). */
     /** reminder: игрок просил напомнить о начале этой арены (33.4). */
     me: {

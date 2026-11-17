@@ -23,6 +23,7 @@ import {WatchPage} from './components/watch/WatchPage';
 import {ImportPage} from './components/gameImport/ImportPage';
 import {TransparencyPage} from './components/TransparencyPage';
 import {ArenaPage, ArenasPage} from './components/arena/ArenaPages';
+import {ConferencesPage} from './components/arena/ConferencesPage';
 import {TeamsPage} from './components/social/TeamsPage';
 import {StudyLobby, StudyRoomPage} from './components/study/StudyPages';
 import {ModerationPage} from './components/social/ModerationPage';
@@ -764,6 +765,7 @@ export default function App() {
                         <Route path="/watch" element={<WatchPage/>}/>
                         <Route path="/arenas" element={<ArenasPage/>}/>
                         <Route path="/arenas/:arenaId" element={<ArenaPage/>}/>
+                        <Route path="/conferences" element={<ConferencesPage/>}/>
                         <Route path="/teams" element={<TeamsPage/>}/>
                         <Route path="/study" element={<StudyLobby/>}/>
                         <Route path="/study/:code" element={<StudyRoomPage/>}/>

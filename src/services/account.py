@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.errors import ApiError
 from src.core.security import get_password_hash
+from src.models.arena import ArenaReminder
 from src.models.email_token import EmailToken
 from src.models.game import Game, GameStatus
 from src.models.imported_game import ImportedGame
@@ -156,7 +157,7 @@ async def delete_account(db: AsyncSession, user: User) -> None:
             (PersonalPuzzle, PersonalPuzzle.user_id), (ImportedGame, ImportedGame.user_id),
             (DrillRecord, DrillRecord.user_id),
             (Tournament, Tournament.owner_id), (EmailToken, EmailToken.user_id),
-            (ProductEvent, ProductEvent.user_id),
+            (ProductEvent, ProductEvent.user_id), (ArenaReminder, ArenaReminder.user_id),
     ):
         await db.execute(delete(model).where(column == user.id))
 
@@ -164,6 +165,9 @@ async def delete_account(db: AsyncSession, user: User) -> None:
     user.username = anonymous
     user.username_key = anonymous
     user.email = None
+    # Страна из профиля (таск 33.6) — личные данные; очки, уже набранные для конференции в аренах, остаются.
+    user.country = None
+    user.country_season = None
     user.hashed_password = get_password_hash(secrets.token_urlsafe(32))
     user.deleted_at = datetime.now(UTC)
     user.token_version = (user.token_version or 0) + 1

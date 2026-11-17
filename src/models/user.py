@@ -85,6 +85,10 @@ class User(Base):
     avatar: Mapped[str | None] = mapped_column(String(8), nullable=True)
     # Кто может писать личные сообщения (таск 30.1): all | following (только те, на кого подписан я) | nobody.
     dm_policy: Mapped[str] = mapped_column(String(16), default="all", server_default="all", nullable=False)
+    # Конференция (таск 33.6, src/services/conferences.py): страна, которую игрок сам указал в профиле (код ISO
+    # 3166-1 alpha-2), и сезон «ГГГГ-ММ», в котором он последний раз менял конференцию (одна смена за сезон).
+    country: Mapped[str | None] = mapped_column(String(2), nullable=True)
+    country_season: Mapped[str | None] = mapped_column(String(7), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 

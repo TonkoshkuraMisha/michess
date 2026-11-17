@@ -18,6 +18,7 @@ from src.db.session import get_db
 from src.models.game import Game, GameStatus
 from src.models.user import RATING_CATEGORIES, RatingCategory, User
 from src.schemas.user import username_key
+from src.services.conferences import conference_of
 from src.services.ladder import rungs as ladder_rungs
 from src.services.rating import (
     ESTIMATED_MOVES,
@@ -143,6 +144,9 @@ async def get_my_profile(current_user: User = Depends(get_current_user)):
         # Оформление (таск 18.3): тема-комплект.
         "theme_preset": current_user.theme_preset,
         "avatar": current_user.avatar,
+        # Конференция (таск 33.6): страна из профиля и её конференция; выбор — PUT /conferences/me.
+        "country": current_user.country,
+        "conference": conference_of(current_user.country),
     }
 
 
