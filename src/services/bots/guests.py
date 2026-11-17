@@ -534,6 +534,10 @@ GUESTS: tuple[Guest, ...] = (
     _guest("vukovic", "Vukovic, Vladimir", "1898–1975", 2050, aggression=40, mobility=130, randomness=25),
     _guest("takacs", "Takacs, Sandor", "1893–1932", 2050, aggression=10, randomness=25),
     _guest("konig", "Koenig, Imre", "1901–1992", 2000, aggression=0, randomness=30),
+
+    # --- Четырнадцатая партия турниров (28.4): Копенгаген 1923 ---------------------------------------------------
+    # Умер через две недели после турнира в Копенгагене.
+    _guest("jacobsen", "Jacobsen, Egil", "1897–1923", 2000, aggression=20, randomness=30),
 )
 GUESTS_BY_ID = {guest.id: guest for guest in GUESTS}
 # По имени из PGN («Фамилия, Имя»): под ним партия с мастером сохраняется и показывается в архиве.

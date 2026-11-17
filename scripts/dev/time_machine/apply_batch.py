@@ -5,6 +5,7 @@ Run from the repo root: python apply_batch.py batchN.json
 import json
 import pathlib
 import sys
+import textwrap
 
 batch = json.loads(pathlib.Path(sys.argv[1]).read_text(encoding="utf-8"))
 LANGS = ("en", "uk", "ru")
@@ -59,7 +60,8 @@ assert s.count(anchor) == 1
 lines = []
 for e in batch["events"]:
     assert f'Event("{e["key"]}"' not in s, e["key"]
-    lines.append(f"    # {e['note']}")
+    # Пояснение к турниру — комментарий над записью; длинное переносится, чтобы пройти проверку длины строки.
+    lines.extend(textwrap.wrap(e["note"], width=112, initial_indent="    # ", subsequent_indent="    # "))
     cycles = f", cycles={e['cycles']}" if e.get("cycles", 1) > 1 else ""
     if e["format"] == "round_robin":
         rows, row = [], "       "
