@@ -1,0 +1,24 @@
+{
+  "guests_header": "Четырнадцатая партия турниров (28.4): Копенгаген 1923",
+  "guests": [
+    {"id": "jacobsen", "pgn": "Jacobsen, Egil", "era": "1897–1923", "rating": 2000, "style": {"aggression": 20, "randomness": 30},
+     "note": "Умер через две недели после турнира в Копенгагене.",
+     "en": ["Egil Jacobsen", "Jacobsen", "Danish champion of 1917 and 1922"],
+     "uk": ["Егіл Якобсен", "Якобсен", "Чемпіон Данії 1917 і 1922 років"],
+     "ru": ["Эгил Якобсен", "Якобсен", "Чемпион Дании 1917 и 1922 годов"]}
+  ],
+  "events": [
+    {"key": "copenhagen_1923", "year": 1923, "format": "round_robin", "cycles": 2,
+     "note": "Шесть участников в два круга. Нимцович победил без поражений; здесь сыграна «бессмертная партия цугцванга» Земиш — Нимцович.",
+     "table": [["nimzowitsch", 8], ["samisch", 6], ["tartakower", 6], ["spielmann", 5.5], ["jacobsen", 3], ["moller", 1.5]],
+     "en": {"title": "Copenhagen 1923", "place": "Copenhagen, March 1923",
+            "story": "A double round robin of six: the invited stars Tartakower, Sämisch and Spielmann, Aron Nimzowitsch, who had settled in Denmark, and the leaders of Danish chess, Møller and Jacobsen. It was here that Sämisch and Nimzowitsch played the game now known as the Immortal Zugzwang Game. Nimzowitsch won the tournament without a defeat, two points clear.",
+            "real": "Winner: Aron Nimzowitsch with 8 points from 10 games, without a defeat; Friedrich Sämisch and Savielly Tartakower shared second place (6)."},
+     "uk": {"title": "Копенгаген 1923", "place": "Копенгаген, березень 1923",
+            "story": "Двоколовий турнір шести: запрошені зірки Тартаковер, Земіш і Шпільман, Арон Німцович, який оселився в Данії, та лідери данських шахів Меллер і Якобсен. Саме тут Земіш і Німцович зіграли партію, відому тепер як «безсмертна партія цугцвангу». Німцович виграв турнір без поразок, із відривом у два очки.",
+            "real": "Переможець — Арон Німцович, 8 із 10 без поразок; друге місце поділили Фрідріх Земіш і Савелій Тартаковер (по 6)."},
+     "ru": {"title": "Копенгаген 1923", "place": "Копенгаген, март 1923",
+            "story": "Двухкруговой турнир шести: приглашённые звёзды Тартаковер, Земиш и Шпильман, поселившийся в Дании Арон Нимцович и лидеры датских шахмат Мёллер и Якобсен. Именно здесь Земиш и Нимцович сыграли партию, известную теперь как «бессмертная партия цугцванга». Нимцович выиграл турнир без поражений, с отрывом в два очка.",
+            "real": "Победитель — Арон Нимцович, 8 из 10 без поражений; второе место разделили Фридрих Земиш и Савелий Тартаковер (по 6)."}}
+  ]
+}

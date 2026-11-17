@@ -396,6 +396,11 @@ _EVENTS: tuple[Event, ...] = (
         ("grunfeld", 8), ("reti", 7.5), ("bogoljubow", 6.5), ("vukovic", 6), ("spielmann", 6), ("samisch", 5.5),
         ("takacs", 4), ("konig", 2), ("kmoch", 1.5),
     )),
+    # Шесть участников в два круга. Нимцович победил без поражений; здесь сыграна «бессмертная партия цугцванга»
+    # Земиш — Нимцович.
+    Event("copenhagen_1923", 1923, "round_robin", _table(
+        ("nimzowitsch", 8), ("samisch", 6), ("tartakower", 6), ("spielmann", 5.5), ("jacobsen", 3), ("moller", 1.5),
+    ), cycles=2),
 )
 # Лента — по годам; турниры одного года — по ключу.
 EVENTS: tuple[Event, ...] = tuple(sorted(_EVENTS, key=lambda event: (event.year, event.key)))

@@ -635,6 +635,7 @@ export const en = {
             vukovic: {name: 'Vladimir Vuković', shortName: 'Vuković', about: 'Croatian chess writer, theoretician and journalist from Zagreb'},
             takacs: {name: 'Sándor Takács', shortName: 'Takács', about: 'Hungarian master, born in Miskolc'},
             konig: {name: 'Imre König', shortName: 'König', about: 'Played for Yugoslavia and later for Great Britain'},
+            jacobsen: {name: 'Egil Jacobsen', shortName: 'Jacobsen', about: 'Danish champion of 1917 and 1922'},
         },
         profiles: {
             philidor: {
@@ -3344,6 +3345,12 @@ export const en = {
                 place: 'Vienna, November – December 1922',
                 story: 'A big tournament in the Austrian capital. Akiba Rubinstein achieved one of the greatest successes of his career: he went through undefeated and finished well ahead of Tartakower. The Austrian master Heinrich Wolf took third place. Spielmann fell ill and could not finish; his last two games were scored as losses.',
                 real: 'Winner: Akiba Rubinstein with 11½ points from 14 games, without a defeat; Savielly Tartakower was second (10), Heinrich Wolf third (9½).',
+            },
+            copenhagen_1923: {
+                title: 'Copenhagen 1923',
+                place: 'Copenhagen, March 1923',
+                story: 'A double round robin of six: the invited stars Tartakower, Sämisch and Spielmann, Aron Nimzowitsch, who had settled in Denmark, and the leaders of Danish chess, Møller and Jacobsen. It was here that Sämisch and Nimzowitsch played the game now known as the Immortal Zugzwang Game. Nimzowitsch won the tournament without a defeat, two points clear.',
+                real: 'Winner: Aron Nimzowitsch with 8 points from 10 games, without a defeat; Friedrich Sämisch and Savielly Tartakower shared second place (6).',
             },
         },
     },

@@ -30,7 +30,8 @@ def number(cell: str) -> float | None:
 
 def points(cell: str) -> float | None:
     cell = re.sub(r"'''|<[^>]+>|&nbsp;|\s", "", cell)
-    if cell == "" or re.fullmatch(r"(\{\{[^}]*\}\}|[xXхХ*●■\-–—])+", cell):
+    # пустая ячейка, шаблон или картинка на диагонали («сам с собой»), прочерк
+    if cell == "" or re.fullmatch(r"(\{\{[^}]*\}\}|\[\[Файл:[^\]]*\]\]|[xXхХ*●■\-–—])+", cell):
         return 0.0
     if not re.fullmatch(r"[01½+\-–−=]+", cell):
         return None
@@ -45,7 +46,10 @@ def split_cells(part: str) -> list[str]:
     out = []
     for cell in cells:
         # «a || b» в одной строке — несколько ячеек
-        out.extend(strip_style(piece) for piece in re.split(r"\|\||!!", cell))
+        for piece in re.split(r"\|\||!!", cell):
+            # colspan="2" в заголовке двухкругового турнира — две колонки с одним номером
+            span = re.match(r'^\s*colspan\s*=\s*"?(\d+)"?\s*\|', piece)
+            out.extend([strip_style(piece)] * (int(span.group(1)) if span else 1))
     return out
 
 
@@ -68,7 +72,8 @@ def rows(path: str, index: int = 0) -> list[tuple[str, str, float | None, str, f
             continue
         if len(cells) != len(header):
             raise ValueError(f"row has {len(cells)} cells, header {len(header)}: {cells[:3]}")
-        named = next(i for i, c in enumerate(cells) if "[[" in c or re.search(r"[А-Яа-яЁё]{4,}", c))
+        named = next(i for i, c in enumerate(cells)
+                     if ("[[" in c and "[[Файл:" not in c) or re.search(r"[А-Яа-яЁё]{4,}", c.replace("Файл", "")))
         link = re.search(r"\[\[([^\]|]+)(?:\|([^\]]+))?\]\]", cells[named])
         name = (link.group(1) if link else re.sub(r"\{\{[^}]*\}\}|'''", "", cells[named])).strip()
         name = re.sub(r"\s*\(.*?\)", "", name)

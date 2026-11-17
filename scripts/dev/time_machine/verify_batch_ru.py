@@ -18,6 +18,7 @@ SOURCES = {
     "semmering_1926": ("ru_semmering_1926", 0),
     "goteborg_1920": ("ru_goteborg_1920", 0),
     "vienna_1922": ("ru_vienna_1922", 0),
+    "copenhagen_1923": ("ru_copenhagen_1923", 0),
 }
 # Разные записи одного имени в источнике и в нашем каталоге.
 FIRST_NAMES = {"ханс": "ганс", "чарлз": "чарльз", "бора": "борис"}
