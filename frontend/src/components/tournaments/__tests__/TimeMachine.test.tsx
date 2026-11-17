@@ -11,7 +11,7 @@ import {
 import type {HistoricEvent} from '../../../services/timeMachine';
 import {gameStart, guestIdOf, participantName, totalRounds} from '../../../services/tournaments';
 import type {Tournament, TournamentPlayer} from '../../../services/tournaments';
-import {RealResult, TimeMachinePage} from '../TimeMachine';
+import {PERIOD_STARTS, RealResult, TimeMachinePage, periodLabel, periodOf} from '../TimeMachine';
 import {TournamentView} from '../TournamentsPage';
 
 const AVRO: HistoricEvent = {
@@ -129,6 +129,37 @@ describe('лента турниров', () => {
         expect(within(london).getByTestId('games-london_1851')).toHaveTextContent('вы играете, пока не проиграете матч');
         expect(london).toHaveTextContent('На выбывание');
         expect(within(london).getByTestId('real-table')).toHaveTextContent('выбыл в 1-м круге');
+    });
+
+    it('периоды ленты: год турнира относится к своему периоду, подпись — годы', () => {
+        expect([1851, 1880, 1881, 1900, 1901, 1914, 1915, 1938, 1948].map(periodOf)).toEqual([0, 0, 1, 1, 2, 2, 3, 3, 3]);
+        expect(PERIOD_STARTS.map((_, index) => periodLabel(index, 1938))).toEqual(['1851–1880', '1881–1900', '1901–1914', '1915–1938']);
+        // Последний период тянется до последнего турнира ленты.
+        expect(periodLabel(3, 1946)).toBe('1915–1946');
+    });
+
+    it('выбор периода оставляет в ленте только его турниры; «Все» возвращает остальные', async () => {
+        stub(() => ({events: [LONDON, AVRO]}));
+        renderPage();
+        await screen.findByTestId('event-avro_1938');
+        const periods = screen.getByTestId('tm-periods');
+        expect(within(periods).getByTestId('period-all')).toHaveTextContent('Все · 2');
+        expect(within(periods).getByTestId('period-all')).toHaveAttribute('aria-pressed', 'true');
+        // Периоды без турниров не показаны.
+        expect(within(periods).getAllByRole('button').map((b) => b.textContent)).toEqual(['Все · 2', '1851–1880 · 1', '1915–1938 · 1']);
+
+        fireEvent.click(within(periods).getByTestId('period-0'));
+        expect(screen.getByTestId('event-london_1851')).toBeInTheDocument();
+        expect(screen.queryByTestId('event-avro_1938')).toBeNull();
+        expect(within(periods).getByTestId('period-0')).toHaveAttribute('aria-pressed', 'true');
+
+        fireEvent.click(within(periods).getByTestId('period-3'));
+        expect(screen.queryByTestId('event-london_1851')).toBeNull();
+        expect(screen.getByTestId('event-avro_1938')).toBeInTheDocument();
+
+        fireEvent.click(within(periods).getByTestId('period-all'));
+        expect(screen.getByTestId('event-london_1851')).toBeInTheDocument();
+        expect(screen.getByTestId('event-avro_1938')).toBeInTheDocument();
     });
 
     it('вход в турнир: выбранный контроль уходит на сервер, открывается турнир', async () => {

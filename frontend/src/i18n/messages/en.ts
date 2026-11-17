@@ -3011,6 +3011,8 @@ export const en = {
     },
     timeMachine: {
         title: 'Time machine',
+        period: 'Period',
+        allPeriods: 'All',
         teaser: 'Join a famous tournament of the past: London 1851, Hastings 1895 and more, with the full original field.',
         intro: 'Travel back and take a seat in a famous tournament. The field is the original one plus you: in a round robin you play everyone, in a knockout you can be eliminated. The masters\' games against each other are played by the server, so history may turn out differently this time.',
         loading: 'Loading tournaments…',
