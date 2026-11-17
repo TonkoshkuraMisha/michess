@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from sqlalchemy import Boolean, DateTime, Integer, String
+from sqlalchemy import Boolean, DateTime, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
@@ -17,7 +17,7 @@ class User(Base):
     """
     __tablename__ = "users"
 
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(50), unique=True, index=True)
     # Нормализованное имя (casefold) аккаунтов, входящих по паролю: уникальность без учёта
     # регистра («Misha» и «misha» — один аккаунт) и вход в любом регистре. У архивных игроков
@@ -91,3 +91,8 @@ class User(Base):
 
     def games_played_for(self, category: RatingCategory) -> int:
         return getattr(self, f"{category}_games_played")
+
+
+# Профиль, регистрация, поиск игроков и жалобы ищут имя без учёта регистра (lower(username)): без индекса по этому
+# выражению каждый такой запрос читал всю таблицу (ревизия базы 29.1).
+Index("ix_users_username_lower", func.lower(User.username))

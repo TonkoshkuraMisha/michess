@@ -14,7 +14,7 @@ class BotPersonality(Base):
     __tablename__ = "bot_personalities"
     __table_args__ = (UniqueConstraint("owner_id", "name_key", name="uq_bot_personalities_owner_name"),)
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     owner_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True,
     )

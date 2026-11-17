@@ -15,7 +15,7 @@ class Move(Base):
     """
     __tablename__ = "moves"
 
-    id: Mapped[int] = mapped_column(primary_key=True, index=True)
+    id: Mapped[int] = mapped_column(primary_key=True)
     game_id: Mapped[int] = mapped_column(ForeignKey("games.id"), index=True)
     player_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
 
