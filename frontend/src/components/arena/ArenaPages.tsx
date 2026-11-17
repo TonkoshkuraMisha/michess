@@ -34,7 +34,13 @@ function arenaName(a: ArenaInfo, t: ReturnType<typeof useI18n>['t']): string {
 function timing(a: ArenaInfo, now: number, t: ReturnType<typeof useI18n>['t']): string {
     if (a.status === 'scheduled') return t('arenas.startsIn', {time: clock(secondsUntil(a.starts_at, now))});
     if (a.status === 'running' && a.format === 'swiss') return t('arenas.round', {round: a.current_round ?? 0, total: a.rounds ?? 0});
+    if (a.status === 'running' && a.last_start_at) {
+        return t('arenas.lastStartIn', {time: clock(secondsUntil(a.last_start_at, now)), end: clock(secondsUntil(a.ends_at, now))});
+    }
     if (a.status === 'running') return t('arenas.endsIn', {time: clock(secondsUntil(a.ends_at, now))});
+    // Честный конец (33.1): после последнего старта — доигрывание; итоги окончательные, когда все партии сыграны.
+    if (a.status === 'closing' && (a.open_games ?? 0) > 0) return t('arenas.closingGames', {n: a.open_games ?? 0});
+    if (a.status === 'closing') return t('arenas.closingTime', {time: clock(secondsUntil(a.ends_at, now))});
     return t('arenas.finished');
 }
 
@@ -146,6 +152,9 @@ export function ArenaPage() {
                         </>
                     )}
                     {arena.me?.joined && arena.status === 'scheduled' && <span className="text-sm">{t('arenas.joinedWait')}</span>}
+                    {arena.status === 'closing' && arena.format !== 'swiss' && (
+                        <span className="text-sm" data-testid="arena-closing">{t('arenas.pairingClosed')}</span>
+                    )}
                     {arena.me?.joined && arena.status === 'running' && arena.format === 'swiss' && <span className="text-sm" data-testid="swiss-waiting">{t('arenas.swissWaiting')}</span>}
                 </div>
             )}
@@ -157,6 +166,7 @@ export function ArenaPage() {
                             <tr className="text-boxwood/70 text-left">
                                 <th>#</th><th>{t('arenas.player')}</th><th className="text-right">{t('arenas.score')}</th>
                                 <th className="text-right">{t('arenas.games')}</th>
+                                <th className="text-right">{t('arenas.performance')}</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -169,6 +179,9 @@ export function ArenaPage() {
                                     </td>
                                     <td className="text-right font-bold">{s.score}</td>
                                     <td className="text-right font-mono text-boxwood/80">{s.games}</td>
+                                    <td className="text-right font-mono text-boxwood/70" data-testid={`arena-perf-${s.username}`}>
+                                        {s.performance ?? '—'}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>

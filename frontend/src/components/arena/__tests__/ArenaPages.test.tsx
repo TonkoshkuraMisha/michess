@@ -105,3 +105,24 @@ describe('швейцарка между людьми', () => {
         expect(screen.getByTestId('swiss-waiting')).toBeInTheDocument();
     });
 });
+
+describe('честный конец арены (33.1)', () => {
+    it('до последнего старта — отсчёт; после — доигрывание и без кнопки «Играть»; перформанс в таблице', async () => {
+        const lastStart = new Date(Date.now() + 10 * 60_000).toISOString();
+        const standings = [{place: 1, username: 'misha', score: 4, games: 2, wins: 2, fire: true, rating: 1500, performance: 1900}];
+        let current: Record<string, unknown> = {...RUNNING, last_start_at: lastStart, open_games: 0, standings,
+            me: {joined: true, waiting: false, current_game_id: null}};
+        vi.stubGlobal('fetch', vi.fn(async () => ({ok: true, status: 200, json: async () => current} as Response)));
+        const view = routes('/arenas/3');
+        expect(await screen.findByTestId('arena-timing')).toHaveTextContent('последний старт через 10:0');
+        expect(screen.getByTestId('arena-play')).toBeInTheDocument();
+        expect(screen.getByTestId('arena-perf-misha')).toHaveTextContent('1900');
+        view.unmount();
+
+        current = {...current, status: 'closing', open_games: 2};
+        routes('/arenas/3');
+        expect(await screen.findByTestId('arena-timing')).toHaveTextContent('доигрываются партии: 2');
+        expect(screen.getByTestId('arena-closing')).toBeInTheDocument();
+        expect(screen.queryByTestId('arena-play')).toBeNull();
+    });
+});

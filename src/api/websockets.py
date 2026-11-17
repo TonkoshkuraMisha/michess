@@ -387,6 +387,12 @@ async def _chat_message(ctx: ActionContext, data: dict) -> None:
 @action("abort_game")
 async def _abort_game(ctx: ActionContext, data: dict) -> None:
     game = await _participant_game(ctx, data, in_progress=True)
+    # Партия арены не отменяется по желанию (33.1): иначе неудобного соперника можно было бы «пропустить»;
+    # неявку засчитывает таймаут первого хода.
+    from src.services import arena as arena_service
+    if await arena_service.is_arena_game(ctx.db, game.game_id):
+        await ctx.error("arena_no_abort")
+        return
     abort_res = await state_manager.abort_game(ctx.db, game.game_id)
     if abort_res.get("status") == "error":
         await ctx.error(abort_res.get("code", "game_not_in_progress"))

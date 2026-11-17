@@ -6,7 +6,8 @@ import {readApiErrorOr, UiError} from './apiErrors';
 import {uiMessage} from '../i18n';
 import {getToken} from './authToken';
 
-export type ArenaStatus = 'scheduled' | 'running' | 'finished';
+/** closing (33.1): пар больше нет — доигрываются последние партии или идёт время до конца; итоги — в finished. */
+export type ArenaStatus = 'scheduled' | 'running' | 'closing' | 'finished';
 
 export interface ArenaInfo {
     id: number;
@@ -21,6 +22,10 @@ export interface ArenaInfo {
     ends_at: string;
     status: ArenaStatus;
     players?: number;
+    /** Последний старт: до него создаются пары (только у формата arena). */
+    last_start_at?: string;
+    /** Идущих партий арены — итоги ждут их. */
+    open_games?: number;
 }
 
 export interface ArenaStanding {
@@ -31,6 +36,8 @@ export interface ArenaStanding {
     wins: number;
     fire: boolean;
     rating: number;
+    /** Перформанс в арене — первый показатель при равенстве очков. */
+    performance?: number | null;
 }
 
 export interface ArenaDetail extends ArenaInfo {

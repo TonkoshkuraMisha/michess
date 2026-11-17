@@ -741,7 +741,8 @@ class GameStateManager:
                 await product_metrics.record_event(db, player.id, product_metrics.GAME_FINISHED)
         # Партия арены (17.2): очки и серии участников — в той же транзакции, что и итог партии.
         from src.services import arena as arena_service
-        await arena_service.on_game_finished(db, game_id, result)
+        await arena_service.on_game_finished(db, game_id, result, termination=termination,
+                                             plies=len(moves_telemetry) if moves_telemetry else 0)
         await db.commit()
         await self._mark_finished_in_db(game_id)
         GAMES_FINISHED.labels(bounded_label(termination)).inc()
@@ -1029,7 +1030,10 @@ class GameStateManager:
         await self.redis.delete(f"user:{white_id}:current_game")
         await self.redis.delete(f"user:{black_id}:current_game")
 
-        w_rating, b_rating = await self._finalize_abort_in_db(db, game_id, white_id, black_id)
+        # Партия арены (33.1): отмена до первых ходов — неявка того, чья очередь ходить (добровольная отмена в арене
+        # запрещена на входе, сюда приходит только таймаут первого хода).
+        no_show = "white" if state_version == 0 else "black"
+        w_rating, b_rating = await self._finalize_abort_in_db(db, game_id, white_id, black_id, no_show=no_show)
 
         return {
             "status": "aborted",
@@ -1043,7 +1047,8 @@ class GameStateManager:
             "black_new_rating": b_rating,
         }
 
-    async def _finalize_abort_in_db(self, db, game_id: int, white_id: int, black_id: int) -> tuple[int, int]:
+    async def _finalize_abort_in_db(self, db, game_id: int, white_id: int, black_id: int,
+                                    no_show: str | None = None) -> tuple[int, int]:
         """
         Записывает отмену партии в БД (идемпотентно). Вызывается после успешного захвата
         завершения со статусом aborted — из abort_game или из сверки после сбоя.
@@ -1068,6 +1073,9 @@ class GameStateManager:
             is_tz = getattr(Game.__table__.c.finished_at.type, "timezone", False)
             now_utc = datetime.now(UTC)
             db_game.finished_at = now_utc if is_tz else now_utc.replace(tzinfo=None)
+            # Арена: неявка — поражение не сделавшему первый ход; сторона неизвестна (сверка) — партия без очков.
+            from src.services import arena as arena_service
+            await arena_service.on_game_aborted(db, game_id, no_show)
         await db.commit()  # и снимает блокировку, если партия уже была завершена
         await self._mark_finished_in_db(game_id)
         return w_rating, b_rating
