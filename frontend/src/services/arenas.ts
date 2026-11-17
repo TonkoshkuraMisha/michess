@@ -28,8 +28,6 @@ export interface ArenaInfo {
     last_start_at?: string;
     /** Идущих партий арены — итоги ждут их. */
     open_games?: number;
-    /** Группа по силе (33.2): потолок рейтинга; null — открытая арена. */
-    max_rating?: number | null;
     /** Деление при переполнении (33.2): 1 — основное. */
     division?: number;
     parent_id?: number | null;

@@ -210,13 +210,13 @@ describe('расписание по конференциям и напомина
     });
 });
 
-describe('группы и деления (33.2)', () => {
-    it('название с группой и делением; игрок в другом делении — переход туда', async () => {
+describe('деления переполненной арены (33.2)', () => {
+    it('название с делением; игрок в другом делении — переход туда', async () => {
         const fetchMock = vi.fn(async (url: string) => {
             const u = String(url);
             const body = u.endsWith('/arenas/3')
-                ? {...RUNNING, max_rating: 1700, division: 1, standings: [], me: {joined: false, waiting: false, current_game_id: null, division_arena_id: 9}}
-                : {...RUNNING, id: 9, max_rating: 1700, division: 2, parent_id: 3, standings: [],
+                ? {...RUNNING, division: 1, standings: [], me: {joined: false, waiting: false, current_game_id: null, division_arena_id: 9}}
+                : {...RUNNING, id: 9, division: 2, parent_id: 3, standings: [],
                     me: {joined: true, waiting: false, current_game_id: null, division_arena_id: null}};
             return {ok: true, status: 200, json: async () => body} as Response;
         });
@@ -226,7 +226,7 @@ describe('группы и деления (33.2)', () => {
                 <Routes><Route path="/arenas/:arenaId" element={<ArenaPage/>}/></Routes>
             </MemoryRouter>,
         );
-        expect(await screen.findByRole('heading', {level: 1})).toHaveTextContent('до 1700 · деление 2');
+        expect(await screen.findByRole('heading', {level: 1})).toHaveTextContent('Арена 3+2 · деление 2');
         expect(fetchMock.mock.calls.some(([u]) => String(u).endsWith('/arenas/9'))).toBe(true);
     });
 });

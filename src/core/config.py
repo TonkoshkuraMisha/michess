@@ -30,8 +30,6 @@ class Settings(BaseSettings):
     VERSION: str = "1.2.2"
     API_V1_STR: str = "/api/v1"
 
-    # Арены по группам рейтинга (таск 33.2): включить, когда в средней арене стабильно больше 40 участников.
-    ARENA_RATING_BANDS: bool = False
     # Конференции, по расписанию которых создаются арены (таск 33.4), через запятую. Пока игроков мало, список можно
     # сократить (например, "central"), чтобы не дробить их по аренам пяти поясов.
     ARENA_CONFERENCES: str = "central,western,northern,southern,eastern"

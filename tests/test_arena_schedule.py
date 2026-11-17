@@ -80,11 +80,9 @@ def test_planned_window_keys_and_active_conferences(monkeypatch):
                        ("central:blitz-3+2", 22)}
     assert len({(item.schedule_key, item.starts_at) for item in items}) == len(items)
 
-    monkeypatch.setattr(settings, "ARENA_RATING_BANDS", True)
-    with_bands = plan.planned(NOW, timedelta(hours=6))
-    assert {item.max_rating for item in with_bands if item.slot is plan.BLITZ} == {None, 1300, 1700, 2100}
-    assert all(item.max_rating is None for item in with_bands if item.slot is not plan.BLITZ)
-    assert max(len(item.schedule_key) for item in with_bands) <= 32            # длина поля arenas.schedule_key
+    assert max(len(item.schedule_key) for item in items) <= 32                 # длина поля arenas.schedule_key
+    # Арен «только до такого-то рейтинга» в расписании нет: ключ — «конференция:слот», без потолка.
+    assert all(item.schedule_key == f"{item.conference}:{item.slot.key}" for item in items)
 
     monkeypatch.setattr(settings, "ARENA_CONFERENCES", "central, eastern, unknown")
     assert {item.conference for item in plan.planned(NOW, timedelta(hours=6))} == {"central", "eastern"}

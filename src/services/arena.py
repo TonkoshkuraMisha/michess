@@ -18,10 +18,9 @@
 * неявка: первый ход не сделан и партия отменена по таймауту — поражение тому, чья очередь ходить, сопернику —
   победа; добровольная отмена в арене запрещена; договорная ничья до EARLY_DRAW_PLIES полуходов — 0 очков обоим;
 * таблица при равенстве очков: перформанс в арене, затем меньше партий, затем раньше вошедший;
-* допуск (таск 33.2): не меньше MIN_RATED_GAMES рейтинговых партий в контроле арены, без флага нечестной игры;
-  вход — только пока арена не закрыта для пар (scheduled / running);
-* группа по силе: у арены max_rating — рейтинг в контроле на входе и его пик за PEAK_DAYS дней не выше потолка
-  (против «слива» рейтинга ради слабой группы);
+* вход открыт всем (решение владельца 17.11.2026, CLAUDE.md, правило 7): в любую арену входит любой
+  зарегистрированный игрок — без порога сыгранных партий и без арен «только до такого-то рейтинга». Закрыт вход
+  только игроку с флагом нечестной игры. Войти можно, пока арена не закрыта для пар (scheduled / running);
 * деления: в делении не больше DIVISION_SIZE участников; следующий входящий попадает в первое неполное деление
   той же арены (своя таблица, те же время и правила), а если таких нет — в новое;
 * «берсерк» (таск 33.3): до своего первого хода игрок берёт половину базового времени без добавки; победа приносит
@@ -48,10 +47,7 @@ from src.services.rating import classify_time_control
 
 FIRE_AFTER = 2
 GAME_MOVES = 40
-MIN_RATED_GAMES = 10
-PEAK_DAYS = 7
 DIVISION_SIZE = 500
-RATING_BANDS = arena_schedule.RATING_BANDS
 EARLY_DRAW_PLIES = 20
 BERSERK_BONUS = 1
 BERSERK_MIN_BASE_MS = 60_000
@@ -126,7 +122,7 @@ async def ensure_schedule(db: AsyncSession, now: datetime | None = None) -> None
             db.add(Arena(schedule_key=item.schedule_key, conference=item.conference,
                          base_time_ms=item.slot.base_time_ms, increment_ms=item.slot.increment_ms,
                          starts_at=item.starts_at, ends_at=item.ends_at, format=item.slot.format,
-                         rounds=item.slot.rounds, max_rating=item.max_rating))
+                         rounds=item.slot.rounds))
     stale = [arena_id for arena_id, key, starts_at in rows
              if _aware(starts_at) > now and (key, _aware(starts_at)) not in plan]
     if stale:
@@ -157,40 +153,13 @@ async def get(db: AsyncSession, arena_id: int) -> Arena:
     return arena
 
 
-async def peak_rating(db: AsyncSession, user: User, category: str, days: int = PEAK_DAYS) -> int:
-    """Наибольший рейтинг игрока в категории за последние days дней (по партиям) и сейчас."""
-    from sqlalchemy import case, or_
-
-    from src.models.game import Game, GameStatus
-    from src.services.rating import ESTIMATED_MOVES, category_duration_bounds_ms
-
-    since = _now() - timedelta(days=days)
-    after = case((Game.white_player_id == user.id, Game.white_initial_rating + Game.white_rating_delta),
-                 else_=Game.black_initial_rating + Game.black_rating_delta)
-    conditions = [or_(Game.white_player_id == user.id, Game.black_player_id == user.id),
-                  Game.status == GameStatus.COMPLETED, Game.is_rated.is_(True), Game.finished_at >= since,
-                  Game.white_rating_delta.is_not(None), Game.black_rating_delta.is_not(None)]
-    lower, upper = category_duration_bounds_ms(category)  # type: ignore[arg-type]
-    estimated = Game.base_time_ms + ESTIMATED_MOVES * Game.increment_ms
-    if lower is not None:
-        conditions.append(estimated >= lower)
-    if upper is not None:
-        conditions.append(estimated < upper)
-    best = await db.scalar(select(func.max(after)).where(*conditions))
-    current = user.rating_for(category)  # type: ignore[arg-type]
-    return max(current, int(best)) if best is not None else current
-
-
-async def check_entry(db: AsyncSession, arena: Arena, user: User) -> None:
-    """Допуск в арену (33.2): сыгранные партии, честная игра, потолок группы."""
-    category = classify_time_control(arena.base_time_ms, arena.increment_ms)
-    games = user.games_played_for(category)
-    if games < MIN_RATED_GAMES:
-        raise DomainError("arena_need_games", need=MIN_RATED_GAMES, have=games)
+def check_entry(user: User) -> None:
+    """
+    Допуск в арену: единственное условие — честная игра. Рейтинг и число сыгранных партий на вход не влияют
+    (решение владельца: никакого деления игроков по силе), новичок может встретиться с сильнейшим.
+    """
     if user.is_cheater:
         raise DomainError("arena_fair_play")
-    if arena.max_rating is not None and await peak_rating(db, user, category) > arena.max_rating:
-        raise DomainError("arena_rating_too_high", limit=arena.max_rating)
 
 
 async def divisions(db: AsyncSession, arena: Arena) -> list[Arena]:
@@ -212,7 +181,7 @@ async def join(db: AsyncSession, arena: Arena, user: User) -> ArenaPlayer:
         ArenaPlayer.arena_id.in_(family_ids), ArenaPlayer.user_id == user.id))
     if existing:
         return existing
-    await check_entry(db, arena, user)
+    check_entry(user)
     counts = dict((await db.execute(select(ArenaPlayer.arena_id, func.count()).where(
         ArenaPlayer.arena_id.in_(family_ids)).group_by(ArenaPlayer.arena_id))).tuples().all())
     target = next((a for a in family if counts.get(a.id, 0) < DIVISION_SIZE), None)
@@ -220,8 +189,7 @@ async def join(db: AsyncSession, arena: Arena, user: User) -> ArenaPlayer:
         root = family[0]
         target = Arena(schedule_key=None, base_time_ms=root.base_time_ms, increment_ms=root.increment_ms,
                        starts_at=root.starts_at, ends_at=root.ends_at, format=root.format, rounds=root.rounds,
-                       max_rating=root.max_rating, division=family[-1].division + 1, parent_id=root.id,
-                       conference=root.conference)
+                       division=family[-1].division + 1, parent_id=root.id, conference=root.conference)
         db.add(target)
         await db.flush()
     category = classify_time_control(arena.base_time_ms, arena.increment_ms)
@@ -542,7 +510,7 @@ async def standings(db: AsyncSession, arena_id: int) -> list[dict]:
 def view(arena: Arena, now: datetime | None = None, open_games: int = 0) -> dict:
     """
     Карточка арены для клиента: контроль времени, начало и конец, статус, последний старт, доступен ли берсерк,
-    конференция, вечерняя ли это арена, группа по силе и деление.
+    конференция, вечерняя ли это арена и деление.
     """
     out = {"id": arena.id, "schedule_key": arena.schedule_key, "format": arena.format, "rounds": arena.rounds,
            "current_round": arena.current_round, "base_time_ms": arena.base_time_ms,
@@ -554,7 +522,6 @@ def view(arena: Arena, now: datetime | None = None, open_games: int = 0) -> dict
     out["berserk"] = berserk_allowed(arena)
     out["conference"] = arena.conference
     out["evening"] = arena_schedule.is_evening(arena.schedule_key)
-    out["max_rating"] = arena.max_rating
     out["division"] = arena.division or 1
     out["parent_id"] = arena.parent_id
     return out
