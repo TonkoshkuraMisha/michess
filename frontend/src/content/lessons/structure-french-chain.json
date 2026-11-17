@@ -1,0 +1,289 @@
+{
+  "id": "structure-french-chain",
+  "course": "strategy",
+  "order": 2,
+  "title": {
+    "en": "The French pawn chain",
+    "uk": "Французький пішаковий ланцюг",
+    "ru": "Французская пешечная цепь"
+  },
+  "summary": {
+    "en": "Pawn chains d4–e5 and e6–d5: attack the chain at its base, play where your pawns point.",
+    "uk": "Ланцюги d4–e5 та e6–d5: атакуйте ланцюг біля основи, грайте там, куди дивляться ваші пішаки.",
+    "ru": "Цепи d4–e5 и e6–d5: атакуйте цепь у основания, играйте там, куда смотрят ваши пешки."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "r1b1kbnr/pp3ppp/1qn1p3/2ppP3/3P4/P1P2N2/1P3PPP/RNBQKB1R b KQkq - 0 6",
+      "highlights": [
+        "d4",
+        "e5",
+        "e6",
+        "d5"
+      ],
+      "text": {
+        "en": "Two pawn chains lock the centre: White's d4–e5 and Black's e6–d5. A chain is strong at the head and weak at the base: the base pawn has no pawn behind it. White's base is d4, Black's is e6. And each side plays on the wing its pawns point to: White on the kingside, Black on the queenside.",
+        "uk": "Два пішакові ланцюги замикають центр: білий d4–e5 і чорний e6–d5. Ланцюг сильний на чолі й слабкий біля основи: базового пішака ззаду ніхто не захищає пішаком. Основа білих — d4, чорних — e6. І кожен грає на фланзі, куди дивляться його пішаки: білі — на королівському, чорні — на ферзевому.",
+        "ru": "Две пешечные цепи запирают центр: белая d4–e5 и чёрная e6–d5. Цепь сильна во главе и слаба у основания: базовую пешку сзади ни одна пешка не защищает. Основание белых — d4, чёрных — e6. И каждый играет на фланге, куда смотрят его пешки: белые — на королевском, чёрные — на ферзевом."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "r1b1kbnr/pp3ppp/1qn1p3/2ppP3/3P4/P1P2N2/1P3PPP/RNBQKB1R b KQkq - 0 6",
+      "text": {
+        "en": "Black's plan: everything hits d4. The pawn c5, the knight c6 and the queen b6 already press on it; the knight from g8 can join via e7 and f5. The second lever is ...f6, attacking the head of the chain on e5.",
+        "uk": "План чорних: усе б'є по d4. Пішак c5, кінь c6 і ферзь b6 уже тиснуть на нього; кінь із g8 долучиться через e7 і f5. Другий важіль — …f6, удар по чолу ланцюга на e5.",
+        "ru": "План чёрных: всё бьёт по d4. Пешка c5, конь c6 и ферзь b6 уже давят на неё; конь с g8 подключится через e7 и f5. Второй рычаг — …f6, удар по голове цепи на e5."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "c5",
+          "to": "d4",
+          "color": "red"
+        },
+        {
+          "do": "arrow",
+          "from": "c6",
+          "to": "d4",
+          "color": "red"
+        },
+        {
+          "do": "arrow",
+          "from": "b6",
+          "to": "d4",
+          "color": "red"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "g8",
+          "to": "e7",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "e7",
+          "to": "f5",
+          "color": "blue"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "ghost",
+          "square": "f6",
+          "piece": "bp"
+        },
+        {
+          "do": "arrow",
+          "from": "f6",
+          "to": "e5",
+          "color": "red"
+        }
+      ]
+    },
+    {
+      "type": "demo",
+      "fen": "r1b1kbnr/pp3ppp/1qn1p3/2ppP3/3P4/P1P2N2/1P3PPP/RNBQKB1R b KQkq - 0 6",
+      "text": {
+        "en": "White's plan: hold d4 and use the space on the kingside. a3 prepares b4 to gain room on the queenside too; the bishop goes to d3, the queen may come to g4 against g7. The e5 pawn cramps Black: the knight has no f6 and Black's light-squared bishop on c8 is shut in behind its own pawns — the 'bad' French bishop.",
+        "uk": "План білих: утримати d4 і використати простір на королівському фланзі. a3 готує b4, щоб і на ферзевому фланзі мати простір; слон іде на d3, ферзь може прийти на g4 проти g7. Пішак e5 стискає чорних: коню немає f6, а білопольний слон чорних на c8 замкнений власними пішаками — «поганий» французький слон.",
+        "ru": "План белых: удержать d4 и использовать простор на королевском фланге. a3 готовит b4, чтобы и на ферзевом фланге иметь простор; слон идёт на d3, ферзь может прийти на g4 против g7. Пешка e5 стесняет чёрных: коню нет f6, а белопольный слон чёрных на c8 заперт собственными пешками — «плохой» французский слон."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "b2",
+          "to": "b4",
+          "color": "green"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "f1",
+          "to": "d3",
+          "color": "green"
+        },
+        {
+          "do": "arrow",
+          "from": "d1",
+          "to": "g4",
+          "color": "green"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "highlight",
+          "squares": [
+            "c8",
+            "e6",
+            "d5"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "r1b1kbnr/pp3ppp/1qn1p3/2ppP3/3P4/P1P2N2/1P3PPP/RNBQKB1R b KQkq - 0 6",
+      "text": {
+        "en": "Where should Black aim the attack on White's chain?",
+        "uk": "Куди чорним спрямувати атаку на білий ланцюг?",
+        "ru": "Куда чёрным направить атаку на белую цепь?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "At the base, d4: with ...c5, ...Nc6, ...Qb6.",
+            "uk": "В основу, d4: …c5, …Nc6, …Qb6.",
+            "ru": "В основание, d4: …c5, …Nc6, …Qb6."
+          },
+          "correct": true,
+          "feedback": {
+            "en": "Yes: the base cannot be defended by a pawn — attack it with everything.",
+            "uk": "Так: основу не захистити пішаком — атакуйте її всім.",
+            "ru": "Да: основание не защитить пешкой — атакуйте его всем."
+          }
+        },
+        {
+          "text": {
+            "en": "At the head, e5, with ...g5 and ...g4.",
+            "uk": "У чоло, e5, ходами …g5 і …g4.",
+            "ru": "В голову, e5, ходами …g5 и …g4."
+          },
+          "feedback": {
+            "en": "The head is the strongest point: e5 is defended by d4. The lever against it is ...f6.",
+            "uk": "Чоло — найміцніше місце: e5 захищає d4. Важіль проти нього — …f6.",
+            "ru": "Голова — самое прочное место: e5 защищает d4. Рычаг против неё — …f6."
+          }
+        },
+        {
+          "text": {
+            "en": "Nowhere: in closed positions only the kingside matters.",
+            "uk": "Нікуди: у закритих позиціях важить лише королівський фланг.",
+            "ru": "Никуда: в закрытых позициях важен только королевский фланг."
+          },
+          "feedback": {
+            "en": "Black's pawns point to the queenside — that is where Black plays.",
+            "uk": "Пішаки чорних дивляться на ферзевий фланг — там чорні й грають.",
+            "ru": "Пешки чёрных смотрят на ферзевый фланг — там чёрные и играют."
+          }
+        }
+      ]
+    }
+  ],
+  "exam": [
+    {
+      "type": "choice",
+      "fen": "r1b1kbnr/pp3ppp/1qn1p3/2ppP3/3P4/P1P2N2/1P3PPP/RNBQKB1R b KQkq - 0 6",
+      "text": {
+        "en": "Which black piece suffers most in this structure?",
+        "uk": "Яка чорна фігура найбільше страждає в цій структурі?",
+        "ru": "Какая чёрная фигура больше всего страдает в этой структуре?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "The bishop on c8",
+            "uk": "Слон c8",
+            "ru": "Слон c8"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "The knight on c6",
+            "uk": "Кінь c6",
+            "ru": "Конь c6"
+          }
+        },
+        {
+          "text": {
+            "en": "The queen on b6",
+            "uk": "Ферзь b6",
+            "ru": "Ферзь b6"
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "Which pawn move attacks the head of White's d4–e5 chain?",
+        "uk": "Який хід пішаком атакує чоло білого ланцюга d4–e5?",
+        "ru": "Какой ход пешкой атакует голову белой цепи d4–e5?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "...f6",
+            "uk": "…f6",
+            "ru": "…f6"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "...c5",
+            "uk": "…c5",
+            "ru": "…c5"
+          },
+          "feedback": {
+            "en": "...c5 hits the base, d4.",
+            "uk": "…c5 б'є в основу, d4.",
+            "ru": "…c5 бьёт в основание, d4."
+          }
+        },
+        {
+          "text": {
+            "en": "...a5",
+            "uk": "…a5",
+            "ru": "…a5"
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "On which wing does White usually play in the French chain structure?",
+        "uk": "На якому фланзі зазвичай грають білі у структурі французького ланцюга?",
+        "ru": "На каком фланге обычно играют белые в структуре французской цепи?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "The kingside: the e5 pawn points there.",
+            "uk": "На королівському: туди дивиться пішак e5.",
+            "ru": "На королевском: туда смотрит пешка e5."
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "The queenside only.",
+            "uk": "Лише на ферзевому.",
+            "ru": "Только на ферзевом."
+          }
+        },
+        {
+          "text": {
+            "en": "In the centre, by pushing d4–d5.",
+            "uk": "У центрі, ходом d4–d5.",
+            "ru": "В центре, ходом d4–d5."
+          }
+        }
+      ]
+    }
+  ]
+}

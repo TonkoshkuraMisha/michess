@@ -1,0 +1,246 @@
+{
+  "id": "structure-carlsbad",
+  "course": "strategy",
+  "order": 3,
+  "title": {
+    "en": "The Carlsbad structure and the minority attack",
+    "uk": "Карлсбадська структура й атака меншості",
+    "ru": "Карлсбадская структура и атака меньшинства"
+  },
+  "summary": {
+    "en": "White's two queenside pawns attack Black's three and leave a weak pawn behind; Black answers in the centre and on the kingside.",
+    "uk": "Два ферзеві пішаки білих атакують три чорні й лишають слабкого пішака; чорні відповідають у центрі та на королівському фланзі.",
+    "ru": "Две ферзевые пешки белых атакуют три чёрные и оставляют слабую пешку; чёрные отвечают в центре и на королевском фланге."
+  },
+  "steps": [
+    {
+      "type": "text",
+      "fen": "r1bqrnk1/pp2bppp/2p2n2/3p2B1/3P4/2NBPN2/PPQ2PPP/1R3RK1 b - - 10 11",
+      "highlights": [
+        "a2",
+        "b2",
+        "a7",
+        "b7",
+        "c6"
+      ],
+      "text": {
+        "en": "This structure comes from the exchange variation of the Queen's Gambit. White has the half-open c-file, Black has the half-open e-file. On the queenside White has two pawns (a2, b2) against three (a7, b7, c6) — and that 'minority' is exactly what attacks.",
+        "uk": "Ця структура виникає з розмінного варіанта ферзевого гамбіту. У білих напіввідкрита лінія c, у чорних — лінія e. На ферзевому фланзі в білих два пішаки (a2, b2) проти трьох (a7, b7, c6) — і саме ця «меншість» атакує.",
+        "ru": "Эта структура возникает из разменного варианта ферзевого гамбита. У белых полуоткрытая вертикаль c, у чёрных — вертикаль e. На ферзевом фланге у белых две пешки (a2, b2) против трёх (a7, b7, c6) — и именно это «меньшинство» атакует."
+      }
+    },
+    {
+      "type": "demo",
+      "fen": "r1bqrnk1/pp2bppp/2p2n2/3p2B1/3P4/2NBPN2/PPQ2PPP/1R3RK1 b - - 10 11",
+      "text": {
+        "en": "The minority attack: the rook on b1 supports b2–b4–b5. After b5xc6 Black must either recapture with the b-pawn and keep a weak pawn on c6 on the open file, or allow the c-file to open in front of d5. Either way White gets a fixed target.",
+        "uk": "Атака меншості: тура b1 підтримує b2–b4–b5. Після b5xc6 чорні або беруть пішаком b і лишають слабкого пішака c6 на відкритій лінії, або дозволяють відкрити лінію c перед d5. Так чи інакше в білих з'являється нерухома мішень.",
+        "ru": "Атака меньшинства: ладья b1 поддерживает b2–b4–b5. После b5xc6 чёрные либо берут пешкой b и оставляют слабую пешку c6 на открытой вертикали, либо дают вскрыть вертикаль c перед d5. Так или иначе у белых появляется неподвижная мишень."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "b2",
+          "to": "b4",
+          "color": "green"
+        },
+        {
+          "do": "arrow",
+          "from": "b4",
+          "to": "b5",
+          "color": "green"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "b5",
+          "to": "c6",
+          "color": "green"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "highlight",
+          "squares": [
+            "c6",
+            "d5"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "demo",
+      "fen": "r1bqrnk1/pp2bppp/2p2n2/3p2B1/3P4/2NBPN2/PPQ2PPP/1R3RK1 b - - 10 11",
+      "text": {
+        "en": "Black does not wait. The knight goes to e4, the bishop aims at h2, the knight from f8 joins via g6 — Black's play is on the kingside, where White's pieces have left for the queenside. ...a5 can slow down b4.",
+        "uk": "Чорні не чекають. Кінь іде на e4, слон дивиться на h2, кінь із f8 долучається через g6 — гра чорних на королівському фланзі, звідки фігури білих пішли на ферзевий. …a5 може пригальмувати b4.",
+        "ru": "Чёрные не ждут. Конь идёт на e4, слон смотрит на h2, конь с f8 подключается через g6 — игра чёрных на королевском фланге, откуда фигуры белых ушли на ферзевый. …a5 может притормозить b4."
+      },
+      "actions": [
+        {
+          "do": "arrow",
+          "from": "f6",
+          "to": "e4",
+          "color": "blue"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "e7",
+          "to": "d6",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "d6",
+          "to": "h2",
+          "color": "red"
+        },
+        {
+          "do": "pause",
+          "ms": 900
+        },
+        {
+          "do": "arrow",
+          "from": "f8",
+          "to": "g6",
+          "color": "blue"
+        },
+        {
+          "do": "arrow",
+          "from": "a7",
+          "to": "a5",
+          "color": "yellow"
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "fen": "r1bqrnk1/pp2bppp/2p2n2/3p2B1/3P4/2NBPN2/PPQ2PPP/1R3RK1 b - - 10 11",
+      "text": {
+        "en": "Why does White play b2–b4–b5 here?",
+        "uk": "Навіщо білі грають тут b2–b4–b5?",
+        "ru": "Зачем белые играют здесь b2–b4–b5?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "To exchange on c6 and leave Black a weak pawn on the queenside.",
+            "uk": "Щоб розміняти на c6 і залишити чорним слабкого пішака на ферзевому фланзі.",
+            "ru": "Чтобы разменять на c6 и оставить чёрным слабую пешку на ферзевом фланге."
+          },
+          "correct": true,
+          "feedback": {
+            "en": "Right: the minority attack creates a target, not a passed pawn.",
+            "uk": "Так: атака меншості створює мішень, а не прохідного.",
+            "ru": "Верно: атака меньшинства создаёт мишень, а не проходную."
+          }
+        },
+        {
+          "text": {
+            "en": "To create a passed pawn for White.",
+            "uk": "Щоб створити прохідного пішака для білих.",
+            "ru": "Чтобы создать проходную пешку для белых."
+          },
+          "feedback": {
+            "en": "Two pawns against three cannot make a passed pawn; they create a weakness.",
+            "uk": "Два пішаки проти трьох не створять прохідного; вони створюють слабкість.",
+            "ru": "Две пешки против трёх не создадут проходную; они создают слабость."
+          }
+        },
+        {
+          "text": {
+            "en": "To attack the black king.",
+            "uk": "Щоб атакувати чорного короля.",
+            "ru": "Чтобы атаковать чёрного короля."
+          },
+          "feedback": {
+            "en": "The king is on the other wing; the target is c6 and d5.",
+            "uk": "Король на іншому фланзі; мішень — c6 і d5.",
+            "ru": "Король на другом фланге; мишень — c6 и d5."
+          }
+        }
+      ]
+    }
+  ],
+  "exam": [
+    {
+      "type": "choice",
+      "fen": "r1bqrnk1/pp2bppp/2p2n2/3p2B1/3P4/2NBPN2/PPQ2PPP/1R3RK1 b - - 10 11",
+      "text": {
+        "en": "Which file is half-open for White in the Carlsbad structure?",
+        "uk": "Яка лінія напіввідкрита для білих у карлсбадській структурі?",
+        "ru": "Какая вертикаль полуоткрыта для белых в карлсбадской структуре?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "The c-file",
+            "uk": "Лінія c",
+            "ru": "Вертикаль c"
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "The e-file",
+            "uk": "Лінія e",
+            "ru": "Вертикаль e"
+          },
+          "feedback": {
+            "en": "The e-file is Black's.",
+            "uk": "Лінія e — чорних.",
+            "ru": "Вертикаль e — у чёрных."
+          }
+        },
+        {
+          "text": {
+            "en": "The d-file",
+            "uk": "Лінія d",
+            "ru": "Вертикаль d"
+          }
+        }
+      ]
+    },
+    {
+      "type": "choice",
+      "text": {
+        "en": "Where does Black usually look for counterplay against the minority attack?",
+        "uk": "Де чорні зазвичай шукають контргру проти атаки меншості?",
+        "ru": "Где чёрные обычно ищут контригру против атаки меньшинства?"
+      },
+      "options": [
+        {
+          "text": {
+            "en": "On the kingside and with a knight on e4.",
+            "uk": "На королівському фланзі та конем на e4.",
+            "ru": "На королевском фланге и конём на e4."
+          },
+          "correct": true
+        },
+        {
+          "text": {
+            "en": "By pushing ...b5 at once.",
+            "uk": "Одразу ходом …b5.",
+            "ru": "Сразу ходом …b5."
+          }
+        },
+        {
+          "text": {
+            "en": "By trading all the rooks on the c-file.",
+            "uk": "Розміном усіх тур по лінії c.",
+            "ru": "Разменом всех ладей по вертикали c."
+          }
+        }
+      ]
+    }
+  ]
+}
