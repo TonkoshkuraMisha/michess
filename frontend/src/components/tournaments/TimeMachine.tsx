@@ -6,9 +6,10 @@
 import {useEffect, useState} from 'react';
 import {Link, useNavigate} from 'react-router-dom';
 import {Hourglass} from 'lucide-react';
-import {renderUiMessage, useI18n} from '../../i18n';
+import {renderUiMessage, uiMessage, useI18n} from '../../i18n';
 import type {MessageKey, UiMessage} from '../../i18n';
 import {errorMessage} from '../../services/apiErrors';
+import {getToken} from '../../services/authToken';
 import {ALL_TIME_CONTROLS} from '../../config/timeControls';
 import {
     eventTitle, fieldName, fieldShortName, getTimeMachine, guestAbout, scoreText, startHistoricEvent,
@@ -16,6 +17,24 @@ import {
 import type {FieldEntry, HistoricEvent} from '../../services/timeMachine';
 
 const sectionClass = 'bg-acacia p-4 rounded-lg border-2 border-acacia-dark';
+/**
+ * Периоды ленты — по эпохам турнирной жизни: первые турниры, классика конца века, годы перед мировой войной и
+ * время между войнами. Период начинается с указанного года и длится до следующего; последний — до конца ленты.
+ */
+export const PERIOD_STARTS = [1851, 1881, 1901, 1915];
+
+/** Номер периода, к которому относится год турнира. */
+export function periodOf(year: number): number {
+    let index = 0;
+    for (let i = 0; i < PERIOD_STARTS.length; i++) if (year >= PERIOD_STARTS[i]) index = i;
+    return index;
+}
+
+/** Подпись периода: «1881–1900»; у последнего — до года последнего турнира ленты. */
+export function periodLabel(index: number, lastYear: number): string {
+    const end = index + 1 < PERIOD_STARTS.length ? PERIOD_STARTS[index + 1] - 1 : Math.max(lastYear, PERIOD_STARTS[index]);
+    return `${PERIOD_STARTS[index]}–${end}`;
+}
 /** Контроль по умолчанию — 10 минут: в большом турнире партий много. */
 const DEFAULT_CONTROL = 'rapid-10+0';
 
@@ -124,6 +143,8 @@ export function TimeMachinePage() {
     const navigate = useNavigate();
     const [events, setEvents] = useState<HistoricEvent[] | null>(null);
     const [control, setControl] = useState(DEFAULT_CONTROL);
+    // Период ленты: null — все турниры.
+    const [period, setPeriod] = useState<number | null>(null);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<UiMessage | null>(null);
 
@@ -140,6 +161,11 @@ export function TimeMachinePage() {
     const controls = ALL_TIME_CONTROLS.filter((c) => !c.isManual && c.base >= 3);
     const chosen = controls.find((c) => c.id === control) ?? controls[0];
     const start = (event: HistoricEvent) => {
+        // Лента открыта и гостю, но участником турнира становится игрок: партии и место пишутся в его профиль.
+        if (!getToken()) {
+            setError(uiMessage('timeMachine.loginToEnter'));
+            return;
+        }
         setBusy(true);
         setError(null);
         startHistoricEvent(event.key, chosen.base * 60_000, chosen.inc * 1000)
@@ -149,6 +175,10 @@ export function TimeMachinePage() {
     };
     // Идущий исторический турнир — один: пока он не закончен, в другой войти нельзя.
     const active = events?.find((e) => e.active_id !== null) ?? null;
+    const shown = events?.filter((e) => period === null || periodOf(e.year) === period) ?? null;
+    const lastYear = events?.length ? Math.max(...events.map((e) => e.year)) : PERIOD_STARTS[PERIOD_STARTS.length - 1];
+    const chip = (on: boolean) => `px-3 py-1.5 rounded-md text-sm font-semibold cursor-pointer transition ${
+        on ? 'bg-amber-700 text-white' : 'bg-black/30 text-boxwood-light hover:bg-black/50'}`;
 
     return (
         <div className="w-full max-w-5xl mx-auto p-3 flex flex-col gap-4 text-boxwood-light" data-testid="time-machine">
@@ -174,7 +204,25 @@ export function TimeMachinePage() {
             </div>
             {active && <p className="text-sm text-amber-300" data-testid="tm-active">{t('timeMachine.oneAtATime', {title: eventTitle(active.key, t)})}</p>}
             {events === null && !error && <p className="text-sm text-boxwood/70">{t('timeMachine.loading')}</p>}
-            {events?.map((event) => (
+            {events !== null && events.length > 0 && (
+                <div role="group" aria-label={t('timeMachine.period')} className="flex flex-wrap items-center gap-2" data-testid="tm-periods">
+                    <button type="button" aria-pressed={period === null} onClick={() => setPeriod(null)} data-testid="period-all"
+                            className={chip(period === null)}>
+                        {t('timeMachine.allPeriods')} · {events.length}
+                    </button>
+                    {PERIOD_STARTS.map((start, index) => {
+                        const count = events.filter((e) => periodOf(e.year) === index).length;
+                        if (count === 0) return null;
+                        return (
+                            <button key={start} type="button" aria-pressed={period === index} onClick={() => setPeriod(index)}
+                                    data-testid={`period-${index}`} className={chip(period === index)}>
+                                {periodLabel(index, lastYear)} · {count}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+            {shown?.map((event) => (
                 <EventCard key={event.key} event={event} control={chosen.label} busy={busy || (active !== null && active.key !== event.key)}
                            onStart={start}/>
             ))}

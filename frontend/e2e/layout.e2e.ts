@@ -15,6 +15,10 @@ const VIEWPORTS = [
     {name: 'phone', width: 360, height: 780, languages: LANGUAGES},
     {name: 'phone', width: 430, height: 932, languages: ['ru'] as const},
     {name: 'wide', width: 1600, height: 900, languages: LANGUAGES},
+    // Планшет и ноутбук (17.11): между телефоном и широким экраном страницы раньше не проверялись — так шапка
+    // оказалась шире экрана на 768–1366 px. Один язык: здесь важна сама раскладка, а не длина текстов.
+    {name: 'tablet', width: 768, height: 1024, languages: ['ru'] as const},
+    {name: 'laptop', width: 1366, height: 768, languages: ['ru'] as const},
 ];
 // Страницы без параметров и разделы, у которых есть своя первая страница.
 const ROUTES = [

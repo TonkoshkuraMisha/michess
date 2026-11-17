@@ -236,7 +236,6 @@ def test_client_catalogs_have_names_and_texts_for_everything():
 # --- API ----------------------------------------------------------------------------------------------------------
 
 def test_overview_lists_events_with_field_and_history(client, token_user_1):
-    assert client.get(f"{API}/time-machine").status_code == 401
     events = client.get(f"{API}/time-machine", headers=auth(token_user_1)).json()["events"]
     assert [e["key"] for e in events] == [event.key for event in EVENTS]
     by_key = {e["key"]: e for e in events}
@@ -249,6 +248,26 @@ def test_overview_lists_events_with_field_and_history(client, token_user_1):
     kinds = {p["id"]: p["kind"] for p in hastings["field"]}
     assert kinds["schlechter"] == "guest" and kinds["lasker"] == "bot"
     assert by_key["london_1851"]["player_games"] is None and by_key["london_1851"]["field"][8]["place"] is None
+
+
+def test_guest_sees_the_timeline_without_history_and_cannot_enter(client, token_user_1):
+    """Лента турниров открыта гостю: турниры прошлого — содержание. История и вход в турнир — только игроку."""
+    guest = client.get(f"{API}/time-machine")
+    assert guest.status_code == 200
+    events = guest.json()["events"]
+    assert [e["key"] for e in events] == [e.key for e in EVENTS]
+    assert all((e["active_id"], e["best_place"], e["played"]) == (None, None, 0) for e in events)
+    assert all(e["field"] for e in events)
+    # Негодный токен — тот же гость, а не ошибка.
+    assert client.get(f"{API}/time-machine", headers={"Authorization": "Bearer nonsense"}).status_code == 200
+    assert client.post(f"{API}/time-machine/avro_1938", json={}).status_code == 401
+
+    client.post(f"{API}/time-machine/avro_1938", json={}, headers=auth(token_user_1))
+    mine = client.get(f"{API}/time-machine", headers=auth(token_user_1)).json()["events"]
+    assert next(e for e in mine if e["key"] == "avro_1938")["active_id"] is not None
+    # Чужая история гостю не видна.
+    again = client.get(f"{API}/time-machine").json()["events"]
+    assert next(e for e in again if e["key"] == "avro_1938")["active_id"] is None
 
 
 def test_unknown_event_and_time_control_limits(client, token_user_1):

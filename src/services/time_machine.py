@@ -357,6 +357,11 @@ _EVENTS: tuple[Event, ...] = (
         ("rabinovich_abram", 8.5), ("schiffers", 8.5), ("kulomzin", 8), ("kalinsky", 7.5), ("dus_chotimirsky", 7),
         ("benko", 6.5), ("nikolaev", 4.5), ("stamm", 2), ("breev", 0),
     )),
+    # Финал пяти победителей предварительного турнира в два круга. В истории очки предварительного турнира шли в
+    # зачёт; здесь — очки только финала. Победил Ласкер.
+    Event("st_petersburg_1914_final", 1914, "round_robin", _table(
+        ("lasker", 7), ("capablanca", 5), ("alekhine", 4), ("tarrasch", 2), ("marshall", 2),
+    ), cycles=2),
 )
 # Лента — по годам; турниры одного года — по ключу.
 EVENTS: tuple[Event, ...] = tuple(sorted(_EVENTS, key=lambda event: (event.year, event.key)))
@@ -376,12 +381,12 @@ def participant(player_id: str) -> tuple[tournaments_service.ParticipantSpec, in
     return tournaments_service.ParticipantSpec("bot", player_id), strength_of(player_id, int(str(meta["rating"]))).rating
 
 
-async def _history(db: AsyncSession, user: User) -> dict[str, dict]:
+async def _history(db: AsyncSession, user_id: int) -> dict[str, dict]:
     """По каждому турниру: идущий (id) и лучшее место игрока в законченных."""
     rows = (await db.execute(
         select(Tournament.id, Tournament.event_key, Tournament.status, Tournament.withdrawn_at, TournamentPlayer.place)
-        .join(TournamentPlayer, (TournamentPlayer.tournament_id == Tournament.id) & (TournamentPlayer.user_id == user.id))
-        .where(Tournament.owner_id == user.id, Tournament.event_key.is_not(None))
+        .join(TournamentPlayer, (TournamentPlayer.tournament_id == Tournament.id) & (TournamentPlayer.user_id == user_id))
+        .where(Tournament.owner_id == user_id, Tournament.event_key.is_not(None))
         .order_by(Tournament.id)
     )).all()
     history: dict[str, dict] = {}
@@ -395,9 +400,12 @@ async def _history(db: AsyncSession, user: User) -> dict[str, dict]:
     return history
 
 
-async def overview(db: AsyncSession, user: User) -> list[dict]:
-    """Лента турниров по годам: состав с силой и настоящим итогом, что уже сыграл игрок."""
-    history = await _history(db, user)
+async def overview(db: AsyncSession, user_id: int | None) -> list[dict]:
+    """
+    Лента турниров по годам: состав с силой и настоящим итогом. Вошедшему игроку — ещё и что он уже сыграл;
+    гостю (user_id = None) лента видна без истории: турниры прошлого — содержание, а не личные данные.
+    """
+    history = await _history(db, user_id) if user_id is not None else {}
     result = []
     for event in EVENTS:
         field = []

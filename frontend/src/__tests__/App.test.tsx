@@ -2,7 +2,7 @@
 // Шапка и меню профиля: ни одного элемента управления без действия. Пункт меню появляется только
 // вместе с рабочей страницей (ToDo.md, «Правила Части II»).
 
-import {fireEvent, render, screen, within} from '@testing-library/react';
+import {act, fireEvent, render, screen, waitFor, within} from '@testing-library/react';
 import {MemoryRouter} from 'react-router-dom';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import App from '../App';
@@ -191,10 +191,69 @@ describe('App: навигация', () => {
         expect(screen.getByRole('button', {name: 'Сменить пароль'})).toBeInTheDocument();
     });
 
-    it('гость попадает в настройки по ссылке в шапке', () => {
+    it('гость попадает в настройки по ссылке в шапке', async () => {
         renderApp();
         fireEvent.click(within(screen.getByRole('banner')).getByTitle('Настройки'));
-        expect(screen.getByRole('heading', {name: 'Настройки'})).toBeInTheDocument();
+        // Страница появляется после попытки восстановить вход (у гостя она заканчивается ничем).
+        expect(await screen.findByRole('heading', {name: 'Настройки'})).toBeInTheDocument();
         expect(screen.getByText(/Войдите в аккаунт/)).toBeInTheDocument();
+    });
+});
+
+describe('App: вход восстанавливается до первой страницы', () => {
+    // Каждый сценарий начинает с чистого состояния: токен из соседнего теста означал бы «уже вошёл».
+    beforeEach(() => setToken(null));
+    afterEach(() => setToken(null));
+
+    // При прямом заходе и обновлении страницы токена ещё нет — он приходит по cookie. Страницы, которые
+    // запрашивают данные сразу, раньше успевали получить 401 («Не удалось загрузить турниры» в «Машине времени»).
+    it('страница не рисуется и не запрашивает данные, пока вход не восстановлен; затем получает токен', async () => {
+        let finishRefresh: (response: Response) => void = () => undefined;
+        const requests: { url: string; authorized: boolean }[] = [];
+        vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
+            const address = String(url);
+            requests.push({url: address, authorized: Boolean((init?.headers as Record<string, string> | undefined)?.Authorization)});
+            if (address.includes('/auth/refresh')) return new Promise<Response>((resolve) => { finishRefresh = resolve; });
+            const body = address.includes('/tournaments/time-machine') ? {events: []} : address.includes('/profile/me') ? PROFILE : [];
+            return Promise.resolve({ok: true, status: 200, json: async () => body} as Response);
+        }));
+        render(
+            <MemoryRouter initialEntries={['/time-machine']}>
+                <App/>
+            </MemoryRouter>,
+        );
+        // Шапка уже на месте, страницы ещё нет, запросов за турнирами не было.
+        expect(screen.getByRole('banner')).toBeInTheDocument();
+        expect(screen.getByTestId('session-restoring')).toBeInTheDocument();
+        expect(screen.queryByTestId('time-machine')).toBeNull();
+        expect(requests.some((r) => r.url.includes('/tournaments/time-machine'))).toBe(false);
+
+        await act(async () => {
+            finishRefresh({ok: true, status: 200, json: async () => ({access_token: 'restored'})} as Response);
+        });
+        expect(await screen.findByTestId('time-machine')).toBeInTheDocument();
+        expect(screen.queryByTestId('session-restoring')).toBeNull();
+        const list = requests.filter((r) => r.url.includes('/tournaments/time-machine'));
+        expect(list.length).toBeGreaterThan(0);
+        expect(list.every((r) => r.authorized)).toBe(true);
+    });
+
+    it('у вошедшего игрока страница рисуется сразу', () => {
+        setToken('jwt');
+        renderApp('/library');
+        expect(screen.queryByTestId('session-restoring')).toBeNull();
+    });
+
+    it('у гостя страница появляется, когда восстановление входа ничего не дало', async () => {
+        vi.stubGlobal('fetch', vi.fn((url: string) => Promise.resolve(String(url).includes('/auth/refresh')
+            ? {ok: false, status: 401, json: async () => ({})} as Response
+            : {ok: true, status: 200, json: async () => []} as Response)));
+        render(
+            <MemoryRouter initialEntries={['/about']}>
+                <App/>
+            </MemoryRouter>,
+        );
+        await waitFor(() => expect(screen.queryByTestId('session-restoring')).toBeNull());
+        expect(screen.getByRole('main')).not.toBeEmptyDOMElement();
     });
 });

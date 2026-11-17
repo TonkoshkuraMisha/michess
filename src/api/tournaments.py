@@ -7,12 +7,13 @@
 import json
 from typing import Literal
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.deps import get_current_user
+from src.api.fair_play import optional_user_id
 from src.core.errors import ApiError, DomainError
 from src.db.session import get_db
 from src.models.tournament import Tournament, TournamentGame, TournamentPlayer
@@ -219,9 +220,12 @@ class TimeMachineStart(BaseModel):
 
 
 @router.get("/time-machine")
-async def time_machine_overview(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    """«Машина времени» (таск 28.2): знаменитые турниры по годам — состав, настоящий итог, что уже сыграл игрок."""
-    return {"events": await time_machine.overview(db, user)}
+async def time_machine_overview(request: Request, db: AsyncSession = Depends(get_db)):
+    """
+    «Машина времени» (таск 28.2): знаменитые турниры по годам — состав, настоящий итог. Лента открыта и гостю;
+    вошедшему игроку добавляется его история (идущий турнир, лучшее место). Войти в турнир может только игрок.
+    """
+    return {"events": await time_machine.overview(db, await optional_user_id(request, db))}
 
 
 @router.post("/time-machine/{event_key}", response_model=TournamentOut, status_code=status.HTTP_201_CREATED)
