@@ -3,10 +3,18 @@
 // Тиснение — светлый и тёмный штрих, поэтому один тайл подходит к любой тёмной палитре. «Пергамент» — приглушённый
 // тёплый тон: интерфейс тёмный, на светлом фоне текст вне карточек не читался бы.
 
-export const PAGE_PATTERNS = ['none', 'celtic', 'map', 'manuscript', 'circuit', 'bauhaus', 'marble'] as const;
+export const PAGE_PATTERNS = [
+    'none', 'celtic', 'map', 'manuscript', 'circuit', 'bauhaus', 'marble',
+    // Таск 31.1: осенние листья, паркет «ёлочкой», тетрадь в клетку.
+    'leaves', 'parquet', 'notebook',
+] as const;
 export type PagePattern = (typeof PAGE_PATTERNS)[number];
 
-export const PAGE_PALETTES = {room: '#2C221C', teal: '#12323C', parchment: '#3B3022'} as const;
+export const PAGE_PALETTES = {
+    room: '#2C221C', teal: '#12323C', parchment: '#3B3022',
+    // Таск 31.1: сумерки осеннего парка, бутылочная зелень клуба, чернила школьной тетради.
+    autumn: '#3A2814', bottle: '#1F3028', ink: '#252C3D',
+} as const;
 export type PagePalette = keyof typeof PAGE_PALETTES;
 
 const PATTERN_KEY = 'michess_page_pattern';

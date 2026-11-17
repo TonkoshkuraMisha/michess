@@ -15,9 +15,9 @@ afterEach(() => {
 });
 
 describe('темы-комплекты', () => {
-    it('шесть комплектов, разные, все части существуют', () => {
-        expect(THEME_PRESETS).toHaveLength(6);
-        expect(new Set(THEME_PRESETS.map((p) => p.id)).size).toBe(6);
+    it('девять комплектов, разные, все части существуют', () => {
+        expect(THEME_PRESETS).toHaveLength(9);
+        expect(new Set(THEME_PRESETS.map((p) => p.id)).size).toBe(9);
         for (const preset of THEME_PRESETS) {
             expect(presetIsValid(preset), preset.id).toBe(true);
             expect(SOUND_SETS[preset.sound], preset.id).toBeDefined();
@@ -36,6 +36,16 @@ describe('темы-комплекты', () => {
         expect(soundEngine.getSoundSet()).toBe('soft');
         expect(localStorage.getItem('michess_sound_set')).toBe('soft');
         expect(findPreset('nope')).toBeUndefined();
+    });
+
+    it('осенний парк, клуб 1950-х и шахматная школа: свои доска, узор и палитра (таск 31.1)', () => {
+        applyPreset(findPreset('autumn_park')!);
+        expect([getSavedBoardThemeKey(), getSavedPagePattern(), getSavedPagePalette()]).toEqual(['autumn', 'leaves', 'autumn']);
+        expect(document.body.style.backgroundImage).toContain('/assets/patterns/leaves.svg');
+        applyPreset(findPreset('club_1950s')!);
+        expect([getSavedBoardThemeKey(), getSavedPagePattern(), getSavedPagePalette()]).toEqual(['club50', 'parquet', 'bottle']);
+        applyPreset(findPreset('chess_school')!);
+        expect([getSavedBoardThemeKey(), getSavedPagePattern(), getSavedPagePalette()]).toEqual(['chalkboard', 'notebook', 'ink']);
     });
 
     it('предпросмотр — живая позиция: 32 поля с фигурами из набора комплекта', () => {

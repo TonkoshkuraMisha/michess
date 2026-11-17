@@ -9,7 +9,8 @@ import type {PagePalette, PagePattern} from './pageBackground';
 import {soundEngine} from '../services/soundEngine';
 import type {SoundSetId} from '../services/soundEngine';
 
-export type PresetId = 'club' | 'marble_hall' | 'study' | 'tournament' | 'night' | 'kids';
+export type PresetId = 'club' | 'marble_hall' | 'study' | 'tournament' | 'night' | 'kids'
+    | 'autumn_park' | 'club_1950s' | 'chess_school';
 
 export interface ThemePreset {
     id: PresetId;
@@ -27,6 +28,10 @@ export const THEME_PRESETS: ThemePreset[] = [
     {id: 'tournament', board: 'vinyl', pieces: 'cburnett', pattern: 'none', palette: 'room', sound: 'soft'},
     {id: 'night', board: 'ebony', pieces: 'spatial', pattern: 'celtic', palette: 'teal', sound: 'soft'},
     {id: 'kids', board: 'tournament', pieces: 'totoy', pattern: 'bauhaus', palette: 'room', sound: 'bright'},
+    // Таск 31.1 (идея владельца): осень в шахматном парке, клубный зал пятидесятых, школьный кружок.
+    {id: 'autumn_park', board: 'autumn', pieces: 'cburnett', pattern: 'leaves', palette: 'autumn', sound: 'wood'},
+    {id: 'club_1950s', board: 'club50', pieces: 'merida', pattern: 'parquet', palette: 'bottle', sound: 'wood'},
+    {id: 'chess_school', board: 'chalkboard', pieces: 'merida', pattern: 'notebook', palette: 'ink', sound: 'soft'},
 ];
 
 export const PRESET_STORAGE_KEY = 'michess_theme_preset';

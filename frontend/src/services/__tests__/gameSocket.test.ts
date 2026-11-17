@@ -49,7 +49,7 @@ describe('GameWebSocketService, SoundEngine & API Config', () => {
 
     it('should provide 17 piece sets and 22 board themes with harmonious styles', () => {
         expect(Object.keys(PIECE_SETS).length).toBe(17);
-        expect(Object.keys(BOARD_THEMES).length).toBe(22);
+        expect(Object.keys(BOARD_THEMES).length).toBe(24);
 
         for (const setKey of Object.keys(PIECE_SETS)) {
             expect(getPieceSvgUrl(setKey, 'w', 'q')).toContain(`/assets/pieces/${setKey}/wQ.svg`);

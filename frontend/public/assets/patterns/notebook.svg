@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
+  <!-- Тетрадь в клетку с полем: тиснёный тайл фона, собственная работа проекта michess, CC0. -->
+  <defs><g id="p" fill="none" stroke-width="1.1" stroke-linecap="butt">
+    <path d="M0 0 H96"/><path d="M0 24 H96"/><path d="M0 48 H96"/><path d="M0 72 H96"/>
+    <path d="M0 0 V96"/><path d="M24 0 V96"/><path d="M48 0 V96"/><path d="M72 0 V96"/>
+  </g></defs>
+  <use href="#p" transform="translate(-0.6 -0.6)" stroke="#ffffff" stroke-opacity="0.05"/>
+  <use href="#p" transform="translate(0.7 0.7)" stroke="#000000" stroke-opacity="0.24"/>
+</svg>

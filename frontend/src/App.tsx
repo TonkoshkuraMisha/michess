@@ -291,7 +291,7 @@ export default function App() {
 
     return (
         <div
-            className={`w-full flex flex-col bg-room text-paper font-sans select-none ${
+            className={`w-full flex flex-col text-paper font-sans select-none ${
                 isSingleScreenRoute ? 'min-h-dvh xl:h-dvh xl:overflow-hidden' : 'min-h-dvh'
             }`}
         >

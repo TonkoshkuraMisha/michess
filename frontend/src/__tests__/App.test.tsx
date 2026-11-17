@@ -79,6 +79,13 @@ describe('App: просмотр партии на одном экране', () =
         const {container} = renderApp('/library');
         expect(container.firstElementChild?.className).not.toContain('xl:h-dvh');
     });
+
+    // Фон страницы (узор и палитра, таски 18.1 и 31.1) рисуется на body: корневой блок с собственной заливкой
+    // закрывал его целиком, и выбранный фон был виден только в превью настроек.
+    it('корневой блок прозрачен: фон страницы виден сквозь него', () => {
+        const {container} = renderApp('/library');
+        expect(container.firstElementChild?.className).not.toMatch(/(^|\s)bg-/);
+    });
 });
 
 describe('App: программа беты (таск 24.4)', () => {

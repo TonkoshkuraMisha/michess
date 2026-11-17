@@ -111,6 +111,9 @@ CC BY-NC-SA 4.0), а также набор без известного прои�
 | `frontend/public/assets/patterns/circuit.svg` | Тиснёный тайл фона страницы (SVG), печатная плата — таск 18.1 | собственная работа, CC0-1.0 |
 | `frontend/public/assets/patterns/bauhaus.svg` | Тиснёный тайл фона страницы (SVG), геометрия Баухауса — таск 18.1 | собственная работа, CC0-1.0 |
 | `frontend/public/assets/patterns/marble.svg` | Тиснёный тайл фона страницы (SVG), мраморные прожилки — таск 18.1 | собственная работа, CC0-1.0 |
+| `frontend/public/assets/patterns/leaves.svg` | Тиснёный тайл фона страницы (SVG), осенние листья и каштаны — таск 31.1 | собственная работа, CC0-1.0 |
+| `frontend/public/assets/patterns/parquet.svg` | Тиснёный тайл фона страницы (SVG), паркет «ёлочкой» — таск 31.1 | собственная работа, CC0-1.0 |
+| `frontend/public/assets/patterns/notebook.svg` | Тиснёный тайл фона страницы (SVG), тетрадь в клетку — таск 31.1 | собственная работа, CC0-1.0 |
 
 Убраны: `Move.mp3`, `Capture.mp3`, `GenericNotify.mp3` (звуки lichess, отнесённые в его COPYING.md к несвободным) и
 `wood-grain.png` (происхождение неизвестно).

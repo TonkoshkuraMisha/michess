@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="160" height="160" viewBox="0 0 160 160">
+  <!-- Осенние листья и каштаны: тиснёный тайл фона, собственная работа проекта michess, CC0. -->
+  <defs><g id="p" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <!-- лист липы -->
+    <g transform="translate(34 40) rotate(-20)">
+      <path d="M0 -20 C-18 -22 -22 2 0 22 C22 2 18 -22 0 -20 Z"/>
+      <path d="M0 -16 V34"/><path d="M0 -4 L-9 -11"/><path d="M0 -4 L9 -11"/><path d="M0 6 L-8 0"/><path d="M0 6 L8 0"/>
+    </g>
+    <!-- лист клёна -->
+    <g transform="translate(112 46) rotate(15)">
+      <path d="M0 -26 L6 -12 L18 -18 L14 -4 L26 0 L14 6 L18 20 L5 14 L0 26 L-5 14 L-18 20 L-14 6 L-26 0 L-14 -4 L-18 -18 L-6 -12 Z"/>
+      <path d="M0 26 V40"/><path d="M0 -14 V14"/>
+    </g>
+    <!-- лист дуба -->
+    <g transform="translate(46 116) rotate(30)">
+      <path d="M0 -28 C7 -26 8 -20 5 -17 C12 -17 13 -9 8 -6 C15 -5 15 4 9 6 C14 9 12 17 6 17 C8 23 3 27 0 28 C-3 27 -8 23 -6 17 C-12 17 -14 9 -9 6 C-15 4 -15 -5 -8 -6 C-13 -9 -12 -17 -5 -17 C-8 -20 -7 -26 0 -28 Z"/>
+      <path d="M0 -22 V38"/>
+    </g>
+    <!-- каштан в раскрытой кожуре -->
+    <g transform="translate(118 122)">
+      <circle cx="0" cy="0" r="10"/><path d="M-6 -4 Q0 -9 6 -4"/>
+      <path d="M-14 4 Q-12 16 0 17 Q12 16 14 4"/><path d="M-15 8 L-19 12"/><path d="M15 8 L19 12"/><path d="M0 18 V23"/>
+    </g>
+    <!-- каштан поменьше -->
+    <g transform="translate(80 84)"><circle cx="0" cy="0" r="6"/><path d="M-3.5 -2.5 Q0 -5.5 3.5 -2.5"/></g>
+  </g></defs>
+  <use href="#p" transform="translate(-0.8 -0.8)" stroke="#ffffff" stroke-opacity="0.07"/>
+  <use href="#p" transform="translate(0.9 0.9)" stroke="#000000" stroke-opacity="0.32"/>
+</svg>
