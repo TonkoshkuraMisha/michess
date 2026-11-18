@@ -106,3 +106,24 @@ class ArenaGame(Base):
     # Тур швейцарки (у арены — 0).
     round: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class ArenaAward(Base):
+    """
+    Призовое место в законченной арене или швейцарке (таск 33.5): тройка таблицы итогов. Записывает плановая задача
+    arena_awards (src/services/arena_awards.py), когда итоги окончательные; дальше из этой записи — уведомление
+    призёру, кубки в профиле и достижения «призёр арены» / «победитель арены».
+    """
+    __tablename__ = "arena_awards"
+    __table_args__ = (
+        UniqueConstraint("arena_id", "user_id", name="uq_arena_award_player"),
+        one_of("arena_awards", "place", ("1", "2", "3")),
+    )
+
+    arena_id: Mapped[int] = mapped_column(ForeignKey("arenas.id", ondelete="CASCADE"), primary_key=True)
+    # Место в таблице итогов: 1, 2 или 3 (строкой — общий помощник one_of для CHECK).
+    place: Mapped[str] = mapped_column(String(1), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    # Категория контроля арены (rating.classify_time_control): по ней кубки в профиле делятся на пулю, блиц и т. д.
+    category: Mapped[str] = mapped_column(String(16))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())

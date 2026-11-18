@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 # напоминание о разминке, комментарий к публикации, напоминание о начале арены. Новый вид добавляется сюда и в
 # каталоги клиента; неизвестный вид — ошибка программиста (assert в ``record``).
 KINDS = ("challenge", "rematch", "tournament_round", "report_answer", "workout_reminder", "post_comment",
-         "arena_reminder")
+         "arena_reminder", "arena_podium")
 KEEP = 50  # сколько последних уведомлений отдаётся клиенту; старые записи из таблицы этот модуль не удаляет
 
 

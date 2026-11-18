@@ -32,7 +32,7 @@ export interface Relation {
 
 /** Виды уведомлений; текст собирается на клиенте из каталога по виду и полям payload. */
 export type NotificationKind = 'challenge' | 'rematch' | 'tournament_round' | 'report_answer' | 'workout_reminder' | 'post_comment'
-    | 'arena_reminder';
+    | 'arena_reminder' | 'arena_podium';
 
 /** Уведомление центра уведомлений (таблица notifications). Поля payload зависят от вида — см. notificationLink. */
 export interface AppNotification {
@@ -95,6 +95,6 @@ export function notificationLink(n: AppNotification): string {
     if (n.kind === 'challenge') return `/challenge/${n.payload.code}`;
     if (n.kind === 'tournament_round') return `/tournaments/${n.payload.tournament_id}`;
     if (n.kind === 'post_comment') return `/feed/post/${n.payload.post_id}`;
-    if (n.kind === 'arena_reminder') return `/arenas/${n.payload.arena_id}`;
+    if (n.kind === 'arena_reminder' || n.kind === 'arena_podium') return `/arenas/${n.payload.arena_id}`;
     return '/';
 }

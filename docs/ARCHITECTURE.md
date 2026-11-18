@@ -55,7 +55,7 @@
 | Задачи и тренировки | `puzzles`, `puzzle_themes`, `puzzle_attempts`, `theme_progress`, `personal_puzzles`, `defense_drills`, `drill_records`, `guess_positions`, `lesson_progress`, `trainer_results`, `exam_results` | `puzzle.py`, `guess.py`, `lesson.py`, `trainer.py` |
 | Боты | `bot_personalities`, `bot_opening_stats`, `bot_ratings`, `bot_rivals`, `bot_rival_stats`, `bot_tunings`, `bot_tuning_log`, `ladder_beaten` | `personality.py`, `bot_memory.py`, `ladder.py` |
 | Турниры с ботами | `tournaments`, `tournament_players`, `tournament_games` | `tournament.py` |
-| Арены между людьми | `arenas`, `arena_players`, `arena_games`, `arena_reminders` | `arena.py` |
+| Арены между людьми | `arenas`, `arena_players`, `arena_games`, `arena_reminders`, `arena_awards` | `arena.py` |
 | Команды | `teams`, `team_members` | `team.py` |
 | Библиотека и архив | `library_collections`, `library_games`, `library_game_collections`, `library_annotations`, `collection_entries` | `library.py`, `collection.py` |
 | Общение | `follows`, `notifications`, `direct_messages`, `blocks`, `hidden_conversations`, `posts`, `post_comments`, `post_likes`, `reports`, `study_materials` | `social.py`, `moderation.py`, `study.py` |
@@ -235,6 +235,9 @@
   «только до такого-то рейтинга» нет (решение владельца 17.11.2026) — новичок может встретиться с сильнейшим.
   Закрыт вход только игроку с флагом нечестной игры. При 500 участниках открывается следующее деление — это
   вместимость таблицы, а не отбор.
+- **Награды** (`arena_awards.py`, таблица `arena_awards`): когда итоги окончательные, тройка таблицы (сыгравшие хотя
+  бы одну партию) получает места — уведомление, кубки в профиле, достижения «призёр арены» и «победитель арены».
+  Раздаёт плановая задача `arena_awards` каждые 5 минут.
 - **Берсерк.** До своего первого хода — половина времени без добавки; победа приносит лишнее очко.
 - **Расписание.** У каждой из пяти конференций — своя зона времени, план задан в её местном времени: вечером блиц
   3+2 каждый час, пуля 2+1 и вечерняя 5+3, в остальное время — блиц раз в три часа, плюс швейцарки. Арены создаются

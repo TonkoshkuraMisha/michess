@@ -208,6 +208,15 @@ describe('расписание по конференциям и напомина
         expect(notificationText(n, makeI18n('uk').t)).toBe('Арена 5+3 скоро почнеться');
         expect(notificationText(n, makeI18n('en').t)).toBe('Arena 5+3 is about to start');
     });
+
+    it('призовое место (33.5): текст на трёх языках и ссылка на арену', () => {
+        const n = {id: 2, kind: 'arena_podium', payload: {arena_id: 9, place: 2, category: 'blitz'},
+            created_at: null, read: false} as AppNotification;
+        expect(notificationLink(n)).toBe('/arenas/9');
+        expect(notificationText(n, makeI18n('ru').t)).toBe('Вы заняли 2 место на арене — поздравляем!');
+        expect(notificationText(n, makeI18n('uk').t)).toBe('Ви посіли 2 місце на арені — вітаємо!');
+        expect(notificationText(n, makeI18n('en').t)).toBe('You took place 2 in the arena — congratulations!');
+    });
 });
 
 describe('деления переполненной арены (33.2)', () => {

@@ -10,7 +10,7 @@ docs/ARCHITECTURE.md, раздел 3.
 """
 
 from src.models.achievement import UserAchievement
-from src.models.arena import Arena, ArenaGame, ArenaPlayer, ArenaReminder
+from src.models.arena import Arena, ArenaAward, ArenaGame, ArenaPlayer, ArenaReminder
 from src.models.base import Base
 from src.models.beta import Feedback, Invite
 from src.models.bot_memory import BotOpeningStat, BotRating, BotRival, BotRivalStat, BotTuning, BotTuningLog
@@ -53,6 +53,7 @@ __all__ = [
     "BotTuning",
     "BotTuningLog",
     "Arena",
+    "ArenaAward",
     "ArenaGame",
     "ArenaPlayer",
     "ArenaReminder",

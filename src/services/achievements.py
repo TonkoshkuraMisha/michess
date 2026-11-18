@@ -21,6 +21,7 @@ from src.models.team import TeamMember
 from src.models.tournament import Tournament, TournamentPlayer
 from src.models.trainer import TrainerResult
 from src.models.user import RatingCategory, User
+from src.services import arena_awards
 
 # Категории рейтинга партий с людьми; звание и достижения rating_* берут лучший рейтинг из четырёх.
 CATEGORIES: tuple[RatingCategory, ...] = ("bullet", "blitz", "rapid", "classical")
@@ -59,6 +60,8 @@ RULES = (
     Rule("tournament_win", "tournament_wins", 1),
     Rule("invitation", "invitations", 1),
     Rule("arena_10", "arena_games", 10),
+    Rule("arena_podium", "arena_podiums", 1),
+    Rule("arena_win", "arena_wins", 1),
     Rule("rating_1500", "best_rating", 1500),
     Rule("rating_1800", "best_rating", 1800),
     Rule("rating_2000", "best_rating", 2000),
@@ -73,7 +76,8 @@ async def _metrics(db: AsyncSession, user: User) -> dict[str, int]:
     турниров; human_wins — победы, где оба игрока не боты), puzzle_attempts (решённые), lesson_progress (пройденные
     записи, делятся по началу кода: basics-, endgame-, остальное — уроки), tournament_players (место в законченном
     турнире, из которого игрок не вышел; приглашение — турнир карьеры со ступенью invitational*), arena_players
-    (сумма партий в аренах), team_members, trainer_results (обход конём) и рейтинги из users.
+    (сумма партий в аренах), arena_awards (призовые места в аренах, arena_awards.trophies), team_members,
+    trainer_results (обход конём) и рейтинги из users.
     """
     finished =(Game.status == GameStatus.COMPLETED) & Game.is_simulation.is_(False)
     mine = (Game.white_player_id == user.id) | (Game.black_player_id == user.id)
@@ -100,6 +104,7 @@ async def _metrics(db: AsyncSession, user: User) -> dict[str, int]:
     places = (await db.execute(placed)).all()
     arena_games = await db.scalar(
         select(func.coalesce(func.sum(ArenaPlayer.games), 0)).where(ArenaPlayer.user_id == user.id)) or 0
+    awards = await arena_awards.trophies(db, user.id)
     team = await db.scalar(select(func.count()).select_from(TeamMember).where(TeamMember.user_id == user.id)) or 0
     # Замкнутый обход конём 8×8 (таск 19.4, уровень 3 тренажёра): за замкнутый обход записано больше 100 очков.
     closed_tours = await db.scalar(select(func.count()).select_from(TrainerResult).where(
@@ -112,6 +117,7 @@ async def _metrics(db: AsyncSession, user: User) -> dict[str, int]:
         "tournament_wins": sum(1 for place, _ in places if place == 1),
         "invitations": sum(1 for _, stage in places if stage and stage.startswith("invitational")),
         "arena_games": int(arena_games), "best_rating": _best_rating(user),
+        "arena_podiums": sum(awards.values()), "arena_wins": awards["gold"],
         "team": team,
         "closed_tours": closed_tours,
     }

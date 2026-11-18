@@ -159,6 +159,20 @@ describe('Profile', () => {
         expect(card).toHaveTextContent('1088');
     });
 
+    it('кубки арен (33.5) — по местам; без наград строки нет', async () => {
+        stubFetch({profile: {ok: true, body: {...PROFILE, arena_trophies: {gold: 2, silver: 0, bronze: 1}}}});
+        const {unmount} = renderProfile();
+        const row = await screen.findByTestId('profile-arena-trophies');
+        expect(row).toHaveTextContent('Кубки арен');
+        expect(screen.getByTestId('profile-trophy-gold')).toHaveTextContent('2');
+        expect(screen.getByTestId('profile-trophy-bronze')).toHaveTextContent('1');
+        unmount();
+        stubFetch({profile: {ok: true, body: {...PROFILE, arena_trophies: {gold: 0, silver: 0, bronze: 0}}}});
+        renderProfile();
+        await screen.findByText(PROFILE.username);
+        expect(screen.queryByTestId('profile-arena-trophies')).toBeNull();
+    });
+
     it('без партий лестницы карточки нет', async () => {
         stubFetch({profile: {ok: true, body: {...PROFILE, ladder: {rating: 1000, games: 0, step: 0, total: 17}}}});
         renderProfile();
