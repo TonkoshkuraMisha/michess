@@ -4297,6 +4297,18 @@ export const en = {
             },
         },
     },
+    design: {
+        title: 'Design components',
+        intro: 'Every shared element of Regence in one place: pages are built from these blocks.',
+        buttons: 'Buttons', primary: 'Play', secondary: 'Settings', ghost: 'More', danger: 'Resign',
+        small: 'Small', large: 'Main action', disabled: 'Unavailable',
+        tabs: 'Tabs', tabRated: 'By rating', tabThemes: 'Techniques', tabDaily: 'Of the day',
+        cards: 'Cards', cardEndgames: 'Endgame trainer', cardLocked: 'Tournament 4', continue: 'Continue',
+        indicators: 'Badges and progress', neutral: 'Info', current: 'Current', done: 'Done', locked: 'Locked',
+        progress: 'Progress',
+        empty: 'Empty state', emptyTitle: 'No puzzles yet', emptyText: 'Solve a few puzzles and your history will appear here.',
+        emptyAction: 'To the puzzles',
+    },
     summary: {
         title: 'Game summary',
         loading: 'The coach is going through the game…',

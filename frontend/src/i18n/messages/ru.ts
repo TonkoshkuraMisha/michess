@@ -4313,6 +4313,18 @@ export const ru: Messages = {
             },
         },
     },
+    design: {
+        title: 'Компоненты дизайна',
+        intro: 'Все общие элементы Regence в одном месте: страницы собираются из этих блоков.',
+        buttons: 'Кнопки', primary: 'Играть', secondary: 'Настройки', ghost: 'Ещё', danger: 'Сдаться',
+        small: 'Маленькая', large: 'Главное действие', disabled: 'Недоступно',
+        tabs: 'Вкладки', tabRated: 'По рейтингу', tabThemes: 'Приёмы', tabDaily: 'Дня',
+        cards: 'Карточки', cardEndgames: 'Эндшпильный тренажёр', cardLocked: 'Турнир 4', continue: 'Продолжить',
+        indicators: 'Метки и прогресс', neutral: 'Справка', current: 'Текущий', done: 'Пройдено', locked: 'Закрыто',
+        progress: 'Прогресс',
+        empty: 'Пустое состояние', emptyTitle: 'Задач пока нет', emptyText: 'Решите несколько задач — здесь появится ваша история.',
+        emptyAction: 'К задачам',
+    },
     summary: {
         title: 'Итог партии',
         loading: 'Наставник разбирает партию…',
