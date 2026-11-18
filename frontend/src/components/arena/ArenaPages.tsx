@@ -3,7 +3,8 @@
 // пару, страница повторяет «Играть» раз в WAIT_POLL_MS; как только партия создана — переход на главную доску (она
 // сама подхватывает идущую партию). ArenaBanner — анонс в лобби главной доски. Арены идут по расписанию конференций
 // (33.4): в названии — конференция; у ещё не начавшейся арены — «напомнить перед началом». Зачёт конференций
-// (33.6): у игрока в таблице — его конференция, под таблицей — очки конференций в этой арене.
+// (33.6): у игрока в таблице — его конференция, под таблицей — очки конференций в этой арене. Под списком арен —
+// месячная лига арен (33.5, ArenaLeague.tsx).
 
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Link, useNavigate, useParams} from 'react-router-dom';
@@ -14,6 +15,7 @@ import {errorMessage} from '../../services/apiErrors';
 import {getToken} from '../../services/authToken';
 import {arenasApi, clock, conferenceKey, controlLabel, secondsUntil} from '../../services/arenas';
 import type {ArenaDetail, ArenaInfo} from '../../services/arenas';
+import {ArenaLeague} from './ArenaLeague';
 
 export const WAIT_POLL_MS = 2000;
 const REFRESH_MS = 5000;
@@ -81,6 +83,7 @@ export function ArenasPage() {
                     </li>
                 ))}
             </ul>
+            <ArenaLeague/>
         </div>
     );
 }

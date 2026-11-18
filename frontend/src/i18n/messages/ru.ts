@@ -2493,6 +2493,16 @@ export const ru: Messages = {
         reminderOn: 'Напомним перед началом',
         reminderOff: 'Не напоминать',
         conferenceStandings: 'Зачёт конференций',
+        league: {
+            title: 'Лига месяца',
+            season: 'Сезон {season}',
+            intro: 'Сумма ваших очков в аренах этого месяца в одном контроле времени. Швейцарки не учитываются, на рейтинг лига не влияет.',
+            player: 'Игрок',
+            best: 'Лучшая арена',
+            arenas: 'Арен',
+            empty: 'В этом месяце в аренах ещё не играли',
+            emptyText: 'Сыграйте в любой арене этого контроля — и вы появитесь в лиге.',
+        },
         conferenceCounted: 'В зачёте',
         conferenceShort: {
             central: 'Центр',

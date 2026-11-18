@@ -2489,6 +2489,16 @@ export const en = {
         reminderOn: 'We will remind you before the start',
         reminderOff: 'Do not remind',
         conferenceStandings: 'Conference standings',
+        league: {
+            title: 'League of the month',
+            season: 'Season {season}',
+            intro: 'Sum of your arena points this month in one time control. Swiss tournaments do not count, and the league does not change your rating.',
+            player: 'Player',
+            best: 'Best arena',
+            arenas: 'Arenas',
+            empty: 'No arena games this month yet',
+            emptyText: 'Play in any arena of this time control and you will appear in the league.',
+        },
         conferenceCounted: 'Counted',
         conferenceShort: {
             central: 'Central',
