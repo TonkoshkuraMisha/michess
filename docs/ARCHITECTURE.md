@@ -263,9 +263,14 @@
   `scripts/verify_lessons.py`.
 - **Большой курс** (`content/supercourse.ts`, замысел — `docs/research/supercourse.md`): уровни 0–5 по разрядам и
   ветви; шаг курса ведёт в уже готовый раздел. Экзамены уровней — `level_exam.py`, диагностика — `exam.py`.
+  **Автозачёт:** `GET /learn/course-progress` (`src/services/course_progress.py`) собирает выполненное по нормативам
+  (записи `lesson_progress`, ступени тем `theme_progress`, попытки `trainer_results`, оценки `exam_results`); клиент
+  (`services/courseProgress.ts`) сопоставляет его с шагами модуля и закрывает модуль сам. Вручную отмечаются только
+  модули без проверяемых шагов.
 - **Личный тренер:** карта навыков (`skills.py`), ежедневная разминка (`workout.py`, напоминание — задача beat в
   16:00 UTC), программы тренировок (`content/programs.ts`). Новых таблиц нет: всё считается по уже собранным данным.
-- **Тесты.** `learn_progress`, `exam`, `level_exams`, `skills`, `workout`; браузер — `e2e/course-library.e2e.ts`.
+- **Тесты.** `learn_progress`, `course_progress`, `exam`, `level_exams`, `skills`, `workout`; клиент —
+  `courseProgress.test.ts`, `SupercoursePage.test.tsx`; браузер — `e2e/course-library.e2e.ts`.
 
 ### 4.11. Дебюты
 

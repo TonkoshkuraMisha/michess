@@ -1,12 +1,16 @@
 // Большой курс (таск 27.6): /learn/course — уровни 0–5 по разрядам, модули по ветвям (тактика, мат, эндшпиль,
 // стратегия, дебют, расчёт, партии). Шаги модуля ведут в готовые разделы; модуль без шагов — место в каркасе под
-// наполнение: игроку не показывается, виден в режиме «каркас курса». Прогресс модуля — запись урока course-<код>.
+// наполнение: игроку не показывается, виден в режиме «каркас курса». Модуль закрывается сам, когда выполнены все его
+// проверяемые шаги (автозачёт — services/courseProgress.ts, нормативы на сервере), выполненный шаг помечен галочкой;
+// модуль из непроверяемых шагов (библиотека, репертуар…) игрок отмечает сам — запись урока course-<код>.
 // Ссылка ?level=N&module=КОД (карточка «Урок по теме ошибки» в итоге партии) открывает уровень N и подсвечивает
 // модуль, прокручивая к нему.
 
 import {useEffect, useMemo, useState} from 'react';
 import {useNavigate, useSearchParams} from 'react-router-dom';
-import {CheckCircle2, Circle, Layers, Trophy} from 'lucide-react';
+import {Check, CheckCircle2, Circle, Layers, Trophy} from 'lucide-react';
+import {activityDone, fetchCourseFacts, moduleAutoDone, moduleCheckable} from '../../services/courseProgress';
+import type {CourseFacts} from '../../services/courseProgress';
 import {useI18n} from '../../i18n';
 import {getToken} from '../../services/authToken';
 import {fetchLessonProgress, saveLessonProgress} from '../../services/lessonProgress';
@@ -30,6 +34,8 @@ export function SupercoursePage() {
     const [examPassed, setExamPassed] = useState<Set<number>>(new Set());
     // Темы, в которых пока нет ни одной задачи: шаг не ведёт в пустую тренировку, а помечен «задач пока нет».
     const [emptyThemes, setEmptyThemes] = useState<Set<string>>(new Set());
+    // Выполненное игроком по видам упражнений (автозачёт): модуль закрывается сам, когда сделаны все его проверяемые шаги.
+    const [facts, setFacts] = useState<CourseFacts | null>(null);
     const logged = Boolean(getToken());
 
     useEffect(() => {
@@ -41,6 +47,11 @@ export function SupercoursePage() {
         }).catch(() => undefined);
         puzzlesApi.training().then((overview) => {
             setEmptyThemes(new Set(overview.themes.filter((th) => th.available.every((n) => n === 0)).map((th) => th.code)));
+        }).catch(() => undefined);
+        fetchCourseFacts().then((next) => {
+            if (!next) return;
+            setFacts(next);
+            setDone((prev) => new Set([...prev, ...COURSE.filter((m) => moduleAutoDone(m, next)).map((m) => m.code)]));
         }).catch(() => undefined);
         fetchExamSummary().then((summary) => {
             const passed = Array.from({length: LEVEL_COUNT}, (_, n) => n).filter((n) => levelExamPassed(n, summary.results));
@@ -107,7 +118,7 @@ export function SupercoursePage() {
                                                 {t(examPassed.has(module.level) ? 'supercourse.levelPassed' : 'supercourse.examTarget', {rating: LEVEL_EXAM_TARGET[module.level]})}
                                             </span>
                                         )}
-                                        {module.steps.length > 0 && logged && !done.has(module.code) && !module.code.startsWith('X') && (
+                                        {module.steps.length > 0 && logged && !done.has(module.code) && !moduleCheckable(module) && (
                                             <button type="button" onClick={() => void markDone(module.code)} data-testid={`course-done-${module.code}`}
                                                     className="ml-auto px-2 py-0.5 rounded bg-amber-700 text-white text-xs font-bold">{t('supercourse.markDone')}</button>
                                         )}
@@ -124,9 +135,12 @@ export function SupercoursePage() {
                                                         </span>
                                                     );
                                                 }
+                                                const stepDone = facts ? activityDone(step, facts) === true : false;
                                                 return (
                                                     <button key={i} type="button" onClick={() => navigate(link.to, {state: link.state})}
-                                                            className="text-left text-xs text-amber-200 hover:underline">
+                                                            data-testid={stepDone ? `course-step-done-${module.code}-${i}` : undefined}
+                                                            className={`text-left text-xs hover:underline ${stepDone ? 'text-emerald-300' : 'text-amber-200'}`}>
+                                                        {stepDone && <Check size={11} className="inline mr-0.5" aria-label={t('supercourse.stepDone')}/>}
                                                         {activityLabel(t as never, language, step)}
                                                     </button>
                                                 );

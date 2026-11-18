@@ -2951,6 +2951,7 @@ export const en = {
         levelPassed: 'Level passed',
         noPuzzlesYet: 'no puzzles yet',
         markDone: 'Module done',
+        stepDone: 'Done',
         levels: {l0: '0 · ABC', l1: '1 · Beginner', l2: '2 · 4th–3rd category', l3: '3 · 3rd–2nd category', l4: '4 · 2nd–1st category', l5: '5 · 1st category – CM'},
         branches: {T: 'Tactics', M: 'Mate and attack', E: 'Endgame', S: 'Strategy and pawn structures', O: 'Openings', C: 'Calculation, vision and thinking', G: 'Games, history and exams'},
     },
