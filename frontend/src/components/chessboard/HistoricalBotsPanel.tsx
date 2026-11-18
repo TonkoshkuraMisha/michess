@@ -1,6 +1,9 @@
 // --- FILE: frontend/src/components/chessboard/HistoricalBotsPanel.tsx ---
 // Выбор соперника-бота: исторические боты и мастера с портретом, годами жизни и силой (измеренной, если бот
-// калиброван, — GET /bots/catalog), выбор цвета, форы и старта со своей позиции.
+// калиброван, — GET /bots/catalog), выбор цвета, форы и старта со своей позиции. Список ботов, портреты и годы —
+// config/champions.ts; имена, титулы и девизы — каталог bots.profiles.*. С сервера приходят только числа: измеренная
+// сила и сила по партиям с людьми (GET /bots/catalog), память бота об игроке (GET /bots/rivalry) — их загружает
+// Chessboard. Внизу — реплика бота к последнему ходу (ключ каталога botComments.*, уже переведённый вызывающим).
 
 import {ODDS} from './odds';
 import type {OddsChoice, OddsGiver, OddsKind} from './odds';
@@ -13,14 +16,18 @@ import {scorePoints} from '../../services/botCatalog';
 import type {BotRival} from '../../services/botCatalog';
 
 export interface HistoricalBotsPanelProps {
+    /** Бот, выбранный в списке (его карточка показана), — не обязательно тот, с кем идёт партия. */
     selectedBotId: HistoricalBotId;
     onSelectBot: (id: HistoricalBotId) => void;
     selectedBotProfile: HistoricalBotProfile;
+    /** Соперник идущей (или только что сыгранной) партии с ботом; null — партии с ботом нет. */
     activeBot: BotOpponentId | null;
     activeBotProfile: HistoricalBotProfile | null;
+    /** id партии с человеком: пока она идёт, начать партию с ботом нельзя. */
     gameId: number | null;
     gameOverResult: string | null;
     isBotThinking: boolean;
+    /** Реплика бота на языке игрока; null — показывается общая фраза bots.defaultThought. */
     botComment: string | null;
     onStartBotGame: (botId: HistoricalBotId, colorPref: 'white' | 'black' | 'random') => void;
     /** На свободной доске стоит своя позиция — партию с ботом можно начать с неё. */
@@ -38,7 +45,10 @@ export interface HistoricalBotsPanelProps {
     onOddsChange?: (odds: OddsChoice) => void;
 }
 
-/** Выбор исторического бота, карточка с его девизом/рейтингом и кнопками старта партии. */
+/**
+ * Выбор исторического бота, карточка с его девизом/рейтингом и кнопками старта партии. Фора недоступна при
+ * старте со своей позиции (материальная фора сама задаёт начальную позицию).
+ */
 export function HistoricalBotsPanel({
     selectedBotId, onSelectBot, selectedBotProfile, activeBot, activeBotProfile, gameId,
     gameOverResult, isBotThinking, botComment, onStartBotGame,

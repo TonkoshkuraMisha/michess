@@ -1,6 +1,9 @@
 // --- FILE: frontend/src/components/chessboard/CoachPanel.tsx ---
 // Панель игры с наставником (таски 11.3, 11.4): включение, уровень, подсказка по ступеням, предупреждение о плохом
-// ходе («Почему?», «Переходить», «Оставить», «Не согласен»), объяснение текстом и вспомогательная доска.
+// ходе («Почему?», «Переходить», «Оставить», «Не согласен»), объяснение текстом и вспомогательная доска. Только
+// разметка: состояние и запросы к серверу — в хуке useCoachMode (он передаётся целиком пропсом coach), текст
+// объяснения собирается из ключей каталога coach.* (services/coach.ts). Chessboard показывает панель на свободной
+// доске и в партии с ботом; в партии с человеком и у зрителя её нет.
 
 import type {ReactNode} from 'react';
 import {GraduationCap} from 'lucide-react';
@@ -11,10 +14,11 @@ import type {CoachLevel, UseCoachModeResult} from './hooks/useCoachMode';
 
 interface Props {
     coach: UseCoachModeResult;
-    /** Партия лестницы: наставник недоступен (партия не была бы засчитана). */
+    /** Идёт партия лестницы или турнира: наставник недоступен (партия не была бы засчитана). */
     locked: boolean;
     /** Партия с ботом идёт (не завершена) — показываем отметку «учебная». */
     inBotGame: boolean;
+    /** Подсказку можно просить: живая позиция, ход игрока, партия не окончена и не идёт проверка хода. */
     canAdvise: boolean;
     onAdvice: () => void;
     onTakeBack: () => void;
@@ -24,19 +28,24 @@ interface Props {
     children?: ReactNode;
 }
 
+// Подпись кнопки подсказки называет следующую ступень: индекс — число уже показанных ступеней (hintStep).
 const HINT_BUTTON_KEYS = ['coachMode.advice', 'coachMode.hintPiece', 'coachMode.hintMove'] as const;
 
+// Классификация хода с сервера (поле classification ответа /analysis/check-move) → заголовок предупреждения;
+// для другой классификации — общий заголовок coachMode.verdictMissed.
 const VERDICT_KEYS: Record<string, 'coachMode.verdictBlunder' | 'coachMode.verdictMistake' | 'coachMode.verdictInaccuracy'> = {
     Blunder: 'coachMode.verdictBlunder',
     Mistake: 'coachMode.verdictMistake',
     Inaccuracy: 'coachMode.verdictInaccuracy',
 };
 
+/** Панель наставника под списком ходов; children — вспомогательная доска, видна при auxOpen. */
 export function CoachPanel({
     coach, locked, inBotGame, canAdvise, onAdvice, onTakeBack, auxOpen = false, onToggleAux, children,
 }: Props) {
     const {t} = useI18n();
     const warning = coach.pending?.status === 'warning' ? coach.pending.check : undefined;
+    // Объяснение плохого хода («Почему?») важнее подсказки: показывается оно, пока есть.
     const shownText = coachText(coach.explanation ?? coach.advice, t);
 
     return (

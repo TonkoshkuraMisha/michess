@@ -14,6 +14,10 @@
 Уровни 1–3 — сколько на доске фигур и отвлекающих целей. Решение проверяется перебором: генератор принимает позицию,
 только если верный ответ ровно один (``solutions``); упражнение задаётся (вид, фигура, уровень, seed) — сервер не
 хранит позиций и в любой момент восстанавливает упражнение для проверки ответа. Цвет решающего меняется по seed.
+
+Модуль чистый: ни базы, ни Redis, ни движка — только python-chess и генератор случайных чисел с заданным seed.
+Позиция сначала строится «за белых», затем по seed может быть зеркально перевёрнута. Выдачу, проверку ответа и забеги
+ведёт src/services/generated_drills.py; проверенные seed собирает scripts/dev/build_drill_seeds.py.
 """
 
 import random
@@ -25,11 +29,14 @@ KINDS = ("capture", "fork", "check", "pin", "safe", "escape", "mate1", "mate2")
 PIECES = ("q", "r", "b", "n", "x")  # x — случайная фигура
 LEVELS = (1, 2, 3)
 PIECE_TYPES = {"q": chess.QUEEN, "r": chess.ROOK, "b": chess.BISHOP, "n": chess.KNIGHT}
+# Дальнобойные фигуры: только они могут связывать.
 SLIDERS = (chess.QUEEN, chess.ROOK, chess.BISHOP)
+# Ценность фигур для сравнения «цель дороже нападающего» (вилка, связка).
 VALUES = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 100}
-# Сколько фигур соперника (кроме короля) и пешек ставить на уровне.
+# Сколько фигур соперника (кроме короля) и пешек ставить на уровне: (от, до) включительно.
 LEVEL_ENEMIES = {1: (1, 2), 2: (2, 3), 3: (3, 5)}
 LEVEL_PAWNS = {1: (0, 0), 2: (0, 2), 3: (1, 3)}
+# Сколько соседних seed подряд пробует generate, прежде чем сдаться (DrillGenerationError).
 MAX_ATTEMPTS = 4000
 
 
@@ -44,7 +51,7 @@ class Drill:
     сервер восстанавливает упражнение при проверке ответа.
     """
     kind: str
-    piece: str      # q/r/b/n — по запросу; x уже заменён на конкретную фигуру
+    piece: str      # как в запросе: q/r/b/n или x (случайная). x не заменяется: он входит в ключ и в seed расстановки
     level: int
     seed: int       # seed, на котором позиция подобрана (по нему упражнение восстанавливается)
     fen: str
@@ -70,6 +77,7 @@ def _at(board: chess.Board, square: chess.Square) -> chess.Piece:
 
 
 def _at_king(board: chess.Board) -> chess.Square:
+    """Поле короля соперника (при расстановке соперник — чёрные)."""
     king = board.king(chess.BLACK)
     assert king is not None
     return king
@@ -101,6 +109,7 @@ def _targets(board: chess.Board, square: chess.Square, us: chess.Color) -> int:
 
 
 def _capture_moves(board: chess.Board) -> list[chess.Move]:
+    """Взятия фигур соперника, которые никто не защищает."""
     us = board.turn
     result = []
     for move in board.legal_moves:
@@ -113,6 +122,7 @@ def _capture_moves(board: chess.Board) -> list[chess.Move]:
 
 
 def _fork_moves(board: chess.Board) -> list[chess.Move]:
+    """Вилки: ход фигурой (не королём и не пешкой) на поле, где её не взять и откуда она бьёт не меньше двух целей."""
     us = board.turn
     result = []
     for move in board.legal_moves:
@@ -130,6 +140,7 @@ def _check_moves(board: chess.Board) -> list[chess.Move]:
 
 
 def _pin_moves(board: chess.Board) -> list[chess.Move]:
+    """Связки: ход дальнобойной фигурой без шаха на поле, где её не взять, после которого она связывает фигуру."""
     them = not board.turn
     result = []
     for move in board.legal_moves:
@@ -191,6 +202,7 @@ def _mate_moves(board: chess.Board) -> list[chess.Move]:
 
 
 def _escape_moves(board: chess.Board) -> list[chess.Move]:
+    """Ходы, после которых у соперника нет мата в один ход."""
     result = []
     for move in board.legal_moves:
         board.push(move)
@@ -201,6 +213,10 @@ def _escape_moves(board: chess.Board) -> list[chess.Move]:
 
 
 def _mate_in_two_moves(board: chess.Board) -> list[chess.Move]:
+    """
+    Первые ходы мата в два: ход не матует сам и не даёт пата, а на каждый ответ соперника есть мат в один ход.
+    Мат в один ход сюда не входит — это другой вид упражнения.
+    """
     result = []
     for move in board.legal_moves:
         board.push(move)
@@ -233,7 +249,10 @@ def mate_reply(board: chess.Board, first: chess.Move) -> chess.Move:
 
 
 def solutions_for(kind: str, board: chess.Board, key_square: chess.Square | None = None) -> list[chess.Move]:
-    """Все ответы, которые засчитываются по правилу вида (упражнение корректно, если ответ один)."""
+    """
+    Все ответы, которые засчитываются по правилу вида (упражнение корректно, если ответ один). key_square нужен
+    только виду safe: это поле фигуры, которую надо увести из-под боя.
+    """
     if kind == "capture":
         return _capture_moves(board)
     if kind == "fork":
@@ -263,6 +282,10 @@ def _random_square(rng: random.Random, board: chess.Board, *, ranks: range = ran
 
 
 def _place_kings(rng: random.Random, board: chess.Board, *, edge_enemy: bool = False) -> tuple[chess.Square, chess.Square]:
+    """
+    Ставит королей не рядом друг с другом и возвращает их поля (наш, соперника). edge_enemy — король соперника на
+    краю доски (последняя горизонталь или крайняя вертикаль в его половине): так строятся матовые упражнения.
+    """
     ours = _random_square(rng, board)
     board.set_piece_at(ours, chess.Piece(chess.KING, chess.WHITE))
     while True:
@@ -289,7 +312,11 @@ def _enemy_types(rng: random.Random, count: int) -> list[chess.PieceType]:
 
 
 def _arrange(kind: str, piece_type: chess.PieceType, level: int, rng: random.Random) -> tuple[chess.Board, chess.Square]:
-    """Случайная расстановка для вида: наш король и фигура piece_type, король и фигуры соперника. Ходят белые."""
+    """
+    Случайная расстановка для вида: наш король и фигура piece_type, король и фигуры соперника. Ходят белые.
+    Возвращает доску и поле нашей фигуры piece_type (в escape фигура вида — у соперника, и поле не используется).
+    Годится ли расстановка как упражнение, решает _accept.
+    """
     board = chess.Board(None)
     board.turn = chess.WHITE
     enemies = rng.randint(*LEVEL_ENEMIES[level])
@@ -344,6 +371,7 @@ def _arrange(kind: str, piece_type: chess.PieceType, level: int, rng: random.Ran
 
 
 def _valid(board: chess.Board) -> bool:
+    """Позиция возможна по правилам, решающий не под шахом и партия не окончена."""
     return board.is_valid() and not board.is_check() and not board.is_game_over()
 
 
@@ -367,7 +395,11 @@ def _accept(kind: str, board: chess.Board, key: chess.Square, piece_type: chess.
 
 
 def generate(kind: str, piece: str, level: int, seed: int) -> Drill:
-    """Упражнение по seed: первые попытки от seed по порядку — детерминированно; seed в ответе — подобранный."""
+    """
+    Упражнение по seed: первые попытки от seed по порядку — детерминированно; seed в ответе — подобранный. Пробуются
+    seed, seed + 1, … (не больше MAX_ATTEMPTS); ни один не дал позиции с единственным ответом —
+    DrillGenerationError. Неизвестное сочетание вида, фигуры и уровня — ValueError.
+    """
     if not supported(kind, piece) or level not in LEVELS:
         raise ValueError(f"unsupported drill {kind}/{piece}/{level}")
     for attempt in range(MAX_ATTEMPTS):
@@ -379,7 +411,10 @@ def generate(kind: str, piece: str, level: int, seed: int) -> Drill:
 
 
 def build(kind: str, piece: str, level: int, seed: int) -> Drill | None:
-    """Одна попытка: расстановка по seed и проверка; None — позиция не годится."""
+    """
+    Одна попытка: расстановка по seed и проверка; None — позиция не годится. Генератор случайных чисел засевается
+    строкой «вид:фигура:уровень:seed», поэтому одни и те же параметры всегда дают одну и ту же позицию.
+    """
     rng = random.Random(f"{kind}:{piece}:{level}:{seed}")
     actual = rng.choice("qrbn") if piece == "x" else piece
     if kind == "pin" and actual == "n":

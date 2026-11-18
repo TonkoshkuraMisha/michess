@@ -10,7 +10,14 @@
 * лучший ход — не очевидное взятие незащищённой фигуры;
 * не больше MAX_PER_PLAYER задач на игрока за партию (самые дорогие ошибки).
 
-Повторение с интервалами: нерешённая задача возвращается через 1, 3, 7, 21 день; решённая дважды подряд — освоена.
+Повторение с интервалами: новая задача доступна сразу; неверный ответ возвращает её через 1 день, первый верный —
+через 3 дня, второй верный подряд делает её освоенной (done). В INTERVALS_DAYS записаны и интервалы 7 и 21 день, но
+при SOLVES_TO_MASTER = 2 задача до них не доходит: после второго верного ответа она уже освоена.
+
+Данные: разбор партии — games.analysis_json (пишет analysis_service.py) и imported_games.analysis_json (пишет
+game_import.py), задачи — таблица personal_puzzles. Извлечение запускают фоновая задача после разбора
+(src/worker/tasks.py) и импорт партий (src/api/game_import.py). Движок — только для проверки отрыва лучшего хода
+(два лучших хода, глубина ENGINE_DEPTH), через пул; без движка задачи из партии не создаются.
 """
 
 import asyncio
@@ -37,23 +44,29 @@ from src.services.themes import themes_for_motif
 
 logger = logging.getLogger(__name__)
 
-MIN_LOSS = 100
-MIN_GAP = 200
-MAX_PER_PLAYER = 3
-ENGINE_DEPTH = 14
-MATE_CP = 10_000
+MIN_LOSS = 100  # наименьшая потеря хода партии (сп), с которой ошибка годится в задачу
+MIN_GAP = 200  # на сколько сп лучший ход должен опережать второй, чтобы решение было единственным
+MAX_PER_PLAYER = 3  # задач на игрока из одной партии
+ENGINE_DEPTH = 14  # глубина проверки двух лучших ходов
+MATE_CP = 10_000  # условная оценка мата в сантипешках; оценка от MATE_CP - 100 считается матом
+# Через сколько дней задача возвращается, по индексу personal_puzzles.interval_index (см. докстринг модуля: при
+# SOLVES_TO_MASTER = 2 используются только первые два значения).
 INTERVALS_DAYS = (1, 3, 7, 21)
-SOLVES_TO_MASTER = 2
+SOLVES_TO_MASTER = 2  # верных ответов подряд, после которых задача освоена и больше не показывается
 # Разделитель кодов тем в колонке personal_puzzles.themes (см. join_themes / split_themes).
 THEMES_SEPARATOR = ","
 
 
 def _score(info: chess.engine.InfoDict, turn: chess.Color) -> int:
+    """Оценка линии движка в сантипешках с точки зрения стороны turn; мат — около ±MATE_CP."""
     return int(info["score"].pov(turn).score(mate_score=MATE_CP) or 0)
 
 
 def top_two(board: chess.Board) -> list[tuple[str, int]] | None:
-    """Два лучших хода с оценкой с точки зрения стороны, которая ходит. None — движка нет."""
+    """
+    Два лучших хода с оценкой с точки зрения стороны, которая ходит (Stockfish через пул, глубина ENGINE_DEPTH, две
+    линии). None — движка нет. Один элемент — в позиции единственный легальный ход. Синхронная: вызывать в потоке.
+    """
     path = resolve_stockfish_path()
     if not path:
         return None
@@ -65,7 +78,10 @@ def top_two(board: chess.Board) -> list[tuple[str, int]] | None:
 
 
 def obvious_capture(board: chess.Board, move: chess.Move) -> bool:
-    """Взятие незащищённой фигуры — его видно без расчёта, задачи из него не выйдет."""
+    """
+    Взятие незащищённой фигуры — его видно без расчёта, задачи из него не выйдет. «Незащищённая» — на поле взятия
+    не бьёт ни одна фигура её стороны; взятие на проходе очевидным не считается.
+    """
     target = board.piece_at(move.to_square)
     if target is None or board.is_en_passant(move):
         return False
@@ -75,7 +91,8 @@ def obvious_capture(board: chess.Board, move: chess.Move) -> bool:
 def is_solvable(board: chess.Board, best: chess.Move, candidates: list[tuple[str, int]]) -> bool:
     """
     Объективно ли решаема задача: лучший ход — не очевидное взятие, он не единственный легальный и опережает второй по
-    силе ход на MIN_GAP (или матует, а второй — нет).
+    силе ход на MIN_GAP (или матует, а второй — нет). candidates — ответ ``top_two``; лучший ход разбора партии
+    должен совпасть с первым ходом этой более глубокой проверки, иначе задача не создаётся.
     """
     if obvious_capture(board, best):
         return False
@@ -114,7 +131,10 @@ def themes_of(board: chess.Board, move: chess.Move) -> list[str]:
 
 
 async def extract_for_game(db: AsyncSession, game_id: int) -> int:
-    """Личные задачи из разобранной партии. Повторный вызов ничего не дублирует. Возвращает число новых задач."""
+    """
+    Личные задачи из разобранной партии — для каждой стороны, за которую играл человек, а не бот. Без разбора
+    (games.analysis_json) или без PGN задач нет. Повторный вызов ничего не дублирует. Возвращает число новых задач.
+    """
     game = await db.get(Game, game_id)
     if game is None or not game.analysis_json or not game.pgn:
         return 0
@@ -146,6 +166,16 @@ async def extract_for_imported(db: AsyncSession, imported_id: int) -> int:
 
 async def _extract(db: AsyncSession, pgn: str, analysis_json: str, players: dict[str, User],
                    existing: set, source: dict[str, int], label: str) -> int:
+    """
+    Общая часть извлечения. players — цвет («white» / «black») → игрок, для которого ищутся задачи; existing —
+    уже созданные пары (игрок, полуход); source — колонка-источник задачи (game_id или imported_game_id).
+
+    Порядок: из разбора берутся ходы игрока с классификацией Mistake или Blunder и потерей от MIN_LOSS, у которых
+    лучший ход известен и отличается от сыгранного; по убыванию потери каждый проверяется движком (``is_solvable``),
+    пока не наберётся MAX_PER_PLAYER (уже созданные задачи партии входят в этот счёт). Если движок недоступен,
+    извлечение прекращается досрочным возвратом — без commit: задачи, добавленные к этому моменту, сохранятся,
+    только если сессию закоммитит вызывающий код.
+    """
     if not players:
         return 0
     try:
@@ -279,6 +309,7 @@ async def summary(db: AsyncSession, user: User) -> dict:
 
 
 async def next_due(db: AsyncSession, user: User) -> PersonalPuzzle | None:
+    """Следующая задача к повторению: неосвоенная, срок которой уже подошёл; первой — с самым давним сроком."""
     return await db.scalar(
         select(PersonalPuzzle).where(PersonalPuzzle.user_id == user.id, PersonalPuzzle.done.is_(False),
                                      PersonalPuzzle.due_at <= _now())
@@ -287,7 +318,11 @@ async def next_due(db: AsyncSession, user: User) -> PersonalPuzzle | None:
 
 
 async def answer(db: AsyncSession, user: User, puzzle_id: int, uci: str) -> dict:
-    """Ответ на личную задачу: верно — интервал растёт; неверно — снова завтра. Решена дважды подряд — освоена."""
+    """
+    Ответ на личную задачу: верно — интервал растёт; неверно — снова завтра. Решена дважды подряд — освоена.
+    Верным считается ход решения или любой ход, ставящий мат. Срок следующего показа — от момента ответа. В ответе
+    раскрываются решение и ход, сделанный в партии, — и при неверном ответе тоже.
+    """
     puzzle = await db.get(PersonalPuzzle, puzzle_id)
     if puzzle is None or puzzle.user_id != user.id:
         from src.services.puzzles import PuzzleError
@@ -331,6 +366,7 @@ async def plies_for_game(db: AsyncSession, game_id: int, user: User | None) -> l
 
 
 async def plies_for_imported(db: AsyncSession, imported_id: int, user: User) -> list[int]:
+    """То же, что ``plies_for_game``, для партии с другого сайта."""
     rows = await db.execute(select(PersonalPuzzle.ply).where(PersonalPuzzle.imported_game_id == imported_id,
                                                               PersonalPuzzle.user_id == user.id))
     return sorted(set(rows.scalars()))

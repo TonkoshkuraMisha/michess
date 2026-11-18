@@ -1,15 +1,21 @@
 // --- FILE: frontend/src/components/chessboard/CoachArrowsOverlay.tsx ---
-// Стрелки наставника поверх доски: зелёная — лучший ход, красная — угроза соперника, синяя — идея хода.
+// Стрелки наставника поверх доски: зелёная — лучший ход, красная — угроза соперника, синяя — идея хода. Стрелки и
+// поля для подсветки присылает сервер в ответе наставника (поле coach ответов /analysis/check-move, /analysis/hint,
+// разбора партии); из ответа их достают coachArrows и coachHighlights (services/coach.ts).
 
 import type {CoachArrow, CoachArrowKind} from '../../services/coach';
 
+/** Цвет стрелки по её виду; виды задаёт сервер. */
 export const COACH_ARROW_COLORS: Record<CoachArrowKind, string> = {
     best: 'rgba(16, 185, 129, 0.88)',
     threat: 'rgba(244, 63, 94, 0.88)',
     idea: 'rgba(56, 189, 248, 0.88)',
 };
 
-/** Центр поля в координатах 0..100 с учётом переворота доски; null — не поле. */
+/**
+ * Центр поля в координатах 0..100 с учётом переворота доски; null — не поле. Общая функция всех слоёв поверх
+ * доски (пометки игрока, стрелка последнего хода, рентген, анимация хода).
+ */
 export function squareCenter(square: string, flipped: boolean): { x: number; y: number } | null {
     if (!/^[a-h][1-8]$/.test(square)) return null;
     const file = square.charCodeAt(0) - 97;
@@ -28,6 +34,7 @@ interface Props {
     idPrefix?: string;
 }
 
+/** Слой стрелок и подсвеченных полей наставника; клики не перехватывает, без стрелок и полей не рисуется. */
 export function CoachArrowsOverlay({arrows, highlights = [], flipped, idPrefix = 'coach'}: Props) {
     if (arrows.length === 0 && highlights.length === 0) return null;
     return (

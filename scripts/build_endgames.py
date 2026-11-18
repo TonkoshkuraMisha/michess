@@ -65,6 +65,7 @@ MATE_SLACK = 8
 
 
 def probe(fen: str) -> dict:
+    """Запрашивает оценку и оптимум ходов позиции в эндшпильных таблицах."""
     from src.core.config import settings
 
     url = settings.TABLEBASE_URL + "?" + urllib.parse.urlencode({"fen": fen})
@@ -73,6 +74,7 @@ def probe(fen: str) -> dict:
 
 
 def main() -> None:
+    """Сверяет канонические позиции эндшпильного тренажёра с таблицами Syzygy."""
     result = []
     for exercise_id, fen, goal in EXERCISES:
         board = chess.Board(fen)

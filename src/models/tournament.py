@@ -3,7 +3,8 @@
 Турниры с историческими мастерами (таск 15.1). Правила — src/services/tournament_rules.py, ход турнира —
 src/services/tournaments.py. Номер участника (seat) — его посев: 1 — сильнейший по рейтингу на старте.
 Участник — игрок-владелец турнира, исторический бот, архетип мастерской или персоналия игрока (её имя и конфиг
-копируются в турнир: удаление или правка персоналии не меняет уже идущий турнир).
+копируются в турнир: удаление или правка персоналии не меняет уже идущий турнир). Мастер прошлого из «Машины
+времени» (src/services/bots/guests.py) записывается как персоналия с ключом «guest:<id>» в bot_key.
 """
 
 from datetime import datetime
@@ -16,7 +17,8 @@ from src.models.base import Base
 
 class Tournament(Base):
     """
-    Турнир игрока с ботами: формат (круговой или на выбывание), контроль времени, статус и итоговое место игрока.
+    Турнир игрока с ботами: формат (круговой, на выбывание или швейцарка), контроль времени и статус. Итоговое
+    место игрока хранится в его строке tournament_players.place.
     """
     __tablename__ = "tournaments"
 
@@ -57,7 +59,7 @@ class TournamentPlayer(Base):
     # user | bot | archetype | personality
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
     user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
-    # id исторического бота («morphy») или ключ архетипа («archetype:rusher»).
+    # id исторического бота («morphy»), ключ архетипа («archetype:rusher») или мастера прошлого («guest:<id>»).
     bot_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # Персоналия мастерской — копия имени и конфига на момент создания турнира.
     personality_name: Mapped[str | None] = mapped_column(String(30), nullable=True)

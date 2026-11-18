@@ -1,17 +1,22 @@
 // --- FILE: frontend/src/components/chessboard/boardUtils.ts ---
-// Константы и чистые функции доски (вынесено из Chessboard.tsx).
+// Константы и чистые функции доски (вынесено из Chessboard.tsx): размер доски по окну, перевес в материале,
+// копия партии chess.js, начальная позиция партии, проверка FEN, раскладка ходов по парам. Сервер не нужен:
+// правила шахмат — библиотека chess.js, тексты — каталог сообщений (ключи board.*).
 
 import {Chess} from 'chess.js';
 import {t} from '../../i18n';
 
+/** Вертикали слева направо и горизонтали сверху вниз — как их видят белые. */
 export const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 export const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
 
+/** Пределы стороны доски в пикселях (ползунок размера и уголок растягивания). */
 export const MIN_BOARD_SIZE = 280;
 export const MAX_BOARD_SIZE = 860;
 
 export type PromotionPiece = 'q' | 'n' | 'r' | 'b';
 
+// Название фигуры читается из каталога в момент показа (геттер): смена языка меняет подпись без перезагрузки.
 function promotionOption(type: PromotionPiece): { type: PromotionPiece; readonly label: string } {
     return {
         type,
@@ -21,6 +26,7 @@ function promotionOption(type: PromotionPiece): { type: PromotionPiece; readonly
     };
 }
 
+/** Фигуры для выбора при превращении пешки, в порядке показа (PromotionDialog). */
 export const PROMOTION_OPTIONS: Array<{ type: PromotionPiece; readonly label: string }> = [
     promotionOption('q'),
     promotionOption('n'),
@@ -28,6 +34,11 @@ export const PROMOTION_OPTIONS: Array<{ type: PromotionPiece; readonly label: st
     promotionOption('b'),
 ];
 
+/**
+ * Наибольшая сторона доски, которая помещается в окно: по высоте — окно минус 220 px под остальную разметку,
+ * по ширине — минус 850 px под боковые колонки на экране от 1280 px, иначе вся ширина минус 24 px. Не меньше
+ * MIN_BOARD_SIZE и не больше MAX_BOARD_SIZE.
+ */
 export function getMaxViewportBoardSize(): number {
     if (typeof window === 'undefined') return 560;
     const availableHeight = window.innerHeight - 220;
@@ -38,6 +49,7 @@ export function getMaxViewportBoardSize(): number {
     return Math.max(MIN_BOARD_SIZE, Math.min(limit, window.innerWidth - 24));
 }
 
+/** Размер доски по умолчанию — наибольший, что помещается в окно (двойной щелчок по уголку растягивания). */
 export function getDefaultBoardSize(): number {
     if (typeof window !== 'undefined') {
         return getMaxViewportBoardSize();
@@ -45,8 +57,15 @@ export function getDefaultBoardSize(): number {
     return 540;
 }
 
+/** Условная ценность фигур в пешках — только для строки перевеса у имени игрока, на игру не влияет. */
 export const PIECE_VALUES: Record<string, number> = {p: 1, n: 3, b: 3, r: 5, q: 9, k: 0};
 
+/**
+ * Перевес в материале и «взятые» фигуры по позиции на доске (boardState — результат board() из chess.js).
+ * Взятые считаются как разница с полным начальным комплектом, а не по истории взятий: превращённая пешка
+ * выглядит взятой, а в партии с нестандартной позиции список не имеет смысла (Chessboard его тогда не показывает).
+ * whiteCapturedSymbols — чёрные фигуры, взятые белыми, и наоборот.
+ */
 export function calculateMaterialBalance(boardState: any[][]) {
     const startCounts: Record<string, number> = {p: 8, n: 2, b: 2, r: 2, q: 1};
     const currentWhite: Record<string, number> = {p: 0, n: 0, b: 0, r: 0, q: 0};
@@ -90,6 +109,10 @@ export function calculateMaterialBalance(boardState: any[][]) {
     };
 }
 
+/**
+ * Независимая копия партии. Копируется через PGN, чтобы сохранить историю ходов (и заголовок FEN у партии с
+ * произвольной позиции); у позиции без ходов и заголовков PGN пуст — тогда копируется только FEN.
+ */
 export function cloneChessInstance(source: Chess): Chess {
     const copy = new Chess();
     const currentPgn = source.pgn();
@@ -109,7 +132,10 @@ export function customStartFen(source: Chess): string | null {
     return fen && fen !== STANDARD_START_FEN ? fen : null;
 }
 
-/** Проверяет FEN теми же правилами, что и доска; возвращает текст ошибки или null. */
+/**
+ * Проверяет FEN теми же правилами, что и доска (chess.js); возвращает текст ошибки на языке игрока или null.
+ * Позиция, в которой партия уже окончена (мат, пат, ничья), тоже отклоняется: играть с неё нечего.
+ */
 export function validateFen(fen: string): string | null {
     try {
         const probe = new Chess(fen.trim());
@@ -120,6 +146,7 @@ export function validateFen(fen: string): string | null {
     }
 }
 
+/** Строка списка ходов: номер хода, ход белых и ход чёрных с их индексами в истории полуходов. */
 export interface HalfMovePair {
     moveNumber: number;
     /** undefined и whiteIdx === -1 — партия начата с хода чёрных, у первой пары нет хода белых. */
@@ -154,6 +181,7 @@ export function pairHalfMoves(history: Array<{ san: string }>, startFen?: string
     return pairs;
 }
 
+/** Индекс полухода, который сейчас на доске: у живой позиции (viewIndex === -1) это последний ход истории. */
 export function prevIndexHelper(viewIndex: number, historyLength: number): number {
     return viewIndex === -1 ? historyLength - 1 : viewIndex;
 }

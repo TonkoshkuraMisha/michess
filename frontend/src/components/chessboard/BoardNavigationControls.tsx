@@ -1,4 +1,6 @@
 // --- FILE: frontend/src/components/chessboard/BoardNavigationControls.tsx ---
+// Кнопки перемотки партии на главной доске: в начало, ход назад, ход вперёд, к живой позиции. Только разметка:
+// какую позицию показывать (viewIndex), решает Chessboard; те же действия — на клавишах-стрелках.
 
 import {ChevronFirst, ChevronLeft, ChevronRight, ChevronLast} from 'lucide-react';
 import {useI18n} from '../../i18n';
@@ -13,7 +15,10 @@ export interface BoardNavigationControlsProps {
     onLast: () => void;
 }
 
-/** Кнопки перемотки журнала ходов — дублируют клавиши со стрелками. */
+/**
+ * Кнопки перемотки журнала ходов — дублируют клавиши со стрелками (влево и вправо — на ход, вверх — в начало,
+ * вниз — к живой позиции). «Назад» отключены в начале партии, «вперёд» — на живой позиции.
+ */
 export function BoardNavigationControls({
     historyLength, viewIndex, onFirst, onBack, onForward, onLast,
 }: BoardNavigationControlsProps) {

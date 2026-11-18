@@ -33,7 +33,8 @@ class Puzzle(Base):
     plays: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # Исходные теги базы — для повторной разметки при изменении реестра.
     source_tags: Mapped[str] = mapped_column(String(300), nullable=False, default="")
-    # Ступень (таск 13.4): 1 — знакомство, 2 — закрепление, 3 — в сочетании, 4 — мастер (см. stage_for).
+    # Ступень (таск 13.4): 1 — знакомство, 2 — закрепление, 3 — в сочетании, 4 — мастер; считается при импорте по
+    # рейтингу и длине решения (src/services/puzzle_import.stage_for).
     stage: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1", index=True)
     # Версия разметки тем (src/services/puzzle_import.TAG_VERSION): старая — задача переразмечается при импорте.
     tag_version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
@@ -79,6 +80,8 @@ class PersonalPuzzle(Base):
     """
     Задача из партии игрока (таск 13.5): позиция перед его ошибкой и единственный сильный ход. Повторение с
     интервалами: нерешённая возвращается через 1, 3, 7, 21 день, пока не решится дважды подряд (тогда done).
+    Числа — personal_puzzles.INTERVALS_DAYS и SOLVES_TO_MASTER; создаёт задачи фоновый разбор партии
+    (src/worker/tasks.py → personal_puzzles.extract_for_game / extract_for_imported).
     """
     __tablename__ = "personal_puzzles"
     __table_args__ = (

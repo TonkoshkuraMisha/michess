@@ -19,6 +19,7 @@ ARCHIVE_PASSWORD = "!historical_archive_no_login!"
 
 
 def _metrics(item: tuple[int, str]):
+    """Считает показатели партии: число ходов, шахов, взятий, превращений и проходных."""
     from src.services.collections import game_metrics
 
     game_id, pgn = item
@@ -26,6 +27,7 @@ def _metrics(item: tuple[int, str]):
 
 
 async def _load():
+    """Загружает завершённые партии архива без дублей для тематических подборок."""
     from sqlalchemy import select
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
     from sqlalchemy.orm import aliased
@@ -49,6 +51,7 @@ async def _load():
 
 
 async def _save(ranked: dict[str, list[tuple[int, int]]]) -> int:
+    """Сохраняет сформированные тематические подборки партий в JSON-файл."""
     from sqlalchemy import delete
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
     from sqlalchemy.pool import NullPool
@@ -70,6 +73,7 @@ async def _save(ranked: dict[str, list[tuple[int, int]]]) -> int:
 
 
 def main() -> None:
+    """Собирает семь забавных подборок партий по историческому архиву."""
     from src.services.collections import rank_collections
 
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)

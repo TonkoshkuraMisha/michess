@@ -13,6 +13,17 @@
 
 Атомарность между воркерами обеспечивает Redis: вызов и приглашение «захватывает» тот,
 чей DELETE ключа вернул 1.
+
+Где лежат данные. Redis:
+- ``queue:{base_ms}:{inc_ms}`` и ``queue:{base_ms}:{inc_ms}:casual`` — очереди вызовов одного контроля времени
+  (ZSET: игрок → рейтинг в момент публикации); рейтинговые и товарищеские — раздельно;
+- ``queue:prefs:{user_id}`` — параметры вызова игрока (HASH); у игрока не больше одного вызова;
+- ``active_queues`` — имена очередей, в которых когда-либо были вызовы (SET): по нему собирается список лобби;
+- ``matchmaking:reserve:{user_id}`` — резерв игрока на время старта партии (живёт RESERVATION_TTL_MS);
+- ``invite:{code}`` — приглашение по ссылке (JSON, живёт INVITE_TTL_S).
+PostgreSQL: запись партии создаётся в ``games``; рейтинги игроков читаются из ``users`` по категории контроля
+времени (src/services/rating.classify_time_control). Состояние идущей партии в Redis создаёт
+src/services/game_state.py (``initialize_game``). Действия игроков приходят из src/api/websockets.py.
 """
 
 import json
@@ -37,10 +48,13 @@ from src.services.rating import classify_time_control
 
 logger = logging.getLogger(__name__)
 
+# Резерв игрока на время старта партии: снимается сразу после старта; срок нужен, чтобы упавший процесс не
+# заблокировал игрока дольше 15 секунд.
 RESERVATION_TTL_MS = 15_000
-INVITE_TTL_S = 900
-UNBOUNDED_MAX_RATING = 10_000
+INVITE_TTL_S = 900  # приглашение по ссылке действует 15 минут
+UNBOUNDED_MAX_RATING = 10_000  # верхняя граница диапазона «без ограничения» (выше любого рейтинга)
 
+# Допустимый контроль времени партии между людьми: от 15 секунд до 3 часов на партию, добавка — до 3 минут за ход.
 MIN_BASE_TIME_MS = 15_000
 MAX_BASE_TIME_MS = 3 * 60 * 60 * 1000
 MAX_INCREMENT_MS = 180_000
@@ -51,7 +65,10 @@ class MatchmakingError(DomainError):
 
 
 def default_rating_window(rating: int) -> tuple[int, int]:
-    """Диапазон по умолчанию, если клиент не прислал свой (0 в настройке — без ограничения)."""
+    """
+    Диапазон по умолчанию, если клиент не прислал свой: рейтинг ± MATCHMAKING_DEFAULT_RATING_RANGE (настройка
+    src/core/config.py; 0, как по умолчанию, — без ограничения).
+    """
     spread = int(settings.MATCHMAKING_DEFAULT_RATING_RANGE)
     if spread <= 0:
         return 0, UNBOUNDED_MAX_RATING
@@ -59,6 +76,10 @@ def default_rating_window(rating: int) -> tuple[int, int]:
 
 
 def normalize_rating_window(min_rating, max_rating, rating: int) -> tuple[int, int]:
+    """
+    Диапазон рейтинга соперника для вызова: границы клиента, недостающая — из диапазона по умолчанию; отрицательные
+    значения поднимаются до 0, перепутанные границы меняются местами.
+    """
     default_min, default_max = default_rating_window(rating)
     lo = default_min if min_rating is None else max(0, int(min_rating))
     hi = default_max if max_rating is None else max(0, int(max_rating))
@@ -66,6 +87,7 @@ def normalize_rating_window(min_rating, max_rating, rating: int) -> tuple[int, i
 
 
 def validate_time_control(base_time_ms, increment_ms) -> tuple[int, int]:
+    """Контроль времени в миллисекундах; вне пределов MIN_BASE_TIME_MS…MAX_INCREMENT_MS — отказ invalid_time_control."""
     base_ms, inc_ms = int(base_time_ms), int(increment_ms)
     if not MIN_BASE_TIME_MS <= base_ms <= MAX_BASE_TIME_MS or not 0 <= inc_ms <= MAX_INCREMENT_MS:
         raise MatchmakingError("invalid_time_control")
@@ -78,15 +100,17 @@ def _queue_name(base_ms, inc_ms, rated: bool) -> str:
 
 
 def _prefs_rated(prefs: dict) -> bool:
+    """Рейтинговый ли вызов по его параметрам из Redis; вызов без поля ``rated`` считается рейтинговым."""
     return str(prefs.get("rated", "1")) != "0"
 
 
 def _ratings_compatible(rating_a: int, window_a: tuple[int, int], rating_b: int, window_b: tuple[int, int]) -> bool:
+    """Взаимное соответствие: рейтинг каждого игрока попадает в диапазон другого (границы включительно)."""
     return window_a[0] <= rating_b <= window_a[1] and window_b[0] <= rating_a <= window_b[1]
 
 
 
-VARIANTS = ("standard", "chess960")
+VARIANTS = ("standard", "chess960")  # варианты партии по приглашению; неизвестное значение заменяется на standard
 
 
 def chess960_start(number: int | None = None) -> str:
@@ -134,6 +158,7 @@ class Matchmaker:
 
     @asynccontextmanager
     async def _session(self, db: AsyncSession | None):
+        """Сессия вызывающего кода, а если её не передали — своя короткая, закрываемая на выходе."""
         if db is not None:
             yield db
         else:
@@ -149,13 +174,20 @@ class Matchmaker:
         return user.rating_for(category) if user else None
 
     async def _ensure_not_in_game(self, user_id: int, *, is_self: bool) -> None:
+        """
+        Отказ, если у игрока есть идущая партия (ключ user:{id}:current_game, game_state.py): self_in_game — когда
+        это сам запросивший, opponent_in_game — когда его соперник.
+        """
         if await self._state_manager.get_active_game_id(user_id) is not None:
             if is_self:
                 raise MatchmakingError("self_in_game")
             raise MatchmakingError("opponent_in_game")
 
     async def _reserve_players(self, *user_ids: int) -> str:
-        """Резервирует игроков на время старта партии; при занятости кого-то — откат и ошибка."""
+        """
+        Резервирует игроков на время старта партии (SET NX с общим токеном); при занятости кого-то — откат уже
+        взятых резервов и отказ players_busy. Возвращает токен для ``_release_players``.
+        """
         token = uuid.uuid4().hex
         reserved: list[int] = []
         for uid in sorted({int(u) for u in user_ids}):
@@ -167,6 +199,7 @@ class Matchmaker:
         return token
 
     async def _release_players(self, token: str, *user_ids: int) -> None:
+        """Снимает резерв, но только свой (по токену): истёкший и уже взятый другим стартом резерв не трогается."""
         for uid in {int(u) for u in user_ids}:
             key = f"matchmaking:reserve:{uid}"
             if await self.redis.get(key) == token:
@@ -190,6 +223,10 @@ class Matchmaker:
         Сразу сводит с подходящим вызовом из лобби (ближайшим по рейтингу, с взаимно
         подходящими диапазонами) или публикует собственный вызов. Возвращает game_id или None.
         rating должен быть свежим (вызывающий код перечитывает пользователя из БД).
+
+        Кандидаты берутся только из очереди того же контроля времени и того же типа (рейтинговая / товарищеская).
+        Рейтинг кандидата — тот, с которым он опубликовал вызов. Публикация нового вызова снимает прежний вызов
+        игрока: у игрока в лобби не больше одного вызова.
         """
         uid = int(user_id)
         rating = int(rating)
@@ -261,7 +298,10 @@ class Matchmaker:
             await self.redis.zrem(qn, str(uid))
 
     async def get_queue_players(self) -> list[dict]:
-        """Возвращает список всех активных вызовов в лобби."""
+        """
+        Возвращает список всех активных вызовов в лобби (по одному на игрока): обходит очереди из ``active_queues``
+        и читает параметры вызова из ``queue:prefs:{user_id}``; запись очереди без параметров пропускается.
+        """
         players = []
         seen: set[int] = set()
         active_queues = await self.redis.smembers("active_queues")
@@ -299,6 +339,13 @@ class Matchmaker:
             is_rated: bool = True,
             odds: dict | None = None,
     ) -> dict | None:
+        """
+        Создаёт запись партии в ``games`` (статус IN_PROGRESS) и возвращает данные для состояния в Redis и события
+        match_found; None — кого-то из игроков нет в базе. Рейтинги на начало партии (``white_initial_rating``,
+        ``black_initial_rating``) берутся свежими из ``users`` по категории контроля времени. Категория считается
+        по base_time и inc_time партии, а не по времени, урезанному форой. odds (``_odds_start``) задаёт начальную
+        позицию и стартовое время сторон.
+        """
         white_user = await self._fresh_user(session, white_id)
         black_user = await self._fresh_user(session, black_id)
         if not white_user or not black_user:
@@ -362,6 +409,10 @@ class Matchmaker:
 
     async def _notify_match_found(self, connection_manager, created: dict, base_time: int, inc_time: int,
                                   arena: dict | None = None) -> None:
+        """
+        Событие match_found обоим игрокам: одинаковые данные партии плюс свой цвет и номер соперника. Без
+        connection_manager (параметр необязателен, так вызывают тесты) ничего не отправляется.
+        """
         if connection_manager is None:
             return
         match_payload = {
@@ -449,9 +500,12 @@ class Matchmaker:
             arena: dict | None = None,
     ) -> dict:
         """
-        Стартует партию с заданными цветами (приглашение, реванш). odds — начальная позиция и время партии с форой
-        (``_odds_start``). arena — пометка партии арены (``arena._game_marker``): номер арены и доступен ли берсерк.
-        initiator_id — кто инициировал старт (для текста ошибки «вы уже играете»).
+        Стартует партию с заданными цветами (приглашение, реванш, пара арены). odds — начальная позиция и время
+        партии с форой или партии Фишера (``_odds_start``); такая партия всегда без рейтинга, что бы ни было
+        передано в is_rated. arena — пометка партии арены (``arena._game_marker``): номер арены и доступен ли
+        берсерк. initiator_id — кто инициировал старт: от него зависит код отказа, если кто-то уже играет
+        (self_in_game — про самого инициатора, opponent_in_game — про его соперника; без initiator_id оба игрока
+        считаются инициаторами). Оба игрока на время старта резервируются; резерв снимается в любом случае.
         """
         white_id, black_id = int(white_id), int(black_id)
         if white_id == black_id:
@@ -490,6 +544,9 @@ class Matchmaker:
         Атомарное принятие вызова из лобби: проверки занятости и диапазона рейтинга, захват
         вызова, создание партии и оповещение обоих игроков. Возвращает game_id или бросает
         MatchmakingError.
+
+        Диапазон вызова сверяется со свежим рейтингом принимающего из базы — в категории контроля времени вызова.
+        Вызов игрока, который уже играет другую партию, считается устаревшим и снимается из лобби. Цвета — случайные.
         """
         c_id = int(challenger_id)
         a_id = int(acceptor_id)
@@ -557,7 +614,9 @@ class Matchmaker:
     ) -> dict:
         """
         Приглашение по ссылке: код с параметрами партии (контроль времени, цвет, тип, фора, вариант) хранится в Redis
-        до принятия или истечения срока; прежнее приглашение игрока заменяется.
+        (``invite:{code}``) до принятия или истечения срока INVITE_TTL_S. Неизвестные значения цвета, форы и варианта
+        заменяются значениями по умолчанию, а не отклоняются. Код — до 8 букв и цифр. Прежние приглашения игрока
+        этот метод не отзывает: каждое живёт до своего срока.
         """
         from src.services.odds import GIVERS, KINDS
 
@@ -594,13 +653,18 @@ class Matchmaker:
         return payload
 
     async def get_private_invite(self, code: str) -> dict | None:
+        """Параметры приглашения по коду, не погашая его; None — кода нет или срок истёк."""
         raw = await self.redis.get(f"invite:{code}")
         if not raw:
             return None
         return json.loads(raw)
 
     async def accept_private_invite(self, code: str, acceptor_id: int) -> dict | None:
-        """Атомарно погашает приглашение и распределяет цвета (без старта партии)."""
+        """
+        Атомарно погашает приглашение и распределяет цвета (без старта партии). None — приглашения нет, срок истёк,
+        принимает сам автор или его успел принять другой. Цвет автора — по его выбору, «random» — жребий. В ответе
+        ``_raw`` — исходная запись, чтобы вернуть приглашение в Redis, если старт партии не удастся.
+        """
         key = f"invite:{code}"
 
         raw = await self.redis.get(key)
@@ -647,8 +711,9 @@ class Matchmaker:
             db: AsyncSession | None = None,
     ) -> dict:
         """
-        Принимает приглашение и стартует партию. Если старт не удался (кто-то из игроков уже
-        в партии), приглашение возвращается в Redis, чтобы им можно было воспользоваться позже.
+        Принимает приглашение и стартует партию. Если старт не удался (например, кто-то из игроков уже
+        в партии или занят стартом другой), приглашение возвращается в Redis, чтобы им можно было
+        воспользоваться позже, — с новым полным сроком INVITE_TTL_S.
         """
         await self._ensure_not_in_game(acceptor_id, is_self=True)
 

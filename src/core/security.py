@@ -17,15 +17,16 @@ from passlib.context import CryptContext
 
 from src.core.config import settings
 
-# Password hashing context using bcrypt algorithm
+# Хэширование паролей: алгоритм bcrypt (библиотека passlib).
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    """Verifies a plain password against a hashed counterpart.
+    """
+    Сверяет пароль с хэшем из users.hashed_password.
 
-    A hash passlib cannot identify (e.g. the marker stored for bot accounts) never matches
-    instead of raising and turning a login attempt into a 500.
+    Значение, которое passlib не распознаёт как хэш (метка у ботов и архивных игроков), не совпадает ни с каким
+    паролем: функция возвращает False, а не бросает исключение, — иначе попытка войти под ботом давала бы ошибку 500.
     """
     try:
         return pwd_context.verify(plain_password, hashed_password)
@@ -34,7 +35,7 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 def get_password_hash(password: str) -> str:
-    """Generates a secure bcrypt hash for a plain password."""
+    """Хэш bcrypt для нового пароля — только он и сохраняется в базе."""
     return pwd_context.hash(password)
 
 
@@ -64,7 +65,10 @@ def decode_user_token(token: str) -> tuple[int, int]:
 
 
 def create_access_token(data: dict, expires_delta: timedelta | None = None) -> str:
-    """Generates a JSON Web Token (JWT) for user authentication."""
+    """
+    Подписывает JWT с полями data и сроком действия exp: expires_delta, а без него —
+    ACCESS_TOKEN_EXPIRE_MINUTES. Токены игроков выпускает create_user_token; напрямую эту функцию зовут тесты.
+    """
     to_encode = data.copy()
     if expires_delta:
         expire = datetime.now(UTC) + expires_delta

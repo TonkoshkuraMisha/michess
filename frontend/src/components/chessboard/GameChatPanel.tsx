@@ -1,7 +1,9 @@
 // --- FILE: frontend/src/components/chessboard/GameChatPanel.tsx ---
 // Чат партии: лента сообщений, быстрые реплики и поле ввода; виден в партии с человеком и при просмотре. Сообщения
-// идут через WebSocket (действие chat_message), частоту ограничивает сервер; на сообщение соперника можно
-// пожаловаться.
+// идут через WebSocket (действие и событие chat_message, хук useGameSocket), частоту ограничивает сервер. Писать
+// могут только игроки партии: зритель чат читает, а сервер его сообщение отклонил бы (код chat_forbidden). Быстрая
+// реплика передаётся кодом и показывается каждому на его языке. На набранное сообщение другого игрока можно
+// пожаловаться — POST /moderation/reports (services/moderation.ts); в памяти хранятся последние 50 сообщений.
 
 import {useState} from 'react';
 import {Flag, MessageSquare, Send} from 'lucide-react';
@@ -29,6 +31,7 @@ export function GameChatPanel({
     messages, chatInput, onChatInputChange, onSendMessage, onSendPreset, isSpectator, onLeaveSpectate, myName, gameId,
 }: GameChatPanelProps) {
     const {t} = useI18n();
+    // Номера сообщений, на которые жалоба уже отправлена: вместо флажка — отметка (и при сбое отправки тоже).
     const [reported, setReported] = useState<Set<number>>(new Set());
     const report = (index: number, sender: string, text: string) => {
         moderationApi.report({target: sender, kind: 'message', reason: 'abuse', message_text: text, game_id: gameId ?? null})

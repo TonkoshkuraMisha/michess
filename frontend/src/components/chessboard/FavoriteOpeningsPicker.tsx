@@ -1,5 +1,9 @@
+// --- FILE: frontend/src/components/chessboard/FavoriteOpeningsPicker.tsx ---
 // Любимые дебюты соперника мастерской (таск 21.2): до трёх за белых и за чёрных из открытой таблицы дебютов. Бот
-// играет их ходы, пока позиция есть в линии; соперник свернул — дальше движок с характером.
+// играет их ходы, пока позиция есть в линии; соперник свернул — дальше движок с характером. Дебют хранится в
+// конфиге соперника не названием, а позицией (EPD); названия и поиск по названию или коду ECO — GET /bots/openings
+// (таблица дебютов сервера, src/services/data/openings.tsv). Названия — английские имена собственные из таблицы,
+// они не переводятся.
 
 import {useEffect, useState} from 'react';
 import {X} from 'lucide-react';
@@ -15,10 +19,15 @@ interface Props {
     onChange: (side: Side, epds: string[]) => void;
 }
 
-/** Названия выбранных дебютов по их позициям (общий кэш на сессию). */
+/** Названия выбранных дебютов по их позициям (общий кэш на сессию, живёт до перезагрузки страницы). */
 const names = new Map<string, OpeningEntry>();
 
+/**
+ * Названия дебютов по позициям: недостающие догружаются одним запросом GET /bots/openings?epd=…, после ответа
+ * компонент перерисовывается. Возвращает общий кэш — пока ответа нет, записи для позиции в нём нет.
+ */
 export function useOpeningNames(epds: string[]): Map<string, OpeningEntry> {
+    // Счётчик нужен только затем, чтобы перерисовать компонент, когда кэш пополнился.
     const [, setVersion] = useState(0);
     const missing = epds.filter((epd) => !names.has(epd));
     const key = missing.join('|');
@@ -43,6 +52,7 @@ function SidePicker({side, value, onChange}: { side: Side; value: string[]; onCh
     const known = useOpeningNames(value);
     const full = value.length >= MAX_FAVORITE_OPENINGS;
 
+    // Поиск по названию: от двух символов, с паузой 250 мс после ввода (не запрос на каждую букву), до 8 строк.
     useEffect(() => {
         const text = query.trim();
         if (text.length < 2 || full) {
@@ -108,6 +118,7 @@ function SidePicker({side, value, onChange}: { side: Side; value: string[]; onCh
     );
 }
 
+/** Выбор любимых дебютов за белых и за чёрных; onChange отдаёт сторону и новый список позиций (EPD). */
 export function FavoriteOpeningsPicker({white, black, onChange}: Props) {
     const {t} = useI18n();
     return (
@@ -119,7 +130,7 @@ export function FavoriteOpeningsPicker({white, black, onChange}: Props) {
     );
 }
 
-/** Строка с дебютами соперника для карточки: «♔ C60 Ruy Lopez · ♚ B20 Sicilian Defense». */
+/** Строка с дебютами соперника для карточки: «♔ Ruy Lopez · ♚ Sicilian Defense» (без кода ECO; он — в выборе). */
 export function OpeningsLine({white = [], black = []}: { white?: string[]; black?: string[] }) {
     const known = useOpeningNames([...white, ...black]);
     if (white.length + black.length === 0) return null;

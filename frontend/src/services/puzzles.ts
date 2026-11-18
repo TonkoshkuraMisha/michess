@@ -1,26 +1,40 @@
 // --- FILE: frontend/src/services/puzzles.ts ---
-// Задачи (таски 13.2–13.3, защитные упражнения 13.6): клиент API. Решение с сервера не приходит — только позиция, первый ход соперника и
-// ответы на верные ходы.
+// Задачи (таски 13.2–13.3, защитные упражнения 13.6): клиент API. Решение с сервера не приходит — только позиция,
+// первый ход соперника и ответы на верные ходы.
+// Все запросы — к /api/v1/puzzles и только с входом (маршруты src/api/puzzles.py). Правила считает сервер:
+// задачи, рейтинг решателя, забег на время и ступени тем — src/services/puzzles.py; «Ваши ошибки» —
+// personal_puzzles.py; защита — defense_drills.py; упражнения-генераторы — generated_drills.py; курс матов —
+// mate_course.py. Какой ход решающего сейчас ожидается, сервер хранит в Redis (одна активная задача на игрока).
 
 import {API_BASE_URL} from '../config/api';
 import {readApiErrorOr, UiError} from './apiErrors';
 import {uiMessage} from '../i18n';
 import {getToken} from './authToken';
 
+/** Задача для решения: позиция до первого хода соперника. Решения в ней нет. */
 export interface PuzzleView {
     id: number;
     fen: string;
+    /** Ход соперника (UCI), с которого задача начинается: клиент показывает его, после него ходит решающий. */
     first_move: string;
     rating: number;
+    /** Коды тем реестра (src/services/themes.py); названия — в каталоге themes.<код>.name. */
     themes: string[];
+    /** Цвет решающего. */
     color: 'white' | 'black';
+    /** Сколько ходов должен сделать решающий. */
     solution_length: number;
     daily?: boolean;
+    /** Состояние забега на время, если задача выдана в нём. */
     run?: TimedRun;
     /** Тренировка по приёмам: ступень задачи (смешанная подборка — null). */
     stage?: number | null;
 }
 
+/**
+ * Забег на время (3 или 5 минут): счёт, ошибки и остаток времени считает сервер, клиент только показывает таймер.
+ * over — забег окончен: вышло время или набрано три ошибки.
+ */
 export interface TimedRun {
     run_id: string;
     minutes: number;
@@ -30,16 +44,23 @@ export interface TimedRun {
     over: boolean;
 }
 
+/**
+ * Прогресс темы после решённой задачи тренировки. Ступень (1–4) пройдена, когда из последних window задач не меньше
+ * pass решены чисто — без ошибки и подсказки; оба числа присылает сервер (STAGE_WINDOW и STAGE_PASS).
+ */
 export interface TrainingProgress {
     theme: string;
     stage: number;
+    /** Итоги последних задач ступени строкой, по знаку на задачу (сервер ведёт её в theme_progress.recent). */
     recent: string;
     mastered: boolean;
+    /** Этой задачей игрок перешёл на следующую ступень. */
     advanced: boolean;
     window: number;
     pass: number;
 }
 
+/** Тема в обзоре тренировки (GET /puzzles/training). */
 export interface ThemeOverview {
     code: string;
     section: string;
@@ -47,27 +68,34 @@ export interface ThemeOverview {
     recent: string;
     solved: number;
     mastered: boolean;
+    /** Сколько задач темы есть в базе на каждой из четырёх ступеней. */
     available: [number, number, number, number];
+    /** Задач хватает на всех ступенях (минимумы темы заданы в реестре тем) — тему можно тренировать. */
     ready: boolean;
 }
 
+/** Обзор тренировки по приёмам: прогресс игрока по всем темам реестра. */
 export interface TrainingOverview {
     window: number;
     pass: number;
     themes: ThemeOverview[];
 }
 
+/** Пример для показа приёма (GET /puzzles/demo): позиция и решение целиком; попыткой это не считается. */
 export interface DemoExample {
     fen: string;
     moves: string[];
     color: 'white' | 'black';
 }
 
-/** Что тренируем: тему (на ступени игрока) или раздел (смешанная подборка); «без названия темы». */
 /** Цели задачи (таск 27.8): итог решения, выводится сервером из тем задачи. */
 export const PUZZLE_GOALS = ['mate', 'draw', 'promotion', 'material'] as const;
 export type PuzzleGoal = typeof PUZZLE_GOALS[number];
 
+/**
+ * Что тренируем: тему (на ступени игрока), раздел (смешанная подборка) или только цель без темы и раздела
+ * (смешанная подборка по цели). blind — «без названия темы»: темы задачи скрыты до конца решения.
+ */
 export interface TrainingTarget {
     theme?: string;
     section?: string;
@@ -94,15 +122,19 @@ export interface PersonalView {
     played_at?: string | null;
 }
 
+/** Ответ на попытку в «Ваших ошибках»: верно ли, лучший ход (solution) и ход, сыгранный в партии (played). */
 export interface PersonalAnswer {
     correct: boolean;
     solution: string;
     played: string;
+    /** Задача освоена (решена верно два раза подряд) и больше не повторяется. */
     done: boolean;
     solved_streak: number;
+    /** Когда задача вернётся на повторение: интервалы 1, 3, 7 и 21 день задаёт сервер. */
     next_due_at: string | null;
 }
 
+/** Сводка «Ваших ошибок»: к повторению сейчас, всего в работе, освоено и когда ближайшее повторение. */
 export interface PersonalSummary {
     due: number;
     active: number;
@@ -110,6 +142,7 @@ export interface PersonalSummary {
     next_due_at: string | null;
 }
 
+/** Итог задачи: рейтинг решателя до и после (Эло против рейтинга задачи) и серия решённых без ошибок и подсказок. */
 export interface PuzzleResult {
     solved: boolean;
     rating_before: number;
@@ -121,6 +154,10 @@ export interface PuzzleResult {
     training?: TrainingProgress | null;
 }
 
+/**
+ * Ответ на ход решающего. Верный ход — reply: ответный ход соперника (null, если задача решена этим ходом).
+ * Первая ошибка завершает задачу: done, и в solution приходит решение целиком. result — только когда done.
+ */
 export interface MoveResponse {
     correct: boolean;
     done: boolean;
@@ -129,16 +166,22 @@ export interface MoveResponse {
     result: PuzzleResult | null;
 }
 
+/**
+ * Подсказка: первая показывает поле фигуры (from), вторая — и поле хода (to). Подсказки снижают прибавку рейтинга:
+ * одна — вдвое, две — до нуля.
+ */
 export interface HintResponse {
     from: string;
     to: string | null;
     hints_used: number;
 }
 
+/** Профиль решателя (GET /puzzles/me): рейтинг задач, число попыток, серия, рекорды забегов и последние попытки. */
 export interface PuzzleProfile {
     rating: number;
     games: number;
     streak: number;
+    /** Личные рекорды забегов на 3 и 5 минут. */
     best: { '3': number; '5': number };
     history: {
         puzzle_id: number;
@@ -150,6 +193,7 @@ export interface PuzzleProfile {
     }[];
 }
 
+/** Итог забега на время: счёт, ошибки и личный рекорд на эту длительность (best — уже с учётом этого забега). */
 export interface TimedResult {
     score: number;
     mistakes: number;
@@ -167,6 +211,7 @@ export const DEFENSE_DRILL_THEMES: Record<string, DefenseKind> = {
     blunder_check: 'blunder',
 };
 
+/** Защитное упражнение на ступени игрока. Угроза и верные ходы в нём не приходят — только после ответа. */
 export interface DefenseDrillView {
     id: number;
     kind: DefenseKind;
@@ -179,14 +224,18 @@ export interface DefenseDrillView {
     choices: string[];
 }
 
+/** Первый этап «Что грозит соперник?»: угадано ли поле; сама угроза (ход соперника, UCI) раскрывается в любом случае. */
 export interface DefenseThreatResponse {
     correct: boolean;
     threat: string;
+    /** Коды мотивов угрозы — для подписи. */
     motifs: string[];
 }
 
+/** Итог защитного упражнения: верные ходы, опровержения неверных и прогресс темы. */
 export interface DefenseAnswer {
     correct: boolean;
+    /** Решено чисто — такой результат идёт в зачёт ступени. */
     clean: boolean;
     good: string[];
     threat: string | null;
@@ -199,20 +248,23 @@ export interface DefenseAnswer {
 /** Упражнения-генераторы (таск 13.7): матрица «вид × фигура», уровни 1–3. */
 export const DRILL_KINDS = ['capture', 'fork', 'check', 'pin', 'safe', 'escape', 'mate1', 'mate2'] as const;
 export type DrillKind = typeof DRILL_KINDS[number];
+/** Фигура упражнения: ферзь, ладья, слон, конь; x — случайная фигура. */
 export const DRILL_PIECES = ['q', 'r', 'b', 'n', 'x'] as const;
 export type DrillPiece = typeof DRILL_PIECES[number];
 
-/** Тема реестра → вид упражнения (кнопка в карточке темы «Приёмов»). */
+/** Тема реестра → вид упражнения (кнопка в карточке темы «Приёмов»). Та же таблица — THEME_DRILLS сервера. */
 export const THEME_DRILLS: Record<string, DrillKind> = {
     hanging_piece: 'capture', fork: 'fork', pin: 'pin', basic_mates: 'mate1',
 };
 
-/** Конь не связывает. */
+/** Есть ли упражнение для пары «вид × фигура»: нет только связки конём — конь не связывает. */
 export function drillSupported(kind: DrillKind, piece: DrillPiece): boolean {
     return !(kind === 'pin' && piece === 'n');
 }
 
+/** Упражнение-генератор: позиция строится сервером по таблице seed (data/drills/seeds.json), решение не приходит. */
 export interface DrillView {
+    /** Ключ упражнения — с ним клиент присылает ответ (POST /puzzles/drills/answer). */
     key: string;
     kind: DrillKind;
     piece: DrillPiece;
@@ -226,7 +278,9 @@ export interface DrillView {
     run?: DrillRun;
 }
 
+/** Забег упражнений на минуту: счёт и время считает сервер; три ошибки или конец времени — over. */
 export interface DrillRun {
+    /** Сочетание «вид, фигура, уровень» — по нему ведётся личный рекорд. */
     combo: string;
     solved: number;
     mistakes: number;
@@ -234,6 +288,7 @@ export interface DrillRun {
     over: boolean;
 }
 
+/** Ответ на ходы упражнения — устроен как MoveResponse задачи; в забеге ещё его состояние (run). */
 export interface DrillAnswer {
     correct: boolean;
     done: boolean;
@@ -242,6 +297,7 @@ export interface DrillAnswer {
     run: DrillRun | null;
 }
 
+/** Итог забега упражнений: счёт и личный рекорд сочетания (таблица drill_records). */
 export interface DrillRunResult {
     combo: string;
     score: number;
@@ -252,6 +308,7 @@ export interface DrillRunResult {
 
 const BASE = `${API_BASE_URL}/api/v1/puzzles`;
 
+/** Запрос к /api/v1/puzzles с токеном; отказ сервера — UiError с текстом по коду ошибки. */
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     const token = getToken();
     let res: Response;
@@ -270,7 +327,10 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     return res.json() as Promise<T>;
 }
 
-/** Курс матовых конструкций (таск 14.6). */
+/**
+ * Курс матовых конструкций (таск 14.6): конструкции по порядку курса и число задач, найденных для каждой;
+ * tasks — сколько задач на конструкцию проходит игрок, exam_size и exam_minutes — размер и время итоговой проверки.
+ */
 export interface MateCourseOverview {
     tasks: number;
     exam_size: number;
@@ -278,29 +338,40 @@ export interface MateCourseOverview {
     constructions: { code: string; available: number }[];
 }
 
+/** План итоговой проверки курса: задачи разных конструкций (тема и номер задачи в её наборе). */
 export interface MateExamPlan {
     minutes: number;
     tasks: { theme: string; index: number }[];
 }
 
+/**
+ * Эндпоинты задач. Задачи курса матов и забега решаются теми же move / hint / giveUp, что и обычные: начатая
+ * задача становится активной задачей игрока на сервере, предыдущая незаконченная отменяется.
+ */
 export const puzzlesApi = {
     mateCourse: () => request<MateCourseOverview>('/course/mates'),
     mateExam: () => request<MateExamPlan>('/course/mates/exam'),
+    /** Начать задачу курса: index-я по сложности задача конструкции; рейтинг задач она не меняет. */
     mateTask: (theme: string, index: number) =>
         request<PuzzleView & { course: string; index: number }>(`/course/mates/${encodeURIComponent(theme)}/${index}`),
+    /** Задача под рейтинг решателя (и по теме), без недавно решавшихся. */
     next: (theme?: string | null) => request<PuzzleView>(`/next${theme ? `?theme=${encodeURIComponent(theme)}` : ''}`),
+    /** Задача дня — одна на всех, по дате UTC. */
     daily: () => request<PuzzleView>('/daily'),
     move: (id: number, move: string) => request<MoveResponse>(`/${id}/move`, {
         method: 'POST', body: JSON.stringify({move}),
     }),
     hint: (id: number) => request<HintResponse>(`/${id}/hint`, {method: 'POST'}),
+    /** «Показать решение»: задача засчитывается как нерешённая. */
     giveUp: (id: number) => request<{ solution: string[]; result: PuzzleResult }>(`/${id}/give-up`, {method: 'POST'}),
     me: () => request<PuzzleProfile>('/me'),
     timedStart: (minutes: 3 | 5) => request<TimedRun>('/timed/start', {
         method: 'POST', body: JSON.stringify({minutes}),
     }),
+    /** Следующая задача забега: сложнее с каждой решённой; рейтинг решателя задачи забега не меняют. */
     timedNext: () => request<PuzzleView & { run: TimedRun }>('/timed/next'),
     timedFinish: () => request<TimedResult>('/timed/finish', {method: 'POST'}),
+    /** Задача тренировки по приёмам (GET /puzzles/train) — см. TrainingTarget. */
     train: (target: TrainingTarget) => {
         const params = new URLSearchParams();
         if (target.theme) params.set('theme', target.theme);
@@ -315,6 +386,7 @@ export const puzzlesApi = {
     personalAnswer: (id: number, move: string) => request<PersonalAnswer>(`/personal/${id}/answer`, {
         method: 'POST', body: JSON.stringify({move}),
     }),
+    /** Полуходы партии, из которых сделаны задачи игрока, — для значка в разборе партии. */
     personalPlies: (gameId: number) => request<{ game_id: number; plies: number[] }>(`/personal/game/${gameId}`),
     drillsNext: (kind: DrillKind, piece: DrillPiece, level: number) =>
         request<DrillView>(`/drills/next?kind=${kind}&piece=${piece}&level=${level}`),
@@ -326,8 +398,10 @@ export const puzzlesApi = {
     }),
     drillsRunNext: () => request<DrillView & { run: DrillRun }>('/drills/run/next'),
     drillsRunFinish: () => request<DrillRunResult>('/drills/run/finish', {method: 'POST'}),
+    /** Личные рекорды забегов по сочетаниям и таблица «тема → вид упражнения» с сервера. */
     drillsRecords: () => request<{ records: Record<string, number>; themes: Record<string, DrillKind> }>('/drills/records'),
     defenseNext: (kind: DefenseKind) => request<DefenseDrillView>(`/defense/next?kind=${kind}`),
+    /** «Что грозит соперник?», первый этап: square — поле фигуры, которая бьёт, или поле удара. */
     defenseThreat: (id: number, square: string) => request<DefenseThreatResponse>(`/defense/${id}/threat`, {
         method: 'POST', body: JSON.stringify({square}),
     }),

@@ -54,7 +54,7 @@ class ArenaPlayer(Base):
     score: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     games: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     wins: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
-    # Побед подряд: с ARENA_FIRE_AFTER и дальше партия приносит вдвое больше очков.
+    # Побед подряд: начиная с arena.FIRE_AFTER (двух) следующая партия приносит вдвое больше очков.
     streak: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     # Рейтинг в категории арены на момент входа — для пар и таблицы.
     rating: Mapped[int] = mapped_column(Integer)

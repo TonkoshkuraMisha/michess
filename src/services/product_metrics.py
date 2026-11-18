@@ -8,6 +8,12 @@
 * активацию — доля новых игроков, сыгравших первую партию за ACTIVATION_FAST_S после регистрации и в первые сутки;
 * удержание D1/D7/D30 — доля когорты регистрации, активная ровно через 1, 7 и 30 дней;
 * сколько игроков дошли до задач, уроков и турниров.
+
+Кто пишет события: регистрация (src/api/auth.py), конец партии с человеком (game_state.py) и с ботом (api/bots.py),
+попытка решения задачи (puzzles.py), пройденный урок (api/learn.py), создание турнира (tournaments.py); «был
+сегодня» — проверка токена запроса (src/api/deps.py). Redis: ``product:active:{дата}:{user_id}`` —
+отметка «сегодня уже записан», чтобы не обращаться к базе на каждый запрос. Содержимое действий (ходы, тексты,
+адреса) в события не попадает.
 """
 
 import logging
@@ -30,18 +36,20 @@ LESSON_COMPLETED = "lesson_completed"
 TOURNAMENT_CREATED = "tournament_created"
 EVENT_KINDS = (REGISTERED, ACTIVE, GAME_FINISHED, PUZZLE_ATTEMPT, LESSON_COMPLETED, TOURNAMENT_CREATED)
 
-ACTIVATION_FAST_S = 5 * 60
-RETENTION_DAYS = (1, 7, 30)
+ACTIVATION_FAST_S = 5 * 60  # «быстрая активация»: первая законченная партия — в первые 5 минут после регистрации
+RETENTION_DAYS = (1, 7, 30)  # дни удержания D1, D7, D30
 
 
 def utc_today() -> date:
+    """Текущие сутки по UTC — единица учёта событий (колонка product_events.day)."""
     return datetime.now(UTC).date()
 
 
 async def record_event(db: AsyncSession, user_id: int | None, kind: str) -> None:
     """
     Отмечает событие в транзакции вызывающего (savepoint: повтор за сутки откатывает только его). Не коммитит —
-    событие сохраняется вместе с действием, которое его вызвало. Сбой учёта не ломает действие.
+    событие сохраняется вместе с действием, которое его вызвало. Сбой учёта не ломает действие. Гость (user_id
+    None) и вид не из EVENT_KINDS молча пропускаются. Повтор за сутки отсекает уникальный индекс таблицы.
     """
     if user_id is None or kind not in EVENT_KINDS:
         return
@@ -54,7 +62,7 @@ async def record_event(db: AsyncSession, user_id: int | None, kind: str) -> None
         logger.warning("Product event %s for user %s not recorded: %s", kind, user_id, exc)
 
 
-ACTIVE_MARK_TTL_S = 2 * 86400
+ACTIVE_MARK_TTL_S = 2 * 86400  # отметка в Redis живёт двое суток: с запасом на сутки, которые она представляет
 
 
 async def mark_active(session_factory: async_sessionmaker[AsyncSession], user_id: int) -> None:
@@ -82,6 +90,11 @@ async def mark_active(session_factory: async_sessionmaker[AsyncSession], user_id
 
 @dataclass
 class Cohort:
+    """
+    Когорта — игроки, зарегистрированные в сутки day: сколько их, сколько закончили первую партию за
+    ACTIVATION_FAST_S и за первые 24 часа, сколько были активны ровно через N дней (retained: N → число игроков).
+    """
+
     day: date
     registered: int = 0
     activated_fast: int = 0
@@ -91,13 +104,22 @@ class Cohort:
 
 @dataclass
 class Report:
+    """Отчёт: когорты по дням, число игроков, дошедших до каждого раздела, и всего игроков с событием регистрации."""
+
     cohorts: list[Cohort]
     reached: dict[str, int]
     total_users: int
 
 
 async def build_report(db: AsyncSession, since: date, until: date | None = None) -> Report:
-    """Когорты регистрации с since по until (включительно) и сколько игроков когда-либо дошли до разделов."""
+    """
+    Когорты регистрации с since по until (включительно) и сколько игроков когда-либо дошли до разделов.
+
+    Читает всю таблицу product_events (отчёт запускает владелец скриптом, не запрос игрока). «Первая партия» —
+    самое раннее событие game_finished игрока; активным считается день с любым событием, кроме регистрации.
+    reached и total_users — за всё время, а не за выбранные дни. Игроки, зарегистрированные до появления учёта,
+    события регистрации не имеют и в когорты не входят.
+    """
     until = until or utc_today()
     rows = (await db.execute(
         select(ProductEvent.user_id, ProductEvent.kind, ProductEvent.day, ProductEvent.created_at)

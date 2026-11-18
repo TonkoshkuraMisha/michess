@@ -7,7 +7,11 @@
 * ничья: 1, а с соперником сильнее на DRAW_BONUS_GAP и больше — 2;
 * поражение: 0.
 
-Рейтинги — на начало партии (games.white_initial_rating / black_initial_rating).
+Рейтинги — на начало партии (games.white_initial_rating / black_initial_rating); если рейтинг в партии не записан,
+берётся 1200. Партия относится к сезону по времени окончания (games.finished_at). Таблиц с очками нет: очки
+считаются при каждом запросе по таблице games и текущим составам (teams, team_members), поэтому переход игрока в
+другую команду переносит с ним и его очки сезона. Ключ сезона и его границы (season_bounds) использует и Кубок
+конференций (src/services/conferences.py).
 """
 
 from datetime import UTC, datetime
@@ -20,20 +24,30 @@ from src.models.game import Game, GameStatus
 from src.models.team import Team, TeamMember
 from src.models.user import User
 
+# Ничья с соперником, который сильнее на столько пунктов рейтинга или больше, приносит 2 очка вместо 1.
 DRAW_BONUS_GAP = 200
+# Допустимая длина названия команды в знаках (после сжатия пробелов).
 NAME_MIN, NAME_MAX = 3, 30
 
 
 def win_points(mine: int, opponent: int) -> int:
+    """
+    Очки лиги за победу: 2 плюс по очку за каждые 200 пунктов перевеса соперника в рейтинге (минус — за свой
+    перевес), в границах от 1 до 4. Округление — round Python: ровно половина округляется к чётному.
+    """
     return max(1, min(4, 2 + round((opponent - mine) / 200)))
 
 
 def draw_points(mine: int, opponent: int) -> int:
+    """Очки лиги за ничью: 1, а с соперником сильнее на DRAW_BONUS_GAP и больше — 2."""
     return 2 if opponent - mine >= DRAW_BONUS_GAP else 1
 
 
 def season_bounds(season: str | None = None, now: datetime | None = None) -> tuple[str, datetime, datetime]:
-    """(ключ «ГГГГ-ММ», начало, конец) сезона; по умолчанию — текущий месяц."""
+    """
+    (ключ «ГГГГ-ММ», начало, конец) сезона; по умолчанию — текущий месяц. Начало — первое число месяца в 00:00 UTC,
+    конец — первое число следующего месяца (не входит в сезон).
+    """
     if season:
         year, month = (int(part) for part in season.split("-"))
     else:
@@ -45,6 +59,7 @@ def season_bounds(season: str | None = None, now: datetime | None = None) -> tup
 
 
 async def team_of(db: AsyncSession, user_id: int) -> Team | None:
+    """Команда игрока (игрок состоит не больше чем в одной) или None."""
     return (await db.execute(
         select(Team).join(TeamMember, TeamMember.team_id == Team.id).where(TeamMember.user_id == user_id)
     )).scalar_one_or_none()
@@ -84,7 +99,10 @@ async def join_team(db: AsyncSession, user: User, team_id: int) -> Team:
 
 
 async def leave_team(db: AsyncSession, user: User) -> None:
-    """Выйти из команды; последний вышедший — команда удаляется, владелец передаётся старейшему участнику."""
+    """
+    Выйти из команды. Вышел последний участник — команда удаляется; вышел владелец — владельцем становится участник,
+    вступивший раньше остальных. Игрок без команды — отказ team_not_member.
+    """
     member = (await db.execute(select(TeamMember).where(TeamMember.user_id == user.id))).scalar_one_or_none()
     if member is None:
         raise DomainError("team_not_member")
@@ -103,7 +121,11 @@ async def leave_team(db: AsyncSession, user: User) -> None:
 
 
 async def season_points(db: AsyncSession, season: str | None = None) -> tuple[str, dict[int, int], dict[int, int]]:
-    """(сезон, очки по командам, очки по игрокам) — по партиям сезона между разными командами."""
+    """
+    (сезон, очки по командам, очки по игрокам) — по партиям сезона между разными командами. Берутся законченные
+    рейтинговые партии (не симуляции), у которых оба игрока сейчас состоят в командах; партии внутри одной команды и
+    партии без обычного результата пропускаются.
+    """
     key, start, end = season_bounds(season)
     team_by_user = {uid: tid for uid, tid in (await db.execute(select(TeamMember.user_id, TeamMember.team_id))).all()}
     if not team_by_user:

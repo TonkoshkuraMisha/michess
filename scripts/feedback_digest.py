@@ -27,6 +27,7 @@ MESSAGE_WIDTH = 240
 
 
 def _line(item: DigestItem) -> str:
+    """Форматирует одну запись обратной связи в строку списка Markdown."""
     text = " / ".join(part.strip() for part in item.message.splitlines() if part.strip())
     if len(text) > MESSAGE_WIDTH:
         text = text[:MESSAGE_WIDTH - 1].rstrip() + "…"
@@ -42,6 +43,7 @@ def _line(item: DigestItem) -> str:
 
 
 def render(digest: Digest) -> str:
+    """Собирает текстовую сводку отзывов беты по статусам и разделам."""
     last_day = (digest.until - timedelta(microseconds=1)).date()
     lines = [f"### Отзывы беты: {digest.since.date():%d.%m} – {last_day:%d.%m.%Y}", ""]
     if digest.items:
@@ -60,6 +62,7 @@ def render(digest: Digest) -> str:
 
 
 async def main(days: int, until: datetime) -> str:
+    """Выгружает отзывы из БД и печатает дайджест для плана работ."""
     from src.db.session import AsyncSessionLocal
     from src.services.beta import build_digest
 

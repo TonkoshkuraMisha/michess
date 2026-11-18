@@ -1,10 +1,17 @@
 # --- FILE: src/api/rate_limit.py ---
 """
-Ограничение частоты запросов: эндпоинты, нагружающие Stockfish, вход и регистрация.
+Ограничение частоты запросов: эндпоинты, нагружающие Stockfish, вход и регистрация, письма, импорт партий,
+открытое API и разделы без движка (у каждого раздела свой счётчик), а также сообщения WebSocket
+(src/api/websockets.py зовёт try_consume).
 
-Фиксированное окно в Redis (INCR + EXPIRE). Квота считается на пользователя, если запрос
+Фиксированное окно в Redis (INCR + EXPIRE): ключ ratelimit:{область}:{кто}:{номер окна}, где «кто» — user:<id>,
+ip:<адрес>, account:<имя> или to:<e-mail>. Квота считается на пользователя, если запрос
 пришёл с валидным Bearer-токеном, иначе — на IP-адрес (гостевые партии с ботами и просмотр
-анализа доступны без входа). Токен только декодируется, без обращения к БД.
+анализа доступны без входа). Токен только декодируется, без обращения к БД (отозванный, но ещё не истёкший токен
+по-прежнему считается на своего игрока — для счётчика этого достаточно). Сами лимиты — настройки RATE_LIMIT_*
+(src/core/config.py). При недоступном Redis запросы пропускаются: сбой учёта не должен останавливать сайт.
+
+DailyQuota — дневные квоты бесплатного тарифа; пока FREE_TIER_LIMITS выключен, они ничего не ограничивают.
 """
 
 import logging
@@ -21,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 def _client_identity(request: Request) -> str:
+    """«user:<id>» по подписи и сроку токена (версия токенов не сверяется, база не читается), иначе «ip:<адрес>»."""
     auth_header = request.headers.get("authorization", "")
     scheme, _, token = auth_header.partition(" ")
     if scheme.lower() == "bearer" and token:
@@ -40,6 +48,10 @@ def client_identity(request: Request) -> str:
 
 
 def client_ip(request: Request) -> str:
+    """
+    Адрес клиента. В продакшене uvicorn запущен с --proxy-headers (Dockerfile) и берёт его из X-Forwarded-For,
+    который ставит nginx; без прокси — адрес соединения. «unknown» — адрес определить не удалось.
+    """
     return request.client.host if request.client else "unknown"
 
 
@@ -124,6 +136,7 @@ class DailyQuota:
         self.limit_setting = limit_setting
 
     def limit(self) -> int:
+        """Действующий дневной предел; 0 — квота выключена (FREE_TIER_LIMITS не включён)."""
         return int(getattr(settings, self.limit_setting)) if settings.FREE_TIER_LIMITS else 0
 
     async def check(self, request: Request) -> None:
@@ -148,6 +161,7 @@ class DailyQuota:
             )
 
     async def record(self, request: Request) -> None:
+        """Засчитывает выполненную работу в дневную квоту (зовётся после успешного ответа)."""
         if self.limit() > 0:
             await record_attempt(self.scope, _client_identity(request), DAY_S)
 

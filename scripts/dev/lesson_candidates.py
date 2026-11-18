@@ -25,6 +25,7 @@ MATE = 100_000
 
 
 async def _puzzles(theme: str, low: int, high: int, max_plies: int) -> list[tuple[str, str, str, int]]:
+    """Выбирает из БД задачи заданной темы и диапазона рейтинга."""
     from sqlalchemy import func, select
     from sqlalchemy.ext.asyncio import create_async_engine
     from sqlalchemy.pool import NullPool
@@ -45,6 +46,7 @@ async def _puzzles(theme: str, low: int, high: int, max_plies: int) -> list[tupl
 
 def _puzzles_from_csv(path: Path, theme: str, low: int, high: int, max_plies: int,
                       seed: int) -> list[tuple[str, str, str, int]]:
+    """Читает подходящие задачи напрямую из локальных CSV-архивов выборки."""
     import csv
     import gzip
     import random
@@ -62,6 +64,7 @@ def _puzzles_from_csv(path: Path, theme: str, low: int, high: int, max_plies: in
 
 
 def _unique_line(engine, fen: str, moves: list[str], limit, gap: int) -> bool:
+    """Проверяет движком, что каждый ход решения единственен с запасом по оценке."""
     board = chess.Board(fen)
     board.push_uci(moves[0])
     for index, uci in enumerate(moves[1:]):
@@ -84,6 +87,7 @@ def _unique_line(engine, fen: str, moves: list[str], limit, gap: int) -> bool:
 
 
 def main() -> None:
+    """Ищет задачи с однозначным решением для составления новых уроков."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("theme")
     parser.add_argument("--min", type=int, default=1000)

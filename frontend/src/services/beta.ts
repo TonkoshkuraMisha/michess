@@ -1,6 +1,8 @@
 // --- FILE: frontend/src/services/beta.ts ---
 // Программа беты (таск 24.4): настройки сайта (закрыта ли регистрация, ссылка на сообщество, версия), проверка
 // кода-приглашения, «Сообщить о проблеме» и работа модератора с приглашениями и сообщениями.
+// Все запросы — к /api/v1/beta (маршруты src/api/beta.py, правила — src/services/beta.py). Без входа доступны
+// /config, /invites/check и отправка сообщения (POST /feedback); остальное сервер отдаёт только модератору.
 
 import {useEffect, useSyncExternalStore} from 'react';
 import {API_BASE_URL} from '../config/api';
@@ -8,20 +10,26 @@ import {readApiErrorOr, UiError} from './apiErrors';
 import {uiMessage} from '../i18n';
 import {getToken} from './authToken';
 
+/** Настройки сайта (GET /beta/config), разобранные parseConfig: значения берутся из настроек сервера. */
 export interface SiteConfig {
     /** Регистрация только по коду-приглашению. */
     inviteOnly: boolean;
     /** Ссылка на канал сообщества; null — не задана, и на сайте её нет. */
     communityUrl: string | null;
+    /** Версия приложения на сервере (settings.VERSION). */
     version: string | null;
 }
 
+/** Состояние приглашения, вычисленное сервером: действует, отозвано, истёк срок, исчерпано число использований. */
 export type InviteState = 'active' | 'revoked' | 'expired' | 'used_up';
 
+/** Код-приглашение в списке модератора (GET /beta/invites). */
 export interface Invite {
     id: number;
     code: string;
+    /** Пометка модератора «для кого» — игрокам не показывается. */
     note: string | null;
+    /** Сколько раз код можно использовать; null — без предела. */
     max_uses: number | null;
     uses: number;
     expires_at: string | null;
@@ -30,27 +38,34 @@ export interface Invite {
     state: InviteState;
 }
 
+/** Статусы сообщения о проблеме — те же, что проверяет сервер (FeedbackStatusIn в src/api/beta.py). */
 export const FEEDBACK_STATUSES = ['new', 'in_progress', 'done', 'rejected'] as const;
 export type FeedbackStatus = typeof FEEDBACK_STATUSES[number];
 
+/** Сообщение о проблеме в очереди модератора: текст и то, что клиент приложил при отправке (sendFeedback). */
 export interface FeedbackItem {
     id: number;
     message: string;
+    /** Путь страницы, с которой отправлено сообщение. */
     page: string | null;
     app_version: string | null;
     language: string | null;
+    /** Размер окна браузера «ширина x высота» (screenSize). */
     screen: string | null;
     status: FeedbackStatus;
+    /** Имя игрока; null — сообщение от гостя. */
     author: string | null;
     created_at: string | null;
     updated_at: string | null;
 }
 
+/** Очередь сообщений (GET /beta/feedback): сообщения и число сообщений в каждом статусе. */
 export interface FeedbackQueue {
     items: FeedbackItem[];
     counts: Record<FeedbackStatus, number>;
 }
 
+/** Запрос к /api/v1/beta: токен — если игрок вошёл; отказ сервера — UiError с текстом по коду ошибки. */
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
     const token = getToken();
     let res: Response;
@@ -79,7 +94,9 @@ export function inviteLink(code: string): string {
     return `${window.location.origin}/?invite=${encodeURIComponent(code)}`;
 }
 
+/** Эндпоинты беты. checkInvite и sendFeedback работают без входа; остальное — только для модератора. */
 export const betaApi = {
+    /** Действует ли код (подсказка в форме регистрации); сам код при проверке не тратится. */
     checkInvite: (code: string) =>
         call<{ valid: boolean }>(`/invites/check?code=${encodeURIComponent(code)}`).then((r) => r.valid === true),
     /** page — только путь страницы: в параметрах адреса бывают одноразовые ссылки (сброс пароля, приглашение). */
@@ -134,6 +151,7 @@ function subscribe(listener: () => void): () => void {
     return () => listeners.delete(listener);
 }
 
+/** Хук: настройки сайта. До ответа сервера — значения по умолчанию; запрос один на вкладку на все хуки. */
 export function useSiteConfig(): SiteConfig {
     const current = useSyncExternalStore(subscribe, () => config, () => config);
     useEffect(() => {

@@ -42,10 +42,12 @@ def load_coach_texts() -> dict[str, str]:
 
 
 def render(sentences: list[dict], texts: dict[str, str]) -> str:
+    """Подставляет параметры в русские шаблоны фраз наставника для печати."""
     return " ".join(texts[s["key"]].format(**s["params"]) for s in sentences)
 
 
 def main() -> None:
+    """Разбирает партии из PGN и выводит комментарии наставника со сводкой."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("pgn", type=pathlib.Path)
     parser.add_argument("--games", type=int, default=5)

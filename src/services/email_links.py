@@ -6,6 +6,12 @@ E-mail игрока и сброс пароля (таск 17.5).
   профиль только по ссылке. Пока не подтверждён — он нигде не числится, и чужой адрес так не занять.
 * Сброс пароля: по подтверждённому адресу уходит одноразовая ссылка на час. Ответ на запрос всегда одинаковый —
   по нему не узнать, есть ли такой адрес. Новый пароль отзывает все токены и прочие ссылки сброса.
+
+Где хранится: ссылки — таблица email_tokens (назначение, адрес, срок, отметка использования); в базе лежит только
+sha256 от секрета ссылки, сам секрет есть лишь в письме. Сроки — настройки EMAIL_VERIFY_TTL_S (сутки) и
+PASSWORD_RESET_TTL_S (час), адрес сайта в ссылке — PUBLIC_BASE_URL. Письма собирает и отправляет
+src/services/mailer.py (без SMTP_HOST письмо не уходит, а пишется в лог). Лимиты запросов писем (на адрес и на
+IP, настройки RATE_LIMIT_EMAIL_*) — в маршрутах src/api/account.py.
 """
 
 from __future__ import annotations
@@ -24,11 +30,14 @@ from src.models.email_token import EmailToken
 from src.models.user import User
 from src.services import mailer
 
+# Назначение ссылки (email_tokens.purpose): подтверждение адреса и сброс пароля. Ссылка одного назначения не
+# принимается там, где ждут другое.
 VERIFY = "verify"
 RESET = "reset"
 
 
 def normalize(email: str) -> str:
+    """Адрес в виде для сравнения и хранения: без пробелов по краям, в нижнем регистре."""
     return email.strip().lower()
 
 
@@ -45,6 +54,7 @@ def _aware(value: datetime) -> datetime:
 
 
 async def _issue(db: AsyncSession, user: User, purpose: str, email: str, ttl_s: int) -> str:
+    """Новая одноразовая ссылка: в базу пишется хэш секрета и срок (с commit), возвращается сам секрет для письма."""
     token = secrets.token_urlsafe(32)
     db.add(EmailToken(user_id=user.id, purpose=purpose, token_hash=_hash(token), email=email,
                       expires_at=_now() + timedelta(seconds=ttl_s)))
@@ -53,6 +63,7 @@ async def _issue(db: AsyncSession, user: User, purpose: str, email: str, ttl_s: 
 
 
 async def _taken(db: AsyncSession, email: str, user_id: int) -> bool:
+    """Записан ли этот адрес (без учёта регистра) в профиле другого игрока."""
     other = await db.scalar(select(User.id).where(func.lower(User.email) == email, User.id != user_id))
     return other is not None
 
@@ -74,6 +85,10 @@ async def request_verification(db: AsyncSession, user: User, email: str, languag
 
 
 async def _consume(db: AsyncSession, token: str, purpose: str) -> EmailToken:
+    """
+    Находит ссылку по хэшу секрета и назначению и помечает её использованной (без commit — его делает вызывающий).
+    Неизвестная, уже использованная или просроченная ссылка — отказ 400 email_link_invalid.
+    """
     row = await db.scalar(select(EmailToken).where(EmailToken.token_hash == _hash(token), EmailToken.purpose == purpose))
     if row is None or row.used_at is not None or _aware(row.expires_at) < _now():
         raise ApiError(400, "email_link_invalid")
@@ -84,7 +99,7 @@ async def _consume(db: AsyncSession, token: str, purpose: str) -> EmailToken:
 async def confirm_verification(db: AsyncSession, token: str) -> User:
     """
     Переход по ссылке из письма: адрес записывается в профиль. Недействительная, просроченная или уже использованная
-    ссылка — отказ.
+    ссылка — отказ. Если за время до перехода адрес подтвердил другой игрок — отказ email_taken.
     """
     row = await _consume(db, token, VERIFY)
     user = await db.get(User, row.user_id)

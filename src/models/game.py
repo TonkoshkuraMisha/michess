@@ -24,8 +24,10 @@ from src.models.base import Base
 
 class GameStatus(str, enum.Enum):
     """
-    Статус партии: PENDING — создана, ещё не началась; IN_PROGRESS — идёт; COMPLETED — закончена с результатом;
-    ABORTED — отменена до первых ходов, рейтинг не меняется.
+    Статус партии: PENDING — значение по умолчанию (партия между людьми создаётся сразу IN_PROGRESS);
+    IN_PROGRESS — идёт; COMPLETED — закончена с результатом; ABORTED — отменена, пока сделано меньше двух
+    полуходов (игроком или из-за неявки на первый ход), рейтинг не меняется. ABORTED получает и запись-заглушка
+    тура швейцарки, когда партию не удалось начать (src/services/arena.py).
     """
     PENDING = "PENDING"
     IN_PROGRESS = "IN_PROGRESS"
@@ -55,7 +57,8 @@ class Game(Base):
 
     state_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     turn: Mapped[str] = mapped_column(String(1), default="w", server_default="w", nullable=False)
-    # Начальная позиция партии с форой (21.1, сеть); None — обычная расстановка.
+    # Начальная позиция партии между людьми, начатой не с обычной расстановки: фора (21.1) или шахматы Фишера;
+    # None — обычная расстановка. У партии с ботом своя позиция записана в заголовках SetUp/FEN её PGN.
     initial_fen: Mapped[str | None] = mapped_column(String(100), nullable=True)
     board_fen: Mapped[str] = mapped_column(
         String,
@@ -64,6 +67,8 @@ class Game(Base):
         nullable=False,
     )
 
+    # Часы: остаток времени сторон на момент последнего хода и время этого хода по часам сервера (миллисекунды
+    # эпохи Unix). Остаток у стороны, которая думает сейчас, = её значение минус время, прошедшее с last_move_at.
     white_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     black_time_ms: Mapped[int | None] = mapped_column(Integer, nullable=True)
     last_move_at: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
@@ -72,11 +77,16 @@ class Game(Base):
     termination: Mapped[str | None] = mapped_column(String(50), nullable=True)
     winner_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
 
+    # Рейтинги игроков в категории партии на её начало и изменение после неё — по ним строится история рейтинга
+    # (GET /profile/{username}/rating-history). У товарищеской и отменённой партии между людьми изменение — 0;
+    # у архивных партий и партий с ботами вне турниров поля изменения пусты.
     white_initial_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
     black_initial_rating: Mapped[int | None] = mapped_column(Integer, nullable=True)
     white_rating_delta: Mapped[int | None] = mapped_column(Integer, nullable=True)
     black_rating_delta: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
+    # Дата («ГГГГ.ММ.ДД», как в PGN), место и код дебюта: у архивных партий — из заголовков PGN, у сыгранных на
+    # сайте — дата окончания, название сайта и код из таблицы дебютов (src/services/openings.py).
     pgn_date: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
     site: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
     eco: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)

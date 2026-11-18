@@ -2,6 +2,7 @@
 // Конференции (таск 33.6): Кубок конференций за сезон и страна игрока в профиле. Правила и таблица стран — на
 // сервере (src/services/conferences.py); клиент получает таблицу «страна → конференция» вместе со страницей.
 // Названия стран не хранятся в каталогах переводов: их даёт браузер (Intl.DisplayNames) на языке интерфейса.
+// Эндпоинты (src/api/conferences.py): GET /api/v1/conferences — страница, PUT /api/v1/conferences/me — страна.
 
 import {API_BASE_URL} from '../config/api';
 import {readApiErrorOr, UiError} from './apiErrors';
@@ -9,6 +10,7 @@ import {uiMessage} from '../i18n';
 import {getToken} from './authToken';
 import type {ConferenceKey} from './arenas';
 
+/** Строка Кубка конференций: сумма зачётов конференции по аренам сезона. */
 export interface CupRow {
     conference: ConferenceKey;
     score: number;
@@ -16,6 +18,7 @@ export interface CupRow {
     arenas: number;
 }
 
+/** Страна и конференция вошедшего игрока (users.country на сервере; конференцию определяет страна). */
 export interface Membership {
     /** Код страны ISO 3166-1 alpha-2 из профиля; null — не указана. */
     country: string | null;
@@ -24,20 +27,24 @@ export interface Membership {
     can_change: boolean;
 }
 
+/** Ответ GET /api/v1/conferences: Кубок за сезон, справочники для выбора страны и данные вошедшего игрока. */
 export interface ConferencesData {
     /** Сезон «ГГГГ-ММ» — календарный месяц. */
     season: string;
     /** Сколько лучших игроков конференции идёт в зачёт арены. */
     top_players: number;
     table: CupRow[];
+    /** Пять конференций и зона времени (IANA), по местному времени которой составлено расписание её арен. */
     conferences: { key: ConferenceKey; timezone: string }[];
     /** Код страны → конференция: все страны, которые можно выбрать. */
     countries: Record<string, ConferenceKey>;
     /** Страна, которую назвал прокси перед сервером, — только подсказка. */
     suggested_country: string | null;
+    /** null — запрос без входа. */
     me: Membership | null;
 }
 
+/** Запрос к /api/v1/conferences: токен — если игрок вошёл; отказ сервера — UiError с текстом по коду ошибки. */
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
     const token = getToken();
     let res: Response;
@@ -57,6 +64,7 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const conferencesApi = {
+    /** Страница конференций за текущий сезон (параметр season сервер принимает, но клиент его не передаёт). */
     page: () => call<ConferencesData>(''),
     /** null — убрать страну из профиля. */
     setCountry: (country: string | null) => call<Membership>('/me', {method: 'PUT', body: JSON.stringify({country})}),

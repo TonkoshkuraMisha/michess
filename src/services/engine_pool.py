@@ -9,6 +9,11 @@
 вызов получает EngineBusyError по таймауту, а не порождает новый процесс.
 
 Пул синхронный и потокобезопасный: им пользуются из asyncio.to_thread (API) и из Celery.
+
+Настройки (src/core/config.py): ENGINE_POOL_SIZE — предел процессов, ENGINE_ACQUIRE_TIMEOUT_S — сколько секунд ждать
+свободный движок. Пул живёт в памяти процесса: у каждого процесса API и у каждого воркера Celery свой пул, так что
+предел действует на процесс, а не на весь сервер. Путь к бинарнику передаёт вызывающий
+(bots/base.resolve_stockfish_path). Метрики Prometheus — время занятости движка, ожидание и отказы по видам работ.
 """
 
 import atexit
@@ -73,6 +78,7 @@ def engine_work(kind: str) -> Iterator[None]:
 
 
 def current_engine_work() -> str:
+    """Вид работы текущего контекста вызова; вне блока engine_work — "other"."""
     return _work_kind.get()
 
 
@@ -93,6 +99,8 @@ class EnginePool:
         self.engine_path = engine_path
         self.size = max(1, int(size))
         self.acquire_timeout_s = acquire_timeout_s
+        # Семафор ограничивает число одновременно выданных движков; в очереди лежат свободные запущенные процессы
+        # (последний освободившийся выдаётся первым). Процесс запускается только при выдаче, когда свободных нет.
         self._slots = threading.BoundedSemaphore(self.size)
         self._idle: queue.LifoQueue[chess.engine.SimpleEngine] = queue.LifoQueue()
         self._closed = False
@@ -125,6 +133,11 @@ class EnginePool:
 
     @staticmethod
     def _configure(engine: chess.engine.SimpleEngine, options: dict) -> None:
+        """
+        Настраивает движок перед выдачей: значения полной силы (_DEFAULT_OPTIONS), поверх них — options вызывающего.
+        Опции, которых у этой сборки движка нет, пропускаются; числовые приводятся к её допустимому диапазону
+        (например, UCI_Elo ниже минимума сборки становится минимумом).
+        """
         merged = {**_DEFAULT_OPTIONS, **options}
         supported: dict = {}
         for name, value in merged.items():
@@ -150,6 +163,9 @@ class EnginePool:
         options — UCI-опции поверх значений по умолчанию (полная сила).
         Движок, упавший с ошибкой протокола или по таймауту, не возвращается в пул, а
         завершается; вместо него при следующем запросе будет запущен новый процесс.
+        timeout_s — сколько ждать свободный движок (по умолчанию acquire_timeout_s пула); не дождались —
+        EngineBusyError. Время ожидания и время, пока движок был выдан, пишутся в метрики по виду работы
+        (current_engine_work).
         """
         if self._closed:
             raise EngineUnavailableError("Engine pool is closed")
@@ -186,6 +202,10 @@ class EnginePool:
             ENGINE_SECONDS.labels(kind).inc(time.perf_counter() - held_since)
 
     def close(self) -> None:
+        """
+        Закрывает пул: завершает свободные движки и запрещает новые выдачи. Движок, выданный в этот момент,
+        завершится при возврате.
+        """
         self._closed = True
         while True:
             try:
@@ -231,6 +251,7 @@ class EngineLease:
             raise
 
     def _release(self, *exc_info) -> None:
+        """Возвращает движок аренды пулу; exc_info — ошибка, с которой он возвращается (тогда пул его завершит)."""
         stack, self._stack, self._engine = self._stack, None, None
         if stack is not None:
             stack.__exit__(*exc_info)
@@ -250,7 +271,10 @@ _pools_lock = threading.Lock()
 
 
 def get_engine_pool(engine_path: str | None) -> EnginePool:
-    """Возвращает пул для указанного бинарника (по одному пулу на путь, создаётся лениво)."""
+    """
+    Возвращает пул для указанного бинарника (по одному пулу на путь, создаётся лениво). Размер и время ожидания —
+    из настроек ENGINE_POOL_SIZE и ENGINE_ACQUIRE_TIMEOUT_S на момент создания. Пустой путь — EngineUnavailableError.
+    """
     if not engine_path:
         raise EngineUnavailableError("Stockfish path is not configured")
     key = os.path.abspath(engine_path)
@@ -263,6 +287,7 @@ def get_engine_pool(engine_path: str | None) -> EnginePool:
 
 
 def close_all_engine_pools() -> None:
+    """Закрывает все пулы процесса и забывает их; следующий get_engine_pool создаст новый. Вызывается при выходе."""
     with _pools_lock:
         pools = list(_pools.values())
         _pools.clear()

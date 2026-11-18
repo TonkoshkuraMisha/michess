@@ -8,7 +8,11 @@
 (frontend/src/i18n/messages/*.ts, ключи repertoire.starters.<id>.*), здесь только коды и ходы.
 
 Правила набора (проверяет tests/test_repertoire.py): все ходы легальны, в каждой позиции у игрока один свой ход,
-каждая линия заканчивается в позиции с названием дебюта из таблицы.
+у каждой линии по таблице определяется дебют (линия проходит хотя бы через одну позицию с названием).
+
+Наборов по уровням: три для начинающих, три среднего уровня, два продвинутых. В базу набор попадает, когда игрок
+создаёт из него репертуар: линии переводятся в UCI (src/services/repertoire.starter_lines) и записываются в
+repertoire_moves; код набора остаётся в repertoires.starter.
 """
 
 from dataclasses import dataclass
@@ -16,6 +20,8 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Starter:
+    """Готовый репертуар: код (он же часть ключей текстов на клиенте), цвет, уровень, линии и метка стиля."""
+
     id: str
     color: str  # white | black
     level: str  # beginner | intermediate | advanced
@@ -266,4 +272,4 @@ STARTERS: tuple[Starter, ...] = (
     )),
 )
 
-BY_ID: dict[str, Starter] = {starter.id: starter for starter in STARTERS}
+BY_ID: dict[str, Starter] = {starter.id: starter for starter in STARTERS}  # поиск набора по коду из запроса

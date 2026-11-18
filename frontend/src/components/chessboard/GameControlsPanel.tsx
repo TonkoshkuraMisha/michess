@@ -1,7 +1,9 @@
 // --- FILE: frontend/src/components/chessboard/GameControlsPanel.tsx ---
 // Кнопки управления партией под списком ходов. Три режима с разным набором действий: партия с человеком (отмена до
-// первых ходов, сдача, ничья, берсерк в арене, реванш), партия с ботом и свободная доска (сброс, возврат хода,
-// позиция из FEN).
+// первых ходов, сдача, ничья, берсерк в арене, реванш), партия с ботом (возврат хода, сдача, ничья, реванш) и
+// свободная доска (сброс, возврат хода, позиция из FEN). После партии с человеком или с ботом — «Разбор» (страница
+// /game/{id}) и скачивание PGN (GET /profile/games/{id}/pgn). Сам компонент ничего не отправляет: действия
+// выполняет Chessboard (WebSocket для партии с человеком, хук useBotGame для бота).
 
 import {useState} from 'react';
 import {Flag, Handshake, X, RefreshCw, RotateCcw, Undo2, Eye, Download, Grid3x3, Zap} from 'lucide-react';
@@ -9,12 +11,14 @@ import type {NavigateFunction} from 'react-router-dom';
 import {API_BASE_URL} from '../../config/api';
 import {useI18n} from '../../i18n';
 
+/** Состояние реванша после партии с человеком (события WebSocket rematch_offered и rematch_declined). */
 export type RematchStatus = 'none' | 'offered_by_me' | 'offered_by_opponent' | 'declined';
 
 export interface GameControlsPanelProps {
-    /** PvP-партия идёт, партия против исторического бота или свободная песочница/анализ. */
+    /** Партия с человеком (идёт или только что окончена), партия с ботом (любым) или свободная доска. */
     mode: 'pvp' | 'bot' | 'sandbox';
     gameId: number | null;
+    /** id партии с ботом в архиве — появляется после сохранения (/bots/save-game); без него разбора и PGN нет. */
     savedBotGameId: number | null;
     historyLength: number;
     gameOverResult: string | null;
@@ -31,9 +35,11 @@ export interface GameControlsPanelProps {
     onAcceptRematch: () => void;
     onDeclineRematch: () => void;
     onOfferRematch: () => void;
+    /** Сброс свободной доски; после партии с человеком тот же обработчик — кнопка «В лобби». */
     onResetSandbox: () => void;
+    /** Возврат хода: на свободной доске и в партии с ботом (там — вместе с ответом бота). */
     onUndoSandboxMove: () => void;
-    /** Партия клубной лестницы: возврат хода запрещён. */
+    /** Идёт партия клубной лестницы или турнира: возврат хода запрещён. */
     undoLocked?: boolean;
     /** На свободной доске стоит позиция, загруженная из FEN (сброс доступен и без ходов). */
     hasCustomPosition?: boolean;
@@ -65,6 +71,9 @@ export function GameControlsPanel({
         if (!error) setFenInput('');
     };
 
+    // Переход к разбору: имена, рейтинги и итог передаются в state маршрута — страница партии (GameViewer) берёт
+    // их в первую очередь, а заголовки PGN — когда state нет (прямой заход по адресу). Запасной рейтинг — для
+    // стороны без числа в карточке.
     const navigateToReview = (reviewGameId: number, site?: string, blackRatingFallback = 1200) => navigate(`/game/${reviewGameId}`, {
         state: {
             game: {
@@ -80,6 +89,8 @@ export function GameControlsPanel({
         }
     });
 
+    // Партия с человеком: пока сделано меньше двух полуходов — «Отменить» (партия не засчитывается), дальше —
+    // «Сдаться»; ничью можно предложить с того же момента.
     if (mode === 'pvp') {
         return (
             <div className="shrink-0 flex flex-col gap-1.5">

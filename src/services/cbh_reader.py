@@ -3,8 +3,9 @@
 библиотеки партий (таск 27.3). Инструмент разработки: в продукте не используется и не называется (правило 5).
 
 Берутся только заголовки (игроки, турнир, место, дата, тур, результат, рейтинги) и главная линия. Варианты
-пропускаются, комментарии (`.cba`) не читаются. Партии не из начальной позиции, шахматы-960 и записи без партии
-пропускаются со счётчиком причин.
+пропускаются, комментарии (`.cba`) не читаются. Удалённые записи, партии не из начальной позиции, шахматы-960 и
+партии в неподдерживаемой кодировке пропускаются со счётчиком причин (Stats); записи-тексты (не партии) и партии без
+ходов пропускаются без счёта. Вызывается из scripts/cbh_to_pgn.py.
 
 Устройство формата и таблицы кодирования ходов — по открытому конвертеру cbh2pgn (Dominik Klein, MIT,
 github.com/asdfjkl/cbh2pgn; см. ATTRIBUTION.md). Код этого модуля свой.
@@ -28,13 +29,19 @@ from pathlib import Path
 import chess
 import chess.pgn
 
+# Длина записи в байтах: индекс партий (.cbh), игроки (.cbp), турниры (.cbt).
 RECORD = 46
 PLAYER_RECORD = 67
 TOURNAMENT_RECORD = 99
 
+# Особые коды потока ходов (см. описание формата выше). SPECIAL — коды, на которых счётчик ходов не растёт сразу:
+# у двухбайтового хода он увеличивается после чтения обоих его байтов, у остальных трёх — не увеличивается вовсе.
 TWO_BYTE, VARIATION_START, VARIATION_END, SKIP, NULL_MOVE = 0x29, 0xDC, 0x0C, 0x9F, 0xAA
 SPECIAL = (TWO_BYTE, VARIATION_START, VARIATION_END, SKIP)
 
+# Таблицы однобайтовых ходов: код → (dx, dy), где dx — сдвиг по вертикалям (от a к h), dy — по горизонталям (от 1-й
+# к 8-й). У ферзей, ладей, слонов и коней — по таблице на первую, вторую и третью фигуру вида; у пешек — по таблице
+# на исходную вертикаль. Сдвиги дальнобойных фигур берутся по модулю 8, поэтому в них нет отрицательных значений.
 KING_MOVES = {0x49: (0, 1), 0x39: (1, 1), 0xD8: (1, 0), 0x5D: (1, 7), 0xC2: (0, 7), 0xB1: (7, 7), 0xB2: (7, 0),
               0x47: (7, 1), 0x76: (2, 0), 0xB5: (-2, 0)}
 CASTLE_SHORT, CASTLE_LONG = 0x76, 0xB5
@@ -107,15 +114,20 @@ TWO_BYTE_TABLE = bytes((
     0x79, 0x45, 0x3B, 0xE5, 0x49, 0x8F, 0x2D, 0xB9, 0xBE, 0x62, 0x93, 0x14, 0xE9, 0xD0, 0x38, 0x9C,
     0xB2, 0xC2, 0x59, 0x5D, 0xB6, 0x72, 0x51, 0xF8, 0x28, 0x7E, 0x61, 0x39, 0xE1, 0xDB, 0x69, 0x80,
 ))
+# Фигура превращения по двум старшим битам двухбайтового хода (0–3).
 PROMOTIONS = (chess.QUEEN, chess.ROOK, chess.BISHOP, chess.KNIGHT)
 
-# Флаги первых 4 байт партии; младшие 24 бита — длина вместе с этими байтами.
+# Флаги первых 4 байт партии; младшие 24 бита — длина вместе с этими байтами. Партии с флагами NOT_ENCODED,
+# SPECIAL_ENCODING и CHESS960 не читаются (счётчик unsupported), с NOT_INITIAL — тоже (счётчик not_initial).
 NOT_ENCODED, NOT_INITIAL, SPECIAL_ENCODING, CHESS960 = 0x80000000, 0x40000000, 0x04000000, 0x0A000000
 LENGTH = 0x00FFFFFF
 
 
 def _token_table() -> dict[int, tuple[chess.PieceType, int, int, int]]:
-    """Код хода → (вид фигуры, номер фигуры вида, сдвиг по вертикали, сдвиг по горизонтали)."""
+    """
+    Код хода → (вид фигуры, номер фигуры вида, dx, dy): dx — на сколько вертикалей сдвиг, dy — на сколько
+    горизонталей. Сводит таблицы *_MOVES в один словарь; коды во всех таблицах разные.
+    """
     table: dict[int, tuple[chess.PieceType, int, int, int]] = {}
     for code, (dx, dy) in KING_MOVES.items():
         table[code] = (chess.KING, 0, dx, dy)
@@ -131,6 +143,7 @@ TOKENS = _token_table()
 
 
 class DecodeError(ValueError):
+    """Партию или файл базы не удалось прочитать: неизвестный код, нелегальный ход, обрыв данных, чужая версия."""
     pass
 
 
@@ -158,6 +171,7 @@ class PieceOrder:
         return order
 
     def square_of(self, color: chess.Color, piece: chess.PieceType, number: int) -> chess.Square:
+        """Поле, на котором стоит фигура с этим номером; такой фигуры нет (взята или не появлялась) — DecodeError."""
         slots = self.slots[(color, piece)]
         square = slots[number] if number < len(slots) else None
         if square is None:
@@ -165,13 +179,18 @@ class PieceOrder:
         return square
 
     def locate(self, square: chess.Square) -> tuple[chess.Color, chess.PieceType, int] | None:
+        """Чья фигура стоит на поле: (цвет, вид, номер); None — в учёте на этом поле никого нет."""
         for (color, piece), slots in self.slots.items():
             if square in slots:
                 return color, piece, slots.index(square)
         return None
 
     def apply(self, board: chess.Board, move: chess.Move) -> None:
-        """Обновить номера перед тем, как ход сделан на доске (board — позиция до хода)."""
+        """
+        Обновить номера перед тем, как ход сделан на доске (board — позиция до хода): убрать взятую фигуру (при
+        взятии на проходе — пешку с соседнего поля), переставить ладью при рокировке, заменить пешку новой фигурой
+        при превращении, иначе — записать фигуре новое поле.
+        """
         mover = self.locate(move.from_square)
         if mover is None:
             raise DecodeError(f"no piece on {chess.square_name(move.from_square)}")
@@ -205,6 +224,11 @@ class PieceOrder:
 
 
 def _one_byte_move(board: chess.Board, order: PieceOrder, code: int) -> chess.Move:
+    """
+    Ход по однобайтовому коду: фигура находится по её номеру в учёте order, поле назначения — сдвигом от её поля.
+    Сдвиг пешки чёрных зеркалится; рокировка — сдвиг короля на две вертикали без переноса через край, остальные
+    сдвиги берутся по модулю 8. Легальность хода проверяет вызывающий (decode_moves).
+    """
     if code not in TOKENS:
         raise DecodeError(f"unknown move code 0x{code:02X}")
     piece, number, dx, dy = TOKENS[code]
@@ -221,7 +245,11 @@ def _one_byte_move(board: chess.Board, order: PieceOrder, code: int) -> chess.Mo
 
 
 def _two_byte_move(board: chess.Board, value: int) -> chess.Move:
-    """Поле в формате: вертикаль·8 + горизонталь; в python-chess — горизонталь·8 + вертикаль."""
+    """
+    Ход из 16-битного значения: биты 0–5 — поле откуда, 6–11 — поле куда, 12–13 — фигура превращения (PROMOTIONS;
+    учитывается, только если пешка идёт на последнюю горизонталь).
+    Поле в формате: вертикаль·8 + горизонталь; в python-chess — горизонталь·8 + вертикаль.
+    """
     origin, target, promotion = value & 0x3F, (value >> 6) & 0x3F, (value >> 12) & 0x3
     origin_sq, target_sq = chess.square(origin // 8, origin % 8), chess.square(target // 8, target % 8)
     piece = board.piece_at(origin_sq)
@@ -231,7 +259,11 @@ def _two_byte_move(board: chess.Board, value: int) -> chess.Move:
 
 
 def decode_moves(data: bytes) -> list[chess.Move]:
-    """Главная линия партии из начальной позиции; нелегальный или непонятный ход — DecodeError."""
+    """
+    Главная линия партии из начальной позиции; нелегальный или непонятный ход — DecodeError. data — байты партии
+    после четырёх байт флагов. Ходы вариантов (глубина вложенности больше нуля) не разбираются, но счётчик на них
+    растёт; конец партии — закрывающий код варианта на нулевой глубине, конец данных или нулевой ход.
+    """
     board = chess.Board()
     order = PieceOrder.initial()
     moves: list[chess.Move] = []
@@ -295,6 +327,10 @@ class Header:
 
 
 def _text(raw: bytes, encoding: str) -> str:
+    """
+    Строка из поля записи: байты до первого нулевого. Сначала пробуется UTF-8; не подошёл — однобайтовая кодировка:
+    cp1251, если так определена вся база, иначе — угаданная по самой этой строке (guess_encoding).
+    """
     raw = raw.split(b"\x00", 1)[0]
     try:
         return raw.decode("utf-8").strip()
@@ -305,6 +341,10 @@ def _text(raw: bytes, encoding: str) -> str:
 
 
 def _record_base(data: bytes) -> int:
+    """
+    Смещение первой записи в файле игроков или турниров: зависит от версии файла (байт 0x18) — 32 для версии 4, 28
+    для версии 0; другая версия — DecodeError.
+    """
     version = data[0x18] if len(data) > 0x18 else 0
     if version == 4:
         return 32
@@ -330,6 +370,11 @@ def guess_encoding(names: list[bytes]) -> str:
 
 @dataclass
 class Stats:
+    """
+    Счётчики чтения базы: games — прочитано партий; deleted — записи с пометкой удаления; not_initial — партии не из
+    начальной позиции; unsupported — неподдерживаемая кодировка ходов или шахматы-960; errors — партии, которые не
+    удалось разобрать; reasons — тексты первых 20 таких ошибок.
+    """
     games: int = 0
     deleted: int = 0
     not_initial: int = 0
@@ -354,6 +399,10 @@ class Database:
 
     @classmethod
     def open(cls, cbh: Path) -> Database:
+        """
+        Читает в память файл индекса cbh и лежащие рядом файлы с тем же именем (.cbg, .cbp, .cbt) и определяет
+        кодировку имён по всем именам игроков и турниров. Отсутствующий файл — ошибка чтения.
+        """
         def sibling(extension: str) -> Path:  # не with_suffix: в именах баз бывают точки («уч. шахм. окончаний»)
             return cbh.with_name(cbh.stem + extension)
 
@@ -363,6 +412,7 @@ class Database:
         return db
 
     def _name_fields(self) -> list[bytes]:
+        """Сырые байты всех текстовых полей: фамилия и имя каждого игрока, название и место каждого турнира."""
         fields: list[bytes] = []
         for data, size, spans in ((self.players, PLAYER_RECORD, ((9, 39), (39, 59))),
                                   (self.tournaments, TOURNAMENT_RECORD, ((9, 49), (49, 79)))):
@@ -374,12 +424,14 @@ class Database:
         return fields
 
     def player(self, number: int) -> str:
+        """Имя игрока по номеру записи в .cbp: «Фамилия, Имя» (или только фамилия)."""
         offset = _record_base(self.players) + number * PLAYER_RECORD
         record = self.players[offset:offset + PLAYER_RECORD]
         last, first = _text(record[9:39], self.encoding), _text(record[39:59], self.encoding)
         return f"{last}, {first}" if first else last
 
     def tournament(self, number: int) -> tuple[str, str]:
+        """Турнир по номеру записи в .cbt: (название, место)."""
         offset = _record_base(self.tournaments) + number * TOURNAMENT_RECORD
         record = self.tournaments[offset:offset + TOURNAMENT_RECORD]
         return _text(record[9:49], self.encoding), _text(record[49:79], self.encoding)
@@ -387,6 +439,7 @@ class Database:
     def header(self, record: bytes) -> Header:
         """
         Заголовок партии из записи индекса: номера игроков и турнира, упакованная дата, тур, результат и рейтинги.
+        Неизвестные части даты пишутся вопросами («1985.??.??»), результат вне 0–2 — «*», тур с подтуром — «3(2)».
         """
         def u24(at: int) -> int:
             return int.from_bytes(record[at:at + 3], "big")
@@ -407,6 +460,10 @@ class Database:
         )
 
     def __iter__(self) -> Iterator[chess.pgn.Game]:
+        """
+        Партии базы по порядку записей индекса — как партии python-chess с заголовками и главной линией. Пропуски
+        считаются в self.stats; партия, которую не удалось разобрать, чтение остальных не прерывает.
+        """
         for start in range(RECORD, len(self.index) - RECORD + 1, RECORD):
             record = self.index[start:start + RECORD]
             if not record[0] & 0x01:

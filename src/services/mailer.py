@@ -5,6 +5,11 @@ Postmark, Mailgun…) или свой сервер — меняются толь
 а пишется в лог вместе со ссылкой: так работает разработка и тесты.
 
 Тексты писем — здесь, на трёх языках интерфейса: письмо читают вне клиента, каталоги фронтенда ему недоступны.
+Это осознанное исключение из правила «ни одной строки для игрока на сервере».
+
+Кто вызывает: src/services/email_links.py — подтверждение адреса и сброс пароля; он же выпускает одноразовую ссылку
+и передаёт её в шаблон. Настройки (src/core/config.py): SMTP_HOST, SMTP_PORT, SMTP_STARTTLS, SMTP_USER,
+SMTP_PASSWORD, MAIL_FROM.
 """
 
 from __future__ import annotations
@@ -23,6 +28,8 @@ Language = Literal["en", "uk", "ru"]
 LANGUAGES: tuple[Language, ...] = ("en", "uk", "ru")
 Kind = Literal["verify", "reset"]
 
+# Вид письма → язык → (тема, текст). Параметры шаблона: {username} — имя игрока, {link} — одноразовая ссылка,
+# {hours} — срок её действия в часах (из EMAIL_VERIFY_TTL_S и PASSWORD_RESET_TTL_S, считает email_links.py).
 TEMPLATES: dict[Kind, dict[Language, tuple[str, str]]] = {
     "verify": {
         "en": ("Confirm your e-mail for michess",
@@ -53,12 +60,14 @@ TEMPLATES: dict[Kind, dict[Language, tuple[str, str]]] = {
 
 
 def render(kind: Kind, language: str, **params: str | int) -> tuple[str, str]:
+    """Тема и текст письма на языке игрока; язык не из LANGUAGES — английский."""
     lang: Language = next((code for code in LANGUAGES if code == language), "en")
     subject, body = TEMPLATES[kind][lang]
     return subject, body.format(**params)
 
 
 def _send_smtp(message: EmailMessage) -> None:
+    """Блокирующая отправка (ждём сервер не дольше 20 с): вызывается из ``send`` в отдельном потоке."""
     with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=20) as smtp:
         if settings.SMTP_STARTTLS:
             smtp.starttls()

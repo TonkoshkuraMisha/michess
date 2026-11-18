@@ -35,8 +35,8 @@ class GuessPosition(Base):
     # Серия: позиции одной партии подряд, где каждый ход игрока проходит отбор.
     series_id: Mapped[int | None] = mapped_column(Integer, index=True, nullable=True)
     series_index: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
-    # Сложность: отрыв лучшего хода, глубина, длина серии → число, как рейтинг задачи (src/services/guess.py).
-    # Меняется по ответам вошедших игроков, как рейтинг задачи (src/services/guess.py, update_rating).
+    # Сложность — число по шкале рейтинга задач. Начальное значение считается при отборе
+    # (guess_selection.difficulty); дальше меняется по ответам вошедших игроков (src/services/guess.answer).
     difficulty: Mapped[int] = mapped_column(Integer, index=True)
     # Коды тем реестра 13.0 (guess_selection.position_themes) — показываются после ответа.
     themes: Mapped[list] = mapped_column(JSON, default=list, server_default="[]")

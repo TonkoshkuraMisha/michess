@@ -1,10 +1,19 @@
 // --- FILE: frontend/src/components/Chessboard.tsx ---
-// Главная доска (маршрут «/»): партия с человеком, партия с ботом и свободный анализ — на одной доске. Здесь
-// состояние позиции и разметка; логика вынесена в хуки chessboard/hooks/: useGameSocket (события партии с человеком
-// и лобби), useBotGame (партия с ботом), useClock (часы), usePremoves (предходы), useCoachMode (игра с наставником).
+// Главная доска (маршруты «/» и «/challenge/{код}» — вход по ссылке-приглашению): партия с человеком, партия с
+// ботом и свободный анализ — на одной доске. Здесь состояние позиции и разметка; логика вынесена в хуки
+// chessboard/hooks/: useGameSocket (события партии с человеком и лобби), useBotGame (партия с ботом), useClock
+// (часы), usePremoves (предходы), useCoachMode (игра с наставником).
 // В партии с человеком источник правды — сервер: клиент показывает свой ход сразу, но позицию, часы и итог берёт из
 // ответа (move_made, game_over); отклонённый ход возвращается на место. Панели вокруг доски — компоненты папки
 // chessboard/.
+//
+// Режим доски определяется тремя значениями: gameId (своя партия с человеком), activeBot (партия с ботом),
+// spectatingGameId (просмотр чужой партии); все три пусты — свободная доска. Гостю вместо доски показывается
+// заглушка с просьбой войти. Данные игрока — GET /profile/me, каталог ботов — GET /bots/catalog. Оформление и
+// размер доски запоминаются в localStorage (michess_board_theme, michess_piece_set, michess_board_size), настройки
+// доски — config/boardPrefs.ts. Другие страницы запускают здесь действие через state маршрута: tournamentGame
+// (партия турнира), guestGame (мастер прошлого), firstGame (первая партия после регистрации), analyzeFen (позиция
+// на разбор с наставником), spectate (просмотр партии), challenge (вызов игрока из профиля).
 
 import type {OddsChoice} from './chessboard/odds';
 import {useState, useEffect, useRef, useCallback} from 'react';
@@ -91,15 +100,21 @@ import {BlindfoldPanel} from './chessboard/BlindfoldPanel';
 import {parseMoveInput, startBlindfold, useBlindfold, visibleSquares} from '../config/blindfold';
 import {squareCenter} from './chessboard/CoachArrowsOverlay';
 
+// Реэкспорт для модулей, которые исторически импортируют эти имена из Chessboard (GameViewer, тесты).
 export {MIN_BOARD_SIZE, MAX_BOARD_SIZE, getMaxViewportBoardSize, getDefaultBoardSize, TIME_CONTROLS};
 export type {PromotionPiece, TimeControlOption, TimeControlGroup};
 
 export {BOARD_THEMES, HISTORICAL_BOTS};
 export type {BoardTheme, HistoricalBotId, HistoricalBotProfile};
 
+/**
+ * Главная доска со всеми панелями вокруг неё. Владеет состоянием партии (позиция, история, чей цвет, итог) и
+ * раздаёт его хукам: useGameSocket и useBotGame меняют одно и то же состояние, поэтому оно живёт здесь.
+ */
 export default function Chessboard() {
     const {t} = useI18n();
     const navigate = useNavigate();
+    // Код приглашения из адреса /challenge/{код}; принимает приглашение useGameSocket.
     const {inviteCode} = useParams<{ inviteCode?: string }>();
 
     const [leftSectionTab, setLeftSectionTab] = useState<'bots' | 'lobby'>('bots');
@@ -119,10 +134,14 @@ export default function Chessboard() {
     // Партию с ботом можно начать с позиции, стоящей на свободной доске.
     const [startFromPosition, setStartFromPosition] = useState<boolean>(false);
 
+    // Живая позиция партии (chess.js) и её ходы в подробном виде (history({verbose: true})) — меняются вместе.
     const [game, setGame] = useState(new Chess());
     const [history, setHistory] = useState<any[]>([]);
+    // Какая позиция на экране: -1 — живая, -2 — начало партии до первого хода, иначе — индекс полухода в history,
+    // после которого показана позиция. Ходить можно только на живой позиции.
     const [viewIndex, setViewIndex] = useState<number>(-1);
     const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
+    // Доска повёрнута кнопкой «Перевернуть» относительно обычного вида (свой цвет снизу).
     const [isManualFlip, setIsManualFlip] = useState<boolean>(false);
 
     const [pendingPromotion, setPendingPromotion] = useState<PendingPromotion | null>(null);
@@ -130,22 +149,28 @@ export default function Chessboard() {
     const [boardThemeKey, setBoardThemeKey] = useState<string>(() => getSavedBoardThemeKey());
     const [pieceSetKey, setPieceSetKey] = useState<string>(() => getSavedPieceSetKey());
 
+    // id своей партии с человеком (приходит в match_found); остаётся и после её окончания, пока игрок не уйдёт
+    // в лобби. Ref-копии (gameIdRef, myColorRef и другие ниже) читают обработчики WebSocket и таймеры: им нужно
+    // текущее значение, а не то, что было при подписке.
     const [gameId, setGameId] = useState<number | null>(null);
     const gameIdRef = useRef<number | null>(null);
     const [myColor, setMyColor] = useState<'white' | 'black'>('white');
     const myColorRef = useRef<'white' | 'black'>('white');
     const [isSearching, setIsSearching] = useState(false);
+    // Игрок: id, имя и рейтинг блица из GET /profile/me (эффект ниже).
     const [currentUserId, setCurrentUserId] = useState<number | null>(null);
     const [currentUsername, setCurrentUsername] = useState<string>('');
     const currentUsernameRef = useRef<string>('');
     const [currentUserRating, setCurrentUserRating] = useState<number>(1200);
+    // Версия состояния партии на сервере: приходит с каждым снимком и уходит обратно с ходом (make_move), чтобы
+    // сервер не принял ход, сделанный по устаревшей позиции.
     const [stateVersion, setStateVersion] = useState(0);
     const stateVersionRef = useRef<number>(0);
 
     // activeBot живёт здесь (не внутри useBotGame), потому что useClock использует его
     // для isTicking/isParticipant и должен вызываться раньше useBotGame.
     const [activeBot, setActiveBot] = useState<BotOpponentId | null>(null);
-    // Вкладка ботов: исторические мастера или мастерская соперников.
+    // Вкладка ботов: исторические мастера, мастерская соперников или клубная лестница.
     const [botsView, setBotsView] = useState<'historical' | 'workshop' | 'ladder'>('historical');
     // Измеренная сила исторических ботов (калибровка матчами), если она есть.
     const [measuredBotRatings, setMeasuredBotRatings] = useState<Record<string, number>>({});
@@ -155,6 +180,7 @@ export default function Chessboard() {
     const [botRivals, setBotRivals] = useState<Record<string, BotRival>>({});
     // Каталог целиком — для рекомендации следующего соперника в итоге партии (таск 11.5).
     const [botCatalog, setBotCatalog] = useState<BotCatalog | null>(null);
+    // Каталог ботов (GET /bots/catalog) читается один раз при открытии доски; при сбое остаются заявленные рейтинги.
     useEffect(() => {
         fetchBotCatalog()
             .then((catalog) => {
@@ -188,16 +214,24 @@ export default function Chessboard() {
         black_new_rating?: number;
     } | null>(null);
 
+    // Момент, с которого считается время обдумывания своего хода: оно уходит на сервер с ходом (time_taken_ms)
+    // и нужно для квоты лага и античита. Часы партии ведёт сервер, а не это значение.
     const moveStartTime = useRef<number>(Date.now());
 
-    // Настройки доски (таск 18.4) и анимация хода соперника: фигура скользит с поля на поле, пока цель скрыта.
+    // Настройки доски (таск 18.4, config/boardPrefs.ts, localStorage michess_board_prefs): показ последнего хода,
+    // способ ввода хода, «быстрый ход», анимация хода соперника, порядок взятых фигур.
     const boardPrefs = useBoardPrefs();
     // Игра вслепую (таск 19.5): ступень текущей партии, подсмотры.
     const blind = useBlindfold();
+    // Режим «вслепую» уже включён для идущей партии (включается один раз, в её начале).
     const blindStartedRef = useRef(false);
+    // Партия, для которой отметка «вслепую» уже отправлена в архив, — чтобы не отправить дважды.
     const blindMarkedRef = useRef<number | null>(null);
+    // Анимация хода соперника: фигура уже стоит на новом поле и «съезжает» на него со старого (go включает
+    // переход). animatedHistoryLength — длина истории, для которой анимация уже показана.
     const [moveAnim, setMoveAnim] = useState<{ from: string; to: string; go: boolean } | null>(null);
     const animatedHistoryLength = useRef(0);
+    // Фигура, которую сейчас тащат указателем, и координаты указателя (её «призрак» рисуется поверх страницы).
     const [dragState, setDragState] = useState<{
         from: string;
         piece: { type: string; color: string };
@@ -205,6 +239,8 @@ export default function Chessboard() {
         y: number;
     } | null>(null);
 
+    // Сторона доски в пикселях: сохранённая игроком (localStorage michess_board_size), но не больше, чем
+    // помещается в окно; при уменьшении окна доска сжимается (эффект ниже).
     const [boardSize, setBoardSize] = useState<number>(() => {
         const maxFit = getMaxViewportBoardSize();
         const savedSize = localStorage.getItem('michess_board_size');
@@ -228,18 +264,24 @@ export default function Chessboard() {
         return () => window.removeEventListener('resize', handleWindowResize);
     }, []);
 
+    // Счёт сессии: победы, поражения и ничьи с момента открытия страницы; нигде не сохраняется.
     const [sessionStats, setSessionStats] = useState({wins: 0, losses: 0, draws: 0});
+    // Итог партии на доске: '1-0', '0-1', '1/2-1/2', '*' (отменена); null — партия идёт или её нет.
     const [gameOverResult, setGameOverResult] = useState<string | null>(null);
     const gameOverResultRef = useRef<string | null>(null);
     useEffect(() => {
         gameOverResultRef.current = gameOverResult;
     }, [gameOverResult]);
+    // Строка статуса над списком ходов. Имя историческое: кроме предложения ничьей, здесь показываются и начало
+    // партии, и её итог, и ответы бота, и отказы сервера (см. chessboard/status.ts).
     const [drawOfferStatus, setDrawOfferStatus] = useState<GameStatus | null>(null);
     const [rematchStatus, setRematchStatus] = useState<'none' | 'offered_by_me' | 'offered_by_opponent' | 'declined'>('none');
 
     const activeTheme = BOARD_THEMES[boardThemeKey] || BOARD_THEMES.walnut;
     const activePieceSet = PIECE_SETS[pieceSetKey] || PIECE_SETS.merida;
 
+    // Выбранный контроль времени: минуты и добавка. У сторон он одинаков; разное стартовое время даёт только
+    // фора по времени (её считает useBotGame или сервер).
     const effectiveWhiteBaseMinutes = selectedTimeControl.isManual ? manualBaseMinutes : selectedTimeControl.base;
     const effectiveBlackBaseMinutes = effectiveWhiteBaseMinutes;
     const effectiveIncSeconds = selectedTimeControl.isManual ? manualIncSeconds : selectedTimeControl.inc;
@@ -252,9 +294,10 @@ export default function Chessboard() {
 
     // Игра с наставником (таск 11.3): проверка ходов игрока и советы — в партии с ботом и на свободной доске.
     const coach = useCoachMode(currentUserRating);
-    // Рентген доски (таск 12.1): свободная доска, партия с ботом при включённом наставнике, зритель. Игроку
-    // идущей партии с человеком — нет (правило 2).
+    // Рентген доски (таск 12.1): свободная доска, партия с ботом при включённом наставнике (кроме лестницы и
+    // турнира), зритель. Игроку идущей партии с человеком — нет (правило 2).
     const xray = useXraySettings();
+    // Свежее значение «партия учебная» для сохранения партии: useBotGame читает его в момент сохранения.
     const coachAssistedRef = useRef(false);
     coachAssistedRef.current = coach.assisted;
     const isCoachAssisted = useCallback(() => coachAssistedRef.current, []);
@@ -264,6 +307,8 @@ export default function Chessboard() {
     const [activeOdds, setActiveOdds] = useState<OddsChoice | null>(null);
     const [hourglass, setHourglass] = useState(false);
 
+    // Часы на экране идут в своей партии, в партии с ботом и у зрителя, пока партия не окончена; пока наставник
+    // проверяет ход или ждёт решения игрока (coach.holdBot), они стоят — это задумано для партии с ботом.
     const {
         whiteTimeMs, setWhiteTimeMs, blackTimeMs, setBlackTimeMs, resetLowTimeWarning, applyIncrement,
     } = useClock({
@@ -275,6 +320,7 @@ export default function Chessboard() {
         hourglass: hourglass && Boolean(activeBot),
     });
 
+    // Звук итога для участника: победа или поражение — по своему цвету; у ничьей и у отменённой партии — свои звуки.
     const playOutcomeSound = useCallback((result: string, playerColor: 'white' | 'black' = myColorRef.current) => {
         if (!result || result === '*') {
             soundEngine.play('decline');
@@ -336,6 +382,7 @@ export default function Chessboard() {
     });
 
     const selectedBotProfile = HISTORICAL_BOTS[selectedBotId];
+    // Память ботов об игроке (GET /bots/rivalry): при открытии доски и после каждой сохранённой партии с ботом.
     useEffect(() => {
         const token = getToken();
         if (!token) return;
@@ -366,6 +413,7 @@ export default function Chessboard() {
         exitBotGame, playAudio, playOutcomeSound, updateSessionStats,
     });
 
+    // Выбор оформления и размера доски сохраняется в localStorage этого браузера (на сервер не уходит).
     const handleThemeChange = (themeId: string) => {
         setBoardThemeKey(themeId);
         localStorage.setItem('michess_board_theme', themeId);
@@ -381,6 +429,8 @@ export default function Chessboard() {
         localStorage.setItem('michess_board_size', String(size));
     };
 
+    // Растягивание доски за уголок: пока тянут, движение ловится на window, размер меняется на среднее смещения
+    // по двум осям и сразу сохраняется; курсор и запрет выделения текста возвращаются по окончании.
     useEffect(() => {
         if (!isResizing) return;
 
@@ -445,6 +495,8 @@ export default function Chessboard() {
     const navigationRef = useRef({history, viewIndex});
     navigationRef.current = {history, viewIndex};
 
+    // Клавиши: Esc снимает выбор, предходы, окно превращения и выпадающее оформление; стрелки влево и вправо
+    // листают партию по ходу, вверх — в начало, вниз — к живой позиции. В полях ввода стрелки не перехватываются.
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
@@ -501,6 +553,8 @@ export default function Chessboard() {
         return () => window.removeEventListener('keydown', handleKeyDown);
     }, [playAudio]);
 
+    // Список ходов следует за показываемым ходом: активный ход — в середину окна списка, а если его нет
+    // (скрыт или ходов ещё нет) на живой позиции — прокрутка в конец.
     useEffect(() => {
         if (notationScrollRef.current) {
             const activeEl = notationScrollRef.current.querySelector<HTMLElement>('.active-move-btn');
@@ -513,6 +567,7 @@ export default function Chessboard() {
         }
     }, [history.length, viewIndex]);
 
+    // Щелчок мимо выпадающих списков (контроль времени, оформление) закрывает их.
     useEffect(() => {
         const handleClickOutside = (event: MouseEvent) => {
             if (timeDropdownRef.current && !timeDropdownRef.current.contains(event.target as Node)) {
@@ -529,6 +584,8 @@ export default function Chessboard() {
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [isTimeDropdownOpen, showAppearanceDropdown]);
 
+    // Свой профиль (GET /profile/me): id — чтобы убрать свой вызов из лобби, имя — для карточки и чата, рейтинг
+    // блица — для карточки в партии с ботом и уровня наставника.
     useEffect(() => {
         const token = getToken();
         if (!token) return;
@@ -554,6 +611,14 @@ export default function Chessboard() {
             });
     }, []);
 
+    // Ход игрока — единая точка для щелчков, перетаскивания, предходов и ввода нотацией. Проверяет очередь хода
+    // и легальность (chess.js), для превращения без выбранной фигуры открывает окно выбора, затем сразу показывает
+    // ход на доске. Дальше — по режиму. Партия с человеком: ход уходит на сервер (make_move: ход, command_id —
+    // чтобы повторная отправка не применила ход дважды, версия состояния, время обдумывания, признаки «вкладка
+    // была скрыта» и «предход»); сервер подтверждает его событием move_made или возвращает прежнюю позицию
+    // событием error. Партия с ботом: добавка времени, проверка наставником (кроме лестницы и турнира), при мате
+    // или ничьей — итог и сохранение. Свободная доска: только наставник. Возвращает true, если ход сделан или
+    // открыто окно превращения.
     const executeMove = useCallback((
         from: string,
         to: string,
@@ -684,6 +749,9 @@ export default function Chessboard() {
         openPromotionDialog: useCallback((p) => setPendingPromotion(p), []),
     });
 
+    // Перетаскивание фигуры: движение и отпускание ловятся на window. Поле под указателем ищется по атрибуту
+    // data-square, а если под ним оказался другой слой — по координатам внутри рамки доски. На ходу соперника
+    // отпускание ставит предход, на своём — делает ход.
     useEffect(() => {
         const handlePointerMove = (e: PointerEvent) => {
             if (!dragState) return;
@@ -760,6 +828,7 @@ export default function Chessboard() {
         handleResetSandbox();
     };
 
+    // Отмена партии до второго полухода: в партии с человеком решает сервер (abort_game → game_over с итогом '*').
     const handleAbortGame = () => {
         if ((!gameId && !activeBot) || gameOverResult || history.length >= 2) return;
         setPendingPromotion(null);
@@ -773,6 +842,7 @@ export default function Chessboard() {
         }
     };
 
+    // Реванш: человеку — предложение через сервер (offer_rematch), с ботом — сразу новая партия другим цветом.
     const handleOfferRematch = () => {
         if (gameId && gameOverResult) {
             gameSocket.send('offer_rematch', {game_id: gameId});
@@ -787,6 +857,8 @@ export default function Chessboard() {
         }
     };
 
+    // Сдача (после подтверждения): в партии с человеком итог объявит сервер (resign → game_over), в партии с
+    // ботом итог ставится сразу и партия сохраняется с причиной «сдача».
     const handleResign = () => {
         if ((!gameId && !activeBot) || gameOverResult) return;
         if (window.confirm(t('controls.resignConfirm'))) {
@@ -805,6 +877,8 @@ export default function Chessboard() {
         }
     };
 
+    // Возврат к пустой свободной доске: сброс песочницы, «В лобби» после партии с человеком, выход из просмотра.
+    // Идущую партию с человеком так покинуть нельзя.
     const handleResetSandbox = () => {
         if (gameId && !gameOverResult) return;
         if (gameId && (rematchStatus === 'offered_by_me' || rematchStatus === 'offered_by_opponent')) {
@@ -893,6 +967,8 @@ export default function Chessboard() {
         coachClearOverlay();
     }, [currentFen, coachClearOverlay]);
 
+    // Возврат хода на свободной доске и в обычной партии с ботом. В партии с ботом снимаются два полухода —
+    // ответ бота и свой ход, — чтобы очередь хода вернулась к игроку. Часы при этом не возвращаются.
     const handleUndoSandboxMove = () => {
         if (gameId || spectatingGameId || history.length === 0 || isBotThinking || !!gameOverResult) return;
         // Партия лестницы или турнира — без возврата ходов (сервер всё равно не засчитал бы такую партию).
@@ -928,6 +1004,8 @@ export default function Chessboard() {
         }
     };
 
+    // Щелчок по полю. На ходу соперника щелчки ставят предход (фигуры берутся из позиции «после предходов»), на
+    // своём — выбирают фигуру и делают ход; щелчок по пустому полю при стоящих предходах снимает всю очередь.
     const handleSquareClick = (squareId: string) => {
         if (viewIndex !== -1 || gameOverResult || spectatingGameId) return;
 
@@ -990,6 +1068,7 @@ export default function Chessboard() {
     // Начальная позиция партии на доске: null — обычная расстановка.
     const startFen = customStartFen(game);
 
+    // Позиция на экране: живая или, при просмотре истории, восстановленная повтором ходов от начала партии.
     const currentGame = viewIndex === -1 ? game : (() => {
         const tg = startFen ? new Chess(startFen) : new Chess();
         const limit = viewIndex === -2 ? -1 : viewIndex;
@@ -1010,6 +1089,7 @@ export default function Chessboard() {
     const material = calculateMaterialBalance(boardState);
 
     const activeMoveIndex = viewIndex === -1 ? history.length - 1 : viewIndex;
+    // Идёт своя партия (с человеком или ботом): не окончена и игрок в ней участник, а не зритель.
     const liveGame = Boolean(gameId || activeBot) && !gameOverResult && !spectatingGameId;
     // Вслепую: какие фигуры видны (null — видны все: обычная партия, подсмотр или партия окончена).
     const blindVisible = blind.level > 0 && liveGame && blind.peekUntil <= Date.now()
@@ -1027,7 +1107,9 @@ export default function Chessboard() {
         startBlindfold(activeBot ? !isRatedBotGame : !isRatedGame);
     }, [liveGame, history.length, activeBot, isRatedBotGame, isRatedGame]);
 
-    // Товарищеская партия с человеком вслепую — отметка в архиве после окончания (бот — при сохранении партии).
+    // Товарищеская партия с человеком вслепую — отметка в архиве после окончания (бот — при сохранении партии):
+    // POST /profile/games/{id}/blindfold со ступенью и числом подсмотров; сервер примет её только от участника
+    // законченной партии без рейтинга.
     useEffect(() => {
         if (!gameId || !gameOverResult || activeBot || isRatedGame || blind.level === 0 || blindMarkedRef.current === gameId) return;
         blindMarkedRef.current = gameId;
@@ -1058,6 +1140,7 @@ export default function Chessboard() {
     }, [history.length]); // eslint-disable-line react-hooks/exhaustive-deps
     const lastMove = activeMoveIndex >= 0 ? history[activeMoveIndex] : null;
 
+    // Поля, куда может пойти выбранная фигура (точки-подсказки) — только на своём ходу и на живой позиции.
     const legalTargetSquares = new Set<string>();
     if (selectedSquare && viewIndex === -1 && !gameOverResult) {
         const currentTurnColor = currentGame.turn() === 'w' ? 'white' : 'black';
@@ -1139,7 +1222,9 @@ export default function Chessboard() {
     // так прибавки времени у игрока и бота совпадают с турнирными, а сервер примет сохранение.
     const routeLocation = useLocation();
     const tournamentStart = (routeLocation.state as { tournamentGame?: TournamentGameStart } | null)?.tournamentGame;
+    // Партия турнира, ждущая, пока применится её контроль времени (первый эффект ставит, второй запускает).
     const [pendingTournament, setPendingTournament] = useState<TournamentGameStart | null>(null);
+    // Турнир и партия турнира, к которым относится партия на доске, — для плашки TournamentGameBar.
     const [tournamentLinkId, setTournamentLinkId] = useState<number | null>(null);
     const [tournamentGameRefId, setTournamentGameRefId] = useState<number | null>(null);
     const inTournamentGame = Boolean(tournamentLinkId && (isTournamentGame || savedTournamentId));
@@ -1230,6 +1315,8 @@ export default function Chessboard() {
         socialApi.challenge(target, createdInviteCode).then(() => setChallengeSent(target)).catch(() => undefined);
     }, [createdInviteCode]);
 
+    // Ставит позицию из FEN на свободную доску (поле ввода под списком ходов и «Разобрать с наставником»);
+    // возвращает текст ошибки или null. После загрузки отмечается «начать с этой позиции» для партии с ботом.
     const handleLoadFen = (fen: string): string | null => {
         const error = validateFen(fen);
         if (error) return error;
@@ -1246,6 +1333,8 @@ export default function Chessboard() {
         return null;
     };
 
+    // Навигация по партии (щелчок в списке ходов и кнопки перемотки) меняет только viewIndex; звук — как у
+    // показанного хода. Выбор последнего хода возвращает к живой позиции.
     const handleSelectMoveFromList = (targetIdx: number) => {
         setSelectedSquare(null);
         const isAlreadyActive = viewIndex === -1
@@ -1300,6 +1389,8 @@ export default function Chessboard() {
         }
     };
 
+    // Картинка фигуры выбранного набора (SVG из /assets/pieces/{набор}/, адрес строит getPieceSvgUrl); стиль
+    // задаёт масштаб набора и тень, подобранную под тему доски (getHarmoniousPieceStyle).
     const renderPieceSvg = (piece: { type: string; color: string }) => {
         const styleProps = getHarmoniousPieceStyle(pieceSetKey, boardThemeKey, piece.color);
         return (
@@ -1315,6 +1406,7 @@ export default function Chessboard() {
         );
     };
 
+    // Гость: вместо доски — просьба войти (все хуки выше уже вызваны, поэтому проверка стоит здесь, а не в начале).
     if (!getToken()) {
         return (
             <div
@@ -1327,7 +1419,9 @@ export default function Chessboard() {
         );
     }
 
+    // Свой вызов в списке лобби не показывается.
     const filteredQueue = queuePlayers.filter(p => p.user_id !== currentUserId);
+    // Размер, с которым доска рисуется: сохранённый, но не шире окна (на телефоне — почти вся ширина).
     const responsiveBoardPx = typeof window !== 'undefined' ? Math.min(boardSize, window.innerWidth - 24) : boardSize;
 
     return (
@@ -1357,7 +1451,7 @@ export default function Chessboard() {
                 </div>
             )}
 
-            {/* ЛЕВАЯ КОЛОНКА: ИГРОВОЙ ЦЕНТР (ЧАСЫ, ИСТОРИЧЕСКИЕ БОТЫ, ЛОББИ И LIVE) */}
+            {/* ЛЕВАЯ КОЛОНКА: КОНТРОЛЬ ВРЕМЕНИ, ПОИСК СОПЕРНИКА, БОТЫ (МАСТЕРА, МАСТЕРСКАЯ, ЛЕСТНИЦА), ЛОББИ И LIVE */}
             <div
                 className="w-full xl:w-[400px] 2xl:w-[440px] xl:h-full bg-acacia p-3 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-2 text-boxwood-light order-2 xl:order-1 shrink-0 xl:overflow-hidden">
 
@@ -1777,7 +1871,7 @@ export default function Chessboard() {
 
             </div>
 
-            {/* ПРАВАЯ КОЛОНКА: ЖУРНАЛ ХОДОВ, ОФОРМЛЕНИЕ, ЧАТ И УПРАВЛЕНИЕ ПАРТИЕЙ */}
+            {/* ПРАВАЯ КОЛОНКА: ЖУРНАЛ ХОДОВ, ОФОРМЛЕНИЕ, СТАТУС, ЧАТ, ИТОГ, НАСТАВНИК, РЕНТГЕН И УПРАВЛЕНИЕ ПАРТИЕЙ */}
             <div
                 className="w-full xl:w-[390px] 2xl:w-[430px] xl:h-full bg-acacia p-3 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-2 text-boxwood-light order-3 shrink-0 xl:overflow-hidden relative">
 
@@ -1941,13 +2035,13 @@ export default function Chessboard() {
 
                 {xrayAvailable && <XrayPanel settings={xray} canSelect={!spectatingGameId}/>}
 
-                {/* Зрителю кнопки песочницы не показываем: «отменить ход» и «сбросить доску»
-                    портили бы чужую партию на его экране. Выход — в панели чата. */}
                 {/* Турнирная партия: турнир, тур, соперник, таблица; после партии — следующая партия и путь в турнир. */}
                 {inTournamentGame && tournamentLinkId && (
                     <TournamentGameBar tournamentId={savedTournamentId ?? tournamentLinkId} tournamentGameId={tournamentGameRefId}
                                        gameOver={Boolean(gameOverResult)}/>
                 )}
+                {/* Зрителю кнопки песочницы не показываем: «отменить ход» и «сбросить доску»
+                    портили бы чужую партию на его экране. Выход — в панели чата. */}
                 {!spectatingGameId && <GameControlsPanel
                     mode={gameId ? 'pvp' : activeBot ? 'bot' : 'sandbox'}
                     hideRematch={inTournamentGame}

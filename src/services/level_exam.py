@@ -15,12 +15,15 @@ from pathlib import Path
 import chess
 
 DATA = Path(__file__).resolve().parent / "data" / "level_exams.json"
+# Начало кода раздела экзамена уровня: level0 … level5.
 PREFIX = "level"
+# Ветви курса, по которым размечены вопросы: тактика, мат и атака, эндшпиль, стратегия, расчёт.
 BRANCHES = ("T", "M", "E", "S", "C")
 
 
 @lru_cache(maxsize=1)
 def levels() -> dict[str, dict]:
+    """Наборы вопросов из файла данных: код раздела («level3») → запись уровня. Файл читается один раз на процесс."""
     with DATA.open(encoding="utf-8") as handle:
         return {f"{PREFIX}{item['level']}": item for item in json.load(handle)}
 
@@ -34,12 +37,14 @@ def is_level_section(section: str) -> bool:
 
 
 def questions(section: str) -> list[dict]:
+    """Вопросы уровня для клиента — без ответов; id вопроса — его порядковый номер в наборе, начиная с 1."""
     return [{"id": index, "fen": q["fen"], "color": "white" if chess.Board(q["fen"]).turn else "black",
              "previous_move": q["previous_move"], "branch": q["branch"]}
             for index, q in enumerate(levels()[section]["questions"], 1)]
 
 
 def question(section: str, question_id: int) -> dict | None:
+    """Полная запись вопроса (с ответом) по номеру в наборе; номера вне набора — None."""
     items = levels()[section]["questions"]
     return items[question_id - 1] if 1 <= question_id <= len(items) else None
 

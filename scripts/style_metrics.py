@@ -69,9 +69,11 @@ class PlayerStats:
     opponents: set[str] = field(default_factory=set)
 
     def per_100(self, value: int) -> float:
+        """Пересчитывает число срабатываний признака на 100 ходов миттельшпиля."""
         return 100.0 * value / self.moves if self.moves else 0.0
 
     def row(self) -> dict[str, float]:
+        """Форматирует строку таблицы стилевых метрик для одного участника."""
         return {
             "sacrifices": self.per_100(self.sacrifices),
             "trades": self.per_100(self.trades),
@@ -82,6 +84,7 @@ class PlayerStats:
 
 
 def _is_storm(board: chess.Board, move: chess.Move, color: chess.Color) -> bool:
+    """Проверяет, является ли ход пешечным штурмом в сторону короля соперника."""
     piece = board.piece_at(move.from_square)
     king = board.king(not color)
     if piece is None or piece.piece_type != chess.PAWN or king is None or board.is_capture(move):
@@ -159,6 +162,7 @@ def collect(path: Path, from_ply: int = MIDDLEGAME_FROM_PLY) -> dict[str, Player
 
 
 def report(totals: dict[str, PlayerStats], with_anchors: bool = False) -> str:
+    """Считает и форматирует таблицу метрик стиля в миттельшпиле по партиям PGN."""
     header = f"{'игрок':<28}{'партий':>7}{'ходов':>7}{'жертвы':>8}{'размены':>9}{'шахи':>7}{'давл.':>7}{'штурм':>7}"
     lines = [header, "-" * len(header)]
     for name in sorted(totals, key=lambda n: -totals[n].row()["sacrifices"]):
@@ -175,6 +179,7 @@ def report(totals: dict[str, PlayerStats], with_anchors: bool = False) -> str:
 
 
 def main() -> None:
+    """Точка входа CLI для расчёта стилевых метрик ботов по файлу PGN."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("pgn", type=Path, help="PGN партий калибровки (calibrate_bots.py --pgn)")
     parser.add_argument("--from-ply", type=int, default=MIDDLEGAME_FROM_PLY, help="С какого полухода миттельшпиль")

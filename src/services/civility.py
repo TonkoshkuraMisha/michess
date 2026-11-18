@@ -10,6 +10,10 @@
 
 Ограничения: новичок (аккаунту меньше NEWCOMER_DAYS) и нарушитель (за последние VIOLATOR_DAYS модератор вынес по
 жалобе на него warn, chat_ban или hide) отправляют не больше QUOTAS[scope] в час.
+
+Откуда данные: словарь и таблицы замены знаков — файл civility_lexicon.txt рядом с модулем (читается один раз на
+процесс; формат описан в его начале); взыскания — таблица reports; счёт отправленного за час — direct_messages,
+posts и post_comments. Вызывают: src/services/direct_messages.py и src/services/feed.py.
 """
 
 import re
@@ -26,11 +30,16 @@ from src.models.social import DirectMessage, Post, PostComment
 from src.models.user import User
 
 LEXICON = Path(__file__).with_name("civility_lexicon.txt")
+# Аккаунт моложе стольких дней считается новичком — для него действуют квоты.
 NEWCOMER_DAYS = 3
+# Сколько дней после взыскания модератора игрок считается нарушителем (квоты действуют).
 VIOLATOR_DAYS = 30
+# Квоты новичка и нарушителя — отправок в час: личные сообщения, комментарии, записи ленты.
 QUOTAS = {"dm": 20, "comment": 10, "post": 3}
+# Решения модератора по жалобе (reports.action), после которых игрок считается нарушителем.
 PENALTIES = ("warn", "chat_ban", "hide")
 
+# Слово текста: буквы, цифры, подчёркивание и знаки @ и $ (ими заменяют буквы, таблица leet словаря).
 _TOKEN = re.compile(r"[\w@$]+")
 
 
@@ -61,6 +70,11 @@ def _source() -> tuple[dict[str, dict[int, str]], list[str]]:
 
 
 def _norm_token(token: str) -> str:
+    """
+    Слово в виде для сверки со словарём: нижний регистр, таблица fold (ё→е); в слове с кириллицей — цифры-буквы
+    (leet-cyr) и латинские двойники (lookalike), в остальных — цифры-буквы латиницы (leet); подчёркивания убираются,
+    повторы одного знака подряд схлопываются в один.
+    """
     tables = _source()[0]
     token = token.lower().translate(tables.get("fold", {}))
     if _is_cyrillic(token):
@@ -71,11 +85,16 @@ def _norm_token(token: str) -> str:
 
 
 def normalize(text: str) -> list[str]:
+    """Слова текста после нормализации (_norm_token), по порядку; знаки препинания и пробелы отбрасываются."""
     return [t for t in (_norm_token(raw) for raw in _TOKEN.findall(text or "")) if t]
 
 
 @cache
 def _lexicon() -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+    """
+    Словарь, разобранный по видам записей: начала слов (запись без пометки), слова целиком (=слово), корни в любом
+    месте слова (*корень) и фразы из нескольких слов. Записи нормализуются так же, как проверяемый текст.
+    """
     prefixes: list[str] = []
     exact: list[str] = []
     roots: list[str] = []
@@ -140,6 +159,10 @@ _SCOPES = {"dm": (DirectMessage.sender_id, DirectMessage.created_at), "post": (P
 
 
 async def check_quota(db: AsyncSession, user: User, scope: str) -> None:
+    """
+    Квота отправки для новичка и нарушителя: если за последний час в разделе scope ("dm", "post", "comment") уже
+    отправлено QUOTAS[scope], — отказ posting_limited. Остальных игроков квота не касается.
+    """
     if not await restricted(db, user):
         return
     author, created = _SCOPES[scope]
@@ -150,6 +173,9 @@ async def check_quota(db: AsyncSession, user: User, scope: str) -> None:
 
 
 async def hold(db: AsyncSession, author_id: int, subject: str, text: str) -> None:
-    """Заявка модератору на придержанный текст (коммит — у вызывающего)."""
+    """
+    Заявка модератору на придержанный текст (коммит — у вызывающего): запись reports вида "held" без подателя жалобы,
+    с указанием, где текст написан (subject), и его первыми 300 знаками.
+    """
     db.add(Report(kind="held", reporter_id=None, target_id=author_id, reason="auto", subject=subject,
                   message_text=(text or "")[:300] or None))

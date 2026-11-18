@@ -13,6 +13,16 @@
   «dm:id» / «post:id» / «comment:id», копия текста) в один шаг; придержанное фильтром — заявка kind="held".
   Решения по тексту: hide — убрать (публикацию скрыть, сообщение и комментарий удалить), release — выпустить
   придержанное; warn и chat_ban по тексту тоже убирают его. Все открытые заявки на тот же текст закрываются вместе.
+* accept — принять предложение по тексту интерфейса (заявка kind="translation", таск 17.7): решение только
+  записывается в заявку, сам текст в каталоге правит человек.
+
+Данные: все заявки — таблица reports (src/models/moderation.py), виды: player, message, cheat_review, appeal,
+translation, content, held. Решение пишется в саму заявку (status, action, moderator_id, resolved_at). Отдельной
+записи «предупреждение» нет: warn, chat_ban и hide в закрытой заявке за последние 30 дней делают игрока
+«нарушителем» с урезанными квотами общения (src/services/civility.py). Запрет чата — users.chat_banned_until, флаг
+нечестной игры — users.is_cheater, доверие — users.trust_factor. Какие решения предлагаются для какого вида заявки,
+определяет клиент (frontend/src/components/social/ModerationPage.tsx); сервер проверяет только, что решение есть в
+ACTIONS и что решает модератор (users.is_moderator). Маршруты — src/api/moderation.py.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -26,13 +36,13 @@ from src.models.social import DirectMessage, Post, PostComment
 from src.models.user import User
 from src.services import notifications
 
-REASONS = ("cheating", "abuse", "spam", "other")
+REASONS = ("cheating", "abuse", "spam", "other")  # причины жалобы, которые может выбрать игрок
 ACTIONS = ("dismiss", "warn", "chat_ban", "mark_cheater", "clear_cheater", "accept", "hide", "release")
-TEXT_KINDS = ("content", "held")
-SUBJECT_KINDS = ("dm", "post", "comment")
-LANGUAGES = ("en", "uk", "ru")
-CHAT_BAN_HOURS = 24
-RESTORED_TRUST = 100
+TEXT_KINDS = ("content", "held")  # виды заявок на конкретный текст: жалоба игрока и придержанное фильтром
+SUBJECT_KINDS = ("dm", "post", "comment")  # что может стоять в subject до двоеточия: вид текста
+LANGUAGES = ("en", "uk", "ru")  # языки, для которых принимаются предложения по переводу
+CHAT_BAN_HOURS = 24  # на сколько часов решение chat_ban отключает общение
+RESTORED_TRUST = 100  # доверие после снятия флага: не ниже стартового значения users.trust_factor
 
 
 def _now() -> datetime:
@@ -40,6 +50,10 @@ def _now() -> datetime:
 
 
 def chat_banned(user: User, now: datetime | None = None) -> bool:
+    """
+    Действует ли сейчас запрет общения (users.chat_banned_until; время без зоны считается UTC). Проверяют чат партии,
+    личные сообщения и лента.
+    """
     until = user.chat_banned_until
     if until is None:
         return False
@@ -51,7 +65,8 @@ async def report(db: AsyncSession, reporter: User, target: User, kind: str, reas
                  message_text: str | None = None, game_id: int | None = None) -> Report:
     """
     Жалоба на игрока или на сообщение чата. На себя жаловаться нельзя; от одного игрока на другого — одна открытая
-    жалоба.
+    жалоба (учитывается открытая заявка любого вида, включая жалобу на его текст). Комментарий и копия сообщения
+    обрезаются до 300 знаков.
     """
     if kind not in ("player", "message") or reason not in REASONS:
         raise DomainError("report_invalid")
@@ -71,7 +86,10 @@ async def report(db: AsyncSession, reporter: User, target: User, kind: str, reas
 
 
 async def flag_for_review(db: AsyncSession, user: User, game_id: int | None) -> None:
-    """Автоматика пометила игрока — заявка на проверку (если открытой ещё нет). Без commit."""
+    """
+    Автоматика (src/services/anticheat.py) пометила игрока — заявка на проверку без автора, с причиной auto (если
+    открытой ещё нет). Без commit: запись сохраняет вызывающий код вместе со штрафом доверия и флагом.
+    """
     exists = await db.scalar(select(Report.id).where(
         Report.target_id == user.id, Report.kind == "cheat_review", Report.status == "open"))
     if exists is None:
@@ -80,7 +98,11 @@ async def flag_for_review(db: AsyncSession, user: User, game_id: int | None) -> 
 
 async def suggest_translation(db: AsyncSession, user: User, language: str, key: str, current: str | None,
                              suggestion: str, context: str | None) -> Report:
-    """Предложение исправить текст интерфейса (таск 17.7): только в режиме «помощник перевода»."""
+    """
+    Предложение исправить текст интерфейса (таск 17.7): только в режиме «помощник перевода»
+    (users.translation_helper). Заявка kind="translation": subject — «язык:ключ каталога», message_text — текущий
+    текст, comment — предложение; автор и «цель» заявки — сам игрок. Одна открытая заявка от игрока на ключ.
+    """
     suggestion = " ".join(suggestion.split())[:300]
     if not user.translation_helper:
         raise DomainError("translation_helper_off")
@@ -116,7 +138,11 @@ async def appeal(db: AsyncSession, user: User, comment: str | None) -> Report:
 
 
 async def queue(db: AsyncSession) -> list[dict]:
-    """Открытые заявки, старые первыми; у каждой — имена и сколько всего жалоб на этого игрока."""
+    """
+    Открытые заявки, старые первыми; у каждой — имена и сколько всего жалоб на этого игрока: жалобы на игрока, на
+    сообщение и на текст за всё время, открытые и закрытые (заявки автоматики о нечестной игре, апелляции и
+    предложения перевода в это число не входят).
+    """
     open_reports = select(Report).where(Report.status == "open").order_by(Report.created_at, Report.id)
     rows = (await db.execute(open_reports)).scalars().all()
     names = {u.id: u for u in (await db.execute(
@@ -146,6 +172,11 @@ async def resolve(db: AsyncSession, moderator: User, report_id: int, action: str
     """
     Решение модератора по заявке (значения — ACTIONS): отклонить, предупредить, отключить чат, подтвердить или снять
     флаг нечестной игры, выпустить или скрыть придержанный текст. Автор заявки получает уведомление.
+
+    Вместе с заявкой тем же решением закрываются: по тексту — все открытые заявки на тот же текст; при
+    mark_cheater и clear_cheater — открытые проверки и апелляции этого игрока. Уведомление report_answer получает
+    только автор той заявки, по которой принято решение (у заявок автоматики автора нет). Решение по тексту,
+    которого нет в ``_apply_to_text`` (например, dismiss), сам текст не меняет.
     """
     if not moderator.is_moderator:
         raise DomainError("moderator_only")
@@ -182,6 +213,7 @@ async def resolve(db: AsyncSession, moderator: User, report_id: int, action: str
     return item
 
 def _parse_subject(subject: str) -> tuple[str, int]:
+    """Ссылка на текст «вид:id» (вид — из SUBJECT_KINDS) → (вид, id); другой формат — отказ report_invalid."""
     kind, _, raw = (subject or "").partition(":")
     if kind not in SUBJECT_KINDS or not raw.isdigit():
         raise DomainError("report_invalid")
@@ -210,6 +242,10 @@ def _author(item: DirectMessage | Post | PostComment) -> int:
 
 
 async def _can_see(db: AsyncSession, item: DirectMessage | Post | PostComment, user: User) -> bool:
+    """
+    Видит ли игрок текст, на который жалуется: личное сообщение — только его получатель; публикация и комментарий —
+    если не скрыты и не придержаны (у комментария — и его публикация). Жаловаться можно только на то, что видишь.
+    """
     if isinstance(item, DirectMessage):
         return item.recipient_id == user.id and not item.held
     if isinstance(item, Post):
@@ -219,7 +255,11 @@ async def _can_see(db: AsyncSession, item: DirectMessage | Post | PostComment, u
 
 
 async def report_text(db: AsyncSession, reporter: User, subject: str, reason: str) -> Report:
-    """Жалоба на сообщение, публикацию или комментарий в один шаг: текст копируется в заявку."""
+    """
+    Жалоба на сообщение, публикацию или комментарий в один шаг: текст (первые 300 знаков) копируется в заявку —
+    она остаётся понятной, даже если автор текст удалит. На свой текст жаловаться нельзя; от игрока на один текст —
+    одна открытая жалоба.
+    """
     if reason not in REASONS:
         raise DomainError("report_invalid")
     item = await load_text(db, subject)
@@ -243,6 +283,10 @@ async def report_text(db: AsyncSession, reporter: User, subject: str, reason: st
 
 
 async def _apply_to_text(db: AsyncSession, subject: str, action: str) -> None:
+    """
+    Применяет решение к самому тексту: release снимает придержание; hide, warn и chat_ban убирают текст —
+    публикация скрывается (hidden_at), личное сообщение и комментарий удаляются. Остальные решения текст не трогают.
+    """
     try:
         item = await load_text(db, subject)
     except DomainError:

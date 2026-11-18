@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
 async def main(username: str, revoke: bool) -> None:
+    """Выдаёт или отзывает роль модератора у указанного пользователя."""
     from sqlalchemy import func, select
 
     from src.db.session import AsyncSessionLocal

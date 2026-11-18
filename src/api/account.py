@@ -1,5 +1,13 @@
 # --- FILE: src/api/account.py ---
-"""Учётная запись (таски 17.5, 23.1): выгрузка своих данных и удаление аккаунта (src/services/account.py)."""
+"""
+Учётная запись (/account; таски 17.5, 23.1, 24.3): выгрузка своих данных и партий, удаление аккаунта
+(src/services/account.py), привязка e-mail и сброс пароля по ссылке из письма (src/services/email_links.py,
+отправка — src/services/mailer.py).
+
+Привязка и удаление требуют пароль; неудачные попытки считаются тем же счётчиком, что и неудачные входы. Письма
+ограничены по адресу получателя и по адресу отправителя запроса (RATE_LIMIT_EMAIL_*). Подтверждение адреса и сброс
+пароля идут без входа — по одноразовому токену из письма (таблица email_tokens).
+"""
 
 from typing import Literal
 
@@ -75,7 +83,7 @@ async def _limit_mail(request: Request, email: str) -> None:
 
 @router.get("/export")
 async def export_my_data(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
-    """Все данные игрока одним файлом JSON (GDPR, право на переносимость)."""
+    """Все данные игрока одним файлом JSON (GDPR, право на переносимость); только свои, нужен вход."""
     data = await service.export_data(db, user)
     return JSONResponse(data, headers={"Content-Disposition": f'attachment; filename="michess-{user.id}.json"'})
 
@@ -83,7 +91,11 @@ async def export_my_data(user: User = Depends(get_current_user), db: AsyncSessio
 @router.get("/games.pgn", response_class=PlainTextResponse)
 async def export_my_games_pgn(offset: int = Query(0, ge=0), user: User = Depends(get_current_user),
                               db: AsyncSession = Depends(get_db)):
-    """Все свои завершённые партии одним файлом PGN (таск 24.3) — открыть в любой шахматной программе."""
+    """
+    Свои завершённые партии одним файлом PGN (таск 24.3) — открыть в любой шахматной программе. За один запрос —
+    не больше account.GAMES_PGN_LIMIT партий, от старых к новым; общее число — в заголовке X-Total-Count, дальше —
+    параметр offset.
+    """
     text, total = await service.games_pgn(db, user, offset)
     return PlainTextResponse(text, media_type="application/x-chess-pgn", headers={
         "Content-Disposition": f'attachment; filename="michess-games-{user.id}.pgn"', "X-Total-Count": str(total),
@@ -96,7 +108,11 @@ async def delete_my_account(
         user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
 ):
-    """Удаление аккаунта с подтверждением паролем."""
+    """
+    Удаление своего аккаунта с подтверждением паролем. Строка в users не стирается, а обезличивается: имя
+    заменяется на deleted_<id>, личные данные и свои записи (прогресс, задачи, турниры, импорт) удаляются, все
+    токены отзываются; партии остаются у соперников. Пока идёт партия — отказ 409 account_in_game.
+    """
     await _check_password(user, payload.password)
     await service.delete_account(db, user)
 
@@ -124,14 +140,17 @@ async def remove_email(
 
 @router.post("/email/verify")
 async def verify_email(payload: TokenRequest, db: AsyncSession = Depends(get_db)):
-    """Ссылка из письма: адрес подтверждён и записан в профиль."""
+    """Ссылка из письма (без входа — по токену из неё): адрес подтверждён и записан в профиль (users.email)."""
     user = await email_links.confirm_verification(db, payload.token)
     return {"email": user.email}
 
 
 @router.post("/password-reset", status_code=status.HTTP_202_ACCEPTED)
 async def request_password_reset(payload: ResetRequest, request: Request, db: AsyncSession = Depends(get_db)):
-    """Письмо со ссылкой сброса. Ответ одинаковый, есть такой адрес или нет."""
+    """
+    Письмо со ссылкой сброса (без входа). Ответ одинаковый, есть такой адрес или нет, — чтобы по нему нельзя было
+    узнать, привязан ли адрес к чьему-то аккаунту.
+    """
     await _limit_mail(request, payload.email)
     await email_links.request_reset(db, payload.email, payload.language)
 

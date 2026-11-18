@@ -54,6 +54,7 @@ def quick_themes(row: dict) -> set[str]:
 
 
 def main() -> None:
+    """Добирает из полной базы lichess задачи для редких и детекторных тем."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("source", type=pathlib.Path)
     parser.add_argument("--seed", type=int, default=27)

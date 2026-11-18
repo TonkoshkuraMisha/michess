@@ -14,18 +14,23 @@
 Оценки — с точки зрения белых, мат приводится к ±CLAMP_CP. Ключевые моменты каждой стороны: лучший ход (точный ход с
 самым большим улучшением оценки в свою пользу за пару полуходов — так засчитывается и наказание ошибки соперника) и
 худший (самая большая потеря).
+
+Откуда данные: список ходов готового разбора (поле "moves" из games.analysis_json или разбора импортированной
+партии — у каждого хода оценка после него eval_cp, потеря cp_loss, цвет и номер полухода) и результат партии. Итог
+не хранится: считается при каждой выдаче разбора (src/api/analysis.py, src/api/game_import.py).
 """
 
 from collections.abc import Sequence
 
-LEAD_CP = 150
-WINNING_CP = 300
-EQUAL_CP = 100
-EQUAL_SHARE = 0.4
-DOMINATION_SHARE = 0.7
-BLUNDER_CP = 200
-CLAMP_CP = 1000
-OPENING_PLIES = 8
+# Все пороги — в сантипешках, оценка с точки зрения белых.
+LEAD_CP = 150           # перевес стороны: оценка не меньше этой в её пользу
+WINNING_CP = 300        # выигрышный перевес (для «упущенной победы»)
+EQUAL_CP = 100          # позиция равная: оценка по модулю меньше этой
+EQUAL_SHARE = 0.4       # «равная борьба»: равных позиций больше этой доли партии
+DOMINATION_SHARE = 0.7  # «доминирование»: победитель был лучше не меньше чем в этой доле позиций после дебюта
+BLUNDER_CP = 200        # потеря хода, с которой он считается решающей ошибкой
+CLAMP_CP = 1000         # оценки (в том числе мат) приводятся к ±этому значению
+OPENING_PLIES = 8       # столько первых полуходов не входит в долю «был лучше» для «доминирования»
 # Упущенный удар (таск B.5): соперник ошибся не меньше чем на MISSED_ERROR_CP, а ответ потерял не меньше
 # MISSED_REPLY_CP из этого — наказать было можно, но не наказали. В списке — не больше MAX_MISSED.
 MISSED_ERROR_CP = 150
@@ -43,6 +48,7 @@ def _winner(result: str | None) -> int:
 
 
 def _leader(eval_cp: int) -> int:
+    """У кого перевес при этой оценке: +1 — у белых, −1 — у чёрных, 0 — ни у кого (меньше LEAD_CP)."""
     if eval_cp >= LEAD_CP:
         return 1
     if eval_cp <= -LEAD_CP:
@@ -51,6 +57,7 @@ def _leader(eval_cp: int) -> int:
 
 
 def _lead_changes(evals: Sequence[int]) -> int:
+    """Сколько раз перевес перешёл от одной стороны к другой; равные позиции между ними переход не отменяют."""
     changes = 0
     last = 0
     for value in evals:
@@ -64,7 +71,11 @@ def _lead_changes(evals: Sequence[int]) -> int:
 
 
 def _turning_point(moves: Sequence[dict], evals: Sequence[int], winner: int) -> int | None:
-    """Грубая ошибка проигравшего, после которой перевес победителя больше не уходил."""
+    """
+    Грубая ошибка проигравшего, после которой перевес победителя больше не уходил: номер полухода или None. Условия:
+    потеря хода не меньше BLUNDER_CP, перед ним у победителя не было и половины LEAD_CP, а после него и до конца
+    партии перевес победителя не опускался ниже LEAD_CP.
+    """
     loser_color = "black" if winner == 1 else "white"
     previous = 0
     for index, move in enumerate(moves):
@@ -81,6 +92,11 @@ def _turning_point(moves: Sequence[dict], evals: Sequence[int], winner: int) -> 
 
 
 def _key_moments(moves: Sequence[dict], evals: Sequence[int], color: str) -> dict:
+    """
+    Лучший и худший ход стороны (номера полуходов или None). Лучший — ход с потерей не больше 10 и наибольшим
+    улучшением оценки за пару полуходов, если улучшение не меньше 50; худший — ход с наибольшей потерей, если она не
+    меньше 50.
+    """
     sign = 1 if color == "white" else -1
     best_ply: int | None = None
     best_gain = 0
@@ -117,7 +133,11 @@ def _missed_punishments(moves: Sequence[dict]) -> list[dict]:
 
 
 def summarize(moves: Sequence[dict], result: str | None) -> dict | None:
-    """Итог по ходам разбора (moves из analysis_json) и результату партии. Пустая партия — None."""
+    """
+    Итог по ходам разбора (moves из analysis_json) и результату партии. Пустая партия — None. Возвращает тип партии
+    (kind), полуход решающей ошибки, число переходов перевеса, долю равных позиций, ключевые моменты сторон и
+    упущенные удары. Партия без победителя (ничья, прервана) решающей ошибки и «доминирования» не имеет.
+    """
     if not moves:
         return None
     evals = [_clamp(int(move.get("eval_cp", 0))) for move in moves]

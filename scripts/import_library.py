@@ -34,6 +34,7 @@ def pgn_files(root: Path) -> list[tuple[str, Path]]:
 
 
 def dry_run(root: Path) -> None:
+    """Проверяет чтение и валидацию PGN-файлов папки без записи в БД."""
     total = library.ImportStats()
     for _, path in pgn_files(root):
         stats = library.ImportStats()
@@ -47,6 +48,7 @@ def dry_run(root: Path) -> None:
 
 
 async def run(root: Path, collection: str, visibility: str, owner: str | None, source: str) -> None:
+    """Импортирует PGN-файлы папки в коллекции библиотеки с дедупликацией."""
     from sqlalchemy import select
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
     from sqlalchemy.pool import NullPool
@@ -77,6 +79,7 @@ async def run(root: Path, collection: str, visibility: str, owner: str | None, s
 
 
 def main() -> None:
+    """Точка входа CLI для импорта партий в библиотеку."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("folder", type=Path)
     parser.add_argument("--collection", required=True, help="путь корневой коллекции, например «Партии/Капабланка»")
@@ -96,6 +99,7 @@ def main() -> None:
 
 
 def library_visibilities() -> tuple[str, ...]:
+    """Возвращает кортеж допустимых уровней видимости коллекций библиотеки."""
     from src.models.library import VISIBILITIES
 
     return VISIBILITIES

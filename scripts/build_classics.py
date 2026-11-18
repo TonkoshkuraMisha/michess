@@ -46,12 +46,15 @@ NOT_CLASSICAL = re.compile(
 
 
 def _slug(white: str, black: str, year: str) -> str:
+    """Формирует строковый идентификатор классической партии по игрокам и году."""
     def last(name: str) -> str:
+        """Извлекает фамилию шахматиста в нижнем регистре из заголовка PGN."""
         return re.sub(r"[^a-z0-9]+", "-", name.split(",")[0].strip().lower()).strip("-")
     return f"{last(white)}-{last(black)}-{year}"
 
 
 async def _candidates(count: int, per_player: int, exclude: set[str]) -> list[dict]:
+    """Отбирает результативные классические партии чемпионов из архива."""
     from sqlalchemy import func, select
 
     from scripts.build_guess_positions import _sessions
@@ -108,10 +111,12 @@ async def _candidates(count: int, per_player: int, exclude: set[str]) -> list[di
 
 
 def _cp(score: chess.engine.PovScore, color: chess.Color) -> int:
+    """Переводит оценку позиции движком в сантипешки с точки зрения ходящего."""
     return score.pov(color).score(mate_score=MATE) or 0
 
 
 def analyse(item: dict, depth: int) -> dict:
+    """Разбирает партию движком, формируя оценки, комментарии и остановки."""
     from src.services.analysis_service import classify_move_by_cp_loss
     from src.services.bots.base import resolve_stockfish_path
     from src.services.coach import comment_for_move
@@ -169,6 +174,7 @@ def analyse(item: dict, depth: int) -> dict:
 
 
 def _write(data: dict) -> Path:
+    """Записывает размеченные классические партии в JSON-каталог клиента."""
     path = OUT / f"{data['id']}.json"
     texts = {"intro": {lang: "" for lang in LANGUAGES}, "summary": {lang: "" for lang in LANGUAGES}}
     if path.exists():
@@ -179,6 +185,7 @@ def _write(data: dict) -> Path:
 
 
 def main() -> None:
+    """Точка входа скрипта отбора и разметки классических партий мастеров."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--count", type=int, default=30)
     parser.add_argument("--per-player", type=int, default=2)

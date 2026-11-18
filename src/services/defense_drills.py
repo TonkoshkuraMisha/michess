@@ -18,6 +18,11 @@
 при сборке выборки офлайн
 (scripts/dev/build_defense_drills.py → data/puzzles/defense_drills.csv.gz); сервер движок для упражнений не
 запускает. Прогресс — по темам find_the_threat / blunder_check, ступень упражнения — по рейтингу исходной задачи.
+
+Где хранится: упражнения — таблица defense_drills (загружается из файла выборки, import_drills); прогресс —
+theme_progress; упражнение, которое игрок решает сейчас, — Redis defense:session:{user_id} (живёт SESSION_TTL_S),
+недавно выданные — список defense:recent:{user_id}. Верные ходы, угроза и опровержения клиенту до ответа не
+отправляются (public_view).
 """
 
 import csv
@@ -38,10 +43,14 @@ from src.models.puzzle import DefenseDrill, ThemeProgress
 from src.models.user import User
 from src.services.puzzles import PuzzleError, reset_stage_counts, update_theme_progress
 
+# Файл выборки и его столбцы. Threat — ход-угроза соперника (UCI); Choices — три хода «Не зевни» через пробел;
+# Refutations — пары «ход:ответ соперника» для проигрывающих ходов; Good — верные ходы через пробел; Motifs — коды
+# мотивов через пробел. SourceId — идентификатор исходной задачи lichess.
 DRILLS_FILE = pathlib.Path(__file__).resolve().parents[2] / "data" / "puzzles" / "defense_drills.csv.gz"
 FIELDS = ("Kind", "SourceId", "FEN", "Threat", "Choices", "Refutations", "Good", "Rating", "Stage", "Motifs")
 SOURCE = "lichess"
 
+# Виды упражнений и тема каталога (src/services/themes.py), по которой идёт прогресс каждого вида.
 KINDS = ("threat", "blunder")
 KIND_THEMES = {"threat": "find_the_threat", "blunder": "blunder_check"}
 THEME_KINDS = {theme: kind for kind, theme in KIND_THEMES.items()}
@@ -57,9 +66,11 @@ LOSING = -200            # …и действительно проигрывае
 NATURAL_GAP = 300        # «естественный» ход: на мелком поиске не хуже лучшего больше чем на столько
 NATURAL_CANDIDATES = 6   # сколько самых естественных ходов проверять глубоко как ловушку
 VERIFY_MARGIN = 200      # перепроверка: верный ход лучше неверных (и «ничего не делать») хотя бы на столько
-MATE = 10_000
+MATE = 10_000            # оценка мата в сантипешках — ею скрипт сборки заменяет «мат в N» от движка
 
+# Сколько живёт в Redis запись о решаемом упражнении: через два часа без ответа упражнение нужно взять заново.
 SESSION_TTL_S = 2 * 60 * 60
+# Сколько последних выданных упражнений помнится, чтобы не повторять их, пока есть другие.
 RECENT_KEPT = 200
 
 # Лучшие ходы позиции: uci → (оценка с точки зрения ходящего, ответ соперника из главного варианта).
@@ -86,7 +97,12 @@ def defender_position(fen: str, moves: list[str]) -> chess.Board | None:
 
 
 def threat_drill(fen: str, moves: list[str], analyse: Analyse) -> dict | None:
-    """Упражнение «Что грозит соперник?» или None, если позиция не проходит критерии решаемости."""
+    """
+    Упражнение «Что грозит соперник?» или None, если позиция не проходит критерии решаемости: тактика задачи —
+    лучший ход соперника или почти (THREAT_BEST_MARGIN); лучшая защита держит позицию (DEFENSIBLE) и выигрывает у
+    «ничего не делать» не меньше THREAT_GAIN; хороших защит (в пределах GOOD_MARGIN от лучшей) — от одной до MAX_GOOD
+    и не больше трети всех легальных ходов. Возвращает позицию, ход-угрозу и список засчитываемых защит.
+    """
     defender = defender_position(fen, moves)
     if defender is None:
         return None
@@ -179,6 +195,7 @@ def verify_drill(row: dict, score_after: Callable[[str, str], int], *, margin: i
 # --- выборка и загрузка в базу -------------------------------------------------------------------------------
 
 def read_drills(path: pathlib.Path = DRILLS_FILE) -> Iterator[dict]:
+    """Строки файла выборки как словари со столбцами FIELDS (все значения — строки)."""
     with gzip.open(path, "rt", encoding="utf-8", newline="") as source:
         yield from csv.DictReader(source)
 
@@ -221,6 +238,7 @@ def validate_drill_row(row: dict) -> bool:
 
 
 def _drill_fields(row: dict) -> dict:
+    """Строка выборки → значения столбцов таблицы defense_drills (кроме вида и идентификатора исходной задачи)."""
     return {
         "fen": row["FEN"], "threat": row["Threat"] or None, "choices": row["Choices"],
         "refutations": row["Refutations"], "good_moves": row["Good"], "rating": int(row["Rating"]),
@@ -233,6 +251,8 @@ async def import_drills(db: AsyncSession, rows: Iterable[dict], *, prune: bool =
     Синхронизирует упражнения с выборкой: новые добавляются, изменившиеся (пересобранная выборка) обновляются, а те,
     которых в выборке больше нет (отбракованы перепроверкой), удаляются — иначе забракованное упражнение осталось бы
     на сервере навсегда. Некорректные строки пропускаются. ``prune=False`` — только добавить и обновить.
+    Упражнение узнаётся по паре (вид, идентификатор исходной задачи). Возвращает счётчики added / updated / removed /
+    invalid; после записи сбрасывается кэш числа задач по ступеням (puzzles.reset_stage_counts).
     """
     existing = {(d.kind, d.source_id): d for d in (await db.execute(select(DefenseDrill))).scalars()}
     seen: set[tuple[str, str]] = set()
@@ -275,6 +295,7 @@ async def stage_counts(db: AsyncSession) -> dict[tuple[str, int], int]:
 
 @dataclass
 class DrillSession:
+    """Упражнение, которое игрок решает сейчас (одно на игрока; хранится в Redis, ключ defense:session:{user_id})."""
     drill_id: int
     phase: str             # threat — показать угрозу; move — защититься (или выбрать ход в «Не зевни»)
     clean: bool = True     # без ошибки на первом этапе
@@ -316,12 +337,16 @@ def public_view(drill: DefenseDrill) -> dict:
 
 
 async def _current_stage(db: AsyncSession, user_id: int, kind: str) -> int:
+    """Ступень игрока в теме этого вида упражнений (theme_progress), не выше 4; без прогресса — первая."""
     progress = await db.get(ThemeProgress, (user_id, KIND_THEMES[kind]))
     return min(progress.stage, 4) if progress else 1
 
 
 async def pick(db: AsyncSession, user: User, kind: str) -> DefenseDrill:
-    """Упражнение вида kind на ступени игрока, без недавних; не хватает — с другой ступени или повтор."""
+    """
+    Упражнение вида kind на ступени игрока, без недавних; не хватает — повтор недавнего со своей ступени, затем любое
+    упражнение этого вида. Выбранное становится активным (прежнее активное забывается) и попадает в список недавних.
+    """
     if kind not in KINDS:
         raise PuzzleError("unknown_drill_kind", 400, kind=kind)
     stage = await _current_stage(db, user.id, kind)
@@ -345,6 +370,11 @@ async def pick(db: AsyncSession, user: User, kind: str) -> DefenseDrill:
 
 
 async def _active(db: AsyncSession, user: User, drill_id: int, phase: str) -> tuple[DrillSession, DefenseDrill]:
+    """
+    Активное упражнение игрока и его запись, если это именно drill_id и сейчас этап phase. Другое упражнение или
+    истёкшая запись — drill_not_active, другой этап — drill_wrong_step: ответить можно только на выданное упражнение
+    и только по порядку этапов.
+    """
     session = await _load_session(user.id)
     if session is None or session.drill_id != drill_id:
         raise PuzzleError("drill_not_active", 409, drill_id=drill_id)
@@ -375,7 +405,10 @@ async def show_threat(db: AsyncSession, user: User, drill_id: int, square: str) 
 
 
 async def answer(db: AsyncSession, user: User, drill_id: int, uci: str) -> dict:
-    """Ход защиты (или выбор в «Не зевни»): итог, верные ходы, опровержения и прогресс темы."""
+    """
+    Ход защиты (или выбор в «Не зевни»): итог, верные ходы, опровержения и прогресс темы. В прогресс «чисто» идёт
+    только верный ход при верно показанной угрозе; после ответа упражнение перестаёт быть активным.
+    """
     session, drill = await _active(db, user, drill_id, "move")
     board = chess.Board(drill.fen)
     try:

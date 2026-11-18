@@ -51,6 +51,11 @@ _DUMMY_PASSWORD_HASH = get_password_hash("timing-equalizer-not-a-real-password")
 
 
 def _is_reserved(username: str) -> bool:
+    """
+    Имя занять нельзя: оно совпадает (без учёта регистра) с маршрутом или служебным словом, с id бота или архетипа
+    либо с именем чемпиона из архива. Той же проверкой пользуются имена соперников мастерской
+    (src/api/personalities.py).
+    """
     from src.api.bots import reserved_bot_usernames
     from src.db.seed import get_champion_meta
 
@@ -65,7 +70,10 @@ def _is_reserved(username: str) -> bool:
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register_user(user_in: UserCreate, request: Request, db: AsyncSession = Depends(get_db)):
     """
-    Register a new user.
+    Регистрация (без входа): создаёт запись в users и возвращает данные нового игрока; токен выдаёт отдельный
+    запрос /auth/login. Порядок проверок: лимит регистраций с адреса → код-приглашение (при закрытой
+    регистрации) → зарезервированное имя → занятость имени без учёта регистра. Отказы — коды
+    too_many_registrations (429), registration_invite_* (403), username_reserved и username_taken (400).
     """
     await enforce_rate_limit(
         "register", f"ip:{client_ip(request)}",
@@ -126,6 +134,7 @@ async def register_user(user_in: UserCreate, request: Request, db: AsyncSession 
 
 
 async def _find_login_user(db: AsyncSession, username: str) -> User | None:
+    """Запись для входа: сначала точное имя, затем без учёта регистра (username_key)."""
     result = await db.execute(select(User).where(User.username == username))
     user = result.scalars().first()
     if user is None:
@@ -143,7 +152,9 @@ async def login(
         db: AsyncSession = Depends(get_db)
 ):
     """
-    OAuth2 compatible token login, get an access token for future requests.
+    Вход по имени и паролю (форма OAuth2: поля username и password). Возвращает короткий access-токен и ставит
+    refresh-cookie долгого входа (src/services/auth_sessions.py). Неверное имя или пароль — один и тот же ответ
+    401 login_failed.
 
     Подбор пароля ограничен дважды: все попытки с одного IP (перебор по многим аккаунтам)
     и неудачные попытки на один аккаунт (перебор одного пароля с многих адресов).
@@ -208,7 +219,9 @@ async def logout(request: Request) -> Response:
 async def issue_ws_ticket(current_user: User = Depends(get_current_user)):
     """
     Одноразовый тикет для подключения WebSocket (?ticket=...), действует WS_TICKET_TTL_S секунд.
-    JWT в адресе WebSocket попадал бы в логи сервера и прокси.
+    JWT в адресе WebSocket попадал бы в логи сервера и прокси. Только для вошедших; не больше
+    RATE_LIMIT_WS_TICKETS тикетов в минуту на игрока. Тикет хранится в Redis (ws_ticket:<тикет>) и забирается
+    при подключении (src/api/deps.get_current_user_ws).
     """
     await enforce_rate_limit(
         "ws_ticket", f"user:{current_user.id}", settings.RATE_LIMIT_WS_TICKETS, 60,
@@ -239,6 +252,7 @@ async def logout_everywhere(current_user: User = Depends(get_current_user), db: 
 
 
 class PasswordChange(BaseModel):
+    """Смена пароля: текущий пароль для подтверждения и новый (не короче 8 знаков)."""
     current_password: str = Field(..., max_length=128)
     new_password: str = Field(..., min_length=8, max_length=128)
 
@@ -253,6 +267,8 @@ async def change_password(
     """
     Смена пароля. Все ранее выданные токены отзываются (на случай, если пароль меняют из-за
     утечки), а текущему клиенту возвращается новый токен, чтобы он остался в системе.
+    Неверный текущий пароль — 400 wrong_current_password; такие попытки считаются тем же счётчиком, что и
+    неудачные входы на аккаунт.
     """
     account = f"account:{current_user.username_key or username_key(current_user.username)}"
     await ensure_below_limit(

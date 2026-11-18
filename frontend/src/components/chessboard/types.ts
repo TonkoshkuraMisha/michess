@@ -1,6 +1,9 @@
 // --- FILE: frontend/src/components/chessboard/types.ts ---
-// Типы лобби, Live-партий и чата (вынесено из Chessboard.tsx).
+// Типы лобби, Live-партий и чата (вынесено из Chessboard.tsx). Откуда приходят данные: списки лобби и идущих
+// партий — опрос по HTTP раз в 1,5 с (GET /profile/matchmaking/queue и /profile/games/live, хук useGameSocket),
+// сообщения чата — событие WebSocket chat_message.
 
+/** Идущая партия между людьми в списке «Live» (строка ответа GET /profile/games/live). */
 export interface LiveGameItem {
     game_id: number;
     white_username: string;
@@ -14,6 +17,7 @@ export interface LiveGameItem {
     is_rated?: boolean;
 }
 
+/** Сообщение чата партии, как оно хранится на клиенте (собирается из события chat_message). */
 export interface ChatMessageItem {
     sender: string;
     /** Текст, набранный игроком; у быстрой фразы пуст — её текст берётся из каталога по коду. */
@@ -27,10 +31,12 @@ export const QUICK_CHAT_PRESETS = ['good_luck', 'thanks', 'nice_move', 'time_tro
 
 export type ChatPresetId = typeof QUICK_CHAT_PRESETS[number];
 
+/** Проверка кода быстрой фразы из события сервера: незнакомый код не показывается как фраза. */
 export function isChatPreset(value: unknown): value is ChatPresetId {
     return typeof value === 'string' && (QUICK_CHAT_PRESETS as readonly string[]).includes(value);
 }
 
+/** Ход пешки на последнюю горизонталь, который ждёт выбора фигуры; isPremove — превращение задано предходом. */
 export interface PendingPromotion {
     from: string;
     to: string;
@@ -38,6 +44,7 @@ export interface PendingPromotion {
     isPremove?: boolean;
 }
 
+/** Открытый вызов в лобби (строка ответа GET /profile/matchmaking/queue). */
 export interface QueuePlayer {
     user_id: number;
     username: string;
@@ -50,7 +57,8 @@ export interface QueuePlayer {
 
 /**
  * Коды ошибок сервера, не связанные с матчмейкингом: они не должны сбрасывать поиск соперника
- * (в отличие от «уже в партии», «вызов неактуален» и т. п.).
+ * (в отличие от «уже в партии», «вызов неактуален» и т. п.). Коды — из реестра src/core/errors.py, приходят
+ * в событии WebSocket error; разбирает их handleServerError в useGameSocket.
  */
 export const GAME_ACTION_ERROR_CODES: ReadonlySet<string> = new Set([
     'rate_limited',

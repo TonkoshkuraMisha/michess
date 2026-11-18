@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field
 
 
 class PositionAnalysisRequest(BaseModel):
+    """Запрос оценки позиции (POST /analysis/position): позиция задаётся ходами от начальной расстановки или от FEN."""
     moves: list[str] = Field(default_factory=list, max_length=1000, description="Список ходов в формате SAN или UCI")
     start_fen: str | None = Field(
         default=None, max_length=120,
@@ -34,11 +35,13 @@ class CoachArrow(BaseModel):
 
 
 class CoachHighlight(BaseModel):
+    """Подсветка поля на доске; kind — вид подсветки, по которому клиент выбирает цвет."""
     square: str
     kind: str
 
 
 class CoachComment(BaseModel):
+    """Комментарий наставника к ходу или позиции: предложения (ключи шаблонов), стрелки и подсветка полей."""
     comment: list[CoachSentence]
     arrows: list[CoachArrow] = Field(default_factory=list)
     highlights: list[CoachHighlight] = Field(default_factory=list)
@@ -47,7 +50,10 @@ class CoachComment(BaseModel):
 class MoveEvaluationItem(BaseModel):
     """
     Один ход в разборе партии: номер и сторона, запись хода, оценка позиции после него, лучший ход движка, потеря в
-    сантипешках, класс хода и комментарий наставника.
+    сантипешках, класс хода и комментарий наставника. Класс и знак считает
+    analysis_service.classify_move_by_cp_loss: Best «!» (потеря до 10 сантипешек или первая линия движка), Good
+    (до 45), Inaccuracy «?!» (до 95), Mistake «?» (до 199), Blunder «??» (от 200). eval_display — оценка с точки
+    зрения белых в виде строки («+1.4», «M3»).
     """
     ply: int
     move_number: int
@@ -65,6 +71,10 @@ class MoveEvaluationItem(BaseModel):
 
 
 class SideSummaryStats(BaseModel):
+    """
+    Итог разбора для одной стороны: точность в процентах (среднее по ходам, формула —
+    analysis_service.calculate_move_accuracy), число ходов каждого класса и средняя потеря в сантипешках.
+    """
     accuracy: float
     best: int
     good: int
@@ -75,10 +85,12 @@ class SideSummaryStats(BaseModel):
 
 
 class AdviceRequest(BaseModel):
+    """Запрос совета наставника (POST /analysis/advice)."""
     fen: str = Field(..., max_length=100, description="Позиция, по которой нужен совет (ходит сторона игрока)")
 
 
 class AdviceResponse(CoachComment):
+    """Совет наставника: комментарий со стрелками, лучший ход и оценка позиции."""
     fen: str
     best_move_uci: str | None = None
     eval_cp: int | None = Field(default=None, description="Оценка с точки зрения белых; None — движок недоступен")
@@ -90,6 +102,7 @@ class HintRequest(BaseModel):
 
 
 class HintResponse(BaseModel):
+    """Подсказка одной ступени (POST /analysis/hint); best_move_uci заполняется только на последней ступени."""
     fen: str
     step: int
     final: bool = Field(description="Последняя ступень: ход показан, дальше подсказывать нечего")
@@ -100,12 +113,14 @@ class HintResponse(BaseModel):
 
 
 class DisputeRequest(BaseModel):
+    """«Не согласен» с предупреждением наставника (POST /analysis/dispute): позиция, ход и показанная потеря."""
     fen: str = Field(..., max_length=100)
     move: str = Field(..., min_length=4, max_length=5)
     cp_loss: int | None = Field(default=None, ge=0, le=20000)
 
 
 class MoveCheckRequest(BaseModel):
+    """Запрос проверки хода в игре с наставником (POST /analysis/check-move)."""
     fen: str = Field(..., max_length=100, description="Позиция до хода игрока")
     move: str = Field(..., min_length=4, max_length=5, description="Ход игрока в UCI")
 
@@ -125,6 +140,7 @@ class MoveCheckResponse(BaseModel):
 
 
 class KeyMoments(BaseModel):
+    """Ключевые моменты стороны в итоге партии: полуходы её лучшего и худшего хода (None — выделить нечего)."""
     best_ply: int | None = None
     worst_ply: int | None = None
 
@@ -140,6 +156,11 @@ class GameSummary(BaseModel):
 
 
 class FullGameAnalysisResponse(BaseModel):
+    """
+    Полный разбор партии. Хранится в games.analysis_json (для импортированных — imported_games.analysis_json);
+    format_version — analysis_service.ANALYSIS_FORMAT_VERSION: разбор другой версии считается устаревшим и
+    пересчитывается. summary в базе не хранится — считается при каждом ответе (src/services/game_summary.py).
+    """
     game_id: int
     format_version: int
     engine: str

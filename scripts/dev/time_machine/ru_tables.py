@@ -14,6 +14,7 @@ RU_CATALOG = pathlib.Path("frontend/src/i18n/messages/ru.ts")
 
 
 def strip_style(cell: str) -> str:
+    """Удаляет стилевые атрибуты и служебную разметку из текста ячейки."""
     cell = cell.strip()
     # «style="..."|значение» → «значение»; «|» внутри [[ссылки]] не трогаем
     match = re.match(r'^(?:style|align|class|bgcolor|colspan|rowspan|width)\s*=\s*"[^"]*"\s*\|(.*)$', cell, flags=re.S)
@@ -21,6 +22,7 @@ def strip_style(cell: str) -> str:
 
 
 def number(cell: str) -> float | None:
+    """Переводит строковую запись очков с дробями в число float."""
     cell = re.sub(r"'''|<[^>]+>|&nbsp;|\s", "", cell).replace(",", ".")
     cell = cell.replace("½", ".5")
     if cell.startswith(".5"):
@@ -29,6 +31,7 @@ def number(cell: str) -> float | None:
 
 
 def points(cell: str) -> float | None:
+    """Извлекает итоговые очки участника из строки российской таблицы."""
     cell = re.sub(r"'''|<[^>]+>|&nbsp;|\s", "", cell)
     # пустая ячейка, шаблон или картинка на диагонали («сам с собой»), прочерк
     if cell == "" or re.fullmatch(r"(\{\{[^}]*\}\}|\[\[Файл:[^\]]*\]\]|[xXхХ*●■\-–—])+", cell):
@@ -39,6 +42,7 @@ def points(cell: str) -> float | None:
 
 
 def split_cells(part: str) -> list[str]:
+    """Разбивает строку HTML-таблицы турнира на отдельные ячейки."""
     part = part.strip("\n")
     if not part:
         return []
@@ -54,6 +58,7 @@ def split_cells(part: str) -> list[str]:
 
 
 def rows(path: str, index: int = 0) -> list[tuple[str, str, float | None, str, float | None]]:
+    """Извлекает строки участников с очками из таблицы русской Википедии."""
     text = pathlib.Path(path).read_text(encoding="utf-8")
     table = re.findall(r"\{\|.*?\n\s*\|\}", text, flags=re.S)[index]
     lines = [line.strip() for line in table.splitlines()]

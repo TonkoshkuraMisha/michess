@@ -7,6 +7,6 @@ from sqlalchemy.orm import DeclarativeBase
 
 class Base(DeclarativeBase):
     """
-    Base class for all SQLAlchemy declarative models.
+    Общий предок всех моделей: в его metadata собираются таблицы, по которым Alembic строит миграции.
     """
     pass

@@ -1,6 +1,9 @@
 // --- FILE: frontend/src/components/chessboard/LadderPanel.tsx ---
 // Клубная лестница: ступени от слабого соперника к сильному, рейтинг лестницы игрока и кнопка партии со следующим
-// соперником (GET и POST /bots/ladder). Честность партии проверяет сервер (src/services/ladder.py).
+// соперником. Состояние — GET /bots/ladder, начало партии — POST /bots/ladder/start (сервер выбирает соперника и
+// цвет при «случайном»). Сама партия идёт как обычная партия с ботом (useBotGame), итог приходит в ответе на её
+// сохранение (/bots/save-game, поле ladder). Честность партии проверяет сервер (src/services/ladder.py): подсказка,
+// анализ, возврат хода или подмена соперника — партия не засчитывается.
 
 import {useCallback, useEffect, useState} from 'react';
 import {CheckCircle2, Lock, Swords} from 'lucide-react';
@@ -14,6 +17,7 @@ import type {UiMessage} from '../../i18n';
 import {ladderOpponentName} from '../../config/players';
 import {getToken} from '../../services/authToken';
 
+/** Ступень лестницы из ответа GET /bots/ladder. */
 interface Rung {
     key: string;
     kind: 'historical' | 'archetype';
@@ -24,6 +28,7 @@ interface Rung {
     status: 'beaten' | 'current' | 'locked';
 }
 
+/** Ответ GET /bots/ladder: рейтинг лестницы, номер текущей ступени (с нуля), все ступени. */
 interface LadderState {
     rating: number;
     games: number;
@@ -33,6 +38,7 @@ interface LadderState {
     active_opponent: string | null;
 }
 
+/** Соперник ступени: исторический бот (bot_id) или архетип мастерской (config — его ползунки). */
 export interface LadderOpponent {
     key: string;
     kind: 'historical' | 'archetype';
@@ -42,15 +48,19 @@ export interface LadderOpponent {
     config: PersonalityConfig | null;
 }
 
+/** Ответ POST /bots/ladder/start: с кем и каким цветом играть. */
 export interface LadderStart {
     opponent: LadderOpponent;
     color: 'white' | 'black';
     step: number;
+    /** Итог прежней партии лестницы, начатой и брошенной: сервер засчитал её поражением. */
     forfeited: LadderOutcome | null;
 }
 
 export interface LadderPanelProps {
+    /** Уже идёт партия (с человеком или ботом) — новую начать нельзя. */
     playDisabled: boolean;
+    /** Сервер открыл партию: вызывающий запускает её на доске с присланным соперником и цветом. */
     onStart: (start: LadderStart) => void;
     /** Меняется после каждой сохранённой партии лестницы — панель перечитывает прогресс. */
     lastOutcome: LadderOutcome | null;
@@ -80,6 +90,7 @@ export function LadderPanel({playDisabled, onStart, lastOutcome}: LadderPanelPro
         }
     }, [token]);
 
+    // Прогресс читается при открытии вкладки и заново — после каждой сохранённой партии лестницы (lastOutcome).
     useEffect(() => {
         load();
     }, [load, lastOutcome]);

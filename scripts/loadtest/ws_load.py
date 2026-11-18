@@ -50,6 +50,7 @@ class Stats:
 
 class Player:
     def __init__(self, info: dict, base_url: str, ws_url: str, stats: Stats):
+        """Инициализирует состояние виртуального игрока нагрузочного теста."""
         self.info = info
         self.base_url = base_url
         self.ws_url = ws_url
@@ -59,6 +60,7 @@ class Player:
         self._reader: asyncio.Task | None = None
 
     async def connect(self, http: httpx.AsyncClient) -> None:
+        """Запрашивает одноразовый тикет и открывает WebSocket-соединение игрока."""
         res = await http.post(
             f"{self.base_url}/api/v1/auth/ws-ticket", headers={"Authorization": f"Bearer {self.info['token']}"},
         )
@@ -71,6 +73,7 @@ class Player:
         self._reader = asyncio.create_task(self._read())
 
     async def _read(self) -> None:
+        """Читает входящие события WebSocket в локальную очередь игрока."""
         assert self.ws is not None
         try:
             async for raw in self.ws:
@@ -83,10 +86,12 @@ class Player:
                 self.stats.errors[f"closed: {exc.rcvd.code if exc.rcvd else 'no close frame'}"] += 1
 
     async def send(self, payload: dict) -> None:
+        """Отправляет команду игрока в открытое WebSocket-соединение."""
         assert self.ws is not None
         await self.ws.send(json.dumps(payload))
 
     async def wait_for(self, predicate, within_s: float) -> dict:
+        """Ждёт в очереди сообщение, подходящее под условие, с ограничением времени."""
         async with asyncio.timeout(within_s):
             while True:
                 event = await self.inbox.get()
@@ -94,6 +99,7 @@ class Player:
                     return event
 
     async def close(self) -> None:
+        """Закрывает WebSocket-соединение и останавливает фоновое чтение."""
         if self.ws is not None:
             await self.ws.close()
         if self._reader is not None:
@@ -104,6 +110,7 @@ async def play_pair(
         index: int, white_info: dict, black_info: dict, args: argparse.Namespace, stats: Stats,
         http: httpx.AsyncClient, connect_gate: asyncio.Semaphore,
 ) -> None:
+    """Разыгрывает одну полную PvP-партию между двумя виртуальными игроками."""
     rng = random.Random(args.seed + index)
     creator = Player(white_info, args.base_url, args.ws_url, stats)
     acceptor = Player(black_info, args.base_url, args.ws_url, stats)
@@ -172,6 +179,7 @@ async def play_pair(
 
 
 def percentile(values: list[float], q: float) -> float:
+    """Вычисляет заданный перцентиль по массиву измеренных задержек."""
     if not values:
         return 0.0
     ordered = sorted(values)
@@ -179,6 +187,7 @@ def percentile(values: list[float], q: float) -> float:
 
 
 async def run(args: argparse.Namespace, players: list[dict]) -> int:
+    """Проводит серию параллельных партий и печатает отчёт по задержкам."""
     if len(players) < 2 * args.games:
         print(f"need {2 * args.games} players in {args.tokens}, got {len(players)}", file=sys.stderr)
         return 2
@@ -228,6 +237,7 @@ async def run(args: argparse.Namespace, players: list[dict]) -> int:
 
 
 def main() -> None:
+    """Разбирает параметры командной строки и запускает нагрузочный тест."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--base-url", default="http://localhost:8080")
     parser.add_argument("--ws-url", help="по умолчанию — base-url со схемой ws/wss")

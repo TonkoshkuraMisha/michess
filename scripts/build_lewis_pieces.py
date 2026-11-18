@@ -93,6 +93,7 @@ TEMPLATE = """<svg xmlns="http://www.w3.org/2000/svg" width="45" height="45" vie
 
 
 def main() -> None:
+    """Генерирует SVG-файлы фигур собственного набора «Льюис» для обоих цветов."""
     OUT.mkdir(parents=True, exist_ok=True)
     for color, palette in COLORS.items():
         for piece, body in PIECES.items():

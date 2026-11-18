@@ -22,16 +22,23 @@ from src.models.tournament import Tournament, TournamentPlayer
 from src.models.trainer import TrainerResult
 from src.models.user import RatingCategory, User
 
+# Категории рейтинга партий с людьми; звание и достижения rating_* берут лучший рейтинг из четырёх.
 CATEGORIES: tuple[RatingCategory, ...] = ("bullet", "blitz", "rapid", "classical")
+# Сколько партий (сумма счётчиков *_games_played по четырём категориям) нужно сыграть, чтобы получить звание.
 TITLE_MIN_GAMES = 10
+# Звания клуба: (нижняя граница лучшего рейтинга, код звания), от старшего к младшему — берётся первое подходящее.
 TITLES = ((2000, "club_master"), (1700, "candidate"), (1400, "first_class"), (1000, "amateur"), (0, "beginner"))
+# Число разделов азбуки (записи lesson_progress с кодом basics-<раздел>); все пройдены — достижение basics_done.
 BASICS_SECTIONS = 8
-# Обход конём: за открытый — до 100 очков, за замкнутый — больше (frontend/src/trainers/boardPuzzles.ts).
+# Обход конём: за открытый — до 100 очков (OPEN_TOUR_SCORE минус подсказки), за замкнутый — от 110 (CLOSED_TOUR_SCORE
+# = 200 минус не больше 90 за подсказки); константы — frontend/src/trainers/boardPuzzles.ts. Очки считает клиент,
+# сервер хранит присланный результат (trainer_results).
 CLOSED_TOUR_MIN = 100
 
 
 @dataclass(frozen=True)
 class Rule:
+    """Достижение: код (ключ текста achievements.<код> на клиенте), имя счётчика из _metrics и порог открытия."""
     code: str
     metric: str
     target: int
@@ -61,7 +68,14 @@ RULES = (
 
 
 async def _metrics(db: AsyncSession, user: User) -> dict[str, int]:
-    finished = (Game.status == GameStatus.COMPLETED) & Game.is_simulation.is_(False)
+    """
+    Счётчики игрока, с которыми сравниваются пороги RULES. Источники: games (законченные партии без симуляций
+    турниров; human_wins — победы, где оба игрока не боты), puzzle_attempts (решённые), lesson_progress (пройденные
+    записи, делятся по началу кода: basics-, endgame-, остальное — уроки), tournament_players (место в законченном
+    турнире, из которого игрок не вышел; приглашение — турнир карьеры со ступенью invitational*), arena_players
+    (сумма партий в аренах), team_members, trainer_results (обход конём) и рейтинги из users.
+    """
+    finished =(Game.status == GameStatus.COMPLETED) & Game.is_simulation.is_(False)
     mine = (Game.white_player_id == user.id) | (Game.black_player_id == user.id)
     games = await db.scalar(select(func.count()).select_from(Game).where(finished, mine)) or 0
     wins = await db.scalar(select(func.count()).select_from(Game).where(finished, Game.winner_id == user.id)) or 0
@@ -71,7 +85,8 @@ async def _metrics(db: AsyncSession, user: User) -> dict[str, int]:
     puzzles = await db.scalar(select(func.count()).select_from(PuzzleAttempt).where(
         PuzzleAttempt.user_id == user.id, PuzzleAttempt.solved.is_(True))) or 0
     completed = (LessonProgress.user_id == user.id) & LessonProgress.completed_at.is_not(None)
-    # Уроки — без упражнений азбуки и эндшпиля (у них свои достижения).
+    # Уроки — без упражнений азбуки и эндшпиля (у них свои достижения). Отбор — по началу кода записи: всё, что не
+    # basics-* и не endgame-*, считается уроком.
     lessons = await db.scalar(select(func.count()).select_from(LessonProgress).where(
         completed, LessonProgress.lesson_id.not_like("basics-%"), LessonProgress.lesson_id.not_like("endgame-%"))) or 0
     basics = await db.scalar(select(func.count()).select_from(LessonProgress).where(
@@ -86,7 +101,7 @@ async def _metrics(db: AsyncSession, user: User) -> dict[str, int]:
     arena_games = await db.scalar(
         select(func.coalesce(func.sum(ArenaPlayer.games), 0)).where(ArenaPlayer.user_id == user.id)) or 0
     team = await db.scalar(select(func.count()).select_from(TeamMember).where(TeamMember.user_id == user.id)) or 0
-    # Замкнутый обход конём 8×8 (таск 19.4): тренажёр пишет за замкнутый обход больше 100 очков.
+    # Замкнутый обход конём 8×8 (таск 19.4, уровень 3 тренажёра): за замкнутый обход записано больше 100 очков.
     closed_tours = await db.scalar(select(func.count()).select_from(TrainerResult).where(
         TrainerResult.user_id == user.id, TrainerResult.trainer == "knight_tour", TrainerResult.level == 3,
         TrainerResult.score > CLOSED_TOUR_MIN)) or 0
@@ -107,6 +122,10 @@ def _best_rating(user: User) -> int:
 
 
 def title(user: User) -> str:
+    """
+    Код звания клуба: newcomer, пока в четырёх категориях вместе сыграно меньше TITLE_MIN_GAMES партий; дальше — по
+    лучшему из четырёх рейтингов (таблица TITLES).
+    """
     rated = 0
     for c in CATEGORIES:
         rated += int(user.games_played_for(c) or 0)
@@ -121,7 +140,10 @@ def _earned_at(item: UserAchievement | None) -> str | None:
 
 
 async def evaluate(db: AsyncSession, user: User) -> dict:
-    """Все достижения с прогрессом; новые открытые записываются (commit)."""
+    """
+    Звание и все достижения с прогрессом (не больше порога) и датой открытия. Достижения, условие которых выполнено
+    впервые, записываются в user_achievements (commit) и в этом ответе помечаются "new".
+    """
     metrics = await _metrics(db, user)
     earned = {a.code: a for a in (await db.execute(
         select(UserAchievement).where(UserAchievement.user_id == user.id))).scalars()}

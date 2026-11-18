@@ -2,7 +2,10 @@
 // Звуки интерфейса. Все звуки синтезируются в браузере (Web Audio) — готовых записей в проекте нет; наборы звуков
 // (SOUND_SETS) — это профили синтеза. Какой звук у хода, определяется по его записи (resolveMoveSound); звук шаха —
 // только в учебных разделах (isLearningPath), в партиях — обычный звук хода.
+// Настройки хранятся только в браузере (localStorage): michess_sound_muted — звук выключен, michess_sound_set —
+// выбранный набор. На сервер они не отправляются.
 
+/** События интерфейса, у которых есть звук: ходы, сигналы партии (начало, итог, предложение, чат) и предупреждения. */
 export type SoundEventType =
     | 'move'
     | 'capture'
@@ -28,12 +31,17 @@ const SOUND_SET_STORAGE_KEY = 'michess_sound_set';
  * Предупреждающие сигналы (нелегальный ход, мало времени) тембр не меняют — их нужно узнавать в любом наборе.
  */
 export interface SoundSet {
+    /** Множитель высоты стука фигуры (центральной частоты фильтра шума). */
     knock: number;
+    /** Множитель громкости стука и мелодичных сигналов. */
     volume: number;
+    /** Множитель высоты мелодичных сигналов (синус и треугольник). */
     pitch: number;
+    /** Форма волны мелодичных сигналов; null — у каждого сигнала своя, как задано в play(). */
     wave: OscillatorType | null;
 }
 
+/** Четыре набора; wood — исходный (все множители равны единице). Названия наборов — в каталоге переводов. */
 export const SOUND_SETS = {
     wood: {knock: 1, volume: 1, pitch: 1, wave: null},
     marble: {knock: 1.6, volume: 0.85, pitch: 1.12, wave: 'sine'},
@@ -43,6 +51,7 @@ export const SOUND_SETS = {
 
 export type SoundSetId = keyof typeof SOUND_SETS;
 
+/** Известен ли набор: значение из localStorage могло остаться от другой версии. */
 export function isSoundSetId(value: unknown): value is SoundSetId {
     return typeof value === 'string' && Object.prototype.hasOwnProperty.call(SOUND_SETS, value);
 }
@@ -91,6 +100,10 @@ class SoundEngine {
         return this.muted;
     }
 
+    /**
+     * AudioContext создаётся при первом звуке, а не при загрузке: браузеры не дают звучать до действия игрока, и
+     * контекст, созданный раньше, остаётся «приостановленным» — поэтому здесь же он возобновляется.
+     */
     private getContext(): AudioContext | null {
         if (typeof window === 'undefined') return null;
         if (!this.ctx) {
@@ -108,6 +121,11 @@ class SoundEngine {
         return this.ctx;
     }
 
+    /**
+     * Один тон: частота freq (с плавным уходом к endFreq, если задана), длительность, задержка от «сейчас», форма
+     * волны и пиковая громкость. Профиль набора применяется только к синусу и треугольнику: пила и меандр —
+     * предупреждающие сигналы, они звучат одинаково в любом наборе.
+     */
     private playTone(
         freq: number,
         durationSec: number,
@@ -256,6 +274,7 @@ class SoundEngine {
         }
     }
 
+    /** Сыграть звук события; при выключенном звуке — ничего. Ноты и длительности заданы прямо здесь, по событию. */
     public play(event: SoundEventType): void {
         if (this.muted) return;
 
@@ -349,6 +368,7 @@ class SoundEngine {
     }
 }
 
+/** Единственный экземпляр на вкладку: настройки читаются из localStorage при загрузке модуля. */
 export const soundEngine = new SoundEngine();
 
 /**
@@ -358,14 +378,17 @@ export const soundEngine = new SoundEngine();
  */
 let checkSounds = false;
 
+/** Включить или выключить звук шаха; вызывает App при каждой смене адреса страницы. */
 export function setCheckSounds(enabled: boolean): void {
     checkSounds = enabled;
 }
 
+/** Звучит ли сейчас шах отдельным сигналом. */
 export function checkSoundsEnabled(): boolean {
     return checkSounds;
 }
 
+/** Начала адресов учебных разделов (совпадение целиком или с продолжением через «/»). */
 const LEARNING_PATHS = ['/learn', '/puzzles', '/train', '/workout', '/programs', '/guess'];
 
 /** Обучающий раздел: школа и курс, задачи, тренажёры, разминка, программы, «Угадай ход»; и тренировка репертуара. */
@@ -375,7 +398,8 @@ export function isLearningPath(pathname: string): boolean {
 }
 
 /**
- * Определяет подходящий звуковой эффект хода по его нотации SAN.
+ * Определяет подходящий звуковой эффект хода по его нотации SAN. Проверки идут по старшинству: шах или мат (только
+ * когда звук шаха включён), превращение, рокировка, взятие; всё остальное — обычный ход.
  */
 export function resolveMoveSound(san?: string | null): SoundEventType {
     if (!san) return 'move';

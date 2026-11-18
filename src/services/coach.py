@@ -13,8 +13,12 @@
 
 Главный принцип детектора остаётся: ложное объяснение хуже молчания. Мотив называется причиной ошибки,
 только если его подтверждает лучший ответ соперника по движку (вилку — взятием одной из целей, висящую
-фигуру — её взятием, мат — матующим ходом). Если подтверждения нет, наставник говорит только то, в чём уверен:
-оценку хода и лучший ход.
+фигуру — её взятием; найденный детектором мат подтверждения не требует). Если подтверждения нет, наставник говорит
+только то, в чём уверен: оценку хода и лучший ход.
+
+Кто вызывает: разбор партии (analysis_service.attach_coach_comments → comment_for_move) и наставник в игре
+(src/services/move_check.py → advice_for_position, hint_for_position). Лучший ход и ответ соперника приходят от
+движка снаружи; сам модуль движок не вызывает и в базу не ходит.
 """
 
 import zlib
@@ -28,6 +32,7 @@ from src.services.positional import move_idea, positional_features
 # Формулировок на каждый шаблон: ключи «coach.<группа>.<код>.v1» … «.vN».
 VARIANTS = 2
 
+# Знаки фигур для параметров предложений: по цвету и виду фигуры.
 FIGURINES = {
     chess.WHITE: {chess.KING: "♔", chess.QUEEN: "♕", chess.ROOK: "♖", chess.BISHOP: "♗", chess.KNIGHT: "♘", chess.PAWN: "♙"},
     chess.BLACK: {chess.KING: "♚", chess.QUEEN: "♛", chess.ROOK: "♜", chess.BISHOP: "♝", chess.KNIGHT: "♞", chess.PAWN: "♟"},
@@ -40,7 +45,8 @@ TEMPLATES: dict[tuple[str, str], tuple[str, ...]] = {
     ("verdict", "inaccuracy"): ("move",),
     ("verdict", "mistake"): ("move",),
     ("verdict", "blunder"): ("move",),
-    # Что грозит стороне, которая ходит (после хода — сопернику сходившего; в совете — игроку).
+    # Угроза: тактика одной стороны против другой. В комментарии к ходу — то, что ошибочный ход позволил сопернику
+    # (грозит сходившему); в совете — то, чем соперник грозит игроку, который сейчас ходит.
     ("threat", "mate_in"): ("n", "move"),
     ("threat", "mate_threat"): ("piece", "square"),
     ("threat", "hanging"): ("piece",),
@@ -123,6 +129,8 @@ TEMPLATES: dict[tuple[str, str], tuple[str, ...]] = {
     ("hint", "piece"): ("piece",),
 }
 
+# Классы хода из разбора (analysis_service.classify_move_by_cp_loss): плохие — с кодом шаблона оценки, хорошие —
+# комментируются, только если ход создал тактику.
 BAD_CLASSIFICATIONS = {"Inaccuracy": "inaccuracy", "Mistake": "mistake", "Blunder": "blunder"}
 GOOD_CLASSIFICATIONS = {"Best", "Good"}
 
@@ -148,6 +156,11 @@ def all_message_keys() -> dict[str, tuple[str, ...]]:
 
 
 def _sentence(group: str, code: str, seed: str, **params: str | int) -> dict:
+    """
+    Одно предложение объяснения: ключ шаблона с номером формулировки и параметры. Формулировку выбирает контрольная
+    сумма от seed (FEN позиции) и кода шаблона — для одной позиции она всегда одна и та же. Параметры, не совпавшие
+    с объявленными в TEMPLATES, — KeyError: это ошибка в коде, а не в данных.
+    """
     expected = TEMPLATES[(group, code)]
     if set(params) != set(expected):
         raise KeyError(f"coach.{group}.{code}: params {sorted(params)} != {sorted(expected)}")
@@ -156,6 +169,7 @@ def _sentence(group: str, code: str, seed: str, **params: str | int) -> dict:
 
 
 def _arrow(from_square: chess.Square, to_square: chess.Square, kind: str) -> dict:
+    """Стрелка для доски клиента; kind — "best" (лучший ход), "threat" (угроза) или "idea" (идея хода)."""
     return {"from": chess.square_name(from_square), "to": chess.square_name(to_square), "kind": kind}
 
 
@@ -218,6 +232,7 @@ def _material_lost(motif: Motif, played: chess.Move, board_before: chess.Board) 
 
 
 def _first(motifs: Iterable[Motif], priority: tuple[str, ...]) -> list[Motif]:
+    """Мотивы, коды которых есть в списке priority, в порядке этого списка; остальные отбрасываются."""
     ranked = [m for m in motifs if m.code in priority]
     return sorted(ranked, key=lambda m: priority.index(m.code))
 
@@ -306,7 +321,11 @@ def _confirmed_by_reply(motif: Motif, reply: chess.Move | None) -> bool:
 
 
 def _threat_sentence(board: chess.Board, motif: Motif, seed: str) -> tuple[dict, list[dict], list[dict]]:
-    """Предложение «что грозит» для стороны, которая не ходит (``motif.color`` — та, что ходит)."""
+    """
+    Предложение «что грозит», его стрелки и подсветка: мотив в пользу ``motif.color`` против другой стороны. В
+    комментарии к ходу ``motif.color`` — сторона, которая ходит в ``board`` (позиция после хода); в совете — сторона,
+    которая не ходит (мат в совете сюда не попадает).
+    """
     code = motif.code
     if code == "mate_in":
         move = _move_from_motif(board, motif)
@@ -339,7 +358,11 @@ def _idea_of(board_before: chess.Board, move: chess.Move, before_motifs: list[Mo
 
 def _best_idea(board_before: chess.Board, best: chess.Move, seed: str,
                before_motifs: list[Motif]) -> tuple[list[dict], list[dict], list[dict]]:
-    """Предложения про упущенное и про лучший ход, стрелки и подсветка."""
+    """
+    Предложения про упущенное и про лучший ход, стрелки и подсветка. Порядок выбора: лучший ход матует; упущенный
+    мат или незащищённая фигура, которую лучший ход берёт; тактика, созданная лучшим ходом; иначе — взятие,
+    позиционная идея (positional.move_idea) или общая фраза.
+    """
     mover = board_before.turn
     sentences: list[dict] = []
     arrows = [_arrow(best.from_square, best.to_square, "best")]
@@ -395,7 +418,9 @@ def comment_for_move(
     """
     Комментарий наставника к ходу партии: ``{"comment": [...], "arrows": [...], "highlights": [...]}`` или
     None, если сказать нечего (обычный хорошо сыгранный ход). ``best_uci`` — лучший ход движка в позиции до хода,
-    ``reply_uci`` — лучший ответ соперника после сделанного хода (по нему проверяются причины ошибки).
+    ``reply_uci`` — лучший ответ соперника после сделанного хода (по нему проверяются причины ошибки);
+    ``classification`` — класс хода из разбора. Хороший ход комментируется, только если он матует или создаёт
+    тактику; плохой — оценкой, одной подтверждённой угрозой и идеей лучшего хода.
     """
     if played not in board_before.legal_moves:
         return None
@@ -448,6 +473,7 @@ def comment_for_move(
 
 
 def _legal(board: chess.Board, uci: str | None) -> chess.Move | None:
+    """Ход из записи UCI, если он легален в позиции; пустая, нечитаемая запись или нелегальный ход — None."""
     if not uci:
         return None
     try:
@@ -519,6 +545,7 @@ def advice_for_position(board: chess.Board, best_uci: str | None) -> dict:
     return {"comment": sentences, "arrows": arrows, "highlights": highlights}
 
 
+# Число ступеней подсказки; номер ступени вне 1…HINT_STEPS приводится к ближайшей границе.
 HINT_STEPS = 3
 
 

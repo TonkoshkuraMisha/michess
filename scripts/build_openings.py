@@ -19,6 +19,7 @@ OUT = Path(__file__).resolve().parents[1] / "src" / "services" / "data" / "openi
 
 
 def main() -> None:
+    """Собирает открытую таблицу дебютов (ECO, названия, FEN и линии UCI)."""
     source = Path(sys.argv[1])
     rows: dict[str, tuple[str, str, int, str]] = {}
     for name in "abcde":

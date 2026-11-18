@@ -4,8 +4,9 @@
 
 Значения читаются из переменных окружения и файла .env в корне проекта (pydantic-settings; образец с пояснениями —
 .env.example, продакшен — DEPLOY.md). У каждой настройки ниже — значение по умолчанию и комментарий, что она
-меняет: адреса PostgreSQL и Redis, срок токенов, пороги античита, размер пула движков, лимиты запросов по
-эндпоинтам, почта, программа беты, арены и конференции.
+меняет: адреса PostgreSQL и Redis, срок токенов, размер пула движков, лимиты запросов по эндпоинтам, почта,
+программа беты, арены и конференции. Пороги античита заданы не здесь, а константами в src/services/anticheat.py
+(отсюда он читает только AC_PREMOVE_MAX_ELAPSED_MS).
 
 Проверка при старте: в продакшене (ENVIRONMENT=production) слабый или взятый из примера SECRET_KEY останавливает
 запуск — этим ключом подписаны токены всех игроков.
@@ -23,10 +24,11 @@ _WEAK_SECRET_KEYS = {"secret", "changeme", "change_me", "your-secret-key", "test
 
 class Settings(BaseSettings):
     """
-    Application core settings configuration.
-    Uses Pydantic for environment variable validation.
+    Все настройки приложения. Поле без значения по умолчанию (POSTGRES_*, SECRET_KEY) обязательно: без него в
+    окружении или .env процесс не стартует. Имена переменных окружения совпадают с именами полей (с учётом регистра).
     """
     PROJECT_NAME: str = "Michess API"
+    # Версия приложения: её отдают /health и /beta/config, она же — метка релиза в Sentry.
     VERSION: str = "1.2.2"
     API_V1_STR: str = "/api/v1"
 
@@ -49,14 +51,15 @@ class Settings(BaseSettings):
         "http://localhost:5173",
     ]
 
-    # PostgreSQL
+    # PostgreSQL: из этих пяти значений собирается адрес базы (async_database_url ниже).
     POSTGRES_USER: str
     POSTGRES_PASSWORD: str
     POSTGRES_SERVER: str
     POSTGRES_PORT: int
     POSTGRES_DB: str
 
-    # Connection pool (per process)
+    # Пул соединений с базой — на каждый процесс API (src/db/session.py): постоянных соединений, сколько можно
+    # открыть сверх них при нагрузке и сколько секунд запрос ждёт свободное соединение, прежде чем получить ошибку.
     DB_POOL_SIZE: int = 10
     DB_MAX_OVERFLOW: int = 20
     DB_POOL_TIMEOUT_S: float = 30.0
@@ -71,7 +74,7 @@ class Settings(BaseSettings):
     # Повторы команды без паузы; худшее ожидание при сбое — (1 + REDIS_RETRIES) таймаута.
     REDIS_RETRIES: int = 1
 
-    # Security (JWT)
+    # Токены входа (JWT, src/core/security.py): ключ подписи и алгоритм.
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
     # Access-токен — короткий, клиент держит его в памяти; долгий вход — refresh-токен в httpOnly-cookie (17.5).
@@ -80,25 +83,33 @@ class Settings(BaseSettings):
     # Флаг Secure у cookie входа; по умолчанию — только в продакшене (ENVIRONMENT=production).
     COOKIE_SECURE: bool | None = None
 
-    # Anti-Cheat Thresholds
+    # Античит. Шесть настроек ниже остались от первой версии античита и сейчас нигде в коде не читаются: пороги
+    # ритма и доверия — константы в src/services/anticheat.py, а путь к Stockfish ищет
+    # src/services/bots/base.resolve_stockfish_path (папка bin/, PATH, стандартные пути Linux). Менять их бесполезно.
     AC_BLUR_RATE_HIGH: float = 0.8
     AC_BLUR_RATE_MED: float = 0.5
     AC_MIN_MOVE_TIME_MS: int = 3000
     AC_MAX_MOVE_TIME_MS: int = 8000
     AC_STOCKFISH_PATH: str = "bin/stockfish-windows-x86-64-avx2.exe"
     AC_MAX_CENTIPAWN_LOSS: int = 15
-    # A client-claimed premove is trusted only if the server saw the move arrive this fast
+    # Единственная действующая настройка античита: предходу, о котором сообщил клиент, сервер верит, только если сам
+    # увидел ход не позже чем через столько миллисекунд (anticheat.trusted_premove). Иначе нечестный игрок пометил бы
+    # предходом все ходы и вывел их из оценки ритма.
     AC_PREMOVE_MAX_ELAPSED_MS: int = 600
 
-    # Matchmaking: rating window (±N) used when the client sends no explicit range; 0 = unrestricted
+    # Лобби (src/services/matchmaker.py): окно рейтинга ±N для вызова, когда клиент не прислал своих границ;
+    # 0 — без ограничения.
     MATCHMAKING_DEFAULT_RATING_RANGE: int = 0
 
-    # Celery publishing from the API process: short timeouts, no publish retries, and a pause
-    # after a broker failure so a dead broker cannot stall the event loop or pile up threads
+    # Постановка задач Celery из процесса API (src/services/task_dispatch.py, src/worker/celery_app.py): короткие
+    # таймауты, без повторов публикации и пауза после сбоя брокера — недоступный брокер не должен задерживать игру
+    # и копить потоки. CELERY_PUBLISH_TIMEOUT_S — сколько ждём саму публикацию.
     CELERY_PUBLISH_TIMEOUT_S: float = 3.0
     # Эндшпильные таблицы (таск 14.4): в разработке — открытый API lichess; в продакшене — свой сервер таблиц с тем же
     # API (решение владельца: таблицы храним у себя, DEPLOY).
     TABLEBASE_URL: str = "https://tablebase.lichess.ovh/standard"
+    # Продолжение настроек Celery: таймаут соединения с брокером и пауза, в течение которой после сбоя брокера
+    # новые задачи даже не пытаемся ставить.
     CELERY_BROKER_CONNECT_TIMEOUT_S: float = 1.0
     CELERY_BROKER_COOLDOWN_S: float = 30.0
 
@@ -107,24 +118,32 @@ class Settings(BaseSettings):
     SENTRY_DSN: str = ""
     SENTRY_TRACES_SAMPLE_RATE: float = 0.0
 
-    # Stockfish engine pool
+    # Пул процессов Stockfish (src/services/engine_pool.py): не больше стольких движков в каждом процессе API и
+    # воркера; запрос сверх предела ждёт свободный движок столько секунд и затем получает отказ engine_busy.
     ENGINE_POOL_SIZE: int = 2
     ENGINE_ACQUIRE_TIMEOUT_S: float = 10.0
 
-    # Rate limits for engine-backed endpoints (requests per window, per user or per IP for guests)
+    # Лимиты запросов (src/api/rate_limit.py): столько запросов за окно RATE_LIMIT_WINDOW_S секунд — на игрока, а без
+    # входа — на адрес. Имя настройки передаётся в rate_limit(...) строкой, поэтому поиск по «settings.ИМЯ» эти
+    # настройки не находит. RATE_LIMIT_BOT_MOVE — ходы ботов (/bots/move, /bots/custom-move, /bots/draw-offer,
+    # /chess960/*); RATE_LIMIT_POSITION_ANALYSIS — оценка позиции, эндшпильные таблицы, «найти мат», справочник
+    # дебютов; RATE_LIMIT_GAME_ANALYSIS — полный разбор партии.
     RATE_LIMIT_WINDOW_S: int = 60
     RATE_LIMIT_BOT_MOVE: int = 90
     RATE_LIMIT_POSITION_ANALYSIS: int = 30
     # Без входа анализ позиции доступен, но реже: гостя нельзя связать с идущей партией
     RATE_LIMIT_POSITION_ANALYSIS_GUEST: int = 10
     RATE_LIMIT_GAME_ANALYSIS: int = 6
-    # Совет наставника по позиции (POST /analysis/advice) — свой лимит: это тоже работа движка
+    # Совет наставника по позиции (POST /analysis/advice) — свой лимит: это тоже работа движка. Тем же лимитом (но
+    # отдельными счётчиками) ограничены подсказка по ступеням (/analysis/hint) и «не согласен» (/analysis/dispute).
     RATE_LIMIT_ADVICE: int = 20
     RATE_LIMIT_ADVICE_GUEST: int = 6
     # Проверка хода в игре с наставником (POST /analysis/check-move): каждый ход игрока — один запрос
     RATE_LIMIT_MOVE_CHECK: int = 60
     RATE_LIMIT_MOVE_CHECK_GUEST: int = 20
-    # Задачи (/puzzles/*): ход, подсказка, выдача — с запасом на режим на время
+    # Задачи (/puzzles/*): ход, подсказка, выдача — с запасом на режим на время. Этим же числом (у каждого раздела
+    # свой счётчик) ограничены разделы без движка: экзамен, лента, сообщения, библиотека, репертуар, «Просмотр»,
+    # тренажёры, мини-игры, команды, совместный разбор, модерация, «Угадай ход», игроки и уведомления.
     RATE_LIMIT_PUZZLES: int = 240
     # Дневные квоты бесплатного тарифа на дорогую работу движка (таск 23.3). Выключены, пока тарифы (25.1) не
     # включат FREE_TIER_LIMITS; базовая игра (ходы ботов, задачи) квот не имеет.
@@ -135,7 +154,9 @@ class Settings(BaseSettings):
     # Открытое API только для чтения (таск 24.3, /api/v1/public) и журналы калибровки: запросов за окно.
     RATE_LIMIT_PUBLIC_API: int = 60
 
-    # Импорт партий с lichess и chess.com (таск 24.1): адреса открытых API, лимиты на игрока.
+    # Импорт партий с lichess и chess.com (таск 24.1): адреса открытых API, лимиты на игрока. MAX_GAMES — партий за
+    # один импорт, MAX_STORED — сколько импортированных партий хранится у игрока, RATE_LIMIT_GAME_IMPORT — импортов
+    # за окно RATE_LIMIT_GAME_IMPORT_WINDOW_S.
     GAME_IMPORT_LICHESS_URL: str = "https://lichess.org"
     GAME_IMPORT_CHESSCOM_URL: str = "https://api.chess.com"
     GAME_IMPORT_MAX_GAMES: int = 20
@@ -143,7 +164,8 @@ class Settings(BaseSettings):
     RATE_LIMIT_GAME_IMPORT: int = 10
     RATE_LIMIT_GAME_IMPORT_WINDOW_S: int = 3600
 
-    # Authentication: attempts per IP, failed logins per account, registrations per IP
+    # Вход и регистрация (src/api/auth.py): все попытки входа с одного адреса, неудачные входы на один аккаунт
+    # (этот же счётчик — подтверждение паролем при смене пароля, e-mail и удалении аккаунта), регистрации с адреса.
     RATE_LIMIT_LOGIN_PER_IP: int = 20
     RATE_LIMIT_LOGIN_WINDOW_S: int = 60
     RATE_LIMIT_LOGIN_FAILURES_PER_ACCOUNT: int = 10
@@ -176,13 +198,15 @@ class Settings(BaseSettings):
     EMAIL_VERIFY_TTL_S: int = 24 * 3600
     PASSWORD_RESET_TTL_S: int = 3600
 
-    # One-time WebSocket tickets (the JWT never goes into the WS URL)
+    # Одноразовые тикеты WebSocket (токен входа в адрес WebSocket не попадает — src/api/deps.py): срок жизни тикета
+    # в секундах и сколько тикетов игрок может получить за минуту (окно 60 с задано в src/api/auth.py).
     WS_TICKET_TTL_S: int = 30
     RATE_LIMIT_WS_TICKETS: int = 30
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def _split_origins(cls, value):
+        """CORS_ORIGINS из окружения: строка через запятую или JSON-список; готовый список — как есть."""
         if isinstance(value, str):
             text = value.strip()
             if text.startswith("["):
@@ -211,7 +235,7 @@ class Settings(BaseSettings):
 
     @property
     def async_database_url(self) -> str:
-        """Assembles the database connection string for asyncpg."""
+        """Адрес PostgreSQL для драйвера asyncpg, собранный из настроек POSTGRES_*."""
         return (
             f"postgresql+asyncpg://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
             f"@{self.POSTGRES_SERVER}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"

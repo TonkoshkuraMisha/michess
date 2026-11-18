@@ -56,6 +56,7 @@ OWN_SETS: dict[str, tuple[str, str]] = {
 
 
 def make_outlined_svg(base_svg: str, code: str) -> str:
+    """Добавляет в SVG фигуры контрастный фильтр обводки для набора outline."""
     is_black = code.startswith("b")
     halo_color = "#FFFFFF" if is_black else "#111827"
     filter_id = f"outline_halo_{code}"
@@ -79,6 +80,7 @@ def make_outlined_svg(base_svg: str, code: str) -> str:
 
 
 def download_svg(url: str) -> str | None:
+    """Скачивает один SVG-файл фигуры по URL с проверкой целостности."""
     req = urllib.request.Request(url, headers={"User-Agent": "piece-set-setup/1.0"})
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
@@ -92,6 +94,7 @@ def download_svg(url: str) -> str | None:
 
 
 def setup_all_piece_sets() -> None:
+    """Скачивает свободные наборы фигур и собирает производный набор с обводкой."""
     PIECES_ROOT.mkdir(parents=True, exist_ok=True)
 
     for set_name in PIECE_SETS:

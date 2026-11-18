@@ -24,10 +24,12 @@ from src.services.product_metrics import RETENTION_DAYS, Report, build_report, u
 
 
 def _share(part: int, whole: int) -> str:
+    """Форматирует количество и долю в процентах от общего числа игроков."""
     return f"{100 * part / whole:5.1f}%" if whole else "    —"
 
 
 def render(report: Report) -> str:
+    """Формирует отчёт по продуктовым метрикам: активация, удержание и охват."""
     today = utc_today()
     header = f"{'когорта':<12}{'рег.':>6}{'≤5 мин':>9}{'≤сутки':>9}" + "".join(f"{'D' + str(n):>8}" for n in RETENTION_DAYS)
     lines = [header, "-" * len(header)]
@@ -68,6 +70,7 @@ def render(report: Report) -> str:
 
 
 async def main(days: int) -> None:
+    """Читает события из product_events и выводит аналитическую сводку."""
     from src.db.session import AsyncSessionLocal
 
     async with AsyncSessionLocal() as db:

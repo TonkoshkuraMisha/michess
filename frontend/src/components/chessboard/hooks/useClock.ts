@@ -1,4 +1,9 @@
 // --- FILE: frontend/src/components/chessboard/hooks/useClock.ts ---
+// Часы партии на главной доске. Хук только ведёт обратный отсчёт у стороны, которая ходит. Откуда берётся время:
+// в партии с человеком и у зрителя — с сервера (white_time_ms и black_time_ms в событиях match_found, move_made,
+// berserk, game_over; useGameSocket ставит их через setWhiteTimeMs и setBlackTimeMs), между событиями часы идут
+// локально и каждый ход сверяются с сервером; флаг в такой партии фиксирует сервер. В партии с ботом часы целиком
+// на клиенте: начальное время и добавку ставит useBotGame, он же объявляет поражение по времени.
 
 import {useCallback, useEffect, useRef, useState} from 'react';
 
@@ -9,7 +14,7 @@ export interface UseClockOptions {
     isTicking: boolean;
     /**
      * Звуковое предупреждение о цейтноте играет только участнику партии, а не зрителю —
-     * это условие уже строго хуже isTicking, поэтому передаётся отдельно.
+     * это условие строже, чем isTicking (у зрителя часы идут, а звука нет), поэтому передаётся отдельно.
      */
     isParticipant: boolean;
     currentTurn: ClockColor;
@@ -26,15 +31,13 @@ export interface UseClockResult {
     setBlackTimeMs: React.Dispatch<React.SetStateAction<number>>;
     /** Сбрасывает флаг «предупреждение уже проиграно» — перед новой партией. */
     resetLowTimeWarning: () => void;
-    /** Добавляет бонус Фишера победившей ходом стороне. */
+    /**
+     * Добавка за ход стороне, которая его сделала (отрицательное значение снимает добавку — при возврате хода).
+     * Нужна только партии с ботом: в партии с человеком время после хода присылает сервер уже с добавкой.
+     */
     applyIncrement: (moverColor: ClockColor, incrementSeconds: number) => void;
 }
 
-/**
- * Часы партии: тиканье раз в 50мс от стороны, которая сейчас ходит, звуковое предупреждение
- * о цейтноте (<10с, один раз за партию) и начисление добавления за ход. Не знает ничего о
- * источнике партии (PvP/бот/зритель) — только о том, идут ли часы и чей сейчас ход.
- */
 /**
  * Шаг, с которым меняются цифры на часах (как в formatTime): секунды, а в цейтноте (< 30 с) — десятые.
  * В состояние React время попадает, только когда меняется видимое значение: раньше каждые 50 мс
@@ -64,11 +67,20 @@ function useClockValue(initial: number) {
     return [shown, set, tick] as const;
 }
 
+/**
+ * Часы партии: тиканье раз в 50мс от стороны, которая сейчас ходит, звуковое предупреждение
+ * о цейтноте (не больше 10 с, один раз за партию) и начисление добавки за ход. Не знает ничего об
+ * источнике партии (PvP/бот/зритель) — только о том, идут ли часы и чей сейчас ход. Начальные 3 минуты —
+ * заглушка до первой партии: настоящее время ставит вызывающий сеттерами.
+ */
 export function useClock({isTicking, isParticipant, currentTurn, myColor, onLowTime, hourglass = false}: UseClockOptions): UseClockResult {
     const [whiteTimeMs, setWhiteTimeMs, tickWhite] = useClockValue(180000);
     const [blackTimeMs, setBlackTimeMs, tickBlack] = useClockValue(180000);
+    // Предупреждение о цейтноте уже прозвучало в этой партии (сбрасывает resetLowTimeWarning).
     const lowTimeWarnedRef = useRef(false);
 
+    // Тик: с часов ходящего снимается время, реально прошедшее с прошлого тика (а не «50 мс»), поэтому часы не
+    // отстают, когда вкладка в фоне и браузер замедляет таймеры. Смена хода перезапускает отсчёт.
     useEffect(() => {
         if (!isTicking) return;
 
@@ -117,7 +129,7 @@ export function useClock({isTicking, isParticipant, currentTurn, myColor, onLowT
     return {whiteTimeMs, blackTimeMs, setWhiteTimeMs, setBlackTimeMs, resetLowTimeWarning, applyIncrement};
 }
 
-/** Форматирует остаток времени как m:ss (или h:mm:ss), с десятыми при цейтноте < 30 с. */
+/** Форматирует остаток времени как mm:ss (от часа — h:mm:ss), с десятыми при цейтноте < 30 с; ноль — «00:00». */
 export function formatTime(ms: number): string {
     const totalMs = Math.max(0, ms);
     const totalSecs = Math.floor(totalMs / 1000);

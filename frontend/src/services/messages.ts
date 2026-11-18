@@ -1,6 +1,9 @@
 // --- FILE: frontend/src/services/messages.ts ---
 // Личные сообщения (таск 30.1): переписки, отправка текста и карточки (партия, позиция, задача, урок, турнир),
 // настройка «кто может мне писать» и чёрный список.
+// Все запросы — к /api/v1/messages и только с входом (маршруты src/api/messages.py, правила —
+// src/services/direct_messages.py, карточки-вложения — src/services/attachments.py). Новое сообщение собеседнику
+// сервер доставляет ещё и по WebSocket в его открытые вкладки.
 
 import {API_BASE_URL} from '../config/api';
 import {readApiErrorOr, UiError} from './apiErrors';
@@ -9,9 +12,13 @@ import {getToken} from './authToken';
 
 /** Вложения личных сообщений; в ленте ещё партия библиотеки и своё достижение (таск 30.2). */
 export type AttachmentKind = 'game' | 'position' | 'puzzle' | 'lesson' | 'tournament' | 'library' | 'achievement';
+/** Кто может писать игроку: все, только те, на кого он подписан, никто. */
 export type DmPolicy = 'all' | 'following' | 'nobody';
 
-/** Карточка вложения: вид, ссылка и снимок данных на момент отправки. */
+/**
+ * Карточка вложения: вид, ссылка и снимок данных на момент отправки. Набор заполненных полей зависит от вида:
+ * сервер проверяет ссылку и сам собирает снимок, клиент присылает только {kind, ref}.
+ */
 export interface Attachment {
     kind: AttachmentKind;
     ref: string;
@@ -31,6 +38,7 @@ export interface Attachment {
     earned_at?: string | null;
 }
 
+/** Одно сообщение переписки с точки зрения смотрящего (mine — отправил он сам). */
 export interface DirectMessage {
     id: number;
     mine: boolean;
@@ -42,28 +50,34 @@ export interface DirectMessage {
     held?: boolean;
 }
 
+/** Строка списка переписок: собеседник, последнее сообщение и число непрочитанных от него. */
 export interface Conversation {
     username: string;
     avatar: string | null;
     last: DirectMessage;
     unread: number;
+    /** Собеседник в чёрном списке смотрящего. */
     blocked: boolean;
 }
 
+/** Переписка с игроком (GET /messages/with/{имя}): страница сообщений, старые — первыми. */
 export interface Thread {
     username: string;
     avatar: string | null;
     messages: DirectMessage[];
+    /** Можно ли сейчас писать; если нет — reason: код причины от сервера (текст — из каталога). */
     can_write: boolean;
     reason: string | null;
     blocked: boolean;
 }
 
+/** Настройки личных сообщений: кто может писать и имена игроков в чёрном списке. */
 export interface DmSettings {
     dm_policy: DmPolicy;
     blocked: string[];
 }
 
+/** Запрос к /api/v1/messages с токеном; отказ сервера — UiError с текстом по коду ошибки. */
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
     const token = getToken();
     let res: Response;
@@ -84,15 +98,19 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 const user = (name: string) => encodeURIComponent(name);
 
+/** Эндпоинты личных сообщений. Ответы hide и markRead несут новое общее число непрочитанных — для шапки. */
 export const messagesApi = {
     conversations: () => call<{ conversations: Conversation[]; unread: number }>(''),
     unread: () => call<{ unread: number }>('/unread'),
+    /** beforeId — подгрузка более ранней страницы: сообщения старше указанного. */
     thread: (name: string, beforeId?: number) =>
         call<Thread>(`/with/${user(name)}${beforeId ? `?before_id=${beforeId}` : ''}`),
+    /** sendAnyway — игрок настаивает после отказа фильтра (text_flagged): сообщение придерживается до модератора. */
     send: (name: string, body: string, attachment?: { kind: AttachmentKind; ref: string } | null, sendAnyway = false) =>
         call<DirectMessage>(`/with/${user(name)}`, {
             method: 'POST', body: JSON.stringify({body, attachment: attachment ?? null, send_anyway: sendAnyway}),
         }),
+    /** Скрыть переписку из списка до нового сообщения собеседника (это не блокировка). */
     hide: (name: string) => call<{ unread: number }>(`/with/${user(name)}/hide`, {method: 'POST'}),
     markRead: (name: string) => call<{ unread: number }>(`/with/${user(name)}/read`, {method: 'POST'}),
     settings: () => call<DmSettings>('/settings'),
@@ -101,10 +119,12 @@ export const messagesApi = {
     unblock: (name: string) => call<DmSettings>(`/block/${user(name)}`, {method: 'DELETE'}),
 };
 
+/** FEN: восемь рядов доски; очередь хода и остальные поля необязательны. Точную проверку позиции делает сервер. */
 const FEN_RE = /^([pnbrqkPNBRQK1-8]+\/){7}[pnbrqkPNBRQK1-8]+(\s+[wb](\s+\S+){0,4})?$/;
 
 /**
- * Что вставил игрок: ссылку на партию, турнир, урок или FEN позиции. Неизвестное — null (тогда вид выбирают вручную).
+ * Что вставил игрок: FEN позиции или ссылку на партию библиотеки, партию, турнир, урок. Неизвестное — null (тогда
+ * вид выбирают вручную). Ссылка библиотеки проверяется раньше ссылки партии: её адрес тоже содержит «/game/».
  */
 export function detectAttachment(raw: string): { kind: AttachmentKind; ref: string } | null {
     const text = raw.trim();

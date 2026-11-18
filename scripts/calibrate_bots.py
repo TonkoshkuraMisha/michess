@@ -65,6 +65,7 @@ class Spec:
 
 
 def declared_ratings() -> dict[str, int]:
+    """Возвращает словарь заявленных рейтингов исторических ботов и архетипов."""
     from src.api.bots import AVAILABLE_BOTS
     from src.services.bots.archetypes import ARCHETYPES
 
@@ -79,6 +80,7 @@ _ENGINES: dict[str, chess.engine.SimpleEngine] = {}
 
 
 def _engine(name: str, options: dict) -> chess.engine.SimpleEngine:
+    """Возвращает или запускает экземпляр Stockfish в воркере с нужными опциями."""
     from src.services.bots.base import resolve_stockfish_path
 
     if name not in _ENGINES:
@@ -92,6 +94,7 @@ def _engine(name: str, options: dict) -> chess.engine.SimpleEngine:
 
 
 def _bot(key: str):
+    """Возвращает экземпляр исторического бота или архетипа по его ключу."""
     from src.services.bots import BOT_INSTANCES
     from src.services.bots.archetypes import ARCHETYPES_BY_KEY
     from src.services.bots.personality import PersonalityBot
@@ -102,6 +105,7 @@ def _bot(key: str):
 
 
 def _move(player: str, board: chess.Board, anchor_movetime: float = ANCHOR_MOVETIME_S) -> chess.Move:
+    """Выбирает ход в калибровочной партии для бота или якоря Stockfish."""
     if player.startswith("anchor:"):
         elo = int(player.split(":")[1])
         engine = _engine(player, {"UCI_LimitStrength": True, "UCI_Elo": elo})
@@ -133,6 +137,7 @@ def game_pgn(spec: Spec, board: chess.Board, result: str) -> str:
 
 
 def play_game(spec: Spec) -> tuple[Spec, str, int, str]:
+    """Разыгрывает одну калибровочную партию между двумя участниками."""
     board = chess.Board()
     for san in OPENINGS[spec.opening % len(OPENINGS)].split():
         board.push_san(san)
@@ -149,6 +154,7 @@ def schedule(
         declared: dict[str, int], rounds: int, only: set[str] | None,
         anchors_only: bool = False, anchor_movetime: float = ANCHOR_MOVETIME_S,
 ) -> list[Spec]:
+    """Составляет расписание матчей ботов с якорями Stockfish и соседями по силе."""
     bots = sorted(declared, key=lambda k: declared[k])
     specs: list[Spec] = []
     pairs: set[tuple[str, str]] = set()
@@ -207,6 +213,7 @@ def games_from_log(path: Path, without_anchors: bool = False) -> list[tuple[str,
 
 
 def expected(ra: float, rb: float) -> float:
+    """Вычисляет ожидаемую долю очков в партии по классической формуле Эло."""
     return 1.0 / (1.0 + 10 ** ((rb - ra) / 400.0))
 
 
@@ -248,6 +255,7 @@ def fit(games: list[tuple[str, str, float]], declared: dict[str, int]) -> dict[s
 
 
 def main() -> None:
+    """Запускает калибровку силы ботов и сохраняет результат в calibration.json."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--rounds", type=int, default=1, help="Партий каждой пары за каждый цвет")
     parser.add_argument("--workers", type=int, default=3)

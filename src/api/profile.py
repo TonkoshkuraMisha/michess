@@ -12,8 +12,12 @@
   и опросом — на случай, если событие WebSocket не дошло. /games/{id}/summary — итог партии для клиента,
   пропустившего game_over. /games/live — партии, идущие сейчас (для зрителей).
 * /matchmaking/* — те же действия лобби, что и по WebSocket (вызов, отмена, принятие), на случай обрыва сокета;
-  защищены от гонки с сообщением WebSocket — партию создаёт src/services/matchmaker.py.
-* /games/{id}/pgn — запись партии файлом.
+  защищены от гонки с сообщением WebSocket — партию создаёт src/services/matchmaker.py. /matchmaking/queue —
+  список открытых вызовов.
+* /games/{id}/pgn — запись партии файлом. /games/{id}/blindfold — отметка «вслепую» у своей товарищеской партии.
+
+Вход нужен для /me, /me/settings, /games/my-active, /matchmaking/join, /leave и /accept и /games/{id}/blindfold;
+остальное открыто всем. Откуда данные: профили и архив — таблицы users и games, идущие партии и лобби — Redis.
 
 Страницы архивных чемпионов подгружают их партии при первом обращении (src/db/seed.ensure_champion_seeded).
 """
@@ -49,6 +53,7 @@ router = APIRouter(prefix="/profile", tags=["Profile & Games"])
 
 
 class QueueJoinRequest(BaseModel):
+    """Вызов в лобби по HTTP: контроль времени, границы рейтинга соперника и тип партии (рейтинговая по умолчанию)."""
     base_time_ms: int = 180000
     increment_ms: int = 0
     min_rating: int | None = None
@@ -63,6 +68,11 @@ async def _resolve_user(db: AsyncSession, username: str) -> User | None:
 
 
 async def _find_user(db: AsyncSession, username: str) -> User | None:
+    """
+    Запись users по имени из адреса. Порядок: чемпион архива (его партии при первом обращении загружаются из PGN —
+    src/db/seed.py) → точное имя → имя без учёта регистра среди аккаунтов (username_key) → без учёта регистра
+    среди архивных игроков и ботов. Удалённые аккаунты отсекает _resolve_user.
+    """
     champ_meta = get_champion_meta(username)
     if champ_meta is not None:
         champ_user = await ensure_champion_seeded(db, champ_meta["id"])
@@ -90,7 +100,13 @@ async def _find_user(db: AsyncSession, username: str) -> User | None:
 
 
 async def _build_active_game_payload(db: AsyncSession, game_id: int, user_id: int) -> dict | None:
-    """Формирует полный слепок активной партии для игрока (цвет, часы, FEN, PGN, версия стейта)."""
+    """
+    Формирует полный слепок активной партии для игрока (цвет, часы, FEN, PGN, версия стейта) из состояния партии в
+    Redis; None — партия не идёт или игрок в ней не участвует. Часы стороны, которая думает, уменьшены на время,
+    прошедшее с последнего хода. Построен как событие match_found WebSocket (поле event проставлено), но без полей
+    variant и arena_id, которые есть в снимке при подключении WebSocket
+    (src/api/websockets._send_active_game_snapshot_if_exists).
+    """
     from src.services.game_state import berserk_fields, is_rated_state, pending_draw_offer, state_manager
 
     state = await state_manager.get_game_state(game_id)
@@ -182,7 +198,11 @@ class SettingsIn(BaseModel):
 @router.patch("/me/settings")
 async def update_my_settings(payload: SettingsIn, db: AsyncSession = Depends(get_db),
                              current_user: User = Depends(get_current_user)):
-    """Настройки профиля (таск 17.7): язык интерфейса и режим «помощник перевода»."""
+    """
+    Настройки своего профиля: язык интерфейса и режим «помощник перевода» (таск 17.7), тема-комплект (18.3) и
+    аватар (18.4). Меняются только присланные поля; ответ — все четыре значения. Страна меняется отдельно —
+    PUT /conferences/me.
+    """
     if payload.language is not None:
         current_user.language = payload.language
     if payload.translation_helper is not None:
@@ -212,7 +232,8 @@ async def get_leaderboard(
 ):
     """
     Таблица лидеров категории: без ботов и архивных игроков, без удалённых аккаунтов и игроков с флагом нечестной
-    игры.
+    игры. Открыта всем. Порядок — по текущему рейтингу категории (users.<категория>_rating); игроки с временным
+    рейтингом и те, кто в категории ещё не играл, из таблицы не исключаются.
     """
     rating_column = _LEADERBOARD_RATING_COLUMN[category]
     query = (
@@ -235,7 +256,10 @@ async def get_my_active_game(
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
 ):
-    """Возвращает текущую активную партию авторизованного игрока (для синхронизации старта и ходов)."""
+    """
+    Возвращает текущую активную партию авторизованного игрока (для синхронизации старта и ходов): id партии — из
+    ключа Redis user:{id}:current_game, состояние — оттуда же. Нет партии — {"active": false}.
+    """
     from src.services.game_state import state_manager
 
     gid_str = await state_manager.redis.get(f"user:{current_user.id}:current_game")
@@ -249,6 +273,7 @@ async def get_my_active_game(
 
 
 async def _active_game_payload_or_none(db: AsyncSession, user_id: int) -> dict | None:
+    """Слепок идущей партии игрока, если она есть, — для запроса лобби, проигравшего гонку с WebSocket."""
     from src.services.game_state import state_manager
 
     game_id = await state_manager.get_active_game_id(user_id)
@@ -343,7 +368,11 @@ async def accept_challenge_http(
 
 @router.get("/games/live")
 async def get_live_games(db: AsyncSession = Depends(get_db)):
-    """Возвращает список активных партий, идущих прямо сейчас (для вкладки Live и режима зрителя)."""
+    """
+    Возвращает список активных партий, идущих прямо сейчас (для вкладки Live и режима зрителя). Открыт всем.
+    Источник — множество Redis active_games и состояние каждой партии; имена и рейтинги — из users, число
+    зрителей — из connection_manager. Новые партии первыми.
+    """
     from src.services.connection_manager import manager
     from src.services.game_state import is_rated_state, state_manager
 
@@ -736,6 +765,10 @@ async def get_game_summary(game_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/games/{game_id}/pgn")
 async def download_pgn(game_id: int, db: AsyncSession = Depends(get_db)):
+    """
+    Запись партии файлом PGN (games.pgn как есть). Открыто всем; статус партии не проверяется — у идущей партии
+    отдаётся то, что уже записано в базу.
+    """
     game = await db.get(Game, game_id)
     if not game or not game.pgn:
         raise ApiError(404, "pgn_not_found", game_id=game_id)
@@ -746,5 +779,6 @@ async def download_pgn(game_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/matchmaking/queue")
 async def get_matchmaking_queue():
+    """Открытые вызовы лобби (из Redis, src/services/matchmaker.get_queue_players). Открыто всем."""
     from src.services.matchmaker import matchmaker
     return await matchmaker.get_queue_players()

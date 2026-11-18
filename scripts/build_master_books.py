@@ -22,6 +22,7 @@ ARCHIVE_PASSWORD = "!historical_archive_no_login!"
 
 
 async def collect(surname: str, exclude: tuple[str, ...]) -> list[str]:
+    """Собирает дебютные ходы мастера из партий архива и библиотеки без дублей."""
     from sqlalchemy import func, or_, select
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
     from sqlalchemy.orm import aliased
@@ -58,6 +59,7 @@ async def collect(surname: str, exclude: tuple[str, ...]) -> list[str]:
 
 
 def build(master_id: str, pgns: list[str], min_games: int) -> None:
+    """Строит и сохраняет в JSON дебютную книгу для указанного мастера."""
     from src.services.bots.masters import MASTERS_BY_ID
 
     master = MASTERS_BY_ID[master_id]
@@ -77,6 +79,7 @@ def build(master_id: str, pgns: list[str], min_games: int) -> None:
 
 
 def main() -> None:
+    """Пересобирает дебютные книги всех дополнительных исторических мастеров."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--min-games", type=int, default=30)
     args = parser.parse_args()

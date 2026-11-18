@@ -28,10 +28,12 @@ MATE = 100_000
 
 
 def score(info: dict, turn: chess.Color) -> int:
+    """Извлекает оценку позиции в сантипешках со стороны ходящего игрока."""
     return info["score"].pov(turn).score(mate_score=MATE)
 
 
 def evaluate(engine: chess.engine.SimpleEngine, board: chess.Board, move: chess.Move, limit) -> int:
+    """Оценивает конкретный ход в позиции через root_moves движка Stockfish."""
     info = engine.analyse(board, limit, root_moves=[move])
     return score(info, board.turn)
 
@@ -40,6 +42,7 @@ DECISIVE = 1500  # сп: дальше — выигрыш, сравнивать �
 
 
 def check_position(engine, board: chess.Board, task: dict, limit, tolerance: int, margin: int) -> list[str]:
+    """Проверяет движком единственность ответа и ложные ходы в шаге урока."""
     problems = []
     infos = engine.analyse(board, limit, multipv=min(5, board.legal_moves.count()))
     lines = [(info["pv"][0], score(info, board.turn)) for info in infos if info.get("pv")]
@@ -75,6 +78,7 @@ def check_position(engine, board: chess.Board, task: dict, limit, tolerance: int
 
 
 def check_lesson(path: Path, engine, limit, tolerance: int, margin: int) -> list[str]:
+    """Проверяет все интерактивные шаги и экзамен одного файла урока."""
     lesson = json.loads(path.read_text(encoding="utf-8"))
     problems = []
     questions = [("шаг", i, s) for i, s in enumerate(lesson["steps"], 1)]
@@ -93,6 +97,7 @@ def check_lesson(path: Path, engine, limit, tolerance: int, margin: int) -> list
 
 
 def main() -> None:
+    """Запускает сверку уроков школы с движком Stockfish."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--time", type=float, default=0.5, help="Секунд на позицию")
     parser.add_argument("--tolerance", type=int, default=30, help="Насколько верный ответ может уступать лучшему")

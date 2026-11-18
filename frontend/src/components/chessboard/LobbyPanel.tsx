@@ -1,6 +1,8 @@
 // --- FILE: frontend/src/components/chessboard/LobbyPanel.tsx ---
 // Вкладка «Лобби / Live»: открытые вызовы игроков, которые можно принять, и партии, идущие сейчас, — для просмотра.
-// Сверху — анонс ближайшей арены.
+// Сверху — анонс ближайшей арены. Оба списка приходят пропсами из хука useGameSocket, который раз в 1,5 с
+// опрашивает сервер: GET /profile/matchmaking/queue (вызовы) и GET /profile/games/live (партии). Свой вызов из
+// списка убирает Chessboard. Принять вызов и начать просмотр нельзя, пока идёт своя партия с человеком.
 
 import {Radio, Play, Eye} from 'lucide-react';
 import {ArenaBanner} from '../arena/ArenaPages';

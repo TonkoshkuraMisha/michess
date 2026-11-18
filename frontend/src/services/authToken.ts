@@ -3,11 +3,20 @@
 // его в localStorage; долгий вход держит refresh-токен в httpOnly-cookie, которую JavaScript не видит вовсе.
 // При загрузке страницы сессия восстанавливается по cookie (restoreSession), за минуту до истечения токен
 // обновляется сам; неудачное обновление — выход (событие michess-auth-expired).
+// Сервер: POST /api/v1/auth/refresh и /auth/logout (src/api/auth.py), сессии — src/services/auth_sessions.py.
+// Срок access-токена задаёт сервер (ACCESS_TOKEN_EXPIRE_MINUTES, 15 минут); клиент читает его из поля exp токена.
 
 import {API_BASE_URL} from '../config/api';
 
+/** Ключ localStorage, где токен лежал в прежних версиях; теперь только стирается (dropLegacyToken). */
 const LEGACY_STORAGE_KEY = 'token';
+/** За сколько до истечения токена запрашивается новый. */
 const REFRESH_AHEAD_MS = 60_000;
+/**
+ * Событие window: токен не удалось обновить (по таймеру здесь или при выдаче WS-тикета в gameSocket.ts).
+ * Сам выход интерфейса происходит не по нему, а через onTokenChange: refreshSession при неудаче ставит токен в null,
+ * и App.tsx узнаёт об этом подпиской. Слушателей события в приложении нет — его проверяют только тесты.
+ */
 export const AUTH_EXPIRED_EVENT = 'michess-auth-expired';
 
 let current: string | null = null;
@@ -34,6 +43,7 @@ function expiresAt(token: string): number | null {
     }
 }
 
+/** Таймер обновления: срабатывает за REFRESH_AHEAD_MS до истечения токена, но не раньше чем через секунду. */
 function schedule(token: string | null): void {
     if (refreshTimer) clearTimeout(refreshTimer);
     refreshTimer = null;
@@ -46,10 +56,12 @@ function schedule(token: string | null): void {
     }, Math.max(1_000, exp - Date.now() - REFRESH_AHEAD_MS));
 }
 
+/** Текущий access-токен из памяти страницы; null — игрок не вошёл (или вход ещё восстанавливается). */
 export function getToken(): string | null {
     return current;
 }
 
+/** Запомнить токен (после входа, регистрации или обновления), перезавести таймер и оповестить подписчиков. */
 export function setToken(token: string | null): void {
     current = token;
     schedule(token);
@@ -61,6 +73,7 @@ export function clearToken(): void {
     setToken(null);
 }
 
+/** Подписка на смену токена (вход, выход, обновление); возвращает функцию отписки. */
 export function onTokenChange(listener: (token: string | null) => void): () => void {
     listeners.add(listener);
     return () => listeners.delete(listener);
