@@ -1,10 +1,12 @@
 // --- FILE: frontend/src/components/chessboard/GameSummaryPanel.tsx ---
-// Окно итога партии с ботом (таск 11.5): разбор запускается сам после сохранения партии, затем — тип партии,
+// Окно итога партии — с ботом (таск 11.5) и с человеком (после конца партии): разбор запускается сам после сохранения партии, затем — тип партии,
 // точность, ключевые ходы с объяснением наставника и рекомендуемый следующий соперник. Разбор — POST
 // /analysis/game/{id} (движок оценивает каждый ход; готовый разбор сервер отдаёт из базы). Тип партии и ключевые
 // ходы — поле summary ответа (src/services/game_summary.py), подписи — каталог summary.*. Рекомендацию соперника
 // считает Chessboard (services/gameSummary.ts) и передаёт пропсом. Когда разбор готов — карточки «Клубного тренера»
-// (CoachCards: задача из своей ошибки, отклонение от репертуара, урок по теме ошибки).
+// (CoachCards: задача из своей ошибки, отклонение от репертуара, урок по теме ошибки). В партии с человеком
+// рекомендации соперника нет; разбор просится только после конца партии — во время своей партии с человеком сервер
+// его не даст (честная игра, forbid_engine_help_during_game).
 
 import {useEffect, useState} from 'react';
 import {Trophy} from 'lucide-react';
@@ -36,12 +38,13 @@ interface Report {
 }
 
 interface Props {
-    /** id сохранённой партии с ботом (ответ /bots/save-game): пока партия не сохранена, панель не показывается. */
+    /** id партии: с ботом — ответ /bots/save-game (пока партия не сохранена, панели нет), с человеком — id партии. */
     gameId: number;
     playerColor: 'white' | 'black';
     /** Имя и сила рекомендуемого соперника (уже на языке игрока); null — рекомендовать некого. */
     recommendation: { name: string; rating: number } | null;
-    onPlayRecommended: () => void;
+    /** «Сыграть» с рекомендованным соперником; без рекомендации не нужен. */
+    onPlayRecommended?: () => void;
 }
 
 /** Ход с номером: «12. Nf3» у белых, «12… Nf6» у чёрных. */
@@ -49,7 +52,7 @@ function moveLabel(move: ReportMove): string {
     return `${move.move_number}${move.color === 'white' ? '.' : '…'} ${move.san}`;
 }
 
-/** Итог партии с ботом: сам запрашивает разбор сохранённой партии и показывает его главное. */
+/** Итог партии: сам запрашивает разбор сохранённой партии и показывает его главное. */
 export function GameSummaryPanel({gameId, playerColor, recommendation, onPlayRecommended}: Props) {
     const {t} = useI18n();
     const [report, setReport] = useState<Report | null>(null);

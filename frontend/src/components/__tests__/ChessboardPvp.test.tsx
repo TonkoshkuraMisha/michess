@@ -312,6 +312,30 @@ describe('зритель', () => {
     });
 });
 
+describe('итог партии с человеком', () => {
+    it('после конца партии — разбор этой партии и ключевые ходы; во время партии разбор не запрашивается', async () => {
+        renderBoard({
+            '/profile/games/my-active': () => ({...MATCH, active: true}),
+            '/analysis/game/5': () => ({
+                white: {accuracy: 91}, black: {accuracy: 64},
+                moves: [{ply: 1, move_number: 1, color: 'white', san: 'e4'}, {ply: 2, move_number: 1, color: 'black', san: 'f6'}],
+                summary: {kind: 'decisive_blunder', turning_point_ply: 2, lead_changes: 0, equal_share: 0.5,
+                          white: {best_ply: 1, worst_ply: null}, black: {best_ply: null, worst_ply: 2}},
+            }),
+            '/learn/after-game/5': () => ({cards: []}),
+        });
+        await emitAct('match_found', MATCH);
+        const analysisCalls = () => (vi.mocked(fetch).mock.calls as unknown as [string][]).filter(([url]) => String(url).includes('/analysis/game/'));
+        expect(analysisCalls()).toHaveLength(0);  // честная игра: во время партии — ни одного запроса разбора
+
+        await emitAct('game_over', {game_id: 5, result: '1-0', reason: 'resignation'});
+        const summary = await screen.findByTestId('game-summary');
+        await waitFor(() => expect(summary.textContent).toContain('Решила одна ошибка'));
+        expect(String(analysisCalls()[0][0])).toContain('/analysis/game/5');
+        expect(screen.queryByTestId('summary-recommendation')).toBeNull();  // соперника-бота не рекомендуем
+    });
+});
+
 describe('реванш', () => {
     it('уход с завершённой партии снимает своё предложение реванша', async () => {
         renderBoard({'/profile/games/my-active': () => ({...MATCH, active: true})});
