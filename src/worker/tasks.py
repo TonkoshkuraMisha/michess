@@ -6,7 +6,8 @@
   из ошибок игроков (src/services/personal_puzzles.py) и раскладка партии в индекс позиций
   (src/services/position_index.py). analyze_imported_game — разбор и задачи для партии с другого сайта.
 * simulate_tournament_game — партия ботов между собой в турнире; после неё в очередь ставятся следующие партии.
-* workout_reminders, arena_reminders, bot_selfplay — плановые (расписание — src/worker/celery_app.py).
+* workout_reminders, arena_reminders, bot_selfplay, archive_move_telemetry — плановые (расписание —
+  src/worker/celery_app.py).
 
 Каждая задача запускается в своём цикле событий и создаёт своё подключение к базе (соединения asyncpg привязаны
 к циклу, в котором созданы). Задачам с движком нужен свободный процесс Stockfish из пула: если пул занят,
@@ -218,3 +219,26 @@ def bot_selfplay() -> int:
         return 0
     logger.info("Bot self-play games: %s", played)
     return played
+
+
+async def _archive_move_telemetry_async() -> int:
+    engine = create_async_engine(_task_database_url(), poolclass=NullPool)
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+            from src.services import telemetry_retention
+
+            return await telemetry_retention.archive_old_moves(db)
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="archive_move_telemetry", ignore_result=True)
+def archive_move_telemetry() -> int:
+    """
+    Сырые ходы moves старше срока апелляции — в сводку партии и удалить (src/services/telemetry_retention.py);
+    по расписанию celery beat раз в сутки.
+    """
+    archived = asyncio.run(_archive_move_telemetry_async())
+    if archived:
+        logger.info("Move telemetry archived for %s games", archived)
+    return archived

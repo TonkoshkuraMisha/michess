@@ -16,7 +16,7 @@ src/services/tournament_simulation.py (is_simulation).
 import enum
 from datetime import datetime
 
-from sqlalchemy import BigInteger, Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, func
+from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from src.models.base import Base
@@ -97,6 +97,10 @@ class Game(Base):
     eco: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
 
     analysis_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Сводка телеметрии ходов по сторонам (src/services/anticheat.telemetry_summary): ритм, потеря фокуса, предходы,
+    # штраф. Пишется при оценке партии античитом или перед удалением сырых ходов из moves через RETENTION_DAYS
+    # (src/services/telemetry_retention.py) — после этого ходы партии остаются только здесь.
+    telemetry_summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     # Имя персоналии из мастерской соперников: в базе соперник — общий бот-пользователь,
     # в архиве и PGN показывается имя, которое дал ему игрок.
     personality_name: Mapped[str | None] = mapped_column(String(30), nullable=True)
