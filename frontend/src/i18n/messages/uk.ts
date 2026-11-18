@@ -1950,6 +1950,8 @@ export const uk: Messages = {
         results: 'Білі · нічиї · чорні, %',
         share: 'Перемоги білих {white}%, нічиї {draw}%, перемоги чорних {black}%',
         masterGames: 'Партії майстрів',
+        inLibrary: 'у бібліотеці',
+        withNotes: 'з поясненнями',
     },
     tools: {
         title: 'Інструменти',

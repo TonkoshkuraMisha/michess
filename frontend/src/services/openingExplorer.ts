@@ -1,6 +1,7 @@
 // --- FILE: frontend/src/services/openingExplorer.ts ---
 // Справочник дебютов (таск 16.2): POST /analysis/opening-explorer — ходы из позиции со статистикой партий, название
-// дебюта и партии мастеров из архива. Под правилом честной игры: во время партии с человеком сервер отвечает 409.
+// дебюта и партии мастеров из архива и библиотеки. Под правилом честной игры: во время партии с человеком сервер
+// отвечает 409.
 // Маршрут — src/api/analysis.py, расчёт — src/services/opening_explorer.py: статистика берётся из индекса позиций
 // сыгранных партий (таблицы position_stats и position_games), название — из открытой таблицы дебютов.
 
@@ -27,7 +28,11 @@ export interface ExplorerMove {
     opening: ExplorerOpening | null;
 }
 
-/** Партия архива, прошедшая через позицию; id — для ссылки на просмотр партии. */
+/**
+ * Партия мастеров, прошедшая через позицию: из архива чемпионов (id — партия сайта, просмотр /game/{id}) или из
+ * публичной коллекции библиотеки (id — партия библиотеки, /library/game/{id}). Повтор одной партии в обоих местах
+ * сервер показывает один раз — партией библиотеки (src/services/opening_explorer.merge_examples).
+ */
 export interface ExplorerGame {
     id: number;
     white: string;
@@ -35,6 +40,9 @@ export interface ExplorerGame {
     year: string | null;
     result: string | null;
     eco: string | null;
+    source: 'archive' | 'library';
+    /** Только у партий библиотеки: есть объяснения, которые видит игрок. */
+    annotated?: boolean;
 }
 
 /** Ответ справочника по позиции после присланных ходов. */

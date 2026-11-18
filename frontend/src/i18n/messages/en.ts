@@ -1946,6 +1946,8 @@ export const en = {
         results: 'White · draws · Black, %',
         share: 'White wins {white}%, draws {draw}%, Black wins {black}%',
         masterGames: 'Master games',
+        inLibrary: 'in the library',
+        withNotes: 'with explanations',
     },
     tools: {
         title: 'Tools',

@@ -20,7 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.library import LibraryCollection, LibraryGame, LibraryGameCollection
 from src.models.user import User
-from src.services import openings, pawn_structures
+from src.services import openings, pawn_structures, position_index
 from src.services.game_engine import normalize_result
 
 STANDARD_FEN = chess.STARTING_FEN
@@ -234,6 +234,8 @@ async def import_games(db: AsyncSession, collection: LibraryCollection, games: I
                                   structure=structure_of(parsed), mate_finish=ends_in_mate(parsed.start_fen, parsed.moves))
                 db.add(row)
                 await db.flush()
+                # Позиции новой партии — в индекс библиотеки: примеры под позицией в справочнике дебютов (8б).
+                await position_index.index_library_game(db, row)
                 known[key] = game_id = row.id
                 stats.added += 1
             if game_id not in linked:
