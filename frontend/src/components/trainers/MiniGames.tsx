@@ -1,7 +1,8 @@
 // --- FILE: frontend/src/components/trainers/MiniGames.tsx ---
 // Игры тренеров (таск 19.8): /train/games — пять учебных игр с упрощёнными правилами; /train/games/:id — партия против
 // бота (за белых или за чёрных) или вдвоём за одним устройством. Правила и бот — на сервере (src/services/mini_games.py):
-// клиент присылает позицию и ход щелчками «откуда» — «куда», сервер проверяет ход и подводит итог.
+// клиент присылает позицию и ход щелчками «откуда» — «куда», сервер проверяет ход и подводит итог. Первая победа над
+// ботом записывается в прогресс уроков (miniProgressId) — по ней засчитывается шаг курса.
 
 import {useEffect, useState} from 'react';
 import {Link, useParams} from 'react-router-dom';
@@ -11,6 +12,8 @@ import type {UiMessage} from '../../i18n';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 import {API_BASE_URL} from '../../config/api';
 import {errorMessage, readApiErrorOr, UiError} from '../../services/apiErrors';
+import {getToken} from '../../services/authToken';
+import {saveLessonProgress} from '../../services/lessonProgress';
 
 export const MINI_GAMES = ['pawn_war', 'king_pawns', 'queen_vs_pawns', 'rook_vs_pawns', 'capture_flag'] as const;
 export type MiniGameId = typeof MINI_GAMES[number];
@@ -23,6 +26,11 @@ const START: Record<MiniGameId, string> = {
 };
 
 type Mode = 'bot-white' | 'bot-black' | 'hotseat';
+
+/** Запись прогресса игры тренера: lesson_progress «mini-<id>», выполнена после первой победы над ботом. */
+export function miniProgressId(id: string): string {
+    return `mini-${id.replace(/_/g, '-')}`;
+}
 
 interface MoveReply {
     fen: string;
@@ -114,6 +122,11 @@ export function MiniGamePage() {
         post(`/${id}/move`, {fen, move, bot: mode !== 'hotseat'}).then((r) => {
             setFen(r.fen);
             setResult(r.result);
+            // Победа над ботом засчитывает шаг курса и программы (автозачёт, services/courseProgress.ts).
+            const token = getToken();
+            if (token && mode !== 'hotseat' && r.result === (mySide === 'white' ? '1-0' : '0-1')) {
+                saveLessonProgress(token, miniProgressId(id), {step: 0, steps_total: 1, completed: true}).catch(() => undefined);
+            }
             setLast(r.bot_move ? {from: r.bot_move.slice(0, 2), to: r.bot_move.slice(2, 4)} : {from: move.slice(0, 2), to: move.slice(2, 4)});
         }).catch((err) => setError(errorMessage(err, 'common.networkError'))).finally(() => setBusy(false));
     };

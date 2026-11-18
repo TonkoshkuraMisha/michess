@@ -6,6 +6,9 @@
 
 GET /learn/after-game/{game_id} — карточки «Клубного тренера» после своей законченной партии
 (src/services/coach_cards.py).
+
+GET /learn/course-progress — выполненное по видам упражнений для автозачёта шагов курса
+(src/services/course_progress.py).
 """
 
 from datetime import UTC, datetime
@@ -23,6 +26,7 @@ from src.models.game import Game, GameStatus
 from src.models.lesson import LessonProgress
 from src.models.user import User
 from src.services import coach_cards, product_metrics
+from src.services import course_progress as course_progress_service
 
 router = APIRouter()
 
@@ -77,6 +81,15 @@ async def list_progress(db: AsyncSession = Depends(get_db), user: User = Depends
         select(LessonProgress).where(LessonProgress.user_id == user.id).order_by(LessonProgress.lesson_id)
     )).scalars().all()
     return [_out(p) for p in rows]
+
+
+@router.get("/course-progress")
+async def course_progress(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """
+    Выполненное игроком по видам упражнений — для автозачёта шагов Большого курса и программ (нормативы —
+    src/services/course_progress.py): {lessons, themes, trainers, exams}.
+    """
+    return await course_progress_service.summary(db, user.id)
 
 
 @router.put("/progress/{lesson_id}", response_model=ProgressOut)

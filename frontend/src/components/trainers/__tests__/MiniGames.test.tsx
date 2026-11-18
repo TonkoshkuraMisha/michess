@@ -4,8 +4,12 @@ import {act, fireEvent, render, screen} from '@testing-library/react';
 import {MemoryRouter, Route, Routes} from 'react-router-dom';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {MINI_GAMES, MiniGamePage, MiniGamesPage} from '../MiniGames';
+import {setToken} from '../../../services/authToken';
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+    vi.unstubAllGlobals();
+    setToken(null);
+});
 
 const page = (path: string) => render(
     <MemoryRouter initialEntries={[path]}>
@@ -41,6 +45,21 @@ describe('игры тренеров', () => {
         click('a7');
         await act(async () => click('a8'));
         expect(screen.getByTestId('mini-status')).toHaveTextContent('Победа белых!');
+        // Без входа прогресс не пишется.
+        expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/learn/progress/'))).toBe(false);
+    });
+
+    it('победа над ботом засчитывает шаг курса (запись mini-<id>)', async () => {
+        setToken('jwt');
+        const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => ({ok: true, json: async () => (
+            {fen: 'Q7/8/8/8/8/8/8/8 b - - 0 1', result: '1-0', bot_move: null})}) as Response);
+        vi.stubGlobal('fetch', fetchMock);
+        page('/train/games/pawn_war');
+        click('a7');
+        await act(async () => click('a8'));
+        const put = fetchMock.mock.calls.find(([, init]) => init?.method === 'PUT');
+        expect(String(put?.[0])).toContain('/learn/progress/mini-pawn-war');
+        expect(JSON.parse(String(put?.[1]?.body))).toMatchObject({completed: true});
     });
 
     it('вдвоём — без бота; за чёрных — первым ходит бот; ошибка хода показывается', async () => {
