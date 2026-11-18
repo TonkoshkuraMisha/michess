@@ -23,7 +23,7 @@ from src.db.session import get_db
 from src.models.arena import Arena
 from src.models.user import RatingCategory, User
 from src.services import arena as service
-from src.services import arena_league, conferences
+from src.services import arena_awards, arena_league, conferences
 from src.services.matchmaker import MatchmakingError
 
 router = APIRouter()
@@ -94,7 +94,7 @@ async def current_arena(db: AsyncSession = Depends(get_db)):
 async def get_arena(arena_id: int, request: Request, db: AsyncSession = Depends(get_db)):
     """
     Страница арены: карточка, таблица, зачёт конференций и — вошедшему игроку — его состояние (участвует ли, ждёт ли
-    пару, идущая партия, напоминание). Заодно продвигает швейцарку: тур мог закончиться.
+    пару, идущая партия, напоминание, призовое место после итогов). Заодно продвигает швейцарку: тур мог закончиться.
     """
     user_id = await optional_user_id(request, db)
     try:
@@ -116,7 +116,9 @@ async def get_arena(arena_id: int, request: Request, db: AsyncSession = Depends(
         me = {"joined": joined, "waiting": user_id in await service.waiting_ids(arena.id),
               "current_game_id": await service.current_game(db, arena.id, user_id) if joined else None,
               "division_arena_id": division_id,
-              "reminder": await service.has_reminder(db, arena.id, user_id)}
+              "reminder": await service.has_reminder(db, arena.id, user_id),
+              # Призовое место (33.5) — только когда награды розданы, то есть итоги окончательные.
+              "podium_place": await arena_awards.place_of(db, arena.id, user_id) if joined else None}
     return {**service.view(arena, None, await service.open_games(db, arena.id)),
             "standings": await service.standings(db, arena.id),
             # Зачёт конференций арены (33.6): сумма очков лучших участников каждой конференции.

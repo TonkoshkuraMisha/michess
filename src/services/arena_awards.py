@@ -8,7 +8,8 @@
 Из записей arena_awards считаются кубки в профиле (trophies: золото, серебро, бронза) и достижения «призёр арены» и
 «победитель арены» (src/services/achievements.py). Раздаёт награды плановая задача arena_awards
 (src/worker/tasks.py, расписание — beat_schedule в celery_app.py); арену проверяют, пока не прошло LOOKBACK после
-объявленного конца, и награждают один раз (у арены уже есть записи — пропускается).
+объявленного конца, и награждают один раз (у арены уже есть записи — пропускается). place_of — место игрока из
+этих же записей: по нему страница арены показывает праздник призёра.
 """
 
 from datetime import UTC, datetime, timedelta
@@ -61,3 +62,10 @@ async def trophies(db: AsyncSession, user_id: int) -> dict[str, int]:
     for place, count in rows:
         counts[MEDALS[place]] = count
     return counts
+
+
+async def place_of(db: AsyncSession, arena_id: int, user_id: int) -> int | None:
+    """Призовое место игрока в арене (1–3) из arena_awards; None — не призёр или итоги ещё не подведены."""
+    place = await db.scalar(select(ArenaAward.place).where(ArenaAward.arena_id == arena_id,
+                                                          ArenaAward.user_id == user_id))
+    return int(place) if place is not None else None

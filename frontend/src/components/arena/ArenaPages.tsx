@@ -4,7 +4,8 @@
 // сама подхватывает идущую партию). ArenaBanner — анонс в лобби главной доски. Арены идут по расписанию конференций
 // (33.4): в названии — конференция; у ещё не начавшейся арены — «напомнить перед началом». Зачёт конференций
 // (33.6): у игрока в таблице — его конференция, под таблицей — очки конференций в этой арене. Под списком арен —
-// месячная лига арен (33.5, ArenaLeague.tsx).
+// месячная лига арен (33.5, ArenaLeague.tsx). Призёру арены (место из наград сервера, me.podium_place) страница один
+// раз показывает праздник призёра — тот же, что после турниров (TournamentCelebration).
 
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Link, useNavigate, useParams} from 'react-router-dom';
@@ -16,6 +17,7 @@ import {getToken} from '../../services/authToken';
 import {arenasApi, clock, conferenceKey, controlLabel, secondsUntil} from '../../services/arenas';
 import type {ArenaDetail, ArenaInfo} from '../../services/arenas';
 import {ArenaLeague} from './ArenaLeague';
+import {markCelebrated, shouldCelebrate, TournamentCelebration} from '../tournaments/TournamentCelebration';
 
 export const WAIT_POLL_MS = 2000;
 const REFRESH_MS = 5000;
@@ -98,6 +100,8 @@ export function ArenaPage() {
     const [searching, setSearching] = useState(false);
     const [error, setError] = useState<UiMessage | null>(null);
     const searchingRef = useRef(false);
+    const [celebrating, setCelebrating] = useState(false);
+    const celebrationKey = `arena-${id}`;
 
     const load = useCallback(() => {
         arenasApi.get(id).then((data) => {
@@ -134,6 +138,16 @@ export function ArenaPage() {
             window.clearInterval(timer);
         };
     }, [searching, id, navigate]);
+
+    // Праздник призёра (33.5): итоги окончательные и игрок в тройке — один раз на арену.
+    const podium = arena?.status === 'finished' ? arena.me?.podium_place ?? null : null;
+    useEffect(() => {
+        if (podium !== null && podium <= 3 && shouldCelebrate(celebrationKey)) setCelebrating(true);
+    }, [podium, celebrationKey]);
+    const closeCelebration = useCallback(() => {
+        markCelebrated(celebrationKey);
+        setCelebrating(false);
+    }, [celebrationKey]);
 
     if (!arena) return error ? <p role="alert" className="p-4 text-rose-300">{renderUiMessage(error, t)}</p> : null;
 
@@ -258,6 +272,10 @@ export function ArenaPage() {
                         </tbody>
                     </table>
                 </section>
+            )}
+            {celebrating && podium !== null && (
+                <TournamentCelebration place={podium} title={arenaName(arena, t)}
+                                       size={arena.standings.filter((s) => s.games > 0).length} onClose={closeCelebration}/>
             )}
         </div>
     );

@@ -2,7 +2,8 @@
 // Праздник призёра (решение владельца, 17.11): после окончания любого турнира, если игрок занял 1–3 место, —
 // полноэкранная сцена: лучи, большой кубок цвета места (золото, серебро, бронза) с бликом, лавровый венок, конфетти
 // и фанфары. Всё рисуется кодом (SVG, canvas, Web Audio) — без чужих картинок и записей. Показывается один раз на
-// турнир (shouldCelebrate / markCelebrated); повторить можно кнопкой. При «уменьшить движение» — без конфетти и
+// турнир (shouldCelebrate / markCelebrated; ключ — номер турнира или строка вида «arena-5» для арен, 33.5); повторить
+// можно кнопкой. При «уменьшить движение» — без конфетти и
 // вращения.
 
 import {useEffect, useRef} from 'react';
@@ -31,7 +32,7 @@ export const MEDALS: Record<1 | 2 | 3, Medal> = {
 const CONFETTI_COLORS = ['#f6c945', '#e85d5d', '#4fa3e0', '#58c48b', '#b27ae6', '#ffffff', '#ff9f43'];
 
 /** Праздник ещё не показывали для этого турнира (хранилище недоступно — показываем). */
-export function shouldCelebrate(tournamentId: number): boolean {
+export function shouldCelebrate(tournamentId: number | string): boolean {
     try {
         return localStorage.getItem(`${STORAGE_PREFIX}${tournamentId}`) === null;
     } catch {
@@ -39,7 +40,7 @@ export function shouldCelebrate(tournamentId: number): boolean {
     }
 }
 
-export function markCelebrated(tournamentId: number): void {
+export function markCelebrated(tournamentId: number | string): void {
     try {
         localStorage.setItem(`${STORAGE_PREFIX}${tournamentId}`, '1');
     } catch {

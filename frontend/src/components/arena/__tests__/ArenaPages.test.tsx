@@ -10,6 +10,7 @@ import {notificationText} from '../../social/SocialHeader';
 import {notificationLink} from '../../../services/social';
 import type {AppNotification} from '../../../services/social';
 import {makeI18n} from '../../../i18n';
+import {soundEngine} from '../../../services/soundEngine';
 
 const SOON = new Date(Date.now() + 40 * 60_000).toISOString();
 const RUNNING = {id: 3, schedule_key: 'blitz-3+2', base_time_ms: 180000, increment_ms: 2000, starts_at: new Date().toISOString(),
@@ -262,5 +263,36 @@ describe('месячная лига арен', () => {
         await act(async () => fireEvent.click(screen.getByTestId('league-category-bullet')));
         expect(await screen.findByText('В этом месяце в аренах ещё не играли')).toBeInTheDocument();
         expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/arenas/league?category=bullet'))).toBe(true);
+    });
+});
+
+describe('праздник призёра арены', () => {
+    afterEach(() => localStorage.clear());
+
+    it('призёр окончательных итогов видит праздник один раз', async () => {
+        vi.spyOn(soundEngine, 'playFanfare').mockImplementation(() => undefined);
+        const body = {...RUNNING, id: 9, status: 'finished',
+            standings: [{place: 1, username: 'me', score: 8, games: 4, wins: 4, fire: false, rating: 1600},
+                {place: 2, username: 'magnus', score: 6, games: 3, wins: 3, fire: false, rating: 2800}],
+            me: {joined: true, waiting: false, current_game_id: null, podium_place: 1}};
+        vi.stubGlobal('fetch', vi.fn(async () => ({ok: true, status: 200, json: async () => body} as Response)));
+        const view = routes('/arenas/9');
+        expect(await screen.findByTestId('tournament-celebration')).toBeInTheDocument();
+        expect(screen.getByText('Место 1 из 2')).toBeInTheDocument();
+        await act(async () => fireEvent.click(screen.getByTestId('celebration-close')));
+        expect(screen.queryByTestId('tournament-celebration')).not.toBeInTheDocument();
+        view.unmount();
+        routes('/arenas/9');
+        expect(await screen.findByTestId('arena-standings')).toBeInTheDocument();
+        expect(screen.queryByTestId('tournament-celebration')).not.toBeInTheDocument();
+    });
+
+    it('без призового места праздника нет', async () => {
+        const body = {...RUNNING, id: 10, status: 'finished', standings: [],
+            me: {joined: true, waiting: false, current_game_id: null, podium_place: null}};
+        vi.stubGlobal('fetch', vi.fn(async () => ({ok: true, status: 200, json: async () => body} as Response)));
+        routes('/arenas/10');
+        expect(await screen.findByTestId('arena-page')).toBeInTheDocument();
+        expect(screen.queryByTestId('tournament-celebration')).not.toBeInTheDocument();
     });
 });
