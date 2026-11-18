@@ -3,7 +3,7 @@
 import {describe, expect, it} from 'vitest';
 import {Chess} from 'chess.js';
 import {
-    calculateMaterialBalance, cloneChessInstance, customStartFen, pairHalfMoves, prevIndexHelper,
+    calculateMaterialBalance, cloneChessInstance, customStartFen, fittedBoardSize, MIN_BOARD_SIZE, pairHalfMoves, prevIndexHelper,
     STANDARD_START_FEN, validateFen,
 } from '../boardUtils';
 import {DEFAULT_TIME_CONTROL, TIME_CONTROLS} from '../../../config/timeControls';
@@ -124,4 +124,18 @@ describe('контроль времени: группа совпадает с к
             expect(serverCategory(option.base, option.inc)).toBe(groupCategory);
         },
     );
+});
+
+describe('fittedBoardSize — доска по окну', () => {
+    it('без сохранённого размера — наибольшая, что помещается', () => {
+        expect(fittedBoardSize(null, 640)).toBe(640);
+        expect(fittedBoardSize('мусор', 640)).toBe(640);
+    });
+    it('сохранённый размер — но не больше окна; окно выросло — доска возвращается к сохранённому', () => {
+        expect(fittedBoardSize('560', 400)).toBe(400);
+        expect(fittedBoardSize('560', 900)).toBe(560);
+    });
+    it('слишком маленький сохранённый размер не используется', () => {
+        expect(fittedBoardSize(String(MIN_BOARD_SIZE - 1), 640)).toBe(640);
+    });
 });
