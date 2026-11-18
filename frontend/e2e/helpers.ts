@@ -30,3 +30,15 @@ export async function loginNewPlayer(page: Page, request: APIRequestContext, pre
     }
     return loginPage(page, username);
 }
+
+/**
+ * Окно «Новая партия» игрового зала (схема владельца 18.11) на шаге «Начать»: соперник — человек или бот, контроль
+ * времени — какой выбран. С первого шага, чтобы не зависеть от выбора, запомненного прошлой партией.
+ */
+export async function openNewGame(page: Page, who: 'human' | 'bot'): Promise<void> {
+    await page.getByTestId('new-game-open').click();
+    await page.getByTestId('new-game-step-who').click();
+    await page.getByTestId(`new-game-who-${who}`).click();
+    await page.getByTestId('new-game-next').click();
+    await expect(page.getByTestId(`new-game-start-${who}`)).toBeVisible();
+}
