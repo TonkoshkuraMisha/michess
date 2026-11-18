@@ -539,7 +539,7 @@ describe('игра с наставником', () => {
         return {calls};
     }
 
-    it('зевок: бот ждёт решения, «Почему?» рисует стрелку, «Переходить» возвращает позицию', async () => {
+    it('зевок: партия не ждёт совета, «Почему?» рисует стрелку, «Переходить» возвращает позицию до хода', async () => {
         const {calls} = await startCoachedGame(BLUNDER);
         clickSquare('f2');
         clickSquare('f3');
@@ -548,7 +548,8 @@ describe('игра с наставником', () => {
         await act(async () => {
             await vi.advanceTimersByTimeAsync(1500);
         });
-        expect(calls.some((url) => url.includes('/bots/move'))).toBe(false);
+        // Решение владельца 18.11: наставник советует, но не останавливает — бот отвечает, не дожидаясь игрока.
+        expect(calls.some((url) => url.includes('/bots/move'))).toBe(true);
 
         fireEvent.click(screen.getByTestId('coach-why'));
         expect(screen.getByTestId('coach-arrow-threat')).toBeInTheDocument();
