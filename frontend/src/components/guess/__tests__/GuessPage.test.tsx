@@ -77,6 +77,19 @@ describe('Угадай ход мастера', () => {
         expect(screen.getByTestId('guess-session')).toHaveTextContent('Баллы: 100 из 100 · точность понимания 100%');
     });
 
+    it('после ответа доска свободна: ход мастера можно сыграть и продолжить, ответ уже засчитан', async () => {
+        const fetchMock = stub({'/guess/next': () => ({position: POSITION}), '/position/5/answer': () => ({...ANSWER, score: 0})});
+        renderPage();
+        await screen.findByTestId('guess-players');
+        await play('h2', 'h3');
+        expect(await screen.findByTestId('guess-score')).toHaveTextContent('0');
+        expect(screen.queryByTestId('explorer-controls')).toBeNull();
+        await play('f3', 'e5');  // ход мастера, сыгранный после ответа, — разбор, а не второй ответ
+        expect(cell('e5').querySelector('img')?.getAttribute('alt')).toBe('wn');
+        expect(screen.getByTestId('explorer-back')).not.toBeDisabled();
+        expect((fetchMock.mock.calls as unknown as [string, RequestInit][]).filter(([, init]) => init?.method === 'POST')).toHaveLength(1);
+    });
+
     it('позиции ещё не отобраны — понятное сообщение', async () => {
         stub({'/guess/next': () => ({position: null})});
         renderPage();

@@ -1,7 +1,8 @@
 // --- FILE: frontend/src/components/guess/GuessPage.tsx ---
 // «Угадай ход мастера» (таск 14.3): позиция из партии мастера, игрок делает ход — баллы, ход мастера, оценка
 // движка и объяснение наставника. Режимы: отдельные позиции и серия ходов из одной партии. /guess/:positionId —
-// конкретная позиция (переход из просмотра партии).
+// конкретная позиция (переход из просмотра партии). После ответа доска свободна: позицию можно разыграть
+// (usePositionExplorer).
 
 import {useCallback, useEffect, useState} from 'react';
 import {Link, useNavigate, useParams} from 'react-router-dom';
@@ -14,6 +15,7 @@ import {guessApi, understanding} from '../../services/guess';
 import type {GuessAnswer, GuessPosition} from '../../services/guess';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 import type {BoardArrow} from '../puzzles/PuzzleBoard';
+import {ExplorerControls, usePositionExplorer} from '../puzzles/usePositionExplorer';
 
 type Mode = 'single' | 'series';
 
@@ -41,6 +43,8 @@ export function GuessPage() {
     const [played, setPlayed] = useState<string | null>(null);
     const [scores, setScores] = useState<number[]>([]);
     const [error, setError] = useState<UiMessage | null>(null);
+    const explorer = usePositionExplorer();
+    const stopExplorer = explorer.stop;
 
     const show = useCallback((next: GuessPosition | null) => {
         setPosition(next);
@@ -48,7 +52,8 @@ export function GuessPage() {
         setAnswer(null);
         setPlayed(null);
         setError(null);
-    }, []);
+        stopExplorer();
+    }, [stopExplorer]);
 
     const loadNext = useCallback((which: Mode) => {
         guessApi.next(which === 'series').then((r) => show(r.position)).catch((err) => setError(errorMessage(err, 'common.networkError')));
@@ -63,7 +68,14 @@ export function GuessPage() {
     }, [positionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const submit = async (uci: string) => {
-        if (!position || answer) return;
+        if (!position) return;
+        // Ответ уже дан — доска свободна: ход игрока начинает разбор с позиции (стрелки мастера и своего хода видны
+        // до первого хода разбора).
+        if (answer) {
+            if (explorer.active) explorer.play(uci);
+            else explorer.start(position.fen, [uci]);
+            return;
+        }
         setPlayed(uci);
         try {
             const result = await guessApi.answer(position.id, uci);
@@ -122,9 +134,11 @@ export function GuessPage() {
             {position && (
                 <div className="flex flex-col md:flex-row gap-5 items-start">
                     <div className="w-full max-w-[520px]">
-                        <PuzzleBoard fen={position.fen} orientation={position.side} interactive={!answer} onMove={(uci) => void submit(uci)}
-                                     lastMove={position.last_move ? {from: position.last_move.slice(0, 2), to: position.last_move.slice(2, 4)} : null}
-                                     arrows={arrows}/>
+                        <PuzzleBoard fen={explorer.fen ?? position.fen} orientation={position.side} interactive onMove={(uci) => void submit(uci)}
+                                     lastMove={explorer.active ? explorer.lastMove
+                                         : position.last_move ? {from: position.last_move.slice(0, 2), to: position.last_move.slice(2, 4)} : null}
+                                     arrows={explorer.active ? [] : arrows}/>
+                        <ExplorerControls explorer={explorer}/>
                     </div>
                     <div className="flex-1 flex flex-col gap-3 min-w-0">
                         <div className="bg-black/30 rounded p-3 text-sm flex flex-col gap-1">
