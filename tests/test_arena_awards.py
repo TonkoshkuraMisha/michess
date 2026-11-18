@@ -2,7 +2,8 @@
 """
 Награды арен (таск 33.5, src/services/arena_awards.py): тройка таблицы итогов законченной арены получает места,
 уведомление и достижения; без партий места нет; незаконченная арена и швейцарка до последнего тура не награждаются;
-повторный запуск ничего не добавляет; кубки видны в профиле через настоящий запрос. Время зафиксировано.
+повторный запуск ничего не добавляет; кубки видны в профиле через настоящий запрос; страница арены отдаёт
+призёру его место (праздник призёра). Время зафиксировано.
 """
 
 import itertools
@@ -72,3 +73,20 @@ async def test_no_place_without_games_and_no_awards_before_the_end(db_session):
 
 def test_awards_task_is_scheduled():
     assert "arena_awards" in {entry["task"] for entry in celery_app.conf.beat_schedule.values()}
+
+
+async def test_arena_page_tells_the_winner_its_place(client, db_session, test_user_1, token_user_1, monkeypatch):
+    from src.services import arena as arena_service
+
+    monkeypatch.setattr(arena_service, "_now", lambda: NOW)
+    arena, _ = await _arena(db_session, [(2, 2), (1, 2)])
+    db_session.add(ArenaPlayer(arena_id=arena.id, user_id=test_user_1.id, score=8, games=4, wins=4, rating=1600))
+    await db_session.commit()
+    headers = {"Authorization": f"Bearer {token_user_1}"}
+
+    # Итоги ещё не подведены — места нет.
+    assert client.get(f"/api/v1/arenas/{arena.id}", headers=headers).json()["me"]["podium_place"] is None
+    await arena_awards.award_finished(db_session, NOW)
+    page = client.get(f"/api/v1/arenas/{arena.id}", headers=headers).json()
+    assert (page["status"], page["me"]["podium_place"]) == ("finished", 1)
+    assert client.get(f"/api/v1/arenas/{arena.id}").json()["me"] is None
