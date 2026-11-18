@@ -197,7 +197,16 @@ jobs:
           grep -Eq "users=[1-9][0-9]* " verify.log
           ls -l backups/
 
-      # E2E (Playwright, frontend/e2e): два браузера — регистрация, вызов по ссылке, мат, реванш.
+      # Идущая арена для сценария арены в E2E (frontend/e2e/social-arena.e2e.ts): расписание может не ставить
+      # арену на время прогона, поэтому создаём разовую и передаём её номер сценарию.
+      - name: Create a running arena for E2E
+        run: |
+          id=$(docker compose -f docker-compose.prod.yml exec -T api python scripts/e2e_arena.py | tail -1)
+          test -n "$id"
+          echo "E2E_ARENA_ID=$id" >> "$GITHUB_ENV"
+
+      # E2E (Playwright, frontend/e2e): два браузера — регистрация, вызов по ссылке, мат, реванш; сообщения, лента и
+      # партия арены.
       - name: Set up Node.js for E2E
         uses: actions/setup-node@v7
         with:
@@ -209,6 +218,7 @@ jobs:
         working-directory: frontend
         env:
           E2E_BASE_URL: http://localhost:8080
+          E2E_ARENA_ID: ${{ env.E2E_ARENA_ID }}
         run: |
           npm ci
           npx playwright install --with-deps chromium
