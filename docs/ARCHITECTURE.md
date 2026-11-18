@@ -157,7 +157,10 @@
   игрока (`users.trust_factor`, начинается со 100): ровный «машинный» ритм ходов по часам сервера — основной сигнал,
   потеря фокуса окна только усиливает его. Ниже 30 — флаг `is_cheater` и заявка модератору на проверку; решает
   человек (`src/services/moderation.py`), игрок может подать апелляцию.
-- **Тесты.** `fair_play`, `anticheat`, `engine_endpoints`, `moderation`.
+- **Телеметрия ходов** (таблица `moves`) — только буфер для античита: сводка по сторонам сразу пишется в
+  `games.telemetry_summary`, а сырые строки удаляет плановая задача `archive_move_telemetry` через 90 дней после
+  партии (срок апелляции, `src/services/telemetry_retention.py`).
+- **Тесты.** `fair_play`, `anticheat`, `engine_endpoints`, `moderation`, `telemetry_retention`.
 
 ### 4.4. Движок Stockfish
 

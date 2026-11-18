@@ -16,7 +16,8 @@
 is_cheater и создаётся заявка модератору (src/services/moderation.py) — решение принимает человек. Партия
 оценивается один раз (отметка в Redis, ключ anticheat:evaluated:{game_id}). Запросы движка с адреса игрока во время
 партии только записываются как сигнал для разбора — штрафа за них нет. Вызывается при завершении партии
-(src/services/game_state.py).
+(src/services/game_state.py). Там же сводка ритма по сторонам пишется в games.telemetry_summary (telemetry_summary):
+сырые ходы moves хранятся только RETENTION_DAYS (src/services/telemetry_retention.py).
 """
 
 import logging
@@ -160,6 +161,24 @@ def compute_telemetry_penalty(moves: list[Move]) -> dict:
     }
 
 
+def telemetry_summary(game: Game, moves: list[Move]) -> dict[str, dict]:
+    """
+    Сводка телеметрии партии по сторонам ({"white": …, "black": …}) — то, что остаётся в games.telemetry_summary
+    после удаления сырых ходов (src/services/telemetry_retention.py): число ходов и предходов, наибольшая задержка
+    сети и величины compute_telemetry_penalty (штраф, доля потери фокуса, вариация и среднее время хода).
+    """
+    summary: dict[str, dict] = {}
+    for color, player_id in (("white", game.white_player_id), ("black", game.black_player_id)):
+        own = [m for m in moves if m.player_id == player_id]
+        summary[color] = {
+            "moves": len(own),
+            "premoves": sum(1 for m in own if m.is_premove),
+            "max_lag_ms": max((int(m.network_lag_ms or 0) for m in own), default=0),
+            **compute_telemetry_penalty(own),
+        }
+    return summary
+
+
 async def evaluate_game_telemetry(db: AsyncSession, game_id: int, force: bool = False) -> dict[int, dict]:
     """
     Анализирует телеметрию завершённой партии для обоих игроков,
@@ -182,6 +201,8 @@ async def evaluate_game_telemetry(db: AsyncSession, game_id: int, force: bool = 
         return {}
 
     already_evaluated = not force and not await _claim_first_evaluation(game_id)
+    # Сводка — сразу: сырые ходы удалит задача хранения через RETENTION_DAYS, а сводка останется у партии.
+    game.telemetry_summary = telemetry_summary(game, all_moves)
 
     moves_by_player: dict[int, list[Move]] = {
         game.white_player_id: [],
