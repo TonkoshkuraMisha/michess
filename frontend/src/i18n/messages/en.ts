@@ -1749,6 +1749,7 @@ export const en = {
             next: 'Next exercise',
             start: 'Start',
         },
+        explore: {hint: 'The board is free: play the position on.', back: 'Move back', toStart: 'To the puzzle position'},
         personal: {
             task: 'This happened in your game. Find the strong move!',
             summary: 'To review now: {due} · in progress: {active} · mastered: {mastered}',
