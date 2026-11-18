@@ -124,9 +124,9 @@ AVAILABLE_BOTS = [
         "rating": 2120,
         "avatar": "/assets/champions/zukertort.jpg",
     },
-    # Мастера второй волны (таск 21.5): портреты — из раздела чемпионов, в лестницу не входят (ступень — индекс).
+    # Мастера второй волны (таск 21.5): портреты — из раздела чемпионов; с 18.11 — ступени лестницы, как все боты.
     *({"id": m.id, "pgn_name": m.pgn_name, "era": m.era, "rating": m.rating,
-       "avatar": f"/assets/champions/{m.id.capitalize()}.jpg", "ladder": False} for m in MASTERS),
+       "avatar": f"/assets/champions/{m.id.capitalize()}.jpg"} for m in MASTERS),
 ]
 
 logger = logging.getLogger(__name__)
@@ -966,7 +966,7 @@ async def save_bot_game(
         player_score = {"1-0": 1.0, "0-1": 0.0}.get(result, 0.5)
         if payload.player_color == "black" and result != "1/2-1/2":
             player_score = 1.0 - player_score
-        ladder_outcome = ladder_service.apply_result(current_user, rung_index, rung, player_score, session.assisted)
+        ladder_outcome = await ladder_service.apply_result(db, current_user, rung, player_score, session.assisted)
     await product_metrics.record_event(db, current_user.id, product_metrics.GAME_FINISHED)
     await db.commit()
     await db.refresh(new_game)

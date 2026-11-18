@@ -937,6 +937,7 @@ export const uk: Messages = {
         beaten: 'пройдено',
         current: 'поточний',
         locked: 'закрито',
+        skipped: 'пропущено — суперник з’явився в драбині після того, як ви пройшли її вище',
         notCounted: 'Партію не зараховано до драбини: {reason}.',
         result: 'Драбина: рейтинг {rating} ({delta}).',
         resultPromoted: 'Драбина: рейтинг {rating} ({delta}) — відкрито наступного суперника!',

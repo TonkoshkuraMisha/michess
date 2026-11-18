@@ -102,11 +102,5 @@ ARCHETYPES: tuple[Archetype, ...] = (
     ),
 )
 
-# Соперники для новичков в лестницу (10.4) не входят: ступень игрока — индекс в списке ступеней, и новые ступени
-# внизу сдвинули бы прогресс всех, кто уже на лестнице. Включать их — вместе с миграцией ladder_step.
-BEGINNER_IDS = frozenset({"blunderer", "queen_rusher", "trap_victim", "pawn_grabber", "knight_rider", "homebody",
-                          "trader", "oddball", "trapper", "gambiteer", "peacemaker", "pawn_pusher"})
-LADDER_ARCHETYPES = tuple(a for a in ARCHETYPES if a.id not in BEGINNER_IDS)
-
 ARCHETYPES_BY_ID = {a.id: a for a in ARCHETYPES}
 ARCHETYPES_BY_KEY = {a.key: a for a in ARCHETYPES}

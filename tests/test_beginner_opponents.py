@@ -7,8 +7,8 @@ import chess
 import pytest
 from pydantic import ValidationError
 
-from src.services import move_check
-from src.services.bots.archetypes import ARCHETYPES, ARCHETYPES_BY_ID, BEGINNER_IDS, LADDER_ARCHETYPES
+from src.services import ladder, move_check
+from src.services.bots.archetypes import ARCHETYPES, ARCHETYPES_BY_ID
 from src.services.bots.personality import (
     BotPersonalityConfig,
     PersonalityBot,
@@ -91,10 +91,15 @@ def test_draw_attitude():
     assert peace[trade] == 40.0 and fight[trade] == -40.0
 
 
+BEGINNER_IDS = {"blunderer", "queen_rusher", "trap_victim", "pawn_grabber", "knight_rider", "homebody",
+                "trader", "oddball", "trapper", "gambiteer", "peacemaker", "pawn_pusher"}
+
+
 def test_beginner_archetypes():
     beginners = [a for a in ARCHETYPES if a.id in BEGINNER_IDS]
     assert len(beginners) == 12 and all(300 <= a.config.target_elo <= 1200 for a in beginners)
-    assert not any(a.id in BEGINNER_IDS for a in LADDER_ARCHETYPES)  # прогресс лестницы не сдвигается
+    # С 18.11 соперники для новичков — нижние ступени лестницы (прогресс хранится ключами, ничей не сдвигается).
+    assert {f"archetype:{a.id}" for a in beginners} <= {r.key for r in ladder.rungs()}
     assert ARCHETYPES_BY_ID["trap_victim"].config.opening_style == "trap_victim"
 
 

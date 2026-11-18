@@ -71,10 +71,10 @@ class User(Base):
     classical_games_played: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
 
     # Клубная лестница (таск 10.4): отдельный рейтинг в партиях с ботами без подсказок движка и
-    # возвратов хода, и ступень — индекс следующего соперника на лестнице (src/services/ladder.py).
+    # возвратов хода. Пройденные ступени — таблица ladder_beaten (src/models/ladder.py), текущую считает
+    # src/services/ladder.py.
     ladder_rating: Mapped[int] = mapped_column(Integer, default=1000, server_default="1000", nullable=False)
     ladder_games: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
-    ladder_step: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     # Рейтинг решателя задач (таск 13.1) — отдельная категория, на игровые рейтинги не влияет.
     puzzle_rating: Mapped[int] = mapped_column(Integer, default=1500, server_default="1500", nullable=False)
     puzzle_games: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)

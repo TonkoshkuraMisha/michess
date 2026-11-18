@@ -6,7 +6,7 @@
 // анализ, возврат хода или подмена соперника — партия не засчитывается.
 
 import {useCallback, useEffect, useState} from 'react';
-import {CheckCircle2, Lock, Swords} from 'lucide-react';
+import {CheckCircle2, CircleDashed, Lock, Swords} from 'lucide-react';
 import {API_BASE_URL} from '../../config/api';
 import {UiError, errorMessage, readApiErrorOr} from '../../services/apiErrors';
 import type {PersonalityConfig} from '../../services/personalities';
@@ -25,7 +25,8 @@ interface Rung {
     id: string;
     rating: number;
     measured: boolean;
-    status: 'beaten' | 'current' | 'locked';
+    /** skipped — слабее текущей, но не пройдена: соперник добавлен в лестницу ниже уже пройденного (сервер, ladder.py). */
+    status: 'beaten' | 'current' | 'skipped' | 'locked';
 }
 
 /** Ответ GET /bots/ladder: рейтинг лестницы, номер текущей ступени (с нуля), все ступени. */
@@ -164,7 +165,9 @@ export function LadderPanel({playDisabled, onStart, lastOutcome}: LadderPanelPro
                                 <span className="w-4 text-right font-mono text-boxwood/50">{i + 1}</span>
                                 {r.status === 'beaten' ? <CheckCircle2 size={12} className="text-emerald-400" aria-label={t('ladder.beaten')}/>
                                     : r.status === 'current' ? <Swords size={12} className="text-amber-300" aria-label={t('ladder.current')}/>
-                                        : <Lock size={12} className="text-boxwood/40" aria-label={t('ladder.locked')}/>}
+                                        : r.status === 'skipped' ? <CircleDashed size={12} className="text-boxwood/60" aria-label={t('ladder.skipped')}
+                                                                                 data-testid={`ladder-skipped-${r.key}`}/>
+                                            : <Lock size={12} className="text-boxwood/40" aria-label={t('ladder.locked')}/>}
                                 <span className="flex-1 truncate">{ladderOpponentName(r.kind, r.id, t)}</span>
                                 <span className="font-mono">{r.rating}</span>
                             </li>

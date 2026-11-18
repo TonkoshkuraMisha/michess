@@ -2,15 +2,19 @@
 """
 Клубная лестница (таск 10.4): соперники по измеренной силе, отдельный рейтинг, ступени, и
 серверная проверка честности — подсказка движка, возврат хода и подмена соперника не засчитываются.
+С 18.11 (задача 7 плана) в лестнице все боты и архетипы, прогресс — множество пройденных ступеней (ladder_beaten):
+соперник, добавленный ниже пройденного, игрока не отбрасывает — он «пропущен».
 """
 
 import chess
 import pytest
 
+from src.api.bots import AVAILABLE_BOTS
+from src.models.ladder import LadderBeaten
 from src.services import ladder
 from src.services.bots import base as bots_base
 from src.services.bots import calibration
-from src.services.bots.archetypes import ARCHETYPES, LADDER_ARCHETYPES
+from src.services.bots.archetypes import ARCHETYPES
 
 API = "/api/v1/bots"
 FOOLS_MATE = ["f2f3", "e7e5", "g2g4", "d8h4"]  # мат белым на 4-м полуходе
@@ -79,9 +83,11 @@ def save(client, token, opponent: dict, moves: list[str], color: str, result: st
 
 def test_rungs_are_ordered_by_measured_strength(fake_calibration):
     items = ladder.rungs()
-    assert len(items) == 7 + len(LADDER_ARCHETYPES)
+    assert len(items) == len(AVAILABLE_BOTS) + len(ARCHETYPES)  # все боты и все архетипы, с новичковыми
     assert [r.rating for r in items] == sorted(r.rating for r in items)
-    assert items[0].key == "archetype:rusher" and items[0].measured and items[0].rating == 650
+    rusher = next(r for r in items if r.key == "archetype:rusher")
+    assert rusher.measured and rusher.rating == 650
+    assert items[0].kind == "archetype" and items[0].rating < 650  # внизу — соперник для новичков
     morphy = next(r for r in items if r.key == "morphy")
     assert morphy.rating == 2050 and morphy.measured
     assert not next(r for r in items if r.key == "philidor").measured
@@ -110,7 +116,7 @@ def test_new_player_starts_at_the_bottom(client, token_user_1, fake_calibration)
 def test_clean_win_raises_rating_and_unlocks_next_rung(client, token_user_1, fake_calibration):
     start = client.post(f"{API}/ladder/start", headers=auth(token_user_1), json={"color": "white"}).json()
     opponent = start["opponent"]
-    assert opponent["id"] == "rusher" and opponent["kind"] == "archetype" and start["color"] == "white"
+    assert opponent["key"] == ladder.rungs()[0].key and opponent["kind"] == "archetype" and start["color"] == "white"
 
     play_ladder_moves(client, token_user_1, opponent, SCHOLARS_MATE, "white")
     saved = save(client, token_user_1, opponent, SCHOLARS_MATE, "white", "1-0")
@@ -217,6 +223,33 @@ def test_regular_bot_games_do_not_touch_the_ladder(client, token_user_1, fake_ca
     })
     assert saved.status_code == 200 and saved.json()["ladder"] is None
     assert client.get(f"{API}/ladder", headers=auth(token_user_1)).json()["games"] == 0
+
+
+def test_current_rung_is_above_the_strongest_beaten():
+    items = [ladder.Rung(k, "archetype", k, r, False) for k, r in (("a", 400), ("b", 600), ("c", 800), ("d", 1000))]
+    assert ladder.current_index(items, set()) == 0
+    assert ladder.current_index(items, {"a", "b"}) == 2
+    # «a» добавлен в лестницу позже, чем игрок прошёл «b»: текущая — «c», «a» — пропущена, а не текущая.
+    assert ladder.current_index(items, {"b"}) == 2
+    assert [ladder.rung_status(i, r, 2, {"b"}) for i, r in enumerate(items)] == ["skipped", "beaten", "current", "locked"]
+    assert ladder.current_index(items, {"a", "b", "c", "d"}) == 3  # всё пройдено — последняя
+
+
+async def test_progress_carried_over_from_the_old_ladder_stays(client, db_session, test_user_1, token_user_1,
+                                                               fake_calibration):
+    # Как после миграции b4d2e8f1a6c3: пройдены первые пять ступеней прежней лестницы.
+    old = ["archetype:rusher", "archetype:quiet", "archetype:pawn_keeper", "archetype:cavalier", "archetype:centralist"]
+    db_session.add_all(LadderBeaten(user_id=test_user_1.id, rung_key=key) for key in old)
+    await db_session.commit()
+    state = client.get(f"{API}/ladder", headers=auth(token_user_1)).json()
+    statuses = {r["key"]: r["status"] for r in state["rungs"]}
+    assert all(statuses[key] == "beaten" for key in old)
+    current = next(r for r in state["rungs"] if r["status"] == "current")
+    strongest = max(r["rating"] for r in state["rungs"] if r["status"] == "beaten")
+    assert current["rating"] >= strongest  # не отброшен вниз к новичковым соперникам
+    assert "skipped" in statuses.values() and statuses[ladder.rungs()[0].key] == "skipped"
+    start = client.post(f"{API}/ladder/start", headers=auth(token_user_1), json={"color": "white"}).json()
+    assert start["opponent"]["key"] == current["key"] and start["step"] == state["step"]
 
 
 def test_expected_score_and_k_factor():
