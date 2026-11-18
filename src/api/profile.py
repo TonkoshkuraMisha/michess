@@ -777,7 +777,7 @@ async def download_pgn(game_id: int, db: AsyncSession = Depends(get_db)):
     if not game or not game.pgn:
         raise ApiError(404, "pgn_not_found", game_id=game_id)
 
-    headers = {"Content-Disposition": f"attachment; filename=michess_game_{game_id}.pgn"}
+    headers = {"Content-Disposition": f"attachment; filename=regence_game_{game_id}.pgn"}
     return PlainTextResponse(content=game.pgn, media_type="application/x-chess-pgn", headers=headers)
 
 

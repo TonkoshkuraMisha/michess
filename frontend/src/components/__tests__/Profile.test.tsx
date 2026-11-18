@@ -48,7 +48,7 @@ const game = (id: number, white: string, black: string, result: string, extra: R
 });
 
 const GAMES = [
-    game(1, 'Alice', 'Bob', '1-0', {eco: 'C20', site: 'Michess', pgn_date: '2026.10.05'}),
+    game(1, 'Alice', 'Bob', '1-0', {eco: 'C20', site: 'Regence', pgn_date: '2026.10.05'}),
     game(2, 'Bob', 'Alice', '1-0'),
     game(3, 'Alice', 'Carol', '1/2-1/2'),
     game(4, 'Dave', 'Alice', '0-1', {pgn_date: '????.??.??'}),

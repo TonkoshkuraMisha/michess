@@ -22,8 +22,8 @@ describe('фон страницы', () => {
         expect(document.body.style.backgroundImage).toContain('/assets/patterns/celtic.svg');
         expect(getSavedPagePattern()).toBe('celtic');
         expect(getSavedPagePalette()).toBe('teal');
-        localStorage.setItem('michess_page_pattern', 'unknown');
-        localStorage.setItem('michess_page_palette', 'pink');
+        localStorage.setItem('regence_page_pattern', 'unknown');
+        localStorage.setItem('regence_page_palette', 'pink');
         expect(getSavedPagePattern()).toBe('none');
         expect(getSavedPagePalette()).toBe('room');
     });

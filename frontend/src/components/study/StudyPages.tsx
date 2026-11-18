@@ -319,7 +319,7 @@ export function StudyRoomPage() {
                                 <button type="button" onClick={() => setSteps((list) => [...list, lessonStep(board, note)])} data-testid="lesson-add"
                                         className="px-2 py-1 rounded bg-black/40 border border-amber-800/60">{t('study.addStep')}</button>
                                 <button type="button" disabled={!lessonReady} data-testid="lesson-download"
-                                        onClick={() => downloadText(`michess-lesson-${code}.json`, JSON.stringify(lesson(), null, 1))}
+                                        onClick={() => downloadText(`regence-lesson-${code}.json`, JSON.stringify(lesson(), null, 1))}
                                         className="px-2 py-1 rounded bg-black/40 border border-amber-800/60 flex items-center gap-1 disabled:opacity-40">
                                     <Download size={13}/> {t('study.download')}
                                 </button>

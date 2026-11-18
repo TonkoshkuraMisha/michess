@@ -85,7 +85,7 @@ async def _limit_mail(request: Request, email: str) -> None:
 async def export_my_data(user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     """Все данные игрока одним файлом JSON (GDPR, право на переносимость); только свои, нужен вход."""
     data = await service.export_data(db, user)
-    return JSONResponse(data, headers={"Content-Disposition": f'attachment; filename="michess-{user.id}.json"'})
+    return JSONResponse(data, headers={"Content-Disposition": f'attachment; filename="regence-{user.id}.json"'})
 
 
 @router.get("/games.pgn", response_class=PlainTextResponse)
@@ -98,7 +98,7 @@ async def export_my_games_pgn(offset: int = Query(0, ge=0), user: User = Depends
     """
     text, total = await service.games_pgn(db, user, offset)
     return PlainTextResponse(text, media_type="application/x-chess-pgn", headers={
-        "Content-Disposition": f'attachment; filename="michess-games-{user.id}.pgn"', "X-Total-Count": str(total),
+        "Content-Disposition": f'attachment; filename="regence-games-{user.id}.pgn"', "X-Total-Count": str(total),
     })
 
 

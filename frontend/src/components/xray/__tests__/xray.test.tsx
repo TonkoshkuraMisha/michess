@@ -77,7 +77,7 @@ describe('XrayPanel и настройки', () => {
         act(() => fireEvent.click(screen.getByTestId('xray-mode-control')));
         rerender(<XrayPanel settings={result.current}/>);
         expect(result.current.modes.has('control')).toBe(true);
-        expect(JSON.parse(localStorage.getItem('michess_xray_modes') ?? '[]')).toEqual(['control']);
+        expect(JSON.parse(localStorage.getItem('regence_xray_modes') ?? '[]')).toEqual(['control']);
         expect(screen.getByText(/число — перевес нападающих/)).toBeTruthy();
 
         act(() => fireEvent.click(screen.getByTestId('xray-for-opponent')));
@@ -89,7 +89,7 @@ describe('XrayPanel и настройки', () => {
     });
 
     it('без выбора фигуры режима «безопасные поля» нет; испорченные настройки — пусто', () => {
-        localStorage.setItem('michess_xray_modes', '{broken');
+        localStorage.setItem('regence_xray_modes', '{broken');
         const {result} = renderHook(() => useXraySettings());
         expect(result.current.modes.size).toBe(0);
         render(<XrayPanel settings={result.current} canSelect={false}/>);

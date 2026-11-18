@@ -85,7 +85,7 @@ def test_no_recorded_audio_or_unlisted_textures():
     assert textures and all(path.suffix == ".svg" for path in textures)
     for path in textures:
         assert f"assets/{path.parent.name}/{path.name}" in ATTRIBUTION, path.name
-        assert "собственная работа проекта michess, CC0" in path.read_text(encoding="utf-8"), path.name
+        assert "собственная работа проекта regence, CC0" in path.read_text(encoding="utf-8"), path.name
 
 
 @pytest.mark.parametrize(("license_name", "is_free"), [

@@ -32,9 +32,9 @@ afterEach(() => {
 });
 
 const HEADINGS: Record<Language, { settings: string; about: string; login: string; leaderboard: string }> = {
-    en: {settings: 'Settings', about: 'About and licenses', login: 'Log in to michess', leaderboard: 'Michess leaderboard'},
-    uk: {settings: 'Налаштування', about: 'Про проєкт і ліцензії', login: 'Вхід до michess', leaderboard: 'Таблиця лідерів Michess'},
-    ru: {settings: 'Настройки', about: 'О проекте и лицензиях', login: 'Вход в michess', leaderboard: 'Таблица лидеров Michess'},
+    en: {settings: 'Settings', about: 'About and licenses', login: 'Log in to regence', leaderboard: 'Regence leaderboard'},
+    uk: {settings: 'Налаштування', about: 'Про проєкт і ліцензії', login: 'Вхід до regence', leaderboard: 'Таблиця лідерів Regence'},
+    ru: {settings: 'Настройки', about: 'О проекте и лицензиях', login: 'Вход в regence', leaderboard: 'Таблица лидеров Regence'},
 };
 
 describe.each(['en', 'uk', 'ru'] as const)('экраны на языке %s', (language) => {

@@ -187,4 +187,4 @@ async def game_pgn(game_id: int = Path(..., ge=1), db: AsyncSession = Depends(ge
                    user: User | None = Depends(optional_user)):
     found = await _visible_game_or_404(db, game_id, user)
     return PlainTextResponse(library.to_pgn(found), media_type="application/x-chess-pgn", headers={
-        "Content-Disposition": f"attachment; filename=michess_library_{found.id}.pgn"})
+        "Content-Disposition": f"attachment; filename=regence_library_{found.id}.pgn"})

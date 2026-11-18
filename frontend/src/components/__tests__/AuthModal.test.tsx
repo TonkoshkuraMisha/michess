@@ -190,7 +190,7 @@ describe('AuthModal: регистрация', () => {
         fillAndSubmit('alice', 'secret-pass', /Зарегистрироваться/);
 
         expect(await screen.findByText('Регистрация успешна! Теперь войдите в систему.')).toBeInTheDocument();
-        expect(screen.getByText('Вход в michess')).toBeInTheDocument();
+        expect(screen.getByText('Вход в regence')).toBeInTheDocument();
         expect(onSuccess).not.toHaveBeenCalled();
     });
 
@@ -220,7 +220,7 @@ describe('AuthModal: регистрация', () => {
         fireEvent.click(screen.getByRole('button', {name: 'Уже есть аккаунт? Войдите'}));
 
         expect(screen.queryByText('Имя уже занято')).not.toBeInTheDocument();
-        expect(screen.getByText('Вход в michess')).toBeInTheDocument();
+        expect(screen.getByText('Вход в regence')).toBeInTheDocument();
     });
 });
 
@@ -242,7 +242,7 @@ describe('AuthModal: закрытие', () => {
 describe('AuthModal: доступность', () => {
     it('окно — модальный диалог с заголовком, меняющимся по режиму', () => {
         render(<AuthModal onSuccess={vi.fn()}/>);
-        const dialog = screen.getByRole('dialog', {name: 'Вход в michess'});
+        const dialog = screen.getByRole('dialog', {name: 'Вход в regence'});
         expect(dialog).toHaveAttribute('aria-modal', 'true');
 
         fireEvent.click(screen.getByRole('button', {name: 'Нет аккаунта? Зарегистрируйтесь'}));

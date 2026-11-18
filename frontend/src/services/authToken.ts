@@ -2,7 +2,7 @@
 // Токен входа (таск 17.5). Короткий access-токен живёт только в памяти страницы — внедрённый скрипт (XSS) не найдёт
 // его в localStorage; долгий вход держит refresh-токен в httpOnly-cookie, которую JavaScript не видит вовсе.
 // При загрузке страницы сессия восстанавливается по cookie (restoreSession), за минуту до истечения токен
-// обновляется сам; неудачное обновление — выход (событие michess-auth-expired).
+// обновляется сам; неудачное обновление — выход (событие regence-auth-expired).
 // Сервер: POST /api/v1/auth/refresh и /auth/logout (src/api/auth.py), сессии — src/services/auth_sessions.py.
 // Срок access-токена задаёт сервер (ACCESS_TOKEN_EXPIRE_MINUTES, 15 минут); клиент читает его из поля exp токена.
 
@@ -17,7 +17,7 @@ const REFRESH_AHEAD_MS = 60_000;
  * Сам выход интерфейса происходит не по нему, а через onTokenChange: refreshSession при неудаче ставит токен в null,
  * и App.tsx узнаёт об этом подпиской. Слушателей события в приложении нет — его проверяют только тесты.
  */
-export const AUTH_EXPIRED_EVENT = 'michess-auth-expired';
+export const AUTH_EXPIRED_EVENT = 'regence-auth-expired';
 
 let current: string | null = null;
 let refreshTimer: ReturnType<typeof setTimeout> | null = null;

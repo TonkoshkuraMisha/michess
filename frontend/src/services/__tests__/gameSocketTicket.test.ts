@@ -66,7 +66,7 @@ describe('gameSocket: подключение по одноразовому ти�
 
         expect(FakeWebSocket.instances).toHaveLength(0);
         expect(getToken()).toBeNull();
-        expect(events).toContain('michess-auth-expired');
+        expect(events).toContain('regence-auth-expired');
     });
 
     it('закрытие с кодом 1008 (сессия отозвана) разлогинивает', async () => {
@@ -77,7 +77,7 @@ describe('gameSocket: подключение по одноразовому ти�
         FakeWebSocket.instances[0].onclose?.({code: 1008});
 
         expect(getToken()).toBeNull();
-        expect(events).toContain('michess-auth-expired');
+        expect(events).toContain('regence-auth-expired');
     });
 
     it('не открывает сокет, если отключились, пока ждали тикет', async () => {
@@ -108,7 +108,7 @@ describe('gameSocket: подключение по одноразовому ти�
         // Событие закрытия старого сокета приходит с опозданием — в том числе с кодом 1008.
         oldSocket.onclose?.({code: 1008});
 
-        expect(events).not.toContain('michess-auth-expired');
+        expect(events).not.toContain('regence-auth-expired');
         gameSocket.send('leave_queue');
         expect(sendSpy).toHaveBeenCalledOnce();           // ушло в действующий сокет,
         expect(FakeWebSocket.instances).toHaveLength(2);  // а не открыло третье соединение

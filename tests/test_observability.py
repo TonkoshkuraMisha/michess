@@ -47,24 +47,24 @@ def test_metrics_endpoint_exposes_application_metrics(client):
     res = client.get("/metrics")
     assert res.status_code == 200
     assert res.headers["content-type"].startswith("text/plain")
-    for name in ("michess_ws_connections", "michess_ws_actions_total", "michess_db_pool_checked_out",
-                 "michess_games_finished_total", "michess_http_requests_total"):
+    for name in ("regence_ws_connections", "regence_ws_actions_total", "regence_db_pool_checked_out",
+                 "regence_games_finished_total", "regence_http_requests_total"):
         assert name in res.text
 
 
 def test_http_requests_are_counted_by_route_template(client):
     route = "/api/v1/profile/{username}"
-    before = _sample("michess_http_requests_total", method="GET", route=route, status="404")
+    before = _sample("regence_http_requests_total", method="GET", route=route, status="404")
     client.get("/api/v1/profile/nobody_with_this_name")
     client.get("/api/v1/profile/another_missing_name")
     # Метка — шаблон маршрута, а не путь: два разных имени дают один временной ряд.
-    assert _sample("michess_http_requests_total", method="GET", route=route, status="404") == before + 2
+    assert _sample("regence_http_requests_total", method="GET", route=route, status="404") == before + 2
 
 
 def test_metrics_scrapes_are_not_counted(client):
-    before = _sample("michess_http_requests_total", method="GET", route="/metrics", status="200")
+    before = _sample("regence_http_requests_total", method="GET", route="/metrics", status="200")
     client.get("/metrics")
-    assert _sample("michess_http_requests_total", method="GET", route="/metrics", status="200") == before
+    assert _sample("regence_http_requests_total", method="GET", route="/metrics", status="200") == before
 
 
 # --- WebSocket-действия -------------------------------------------------------------------------
@@ -81,13 +81,13 @@ async def test_ws_action_outcome_and_duration_are_recorded(silent_send, raised, 
             raise raised
 
     user = User(id=901, username="metrics_user")
-    count_before = _sample("michess_ws_actions_total", action="make_move", outcome=outcome)
-    observed_before = _sample("michess_ws_action_seconds_count", action="make_move")
+    count_before = _sample("regence_ws_actions_total", action="make_move", outcome=outcome)
+    observed_before = _sample("regence_ws_action_seconds_count", action="make_move")
 
     await ws_module._dispatch_action(lambda: _NoDbSession(), user, "make_move", handler, {})
 
-    assert _sample("michess_ws_actions_total", action="make_move", outcome=outcome) == count_before + 1
-    assert _sample("michess_ws_action_seconds_count", action="make_move") == observed_before + 1
+    assert _sample("regence_ws_actions_total", action="make_move", outcome=outcome) == count_before + 1
+    assert _sample("regence_ws_action_seconds_count", action="make_move") == observed_before + 1
 
 
 async def test_rate_limited_ws_action_is_counted(silent_send, monkeypatch):
@@ -95,14 +95,14 @@ async def test_rate_limited_ws_action_is_counted(silent_send, monkeypatch):
         return False
 
     monkeypatch.setattr(ws_module, "_within_rate_limit", over_limit)
-    before = _sample("michess_ws_actions_total", action="chat_message", outcome=obs.OUTCOME_RATE_LIMITED)
+    before = _sample("regence_ws_actions_total", action="chat_message", outcome=obs.OUTCOME_RATE_LIMITED)
 
     accepted = await ws_module._handle_message(
         lambda: _NoDbSession(), User(id=902, username="spammer"), '{"action": "chat_message", "message": "hi"}',
     )
 
     assert accepted is False
-    assert _sample("michess_ws_actions_total", action="chat_message", outcome=obs.OUTCOME_RATE_LIMITED) == before + 1
+    assert _sample("regence_ws_actions_total", action="chat_message", outcome=obs.OUTCOME_RATE_LIMITED) == before + 1
 
 
 # --- Пул БД и метки -----------------------------------------------------------------------------
@@ -112,12 +112,12 @@ async def test_pool_gauge_follows_checkout_and_checkin(tmp_path):
         f"sqlite+aiosqlite:///{(tmp_path / 'gauge.db').as_posix()}", poolclass=AsyncAdaptedQueuePool,
     )
     obs.instrument_engine(engine)
-    base = _sample("michess_db_pool_checked_out")
+    base = _sample("regence_db_pool_checked_out")
     try:
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
-            assert _sample("michess_db_pool_checked_out") == base + 1
-        assert _sample("michess_db_pool_checked_out") == base
+            assert _sample("regence_db_pool_checked_out") == base + 1
+        assert _sample("regence_db_pool_checked_out") == base
     finally:
         await engine.dispose()
 
@@ -152,7 +152,7 @@ def test_sentry_init_does_not_send_personal_data(monkeypatch):
 
     assert obs.init_sentry("worker") is True
     assert calls[0]["send_default_pii"] is False
-    assert calls[0]["release"] == f"michess@{settings.VERSION}"
+    assert calls[0]["release"] == f"regence@{settings.VERSION}"
     assert calls[0]["traces_sample_rate"] == settings.SENTRY_TRACES_SAMPLE_RATE
     assert tags == [("component", "worker")]
 

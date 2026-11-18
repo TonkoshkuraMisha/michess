@@ -30,7 +30,7 @@ test.describe('язык интерфейса', () => {
 
         await expect(page.locator('html')).toHaveAttribute('lang', 'en');
         await page.getByRole('button', {name: 'Log in'}).click();
-        await expect(page.getByRole('dialog', {name: 'Log in to michess'})).toBeVisible();
+        await expect(page.getByRole('dialog', {name: 'Log in to regence'})).toBeVisible();
         await context.close();
     });
 });

@@ -163,11 +163,11 @@ class GameWebSocketService {
 
     private handleAuthExpired() {
         // Токен истёк или отозван — очищаем его и уведомляем приложение. Интерфейс выходит по clearToken()
-        // (подписка onTokenChange в App.tsx); событие michess-auth-expired слушают только тесты.
+        // (подписка onTokenChange в App.tsx); событие regence-auth-expired слушают только тесты.
         this.currentToken = null;
         this.pendingMessages = [];
         clearToken();
-        window.dispatchEvent(new Event('michess-auth-expired'));
+        window.dispatchEvent(new Event('regence-auth-expired'));
     }
 
     private closeSocket() {

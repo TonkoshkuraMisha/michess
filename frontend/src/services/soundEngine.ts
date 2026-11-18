@@ -2,7 +2,7 @@
 // Звуки интерфейса. Все звуки синтезируются в браузере (Web Audio) — готовых записей в проекте нет; наборы звуков
 // (SOUND_SETS) — это профили синтеза. Какой звук у хода, определяется по его записи (resolveMoveSound); звук шаха —
 // только в учебных разделах (isLearningPath), в партиях — обычный звук хода.
-// Настройки хранятся только в браузере (localStorage): michess_sound_muted — звук выключен, michess_sound_set —
+// Настройки хранятся только в браузере (localStorage): regence_sound_muted — звук выключен, regence_sound_set —
 // выбранный набор. На сервер они не отправляются.
 
 /** События интерфейса, у которых есть звук: ходы, сигналы партии (начало, итог, предложение, чат) и предупреждения. */
@@ -23,8 +23,8 @@ export type SoundEventType =
     | 'chat'
     | 'low_time';
 
-const MUTE_STORAGE_KEY = 'michess_sound_muted';
-const SOUND_SET_STORAGE_KEY = 'michess_sound_set';
+const MUTE_STORAGE_KEY = 'regence_sound_muted';
+const SOUND_SET_STORAGE_KEY = 'regence_sound_set';
 
 /**
  * Наборы звуков (таск 18.3) — профили синтеза, а не записи: высота и громкость стука, высота и тембр сигналов.

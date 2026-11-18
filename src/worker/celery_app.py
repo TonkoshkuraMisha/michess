@@ -39,7 +39,7 @@ ANALYSIS_QUEUE = "analysis"
 SIMULATION_QUEUE = "simulation"
 
 celery_app = Celery(
-    "michess_worker",
+    "regence_worker",
     broker=f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/0",
     backend=f"redis://{settings.REDIS_HOST}:{settings.REDIS_PORT}/1",
     include=["src.worker.tasks"]

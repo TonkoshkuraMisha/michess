@@ -36,7 +36,7 @@ logger = logging.getLogger(__name__)
 TIMEOUT_S = 1.5
 MAX_PIECES = 7
 CACHE_TTL_S = 30 * 24 * 3600
-USER_AGENT = "michess-endgame-trainer"
+USER_AGENT = "regence-endgame-trainer"
 # Глубина запасного расчёта: в эндшпиле до семи фигур её хватает, чтобы найти мат и отличить выигрыш от ничьей.
 FALLBACK_DEPTH = 18
 # Оценка движка (сантипешки, для ходящей стороны) не меньше этой — выигрыш, не больше минус её — проигрыш.

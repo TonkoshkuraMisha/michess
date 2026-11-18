@@ -34,11 +34,11 @@ describe('настройки доски', () => {
     it('по умолчанию — как было; выбор сохраняется; мусор в хранилище игнорируется', () => {
         expect(getBoardPrefs()).toEqual(DEFAULT_BOARD_PREFS);
         setBoardPref('lastMove', 'arrow');
-        expect(JSON.parse(localStorage.getItem('michess_board_prefs')!).lastMove).toBe('arrow');
-        localStorage.setItem('michess_board_prefs', JSON.stringify({lastMove: 'laser', quickMove: 'yes', captured: 'order'}));
+        expect(JSON.parse(localStorage.getItem('regence_board_prefs')!).lastMove).toBe('arrow');
+        localStorage.setItem('regence_board_prefs', JSON.stringify({lastMove: 'laser', quickMove: 'yes', captured: 'order'}));
         reloadBoardPrefs();
         expect(getBoardPrefs()).toEqual({...DEFAULT_BOARD_PREFS, captured: 'order'});
-        localStorage.setItem('michess_board_prefs', '{broken');
+        localStorage.setItem('regence_board_prefs', '{broken');
         reloadBoardPrefs();
         expect(getBoardPrefs()).toEqual(DEFAULT_BOARD_PREFS);
     });

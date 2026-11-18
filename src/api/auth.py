@@ -42,7 +42,7 @@ router = APIRouter(prefix="/auth", tags=["Authentication"])
 RESERVED_USERNAMES = frozenset({
     "me", "leaderboard", "games", "matchmaking", "profile", "auth", "api", "ws",
     "admin", "administrator", "moderator", "support", "system", "root",
-    "michess", "bot", "guest", "anonymous", "null", "undefined",
+    "regence", "michess", "bot", "guest", "anonymous", "null", "undefined",
 })
 
 # Хэш для сравнения, когда пользователя нет: ответ занимает столько же времени, что и при

@@ -102,8 +102,8 @@ export function ToolsPage() {
         }
     };
 
-    const exportPgn = () => downloadText('michess-line.pgn', buildPgn({
-        headers: {Site: 'Michess'}, startFen: baseFen, moves: position.sans.map((san) => ({san})),
+    const exportPgn = () => downloadText('regence-line.pgn', buildPgn({
+        headers: {Site: 'Regence'}, startFen: baseFen, moves: position.sans.map((san) => ({san})),
     }));
 
     return (

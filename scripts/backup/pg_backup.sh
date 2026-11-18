@@ -7,7 +7,7 @@
 #   pg_backup.sh restore FILE — восстановить снимок в рабочую базу (останавливайте api и worker!)
 #
 # Снимки — pg_dump в custom-формате (сжатый, восстанавливается pg_restore выборочно и параллельно),
-# имя michess_YYYYmmdd_HHMMSS.dump. Файл пишется во временный и переименовывается только после
+# имя regence_YYYYmmdd_HHMMSS.dump. Файл пишется во временный и переименовывается только после
 # успешного pg_dump: оборванный снимок никогда не выглядит готовым. Снимки старше
 # BACKUP_KEEP_DAYS дней удаляются.
 #
@@ -29,12 +29,12 @@ wait_for_db() {
 }
 
 latest_backup() {
-    ls -1 "$BACKUP_DIR"/michess_*.dump 2>/dev/null | sort | tail -n 1
+    ls -1 "$BACKUP_DIR"/regence_*.dump 2>/dev/null | sort | tail -n 1
 }
 
 backup_once() {
     mkdir -p "$BACKUP_DIR"
-    target="$BACKUP_DIR/michess_$(date -u '+%Y%m%d_%H%M%S').dump"
+    target="$BACKUP_DIR/regence_$(date -u '+%Y%m%d_%H%M%S').dump"
     tmp="$target.partial"
     if pg_dump -Fc -d "$POSTGRES_DB" -f "$tmp"; then
         mv "$tmp" "$target"
@@ -44,7 +44,7 @@ backup_once() {
         log "ERROR: pg_dump failed"
         return 1
     fi
-    find "$BACKUP_DIR" -name 'michess_*.dump' -type f -mtime +"$KEEP_DAYS" -print -delete \
+    find "$BACKUP_DIR" -name 'regence_*.dump' -type f -mtime +"$KEEP_DAYS" -print -delete \
         | sed 's/^/removed old snapshot /'
     find "$BACKUP_DIR" -name '*.partial' -type f -mmin +60 -delete
 }

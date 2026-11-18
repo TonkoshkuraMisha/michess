@@ -103,6 +103,6 @@ export async function downloadMyGamesPgn(username: string | null): Promise<numbe
     const text = await res.text();
     const total = Number(res.headers.get('X-Total-Count') ?? 0);
     if (!text.trim()) return 0;
-    saveTextFile(text, `michess-${username ?? 'games'}.pgn`, 'application/x-chess-pgn');
+    saveTextFile(text, `regence-${username ?? 'games'}.pgn`, 'application/x-chess-pgn');
     return total || text.split('[Event ').length - 1;
 }

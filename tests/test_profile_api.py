@@ -180,7 +180,7 @@ async def test_download_pgn(client, db_session):
 
     assert res.status_code == 200
     assert res.headers["content-type"].startswith("application/x-chess-pgn")
-    assert f"michess_game_{game.id}.pgn" in res.headers["content-disposition"]
+    assert f"regence_game_{game.id}.pgn" in res.headers["content-disposition"]
     assert "Qxf7#" in res.text
     assert client.get(f"{API}/games/999999/pgn").status_code == 404
 

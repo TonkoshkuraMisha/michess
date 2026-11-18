@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
-  <!-- Свинцовые перемычки витража: собственная работа проекта michess, CC0. -->
+  <!-- Свинцовые перемычки витража: собственная работа проекта regence, CC0. -->
   <filter id="f" x="0" y="0" width="100%" height="100%">
     <feTurbulence type="turbulence" baseFrequency="0.012" numOctaves="1" seed="41" stitchTiles="stitch" result="n"/>
     <feColorMatrix in="n" type="matrix" values="0 0 0 0 0.1  0 0 0 0 0.1  0 0 0 0 0.1  -9 0 0 0 0.9"/>

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="45" height="45" viewBox="4 0 37.5 43">
-  <!-- Набор «Льюис» по мотивам льюисских шахмат XII века: собственная работа проекта michess, CC0. -->
+  <!-- Набор «Льюис» по мотивам льюисских шахмат XII века: собственная работа проекта regence, CC0. -->
   <g stroke="#1C0B07" stroke-width="1.5" stroke-linejoin="round">
   <path d="M10 39 V17 Q10 12 15 12 H30 Q35 12 35 17 V39 Z" fill="#5A1F18"/>
   <path d="M10 17 H35 M10 22 H35" stroke="#1C0B07" stroke-width="1" fill="none" opacity="0.6"/>

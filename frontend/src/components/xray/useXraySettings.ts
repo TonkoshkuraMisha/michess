@@ -10,7 +10,7 @@ export const XRAY_MODES: readonly XrayMode[] = [
     'control', 'hanging', 'lines', 'captures', 'defenses', 'checks', 'moves', 'pawns', 'safety',
 ];
 
-const STORAGE_KEY = 'michess_xray_modes';
+const STORAGE_KEY = 'regence_xray_modes';
 
 function readModes(): Set<XrayMode> {
     try {

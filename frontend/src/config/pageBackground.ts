@@ -17,8 +17,8 @@ export const PAGE_PALETTES = {
 } as const;
 export type PagePalette = keyof typeof PAGE_PALETTES;
 
-const PATTERN_KEY = 'michess_page_pattern';
-const PALETTE_KEY = 'michess_page_palette';
+const PATTERN_KEY = 'regence_page_pattern';
+const PALETTE_KEY = 'regence_page_palette';
 
 function read(key: string): string | null {
     try {
