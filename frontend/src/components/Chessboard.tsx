@@ -1096,12 +1096,13 @@ export default function Chessboard() {
     const xrayAvailable = Boolean(spectatingGameId) || (!gameId && (!activeBot || (coach.enabled && !isRatedBotGame)));
     // «Своя» сторона: в партии с ботом — цвет игрока, на свободной доске и у зрителя — сторона, которая ходит.
     const xraySide: 'w' | 'b' = activeBot && !spectatingGameId ? (myColor === 'white' ? 'w' : 'b') : currentGame.turn();
-    // Вкладки правой колонки (план владельца 18.11): журнал ходов с управлением партией, чат партии с человеком,
-    // наставник (кроме партии с человеком) и рентген, когда он разрешён. Скрытая вкладка остаётся в разметке и только
-    // не показывается: черновик сообщения, вспомогательная доска и настройки не сбрасываются при переключении.
+    // Вкладки правой колонки (план владельца 18.11): журнал ходов с управлением партией, чат партии с человеком (у
+    // игрока; у зрителя чат виден всегда — см. tabPanel), наставник (кроме партии с человеком) и рентген, когда он
+    // разрешён. Скрытая вкладка остаётся в разметке и только не показывается: черновик сообщения, вспомогательная доска
+    // и настройки не сбрасываются при переключении.
     const sideTabs: SideTab[] = [
         'moves',
-        ...((gameId || spectatingGameId) ? ['chat' as const] : []),
+        ...((gameId && !spectatingGameId) ? ['chat' as const] : []),
         ...((!gameId && !spectatingGameId) ? ['coach' as const] : []),
         ...(xrayAvailable ? ['xray' as const] : []),
     ];
@@ -1129,10 +1130,12 @@ export default function Chessboard() {
     }, [shownTab, chatMessages.length]);
     const chatUnread = Math.max(0, chatMessages.length - chatSeen);
     const SIDE_TAB_ICONS = {moves: ListOrdered, chat: MessageSquare, coach: GraduationCap, xray: ScanEye};
+    // У зрителя в панели чата — кнопка «Выйти из просмотра»: она видна всегда, на любой вкладке, и отдельной вкладки
+    // «Чат» у зрителя нет.
     const tabPanel = (id: SideTab) => ({
         role: 'tabpanel' as const,
         'data-testid': `side-panel-${id}`,
-        className: shownTab === id ? 'contents' : 'hidden',
+        className: shownTab === id || (id === 'chat' && spectatingGameId) ? 'contents' : 'hidden',
     });
 
     const material = calculateMaterialBalance(boardState);
