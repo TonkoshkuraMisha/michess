@@ -73,6 +73,7 @@ celery_app.conf.update(
         "workout_reminders": {"queue": ANALYSIS_QUEUE},
         "arena_reminders": {"queue": ANALYSIS_QUEUE},
         "archive_move_telemetry": {"queue": ANALYSIS_QUEUE},
+        "arena_awards": {"queue": ANALYSIS_QUEUE},
         "bot_selfplay": {"queue": SIMULATION_QUEUE},
     },
     # Плановые задачи (процесс celery beat, сервис beat в docker-compose.prod.yml; список — DEPLOY.md, раздел 8в).
@@ -86,6 +87,8 @@ celery_app.conf.update(
         "arena-reminders": {"task": "arena_reminders", "schedule": crontab()},
         # Хранение телеметрии ходов (задача 9 плана 18.11): раз в сутки ночью по UTC, в минуту 41 — не вместе с другими.
         "archive-move-telemetry": {"task": "archive_move_telemetry", "schedule": crontab(hour=3, minute=41)},
+        # Награды арен (таск 33.5): каждые 5 минут — призёры получают места вскоре после окончательных итогов.
+        "arena-awards": {"task": "arena_awards", "schedule": crontab(minute="*/5")},
     },
     # Не брать впрок длинные партии симуляции: иначе один воркер набирает очередь и держит её.
     worker_prefetch_multiplier=1,

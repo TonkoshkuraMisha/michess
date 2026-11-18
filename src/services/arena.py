@@ -542,9 +542,17 @@ def performance(results: list[tuple[int, float]]) -> int | None:
 
 
 async def standings(db: AsyncSession, arena_id: int) -> list[dict]:
+    """Таблица итогов для страницы арены — порядок ranked; место — номер строки."""
+    return [{"place": i + 1, "username": name, "score": p.score, "games": p.games, "wins": p.wins,
+             "fire": p.streak >= FIRE_AFTER, "rating": p.rating, "performance": perf, "conference": p.conference}
+            for i, (p, name, perf) in enumerate(await ranked(db, arena_id))]
+
+
+async def ranked(db: AsyncSession, arena_id: int) -> list[tuple[ArenaPlayer, str, int | None]]:
     """
-    Таблица: очки; при равенстве — перформанс в арене, затем меньше партий (те же очки быстрее), затем раньше
-    вошедший. Партии, закрытые без очков («*»), в перформанс не идут.
+    Участники по местам: (участник, имя, перформанс). Порядок: очки; при равенстве — перформанс в арене, затем меньше
+    партий (те же очки быстрее), затем раньше вошедший. Партии, закрытые без очков («*»), в перформанс не идут.
+    Им пользуются таблица итогов и награды (src/services/arena_awards.py).
     """
     rows = (await db.execute(
         select(ArenaPlayer, User.username).join(User, User.id == ArenaPlayer.user_id)
@@ -567,11 +575,7 @@ async def standings(db: AsyncSession, arena_id: int) -> list[dict]:
         joined = _aware(p.joined_at) if p.joined_at else _now()
         return (-p.score, -(perf[p.user_id] or 0), p.games, joined)
 
-    ordered = sorted(rows, key=key)
-    return [{"place": i + 1, "username": name, "score": p.score, "games": p.games, "wins": p.wins,
-             "fire": p.streak >= FIRE_AFTER, "rating": p.rating, "performance": perf[p.user_id],
-             "conference": p.conference}
-            for i, (p, name) in enumerate(ordered)]
+    return [(p, name, perf[p.user_id]) for p, name in sorted(rows, key=key)]
 
 
 def view(arena: Arena, now: datetime | None = None, open_games: int = 0) -> dict:

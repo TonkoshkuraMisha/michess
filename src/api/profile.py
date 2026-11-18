@@ -40,6 +40,7 @@ from src.db.session import get_db
 from src.models.game import Game, GameStatus
 from src.models.user import RATING_CATEGORIES, RatingCategory, User
 from src.schemas.user import username_key
+from src.services import arena_awards
 from src.services.conferences import conference_of
 from src.services.ladder import current_rung as ladder_current_rung
 from src.services.ladder import rungs as ladder_rungs
@@ -467,6 +468,8 @@ async def get_user_profile(username: str, db: AsyncSession = Depends(get_db)):
             "step": (await ladder_current_rung(db, user))[0],
             "total": len(ladder_rungs()),
         },
+        # Кубки арен (таск 33.5): первые, вторые и третьи места (src/services/arena_awards.py).
+        "arena_trophies": await arena_awards.trophies(db, user.id),
     }
 
 

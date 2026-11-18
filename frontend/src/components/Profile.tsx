@@ -41,6 +41,8 @@ interface UserProfile {
     created_at: string;
     /** Клубная лестница: отдельный рейтинг партий с ботами без подсказок и возвратов хода. */
     ladder?: { rating: number; games: number; step: number; total: number };
+    /** Кубки арен (таск 33.5): первые, вторые и третьи места — src/services/arena_awards.py. */
+    arena_trophies?: { gold: number; silver: number; bronze: number };
 }
 
 const RATING_CATEGORIES: Array<{ key: 'bullet_rating' | 'blitz_rating' | 'rapid_rating' | 'classical_rating'; category: RatingCategoryKey }> = [
@@ -73,6 +75,8 @@ interface GameData {
 type RatingCategoryKey = 'bullet' | 'blitz' | 'rapid' | 'classical';
 
 const CHART_CATEGORIES: RatingCategoryKey[] = ['bullet', 'blitz', 'rapid', 'classical'];
+// Цвет кубка арены по месту.
+const MEDAL_COLORS = {gold: 'text-amber-300', silver: 'text-slate-300', bronze: 'text-orange-400'} as const;
 
 interface PlayerStats {
     total: number;
@@ -342,6 +346,18 @@ export default function Profile() {
                     <Achievements username={profile.username}/>
                     <SkillMap username={profile.username}/>
                     <TournamentHistory username={profile.username}/>
+                    {profile.arena_trophies && profile.arena_trophies.gold + profile.arena_trophies.silver + profile.arena_trophies.bronze > 0 && (
+                        <div className="bg-[#1A120B] border border-amber-900/60 px-3 py-2.5 rounded shadow-inner flex items-center gap-4"
+                             data-testid="profile-arena-trophies">
+                            <div className="text-boxwood/70 text-xs uppercase tracking-widest flex-1">{t('profile.arenaTrophies')}</div>
+                            {(['gold', 'silver', 'bronze'] as const).map((medal) => (
+                                <span key={medal} className={`flex items-center gap-1 font-mono font-bold ${MEDAL_COLORS[medal]}`}
+                                      title={t(`profile.medals.${medal}`)} data-testid={`profile-trophy-${medal}`}>
+                                    <Trophy size={14} aria-label={t(`profile.medals.${medal}`)}/>{profile.arena_trophies![medal]}
+                                </span>
+                            ))}
+                        </div>
+                    )}
                     <ProfilePosts username={profile.username}/>
                     {profile.ladder && profile.ladder.games > 0 && (
                         <div className="bg-[#1A120B] border border-amber-900/60 px-3 py-2.5 rounded shadow-inner flex items-center justify-between gap-3"

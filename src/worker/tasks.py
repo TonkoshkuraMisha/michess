@@ -6,7 +6,7 @@
   из ошибок игроков (src/services/personal_puzzles.py) и раскладка партии в индекс позиций
   (src/services/position_index.py). analyze_imported_game — разбор и задачи для партии с другого сайта.
 * simulate_tournament_game — партия ботов между собой в турнире; после неё в очередь ставятся следующие партии.
-* workout_reminders, arena_reminders, bot_selfplay, archive_move_telemetry — плановые (расписание —
+* workout_reminders, arena_reminders, arena_awards, bot_selfplay, archive_move_telemetry — плановые (расписание —
   src/worker/celery_app.py).
 
 Каждая задача запускается в своём цикле событий и создаёт своё подключение к базе (соединения asyncpg привязаны
@@ -242,3 +242,23 @@ def archive_move_telemetry() -> int:
     if archived:
         logger.info("Move telemetry archived for %s games", archived)
     return archived
+
+
+async def _arena_awards_async() -> int:
+    engine = create_async_engine(_task_database_url(), poolclass=NullPool)
+    try:
+        async with async_sessionmaker(engine, expire_on_commit=False)() as db:
+            from src.services import arena_awards
+
+            return await arena_awards.award_finished(db)
+    finally:
+        await engine.dispose()
+
+
+@celery_app.task(name="arena_awards", ignore_result=True)
+def arena_awards() -> int:
+    """Призовые места законченных арен (таск 33.5, src/services/arena_awards.py) — по расписанию celery beat."""
+    awarded = asyncio.run(_arena_awards_async())
+    if awarded:
+        logger.info("Arena awards given: %s", awarded)
+    return awarded

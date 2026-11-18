@@ -34,6 +34,7 @@ export function notificationText(n: AppNotification, t: ReturnType<typeof useI18
             control: controlLabel({base_time_ms: Number(p.base_time_ms), increment_ms: Number(p.increment_ms)}),
         });
     }
+    if (n.kind === 'arena_podium') return t('social.notify.arenaPodium', {place: Number(p.place)});
     return t('social.notify.reportAnswer');
 }
 
