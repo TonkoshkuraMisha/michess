@@ -35,10 +35,9 @@ function arenaName(a: ArenaInfo, t: ReturnType<typeof useI18n>['t'], withConfere
     // Конференция, по расписанию которой идёт арена (33.4).
     const key = withConference ? conferenceKey(a.conference) : null;
     const conference = key ? ` · ${t(`arenas.conferences.${key}`)}` : '';
-    // Группа по силе и деление (33.2).
-    const band = a.max_rating ? ` · ${t('arenas.band', {limit: a.max_rating})}` : '';
+    // Деление переполненной арены (33.2).
     const division = (a.division ?? 1) > 1 ? ` · ${t('arenas.division', {n: a.division ?? 1})}` : '';
-    return `${base}${conference}${band}${division}`;
+    return `${base}${conference}${division}`;
 }
 
 function timing(a: ArenaInfo, now: number, t: ReturnType<typeof useI18n>['t']): string {

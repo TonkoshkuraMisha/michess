@@ -23,8 +23,7 @@ from src.services.matchmaker import MatchmakingError
 router = APIRouter()
 
 RECENT = timedelta(hours=6)
-_CODES = {"arena_not_found": status.HTTP_404_NOT_FOUND, "arena_need_games": status.HTTP_403_FORBIDDEN,
-          "arena_fair_play": status.HTTP_403_FORBIDDEN, "arena_rating_too_high": status.HTTP_403_FORBIDDEN}
+_CODES = {"arena_not_found": status.HTTP_404_NOT_FOUND, "arena_fair_play": status.HTTP_403_FORBIDDEN}
 
 
 def _http(exc: DomainError):
@@ -108,7 +107,10 @@ async def get_arena(arena_id: int, request: Request, db: AsyncSession = Depends(
 
 @router.post("/{arena_id}/join")
 async def join_arena(arena_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    """Вход: допуск и группа по силе (33.2); при переполнении игрок попадает в другое деление — его id в ответе."""
+    """
+    Вход в арену — любому зарегистрированному игроку без флага нечестной игры; при переполнении игрок попадает в
+    другое деление — его id в ответе.
+    """
     try:
         player = await service.join(db, await service.get(db, arena_id), user)
     except DomainError as exc:

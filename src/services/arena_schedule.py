@@ -10,7 +10,8 @@
 * швейцарки: 10+5 каждый день в 15:00, 15+10 по воскресеньям в 11:00 (по 5 туров).
 
 В одной конференции одновременно идёт не больше двух турниров (проверяется тестом на неделю вперёд). Играть можно в
-арене любой конференции: зона времени определяет только то, когда арены идут чаще. Сам список стран конференций и
+арене любой конференции: зона времени определяет только то, когда арены идут чаще. Арен «для своей силы» в расписании
+нет: каждая арена открыта любому зарегистрированному игроку (решение владельца 17.11.2026). Сам список стран конференций и
 зачёт — таск 33.6; здесь нужны только ключи конференций и их зоны.
 
 Модуль чистый: по моменту времени возвращает, какие арены должны существовать; создаёт их arena.ensure_schedule.
@@ -30,7 +31,6 @@ CONFERENCE_ZONES: dict[str, str] = {
     "southern": "Europe/Istanbul",
     "eastern": "Asia/Kolkata",
 }
-RATING_BANDS = (1300, 1700, 2100)
 SUNDAY = 6
 
 
@@ -63,12 +63,11 @@ WEEK_PLAN: tuple[tuple[int, int, Slot], ...] = ((SUNDAY, 11, SWISS_WEEKLY),)
 
 @dataclass(frozen=True)
 class Planned:
-    """Турнир расписания: ключ (конференция:слот[-uПОТОЛОК]), начало в UTC и параметры."""
+    """Турнир расписания: ключ «конференция:слот», начало в UTC и параметры."""
     schedule_key: str
     conference: str
     slot: Slot
     starts_at: datetime
-    max_rating: int | None = None
 
     @property
     def ends_at(self) -> datetime:
@@ -91,7 +90,6 @@ def day_events(conference: str, day: date) -> list[tuple[datetime, Slot]]:
 
 def planned(now: datetime, horizon: timedelta) -> list[Planned]:
     """Турниры, которые идут сейчас или начнутся в ближайшие horizon, — по всем активным конференциям."""
-    with_bands = settings.ARENA_RATING_BANDS
     out: dict[tuple[str, datetime], Planned] = {}
     for conference in active_conferences():
         today = now.astimezone(ZoneInfo(CONFERENCE_ZONES[conference])).date()
@@ -99,12 +97,9 @@ def planned(now: datetime, horizon: timedelta) -> list[Planned]:
             for starts_at, slot in day_events(conference, today + timedelta(days=offset)):
                 if not (starts_at < now + horizon and starts_at + slot.duration > now):
                     continue
-                # Группы по силе (33.2) — копии блиц-арен с потолком рейтинга; включаются, когда аудитория вырастет.
-                limits: tuple[int | None, ...] = (None, *RATING_BANDS) if with_bands and slot is BLITZ else (None,)
-                for limit in limits:
-                    key = f"{conference}:{slot.key}" + (f"-u{limit}" if limit else "")
-                    # Переход на зимнее время повторяет час: один ключ и момент — один турнир.
-                    out.setdefault((key, starts_at), Planned(key, conference, slot, starts_at, limit))
+                key = f"{conference}:{slot.key}"
+                # Переход на зимнее время повторяет час: один ключ и момент — один турнир.
+                out.setdefault((key, starts_at), Planned(key, conference, slot, starts_at))
     return sorted(out.values(), key=lambda item: (item.starts_at, item.schedule_key))
 
 

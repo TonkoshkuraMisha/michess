@@ -1,15 +1,18 @@
 # --- FILE: tests/test_arena_groups.py ---
-"""Допуск и группы по силе (таск 33.2): партии в контроле, честная игра, потолок группы с пиком за неделю, деления."""
+"""
+Вход в арену и деления. Решение владельца (17.11.2026): никакого деления игроков по силе — в любую арену входит
+любой зарегистрированный игрок, закрыт вход только игроку с флагом нечестной игры. Деления (33.2) остаются: это
+вместимость одной таблицы, а не отбор.
+"""
 
 from datetime import UTC, datetime, timedelta
 
-import pytest
 from sqlalchemy import select
 
 from src.models.arena import Arena, ArenaPlayer
-from src.models.game import Game, GameStatus
 from src.models.user import User
 from src.services import arena
+from src.services import arena_schedule as plan
 
 API = "/api/v1/arenas"
 
@@ -18,56 +21,50 @@ def auth(token: str) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-@pytest.fixture
-def entry_rule(monkeypatch):
-    monkeypatch.setattr(arena, "MIN_RATED_GAMES", 10)
-
-
 def blitz(now: datetime, **extra) -> Arena:
     return Arena(base_time_ms=180_000, increment_ms=2_000, starts_at=now - timedelta(minutes=5),
                  ends_at=now + timedelta(minutes=55), **extra)
 
 
-async def test_entry_needs_rated_games_and_fair_play(client, db_session, test_user_1, token_user_1, entry_rule):
+async def test_any_registered_player_may_enter(client, db_session, test_user_1, test_user_2, token_user_1,
+                                               token_user_2):
+    """Новичок без единой партии и сильнейший игрок входят в одну и ту же арену — настоящими запросами клиента."""
     item = blitz(datetime.now(UTC))
     db_session.add(item)
+    test_user_1.blitz_rating, test_user_1.blitz_games_played = 700, 0          # только что зарегистрировался
+    test_user_2.blitz_rating, test_user_2.blitz_games_played = 2750, 4000      # сильнейший на площадке
     await db_session.commit()
-    refused = client.post(f"{API}/{item.id}/join", headers=auth(token_user_1))
-    assert refused.status_code == 403
-    assert refused.json()["detail"]["code"] == "arena_need_games"
-    assert refused.json()["detail"]["params"] == {"need": 10, "have": 0}
 
-    test_user_1.blitz_games_played = 12
+    for token in (token_user_1, token_user_2):
+        joined = client.post(f"{API}/{item.id}/join", headers=auth(token))
+        assert joined.status_code == 200 and joined.json() == {"joined": True, "arena_id": item.id}
+    table = client.get(f"{API}/{item.id}").json()
+    assert {row["username"]: row["rating"] for row in table["standings"]} == {"player1": 700, "player2": 2750}
+    assert "max_rating" not in table                                            # арен с потолком рейтинга больше нет
+
+    # И они могут встретиться за доской: пара создаётся из тех, кто ждёт.
+    assert client.post(f"{API}/{item.id}/ready", headers=auth(token_user_1)).json() == {"waiting": True}
+    assert "game_id" in client.post(f"{API}/{item.id}/ready", headers=auth(token_user_2)).json()
+
+
+async def test_only_the_fair_play_flag_closes_the_entry(client, db_session, test_user_1, token_user_1):
+    item = blitz(datetime.now(UTC))
+    db_session.add(item)
     test_user_1.is_cheater = True
     await db_session.commit()
-    assert client.post(f"{API}/{item.id}/join", headers=auth(token_user_1)).json()["detail"]["code"] == "arena_fair_play"
+    refused = client.post(f"{API}/{item.id}/join", headers=auth(token_user_1))
+    assert refused.status_code == 403 and refused.json()["detail"]["code"] == "arena_fair_play"
     test_user_1.is_cheater = False
     await db_session.commit()
     assert client.post(f"{API}/{item.id}/join", headers=auth(token_user_1)).status_code == 200
+    assert client.post(f"{API}/{item.id}/join").status_code == 401             # без входа — никак
 
 
-async def test_rating_band_checks_the_peak_of_the_week(client, db_session, test_user_1, test_user_2, token_user_1):
-    now = datetime.now(UTC)
-    band = blitz(now, max_rating=1300)
-    db_session.add(band)
-    test_user_1.blitz_rating = 1280
-    await db_session.commit()
-    # Неделю назад игрок был 1450 и «слил» рейтинг — в группу до 1300 не пускаем.
-    db_session.add(Game(white_player_id=test_user_1.id, black_player_id=test_user_2.id, status=GameStatus.COMPLETED,
-                        is_rated=True, base_time_ms=180_000, increment_ms=2_000, result="1-0",
-                        white_initial_rating=1440, white_rating_delta=10, black_initial_rating=1500,
-                        black_rating_delta=-10, finished_at=now - timedelta(days=3)))
-    await db_session.commit()
-    high = client.post(f"{API}/{band.id}/join", headers=auth(token_user_1))
-    assert high.status_code == 403 and high.json()["detail"] == {
-        "code": "arena_rating_too_high", "params": {"limit": 1300}, "message": high.json()["detail"]["message"]}
-    # Пик старше недели не мешает.
-    old = (await db_session.execute(select(Game))).scalars().first()
-    old.finished_at = now - timedelta(days=9)
-    await db_session.commit()
-    assert client.post(f"{API}/{band.id}/join", headers=auth(token_user_1)).json()["arena_id"] == band.id
-    view = client.get(f"{API}/{band.id}").json()
-    assert view["max_rating"] == 1300 and view["division"] == 1
+def test_schedule_has_no_rating_restricted_arenas():
+    now = datetime(2026, 11, 15, 10, 20, tzinfo=UTC)
+    planned = plan.planned(now, timedelta(hours=6))
+    assert planned and all(item.schedule_key == f"{item.conference}:{item.slot.key}" for item in planned)
+    assert not hasattr(Arena, "max_rating")
 
 
 async def test_overflow_opens_a_new_division(client, db_session, test_user_1, token_user_1, monkeypatch):
@@ -100,18 +97,3 @@ async def test_no_entry_after_last_start(client, db_session, token_user_1):
     await db_session.commit()
     refused = client.post(f"{API}/{late.id}/join", headers=auth(token_user_1))
     assert refused.status_code == 409 and refused.json()["detail"]["code"] == "arena_pairing_closed"
-
-
-async def test_schedule_adds_rating_bands_only_when_enabled(db_session, monkeypatch):
-    from src.core.config import settings
-
-    now = datetime(2026, 11, 15, 10, 20, tzinfo=UTC)
-    await arena.ensure_schedule(db_session, now)
-    assert (await db_session.execute(select(Arena).where(Arena.max_rating.is_not(None)))).scalars().first() is None
-    monkeypatch.setattr(settings, "ARENA_RATING_BANDS", True)
-    await arena.ensure_schedule(db_session, now)
-    bands = (await db_session.execute(select(Arena).where(Arena.max_rating.is_not(None)))).scalars().all()
-    assert {a.max_rating for a in bands} == {1300, 1700, 2100}
-    assert {a.schedule_key for a in bands if a.conference == "central"} == {
-        "central:blitz-3+2-u1300", "central:blitz-3+2-u1700", "central:blitz-3+2-u2100"}
-    assert all(a.increment_ms == 2_000 and a.base_time_ms == 180_000 for a in bands)   # группы — только у блица 3+2
