@@ -99,6 +99,25 @@ describe('Курс матовых конструкций', () => {
         expect(screen.getByTestId('mates-next')).toBeInTheDocument();
     }, 20_000);  // под нагрузкой (замер покрытия, CI) 5 с по умолчанию не хватало
 
+    it('после неверного хода доска свободна: верный ход можно сыграть самому', async () => {
+        stub([
+            [/course\/mates$/, () => OVERVIEW],
+            [/\/demo/, () => ({theme: 'back_rank_mate', examples: []})],
+            [/course\/mates\/back_rank_mate\/0$/, () => TASK],
+            [/\/11\/move$/, () => ({correct: false, done: true, reply: null, solution: ['d2d8', 'e2e8', 'd8e8'], result: {solved: false}})],
+            [/learn\/progress\//, () => ({})],
+        ]);
+        renderAt('/learn/mates/back_rank_mate');
+        fireEvent.click(await screen.findByTestId('mates-start', {}, {timeout: 5000}));
+        await waitFor(() => expect(cell('e2').querySelector('img')).not.toBeNull(), {timeout: 5000});
+        await drag('d2', 'd5');
+        expect(await screen.findByTestId('course-failed', {}, {timeout: 5000})).toBeInTheDocument();
+        expect(screen.queryByTestId('explorer-controls')).toBeNull();
+        await drag('d2', 'd8');  // ход решения со стрелки — на доске
+        expect(cell('d8').querySelector('img')?.getAttribute('alt')).toBe('wr');
+        expect(screen.getByTestId('explorer-back')).not.toBeDisabled();
+    }, 20_000);
+
     it('без входа курс просит войти', () => {
         setToken(null);
         stub([]);

@@ -2,6 +2,7 @@
 // Курс матовых конструкций (таск 14.6): /learn/mates — 20 конструкций по порядку и итоговая проверка;
 // /learn/mates/:theme — объяснение (текст каталога), два показа, 10 задач от лёгкой к трудной;
 // /learn/mates/exam — смешанная проверка на время. Задачи решаются сервером (/puzzles/{id}/move) без рейтинга.
+// После задачи доска свободна — позицию можно разыграть (usePositionExplorer).
 // Прогресс — как у уроков школы: «mates-<конструкция>» и «mates-exam» (результат проверки).
 
 import {useEffect, useMemo, useRef, useState} from 'react';
@@ -19,6 +20,7 @@ import type {DemoExample, MateCourseOverview, PuzzleView} from '../../services/p
 import {themeText} from '../../services/themes';
 import {DemoViewer} from '../puzzles/TrainingPanel';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
+import {ExplorerControls, usePositionExplorer} from '../puzzles/usePositionExplorer';
 
 export const EXAM_PROGRESS_ID = 'mates-exam';
 
@@ -71,6 +73,7 @@ export function CoursePuzzle({puzzle, onDone}: { puzzle: PuzzleView; onDone: (so
     const [solution, setSolution] = useState<string | null>(null);
     const [error, setError] = useState<UiMessage | null>(null);
     const busy = useRef(false);
+    const explorer = usePositionExplorer();
 
     const apply = (position: string, uci: string) => {
         const game = new Chess(position);
@@ -84,7 +87,14 @@ export function CoursePuzzle({puzzle, onDone}: { puzzle: PuzzleView; onDone: (so
     };
 
     const onMove = async (uci: string) => {
-        if (busy.current || outcome !== null) return;
+        // Задача решена или не решена — доска свободна: ход игрока начинает разбор с текущей позиции (стрелку
+        // решения можно сыграть самому).
+        if (outcome !== null) {
+            if (explorer.active) explorer.play(uci);
+            else explorer.start(fen, [uci]);
+            return;
+        }
+        if (busy.current) return;
         busy.current = true;
         try {
             const res = await puzzlesApi.move(puzzle.id, uci);
@@ -124,9 +134,10 @@ export function CoursePuzzle({puzzle, onDone}: { puzzle: PuzzleView; onDone: (so
     return (
         <div className="flex flex-col md:flex-row gap-5 items-start" data-testid="course-puzzle">
             <div className="w-full max-w-[520px]">
-                <PuzzleBoard fen={fen} orientation={puzzle.color} interactive={outcome === null} onMove={(uci) => void onMove(uci)}
-                             lastMove={lastMove} mark={mark}
-                             arrows={solution ? [{from: solution.slice(0, 2), to: solution.slice(2, 4), color: 'green'}] : []}/>
+                <PuzzleBoard fen={explorer.fen ?? fen} orientation={puzzle.color} interactive onMove={(uci) => void onMove(uci)}
+                             lastMove={explorer.active ? explorer.lastMove : lastMove} mark={explorer.active ? null : mark}
+                             arrows={solution && !explorer.active ? [{from: solution.slice(0, 2), to: solution.slice(2, 4), color: 'green'}] : []}/>
+                <ExplorerControls explorer={explorer}/>
             </div>
             <div className="flex-1 flex flex-col gap-2 min-w-0">
                 <p className="text-amber-200">{t(puzzle.color === 'white' ? 'mateCourse.whiteMates' : 'mateCourse.blackMates')}</p>
