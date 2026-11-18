@@ -11,7 +11,12 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from src.models.base import Base
+from src.models.base import Base, one_of
+
+# Откуда партия: сайты (src/services/game_import.py, SOURCES) и вставленный PGN.
+IMPORT_SOURCES = ("lichess", "chesscom", "pgn")
+# Каким цветом играл владелец партии.
+IMPORT_COLORS = ("white", "black")
 
 
 class ImportedGame(Base):
@@ -20,7 +25,11 @@ class ImportedGame(Base):
     ходов, сведения из заголовков и разбор движком.
     """
     __tablename__ = "imported_games"
-    __table_args__ = (UniqueConstraint("user_id", "source", "external_id", name="uq_imported_games_source_id"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "source", "external_id", name="uq_imported_games_source_id"),
+        one_of("imported_games", "source", IMPORT_SOURCES),
+        one_of("imported_games", "color", IMPORT_COLORS),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)

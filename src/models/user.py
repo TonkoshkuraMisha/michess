@@ -16,7 +16,10 @@ from sqlalchemy import Boolean, DateTime, Index, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
-from src.models.base import Base
+from src.models.base import Base, one_of
+
+# Кто может писать игроку личные сообщения (src/services/direct_messages.py, POLICIES).
+DM_POLICIES = ("all", "following", "nobody")
 
 RatingCategory = Literal["bullet", "blitz", "rapid", "classical"]
 RATING_CATEGORIES: tuple[RatingCategory, ...] = ("bullet", "blitz", "rapid", "classical")
@@ -27,6 +30,7 @@ class User(Base):
     Запись таблицы users: живой игрок, бот или архивный игрок из PGN. Что в каких полях — в описании модуля выше.
     """
     __tablename__ = "users"
+    __table_args__ = (one_of("users", "dm_policy", DM_POLICIES),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     username: Mapped[str] = mapped_column(String(50), unique=True, index=True)

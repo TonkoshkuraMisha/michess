@@ -9,7 +9,12 @@ from datetime import datetime
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, UniqueConstraint, false, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from src.models.base import Base
+from src.models.base import Base, one_of
+
+# Форматы турнира между людьми (src/services/arena.py, arena_schedule.Slot.format).
+ARENA_FORMATS = ("arena", "swiss")
+# Итог партии арены; «*» — отменённая или не засчитанная партия, NULL — партия ещё идёт.
+ARENA_GAME_RESULTS = ("1-0", "0-1", "1/2-1/2", "*")
 
 
 class Arena(Base):
@@ -18,6 +23,7 @@ class Arena(Base):
     (src/services/arena_schedule.py) или как следующее деление переполненной арены (parent_id).
     """
     __tablename__ = "arenas"
+    __table_args__ = (one_of("arenas", "format", ARENA_FORMATS),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     # Код расписания (например, «blitz-3+2»), чтобы не создавать одну и ту же арену дважды; пусто — разовая арена.
@@ -84,12 +90,13 @@ class ArenaGame(Base):
     идёт — итоги арены её ждут.
     """
     __tablename__ = "arena_games"
+    __table_args__ = (one_of("arena_games", "result", ARENA_GAME_RESULTS),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     arena_id: Mapped[int] = mapped_column(ForeignKey("arenas.id", ondelete="CASCADE"), index=True)
     game_id: Mapped[int] = mapped_column(ForeignKey("games.id", ondelete="CASCADE"), unique=True)
-    white_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
-    black_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    white_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    black_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     result: Mapped[str | None] = mapped_column(String(8), nullable=True)
     white_points: Mapped[int | None] = mapped_column(Integer, nullable=True)
     black_points: Mapped[int | None] = mapped_column(Integer, nullable=True)

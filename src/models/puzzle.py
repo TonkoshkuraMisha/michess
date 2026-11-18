@@ -10,7 +10,10 @@ from datetime import datetime
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.models.base import Base
+from src.models.base import Base, one_of
+
+# Виды защитных упражнений (src/services/defense_drills.py, KINDS).
+DEFENSE_DRILL_KINDS = ("threat", "blunder")
 
 
 class Puzzle(Base):
@@ -123,6 +126,7 @@ class DefenseDrill(Base):
     __table_args__ = (
         UniqueConstraint("kind", "source", "source_id", name="uq_defense_drills_source"),
         Index("ix_defense_drills_kind_stage", "kind", "stage"),
+        one_of("defense_drills", "kind", DEFENSE_DRILL_KINDS),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)

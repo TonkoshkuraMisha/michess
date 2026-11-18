@@ -40,8 +40,12 @@ class Game(Base):
     __tablename__ = "games"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    white_player_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    black_player_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    # RESTRICT — осознанное решение (ревизия базы 29.1, находка 5): игрока с партиями не удаляют, аккаунт
+    # обезличивается (src/services/account.py), а партии остаются у соперника и в статистике. То же у winner_id и moves.
+    white_player_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False,
+                                                 index=True)
+    black_player_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=False,
+                                                 index=True)
 
     pgn: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[GameStatus] = mapped_column(
@@ -75,7 +79,8 @@ class Game(Base):
 
     result: Mapped[str | None] = mapped_column(String(10), nullable=True)
     termination: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    winner_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    winner_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="RESTRICT"), nullable=True,
+                                                  index=True)
 
     # Рейтинги игроков в категории партии на её начало и изменение после неё — по ним строится история рейтинга
     # (GET /profile/{username}/rating-history). У товарищеской и отменённой партии между людьми изменение — 0;

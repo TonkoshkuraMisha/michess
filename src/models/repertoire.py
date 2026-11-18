@@ -10,12 +10,16 @@ from datetime import datetime
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from src.models.base import Base
+from src.models.base import Base, one_of
+
+# Цвет репертуара.
+REPERTOIRE_COLORS = ("white", "black")
 
 
 class Repertoire(Base):
     """Репертуар игрока: название и цвет, за который он составлен."""
     __tablename__ = "repertoires"
+    __table_args__ = (one_of("repertoires", "color", REPERTOIRE_COLORS),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)

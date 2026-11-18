@@ -12,7 +12,10 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from src.models.base import Base
+from src.models.base import Base, one_of
+
+# Статусы отзыва игрока (src/services/beta.py, FEEDBACK_STATUSES).
+FEEDBACK_STATUSES = ("new", "in_progress", "done", "rejected")
 
 
 class Invite(Base):
@@ -31,7 +34,7 @@ class Invite(Base):
     uses: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -41,9 +44,10 @@ class Feedback(Base):
     разбора модератором.
     """
     __tablename__ = "feedback"
+    __table_args__ = (one_of("feedback", "status", FEEDBACK_STATUSES),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     message: Mapped[str] = mapped_column(String(2000))
     # Контекст: путь страницы, версия приложения, язык интерфейса, размер экрана («1280x720»).
     page: Mapped[str | None] = mapped_column(String(200), nullable=True)
@@ -52,6 +56,6 @@ class Feedback(Base):
     screen: Mapped[str | None] = mapped_column(String(20), nullable=True)
     # new | in_progress | done | rejected
     status: Mapped[str] = mapped_column(String(16), default="new", server_default="new", index=True)
-    moderator_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    moderator_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
