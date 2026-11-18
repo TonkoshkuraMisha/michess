@@ -145,6 +145,21 @@ describe('страницы школы', () => {
         expect(screen.getByRole('link', {name: 'Go through again'})).toHaveAttribute('href', '/learn/tactics-double-attack');
     });
 
+    it('раскладка школы: «Большой курс» — главная карточка, курсы и тренажёры — карточки, у курса — прогресс', async () => {
+        setToken('jwt');
+        stubProgress([{lesson_id: 'tactics-double-attack', step: 5, steps_total: 6, completed: true, exam_score: 2, exam_total: 3}]);
+        render(<MemoryRouter><LearnPage/></MemoryRouter>);
+        expect(screen.getByTestId('learn-course-link')).toHaveAttribute('href', '/learn/course');
+        const mates = screen.getByTestId('learn-mates-link');
+        expect(mates).toHaveAttribute('href', '/learn/mates');
+        // Название — заголовок карточки, описание его не повторяет.
+        expect(mates.querySelector('h3')).toHaveTextContent('Mating patterns course');
+        expect(mates.querySelector('p')?.textContent).not.toContain('Mating patterns course');
+        expect(screen.getByTestId('learn-guess-link')).toHaveAttribute('href', '/guess');
+        const bars = await screen.findAllByRole('progressbar');
+        expect(bars.some((bar) => bar.getAttribute('aria-valuenow') === '1')).toBe(true);
+    });
+
     it('без входа — урок доступен, но предупреждает, что прогресс не сохранится', () => {
         const fetchMock = stubProgress([]);
         render(<MemoryRouter><LearnPage/></MemoryRouter>);
