@@ -2,7 +2,8 @@
 // Эндшпильный тренажёр (таск 14.4): /learn/endgames — 33 упражнения (с «обязательными позициями» и этюдами 27.9), /learn/endgames/:id — игра против идеальной
 // защиты по эндшпильным таблицам (POST /analysis/tablebase). Цели: мат (счётчик ходов против оптимума по таблицам),
 // провести пешку или реализовать перевес не упустив выигрыш, удержать ничью заданное число ходов. После каждого хода
-// игрока таблицы проверяют, не упущен ли результат.
+// игрока таблицы проверяют, не упущен ли результат (trainerVerdict в services/tablebase.ts). Сервер таблиц недоступен —
+// отвечает оценка движка (source: 'engine'): тренажёр продолжает работать и показывает об этом пометку.
 
 import {useEffect, useRef, useState} from 'react';
 import {Link, useParams} from 'react-router-dom';
@@ -13,7 +14,7 @@ import type {MessageKey, UiMessage} from '../../i18n';
 import {errorMessage} from '../../services/apiErrors';
 import {getToken} from '../../services/authToken';
 import {fetchLessonProgress, saveLessonProgress} from '../../services/lessonProgress';
-import {probeTablebase} from '../../services/tablebase';
+import {probeTablebase, trainerVerdict} from '../../services/tablebase';
 import exercisesData from '../../content/endgames.json';
 import {MUST_KNOW} from '../../content/mustKnow';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
@@ -105,6 +106,7 @@ export function EndgameTrainerPage() {
     const [result, setResult] = useState<MessageKey | null>(null);
     const [error, setError] = useState<UiMessage | null>(null);
     const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(null);
+    const [engineFallback, setEngineFallback] = useState(false);
     const busy = useRef(false);
 
     useEffect(() => {
@@ -123,6 +125,7 @@ export function EndgameTrainerPage() {
         setResult(null);
         setError(null);
         setLastMove(null);
+        setEngineFallback(false);
     }
 
     const finish = (ok: boolean, key: MessageKey) => {
@@ -152,9 +155,10 @@ export function EndgameTrainerPage() {
         setStatus('thinking');
         try {
             const probe = await probeTablebase(game.fen());
+            setEngineFallback(probe.source === 'engine');
             // Оценка — для соперника (он ходит): для выигрыша у соперника должен быть проигрыш, для ничьей — не выигрыш.
-            if (winning && probe.category !== 'loss') return finish(false, 'endgames.result.winLost');
-            if (!winning && (probe.category === 'win' || probe.category === 'maybe-win')) return finish(false, 'endgames.result.drawLost');
+            const verdict = trainerVerdict(probe, winning);
+            if (verdict !== 'continue') return finish(false, `endgames.result.${verdict}`);
             const promoted = uci.length === 5 || (game.history({verbose: true}).at(-1)?.promotion ?? null) !== null;
             if (exercise.goal === 'promote' && promoted) return finish(true, 'endgames.result.promoted');
             if (exercise.goal === 'convert' && loneKing(game, them)) return finish(true, 'endgames.result.converted');
@@ -196,6 +200,7 @@ export function EndgameTrainerPage() {
                             : t('endgames.moves', {moves, limit: exercise.limit})}
                     </p>
                     {status === 'thinking' && <p className="text-boxwood/70 animate-pulse">{t('endgames.thinking')}</p>}
+                    {engineFallback && <p className="text-amber-300/90 text-xs" data-testid="endgame-engine-fallback">{t('endgames.engineFallback')}</p>}
                     {result && (
                         <p data-testid="endgame-result" className={status === 'success' ? 'text-emerald-300' : 'text-rose-300'}>
                             {t(result, {moves, optimum: exercise.optimum ?? 0})}

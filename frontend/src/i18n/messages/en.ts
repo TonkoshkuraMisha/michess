@@ -2369,6 +2369,7 @@ export const en = {
         moves: 'Moves: {moves} of {limit}',
         movesOptimum: 'Moves: {moves} · optimum {optimum} · limit {limit}',
         thinking: 'The opponent is thinking…',
+        engineFallback: 'The endgame tablebases are unavailable right now: the opponent moves by the engine\'s evaluation, without the distance to mate.',
         again: 'Start again',
         goals: {
             mate: {section: 'Mates', task: 'Playing {side}, deliver mate within {limit} moves.'},
