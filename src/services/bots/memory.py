@@ -22,8 +22,14 @@
   проигрывал — реже; ход, с которым бот проиграл этому игроку в последний раз, — ещё × LAST_LOSS. Память соперника
   загружается на запрос хода (load_rival) и передаётся в синхронный выбор хода через contextvars: объекты ботов
   общие на все запросы.
+* Где соперник ошибается (32.2, по разбору). Когда фоновый разбор партии готов (games.analysis_json, задача
+  analyze_game), record_rival_errors отмечает ходы книги бота, после которых игрок в ближайшие ERROR_WINDOW
+  полуходов сделал ошибку или зевок (классы ERROR_CLASSES разбора). Вес такого хода против этого игрока — ещё
+  × до ERROR_MAX по доле партий с ошибкой: бот охотнее ведёт его в позиции, где тот уже ошибался. Учитываются те же
+  партии, что и для итогов соперника: исторический бот, обычная расстановка, без наставника.
 """
 
+import json
 import logging
 import time
 from contextvars import ContextVar
@@ -35,6 +41,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.bot_memory import BotOpeningStat, BotRating, BotRival, BotRivalStat
+from src.models.game import Game, GameStatus
+from src.models.user import User
 
 logger = logging.getLogger(__name__)
 
@@ -50,6 +58,14 @@ REFRESH_SECONDS = 300
 RIVAL_MIN_GAMES = 2
 RIVAL_MIN, RIVAL_MAX = 0.25, 1.75
 LAST_LOSS = 0.1
+# Ошибка игрока засчитывается ходу книги, если случилась не дальше ERROR_WINDOW полуходов после него.
+ERROR_WINDOW = 12
+# Классы ходов разбора (analysis_service.classify_move_by_cp_loss), которые считаются ошибкой игрока.
+ERROR_CLASSES = ("Mistake", "Blunder")
+# Предел добавки к весу хода, после которого игрок ошибался во всех партиях.
+ERROR_MAX = 1.5
+# Суффикс служебного имени бота, если его имя занято человеком (api/bots._get_or_create_bot_user).
+BOT_USERNAME_SUFFIX = "_bot"
 
 _book: dict[str, dict[tuple[str, str], tuple[int, float]]] = {}
 _offset: dict[str, int] = {}
@@ -62,6 +78,8 @@ class Rival:
     bot_id: str
     games: int
     moves: dict[tuple[str, str], tuple[int, float, bool]] = field(default_factory=dict)
+    # Ход книги → в скольких партиях игрок ошибся вскоре после него (по разбору).
+    errors: dict[tuple[str, str], int] = field(default_factory=dict)
 
 
 _rival: ContextVar[Rival | None] = ContextVar("bot_rival", default=None)
@@ -78,6 +96,8 @@ def rival_factor(rival: Rival, fen_key: str, uci: str) -> float:
         return 1.0
     rate = (points + 1.0) / (games + 2.0)
     factor = RIVAL_MIN + (RIVAL_MAX - RIVAL_MIN) * rate
+    # Доля партий, где игрок ошибся после этого хода; +1 в знаменателе — одна ошибка ещё не закономерность.
+    factor *= 1.0 + (ERROR_MAX - 1.0) * rival.errors.get((fen_key, uci), 0) / (games + 1)
     return factor * LAST_LOSS if last_lost else factor
 
 
@@ -124,22 +144,38 @@ def bot_points(result: str, bot_color: chess.Color) -> float:
 
 def book_moves_played(opening_book: dict, moves_uci: list[str], bot_color: chess.Color) -> list[tuple[str, str]]:
     """Ходы бота из его книги с начала партии — до первого выхода из книги (любой из сторон) или BOOK_PLIES."""
+    return [(key, uci) for _, key, uci in book_plies(opening_book, moves_uci, bot_color)]
+
+
+def book_plies(opening_book: dict, moves_uci: list[str], bot_color: chess.Color) -> list[tuple[int, str, str]]:
+    """То же, что book_moves_played, с номером полухода каждого хода (1 — первый ход партии, как ply в разборе)."""
     from src.services.bots.base import normalize_fen_key
 
     board = chess.Board()
-    played: list[tuple[str, str]] = []
-    for uci in moves_uci[:BOOK_PLIES]:
+    played: list[tuple[int, str, str]] = []
+    for index, uci in enumerate(moves_uci[:BOOK_PLIES]):
         key = normalize_fen_key(board)
         if board.turn == bot_color:
             known = {str(entry[0]) for entry in opening_book.get(key, [])}
             if uci not in known:
                 break
-            played.append((key, uci))
+            played.append((index + 1, key, uci))
         try:
             board.push_uci(uci)
         except ValueError:
             break
     return played
+
+
+def erred_after(book: list[tuple[int, str, str]], report_moves: list[dict], player_color: str) -> set[tuple[str, str]]:
+    """
+    Ходы книги бота, после которых игрок ошибся: в разборе (moves из analysis_json) у хода игрока класс из
+    ERROR_CLASSES не дальше ERROR_WINDOW полуходов после хода бота.
+    """
+    error_plies = [int(item["ply"]) for item in report_moves
+                   if item.get("color") == player_color and item.get("classification") in ERROR_CLASSES]
+    return {(key, uci) for ply, key, uci in book
+            if any(ply < error <= ply + ERROR_WINDOW for error in error_plies)}
 
 
 async def record_book(db: AsyncSession, bot_id: str, opening_book: dict, moves_uci: list[str],
@@ -216,7 +252,8 @@ async def load_rival(db: AsyncSession, bot_id: str, user_id: int | None) -> Riva
         return None
     rows = (await db.execute(select(BotRivalStat).where(
         BotRivalStat.bot_id == bot_id, BotRivalStat.user_id == user_id))).scalars().all()
-    return Rival(bot_id, summary.games, {(r.fen_key, r.uci): (r.games, r.points, r.last_lost) for r in rows})
+    return Rival(bot_id, summary.games, {(r.fen_key, r.uci): (r.games, r.points, r.last_lost) for r in rows},
+                 {(r.fen_key, r.uci): r.errors for r in rows if r.errors})
 
 
 async def record_rival(db: AsyncSession, bot_id: str, user_id: int, opening_book: dict, moves_uci: list[str],
@@ -249,3 +286,51 @@ async def record_rival(db: AsyncSession, bot_id: str, user_id: int, opening_book
 async def rivals_of(db: AsyncSession, user_id: int) -> list[BotRival]:
     return list((await db.execute(select(BotRival).where(BotRival.user_id == user_id)
                                   .order_by(BotRival.games.desc()))).scalars().all())
+
+
+def _bot_id_of(user: User) -> str | None:
+    """Исторический бот за записью игрока (имя — id бота, иногда со служебным суффиксом); иначе None."""
+    from src.services.bots import BOT_INSTANCES
+
+    if not user.is_bot:
+        return None
+    name = user.username.removesuffix(BOT_USERNAME_SUFFIX)
+    return name if name in BOT_INSTANCES else None
+
+
+async def record_rival_errors(db: AsyncSession, game_id: int) -> int:
+    """
+    Ошибки игрока из готового разбора партии с историческим ботом (вызывает задача analyze_game после разбора):
+    ходам книги бота против этого игрока добавляется errors. Партия — та же, что учитывает record_rival: законченная,
+    из обычной расстановки, без наставника, не персоналия мастерской. Повторный разбор не удваивает счёт
+    (BotRival.errors_game_id). Возвращает число отмеченных ходов книги. Коммит — здесь.
+    """
+    from src.services.bots import BOT_INSTANCES
+
+    game = await db.get(Game, game_id)
+    if (game is None or game.status != GameStatus.COMPLETED or not game.analysis_json or game.assisted
+            or game.is_simulation or game.personality_name or "[FEN " in (game.pgn or "")):
+        return 0
+    white, black = await db.get(User, game.white_player_id), await db.get(User, game.black_player_id)
+    if white is None or black is None:
+        return 0
+    bot_id, bot_color, player = _bot_id_of(white), chess.WHITE, black
+    if bot_id is None:
+        bot_id, bot_color, player = _bot_id_of(black), chess.BLACK, white
+    if bot_id is None or player.is_bot:
+        return 0
+    summary = await db.scalar(select(BotRival).where(BotRival.bot_id == bot_id, BotRival.user_id == player.id))
+    if summary is None or (summary.errors_game_id or 0) >= game.id:
+        return 0
+    report_moves = json.loads(game.analysis_json).get("moves", [])
+    book = book_plies(BOT_INSTANCES[bot_id].opening_book, [str(m["uci"]) for m in report_moves], bot_color)
+    marked = erred_after(book, report_moves, "black" if bot_color == chess.WHITE else "white")
+    for fen_key, uci in marked:
+        row = await db.scalar(select(BotRivalStat).where(
+            BotRivalStat.bot_id == bot_id, BotRivalStat.user_id == player.id, BotRivalStat.fen_key == fen_key,
+            BotRivalStat.uci == uci))
+        if row is not None:
+            row.errors += 1
+    summary.errors_game_id = game.id
+    await db.commit()
+    return len(marked)
