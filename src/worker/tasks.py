@@ -4,7 +4,8 @@
 
 * analyze_game — разбор только что законченной партии движком (результат — в games.analysis_json), личные задачи
   из ошибок игроков (src/services/personal_puzzles.py) и раскладка партии в индекс позиций
-  (src/services/position_index.py). analyze_imported_game — разбор и задачи для партии с другого сайта.
+  (src/services/position_index.py), а для партии с историческим ботом — где соперник ошибается
+  (src/services/bots/memory.py, record_rival_errors). analyze_imported_game — разбор и задачи для партии с другого сайта.
 * simulate_tournament_game — партия ботов между собой в турнире; после неё в очередь ставятся следующие партии.
 * workout_reminders, arena_reminders, arena_awards, bot_selfplay, archive_move_telemetry — плановые (расписание —
   src/worker/celery_app.py).
@@ -26,6 +27,7 @@ from sqlalchemy.pool import NullPool
 from src.core.config import settings
 from src.services import game_import, personal_puzzles, position_index, tournament_simulation
 from src.services.analysis_service import analysis_service
+from src.services.bots import memory as bot_memory
 from src.services.engine_pool import EngineBusyError, engine_work
 
 # Задача привязана к нашему приложению Celery явно. С @shared_task API-процесс, где celery_app
@@ -72,6 +74,12 @@ async def _prewarm_game_analysis_async(game_id: int) -> dict:
                 raise
             except Exception:
                 logger.exception("Personal puzzles extraction failed for game %s", game_id)
+            # Где соперник исторического бота ошибается (32.2) — по тому же разбору; сбой разбор не отменяет.
+            try:
+                await bot_memory.record_rival_errors(db, game_id)
+            except Exception:
+                await db.rollback()
+                logger.exception("Bot rival errors update failed for game %s", game_id)
             return report
     finally:
         await engine.dispose()

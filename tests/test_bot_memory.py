@@ -1,6 +1,10 @@
 # --- FILE: tests/test_bot_memory.py ---
-"""Память ботов (таск 32.1): опыт дебютных вариантов, рейтинг по партиям с людьми, поправка силы."""
+"""
+Память ботов (таск 32.1): опыт дебютных вариантов, рейтинг по партиям с людьми, поправка силы; память о
+сопернике (32.2) — по итогам и по ошибкам из разбора партии.
+"""
 
+import json
 import random
 from collections import Counter
 
@@ -179,3 +183,55 @@ async def test_move_request_passes_the_rival_into_the_move_thread(client, token_
     client.post("/api/v1/bots/move", headers=auth(token_user_1), json={"bot_id": "morphy", "fen": fen})
     client.post("/api/v1/bots/move", json={"bot_id": "morphy", "fen": fen})          # гость — соперника нет
     assert [r.games if r else None for r in seen] == [3, None]
+
+
+# --- где соперник ошибается: по разбору партии (32.2) ----------------------------------------------
+
+def _report(moves: list[str], errors: dict[int, str]) -> list[dict]:
+    """Ходы разбора (analysis_json): у хода с номером из errors — этот класс, у остальных — Best."""
+    return [{"ply": i + 1, "uci": uci, "color": "white" if i % 2 == 0 else "black",
+             "classification": errors.get(i + 1, "Best")} for i, uci in enumerate(moves)]
+
+
+def test_erred_after_counts_only_player_errors_inside_the_window():
+    book = [(2, "k2", "m2"), (4, "k4", "m4")]
+    moves = [f"m{i}" for i in range(1, 30)]
+    window = memory.ERROR_WINDOW
+    # Ошибка белых на 5-м полуходе — после обоих ходов бота; неточность и ошибка самого бота не считаются.
+    assert memory.erred_after(book, _report(moves, {5: "Mistake", 3: "Inaccuracy", 6: "Blunder"}), "white") == {
+        ("k2", "m2"), ("k4", "m4")}
+    # Ошибка дальше окна от первого хода бота — только второму.
+    assert memory.erred_after(book, _report(moves, {3 + window: "Blunder"}), "white") == {("k4", "m4")}
+    assert memory.erred_after(book, _report(moves, {}), "white") == set()
+
+
+def test_rival_factor_leans_towards_lines_where_the_player_erred():
+    calm = memory.Rival("probe", 3, {(START_KEY, "e2e4"): (2, 1.0, False)})
+    erring = memory.Rival("probe", 3, {(START_KEY, "e2e4"): (2, 1.0, False)}, {(START_KEY, "e2e4"): 2})
+    base, more = memory.rival_factor(calm, START_KEY, "e2e4"), memory.rival_factor(erring, START_KEY, "e2e4")
+    assert base < more < base * memory.ERROR_MAX
+
+
+async def test_analysed_game_teaches_the_bot_where_its_rival_errs(client, token_user_1, test_user_1, db_session):
+    from src.models.game import Game
+
+    line = _morphy_line()
+    game_ids = []
+    for _ in range(2):
+        response = client.post("/api/v1/bots/save-game", headers=auth(token_user_1), json={
+            "bot_id": "morphy", "player_color": "white", "result": "0-1", "moves_uci": line,
+            "termination": "resignation",
+        })
+        assert response.status_code == 200, response.text
+        game_ids.append(response.json()["game_id"])
+    # Разбор первой партии: после ответа Морфи из книги игрок зевнул (3-й полуход).
+    game = await db_session.get(Game, game_ids[0])
+    game.analysis_json = json.dumps({"moves": _report(line, {3: "Blunder"})})
+    await db_session.commit()
+    assert await memory.record_rival_errors(db_session, game_ids[0]) == 1
+    assert await memory.record_rival_errors(db_session, game_ids[0]) == 0          # повторный разбор не удваивает
+    rival = await memory.load_rival(db_session, "morphy", test_user_1.id)
+    assert rival is not None and rival.errors == {(_after("e2e4"), line[1]): 1}
+    # Без разбора и для неизвестной партии — ничего.
+    assert await memory.record_rival_errors(db_session, game_ids[1]) == 0
+    assert await memory.record_rival_errors(db_session, 10 ** 9) == 0

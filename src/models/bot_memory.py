@@ -1,7 +1,8 @@
 # --- FILE: src/models/bot_memory.py ---
 """
 Память ботов (таск 32.1): статистика их дебютных вариантов по сыгранным партиям и рейтинг, измеряемый по партиям
-с людьми (32.1), память о постоянных соперниках (32.2). Правила — src/services/bots/memory.py.
+с людьми (32.1), память о постоянных соперниках (32.2) — по итогам и по ошибкам из разбора партий.
+Правила — src/services/bots/memory.py.
 """
 
 from datetime import datetime
@@ -51,10 +52,16 @@ class BotRival(Base):
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True)
     games: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     points: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
+    # Последняя партия, чьи ошибки из разбора уже учтены (memory.record_rival_errors): повторный разбор той же или
+    # более ранней партии их не удвоит.
+    errors_game_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
 
 class BotRivalStat(Base):
-    """Ход книги бота против конкретного игрока: итог для бота и проиграна ли последняя партия с этим ходом."""
+    """
+    Ход книги бота против конкретного игрока: итог для бота, проиграна ли последняя партия с этим ходом и в скольких
+    партиях игрок вскоре после него ошибся (errors — по разбору движком, memory.ERROR_WINDOW полуходов).
+    """
 
     __tablename__ = "bot_rival_stats"
     __table_args__ = (UniqueConstraint("bot_id", "user_id", "fen_key", "uci", name="uq_bot_rival_stat"),)
@@ -67,6 +74,7 @@ class BotRivalStat(Base):
     games: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     points: Mapped[float] = mapped_column(Float, default=0.0, server_default="0")
     last_lost: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
+    errors: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
 
 
 class BotTuning(Base):
