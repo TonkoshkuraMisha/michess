@@ -2108,6 +2108,11 @@ export default function Chessboard() {
                         onPlayRecommended={handlePlayRecommended}
                     />
                 )}
+                {/* Итог партии с человеком: разбор и карточки «Клубного тренера» — после конца партии; у отменённой
+                    партии ходов нет, зрителю итог не нужен. */}
+                {gameId && gameOverResult && gameOverResult !== '*' && !spectatingGameId && (
+                    <GameSummaryPanel gameId={gameId} playerColor={myColor} recommendation={null}/>
+                )}
 
 
 
