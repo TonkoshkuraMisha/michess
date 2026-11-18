@@ -19,6 +19,7 @@ from src.models.email_token import EmailToken
 from src.models.game import Game
 from src.models.guess import GuessPosition
 from src.models.imported_game import ImportedGame
+from src.models.ladder import LadderBeaten
 from src.models.lesson import LessonProgress
 from src.models.library import LibraryCollection, LibraryGame, LibraryGameCollection
 from src.models.moderation import Report
@@ -79,6 +80,7 @@ __all__ = [
     "LessonProgress",
     "Move",
     "Report",
+    "LadderBeaten",
     "PersonalPuzzle",
     "ProductEvent",
     "Puzzle",

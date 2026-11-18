@@ -24,7 +24,8 @@ class RungOut(BaseModel):
     id: str
     rating: int
     measured: bool
-    status: Literal["beaten", "current", "locked"]
+    # skipped — слабее текущей ступени, но не пройдена (соперник добавлен ниже уже пройденного).
+    status: ladder.RungStatus
 
 
 class LadderState(BaseModel):
@@ -57,19 +58,19 @@ class LadderStartResponse(BaseModel):
     forfeited: ladder.LadderOutcome | None = None
 
 
-def _state(user: User, active: str | None) -> LadderState:
+async def _state(db: AsyncSession, user: User, active: str | None) -> LadderState:
+    """Лестница игрока: рейтинг, номер текущей ступени (step) и статус каждой ступени (ladder.rung_status)."""
     items = ladder.rungs()
-    step = min(user.ladder_step, len(items) - 1)
+    beaten = await ladder.beaten_keys(db, user.id)
+    current = ladder.current_index(items, beaten)
     return LadderState(
         rating=user.ladder_rating,
         games=user.ladder_games,
-        step=user.ladder_step,
+        step=current,
         total=len(items),
         rungs=[
-            RungOut(
-                key=r.key, kind=r.kind, id=r.id, rating=r.rating, measured=r.measured,
-                status="beaten" if i < user.ladder_step else "current" if i == step else "locked",
-            )
+            RungOut(key=r.key, kind=r.kind, id=r.id, rating=r.rating, measured=r.measured,
+                    status=ladder.rung_status(i, r, current, beaten))
             for i, r in enumerate(items)
         ],
         active_opponent=active,
@@ -82,9 +83,10 @@ async def note_ladder_analysis(request: Request, db: AsyncSession = Depends(get_
 
 
 @router.get("", response_model=LadderState)
-async def get_ladder(user: User = Depends(get_current_user)):
+async def get_ladder(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Прогресс игрока на лестнице и соперник открытой партии, если она есть."""
     session = await ladder.get_session(user.id)
-    return _state(user, session.rung_key if session else None)
+    return await _state(db, user, session.rung_key if session else None)
 
 
 @router.post("/start", response_model=LadderStartResponse)
@@ -97,10 +99,10 @@ async def start_ladder_game(
     if previous is not None and previous.max_ply >= 0:
         found = ladder.find_rung(previous.rung_key)
         if found is not None:
-            forfeited = ladder.apply_result(user, *found, score=0.0, assisted=previous.assisted)
+            forfeited = await ladder.apply_result(db, user, found[1], score=0.0, assisted=previous.assisted)
             await db.commit()
 
-    index, rung = ladder.current_rung(user)
+    index, rung = await ladder.current_rung(db, user)
     color = payload.color if payload.color != "random" else random.choice(("white", "black"))
     await ladder.open_session(user.id, rung, color)
     archetype = ladder.archetype_for(rung)

@@ -53,7 +53,7 @@
 | Партии | `games`, `moves`, `imported_games` | `game.py`, `move.py`, `imported_game.py` |
 | Дебюты и позиции | `position_stats`, `position_games`, `repertoires`, `repertoire_moves`, `repertoire_cards` | `position.py`, `repertoire.py` |
 | Задачи и тренировки | `puzzles`, `puzzle_themes`, `puzzle_attempts`, `theme_progress`, `personal_puzzles`, `defense_drills`, `drill_records`, `guess_positions`, `lesson_progress`, `trainer_results`, `exam_results` | `puzzle.py`, `guess.py`, `lesson.py`, `trainer.py` |
-| Боты | `bot_personalities`, `bot_opening_stats`, `bot_ratings`, `bot_rivals`, `bot_rival_stats`, `bot_tunings`, `bot_tuning_log` | `personality.py`, `bot_memory.py` |
+| Боты | `bot_personalities`, `bot_opening_stats`, `bot_ratings`, `bot_rivals`, `bot_rival_stats`, `bot_tunings`, `bot_tuning_log`, `ladder_beaten` | `personality.py`, `bot_memory.py`, `ladder.py` |
 | Турниры с ботами | `tournaments`, `tournament_players`, `tournament_games` | `tournament.py` |
 | Арены между людьми | `arenas`, `arena_players`, `arena_games`, `arena_reminders` | `arena.py` |
 | Команды | `teams`, `team_members` | `team.py` |
@@ -205,8 +205,11 @@
 
 ### 4.7. Лестница, турниры с ботами, «Машина времени»
 
-- **Лестница** (`src/services/ladder.py`): соперники по возрастанию измеренной силы и отдельный рейтинг. Честность
-  партии проверяет сервер: запрос подсказки, возврат хода или подмена соперника — партия не засчитывается.
+- **Лестница** (`src/services/ladder.py`): все исторические боты и все архетипы, включая соперников для новичков,
+  по возрастанию измеренной силы, и отдельный рейтинг. Прогресс — пройденные ступени по ключу соперника (таблица
+  `ladder_beaten`), текущая — первая непройденная выше самой сильной пройденной; новый соперник ничей прогресс не
+  сдвигает (ниже пройденного он «пропущен»). Честность партии проверяет сервер: запрос подсказки, возврат хода или
+  подмена соперника — партия не засчитывается.
 - **Турниры** (`tournaments.py`, правила — `tournament_rules.py`): круговые (таблицы Бергера) и на выбывание.
   Партии ботов между собой играет отдельный воркер (`tournament_simulation.py`, очередь `simulation`). Результат
   партии игрока приходит только из сохранения сыгранной партии — прислать его самому нельзя.

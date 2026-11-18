@@ -933,6 +933,7 @@ export const en = {
         beaten: 'beaten',
         current: 'current',
         locked: 'locked',
+        skipped: 'skipped — this opponent joined the ladder after you had climbed past it',
         notCounted: 'The game does not count for the ladder: {reason}.',
         result: 'Ladder: rating {rating} ({delta}).',
         resultPromoted: 'Ladder: rating {rating} ({delta}) — the next opponent is unlocked!',

@@ -937,6 +937,7 @@ export const ru: Messages = {
         beaten: 'пройден',
         current: 'текущий',
         locked: 'закрыт',
+        skipped: 'пропущен — соперник появился в лестнице после того, как вы прошли её выше',
         notCounted: 'Партия не засчитана в лестницу: {reason}.',
         result: 'Лестница: рейтинг {rating} ({delta}).',
         resultPromoted: 'Лестница: рейтинг {rating} ({delta}) — открыт следующий соперник!',

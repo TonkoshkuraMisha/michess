@@ -1,8 +1,10 @@
 # --- FILE: src/services/ladder.py ---
 """
-Клубная лестница (таск 10.4): соперники от слабого к сильному — архетипы мастерской и исторические
-боты, упорядоченные по измеренной силе (src/services/bots/calibration.py), и отдельный рейтинг
-игрока в партиях с ними.
+Клубная лестница (таск 10.4): соперники от слабого к сильному — все архетипы мастерской (с соперниками для
+новичков) и все исторические боты, упорядоченные по измеренной силе (src/services/bots/calibration.py), и отдельный
+рейтинг игрока в партиях с ними. Прогресс — множество пройденных ступеней (таблица ladder_beaten, по ключу соперника,
+а не по номеру): новый соперник встаёт в лестницу по силе и ничей прогресс не сдвигает. Текущая ступень — первая
+непройденная выше самой сильной пройденной (current_index).
 
 Честность партии проверяет сервер, а не клиент. Партию лестницы открывает POST /bots/ladder/start
 — сессия в Redis на LADDER_SESSION_TTL_S. Пока она открыта:
@@ -20,12 +22,16 @@
 import json
 import time
 from dataclasses import asdict, dataclass
+from typing import Literal
 
 import chess
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.db import redis as redis_module
+from src.models.ladder import LadderBeaten
 from src.models.user import User
-from src.services.bots.archetypes import ARCHETYPES, ARCHETYPES_BY_ID, LADDER_ARCHETYPES
+from src.services.bots.archetypes import ARCHETYPES, ARCHETYPES_BY_ID
 from src.services.bots.calibration import strength_of
 from src.services.bots.personality import BotPersonalityConfig
 
@@ -61,18 +67,17 @@ SCOPES: tuple[Scope, ...] = ("ladder", "tournament")
 
 def rungs() -> list[Rung]:
     """
-    Ступени лестницы — исторические боты и архетипы мастерской — по возрастанию силы: измеренной, если бот калиброван,
+    Ступени лестницы — все исторические боты и все архетипы мастерской, включая соперников для новичков (задача 7
+    плана 18.11: единая лестница примерно от 350 до 2400) — по возрастанию силы: измеренной, если бот калиброван,
     иначе заявленной.
     """
     from src.api.bots import AVAILABLE_BOTS
 
     items = [
         Rung(str(b["id"]), "historical", str(b["id"]), *_strength(str(b["id"]), int(str(b["rating"]))))
-        for b in AVAILABLE_BOTS if b.get("ladder", True)
+        for b in AVAILABLE_BOTS
     ]
-    items += [
-        Rung(a.key, "archetype", a.id, *_strength(a.key, a.config.target_elo)) for a in LADDER_ARCHETYPES
-    ]
+    items += [Rung(a.key, "archetype", a.id, *_strength(a.key, a.config.target_elo)) for a in ARCHETYPES]
     return sorted(items, key=lambda r: (r.rating, r.key))
 
 
@@ -81,10 +86,37 @@ def _strength(key: str, declared: int) -> tuple[int, bool]:
     return s.rating, s.measured
 
 
-def current_rung(user: User) -> tuple[int, Rung]:
-    ladder = rungs()
-    index = min(user.ladder_step, len(ladder) - 1)
-    return index, ladder[index]
+def current_index(items: list[Rung], beaten: set[str]) -> int:
+    """
+    Текущая ступень: первая непройденная выше самой сильной пройденной. Так соперник, добавленный ниже уже пройденного,
+    не отбрасывает игрока назад (он виден как «пропущенный» и остаётся доступен). Пройдены все — последняя ступень.
+    """
+    top = max((i for i, r in enumerate(items) if r.key in beaten), default=-1)
+    return next((i for i in range(top + 1, len(items)) if items[i].key not in beaten), len(items) - 1)
+
+
+RungStatus = Literal["beaten", "current", "skipped", "locked"]
+
+
+def rung_status(index: int, rung: Rung, current: int, beaten: set[str]) -> RungStatus:
+    """beaten — пройдена; current — текущая; skipped — слабее текущей, но не пройдена; locked — впереди."""
+    if rung.key in beaten:
+        return "beaten"
+    if index == current:
+        return "current"
+    return "skipped" if index < current else "locked"
+
+
+async def beaten_keys(db: AsyncSession, user_id: int) -> set[str]:
+    """Пройденные ступени игрока (таблица ladder_beaten)."""
+    return set((await db.execute(select(LadderBeaten.rung_key).where(LadderBeaten.user_id == user_id))).scalars())
+
+
+async def current_rung(db: AsyncSession, user: User) -> tuple[int, Rung]:
+    """Текущая ступень игрока и её номер в rungs()."""
+    items = rungs()
+    index = current_index(items, await beaten_keys(db, user.id))
+    return index, items[index]
 
 
 def opponent_key(bot_id: str, config: BotPersonalityConfig | None) -> str:
@@ -186,18 +218,26 @@ class LadderOutcome:
     opponent: str  # ключ ступени: «morphy» или «archetype:rusher»
 
 
-def apply_result(user: User, rung_index: int, rung: Rung, score: float, assisted: str | None) -> LadderOutcome:
-    """Меняет рейтинг и ступень игрока (без commit). score — очки игрока: 1, ½ или 0."""
+async def apply_result(db: AsyncSession, user: User, rung: Rung, score: float, assisted: str | None) -> LadderOutcome:
+    """
+    Меняет рейтинг игрока и отмечает ступень пройденной (без commit). score — очки игрока: 1, ½ или 0. Ступень
+    засчитывается победой над текущим соперником; партия с подсказкой (assisted) не меняет ничего.
+    """
+    items = rungs()
+    beaten = await beaten_keys(db, user.id)
+    current = current_index(items, beaten)
     if assisted:
-        return LadderOutcome(False, assisted, 0, user.ladder_rating, user.ladder_step, False, rung.key)
+        return LadderOutcome(False, assisted, 0, user.ladder_rating, current, False, rung.key)
     k = K_NEW if user.ladder_games < K_NEW_GAMES else K_ESTABLISHED
     delta = round(k * (score - expected_score(user.ladder_rating, rung.rating)))
     user.ladder_rating = max(100, user.ladder_rating + delta)
     user.ladder_games += 1
-    promoted = score == 1.0 and rung_index == user.ladder_step and rung_index < len(rungs()) - 1
+    promoted = score == 1.0 and items[current].key == rung.key and rung.key not in beaten
     if promoted:
-        user.ladder_step += 1
-    return LadderOutcome(True, None, delta, user.ladder_rating, user.ladder_step, promoted, rung.key)
+        db.add(LadderBeaten(user_id=user.id, rung_key=rung.key))
+        beaten.add(rung.key)
+        current = current_index(items, beaten)
+    return LadderOutcome(True, None, delta, user.ladder_rating, current, promoted, rung.key)
 
 
 def find_rung(key: str) -> tuple[int, Rung] | None:

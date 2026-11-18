@@ -41,6 +41,7 @@ from src.models.game import Game, GameStatus
 from src.models.user import RATING_CATEGORIES, RatingCategory, User
 from src.schemas.user import username_key
 from src.services.conferences import conference_of
+from src.services.ladder import current_rung as ladder_current_rung
 from src.services.ladder import rungs as ladder_rungs
 from src.services.rating import (
     ESTIMATED_MOVES,
@@ -463,7 +464,7 @@ async def get_user_profile(username: str, db: AsyncSession = Depends(get_db)):
         "ladder": {
             "rating": user.ladder_rating,
             "games": user.ladder_games,
-            "step": user.ladder_step,
+            "step": (await ladder_current_rung(db, user))[0],
             "total": len(ladder_rungs()),
         },
     }

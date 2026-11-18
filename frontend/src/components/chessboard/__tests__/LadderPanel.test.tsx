@@ -49,6 +49,16 @@ describe('LadderPanel', () => {
         expect(screen.getByLabelText('закрыт')).toBeInTheDocument();
     });
 
+    it('соперник ниже пройденного — «пропущен», а не закрыт', async () => {
+        const skipped = {key: 'archetype:blunderer', kind: 'archetype', id: 'blunderer', rating: 350, measured: false, status: 'skipped'};
+        vi.stubGlobal('fetch', vi.fn(async () => ({ok: true, status: 200,
+            json: async () => ({...STATE, total: 4, rungs: [skipped, ...STATE.rungs]})}) as Response));
+        render(<LadderPanel playDisabled={false} onStart={vi.fn()} lastOutcome={null}/>);
+        expect(await screen.findByTestId('ladder-skipped-archetype:blunderer')).toBeInTheDocument();
+        expect(screen.getByLabelText(/пропущен — соперник появился/)).toBeInTheDocument();
+        expect(screen.getByText('Следующий: Тихоня')).toBeInTheDocument();
+    });
+
     it('старт отправляет цвет и отдаёт соперника, выбранного сервером', async () => {
         const fetchMock = stub();
         const onStart = vi.fn();
