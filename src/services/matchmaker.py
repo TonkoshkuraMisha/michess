@@ -30,6 +30,7 @@ import json
 import logging
 import random
 import secrets
+import string
 import time
 import uuid
 from contextlib import asynccontextmanager
@@ -58,6 +59,11 @@ UNBOUNDED_MAX_RATING = 10_000  # верхняя граница диапазон�
 MIN_BASE_TIME_MS = 15_000
 MAX_BASE_TIME_MS = 3 * 60 * 60 * 1000
 MAX_INCREMENT_MS = 180_000
+
+
+# Код приглашения по ссылке: длина и алфавит (буквы и цифры, без похожих на «-» и «_» символов).
+INVITE_CODE_LENGTH = 8
+INVITE_CODE_ALPHABET = string.ascii_letters + string.digits
 
 
 class MatchmakingError(DomainError):
@@ -631,7 +637,8 @@ class Matchmaker:
         if variant == "chess960":
             odds_kind = ""  # фора и 960 вместе не бывают
 
-        code = secrets.token_urlsafe(6).replace("-", "").replace("_", "")[:8]
+        # Ровно INVITE_CODE_LENGTH букв и цифр: прежний token_urlsafe с вырезанными «-» и «_» иногда давал код короче шести.
+        code = "".join(secrets.choice(INVITE_CODE_ALPHABET) for _ in range(INVITE_CODE_LENGTH))
         if color_pref not in ("white", "black", "random"):
             color_pref = "random"
 
