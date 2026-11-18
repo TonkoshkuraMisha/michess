@@ -35,7 +35,7 @@ export function SegmentedControl<T extends string>({options, value, onChange, la
     };
     return (
         <div role="tablist" aria-label={label}
-             className={`inline-flex flex-wrap gap-1 rounded-lg bg-black/30 border border-amber-900/50 p-1 ${stretch ? 'w-full' : ''}`}>
+             className={`inline-flex flex-wrap gap-1 rounded-lg bg-black/30 border border-amber-900/50 p-1 ${stretch ? 'w-full' : 'self-start max-w-full'}`}>
             {options.map((option, index) => {
                 const selected = option.id === value;
                 return (

@@ -34,7 +34,7 @@ interface ProgressProps {
 export function ProgressBar({value, max, label, showNumbers = true}: ProgressProps) {
     const share = max > 0 ? Math.min(1, Math.max(0, value / max)) : 0;
     return (
-        <div className="flex items-center gap-2 w-full">
+        <div className="flex items-center gap-2 flex-1 min-w-[8rem]">
             <div role="progressbar" aria-label={label} aria-valuemin={0} aria-valuemax={max} aria-valuenow={value}
                  className="h-1.5 flex-1 rounded-full bg-black/40 overflow-hidden">
                 <div className={`h-full rounded-full ${share >= 1 ? 'bg-emerald-500' : 'bg-amber-500'}`} style={{width: `${Math.round(share * 100)}%`}}/>
