@@ -20,7 +20,7 @@ export interface ArenaInfo {
     /** Ключ слота расписания; null — арена создана не расписанием. */
     schedule_key: string | null;
     /** arena — по времени, swiss — по турам (17.2). */
-    format?: 'arena' | 'swiss';
+    format?: 'arena' | 'swiss' | 'match';
     /** Только у швейцарки: всего туров и номер идущего. */
     rounds?: number;
     current_round?: number;
@@ -44,6 +44,8 @@ export interface ArenaInfo {
     parent_id?: number | null;
     /** Конференция, по расписанию которой идёт арена (33.4): central | western | northern | southern | eastern. */
     conference?: string | null;
+    /** Матч конференций: конференция-гость (хозяин — conference). */
+    opponent_conference?: string | null;
     /** Вечерняя арена 5+3 — главная арена дня своей конференции (33.4). */
     evening?: boolean;
 }
@@ -84,10 +86,34 @@ export interface ArenaConferenceRow {
     players: number;
 }
 
+/** Игрок на доске матча конференций: очки — в единицах матча (победа 1, ничья ½). */
+export interface MatchSeat {
+    username: string;
+    rating: number;
+    score: number;
+}
+
+/**
+ * Матч конференций (arena.match_view на сервере): хозяин и гость, счёт, сколько записалось с каждой стороны, открыта ли
+ * запись и доски (до старта — предварительный состав по рейтингу).
+ */
+export interface MatchDetail {
+    home: string;
+    guest: string;
+    home_score: number;
+    guest_score: number;
+    home_players: number;
+    guest_players: number;
+    entry_open: boolean;
+    boards: { board: number; home: MatchSeat; guest: MatchSeat }[];
+}
+
 /** Страница арены (GET /arenas/{id}): карточка, таблица, зачёт конференций и состояние вошедшего игрока. */
 export interface ArenaDetail extends ArenaInfo {
     standings: ArenaStanding[];
     conferences?: ArenaConferenceRow[];
+    /** Только у матча конференций (format 'match'). */
+    match?: MatchDetail | null;
     /**
      * Состояние игрока; null — запрос без входа. waiting — ждёт пару, current_game_id — его идущая партия арены.
      * division_arena_id: игрок в другом делении этой арены — клиент переходит туда (33.2).

@@ -5,7 +5,8 @@
 // (33.4): в названии — конференция; у ещё не начавшейся арены — «напомнить перед началом». Зачёт конференций
 // (33.6): у игрока в таблице — его конференция, под таблицей — очки конференций в этой арене. Под списком арен —
 // месячная лига арен (33.5, ArenaLeague.tsx). Призёру арены (место из наград сервера, me.podium_place) страница один
-// раз показывает праздник призёра — тот же, что после турниров (TournamentCelebration).
+// раз показывает праздник призёра — тот же, что после турниров (TournamentCelebration). Матч конференций (format
+// 'match', ConferenceMatches.tsx): вместо таблицы — счёт и доски; «Играть» нет — партии туров начинаются сами.
 
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Link, useNavigate, useParams} from 'react-router-dom';
@@ -17,6 +18,7 @@ import {getToken} from '../../services/authToken';
 import {arenasApi, clock, conferenceKey, controlLabel, secondsUntil} from '../../services/arenas';
 import type {ArenaDetail, ArenaInfo} from '../../services/arenas';
 import {ArenaLeague} from './ArenaLeague';
+import {conferenceName, MatchBoards} from './ConferenceMatches';
 import {markCelebrated, shouldCelebrate, TournamentCelebration} from '../tournaments/TournamentCelebration';
 
 export const WAIT_POLL_MS = 2000;
@@ -33,6 +35,9 @@ function useNow(intervalMs = 1000): number {
 
 /** Название арены; withConference: false — короткое, для узкого анонса в лобби. */
 function arenaName(a: ArenaInfo, t: ReturnType<typeof useI18n>['t'], withConference = true): string {
+    if (a.format === 'match') {
+        return t('arenas.matchName', {home: conferenceName(a.conference, t), guest: conferenceName(a.opponent_conference, t)});
+    }
     const base = a.format === 'swiss'
         ? t('arenas.swissName', {control: controlLabel(a), rounds: a.rounds ?? 0})
         : t(a.evening ? 'arenas.eveningName' : 'arenas.name', {control: controlLabel(a)});
@@ -46,7 +51,7 @@ function arenaName(a: ArenaInfo, t: ReturnType<typeof useI18n>['t'], withConfere
 
 function timing(a: ArenaInfo, now: number, t: ReturnType<typeof useI18n>['t']): string {
     if (a.status === 'scheduled') return t('arenas.startsIn', {time: clock(secondsUntil(a.starts_at, now))});
-    if (a.status === 'running' && a.format === 'swiss') return t('arenas.round', {round: a.current_round ?? 0, total: a.rounds ?? 0});
+    if (a.status === 'running' && (a.format === 'swiss' || a.format === 'match')) return t('arenas.round', {round: a.current_round ?? 0, total: a.rounds ?? 0});
     if (a.status === 'running' && a.last_start_at) {
         return t('arenas.lastStartIn', {time: clock(secondsUntil(a.last_start_at, now)), end: clock(secondsUntil(a.ends_at, now))});
     }
@@ -162,6 +167,9 @@ export function ArenaPage() {
     const remind = (on: boolean) => (on ? arenasApi.remind(id) : arenasApi.forgetReminder(id))
         .then(load).catch((err) => setError(errorMessage(err, 'common.networkError')));
 
+    // Арена «по времени» (формат не указан — тоже она): «Играть» и доигрывание; швейцарка и матч идут турами.
+    const byTime = (arena.format ?? 'arena') === 'arena';
+
     return (
         <div className="w-full max-w-4xl mx-auto p-3 flex flex-col gap-4 text-boxwood-light" data-testid="arena-page">
             <Link to="/arenas" className="text-sm text-amber-400 hover:underline">{t('arenas.title')}</Link>
@@ -169,16 +177,16 @@ export function ArenaPage() {
                 <h1 className="text-2xl font-bold text-amber-200">{arenaName(arena, t)}</h1>
                 <span className="font-mono text-amber-300" data-testid="arena-timing">{timing(arena, now, t)}</span>
             </div>
-            <p className="text-sm text-boxwood/80">{t(arena.format === 'swiss' ? 'arenas.swissRules' : 'arenas.rules')}</p>
+            <p className="text-sm text-boxwood/80">{t(arena.format === 'match' ? 'arenas.matchRules' : arena.format === 'swiss' ? 'arenas.swissRules' : 'arenas.rules')}</p>
             {arena.berserk && <p className="text-sm text-boxwood/80" data-testid="arena-berserk-rule">{t('arenas.berserkRule')}</p>}
             {error && <p role="alert" className="text-sm text-rose-300">{renderUiMessage(error, t)}</p>}
             {getToken() && arena.status !== 'finished' && (
                 <div className="flex flex-wrap items-center gap-3">
-                    {!arena.me?.joined && (
+                    {!arena.me?.joined && (arena.format !== 'match' || arena.match?.entry_open) && (
                         <button type="button" onClick={() => void join()} data-testid="arena-join"
                                 className="px-4 py-2 rounded bg-amber-700 text-white font-bold">{t('arenas.join')}</button>
                     )}
-                    {arena.me?.joined && arena.status === 'running' && arena.format !== 'swiss' && !searching && (
+                    {arena.me?.joined && arena.status === 'running' && byTime && !searching && (
                         <button type="button" onClick={() => {
                             setError(null);
                             setSearching(true);
@@ -204,13 +212,14 @@ export function ArenaPage() {
                                     className="text-amber-400 hover:underline">{t('arenas.reminderOff')}</button>
                         </span>
                     )}
-                    {arena.status === 'closing' && arena.format !== 'swiss' && (
+                    {arena.status === 'closing' && byTime && (
                         <span className="text-sm" data-testid="arena-closing">{t('arenas.pairingClosed')}</span>
                     )}
-                    {arena.me?.joined && arena.status === 'running' && arena.format === 'swiss' && <span className="text-sm" data-testid="swiss-waiting">{t('arenas.swissWaiting')}</span>}
+                    {arena.me?.joined && arena.status === 'running' && !byTime && <span className="text-sm" data-testid="swiss-waiting">{t('arenas.swissWaiting')}</span>}
                 </div>
             )}
-            <section className="bg-acacia p-3 rounded-lg border-2 border-acacia-dark overflow-x-auto">
+            {arena.match && <MatchBoards match={arena.match}/>}
+            {!arena.match && <section className="bg-acacia p-3 rounded-lg border-2 border-acacia-dark overflow-x-auto">
                 <h2 className="font-bold text-amber-200 mb-2 flex items-center gap-1.5"><Trophy size={16}/> {t('arenas.standings')}</h2>
                 {arena.standings.length === 0 ? <p className="text-sm text-boxwood/70">{t('arenas.empty')}</p> : (
                     <table className="w-full text-sm" data-testid="arena-standings">
@@ -245,8 +254,8 @@ export function ArenaPage() {
                         </tbody>
                     </table>
                 )}
-            </section>
-            {(arena.conferences ?? []).length > 0 && (
+            </section>}
+            {!arena.match && (arena.conferences ?? []).length > 0 && (
                 <section className="bg-acacia p-3 rounded-lg border-2 border-acacia-dark overflow-x-auto">
                     <h2 className="font-bold text-amber-200 mb-2 flex flex-wrap items-baseline justify-between gap-2">
                         <span>{t('arenas.conferenceStandings')}</span>

@@ -18,6 +18,19 @@ export interface CupRow {
     arenas: number;
 }
 
+/** Матч конференций в списке страницы (conferences.matches на сервере): счёт — победа 1, ничья ½. */
+export interface MatchRow {
+    arena_id: number;
+    home: ConferenceKey;
+    guest: ConferenceKey;
+    starts_at: string;
+    status: 'scheduled' | 'running' | 'closing' | 'finished';
+    home_score: number;
+    guest_score: number;
+    /** Сколько игроков обеих конференций записалось. */
+    players: number;
+}
+
 /** Страна и конференция вошедшего игрока (users.country на сервере; конференцию определяет страна). */
 export interface Membership {
     /** Код страны ISO 3166-1 alpha-2 из профиля; null — не указана. */
@@ -34,6 +47,8 @@ export interface ConferencesData {
     /** Сколько лучших игроков конференции идёт в зачёт арены. */
     top_players: number;
     table: CupRow[];
+    /** Матчи конференций сезона и ближайшие. */
+    matches?: MatchRow[];
     /** Пять конференций и зона времени (IANA), по местному времени которой составлено расписание её арен. */
     conferences: { key: ConferenceKey; timezone: string }[];
     /** Код страны → конференция: все страны, которые можно выбрать. */

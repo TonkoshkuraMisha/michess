@@ -12,14 +12,15 @@ from sqlalchemy.orm import Mapped, mapped_column
 from src.models.base import Base, one_of
 
 # Форматы турнира между людьми (src/services/arena.py, arena_schedule.Slot.format).
-ARENA_FORMATS = ("arena", "swiss")
+ARENA_FORMATS = ("arena", "swiss", "match")
 # Итог партии арены; «*» — отменённая или не засчитанная партия, NULL — партия ещё идёт.
 ARENA_GAME_RESULTS = ("1-0", "0-1", "1/2-1/2", "*")
 
 
 class Arena(Base):
     """
-    Турнир между людьми: арена по времени или швейцарка по турам. Создаётся по расписанию
+    Турнир между людьми: арена по времени, швейцарка по турам или матч двух конференций (два тура, пары по доскам —
+    src/services/conference_match_rules.py). Создаётся по расписанию
     (src/services/arena_schedule.py) или как следующее деление переполненной арены (parent_id).
     """
     __tablename__ = "arenas"
@@ -32,7 +33,8 @@ class Arena(Base):
     increment_ms: Mapped[int] = mapped_column(Integer, default=0)
     starts_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
     ends_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), index=True)
-    # arena — играешь, пока идёт время; swiss — заданное число туров, пары по очкам (src/services/arena.py).
+    # arena — играешь, пока идёт время; swiss — заданное число туров, пары по очкам (src/services/arena.py); match —
+    # матч конференций: хозяин — conference, гость — opponent_conference.
     format: Mapped[str] = mapped_column(String(16), default="arena", server_default="arena")
     rounds: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     current_round: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
@@ -43,6 +45,8 @@ class Arena(Base):
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("arenas.id", ondelete="CASCADE"), nullable=True, index=True)
     # Конференция, по расписанию которой идёт арена (33.4, src/services/arena_schedule.py); пусто — разовая арена.
     conference: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # Матч конференций: конференция-гость (хозяин — conference); у остальных форматов пусто.
+    opponent_conference: Mapped[str | None] = mapped_column(String(16), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
@@ -68,6 +72,8 @@ class ArenaPlayer(Base):
     byes: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     # Конференция игрока на момент входа (33.6): его очки идут в её зачёт; пусто — страна в профиле не указана.
     conference: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # Матч конференций: доска игрока в составе своей стороны (с 1); пусто — запасной или состав ещё не объявлен.
+    board: Mapped[int | None] = mapped_column(Integer, nullable=True)
     joined_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

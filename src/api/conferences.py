@@ -13,6 +13,7 @@ from src.api.fair_play import optional_user_id
 from src.core.errors import DomainError
 from src.db.session import get_db
 from src.models.user import User
+from src.services import arena as arena_service
 from src.services import conferences as service
 from src.services.arena_schedule import CONFERENCE_ZONES
 
@@ -32,14 +33,17 @@ class CountryIn(BaseModel):
 async def conferences_page(request: Request, season: str | None = Query(None, pattern=SEASON),
                            db: AsyncSession = Depends(get_db)):
     """
-    Кубок конференций за сезон (по умолчанию — текущий месяц), таблица «страна → конференция» для выбора в профиле
-    и — вошедшему игроку — его страна и конференция. suggested_country — страна, названная прокси (только подсказка):
-    берётся из заголовка, заданного настройкой COUNTRY_HEADER; пока настройка пуста, подсказки нет. Открыто всем.
+    Кубок конференций за сезон (по умолчанию — текущий месяц), матчи конференций сезона и ближайшие, таблица
+    «страна → конференция» для выбора в профиле и — вошедшему игроку — его страна и конференция. suggested_country —
+    страна, названная прокси (только подсказка): берётся из заголовка, заданного настройкой
+    COUNTRY_HEADER; пока настройка пуста, подсказки нет. Открыто всем.
     """
     user_id = await optional_user_id(request, db)
     user = await db.get(User, user_id) if user_id is not None else None
+    await arena_service.ensure_schedule(db)  # ближайший матч конференций создаётся заранее — для записи
     return {
         **await service.cup(db, season),
+        "matches": await service.matches(db, season),
         "conferences": [{"key": key, "timezone": zone} for key, zone in CONFERENCE_ZONES.items()],
         "countries": service.CONFERENCE_OF,
         "suggested_country": service.suggested_country(request.headers),

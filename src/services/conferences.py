@@ -18,14 +18,16 @@
 * зачёт арены — конференция игрока запоминается при входе в арену (arena_players.conference), поэтому поздняя смена
   страны итогов не переписывает. Очки конференции в арене — сумма очков её TOP_PLAYERS лучших участников (чтобы
   большая аудитория не выигрывала числом);
-* Кубок конференций — сумма зачётов всех арен, начавшихся в сезоне; считается из arena_players при запросе.
+* Кубок конференций — сумма зачётов всех арен, начавшихся в сезоне; считается из arena_players при запросе;
+* матчи конференций (формат арены "match", правила — conference_match_rules.py) — список matches: матчи сезона и
+  ближайшие, со счётом сторон из arena_players.
 """
 
 from collections import defaultdict
 from collections.abc import Iterable, Mapping
-from datetime import datetime
+from datetime import UTC, datetime
 
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.core.config import settings
@@ -190,3 +192,32 @@ async def cup(db: AsyncSession, season: str | None = None, now: datetime | None 
     table = [{"conference": conference, "score": scores[conference], "arenas": arenas[conference]}
              for conference in ranked]
     return {"season": key, "top_players": TOP_PLAYERS, "table": table}
+
+
+async def matches(db: AsyncSession, season: str | None = None, now: datetime | None = None) -> list[dict]:
+    """
+    Матчи конференций сезона и ещё не начавшиеся: {"arena_id", "home", "guest", "starts_at", "status", "home_score",
+    "guest_score", "players"} по порядку начала. Счёт — очки арены сторон в единицах матча (победа 1, ничья ½).
+    """
+    from src.services import arena as arena_service
+    from src.services import conference_match_rules as match_rules
+
+    now = now or datetime.now(UTC)
+    _, start, end = season_bounds(season, now)
+    rows = list((await db.execute(select(Arena).where(
+        Arena.format == "match", or_(Arena.starts_at.between(start, end), Arena.starts_at > now))
+        .order_by(Arena.starts_at, Arena.id))).scalars())
+    if not rows:
+        return []
+    totals = (await db.execute(select(ArenaPlayer.arena_id, ArenaPlayer.conference, func.sum(ArenaPlayer.score),
+                                      func.count()).where(ArenaPlayer.arena_id.in_([a.id for a in rows]))
+                               .group_by(ArenaPlayer.arena_id, ArenaPlayer.conference))).all()
+    score = {(arena_id, conference): (int(points), int(count)) for arena_id, conference, points, count in totals}
+    out = []
+    for item in rows:
+        home, guest = score.get((item.id, item.conference), (0, 0)), score.get((item.id, item.opponent_conference), (0, 0))
+        out.append({"arena_id": item.id, "home": item.conference, "guest": item.opponent_conference,
+                    "starts_at": arena_service._aware(item.starts_at).isoformat(),
+                    "status": arena_service.status(item, now), "home_score": match_rules.side_score(home[0]),
+                    "guest_score": match_rules.side_score(guest[0]), "players": home[1] + guest[1]})
+    return out

@@ -32,6 +32,12 @@
 (tournament_rules.swiss_pairings, посев — по рейтингу на входе), партии всех пар создаются сразу (неявка — поражение по
 времени), при нечётном числе — свободный тур слабейшему без свободного тура (очки за победу); следующий тур — когда
 сыграны все партии текущего; «огня» нет. Ход турнира продвигается при каждом завершении партии и при запросе страницы.
+
+Матч конференций (format="match", правила — src/services/conference_match_rules.py): хозяин — conference, гость —
+opponent_conference; записаться может только игрок одной из двух конференций и только до закрытия записи. На старте
+стороны выстраиваются по рейтингу на входе (arena_players.board), два тура идут тем же порядком, что у швейцарки:
+партии всех досок создаются сразу, следующий тур — когда сыгран текущий. Очки — как в швейцарке (без «огня», ранней
+ничьей и берсерка); счёт матча — match_view. Кубков за матч нет (src/services/arena_awards.py).
 """
 
 from datetime import UTC, datetime, timedelta
@@ -44,6 +50,7 @@ from src.db import redis as redis_module
 from src.models.arena import Arena, ArenaGame, ArenaPlayer, ArenaReminder
 from src.models.user import User
 from src.services import arena_schedule
+from src.services import conference_match_rules as match_rules
 from src.services.rating import classify_time_control
 
 # После стольких побед подряд очки за следующие партии удваиваются («огонь»).
@@ -64,6 +71,8 @@ LOOKAHEAD = timedelta(hours=6)
 REMIND_BEFORE = timedelta(minutes=5)
 # Сколько секунд живёт отметка ожидания пары: клиент повторяет «Играть», и ушедший игрок выпадает из ожидания сам.
 WAIT_TTL_S = 120
+# Форматы, которые идут турами (а не «играешь, пока идёт время»): у них свой конец (finished_at) и нет «огня».
+ROUND_FORMATS = ("swiss", "match")
 
 
 def _now() -> datetime:
@@ -107,7 +116,7 @@ def status(arena: Arena, now: datetime | None = None, open_games: int = 0) -> st
     now = now or _now()
     if now < _aware(arena.starts_at):
         return "scheduled"
-    if arena.format == "swiss":
+    if arena.format in ROUND_FORMATS:
         return "finished" if arena.finished_at is not None else "running"
     if now < last_start(arena):
         return "running"
@@ -127,16 +136,26 @@ async def ensure_schedule(db: AsyncSession, now: datetime | None = None) -> None
     никто не вошёл.
     """
     now = now or _now()
-    plan = {(item.schedule_key, item.starts_at): item for item in arena_schedule.planned(now, LOOKAHEAD)}
+    horizon = max(LOOKAHEAD, match_rules.MATCH_LOOKAHEAD)
+    plan: dict[tuple[str, datetime], Arena] = {}
+    for item in arena_schedule.planned(now, LOOKAHEAD):
+        plan[(item.schedule_key, item.starts_at)] = Arena(
+            schedule_key=item.schedule_key, conference=item.conference, base_time_ms=item.slot.base_time_ms,
+            increment_ms=item.slot.increment_ms, starts_at=item.starts_at, ends_at=item.ends_at,
+            format=item.slot.format, rounds=item.slot.rounds)
+    # Матчи конференций видны для записи заранее — на MATCH_LOOKAHEAD вперёд.
+    slot = match_rules.MATCH_SLOT
+    for match in match_rules.planned_matches(now, match_rules.MATCH_LOOKAHEAD, arena_schedule.active_conferences()):
+        plan[(match.schedule_key, match.starts_at)] = Arena(
+            schedule_key=match.schedule_key, conference=match.home, opponent_conference=match.guest,
+            base_time_ms=slot.base_time_ms, increment_ms=slot.increment_ms, starts_at=match.starts_at,
+            ends_at=match.ends_at, format=slot.format, rounds=slot.rounds)
     rows = (await db.execute(select(Arena.id, Arena.schedule_key, Arena.starts_at).where(
-        Arena.schedule_key.is_not(None), Arena.ends_at > now, Arena.starts_at < now + LOOKAHEAD))).all()
+        Arena.schedule_key.is_not(None), Arena.ends_at > now, Arena.starts_at < now + horizon))).all()
     existing = {(key, _aware(starts_at)) for _, key, starts_at in rows}
-    for slot_key, item in plan.items():
+    for slot_key, new_arena in plan.items():
         if slot_key not in existing:
-            db.add(Arena(schedule_key=item.schedule_key, conference=item.conference,
-                         base_time_ms=item.slot.base_time_ms, increment_ms=item.slot.increment_ms,
-                         starts_at=item.starts_at, ends_at=item.ends_at, format=item.slot.format,
-                         rounds=item.slot.rounds))
+            db.add(new_arena)
     stale = [arena_id for arena_id, key, starts_at in rows
              if _aware(starts_at) > now and (key, _aware(starts_at)) not in plan]
     if stale:
@@ -197,6 +216,13 @@ async def join(db: AsyncSession, arena: Arena, user: User) -> ArenaPlayer:
         raise DomainError("arena_finished")
     if arena.format == "arena" and now >= last_start(arena):
         raise DomainError("arena_pairing_closed")
+    from src.services import conferences
+
+    if arena.format == "match":
+        existing_player = await _player(db, arena.id, user.id)
+        if existing_player:
+            return existing_player
+        check_match_entry(arena, user, now)
     family = await divisions(db, arena)
     family_ids = [a.id for a in family]
     existing = await db.scalar(select(ArenaPlayer).where(
@@ -215,8 +241,6 @@ async def join(db: AsyncSession, arena: Arena, user: User) -> ArenaPlayer:
         db.add(target)
         await db.flush()
     category = classify_time_control(arena.base_time_ms, arena.increment_ms)
-    from src.services import conferences
-
     # Конференция запоминается на входе (33.6): поздняя смена страны зачёт этой арены не меняет.
     player = ArenaPlayer(arena_id=target.id, user_id=user.id, rating=user.rating_for(category),
                          conference=conferences.conference_of(user.country))
@@ -224,6 +248,23 @@ async def join(db: AsyncSession, arena: Arena, user: User) -> ArenaPlayer:
     await db.commit()
     await db.refresh(player)
     return player
+
+
+def check_match_entry(arena: Arena, user: User, now: datetime) -> None:
+    """
+    Запись на матч конференций: честная игра, запись ещё открыта (match_entry_closed), у игрока есть конференция
+    (match_no_conference) и это одна из двух сторон матча (match_wrong_conference). Порогов по силе нет.
+    """
+    from src.services import conferences
+
+    check_entry(user)
+    if not match_rules.entry_open(_aware(arena.starts_at), now):
+        raise DomainError("match_entry_closed")
+    conference = conferences.conference_of(user.country)
+    if conference is None:
+        raise DomainError("match_no_conference")
+    if conference not in (arena.conference, arena.opponent_conference):
+        raise DomainError("match_wrong_conference")
 
 
 def _wait_key(arena_id: int) -> str:
@@ -409,7 +450,7 @@ async def on_game_finished(db: AsyncSession, game_id: int, result: str, terminat
     game.result = result
     sides = ((game.white_id, white_score, "white"), (game.black_id, 1.0 - white_score, "black"))
     arena = await db.get(Arena, game.arena_id)
-    swiss = arena is not None and arena.format == "swiss"
+    swiss = arena is not None and arena.format in ROUND_FORMATS
     for user_id, score, color in sides:
         player = players.get(user_id)
         if player is None:
@@ -438,7 +479,7 @@ async def advance_after_game(db: AsyncSession, game_id: int) -> None:
     if record is None:
         return
     arena = await db.get(Arena, record.arena_id)
-    if arena is None or arena.format != "swiss":
+    if arena is None or arena.format not in ROUND_FORMATS:
         return
     await advance_swiss(db, arena)  # сама перечитывает арену под блокировкой
     await db.commit()
@@ -448,8 +489,8 @@ async def advance_after_game(db: AsyncSession, game_id: int) -> None:
 
 async def advance_swiss(db: AsyncSession, arena: Arena, now: datetime | None = None) -> None:
     """
-    Продвигает швейцарку (без commit): после начала — первый тур; тур сыгран — следующий или конец. Меньше двух
-    участников на старте — турнир окончен без партий.
+    Продвигает швейцарку или матч конференций (без commit): после начала — первый тур; тур сыгран — следующий или
+    конец. Меньше двух участников на старте (у матча — ни одной доски) — турнир окончен без партий.
 
     Атомарность: когда тур кончается одновременно на многих досках, продвигать его пытаются все завершившие партии и
     открытые страницы. Решение принимается под блокировкой строки арены (SELECT ... FOR UPDATE, до commit
@@ -459,7 +500,7 @@ async def advance_swiss(db: AsyncSession, arena: Arena, now: datetime | None = N
     from src.services import tournament_rules as rules
 
     now = now or _now()
-    if arena.format != "swiss" or arena.finished_at is not None or now < _aware(arena.starts_at):
+    if arena.format not in ROUND_FORMATS or arena.finished_at is not None or now < _aware(arena.starts_at):
         return
     if await _round_in_progress(db, arena):
         return
@@ -474,6 +515,9 @@ async def advance_swiss(db: AsyncSession, arena: Arena, now: datetime | None = N
         .order_by(ArenaPlayer.rating.desc(), ArenaPlayer.joined_at, ArenaPlayer.id)
         .execution_options(populate_existing=True)
     )).scalars())
+    if arena.format == "match":
+        await _advance_match(db, arena, players, now)
+        return
     if arena.current_round >= arena.rounds or len(players) < 2:
         arena.finished_at = now
         return
@@ -495,6 +539,60 @@ async def advance_swiss(db: AsyncSession, arena: Arena, now: datetime | None = N
                and seat_of[g.white_id] in seats and seat_of[g.black_id] in seats]
     for white_seat, black_seat in rules.swiss_pairings(seats, records):
         await _start_swiss_game(db, arena, user_of[white_seat], user_of[black_seat])
+
+
+async def _advance_match(db: AsyncSession, arena: Arena, players: list[ArenaPlayer], now: datetime) -> None:
+    """
+    Следующий тур матча конференций (арена уже под блокировкой). Перед первым туром — составы: доски по рейтингу на
+    входе (match_rules.lineup, записываются в arena_players.board); ни одной доски — матч окончен без партий. Цвета
+    доски — match_rules.board_colors.
+    """
+    if arena.current_round == 0:
+        order = [p.user_id for p in sorted(players, key=lambda p: (_aware(p.joined_at) if p.joined_at else now, p.id))]
+        boards = match_rules.lineup(players, arena.conference or "", arena.opponent_conference or "", order)
+        for number, (home, guest) in enumerate(boards, 1):
+            home.board = guest.board = number  # type: ignore[attr-defined]
+    seated = sorted((p for p in players if p.board), key=lambda p: (p.board, p.conference != arena.conference))
+    if arena.current_round >= arena.rounds or not seated:
+        arena.finished_at = now
+        return
+    arena.current_round += 1
+    for home, guest in zip(seated[::2], seated[1::2], strict=True):
+        home_white = match_rules.board_colors(home.board or 0, arena.current_round)
+        white, black = (home, guest) if home_white else (guest, home)
+        await _start_swiss_game(db, arena, white.user_id, black.user_id)
+
+
+async def match_view(db: AsyncSession, arena: Arena) -> dict:
+    """
+    Матч конференций для страницы: хозяин, гость, счёт сторон (победа 1, ничья ½) и доски — пары составов с очками
+    каждого; до старта доски — предварительный состав по тем же правилам (записи ещё нет в arena_players.board).
+    """
+    rows = (await db.execute(select(ArenaPlayer, User.username).join(User, User.id == ArenaPlayer.user_id)
+                             .where(ArenaPlayer.arena_id == arena.id).order_by(ArenaPlayer.joined_at, ArenaPlayer.id))).all()
+    name = {p.user_id: username for p, username in rows}
+    players = [p for p, _ in rows]
+    home_key, guest_key = arena.conference or "", arena.opponent_conference or ""
+    if any(p.board for p in players):
+        by_board: dict[int, dict[str, ArenaPlayer]] = {}
+        for p in players:
+            if p.board:
+                by_board.setdefault(p.board, {})["home" if p.conference == home_key else "guest"] = p
+        pairs = [(by_board[n]["home"], by_board[n]["guest"]) for n in sorted(by_board)]
+    else:
+        pairs = match_rules.lineup(players, home_key, guest_key, [p.user_id for p in players])  # type: ignore[assignment]
+
+    def seat(p: ArenaPlayer) -> dict:
+        return {"username": name[p.user_id], "rating": p.rating, "score": match_rules.side_score(p.score)}
+
+    def total(conference: str) -> float:
+        return match_rules.side_score(sum(p.score for p in players if p.conference == conference))
+
+    return {"home": home_key, "guest": guest_key, "home_score": total(home_key), "guest_score": total(guest_key),
+            "home_players": sum(p.conference == home_key for p in players),
+            "guest_players": sum(p.conference == guest_key for p in players),
+            "entry_open": match_rules.entry_open(_aware(arena.starts_at), _now()),
+            "boards": [{"board": n, "home": seat(h), "guest": seat(g)} for n, (h, g) in enumerate(pairs, 1)]}
 
 
 async def _round_in_progress(db: AsyncSession, arena: Arena) -> bool:
@@ -592,6 +690,7 @@ def view(arena: Arena, now: datetime | None = None, open_games: int = 0) -> dict
         out["last_start_at"] = last_start(arena).isoformat()
     out["berserk"] = berserk_allowed(arena)
     out["conference"] = arena.conference
+    out["opponent_conference"] = arena.opponent_conference
     out["evening"] = arena_schedule.is_evening(arena.schedule_key)
     out["division"] = arena.division or 1
     out["parent_id"] = arena.parent_id
