@@ -1,12 +1,12 @@
 // --- FILE: frontend/src/components/trainers/MiniGames.tsx ---
 // Игры тренеров (таск 19.8): /train/games — пять учебных игр с упрощёнными правилами; /train/games/:id — партия против
-// бота (за белых или за чёрных) или вдвоём за одним устройством. Правила и бот — на сервере (src/services/mini_games.py):
+// бота (за белых или за чёрных), вдвоём за одним устройством или с другом по ссылке (комната — MiniGameRoom.tsx). Правила и бот — на сервере (src/services/mini_games.py):
 // клиент присылает позицию и ход щелчками «откуда» — «куда», сервер проверяет ход и подводит итог. Первая победа над
 // ботом записывается в прогресс уроков (miniProgressId) — по ней засчитывается шаг курса.
 
 import {useEffect, useState} from 'react';
-import {Link, useParams} from 'react-router-dom';
-import {ArrowLeft, Swords} from 'lucide-react';
+import {Link, useNavigate, useParams} from 'react-router-dom';
+import {ArrowLeft, Link2, Swords} from 'lucide-react';
 import {renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
@@ -14,6 +14,7 @@ import {API_BASE_URL} from '../../config/api';
 import {errorMessage, readApiErrorOr, UiError} from '../../services/apiErrors';
 import {getToken} from '../../services/authToken';
 import {saveLessonProgress} from '../../services/lessonProgress';
+import {miniRoomsApi} from '../../services/miniGameRooms';
 
 export const MINI_GAMES = ['pawn_war', 'king_pawns', 'queen_vs_pawns', 'rook_vs_pawns', 'capture_flag'] as const;
 export type MiniGameId = typeof MINI_GAMES[number];
@@ -72,6 +73,7 @@ export function MiniGamesPage() {
 export function MiniGamePage() {
     const {t} = useI18n();
     const {gameId = ''} = useParams<{ gameId: string }>();
+    const navigate = useNavigate();
     const id = (MINI_GAMES as readonly string[]).includes(gameId) ? gameId as MiniGameId : null;
     const [mode, setMode] = useState<Mode>('bot-white');
     const [fen, setFen] = useState(id ? START[id] : '');
@@ -148,6 +150,14 @@ export function MiniGamePage() {
                         {t(`miniGames.modes.${m === 'bot-white' ? 'botWhite' : m === 'bot-black' ? 'botBlack' : 'hotseat'}`)}
                     </button>
                 ))}
+                {/* С другом по сети (19.8): комната на двоих, цвет — случайно; только вошедшим. */}
+                <button type="button" disabled={!getToken()} data-testid="mini-mode-online"
+                        title={getToken() ? undefined : t('miniGames.room.loginToCreate')}
+                        onClick={() => miniRoomsApi.create(id).then((r) => navigate(`/train/games/room/${r.code}`))
+                            .catch((err) => setError(errorMessage(err, 'common.networkError')))}
+                        className="px-3 py-1.5 rounded border text-sm bg-black/35 border-amber-900/50 flex items-center gap-1 disabled:opacity-50">
+                    <Link2 size={14}/> {t('miniGames.room.online')}
+                </button>
             </div>
             <p className="font-bold" data-testid="mini-status">
                 {outcome ?? (busy ? t('miniGames.thinking') : t(turn === 'white' ? 'miniGames.whiteToMove' : 'miniGames.blackToMove'))}

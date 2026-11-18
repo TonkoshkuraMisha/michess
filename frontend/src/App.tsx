@@ -37,6 +37,7 @@ import {FeedPage, PostPage} from './components/social/FeedPage';
 import {CommunityRulesPage} from './components/social/Civility';
 import {DesignGallery} from './components/DesignGallery';
 import {MiniGamePage, MiniGamesPage} from './components/trainers/MiniGames';
+import {MiniGameRoomPage} from './components/trainers/MiniGameRoom';
 import {Chess960Page} from './components/chess960/Chess960Page';
 import {Chess960LiveGame} from './components/chess960/Chess960LiveGame';
 import {WorkoutPage} from './components/WorkoutPage';
@@ -795,6 +796,7 @@ export default function App() {
                         <Route path="/repertoire/:repertoireId" element={<RepertoireEditorPage/>}/>
                         <Route path="/repertoire/:repertoireId/drill" element={<RepertoireDrillPage/>}/>
                         <Route path="/train/games/:gameId" element={<MiniGamePage/>}/>
+                        <Route path="/train/games/room/:code" element={<MiniGameRoomPage/>}/>
                         <Route path="/train/:trainerId" element={<TrainerPage/>}/>
                         <Route path="/guess" element={<GuessPage/>}/>
                         <Route path="/guess/:positionId" element={<GuessPage/>}/>

@@ -268,10 +268,11 @@
   позиции строятся по seed и проверяются перебором), **матовые конструкции** (`mate_course.py`, `mate_patterns.py`),
   **«Угадай ход мастера»** (`guess.py`, отбор позиций — `guess_selection.py`), **миниатюры** и **«Узнай структуру»**.
 - **Тренажёры зрения, памяти и счёта** считаются на клиенте (`frontend/src/trainers/`), сервер хранит результаты
-  (`src/api/trainers.py`, таблица `trainer_results`); учебные мини-игры — `mini_games.py`.
+  (`src/api/trainers.py`, таблица `trainer_results`); учебные мини-игры — `mini_games.py`; с
+  другом по ссылке — комнаты `mini_game_rooms.py` (Redis, опрос раз в секунду, `/train/games/room/{code}`).
 - **Тесты.** `puzzles_api`, `puzzles_data`, `themes`, `theme_training`, `theme_detectors`, `personal_puzzles`,
   `defense_drills`, `generated_drills`, `mate_course`, `mate_patterns`, `guess_api`, `guess_selection`, `trainers`,
-  `mini_games`, `miniatures`, `structure_quiz`; браузер — `e2e/puzzles.e2e.ts`, `puzzle-moves.e2e.ts`.
+  `mini_games`, `mini_game_rooms`, `miniatures`, `structure_quiz`; браузер — `e2e/puzzles.e2e.ts`, `puzzle-moves.e2e.ts`.
 
 ### 4.10. Школа, Большой курс, план тренировок
 
