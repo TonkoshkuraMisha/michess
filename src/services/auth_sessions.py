@@ -27,6 +27,7 @@ from src.db import redis as redis_module
 logger = logging.getLogger(__name__)
 
 # Имя cookie с refresh-токеном и начало ключа Redis, под которым хранится запись сессии.
+# Имя куки не меняли при переименовании платформы в Regence (18.11.2026): смена разлогинила бы всех игроков.
 REFRESH_COOKIE = "michess_refresh"
 REFRESH_PREFIX = "refresh:"
 

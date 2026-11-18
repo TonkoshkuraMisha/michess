@@ -18,7 +18,7 @@ import {boardState, goalMove, rating, starsMove, starsPar} from '../../content/b
 import type {BoardState, Level} from '../../content/basics/rules';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 
-const RATINGS_KEY = 'michess.basics.ratings';
+const RATINGS_KEY = 'regence.basics.ratings';
 const STATES: BoardState[] = ['check', 'mate', 'stalemate', 'none'];
 
 function loadRatings(): Record<string, number> {

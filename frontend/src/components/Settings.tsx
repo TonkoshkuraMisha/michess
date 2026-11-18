@@ -192,7 +192,7 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `michess-${username ?? 'data'}.json`;
+            link.download = `regence-${username ?? 'data'}.json`;
             link.click();
             URL.revokeObjectURL(url);
         } catch {
@@ -227,12 +227,12 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
 
     const selectBoardTheme = (themeId: string) => {
         setBoardThemeKey(themeId);
-        localStorage.setItem('michess_board_theme', themeId);
+        localStorage.setItem('regence_board_theme', themeId);
     };
 
     const selectPieceSet = (setId: string) => {
         setPieceSetKey(setId);
-        localStorage.setItem('michess_piece_set', setId);
+        localStorage.setItem('regence_piece_set', setId);
         soundEngine.play('move');
     };
 

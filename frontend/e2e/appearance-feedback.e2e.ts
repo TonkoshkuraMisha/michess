@@ -16,7 +16,7 @@ test('тема «Осенний парк»: фон страницы виден, 
             image: getComputedStyle(document.body).backgroundImage,
             color: getComputedStyle(document.body).backgroundColor,
             cover: root ? getComputedStyle(root).backgroundColor : 'no root',
-            board: localStorage.getItem('michess_board_theme'),
+            board: localStorage.getItem('regence_board_theme'),
         };
     })()`) as { image: string; color: string; cover: string; board: string | null };
     await expect.poll(async () => (await look()).image).toContain('/assets/patterns/leaves.svg');

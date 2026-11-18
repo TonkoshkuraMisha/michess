@@ -52,7 +52,7 @@ async def get_current_user(
     """
     Зависимость HTTP-эндпоинтов «только для вошедших»: игрок по токену из заголовка Authorization: Bearer, иначе
     401 not_authenticated. Заодно отмечает игрока активным за сутки: счётчик в Redis для метрики
-    michess_active_players_today и событие в product_events (не чаще раза в сутки).
+    regence_active_players_today и событие в product_events (не чаще раза в сутки).
     """
     user = await user_from_token(db, token)
     if user is None:

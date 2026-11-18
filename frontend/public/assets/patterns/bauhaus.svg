@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
-  <!-- Геометрия Баухауса: тиснёный тайл фона, собственная работа проекта michess, CC0. -->
+  <!-- Геометрия Баухауса: тиснёный тайл фона, собственная работа проекта regence, CC0. -->
   <defs><g id="p" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
     <circle cx="30" cy="30" r="18"/><rect x="72" y="12" width="36" height="36"/><path d="M12 108 L30 72 L48 108 Z"/>
     <path d="M72 72 H108 V108"/><path d="M60 0 V120" /><path d="M0 60 H120"/>

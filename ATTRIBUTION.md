@@ -33,14 +33,14 @@
 | `firi` | James Faure | CC-BY-4.0 |
 | `shapes` | flugsio | CC-BY-SA-4.0 |
 | `letter` | usolando | AGPL-3.0-or-later |
-| `outline` | michess, производная от `merida` (добавлена окантовка) | GPL-2.0-or-later |
-| `lewis` | michess, собственный рисунок по мотивам льюисских шахмат XII века (общественное достояние); `scripts/build_lewis_pieces.py` | CC0-1.0 |
+| `outline` | regence, производная от `merida` (добавлена окантовка) | GPL-2.0-or-later |
+| `lewis` | regence, собственный рисунок по мотивам льюисских шахмат XII века (общественное достояние); `scripts/build_lewis_pieces.py` | CC0-1.0 |
 
 Аватары игроков (таск 18.4) — фигуры набора `lewis` на цветном фоне (`frontend/src/components/PlayerAvatar.tsx`);
 внешний сервис аватаров (DiceBear) больше не используется.
 
 Иконки приложения (таск 24.2, `frontend/public/icons/`: `icon.svg`, PNG 192/512, maskable, `apple-touch-icon.png`) —
-конь набора `rhosgfx` (CC0-1.0) на собственном фоне и рамке michess; собираются `scripts/dev/build_pwa_icons.mjs`.
+конь набора `rhosgfx` (CC0-1.0) на собственном фоне и рамке regence; собираются `scripts/dev/build_pwa_icons.mjs`.
 
 Убраны как несвободные: `alpha` (Eric Bentzen, «free for personal non commercial use»), `maestro` (sadsnake1,
 CC BY-NC-SA 4.0), а также набор без известного происхождения, лежавший в корне папки и в `classic/`.
@@ -123,7 +123,7 @@ CC BY-NC-SA 4.0), а также набор без известного прои�
 | Что | Автор | Условия | Примечание |
 |---|---|---|---|
 | Эндшпильные таблицы — открытый API [lichess](https://tablebase.lichess.ovh) (`TABLEBASE_URL`) | lichess.org (сервер lila-tablebase; таблицы Syzygy и др.) | Открытый сервис | Только в разработке: на сервер уходит одна позиция (FEN), без данных игрока. В продакшене — свой сервер таблиц (решение владельца, DEPLOY). |
-| Импорт партий игрока (таск 24.1): открытый API [lichess](https://lichess.org/api) (`GAME_IMPORT_LICHESS_URL`, `/api/games/user/{ник}`) и Published-Data API [chess.com](https://www.chess.com/news/view/published-data-api) (`GAME_IMPORT_CHESSCOM_URL`, `/pub/player/{ник}/games/…`) | lichess.org; Chess.com | Открытые API без ключа; запрос делает игрок за свои партии | На сайт уходит только ник, введённый игроком; клиент представляется общим именем `michess-game-import`, без входа и токенов. Один запрос к сайту за раз, ответ 429 ставит сайт на паузу 60 с. Хранятся ходы и заголовки партии без комментариев и чужих оценок (`imported_games`). |
+| Импорт партий игрока (таск 24.1): открытый API [lichess](https://lichess.org/api) (`GAME_IMPORT_LICHESS_URL`, `/api/games/user/{ник}`) и Published-Data API [chess.com](https://www.chess.com/news/view/published-data-api) (`GAME_IMPORT_CHESSCOM_URL`, `/pub/player/{ник}/games/…`) | lichess.org; Chess.com | Открытые API без ключа; запрос делает игрок за свои партии | На сайт уходит только ник, введённый игроком; клиент представляется общим именем `regence-game-import`, без входа и токенов. Один запрос к сайту за раз, ответ 429 ставит сайт на паузу 60 с. Хранятся ходы и заголовки партии без комментариев и чужих оценок (`imported_games`). |
 
 ## Данные
 

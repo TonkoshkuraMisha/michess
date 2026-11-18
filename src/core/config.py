@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     Все настройки приложения. Поле без значения по умолчанию (POSTGRES_*, SECRET_KEY) обязательно: без него в
     окружении или .env процесс не стартует. Имена переменных окружения совпадают с именами полей (с учётом регистра).
     """
-    PROJECT_NAME: str = "Michess API"
+    PROJECT_NAME: str = "Regence API"
     # Версия приложения: её отдают /health и /beta/config, она же — метка релиза в Sentry.
     VERSION: str = "1.2.2"
     API_V1_STR: str = "/api/v1"
@@ -196,7 +196,7 @@ class Settings(BaseSettings):
     SMTP_USER: str = ""
     SMTP_PASSWORD: str = ""
     SMTP_STARTTLS: bool = True
-    MAIL_FROM: str = "michess <noreply@localhost>"
+    MAIL_FROM: str = "regence <noreply@localhost>"
     # Адрес сайта для ссылок в письмах.
     PUBLIC_BASE_URL: str = "http://localhost:5173"
     EMAIL_VERIFY_TTL_S: int = 24 * 3600

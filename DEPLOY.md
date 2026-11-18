@@ -1,6 +1,6 @@
 <!-- --- FILE: DEPLOY.md --- -->
 
-# Развёртывание michess (продакшен)
+# Развёртывание regence (продакшен)
 
 Стек поднимается одной командой через `docker-compose.prod.yml`:
 
@@ -64,7 +64,7 @@ nginx в образе `web` слушает только HTTP. TLS заверша
 ## 5. Резервные копии
 
 Сервис `backup` делает снимок БД сразу при старте и затем каждые `BACKUP_INTERVAL_HOURS` часов
-(по умолчанию 24) в папку хоста `BACKUP_DIR` (`./backups`): `michess_YYYYmmdd_HHMMSS.dump`,
+(по умолчанию 24) в папку хоста `BACKUP_DIR` (`./backups`): `regence_YYYYmmdd_HHMMSS.dump`,
 формат `pg_dump -Fc`. Снимки старше `BACKUP_KEEP_DAYS` дней (14) удаляются.
 
 **Копируйте `BACKUP_DIR` за пределы сервера** (rsync, `rclone` в объектное хранилище): копия
@@ -82,7 +82,7 @@ nginx в образе `web` слушает только HTTP. TLS заверша
 ### Восстановление
 
     docker compose -f docker-compose.prod.yml stop api worker
-    docker compose -f docker-compose.prod.yml run --rm --no-deps backup restore michess_20261111_094729.dump
+    docker compose -f docker-compose.prod.yml run --rm --no-deps backup restore regence_20261111_094729.dump
     docker compose -f docker-compose.prod.yml up -d
 
 `restore` заменяет содержимое рабочей базы одной транзакцией (при ошибке база остаётся как
@@ -102,36 +102,36 @@ GlitchTip) и перезапустите `api` и `worker`. В Sentry уходя
 compose (или опубликуйте порт `api` только на внутренний интерфейс):
 
     scrape_configs:
-      - job_name: michess
+      - job_name: regence
         static_configs:
           - targets: ["api:8000", "worker:9101", "worker-simulation:9101"]
 
 Воркеры Celery отдают свои метрики сами (порт `WORKER_METRICS_PORT`, его задаёт `docker-compose.prod.yml`): там
 время движка в фоновом разборе (`kind="analysis"`) и в партиях ботов (`kind="simulation"`). Суммарный бюджет движка —
-`sum(increase(michess_engine_seconds_total[1d]))` по всем трём целям.
+`sum(increase(regence_engine_seconds_total[1d]))` по всем трём целям.
 
 | Метрика                                    | Что показывает                                              |
 |--------------------------------------------|-------------------------------------------------------------|
-| `michess_ws_connections`                   | открытые WebSocket-соединения                               |
-| `michess_ws_actions_total{action,outcome}` | WS-действия: `ok`, `ignored`, `rejected`, `error`, `rate_limited` |
-| `michess_ws_action_seconds{action}`        | время обработки; `action="make_move"` — задержка хода       |
-| `michess_db_pool_checked_out`              | занятые соединения пула БД (предел — `DB_POOL_SIZE + DB_MAX_OVERFLOW` на процесс) |
-| `michess_http_requests_total`, `michess_http_request_seconds` | HTTP по шаблону маршрута и статусу    |
-| `michess_games_finished_total{termination}`| завершённые партии                                          |
-| `michess_timeout_check_failures_total`     | сбои проверки флагов и неявок (должен быть около нуля)      |
-| `michess_engine_seconds_total{kind}`       | время, пока движки Stockfish заняты: `bot_move`, `analysis`, `coach`, `simulation`, `puzzles`, `other` |
-| `michess_engine_acquire_wait_seconds{kind}`, `michess_engine_busy_total{kind}` | ожидание свободного движка и отказы «пул занят» |
-| `michess_active_players_today`             | вошедшие игроки за сутки UTC (HyperLogLog в Redis)          |
+| `regence_ws_connections`                   | открытые WebSocket-соединения                               |
+| `regence_ws_actions_total{action,outcome}` | WS-действия: `ok`, `ignored`, `rejected`, `error`, `rate_limited` |
+| `regence_ws_action_seconds{action}`        | время обработки; `action="make_move"` — задержка хода       |
+| `regence_db_pool_checked_out`              | занятые соединения пула БД (предел — `DB_POOL_SIZE + DB_MAX_OVERFLOW` на процесс) |
+| `regence_http_requests_total`, `regence_http_request_seconds` | HTTP по шаблону маршрута и статусу    |
+| `regence_games_finished_total{termination}`| завершённые партии                                          |
+| `regence_timeout_check_failures_total`     | сбои проверки флагов и неявок (должен быть около нуля)      |
+| `regence_engine_seconds_total{kind}`       | время, пока движки Stockfish заняты: `bot_move`, `analysis`, `coach`, `simulation`, `puzzles`, `other` |
+| `regence_engine_acquire_wait_seconds{kind}`, `regence_engine_busy_total{kind}` | ожидание свободного движка и отказы «пул занят» |
+| `regence_active_players_today`             | вошедшие игроки за сутки UTC (HyperLogLog в Redis)          |
 
-Стоит настроить оповещения: p95 `michess_ws_action_seconds{action="make_move"}` выше 0,5 с,
-рост `michess_ws_actions_total{outcome="error"}` и `michess_timeout_check_failures_total`,
-`michess_db_pool_checked_out` у предела пула, `/health` с кодом 503.
+Стоит настроить оповещения: p95 `regence_ws_action_seconds{action="make_move"}` выше 0,5 с,
+рост `regence_ws_actions_total{outcome="error"}` и `regence_timeout_check_failures_total`,
+`regence_db_pool_checked_out` у предела пула, `/health` с кодом 503.
 
 **Бюджет движка (таск 23.3).** Процессор на активного игрока в день (в конце суток UTC):
-`increase(michess_engine_seconds_total[1d]) / michess_active_players_today`, по видам работ — с `by (kind)`.
+`increase(regence_engine_seconds_total[1d]) / regence_active_players_today`, по видам работ — с `by (kind)`.
 Счётчики пишет процесс, где работал движок: API (ходы ботов, анализ, наставник) отдаёт их на `/metrics`, а
 Celery-воркеры (фоновый анализ, симуляция турниров) — только если у них общий с API `PROMETHEUS_MULTIPROC_DIR`
-или свой экспортёр. Рост `michess_engine_busy_total` — сигнал добавить движков (`ENGINE_POOL_SIZE`) или воркеров.
+или свой экспортёр. Рост `regence_engine_busy_total` — сигнал добавить движков (`ENGINE_POOL_SIZE`) или воркеров.
 
 **Эндшпильные таблицы (таск 14.4).** Решение владельца: в продакшене таблицы храним у себя. Поднять свой сервер
 таблиц с API lichess (проект lila-tablebase: Syzygy 3–5 фигур ≈ 1 ГБ, плюс DTM-таблицы для счётчика «ходов до мата»)
@@ -196,7 +196,7 @@ Celery-воркеры (фоновый анализ, симуляция турн�
 ## 8б. Вход: короткий токен и refresh-cookie
 
 Access-токен живёт `ACCESS_TOKEN_EXPIRE_MINUTES` (15) и хранится только в памяти страницы; долгий вход — refresh-токен
-в cookie `michess_refresh` (HttpOnly, SameSite=Strict, путь `/api/v1/auth`, `REFRESH_TOKEN_EXPIRE_DAYS` = 30), его хэш —
+в cookie `regence_refresh` (HttpOnly, SameSite=Strict, путь `/api/v1/auth`, `REFRESH_TOKEN_EXPIRE_DAYS` = 30), его хэш —
 в Redis. Флаг Secure ставится при `ENVIRONMENT=production` (переопределяется `COOKIE_SECURE`): за nginx нужен HTTPS (раздел 4).
 Если фронтенд и API на разных адресах, адрес фронтенда должен быть в `CORS_ORIGINS` — запросы идут с
 `credentials: 'include'`. Сброс Redis выкидывает всех из долгих сессий: войти заново.

@@ -128,7 +128,7 @@ def game_pgn(spec: Spec, board: chess.Board, result: str) -> str:
     """Партия калибровки в PGN — для метрик стиля (scripts/style_metrics.py)."""
     game = chess.pgn.Game.from_board(board)
     game.headers.update({
-        "Event": "michess calibration", "White": spec.white, "Black": spec.black, "Result": result,
+        "Event": "regence calibration", "White": spec.white, "Black": spec.black, "Result": result,
         "Opening": OPENINGS[spec.opening % len(OPENINGS)],
     })
     for tag in ("Site", "Date", "Round"):

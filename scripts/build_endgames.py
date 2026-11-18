@@ -69,7 +69,7 @@ def probe(fen: str) -> dict:
     from src.core.config import settings
 
     url = settings.TABLEBASE_URL + "?" + urllib.parse.urlencode({"fen": fen})
-    request = urllib.request.Request(url, headers={"User-Agent": "michess-endgame-trainer"})
+    request = urllib.request.Request(url, headers={"User-Agent": "regence-endgame-trainer"})
     return json.load(urllib.request.urlopen(request, timeout=15))
 
 

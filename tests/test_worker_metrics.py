@@ -28,13 +28,13 @@ def test_worker_serves_the_sum_of_child_process_files(monkeypatch, tmp_path):
                         lambda port, registry: served.update(port=port, registry=registry))
     # «Дочерний процесс» пишет время движка в файл каталога, как это делает Counter в multiprocess-режиме.
     monkeypatch.setattr(values, "ValueClass", values.MultiProcessValue(lambda: 4242))
-    counter = Counter("michess_engine_seconds_probe", "probe", ["kind"], registry=CollectorRegistry())
+    counter = Counter("regence_engine_seconds_probe", "probe", ["kind"], registry=CollectorRegistry())
     counter.labels("analysis").inc(7.5)
 
     assert observability.start_worker_metrics_server(9101) is True
     body = generate_latest(served["registry"]).decode()
     assert served["port"] == 9101
-    assert 'michess_engine_seconds_probe_total{kind="analysis"} 7.5' in body
+    assert 'regence_engine_seconds_probe_total{kind="analysis"} 7.5' in body
     assert any(name.endswith("_4242.db") for name in os.listdir(tmp_path))
 
 

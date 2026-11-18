@@ -79,8 +79,8 @@ describe('Settings: оформление и звук', () => {
         fireEvent.click(screen.getByRole('button', {name: 'Графит'}));
         fireEvent.click(screen.getByRole('button', {name: 'Стаунтон (Турнирный)'}));
 
-        expect(localStorage.getItem('michess_board_theme')).toBe('slate');
-        expect(localStorage.getItem('michess_piece_set')).toBe('cburnett');
+        expect(localStorage.getItem('regence_board_theme')).toBe('slate');
+        expect(localStorage.getItem('regence_piece_set')).toBe('cburnett');
         expect(screen.getByRole('button', {name: 'Графит'})).toHaveAttribute('aria-pressed', 'true');
     });
 
@@ -103,9 +103,9 @@ describe('Settings: оформление и звук', () => {
         setEarnedForTests(['wins_10']);   // мраморная доска открывается за десять побед (таск 18.4)
         renderSettings();
         fireEvent.click(screen.getByTestId('preset-marble_hall'));
-        expect(localStorage.getItem('michess_board_theme')).toBe('marble');
-        expect(localStorage.getItem('michess_piece_set')).toBe('celtic');
-        expect(localStorage.getItem('michess_page_pattern')).toBe('marble');
+        expect(localStorage.getItem('regence_board_theme')).toBe('marble');
+        expect(localStorage.getItem('regence_piece_set')).toBe('celtic');
+        expect(localStorage.getItem('regence_page_pattern')).toBe('marble');
         expect(soundEngine.setSoundSet).toHaveBeenCalledWith('marble');
         expect(screen.getByTestId('preset-marble_hall')).toHaveAttribute('aria-pressed', 'true');
         await waitFor(() => expect((fetchMock.mock.calls as unknown as [string, RequestInit][])
@@ -118,11 +118,11 @@ describe('Settings: оформление и звук', () => {
     it('отдельная тема для разбора партий: комплект или «как в игре»', () => {
         renderSettings();
         fireEvent.change(screen.getByTestId('analysis-theme'), {target: {value: 'study'}});
-        expect(localStorage.getItem('michess_analysis_board_theme')).toBe('leather');
-        expect(localStorage.getItem('michess_analysis_piece_set')).toBe('mpchess');
-        expect(localStorage.getItem('michess_board_theme')).toBeNull();
+        expect(localStorage.getItem('regence_analysis_board_theme')).toBe('leather');
+        expect(localStorage.getItem('regence_analysis_piece_set')).toBe('mpchess');
+        expect(localStorage.getItem('regence_board_theme')).toBeNull();
         fireEvent.change(screen.getByTestId('analysis-theme'), {target: {value: 'same'}});
-        expect(localStorage.getItem('michess_analysis_board_theme')).toBeNull();
+        expect(localStorage.getItem('regence_analysis_board_theme')).toBeNull();
     });
 
     it('настройки доски: показ хода соперника, ввод хода, быстрый ход сохраняются', () => {
@@ -131,7 +131,7 @@ describe('Settings: оформление и звук', () => {
         fireEvent.click(screen.getByTestId('pref-moveInput-click'));
         fireEvent.click(screen.getByTestId('pref-quickMove'));
         fireEvent.click(screen.getByTestId('pref-captured-order'));
-        expect(JSON.parse(localStorage.getItem('michess_board_prefs')!)).toMatchObject(
+        expect(JSON.parse(localStorage.getItem('regence_board_prefs')!)).toMatchObject(
             {lastMove: 'arrow', moveInput: 'click', quickMove: true, captured: 'order'});
         expect(screen.getByTestId('pref-lastMove-arrow')).toHaveAttribute('aria-checked', 'true');
     });
@@ -144,7 +144,7 @@ describe('Settings: оформление и звук', () => {
         expect(screen.getByTestId('board-marble')).toBeDisabled();
         expect(screen.getByTestId('pieces-lewis')).toHaveAttribute('title', 'Откроется за достижение «Чемпион»');
         fireEvent.click(screen.getByTestId('board-marble'));
-        expect(localStorage.getItem('michess_board_theme')).toBeNull();
+        expect(localStorage.getItem('regence_board_theme')).toBeNull();
         act(() => setEarnedForTests(['wins_10', 'tournament_win']));
         expect(screen.getByTestId('board-marble')).not.toBeDisabled();
         expect(screen.getByTestId('pieces-lewis')).not.toBeDisabled();

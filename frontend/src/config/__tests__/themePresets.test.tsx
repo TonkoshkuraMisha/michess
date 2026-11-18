@@ -34,7 +34,7 @@ describe('темы-комплекты', () => {
         expect(getSavedPresetId()).toBe('study');
         applyPreset(findPreset('night')!);
         expect(soundEngine.getSoundSet()).toBe('soft');
-        expect(localStorage.getItem('michess_sound_set')).toBe('soft');
+        expect(localStorage.getItem('regence_sound_set')).toBe('soft');
         expect(findPreset('nope')).toBeUndefined();
     });
 

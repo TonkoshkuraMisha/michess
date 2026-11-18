@@ -6,7 +6,7 @@ $pythonExe = Join-Path $root ".venv\Scripts\python.exe"
 $frontendDir = Join-Path $root "frontend"
 $stockfishBin = Join-Path $root "bin\stockfish.exe"
 
-Write-Host "=== Запуск среды разработки Michess ===" -ForegroundColor Cyan
+Write-Host "=== Запуск среды разработки Regence ===" -ForegroundColor Cyan
 
 # 1. Автосоздание .env файлов из шаблонов, если их ещё нет на этой машине
 if (-not (Test-Path (Join-Path $root ".env")) -and (Test-Path (Join-Path $root ".env.example")))
@@ -21,7 +21,7 @@ if (-not (Test-Path (Join-Path $frontendDir ".env")) -and (Test-Path (Join-Path 
 }
 
 # 2. Остановка старых фоновых задач, процессов node и освобождение портов 8000 и 3000
-Get-Job -Name "MichessBackend", "MichessWorker", "MichessFrontend" -ErrorAction SilentlyContinue | Stop-Job -PassThru | Remove-Job -Force -ErrorAction SilentlyContinue
+Get-Job -Name "RegenceBackend", "RegenceWorker", "RegenceFrontend" -ErrorAction SilentlyContinue | Stop-Job -PassThru | Remove-Job -Force -ErrorAction SilentlyContinue
 
 # Процессы, оставшиеся от прошлых запусков из ДРУГИХ окон (Get-Job видит задания только своей сессии):
 # Celery-воркер этого проекта (порта у него нет) и Vite из папки frontend. Чужие процессы node
@@ -190,7 +190,7 @@ if (-not (Test-Path $steinitzPgn))
 
 # 8. Запуск FastAPI Backend в фоне
 Write-Host "[+] Запуск FastAPI Backend (порт 8000)..." -ForegroundColor Green
-Start-Job -Name "MichessBackend" -ScriptBlock {
+Start-Job -Name "RegenceBackend" -ScriptBlock {
     param($py, $r)
     Set-Location $r
     & $py -m uvicorn src.main:app --host 127.0.0.1 --port 8000 --reload
@@ -199,7 +199,7 @@ Start-Job -Name "MichessBackend" -ScriptBlock {
 # 8.0. Запуск Celery-воркера (фоновый анализ завершённых партий) в фоне.
 # На Windows пул prefork у Celery не работает — используем solo (одна задача за раз).
 Write-Host "[+] Запуск Celery-воркера (фоновый анализ партий)..." -ForegroundColor Green
-Start-Job -Name "MichessWorker" -ScriptBlock {
+Start-Job -Name "RegenceWorker" -ScriptBlock {
     param($py, $r)
     Set-Location $r
     # Обе очереди (analysis — разбор партий, simulation — партии ботов в турнирах) слушает один воркер.
@@ -232,10 +232,10 @@ for ($i = 0; $i -lt $waitSeconds * 2; $i++)
     if (-not $backendReady -and (Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue)) { $backendReady = $true }
     if ($frontendReady -and $backendReady) { break }
     # Задание бэкенда упало сразу (ошибка импорта и т.п.) — ждать порт дальше бессмысленно
-    if (-not $backendReady -and (Get-Job -Name "MichessBackend" -ErrorAction SilentlyContinue).State -in @("Failed", "Completed", "Stopped")) { break }
+    if (-not $backendReady -and (Get-Job -Name "RegenceBackend" -ErrorAction SilentlyContinue).State -in @("Failed", "Completed", "Stopped")) { break }
     Start-Sleep -Milliseconds 500
 }
-$workerJob = Get-Job -Name "MichessWorker" -ErrorAction SilentlyContinue
+$workerJob = Get-Job -Name "RegenceWorker" -ErrorAction SilentlyContinue
 $workerAlive = $workerJob -and $workerJob.State -eq "Running"
 
 if ($frontendReady)
@@ -258,11 +258,11 @@ else
 }
 if (-not $backendReady)
 {
-    Write-Host "[!] Backend не открыл порт 8000. Логи: Receive-Job -Name MichessBackend -Keep" -ForegroundColor Red
+    Write-Host "[!] Backend не открыл порт 8000. Логи: Receive-Job -Name RegenceBackend -Keep" -ForegroundColor Red
 }
 if (-not $workerAlive)
 {
-    Write-Host "[!] Celery-воркер остановился. Логи: Receive-Job -Name MichessWorker -Keep" -ForegroundColor Red
+    Write-Host "[!] Celery-воркер остановился. Логи: Receive-Job -Name RegenceWorker -Keep" -ForegroundColor Red
 }
 
 $allOk = $frontendReady -and $backendReady -and $workerAlive
@@ -278,7 +278,7 @@ else
 }
 Write-Host " Фронтенд: http://127.0.0.1:3000" -ForegroundColor Cyan
 Write-Host " API Docs: http://127.0.0.1:8000/docs" -ForegroundColor Cyan
-Write-Host " Просмотр логов бэкенда: Receive-Job -Name MichessBackend -Keep" -ForegroundColor Gray
-Write-Host " Логи Celery-воркера:   Receive-Job -Name MichessWorker -Keep" -ForegroundColor Gray
+Write-Host " Просмотр логов бэкенда: Receive-Job -Name RegenceBackend -Keep" -ForegroundColor Gray
+Write-Host " Логи Celery-воркера:   Receive-Job -Name RegenceWorker -Keep" -ForegroundColor Gray
 Write-Host " Для остановки бэкенда: Get-Job | Stop-Job; Get-Job | Remove-Job" -ForegroundColor Yellow
 Write-Host "========================================================" -ForegroundColor Green

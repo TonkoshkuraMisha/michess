@@ -242,7 +242,7 @@ async def save_and_record(
         white_player_id=await user_id(white), black_player_id=await user_id(black), pgn=pgn_text, board_fen=final_fen,
         result=result, termination=termination, is_rated=False, base_time_ms=tgame.base_time_ms,
         increment_ms=tgame.increment_ms, status=GameStatus.COMPLETED, finished_at=now,
-        pgn_date=now.strftime("%Y.%m.%d"), site="Michess Tournament", eco=eco_code(moves), is_simulation=True,
+        pgn_date=now.strftime("%Y.%m.%d"), site="Regence Tournament", eco=eco_code(moves), is_simulation=True,
     )
     db.add(game)
     await db.flush()

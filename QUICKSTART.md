@@ -1,13 +1,13 @@
 <!-- --- FILE: QUICKSTART.md --- -->
 
-# Быстрый старт и восстановление michess на новом хосте
+# Быстрый старт и восстановление regence на новом хосте
 
 ## 1. Установка с нуля (Холодный старт на новом ПК)
 
 ### Шаг 1. Клонирование и переменные окружения
 
-    git clone https://github.com/TonkoshkuraMisha/michess.git michess
-    cd michess
+    git clone https://github.com/TonkoshkuraMisha/michess.git regence
+    cd regence
     git checkout dev
 
     Copy-Item .env.example .env -ErrorAction SilentlyContinue

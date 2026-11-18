@@ -1,6 +1,6 @@
 <!-- --- FILE: frontend/README.md --- -->
 
-# Клиент michess
+# Клиент regence
 
 Одностраничное приложение: React 19, TypeScript, Vite 6, Tailwind CSS v4. Общее устройство проекта —
 [../docs/ARCHITECTURE.md](../docs/ARCHITECTURE.md); здесь — только то, что нужно для работы с клиентом.

@@ -35,10 +35,10 @@ COPY data/drills ./data/drills
 COPY src ./src
 
 # Не root: при уязвимости в приложении у процесса нет прав на систему контейнера.
-RUN useradd --create-home --uid 10001 michess \
+RUN useradd --create-home --uid 10001 regence \
     && mkdir -p /app/src/db/data/pgns \
-    && chown -R michess:michess /app/src/db/data
-USER michess
+    && chown -R regence:regence /app/src/db/data
+USER regence
 
 EXPOSE 8000
 

@@ -652,7 +652,7 @@ export const PIECE_SETS: Record<string, PieceSetConfig> = {
         get description() {
             return t('appearance.pieceSets.lewis.description');
         },
-        author: 'michess',
+        author: 'regence',
         license: 'CC0-1.0'
     }
 };
@@ -666,7 +666,7 @@ const RETIRED_PIECE_SETS: Record<string, string> = {
 
 export function getSavedBoardThemeKey(): string {
     if (typeof window !== 'undefined') {
-        const saved = localStorage.getItem('michess_board_theme');
+        const saved = localStorage.getItem('regence_board_theme');
         if (saved && BOARD_THEMES[saved]) return saved;
     }
     return 'walnut';
@@ -674,7 +674,7 @@ export function getSavedBoardThemeKey(): string {
 
 export function getSavedPieceSetKey(): string {
     if (typeof window !== 'undefined') {
-        const saved = localStorage.getItem('michess_piece_set');
+        const saved = localStorage.getItem('regence_piece_set');
         if (saved && PIECE_SETS[saved]) return saved;
         if (saved && RETIRED_PIECE_SETS[saved]) return RETIRED_PIECE_SETS[saved];
     }
@@ -682,8 +682,8 @@ export function getSavedPieceSetKey(): string {
 }
 
 // Отдельная тема для разбора партий (таск 18.3): своя доска и фигуры в просмотре партии; без записи — как в игре.
-const ANALYSIS_BOARD_KEY = 'michess_analysis_board_theme';
-const ANALYSIS_PIECES_KEY = 'michess_analysis_piece_set';
+const ANALYSIS_BOARD_KEY = 'regence_analysis_board_theme';
+const ANALYSIS_PIECES_KEY = 'regence_analysis_piece_set';
 
 function readKey(key: string): string | null {
     try {

@@ -50,13 +50,13 @@ ENGINE_WORK_KINDS = ("bot_move", "analysis", "coach", "simulation", "puzzles", "
 _work_kind: ContextVar[str] = ContextVar("engine_work_kind", default="other")
 
 ENGINE_SECONDS = Counter(
-    "michess_engine_seconds_total", "Time Stockfish engines were held from the pool, by kind of work", ["kind"],
+    "regence_engine_seconds_total", "Time Stockfish engines were held from the pool, by kind of work", ["kind"],
 )
 ENGINE_ACQUIRE_WAIT_SECONDS = Histogram(
-    "michess_engine_acquire_wait_seconds", "Waiting for a free engine in the pool", ["kind"],
+    "regence_engine_acquire_wait_seconds", "Waiting for a free engine in the pool", ["kind"],
     buckets=(0.001, 0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0),
 )
-ENGINE_BUSY = Counter("michess_engine_busy_total", "Requests refused because every engine was busy", ["kind"])
+ENGINE_BUSY = Counter("regence_engine_busy_total", "Requests refused because every engine was busy", ["kind"])
 
 
 @contextmanager

@@ -7,7 +7,7 @@
 
 x-backend: &backend
   build: .
-  image: michess-backend:latest
+  image: regence-backend:latest
   env_file: .env
   environment: &backend-env
     ENVIRONMENT: production
@@ -156,7 +156,7 @@ services:
 
   web:
     build: ./frontend
-    image: michess-web:latest
+    image: regence-web:latest
     ports:
       - "${HTTP_PORT:-80}:80"
     depends_on:

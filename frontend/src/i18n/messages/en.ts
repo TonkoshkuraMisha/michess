@@ -101,7 +101,7 @@ export const en = {
         resetSent: 'If this address is linked to an account, a letter with the link is on its way. Check the spam folder too.',
         resetFailed: 'Could not send the letter',
         backToLogin: 'Back to login',
-        loginTitle: 'Log in to michess',
+        loginTitle: 'Log in to regence',
         registerTitle: 'Create an account',
         loginSubtitle: 'Enter your credentials to play',
         registerSubtitle: 'Create a new account to get started',
@@ -152,7 +152,7 @@ export const en = {
     settings: {
         app: {
             title: 'App on your phone',
-            intro: 'Install michess on the home screen: it opens in its own window, without the browser bar, like a regular app. Games, puzzles and analysis still need the internet.',
+            intro: 'Install regence on the home screen: it opens in its own window, without the browser bar, like a regular app. Games, puzzles and analysis still need the internet.',
             install: 'Install the app',
             installed: 'The app is installed — you are in it or can open it from the home screen.',
             ios: 'On iPhone and iPad: tap “Share” in Safari, then “Add to Home Screen”.',
@@ -242,7 +242,7 @@ export const en = {
     },
     about: {
         title: 'About and licenses',
-        subtitle: 'Third-party works michess is built on, their authors and terms of use.',
+        subtitle: 'Third-party works regence is built on, their authors and terms of use.',
         engineTitle: 'Chess engine',
         engineText: 'Game analysis and bot play run on the Stockfish engine. It is distributed under the GNU GPL version 3; the source code is at {link}. The engine runs as a separate program and is unmodified.',
         engineVersion: 'This installation runs {name}. The source code of exactly this version is {link}; the full licence text is in the server image (/usr/share/common-licenses/GPL-3).',
@@ -312,7 +312,7 @@ export const en = {
             letter: {name: 'Letters (Notation)', shortName: 'Letters', description: 'Piece letters, as in notation — high contrast'},
             lewis: {name: 'Lewis (Medieval)', shortName: 'Lewis', description: 'Our own set after the 12th-century Lewis chessmen: enthroned king and queen, mitred bishop, warrior with a shield'},
         },
-        outlineAuthor: 'michess, based on Merida (Armando Hernandez Marroquin)',
+        outlineAuthor: 'regence, based on Merida (Armando Hernandez Marroquin)',
     },
     hall: {
         title: 'Game hall',
@@ -1112,7 +1112,7 @@ export const en = {
     leaderboard: {
         loadFailed: 'Could not load the leaderboard',
         badge: 'Fair Play rating standings',
-        title: 'Michess leaderboard',
+        title: 'Regence leaderboard',
         subtitle: 'Top 50 players by Elo rating — {category}',
         toBoard: 'To the board',
         loading: 'Loading the rating…',
@@ -2007,7 +2007,7 @@ export const en = {
     },
     transparency: {
         title: 'How we measure bot strength',
-        intro: 'A bot’s rating on michess is not a number someone made up. Here is how it is obtained, the result for every bot with its margin of error, and the raw logs of the matches.',
+        intro: 'A bot’s rating on regence is not a number someone made up. Here is how it is obtained, the result for every bot with its margin of error, and the raw logs of the matches.',
         aboutLink: 'The calibration method, results with ±95 %, match logs and open data.',
         methodTitle: 'The method',
         method: {
@@ -3092,9 +3092,9 @@ export const en = {
         community: {
             title: 'Community',
             text: 'Project news and discussion are in our channel.',
-            telegram: 'michess channel on Telegram',
-            discord: 'michess server on Discord',
-            generic: 'michess community',
+            telegram: 'regence channel on Telegram',
+            discord: 'regence server on Discord',
+            generic: 'regence community',
         },
         invites: {
             title: 'Invitations',
@@ -3618,7 +3618,7 @@ export const en = {
         history: 'Tournament history',
         diploma: {
             title: 'Diploma',
-            heading: 'Michess tournament',
+            heading: 'Regence tournament',
             awarded: 'awarded to',
             place: 'for {place} place',
             event: '{format}, {size} players, {date}',

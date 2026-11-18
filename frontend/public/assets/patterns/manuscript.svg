@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
-  <!-- Рукопись: линовка, поле и строки: тиснёный тайл фона, собственная работа проекта michess, CC0. -->
+  <!-- Рукопись: линовка, поле и строки: тиснёный тайл фона, собственная работа проекта regence, CC0. -->
   <defs><g id="p" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
     <path d="M14 0 V120"/><path d="M0 20 H120"/><path d="M0 44 H120"/><path d="M0 68 H120"/><path d="M0 92 H120"/><path d="M0 116 H120"/>
     <path d="M22 16 c6 -6 10 4 16 -1 s10 4 16 -1 s8 4 14 0 s10 3 18 -1"/><path d="M22 40 c8 -5 12 4 18 0 s12 3 20 -1 s10 4 22 0"/>

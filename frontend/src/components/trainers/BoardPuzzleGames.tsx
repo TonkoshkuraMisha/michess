@@ -45,7 +45,7 @@ function Grid({size, render, onCell}: { size: number; render: (cell: Cell) => { 
     );
 }
 
-const SOLUTIONS_KEY = (id: string) => `michess_placement_solutions_${id}`;
+const SOLUTIONS_KEY = (id: string) => `regence_placement_solutions_${id}`;
 
 function readSolutions(id: string): string[] {
     try {

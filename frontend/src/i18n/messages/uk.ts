@@ -101,7 +101,7 @@ export const uk: Messages = {
         resetSent: 'Якщо цю адресу прив’язано до акаунта, лист із посиланням уже в дорозі. Перевірте й теку «Спам».',
         resetFailed: 'Не вдалося надіслати лист',
         backToLogin: 'Назад до входу',
-        loginTitle: 'Вхід до michess',
+        loginTitle: 'Вхід до regence',
         registerTitle: 'Реєстрація акаунта',
         loginSubtitle: 'Введіть свої облікові дані, щоб грати',
         registerSubtitle: 'Створіть новий акаунт, щоб почати',
@@ -156,7 +156,7 @@ export const uk: Messages = {
     settings: {
         app: {
             title: 'Застосунок на телефоні',
-            intro: 'Встановіть michess на головний екран: він відкриватиметься у власному вікні, без рядка браузера, як звичайний застосунок. Партії, задачі й розбір, як і раніше, потребують інтернету.',
+            intro: 'Встановіть regence на головний екран: він відкриватиметься у власному вікні, без рядка браузера, як звичайний застосунок. Партії, задачі й розбір, як і раніше, потребують інтернету.',
             install: 'Встановити застосунок',
             installed: 'Застосунок встановлено — ви в ньому або можете відкрити його з головного екрана.',
             ios: 'На iPhone та iPad: у Safari натисніть «Поділитися», потім «На початковий екран».',
@@ -246,7 +246,7 @@ export const uk: Messages = {
     },
     about: {
         title: 'Про проєкт і ліцензії',
-        subtitle: 'Чужі роботи, на яких побудовано michess, їхні автори та умови використання.',
+        subtitle: 'Чужі роботи, на яких побудовано regence, їхні автори та умови використання.',
         engineTitle: 'Шаховий рушій',
         engineText: 'Аналіз партій і гра ботів працюють на рушії Stockfish. Він поширюється за ліцензією GNU GPL версії 3; вихідний код — {link}. Рушій запускається як окрема програма і не змінений.',
         engineVersion: 'У цій установці працює {name}. Вихідний код саме цієї версії — {link}; повний текст ліцензії є в образі сервера (/usr/share/common-licenses/GPL-3).',
@@ -316,7 +316,7 @@ export const uk: Messages = {
             letter: {name: 'Літери (Нотація)', shortName: 'Літери', description: 'Літери фігур, як у нотації, — високий контраст'},
             lewis: {name: 'Льюїс (Середньовіччя)', shortName: 'Льюїс', description: 'Власний набір за мотивами льюїських шахів XII століття: король і ферзь на тронах, єпископ у митрі, воїн зі щитом'},
         },
-        outlineAuthor: 'michess, на основі Merida (Armando Hernandez Marroquin)',
+        outlineAuthor: 'regence, на основі Merida (Armando Hernandez Marroquin)',
     },
     hall: {
         title: 'Ігрова зала',
@@ -1116,7 +1116,7 @@ export const uk: Messages = {
     leaderboard: {
         loadFailed: 'Не вдалося завантажити таблицю лідерів',
         badge: 'Рейтинговий залік Fair Play',
-        title: 'Таблиця лідерів Michess',
+        title: 'Таблиця лідерів Regence',
         subtitle: 'Топ-50 гравців за рейтингом Ело — {category}',
         toBoard: 'До дошки',
         loading: 'Завантаження рейтингу…',
@@ -2011,7 +2011,7 @@ export const uk: Messages = {
     },
     transparency: {
         title: 'Як ми вимірюємо силу ботів',
-        intro: 'Рейтинг бота на michess — не вигадане число. Тут — як його отримано, результат для кожного бота з похибкою і журнали матчів як є.',
+        intro: 'Рейтинг бота на regence — не вигадане число. Тут — як його отримано, результат для кожного бота з похибкою і журнали матчів як є.',
         aboutLink: 'Методика калібрування, результати з ±95 %, журнали матчів і відкриті дані.',
         methodTitle: 'Методика',
         method: {
@@ -3096,9 +3096,9 @@ export const uk: Messages = {
         community: {
             title: 'Спільнота',
             text: 'Новини проєкту та обговорення — у нашому каналі.',
-            telegram: 'Канал michess у Telegram',
-            discord: 'Сервер michess у Discord',
-            generic: 'Спільнота michess',
+            telegram: 'Канал regence у Telegram',
+            discord: 'Сервер regence у Discord',
+            generic: 'Спільнота regence',
         },
         invites: {
             title: 'Запрошення',
@@ -3634,7 +3634,7 @@ export const uk: Messages = {
         history: 'Історія турнірів',
         diploma: {
             title: 'Диплом',
-            heading: 'Турнір Michess',
+            heading: 'Турнір Regence',
             awarded: 'нагороджується',
             place: 'за {place} місце',
             event: '{format}, {size} учасників, {date}',

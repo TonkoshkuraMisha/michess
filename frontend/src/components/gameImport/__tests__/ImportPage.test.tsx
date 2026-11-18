@@ -67,7 +67,7 @@ describe('Импорт партий', () => {
         const call = fetchMock.mock.calls.find(([url]) => String(url).endsWith('/imports/fetch'));
         expect(JSON.parse(String(call?.[1]?.body))).toEqual({source: 'chesscom', username: 'me_42', max: 20});
         expect(call?.[1]?.headers).toMatchObject({Authorization: 'Bearer t'});
-        expect(localStorage.getItem('michess_import_nick_chesscom')).toBe('me_42');
+        expect(localStorage.getItem('regence_import_nick_chesscom')).toBe('me_42');
     });
 
     it('кнопка неактивна, пока ник не похож на ник', () => {

@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
-  <!-- Меловая пыль (светлый узор для режима screen): собственная работа проекта michess, CC0. -->
+  <!-- Меловая пыль (светлый узор для режима screen): собственная работа проекта regence, CC0. -->
   <filter id="f" x="0" y="0" width="100%" height="100%">
     <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="9" stitchTiles="stitch" result="n"/>
     <feColorMatrix in="n" type="matrix" values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  1.8 0 0 0 -0.95"/>

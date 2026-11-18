@@ -54,7 +54,7 @@ async def test_email_is_linked_only_after_the_link(client, db_session, test_user
                            json={"email": "Alice@Example.com", "password": PASSWORD, "language": "uk"})
     assert response.status_code == 202
     to, subject, body = outbox[-1]
-    assert to == "alice@example.com" and subject == "Підтвердіть e-mail для michess" and "/verify-email?token=" in body
+    assert to == "alice@example.com" and subject == "Підтвердіть e-mail для regence" and "/verify-email?token=" in body
     assert client.get("/api/v1/profile/me", headers=auth(token_user_1)).json()["email"] is None
 
     token = link_token(body)
@@ -81,7 +81,7 @@ async def test_password_reset_by_link(client, db_session, test_user_1, token_use
     await verified(client, db_session, test_user_1, token_user_1, outbox)
     assert client.post(f"{API}/password-reset", json={"email": "alice@example.com", "language": "ru"}).status_code == 202
     to, subject, body = outbox[-1]
-    assert subject == "Сброс пароля michess" and "/reset-password?token=" in body
+    assert subject == "Сброс пароля regence" and "/reset-password?token=" in body
     token = link_token(body)
 
     assert client.post(f"{API}/password-reset/confirm",

@@ -85,7 +85,7 @@ def analyze_game_task(self, game_id: int):
     """
     Задача Celery «analyze_game»: фоновый разбор завершённой партии (с человеком или с ботом). Её ставят
     game_state.finish_game и POST /bots/save-game через src/services/task_dispatch.py. Время движка идёт в метрику
-    michess_engine_seconds_total с меткой analysis. Любой другой сбой только записывается в журнал: разбор
+    regence_engine_seconds_total с меткой analysis. Любой другой сбой только записывается в журнал: разбор
     необязателен, его можно запросить со страницы партии.
     """
     try:

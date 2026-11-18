@@ -10,7 +10,7 @@
 // Режим доски определяется тремя значениями: gameId (своя партия с человеком), activeBot (партия с ботом),
 // spectatingGameId (просмотр чужой партии); все три пусты — свободная доска. Гостю вместо доски показывается
 // заглушка с просьбой войти. Данные игрока — GET /profile/me, каталог ботов — GET /bots/catalog. Оформление и
-// размер доски запоминаются в localStorage (michess_board_theme, michess_piece_set, michess_board_size), настройки
+// размер доски запоминаются в localStorage (regence_board_theme, regence_piece_set, regence_board_size), настройки
 // доски — config/boardPrefs.ts. Другие страницы запускают здесь действие через state маршрута: tournamentGame
 // (партия турнира), guestGame (мастер прошлого), firstGame (первая партия после регистрации), analyzeFen (позиция
 // на разбор с наставником), spectate (просмотр партии), challenge (вызов игрока из профиля).
@@ -218,7 +218,7 @@ export default function Chessboard() {
     // и нужно для квоты лага и античита. Часы партии ведёт сервер, а не это значение.
     const moveStartTime = useRef<number>(Date.now());
 
-    // Настройки доски (таск 18.4, config/boardPrefs.ts, localStorage michess_board_prefs): показ последнего хода,
+    // Настройки доски (таск 18.4, config/boardPrefs.ts, localStorage regence_board_prefs): показ последнего хода,
     // способ ввода хода, «быстрый ход», анимация хода соперника, порядок взятых фигур.
     const boardPrefs = useBoardPrefs();
     // Игра вслепую (таск 19.5): ступень текущей партии, подсмотры.
@@ -239,11 +239,11 @@ export default function Chessboard() {
         y: number;
     } | null>(null);
 
-    // Сторона доски в пикселях: сохранённая игроком (localStorage michess_board_size), но не больше, чем
+    // Сторона доски в пикселях: сохранённая игроком (localStorage regence_board_size), но не больше, чем
     // помещается в окно; при уменьшении окна доска сжимается (эффект ниже).
     const [boardSize, setBoardSize] = useState<number>(() => {
         const maxFit = getMaxViewportBoardSize();
-        const savedSize = localStorage.getItem('michess_board_size');
+        const savedSize = localStorage.getItem('regence_board_size');
         if (savedSize) {
             const parsed = Number(savedSize);
             if (!Number.isNaN(parsed) && parsed >= MIN_BOARD_SIZE) {
@@ -416,17 +416,17 @@ export default function Chessboard() {
     // Выбор оформления и размера доски сохраняется в localStorage этого браузера (на сервер не уходит).
     const handleThemeChange = (themeId: string) => {
         setBoardThemeKey(themeId);
-        localStorage.setItem('michess_board_theme', themeId);
+        localStorage.setItem('regence_board_theme', themeId);
     };
 
     const handlePieceSetChange = (setId: string) => {
         setPieceSetKey(setId);
-        localStorage.setItem('michess_piece_set', setId);
+        localStorage.setItem('regence_piece_set', setId);
     };
 
     const handleBoardSizeChange = (size: number) => {
         setBoardSize(size);
-        localStorage.setItem('michess_board_size', String(size));
+        localStorage.setItem('regence_board_size', String(size));
     };
 
     // Растягивание доски за уголок: пока тянут, движение ловится на window, размер меняется на среднее смещения
@@ -449,7 +449,7 @@ export default function Chessboard() {
             const dynamicMax = getMaxViewportBoardSize();
             const nextSize = Math.min(Math.max(startSize + delta, MIN_BOARD_SIZE), dynamicMax);
             setBoardSize(nextSize);
-            localStorage.setItem('michess_board_size', String(nextSize));
+            localStorage.setItem('regence_board_size', String(nextSize));
         };
 
         const handleResizeEnd = () => {
@@ -486,7 +486,7 @@ export default function Chessboard() {
         e.stopPropagation();
         const defaultSize = getDefaultBoardSize();
         setBoardSize(defaultSize);
-        localStorage.setItem('michess_board_size', String(defaultSize));
+        localStorage.setItem('regence_board_size', String(defaultSize));
     };
 
     // Обработчик клавиш висит на window: историю и текущий ход читает через ref, обновляемый на каждом

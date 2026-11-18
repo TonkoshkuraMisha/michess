@@ -8,7 +8,7 @@
 // наставнику делает партию учебной (правило 2): отметка assisted уходит на сервер при сохранении партии с ботом.
 // «Не согласен» — POST /analysis/dispute: позиция попадает в очередь спорных оценок. Проверку хода и подсказку
 // сервер отклоняет, пока у игрока идёт партия с человеком, и ограничивает квотой наставника. Включён ли наставник
-// и выбранный уровень помнит localStorage (ключи michess_coach_enabled, michess_coach_level); уровень, пока игрок
+// и выбранный уровень помнит localStorage (ключи regence_coach_enabled, regence_coach_level); уровень, пока игрок
 // его не выбрал, определяется по рейтингу. В партии лестницы и турнира Chessboard проверку ходов не вызывает, а
 // панель наставника заблокирована.
 
@@ -23,8 +23,8 @@ import {getToken} from '../../../services/authToken';
 export type CoachLevel = 'novice' | 'amateur' | 'strong';
 export const COACH_LEVELS: readonly CoachLevel[] = ['novice', 'amateur', 'strong'];
 
-export const COACH_ENABLED_KEY = 'michess_coach_enabled';
-export const COACH_LEVEL_KEY = 'michess_coach_level';
+export const COACH_ENABLED_KEY = 'regence_coach_enabled';
+export const COACH_LEVEL_KEY = 'regence_coach_level';
 
 /**
  * Ответ POST /analysis/check-move (src/services/move_check.py). Оценки — в сотых пешки с точки зрения сходившего;

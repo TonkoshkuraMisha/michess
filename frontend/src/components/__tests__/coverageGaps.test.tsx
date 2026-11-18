@@ -169,7 +169,7 @@ describe('звуковой движок', () => {
         const last = created.osc[created.osc.length - 1];
         expect(last.type).toBe(SOUND_SETS.bright.wave);
         expect(last.frequency.setValueAtTime.mock.calls[0][0]).toBeCloseTo(880 * SOUND_SETS.bright.pitch);
-        expect(localStorage.getItem('michess_sound_set')).toBe('bright');
+        expect(localStorage.getItem('regence_sound_set')).toBe('bright');
         soundEngine.setSoundSet('wood');
     });
 

@@ -39,7 +39,7 @@ export interface BlindfoldState {
     hideMoves: boolean;
 }
 
-const KEY = 'michess_blindfold_level';
+const KEY = 'regence_blindfold_level';
 
 function readArmed(): BlindfoldLevel {
     try {

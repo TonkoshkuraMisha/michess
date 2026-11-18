@@ -818,7 +818,7 @@ class GameStateManager:
         db_game.status = GameStatus.COMPLETED
         db_game.finished_at = func.now()
         db_game.pgn_date = today_str
-        db_game.site = "MiChess"
+        db_game.site = "Regence"
 
         moves_telemetry = await self.read_all_moves(game_id)
         if moves_telemetry:
@@ -830,8 +830,8 @@ class GameStateManager:
             db_game.eco = eco_code
 
             pgn_game = chess.pgn.Game()
-            pgn_game.headers["Event"] = "MiChess Rated Game" if db_game.is_rated else "MiChess Casual Game"
-            pgn_game.headers["Site"] = "MiChess"
+            pgn_game.headers["Event"] = "Regence Rated Game" if db_game.is_rated else "Regence Casual Game"
+            pgn_game.headers["Site"] = "Regence"
             pgn_game.headers["Date"] = today_str
             pgn_game.headers["White"] = white_user.username
             pgn_game.headers["Black"] = black_user.username

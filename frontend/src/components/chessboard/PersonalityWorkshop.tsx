@@ -2,7 +2,7 @@
 // Мастерская соперников: игрок собирает бота из ползунков характера и силы, выбирает ему дебюты, сохраняет и играет
 // с ним. Как ползунки превращаются в стиль игры — src/services/bots/personality.py; хранение —
 // services/personalities.ts: у вошедшего игрока — сервер (GET, POST, PUT, DELETE /bots/personalities), без токена —
-// localStorage этого браузера (ключ michess_guest_personalities). Готовые архетипы и их сила — GET /bots/catalog.
+// localStorage этого браузера (ключ regence_guest_personalities). Готовые архетипы и их сила — GET /bots/catalog.
 // Радар стиля, оценка силы и метки стиля считаются на клиенте (config/archetypes.ts). Сейчас мастерскую показывает
 // только Chessboard, а он без входа выводит заглушку — гостевая ветка с главной доски недостижима.
 

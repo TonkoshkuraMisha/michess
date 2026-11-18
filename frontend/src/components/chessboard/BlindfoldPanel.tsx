@@ -1,7 +1,7 @@
 // --- FILE: frontend/src/components/chessboard/BlindfoldPanel.tsx ---
 // Игра вслепую (таск 19.5): до партии — выбор ступени (для партий без рейтинга); в партии — «Подсмотреть», счёт
 // подсмотров, ввод хода нотацией и скрытие списка ходов. Состояние (выбранная ступень, ступень партии, подсмотры)
-// — общий стор config/blindfold.ts; выбранная ступень запоминается в localStorage (michess_blindfold_level).
+// — общий стор config/blindfold.ts; выбранная ступень запоминается в localStorage (regence_blindfold_level).
 // Какие фигуры скрыты, решает Chessboard (visibleSquares). Ступень и число подсмотров уходят в архив при сохранении
 // партии с ботом (/bots/save-game) или отметкой POST /profile/games/{id}/blindfold после товарищеской партии.
 

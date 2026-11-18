@@ -48,21 +48,21 @@ class _Engine:
 def test_pool_accounts_held_time_and_refusals(monkeypatch):
     pool = EnginePool("stockfish", size=1, acquire_timeout_s=0.01)
     monkeypatch.setattr(pool, "_spawn", lambda: _Engine())
-    held_before = sample("michess_engine_seconds_total", "coach")
-    busy_before = sample("michess_engine_busy_total", "coach")
+    held_before = sample("regence_engine_seconds_total", "coach")
+    busy_before = sample("regence_engine_busy_total", "coach")
 
     with engine_work("coach"), pool.acquire(), pytest.raises(EngineBusyError), pool.acquire():  # единственный движок занят
         pass
-    assert sample("michess_engine_seconds_total", "coach") > held_before
-    assert sample("michess_engine_busy_total", "coach") == busy_before + 1
+    assert sample("regence_engine_seconds_total", "coach") > held_before
+    assert sample("regence_engine_busy_total", "coach") == busy_before + 1
 
 
 async def test_active_players_are_counted_once_per_day(client, token_user_1, token_user_2):
     for token in (token_user_1, token_user_1, token_user_2):
         assert client.get("/api/v1/profile/me", headers={"Authorization": f"Bearer {token}"}).status_code == 200
     await observability.refresh_active_players()
-    assert REGISTRY.get_sample_value("michess_active_players_today") == 2
-    assert "michess_engine_seconds_total" in client.get("/metrics").text
+    assert REGISTRY.get_sample_value("regence_active_players_today") == 2
+    assert "regence_engine_seconds_total" in client.get("/metrics").text
 
 
 @pytest.fixture

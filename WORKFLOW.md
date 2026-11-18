@@ -1,6 +1,6 @@
 <!-- --- FILE: WORKFLOW.md --- -->
 
-# Регламент разработки и Git-процессов (Michess Workflow)
+# Регламент разработки и Git-процессов (Regence Workflow)
 
 Пошаговая шпаргалка для работы над каждой новой задачей в проекте.
 
@@ -32,7 +32,7 @@
 
 ### Шаг 1. Создание ветки перед началом работы
 
-Всегда начинай новую задачу в корневой папке проекта `michess` с переключения на `dev` и создания новой рабочей ветки:
+Всегда начинай новую задачу в корневой папке проекта `regence` с переключения на `dev` и создания новой рабочей ветки:
 
     git checkout dev
     git pull origin dev
@@ -75,8 +75,8 @@
    Интеграционные тесты (`tests/integration`) запускаются только при заданных `TEST_DATABASE_URL` и
    `TEST_REDIS_URL` и **удаляют все таблицы** в указанной базе — используйте отдельную базу, не рабочую:
 
-   docker exec michess-db-1 psql -U michess_user -d michess_db -c "CREATE DATABASE michess_test"
-   $env:TEST_DATABASE_URL = "postgresql+asyncpg://michess_user:michess_password@localhost:15432/michess_test"
+   docker exec michess-db-1 psql -U michess_user -d michess_db -c "CREATE DATABASE regence_test"
+   $env:TEST_DATABASE_URL = "postgresql+asyncpg://michess_user:michess_password@localhost:15432/regence_test"
    $env:TEST_REDIS_URL = "redis://localhost:6379/15"
    python -m pytest tests/integration
 
@@ -121,7 +121,7 @@
     gh pr create --base dev --title "feat(раздел): что сделано (номер таска)" --body "..."
     gh pr checks <номер> --watch
 
-На запрос запускается пайплайн `Michess CI` из трёх проверок: сервер (линтер, типы, тесты, миграции), клиент
+На запрос запускается пайплайн `Regence CI` из трёх проверок: сервер (линтер, типы, тесты, миграции), клиент
 (линтер, тесты, сборка) и сборка продакшен-образов со сценариями в браузере (Playwright). Сливать — только когда
 зелёные все три:
 

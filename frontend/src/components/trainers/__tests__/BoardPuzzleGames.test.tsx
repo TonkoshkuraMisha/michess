@@ -23,7 +23,7 @@ describe('расстановка', () => {
         for (const cell of allQueenSolutions(4)[0]) click(cell);
         expect(onFinish).toHaveBeenCalledWith(90, 1);
         expect(screen.getByTestId('placement-found')).toHaveTextContent('Найдено различных решений: 1 из 2');
-        expect(JSON.parse(localStorage.getItem('michess_placement_solutions_queens4')!)).toHaveLength(1);
+        expect(JSON.parse(localStorage.getItem('regence_placement_solutions_queens4')!)).toHaveLength(1);
     });
 
     it('больше фигур, чем нужно, поставить нельзя; доминирование показывает непокрытые поля', () => {

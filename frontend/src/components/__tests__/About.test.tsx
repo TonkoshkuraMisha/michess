@@ -84,7 +84,7 @@ describe('наборы фигур', () => {
         ['cardinal', 'outline'],
         ['unknown-set', 'merida'],
     ])('сохранённый набор %s заменяется на %s', (saved, expected) => {
-        localStorage.setItem('michess_piece_set', saved);
+        localStorage.setItem('regence_piece_set', saved);
         expect(getSavedPieceSetKey()).toBe(expected);
     });
 });

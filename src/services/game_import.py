@@ -43,7 +43,7 @@ logger = logging.getLogger(__name__)
 
 SOURCES = ("lichess", "chesscom")
 TIMEOUT_S = 15.0
-USER_AGENT = "michess-game-import"
+USER_AGENT = "regence-game-import"
 SOURCE_COOLDOWN_S = 60
 # Сколько месячных архивов chess.com просматривать назад в поисках N партий.
 CHESSCOM_MAX_ARCHIVES = 3
