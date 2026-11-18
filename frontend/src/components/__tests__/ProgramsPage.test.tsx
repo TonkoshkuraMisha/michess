@@ -52,6 +52,24 @@ describe('программы тренировок', () => {
         expect(screen.getByTestId('program-progress')).toHaveTextContent('Пройдено занятий: 3 из 40');
     });
 
+    it('автозачёт: подряд идущие выполненные занятия засчитываются сами, галочки у упражнений (план владельца 18.11)', async () => {
+        const calls: [string, RequestInit | undefined][] = [];
+        vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
+            calls.push([String(url), init]);
+            const body = String(url).includes('/learn/course-progress')
+                ? {lessons: ['tactics-double-attack'], themes: ['fork', 'double_attack'], trainers: ['double_strike'], exams: {}}
+                : init?.method === 'PUT' ? {} : [];
+            return {ok: true, json: async () => body} as Response;
+        }));
+        await act(async () => page('/programs/to_1200'));
+        // Занятия 1–3 закрыты фактами, четвёртое (разминка) не проверяется — счёт на нём остановился.
+        expect(screen.getByTestId('program-progress')).toHaveTextContent('Пройдено занятий: 3 из 40');
+        const put = calls.find(([, init]) => init?.method === 'PUT')!;
+        expect(JSON.parse(String(put[1]!.body))).toEqual({step: 2, steps_total: 40, completed: false});
+        expect(screen.getByTestId('activity-done-0-0')).toBeInTheDocument();
+        expect(screen.getByTestId('session-3')).toContainElement(screen.getByTestId('session-done'));
+    });
+
     it('нет такой программы', () => {
         stub([]);
         page('/programs/nope');

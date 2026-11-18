@@ -2774,6 +2774,7 @@ export const uk: Messages = {
         week: 'Тиждень {n}',
         session: 'Заняття {n}',
         markDone: 'Заняття виконано',
+        activityDone: 'виконано',
         activities: {mate: 'Матова конструкція', endgame: 'Ендшпіль', puzzles: 'Задачі', trainer: 'Тренажер',
             classics: 'Партії майстрів із поясненнями', guess: 'Вгадай хід майстра', play: 'Партія з ботом'},
         items: {
