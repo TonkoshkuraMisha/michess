@@ -4299,7 +4299,7 @@ export const en = {
         yourWorst: 'Your costliest move: {move}',
         recommend: 'Next opponent: {name} ({rating})',
         play: 'Play',
-        coach: {
+        afterGame: {
             title: 'Club coach',
             puzzle: 'Fix your blunder',
             solve: 'Solve this position',

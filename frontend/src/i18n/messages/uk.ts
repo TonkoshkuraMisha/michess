@@ -4315,7 +4315,7 @@ export const uk: Messages = {
         yourWorst: 'Ваш найдорожчий хід: {move}',
         recommend: 'Наступний суперник: {name} ({rating})',
         play: 'Зіграти',
-        coach: {
+        afterGame: {
             title: 'Клубний тренер',
             puzzle: 'Виправ свій зівок',
             solve: 'Розв’язати цю позицію',

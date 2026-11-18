@@ -65,13 +65,13 @@ export function CoachCards({gameId}: { gameId: number }) {
 
     return (
         <div className="flex flex-col gap-1" data-testid="coach-cards">
-            <p className="flex items-center gap-1.5 font-bold text-amber-300 pt-1"><GraduationCap size={14}/> {t('summary.coach.title')}</p>
+            <p className="flex items-center gap-1.5 font-bold text-amber-300 pt-1"><GraduationCap size={14}/> {t('summary.afterGame.title')}</p>
             {puzzle && (
                 <div className={CARD} data-testid="coach-card-puzzle">
-                    <p className="font-bold">{t('summary.coach.puzzle')}</p>
+                    <p className="font-bold">{t('summary.afterGame.puzzle')}</p>
                     {!solving ? (
                         <button type="button" className={BUTTON} onClick={() => setSolving(true)} data-testid="coach-solve">
-                            {t('summary.coach.solve')}
+                            {t('summary.afterGame.solve')}
                         </button>
                     ) : (
                         <>
@@ -95,16 +95,16 @@ export function CoachCards({gameId}: { gameId: number }) {
             )}
             {deviation && (
                 <div className={CARD} data-testid="coach-card-deviation">
-                    <p className="font-bold">{t('summary.coach.deviation')}</p>
+                    <p className="font-bold">{t('summary.afterGame.deviation')}</p>
                     <DeviationItem deviation={deviation}/>
                 </div>
             )}
             {lesson && (
                 <div className={CARD} data-testid="coach-card-lesson">
-                    <p className="font-bold">{t('summary.coach.lesson', {theme: themeText(lesson.theme, 'name', t)})}</p>
+                    <p className="font-bold">{t('summary.afterGame.lesson', {theme: themeText(lesson.theme, 'name', t)})}</p>
                     <Link to={`/learn/course?level=${lesson.module.level}&module=${lesson.module.code}`} className={BUTTON}
                           data-testid="coach-lesson-link">
-                        {t('summary.coach.openLesson', {module: t(moduleTitleKey(lesson.module.code) as 'supercourse.title')})}
+                        {t('summary.afterGame.openLesson', {module: t(moduleTitleKey(lesson.module.code) as 'supercourse.title')})}
                     </Link>
                 </div>
             )}

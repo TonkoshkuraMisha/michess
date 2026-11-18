@@ -4315,7 +4315,7 @@ export const ru: Messages = {
         yourWorst: 'Ваш самый дорогой ход: {move}',
         recommend: 'Следующий соперник: {name} ({rating})',
         play: 'Сыграть',
-        coach: {
+        afterGame: {
             title: 'Клубный тренер',
             puzzle: 'Исправь свой зевок',
             solve: 'Решить эту позицию',
