@@ -6,12 +6,16 @@
 // Страница задач (таск 13.3): решение по рейтингу или теме, задача дня, режим на время (3/5 минут, три ошибки —
 // конец, личный рекорд), подсказка, «Показать решение», итог с изменением рейтинга, история и график рейтинга,
 // «Разобрать с наставником» — позиция задачи на свободной доске с включённым наставником.
+// Раскладка (план владельца 18.11): режимы — три группы вкладок с пояснением (PuzzleModePicker, puzzleModes.ts);
+// пока задача не загружена, вместо доски с начальной расстановкой — карточки всех режимов по группам, выбранный —
+// крупно и с кнопкой «Начать»;
+// у графика рейтинга подписаны оси (рейтинг слева, даты первой и последней задачи снизу).
 
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Link, useLocation, useNavigate} from 'react-router-dom';
 import {Chess} from 'chess.js';
 import {format, parseISO} from 'date-fns';
-import {Puzzle as PuzzleIcon, Lightbulb, Flag, ArrowRight, GraduationCap, Timer, CalendarDays} from 'lucide-react';
+import {Puzzle as PuzzleIcon, Lightbulb, Flag, ArrowRight, GraduationCap} from 'lucide-react';
 import {hasMessage, renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
 import {UiError} from '../../services/apiErrors';
@@ -31,10 +35,12 @@ import {TrainingPanel} from './TrainingPanel';
 import {SolutionReplay} from './SolutionReplay';
 import type {ReplayView} from './SolutionReplay';
 import {ExplorerControls, usePositionExplorer} from './usePositionExplorer';
+import {PuzzleModePicker} from './PuzzleModePicker';
+import {MODE_GROUPS, MODE_ICONS, MODES} from './puzzleModes';
+import type {Mode} from './puzzleModes';
+import {Card, CardGrid, Section} from '../ui';
 
-// save — «Спасите партию» (27.9): смешанная подборка задач с целью «ничья» (вечный шах, пат, крепость, равенство).
-type Mode = 'rated' | 'themes' | 'defense' | 'save' | 'drills' | 'personal' | 'daily' | 'timed';
-const MODES: Mode[] = ['rated', 'themes', 'defense', 'save', 'drills', 'personal', 'daily', 'timed'];
+// Режим save — «Спасите партию» (27.9): смешанная подборка задач с целью «ничья» (вечный шах, пат, крепость, равенство).
 const SAVE_TARGET: TrainingTarget = {goal: 'draw', blind: false};
 type Phase = 'idle' | 'loading' | 'opponent' | 'solving' | 'waiting' | 'done';
 
@@ -48,23 +54,42 @@ function errorOf(err: unknown): UiMessage {
     return err instanceof UiError ? err.ui : {key: 'common.networkError'};
 }
 
+/** Шаг округления границ шкалы рейтинга и запас над и под крайними точками. */
+const CHART_STEP = 10;
+const CHART_MARGIN = 5;
+
+/**
+ * График рейтинга в задачах по истории попыток (puzzlesApi.me → history, новые первыми). Слева — шкала рейтинга
+ * (верх, середина, низ), снизу — даты первой и последней попытки на графике.
+ */
 export function RatingChart({history}: { history: PuzzleProfile['history'] }) {
-    const {t} = useI18n();
-    const points = [...history].reverse().map((h) => h.rating_after);
+    const {t, dateLocale} = useI18n();
+    const points = [...history].reverse();
     if (points.length < 2) return null;
-    const min = Math.min(...points) - 10;
-    const max = Math.max(...points) + 10;
-    const path = points.map((value, i) => {
-        const x = (i / (points.length - 1)) * 100;
-        const y = 40 - ((value - min) / (max - min)) * 40;
-        return `${x.toFixed(2)},${y.toFixed(2)}`;
-    }).join(' ');
+    const values = points.map((h) => h.rating_after);
+    const low = Math.floor((Math.min(...values) - CHART_MARGIN) / CHART_STEP) * CHART_STEP;
+    const high = Math.ceil((Math.max(...values) + CHART_MARGIN) / CHART_STEP) * CHART_STEP;
+    const middle = Math.round((low + high) / 2);
+    const y = (value: number) => 40 - ((value - low) / (high - low)) * 40;
+    const path = values.map((value, i) => `${((i / (values.length - 1)) * 100).toFixed(2)},${y(value).toFixed(2)}`).join(' ');
+    const day = (iso: string | null) => (iso ? format(parseISO(iso), 'd MMM', {locale: dateLocale}) : '');
     return (
-        <svg viewBox="0 0 100 40" className="w-full h-16" role="img" aria-label={t('puzzles.chart')}
-             data-testid="puzzle-chart" preserveAspectRatio="none">
-            <polyline points={path} fill="none" stroke="rgb(251, 191, 36)" strokeWidth="1.2"
-                      vectorEffect="non-scaling-stroke"/>
-        </svg>
+        <div className="grid grid-cols-[auto_1fr] gap-x-2 text-[10px] font-mono text-boxwood/70">
+            <div className="flex flex-col justify-between h-24 text-right" aria-hidden data-testid="puzzle-chart-scale">
+                <span>{high}</span><span>{middle}</span><span>{low}</span>
+            </div>
+            <svg viewBox="0 0 100 40" className="w-full h-24 border-l border-b border-amber-900/60" role="img"
+                 aria-label={t('puzzles.chart')} data-testid="puzzle-chart" preserveAspectRatio="none">
+                <line x1="0" x2="100" y1={y(middle)} y2={y(middle)} stroke="rgba(251, 191, 36, 0.15)"
+                      strokeDasharray="2 2" vectorEffect="non-scaling-stroke"/>
+                <polyline points={path} fill="none" stroke="rgb(251, 191, 36)" strokeWidth="1.5"
+                          vectorEffect="non-scaling-stroke"/>
+            </svg>
+            <span/>
+            <div className="flex justify-between" aria-hidden>
+                <span>{day(points[0].created_at)}</span><span>{day(points[points.length - 1].created_at)}</span>
+            </div>
+        </div>
     );
 }
 
@@ -409,18 +434,8 @@ export default function PuzzlesPage() {
                     {t('puzzles.profile', {rating: profile.rating, games: profile.games, streak: profile.streak})}
                 </p>
             )}
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-1 font-bold text-xs" role="tablist">
-                {MODES.map((m) => (
-                    <button key={m} type="button" role="tab" aria-selected={mode === m} data-testid={`puzzle-mode-${m}`}
-                            onClick={() => chooseMode(m)}
-                            className={`py-1.5 rounded border cursor-pointer flex items-center justify-center gap-1 ${mode === m
-                                ? 'bg-amber-800 text-white border-amber-400' : 'bg-black/35 border-amber-900/40'}`}>
-                        {m === 'daily' && <CalendarDays size={13}/>}
-                        {m === 'timed' && <Timer size={13}/>}
-                        {t(`puzzles.modes.${m}`)}
-                    </button>
-                ))}
-            </div>
+            {/* Пока слева карточки режимов, вкладки их не повторяют; в защите и упражнениях карточек нет. */}
+            {(puzzle || personal || mode === 'defense' || mode === 'drills') && <PuzzleModePicker mode={mode} onChange={chooseMode}/>}
         </>
     );
 
@@ -442,6 +457,16 @@ export default function PuzzlesPage() {
         setCandidates((list) => (list.includes(uci) ? list.filter((c) => c !== uci) : list.length >= 3 ? list : [...list, uci]));
     };
 
+    const nextButton = (
+        <button type="button" onClick={() => void load()} data-testid="puzzle-next"
+                disabled={phase === 'loading' || phase === 'opponent'}
+                className="self-start flex items-center gap-1 px-3 py-1.5 rounded bg-amber-700 hover:bg-amber-600 text-white font-bold disabled:opacity-40 cursor-pointer">
+            <ArrowRight size={15}/> {t(puzzle ? 'puzzles.next' : 'puzzles.start')}
+        </button>
+    );
+    // Режимы, где задачу берут кнопкой «Начать»; у остальных старт свой (забег, путь по приёмам, очередь ошибок).
+    const startsWithButton = mode === 'rated' || mode === 'daily' || mode === 'save';
+
     if (mode === 'defense') {
         return (
             <DefenseTrainer key={defenseKind} header={header} initialKind={defenseKind}
@@ -453,6 +478,29 @@ export default function PuzzlesPage() {
     return (
         <div className="w-full max-w-6xl mx-auto p-3 sm:p-4 flex flex-col lg:flex-row gap-4" data-testid="puzzles-page">
             <div className="w-full lg:w-[min(70vh,640px)] shrink-0 flex flex-col gap-2">
+                {!puzzle && !personal ? (
+                    // До первой задачи — все режимы карточками по группам; выбранный крупнее и с кнопкой «Начать».
+                    <div className="flex flex-col gap-4" data-testid="puzzle-mode-cards">
+                        {MODE_GROUPS.map((group) => (
+                            <Section key={group.id} title={t(`puzzles.modeGroups.${group.id}`)}>
+                                <CardGrid cols={2}>
+                                    {group.modes.map((m) => {
+                                        const Icon = MODE_ICONS[m];
+                                        const current = m === mode;
+                                        return (
+                                            <Card key={m} variant={current ? 'hero' : 'default'}
+                                                  testId={`puzzle-mode-${m}`}
+                                                  icon={<Icon size={current ? 24 : 20}/>}
+                                                  title={t(`puzzles.modes.${m}`)} description={t(`puzzles.modeInfo.${m}`)}
+                                                  onClick={current ? undefined : () => chooseMode(m)}
+                                                  footer={current && startsWithButton ? nextButton : undefined}/>
+                                        );
+                                    })}
+                                </CardGrid>
+                            </Section>
+                        ))}
+                    </div>
+                ) : <>
                 <PuzzleBoard fen={personalReplay?.fen ?? explorer.fen ?? fen} orientation={personal?.color ?? puzzle?.color ?? 'white'}
                              interactive={phase === 'solving' || (phase === 'done' && !personalReplay && !run)}
                              lastMove={personalReplay ? personalReplay.lastMove : explorer.active ? explorer.lastMove : lastMove}
@@ -465,6 +513,7 @@ export default function PuzzlesPage() {
                              onSquare={marking ? markCandidate : undefined}
                              onMove={(uci) => void onMove(uci)}/>
                 <ExplorerControls explorer={explorer}/>
+                </>}
                 {candidatesOn && candidatesAllowed && puzzle && (
                     <div className="flex flex-wrap items-center gap-2 text-sm" data-testid="candidates-panel">
                         {marking ? (
@@ -680,11 +729,7 @@ export default function PuzzlesPage() {
 
                     {mode !== 'timed' && mode !== 'personal' && (mode !== 'themes' || target) && (
                         <div className="flex flex-wrap gap-2">
-                            <button type="button" onClick={() => void load()} data-testid="puzzle-next"
-                                    disabled={phase === 'loading' || phase === 'opponent'}
-                                    className="flex items-center gap-1 px-3 py-1.5 rounded bg-amber-800 hover:bg-amber-700 text-white font-bold disabled:opacity-40 cursor-pointer">
-                                <ArrowRight size={15}/> {t(puzzle ? 'puzzles.next' : 'puzzles.start')}
-                            </button>
+                            {puzzle && nextButton}
                             {phase === 'solving' && (
                                 <>
                                     <button type="button" onClick={() => void askHint()} data-testid="puzzle-hint"

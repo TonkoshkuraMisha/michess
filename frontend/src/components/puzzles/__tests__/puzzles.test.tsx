@@ -84,6 +84,31 @@ async function start() {
 }
 
 describe('PuzzlesPage', () => {
+    it('до старта — карточки режимов по группам вместо пустой доски; с задачей — вкладки (план владельца 18.11)', async () => {
+        stub((url) => (url.includes('/daily') || url.includes('/next') ? PUZZLE : {}));
+        renderPage();
+        const intro = await screen.findByTestId('puzzle-mode-rated');
+        expect(intro).toHaveTextContent('По рейтингу');
+        expect(intro).toHaveTextContent('решённая его поднимает');
+        expect(intro).toContainElement(screen.getByTestId('puzzle-next'));  // «Начать» — в карточке выбранного режима
+        expect(document.querySelector('[data-square]')).toBeNull();
+        expect(screen.queryByRole('tablist')).toBeNull();  // вкладки не повторяют карточки
+        // Остальные режимы — карточки с описанием; щелчок выбирает режим.
+        expect(screen.getByTestId('puzzle-mode-timed')).toHaveTextContent('три ошибки');
+
+        fireEvent.click(screen.getByTestId('puzzle-mode-daily'));
+        await waitFor(() => expect(screen.getByTestId('puzzle-mode-info')).toHaveTextContent('Одна задача в день'));
+        expect(screen.getAllByRole('tablist').map((list) => list.getAttribute('aria-label')))
+            .toEqual(['Решать', 'Тренироваться', 'Свои партии']);
+        expect(screen.getByTestId('puzzle-mode-daily')).toHaveAttribute('aria-selected', 'true');
+
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(600);
+        });
+        expect(screen.queryByTestId('puzzle-mode-cards')).toBeNull();
+        expect(square('e2').querySelector('img')?.getAttribute('alt')).toBe('br');
+    });
+
     it('ход соперника, проверка каждого хода сервером, ответ и итог', async () => {
         const calls = stub((url, init) => {
             if (url.includes('/next')) return PUZZLE;
@@ -108,6 +133,8 @@ describe('PuzzlesPage', () => {
         expect(calls.filter((c) => c.url.includes('/move')).map((c) => c.body)).toEqual([{move: 'd2d8'}, {move: 'd8e8'}]);
         expect(screen.getByTestId('puzzle-themes').textContent).toContain('Мат по последней горизонтали');
         expect(screen.getByTestId('puzzle-chart')).toBeTruthy();
+        // Шкала рейтинга: границы округлены до десятков с запасом над и под точками 1500 и 1510.
+        expect(screen.getByTestId('puzzle-chart-scale').textContent).toBe('152015051490');
     });
 
     it('после задачи доска свободна: позицию можно доиграть и вернуть (решение владельца 18.11)', async () => {

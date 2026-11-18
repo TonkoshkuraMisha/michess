@@ -38,8 +38,10 @@ export function SegmentedControl<T extends string>({options, value, onChange, la
              className={`inline-flex flex-wrap gap-1 rounded-lg bg-black/30 border border-amber-900/50 p-1 ${stretch ? 'w-full' : 'self-start max-w-full'}`}>
             {options.map((option, index) => {
                 const selected = option.id === value;
+                // Значение может быть из соседней группы (страница задач): тогда в эту группу входят с первой вкладки.
+                const focusable = selected || (index === 0 && !options.some((o) => o.id === value));
                 return (
-                    <button key={option.id} type="button" role="tab" aria-selected={selected} tabIndex={selected ? 0 : -1}
+                    <button key={option.id} type="button" role="tab" aria-selected={selected} tabIndex={focusable ? 0 : -1}
                             ref={(el) => {
                                 refs.current[index] = el;
                             }}

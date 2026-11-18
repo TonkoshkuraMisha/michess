@@ -1681,6 +1681,17 @@ export const en = {
             save: 'Save the game',
             drills: 'Drills',
         },
+        modeGroups: {solve: 'Solve', train: 'Train', review: 'Your games'},
+        modeInfo: {
+            rated: 'Puzzles matched to your puzzle rating: a solved one raises it, a missed one lowers it.',
+            daily: 'One puzzle a day, the same for every player.',
+            timed: 'As many puzzles as you can in 3 or 5 minutes; three mistakes end the run.',
+            themes: 'A path through each technique step by step, from simple examples to mixed sets.',
+            drills: 'Short exercises built on the fly: captures, checks and threats with each piece.',
+            defense: 'Spot the threat, avoid the blunder, find the only defence.',
+            save: 'A worse position: find the perpetual check, stalemate or fortress and save the game.',
+            personal: 'Positions where you went wrong in your own games, repeated until the right move sticks.',
+        },
         save: {
             intro: 'You are worse. Find the draw: perpetual check, stalemate, a fortress, a desperado piece or simply the only move that keeps the balance.',
         },
