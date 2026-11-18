@@ -1,10 +1,13 @@
 // «Узнай структуру» (таск 27.9, тренажёр 19.1): позиция из партии библиотеки (или учебный скелет) → название пешечной
-// структуры из четырёх. После ответа — ссылка на партию, из которой взята позиция.
+// структуры из четырёх. После ответа — ссылка на партию, из которой взята позиция, и свободная доска: позицию можно
+// разыграть за обе стороны (решение владельца 18.11, usePositionExplorer; учебный скелет без королей chess.js не
+// примет — тогда доска просто остаётся показом).
 
 import {useEffect, useState} from 'react';
 import {Link} from 'react-router-dom';
 import {useI18n} from '../../i18n';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
+import {ExplorerControls, usePositionExplorer} from '../puzzles/usePositionExplorer';
 import {libraryApi} from '../../services/library';
 import type {StructureCode, StructureQuestion} from '../../services/library';
 
@@ -24,6 +27,7 @@ export function StructureQuiz({seed, onFinish, variant = 'name'}: Props) {
     const [index, setIndex] = useState(0);
     const [picked, setPicked] = useState<string | null>(null);
     const [score, setScore] = useState({correct: 0, wrong: 0});
+    const explorer = usePositionExplorer();
 
     useEffect(() => {
         let alive = true;
@@ -52,6 +56,7 @@ export function StructureQuiz({seed, onFinish, variant = 'name'}: Props) {
         }
         setIndex((i) => i + 1);
         setPicked(null);
+        explorer.stop();
     };
     const name = (code: StructureCode) => t(`structures.${code}`);
     const option = (code: StructureCode) => (variant === 'plan' ? t(`structurePlans.${code}`) : name(code));
@@ -64,7 +69,13 @@ export function StructureQuiz({seed, onFinish, variant = 'name'}: Props) {
             </div>
             <p className="text-lg">{t(variant === 'plan' ? 'trainers.planPrompt' : 'trainers.structurePrompt')}</p>
             <div className="w-full max-w-[420px]">
-                <PuzzleBoard fen={quiz.fen} orientation="white" interactive={false} onMove={() => undefined} sound={false}/>
+                <PuzzleBoard fen={explorer.fen ?? quiz.fen} orientation="white" interactive={Boolean(picked)} sound={false}
+                             lastMove={explorer.lastMove}
+                             onMove={(uci) => {
+                                 if (explorer.active) explorer.play(uci);
+                                 else explorer.start(quiz.fen, [uci]);
+                             }}/>
+                <ExplorerControls explorer={explorer}/>
             </div>
             <div className={`grid gap-2 ${variant === 'plan' ? '' : 'sm:grid-cols-2'}`}>
                 {quiz.options.map((code) => {

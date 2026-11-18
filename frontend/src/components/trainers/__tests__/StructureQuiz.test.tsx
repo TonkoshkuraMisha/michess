@@ -32,6 +32,30 @@ describe('Узнай структуру', () => {
     });
 });
 
+describe('свободная доска после ответа (решение владельца 18.11)', () => {
+    it('до ответа фигуры не ходят; после — позицию можно разыграть и вернуть', async () => {
+        vi.stubGlobal('fetch', vi.fn(async () => ({ok: true, json: async () => ({questions: QUESTIONS})}) as Response));
+        await act(async () => render(<MemoryRouter><StructureQuiz seed={3} onFinish={vi.fn()}/></MemoryRouter>));
+        const cell = (sq: string) => document.querySelector(`[data-square="${sq}"]`) as HTMLElement;
+        fireEvent.click(cell('d4'));
+        fireEvent.click(cell('d5'));
+        expect(cell('d5').querySelector('img')).toBeNull();  // до ответа — только показ
+
+        fireEvent.click(screen.getByTestId('quiz-option-carlsbad'));
+        await act(async () => {
+            fireEvent.click(cell('d4'));
+        });
+        await act(async () => {
+            fireEvent.click(cell('d5'));
+        });
+        expect(cell('d5').querySelector('img')?.getAttribute('alt')).toBe('wp');
+        expect(screen.getByTestId('explorer-controls')).toBeTruthy();
+
+        fireEvent.click(screen.getByTestId('quiz-next'));  // следующий вопрос — снова позиция вопроса
+        expect(screen.queryByTestId('explorer-controls')).toBeNull();
+    });
+});
+
 describe('Найди план (27.9)', () => {
     it('варианты — планы структур, после ответа — название структуры', async () => {
         vi.stubGlobal('fetch', vi.fn(async () => ({ok: true, json: async () => ({questions: QUESTIONS})}) as Response));
