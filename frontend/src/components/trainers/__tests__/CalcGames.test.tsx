@@ -6,7 +6,10 @@ import {ChecksGame, QUIZ_ROUNDS, QuizGame} from '../CalcGames';
 import type {QuizKind} from '../CalcGames';
 import {loadAllClassics} from '../../../content/classics';
 import {positionPool} from '../../../trainers/memory';
-import {checksAndCaptures, checksPosition, compareQuestion, distanceQuestion, evalQuestion, exchangeQuestion, squareQuestion} from '../../../trainers/calculation';
+import {
+    checksAndCaptures, checksPosition, compareQuestion, distanceQuestion, evalQuestion, exchangeQuestion, squareFen, squareQuestion,
+} from '../../../trainers/calculation';
+import {Chess} from 'chess.js';
 
 async function settle() {
     for (let i = 0; i < 5; i++) await act(async () => Promise.resolve());
@@ -39,6 +42,20 @@ describe('викторины счёта', () => {
         fireEvent.click(screen.getByTestId(`quiz-option-${wrong}`));
         expect(screen.getByTestId('quiz-score')).toHaveTextContent('Верно: 0 · ошибок: 1');
         expect(screen.getByTestId(`quiz-option-${right}`).className).toContain('emerald');
+    });
+
+    it('после ответа позицию можно разыграть на доске (гонку пешки и короля)', async () => {
+        render(<QuizGame kind="calc_square" level={1} seed={2} onFinish={vi.fn()}/>);
+        await settle();
+        expect(screen.queryByTestId('explorer-controls')).toBeNull();  // до ответа доска закрыта
+        fireEvent.click(screen.getByTestId('quiz-option-yes'));
+        expect(screen.getByTestId('explorer-back')).toBeDisabled();
+        const move = new Chess(squareFen(squareQuestion(2, 0))).moves({verbose: true})[0];
+        fireEvent.click(document.querySelector(`[data-square="${move.from}"]`)!);
+        fireEvent.click(document.querySelector(`[data-square="${move.to}"]`)!);
+        expect(screen.getByTestId('explorer-back')).not.toBeDisabled();
+        fireEvent.click(screen.getByTestId('explorer-back'));
+        expect(screen.getByTestId('explorer-back')).toBeDisabled();
     });
 });
 
