@@ -32,13 +32,14 @@ def test_masters_are_registered_with_books():
 def test_metadata_portraits_ladder_and_names():
     for master in MASTERS:
         meta = BOT_METADATA[master.id]
-        assert meta["ladder"] is False and meta["rating"] == master.rating
+        assert meta["rating"] == master.rating
         portrait = ROOT / "frontend" / "public" / meta["avatar"].lstrip("/")
         assert portrait.is_file(), portrait
         assert master.id in reserved_bot_usernames()
+    # С 18.11 (задача 7 плана) все мастера — ступени лестницы.
     rung_keys = {r.key for r in ladder.rungs()}
-    assert not rung_keys & {m.id for m in MASTERS}
-    assert len([b for b in AVAILABLE_BOTS if b.get("ladder", True)]) == 7  # первая волна — как была
+    assert {m.id for m in MASTERS} <= rung_keys
+    assert {str(b["id"]) for b in AVAILABLE_BOTS} <= rung_keys
 
 
 def test_books_cover_only_the_masters_own_moves():

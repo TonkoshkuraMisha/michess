@@ -124,9 +124,9 @@ AVAILABLE_BOTS = [
         "rating": 2120,
         "avatar": "/assets/champions/zukertort.jpg",
     },
-    # Мастера второй волны (таск 21.5): портреты — из раздела чемпионов, в лестницу не входят (ступень — индекс).
+    # Мастера второй волны (таск 21.5): портреты — из раздела чемпионов; с 18.11 — ступени лестницы, как все боты.
     *({"id": m.id, "pgn_name": m.pgn_name, "era": m.era, "rating": m.rating,
-       "avatar": f"/assets/champions/{m.id.capitalize()}.jpg", "ladder": False} for m in MASTERS),
+       "avatar": f"/assets/champions/{m.id.capitalize()}.jpg"} for m in MASTERS),
 ]
 
 logger = logging.getLogger(__name__)
