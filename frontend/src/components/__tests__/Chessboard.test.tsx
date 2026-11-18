@@ -12,6 +12,7 @@ import {mockFetchRouter} from '../../test/mocks';
 import {DEFAULT_CONFIG} from '../../services/personalities';
 import {resetBotCatalogCache} from '../../services/botCatalog';
 import {setToken} from '../../services/authToken';
+import {openBots} from '../../test/newGame';
 
 vi.mock('../../services/gameSocket', () => ({
     gameSocket: {
@@ -45,6 +46,7 @@ function renderChessboard() {
     );
 }
 
+
 function squareEl(square: string): HTMLElement {
     const el = document.querySelector(`[data-square="${square}"]`);
     if (!el) throw new Error(`Клетка ${square} не найдена на доске`);
@@ -66,6 +68,7 @@ async function startBotGame(color: 'white' | 'black', botReply: Partial<typeof B
     }));
 
     renderChessboard();
+    await openBots();
 
     const startButton = await screen.findByRole('button', {name: color === 'white' ? /Белыми/ : /Чёрными/});
     await act(async () => {
@@ -83,6 +86,52 @@ afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
     localStorage.clear();
+});
+
+describe('«Новая партия» по шагам (схема владельца 18.11)', () => {
+    it('первый раз — соперник, время, старт; партия началась — окно закрылось; дальше окно открывается сразу на старте', async () => {
+        vi.stubGlobal('fetch', mockFetchRouter({
+            '/profile/me': () => ({id: 1, username: 'TestPlayer', blitz_rating: 1500}),
+            '/profile/matchmaking/queue': () => [],
+            '/profile/games/live': () => [],
+            '/profile/games/my-active': () => ({active: false}),
+            '/bots/move': () => BOT_MOVE_DEFAULT,
+        }));
+        renderChessboard();
+        // В колонке нет ни каталога ботов, ни поиска соперника — только кнопка окна.
+        expect(screen.queryByRole('button', {name: /Белыми/})).toBeNull();
+        expect(screen.queryByRole('button', {name: /Найти соперника/})).toBeNull();
+
+        fireEvent.click(await screen.findByTestId('new-game-open'));
+        expect(screen.getByTestId('new-game-step-who')).toHaveAttribute('aria-current', 'step');
+        expect(screen.getByTestId('new-game-step-start')).toBeDisabled();
+        fireEvent.click(screen.getByTestId('new-game-who-bot'));
+        expect(screen.getByTestId('new-game-step-time')).toHaveAttribute('aria-current', 'step');
+        fireEvent.click(screen.getByTestId('new-game-next'));
+        await act(async () => {
+            fireEvent.click(await screen.findByRole('button', {name: /Белыми/}));
+        });
+        expect(screen.queryByTestId('new-game')).toBeNull();
+        expect(screen.getByTestId('new-game-open')).toBeDisabled();  // идёт партия — новую не начать
+        expect(screen.getByTestId('opponent-note')).toBeInTheDocument();
+        expect(localStorage.getItem('regence_new_game_who')).toBe('bot');
+    });
+
+    it('запомненный «человек» — окно сразу на поиске соперника; Esc закрывает', async () => {
+        vi.stubGlobal('fetch', mockFetchRouter({
+            '/profile/me': () => ({id: 1, username: 'TestPlayer', blitz_rating: 1500}),
+            '/profile/matchmaking/queue': () => [],
+            '/profile/games/live': () => [],
+            '/profile/games/my-active': () => ({active: false}),
+        }));
+        localStorage.setItem('regence_new_game_who', 'human');
+        renderChessboard();
+        fireEvent.click(await screen.findByTestId('new-game-open'));
+        expect(screen.getByTestId('new-game-start-human')).toBeInTheDocument();
+        expect(screen.getByRole('button', {name: /Найти соперника/})).toBeInTheDocument();
+        fireEvent.keyDown(window, {key: 'Escape'});
+        expect(screen.queryByTestId('new-game')).toBeNull();
+    });
 });
 
 describe('ход', () => {
@@ -225,6 +274,7 @@ describe('сбой связи с сервером в партии с ботом'
 
     async function startAsBlack() {
         renderChessboard();
+        await openBots();
         const startButton = await screen.findByRole('button', {name: /Чёрными/});
         await act(async () => {
             fireEvent.click(startButton);
@@ -318,6 +368,7 @@ describe('партия с ботом с произвольной позиции'
     it('партия с ботом начинается с позиции на доске и сохраняется вместе с ней', async () => {
         const fetchMock = stubBotApi();
         renderChessboard();
+        await openBots();
         await loadFen(KQ_VS_K);
 
         expect(screen.getByLabelText('Начать с позиции на доске')).toBeChecked();
@@ -343,6 +394,7 @@ describe('партия с ботом с произвольной позиции'
     it('без галочки партия начинается с обычной расстановки', async () => {
         const fetchMock = stubBotApi();
         renderChessboard();
+        await openBots();
         await loadFen(KQ_VS_K);
         fireEvent.click(screen.getByLabelText('Начать с позиции на доске'));
 
@@ -357,6 +409,7 @@ describe('партия с ботом с произвольной позиции'
     it('фора: партия с ботом начинается без коня соперника (таск 21.1)', async () => {
         stubBotApi();
         renderChessboard();
+        await openBots();
         await screen.findByRole('button', {name: /Белыми/});
         fireEvent.change(screen.getByTestId('odds-kind'), {target: {value: 'knight'}});
         expect(screen.getByTestId('odds-giver')).toHaveValue('opponent');
@@ -371,6 +424,7 @@ describe('партия с ботом с произвольной позиции'
     it('на обычной расстановке выбора «с позиции» нет', async () => {
         stubBotApi();
         renderChessboard();
+        await openBots();
         await screen.findByRole('button', {name: /Белыми/});
         expect(screen.queryByLabelText('Начать с позиции на доске')).not.toBeInTheDocument();
     });
@@ -399,6 +453,7 @@ describe('мастерская соперников', () => {
         });
         vi.stubGlobal('fetch', fetchMock);
         renderChessboard();
+        await openBots();
 
         fireEvent.click(await screen.findByRole('tab', {name: 'Мастерская'}));
         fireEvent.click(await screen.findByRole('button', {name: /Торопыга/}));
@@ -456,6 +511,7 @@ describe('клубная лестница', () => {
         });
         vi.stubGlobal('fetch', fetchMock);
         renderChessboard();
+        await openBots();
 
         fireEvent.click(await screen.findByRole('tab', {name: 'Лестница'}));
         const white = await screen.findByRole('button', {name: /Белыми/});
@@ -490,7 +546,7 @@ describe('клавиатура', () => {
             '/profile/games/my-active': () => ({active: false}),
         }));
         renderChessboard();
-        await screen.findByRole('button', {name: /Белыми/});
+        await screen.findByTestId('new-game-open');
 
         // Свободная доска: ход сразу после хода — стрелка должна видеть уже обновлённую историю.
         clickSquare('e2');
@@ -532,6 +588,7 @@ describe('игра с наставником', () => {
             return {ok: true, status: 200, json: async () => body} as Response;
         }));
         renderChessboard();
+        await openBots();
         const startButton = await screen.findByRole('button', {name: /Белыми/});
         await act(async () => {
             fireEvent.click(startButton);
@@ -629,6 +686,7 @@ describe('итог партии', () => {
             return {ok: true, status: 200, json: async () => body} as Response;
         }));
         renderChessboard();
+        await openBots();
         await act(async () => {
             fireEvent.click(await screen.findByRole('button', {name: /Белыми/}));
         });
@@ -871,6 +929,7 @@ describe('ничья с ботом (таск 21.4)', () => {
         });
         vi.stubGlobal('fetch', fetchMock);
         renderChessboard();
+        await openBots();
         await act(async () => {
             fireEvent.click(await screen.findByRole('button', {name: /Белыми/}));
         });

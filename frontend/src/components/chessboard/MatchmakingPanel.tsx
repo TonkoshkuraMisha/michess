@@ -41,6 +41,22 @@ export interface MatchmakingPanelProps {
 }
 
 /**
+ * Строка идущей партии с человеком: «идёт рейтинговая / товарищеская партия» или итог. Игровой зал показывает её в
+ * левой колонке, пока окно «Новая партия» закрыто.
+ */
+export function PvpGameStatus({gameOverResult, isRatedGame}: { gameOverResult: string | null; isRatedGame: boolean }) {
+    const {t} = useI18n();
+    return (
+        <div className="text-center py-1.5 px-3 rounded bg-emerald-950/60 border border-emerald-700/50 text-emerald-300 text-xs sm:text-sm font-bold"
+             data-testid="pvp-game-status">
+            {gameOverResult
+                ? t('matchmaking.gameFinished', {result: gameOverResult})
+                : t(isRatedGame ? 'matchmaking.ratedInProgress' : 'matchmaking.casualInProgress')}
+        </div>
+    );
+}
+
+/**
  * Поиск соперника в лобби (рейтинговая или товарищеская партия; повторное нажатие отменяет поиск) и создание
  * ссылки для игры с другом. Пока партия с человеком на доске, вместо кнопок — строка о её типе или итоге.
  */
@@ -107,11 +123,7 @@ export function MatchmakingPanel({
                     </button>
                 </div>
             ) : (
-                <div className="text-center py-1.5 px-3 rounded bg-emerald-950/60 border border-emerald-700/50 text-emerald-300 text-xs sm:text-sm font-bold">
-                    {gameOverResult
-                        ? t('matchmaking.gameFinished', {result: gameOverResult})
-                        : t(isRatedGame ? 'matchmaking.ratedInProgress' : 'matchmaking.casualInProgress')}
-                </div>
+                <PvpGameStatus gameOverResult={gameOverResult} isRatedGame={isRatedGame}/>
             )}
 
             {showInvitePanel && !gameId && (

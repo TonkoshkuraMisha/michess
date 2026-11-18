@@ -4,6 +4,7 @@
 // Игроки регистрируются один раз на весь файл: регистрация ограничена 5 аккаунтами в час с IP.
 
 import {expect, test, type Browser, type Page} from '@playwright/test';
+import {openNewGame} from './helpers.ts';
 
 const PASSWORD = 'e2e-pass-12345';
 
@@ -55,6 +56,7 @@ async function resign(page: Page) {
 async function startFriendGame(creator: Page, acceptor: Page, color: 'white' | 'black') {
     await creator.goto('/');
     await acceptor.goto('/');
+    await openNewGame(creator, 'human');
     await creator.getByRole('button', {name: 'С другом'}).click();
     await creator.getByRole('button', {name: color === 'white' ? '♔ Белые' : '♚ Чёрные'}).click();
     await creator.getByRole('button', {name: 'Сгенерировать и скопировать ссылку'}).click();
@@ -148,7 +150,6 @@ test.describe.serial('PvP в двух браузерах', () => {
         await move(alice, bob, 'e2', 'e4');
         await move(bob, alice, 'e7', 'e5');
 
-        await spectator.getByRole('button', {name: /Лобби \/ Live/}).click();
         await spectator.getByRole('button', {name: /Идут сейчас \(Live\)/}).click();
         // Строка партии — самый внутренний блок, в котором есть и имена игроков, и кнопка.
         const watchButton = spectator.getByRole('button', {name: 'Смотреть'});

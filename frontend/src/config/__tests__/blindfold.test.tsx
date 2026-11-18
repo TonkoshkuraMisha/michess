@@ -9,6 +9,7 @@ import Chessboard from '../../components/Chessboard';
 import {resetBotCatalogCache} from '../../services/botCatalog';
 import {setToken} from '../../services/authToken';
 import {mockFetchRouter} from '../../test/mocks';
+import {openBots} from '../../test/newGame';
 
 vi.mock('../../services/gameSocket', () => ({gameSocket: {connect: vi.fn(), disconnect: vi.fn(), send: vi.fn(), on: vi.fn(), off: vi.fn()}}));
 vi.mock('../../services/soundEngine', async (importOriginal) => ({
@@ -88,6 +89,7 @@ describe('вслепую: партия с ботом', () => {
         vi.stubGlobal('fetch', fetchMock);
         armBlindfold(4);
         render(<MemoryRouter><Chessboard/></MemoryRouter>);
+        await openBots();
         const start = await screen.findByRole('button', {name: /Белыми/});
         await act(async () => fireEvent.click(start));
         expect(screen.getByTestId('blindfold-panel')).toBeInTheDocument();

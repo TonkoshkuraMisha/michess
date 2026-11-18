@@ -10,6 +10,7 @@ import {gameSocket} from '../../services/gameSocket';
 import {emitSocketEvent, mockFetchRouter} from '../../test/mocks';
 import {setLanguage} from '../../i18n';
 import {setToken} from '../../services/authToken';
+import {openHuman} from '../../test/newGame';
 
 vi.mock('../../services/gameSocket', () => ({
     gameSocket: {
@@ -84,6 +85,7 @@ function renderBoard(fetchHandlers: Record<string, () => unknown> = {}) {
         </MemoryRouter>,
     );
 }
+
 
 beforeEach(() => {
     setToken('test-token');
@@ -235,6 +237,7 @@ describe('потерянный game_over', () => {
 describe('поиск соперника', () => {
     it('после переподключения WebSocket вызов возвращается в лобби', async () => {
         renderBoard();
+        await openHuman();
         await act(async () => {
             fireEvent.click(await screen.findByRole('button', {name: /Найти соперника/}));
         });
@@ -329,6 +332,7 @@ describe('реванш', () => {
 describe('товарищеские партии', () => {
     it('выбранный тип уходит на сервер по WebSocket и HTTP и возвращается после переподключения', async () => {
         renderBoard();
+        await openHuman();
         await act(async () => {
             fireEvent.click(await screen.findByRole('radio', {name: 'Товарищеская'}));
         });
@@ -351,6 +355,7 @@ describe('товарищеские партии', () => {
 
     it('приглашение по ссылке создаётся выбранного типа', async () => {
         renderBoard();
+        await openHuman();
         await act(async () => {
             fireEvent.click(await screen.findByRole('radio', {name: 'Товарищеская'}));
             fireEvent.click(screen.getByRole('button', {name: /С другом/}));
@@ -364,6 +369,7 @@ describe('товарищеские партии', () => {
 
     it('приглашение с форой (21.1): вид форы и кто даёт уходят серверу', async () => {
         renderBoard();
+        await openHuman();
         await act(async () => {
             fireEvent.click(screen.getByRole('button', {name: /С другом/}));
         });
@@ -390,6 +396,7 @@ describe('товарищеские партии', () => {
                 </Routes>
             </MemoryRouter>,
         );
+        await openHuman();
         await act(async () => {
             fireEvent.click(screen.getByRole('button', {name: /С другом/}));
         });
@@ -431,10 +438,7 @@ describe('товарищеские партии', () => {
                 {user_id: 8, username: 'Serious', rating: 1500, base_time_ms: 180000, increment_ms: 0, rated: true},
             ],
         });
-        await act(async () => {
-            fireEvent.click(await screen.findByRole('button', {name: /Лобби \/ Live/}));
-        });
-
+        // Лобби всегда в левой колонке игрового зала (вкладки «Боты / Лобби» больше нет: боты — в окне «Новая партия»).
         const friendly = (await screen.findByText('Friendly')).closest('div')!.parentElement!;
         expect(friendly.textContent).toContain('товарищеская');
         const serious = screen.getByText('Serious').closest('div')!.parentElement!;

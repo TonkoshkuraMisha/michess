@@ -98,7 +98,6 @@ export interface UseGameSocketOptions {
     clearPremove: () => void;
     setWhiteTimeMs: (ms: number) => void;
     setBlackTimeMs: (ms: number) => void;
-    setLeftSectionTab: (t: 'bots' | 'lobby') => void;
     setLobbyTab: (t: 'lobby' | 'live') => void;
     setIsTimeDropdownOpen: (v: boolean) => void;
     setShowInvitePanel: (v: boolean) => void;
@@ -174,7 +173,7 @@ export function useGameSocket({
     setGame, setHistory, setViewIndex, setGameId, setMyColor, setSpectatingGameId,
     setStateVersion, setWhitePlayer, setBlackPlayer, setRatingInfo, setGameOverResult,
     setDrawOfferStatus, setRematchStatus, isSearching, setIsSearching, setIsManualFlip, setSelectedSquare,
-    setPendingPromotion, clearPremove, setWhiteTimeMs, setBlackTimeMs, setLeftSectionTab,
+    setPendingPromotion, clearPremove, setWhiteTimeMs, setBlackTimeMs,
     setLobbyTab, setIsTimeDropdownOpen, setShowInvitePanel, moveStartTime, resetLowTimeWarning,
     exitBotGame, playAudio, playOutcomeSound, updateSessionStats,
 }: UseGameSocketOptions): UseGameSocketResult {
@@ -738,7 +737,6 @@ export function useGameSocket({
         setRatingInfo(null);
         isSearchingRef.current = true;
         setIsSearching(true);
-        setLeftSectionTab('lobby');
         setLobbyTab('lobby');
         setIsTimeDropdownOpen(false);
         setDrawOfferStatus(status(ratedChoice ? 'status.challengePublishedRated' : 'status.challengePublishedCasual', {
@@ -780,7 +778,7 @@ export function useGameSocket({
         }
     }, [
         gameIdRef, setGameId, exitBotGame, resetLowTimeWarning, setPendingPromotion, clearPremove,
-        setGameOverResult, setRatingInfo, setIsSearching, setLeftSectionTab, setLobbyTab,
+        setGameOverResult, setRatingInfo, setIsSearching, setLobbyTab,
         setIsTimeDropdownOpen, setDrawOfferStatus, effectiveWhiteBaseMinutes,
         effectiveIncSeconds, applyMatchFoundSnapshot, gameOverResultRef, setSpectatingGameId, setGame,
         setHistory, setViewIndex, ratedChoice,
