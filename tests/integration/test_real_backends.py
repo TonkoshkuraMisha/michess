@@ -19,10 +19,7 @@ import os
 import pytest
 import redis.asyncio as redis_asyncio
 from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
-from sqlalchemy.pool import NullPool
 
-from src.models.base import Base
 from src.models.game import Game, GameStatus
 from src.models.user import User
 from src.services.game_state import state_manager
@@ -38,18 +35,6 @@ pytestmark = [
         reason="TEST_DATABASE_URL / TEST_REDIS_URL not set (real PostgreSQL and Redis required)",
     ),
 ]
-
-
-@pytest.fixture
-async def pg():
-    engine = create_async_engine(DATABASE_URL, poolclass=NullPool)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-        await conn.run_sync(Base.metadata.create_all)
-    yield async_sessionmaker(engine, expire_on_commit=False)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
-    await engine.dispose()
 
 
 @pytest.fixture
