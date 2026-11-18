@@ -1893,6 +1893,7 @@ export const en = {
         failed: 'Not that move — the green arrow shows the solution.',
         showSolution: 'Show solution',
         nextTask: 'Next puzzle',
+        examFinish: 'Finish the test',
         constructionDone: 'Pattern complete: {solved} of {total} solved.',
         backToCourse: 'Back to the patterns',
         examTitle: 'Final test ({minutes} min)',

@@ -1897,6 +1897,7 @@ export const ru: Messages = {
         failed: 'Не тот ход — зелёная стрелка показывает решение.',
         showSolution: 'Показать решение',
         nextTask: 'Следующая задача',
+        examFinish: 'Завершить проверку',
         constructionDone: 'Конструкция пройдена: решено {solved} из {total}.',
         backToCourse: 'К списку конструкций',
         examTitle: 'Итоговая проверка ({minutes} мин)',
