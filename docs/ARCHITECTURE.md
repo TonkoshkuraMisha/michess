@@ -285,10 +285,12 @@
 
 - **Таблица дебютов** (`openings.py`, данные `openings.tsv`): дебют определяется по позиции, поэтому перестановки
   ходов распознаются. **Индекс позиций** (`position_index.py`): первые 30 полуходов каждой законченной партии —
-  в `position_stats` и `position_games`. **Справочник** (`opening_explorer.py`) — ходы из позиции со статистикой.
+  в `position_stats` и `position_games`; партии библиотеки — только в `position_library_games` (примеры, без
+  статистики). **Справочник** (`opening_explorer.py`) — ходы из позиции со статистикой и партии мастеров: архив и
+  публичные коллекции библиотеки; повтор (те же фамилии и год) показывается один раз — партией библиотеки.
 - **Репертуар** (`repertoire.py`, `repertoire_drill.py`, `repertoire_deviations.py`, `repertoire_starters.py`): свои
   линии как граф позиций, повторение по расписанию SM-2, игра против репертуара, разбор отклонений в сыгранной партии.
-- **Тесты.** `opening_explorer`, `position_index`, `repertoire`, `repertoire_drill`, `repertoire_deviations`,
+- **Тесты.** `opening_explorer`, `explorer_library`, `position_index`, `repertoire`, `repertoire_drill`, `repertoire_deviations`,
   `repertoire_advanced`.
 
 ### 4.12. Архив, библиотека, просмотр, импорт

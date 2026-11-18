@@ -39,3 +39,17 @@ class PositionGame(Base):
     position_hash: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     game_id: Mapped[int] = mapped_column(ForeignKey("games.id", ondelete="CASCADE"), primary_key=True, index=True)
     ply: Mapped[int] = mapped_column(Integer)
+
+
+class PositionLibraryGame(Base):
+    """
+    Партия библиотеки, прошедшая через позицию (8б): примеры под позицией в справочнике дебютов. В статистику ходов
+    (position_stats) партии библиотеки не попадают — многие из них есть и в архиве чемпионов, и одна партия
+    посчиталась бы дважды. Ключ — (позиция, партия библиотеки); ply — первый полуход, на котором позиция встретилась.
+    """
+    __tablename__ = "position_library_games"
+
+    position_hash: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    library_game_id: Mapped[int] = mapped_column(ForeignKey("library_games.id", ondelete="CASCADE"), primary_key=True,
+                                                 index=True)
+    ply: Mapped[int] = mapped_column(Integer)

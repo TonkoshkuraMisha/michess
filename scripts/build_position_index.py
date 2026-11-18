@@ -49,7 +49,41 @@ async def main(batch: int) -> None:
     await engine.dispose()
 
 
+async def main_library(batch: int) -> None:
+    """Раскладывает партии библиотеки без отметки positions_indexed в position_library_games."""
+    from sqlalchemy import func, select
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from sqlalchemy.pool import NullPool
+
+    from src.core.config import settings
+    from src.models.library import LibraryGame
+    from src.services.position_index import index_library_game
+
+    engine = create_async_engine(settings.async_database_url, poolclass=NullPool)
+    sessions = async_sessionmaker(engine, expire_on_commit=False)
+    pending = LibraryGame.positions_indexed.is_(False)
+    started = time.monotonic()
+    async with sessions() as db:
+        total = await db.scalar(select(func.count()).select_from(LibraryGame).where(pending)) or 0
+        done = added = last_id = 0
+        while True:
+            games = (await db.execute(
+                select(LibraryGame).where(pending, LibraryGame.id > last_id).order_by(LibraryGame.id).limit(batch)
+            )).scalars().all()
+            if not games:
+                break
+            for game in games:
+                added += await index_library_game(db, game)
+            await db.commit()
+            last_id = games[-1].id
+            done += len(games)
+            print(f"{done}/{total} партий библиотеки, в индексе {added} ({time.monotonic() - started:.0f} с)", flush=True)
+    await engine.dispose()
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--batch", type=int, default=500)
-    asyncio.run(main(parser.parse_args().batch))
+    parser.add_argument("--library", action="store_true", help="партии библиотеки вместо партий сайта и архива")
+    args = parser.parse_args()
+    asyncio.run(main_library(args.batch) if args.library else main(args.batch))

@@ -1,6 +1,7 @@
 // --- FILE: frontend/src/components/OpeningExplorer.tsx ---
 // Дерево дебютов (таск 16.2): ходы из текущей позиции со статистикой партий (доли побед белых / ничьих / побед
-// чёрных), название дебюта и партии мастеров из архива. Используется в «Инструментах» (/tools) и в просмотре партии.
+// чёрных), название дебюта и партии мастеров из архива и библиотеки (партия библиотеки ведёт в библиотеку и помечена
+// «в библиотеке» или «с объяснениями»). Используется в «Инструментах» (/tools) и в просмотре партии.
 
 import {useEffect, useState} from 'react';
 import {Link} from 'react-router-dom';
@@ -89,8 +90,17 @@ export function OpeningExplorer({moves, onPlay}: Props) {
                         <div className="flex flex-col gap-0.5" data-testid="explorer-games">
                             <h4 className="text-xs text-boxwood/60">{t('explorer.masterGames')}</h4>
                             {data.games.map((g) => (
-                                <Link key={g.id} to={`/game/${g.id}`} className="text-xs hover:underline flex justify-between gap-2">
-                                    <span className="truncate">{g.white} — {g.black}</span>
+                                <Link key={`${g.source}-${g.id}`} to={g.source === 'library' ? `/library/game/${g.id}` : `/game/${g.id}`}
+                                      data-testid={`explorer-game-${g.source}-${g.id}`}
+                                      className="text-xs hover:underline flex justify-between gap-2">
+                                    <span className="truncate">
+                                        {g.white} — {g.black}
+                                        {g.source === 'library' && (
+                                            <span className="ml-1.5 text-amber-300/90 no-underline">
+                                                · {t(g.annotated ? 'explorer.withNotes' : 'explorer.inLibrary')}
+                                            </span>
+                                        )}
+                                    </span>
                                     <span className="font-mono text-boxwood/70 shrink-0">{g.result} {g.year}</span>
                                 </Link>
                             ))}

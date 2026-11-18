@@ -71,6 +71,8 @@ class LibraryGame(Base):
     # Партия закончилась матом на доске (миниатюры 27.9 выбираются по этой метке).
     mate_finish: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", index=True)
     moves: Mapped[str] = mapped_column(Text, default="", server_default="")  # UCI через пробел
+    # Партия разложена в индекс позиций библиотеки (position_library_games, src/services/position_index.py).
+    positions_indexed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 

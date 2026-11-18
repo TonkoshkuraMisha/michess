@@ -12,7 +12,11 @@ const START = {
         {uci: 'e2e4', san: 'e4', games: 10, white_wins: 5, draws: 3, black_wins: 2, opening: {eco: 'B00', name: "King's Pawn Game"}},
         {uci: 'd2d4', san: 'd4', games: 4, white_wins: 1, draws: 2, black_wins: 1, opening: null},
     ],
-    games: [{id: 77, white: 'Morphy, Paul', black: 'Anderssen, Adolf', year: '1858', result: '1-0', eco: 'C60'}],
+    games: [
+        {id: 77, white: 'Morphy, Paul', black: 'Anderssen, Adolf', year: '1858', result: '1-0', eco: 'C60', source: 'archive'},
+        {id: 5, white: 'Steinitz, Wilhelm', black: 'Zukertort, Johannes', year: '1886', result: '0-1', eco: 'C50',
+         source: 'library', annotated: true},
+    ],
 };
 const AFTER_E4 = {fen: 'x', opening: {eco: 'B00', name: "King's Pawn Game"}, moves: [], games: []};
 
@@ -41,6 +45,10 @@ describe('справочник дебютов', () => {
         expect(screen.getByLabelText('Победы белых 50%, ничьи 30%, победы чёрных 20%')).toBeInTheDocument();
         expect(screen.getByTestId('explorer-games')).toHaveTextContent('Morphy, Paul — Anderssen, Adolf');
         expect(screen.getByRole('link', {name: /Morphy/})).toHaveAttribute('href', '/game/77');
+        // Партия библиотеки (8б) ведёт в библиотеку и помечена объяснениями.
+        const fromLibrary = screen.getByTestId('explorer-game-library-5');
+        expect(fromLibrary).toHaveAttribute('href', '/library/game/5');
+        expect(fromLibrary).toHaveTextContent('с объяснениями');
         await act(async () => fireEvent.click(screen.getByRole('button', {name: 'e4'})));
         expect(await screen.findByTestId('explorer-opening')).toHaveTextContent("B00 · King's Pawn Game");
         expect(screen.getByTestId('explorer-empty')).toBeInTheDocument();

@@ -25,7 +25,7 @@ from src.models.library import LibraryCollection, LibraryGame, LibraryGameCollec
 from src.models.moderation import Report
 from src.models.move import Move
 from src.models.personality import BotPersonality
-from src.models.position import PositionGame, PositionStat
+from src.models.position import PositionGame, PositionLibraryGame, PositionStat
 from src.models.product_event import ProductEvent
 from src.models.puzzle import DefenseDrill, DrillRecord, PersonalPuzzle, Puzzle, PuzzleAttempt, PuzzleTheme, ThemeProgress
 from src.models.repertoire import Repertoire, RepertoireCard, RepertoireMove
@@ -77,6 +77,7 @@ __all__ = [
     "PostLike",
     "HiddenConversation",
     "PositionGame",
+    "PositionLibraryGame",
     "PositionStat",
     "LessonProgress",
     "Move",

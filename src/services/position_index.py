@@ -11,6 +11,11 @@
 Позиция в таблицах — 64-битный хэш Zobrist (расстановка, очередь хода, рокировки, взятие на проходе), а не FEN:
 разные позиции изредка могут совпасть по хэшу, поэтому читатель индекса проверяет легальность хода
 (src/services/opening_explorer.py). Читают индекс справочник дебютов и репертуар.
+
+Партии библиотеки (8б) раскладываются отдельно — в position_library_games, только «партия ↔ позиция», без
+статистики: это примеры под позицией в справочнике, а многие из них есть и в архиве (повтор посчитался бы дважды).
+Новые партии библиотеки индексирует импорт (src/services/library.py), уже загруженные — scripts/build_position_index.py
+--library. Партия из своей позиции (start_fen) не индексируется: её позиции не встречаются в дебюте.
 """
 
 import io
@@ -25,7 +30,8 @@ from sqlalchemy.dialects import postgresql, sqlite
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.models.game import Game, GameStatus
-from src.models.position import PositionGame, PositionStat
+from src.models.library import LibraryGame
+from src.models.position import PositionGame, PositionLibraryGame, PositionStat
 
 MAX_PLIES = 30  # сколько первых полуходов партии попадает в индекс (15 ходов): глубже статистики нет
 # Результат партии → прибавка к счётчикам (победы белых, ничьи, победы чёрных). Другой результат («*») — не в индекс.
@@ -136,3 +142,41 @@ async def index_by_id(db: AsyncSession, game_id: int) -> bool:
     added = await index_game(db, game)
     await db.commit()
     return added
+
+
+def library_plies(moves: str) -> dict[int, int]:
+    """
+    {хэш позиции: первый полуход} для первых MAX_PLIES полуходов партии библиотеки (ходы UCI через пробел, от
+    начальной позиции). Нелегальный ход обрывает разбор: позиции до него остаются.
+    """
+    board = chess.Board()
+    first_ply: dict[int, int] = {}
+    for ply, uci in enumerate(moves.split()[:MAX_PLIES]):
+        try:
+            move = chess.Move.from_uci(uci)
+        except ValueError:
+            break
+        if move not in board.legal_moves:
+            break
+        first_ply.setdefault(position_key(board), ply)
+        board.push(move)
+    return first_ply
+
+
+async def index_library_game(db: AsyncSession, game: LibraryGame) -> bool:
+    """
+    Добавляет партию библиотеки в position_library_games (без commit). True — добавлена; повторный вызов ничего не
+    меняет. Партия из своей позиции или без ходов только помечается positions_indexed.
+    """
+    if game.positions_indexed:
+        return False
+    game.positions_indexed = True
+    if game.start_fen or not game.moves:
+        return False
+    first_ply = library_plies(game.moves)
+    if not first_ply:
+        return False
+    await db.execute(_insert(db, PositionLibraryGame).values([
+        {"position_hash": key, "library_game_id": game.id, "ply": ply} for key, ply in first_ply.items()
+    ]).on_conflict_do_nothing(index_elements=["position_hash", "library_game_id"]))
+    return True
