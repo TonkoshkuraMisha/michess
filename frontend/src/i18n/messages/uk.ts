@@ -4313,6 +4313,18 @@ export const uk: Messages = {
             },
         },
     },
+    design: {
+        title: 'Компоненти дизайну',
+        intro: 'Усі спільні елементи Regence в одному місці: сторінки складаються з цих блоків.',
+        buttons: 'Кнопки', primary: 'Грати', secondary: 'Налаштування', ghost: 'Більше', danger: 'Здатися',
+        small: 'Мала', large: 'Головна дія', disabled: 'Недоступно',
+        tabs: 'Вкладки', tabRated: 'За рейтингом', tabThemes: 'Прийоми', tabDaily: 'Дня',
+        cards: 'Картки', cardEndgames: 'Ендшпільний тренажер', cardLocked: 'Турнір 4', continue: 'Продовжити',
+        indicators: 'Позначки та прогрес', neutral: 'Довідка', current: 'Поточний', done: 'Пройдено', locked: 'Закрито',
+        progress: 'Прогрес',
+        empty: 'Порожній стан', emptyTitle: 'Задач ще немає', emptyText: 'Розв’яжіть кілька задач — тут з’явиться ваша історія.',
+        emptyAction: 'До задач',
+    },
     summary: {
         title: 'Підсумок партії',
         loading: 'Наставник розбирає партію…',
