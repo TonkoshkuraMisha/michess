@@ -6,22 +6,24 @@ src/services/arena.py, расписание по конференциям — sr
 Списки и страница арены открыты всем; вход, «Играть» и напоминания — только вошедшим. Арены, участники и партии
 лежат в таблицах arenas, arena_players, arena_games, arena_reminders; кто сейчас ждёт пару — в Redis
 (arena:{id}:waiting). Сами партии арены идут по общему WebSocket партий (src/api/websockets.py).
+Месячная лига арен (GET /arenas/league) — src/services/arena_league.py.
 """
 
 from datetime import timedelta
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, Depends, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.api.conferences import SEASON
 from src.api.deps import get_current_user
 from src.api.fair_play import optional_user_id
 from src.core.errors import DomainError
 from src.db.session import get_db
 from src.models.arena import Arena
-from src.models.user import User
+from src.models.user import RatingCategory, User
 from src.services import arena as service
-from src.services import conferences
+from src.services import arena_league, conferences
 from src.services.matchmaker import MatchmakingError
 
 router = APIRouter()
@@ -56,6 +58,16 @@ async def list_arenas(db: AsyncSession = Depends(get_db)):
     )).scalars().all())
     views = await _views(db, rows, now)
     return {"arenas": [v for v in views if v["status"] != "finished" or v["players"] > 0]}
+
+
+@router.get("/league")
+async def arena_league_table(request: Request, category: RatingCategory = Query("blitz"),
+                             season: str | None = Query(None, pattern=SEASON), db: AsyncSession = Depends(get_db)):
+    """
+    Месячная лига арен: игроки по сумме очков арен сезона (по умолчанию — текущий месяц) в категории контроля. На
+    рейтинг не влияет. Открыта всем; вошедшему — его строка (me), даже если он ниже первых строк таблицы.
+    """
+    return await arena_league.league(db, category, season, await optional_user_id(request, db))
 
 
 @router.get("/current")

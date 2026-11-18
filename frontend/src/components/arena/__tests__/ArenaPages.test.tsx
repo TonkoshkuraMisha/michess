@@ -239,3 +239,28 @@ describe('деления переполненной арены (33.2)', () => {
         expect(fetchMock.mock.calls.some(([u]) => String(u).endsWith('/arenas/9'))).toBe(true);
     });
 });
+
+describe('месячная лига арен', () => {
+    const row = (place: number, username: string, score: number) => ({place, username, score, best: score, arenas: 1});
+    const league = (category: string) => ({
+        season: '2026-11', category, categories: ['bullet', 'blitz'], players: 3,
+        table: category === 'blitz' ? [row(1, 'magnus', 12), row(2, 'hikaru', 9)] : [],
+        me: category === 'blitz' ? row(7, 'me', 2) : null,
+    });
+
+    it('таблица по категории, своя строка ниже первых мест и пустая лига', async () => {
+        const fetchMock = vi.fn(async (url: string) => {
+            const match = /league\?category=(\w+)/.exec(url);
+            const body = match ? league(match[1]) : {arenas: []};
+            return {ok: true, status: 200, json: async () => body} as Response;
+        });
+        vi.stubGlobal('fetch', fetchMock);
+        routes('/arenas');
+        expect(await screen.findByTestId('league-row-1')).toHaveTextContent('magnus');
+        expect(screen.getByTestId('league-me')).toHaveTextContent('7');
+        expect(screen.getByTestId('arena-league')).toHaveTextContent('Сезон 2026-11');
+        await act(async () => fireEvent.click(screen.getByTestId('league-category-bullet')));
+        expect(await screen.findByText('В этом месяце в аренах ещё не играли')).toBeInTheDocument();
+        expect(fetchMock.mock.calls.some(([url]) => String(url).endsWith('/arenas/league?category=bullet'))).toBe(true);
+    });
+});

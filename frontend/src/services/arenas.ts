@@ -99,6 +99,33 @@ export interface ArenaDetail extends ArenaInfo {
     } | null;
 }
 
+/** Категория контроля лиги (как категории рейтинга). */
+export type LeagueCategory = 'bullet' | 'blitz' | 'rapid' | 'classical';
+
+/** Строка месячной лиги арен (src/services/arena_league.py): места расставлены сервером. */
+export interface LeagueRow {
+    place: number;
+    username: string;
+    /** Сумма очков арен сезона в категории. */
+    score: number;
+    /** Очки лучшей арены — первый показатель при равенстве суммы. */
+    best: number;
+    /** В скольких аренах игрок сыграл хотя бы одну партию. */
+    arenas: number;
+}
+
+/** Ответ GET /arenas/league: лига сезона «ГГГГ-ММ» в категории; me — строка вошедшего игрока или null. */
+export interface ArenaLeague {
+    season: string;
+    category: LeagueCategory;
+    /** Категории, в которых расписание ставит арены, — вкладки лиги. */
+    categories: LeagueCategory[];
+    /** Сколько игроков в лиге всего (в table — только первые строки). */
+    players: number;
+    table: LeagueRow[];
+    me: LeagueRow | null;
+}
+
 /** Запрос к /api/v1/arenas: токен — если игрок вошёл; отказ сервера — UiError с текстом по коду ошибки. */
 async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
     const token = getToken();
@@ -115,13 +142,15 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
     return res.json() as Promise<T>;
 }
 
-/** Эндпоинты арен. list, current и get открыты без входа; остальные требуют токен. */
+/** Эндпоинты арен. list, current, get и league открыты без входа; остальные требуют токен. */
 export const arenasApi = {
     /** Идущие, ближайшие (на 6 часов вперёд) и недавно законченные арены. */
     list: () => call<{ arenas: ArenaInfo[] }>(''),
     /** Анонс для лобби: идущая арена с наибольшим числом игроков, иначе ближайшая по началу; null — арен нет. */
     current: () => call<{ arena: ArenaInfo | null }>('/current'),
     get: (id: number) => call<ArenaDetail>(`/${id}`),
+    /** Месячная лига арен текущего сезона в категории контроля. */
+    league: (category: LeagueCategory) => call<ArenaLeague>(`/league?category=${category}`),
     /** arena_id — деление, куда попал игрок (при переполнении — не та арена, что запрошена). */
     join: (id: number) => call<{ joined: boolean; arena_id?: number }>(`/${id}/join`, {method: 'POST'}),
     /** «Играть»: либо сразу пара (game_id), либо ожидание (waiting) — тогда клиент повторяет запрос. */
