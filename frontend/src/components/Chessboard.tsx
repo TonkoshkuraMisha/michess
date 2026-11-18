@@ -20,7 +20,8 @@ import {useState, useEffect, useRef, useCallback} from 'react';
 import {socialApi} from '../services/social';
 import {useLocation, useNavigate, useParams} from 'react-router-dom';
 import {Chess} from 'chess.js';
-import {ListOrdered, Bot, Zap, Radio} from 'lucide-react';
+import {ListOrdered, Bot, Zap, Radio, MessageSquare, GraduationCap, ScanEye} from 'lucide-react';
+import {SegmentedControl} from './ui';
 import {gameSocket} from '../services/gameSocket';
 import {soundEngine, resolveMoveSound} from '../services/soundEngine';
 import type {SoundEventType} from '../services/soundEngine';
@@ -107,10 +108,9 @@ export type {PromotionPiece, TimeControlOption, TimeControlGroup};
 export {BOARD_THEMES, HISTORICAL_BOTS};
 export type {BoardTheme, HistoricalBotId, HistoricalBotProfile};
 
-/**
- * Главная доска со всеми панелями вокруг неё. Владеет состоянием партии (позиция, история, чей цвет, итог) и
- * раздаёт его хукам: useGameSocket и useBotGame меняют одно и то же состояние, поэтому оно живёт здесь.
- */
+/** Вкладка правой колонки игрового зала. */
+type SideTab = 'moves' | 'chat' | 'coach' | 'xray';
+
 /** Сохранённая игроком сторона доски; недоступное хранилище (приватный режим) — как «не сохранено». */
 function savedBoardSize(): string | null {
     try {
@@ -120,6 +120,10 @@ function savedBoardSize(): string | null {
     }
 }
 
+/**
+ * Главная доска со всеми панелями вокруг неё. Владеет состоянием партии (позиция, история, чей цвет, итог) и
+ * раздаёт его хукам: useGameSocket и useBotGame меняют одно и то же состояние, поэтому оно живёт здесь.
+ */
 export default function Chessboard() {
     const {t} = useI18n();
     const navigate = useNavigate();
@@ -1088,6 +1092,48 @@ export default function Chessboard() {
     const xrayAvailable = Boolean(spectatingGameId) || (!gameId && (!activeBot || (coach.enabled && !isRatedBotGame)));
     // «Своя» сторона: в партии с ботом — цвет игрока, на свободной доске и у зрителя — сторона, которая ходит.
     const xraySide: 'w' | 'b' = activeBot && !spectatingGameId ? (myColor === 'white' ? 'w' : 'b') : currentGame.turn();
+    // Вкладки правой колонки (план владельца 18.11): журнал ходов с управлением партией, чат партии с человеком (у
+    // игрока; у зрителя чат виден всегда — см. tabPanel), наставник (кроме партии с человеком) и рентген, когда он
+    // разрешён. Скрытая вкладка остаётся в разметке и только не показывается: черновик сообщения, вспомогательная доска
+    // и настройки не сбрасываются при переключении.
+    const sideTabs: SideTab[] = [
+        'moves',
+        ...((gameId && !spectatingGameId) ? ['chat' as const] : []),
+        ...((!gameId && !spectatingGameId) ? ['coach' as const] : []),
+        ...(xrayAvailable ? ['xray' as const] : []),
+    ];
+    const [sideTab, setSideTab] = useState<SideTab>('moves');
+    const shownTab: SideTab = sideTabs.includes(sideTab) ? sideTab : 'moves';
+    // Предупреждение наставника о зевке нельзя пропустить: вкладка «Наставник» открывается сама, а когда игрок ответил
+    // («оставить ход» или «вернуть»), колонка возвращается к ходам — если её открыл не сам игрок.
+    const coachPending = Boolean(coach.pending);
+    const coachOpenedItself = useRef(false);
+    useEffect(() => {
+        if (coachPending) {
+            setSideTab((current) => {
+                if (current !== 'coach') coachOpenedItself.current = true;
+                return 'coach';
+            });
+        } else if (coachOpenedItself.current) {
+            coachOpenedItself.current = false;
+            setSideTab('moves');
+        }
+    }, [coachPending]);
+    // Непрочитанные сообщения чата — число на вкладке, пока она закрыта.
+    const [chatSeen, setChatSeen] = useState(0);
+    useEffect(() => {
+        if (shownTab === 'chat') setChatSeen(chatMessages.length);
+    }, [shownTab, chatMessages.length]);
+    const chatUnread = Math.max(0, chatMessages.length - chatSeen);
+    const SIDE_TAB_ICONS = {moves: ListOrdered, chat: MessageSquare, coach: GraduationCap, xray: ScanEye};
+    // У зрителя в панели чата — кнопка «Выйти из просмотра»: она видна всегда, на любой вкладке, и отдельной вкладки
+    // «Чат» у зрителя нет.
+    const tabPanel = (id: SideTab) => ({
+        role: 'tabpanel' as const,
+        'data-testid': `side-panel-${id}`,
+        className: shownTab === id || (id === 'chat' && spectatingGameId) ? 'contents' : 'hidden',
+    });
+
     const material = calculateMaterialBalance(boardState);
 
     const activeMoveIndex = viewIndex === -1 ? history.length - 1 : viewIndex;
@@ -1913,7 +1959,8 @@ export default function Chessboard() {
 
             </div>
 
-            {/* ПРАВАЯ КОЛОНКА: ЖУРНАЛ ХОДОВ, ОФОРМЛЕНИЕ, СТАТУС, ЧАТ, ИТОГ, НАСТАВНИК, РЕНТГЕН И УПРАВЛЕНИЕ ПАРТИЕЙ.
+            {/* ПРАВАЯ КОЛОНКА: ЖУРНАЛ ХОДОВ, ОФОРМЛЕНИЕ, СТАТУС, ЧАТ, ИТОГ, НАСТАВНИК, РЕНТГЕН И УПРАВЛЕНИЕ ПАРТИЕЙ —
+                по вкладкам «Ходы / Чат / Наставник / Рентген» (sideTabs выше).
                 На широком экране высота колонки — по окну; что не помещается, прокручивается (раньше обрезалось). */}
             <div
                 className="w-full xl:w-[390px] 2xl:w-[430px] xl:h-full bg-acacia p-3 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-2 text-boxwood-light order-3 shrink-0 xl:overflow-y-auto relative">
@@ -2005,6 +2052,20 @@ export default function Chessboard() {
                     </div>
                 )}
 
+                {sideTabs.length > 1 && (
+                    <SegmentedControl<SideTab> label={t('board.tabs.label')} value={shownTab} onChange={setSideTab}
+                                              stretch testIdPrefix="side-tab"
+                                              options={sideTabs.map((id) => {
+                                                  const Icon = SIDE_TAB_ICONS[id];
+                                                  return {
+                                                      id, icon: <Icon size={14} aria-hidden/>,
+                                                      label: id === 'chat' && chatUnread > 0
+                                                          ? `${t('board.tabs.chat')} (${chatUnread})` : t(`board.tabs.${id}`),
+                                                  };
+                                              })}/>
+                )}
+
+                <div {...tabPanel('moves')}>
                 {!spectatingGameId && (
                     <BlindfoldPanel inGame={liveGame}
                                     myTurn={liveGame && viewIndex === -1 && (currentGame.turn() === 'w' ? 'white' : 'black') === myColor}
@@ -2038,6 +2099,23 @@ export default function Chessboard() {
                 {gameOverResult && tournamentBar}
                 {!spectatingGameId && gameOverResult && controlsPanel}
 
+
+                {activeBot && gameOverResult && savedBotGameId && (
+                    <GameSummaryPanel
+                        gameId={savedBotGameId}
+                        playerColor={myColor}
+                        recommendation={recommendationLabel}
+                        onPlayRecommended={handlePlayRecommended}
+                    />
+                )}
+
+
+
+                {!gameOverResult && tournamentBar}
+                {!spectatingGameId && !gameOverResult && controlsPanel}
+                </div>
+
+                <div {...tabPanel('chat')}>
                 {(gameId || spectatingGameId) && (
                     <GameChatPanel
                         messages={chatMessages}
@@ -2051,16 +2129,8 @@ export default function Chessboard() {
                         gameId={gameId || spectatingGameId}
                     />
                 )}
-
-                {activeBot && gameOverResult && savedBotGameId && (
-                    <GameSummaryPanel
-                        gameId={savedBotGameId}
-                        playerColor={myColor}
-                        recommendation={recommendationLabel}
-                        onPlayRecommended={handlePlayRecommended}
-                    />
-                )}
-
+                </div>
+                <div {...tabPanel('coach')}>
                 {!gameId && !spectatingGameId && (
                     <CoachPanel
                         coach={coach}
@@ -2078,11 +2148,10 @@ export default function Chessboard() {
                                   xrayModes={xrayAvailable ? xray.modes : undefined} xrayForOpponent={xray.forOpponent}/>
                     </CoachPanel>
                 )}
-
+                </div>
+                <div {...tabPanel('xray')}>
                 {xrayAvailable && <XrayPanel settings={xray} canSelect={!spectatingGameId}/>}
-
-                {!gameOverResult && tournamentBar}
-                {!spectatingGameId && !gameOverResult && controlsPanel}
+                </div>
 
             </div>
 

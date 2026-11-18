@@ -991,6 +991,7 @@ export const en = {
         back: 'Move back (Left arrow)',
         forward: 'Move forward (Right arrow)',
         toEnd: 'To the last move (Down arrow)',
+        tabs: {label: 'Side panel', moves: 'Moves', chat: 'Chat', coach: 'Coach', xray: 'X-ray'},
         moveLog: 'Move list',
         freeBoard: 'Free board / Analysis',
         versus: '{white} vs {black}',

@@ -995,6 +995,7 @@ export const ru: Messages = {
         back: 'Ход назад (стрелка влево)',
         forward: 'Ход вперёд (стрелка вправо)',
         toEnd: 'К последнему ходу (стрелка вниз)',
+        tabs: {label: 'Боковая панель', moves: 'Ходы', chat: 'Чат', coach: 'Наставник', xray: 'Рентген'},
         moveLog: 'Журнал ходов',
         freeBoard: 'Свободная доска / Анализ',
         versus: '{white} vs {black}',

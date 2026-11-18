@@ -995,6 +995,7 @@ export const uk: Messages = {
         back: 'Хід назад (стрілка вліво)',
         forward: 'Хід уперед (стрілка вправо)',
         toEnd: 'До останнього ходу (стрілка вниз)',
+        tabs: {label: 'Бічна панель', moves: 'Ходи', chat: 'Чат', coach: 'Наставник', xray: 'Рентген'},
         moveLog: 'Журнал ходів',
         freeBoard: 'Вільна дошка / Аналіз',
         versus: '{white} проти {black}',
