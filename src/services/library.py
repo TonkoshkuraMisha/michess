@@ -21,9 +21,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.library import LibraryCollection, LibraryGame, LibraryGameCollection
 from src.models.user import User
 from src.services import openings, pawn_structures
+from src.services.game_engine import normalize_result
 
 STANDARD_FEN = chess.STARTING_FEN
-RESULTS = ("1-0", "0-1", "1/2-1/2", "*")
 MAX_PLIES = 1000
 YEAR = re.compile(r"^(\d{4})")
 
@@ -133,7 +133,7 @@ def parse_game(game: chess.pgn.Game) -> ParsedGame | None:
     return ParsedGame(
         white=_header(game, "White", 120), black=_header(game, "Black", 120), event=_header(game, "Event", 200),
         site=_header(game, "Site", 200), date=date, year=year, round=_header(game, "Round", 20),
-        result=result if result in RESULTS else "*",
+        result=normalize_result(result),
         white_elo=_int(game.headers.get("WhiteElo", "")), black_elo=_int(game.headers.get("BlackElo", "")),
         eco=eco, opening=opening.name[:200] if opening else "", start_fen=start_fen, moves=moves,
     )

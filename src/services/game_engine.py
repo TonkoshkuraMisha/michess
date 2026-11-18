@@ -93,6 +93,26 @@ def is_standard_start(board: chess.Board) -> bool:
     return board.root().fen() == STARTING_FEN
 
 
+# Итоги партии, которые хранит база (CHECK у games, imported_games, library_games, arena_games): победа белых,
+# победа чёрных, ничья, «не закончена / неизвестно».
+GAME_RESULTS = ("1-0", "0-1", "1/2-1/2", "*")
+# Как ещё записывают итог в чужих PGN — приводится к стандартному.
+_RESULT_ALIASES = {"½-½": "1/2-1/2", "1/2": "1/2-1/2", "0.5-0.5": "1/2-1/2", "=": "1/2-1/2", "1:0": "1-0", "0:1": "0-1",
+                   "1–0": "1-0", "0–1": "0-1"}
+
+
+def normalize_result(tag: str | None) -> str:
+    """
+    Итог из заголовка Result чужого PGN — одним из GAME_RESULTS: известные варианты записи (½-½, 1:0, тире вместо
+    дефиса) приводятся к стандарту, всё остальное (пусто, «?», мусор) — «*». Пользуются импорт в библиотеку
+    (library.py), импорт с сайтов (game_import.py) и загрузчик архива (src/db/seed.py).
+    """
+    value = (tag or "").strip()
+    if value in GAME_RESULTS:
+        return value
+    return _RESULT_ALIASES.get(value, "*")
+
+
 _LINE_BREAK_RE = re.compile(r"\r+\n|\r")
 
 

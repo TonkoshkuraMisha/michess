@@ -34,7 +34,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.db.session import AsyncSessionLocal
 from src.models.game import Game, GameStatus
 from src.models.user import User
-from src.services.game_engine import normalize_pgn_text
+from src.services.game_engine import normalize_pgn_text, normalize_result
 
 logger = logging.getLogger(__name__)
 
@@ -91,8 +91,9 @@ _SEED_LOCKS: dict[str, asyncio.Lock] = {}
 def extract_pgn_metadata(raw_pgn: str, fallback_result: str = "*") -> dict[str, str | None]:
     """
     Результат, дата, место и код дебюта из заголовков PGN; чего в заголовках нет — пустое значение (для результата —
-    fallback_result, а если и он «*» — результат в конце записи ходов). Дата — первый из заголовков Date и EventDate,
-    который не начинается с «?». Значения обрезаются до длины колонок games.
+    fallback_result, а если и он «*» — результат в конце записи ходов; итог приводится game_engine.normalize_result).
+    Дата — первый из заголовков Date и EventDate, который не начинается с «?». Значения обрезаются до длины колонок
+    games.
     """
     result_str = fallback_result or "*"
     pgn_date: str | None = None
@@ -125,7 +126,8 @@ def extract_pgn_metadata(raw_pgn: str, fallback_result: str = "*") -> dict[str, 
         eco = e_match.group(1).strip()[:10]
 
     return {
-        "result": result_str,
+        # Нестандартная запись итога (½-½, 1:0, «?») — к одному из значений, которые пропускает CHECK games.result.
+        "result": normalize_result(result_str),
         "pgn_date": pgn_date,
         "site": site,
         "eco": eco,
