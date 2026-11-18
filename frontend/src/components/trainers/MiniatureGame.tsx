@@ -1,11 +1,13 @@
 // «Миниатюры» (таск 27.9): короткая партия из библиотеки, закончившаяся матом. Позиция перед последним ходом — найти
-// мат (засчитывается любой матующий ход, не только ход партии). После ответа — ход партии и ссылка на неё.
+// мат (засчитывается любой матующий ход, не только ход партии). После ответа доска не застывает: верный ход стоит на
+// доске, неверный — видна стрелка хода партии; позицию можно доиграть (usePositionExplorer). И ссылка на партию.
 
 import {useEffect, useState} from 'react';
 import {Link} from 'react-router-dom';
 import {Chess} from 'chess.js';
 import {useI18n} from '../../i18n';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
+import {ExplorerControls, usePositionExplorer} from '../puzzles/usePositionExplorer';
 import {libraryApi} from '../../services/library';
 import type {LibraryMiniature} from '../../services/library';
 
@@ -34,6 +36,7 @@ export function MiniatureGame({seed, onFinish}: Props) {
     const [index, setIndex] = useState(0);
     const [verdict, setVerdict] = useState<{ ok: boolean; move: string } | null>(null);
     const [score, setScore] = useState({correct: 0, wrong: 0});
+    const explorer = usePositionExplorer();
 
     useEffect(() => {
         let alive = true;
@@ -52,10 +55,15 @@ export function MiniatureGame({seed, onFinish}: Props) {
     const white = item.fen.split(' ')[1] === 'w';
 
     const onMove = (uci: string) => {
-        if (verdict) return;
+        if (verdict) {
+            explorer.play(uci);
+            return;
+        }
         const ok = isMate(item.fen, uci);
         setVerdict({ok, move: uci});
         setScore((s) => (ok ? {...s, correct: s.correct + 1} : {...s, wrong: s.wrong + 1}));
+        // Верный ход ставится на доску; неверный — нет: с позиции задачи видна стрелка хода партии, его можно сыграть.
+        explorer.start(item.fen, ok ? [uci] : []);
     };
     const next = () => {
         if (index + 1 >= items.length) {
@@ -64,8 +72,10 @@ export function MiniatureGame({seed, onFinish}: Props) {
         }
         setIndex((i) => i + 1);
         setVerdict(null);
+        explorer.stop();
     };
-    const shown = verdict ? (verdict.ok ? verdict.move : item.answer) : null;
+    // Стрелка хода партии — только пока на доске позиция задачи (после неверного ответа).
+    const shown = verdict && !verdict.ok && explorer.plies === 0 ? item.answer : null;
 
     return (
         <div className="flex flex-col gap-3" data-testid="miniature-game">
@@ -78,9 +88,11 @@ export function MiniatureGame({seed, onFinish}: Props) {
             </p>
             <p className="text-lg">{t(white ? 'trainers.miniaturePromptWhite' : 'trainers.miniaturePromptBlack', {moves: Math.ceil((item.moves.length + 1) / 2)})}</p>
             <div className="w-full max-w-[420px]">
-                <PuzzleBoard fen={item.fen} orientation={white ? 'white' : 'black'} interactive={!verdict} onMove={onMove} sound={false}
-                             arrows={shown ? [{from: shown.slice(0, 2), to: shown.slice(2, 4), color: verdict?.ok ? 'green' : 'yellow'}] : []}/>
+                <PuzzleBoard fen={explorer.fen ?? item.fen} orientation={white ? 'white' : 'black'} interactive onMove={onMove}
+                             lastMove={explorer.lastMove} sound={explorer.active}
+                             arrows={shown ? [{from: shown.slice(0, 2), to: shown.slice(2, 4), color: 'yellow'}] : []}/>
             </div>
+            <ExplorerControls explorer={explorer}/>
             {verdict && (
                 <div className="flex flex-wrap items-center gap-3">
                     <span className={verdict.ok ? 'text-emerald-300 font-bold' : 'text-rose-300 font-bold'} data-testid="miniature-verdict">
