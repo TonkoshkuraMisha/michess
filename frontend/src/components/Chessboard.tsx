@@ -47,7 +47,7 @@ import type {MasterGameStart} from '../services/masters';
 import type {TimeControlOption, TimeControlGroup} from '../config/timeControls';
 import {
     FILES, RANKS, MIN_BOARD_SIZE, MAX_BOARD_SIZE,
-    getMaxViewportBoardSize, getDefaultBoardSize, calculateMaterialBalance, cloneChessInstance, prevIndexHelper,
+    getMaxViewportBoardSize, getDefaultBoardSize, fittedBoardSize, calculateMaterialBalance, cloneChessInstance, prevIndexHelper,
     customStartFen, pairHalfMoves, validateFen, STANDARD_START_FEN
 } from './chessboard/boardUtils';
 import type {PromotionPiece} from './chessboard/boardUtils';
@@ -111,6 +111,15 @@ export type {BoardTheme, HistoricalBotId, HistoricalBotProfile};
  * Главная доска со всеми панелями вокруг неё. Владеет состоянием партии (позиция, история, чей цвет, итог) и
  * раздаёт его хукам: useGameSocket и useBotGame меняют одно и то же состояние, поэтому оно живёт здесь.
  */
+/** Сохранённая игроком сторона доски; недоступное хранилище (приватный режим) — как «не сохранено». */
+function savedBoardSize(): string | null {
+    try {
+        return localStorage.getItem('regence_board_size');
+    } catch {
+        return null;
+    }
+}
+
 export default function Chessboard() {
     const {t} = useI18n();
     const navigate = useNavigate();
@@ -240,26 +249,13 @@ export default function Chessboard() {
     } | null>(null);
 
     // Сторона доски в пикселях: сохранённая игроком (localStorage regence_board_size), но не больше, чем
-    // помещается в окно; при уменьшении окна доска сжимается (эффект ниже).
-    const [boardSize, setBoardSize] = useState<number>(() => {
-        const maxFit = getMaxViewportBoardSize();
-        const savedSize = localStorage.getItem('regence_board_size');
-        if (savedSize) {
-            const parsed = Number(savedSize);
-            if (!Number.isNaN(parsed) && parsed >= MIN_BOARD_SIZE) {
-                return Math.min(parsed, maxFit);
-            }
-        }
-        return maxFit;
-    });
+    // помещается в окно; при изменении окна доска и сжимается, и растёт обратно (fittedBoardSize, эффект ниже).
+    const [boardSize, setBoardSize] = useState<number>(() => fittedBoardSize(savedBoardSize()));
     const [isResizing, setIsResizing] = useState(false);
     const resizeStartRef = useRef<{ startX: number; startY: number; startSize: number } | null>(null);
 
     useEffect(() => {
-        const handleWindowResize = () => {
-            const maxFit = getMaxViewportBoardSize();
-            setBoardSize(prev => Math.min(prev, maxFit));
-        };
+        const handleWindowResize = () => setBoardSize(fittedBoardSize(savedBoardSize()));
         window.addEventListener('resize', handleWindowResize);
         return () => window.removeEventListener('resize', handleWindowResize);
     }, []);
