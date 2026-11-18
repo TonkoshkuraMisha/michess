@@ -154,13 +154,20 @@ export interface SquareQuestion {
     answer: boolean;
 }
 
-/** Успевает ли король догнать пешку (правило квадрата; король своего цвета и другие фигуры не мешают). */
+/**
+ * Успевает ли король догнать пешку (правило квадрата; король своего цвета и другие фигуры не мешают). Король ловит
+ * пешку, если успевает взять её не позже, чем на поле превращения: пешке нужно pawnMoves ходов (со второй
+ * горизонтали — на один меньше, через двойной шаг), а королю — дойти до поля превращения и побить там нового ферзя.
+ * При ходе белых у чёрных за это время pawnMoves ходов (последний — взятие), при ходе чёрных — на один больше.
+ * Пример: пешка f6, король d6, ход белых — 1.f7 Ke7 2.f8=Ф+ Kxf8: догоняет (до 18.11.2026 правило было на ход строже
+ * и здесь отвечало «не успеет»).
+ */
 export function kingCatchesPawn(pawn: string, king: string, toMove: 'w' | 'b'): boolean {
     const rank = Number(pawn[1]);
     const pawnMoves = 8 - rank - (rank === 2 ? 1 : 0);
     const promotion = `${pawn[0]}8`;
     const kingMoves = kingDistance(king, promotion);
-    return toMove === 'b' ? kingMoves <= pawnMoves : kingMoves <= pawnMoves - 1;
+    return kingMoves <= pawnMoves + (toMove === 'b' ? 1 : 0);
 }
 
 export function squareQuestion(seed: number, index: number): SquareQuestion {
