@@ -3,7 +3,8 @@
 // точность, ключевые ходы с объяснением наставника и рекомендуемый следующий соперник. Разбор — POST
 // /analysis/game/{id} (движок оценивает каждый ход; готовый разбор сервер отдаёт из базы). Тип партии и ключевые
 // ходы — поле summary ответа (src/services/game_summary.py), подписи — каталог summary.*. Рекомендацию соперника
-// считает Chessboard (services/gameSummary.ts) и передаёт пропсом.
+// считает Chessboard (services/gameSummary.ts) и передаёт пропсом. Когда разбор готов — карточки «Клубного тренера»
+// (CoachCards: задача из своей ошибки, отклонение от репертуара, урок по теме ошибки).
 
 import {useEffect, useState} from 'react';
 import {Trophy} from 'lucide-react';
@@ -16,6 +17,7 @@ import type {CoachComment} from '../../services/coach';
 import {isSummaryKind} from '../../services/gameSummary';
 import type {GameSummary} from '../../services/gameSummary';
 import {getToken} from '../../services/authToken';
+import {CoachCards} from './CoachCards';
 
 // Части ответа разбора, которые нужны этой панели (полный ответ — FullGameAnalysisResponse на сервере).
 interface ReportMove {
@@ -117,6 +119,7 @@ export function GameSummaryPanel({gameId, playerColor, recommendation, onPlayRec
                             {move.coach && <p className="text-boxwood/80 leading-snug">{coachText(move.coach, t)}</p>}
                         </div>
                     ))}
+                    <CoachCards gameId={gameId}/>
                 </>
             )}
             {recommendation && (

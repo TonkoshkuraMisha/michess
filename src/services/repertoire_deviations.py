@@ -7,14 +7,20 @@
 * `end` — партия дошла до конца подготовленной линии;
 * `followed` — вся партия прошла по репертуару.
 
-Ничего не хранит: дерево репертуара строит src/services/repertoire.build_tree из repertoire_moves, ходы партии
-берёт маршрут GET /repertoires/game/{id}/deviations (src/api/repertoire.py) из PGN своей законченной партии.
+Ничего не хранит: дерево репертуара строит src/services/repertoire.build_tree из repertoire_moves, ходы партии —
+главная линия PGN законченной партии (game_moves). Сверку всех репертуаров игрока делает for_game; её отдают маршрут
+GET /repertoires/game/{id}/deviations (src/api/repertoire.py) и карточки после партии (src/services/coach_cards.py).
 """
 
+import io
 from dataclasses import dataclass
 
 import chess
+import chess.pgn
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from src.models.game import Game
 from src.models.repertoire import Repertoire
 from src.services import repertoire as service
 
@@ -56,3 +62,35 @@ def find(repertoire: Repertoire, edges: list[service.Edge], moves: list[chess.Mo
     return Deviation("followed", len(moves), None, None, [], [m.uci() for m in moves],
                      service.position_key(board)) \
         if moves else None
+
+
+def game_moves(pgn: str | None) -> list[chess.Move]:
+    """Главная линия партии из начальной позиции; партии с особой расстановкой не сверяются (пустой список)."""
+    parsed = chess.pgn.read_game(io.StringIO(pgn or ""))
+    if parsed is None or parsed.board().fen() != chess.STARTING_FEN:
+        return []
+    return list(parsed.mainline_moves())
+
+
+async def for_game(db: AsyncSession, game: Game, user_id: int) -> dict:
+    """
+    Где партия ушла из каждого репертуара игрока её цвета: {color, results}. results — по одному на репертуар
+    (repertoire_id, name, starter, kind, ply, played, played_uci, expected, line, position), самые поздние
+    отклонения первыми. Проверку «своя законченная партия» делает вызывающий.
+    """
+    color = "white" if game.white_player_id == user_id else "black"
+    moves = game_moves(game.pgn)
+    repertoires = (await db.execute(
+        select(Repertoire).where(Repertoire.user_id == user_id, Repertoire.color == color).order_by(Repertoire.id)
+    )).scalars().all()
+    results: list[dict] = []
+    for repertoire in repertoires:
+        edges = service.build_tree(repertoire.color, await service.load_moves(db, repertoire.id))
+        found = find(repertoire, edges, moves)
+        if found is None:
+            continue
+        results.append({"repertoire_id": repertoire.id, "name": repertoire.name, "starter": repertoire.starter,
+                        "kind": found.kind, "ply": found.ply, "played": found.played, "played_uci": found.played_uci,
+                        "expected": found.expected, "line": found.line, "position": found.position})
+    results.sort(key=lambda r: -int(r["ply"]))
+    return {"color": color, "results": results}

@@ -3,6 +3,9 @@
 Школа (таск 14.1): прогресс уроков. Уроки — данные клиента, поэтому сервер принимает любой id урока в формате
 слага и хранит по нему шаг, завершение и лучший результат контрольных вопросов. Прогресс только растёт: повторное
 прохождение не сбрасывает пройденное, а результат экзамена хранится лучший.
+
+GET /learn/after-game/{game_id} — карточки «Клубного тренера» после своей законченной партии
+(src/services/coach_cards.py).
 """
 
 from datetime import UTC, datetime
@@ -13,11 +16,13 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.deps import get_current_user
+from src.api.rate_limit import rate_limit
 from src.core.errors import ApiError
 from src.db.session import get_db
+from src.models.game import Game, GameStatus
 from src.models.lesson import LessonProgress
 from src.models.user import User
-from src.services import product_metrics
+from src.services import coach_cards, product_metrics
 
 router = APIRouter()
 
@@ -112,3 +117,17 @@ async def save_progress(
     await db.commit()
     await db.refresh(progress)
     return _out(progress)
+
+
+@router.get("/after-game/{game_id}", dependencies=[Depends(rate_limit("after_game", "RATE_LIMIT_PUZZLES"))])
+async def after_game(game_id: int = Path(..., ge=1), db: AsyncSession = Depends(get_db),
+                     user: User = Depends(get_current_user)):
+    """
+    Карточки «Клубного тренера» после партии: личная задача из самой дорогой ошибки, отклонение от репертуара и темы
+    ошибки для урока (src/services/coach_cards.py). Только своя законченная партия, иначе 404 game_not_found.
+    """
+    game = await db.get(Game, game_id)
+    player = game is not None and user.id in (game.white_player_id, game.black_player_id)
+    if game is None or not player or game.status != GameStatus.COMPLETED:
+        raise ApiError(404, "game_not_found", game_id=game_id)
+    return await coach_cards.for_game(db, game, user.id)
