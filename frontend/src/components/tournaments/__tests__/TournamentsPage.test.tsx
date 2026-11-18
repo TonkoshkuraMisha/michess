@@ -76,6 +76,33 @@ afterEach(() => {
     localStorage.clear();
 });
 
+describe('список турниров (раскладка на общих компонентах, план владельца 18.11)', () => {
+    it('арены и машина времени — карточки; мои турниры — место или статус; пустой список — пустое состояние', async () => {
+        stub({
+            '/tournaments': () => [
+                {id: 3, format: 'round_robin', size: 6, status: 'finished', my_place: 1},
+                {id: 4, format: 'swiss', size: 8, status: 'running', my_place: null},
+            ],
+            '/bots/catalog': () => ({calibration: null, historical: [], archetypes: []}),
+            '/bots/personalities': () => [],
+        });
+        render(<MemoryRouter><TournamentsPage/></MemoryRouter>);
+        expect(screen.getByRole('heading', {level: 1})).toHaveTextContent('Tournaments');
+        expect(screen.getByTestId('arenas-link')).toHaveAttribute('href', '/arenas');
+        expect(screen.getByTestId('arenas-link')).toHaveTextContent('Arenas');
+        expect(screen.getByTestId('time-machine-link')).toHaveAttribute('href', '/time-machine');
+        const mine = screen.getByTestId('my-tournaments');
+        await waitFor(() => expect(mine.querySelectorAll('a')).toHaveLength(2));
+        expect(mine.querySelector('a[href="/tournaments/3"]')).toHaveTextContent('1');
+    });
+
+    it('без турниров — пустое состояние', async () => {
+        stub({'/tournaments': () => [], '/bots/catalog': () => ({calibration: null, historical: [], archetypes: []}), '/bots/personalities': () => []});
+        render(<MemoryRouter><TournamentsPage/></MemoryRouter>);
+        expect(await screen.findByText('No tournaments yet.')).toBeInTheDocument();
+    });
+});
+
 describe('создание турнира', () => {
     it('выбор соперников по размеру турнира и отправка', async () => {
         const fetchMock = stub({
