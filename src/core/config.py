@@ -117,6 +117,10 @@ class Settings(BaseSettings):
     # Доля запросов с трассировкой производительности: 0 — только ошибки.
     SENTRY_DSN: str = ""
     SENTRY_TRACES_SAMPLE_RATE: float = 0.0
+    # Метрики воркера Celery (src/core/observability.start_worker_metrics_server): порт, на котором главный процесс
+    # воркера отдаёт /metrics своих процессов (время движка в фоновом разборе и симуляциях); 0 — не отдавать.
+    # В продакшене задаёт docker-compose.prod.yml (9101), в разработке выключено.
+    WORKER_METRICS_PORT: int = 0
 
     # Пул процессов Stockfish (src/services/engine_pool.py): не больше стольких движков в каждом процессе API и
     # воркера; запрос сверх предела ждёт свободный движок столько секунд и затем получает отказ engine_busy.

@@ -14,6 +14,9 @@ Prometheus изнутри сети compose (api:8000/metrics). API работа�
 docker-compose.prod.yml (каталог /tmp/prometheus на tmpfs, очищается при старте контейнера). В разработке
 переменной нет — метрики берутся из памяти единственного процесса.
 
+Воркеры Celery (фоновый разбор, симуляции турниров) отдают свои метрики сами — start_worker_metrics_server на порту
+WORKER_METRICS_PORT; так michess_engine_seconds_total учитывает и фоновую работу движка.
+
 Откуда значения: счётчики WebSocket увеличивает src/api/websockets.py, HTTP — http_metrics_middleware ниже,
 законченные партии и сбои цикла часов — src/services/game_state.py, время движка — src/services/engine_pool.py,
 число игроков за сутки — Redis (ключ active_players:<дата UTC>, отметку ставит src/api/deps.get_current_user).
@@ -131,12 +134,42 @@ def metrics_response() -> Response:
     Тело ответа /metrics в формате Prometheus. Если задан PROMETHEUS_MULTIPROC_DIR, значения суммируются из файлов
     всех процессов uvicorn; иначе берётся реестр текущего процесса.
     """
+    return Response(generate_latest(_collect_registry()), media_type=CONTENT_TYPE_LATEST)
+
+
+def _collect_registry() -> CollectorRegistry:
+    """Реестр для отдачи метрик: сумма файлов всех процессов (multiprocess) или реестр текущего процесса."""
     if os.environ.get("PROMETHEUS_MULTIPROC_DIR"):
         registry = CollectorRegistry()
         multiprocess.MultiProcessCollector(registry)
-    else:
-        registry = REGISTRY
-    return Response(generate_latest(registry), media_type=CONTENT_TYPE_LATEST)
+        return registry
+    return REGISTRY
+
+
+def start_worker_metrics_server(port: int) -> bool:
+    """
+    Отдаёт /metrics воркера Celery на port (поток в главном процессе воркера; вызывает сигнал worker_init в
+    src/worker/celery_app.py). Задачи выполняют дочерние процессы, поэтому у сервисов worker и worker-simulation,
+    как у api, задан PROMETHEUS_MULTIPROC_DIR — свой tmpfs у каждого контейнера: общий каталог с api нельзя, номера
+    процессов в разных контейнерах совпадают, и файлы метрик затирали бы друг друга. Prometheus опрашивает
+    worker:9101 и worker-simulation:9101 вместе с api:8000 (DEPLOY.md, раздел 6) и суммирует сам. port 0 — выключено.
+    """
+    if port <= 0:
+        return False
+    from prometheus_client import start_http_server
+
+    start_http_server(port, registry=_collect_registry())
+    logger.info("Worker metrics on port %s", port)
+    return True
+
+
+def forget_worker_process(pid: int) -> None:
+    """
+    Дочерний процесс воркера завершился: его файлы «живых» показателей (Gauge livesum/liveall) удаляются, чтобы
+    сумма не учитывала умерший процесс. Счётчики (время движка) остаются — их сумма не должна уменьшаться.
+    """
+    if os.environ.get("PROMETHEUS_MULTIPROC_DIR"):
+        multiprocess.mark_process_dead(pid)
 
 
 def route_template(scope) -> str:

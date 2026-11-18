@@ -104,7 +104,11 @@ compose (или опубликуйте порт `api` только на внут
     scrape_configs:
       - job_name: michess
         static_configs:
-          - targets: ["api:8000"]
+          - targets: ["api:8000", "worker:9101", "worker-simulation:9101"]
+
+Воркеры Celery отдают свои метрики сами (порт `WORKER_METRICS_PORT`, его задаёт `docker-compose.prod.yml`): там
+время движка в фоновом разборе (`kind="analysis"`) и в партиях ботов (`kind="simulation"`). Суммарный бюджет движка —
+`sum(increase(michess_engine_seconds_total[1d]))` по всем трём целям.
 
 | Метрика                                    | Что показывает                                              |
 |--------------------------------------------|-------------------------------------------------------------|

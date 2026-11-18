@@ -8,15 +8,32 @@
 
 Публикация задач из API не должна задерживать игру, поэтому таймауты соединения с брокером короткие, а повторов
 публикации нет (см. src/services/task_dispatch.py).
+
+Метрики Prometheus воркера (время движка в разборе и симуляциях) отдаёт главный процесс на WORKER_METRICS_PORT —
+сигналы ниже, правила — src/core/observability.start_worker_metrics_server.
 """
 
 from celery import Celery
 from celery.schedules import crontab
+from celery.signals import worker_init, worker_process_shutdown
 
 from src.core.config import settings
-from src.core.observability import init_sentry
+from src.core.observability import forget_worker_process, init_sentry, start_worker_metrics_server
 
 init_sentry("worker")
+
+
+@worker_init.connect
+def _serve_worker_metrics(**_) -> None:
+    """Главный процесс воркера (до запуска дочерних): /metrics на WORKER_METRICS_PORT, если он задан."""
+    start_worker_metrics_server(settings.WORKER_METRICS_PORT)
+
+
+@worker_process_shutdown.connect
+def _forget_worker_process(pid: int | None = None, **_) -> None:
+    """Дочерний процесс завершается — его «живые» показатели больше не суммируются."""
+    if pid:
+        forget_worker_process(pid)
 
 ANALYSIS_QUEUE = "analysis"
 SIMULATION_QUEUE = "simulation"
