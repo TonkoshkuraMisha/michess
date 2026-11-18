@@ -308,7 +308,9 @@ async def _whites(db: AsyncSession, arena_id: int, user_id: int) -> int:
 async def ready(db: AsyncSession, arena: Arena, user: User) -> dict:
     """
     «Играть»: игрок ждёт пару. Если ждёт ещё кто-то — сразу пара и партия; иначе игрок остаётся в ожидании
-    (клиент повторяет запрос, пока не начнётся партия). Возвращает {"game_id": …} или {"waiting": true}.
+    (клиент повторяет запрос, пока не начнётся партия). Возвращает {"game_id": …} или {"waiting": true}. У игрока уже
+    идёт партия этой арены (пару составил другой, а страница ещё повторяет запрос) — её номер, без нового ожидания:
+    иначе следующий нажавший «Играть» получил бы в пару занятого игрока.
     """
     from src.services.connection_manager import manager
     from src.services.matchmaker import matchmaker
@@ -321,6 +323,10 @@ async def ready(db: AsyncSession, arena: Arena, user: User) -> dict:
     me = await _player(db, arena.id, user.id)
     if me is None:
         raise DomainError("arena_not_joined")
+    playing = await current_game(db, arena.id, user.id)
+    if playing is not None:
+        await leave_waiting(arena.id, user.id)
+        return {"game_id": playing}
     await redis_module.redis_client.hset(_wait_key(arena.id), mapping={str(user.id): str(_now().timestamp())})
     others = [uid for uid in await waiting_ids(arena.id) if uid != user.id]
     if not others:

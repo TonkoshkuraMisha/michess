@@ -56,6 +56,10 @@ async def test_pairing_and_scores(client, db_session, running, test_user_1, test
     started = client.post(f"{API}/{running.id}/ready", headers=auth(token_user_2)).json()
     game_id = started["game_id"]
     assert client.get(f"{API}/{running.id}", headers=auth(token_user_1)).json()["me"]["current_game_id"] == game_id
+    # Страница первого игрока ещё повторяет «Играть»: он уже в партии — получает её, а не новое ожидание (иначе третий
+    # игрок получил бы в пару занятого соперника).
+    assert client.post(f"{API}/{running.id}/ready", headers=auth(token_user_1)).json() == {"game_id": game_id}
+    assert await arena.waiting_ids(running.id) == set()
     record = (await db_session.execute(select(ArenaGame).where(ArenaGame.game_id == game_id))).scalar_one()
 
     # Обычное завершение партии засчитывает её в арене.
