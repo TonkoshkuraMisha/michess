@@ -1,7 +1,7 @@
 """club ladder by beaten opponents (owner's plan 18.11, task 7): ladder_beaten instead of users.ladder_step
 
 Revision ID: b4d2e8f1a6c3
-Revises: 59c61fc287c2
+Revises: c9a4e7d2f5b8
 Create Date: 2026-11-18 12:00:00.000000
 
 Ступень игрока была индексом в списке соперников, поэтому новых соперников нельзя было вставить в лестницу, не
@@ -17,11 +17,11 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = 'b4d2e8f1a6c3'
-down_revision: str | Sequence[str] | None = '59c61fc287c2'
+down_revision: str | Sequence[str] | None = 'c9a4e7d2f5b8'
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
-# Лестница до 18.11.2026 (ladder.rungs() на коммите 59c61fc287c2): десять архетипов мастерской и семь исторических
+# Лестница до 18.11.2026 (ladder.rungs() до этой миграции): десять архетипов мастерской и семь исторических
 # ботов по измеренной силе.
 OLD_RUNGS = (
     'archetype:rusher', 'archetype:quiet', 'archetype:pawn_keeper', 'archetype:cavalier', 'archetype:centralist',
