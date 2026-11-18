@@ -4,6 +4,7 @@
 // * «Не зевни» — из трёх естественных ходов выбрать единственный, который не проигрывает;
 // * «Единственная защита» — задачи базы с тегом защиты: их ведёт тренировка по приёмам (onDefensiveMove).
 // Угроза и верные ходы приходят с сервера только после ответа.
+// После ответа доска свободна (решение владельца 18.11): позицию можно доиграть за обе стороны (usePositionExplorer).
 
 import {useCallback, useState} from 'react';
 import type {ReactNode} from 'react';
@@ -16,6 +17,7 @@ import {puzzlesApi} from '../../services/puzzles';
 import type {DefenseAnswer, DefenseDrillView, DefenseKind, DefenseThreatResponse} from '../../services/puzzles';
 import {themeText} from '../../services/themes';
 import {PuzzleBoard} from './PuzzleBoard';
+import {ExplorerControls, usePositionExplorer} from './usePositionExplorer';
 import {sanMoves, toMove} from './puzzleNotation';
 import {SolutionReplay} from './SolutionReplay';
 import type {ReplayLine, ReplayView} from './SolutionReplay';
@@ -49,6 +51,11 @@ export function DefenseTrainer({header, initialKind = 'threat', onDefensiveMove,
     const [error, setError] = useState<UiMessage | null>(null);
     // Разбор после ответа (таск B.3): линия на доске вместо позиции упражнения.
     const [replay, setReplay] = useState<ReplayView | null>(null);
+    // Свободная доска после ответа (решение владельца 18.11): первый ход игрока после ответа начинает разбор с
+    // позиции на доске; новое упражнение его сбрасывает.
+    const explorer = usePositionExplorer();
+    const exploring = explorer.active && !replay;
+    const stopExplorer = explorer.stop;
 
     const load = useCallback(async (nextKind: DefenseKind) => {
         setError(null);
@@ -62,12 +69,13 @@ export function DefenseTrainer({header, initialKind = 'threat', onDefensiveMove,
             setPlayed(null);
             setMark(null);
             setReplay(null);
+            stopExplorer();
             setPhase(view.kind === 'threat' ? 'threat' : 'move');
         } catch (err) {
             setError(errorOf(err));
             setPhase('idle');
         }
-    }, []);
+    }, [stopExplorer]);
 
     const chooseKind = (next: DefenseKind) => {
         setKind(next);
@@ -89,6 +97,11 @@ export function DefenseTrainer({header, initialKind = 'threat', onDefensiveMove,
     };
 
     const play = async (uci: string) => {
+        if (phase === 'done') {
+            if (explorer.active) explorer.play(uci);
+            else explorer.start(fen, [uci]);
+            return;
+        }
         if (!drill || phase !== 'move') return;
         const game = new Chess(drill.fen);
         const move = game.move(toMove(uci));
@@ -126,12 +139,14 @@ export function DefenseTrainer({header, initialKind = 'threat', onDefensiveMove,
     return (
         <div className="w-full max-w-6xl mx-auto p-3 sm:p-4 flex flex-col lg:flex-row gap-4" data-testid="defense-trainer">
             <div className="w-full lg:w-[min(70vh,640px)] shrink-0 flex flex-col gap-2">
-                <PuzzleBoard fen={replay?.fen ?? fen} orientation={drill?.color ?? 'white'}
-                             interactive={phase === 'threat' || (phase === 'move' && drill?.kind === 'threat')}
-                             lastMove={replay ? replay.lastMove : played} hint={replay ? null : threatSquares}
-                             mark={replay ? null : mark} arrows={replay?.arrows}
+                <PuzzleBoard fen={replay?.fen ?? (exploring ? explorer.fen : null) ?? fen} orientation={drill?.color ?? 'white'}
+                             interactive={phase === 'threat' || (phase === 'move' && drill?.kind === 'threat') || (phase === 'done' && !replay)}
+                             lastMove={replay ? replay.lastMove : exploring ? explorer.lastMove : played}
+                             hint={replay || exploring ? null : threatSquares}
+                             mark={replay || exploring ? null : mark} arrows={replay?.arrows}
                              onMove={(uci) => void play(uci)}
                              onSquare={phase === 'threat' ? (square) => void pickThreat(square) : undefined}/>
+                <ExplorerControls explorer={explorer}/>
                 <div className="text-sm font-bold text-amber-300" role="status" data-testid="defense-status">
                     {phase === 'threat' && t('puzzles.defense.findThreat')}
                     {phase === 'move' && drill?.kind === 'threat' && t('puzzles.defense.defendNow')}
