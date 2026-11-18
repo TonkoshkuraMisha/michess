@@ -2,10 +2,13 @@
 // Турниры (таск 15.3): /tournaments — свои турниры и создание нового; /tournaments/:id — турнир: таблица или сетка,
 // партии по турам, «Играть мою партию», диплом призёра. Партии ботов между собой играет сервер — страница
 // обновляет состояние, пока они идут.
+// Раскладка списка (план владельца 18.11, общие компоненты): шапка, карточки «Арены» и «Машина времени», «Мои
+// турниры» с меткой места или статуса, карьера и создание турнира.
 
 import {useCallback, useEffect, useMemo, useState} from 'react';
 import {Link, useNavigate, useParams} from 'react-router-dom';
-import {Trophy} from 'lucide-react';
+import {Hourglass, Swords, Trophy} from 'lucide-react';
+import {Badge, Card, CardGrid, EmptyState, Page, PageHeader, Section} from '../ui';
 import {API_BASE_URL} from '../../config/api';
 import {renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
@@ -174,40 +177,38 @@ export function TournamentsPage() {
         listTournaments().then(setItems).catch(() => undefined);
     }, []);
     return (
-        <div className="w-full max-w-4xl mx-auto p-3 flex flex-col gap-4 text-boxwood-light" data-testid="tournaments-page">
-            <header className="flex items-center gap-2">
-                <Trophy className="text-amber-400"/>
-                <h1 className="text-2xl font-bold text-amber-200">{t('tournaments.title')}</h1>
-            </header>
-            <p className="text-boxwood/85">{t('tournaments.intro')}</p>
-            <Link to="/arenas" data-testid="arenas-link" className="self-start text-amber-300 hover:underline">{t('arenas.cta')}</Link>
-            <section className="bg-acacia p-4 rounded-lg border-2 border-acacia-dark flex flex-col gap-2">
-                <h2 className="text-lg font-bold text-amber-200">{t('tournaments.myTournaments')}</h2>
-                {items.length === 0 ? <p className="text-sm text-boxwood/70">{t('tournaments.none')}</p> : (
-                    <ul className="flex flex-col gap-1">
+        <Page testId="tournaments-page">
+            <PageHeader title={t('tournaments.title')} icon={<Trophy size={24}/>} description={t('tournaments.intro')}/>
+            <CardGrid cols={2}>
+                <Card to="/arenas" testId="arenas-link" icon={<Swords size={20}/>}
+                      title={t('arenas.title')} description={t('arenas.cta')}/>
+                <Card to="/time-machine" testId="time-machine-link" icon={<Hourglass size={20}/>}
+                      title={t('timeMachine.title')} description={t('timeMachine.teaser')}/>
+            </CardGrid>
+            <Section title={t('tournaments.myTournaments')} testId="my-tournaments">
+                {items.length === 0 ? (
+                    <EmptyState icon={<Trophy size={28}/>} title={t('tournaments.none')}/>
+                ) : (
+                    <ul className="flex flex-col gap-1.5">
                         {items.map((item) => (
                             <li key={item.id}>
-                                <Link to={`/tournaments/${item.id}`} className="flex justify-between gap-2 bg-black/30 rounded px-3 py-2 hover:bg-black/50">
-                                    <span>{t(`tournaments.formats.${item.format}`)} · {item.size}</span>
-                                    <span className="text-sm text-amber-300">
+                                <Link to={`/tournaments/${item.id}`}
+                                      className="flex items-center justify-between gap-2 bg-acacia rounded-lg border border-amber-900/50 px-4 py-2.5 hover:border-amber-500 transition-colors">
+                                    <span className="font-bold text-amber-100">{t(`tournaments.formats.${item.format}`)} · {item.size}</span>
+                                    <Badge tone={item.status === 'finished' ? (item.my_place === 1 ? 'success' : 'neutral') : 'accent'}>
                                         {item.status === 'finished' && item.my_place
                                             ? t('tournaments.placeOf', {place: item.my_place, size: item.size})
                                             : t(`tournaments.statuses.${item.status}`)}
-                                    </span>
+                                    </Badge>
                                 </Link>
                             </li>
                         ))}
                     </ul>
                 )}
-            </section>
-            <Link to="/time-machine" data-testid="time-machine-link"
-                  className="bg-acacia p-4 rounded-lg border-2 border-acacia-dark hover:border-amber-500 transition flex flex-col gap-1">
-                <span className="font-bold text-amber-200">{t('timeMachine.title')}</span>
-                <span className="text-sm text-boxwood/85">{t('timeMachine.teaser')}</span>
-            </Link>
+            </Section>
             <Career/>
             <CreateTournament/>
-        </div>
+        </Page>
     );
 }
 

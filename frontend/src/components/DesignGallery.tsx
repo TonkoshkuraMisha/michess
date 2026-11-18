@@ -43,7 +43,7 @@ export function DesignGallery() {
                       badge={<Badge tone="accent">{t('design.current')}</Badge>}
                       footer={<><ProgressBar value={3} max={8} label={t('design.progress')}/><ButtonLink to="/learn/course" variant="primary" size="sm">{t('design.continue')}</ButtonLink></>}/>
                 <CardGrid>
-                    <Card to="/learn/mates" icon={<Crown size={20}/>} title={t('mateCourse.card')}
+                    <Card to="/learn/mates" icon={<Crown size={20}/>} title={t('mateCourse.title')} description={t('mateCourse.card')}
                           badge={<Badge tone="success">{t('design.done')}</Badge>} footer={<ProgressBar value={20} max={20} label={t('design.progress')}/>}/>
                     <Card to="/learn/endgames" icon={<BookOpen size={20}/>} title={t('design.cardEndgames')} footer={<ProgressBar value={7} max={33} label={t('design.progress')}/>}/>
                     <Card variant="muted" icon={<Trophy size={20}/>} title={t('design.cardLocked')} badge={<Badge tone="danger">{t('design.locked')}</Badge>}/>

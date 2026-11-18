@@ -49,6 +49,16 @@ export function getMaxViewportBoardSize(): number {
     return Math.max(MIN_BOARD_SIZE, Math.min(limit, window.innerWidth - 24));
 }
 
+/**
+ * Сторона доски для текущего окна: сохранённая игроком (строка из localStorage regence_board_size), но не больше, чем
+ * помещается; без сохранённой — наибольшая, что помещается. Вызывается при открытии и при каждом изменении окна,
+ * поэтому доска и сжимается, и снова растёт, когда окно разворачивают (раньше она только сжималась).
+ */
+export function fittedBoardSize(saved: string | null, maxFit: number = getMaxViewportBoardSize()): number {
+    const parsed = saved === null ? NaN : Number(saved);
+    return !Number.isNaN(parsed) && parsed >= MIN_BOARD_SIZE ? Math.min(parsed, maxFit) : maxFit;
+}
+
 /** Размер доски по умолчанию — наибольший, что помещается в окно (двойной щелчок по уголку растягивания). */
 export function getDefaultBoardSize(): number {
     if (typeof window !== 'undefined') {
