@@ -10,7 +10,7 @@ import {X} from 'lucide-react';
 import {useI18n} from '../../i18n';
 import {soundEngine} from '../../services/soundEngine';
 
-const STORAGE_PREFIX = 'michess_celebrated_';
+const STORAGE_PREFIX = 'regence_celebrated_';
 const CONFETTI_MS = 7000;
 
 interface Medal {
@@ -155,7 +155,7 @@ function LaurelBranch() {
             <path d={`M ${x0} ${y0} A ${r} ${r} 0 0 1 ${x1} ${y1}`} fill="none" stroke="#4d7a2c" strokeWidth="3" strokeLinecap="round"/>
             {pairs.map((leaf, i) => (
                 <g key={i} transform={`translate(${leaf.x} ${leaf.y}) rotate(${leaf.tangent}) scale(${leaf.scale})`}>
-                    <g className="michess-leaf" style={{animationDelay: `${leaf.delay}s`}}>
+                    <g className="regence-leaf" style={{animationDelay: `${leaf.delay}s`}}>
                         <ellipse cx={-4} cy={-9} rx={15} ry={6} fill="url(#laurel)" transform="rotate(-28)"/>
                         <ellipse cx={-4} cy={9} rx={15} ry={6} fill="url(#laurel)" transform="rotate(28)"/>
                     </g>
@@ -198,7 +198,7 @@ function Trophy({place}: { place: 1 | 2 | 3 }) {
             <path d="M95 60 H225 V120 C225 175 195 205 160 212 C125 205 95 175 95 120 Z" fill="url(#cup)"/>
             <rect x="88" y="52" width="144" height="14" rx="5" fill={m.main} stroke={m.dark} strokeWidth="2"/>
             <g clipPath="url(#cupClip)">
-                <rect className="michess-shine" x="-60" y="40" width="50" height="190" fill="url(#shine)" transform="skewX(-18)"/>
+                <rect className="regence-shine" x="-60" y="40" width="50" height="190" fill="url(#shine)" transform="skewX(-18)"/>
             </g>
             {/* Звезда и место */}
             <circle cx="160" cy="128" r="30" fill={m.dark} opacity="0.35"/>
@@ -239,38 +239,38 @@ export function TournamentCelebration({place, title, size, onClose}: Celebration
              className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden"
              style={{                 background: `radial-gradient(circle at 50% 40%, ${medal.glow} 0%, transparent 42%), rgba(10, 7, 3, 0.985)`,                 backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',             }}>
             <style>{`
-                @keyframes michess-rays { to { transform: rotate(360deg); } }
-                @keyframes michess-pop { 0% { transform: scale(0.2) translateY(60px); opacity: 0; }
+                @keyframes regence-rays { to { transform: rotate(360deg); } }
+                @keyframes regence-pop { 0% { transform: scale(0.2) translateY(60px); opacity: 0; }
                     60% { transform: scale(1.08) translateY(-6px); opacity: 1; } 100% { transform: scale(1) translateY(0); } }
-                @keyframes michess-shine { 0%, 35% { transform: translateX(0) skewX(-18deg); }
+                @keyframes regence-shine { 0%, 35% { transform: translateX(0) skewX(-18deg); }
                     70%, 100% { transform: translateX(420px) skewX(-18deg); } }
-                @keyframes michess-leaf { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-                @keyframes michess-title { 0% { transform: translateY(24px); opacity: 0; letter-spacing: 0.5em; }
+                @keyframes regence-leaf { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+                @keyframes regence-title { 0% { transform: translateY(24px); opacity: 0; letter-spacing: 0.5em; }
                     100% { transform: translateY(0); opacity: 1; letter-spacing: 0.06em; } }
-                .michess-leaf { transform-box: fill-box; transform-origin: center; animation: michess-leaf 0.45s ease-out both; }
-                .michess-shine { animation: michess-shine 3.2s ease-in-out 1s infinite; }
+                .regence-leaf { transform-box: fill-box; transform-origin: center; animation: regence-leaf 0.45s ease-out both; }
+                .regence-shine { animation: regence-shine 3.2s ease-in-out 1s infinite; }
                 @media (prefers-reduced-motion: reduce) {
-                    .michess-leaf, .michess-shine, .michess-anim { animation: none !important; }
+                    .regence-leaf, .regence-shine, .regence-anim { animation: none !important; }
                 }
             `}</style>
             {/* Лучи */}
-            <div aria-hidden="true" className="michess-anim absolute left-1/2 top-[42%] w-[160vmax] h-[160vmax] -translate-x-1/2 -translate-y-1/2"
+            <div aria-hidden="true" className="regence-anim absolute left-1/2 top-[42%] w-[160vmax] h-[160vmax] -translate-x-1/2 -translate-y-1/2"
                  style={{
                      background: `repeating-conic-gradient(${medal.ray} 0deg 6deg, transparent 6deg 18deg)`,
                      maskImage: 'radial-gradient(circle, black 0%, transparent 60%)',
                      WebkitMaskImage: 'radial-gradient(circle, black 0%, transparent 60%)',
-                     animation: calm ? undefined : 'michess-rays 40s linear infinite',
+                     animation: calm ? undefined : 'regence-rays 40s linear infinite',
                  }}/>
             {!calm && <Confetti/>}
             <div className="relative z-[101] flex flex-col items-center gap-3 px-4 text-center">
-                <h2 className="michess-anim text-4xl sm:text-6xl font-black uppercase"
+                <h2 className="regence-anim text-4xl sm:text-6xl font-black uppercase"
                     style={{
                         color: medal.light, textShadow: `0 0 24px ${medal.glow}, 0 4px 0 ${medal.dark}`,
-                        fontFamily: "Georgia, 'Times New Roman', serif", animation: calm ? undefined : 'michess-title 0.9s ease-out both',
+                        fontFamily: "Georgia, 'Times New Roman', serif", animation: calm ? undefined : 'regence-title 0.9s ease-out both',
                     }} data-testid="celebration-title">
                     {t(`celebration.${medal.key}`)}
                 </h2>
-                <div className="michess-anim" style={{animation: calm ? undefined : 'michess-pop 0.9s cubic-bezier(.2,1.4,.4,1) 0.15s both'}}>
+                <div className="regence-anim" style={{animation: calm ? undefined : 'regence-pop 0.9s cubic-bezier(.2,1.4,.4,1) 0.15s both'}}>
                     <Trophy place={rank}/>
                 </div>
                 <p className="text-lg sm:text-2xl font-bold text-amber-100" data-testid="celebration-subtitle">{title}</p>

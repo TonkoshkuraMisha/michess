@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="96" height="96" viewBox="0 0 96 96">
-  <!-- Тетрадь в клетку с полем: тиснёный тайл фона, собственная работа проекта michess, CC0. -->
+  <!-- Тетрадь в клетку с полем: тиснёный тайл фона, собственная работа проекта regence, CC0. -->
   <defs><g id="p" fill="none" stroke-width="1.1" stroke-linecap="butt">
     <path d="M0 0 H96"/><path d="M0 24 H96"/><path d="M0 48 H96"/><path d="M0 72 H96"/>
     <path d="M0 0 V96"/><path d="M24 0 V96"/><path d="M48 0 V96"/><path d="M72 0 V96"/>

@@ -1,7 +1,7 @@
 {
   "id": "/",
-  "name": "michess",
-  "short_name": "michess",
+  "name": "regence",
+  "short_name": "regence",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

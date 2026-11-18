@@ -85,7 +85,7 @@ PIECES = {
 }
 
 TEMPLATE = """<svg xmlns="http://www.w3.org/2000/svg" width="45" height="45" viewBox="4 0 37.5 43">
-  <!-- Набор «Льюис» по мотивам льюисских шахмат XII века: собственная работа проекта michess, CC0. -->
+  <!-- Набор «Льюис» по мотивам льюисских шахмат XII века: собственная работа проекта regence, CC0. -->
   <g stroke="{line}" stroke-width="1.5" stroke-linejoin="round">{body}
   </g>
 </svg>

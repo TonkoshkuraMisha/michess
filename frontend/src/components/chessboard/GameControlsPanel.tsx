@@ -256,7 +256,7 @@ export function GameControlsPanel({
                         <div className="grid grid-cols-2 gap-2">
                             <button
                                 type="button"
-                                onClick={() => navigateToReview(savedBotGameId, 'Michess Bot Arena', 1850)}
+                                onClick={() => navigateToReview(savedBotGameId, 'Regence Bot Arena', 1850)}
                                 className="flex items-center justify-center gap-1.5 px-3 py-1.5 bg-emerald-900/80 hover:bg-emerald-800 text-emerald-100 text-xs font-bold rounded-md transition shadow border border-emerald-600/50 cursor-pointer"
                             >
                                 <Eye size={14}/> {t('common.gameReview')}

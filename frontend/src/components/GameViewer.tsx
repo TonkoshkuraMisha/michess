@@ -118,7 +118,7 @@ export default function GameViewer({library = false, imported = false}: { librar
 
     const [boardSize, setBoardSize] = useState<number>(() => {
         const maxFit = getMaxViewportBoardSize();
-        const savedSize = localStorage.getItem('michess_board_size');
+        const savedSize = localStorage.getItem('regence_board_size');
         if (savedSize) {
             const parsed = Number(savedSize);
             if (!Number.isNaN(parsed) && parsed >= MIN_BOARD_SIZE) {
@@ -161,13 +161,13 @@ export default function GameViewer({library = false, imported = false}: { librar
     const handleThemeChange = (themeId: string) => {
         setBoardThemeKey(themeId);
         if (hasAnalysisAppearance()) setAnalysisAppearance(themeId, pieceSetKey);
-        else localStorage.setItem('michess_board_theme', themeId);
+        else localStorage.setItem('regence_board_theme', themeId);
     };
 
     const handlePieceSetChange = (setId: string) => {
         setPieceSetKey(setId);
         if (hasAnalysisAppearance()) setAnalysisAppearance(boardThemeKey, setId);
-        else localStorage.setItem('michess_piece_set', setId);
+        else localStorage.setItem('regence_piece_set', setId);
     };
 
     useEffect(() => {
@@ -188,7 +188,7 @@ export default function GameViewer({library = false, imported = false}: { librar
             const dynamicMax = getMaxViewportBoardSize();
             const nextSize = Math.min(Math.max(startSize + delta, MIN_BOARD_SIZE), dynamicMax);
             setBoardSize(nextSize);
-            localStorage.setItem('michess_board_size', String(nextSize));
+            localStorage.setItem('regence_board_size', String(nextSize));
         };
 
         const handleResizeEnd = () => {
@@ -225,7 +225,7 @@ export default function GameViewer({library = false, imported = false}: { librar
         e.stopPropagation();
         const defaultSize = getDefaultBoardSize();
         setBoardSize(defaultSize);
-        localStorage.setItem('michess_board_size', String(defaultSize));
+        localStorage.setItem('regence_board_size', String(defaultSize));
     };
 
     useEffect(() => {
@@ -908,7 +908,7 @@ export default function GameViewer({library = false, imported = false}: { librar
                     )}
                     {analysisReport && history.length > 0 && (
                         <button type="button" data-testid="download-annotated"
-                                onClick={() => downloadText(`michess-${gameId}-annotated.pgn`, buildPgn({
+                                onClick={() => downloadText(`regence-${gameId}-annotated.pgn`, buildPgn({
                                     headers: pgnHeaders, startFen, result: pgnHeaders.Result,
                                     moves: annotatedMoves(history, analysisReport, (coach) => coachText(coach, t)),
                                 }))}

@@ -33,7 +33,7 @@ export type MessagePluralKey = PluralKey<Messages>;
 
 const DATE_LOCALES: Record<Language, Locale> = {en: enUS, uk: ukDateLocale, ru: ruDateLocale};
 
-export const LANGUAGE_STORAGE_KEY = 'michess_language';
+export const LANGUAGE_STORAGE_KEY = 'regence_language';
 
 function readStoredLanguage(): Language | null {
     try {

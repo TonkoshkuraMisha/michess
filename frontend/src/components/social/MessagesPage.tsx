@@ -303,7 +303,7 @@ export function MessagesPage() {
 
     const refresh = useCallback(() => {
         messagesApi.conversations().then((r) => setItems(r.conversations)).catch(() => undefined);
-        window.dispatchEvent(new Event('michess:dm-changed'));
+        window.dispatchEvent(new Event('regence:dm-changed'));
     }, []);
 
     useEffect(() => {

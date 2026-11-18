@@ -34,7 +34,7 @@ export const THEME_PRESETS: ThemePreset[] = [
     {id: 'chess_school', board: 'chalkboard', pieces: 'merida', pattern: 'notebook', palette: 'ink', sound: 'soft'},
 ];
 
-export const PRESET_STORAGE_KEY = 'michess_theme_preset';
+export const PRESET_STORAGE_KEY = 'regence_theme_preset';
 
 export function findPreset(id: string | null | undefined): ThemePreset | undefined {
     return THEME_PRESETS.find((preset) => preset.id === id);
@@ -51,8 +51,8 @@ export function getSavedPresetId(): string | null {
 /** Применить комплект: доска, фигуры, фон страницы, звуки; запомнить в браузере. */
 export function applyPreset(preset: ThemePreset): void {
     try {
-        localStorage.setItem('michess_board_theme', preset.board);
-        localStorage.setItem('michess_piece_set', preset.pieces);
+        localStorage.setItem('regence_board_theme', preset.board);
+        localStorage.setItem('regence_piece_set', preset.pieces);
         localStorage.setItem(PRESET_STORAGE_KEY, preset.id);
     } catch {
         // Хранилище недоступно — фон и звук всё равно поменяются до перезагрузки.

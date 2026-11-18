@@ -19,7 +19,7 @@ export interface BoardPrefs {
 
 export const DEFAULT_BOARD_PREFS: BoardPrefs = {lastMove: 'highlight', moveInput: 'both', quickMove: false, animateOpponent: true, captured: 'value'};
 
-const KEY = 'michess_board_prefs';
+const KEY = 'regence_board_prefs';
 const ALLOWED: { [K in keyof BoardPrefs]: readonly BoardPrefs[K][] } = {
     lastMove: ['highlight', 'arrow', 'both'],
     moveInput: ['both', 'click'],

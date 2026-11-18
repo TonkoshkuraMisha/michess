@@ -10,8 +10,8 @@
 // Новая версия файла (VERSION) при следующем открытии удаляет старые кэши.
 
 const VERSION = 'v1';
-const SHELL_CACHE = `michess-shell-${VERSION}`;
-const ASSET_CACHE = `michess-assets-${VERSION}`;
+const SHELL_CACHE = `regence-shell-${VERSION}`;
+const ASSET_CACHE = `regence-assets-${VERSION}`;
 const OFFLINE_URL = '/offline.html';
 const SHELL = [OFFLINE_URL, '/offline.js', '/favicon.svg', '/icons/icon-192.png', '/manifest.webmanifest'];
 // Сколько файлов держать в кэше картинок и сборки: старые версии сборки и редкие фигуры вытесняются.
@@ -25,7 +25,8 @@ self.addEventListener('activate', (event) => {
     event.waitUntil(
         caches.keys()
             .then((keys) => Promise.all(keys
-                .filter((key) => key.startsWith('michess-') && key !== SHELL_CACHE && key !== ASSET_CACHE)
+                // Кэши прежнего имени платформы (michess-…, до 18.11.2026) тоже удаляются.
+                .filter((key) => (key.startsWith('regence-') || key.startsWith('michess-')) && key !== SHELL_CACHE && key !== ASSET_CACHE)
                 .map((key) => caches.delete(key))))
             .then(() => self.clients.claim()),
     );

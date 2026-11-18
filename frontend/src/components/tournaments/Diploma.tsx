@@ -39,7 +39,7 @@ export function Diploma({name, place, format, size, date}: DiplomaProps) {
             ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
             URL.revokeObjectURL(url);
             const link = document.createElement('a');
-            link.download = `michess-diploma-${place}.png`;
+            link.download = `regence-diploma-${place}.png`;
             link.href = canvas.toDataURL('image/png');
             link.click();
         };

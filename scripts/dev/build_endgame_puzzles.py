@@ -5,9 +5,9 @@
 поэтому позиции генерируются: случайная расстановка типа окончания → таблицы (settings.TABLEBASE_URL)
 → задача берётся, только если верный ход ровно один (выигрыш или, в защите, единственная ничья), и он подходит под
 тему. Перед позицией ставится законный ход соперника (отход его короля), как в формате базы lichess: FEN — до хода
-соперника, первый ход в Moves — его. Рейтинг — по глубине результата (DTZ). Темы — тегами «michess:<код>».
+соперника, первый ход в Moves — его. Рейтинг — по глубине результата (DTZ). Темы — тегами «michess:<код>» (идентификатор данных, не бренд).
 Детерминирован (--seed); нужна сеть; в CI не запускается. Загрузка в базу — scripts/import_puzzles.py (источник
-«michess», тема — из тега).
+«regence», тема — из тега).
 
 Лусены и Филидора здесь нет намеренно: в этих ладейных позициях верных ходов почти всегда несколько (замер 16.11.2026:
 из 70 позиций Лусены и 50 позиций Филидора — ни одной с единственным ходом), а задача засчитывает один. Эти приёмы
@@ -43,7 +43,7 @@ FIELDS = ("PuzzleId", "FEN", "Moves", "Rating", "RatingDeviation", "Popularity",
 def probe(fen: str) -> dict:
     """Ответ сервера таблиц (settings.TABLEBASE_URL) по позиции; 429 — минута ожидания, иначе до пяти попыток."""
     url = settings.TABLEBASE_URL + "?" + urllib.parse.urlencode({"fen": fen})
-    request = urllib.request.Request(url, headers={"User-Agent": "michess-endgame-puzzles"})
+    request = urllib.request.Request(url, headers={"User-Agent": "regence-endgame-puzzles"})
     for attempt in range(5):
         try:
             return json.load(urllib.request.urlopen(request, timeout=15))

@@ -112,13 +112,13 @@ export function NotificationBell() {
         const onNotification = () => refresh();
         gameSocket.on('notification', onNotification);
         gameSocket.on('direct_message', onNotification);
-        window.addEventListener('michess:dm-changed', onNotification);
+        window.addEventListener('regence:dm-changed', onNotification);
         return () => {
             alive.current = false;
             window.clearInterval(timer);
             gameSocket.off('notification', onNotification);
             gameSocket.off('direct_message', onNotification);
-            window.removeEventListener('michess:dm-changed', onNotification);
+            window.removeEventListener('regence:dm-changed', onNotification);
         };
     }, [refresh]);
 

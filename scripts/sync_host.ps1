@@ -86,7 +86,7 @@ function UnpushedBranches {
 # Режим «ухожу»
 # ---------------------------------------------------------------------------------------------
 function Invoke-Leave {
-    Write-Host "=== Michess: уход с хоста $hostTag ===" -ForegroundColor Cyan
+    Write-Host "=== Regence: уход с хоста $hostTag ===" -ForegroundColor Cyan
 
     Step "Получаем состояние GitHub"
     Invoke-Git fetch --prune --quiet
@@ -332,7 +332,7 @@ try {
         Invoke-Leave
     }
     else {
-        Write-Host "=== Michess: синхронизация хоста $hostTag ===" -ForegroundColor Cyan
+        Write-Host "=== Regence: синхронизация хоста $hostTag ===" -ForegroundColor Cyan
         Sync-Git
         if ($GitOnly) { Summary "Git синхронизирован"; exit $(if ($problems.Count) { 2 } else { 0 }) }
         Sync-Env

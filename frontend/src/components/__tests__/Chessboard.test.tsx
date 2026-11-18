@@ -516,7 +516,7 @@ describe('игра с наставником', () => {
     };
 
     async function startCoachedGame(check: object) {
-        localStorage.setItem('michess_coach_enabled', '1');
+        localStorage.setItem('regence_coach_enabled', '1');
         const calls: string[] = [];
         vi.stubGlobal('fetch', vi.fn(async (input: string | URL | Request) => {
             const url = String(input);

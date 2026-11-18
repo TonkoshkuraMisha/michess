@@ -105,8 +105,8 @@ export function opponentOf(game: ImportedGameView): { name: string; rating: numb
 }
 
 // Ник на сайте запоминается в браузере — удобство, не данные: без него всё работает.
-// Ключи localStorage: michess_import_nick_lichess и michess_import_nick_chesscom.
-const NICK_KEY = 'michess_import_nick';
+// Ключи localStorage: regence_import_nick_lichess и regence_import_nick_chesscom.
+const NICK_KEY = 'regence_import_nick';
 
 /** Ник, с которым игрок импортировал партии с этого сайта в прошлый раз; пусто — не запомнен. */
 export function savedNick(source: ImportSource): string {

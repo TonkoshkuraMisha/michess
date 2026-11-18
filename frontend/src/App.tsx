@@ -349,7 +349,7 @@ export default function App() {
                         </div>
                         <span
                             className={`hidden ${token && userProfile ? "min-[720px]:inline md:hidden lg:inline" : "min-[440px]:inline"} text-2xl font-extrabold tracking-wide text-boxwood-light group-hover:text-white transition`}>
-                            michess
+                            regence
                         </span>
                     </Link>
 

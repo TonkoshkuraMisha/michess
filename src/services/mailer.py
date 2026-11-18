@@ -32,26 +32,26 @@ Kind = Literal["verify", "reset"]
 # {hours} — срок её действия в часах (из EMAIL_VERIFY_TTL_S и PASSWORD_RESET_TTL_S, считает email_links.py).
 TEMPLATES: dict[Kind, dict[Language, tuple[str, str]]] = {
     "verify": {
-        "en": ("Confirm your e-mail for michess",
-               "Hello, {username}!\n\nTo confirm this address for your michess account, open the link:\n{link}\n\n"
+        "en": ("Confirm your e-mail for regence",
+               "Hello, {username}!\n\nTo confirm this address for your regence account, open the link:\n{link}\n\n"
                "The link works for {hours} h. If you did not ask for it, just ignore this letter."),
-        "uk": ("Підтвердіть e-mail для michess",
-               "Вітаємо, {username}!\n\nЩоб підтвердити цю адресу для акаунта michess, відкрийте посилання:\n{link}\n\n"
+        "uk": ("Підтвердіть e-mail для regence",
+               "Вітаємо, {username}!\n\nЩоб підтвердити цю адресу для акаунта regence, відкрийте посилання:\n{link}\n\n"
                "Посилання діє {hours} год. Якщо ви цього не просили, просто проігноруйте лист."),
-        "ru": ("Подтвердите e-mail для michess",
-               "Здравствуйте, {username}!\n\nЧтобы подтвердить этот адрес для аккаунта michess, откройте ссылку:\n{link}\n\n"
+        "ru": ("Подтвердите e-mail для regence",
+               "Здравствуйте, {username}!\n\nЧтобы подтвердить этот адрес для аккаунта regence, откройте ссылку:\n{link}\n\n"
                "Ссылка действует {hours} ч. Если вы этого не просили, просто проигнорируйте письмо."),
     },
     "reset": {
-        "en": ("Reset your michess password",
+        "en": ("Reset your regence password",
                "Hello, {username}!\n\nTo set a new password, open the link:\n{link}\n\n"
                "The link works for {hours} h and only once. If you did not ask to reset the password, ignore this "
                "letter: your password stays the same."),
-        "uk": ("Скидання пароля michess",
+        "uk": ("Скидання пароля regence",
                "Вітаємо, {username}!\n\nЩоб задати новий пароль, відкрийте посилання:\n{link}\n\n"
                "Посилання діє {hours} год і лише один раз. Якщо ви не просили скинути пароль, проігноруйте лист: "
                "пароль не зміниться."),
-        "ru": ("Сброс пароля michess",
+        "ru": ("Сброс пароля regence",
                "Здравствуйте, {username}!\n\nЧтобы задать новый пароль, откройте ссылку:\n{link}\n\n"
                "Ссылка действует {hours} ч и только один раз. Если вы не просили сбросить пароль, проигнорируйте "
                "письмо: пароль не изменится."),

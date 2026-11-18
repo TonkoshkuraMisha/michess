@@ -110,7 +110,7 @@ export interface ImportResult {
 /** Предел числа персоналий — тот же, что на сервере (MAX_PERSONALITIES_PER_USER); гостю он же в браузере. */
 export const MAX_PERSONALITIES = 20;
 /** Ключ localStorage с персоналиями гостя (JSON-массив Personality). */
-export const GUEST_STORAGE_KEY = 'michess_guest_personalities';
+export const GUEST_STORAGE_KEY = 'regence_guest_personalities';
 
 /** Характер новой персоналии — те же значения по умолчанию, что у BotPersonalityConfig на сервере. */
 export const DEFAULT_CONFIG: PersonalityConfig = {

@@ -7,7 +7,7 @@
 завершения партии и потерянных обновлений рейтинга работает на реальных бэкендах.
 
 Запуск (нужны пустая БД и Redis, данные в них будут удалены):
-    TEST_DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/michess_test \
+    TEST_DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/regence_test \
     TEST_REDIS_URL=redis://localhost:6379/15 \
     python -m pytest -m integration
 Без этих переменных тесты пропускаются. В CI они запускаются с сервисами postgres и redis.

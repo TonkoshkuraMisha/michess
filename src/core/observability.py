@@ -15,7 +15,7 @@ docker-compose.prod.yml (каталог /tmp/prometheus на tmpfs, очищае
 переменной нет — метрики берутся из памяти единственного процесса.
 
 Воркеры Celery (фоновый разбор, симуляции турниров) отдают свои метрики сами — start_worker_metrics_server на порту
-WORKER_METRICS_PORT; так michess_engine_seconds_total учитывает и фоновую работу движка.
+WORKER_METRICS_PORT; так regence_engine_seconds_total учитывает и фоновую работу движка.
 
 Откуда значения: счётчики WebSocket увеличивает src/api/websockets.py, HTTP — http_metrics_middleware ниже,
 законченные партии и сбои цикла часов — src/services/game_state.py, время движка — src/services/engine_pool.py,
@@ -51,37 +51,37 @@ logger = logging.getLogger(__name__)
 # не id пользователей или партий: иначе число временных рядов растёт без предела.
 
 WS_CONNECTIONS = Gauge(
-    "michess_ws_connections", "Open WebSocket connections", multiprocess_mode="livesum",
+    "regence_ws_connections", "Open WebSocket connections", multiprocess_mode="livesum",
 )
 WS_ACTIONS = Counter(
-    "michess_ws_actions_total", "Processed WebSocket actions", ["action", "outcome"],
+    "regence_ws_actions_total", "Processed WebSocket actions", ["action", "outcome"],
 )
 WS_ACTION_SECONDS = Histogram(
-    "michess_ws_action_seconds", "WebSocket action processing time (make_move = move latency)", ["action"],
+    "regence_ws_action_seconds", "WebSocket action processing time (make_move = move latency)", ["action"],
     buckets=(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0),
 )
 HTTP_REQUESTS = Counter(
-    "michess_http_requests_total", "HTTP requests", ["method", "route", "status"],
+    "regence_http_requests_total", "HTTP requests", ["method", "route", "status"],
 )
 HTTP_REQUEST_SECONDS = Histogram(
-    "michess_http_request_seconds", "HTTP request processing time", ["method", "route"],
+    "regence_http_request_seconds", "HTTP request processing time", ["method", "route"],
 )
 DB_POOL_CHECKED_OUT = Gauge(
-    "michess_db_pool_checked_out", "Database connections currently checked out of the pool",
+    "regence_db_pool_checked_out", "Database connections currently checked out of the pool",
     multiprocess_mode="livesum",
 )
 # Только партии между людьми (game_state.finish_game); партии с ботами (/bots/save-game) сюда не входят.
 GAMES_FINISHED = Counter(
-    "michess_games_finished_total", "Games finished and recorded in the database", ["termination"],
+    "regence_games_finished_total", "Games finished and recorded in the database", ["termination"],
 )
 TIMEOUT_CHECK_FAILURES = Counter(
-    "michess_timeout_check_failures_total", "Failed timeout checks of individual games",
+    "regence_timeout_check_failures_total", "Failed timeout checks of individual games",
 )
 # Бюджет движка (таск 23.3): «процессор на активного игрока в день» =
-#   increase(michess_engine_seconds_total[1d]) / michess_active_players_today (в конце суток UTC).
+#   increase(regence_engine_seconds_total[1d]) / regence_active_players_today (в конце суток UTC).
 # Время движка считает сам пул (src/services/engine_pool.py), игроков за день — HyperLogLog в Redis.
 ACTIVE_PLAYERS_TODAY = Gauge(
-    "michess_active_players_today", "Distinct logged-in players seen today (UTC)", multiprocess_mode="mostrecent",
+    "regence_active_players_today", "Distinct logged-in players seen today (UTC)", multiprocess_mode="mostrecent",
 )
 # Суточный счётчик игроков хранится в Redis трое суток — с запасом, чтобы вчерашнее значение ещё можно было прочесть.
 ACTIVE_PLAYERS_TTL_S = 3 * 86400
@@ -228,7 +228,7 @@ def instrument_engine(engine) -> None:
 def init_sentry(component: str) -> bool:
     """
     Подключает Sentry, если задан SENTRY_DSN; возвращает, подключён ли. component — "api" (вызов в src/main.py) или
-    "worker" (src/worker/celery_app.py), попадает в тег событий. Релиз — michess@VERSION, личные данные не
+    "worker" (src/worker/celery_app.py), попадает в тег событий. Релиз — regence@VERSION, личные данные не
     отправляются (send_default_pii=False).
     """
     if not settings.SENTRY_DSN:
@@ -239,7 +239,7 @@ def init_sentry(component: str) -> bool:
     sentry_sdk.init(
         dsn=settings.SENTRY_DSN,
         environment=settings.ENVIRONMENT,
-        release=f"michess@{settings.VERSION}",
+        release=f"regence@{settings.VERSION}",
         traces_sample_rate=settings.SENTRY_TRACES_SAMPLE_RATE,
         send_default_pii=False,
     )

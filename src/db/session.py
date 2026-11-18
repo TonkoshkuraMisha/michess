@@ -18,7 +18,7 @@ from src.core.observability import instrument_engine
 
 # Движок — один на процесс API. pool_timeout — сколько запрос ждёт свободное соединение (DB_POOL_TIMEOUT_S);
 # pool_pre_ping проверяет соединение перед выдачей, чтобы после перезапуска PostgreSQL запросы не падали на
-# оборванных соединениях. instrument_engine считает занятые соединения для метрики michess_db_pool_checked_out.
+# оборванных соединениях. instrument_engine считает занятые соединения для метрики regence_db_pool_checked_out.
 engine = create_async_engine(
     settings.async_database_url,
     echo=False,

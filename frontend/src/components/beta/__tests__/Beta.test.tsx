@@ -90,7 +90,7 @@ describe('канал сообщества', () => {
         const link = await screen.findByTestId('community-link');
         expect(link).toHaveAttribute('href', 'https://t.me/example');
         expect(link).toHaveAttribute('target', '_blank');
-        expect(link).toHaveTextContent('Канал michess в Telegram');
+        expect(link).toHaveTextContent('Канал regence в Telegram');
     });
 
     it.each([

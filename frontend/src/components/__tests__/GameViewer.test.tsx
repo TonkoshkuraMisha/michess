@@ -18,7 +18,7 @@ vi.mock('../../services/soundEngine', async (importOriginal) => {
 
 const FOOLS_MATE_PGN = [
     '[Event "Casual"]',
-    '[Site "Michess"]',
+    '[Site "Regence"]',
     '[Date "2026.11.01"]',
     '[White "alice"]',
     '[Black "bob"]',

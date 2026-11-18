@@ -80,7 +80,7 @@ def download_and_install_stockfish() -> str:
         return target_path
 
     print("[1/3] Запрашиваем последний релиз Stockfish с GitHub...")
-    headers = {"User-Agent": "Michess-Setup/1.0"}
+    headers = {"User-Agent": "Regence-Setup/1.0"}
     resp = requests.get(GITHUB_RELEASE_API, headers=headers, timeout=20)
     resp.raise_for_status()
     release_data = resp.json()

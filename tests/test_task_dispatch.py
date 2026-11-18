@@ -88,6 +88,6 @@ async def test_background_scheduling_returns_immediately(monkeypatch):
 
 def test_task_is_bound_to_project_celery_app():
     """С @shared_task API-процесс публиковал в amqp://localhost вместо брокера Redis."""
-    assert analyze_game_task.app.main == "michess_worker"
+    assert analyze_game_task.app.main == "regence_worker"
     assert analyze_game_task.app.conf.broker_url.startswith("redis://")
     assert analyze_game_task.ignore_result is True

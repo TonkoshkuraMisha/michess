@@ -389,7 +389,7 @@ def _build_pgn_string(
         # Заголовки SetUp/FEN — стандартный способ записать партию не с начальной расстановки.
         pgn_game.setup(board)
     pgn_game.headers["Event"] = "Historical Bot Match"
-    pgn_game.headers["Site"] = "Michess Bot Arena"
+    pgn_game.headers["Site"] = "Regence Bot Arena"
     pgn_game.headers["Date"] = datetime.now(UTC).strftime("%Y.%m.%d")
     pgn_game.headers["Round"] = "-"
     pgn_game.headers["White"] = white_name
@@ -472,7 +472,7 @@ def _prepare_game_kwargs(
         "status": GameStatus.COMPLETED,
         "finished_at": now_utc,
         "pgn_date": now_utc.strftime("%Y.%m.%d"),
-        "site": "Michess Bot Arena",
+        "site": "Regence Bot Arena",
         # У партии с произвольной позиции дебюта нет.
         "eco": None if payload.start_fen else openings.eco_code(payload.moves_uci),
     }
