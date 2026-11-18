@@ -20,8 +20,9 @@ import {useState, useEffect, useRef, useCallback} from 'react';
 import {socialApi} from '../services/social';
 import {useLocation, useNavigate, useParams} from 'react-router-dom';
 import {Chess} from 'chess.js';
-import {ListOrdered, Bot, Zap, Radio, MessageSquare, GraduationCap, ScanEye} from 'lucide-react';
-import {SegmentedControl} from './ui';
+import {ListOrdered, Zap, MessageSquare, GraduationCap, ScanEye, Swords} from 'lucide-react';
+import {Button, SegmentedControl} from './ui';
+import {NewGameDialog} from './chessboard/NewGameDialog';
 import {gameSocket} from '../services/gameSocket';
 import {soundEngine, resolveMoveSound} from '../services/soundEngine';
 import type {SoundEventType} from '../services/soundEngine';
@@ -79,7 +80,7 @@ import {PlayerInfoBar} from './chessboard/PlayerInfoBar';
 import {GameControlsPanel} from './chessboard/GameControlsPanel';
 import {GameHallHeader} from './chessboard/GameHallHeader';
 import {TimeControlPicker} from './chessboard/TimeControlPicker';
-import {MatchmakingPanel} from './chessboard/MatchmakingPanel';
+import {MatchmakingPanel, PvpGameStatus} from './chessboard/MatchmakingPanel';
 import {HistoricalBotsPanel} from './chessboard/HistoricalBotsPanel';
 import {PersonalityWorkshop} from './chessboard/PersonalityWorkshop';
 import {LadderPanel} from './chessboard/LadderPanel';
@@ -130,7 +131,6 @@ export default function Chessboard() {
     // Код приглашения из адреса /challenge/{код}; принимает приглашение useGameSocket.
     const {inviteCode} = useParams<{ inviteCode?: string }>();
 
-    const [leftSectionTab, setLeftSectionTab] = useState<'bots' | 'lobby'>('bots');
     const [lobbyTab, setLobbyTab] = useState<'lobby' | 'live'>('lobby');
     const [showInvitePanel, setShowInvitePanel] = useState(false);
     const [showAppearanceDropdown, setShowAppearanceDropdown] = useState(false);
@@ -376,7 +376,7 @@ export default function Chessboard() {
         setGame, setHistory, setViewIndex, setSelectedSquare, setMyColor, setIsManualFlip, setPendingPromotion,
         clearPremove, setGameOverResult, setRatingInfo, setDrawOfferStatus, setRematchStatus,
         setWhiteTimeMs, setBlackTimeMs, resetLowTimeWarning, applyIncrement,
-        moveStartTime, myColorRef, gameIdRef, setGameId, setLeftSectionTab, setWhitePlayer, setBlackPlayer,
+        moveStartTime, myColorRef, gameIdRef, setGameId, setWhitePlayer, setBlackPlayer,
         playAudio, playOutcomeSound, updateSessionStats,
         isAssisted: isCoachAssisted, onNewGame: coach.reset,
     });
@@ -408,7 +408,7 @@ export default function Chessboard() {
         setGame, setHistory, setViewIndex, setGameId, setMyColor, setSpectatingGameId, setActiveBot,
         setStateVersion, setWhitePlayer, setBlackPlayer, setRatingInfo, setGameOverResult,
         setDrawOfferStatus, setRematchStatus, isSearching, setIsSearching, setIsManualFlip, setSelectedSquare,
-        setPendingPromotion, clearPremove, setWhiteTimeMs, setBlackTimeMs, setLeftSectionTab,
+        setPendingPromotion, clearPremove, setWhiteTimeMs, setBlackTimeMs,
         setLobbyTab, setIsTimeDropdownOpen, setShowInvitePanel, moveStartTime, resetLowTimeWarning,
         exitBotGame, playAudio, playOutcomeSound, updateSessionStats,
     });
@@ -1103,6 +1103,13 @@ export default function Chessboard() {
         ...(xrayAvailable ? ['xray' as const] : []),
     ];
     const [sideTab, setSideTab] = useState<SideTab>('moves');
+    // Окно «Новая партия» (схема владельца 18.11). Пока идёт партия или игрок смотрит чужую, новую не начать; как
+    // только партия началась (из окна или из лобби), окно закрывается само.
+    const [newGameOpen, setNewGameOpen] = useState(false);
+    const gameRunning = Boolean(spectatingGameId) || (Boolean(gameId || activeBot) && !gameOverResult);
+    useEffect(() => {
+        if (gameRunning) setNewGameOpen(false);
+    }, [gameRunning]);
     const shownTab: SideTab = sideTabs.includes(sideTab) ? sideTab : 'moves';
     // Предупреждение наставника о зевке нельзя пропустить: вкладка «Наставник» открывается сама, а когда игрок ответил
     // («оставить ход» или «вернуть»), колонка возвращается к ходам — если её открыл не сам игрок.
@@ -1539,7 +1546,8 @@ export default function Chessboard() {
                 </div>
             )}
 
-            {/* ЛЕВАЯ КОЛОНКА: КОНТРОЛЬ ВРЕМЕНИ, ПОИСК СОПЕРНИКА, БОТЫ (МАСТЕРА, МАСТЕРСКАЯ, ЛЕСТНИЦА), ЛОББИ И LIVE */}
+            {/* ЛЕВАЯ КОЛОНКА: «НОВАЯ ПАРТИЯ» (ОКНО ПО ШАГАМ: КОНТРОЛЬ ВРЕМЕНИ, ПОИСК СОПЕРНИКА, БОТЫ), ИДУЩИЙ ПОИСК,
+                СОПЕРНИК-БОТ, ТУРНИРЫ, ЛОББИ И LIVE */}
             <div
                 className="w-full xl:w-[400px] 2xl:w-[440px] xl:h-full bg-acacia p-3 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-2 text-boxwood-light order-2 xl:order-1 shrink-0 xl:overflow-hidden">
 
@@ -1550,150 +1558,36 @@ export default function Chessboard() {
                     onFlipBoard={() => setIsManualFlip(prev => !prev)}
                 />
 
-                <div
-                    className="bg-acacia-dark p-2.5 rounded-md border border-amber-900/50 flex flex-col gap-2 shadow-inner shrink-0">
-                    <TimeControlPicker
-                        selectedTimeControl={selectedTimeControl}
-                        manualBaseMinutes={manualBaseMinutes}
-                        manualIncSeconds={manualIncSeconds}
-                        onManualBaseMinutesChange={setManualBaseMinutes}
-                        onManualIncSecondsChange={setManualIncSeconds}
-                        isOpen={isTimeDropdownOpen}
-                        onToggleOpen={() => setIsTimeDropdownOpen(!isTimeDropdownOpen)}
-                        onSelect={(opt) => {
-                            setSelectedTimeControl(opt);
-                            if (opt.isManual) {
-                                setManualBaseMinutes(Math.max(1, Math.round(opt.base)));
-                                setManualIncSeconds(opt.inc);
-                            }
-                            setIsTimeDropdownOpen(false);
-                        }}
-                        disabled={isSearching || !!gameId || (!!activeBot && !gameOverResult)}
-                        dropdownRef={timeDropdownRef}
-                    />
+                <Button variant="primary" size="lg" icon={<Swords size={18}/>} onClick={() => setNewGameOpen(true)}
+                        disabled={gameRunning} data-testid="new-game-open" className="w-full shrink-0">
+                    {t('newGame.open')}
+                </Button>
 
-                    <MatchmakingPanel
-                        gameId={gameId}
-                        gameOverResult={gameOverResult}
-                        isRatedGame={isRatedGame}
-                        ratedChoice={ratedChoice}
-                        onRatedChoiceChange={setRatedChoice}
-                        isSearching={isSearching}
-                        onStartMatchmaking={startMatchmaking}
-                        onCancelMatchmaking={cancelMatchmaking}
-                        showInvitePanel={showInvitePanel}
-                        onToggleInvitePanel={() => setShowInvitePanel(prev => !prev)}
-                        inviteColorPref={inviteColorPref}
-                        inviteOdds={inviteOdds}
-                        onInviteOddsChange={setInviteOdds}
-                        inviteVariant={inviteVariant}
-                        onInviteVariantChange={setInviteVariant}
-                        onInviteColorPrefChange={setInviteColorPref}
-                        createdInviteCode={createdInviteCode}
-                        inviteCopied={inviteCopied}
-                        onCreatePrivateInvite={handleCreatePrivateInvite}
-                        onCopyInviteLink={handleCopyInviteLink}
-                    />
-                </div>
+                {gameId && <PvpGameStatus gameOverResult={gameOverResult} isRatedGame={isRatedGame}/>}
 
-                <div
-                    className="grid grid-cols-2 gap-1.5 p-1 bg-acacia-dark rounded-md border border-amber-900/50 shrink-0">
-                    <button
-                        type="button"
-                        onClick={() => setLeftSectionTab('bots')}
-                        className={`py-1.5 px-2.5 rounded text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                            leftSectionTab === 'bots'
-                                ? 'bg-amber-700 text-white shadow border border-amber-500/50'
-                                : 'text-boxwood/75 hover:text-amber-200 hover:bg-white/5'
-                        }`}
-                    >
-                        <Bot size={15}/> {t('hall.tabBots')}
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => setLeftSectionTab('lobby')}
-                        className={`py-1.5 px-2.5 rounded text-xs sm:text-sm font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
-                            leftSectionTab === 'lobby'
-                                ? 'bg-amber-700 text-white shadow border border-amber-500/50'
-                                : 'text-boxwood/75 hover:text-amber-200 hover:bg-white/5'
-                        }`}
-                    >
-                        <Radio size={14}
-                               className={filteredQueue.length + liveGames.length > 0 ? 'text-emerald-400 animate-pulse' : ''}/>
-                        <span>{t('hall.tabLobby')}</span>
-                        <span className="text-xs font-mono px-1.5 py-0.2 rounded bg-black/40 text-amber-300">
-                            {filteredQueue.length + liveGames.length}
-                        </span>
-                    </button>
-                </div>
+                {isSearching && !newGameOpen && (
+                    <div role="status" data-testid="searching-bar"
+                         className="flex items-center justify-between gap-2 rounded-md bg-emerald-950/70 border border-emerald-600/50 px-3 py-2 text-sm text-emerald-100 shrink-0">
+                        <span className="animate-pulse">{t('newGame.searching')}</span>
+                        <Button size="sm" onClick={cancelMatchmaking}>{t('common.cancel')}</Button>
+                    </div>
+                )}
+
+                {/* Соперник-бот текущей партии: имя, «думает…», реплика или девиз. */}
+                {activeBotProfile && activeBot && (
+                    <div className="p-2 rounded-md bg-black/55 border border-amber-600/40 text-xs text-amber-100 shrink-0" data-testid="opponent-note">
+                        <div className="font-bold text-amber-400 mb-0.5 flex justify-between">
+                            <span>{t('bots.thought', {name: activeBotProfile.shortName})}</span>
+                            {isBotThinking && <span className="animate-pulse text-amber-300 font-mono text-[11px]">{t('bots.thinking')}</span>}
+                        </div>
+                        <div className="text-boxwood-light leading-snug">{botComment ? renderStatus(botComment, t) : activeBotProfile.motto}</div>
+                    </div>
+                )}
 
                 {/* Турниры, где ждут партию игрока: путь назад — и после перезагрузки страницы. */}
                 {!inTournamentGame && !gameId && !(activeBot && !gameOverResult) && <ContinueTournaments/>}
-                {leftSectionTab === 'bots' ? (
-                    <div className="flex-1 min-h-0 flex flex-col gap-1.5">
-                    <div className="grid grid-cols-3 gap-1 text-xs font-bold" role="tablist">
-                        {(['historical', 'workshop', 'ladder'] as const).map((view) => (
-                            <button key={view} type="button" role="tab" aria-selected={botsView === view}
-                                    onClick={() => setBotsView(view)}
-                                    className={`py-1 rounded border cursor-pointer ${botsView === view
-                                        ? 'bg-amber-800 text-white border-amber-400'
-                                        : 'bg-black/35 text-boxwood/85 border-amber-900/40 hover:border-amber-600/50'}`}>
-                                {t(view === 'historical' ? 'hall.viewHistorical' : view === 'workshop' ? 'hall.viewWorkshop' : 'hall.viewLadder')}
-                            </button>
-                        ))}
-                    </div>
-                    {botsView !== 'historical' ? (
-                        <div className="flex-1 min-h-0 bg-acacia-dark p-2.5 rounded-md border border-amber-700/40 overflow-y-auto flex flex-col gap-2">
-                            {activeBotProfile && (activeBot === 'custom' || isLadderGame) && (
-                                <div className="p-2 rounded-md bg-black/55 border border-amber-600/40 text-xs text-amber-100">
-                                    <div className="font-bold text-amber-400 mb-0.5 flex justify-between">
-                                        <span>{t('bots.thought', {name: activeBotProfile.shortName})}</span>
-                                        {isBotThinking && <span className="animate-pulse text-amber-300 font-mono text-[11px]">{t('bots.thinking')}</span>}
-                                    </div>
-                                    <div className="text-boxwood-light leading-snug">{botComment ? renderStatus(botComment, t) : activeBotProfile.motto}</div>
-                                </div>
-                            )}
-                            {botsView === 'ladder' ? (
-                                <LadderPanel
-                                    playDisabled={(!!gameId || !!activeBot) && !gameOverResult}
-                                    onStart={handleLadderStart}
-                                    lastOutcome={ladderOutcome}
-                                />
-                            ) : (
-                                <PersonalityWorkshop
-                                    token={getToken()}
-                                    playDisabled={!!gameId && !gameOverResult}
-                                    onPlay={(opponent: CustomOpponent, colorPref) => handleStartCustomGame(opponent, colorPref)}
-                                    canStartFromPosition={canStartFromPosition}
-                                    startFromPosition={startFromPosition}
-                                    onStartFromPositionChange={setStartFromPosition}
-                                />
-                            )}
-                        </div>
-                    ) : (
-                    <HistoricalBotsPanel
-                        selectedBotId={selectedBotId}
-                        onSelectBot={setSelectedBotId}
-                        selectedBotProfile={selectedBotProfile}
-                        activeBot={activeBot}
-                        activeBotProfile={activeBotProfile}
-                        gameId={gameId}
-                        gameOverResult={gameOverResult}
-                        isBotThinking={isBotThinking}
-                        botComment={botComment ? renderStatus(botComment, t) : null}
-                        onStartBotGame={handleStartBotGame}
-                        canStartFromPosition={canStartFromPosition}
-                        startFromPosition={startFromPosition}
-                        onStartFromPositionChange={setStartFromPosition}
-                        measured={measuredBotRatings}
-                        live={liveBotStrength}
-                        rivals={botRivals}
-                        odds={oddsChoice}
-                        onOddsChange={setOddsChoice}
-                    />
-                    )}
-                    </div>
-                ) : (
+
+                <div className="flex-1 min-h-0 flex flex-col">
                     <LobbyPanel
                         lobbyTab={lobbyTab}
                         onLobbyTabChange={setLobbyTab}
@@ -1705,7 +1599,113 @@ export default function Chessboard() {
                         onAcceptChallenge={acceptChallenge}
                         onSpectateGame={handleSpectateGame}
                     />
-                )}
+                </div>
+
+                <NewGameDialog
+                    open={newGameOpen}
+                    onClose={() => setNewGameOpen(false)}
+                    timeControl={(
+                        <TimeControlPicker
+                            selectedTimeControl={selectedTimeControl}
+                            manualBaseMinutes={manualBaseMinutes}
+                            manualIncSeconds={manualIncSeconds}
+                            onManualBaseMinutesChange={setManualBaseMinutes}
+                            onManualIncSecondsChange={setManualIncSeconds}
+                            isOpen={isTimeDropdownOpen}
+                            onToggleOpen={() => setIsTimeDropdownOpen(!isTimeDropdownOpen)}
+                            onSelect={(opt) => {
+                                setSelectedTimeControl(opt);
+                                if (opt.isManual) {
+                                    setManualBaseMinutes(Math.max(1, Math.round(opt.base)));
+                                    setManualIncSeconds(opt.inc);
+                                }
+                                setIsTimeDropdownOpen(false);
+                            }}
+                            disabled={isSearching || !!gameId || (!!activeBot && !gameOverResult)}
+                            dropdownRef={timeDropdownRef}
+                        />
+                    )}
+                    human={(
+                        <MatchmakingPanel
+                            gameId={gameId}
+                            gameOverResult={gameOverResult}
+                            isRatedGame={isRatedGame}
+                            ratedChoice={ratedChoice}
+                            onRatedChoiceChange={setRatedChoice}
+                            isSearching={isSearching}
+                            onStartMatchmaking={startMatchmaking}
+                            onCancelMatchmaking={cancelMatchmaking}
+                            showInvitePanel={showInvitePanel}
+                            onToggleInvitePanel={() => setShowInvitePanel(prev => !prev)}
+                            inviteColorPref={inviteColorPref}
+                            inviteOdds={inviteOdds}
+                            onInviteOddsChange={setInviteOdds}
+                            inviteVariant={inviteVariant}
+                            onInviteVariantChange={setInviteVariant}
+                            onInviteColorPrefChange={setInviteColorPref}
+                            createdInviteCode={createdInviteCode}
+                            inviteCopied={inviteCopied}
+                            onCreatePrivateInvite={handleCreatePrivateInvite}
+                            onCopyInviteLink={handleCopyInviteLink}
+                        />
+                    )}
+                    bots={(
+                        <div className="flex-1 min-h-0 flex flex-col gap-1.5">
+                        <div className="grid grid-cols-3 gap-1 text-xs font-bold" role="tablist">
+                            {(['historical', 'workshop', 'ladder'] as const).map((view) => (
+                                <button key={view} type="button" role="tab" aria-selected={botsView === view}
+                                        onClick={() => setBotsView(view)}
+                                        className={`py-1 rounded border cursor-pointer ${botsView === view
+                                            ? 'bg-amber-800 text-white border-amber-400'
+                                            : 'bg-black/35 text-boxwood/85 border-amber-900/40 hover:border-amber-600/50'}`}>
+                                    {t(view === 'historical' ? 'hall.viewHistorical' : view === 'workshop' ? 'hall.viewWorkshop' : 'hall.viewLadder')}
+                                </button>
+                            ))}
+                        </div>
+                        {botsView !== 'historical' ? (
+                            <div className="flex-1 min-h-0 bg-acacia-dark p-2.5 rounded-md border border-amber-700/40 overflow-y-auto flex flex-col gap-2">
+                                {botsView === 'ladder' ? (
+                                    <LadderPanel
+                                        playDisabled={(!!gameId || !!activeBot) && !gameOverResult}
+                                        onStart={handleLadderStart}
+                                        lastOutcome={ladderOutcome}
+                                    />
+                                ) : (
+                                    <PersonalityWorkshop
+                                        token={getToken()}
+                                        playDisabled={!!gameId && !gameOverResult}
+                                        onPlay={(opponent: CustomOpponent, colorPref) => handleStartCustomGame(opponent, colorPref)}
+                                        canStartFromPosition={canStartFromPosition}
+                                        startFromPosition={startFromPosition}
+                                        onStartFromPositionChange={setStartFromPosition}
+                                    />
+                                )}
+                            </div>
+                        ) : (
+                        <HistoricalBotsPanel
+                            selectedBotId={selectedBotId}
+                            onSelectBot={setSelectedBotId}
+                            selectedBotProfile={selectedBotProfile}
+                            activeBot={activeBot}
+                            activeBotProfile={activeBotProfile}
+                            gameId={gameId}
+                            gameOverResult={gameOverResult}
+                            isBotThinking={isBotThinking}
+                            botComment={botComment ? renderStatus(botComment, t) : null}
+                            onStartBotGame={handleStartBotGame}
+                            canStartFromPosition={canStartFromPosition}
+                            startFromPosition={startFromPosition}
+                            onStartFromPositionChange={setStartFromPosition}
+                            measured={measuredBotRatings}
+                            live={liveBotStrength}
+                            rivals={botRivals}
+                            odds={oddsChoice}
+                            onOddsChange={setOddsChoice}
+                        />
+                        )}
+                        </div>
+                    )}
+                />
             </div>
 
             {/* ЦЕНТРАЛЬНАЯ КОЛОНКА: ИГРОКИ И ШАХМАТНАЯ ДОСКА */}

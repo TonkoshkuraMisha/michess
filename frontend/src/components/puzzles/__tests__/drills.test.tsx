@@ -97,6 +97,12 @@ describe('упражнения-генераторы', () => {
         expect(answers(calls)).toEqual([{key: 'capture.r.1.5', moves: ['a1a8'], run: false}]);
         expect(screen.getByTestId('drill-outcome').textContent).toBe('Верно!');
         expect(screen.getByTestId('puzzle-mark-ok')).toBeTruthy();
+
+        // После ответа доска свободна (решение владельца 18.11): король уходит от шаха — разбор на доске, запросов нет.
+        await clickMove('e8', 'e7');
+        expect(cell('e7').querySelector('img')?.getAttribute('alt')).toBe('bk');
+        expect(screen.getByTestId('explorer-controls')).toBeTruthy();
+        expect(answers(calls)).toHaveLength(1);
     });
 
     it('неверный ход — отметка и решение', async () => {

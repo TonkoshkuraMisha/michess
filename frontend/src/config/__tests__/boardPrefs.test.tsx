@@ -12,6 +12,7 @@ import Chessboard from '../../components/Chessboard';
 import {resetBotCatalogCache} from '../../services/botCatalog';
 import {setToken} from '../../services/authToken';
 import {mockFetchRouter} from '../../test/mocks';
+import {openBots} from '../../test/newGame';
 
 vi.mock('../../services/gameSocket', () => ({gameSocket: {connect: vi.fn(), disconnect: vi.fn(), send: vi.fn(), on: vi.fn(), off: vi.fn()}}));
 vi.mock('../../services/soundEngine', async (importOriginal) => ({
@@ -76,6 +77,7 @@ describe('настройки на доске', () => {
             '/bots/move': () => ({uci: 'e7e5', san: 'e5', fen_after: '', source: 'book', comment: '', thinking_time_ms: 10}),
         }));
         render(<MemoryRouter><Chessboard/></MemoryRouter>);
+        await openBots();
         const start = await screen.findByRole('button', {name: /Белыми/});
         await act(async () => fireEvent.click(start));
     }

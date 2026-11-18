@@ -93,6 +93,17 @@ describe('«Что грозит?»', () => {
         expect(calls.find((c) => c.url.includes('/answer'))?.body).toEqual({move: 'f3h4'});
         expect(screen.getByTestId('defense-outcome').textContent).toBe('Верно!');
         expect(screen.getByTestId('defense-progress').textContent).toContain('Ступень 2');
+
+        // После ответа доска свободна (решение владельца 18.11): ход за чёрных начинает разбор.
+        expect(screen.queryByTestId('explorer-controls')).toBeNull();
+        await act(async () => {
+            fireEvent.click(square('a7'));
+        });
+        await act(async () => {
+            fireEvent.click(square('a6'));
+        });
+        expect(square('a6').querySelector('img')?.getAttribute('alt')).toBe('bp');
+        expect(screen.getByTestId('explorer-controls')).toBeTruthy();
     });
 
     it('пропущенная угроза показывается, неверная защита — с ходами, которые держат', async () => {
