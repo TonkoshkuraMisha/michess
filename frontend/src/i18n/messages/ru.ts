@@ -2373,6 +2373,7 @@ export const ru: Messages = {
         moves: 'Ходов: {moves} из {limit}',
         movesOptimum: 'Ходов: {moves} · оптимум {optimum} · лимит {limit}',
         thinking: 'Соперник думает…',
+        engineFallback: 'Таблицы эндшпиля сейчас недоступны: соперник ходит по оценке движка, без расстояния до мата.',
         again: 'Начать заново',
         goals: {
             mate: {section: 'Маты', task: 'Играя {side}, поставьте мат не дольше чем за {limit} ходов.'},

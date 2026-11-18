@@ -3,7 +3,9 @@
 // лучший ход (им отвечает идеальный защитник). Под правилом честной игры.
 // Маршрут — src/api/analysis.py, расчёт — src/services/tablebase.py: сервер спрашивает сервис эндшпильных таблиц
 // по адресу TABLEBASE_URL (уходит только позиция), ответ кэшируется в Redis. Позицию, где фигур больше, чем знают
-// таблицы, сервер отклоняет кодом tablebase_too_many_pieces; недоступный сервис — tablebase_unavailable.
+// таблицы, сервер отклоняет кодом tablebase_too_many_pieces. Недоступный сервис таблиц сервер заменяет оценкой
+// Stockfish (source: 'engine', dtm и dtz — null, категории maybe-* — спорная оценка); нет и движка —
+// tablebase_unavailable. Вердикт тренажёра по ответу — trainerVerdict.
 
 import {API_BASE_URL} from '../config/api';
 import {readApiErrorOr, UiError} from './apiErrors';
@@ -28,6 +30,24 @@ export interface TablebaseProbe {
     dtz: number | null;
     /** Лучший ход ходящей стороны (первый в ответе сервиса таблиц); null — ходов в ответе нет. */
     best: TablebaseMove | null;
+    /** tablebase — точный ответ таблиц; engine — таблицы недоступны, ответила оценка движка. */
+    source: 'tablebase' | 'engine';
+}
+
+/**
+ * Итог хода игрока в эндшпильном тренажёре по ответу для соперника (он ходит): continue — играем дальше,
+ * winLost — выигрыш упущен, drawLost — ничья упущена. По точным таблицам строго: для выигрыша у соперника должен
+ * быть проигрыш. По оценке движка партию обрывает только явный вердикт (draw / win), спорная оценка maybe-* —
+ * не повод засчитать ошибку.
+ */
+export function trainerVerdict(probe: TablebaseProbe, winning: boolean): 'continue' | 'winLost' | 'drawLost' {
+    const category = probe.category;
+    if (probe.source === 'engine') {
+        if (winning) return category === 'draw' || category === 'win' ? 'winLost' : 'continue';
+        return category === 'win' ? 'drawLost' : 'continue';
+    }
+    if (winning) return category !== 'loss' ? 'winLost' : 'continue';
+    return category === 'win' || category === 'maybe-win' ? 'drawLost' : 'continue';
 }
 
 /** Запрос таблиц по позиции (FEN). Отказ сервера, в том числе запрет во время партии, — UiError с текстом по коду. */

@@ -1,11 +1,12 @@
 // Эндшпильный тренажёр (таск 14.4): данные упражнений, ответ идеального защитника, упущенный выигрыш, мат против
-// оптимума, удержанная ничья. Таблицы подменены.
+// оптимума, удержанная ничья; запасной ответ движка при недоступных таблицах. Таблицы подменены.
 
 import {act, fireEvent, render, screen} from '@testing-library/react';
 import {MemoryRouter, Route, Routes} from 'react-router-dom';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {Chess} from 'chess.js';
 import {EndgamesPage, EndgameTrainerPage, EXERCISES} from '../EndgameTrainer';
+import {trainerVerdict} from '../../../services/tablebase';
 
 const cell = (name: string) => document.querySelector(`[data-square="${name}"]`) as HTMLElement;
 
@@ -82,5 +83,29 @@ describe('игра против таблиц', () => {
         open('kp_opposition_def');
         await drag('e8', 'd7');
         expect(await screen.findByTestId('endgame-result')).toHaveTextContent('проигрывает');
+    });
+});
+
+describe('таблицы недоступны — отвечает движок', () => {
+    it('спорная оценка движка не обрывает задание, видна пометка', async () => {
+        stubProbe(() => ({category: 'maybe-win', dtm: null, dtz: null, source: 'engine',
+            best: {uci: 'e5e4', san: 'Ke4', category: null, dtm: null, dtz: null}}));
+        open('kq_center');
+        await drag('b1', 'f1');
+        expect(await screen.findByTestId('endgame-engine-fallback')).toHaveTextContent('Таблицы эндшпиля сейчас недоступны');
+        expect(screen.queryByTestId('endgame-result')).toBeNull();
+        expect(cell('e4').querySelector('img')?.getAttribute('alt')).toBe('bk');
+    });
+
+    it('правила вердикта: таблицам — строго, движку — только явная оценка', () => {
+        const probe = (category: string, source: 'tablebase' | 'engine') => ({category, dtm: null, dtz: null, best: null, source});
+        expect(trainerVerdict(probe('maybe-loss', 'tablebase'), true)).toBe('winLost');
+        expect(trainerVerdict(probe('maybe-loss', 'engine'), true)).toBe('continue');
+        expect(trainerVerdict(probe('maybe-win', 'engine'), true)).toBe('continue');
+        expect(trainerVerdict(probe('draw', 'engine'), true)).toBe('winLost');
+        expect(trainerVerdict(probe('loss', 'engine'), true)).toBe('continue');
+        expect(trainerVerdict(probe('maybe-win', 'tablebase'), false)).toBe('drawLost');
+        expect(trainerVerdict(probe('maybe-win', 'engine'), false)).toBe('continue');
+        expect(trainerVerdict(probe('win', 'engine'), false)).toBe('drawLost');
     });
 });

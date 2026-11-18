@@ -148,13 +148,17 @@ async def analyze_game_position(
 async def probe_tablebase(request: TablebaseRequest):
     """
     Эндшпильный тренажёр (таск 14.4): результат позиции по таблицам и лучший ход стороны, которая ходит (им отвечает
-    «идеальный защитник»). Это точная оценка — под правилом честной игры, как анализ.
+    «идеальный защитник»). Это точная оценка — под правилом честной игры, как анализ. Сервер таблиц недоступен —
+    отвечает Stockfish из пула (source="engine", см. src/services/tablebase.py); все движки заняты — 503 engine_busy.
     """
     try:
         board = board_from_start_fen(request.fen)
-        return await tablebase.probe(board)
+        with engine_work("analysis"):
+            return await tablebase.probe(board)
     except InvalidStartPositionError as exc:
         raise exc.to_http(400) from exc
+    except EngineBusyError:
+        raise _engine_busy() from None
     except DomainError as exc:
         raise exc.to_http(503 if exc.code == "tablebase_unavailable" else 400) from exc
 

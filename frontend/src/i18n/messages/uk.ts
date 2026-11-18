@@ -2373,6 +2373,7 @@ export const uk: Messages = {
         moves: 'Ходів: {moves} з {limit}',
         movesOptimum: 'Ходів: {moves} · оптимум {optimum} · ліміт {limit}',
         thinking: 'Суперник думає…',
+        engineFallback: 'Таблиці ендшпілю зараз недоступні: суперник ходить за оцінкою рушія, без відстані до мату.',
         again: 'Почати заново',
         goals: {
             mate: {section: 'Мати', task: 'Граючи {side}, поставте мат не довше ніж за {limit} ходів.'},
