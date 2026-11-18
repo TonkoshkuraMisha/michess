@@ -12,6 +12,7 @@ from src.models.arena import Arena, ArenaPlayer, ArenaReminder
 from src.models.social import Notification
 from src.services import arena, notifications
 from src.services import arena_schedule as plan
+from src.services import conference_match_rules as match_rules
 
 API = "/api/v1/arenas"
 NOW = datetime(2026, 11, 18, 17, 30, tzinfo=UTC)          # среда, 19:30 в Киеве
@@ -92,8 +93,9 @@ async def test_schedule_is_created_once_with_its_conference(db_session):
     await arena.ensure_schedule(db_session, NOW)
     first = await db_session.scalar(select(func.count()).select_from(Arena))
     await arena.ensure_schedule(db_session, NOW)
+    # Арены на LOOKAHEAD вперёд и матчи конференций — на неделю с лишним (match_rules.MATCH_LOOKAHEAD).
     assert await db_session.scalar(select(func.count()).select_from(Arena)) == first == len(
-        plan.planned(NOW, arena.LOOKAHEAD))
+        plan.planned(NOW, arena.LOOKAHEAD)) + len(match_rules.planned_matches(NOW, match_rules.MATCH_LOOKAHEAD))
     evening = (await db_session.execute(select(Arena).where(Arena.schedule_key == "central:evening-5+3"))).scalar_one()
     assert (evening.conference, evening.base_time_ms, evening.increment_ms) == ("central", 300_000, 3_000)
     view = arena.view(evening, NOW)

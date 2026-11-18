@@ -31,7 +31,8 @@ router = APIRouter()
 # Сколько законченная арена ещё видна в списке.
 RECENT = timedelta(hours=6)
 # Статусы HTTP для кодов отказа сервиса; остальные отказы — 409 (конфликт с состоянием арены).
-_CODES = {"arena_not_found": status.HTTP_404_NOT_FOUND, "arena_fair_play": status.HTTP_403_FORBIDDEN}
+_CODES = {"arena_not_found": status.HTTP_404_NOT_FOUND, "arena_fair_play": status.HTTP_403_FORBIDDEN,
+          "match_wrong_conference": status.HTTP_403_FORBIDDEN, "match_no_conference": status.HTTP_403_FORBIDDEN}
 
 
 def _http(exc: DomainError):
@@ -101,7 +102,7 @@ async def get_arena(arena_id: int, request: Request, db: AsyncSession = Depends(
         arena = await service.get(db, arena_id)
     except DomainError as exc:
         raise _http(exc) from None
-    if arena.format == "swiss":
+    if arena.format in service.ROUND_FORMATS:
         await service.advance_swiss(db, arena)  # тур мог закончиться, а турнир — начаться
         await db.commit()
     me = None
@@ -122,7 +123,9 @@ async def get_arena(arena_id: int, request: Request, db: AsyncSession = Depends(
     return {**service.view(arena, None, await service.open_games(db, arena.id)),
             "standings": await service.standings(db, arena.id),
             # Зачёт конференций арены (33.6): сумма очков лучших участников каждой конференции.
-            "conferences": await conferences.arena_table(db, arena.id), "me": me}
+            "conferences": await conferences.arena_table(db, arena.id), "me": me,
+            # Матч конференций: счёт сторон и доски (src/services/conference_match_rules.py).
+            "match": await service.match_view(db, arena) if arena.format == "match" else None}
 
 
 @router.post("/{arena_id}/join")

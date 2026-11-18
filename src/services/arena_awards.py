@@ -36,6 +36,7 @@ async def award_finished(db: AsyncSession, now: datetime | None = None) -> int:
     candidates = (await db.execute(select(Arena).where(
         or_(Arena.ends_at <= now, Arena.finished_at.is_not(None)),
         Arena.ends_at > now - LOOKBACK,
+        Arena.format != "match",  # матч конференций — командный: кубки за личное место в нём не даются
         ~exists().where(ArenaAward.arena_id == Arena.id),
     ).order_by(Arena.id))).scalars().all()
     added = 0

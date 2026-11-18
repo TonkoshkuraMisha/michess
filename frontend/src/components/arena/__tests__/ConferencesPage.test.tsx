@@ -1,4 +1,5 @@
-// Конференции (таск 33.6): Кубок сезона, выбор страны с подсказкой, правило одной смены за сезон; зачёт на странице арены.
+// Конференции (таск 33.6): Кубок сезона, выбор страны с подсказкой, правило одной смены за сезон; зачёт на странице арены;
+// матчи конференций — список на странице и счёт с досками на странице матча.
 
 import {act, fireEvent, render, screen} from '@testing-library/react';
 import {MemoryRouter, Route, Routes} from 'react-router-dom';
@@ -7,6 +8,7 @@ import {setToken} from '../../../services/authToken';
 import {countryName, localeCountry} from '../../../services/conferences';
 import {ArenaPage} from '../ArenaPages';
 import {ConferencesPage} from '../ConferencesPage';
+import {matchScore} from '../ConferenceMatches';
 
 const TABLE = [
     {conference: 'central', score: 42, arenas: 3}, {conference: 'eastern', score: 12, arenas: 2},
@@ -137,5 +139,52 @@ describe('зачёт конференций на странице арены', (
         const table = screen.getByTestId('arena-conferences');
         expect(table).toHaveTextContent('Центральная конференция');
         expect(table).toHaveTextContent('1/1');
+    });
+});
+
+describe('матчи конференций', () => {
+    it('счёт записывается с половинками', () => {
+        expect([0, 0.5, 1, 1.5, 4].map(matchScore)).toEqual(['0', '½', '1', '1½', '4']);
+    });
+
+    it('список матчей на странице конференций: сыгранный со счётом, ближайший — со временем', async () => {
+        const matches = [
+            {arena_id: 7, home: 'central', guest: 'western', starts_at: '2026-11-14T17:00:00Z', status: 'finished',
+                home_score: 1.5, guest_score: 2.5, players: 4},
+            {arena_id: 8, home: 'northern', guest: 'eastern', starts_at: '2026-11-21T17:00:00Z', status: 'scheduled',
+                home_score: 0, guest_score: 0, players: 3},
+        ];
+        vi.stubGlobal('fetch', vi.fn(async () => ({ok: true, status: 200, json: async () => ({...PAGE, matches})} as Response)));
+        page();
+        const played = await screen.findByTestId('match-7');
+        expect(played).toHaveAttribute('href', '/arenas/7');
+        expect(played).toHaveTextContent('Центральная конференция — Западная конференция');
+        expect(played).toHaveTextContent('1½ : 2½');
+        expect(screen.getByTestId('match-8')).not.toHaveTextContent('0 : 0');
+    });
+
+    it('страница матча: счёт и доски вместо таблицы, запись закрыта — кнопки входа нет', async () => {
+        const seat = (username: string, score: number) => ({username, rating: 1500, score});
+        const arena = {
+            id: 7, format: 'match', conference: 'central', opponent_conference: 'western', rounds: 2, current_round: 2,
+            base_time_ms: 300000, increment_ms: 3000, starts_at: new Date().toISOString(),
+            ends_at: new Date(Date.now() + 3600_000).toISOString(), status: 'running', standings: [], conferences: [],
+            me: {joined: false, waiting: false, current_game_id: null},
+            match: {home: 'central', guest: 'western', home_score: 1.5, guest_score: 0.5, home_players: 2, guest_players: 3,
+                entry_open: false, boards: [{board: 1, home: seat('misha', 1), guest: seat('magnus', 0)},
+                    {board: 2, home: seat('olga', 0.5), guest: seat('hikaru', 0.5)}]},
+        };
+        vi.stubGlobal('fetch', vi.fn(async () => ({ok: true, status: 200, json: async () => arena} as Response)));
+        render(
+            <MemoryRouter initialEntries={['/arenas/7']}>
+                <Routes><Route path="/arenas/:arenaId" element={<ArenaPage/>}/></Routes>
+            </MemoryRouter>,
+        );
+        expect(await screen.findByTestId('match-score')).toHaveTextContent('1½ : ½');
+        expect(screen.getByText('Матч Центральная конференция — Западная конференция')).toBeInTheDocument();
+        expect(screen.getByTestId('match-board-2')).toHaveTextContent('olga');
+        expect(screen.queryByTestId('arena-standings')).toBeNull();
+        expect(screen.queryByTestId('arena-join')).toBeNull();
+        expect(screen.queryByTestId('arena-play')).toBeNull();
     });
 });

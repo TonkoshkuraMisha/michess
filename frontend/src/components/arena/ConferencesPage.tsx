@@ -2,6 +2,7 @@
 // Конференции (таск 33.6): /conferences — Кубок конференций текущего сезона (месяца) и выбор своей страны. Страна
 // определяет конференцию; очки игрока в любой арене идут в зачёт его конференции. Страну игрок указывает сам:
 // подсказка (страна от сервера или из языка браузера) только предлагается и без нажатия никуда не отправляется.
+// Под Кубком — матчи конференций сезона и ближайшие (ConferenceMatches.tsx).
 
 import {useCallback, useEffect, useMemo, useState} from 'react';
 import {Link} from 'react-router-dom';
@@ -12,6 +13,7 @@ import {errorMessage} from '../../services/apiErrors';
 import {getToken} from '../../services/authToken';
 import {conferencesApi, countryName, localeCountry} from '../../services/conferences';
 import type {ConferencesData} from '../../services/conferences';
+import {MatchList} from './ConferenceMatches';
 
 export function ConferencesPage() {
     const {t, language} = useI18n();
@@ -79,6 +81,8 @@ export function ConferencesPage() {
                     </tbody>
                 </table>
             </section>
+
+            <MatchList matches={data.matches ?? []}/>
 
             <section className="bg-acacia p-3 rounded-lg border-2 border-acacia-dark flex flex-col gap-2" data-testid="my-country">
                 <h2 className="font-bold text-amber-200">{t('conferences.myCountry')}</h2>
