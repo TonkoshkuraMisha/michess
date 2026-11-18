@@ -1,6 +1,7 @@
 // --- FILE: frontend/src/components/chessboard/MoveList.tsx ---
 // Список ходов партии на главной доске: ход можно выбрать и посмотреть позицию после него, кнопка возвращает к живой
-// позиции.
+// позиции. Ходы — история chess.js из Chessboard, разложенная по парам функцией pairHalfMoves (boardUtils.ts).
+// Активный ход помечен классом active-move-btn: по нему Chessboard прокручивает список (scrollMove.ts).
 
 import type {RefObject} from 'react';
 
@@ -11,12 +12,14 @@ export type MovePair = HalfMovePair;
 
 export interface MoveListProps {
     movePairs: MovePair[];
+    /** Индекс подсвеченного полухода: показываемый ход, а на живой позиции — последний. */
     activeMoveIndex: number;
-    /** -1 — живая позиция (хвост партии); иначе — просмотр конкретного полухода истории. */
+    /** -1 — живая позиция (хвост партии); -2 — начало партии до первого хода; иначе — индекс полухода истории. */
     viewIndex: number;
     historyLength: number;
     /** Партия с соперником (PvP/бот) идёт — иначе это свободный анализ/песочница. */
     hasActiveSession: boolean;
+    /** Окно прокрутки списка — им управляет вызывающий (держит активный ход в середине). */
     scrollRef: RefObject<HTMLDivElement | null>;
     onSelectMove: (idx: number) => void;
     onReturnToLive: () => void;

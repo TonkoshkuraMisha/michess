@@ -1,6 +1,9 @@
 // --- FILE: frontend/src/components/chessboard/AppearancePickerDropdown.tsx ---
-// Выбор оформления доски: набор фигур, тема доски и её размер. Варианты — config/boardAppearance.ts; закрытые за
-// достижения помечены замком (config/unlocks.ts).
+// Выбор оформления доски: набор фигур, тема доски и её размер. Варианты — config/boardAppearance.ts. Вариант,
+// закрытый за достижение (config/unlocks.ts; достижения игрока — GET /profile/{имя}/achievements), выбрать нельзя:
+// кнопка отключена, условие открытия — во всплывающей подсказке. Уже выбранный вариант остаётся доступным. Сам
+// компонент ничего не хранит: выбор запоминает Chessboard (localStorage: michess_piece_set, michess_board_theme,
+// michess_board_size).
 
 import {Palette, ChevronDown, ChevronUp, X} from 'lucide-react';
 import {BOARD_THEMES, PIECE_SETS, getPieceSvgUrl} from '../../config/boardAppearance';
@@ -19,7 +22,9 @@ export interface AppearancePickerDropdownProps {
     activePieceSetShortName: string;
     onPieceSetChange: (id: string) => void;
     onThemeChange: (id: string) => void;
+    /** Сохранённый размер доски (положение ползунка). */
     boardSize: number;
+    /** Размер, с которым доска нарисована на самом деле: на узком экране он меньше сохранённого. */
     responsiveBoardPx: number;
     onBoardSizeChange: (size: number) => void;
 }

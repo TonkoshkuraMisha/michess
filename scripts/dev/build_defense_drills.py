@@ -38,7 +38,9 @@ from src.services.puzzles import STAGES
 
 
 def make_analyse(engine: chess.engine.SimpleEngine, depth: int):
+    """Создаёт функцию анализа лучших ходов позиции на заданной глубине."""
     def analyse(board: chess.Board, multipv: int, moves: list[str] | None) -> MoveScores:
+        """Возвращает лучшие ходы позиции с оценками и ответами соперника."""
         root = [chess.Move.from_uci(uci) for uci in moves] if moves else None
         infos = engine.analyse(board, chess.engine.Limit(depth=depth), multipv=multipv, root_moves=root)
         scores: MoveScores = {}
@@ -55,6 +57,7 @@ def make_analyse(engine: chess.engine.SimpleEngine, depth: int):
 def make_score_after(engine: chess.engine.SimpleEngine, depth: int):
     """Оценка после хода — с точки зрения сыгравшего; новая «партия» на каждый вызов: без памяти прошлых поисков."""
     def score_after(fen: str, uci: str) -> int:
+        """Оценивает позицию после хода с чистой памятью движка для перепроверки."""
         board = chess.Board(fen)
         mover = board.turn
         board.push_uci(uci)
@@ -65,6 +68,7 @@ def make_score_after(engine: chess.engine.SimpleEngine, depth: int):
 
 
 def main() -> None:
+    """Отбирает, верифицирует и сохраняет защитные упражнения из базы задач."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--per-stage", type=int, default=100, help="упражнений каждого вида на каждой ступени")
     parser.add_argument("--depth", type=int, default=12, help="глубина проверки движком")

@@ -1,3 +1,4 @@
+// --- FILE: frontend/src/services/pwa.ts ---
 // Приложение на телефоне (таск 24.2): регистрация сервис-воркера (public/sw.js) и установка на главный экран.
 //
 // Сервис-воркер — только в сборке: в разработке он кэшировал бы файлы Vite и мешал горячей перезагрузке.
@@ -7,11 +8,16 @@
 
 import {useSyncExternalStore} from 'react';
 
+/** Событие Chrome и Edge «приложение можно установить»; в стандартных типах DOM его нет. */
 interface BeforeInstallPromptEvent extends Event {
     prompt(): Promise<void>;
     userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
 }
 
+/**
+ * Что показать в настройках: installed — уже установлено (или открыто как приложение); available — есть
+ * сохранённое событие, кнопка покажет системный диалог; ios — подсказка для Safari; unsupported — ничего.
+ */
 export type InstallState = 'installed' | 'available' | 'ios' | 'unsupported';
 
 let deferredPrompt: BeforeInstallPromptEvent | null = null;
@@ -22,17 +28,20 @@ function notify(): void {
     listeners.forEach((listener) => listener());
 }
 
+/** Страница открыта как установленное приложение (display-mode: standalone; в Safari — navigator.standalone). */
 export function isStandalone(win: Window = window): boolean {
     const nav = win.navigator as Navigator & { standalone?: boolean };
     return Boolean(win.matchMedia?.('(display-mode: standalone)').matches || nav.standalone);
 }
 
+/** iPhone, iPad или iPod — по строке User-Agent. */
 export function isIos(win: Window = window): boolean {
     const nav = win.navigator;
     // iPad с iPadOS 13+ представляется Mac'ом, но с сенсорным экраном.
     return /iphone|ipad|ipod/i.test(nav.userAgent) || (/Macintosh/.test(nav.userAgent) && nav.maxTouchPoints > 1);
 }
 
+/** Текущее состояние установки — см. InstallState; порядок проверок важен: установленное важнее доступного. */
 export function installState(win: Window = window): InstallState {
     if (installedNow || isStandalone(win)) return 'installed';
     if (deferredPrompt) return 'available';
@@ -52,7 +61,10 @@ export async function promptInstall(): Promise<boolean> {
     return choice.outcome === 'accepted';
 }
 
-/** Вызывается один раз при старте приложения (main.tsx). */
+/**
+ * Вызывается один раз при старте приложения (main.tsx): подписка на события установки и — только в сборке —
+ * регистрация /sw.js после загрузки страницы. Ошибка регистрации глушится: сайт работает и без сервис-воркера.
+ */
 export function initPwa(win: Window = window, production: boolean = import.meta.env.PROD): void {
     win.addEventListener('beforeinstallprompt', (event) => {
         deferredPrompt = event as BeforeInstallPromptEvent;
@@ -78,6 +90,7 @@ function subscribe(listener: () => void): () => void {
     return () => listeners.delete(listener);
 }
 
+/** Хук: состояние установки, обновляется при событиях браузера (settings/InstallAppSection.tsx). */
 export function useInstallState(): InstallState {
     return useSyncExternalStore(subscribe, () => installState());
 }

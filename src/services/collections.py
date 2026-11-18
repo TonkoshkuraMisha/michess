@@ -10,6 +10,9 @@
 * promotions — больше всего превращений;
 * pawn_wars — больше всего проходных пешек на доске одновременно;
 * stalemates — «триумфальные ничьи»: партия закончилась патом (самые длинные — первыми).
+
+Модуль только считает. Таблицу подборок (collection_entries) заполняет scripts/build_collections.py по PGN партий
+архива, а отдаёт её раздел «Просмотр» (src/api/watch.py).
 """
 
 import io
@@ -19,9 +22,10 @@ from dataclasses import dataclass
 import chess
 import chess.pgn
 
+# Коды подборок (по ним клиент берёт названия из каталогов) и число партий в каждой.
 COLLECTIONS = ("shortest", "checks", "capture_streak", "peaceful", "promotions", "pawn_wars", "stalemates")
 PER_COLLECTION = 10
-MIN_PEACEFUL_PLIES = 40   # короткая партия без взятий — не «мирная», а просто короткая
+MIN_PEACEFUL_PLIES = 40   # короткая партия без взятий — не «мирная», а просто короткая (40 полуходов — 20 ходов)
 
 
 @dataclass(frozen=True)
@@ -59,7 +63,11 @@ def passed_pawns(board: chess.Board) -> int:
 
 
 def game_metrics(pgn: str) -> Metrics | None:
-    """Показатели партии по её PGN. None — партия из своей позиции или без результата: в подборки она не идёт."""
+    """
+    Показатели партии по её PGN. None — партия из своей позиции (есть заголовок FEN), без результата или без ходов: в
+    подборки она не идёт. Шах считается после каждого хода, проходные пешки — после каждого хода чёрных (берётся
+    наибольшее число за партию), мат и пат — по последней позиции.
+    """
     game = chess.pgn.read_game(io.StringIO(pgn))
     if game is None or "FEN" in game.headers or game.headers.get("Result") not in ("1-0", "0-1", "1/2-1/2"):
         return None
@@ -84,7 +92,10 @@ def game_metrics(pgn: str) -> Metrics | None:
 
 
 def rank_collections(metrics: dict[int, Metrics], size: int = PER_COLLECTION) -> dict[str, list[tuple[int, int]]]:
-    """Места в подборках: {подборка: [(id партии, показатель), …]}; при равенстве — меньший id."""
+    """
+    Места в подборках: {подборка: [(id партии, показатель), …]}; при равенстве — меньший id. metrics — показатели по
+    id партии, size — сколько партий в подборке. Условия отбора — в описании модуля.
+    """
     items = list(metrics.items())
 
     def top(candidates, key, value) -> list[tuple[int, int]]:

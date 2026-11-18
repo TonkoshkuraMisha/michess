@@ -2,6 +2,8 @@
 // Пометки игрока на доске (таск B.1): правой кнопкой — протянуть стрелку или щёлкнуть поле, цвет — модификатором
 // (без него зелёный, Shift — красный, Alt — синий, Ctrl или Shift+Alt — жёлтый); повтор той же пометки её снимает,
 // левый щелчок по доске убирает всё. Для расчёта вариантов в живой партии и в задачах — на ход не влияет.
+// Работает только мышью (на сенсорном экране правой кнопки нет); пометки живут в памяти компонента — на сервер
+// не уходят и сопернику не видны.
 
 import {useCallback, useEffect, useRef, useState} from 'react';
 import type {PointerEvent as ReactPointerEvent} from 'react';
@@ -24,6 +26,7 @@ export const ANNOTATION_COLORS: Record<AnnotationColor, string> = {
 
 const ANNOTATION_KEYS = Object.keys(ANNOTATION_COLORS) as AnnotationColor[];
 
+/** Цвет пометки по зажатым клавишам: Ctrl/Cmd или Shift+Alt — жёлтый, Shift — красный, Alt — синий, иначе зелёный. */
 export function annotationColor(event: { shiftKey: boolean; altKey: boolean; ctrlKey: boolean; metaKey: boolean }): AnnotationColor {
     if (event.ctrlKey || event.metaKey || (event.shiftKey && event.altKey)) return 'yellow';
     if (event.shiftKey) return 'red';
@@ -38,13 +41,14 @@ function squareAt(x: number, y: number): string | null {
     return cell instanceof HTMLElement ? cell.dataset.square ?? null : null;
 }
 
-/** Повтор той же пометки снимает её, другой цвет — перекрашивает. */
+/** Стрелка: повтор той же пометки снимает её, другой цвет — перекрашивает. */
 export function toggleArrow(arrows: AnnotationArrow[], next: AnnotationArrow): AnnotationArrow[] {
     const same = arrows.find((a) => a.from === next.from && a.to === next.to);
     const rest = arrows.filter((a) => a !== same);
     return same && same.color === next.color ? rest : [...rest, next];
 }
 
+/** Кольцо на поле: тот же цвет снимает его, другой — перекрашивает. */
 export function toggleSquare(squares: Record<string, AnnotationColor>, square: string, color: AnnotationColor) {
     const next = {...squares};
     if (next[square] === color) delete next[square];
@@ -52,6 +56,7 @@ export function toggleSquare(squares: Record<string, AnnotationColor>, square: s
     return next;
 }
 
+/** Что возвращает useBoardAnnotations: сами пометки и обработчики указателя для контейнера доски. */
 export interface BoardAnnotations {
     arrows: AnnotationArrow[];
     squares: Record<string, AnnotationColor>;
@@ -65,11 +70,13 @@ export interface BoardAnnotations {
 
 /**
  * Пометки доски. resetKey — пометки снимаются, когда он меняется (сделан ход, новая задача). enabled=false —
- * правая кнопка остаётся за вызывающим (например, отменяет предход).
+ * правая кнопка остаётся за вызывающим (например, отменяет предход). Поле под указателем ищется по атрибуту
+ * data-square, поэтому клетки доски вызывающего должны его иметь.
  */
 export function useBoardAnnotations(resetKey: string, enabled = true): BoardAnnotations {
     const [arrows, setArrows] = useState<AnnotationArrow[]>([]);
     const [squares, setSquares] = useState<Record<string, AnnotationColor>>({});
+    // Поле, на котором нажата правая кнопка: отпускание на нём же — кольцо, на другом — стрелка.
     const start = useRef<string | null>(null);
 
     const clear = useCallback(() => {
@@ -77,6 +84,7 @@ export function useBoardAnnotations(resetKey: string, enabled = true): BoardAnno
         setSquares((prev) => (Object.keys(prev).length ? {} : prev));
     }, []);
 
+    // Сброс только при смене resetKey, а не при каждом рендере и не при первом показе.
     const lastKey = useRef(resetKey);
     useEffect(() => {
         if (lastKey.current === resetKey) return;
@@ -116,7 +124,7 @@ interface OverlayProps {
     idPrefix?: string;
 }
 
-/** Слой пометок поверх доски: кольца на полях и стрелки. */
+/** Слой пометок поверх доски: кольца на полях и стрелки. Клики не перехватывает; без пометок не рисуется. */
 export function AnnotationsOverlay({arrows, squares, flipped, idPrefix = 'notes'}: OverlayProps) {
     const marked = Object.entries(squares);
     if (arrows.length === 0 && marked.length === 0) return null;

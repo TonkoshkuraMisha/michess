@@ -3,18 +3,23 @@
 // одноразовому тикету (POST /auth/ws-ticket), токен в адрес не попадает. При обрыве соединение восстанавливается
 // само (пауза RECONNECT_DELAY_MS; после отказа «слишком часто» — дольше); сообщения, отправленные без связи, уходят
 // после подключения. Компоненты подписываются на события по имени (on / off), действия отправляют через send(имя,
-// данные).
+// данные). Сервер — src/api/websockets.py: имя действия ищется в ACTION_HANDLERS, ответы и рассылки приходят
+// сообщениями {event: имя, …данные}; подписка на '*' получает все события.
 
 import {API_BASE_URL, WS_BASE_URL} from '../config/api';
 import {clearToken, getToken} from './authToken';
 
 type EventCallback = (data: any) => void;
 
+/** Пауза перед повторным подключением после обрыва или сбоя выдачи тикета. */
 const RECONNECT_DELAY_MS = 1500;
+/** Пауза после отказа 429 на выдаче тикета: частые попытки только продлевают блокировку. */
 const RATE_LIMITED_RECONNECT_DELAY_MS = 15000;
 
+/** Сервер ответил 401 на запрос тикета: токен истёк или отозван. */
 class AuthExpiredError extends Error {}
 
+/** Сервер ответил 429 на запрос тикета: слишком частые подключения. */
 class RateLimitedError extends Error {}
 
 /**
@@ -43,6 +48,7 @@ class GameWebSocketService {
     private connecting = false;
     private attempt = 0;
 
+    /** Открыть соединение (или оставить уже открытое); при смене токена прежнее соединение закрывается. */
     connect(token: string) {
         if (!token) return;
 
@@ -68,6 +74,7 @@ class GameWebSocketService {
         void this.openSocket(token);
     }
 
+    /** Получить тикет и открыть сокет; ошибка тикета — выход (401) или повтор через паузу (429 и прочее). */
     private async openSocket(token: string) {
         this.connecting = true;
         const attempt = ++this.attempt;
@@ -133,6 +140,7 @@ class GameWebSocketService {
                 this.handleAuthExpired();
                 return;
             }
+            // 1000 — обычное закрытие (так закрывает сокет и сам клиент в closeSocket): переподключаться незачем.
             if (this.currentToken && event.code !== 1000) {
                 this.scheduleReconnect(RECONNECT_DELAY_MS);
             }
@@ -154,7 +162,8 @@ class GameWebSocketService {
     }
 
     private handleAuthExpired() {
-        // Токен истёк или отозван — очищаем его и уведомляем приложение
+        // Токен истёк или отозван — очищаем его и уведомляем приложение. Интерфейс выходит по clearToken()
+        // (подписка onTokenChange в App.tsx); событие michess-auth-expired слушают только тесты.
         this.currentToken = null;
         this.pendingMessages = [];
         clearToken();
@@ -172,6 +181,7 @@ class GameWebSocketService {
         }
     }
 
+    /** Подписка на событие сервера по имени ('*' — на все); повторная подписка той же функцией не дублируется. */
     on(event: string, callback: EventCallback) {
         if (!this.listeners[event]) {
             this.listeners[event] = [];
@@ -186,6 +196,10 @@ class GameWebSocketService {
         this.listeners[event] = this.listeners[event].filter(cb => cb !== callback);
     }
 
+    /**
+     * Отправить действие {action, …payload}. Без открытого соединения сообщение ждёт в очереди и уходит после
+     * подключения (подключение запускается здесь же); если игрок не вошёл — сообщение теряется с записью в консоль.
+     */
     send(action: string, payload: any = {}) {
         const serialized = JSON.stringify({action, ...payload});
 
@@ -203,6 +217,7 @@ class GameWebSocketService {
         }
     }
 
+    /** Закрыть соединение насовсем (выход игрока): очередь сообщений и запланированное переподключение сбрасываются. */
     disconnect() {
         this.currentToken = null;
         this.pendingMessages = [];
@@ -216,4 +231,5 @@ class GameWebSocketService {
     }
 }
 
+/** Единственный экземпляр на вкладку: им пользуются доска и её хуки, шапка и личные сообщения, шахматы Фишера. */
 export const gameSocket = new GameWebSocketService();

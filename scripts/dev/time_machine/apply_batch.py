@@ -12,10 +12,12 @@ LANGS = ("en", "uk", "ru")
 
 
 def q(text: str) -> str:
+    """Форматирует и экранирует строковый литерал для генерации кода."""
     return "'" + text.replace("\\", "\\\\").replace("'", "\\'") + "'"
 
 
 def number(value) -> str:
+    """Форматирует числовое значение очков без лишнего нуля после точки."""
     return str(int(value)) if float(value).is_integer() else str(value)
 
 

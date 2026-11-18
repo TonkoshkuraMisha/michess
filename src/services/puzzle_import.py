@@ -8,6 +8,11 @@ puzzle_themes. Темы задачи — коды реестра: по тега�
 
 Разметка версионируется (TAG_VERSION): когда меняются реестр, детектор или классификатор матов, версия растёт, и
 импорт переразмечает уже загруженные задачи (``retag_outdated``) — без повторной загрузки.
+
+Запускает загрузку scripts/import_puzzles.py (при развёртывании — сервис migrate): основная выборка SUBSET, затем,
+если файл есть, дополнение EXTRA для тем без тегов базы, затем переразметка. Колонки строки — как в выгрузке
+lichess: PuzzleId, FEN, Moves, Rating, RatingDeviation, Popularity, NbPlays, Themes. Исходные теги базы сохраняются
+в puzzles.source_tags (первые 300 знаков) — по ним и идёт переразметка.
 """
 
 import csv
@@ -25,14 +30,15 @@ from src.services.mate_patterns import patterns_for_solution
 from src.services.mentor_service import analyze_move
 from src.services.themes import themes_for_lichess_tags, themes_for_motif
 
-SOURCE = "lichess"
+SOURCE = "lichess"  # значение puzzles.source; вместе с puzzles.source_id (PuzzleId) отличает уже загруженные задачи
 TAG_VERSION = 3  # 2: ступень — по уточнённой формуле; 3: темы без тегов базы (src/services/theme_detectors.py)
 SUBSET = pathlib.Path(__file__).resolve().parents[2] / "data" / "puzzles" / "lichess_subset.csv.gz"
-EXTRA = SUBSET.with_name("lichess_themes_extra.csv.gz")
-BATCH = 500
+EXTRA = SUBSET.with_name("lichess_themes_extra.csv.gz")  # собирает scripts/dev/build_theme_extra.py
+BATCH = 500  # задач в одной транзакции при загрузке и переразметке
 
 
 def read_subset(path: pathlib.Path = SUBSET) -> Iterator[dict]:
+    """Строки сжатого CSV выборки как словари (ключи — заголовки колонок); читает построчно, не держа файл в памяти."""
     with gzip.open(path, "rt", encoding="utf-8", newline="") as source:
         yield from csv.DictReader(source)
 
@@ -43,6 +49,9 @@ def stage_for(rating: int, moves: list[str]) -> int:
     По рейтингу и длине решения. Приём «в чистом виде» — это ход и его естественное продолжение (вилка и взятие
     фигуры), то есть до двух ходов решающего; длина поднимает ступень с трёх ходов. ``moves`` — как в базе: первый
     ход соперника, дальше чередование. Та же формула — в миграции c5e7a9b1d3f6.
+
+    Пороги (достаточно одного условия): ступень 4 — рейтинг от 2000 или от 10 полуходов (5 ходов решающего);
+    3 — от 1600 или от 8 полуходов (4 хода); 2 — от 1200 или от 6 полуходов (3 хода); иначе 1.
     """
     plies = len(moves)
     if rating >= 2000 or plies >= 10:
@@ -78,6 +87,11 @@ def detected_themes(fen: str, moves: list[str]) -> list[str]:
 
 
 def themes_for_row(row: dict) -> list[str]:
+    """
+    Все темы задачи без повторов, из четырёх источников по порядку: теги базы (``themes_for_lichess_tags``), мотивы
+    первого хода решения (``detected_themes``), матовая конструкция финальной позиции (``patterns_for_solution``) и
+    детекторы тем без тегов (``theme_detectors.detect``).
+    """
     moves = row["Moves"].split()
     codes = themes_for_lichess_tags(row["Themes"].split())
     extra = theme_detectors.detect(row["FEN"], moves, row["Themes"].split())
@@ -105,7 +119,11 @@ def validate_row(row: dict) -> bool:
 
 
 async def retag_outdated(db: AsyncSession) -> int:
-    """Переразметить задачи с версией разметки ниже TAG_VERSION (темы и ступень). Возвращает число задач."""
+    """
+    Переразметить задачи с версией разметки ниже TAG_VERSION (темы и ступень). Возвращает число задач. Идёт пачками
+    по BATCH с commit после каждой: прерванный запуск продолжится с оставшихся. В конце сбрасывается кэш числа
+    задач по ступеням (puzzles.reset_stage_counts).
+    """
     from sqlalchemy import delete
 
     from src.services.puzzles import reset_stage_counts
@@ -132,7 +150,11 @@ async def retag_outdated(db: AsyncSession) -> int:
 
 
 async def import_rows(db: AsyncSession, rows: Iterable[dict]) -> tuple[int, int]:
-    """Загружает строки; возвращает (добавлено, пропущено — уже есть или некорректны)."""
+    """
+    Загружает строки; возвращает (добавлено, пропущено — уже есть или некорректны). «Уже есть» — по паре
+    puzzles.source и puzzles.source_id; повтор PuzzleId внутри одного запуска тоже пропускается. Commit — каждые
+    BATCH задач.
+    """
     existing = set((await db.execute(select(Puzzle.source_id).where(Puzzle.source == SOURCE))).scalars())
     added = skipped = 0
     pending = 0

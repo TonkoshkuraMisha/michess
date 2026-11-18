@@ -16,7 +16,8 @@ WebSocket партий и лобби (/ws/matchmaking): все действия 
 (_participant_game), иначе молча игнорируется; отказ с объяснением уходит кодом ошибки (src/core/errors.py).
 Сессия базы открывается на одно действие и освобождается до отправки в сеть (ActionContext.release_db) — иначе
 медленный клиент держал бы соединение пула. Частота сообщений ограничена по группам (WS_RATE_LIMITS: ходы, чат,
-предложения, прочее), размер — WS_MAX_MESSAGE_CHARS; за поток отклонённых сообщений соединение закрывается.
+предложения, лобби, прочее), размер — WS_MAX_MESSAGE_CHARS; за поток отклонённых сообщений (WS_MAX_STRIKES за
+WS_STRIKE_WINDOW_S секунд) соединение закрывается кодом 1013.
 
 Состояние партии и часы — src/services/game_state.py, старт партий — src/services/matchmaker.py, рассылка в
 несколько процессов и вкладок — src/services/connection_manager.py.
@@ -54,6 +55,10 @@ router = APIRouter(prefix="/ws", tags=["WebSockets"])
 
 
 def _compute_live_clocks(state: dict) -> tuple[int, int]:
+    """
+    Часы обеих сторон на текущий момент (мс): в состоянии партии хранится остаток на момент последнего хода,
+    поэтому у стороны, которая думает, вычитается время, прошедшее с last_move_at. Квота лага здесь не учитывается.
+    """
     now_ms = int(time.time() * 1000)
     elapsed = max(0, now_ms - int(state.get("last_move_at", now_ms)))
     turn = state.get("turn", "white")
@@ -66,7 +71,10 @@ def _compute_live_clocks(state: dict) -> tuple[int, int]:
 
 
 async def _send_active_game_snapshot_if_exists(db: AsyncSession, user: User):
-    """Если игрок переподключился во время идущей партии, восстанавливаем ему доску и часы."""
+    """
+    Если игрок переподключился во время идущей партии, восстанавливаем ему доску и часы: событие match_found с
+    полным состоянием партии из Redis (ключ user:{id}:current_game → состояние партии).
+    """
     game_id_str = await state_manager.redis.get(f"user:{user.id}:current_game")
     if not game_id_str:
         return
@@ -168,6 +176,7 @@ class ActionContext:
     db: AsyncSession
 
     async def send(self, payload: dict) -> None:
+        """Ответ самому игроку (во все его вкладки); соединение с базой освобождается до отправки."""
         await self.release_db()
         await manager.send_personal_message(payload, self.user.id)
 
@@ -234,12 +243,17 @@ def _rated_flag(data: dict) -> bool:
 
 
 def _required_game_id(data: dict) -> int:
+    """id партии из сообщения; без него действие игнорируется."""
     if not data.get("game_id"):
         raise _Ignore
     return _int_field(data, "game_id")
 
 
 async def _load_game(data: dict) -> GameRef:
+    """
+    Партия из data["game_id"] по состоянию в Redis (пропавшее состояние восстанавливается из базы); неизвестная
+    партия — действие игнорируется. Участие игрока здесь не проверяется — см. _participant_game.
+    """
     gid = _required_game_id(data)
     state = await state_manager.get_game_state(gid)
     if not state:
@@ -266,6 +280,7 @@ ACTION_HANDLERS: dict[str, ActionHandler] = {}
 
 
 def action(name: str):
+    """Декоратор: регистрирует функцию обработчиком действия name в ACTION_HANDLERS."""
     def register(handler: ActionHandler) -> ActionHandler:
         ACTION_HANDLERS[name] = handler
         return handler
@@ -276,6 +291,11 @@ def action(name: str):
 
 @action("join_queue")
 async def _join_queue(ctx: ActionContext, data: dict) -> None:
+    """
+    Вызов в лобби: контроль времени (по умолчанию 3+0), границы рейтинга соперника и тип партии. Рейтинг игрока
+    берётся свежий из базы, в категории этого контроля. Если подходящий вызов уже ждал, партия стартует сразу
+    (match_found обоим рассылает matchmaker); иначе игрок получает queue_joined.
+    """
     fresh_user = await _fresh_current_user(ctx.db, ctx.user)
     base_time_ms = _int_field(data, "base_time_ms", 180000)
     increment_ms = _int_field(data, "increment_ms", 0)
@@ -295,12 +315,14 @@ async def _join_queue(ctx: ActionContext, data: dict) -> None:
 
 @action("leave_queue")
 async def _leave_queue(ctx: ActionContext, data: dict) -> None:
+    """Снять свой вызов из лобби."""
     await matchmaker.leave_queue(ctx.user.id)
     await ctx.send({"event": "queue_left"})
 
 
 @action("accept_challenge")
 async def _accept_challenge(ctx: ActionContext, data: dict) -> None:
+    """Принять вызов игрока target_user_id из лобби; партию создаёт и оповещает обоих matchmaker."""
     if not data.get("target_user_id"):
         raise _Ignore
     await matchmaker.accept_challenge(_int_field(data, "target_user_id"), ctx.user.id, manager, state_manager, db=ctx.db)
@@ -308,6 +330,11 @@ async def _accept_challenge(ctx: ActionContext, data: dict) -> None:
 
 @action("create_invite")
 async def _create_invite(ctx: ActionContext, data: dict) -> None:
+    """
+    Приватное приглашение по ссылке: контроль (по умолчанию 3+2), цвет, тип партии, фора (odds_kind, кто её даёт)
+    и вариант (standard или шахматы Фишера). Код приглашения возвращается событием invite_created; само
+    приглашение хранит matchmaker в Redis.
+    """
     fresh_user = await _fresh_current_user(ctx.db, ctx.user)
     base_time_ms = _int_field(data, "base_time_ms", 180000)
     increment_ms = _int_field(data, "increment_ms", 2000)
@@ -328,6 +355,7 @@ async def _create_invite(ctx: ActionContext, data: dict) -> None:
 
 @action("accept_invite")
 async def _accept_invite(ctx: ActionContext, data: dict) -> None:
+    """Принять приватное приглашение по коду: партию начинает matchmaker.start_game_from_invite."""
     code = str(data.get("code", "")).strip()
     if not code:
         raise _Ignore
@@ -338,6 +366,10 @@ async def _accept_invite(ctx: ActionContext, data: dict) -> None:
 
 @action("spectate_game")
 async def _spectate_game(ctx: ActionContext, data: dict) -> None:
+    """
+    Стать зрителем идущей партии: игрок добавляется в список зрителей и получает spectate_started с текущей
+    позицией и часами; дальше ему приходят ходы, чат и итог партии. Законченная партия — отказ.
+    """
     game = await _load_game(data)
     if game.state.get("status") != "in_progress":
         await ctx.error("spectate_unavailable")
@@ -372,6 +404,7 @@ async def _spectate_game(ctx: ActionContext, data: dict) -> None:
 
 @action("leave_spectate")
 async def _leave_spectate(ctx: ActionContext, data: dict) -> None:
+    """Перестать смотреть партию game_id; без id — все партии, которые игрок смотрит."""
     if data.get("game_id"):
         await manager.remove_spectator(_int_field(data, "game_id"), ctx.user.id)
     else:
@@ -386,6 +419,12 @@ CHAT_PRESETS = frozenset({"good_luck", "thanks", "nice_move", "time_trouble"})
 
 @action("chat_message")
 async def _chat_message(ctx: ActionContext, data: dict) -> None:
+    """
+    Сообщение в чат партии: свой текст (обрезается до 140 знаков) или код быстрой фразы (preset). Писать могут
+    только игроки партии; сообщение получают оба игрока и зрители. В базе чат не хранится, фильтр оскорблений
+    (src/services/civility.py) к нему не применяется — на сообщение можно пожаловаться модератору. Игрок, которому
+    модератор отключил чат, получает отказ chat_banned.
+    """
     preset = data.get("preset")
     raw_text = str(data.get("text", "")).strip()
     if preset is not None:
@@ -420,6 +459,10 @@ async def _chat_message(ctx: ActionContext, data: dict) -> None:
 
 @action("abort_game")
 async def _abort_game(ctx: ActionContext, data: dict) -> None:
+    """
+    Отмена партии без изменения рейтинга — пока сделано меньше двух полуходов (state_manager.abort_game), иначе
+    отказ abort_too_late. Партию арены отменить нельзя.
+    """
     game = await _participant_game(ctx, data, in_progress=True)
     # Партия арены не отменяется по желанию (33.1): иначе неудобного соперника можно было бы «пропустить»;
     # неявку засчитывает таймаут первого хода.
@@ -470,6 +513,10 @@ async def _berserk(ctx: ActionContext, data: dict) -> None:
 
 @action("resign")
 async def _resign(ctx: ActionContext, data: dict) -> None:
+    """
+    Сдача: победа соперника. Завершить партию может только один претендент (claim_game_end) — если её в тот же
+    момент закончил мат, флаг или ничья, сдача ничего не меняет. Итог и рейтинг пишет finish_game.
+    """
     game = await _participant_game(ctx, data, in_progress=True)
     game_result = "0-1" if ctx.user.id == game.white_id else "1-0"
     if not await state_manager.claim_game_end(game.game_id, game_result, "resignation"):
@@ -488,6 +535,7 @@ async def _resign(ctx: ActionContext, data: dict) -> None:
 
 @action("offer_draw")
 async def _offer_draw(ctx: ActionContext, data: dict) -> None:
+    """Предложить ничью: предложение записывается в состояние партии (поле draw_offer) и уходит сопернику."""
     game = await _participant_game(ctx, data, in_progress=True)
     # Одно предложение на позицию: повторное (или после отказа) — только после следующего хода.
     # Иначе предложения ничьей превращаются в способ дёргать соперника в цейтноте.
@@ -510,6 +558,11 @@ async def _offer_draw(ctx: ActionContext, data: dict) -> None:
 
 @action("accept_draw")
 async def _accept_draw(ctx: ActionContext, data: dict) -> None:
+    """
+    Принять ничью, предложенную соперником. Наличие предложения перепроверяется атомарно при завершении партии
+    (guard в claim_game_end): если предложения к этому моменту уже нет (его снимают ответный ход и отказ),
+    партия продолжается.
+    """
     game = await _participant_game(ctx, data, in_progress=True)
     draw_offer = str(game.state.get("draw_offer") or "")
     if not draw_offer.isdigit() or int(draw_offer) == ctx.user.id:
@@ -536,6 +589,7 @@ async def _accept_draw(ctx: ActionContext, data: dict) -> None:
 
 @action("decline_draw")
 async def _decline_draw(ctx: ActionContext, data: dict) -> None:
+    """Отклонить ничью соперника: предложение стирается из состояния партии, соперник получает draw_declined."""
     game = await _participant_game(ctx, data, in_progress=True)
     if pending_draw_offer(game.state) in (None, ctx.user.id):
         raise _Ignore  # отклонять нечего: предложения нет или оно своё
@@ -551,6 +605,7 @@ async def _decline_draw(ctx: ActionContext, data: dict) -> None:
 
 @action("offer_rematch")
 async def _offer_rematch(ctx: ActionContext, data: dict) -> None:
+    """Предложить реванш после законченной партии: отметка в её состоянии, событие и уведомление сопернику."""
     game = await _participant_game(ctx, data, in_progress=False)
     await state_manager.update_game_state(game.game_id, {"rematch_offer": str(ctx.user.id)})
     opponent = game.opponent_of(ctx.user.id)
@@ -566,6 +621,7 @@ async def _offer_rematch(ctx: ActionContext, data: dict) -> None:
 
 @action("accept_rematch")
 async def _accept_rematch(ctx: ActionContext, data: dict) -> None:
+    """Принять реванш соперника: новая партия с переменой цветов, тем же контролем и типом (create_rematch_game)."""
     game = await _participant_game(ctx, data, in_progress=False)
     rematch_offer = str(game.state.get("rematch_offer") or "")
     if not rematch_offer.isdigit() or int(rematch_offer) == ctx.user.id:
@@ -580,6 +636,7 @@ async def _accept_rematch(ctx: ActionContext, data: dict) -> None:
 
 @action("decline_rematch")
 async def _decline_rematch(ctx: ActionContext, data: dict) -> None:
+    """Отклонить (или отозвать своё) предложение реванша: отметка стирается, соперник получает rematch_declined."""
     game = await _participant_game(ctx, data, in_progress=None)
     await state_manager.update_game_state(game.game_id, {"rematch_offer": ""})
     await manager.send_personal_message(
@@ -591,6 +648,7 @@ async def _decline_rematch(ctx: ActionContext, data: dict) -> None:
 # --- Ход ----------------------------------------------------------------------------------
 
 def _move_payload(ctx: ActionContext, gid: int, command_id: str, res: dict, move_data: dict, game_over: bool) -> dict:
+    """Событие move_made для игроков и зрителей: ход, новая позиция и запись партии, часы, версия состояния."""
     return {
         "event": "move_made",
         "game_id": gid,
@@ -616,6 +674,10 @@ async def _record_applied_move(
     Ход к этому моменту зафиксирован в Redis и отменить его нельзя, поэтому сбой здесь не должен
     мешать рассылке move_made: иначе соперник не узнал бы о ходе, а сходивший получил бы
     «внутреннюю ошибку» при том, что ход засчитан.
+
+    Телеметрия копится в списке Redis game:{id}:moves и переносится в таблицу moves при завершении партии. Время
+    на ход — по часам сервера; время, названное клиентом, идёт только в оценку задержки сети (network_lag_ms).
+    В поле move_number записывается номер хода партии (fullmove), а не номер полухода.
     """
     server_elapsed_ms = res.get("elapsed_ms", 0)
     try:
@@ -648,6 +710,13 @@ async def _record_applied_move(
 
 @action("make_move")
 async def _make_move(ctx: ActionContext, data: dict) -> None:
+    """
+    Ход в партии. Очередь хода, версию состояния, легальность и часы проверяет и атомарно применяет
+    state_manager.process_atomic_move (Redis); повтор того же command_id применяется один раз. Отказ возвращает
+    игроку актуальную позицию. Применённый ход рассылается обоим игрокам и зрителям (move_made); если он закончил
+    партию (мат, пат, ничья по правилам) или при попытке хода обнаружен упавший флаг — итог пишет finish_game и
+    рассылается game_over.
+    """
     move_str = data.get("move")
     if not move_str or not isinstance(move_str, str) or len(move_str) > 10:
         raise _Ignore
@@ -778,6 +847,8 @@ _ACTION_GROUPS = {
 # отклонённых сообщений за WS_STRIKE_WINDOW_S честный клиент не набирает.
 WS_MAX_STRIKES = 30
 WS_STRIKE_WINDOW_S = 10.0
+# Константа здесь не используется: кодом 1008 соединение закрывают отзыв сессии
+# (connection_manager.WS_CLOSE_SESSION_REVOKED) и неверный тикет (src/api/deps.py).
 WS_CLOSE_POLICY_VIOLATION = 1008
 # Флуд закрывается кодом 1013 (try again later), а не 1008: 1008 клиент понимает как
 # «сессия отозвана» и разлогинивает игрока, хотя его токен в порядке.
@@ -785,6 +856,8 @@ WS_CLOSE_FLOOD = 1013
 
 
 class _StrikeCounter:
+    """Счётчик отклонённых сообщений одного соединения за последние WS_STRIKE_WINDOW_S секунд (в памяти процесса)."""
+
     def __init__(self):
         self._times: list[float] = []
 
@@ -796,12 +869,14 @@ class _StrikeCounter:
 
 
 async def _within_rate_limit(user_id: int, action_name: str) -> bool:
+    """Укладывается ли действие в лимит своей группы (счётчик в Redis: ratelimit:ws:<группа>:user:<id>:<окно>)."""
     group = _ACTION_GROUPS.get(action_name, "other")
     limit, window_s = WS_RATE_LIMITS[group]
     return await try_consume(f"ws:{group}", f"user:{user_id}", limit, window_s)
 
 
 async def _reject_rate_limited(user: User, action_name: str, data: dict) -> None:
+    """Отказ rate_limited игроку; для хода — вместе с актуальной позицией, чтобы клиент вернул её на доску."""
     payload: dict[str, Any] = {"event": "error", "action": action_name, **error_payload("rate_limited")}
     if action_name == "make_move" and data.get("game_id"):
         # Клиент уже показал ход на доске — возвращаем ему актуальную позицию.

@@ -40,11 +40,13 @@ ALIASES = {
 
 
 def plain(text: str) -> str:
+    """Очищает содержимое ячейки от HTML-тегов, сносок и пробелов."""
     text = text.replace("ø", "o").replace("ł", "l").replace("ß", "ss")
     return "".join(c for c in unicodedata.normalize("NFD", text.lower()) if not unicodedata.combining(c))
 
 
 def number(cell: str) -> float | None:
+    """Преобразует текстовую запись очков с символом ½ в float."""
     cell = re.sub(r"'''|<[^>]+>|&nbsp;", " ", cell).strip()
     cell = re.sub(r"\{\{frac\|(\d)\|(\d)\}\}", lambda m: f" {int(m.group(1)) / int(m.group(2))}", cell)
     cell = cell.replace("{{frac|2}}", "½").replace("½", ".5")
@@ -68,6 +70,7 @@ def result_points(cell: str) -> float | None:
 
 
 def rows_of(slug: str, index: int) -> list[tuple[str, float | None, float | None]]:
+    """Разбирает кросс-таблицу английской Википедии в список строк игроков."""
     text = (HERE / ".cache" / f"{slug}.txt").read_text(encoding="utf-8")
     table = re.findall(r"\{\|.*?\n\|\}", text, flags=re.S)[index]
     out = []

@@ -69,6 +69,7 @@ def get_target_asset_url(assets: list[dict]) -> tuple[str, str]:
 
 
 def download_and_install_stockfish() -> str:
+    """Скачивает и устанавливает официальный бинарник Stockfish под текущую ОС."""
     os.makedirs(BIN_DIR, exist_ok=True)
     is_windows = platform.system().lower() == "windows"
     target_filename = "stockfish.exe" if is_windows else "stockfish"

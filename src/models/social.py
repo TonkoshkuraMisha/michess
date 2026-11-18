@@ -2,6 +2,11 @@
 """
 Игроки и уведомления (таск 17.1): подписки (взаимная подписка — «друзья») и центр уведомлений. Тексты уведомлений
 собирает клиент по коду вида (kind) и параметрам (payload) — сервер строк для людей не хранит.
+
+В этом же файле — таблицы общения (таски 30.1–30.3): личные сообщения и чёрный список
+(src/services/direct_messages.py), публикации ленты, комментарии и отметки «нравится» (src/services/feed.py),
+скрытые переписки. Тексты сообщений и публикаций — ввод игроков; придержанное фильтром оскорблений (held) ждёт
+решения модератора (src/services/civility.py, src/services/moderation.py).
 """
 
 from datetime import datetime
@@ -33,6 +38,7 @@ class Notification(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True)
     # challenge | rematch | tournament_round | report_answer | workout_reminder | post_comment | arena_reminder
+    # (список — notifications.KINDS; клиенту отдаются последние notifications.KEEP, старые из базы не удаляются).
     kind: Mapped[str] = mapped_column(String(32))
     payload: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)

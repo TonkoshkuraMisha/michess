@@ -75,12 +75,17 @@ logger = logging.getLogger(__name__)
 
 init_sentry("api")
 
+# Сколько /health ждёт ответа PostgreSQL и Redis (каждого отдельно), прежде чем считать сервис недоступным.
 HEALTH_CHECK_TIMEOUT_S = 2.0
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Lifespan context manager for handling startup and shutdown events gracefully."""
+    """
+    Старт и остановка процесса API. При старте запускается фоновый цикл часов партий (флаги, неявки, брошенные
+    партии — state_manager.check_timeouts_loop; цикл есть в каждом процессе uvicorn, но работу ведёт один лидер —
+    ключ Redis timeouts:leader). При остановке цикл отменяется, процессы Stockfish и соединение с Redis закрываются.
+    """
     logger.info("Starting up %s (%s)...", settings.PROJECT_NAME, settings.ENVIRONMENT)
     timeout_task = asyncio.create_task(state_manager.check_timeouts_loop(manager))
 
@@ -98,8 +103,11 @@ async def lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
+    """
+    Собирает приложение: CORS, метрики HTTP, единый формат ошибок проверки запроса и маршруты всех разделов.
+    Все маршруты живут под префиксом /api/v1 (settings.API_V1_STR); вне его — только /health и /metrics.
+    """
     # Документация API в продакшене не публикуется: она раскрывает все эндпоинты и схемы.
-    """Собирает приложение: CORS, метрики HTTP, единый формат ошибок проверки запроса и маршруты всех разделов."""
     docs_enabled = not settings.is_production
     app = FastAPI(
         title=settings.PROJECT_NAME,
@@ -198,7 +206,10 @@ async def health_check():
 
 @app.get("/metrics", include_in_schema=False)
 async def metrics():
-    """Метрики Prometheus. Наружу через nginx не публикуется — только внутри сети compose."""
+    """
+    Метрики Prometheus (src/core/observability.py). Наружу через nginx не публикуется — только внутри сети compose.
+    Перед отдачей обновляется число игроков за сегодня (счётчик в Redis).
+    """
     await refresh_active_players()
     return metrics_response()
 

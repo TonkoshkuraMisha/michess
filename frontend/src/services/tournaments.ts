@@ -1,5 +1,9 @@
 // --- FILE: frontend/src/services/tournaments.ts ---
 // Турниры с историческими мастерами (таски 15.1–15.3): API и подписи участников на языке игрока.
+// Все запросы — к /api/v1/tournaments и только с входом (маршруты src/api/tournaments.py). Расписание, места и
+// правила матчей — src/services/tournament_rules.py; партии ботов между собой играет сервер в фоне
+// (tournament_simulation.py). Результат партии игрока сюда не отправляется: его приносит сохранение сыгранной
+// партии (POST /api/v1/bots/save-game с полем tournament_game_id) — прислать итог самому нельзя.
 
 import {API_BASE_URL} from '../config/api';
 import {UiError, readApiErrorOr} from './apiErrors';
@@ -14,33 +18,51 @@ import {GUEST_PREFIX, guestShortName} from './timeMachine';
 export type TournamentFormat = 'round_robin' | 'knockout' | 'swiss';
 /** Швейцарская система (таск 15.4): число туров по размеру — как на сервере (tournament_rules.SWISS_ROUNDS). */
 export const SWISS_ROUNDS: Record<number, number> = {6: 4, 8: 5};
+/** Соперник-бот: исторический бот, архетип мастерской или персоналия (своя либо мастер прошлого). */
 export type ParticipantKind = 'bot' | 'archetype' | 'personality';
 
+/** Участник турнира. */
 export interface TournamentPlayer {
+    /** Номер участника — его посев: 1 — сильнейший по рейтингу на старте. */
     seat: number;
     kind: 'user' | ParticipantKind;
     user_id: number | null;
+    /** id исторического бота, «archetype:<id>» или «guest:<id>» мастера прошлого; у игрока — null. */
     bot_key: string | null;
     personality_name: string | null;
     rating: number;
+    /** Итоговое место; null — турнир ещё идёт. */
     place: number | null;
+    /** На выбывание: тур, в котором участник выбыл. */
     eliminated_round: number | null;
+    /** Характер соперника из мастерской — с ним доска начинает партию; у исторического бота и у игрока — null. */
     config: PersonalityConfig | null;
 }
 
+/** Партия расписания турнира. */
 export interface TournamentGame {
     id: number;
     round: number;
     board: number;
+    /**
+     * На выбывание: main — основная партия матча, rematch — переигровка после ничьей (цвета меняются, контроль
+     * вдвое короче), armageddon — решающая, где чёрным достаточно ничьей.
+     */
     stage: 'main' | 'rematch' | 'armageddon';
     white_seat: number;
     black_seat: number;
     base_time_ms: number;
     increment_ms: number;
+    /** null — партия ещё не сыграна. */
     result: '1-0' | '0-1' | '1/2-1/2' | null;
+    /** Сохранённая партия (таблица games) — для просмотра; null — её нет. */
     game_id: number | null;
 }
 
+/**
+ * Строка таблицы. Места в круговом турнире: очки, затем личная встреча среди набравших поровну, затем коэффициент
+ * Зоннеборна–Бергера, затем посев; buchholz приходит только в швейцарке.
+ */
 export interface Standing {
     seat: number;
     points: number;
@@ -50,6 +72,7 @@ export interface Standing {
     place: number;
 }
 
+/** Турнир целиком (GET /tournaments/{id}): участники, расписание с результатами и таблица. */
 export interface Tournament {
     id: number;
     format: TournamentFormat;
@@ -60,6 +83,7 @@ export interface Tournament {
     current_round: number;
     created_at: string;
     finished_at: string | null;
+    /** Номер самого игрока среди участников. */
     my_seat: number | null;
     /** Игрок сдал турнир: боты доигрывают, сам он больше не играет. */
     withdrawn: boolean;
@@ -70,6 +94,7 @@ export interface Tournament {
     standings: Standing[];
 }
 
+/** Турнир в списке игрока (GET /tournaments, новые первыми). */
 export interface TournamentSummary {
     id: number;
     format: TournamentFormat;
@@ -77,6 +102,7 @@ export interface TournamentSummary {
     status: 'active' | 'finished';
     created_at: string;
     my_place: number | null;
+    /** Ключ этапа карьеры, если турнир начат из неё. */
     career_stage?: string | null;
     event_key?: string | null;
     /** Текущий тур и готова ли в нём партия игрока («Продолжить турнир» на главной). */
@@ -84,6 +110,7 @@ export interface TournamentSummary {
     my_game_ready: boolean;
 }
 
+/** Тело создания турнира (POST /tournaments). size — число участников вместе с игроком (от 4 до 8). */
 export interface TournamentCreate {
     format: TournamentFormat;
     size: number;
@@ -108,6 +135,7 @@ export interface TournamentGameStart {
 
 const BASE = `${API_BASE_URL}/api/v1/tournaments`;
 
+/** Запрос с токеном; отказ — UiError с текстом по коду сервера, а если кода нет — с запасным сообщением fallback. */
 async function call<T>(url: string, init: RequestInit, fallback: MessageKey): Promise<T> {
     const token = getToken();
     const res = await fetch(url, {
@@ -133,6 +161,7 @@ export const startMyGame = (tournamentId: number, gameId: number) =>
 export const withdrawTournament = (tournamentId: number) =>
     call<Tournament>(`${BASE}/${tournamentId}/withdraw`, {method: 'POST'}, 'tournaments.loadFailed');
 
+/** Случайные соперники: около силы игрока, сильнее или слабее — подбирает сервер. */
 export type RandomOpponents = 'my_level' | 'stronger' | 'weaker';
 
 /** Этап карьеры (таск 15.4); у скрытого приглашения подробностей нет. */
@@ -151,10 +180,13 @@ export interface CareerStage {
     opponents?: { kind: ParticipantKind; id: string | number }[];
 }
 
+/** Карьера: этапы лестницы готовых турниров (src/services/tournament_career.py). */
 export const getCareer = () => call<{ stages: CareerStage[] }>(`${BASE}/career`, {method: 'GET'}, 'tournaments.loadFailed');
+/** Начать турнир этапа карьеры; закрытый этап сервер не начнёт (403). */
 export const startCareerStage = (key: string) =>
     call<Tournament>(`${BASE}/career/${encodeURIComponent(key)}`, {method: 'POST'}, 'tournaments.createFailed');
 
+/** Создать свой турнир; партии ботов первого тура сервер сразу ставит в очередь симуляции. */
 export const createTournament = (body: TournamentCreate) =>
     call<Tournament>(BASE, {method: 'POST', body: JSON.stringify(body)}, 'tournaments.createFailed');
 
@@ -217,7 +249,11 @@ export function gameStart(t: Tournament, game: TournamentGame, name: string): To
     };
 }
 
-/** Сколько всего туров (кругов сетки): у больших исторических турниров размер и число кругов любые. */
+/**
+ * Сколько всего туров: в швейцарке — по таблице SWISS_ROUNDS, в круговом — по расписанию, на выбывание — число
+ * кругов сетки (log2 от размера, вверх). У больших исторических турниров размер и число кругов любые, поэтому
+ * там, где можно, число берётся из самих партий расписания.
+ */
 export function totalRounds(t: Tournament): number {
     if (t.format === 'swiss') return SWISS_ROUNDS[t.size] ?? Math.max(1, ...t.games.map((g) => g.round));
     // Один круг — на тур меньше числа участников (при нечётном числе — столько же); расписание в несколько кругов

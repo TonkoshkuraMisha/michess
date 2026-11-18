@@ -1,6 +1,8 @@
 // --- FILE: frontend/src/components/chessboard/AuxBoard.tsx ---
 // Вспомогательная доска (таск 11.4): копия позиции партии, где игрок разыгрывает варианты за обе стороны,
-// пока соперник думает. На партию не влияет; «К позиции партии» — снова текущая позиция.
+// пока соперник думает. На партию не влияет; «К позиции партии» — снова текущая позиция. Открывается из панели
+// наставника (CoachPanel), то есть только в партии с ботом и на свободной доске. Всё считается в браузере
+// (chess.js), сервер не участвует.
 
 import {useEffect, useState} from 'react';
 import type {PointerEvent as ReactPointerEvent, ReactNode} from 'react';
@@ -43,8 +45,13 @@ interface Drag {
     moved: boolean;
 }
 
+// Сдвиг указателя, с которого нажатие считается перетаскиванием, а не щелчком по фигуре.
 const DRAG_THRESHOLD_PX = 4;
 
+/**
+ * Вспомогательная доска. Берёт позицию партии (fen) один раз — при открытии и по кнопке «К позиции партии»;
+ * дальше ходы партии её не двигают, чтобы разбираемый вариант не пропал.
+ */
 export function AuxBoard({fen, flipped, lightColor, darkColor, renderPiece, onClose, xrayModes, xrayForOpponent = false}: Props) {
     const {t} = useI18n();
     // Позиция, с которой начат разбор, и сыгранные на доске ходы (SAN): доска строится из них заново.
@@ -107,6 +114,8 @@ export function AuxBoard({fen, flipped, lightColor, darkColor, renderPiece, onCl
         setDrag({from: square, startX: event.clientX, startY: event.clientY, x: event.clientX, y: event.clientY, moved: false});
     };
 
+    // Пока фигуру тащат, движение и отпускание ловятся на window: указатель может уйти за край доски. Эффект
+    // намеренно без списка зависимостей — подписка обновляется на каждом рендере и видит свежие drag и attempt.
     useEffect(() => {
         if (!drag) return;
         const move = (event: PointerEvent) => setDrag((current) => current && {
@@ -129,6 +138,7 @@ export function AuxBoard({fen, flipped, lightColor, darkColor, renderPiece, onCl
     });  // eslint-disable-line react-hooks/exhaustive-deps
 
     const dragged = drag?.moved ? board.get(drag.from as never) : null;
+    // Сторона рентгена: обычно та, чей ход на этой доске; при «Показать за соперника» — противоположная.
     const xraySide = board.turn() === (xrayForOpponent ? 'w' : 'b') ? 'b' : 'w';
 
     const undo = () => {

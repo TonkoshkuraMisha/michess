@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 
 def _analyse(job: tuple[int, str, int]) -> tuple[int, dict | None]:
+    """Оценивает ходы партии движком и собирает черновые комментарии наставника."""
     from build_classics import analyse
 
     game_id, pgn, depth = job
@@ -30,6 +31,7 @@ def _analyse(job: tuple[int, str, int]) -> tuple[int, dict | None]:
 
 
 async def _select(collection: str, limit: int) -> list[tuple[int, str]]:
+    """Отбирает публичные партии библиотеки, у которых ещё нет автоаннотации."""
     from sqlalchemy import select
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
     from sqlalchemy.pool import NullPool
@@ -52,6 +54,7 @@ async def _select(collection: str, limit: int) -> list[tuple[int, str]]:
 
 
 async def _save(results: list[tuple[int, dict]]) -> None:
+    """Сохраняет сгенерированную аннотацию партии в таблицу library_annotations."""
     from sqlalchemy import select
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
     from sqlalchemy.pool import NullPool
@@ -73,6 +76,7 @@ async def _save(results: list[tuple[int, dict]]) -> None:
 
 
 def main() -> None:
+    """Запускает пакетную разметку партий библиотеки комментариями наставника."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--collection", required=True, help="часть пути коллекции")
     parser.add_argument("--limit", type=int, default=200)

@@ -16,6 +16,14 @@
 Тренировка по приёмам (таск 13.4): задачи темы на текущей ступени игрока (1–4); ступень пройдена, когда из последних
 STAGE_WINDOW задач не меньше STAGE_PASS решены чисто (без ошибки и подсказки). Смешанная подборка — по разделу
 каталога; «без названия темы» — темы задачи не показываются до конца решения.
+
+Где лежат данные. PostgreSQL: задачи — puzzles и puzzle_themes (открытая база lichess, загружает
+src/services/puzzle_import.py); каждая законченная попытка — puzzle_attempts (и задачи забега и курса тоже: они
+входят в историю, серию и список недавних, только рейтинг не меняют); прогресс тем — theme_progress; рейтинг
+решателя, число задач и рекорды забегов — users.puzzle_rating, puzzle_games, puzzle_best_3, puzzle_best_5. Рейтинг
+самой задачи (puzzles.rating) не меняется никогда. Redis: ``puzzle:session:{user_id}`` — активная задача (JSON
+PuzzleSession, живёт SESSION_TTL_S), ``puzzle:run:{user_id}`` — забег на время (до его конца плюс 10 минут).
+Маршруты — src/api/puzzles.py.
 """
 
 import datetime as dt
@@ -37,22 +45,23 @@ from src.models.user import User
 from src.services import product_metrics
 from src.services.themes import GOAL_THEMES, PUZZLE_GOALS, SECTIONS, THEMES, THEMES_BY_CODE, puzzle_goal
 
-SESSION_TTL_S = 2 * 60 * 60
-RECENT_EXCLUDED = 300
+SESSION_TTL_S = 2 * 60 * 60  # активная задача без ходов живёт 2 часа, затем считается брошенной (рейтинг не меняется)
+RECENT_EXCLUDED = 300  # сколько последних решавшихся задач не выдаётся повторно
+# Окно рейтинга вокруг рейтинга игрока при подборе задачи: расширяется по шагам, None — любая задача.
 RATING_WINDOWS = (75, 150, 300, 600, None)
-PROVISIONAL_GAMES = 30
-MIN_RATING = 400
-HINT_FACTORS = (1.0, 0.5, 0.0)
-DAILY_RATING = (1300, 1900)
-DAILY_POPULARITY = 95
-TIMED_MINUTES = (3, 5)
-TIMED_MISTAKES = 3
-TIMED_START_OFFSET = -300
-TIMED_STEP = 40
-TIMED_GRACE_S = 2
-STAGES = (1, 2, 3, 4)
-STAGE_WINDOW = 10
-STAGE_PASS = 8
+PROVISIONAL_GAMES = 30  # первые задачи рейтинг решателя «временный»: K = 40 (то же число, что в rating.py для партий)
+MIN_RATING = 400  # ниже рейтинг решателя не опускается
+HINT_FACTORS = (1.0, 0.5, 0.0)  # множитель начисления за решённую задачу при 0, 1 и 2 подсказках
+DAILY_RATING = (1300, 1900)  # «задача дня»: рейтинг задачи в этих пределах…
+DAILY_POPULARITY = 95  # …и популярность в базе lichess не ниже этой
+TIMED_MINUTES = (3, 5)  # допустимая длительность забега на время
+TIMED_MISTAKES = 3  # столько ошибок заканчивают забег
+TIMED_START_OFFSET = -300  # первая задача забега — на 300 пунктов легче рейтинга игрока…
+TIMED_STEP = 40  # …и каждая решённая поднимает цель на 40 (не ниже 600)
+TIMED_GRACE_S = 2  # отсрочка конца забега на задержку сети: ход, пришедший на 2 с позже срока, ещё считается
+STAGES = (1, 2, 3, 4)  # ступени темы; ступень задачи (puzzles.stage) назначает puzzle_import.stage_for
+STAGE_WINDOW = 10  # ступень пройдена, когда из последних 10 задач ступени…
+STAGE_PASS = 8  # …не меньше 8 решены чисто
 
 
 class PuzzleError(DomainError):
@@ -72,7 +81,7 @@ class PuzzleSession:
     puzzle_id: int
     index: int = 1          # индекс ожидаемого хода решающего в moves
     hints: int = 0
-    daily: bool = False
+    daily: bool = False     # задача дня: пометка, на проверку и рейтинг не влияет
     run: str | None = None  # забег режима на время: задача без рейтинга
     training: str | None = None  # тренировка по теме: её код (прогресс темы обновляется по итогу)
     stage: int | None = None
@@ -117,6 +126,7 @@ def public_view(puzzle: Puzzle, *, show_themes: bool = True) -> dict:
 
 
 async def _recent_ids(db: AsyncSession, user_id: int) -> list[int]:
+    """Задачи последних RECENT_EXCLUDED попыток игрока (puzzle_attempts) — их подбор не выдаёт повторно."""
     rows = await db.execute(
         select(PuzzleAttempt.puzzle_id).where(PuzzleAttempt.user_id == user_id)
         .order_by(PuzzleAttempt.created_at.desc(), PuzzleAttempt.id.desc()).limit(RECENT_EXCLUDED)
@@ -127,7 +137,10 @@ async def _recent_ids(db: AsyncSession, user_id: int) -> list[int]:
 async def pick_puzzle(
         db: AsyncSession, user: User, theme: str | None = None, target_rating: int | None = None,
 ) -> Puzzle:
-    """Задача под рейтинг игрока (окно расширяется, пока не найдётся), по теме, без недавних."""
+    """
+    Задача под рейтинг игрока (окно расширяется, пока не найдётся), по теме, без недавних. target_rating заменяет
+    рейтинг игрока (забег на время). Внутри окна задача выбирается случайно.
+    """
     if theme is not None and theme not in THEMES_BY_CODE:
         raise PuzzleError("unknown_theme", 400, theme=theme)
     recent = await _recent_ids(db, user.id)
@@ -154,7 +167,11 @@ async def pick_puzzle(
 
 
 async def daily_puzzle(db: AsyncSession, day: dt.date) -> Puzzle:
-    """Одна задача на всех на этот день: популярная, среднего уровня, по дате."""
+    """
+    Одна задача на всех на этот день: популярная, среднего уровня, по дате. Номер среди подходящих задач (по
+    возрастанию id) — контрольная сумма даты по модулю их числа: день всегда даёт ту же задачу, пока база не
+    изменилась. Если подходящих нет, выбор идёт из всех задач.
+    """
     condition: ColumnElement[bool] = (Puzzle.popularity >= DAILY_POPULARITY) & Puzzle.rating.between(*DAILY_RATING)
     count = await db.scalar(select(func.count()).select_from(Puzzle).where(condition)) or 0
     if count == 0:
@@ -170,20 +187,26 @@ async def daily_puzzle(db: AsyncSession, day: dt.date) -> Puzzle:
 
 async def start(user: User, puzzle: Puzzle, *, daily: bool = False, run: str | None = None,
                 training: str | None = None, stage: int | None = None, course: str | None = None) -> None:
-    """Начать задачу: предыдущая незаконченная просто отменяется (без изменения рейтинга)."""
+    """
+    Начать задачу: предыдущая незаконченная просто отменяется (без изменения рейтинга и без записи попытки).
+    Параметры — режим решения: задача дня, забег на время, тренировка темы со ступенью, курс матовых конструкций.
+    """
     await _save_session(user.id, PuzzleSession(puzzle_id=puzzle.id, daily=daily, run=run, training=training,
                                                stage=stage, course=course))
 
 
 # --- тренировка по приёмам -----------------------------------------------------------------------------------
 
+# Кэш ``stage_counts`` в памяти процесса: (тема, ступень) → число задач. У каждого процесса API свой.
 _stage_counts: dict[tuple[str, int], int] | None = None
 
 
 async def stage_counts(db: AsyncSession) -> dict[tuple[str, int], int]:
     """
-    Сколько задач у каждой темы на каждой ступени. База задач меняется только импортом — считается один раз.
-    Темы «Что грозит соперник?» и «Не зевни» решаются защитными упражнениями (таск 13.6) — их счёт оттуда.
+    Сколько задач у каждой темы на каждой ступени. База задач меняется только импортом — считается один раз на
+    процесс (импорт идёт при развёртывании, до запуска API; импорт в работающую систему процессы API увидят после
+    перезапуска). Темы «Что грозит соперник?» и «Не зевни» решаются защитными упражнениями (таск 13.6) — их счёт
+    оттуда.
     """
     from src.services import defense_drills
 
@@ -201,7 +224,7 @@ async def stage_counts(db: AsyncSession) -> dict[tuple[str, int], int]:
 
 
 def reset_stage_counts() -> None:
-    """После импорта задач и в тестах."""
+    """Сбрасывает кэш ``stage_counts`` этого процесса: после импорта задач и в тестах."""
     global _stage_counts
     _stage_counts = None
 
@@ -211,7 +234,10 @@ async def _progress(db: AsyncSession, user_id: int, theme: str) -> ThemeProgress
 
 
 def goal_clause(goal: str) -> ColumnElement[bool]:
-    """Задачи с этой целью (27.8): есть тема цели и нет тем старших целей; «материал» — ни одной из старших."""
+    """
+    Задачи с этой целью (27.8): есть тема цели и нет тем старших целей; «материал» — ни одной из старших.
+    Старшинство — порядок themes.PUZZLE_GOALS, темы каждой цели — themes.GOAL_THEMES.
+    """
     other = aliased(PuzzleTheme)
 
     def has(codes: tuple[str, ...]) -> ColumnElement[bool]:
@@ -232,6 +258,9 @@ async def pick_training(
     Задача тренировки: по теме (ступень — из прогресса, если не задана) или смешанная по разделу; goal — только
     задачи с этой целью («отвлечение с целью мата», 27.8). Одна цель без темы и раздела — смешанная подборка по
     цели из всех тем: так устроен режим «Спасите партию» (27.9, goal=draw).
+
+    Возвращает задачу и ступень (None у смешанной подборки). Сначала ищется задача не из недавних, затем — любая:
+    на узкой теме лучше повтор, чем отказ.
     """
     if theme is not None and section is not None:
         raise PuzzleError("training_target_required", 400)
@@ -269,7 +298,12 @@ async def pick_training(
 
 
 async def update_theme_progress(db: AsyncSession, user_id: int, theme: str, stage: int, clean: bool) -> dict:
-    """Засчитать результат ступени темы (задача тренировки или защитное упражнение 13.6); коммит — за вызывающим."""
+    """
+    Засчитать результат ступени темы (задача тренировки или защитное упражнение 13.6); коммит — за вызывающим.
+    theme_progress.recent — строка из «1» (чисто) и «0» по последним STAGE_WINDOW задачам текущей ступени; при
+    STAGE_PASS единицах ступень пройдена, окно очищается; после последней ступени тема освоена (mastered).
+    solved — счётчик всех чисто решённых задач темы, на любой ступени.
+    """
     progress = await _progress(db, user_id, theme)
     if progress is None:
         progress = ThemeProgress(user_id=user_id, theme=theme, stage=1, recent="", solved=0, mastered=False)
@@ -306,7 +340,10 @@ async def demo_puzzles(db: AsyncSession, theme: str, count: int = 2) -> list[dic
 
 
 async def training_overview(db: AsyncSession, user: User) -> dict:
-    """Прогресс по всем темам и сколько задач есть на каждой ступени (тема готова к выдаче, когда хватает минимумов)."""
+    """
+    Прогресс по всем темам и сколько задач есть на каждой ступени (тема готова к выдаче, когда хватает минимумов:
+    на каждой ступени задач не меньше, чем задано для темы в реестре — themes.Theme.minimums).
+    """
     counts = await stage_counts(db)
     rows = await db.execute(select(ThemeProgress).where(ThemeProgress.user_id == user.id))
     progress = {p.theme: p for p in rows.scalars()}
@@ -339,6 +376,7 @@ async def _load_run(user_id: int) -> dict | None:
 
 
 async def _save_run(user_id: int, run: dict) -> None:
+    """Сохраняет забег в Redis до его конца плюс 10 минут (не меньше минуты): итог можно забрать и после срока."""
     ttl = int(run["ends_at"] - time.time()) + 600
     await redis_module.redis_client.set(_run_key(user_id), json.dumps(run), ex=max(ttl, 60))
 
@@ -351,10 +389,15 @@ def _run_view(run: dict) -> dict:
 
 
 def _run_over(run: dict) -> bool:
+    """Забег окончен: набрано TIMED_MISTAKES ошибок или время вышло (с отсрочкой TIMED_GRACE_S). Часы — сервера."""
     return run["mistakes"] >= TIMED_MISTAKES or time.time() > run["ends_at"] + TIMED_GRACE_S
 
 
 async def start_run(user: User, minutes: int) -> dict:
+    """
+    Начинает забег на время (minutes — из TIMED_MINUTES): прежний забег и активная задача игрока отменяются.
+    В забеге запоминается стартовая сложность — рейтинг решателя на момент старта плюс TIMED_START_OFFSET.
+    """
     if minutes not in TIMED_MINUTES:
         raise PuzzleError("invalid_timed_minutes", 400, minutes=minutes)
     run = {"id": uuid.uuid4().hex, "minutes": minutes, "ends_at": time.time() + minutes * 60,
@@ -381,6 +424,10 @@ async def next_in_run(db: AsyncSession, user: User) -> tuple[Puzzle, dict]:
 
 
 async def _count_in_run(user_id: int, run_id: str, solved: bool) -> dict | None:
+    """
+    Засчитывает задачу в забег: решена — счёт, нет — ошибка. Задача, законченная после конца забега, не
+    засчитывается. None — забега уже нет или задача начата в другом забеге.
+    """
     run = await _load_run(user_id)
     if run is None or run["id"] != run_id:
         return None
@@ -391,7 +438,11 @@ async def _count_in_run(user_id: int, run_id: str, solved: bool) -> dict | None:
 
 
 async def finish_run(db: AsyncSession, user: User) -> dict:
-    """Итог забега: счёт, рекорд за эти минуты, новый ли это рекорд."""
+    """
+    Итог забега: счёт, рекорд за эти минуты, новый ли это рекорд. Забег и активная задача удаляются; рекорд
+    (users.puzzle_best_3 или puzzle_best_5) обновляется, только если счёт строго больше прежнего. Закончен ли
+    забег, не проверяется: его можно завершить и досрочно.
+    """
     run = await _load_run(user.id)
     if run is None:
         raise PuzzleError("timed_run_not_active", 409)
@@ -408,6 +459,7 @@ async def finish_run(db: AsyncSession, user: User) -> dict:
 
 
 async def _active(db: AsyncSession, user: User, puzzle_id: int) -> tuple[PuzzleSession, Puzzle]:
+    """Активная задача игрока и её запись; ход по задаче, которая сейчас не активна, — отказ puzzle_not_active."""
     session = await _load_session(user.id)
     if session is None or session.puzzle_id != puzzle_id:
         raise PuzzleError("puzzle_not_active", 409, puzzle_id=puzzle_id)
@@ -419,6 +471,7 @@ async def _active(db: AsyncSession, user: User, puzzle_id: int) -> tuple[PuzzleS
 
 
 def _board_at(puzzle: Puzzle, index: int) -> chess.Board:
+    """Позиция перед ходом решения с индексом index: начальная позиция задачи плюс первые index ходов из moves."""
     board = chess.Board(puzzle.fen)
     for uci in puzzle.moves.split()[:index]:
         board.push_uci(uci)
@@ -426,6 +479,11 @@ def _board_at(puzzle: Puzzle, index: int) -> chess.Board:
 
 
 def rating_delta(user_rating: int, puzzle_rating: int, games: int, solved: bool, hints: int) -> int:
+    """
+    Изменение рейтинга решателя по формуле Эло против рейтинга задачи: K × (результат − ожидание), K = 40 первые
+    PROVISIONAL_GAMES задач, затем 20. За решённую задачу прибавка умножается на HINT_FACTORS по числу подсказок;
+    вычет за нерешённую от подсказок не зависит.
+    """
     k = 40 if games < PROVISIONAL_GAMES else 20
     expected = 1 / (1 + 10 ** ((puzzle_rating - user_rating) / 400))
     delta = k * ((1 if solved else 0) - expected)
@@ -435,7 +493,7 @@ def rating_delta(user_rating: int, puzzle_rating: int, games: int, solved: bool,
 
 
 async def streak(db: AsyncSession, user_id: int) -> int:
-    """Подряд решённые задачи без подсказок — от последней попытки назад."""
+    """Подряд решённые задачи без подсказок — от последней попытки назад (просматривается не больше 500 попыток)."""
     rows = await db.execute(
         select(PuzzleAttempt.solved, PuzzleAttempt.hints_used).where(PuzzleAttempt.user_id == user_id)
         .order_by(PuzzleAttempt.created_at.desc(), PuzzleAttempt.id.desc()).limit(500)
@@ -449,6 +507,11 @@ async def streak(db: AsyncSession, user_id: int) -> int:
 
 
 async def _finish(db: AsyncSession, user: User, puzzle: Puzzle, session: PuzzleSession, solved: bool) -> dict:
+    """
+    Завершение задачи одним commit: рейтинг решателя (не в забеге и не в курсе; не ниже MIN_RATING), запись попытки
+    в puzzle_attempts, прогресс темы в тренировке (чисто — решено без подсказок) и событие продуктовых метрик.
+    После commit активная задача удаляется из Redis, а задача забега засчитывается в его счёт.
+    """
     before = user.puzzle_rating
     if session.run is None and session.course is None:
         delta = rating_delta(before, puzzle.rating, user.puzzle_games, solved, session.hints)
@@ -477,7 +540,10 @@ async def _finish(db: AsyncSession, user: User, puzzle: Puzzle, session: PuzzleS
 
 
 async def play(db: AsyncSession, user: User, puzzle_id: int, uci: str) -> dict:
-    """Ход решающего: верно — ответ соперника или итог; неверно — итог с решением."""
+    """
+    Ход решающего: верно — ответ соперника или итог; неверно — итог с решением. Верный ход — ход решения базы или
+    любой ход, ставящий мат. Нелегальный ход — отказ illegal_move, задача при этом остаётся активной.
+    """
     session, puzzle = await _active(db, user, puzzle_id)
     moves = puzzle.moves.split()
     board = _board_at(puzzle, session.index)
@@ -526,7 +592,10 @@ async def give_up(db: AsyncSession, user: User, puzzle_id: int) -> dict:
 
 
 async def profile(db: AsyncSession, user: User, limit: int = 30) -> dict:
-    """Рейтинг решателя, число задач, серия и последние попытки (для графика и истории)."""
+    """
+    Рейтинг решателя, число задач, серия, рекорды забегов на 3 и 5 минут и последние limit попыток — новые первыми
+    (для графика и истории).
+    """
     rows = await db.execute(
         select(PuzzleAttempt, Puzzle.rating).join(Puzzle, Puzzle.id == PuzzleAttempt.puzzle_id)
         .where(PuzzleAttempt.user_id == user.id)

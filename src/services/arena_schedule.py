@@ -31,11 +31,16 @@ CONFERENCE_ZONES: dict[str, str] = {
     "southern": "Europe/Istanbul",
     "eastern": "Asia/Kolkata",
 }
+# Номер воскресенья в date.weekday() (понедельник — 0).
 SUNDAY = 6
 
 
 @dataclass(frozen=True)
 class Slot:
+    """
+    Вид турнира расписания: ключ, контроль времени (база и добавка в мс), длительность, формат ("arena" или "swiss")
+    и число туров (только для швейцарки). У швейцарки длительность — плановое окно: конец определяют сыгранные туры.
+    """
     key: str
     base_time_ms: int
     increment_ms: int
@@ -89,7 +94,11 @@ def day_events(conference: str, day: date) -> list[tuple[datetime, Slot]]:
 
 
 def planned(now: datetime, horizon: timedelta) -> list[Planned]:
-    """Турниры, которые идут сейчас или начнутся в ближайшие horizon, — по всем активным конференциям."""
+    """
+    Турниры, которые идут сейчас или начнутся в ближайшие horizon, — по всем активным конференциям, по порядку начала.
+    Просматриваются местные дни конференции от вчерашнего до послезавтрашнего: этого хватает и на турнир, начатый
+    до полуночи, и на горизонт в несколько часов.
+    """
     out: dict[tuple[str, datetime], Planned] = {}
     for conference in active_conferences():
         today = now.astimezone(ZoneInfo(CONFERENCE_ZONES[conference])).date()
@@ -104,5 +113,5 @@ def planned(now: datetime, horizon: timedelta) -> list[Planned]:
 
 
 def is_evening(schedule_key: str | None) -> bool:
-    """Вечерняя арена 5+3 — главная арена дня своей конференции."""
+    """Вечерняя арена 5+3 — главная арена дня своей конференции; узнаётся по части ключа расписания после «:»."""
     return bool(schedule_key) and str(schedule_key).split(":")[-1] == EVENING.key

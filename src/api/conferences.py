@@ -23,6 +23,7 @@ _CODES = {"country_unknown": status.HTTP_400_BAD_REQUEST}
 
 
 class CountryIn(BaseModel):
+    """Страна для профиля. Сервер адрес игрока для этого не использует — страну игрок указывает сам."""
     # Код страны ISO 3166-1 alpha-2; null — убрать страну из профиля.
     country: str | None = Field(None, min_length=2, max_length=2, pattern=r"^[A-Za-z]{2}$")
 
@@ -32,7 +33,8 @@ async def conferences_page(request: Request, season: str | None = Query(None, pa
                            db: AsyncSession = Depends(get_db)):
     """
     Кубок конференций за сезон (по умолчанию — текущий месяц), таблица «страна → конференция» для выбора в профиле
-    и — вошедшему игроку — его страна и конференция. suggested_country — страна, названная прокси (только подсказка).
+    и — вошедшему игроку — его страна и конференция. suggested_country — страна, названная прокси (только подсказка):
+    берётся из заголовка, заданного настройкой COUNTRY_HEADER; пока настройка пуста, подсказки нет. Открыто всем.
     """
     user_id = await optional_user_id(request, db)
     user = await db.get(User, user_id) if user_id is not None else None
@@ -48,7 +50,10 @@ async def conferences_page(request: Request, season: str | None = Query(None, pa
 @router.put("/me")
 async def set_my_country(payload: CountryIn, db: AsyncSession = Depends(get_db),
                          user: User = Depends(get_current_user)):
-    """Страна в профиле: от неё зависит конференция. Сменить конференцию можно один раз за сезон."""
+    """
+    Страна в своём профиле (users.country): от неё зависит конференция. Сменить конференцию можно один раз за
+    сезон — иначе 409 country_change_too_soon; неизвестный код страны — 400.
+    """
     try:
         return await service.set_country(db, user, payload.country)
     except DomainError as exc:

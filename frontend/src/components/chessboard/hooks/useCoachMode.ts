@@ -3,7 +3,12 @@
 // оценивает ход (POST /analysis/check-move); если ход плохой для уровня игрока, бот и часы ждут, а игрок решает:
 // «Переходить», «Оставить» или «Не согласен» (с объяснением «Почему?»). Подсказка по ступеням (таск 11.4,
 // POST /analysis/hint): намёк словами → какой фигурой ходить → ход со стрелкой; счётчик ступеней. Любое обращение к
-// наставнику делает партию учебной (правило 2).
+// наставнику делает партию учебной (правило 2): отметка assisted уходит на сервер при сохранении партии с ботом.
+// «Не согласен» — POST /analysis/dispute: позиция попадает в очередь спорных оценок. Проверку хода и подсказку
+// сервер отклоняет, пока у игрока идёт партия с человеком, и ограничивает квотой наставника. Включён ли наставник
+// и выбранный уровень помнит localStorage (ключи michess_coach_enabled, michess_coach_level); уровень, пока игрок
+// его не выбрал, определяется по рейтингу. В партии лестницы и турнира Chessboard проверку ходов не вызывает, а
+// панель наставника заблокирована.
 
 import {useCallback, useRef, useState} from 'react';
 import type {Chess} from 'chess.js';
@@ -19,6 +24,10 @@ export const COACH_LEVELS: readonly CoachLevel[] = ['novice', 'amateur', 'strong
 export const COACH_ENABLED_KEY = 'michess_coach_enabled';
 export const COACH_LEVEL_KEY = 'michess_coach_level';
 
+/**
+ * Ответ POST /analysis/check-move (src/services/move_check.py). Оценки — в сотых пешки с точки зрения сходившего;
+ * available=false — движок оценить ход не смог, предупреждения не будет.
+ */
 export interface MoveCheck {
     available: boolean;
     cp_loss?: number;
@@ -34,11 +43,14 @@ export interface MoveCheck {
 
 /** Позиция, после которой перевес настолько велик, что «потеря» не меняет результата — без предупреждения. */
 const STILL_WINNING_CP = 600;
+/** Потеря, с которой о пропущенном ударе говорится и при решающем перевесе. */
 const MISSED_WHILE_WINNING_CP = 200;
 
 /**
- * Предупреждать ли игрока: новичку — только о грубых зевках, любителю — об ошибках и пропущенных ударах,
- * сильному — и о неточностях с пропущенным ударом. Пока перевес решающий, мелкие потери не тревожат.
+ * Предупреждать ли игрока: новичку — только о грубых зевках (потеря от 300 сотых пешки), любителю — об ошибках
+ * (от 150) и пропущенных ударах (от 50), сильному — и о неточностях (от 100; с пропущенным ударом — от 30). Пока
+ * перевес решающий (после хода не меньше 600 и потеря меньше 500), мелкие потери не тревожат. Пороги — только
+ * здесь, на клиенте: сервер присылает числа, а решение о предупреждении принимает эта функция.
  */
 export function shouldWarn(check: MoveCheck, level: CoachLevel): boolean {
     if (!check.available) return false;
@@ -60,6 +72,7 @@ export function levelForRating(rating: number): CoachLevel {
     return 'strong';
 }
 
+// Чтение и запись настройки в localStorage; недоступное хранилище (приватный режим) — не ошибка.
 function readStored<T extends string>(key: string, allowed: readonly T[]): T | null {
     try {
         const value = localStorage.getItem(key);
@@ -77,6 +90,7 @@ function store(key: string, value: string): void {
     }
 }
 
+/** Ход игрока, который проверяется или по которому игрок решает, что делать. */
 export interface PendingCheck {
     /** checking — ждём ответ сервера; warning — ход плохой, игрок решает. */
     status: 'checking' | 'warning';
@@ -123,6 +137,7 @@ export interface UseCoachModeResult {
     /** Обращались ли к наставнику в этой партии: партия учебная. */
     assisted: boolean;
     error: UiMessage | null;
+    /** Вызывается после каждого хода игрока: при включённом наставнике отправляет ход на проверку. */
     onPlayerMove: (previousGame: Chess, fenBefore: string, uci: string, fenAfter: string) => void;
     /** Новая партия: счётчики и отметка учебной партии — с нуля. */
     reset: () => void;
@@ -130,11 +145,17 @@ export interface UseCoachModeResult {
     clearOverlay: () => void;
 }
 
+// Токен передаётся, если игрок вошёл: по нему сервер считает лимиты на игрока и проверяет правило честной игры.
 function authHeaders(): Record<string, string> {
     const token = getToken();
     return token ? {'Content-Type': 'application/json', Authorization: `Bearer ${token}`} : {'Content-Type': 'application/json'};
 }
 
+/**
+ * Состояние игры с наставником для главной доски. playerRating — рейтинг игрока (блиц из GET /profile/me), по
+ * нему выбирается уровень, пока игрок не выбрал сам. Доской хук не управляет: вызывающий сообщает о ходе
+ * (onPlayerMove), держит бота и часы, пока holdBot, и сам возвращает позицию по takeBack.
+ */
 export function useCoachMode(playerRating: number): UseCoachModeResult {
     const [enabled, setEnabledState] = useState<boolean>(() => readStored(COACH_ENABLED_KEY, ['1', '0']) === '1');
     const [chosenLevel, setChosenLevel] = useState<CoachLevel | null>(() => readStored(COACH_LEVEL_KEY, COACH_LEVELS));
@@ -146,9 +167,11 @@ export function useCoachMode(playerRating: number): UseCoachModeResult {
     const [hintStep, setHintStep] = useState(0);
     const [hintFinal, setHintFinal] = useState(false);
     const [disputeSent, setDisputeSent] = useState(false);
+    // Позиция и ступень последней подсказки: повторный запрос к той же позиции даёт следующую ступень.
     const hintRef = useRef<{ fen: string; step: number } | null>(null);
     const [assisted, setAssisted] = useState(false);
     const [error, setError] = useState<UiMessage | null>(null);
+    // Копия pending для асинхронного кода: ответ сервера сверяется с ходом, который ждёт проверки сейчас.
     const pendingRef = useRef<PendingCheck | null>(null);
     const level = chosenLevel ?? levelForRating(playerRating);
 
@@ -177,6 +200,8 @@ export function useCoachMode(playerRating: number): UseCoachModeResult {
         hintRef.current = null;
     }, []);
 
+    // Проверка хода. Партия помечается учебной уже при отправке хода на проверку. Ошибка сети или отказ сервера
+    // (лимит, движок занят) игру не останавливают: показывается сообщение, а ход остаётся.
     const onPlayerMove = useCallback((previousGame: Chess, fenBefore: string, uci: string, fenAfter: string) => {
         clearOverlay();
         if (!enabled) return;
@@ -235,6 +260,8 @@ export function useCoachMode(playerRating: number): UseCoachModeResult {
         }).catch(() => undefined);
     }, [updatePending]);
 
+    // Ступень выбирает клиент (1–3), но какая ступень показана и последняя ли она — берётся из ответа сервера
+    // (step, final). Каждая полученная ступень считается в hintsUsed и делает партию учебной.
     const requestHint = useCallback(async (fen: string) => {
         const previous = hintRef.current;
         const step = previous && previous.fen === fen ? Math.min(3, previous.step + 1) : 1;

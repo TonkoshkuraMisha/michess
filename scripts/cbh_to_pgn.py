@@ -19,6 +19,7 @@ from src.services.cbh_reader import Database, DecodeError  # noqa: E402
 
 
 def convert(source: Path, target: Path) -> None:
+    """Конвертирует одну базу формата .cbh в PGN (заголовки и главная линия)."""
     converted = failed = 0
     for cbh in sorted(source.rglob("*")):
         if cbh.suffix.lower() != ".cbh" or not cbh.with_suffix(".cbg").exists():
@@ -50,6 +51,7 @@ def convert(source: Path, target: Path) -> None:
 
 
 def main() -> None:
+    """Рекурсивно обходит папку с базами .cbh и переводит их в файлы PGN."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("source", type=Path)
     parser.add_argument("target", type=Path)

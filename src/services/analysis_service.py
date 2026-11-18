@@ -3,13 +3,17 @@
 Разбор партии движком: оценка каждого хода, классификация, точность сторон.
 
 Как считается: партия проходится по ходам, позиция до и после хода оценивается Stockfish из пула
-(src/services/engine_pool.py); без движка — статическим оценщиком. Потеря хода в сантипешках даёт класс: до 10 —
-лучший, до 45 — хороший, до 95 — неточность (?!), до 199 — ошибка (?), от 200 — грубая ошибка (??). Точность
-стороны (0–100 %) — по потерям её ходов. К ходам добавляются комментарии наставника (src/services/coach.py).
+(src/services/engine_pool.py; глубина 10, не дольше 0,06 с на позицию, оценка обрезается до ±2000 сантипешек);
+если бинарника нет или он не запускается — статическим оценщиком (static_board_eval_cp из bots/base.py). Потеря
+хода в сантипешках даёт класс: до 10 или ход совпал с первой линией движка — лучший, до 45 — хороший, до 95 —
+неточность (?!), до 199 — ошибка (?), от 200 — грубая ошибка (??). Точность стороны (0–100 %) — среднее точностей
+её ходов (calculate_move_accuracy). К ходам добавляются комментарии наставника (src/services/coach.py) — только
+когда считал настоящий движок.
 
 Где хранится: готовый разбор — games.analysis_json; он действителен, пока совпадают версия формата
 (ANALYSIS_FORMAT_VERSION) и число ходов. Считается в фоне после партии (src/worker/tasks.py) или по кнопке.
-Разбор идущей партии запрещён — он работал бы как подсказка (GameNotFinishedError).
+Разбор идущей партии запрещён — он работал бы как подсказка (GameNotFinishedError). Партии с других сайтов
+разбирает evaluate_pgn, их разбор сохраняет вызывающий модуль (src/services/game_import.py).
 
 Здесь же — вход для совета, подсказки и проверки хода наставником (AnalysisService.advise / hint / check_move),
 которые пользуются общим кэшем оценок src/services/move_check.py.
@@ -47,6 +51,7 @@ def classify_move_by_cp_loss(cp_loss: int, is_best_move: bool = False) -> tuple[
     - Inaccuracy (?!): 46..95 cp
     - Mistake (?): 96..199 cp
     - Blunder (??): >= 200 cp
+    Возвращает пару (название класса, знак): знак лучшего хода — "!", хорошего — пустая строка.
     """
     loss = max(0, int(cp_loss))
     if is_best_move or loss <= 10:
@@ -61,14 +66,20 @@ def classify_move_by_cp_loss(cp_loss: int, is_best_move: bool = False) -> tuple[
 
 
 def calculate_move_accuracy(cp_loss: int) -> float:
-    """Формула точности одного хода (0..100%) на основе потери сантипешек."""
+    """
+    Формула точности одного хода (0..100%) на основе потери сантипешек: убывающая экспонента, 0 cp — 100 %, 100 cp —
+    около 66 %, 200 cp — около 43 %.
+    """
     loss = max(0.0, float(cp_loss))
     raw = 103.1668 * math.exp(-0.004 * loss) - 3.1669
     return round(max(0.0, min(100.0, raw)), 1)
 
 
 def calculate_accuracy(cp_losses: list[int]) -> float:
-    """Рассчитывает общую точность игрока в партии (0..100%) по списку потерь сантипешек."""
+    """
+    Рассчитывает общую точность игрока в партии (0..100%) по списку потерь сантипешек: среднее арифметическое точностей
+    отдельных ходов. Пустой список (у стороны не было ходов) — 100.
+    """
     if not cp_losses:
         return 100.0
     per_move = [calculate_move_accuracy(loss) for loss in cp_losses]
@@ -76,14 +87,17 @@ def calculate_accuracy(cp_losses: list[int]) -> float:
 
 
 PHASES = ("opening", "middlegame", "endgame")
-# Дебют — первые 10 ходов, пока на доске ещё не эндшпиль; эндшпиль — ферзей нет и фигур мало или на доске у обеих
-# сторон вместе не больше двух ладей с лёгкой фигурой (src/services/positional.is_endgame или мало материала).
+# Дебют — первые 10 ходов (по номеру хода на доске), пока на доске ещё не эндшпиль. Эндшпиль — одно из двух:
+# ферзей нет и у каждой стороны фигур не больше чем на 8 очков — ладья с лёгкой фигурой
+# (src/services/positional.is_endgame), либо фигур обеих сторон вместе не больше чем на ENDGAME_TOTAL_MATERIAL очков
+# (26 — например, по две ладьи и лёгкой фигуре у каждой стороны). Очки — positional.PIECE_POINTS: конь и слон — 3,
+# ладья — 5, ферзь — 9; пешки и короли не считаются. Всё остальное — миттельшпиль.
 OPENING_MOVES = 10
 ENDGAME_TOTAL_MATERIAL = 26
 
 
 def game_phase(board: chess.Board) -> str:
-    """Фаза партии в позиции перед ходом."""
+    """Фаза партии в позиции перед ходом: код из PHASES. Проверка на эндшпиль идёт первой, раньше счёта ходов."""
     from src.services.positional import PIECE_POINTS, is_endgame
 
     total = sum(len(board.pieces(pt, color)) * points
@@ -121,7 +135,12 @@ def attach_coach_comments(start_board: chess.Board, moves_report: list[dict], be
 
 
 def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
-    """Синхронный проход по всем позициям партии со Stockfish или статическим fallback-оценщиком."""
+    """
+    Синхронный проход по всем позициям партии со Stockfish или статическим fallback-оценщиком; вызывается в отдельном
+    потоке (evaluate_pgn). Движок берётся из пула один раз на всю партию и возвращается в пул по окончании прохода.
+    Возвращает отчёт: версия формата, имя движка, итоги сторон ("white", "black") и список ходов ("moves") с оценкой
+    после хода, потерей, классом, фазой и комментарием наставника. Нечитаемый PGN — DomainValueError pgn_parse_failed.
+    """
     pgn_game = read_pgn_game(pgn_text)
     if pgn_game is None:
         raise DomainValueError("pgn_parse_failed")
@@ -153,7 +172,8 @@ def _evaluate_board_sequence_sync(pgn_text: str, depth: int = 10) -> dict:
     def eval_single_board(b: chess.Board) -> tuple[int, int | None, str | None]:
         """
         Оценка одной позиции за белых: сантипешки, «мат в N» (или None) и лучший ход. Мат и конец партии определяются
-        без движка; иначе считает движок, а без него — статический оценщик.
+        без движка (мат на доске — ±10000 и «мат» ±1, ничья — 0); иначе считает движок, а без него или при его сбое
+        на этой позиции — статический оценщик (лучший ход — тот, после которого статическая оценка выше).
         """
         if b.is_checkmate():
             mate_val = -1 if b.turn == chess.WHITE else 1
@@ -318,11 +338,13 @@ _FINISHED_STATUSES = (GameStatus.COMPLETED, GameStatus.ABORTED)
 
 
 def ensure_game_finished(game: Game) -> None:
+    """Отказ GameNotFinishedError (game_not_finished), если партия не завершена и не прервана."""
     if game.status not in _FINISHED_STATUSES:
         raise GameNotFinishedError("game_not_finished", game_id=game.id)
 
 
 def _count_mainline_plies(pgn_text: str) -> int:
+    """Число полуходов главной линии PGN; -1 для нечитаемого PGN — с ним не совпадёт ни один сохранённый разбор."""
     pgn_game = read_pgn_game(pgn_text)
     if pgn_game is None:
         return -1
@@ -352,7 +374,9 @@ class AnalysisService:
     async def analyze_position(self, db: AsyncSession, moves: list[str], start_fen: str | None = None) -> dict:
         """
         Оценка позиции после списка ходов (SAN или UCI) от обычной расстановки или от start_fen: оценка за белых и
-        лучший ход. Считает Stockfish из пула; без движка — статическая оценка без лучшего хода.
+        лучший ход. Первый нечитаемый или невозможный ход обрывает список — оценивается позиция перед ним. Считает
+        Stockfish из пула (глубина 10, до 0,1 с); без движка — статическая оценка без лучшего хода. Занятый пул
+        (EngineBusyError) не перехватывается — маршрут отвечает отказом. Параметр db не используется.
         """
         board = board_from_start_fen(start_fen)  # InvalidStartPositionError для невозможной позиции
         for move_str in moves:

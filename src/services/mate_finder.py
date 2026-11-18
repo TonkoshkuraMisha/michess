@@ -2,6 +2,8 @@
 """
 «Найти мат» (таск 16.4): игрок задаёт глубину (до MAX_MOVES ходов), движок ищет мат под лимитом времени и возвращает
 линию. Движок — только через пул (src/services/engine_pool.py); поиск — в потоке, чтобы не держать цикл событий.
+
+Маршрут — src/api/analysis.py (закрыт правилом честной игры: во время своей партии недоступен). Ничего не хранит.
 """
 
 import asyncio
@@ -13,8 +15,8 @@ from src.services.bots.base import resolve_stockfish_path
 from src.services.engine_pool import EngineUnavailableError, get_engine_pool
 from src.services.game_engine import board_from_start_fen
 
-MAX_MOVES = 5
-TIME_LIMIT_S = 3.0
+MAX_MOVES = 5  # самая большая глубина, которую можно запросить (проверяет схема запроса в src/api/analysis.py)
+TIME_LIMIT_S = 3.0  # предел одного поиска: за это время мат в MAX_MOVES может и не найтись — тогда ответ «не найден»
 
 
 def _search(board: chess.Board, moves: int) -> tuple[int | None, list[chess.Move]]:
@@ -33,7 +35,9 @@ def _search(board: chess.Board, moves: int) -> tuple[int | None, list[chess.Move
 async def find_mate(fen: str, moves: int) -> dict:
     """
     Ищет мат не длиннее moves ходов: найден ли он, за сколько ходов и сама линия (в записи UCI и SAN). Поиск идёт в
-    отдельном потоке под лимитом времени.
+    отдельном потоке под лимитом времени. «Не найден» — также когда матует соперник (mate <= 0), мат длиннее
+    запрошенного или партия в позиции уже окончена. Линия обрезается до матующего хода: mate ходов стороны и
+    mate - 1 ответов соперника.
     """
     board = board_from_start_fen(fen)  # InvalidStartPositionError — невозможная позиция
     if board.is_game_over():

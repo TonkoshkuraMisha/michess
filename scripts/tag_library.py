@@ -17,6 +17,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 
 async def repair_texts() -> None:
+    """Исправляет повреждённую кодировку заголовков в партиях библиотеки."""
     from sqlalchemy import select
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
     from sqlalchemy.pool import NullPool
@@ -43,6 +44,7 @@ async def repair_texts() -> None:
 
 
 async def run(recompute: bool) -> None:
+    """Проставляет теги пешечных структур и матовых финалов партиям библиотеки."""
     import chess
     from sqlalchemy import select
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
@@ -74,6 +76,7 @@ async def run(recompute: bool) -> None:
 
 
 def main() -> None:
+    """Точка входа скрипта разметки и починки текста партий библиотеки."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--all", action="store_true")
     parser.add_argument("--texts", action="store_true")

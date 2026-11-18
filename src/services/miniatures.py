@@ -1,6 +1,11 @@
 """
 «Миниатюры» (таск 27.9): короткие партии библиотеки, закончившиеся матом на доске. Упражнение — позиция перед
 последним ходом: найти мат (засчитывается любой матующий ход). Движок не нужен: мат проверяет python-chess.
+
+Данные: таблица library_games. Отбор делает маршрут GET /library/miniatures (src/api/library.py): публичные партии
+с обычной начальной позиции, с признаком mate_finish и не длиннее MAX_PLIES полуходов, в случайном порядке; этот
+модуль перепроверяет каждую по ходам и строит задание. Ответ (ход партии) уходит клиенту — упражнение без рейтинга,
+проверка на клиенте.
 """
 
 import random
@@ -20,7 +25,10 @@ class Miniature:
 
 
 def miniature(game_id: int, moves_text: str) -> Miniature | None:
-    """Партия — миниатюра, если последний ход дал мат."""
+    """
+    Партия — миниатюра, если последний ход дал мат. moves_text — ходы партии в UCI через пробел (library_games.moves).
+    None — партия длиннее MAX_PLIES, короче двух полуходов, с нечитаемым или нелегальным ходом либо без мата в конце.
+    """
     moves = moves_text.split()
     if not 2 <= len(moves) <= MAX_PLIES:
         return None
@@ -41,6 +49,7 @@ def miniature(game_id: int, moves_text: str) -> Miniature | None:
 
 
 def pick(rows: list[tuple[int, str]], count: int, rng: random.Random) -> list[Miniature]:
+    """Не больше count миниатюр из строк (id партии, ходы) в случайном порядке; rng с seed делает набор повторяемым."""
     found = [m for m in (miniature(game_id, moves) for game_id, moves in rows) if m is not None]
     rng.shuffle(found)
     return found[:count]

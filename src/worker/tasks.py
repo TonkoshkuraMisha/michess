@@ -10,7 +10,10 @@
 
 Каждая задача запускается в своём цикле событий и создаёт своё подключение к базе (соединения asyncpg привязаны
 к циклу, в котором созданы). Задачам с движком нужен свободный процесс Stockfish из пула: если пул занят,
-задача откладывается на ENGINE_BUSY_RETRY_S и повторяется. Ставит задачи в очередь src/services/task_dispatch.py.
+разбор и партия турнира откладываются на ENGINE_BUSY_RETRY_S секунд и повторяются — не больше пяти раз
+(max_retries), после чего задача снимается (разбор тогда можно запросить со страницы партии, а партию турнира
+заново поставит в очередь открытие страницы турнира). Самоигра при занятом пуле просто пропускает запуск.
+Ставит задачи в очередь src/services/task_dispatch.py.
 """
 
 import asyncio
@@ -35,12 +38,15 @@ ENGINE_BUSY_RETRY_S = 15
 
 
 def _task_database_url() -> str:
+    """Адрес базы для задач. Отдельная функция — чтобы тесты могли подставить адрес своей базы."""
     return settings.async_database_url
 
 
 async def _prewarm_game_analysis_async(game_id: int) -> dict:
     """
-    Выполняет фоновый расчёт и кэширование полного анализа партии после её завершения.
+    Выполняет фоновый расчёт и кэширование полного анализа партии после её завершения: сначала раскладывает партию
+    в индекс позиций, затем считает разбор (сохраняется в games.analysis_json; готовый не пересчитывается) и по
+    нему — личные задачи из ошибок игроков. Возвращает отчёт разбора.
 
     Каждая задача Celery запускается в собственном event loop (asyncio.run), а соединения
     asyncpg привязаны к loop, в котором созданы. Глобальный движок приложения с пулом
@@ -75,12 +81,17 @@ async def _prewarm_game_analysis_async(game_id: int) -> dict:
 # бэкенд ломается до перезапуска процесса («The Celery application must be restarted»).
 @celery_app.task(name="analyze_game", bind=True, max_retries=5, ignore_result=True)
 def analyze_game_task(self, game_id: int):
-    """Синхронная обёртка Celery для фонового анализа завершённой партии."""
+    """
+    Задача Celery «analyze_game»: фоновый разбор завершённой партии (с человеком или с ботом). Её ставят
+    game_state.finish_game и POST /bots/save-game через src/services/task_dispatch.py. Время движка идёт в метрику
+    michess_engine_seconds_total с меткой analysis. Любой другой сбой только записывается в журнал: разбор
+    необязателен, его можно запросить со страницы партии.
+    """
     try:
         with engine_work("analysis"):
             return asyncio.run(_prewarm_game_analysis_async(game_id))
     except EngineBusyError as exc:
-        # Все движки заняты — анализ не теряем, а откладываем.
+        # Все движки заняты — анализ не теряем, а откладываем: до пяти попыток с паузой ENGINE_BUSY_RETRY_S.
         raise self.retry(exc=exc, countdown=ENGINE_BUSY_RETRY_S) from exc
     except Exception:
         logger.exception("Background analysis task failed for game %s", game_id)

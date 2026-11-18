@@ -2,7 +2,11 @@
 // Партия с ботом. Идёт на клиенте: позицию и часы ведёт браузер, ход бота запрашивается у сервера (/bots/move или
 // /bots/custom-move) с повтором при временном сбое, пауза «раздумья» — по времени, которое прислал сервер. После
 // окончания партия сохраняется целиком (/bots/save-game), и итог определяет сервер. Здесь же особые партии: клубная
-// лестница, партия турнира, фора.
+// лестница, партия турнира, фора. Запросы к серверу: POST /bots/move (исторический бот, по его id), POST
+// /bots/custom-move (соперник мастерской: id сохранённого или сами ползунки), POST /bots/draw-offer (предложение
+// ничьей), POST /bots/save-game (сохранение; только вошедшему игроку — гостю партия не сохраняется). Реплика бота
+// приходит ключом каталога botComments.*; текста сервер не присылает. Сохранение отвечает id партии в архиве,
+// исправленным итогом (если сервер считает иначе), а для лестницы и турнира — их итогом.
 
 import {giverColor, oddsFen, oddsTimes} from '../odds';
 import type {OddsChoice} from '../odds';
@@ -26,6 +30,7 @@ import {messageParam, status} from '../status';
 import type {GameStatus, StatusParam} from '../status';
 import {getToken} from '../../../services/authToken';
 
+// Паузы между повторами запроса хода бота; после четвёртой попытки — каждые 8 с, пока партия идёт.
 const BOT_RETRY_DELAYS_MS = [1000, 2000, 4000, 8000];
 
 /** 4xx, кроме 408/429, — ошибка запроса (позиция, бот): повтор того же запроса не поможет. */
@@ -40,6 +45,10 @@ export function botRetryDelayMs(attempt: number, response: Response | null): num
     return BOT_RETRY_DELAYS_MS[Math.min(attempt, BOT_RETRY_DELAYS_MS.length - 1)];
 }
 
+/**
+ * Что хук получает от Chessboard. Позиция, история, часы, итог и карточки игроков принадлежат компоненту (ими же
+ * пользуется useGameSocket), поэтому сюда приходят значения и сеттеры, а не собственное состояние.
+ */
 export interface UseBotGameOptions {
     game: Chess;
     myColor: 'white' | 'black';
@@ -97,7 +106,10 @@ export interface UseBotGameOptions {
     onNewGame?: () => void;
 }
 
-/** Итог партии клубной лестницы — ответ сервера на сохранение. */
+/**
+ * Итог партии клубной лестницы — поле ladder ответа /bots/save-game (или forfeited ответа /bots/ladder/start).
+ * counted=false — партия не засчитана, reason — код причины (LADDER_REASONS в src/services/ladder.py).
+ */
 export interface LadderOutcome {
     counted: boolean;
     reason: string | null;
@@ -117,7 +129,7 @@ export interface BotGameStartOptions {
     odds?: OddsChoice;
 }
 
-/** Итог партии лестницы для строки статуса; reason пока приходит с сервера текстом (до таска 11.0c). */
+/** Итог партии лестницы для строки статуса: засчитана — новый рейтинг и изменение, нет — причина по коду сервера. */
 export function ladderOutcomeMessage(outcome: LadderOutcome): GameStatus & { key: MessageKey } {
     if (!outcome.counted) {
         // Причина — код сервера (ladder.reasons); незнакомая (устаревший ответ) — как есть.
@@ -150,8 +162,12 @@ export interface UseBotGameResult {
     /** Реплика бота; null — показывается девиз соперника. */
     botComment: GameStatus | null;
     isBotThinking: boolean;
+    /** id сохранённой партии в архиве (ответ /bots/save-game); null — партия идёт или не сохранена. */
     savedBotGameId: number | null;
-    /** startFen — начать партию с этой позиции вместо обычной расстановки. */
+    /**
+     * Начинает партию с ботом: исторический бот по id или 'custom' (так её вызывает startCustomBotGame).
+     * startFen — начать партию с этой позиции вместо обычной расстановки (фора тогда не применяется).
+     */
     startHistoricalBotGame: (
         botId: BotOpponentId, colorPref?: 'white' | 'black' | 'random', startFen?: string | null,
         options?: BotGameStartOptions,
@@ -173,6 +189,10 @@ export interface UseBotGameResult {
     botProfileFor: (id: BotOpponentId) => HistoricalBotProfile;
     /** Имя бота для строки статуса: переводится при показе (у соперника из мастерской — его имя). */
     botNameParam: (id: BotOpponentId) => StatusParam;
+    /**
+     * Сохраняет оконченную партию (POST /bots/save-game) — один раз на партию. Сервер заново проигрывает ходы и
+     * сам определяет итог. Партия без ходов сохраняется, только если она на счёт (лестница, турнир).
+     */
     saveBotGameToDatabase: (
         botId: BotOpponentId,
         playerColor: 'white' | 'black',
@@ -189,8 +209,9 @@ export interface UseBotGameResult {
 }
 
 /**
- * Партия с историческим ботом: запуск, обмен ходами с /bots/move (с ретраями на 429/503),
- * поражение по флагу, сохранение завершённой партии в архив через /bots/save-game.
+ * Партия с ботом — историческим или собранным в мастерской: запуск, запрос ходов у /bots/move или
+ * /bots/custom-move (с повтором при сбое сети, 5xx, 408 и 429), поражение по флагу, ничья по предложению,
+ * сохранение завершённой партии в архив через /bots/save-game.
  */
 export function useBotGame({
     game, myColor, gameOverResult, whiteTimeMs, blackTimeMs, isSearching, setIsSearching,
@@ -207,10 +228,12 @@ export function useBotGame({
     const [botComment, setBotComment] = useState<GameStatus | null>(null);
     const [isBotThinking, setIsBotThinking] = useState<boolean>(false);
     const [savedBotGameId, setSavedBotGameId] = useState<number | null>(null);
+    // Партия уже отправлена на сохранение: конец партии могут заметить сразу два места (ход и флаг).
     const botGameSavedRef = useRef<boolean>(false);
     // Соперник из мастерской текущей (или последней) партии — ref, чтобы ход, сохранение и
     // реванш читали его без лишних зависимостей эффектов.
     const customOpponentRef = useRef<CustomOpponent | null>(null);
+    // Признаки партии на счёт — и в ref (их читает сохранение), и в состоянии (по ним Chessboard прячет помощь).
     const ladderRef = useRef<boolean>(false);
     const [isLadderGame, setIsLadderGame] = useState<boolean>(false);
     const tournamentGameRef = useRef<number | null>(null);
@@ -281,6 +304,8 @@ export function useBotGame({
             if (response.ok) {
                 const data = await response.json();
                 if (data.game_id) setSavedBotGameId(data.game_id);
+                // Сервер рассудил иначе (например, флаг упал при недостатке материала у соперника — ничья):
+                // на экране остаётся его итог.
                 if (data.result && data.result !== result) {
                     setGameOverResult(data.result);
                     setDrawOfferStatus(status('status.fideResult', {result: data.result}));
@@ -332,6 +357,8 @@ export function useBotGame({
                 ? (Math.random() < 0.5 ? 'white' : 'black')
                 : colorPref;
 
+        // Фора: материальная задаёт начальную позицию (если партия не начата со своей позиции), по времени —
+        // уменьшает часы дающего, «песочные часы» включают особый режим часов в useClock.
         const odds = options.odds && options.odds.kind !== 'none' ? options.odds : null;
         const giver = odds ? giverColor(odds.giver, chosenColor) : 'white';
         const oddsStart = odds && !startFen ? oddsFen(odds.kind, giver) : null;
@@ -399,7 +426,9 @@ export function useBotGame({
         startHistoricalBotGame('custom', colorPref, startFen, options);
     }, [startHistoricalBotGame]);
 
-    // Ход бота: запрашивает /bots/move, ждёт имитацию обдумывания, применяет ход.
+    // Ход бота: когда очередь хода у бота, запрашивает /bots/move (или /bots/custom-move), выжидает время
+    // «раздумья» из ответа (thinking_time_ms за вычетом времени запроса, не меньше 80 мс) и применяет ход. Смена
+    // позиции, конец партии или пауза наставника (holdBot) отменяют запрос и отложенный ход.
     useEffect(() => {
         if (!activeBot || gameOverResult || game.isGameOver() || holdBot) return;
 
@@ -520,7 +549,8 @@ export function useBotGame({
         };
     }, [activeBot, game, myColor, gameOverResult, holdBot, playAudio, playOutcomeSound, updateSessionStats, saveBotGameToDatabase, applyIncrement, effectiveIncSeconds, setGame, setHistory, setViewIndex, clearPremove, setGameOverResult, setDrawOfferStatus, moveStartTime, botNameParam]);
 
-    // Поражение по флагу в партии с ботом.
+    // Поражение по флагу в партии с ботом: время вышло у любой из сторон (у бота оно тоже идёт, пока он «думает»).
+    // Итог здесь предварительный — окончательный вернёт сервер при сохранении.
     useEffect(() => {
         if (!activeBot || gameOverResult) return;
 

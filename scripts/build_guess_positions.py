@@ -72,10 +72,12 @@ def _analyse(engine, board: chess.Board, limit: chess.engine.Limit, multipv: int
 
 
 def _lines(engine, board: chess.Board, limit: chess.engine.Limit, multipv: int) -> list[Line]:
+    """Запрашивает у движка несколько лучших линий (MultiPV) для позиции."""
     return _analyse(engine, board, limit, multipv)[0]
 
 
 def _move_cp(engine, board: chess.Board, move: chess.Move, limit: chess.engine.Limit) -> int:
+    """Возвращает оценку конкретного хода в сантипешках для ходящей стороны."""
     info = engine.analyse(board, limit, root_moves=[move])
     return info["score"].pov(board.turn).score(mate_score=MATE)
 
@@ -108,6 +110,7 @@ def analyse_game(game_id: int, pgn: str, shallow_depth: int, deep_time: float) -
 
 
 def _scan(engine, game, board, shallow, deep, passing: dict[int, dict], errors: set[int]) -> None:
+    """Находит в партии объективно решаемые позиции и серии для «Угадай ход»."""
     moves = list(game.mainline_moves())
     book = book_plies(moves)
     for ply, move in enumerate(moves):
@@ -157,6 +160,7 @@ def _sessions():
 
 
 async def _load_games(limit: int, seed: int) -> list[tuple[int, str]]:
+    """Загружает партии мастеров из базы данных для поиска ключевых моментов."""
     from sqlalchemy import select
     from sqlalchemy.orm import aliased
 
@@ -181,6 +185,7 @@ async def _load_games(limit: int, seed: int) -> list[tuple[int, str]]:
 
 
 async def _save(results: list[tuple[int, list[dict]]]) -> tuple[int, int]:
+    """Сохраняет отобранные позиции и серии в таблицу guess_positions."""
     from sqlalchemy import func, select
 
     from src.models.guess import GuessPosition
@@ -212,6 +217,7 @@ async def _save(results: list[tuple[int, list[dict]]]) -> tuple[int, int]:
 
 
 async def _refilter() -> tuple[int, int]:
+    """Перепроверяет сохранённые позиции по фильтрам дебюта/эндшпиля и размечает темы."""
     from src.services.guess import refilter
 
     engine, sessions = _sessions()
@@ -222,6 +228,7 @@ async def _refilter() -> tuple[int, int]:
 
 
 def main() -> None:
+    """Точка входа генератора и фильтра позиций режима «Угадай ход мастера»."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--games", type=int, default=200, help="Сколько новых партий разобрать")
     parser.add_argument("--workers", type=int, default=4)
@@ -243,6 +250,7 @@ def main() -> None:
     positions = series = 0
 
     def flush() -> None:
+        """Записывает накопленную пачку отобранных позиций в базу данных."""
         nonlocal positions, series
         if batch:
             saved, new_series = asyncio.run(_save(batch))

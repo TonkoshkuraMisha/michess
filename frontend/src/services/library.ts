@@ -1,5 +1,8 @@
+// --- FILE: frontend/src/services/library.ts ---
 // Библиотека партий (таск 27.1): /api/v1/library — дерево коллекций, партии коллекции, поиск и PGN для просмотра.
 // Без входа видны публичные коллекции; с токеном — ещё свои закрытые (и служебные у модераторов).
+// Маршруты — src/api/library.py, правила видимости и поиск — src/services/library.py. Отсюда же берутся данные
+// тренажёров «Миниатюры» и «Узнай структуру» (/library/miniatures, /library/structure-quiz).
 
 import type {CoachComment} from './coach';
 import {API_BASE_URL} from '../config/api';
@@ -7,14 +10,18 @@ import {readApiErrorOr, UiError} from './apiErrors';
 import {uiMessage} from '../i18n';
 import {getToken} from './authToken';
 
+/** Коллекция библиотеки. Сервер отдаёт их плоским списком; дерево клиент собирает по parent_id (childrenOf). */
 export interface LibraryCollection {
     id: number;
     parent_id: number | null;
     name: string;
+    /** public — видна всем, owner — только владельцу, staff — служебная, только модераторам. */
     visibility: 'public' | 'owner' | 'staff';
+    /** Партий непосредственно в этой коллекции, без вложенных (с вложенными — totalGames). */
     games: number;
 }
 
+/** Строка списка партий: заголовки PGN и длина партии в полуходах. */
 export interface LibraryGameRow {
     id: number;
     white: string;
@@ -31,6 +38,7 @@ export interface LibraryGameRow {
     structure?: string | null;
 }
 
+/** Коды пешечных структур — те же, что размечает сервер (src/services/pawn_structures.py); названия — в каталоге. */
 export const STRUCTURES = ['hedgehog', 'maroczy', 'wedge', 'kid_chain', 'modern_benoni', 'stonewall', 'saw', 'french_chain',
     'french_exchange', 'carlsbad', 'hanging_pawns', 'isolated_pawn', 'spanish', 'symmetry'] as const;
 export type StructureCode = typeof STRUCTURES[number];
@@ -51,13 +59,17 @@ export interface StructureQuestion {
     ply: number | null;
 }
 
+/** Страница списка партий: total — всего найдено, games — не больше LIBRARY_PAGE строк. */
 export interface LibraryPage {
     total: number;
     games: LibraryGameRow[];
 }
 
+/** Фильтры поиска (GET /library/games); пустые и незаданные в запрос не попадают (searchQuery). */
 export interface LibrarySearch {
+    /** Часть имени игрока. */
     player?: string;
+    /** Начало кода дебюта: «B9» найдёт B90–B99. */
     eco?: string;
     year_from?: number;
     year_to?: number;
@@ -71,14 +83,19 @@ export interface LibrarySearch {
 
 /** Аннотация партии (таск 27.4): комментарии наставника кодами coach.* по полуходам. */
 export interface LibraryAnnotation {
+    /** auto и approved сервер показывает всем, draft и review — только модераторам. */
     status: 'auto' | 'draft' | 'review' | 'approved';
     version: number;
+    /** Ключ — номер полухода строкой. */
     comments: Record<string, CoachComment>;
+    /** Оценки позиций по ходу партии, сохранённые вместе с аннотацией. */
     evals: number[];
 }
 
+/** Размер страницы списка партий (параметр limit запросов). */
 export const LIBRARY_PAGE = 50;
 
+/** GET к /api/v1/library: токен — если игрок вошёл; отказ сервера — UiError с текстом по коду ошибки. */
 async function call<T>(path: string): Promise<T> {
     const token = getToken();
     let res: Response;
@@ -91,6 +108,7 @@ async function call<T>(path: string): Promise<T> {
     return res.json() as Promise<T>;
 }
 
+/** Строка запроса поиска: заданные фильтры плюс limit = LIBRARY_PAGE. */
 export function searchQuery(search: LibrarySearch): string {
     const params = new URLSearchParams();
     for (const [key, value] of Object.entries(search)) {
@@ -105,9 +123,12 @@ export const libraryApi = {
     collectionGames: (id: number, offset = 0) =>
         call<LibraryPage & { id: number; name: string }>(`/collections/${id}/games?offset=${offset}&limit=${LIBRARY_PAGE}`),
     search: (search: LibrarySearch) => call<LibraryPage>(`/games?${searchQuery(search)}`),
+    /** Адрес PGN партии — его загружает просмотр партии (GameViewer). */
     pgnUrl: (id: number | string) => `${API_BASE_URL}/api/v1/library/games/${id}/pgn`,
+    /** Аннотация партии из ответа GET /library/games/{id}; null — её нет или она не для этого посетителя. */
     annotation: (id: number | string) =>
         call<{ annotation: LibraryAnnotation | null }>(`/games/${id}`).then((body) => body.annotation ?? null),
+    /** seed делает набор воспроизводимым: тот же seed — те же партии и вопросы. */
     miniatures: (count: number, seed: number) =>
         call<{ miniatures: LibraryMiniature[] }>(`/miniatures?count=${count}&seed=${seed}`),
     structureQuiz: (count: number, seed: number) =>

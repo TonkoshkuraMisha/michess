@@ -8,9 +8,10 @@
   идут и в её зачёт (сумма лучших участников конференции);
 * напоминание (33.4): игрок нажал «напомнить» у ещё не начавшейся арены — за REMIND_BEFORE до старта ему приходит
   уведомление (плановая задача arena_reminders, раз в минуту);
-* вход — пока арена не кончилась; «Играть» ставит игрока в ожидание (Redis), пара — с другим ожидающим, ближайшим
-  по очкам и рейтингу, по возможности не с прошлым соперником; партия — обычная рейтинговая PvP-партия
-  (matchmaker.start_pvp_game), цвета — тому, кто реже играл белыми;
+* вход — до «последнего старта», в том числе до начала (швейцарка — пока не окончена); «Играть» ставит игрока в
+  ожидание (Redis, хэш arena:{id}:waiting, отметка живёт WAIT_TTL_S секунд), пара — с другим ожидающим, ближайшим по
+  очкам и рейтингу, по возможности не с прошлым соперником; партия — обычная рейтинговая PvP-партия
+  (matchmaker.start_pvp_game), белые — тому, кто реже играл белыми в этой арене (при равенстве — нажавшему «Играть»);
 * очки: победа 2, ничья 1, поражение 0; с FIRE_AFTER побед подряд («огонь») — вдвое; серию рвёт ничья или поражение;
 * честный конец (таск 33.1, docs/research/arenas.md): новые пары — только до «последнего старта» (конец минус
   длительность партии: 2 × (база + GAME_MOVES × добавка)); итоги — когда закончилась последняя партия (до этого
@@ -45,14 +46,23 @@ from src.models.user import User
 from src.services import arena_schedule
 from src.services.rating import classify_time_control
 
+# После стольких побед подряд очки за следующие партии удваиваются («огонь»).
 FIRE_AFTER = 2
+# Оценка длины партии в ходах: по ней считается длительность партии и «последний старт» арены (game_length).
 GAME_MOVES = 40
+# Предел участников одного деления; следующий входящий открывает новое деление той же арены.
 DIVISION_SIZE = 500
+# Ничья по соглашению раньше этого числа полуходов (20 — это 10 ходов) очков в арене не приносит.
 EARLY_DRAW_PLIES = 20
+# Сколько очков добавляет победа с «берсерком».
 BERSERK_BONUS = 1
+# «Берсерк» без добавки доступен только при базе больше этой (минута): в контроле 1+0 его нет.
 BERSERK_MIN_BASE_MS = 60_000
+# На сколько вперёд создаются арены расписания (ensure_schedule).
 LOOKAHEAD = timedelta(hours=6)
+# За сколько до начала арены приходит напоминание (send_reminders).
 REMIND_BEFORE = timedelta(minutes=5)
+# Сколько секунд живёт отметка ожидания пары: клиент повторяет «Играть», и ушедший игрок выпадает из ожидания сам.
 WAIT_TTL_S = 120
 
 
@@ -82,6 +92,7 @@ def berserk_allowed(arena: Arena) -> bool:
 
 
 def pairing_open(arena: Arena, now: datetime | None = None) -> bool:
+    """Арена сейчас создаёт пары: формат arena, начало уже наступило, «последний старт» — ещё нет."""
     now = now or _now()
     return (arena.format or "arena") == "arena" and _aware(arena.starts_at) <= now < last_start(arena)
 
@@ -89,7 +100,9 @@ def pairing_open(arena: Arena, now: datetime | None = None) -> bool:
 def status(arena: Arena, now: datetime | None = None, open_games: int = 0) -> str:
     """
     scheduled → running (пары создаются) → closing (пар больше нет: доигрываются партии или идёт время до конца) →
-    finished (конец наступил и все партии сыграны — итоги окончательные).
+    finished (конец наступил и все партии сыграны — итоги окончательные). open_games — число несыгранных партий
+    арены, его передаёт вызывающий. Швейцарка: scheduled → running → finished (когда записан finished_at, то есть
+    сыгран последний тур), её объявленный конец на статус не влияет.
     """
     now = now or _now()
     if now < _aware(arena.starts_at):
@@ -102,6 +115,7 @@ def status(arena: Arena, now: datetime | None = None, open_games: int = 0) -> st
 
 
 async def open_games(db: AsyncSession, arena_id: int) -> int:
+    """Число партий арены без результата (arena_games.result пуст): идущих или ещё не засчитанных."""
     return await db.scalar(select(func.count()).select_from(ArenaGame).where(
         ArenaGame.arena_id == arena_id, ArenaGame.result.is_(None))) or 0
 
@@ -135,7 +149,10 @@ async def ensure_schedule(db: AsyncSession, now: datetime | None = None) -> None
 
 
 def points(result_for_player: float, streak_before: int) -> int:
-    """Очки за партию: победа 2, ничья 1; на «огне» (FIRE_AFTER побед подряд) — вдвое."""
+    """
+    Очки за партию: победа 2, ничья 1; на «огне» (FIRE_AFTER побед подряд) — вдвое. result_for_player — 1.0, 0.5 или
+    0.0; streak_before — серия побед игрока до этой партии (в швейцарке передаётся 0 — «огня» там нет).
+    """
     base = {1.0: 2, 0.5: 1, 0.0: 0}[result_for_player]
     return base * 2 if streak_before >= FIRE_AFTER else base
 
@@ -163,13 +180,18 @@ def check_entry(user: User) -> None:
 
 
 async def divisions(db: AsyncSession, arena: Arena) -> list[Arena]:
+    """Все деления одной арены по порядку: первая (корневая) запись и записи, у которых она в parent_id."""
     root_id = arena.parent_id or arena.id
     return list((await db.execute(select(Arena).where(
         (Arena.id == root_id) | (Arena.parent_id == root_id)).order_by(Arena.division))).scalars().all())
 
 
 async def join(db: AsyncSession, arena: Arena, user: User) -> ArenaPlayer:
-    """Вход в арену: допуск, затем первое неполное деление (или новое). Уже участник — его место."""
+    """
+    Вход в арену: допуск, затем первое неполное деление (или новое). Уже участник любого деления — его запись, без
+    повторной проверки допуска. Оконченная арена — arena_finished, арена после «последнего старта» —
+    arena_pairing_closed. В записи участника запоминаются рейтинг в категории и конференция на момент входа.
+    """
     now = _now()
     if status(arena, now) == "finished":
         raise DomainError("arena_finished")
@@ -213,6 +235,10 @@ async def leave_waiting(arena_id: int, user_id: int) -> None:
 
 
 async def waiting_ids(arena_id: int) -> set[int]:
+    """
+    Игроки, ждущие пару в арене: записи хэша Redis arena:{id}:waiting (игрок → время отметки) не старше WAIT_TTL_S.
+    Устаревшие записи заодно удаляются.
+    """
     raw = await redis_module.redis_client.hgetall(_wait_key(arena_id))
     now = _now().timestamp()
     alive = {int(uid) for uid, since in raw.items() if now - float(since) < WAIT_TTL_S}
@@ -264,6 +290,7 @@ async def ready(db: AsyncSession, arena: Arena, user: User) -> dict:
     last = await _last_opponent(db, arena.id, user.id)
 
     def distance(uid: int) -> tuple[int, int, int]:
+        """Чем меньше, тем лучше соперник: сначала не прошлый соперник, затем разница очков, затем рейтингов."""
         other = players.get(uid)
         if other is None:
             return (2, 0, 0)
@@ -349,7 +376,11 @@ async def on_game_aborted(db: AsyncSession, game_id: int, no_show: str | None) -
 
 async def on_game_finished(db: AsyncSession, game_id: int, result: str, termination: str | None = None,
                            plies: int | None = None, berserk_bonus: bool = True) -> bool:
-    """Партия арены закончилась: очки, серии, счётчики (без commit). False — это не партия арены."""
+    """
+    Партия арены закончилась: очки, серии, счётчики (без commit). False — это не партия арены или она уже засчитана.
+    result — "1-0", "0-1" или ничья; termination и plies нужны для правила ранней ничьей по соглашению;
+    berserk_bonus=False — победа без бонуса берсерка (неявка соперника).
+    """
     game = (await db.execute(select(ArenaGame).where(ArenaGame.game_id == game_id))).scalar_one_or_none()
     if game is None or game.result is not None:
         return False
@@ -422,7 +453,8 @@ async def advance_swiss(db: AsyncSession, arena: Arena, now: datetime | None = N
     user_of = {seat: uid for uid, seat in seat_of.items()}
     pairable = list(players)
     if len(pairable) % 2:
-        # Свободный тур — слабейшему по очкам из тех, у кого его ещё не было.
+        # Свободный тур — слабейшему по очкам из тех, у кого его ещё не было (при равных очках — младшему по посеву);
+        # если он был уже у всех — последнему по посеву.
         bye = min((p for p in pairable if p.byes == 0), key=lambda p: (p.score, -seat_of[p.user_id]), default=pairable[-1])
         bye.byes += 1
         bye.score += points(1.0, 0)
@@ -573,7 +605,8 @@ async def set_reminder(db: AsyncSession, arena: Arena, user_id: int, on: bool) -
 async def send_reminders(db: AsyncSession, now: datetime | None = None) -> int:
     """
     Уведомления тем, кто просил напомнить: арена начинается не позже чем через REMIND_BEFORE (или уже идёт — если
-    плановая задача опоздала) и ещё не кончилась. Каждому — один раз. Возвращает число отправленных.
+    плановая задача опоздала) и ещё не кончилась. Каждому — один раз (отметка arena_reminders.sent_at). Возвращает
+    число отправленных. Без commit: его делает вызывающая задача (src/worker/tasks.py).
     """
     from src.services import notifications
 

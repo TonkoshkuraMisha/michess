@@ -1,7 +1,10 @@
 // --- FILE: frontend/src/components/chessboard/PersonalityWorkshop.tsx ---
 // Мастерская соперников: игрок собирает бота из ползунков характера и силы, выбирает ему дебюты, сохраняет и играет
 // с ним. Как ползунки превращаются в стиль игры — src/services/bots/personality.py; хранение —
-// services/personalities.ts.
+// services/personalities.ts: у вошедшего игрока — сервер (GET, POST, PUT, DELETE /bots/personalities), без токена —
+// localStorage этого браузера (ключ michess_guest_personalities). Готовые архетипы и их сила — GET /bots/catalog.
+// Радар стиля, оценка силы и метки стиля считаются на клиенте (config/archetypes.ts). Сейчас мастерскую показывает
+// только Chessboard, а он без входа выводит заглушку — гостевая ветка с главной доски недостижима.
 
 import {useCallback, useEffect, useState} from 'react';
 import {PolarAngleAxis, PolarGrid, Radar, RadarChart} from 'recharts';
@@ -44,7 +47,8 @@ interface SliderSpec {
     readonly hint: string;
 }
 
-/** Ползунки с подписью «что это меняет». Границы — как в BotPersonalityConfig на сервере. */
+// Описание ползунка; подпись и подсказка «что это меняет» читаются из каталога при показе (геттеры), поэтому
+// меняются вместе с языком.
 function slider(key: SliderKey, min: number, max: number, step: number): SliderSpec {
     return {
         key,
@@ -60,6 +64,10 @@ function slider(key: SliderKey, min: number, max: number, step: number): SliderS
     };
 }
 
+/**
+ * Ползунки конструктора. Границы — те же, что в BotPersonalityConfig на сервере (src/services/bots/personality.py):
+ * значение вне границ сервер не примет.
+ */
 export const SLIDERS: SliderSpec[] = [
     slider('aggression', -100, 100, 5),
     slider('center_control', 0, 200, 10),
@@ -77,12 +85,15 @@ export interface PersonalityWorkshopProps {
     /** Токен вошедшего игрока: персоналии на сервере; без него — в этом браузере. */
     token: string | null;
     playDisabled: boolean;
+    /** Начать партию с соперником из черновика; партию ведёт вызывающий (useBotGame, /bots/custom-move). */
     onPlay: (opponent: CustomOpponent, colorPref: 'white' | 'black' | 'random') => void;
+    /** На свободной доске стоит своя позиция — партию можно начать с неё (флажок под кнопкой сохранения). */
     canStartFromPosition: boolean;
     startFromPosition: boolean;
     onStartFromPositionChange: (value: boolean) => void;
 }
 
+/** Соперник в конструкторе: то, что сейчас на ползунках; до сохранения живёт только в памяти компонента. */
 interface Draft {
     name: string;
     config: PersonalityConfig;
@@ -118,6 +129,7 @@ export function PersonalityWorkshop({
     const shownMine = mine.filter((p) => fits(p.config.target_elo, p.config));
     const shownArchetypes = archetypes.filter((a) => fits(a.rating, a.config));
 
+    // Архетипы — из каталога ботов (GET /bots/catalog; services/botCatalog.ts держит ответ в памяти).
     useEffect(() => {
         let alive = true;
         fetchBotCatalog()
@@ -147,6 +159,8 @@ export function PersonalityWorkshop({
     const setValue = (key: SliderKey, value: number) =>
         setDraft((d) => ({...d, config: {...d.config, [key]: value}}));
 
+    // Берёт соперника (своего или архетип) в конструктор. Конфиг копируется, чтобы правки черновика не меняли
+    // сохранённого соперника и архетип из каталога.
     const pick = (
         name: string, config: PersonalityConfig, savedId: Draft['savedId'], bio?: string, archetypeId?: ArchetypeId,
     ) => {
@@ -203,6 +217,8 @@ export function PersonalityWorkshop({
         }
     };
 
+    // Играть можно и несохранённым черновиком: тогда на сервер с каждым ходом уходят сами ползунки (config).
+    // Архетип без правок играет как архетип (в архив — его ключ, имя на языке игрока).
     const play = (colorPref: 'white' | 'black' | 'random') => {
         const name = draft.name.trim() || t('workshop.defaultName');
         const savedOnServer = token && typeof draft.savedId === 'number';
@@ -410,6 +426,7 @@ export function PersonalityWorkshop({
     );
 }
 
+/** Черновик совпадает с сохранённым соперником (имя и все ползунки) — можно играть по его id. */
 function isUnchanged(mine: Personality[], draft: Draft): boolean {
     const saved = mine.find((p) => p.id === draft.savedId);
     return !!saved && saved.name === draft.name.trim() && sameConfig(saved.config, draft.config);

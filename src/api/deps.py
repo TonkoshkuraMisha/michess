@@ -50,7 +50,9 @@ async def get_current_user(
         session_factory: async_sessionmaker[AsyncSession] = Depends(get_session_factory),
 ) -> User:
     """
-    Dependency for HTTP endpoints to authenticate users via Bearer token in headers.
+    Зависимость HTTP-эндпоинтов «только для вошедших»: игрок по токену из заголовка Authorization: Bearer, иначе
+    401 not_authenticated. Заодно отмечает игрока активным за сутки: счётчик в Redis для метрики
+    michess_active_players_today и событие в product_events (не чаще раза в сутки).
     """
     user = await user_from_token(db, token)
     if user is None:
@@ -65,11 +67,13 @@ async def get_current_user_ws(
         session_factory: async_sessionmaker[AsyncSession] = Depends(get_session_factory),
 ) -> User:
     """
-    Dependency for WebSocket endpoints: authenticates by a one-time ticket.
+    Зависимость WebSocket: вход по одноразовому тикету из параметра адреса ?ticket=. Неверный, истёкший или уже
+    использованный тикет — закрытие с кодом 1008; Redis недоступен — 1011.
 
-    JWT в адресе WebSocket попадал бы в access-логи uvicorn и прокси и жил там сутки. Вместо него
-    клиент получает по HTTP (токен в заголовке) одноразовый тикет на WS_TICKET_TTL_S секунд;
-    GETDEL гарантирует, что тикет сработает ровно один раз.
+    JWT в адресе WebSocket попадал бы в access-логи uvicorn и прокси и оставался бы там рабочим до конца своего
+    срока. Вместо него клиент получает по HTTP (токен в заголовке) одноразовый тикет на WS_TICKET_TTL_S секунд;
+    GETDEL гарантирует, что тикет сработает ровно один раз. В Redis под ключом ws_ticket:<тикет> лежит
+    «id игрока:версия токенов».
 
     Пользователь читается в короткой сессии, которая закрывается сразу: зависимость с get_db
     держала бы соединение пула всё время, пока открыт WebSocket. Возвращаемый объект

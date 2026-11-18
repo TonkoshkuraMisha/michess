@@ -8,7 +8,8 @@
   видит, на чужие сайты и на остальные запросы API она не уходит. В Redis — только её хэш: refresh:<sha256> →
   «<user_id>:<token_version>», срок REFRESH_TOKEN_EXPIRE_DAYS, продлевается при каждом обновлении.
 * Отзыв: выход удаляет запись; «выйти везде», смена пароля и удаление аккаунта увеличивают token_version — все
-  refresh-токены с прежней версией перестают действовать.
+  refresh-токены с прежней версией перестают действовать. Версию из записи с users.token_version сверяет маршрут
+  обновления (src/api/auth.py); этот модуль только хранит и читает запись.
 
 Токен при обновлении не меняется (без ротации): у игрока бывает несколько вкладок, и ротация обрывала бы сессию
 в той, что обновилась второй.
@@ -25,11 +26,13 @@ from src.db import redis as redis_module
 
 logger = logging.getLogger(__name__)
 
+# Имя cookie с refresh-токеном и начало ключа Redis, под которым хранится запись сессии.
 REFRESH_COOKIE = "michess_refresh"
 REFRESH_PREFIX = "refresh:"
 
 
 def _key(token: str) -> str:
+    """Ключ Redis для токена: в ключе — sha256 токена, так что по содержимому Redis сам токен не восстановить."""
     return REFRESH_PREFIX + hashlib.sha256(token.encode()).hexdigest()
 
 
@@ -56,13 +59,17 @@ def clear_refresh_cookie(response: Response) -> None:
 
 
 async def issue(user_id: int, token_version: int) -> str:
+    """Новая сессия входа: случайный refresh-токен и запись о нём в Redis на REFRESH_TOKEN_EXPIRE_DAYS дней."""
     token = secrets.token_urlsafe(32)
     await redis_module.redis_client.set(_key(token), f"{user_id}:{token_version}", ex=_ttl_s())
     return token
 
 
 async def lookup(token: str | None) -> tuple[int, int] | None:
-    """(user_id, token_version) по refresh-токену и продление его срока; None — токена нет или он отозван."""
+    """
+    (user_id, token_version) по refresh-токену и продление его срока; None — токена нет или он отозван. Недоступный
+    Redis — тоже None: игроку придётся войти заново.
+    """
     if not token:
         return None
     try:
@@ -80,6 +87,7 @@ async def lookup(token: str | None) -> tuple[int, int] | None:
 
 
 async def revoke(token: str | None) -> None:
+    """Выход: удаляет запись сессии этого токена. Сбой Redis только пишется в лог — запись истечёт сама по сроку."""
     if not token:
         return
     try:

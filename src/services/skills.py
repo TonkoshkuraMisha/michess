@@ -8,6 +8,12 @@
 * Эндшпиль (14.4) и матовые конструкции (14.6): пройденные упражнения.
 
 Только для самого игрока: данные тренировок — личные.
+
+Откуда данные: puzzle_attempts и puzzle_themes (тактика; учитываются все попытки, включая забеги и курс матов),
+personal_puzzles (ошибки в партиях), trainer_results (тренажёры), repertoires и repertoire_cards (дебюты),
+lesson_progress (эндшпиль и маты: пройденные записи с идентификатором «endgame-…» и «mates-…»), exam_results
+(диагностика, src/services/exam.py). Маршрут — src/api/skills.py; слабые темы берёт и разминка
+(src/services/workout.py). Сам модуль ничего не пишет.
 """
 
 from collections import Counter
@@ -25,18 +31,25 @@ from src.services.personal_puzzles import split_themes
 from src.services.themes import SECTIONS, THEMES
 
 MIN_ATTEMPTS = 5  # меньше — оценки раздела или темы нет («мало данных»)
-WEAK_THEMES = 5
+WEAK_THEMES = 5  # сколько слабых тем и сколько частых тем своих ошибок показывается
+# «Всего» для полосы прогресса эндшпиля. Число записано вручную и с данными не сверяется: в
+# frontend/src/content/endgames.json на 17.11.2026 — 34 упражнения (см. также ``lessons_done``).
 ENDGAME_EXERCISES = 25
-MATE_CONSTRUCTIONS = 20
-SECTION_OF = {theme.code: theme.section for theme in THEMES}
+MATE_CONSTRUCTIONS = 20  # «всего» конструкций курса матов; то же число, что len(mate_course.COURSE)
+SECTION_OF = {theme.code: theme.section for theme in THEMES}  # код темы → раздел каталога (A–L)
 
 
 def _percent(solved: int, total: int) -> int | None:
+    """Доля решённых в процентах; None — попыток меньше MIN_ATTEMPTS, оценка была бы случайной."""
     return round(100 * solved / total) if total >= MIN_ATTEMPTS else None
 
 
 async def tactics(db: AsyncSession, user_id: int) -> tuple[list[dict], list[dict]]:
-    """Решаемость по разделам и самые слабые темы (не меньше MIN_ATTEMPTS попыток)."""
+    """
+    Решаемость по разделам и самые слабые темы (не меньше MIN_ATTEMPTS попыток). Попытка задачи с несколькими
+    темами засчитывается каждой из них. Слабые — WEAK_THEMES тем с наименьшей долей решённых; при равной доле
+    первой идёт тема с большим числом попыток.
+    """
     rows = (await db.execute(
         select(PuzzleTheme.theme, func.count(), func.sum(case((PuzzleAttempt.solved, 1), else_=0)))
         .join(PuzzleAttempt, PuzzleAttempt.puzzle_id == PuzzleTheme.puzzle_id)
@@ -76,6 +89,7 @@ async def mistakes(db: AsyncSession, user_id: int) -> dict:
 
 
 async def trainers(db: AsyncSession, user_id: int) -> list[dict]:
+    """Тренажёры зрения, памяти и счёта (trainer_results): число попыток, лучший счёт и наибольший уровень каждого."""
     rows = (await db.execute(
         select(TrainerResult.trainer, func.count(), func.max(TrainerResult.score), func.max(TrainerResult.level))
         .where(TrainerResult.user_id == user_id).group_by(TrainerResult.trainer).order_by(TrainerResult.trainer)
@@ -85,7 +99,10 @@ async def trainers(db: AsyncSession, user_id: int) -> list[dict]:
 
 
 async def openings(db: AsyncSession, user_id: int) -> dict:
-    """Карточки повторения репертуаров (20.2): выучено — интервал от 6 дней."""
+    """
+    Карточки повторения репертуаров (20.2): выучено — интервал от 6 дней. Правило то же, что
+    repertoire_drill.status; число 6 здесь повторено (repertoire_drill.LEARNED_DAYS).
+    """
     rows = (await db.execute(
         select(RepertoireCard.first_reviewed_at.is_(None), RepertoireCard.interval_days >= 6, func.count())
         .join(Repertoire, Repertoire.id == RepertoireCard.repertoire_id)
@@ -100,6 +117,11 @@ async def openings(db: AsyncSession, user_id: int) -> dict:
 
 
 async def lessons_done(db: AsyncSession, user_id: int, prefix: str) -> int:
+    """
+    Сколько записей lesson_progress игрока с идентификатором на prefix пройдено. Итоговая проверка курса матов
+    («mates-exam») не считается. Считаются все идентификаторы с таким началом: под «endgame-» попадают и упражнения
+    эндшпильного тренажёра, и уроки школы с идентификатором «endgame-…».
+    """
     return await db.scalar(select(func.count()).select_from(LessonProgress).where(
         LessonProgress.user_id == user_id, LessonProgress.lesson_id.like(f"{prefix}%"),
         LessonProgress.completed_at.is_not(None), LessonProgress.lesson_id != "mates-exam",

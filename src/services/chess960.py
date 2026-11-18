@@ -18,21 +18,26 @@ from src.core.errors import DomainValueError
 from src.services.bots.base import resolve_stockfish_path
 from src.services.engine_pool import EngineUnavailableError, get_engine_pool
 
+# Номер обычной начальной расстановки в нумерации шахмат Фишера (0–959).
 STANDARD_POSITION = 518
+# Сколько полуходов переигрывает сервер; ходы сверх этого числа отбрасываются (защита от слишком длинного запроса).
 MAX_PLIES = 600
-# Уровни бота: ограничение силы Stockfish (UCI_Elo не ниже 1320) и время на ход.
+# Уровни бота: ограничение силы Stockfish (UCI_Elo не ниже 1320) и время на ход в секундах. Неизвестный уровень
+# играет как второй.
 LEVELS: dict[int, tuple[int, float]] = {1: (1320, 0.05), 2: (1600, 0.1), 3: (1900, 0.15), 4: (2200, 0.25),
                                         5: (2600, 0.4)}
 
 
 @dataclass
 class Game:
+    """Переигранная партия: номер расстановки, доска после всех ходов и эти ходы в записи SAN."""
     number: int
     board: chess.Board
     sans: list[str]
 
 
 def start_board(number: int) -> chess.Board:
+    """Начальная доска расстановки number (0–959) в режиме chess960; другой номер — chess960_bad_position."""
     if not 0 <= number <= 959:
         raise DomainValueError("chess960_bad_position")
     return chess.Board.from_chess960_pos(number)
@@ -43,7 +48,10 @@ def random_number(rng: random.Random | None = None) -> int:
 
 
 def replay(number: int, moves: list[str]) -> Game:
-    """Партия с расстановки number по ходам UCI; нелегальный ход — ошибка с этим ходом."""
+    """
+    Партия с расстановки number по ходам UCI; нелегальный ход — ошибка с этим ходом, ход после конца партии —
+    mini_game_over. Берутся первые MAX_PLIES ходов.
+    """
     board = start_board(number)
     sans: list[str] = []
     for uci in moves[:MAX_PLIES]:
@@ -70,7 +78,8 @@ def push(board: chess.Board, uci: str) -> str:
 def outcome(board: chess.Board) -> tuple[str | None, str | None]:
     """
     Итог и причина: мат, пат, нехватка материала; троекратное повторение и 50 ходов — когда они уже случились
-    (claim_draw в python-chess засчитал бы ничью на ход раньше: «следующим ходом можно повторить»).
+    (claim_draw в python-chess засчитал бы ничью на ход раньше: «следующим ходом можно повторить»). Возвращает
+    (результат "1-0" | "0-1" | "1/2-1/2", причина) или (None, None), пока партия идёт.
     """
     result = board.outcome()
     if result is not None:
@@ -83,7 +92,10 @@ def outcome(board: chess.Board) -> tuple[str | None, str | None]:
 
 
 def bot_move(board: chess.Board, level: int) -> chess.Move:
-    """Ход бота в партии Фишера: Stockfish из пула с ограничением силы и времени по уровню (LEVELS)."""
+    """
+    Ход бота в партии Фишера: Stockfish из пула с ограничением силы и времени по уровню (LEVELS). Движка нет или он
+    не вернул легального хода — EngineUnavailableError; пул занят — EngineBusyError (маршрут отвечает отказом).
+    """
     elo, seconds = LEVELS.get(level, LEVELS[2])
     path = resolve_stockfish_path()
     if path is None:

@@ -21,6 +21,7 @@ from src.services.mentor_service import analyze_move  # noqa: E402
 
 
 def main(path: str, games_limit: int, show: list[str]) -> None:
+    """Замеряет частоту и скорость детектора мотивов на партиях PGN."""
     random.seed(7)
     counts: collections.Counter[str] = collections.Counter()
     samples: dict[str, list[tuple[str, str, object]]] = collections.defaultdict(list)

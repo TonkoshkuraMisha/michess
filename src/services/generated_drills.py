@@ -8,7 +8,9 @@
 ходом соперника, затем засчитывается любой мат.
 
 Забег на время (RUN_SECONDS, три ошибки — конец) хранится на сервере: счёт растёт только за упражнение, выданное в
-этом забеге; лучший счёт по сочетанию «вид.фигура.уровень» — личный рекорд (таблица drill_records).
+этом забеге; лучший счёт по сочетанию «вид.фигура.уровень» — личный рекорд (таблица drill_records). Идущий забег —
+запись Redis drills:run:{user_id}: сочетание, время конца, счёт, ошибки и ключ выданного упражнения; у игрока один
+забег, новый заменяет прежний.
 """
 
 import json
@@ -26,9 +28,12 @@ from src.models.user import User
 from src.services import drill_generator as gen
 from src.services.puzzles import PuzzleError
 
+# Таблица проверенных seed: «вид.фигура.уровень» → список seed (собирает scripts/dev/build_drill_seeds.py).
 SEEDS_FILE = pathlib.Path(__file__).resolve().parents[2] / "data" / "drills" / "seeds.json"
+# Забег на время: длительность в секундах и число ошибок, после которого он заканчивается.
 RUN_SECONDS = 60
 RUN_MISTAKES = 3
+# Запас на задержку сети: ответ, пришедший в эти секунды после конца забега, ещё засчитывается.
 RUN_GRACE_S = 2
 # Связь с путём по приёмам (13.4): тема → вид упражнения (кнопка в карточке темы).
 THEME_DRILLS = {"hanging_piece": "capture", "fork": "fork", "pin": "pin", "basic_mates": "mate1"}
@@ -37,6 +42,7 @@ _seeds: dict[str, list[int]] | None = None
 
 
 def seeds() -> dict[str, list[int]]:
+    """Таблица seed из SEEDS_FILE; читается с диска один раз на процесс."""
     global _seeds
     if _seeds is None:
         _seeds = json.loads(SEEDS_FILE.read_text(encoding="utf-8"))
@@ -44,6 +50,7 @@ def seeds() -> dict[str, list[int]]:
 
 
 def combo(kind: str, piece: str, level: int) -> str:
+    """Ключ сочетания «вид.фигура.уровень» (ключ таблицы seed и рекорда); неизвестное сочетание — unknown_drill."""
     if not gen.supported(kind, piece) or level not in gen.LEVELS:
         raise PuzzleError("unknown_drill", 400, drill=f"{kind}/{piece}/{level}")
     return f"{kind}.{piece}.{level}"
@@ -67,6 +74,10 @@ def view(drill: gen.Drill) -> dict:
 
 
 def pick(kind: str, piece: str, level: int, rng: random.Random | None = None) -> gen.Drill:
+    """
+    Случайное упражнение сочетания: seed из таблицы в случайном порядке, первый, по которому генератор строит
+    позицию. Для сочетания нет ни одного годного seed — no_puzzles_available.
+    """
     table = seeds().get(combo(kind, piece, level)) or []
     for seed in (rng or random).sample(table, len(table)):
         drill = gen.build(kind, piece, level, seed)
@@ -115,7 +126,9 @@ def _mates(board: chess.Board, move: chess.Move) -> bool:
 def check(key: str, moves: list[str]) -> dict:
     """
     Ответ на упражнение: moves — ходы решающего и ответы соперника по порядку (в мате в 2 — сначала один ход,
-    затем все три). Возвращает, верно ли, закончено ли, ответ соперника (мат в 2) и решение при ошибке.
+    затем все три). Возвращает, верно ли, закончено ли, ответ соперника (мат в 2) и решение при ошибке. Неверное
+    число ходов или не тот ответ соперника во втором запросе — drill_wrong_step; нелегальный ход — illegal_move.
+    Вторым ходом мата в 2 засчитывается любой матующий ход.
     """
     drill = _restore(key)
     if not moves or len(moves) > 3 or (drill.kind != "mate2" and len(moves) != 1) or len(moves) == 2:
@@ -151,10 +164,12 @@ async def _load_run(user_id: int) -> dict | None:
 
 
 async def _save_run(user_id: int, run: dict) -> None:
+    """Сохраняет забег в Redis; запись живёт на 10 минут дольше забега, чтобы итог можно было забрать (finish_run)."""
     await redis_module.redis_client.set(_run_key(user_id), json.dumps(run), ex=RUN_SECONDS + 600)
 
 
 def _run_over(run: dict) -> bool:
+    """Забег окончен: набрано RUN_MISTAKES ошибок или вышло время (с запасом RUN_GRACE_S)."""
     return run["mistakes"] >= RUN_MISTAKES or time.time() > run["ends_at"] + RUN_GRACE_S
 
 
@@ -164,6 +179,7 @@ def run_view(run: dict) -> dict:
 
 
 async def start_run(user: User, kind: str, piece: str, level: int) -> dict:
+    """Начинает забег на время по сочетанию; прежний забег игрока, если он был, заменяется."""
     run = {"combo": combo(kind, piece, level), "ends_at": time.time() + RUN_SECONDS,
            "solved": 0, "mistakes": 0, "current": None}
     await _save_run(user.id, run)
@@ -185,7 +201,10 @@ async def next_in_run(user: User) -> tuple[gen.Drill, dict]:
 
 
 async def answer(user: User, key: str, moves: list[str], *, in_run: bool) -> dict:
-    """Проверка ответа; в забеге законченное упражнение (то, что выдано забегом) меняет счёт."""
+    """
+    Проверка ответа; в забеге законченное упражнение (то, что выдано забегом) меняет счёт. Ответ на упражнение,
+    которое забег не выдавал, — отказ timed_run_not_active; ответ после конца забега проверяется, но счёт не меняет.
+    """
     result = check(key, moves)
     result["run"] = None
     if in_run:
@@ -220,5 +239,6 @@ async def finish_run(db: AsyncSession, user: User) -> dict:
 
 
 async def records(db: AsyncSession, user: User) -> dict[str, int]:
+    """Личные рекорды игрока: сочетание «вид.фигура.уровень» → лучший счёт забега (таблица drill_records)."""
     rows = await db.execute(select(DrillRecord.combo, DrillRecord.best).where(DrillRecord.user_id == user.id))
     return {combo_key: best for combo_key, best in rows}

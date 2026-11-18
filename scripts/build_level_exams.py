@@ -35,6 +35,7 @@ CANDIDATES = 40
 
 
 async def _candidates(sections: str, low: int, high: int, used: set[str]) -> list[tuple[str, str, str, int]]:
+    """Отбирает из базы задачи нужной ветви и рейтинга для экзамена уровня."""
     from sqlalchemy import select
     from sqlalchemy.ext.asyncio import create_async_engine
     from sqlalchemy.pool import NullPool
@@ -56,6 +57,7 @@ async def _candidates(sections: str, low: int, high: int, used: set[str]) -> lis
 
 
 def _verified(engine: chess.engine.SimpleEngine, fen: str, moves: str, limit: chess.engine.Limit) -> dict | None:
+    """Проверяет движком единственность лучшего хода и полное решение задачи."""
     board = chess.Board(fen)
     first, *rest = moves.split()
     board.push_uci(first)
@@ -78,6 +80,7 @@ def _verified(engine: chess.engine.SimpleEngine, fen: str, moves: str, limit: ch
 
 
 def main() -> None:
+    """Собирает и сохраняет наборы позиций для экзаменов по уровням курса."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--time", type=float, default=0.5, help="Секунд движка на позицию")
     parser.add_argument("--seed", type=int, default=2712)

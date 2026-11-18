@@ -1,7 +1,8 @@
 // --- FILE: frontend/src/components/chessboard/hooks/usePremoves.ts ---
 // Предходы: очередь ходов, заданных во время хода соперника (не больше MAX_PREMOVES). Доска показывает позицию «как
 // если бы предходы сыграны»; первый предход исполняется, как только соперник сходил, и если он стал нелегальным —
-// очередь снимается.
+// очередь снимается. Очередь живёт только в браузере: сервер о предходах не знает, пока очередной из них не
+// отправлен обычным ходом (make_move с признаком is_premove). Работает в партии с человеком и с ботом.
 
 import {useCallback, useEffect, useMemo, useState} from 'react';
 import {Chess} from 'chess.js';
@@ -22,11 +23,12 @@ export interface UsePremovesOptions {
     viewIndex: number;
     /** Премувы имеют смысл только в PvP и партиях с ботом — не в свободном анализе. */
     isOpponentControlled: boolean;
+    /** Обычный ход доски (Chessboard.executeMove); возвращает false, если ход невозможен. */
     executeMove: (from: string, to: string, explicitPromotion?: PromotionPiece, isPremoveMove?: boolean) => boolean;
     playAudio: (type: SoundEventType) => void;
     /** Снимает выделение клетки и обрывает текущее перетаскивание — премув начинается «с чистого». */
     clearSelection: () => void;
-    /** Открывает диалог выбора фигуры для премува-превращения (closes с isPremove: true). */
+    /** Открывает диалог выбора фигуры для премува-превращения (с пометкой isPremove: true — выбор вернётся сюда). */
     openPromotionDialog: (p: { from: string; to: string; color: 'w' | 'b'; isPremove: true }) => void;
 }
 
@@ -73,9 +75,11 @@ export interface UsePremovesResult {
 }
 
 /**
- * Предход: пока ходит соперник, игрок может заранее указать свой следующий ход. Как только
- * позиция подтверждает, что очередь перешла к игроку, премув автоматически исполняется через
- * executeMove (с isPremoveMove=true — сервер не засчитывает время на обдумывание такого хода).
+ * Предход: пока ходит соперник, игрок может заранее указать свои следующие ходы (до MAX_PREMOVES). Как только
+ * позиция подтверждает, что очередь перешла к игроку, первый премув автоматически исполняется через
+ * executeMove с isPremoveMove=true: клиент сообщает нулевое время обдумывания и признак is_premove. Часы при этом
+ * всё равно ведёт сервер по своему времени; признак нужен античиту (такой ход не учитывается в ритме ходов, и
+ * сервер верит признаку, только если сам видит почти мгновенный ход).
  */
 export function usePremoves({
     game, myColor, gameOverResult, viewIndex, isOpponentControlled, executeMove, playAudio,
@@ -107,11 +111,13 @@ export function usePremoves({
         }
 
         const next = {from, to, promotion: isPawnPromotion ? (explicitPromotion || 'q') : undefined};
+        // Сверх MAX_PREMOVES предход в очередь не попадает (звук при этом всё равно играет).
         setPremoves((queue) => (queue.length >= MAX_PREMOVES ? queue : [...queue, next]));
         playAudio('premove');
         clearSelection();
     }, [premoveView, myColor, playAudio, clearSelection, openPromotionDialog]);
 
+    // Исполнение: срабатывает на каждую новую позицию; ждёт, пока ход перейдёт к игроку и на доске живая позиция.
     useEffect(() => {
         if (premoves.length === 0 || gameOverResult || viewIndex !== -1 || !isOpponentControlled) return;
 

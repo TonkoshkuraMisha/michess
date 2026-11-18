@@ -16,7 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from src.core.config import settings
 from src.core.observability import instrument_engine
 
-# Create asynchronous engine using configuration URL
+# Движок — один на процесс API. pool_timeout — сколько запрос ждёт свободное соединение (DB_POOL_TIMEOUT_S);
+# pool_pre_ping проверяет соединение перед выдачей, чтобы после перезапуска PostgreSQL запросы не падали на
+# оборванных соединениях. instrument_engine считает занятые соединения для метрики michess_db_pool_checked_out.
 engine = create_async_engine(
     settings.async_database_url,
     echo=False,
@@ -28,7 +30,8 @@ engine = create_async_engine(
 )
 instrument_engine(engine)
 
-# Create asynchronous session factory
+# Фабрика сессий. expire_on_commit=False: объекты остаются читаемыми после commit — обработчики WebSocket
+# освобождают соединение до отправки ответа и продолжают пользоваться уже загруженными данными.
 AsyncSessionLocal = async_sessionmaker(
     bind=engine,
     autoflush=False,
@@ -39,8 +42,8 @@ AsyncSessionLocal = async_sessionmaker(
 
 async def get_db():
     """
-    Dependency generator that yields an asynchronous database session.
-    Ensures proper cleanup after request completion.
+    Зависимость FastAPI: сессия базы на один HTTP-запрос, закрывается после ответа. Сама ничего не коммитит —
+    изменения сохраняет обработчик или сервис.
 
     Только для HTTP-запросов: сессия живёт до конца запроса. Долгоживущим обработчикам
     (WebSocket) нужна фабрика get_session_factory и короткая сессия на каждую операцию.
@@ -51,7 +54,7 @@ async def get_db():
 
 def get_session_factory() -> async_sessionmaker[AsyncSession]:
     """
-    Dependency: фабрика сессий для долгоживущих соединений.
+    Зависимость FastAPI: фабрика сессий для долгоживущих соединений.
 
     Сессия из get_db, взятая WebSocket-обработчиком, жила бы всё соединение: первый же запрос
     открывает транзакцию, и соединение пула остаётся занятым («idle in transaction»), пока

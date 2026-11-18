@@ -66,6 +66,8 @@ from src.services.task_dispatch import schedule_game_analysis_in_background, sch
 
 router = APIRouter()
 
+# Те же зависимости, что и в остальных разделах: get_db — сессия базы на запрос (src/db/session.py),
+# get_current_user — вошедший игрок (src/api/deps.py).
 get_db = getattr(deps, "get_db", None) or getattr(db_session, "get_db", None)
 get_current_user = getattr(deps, "get_current_user", None)
 
@@ -165,6 +167,8 @@ def reserved_bot_usernames() -> set[str]:
     return names
 
 
+# Темп «раздумья» исторических ботов первой волны: множитель к времени на ход (меньше 1 — играет быстрее).
+# Числа заданы вручную; у остальных ботов и соперников мастерской множитель 1.
 BOT_TEMPO_MULTIPLIER = {
     "morphy": 0.72,
     "labourdonnais": 0.78,
@@ -177,6 +181,7 @@ BOT_TEMPO_MULTIPLIER = {
 
 
 class BotMoveRequest(BaseModel):
+    """Запрос хода исторического бота (POST /bots/move): кто ходит и в какой позиции."""
     bot_id: str = Field(default="philidor", description="ID исторического бота")
     fen: str = Field(..., max_length=100, description="Текущая позиция на доске в формате FEN")
 
@@ -188,6 +193,10 @@ class BotComment(BaseModel):
 
 
 class BotMoveResponse(BaseModel):
+    """
+    Ход бота: запись хода, позиция после него, источник хода (source: дебютная книга или движок), реплика бота и
+    время «раздумья», которое клиент выдерживает перед показом хода.
+    """
     bot_id: str
     uci: str
     san: str
@@ -277,6 +286,10 @@ def calculate_authentic_thinking_time_ms(
     """
     Вычисляет реалистичное человеческое время на ход (в мс) для исторического мастера
     с учётом его темпа, дебютной книги, единственного ответа или тактической сложности позиции.
+
+    Это имитация для клиента, а не время работы движка: единственный ход — около 0,3 с, ход по книге — 0,4–0,7 с
+    плюс немного с каждым ходом партии, остальные — от 0,32 до 2,9 с (больше ходов и взятий на доске, шах или
+    взятие — дольше; в позиции с десятью и менее фигурами — быстрее). В значении есть случайная составляющая.
     """
     legal_moves = list(board.legal_moves)
     num_legal = len(legal_moves)
@@ -333,8 +346,11 @@ def resolve_bot_game_outcome(board: chess.Board, payload: BotGameSaveRequest) ->
     - игрок сдался — только поражение игрока;
     - упал флаг — победа стороны с неупавшим флагом, но ничья, если у неё нет материала
       для мата (правило ФИДЕ 6.9). Часы партии с ботом живут на клиенте, поэтому сторону
-      с упавшим флагом сервер берёт из присланного результата.
+      с упавшим флагом сервер берёт из присланного результата;
+    - бот согласился на ничью (termination='agreement') — ничья. Согласие сервер не запоминает и проверить не
+      может, поэтому в партиях лестницы и турнира такой итог не принимается (проверка — в save_bot_game).
     Иначе партия не завершена, и «победу» сохранить нельзя.
+    Возвращает (результат, причина окончания).
     """
     outcome = terminal_outcome(board)
     if outcome is not None:
@@ -420,8 +436,9 @@ async def _get_or_create_bot_user(db: AsyncSession, bot_id: str) -> User:
     bot_user = User(
         username=bot_username,
         hashed_password=BOT_PASSWORD_MARKER,
-        # Фиксированная «историческая сила» бота — одинаковая во всех категориях: партии
-        # с ботом не рейтинговые (is_rated=False), это чисто отображаемое значение.
+        # Фиксированная «историческая сила» бота — одинаковая во всех категориях: это чисто отображаемое
+        # значение, рейтинг самого бота партии не меняют. Партии с ботом не рейтинговые (is_rated=False), кроме
+        # турнирных — там меняется только рейтинг игрока.
         bullet_rating=bot_rating,
         blitz_rating=bot_rating,
         rapid_rating=bot_rating,
@@ -498,6 +515,10 @@ async def get_calibration_runs():
 
 @router.get("/calibration/runs/{name}", response_class=PlainTextResponse, dependencies=[PUBLIC_LIMIT])
 async def get_calibration_run(name: str = Path(..., max_length=80)):
+    """
+    Один журнал прогона калибровки текстом (PGN партий или протокол матчей) — файл, записанный
+    scripts/calibrate_bots.py; 404, если такого журнала нет. Открыт всем, под лимитом открытого API.
+    """
     text = await asyncio.to_thread(bot_calibration.read_run, name)
     if text is None:
         raise ApiError(404, "calibration_run_not_found")
@@ -587,6 +608,10 @@ async def get_guest(guest_id: str = Path(..., max_length=40)):
 
 
 class DrawOfferRequest(BaseModel):
+    """
+    Предложение ничьей боту: позиция, кто соперник и каким цветом он играет; для соперника мастерской — его
+    характер (config) или id сохранённой персоналии.
+    """
     fen: str = Field(..., max_length=100)
     bot_id: str = Field(..., max_length=40)
     bot_color: Literal["white", "black"]
@@ -605,7 +630,9 @@ HISTORICAL_DRAW_ATTITUDE = {"labourdonnais": -40, "anderssen": -60, "morphy": -4
 async def draw_offer(payload: DrawOfferRequest, request: Request, db: AsyncSession = Depends(get_db)):
     """
     Ответ бота на предложение ничьей (таск 21.4): по оценке позиции за бота и его отношению к ничьей. В дебюте
-    (до 10-го хода) бот не соглашается — партия ещё не началась.
+    (до 10-го хода, personality.DRAW_OFFER_MIN_MOVE) бот не соглашается — партия ещё не началась — и движок не
+    вызывается. Оценка берётся из кэша оценок или считается движком (move_check.evaluate_cached); это оценка
+    позиции, поэтому эндпоинт закрыт правилом честной игры и лимитом ходов бота. Сервер согласие не запоминает.
     """
     board = _playable_board(payload.fen)
     if payload.bot_id == CUSTOM_BOT_ID:
@@ -640,7 +667,10 @@ async def search_openings(q: str = Query("", max_length=60), epd: list[str] = Qu
 
 @router.get("/list")
 async def get_available_bots():
-    """Возвращает список доступных исторических ботов и статус движка Stockfish."""
+    """
+    Возвращает список доступных исторических ботов (AVAILABLE_BOTS) и статус движка Stockfish: найден ли его
+    бинарник на этом сервере. Открыт всем.
+    """
     return {
         "bots": AVAILABLE_BOTS,
         "stockfish_active": bool(resolve_stockfish_path()),
@@ -657,7 +687,12 @@ async def get_available_bots():
     ],
 )
 async def get_bot_move(payload: BotMoveRequest, request: Request, db: AsyncSession = Depends(get_db)):
-    """Принимает FEN позиции и возвращает ответный ход выбранного исторического бота."""
+    """
+    Принимает FEN позиции и возвращает ответный ход выбранного исторического бота. Доступно и гостю. Перед ходом:
+    запрос отмечается в сессии лестницы или турнира игрока (подсказка, возврат хода или подмена соперника —
+    src/services/ladder.py), бот подгружает свою память (итоги дебютов, а в дебюте — и память об этом сопернике,
+    src/services/bots/memory.py). Сам выбор хода — синхронный расчёт в отдельном потоке.
+    """
     bot = BOT_INSTANCES.get(payload.bot_id)
     if bot is None:
         raise ApiError(404, "bot_not_found", bot_id=payload.bot_id)
@@ -701,7 +736,11 @@ async def get_bot_move(payload: BotMoveRequest, request: Request, db: AsyncSessi
 async def get_custom_bot_move(
         payload: CustomBotMoveRequest, request: Request, db: AsyncSession = Depends(get_db),
 ):
-    """Ход соперника, собранного из ползунков характера (src/services/bots/personality.py)."""
+    """
+    Ход соперника, собранного из ползунков характера (src/services/bots/personality.py): характер прислан в
+    запросе (доступно гостю) или берётся из сохранённой персоналии игрока (нужен вход, чужая — 404). Запрос так же
+    отмечается в сессии лестницы или турнира.
+    """
     board = _playable_board(payload.fen)
     config = payload.config
     if payload.personality_id is not None:
@@ -806,6 +845,11 @@ async def _resolve_personality_for_save(
 
 async def _remember_bot_game(db: AsyncSession, payload: BotGameSaveRequest, result: str, player_rating: int,
                              player_id: int) -> None:
+    """
+    Память исторического бота после партии (src/services/bots/memory.py): итог сыгранных ходов дебютной книги —
+    всегда; память об этом сопернике — если игрок не пользовался наставником; рейтинг бота по партиям с людьми —
+    если к тому же партия не вслепую. Сбой здесь только записывается в журнал.
+    """
     bot_color = chess.BLACK if payload.player_color == "white" else chess.WHITE
     book = BOT_INSTANCES[payload.bot_id].opening_book
     try:
@@ -828,7 +872,16 @@ async def save_bot_game(
         db: AsyncSession = Depends(get_db),
         current_user: User = Depends(get_current_user),
 ):
-    """Сохраняет завершённую партию против исторического бота или персоналии из мастерской."""
+    """
+    Сохраняет завершённую партию против исторического бота или персоналии из мастерской. Только для вошедших.
+
+    Что делает: переигрывает присланные ходы и сам определяет итог (resolve_bot_game_outcome), пишет партию в
+    games (без рейтинга, кроме турнирной), для партии лестницы обновляет рейтинг и ступень лестницы, для партии
+    турнира — записывает результат в турнир, меняет рейтинг игрока и ставит в очередь открывшиеся партии ботов, обновляет
+    память исторического бота и ставит фоновый разбор. Партия лестницы или турнира должна совпадать с открытой
+    на сервере (соперник, цвет, контроль) — иначе 409; подсказка или возврат хода в турнирной партии дают
+    поражение, а не результат с доски.
+    """
     if payload.blindfold and (payload.ladder or payload.tournament_game_id):
         # Игра вслепую — тренировка: в лестнице и турнире её нет (таск 19.5).
         raise ApiError(400, "blindfold_not_allowed")

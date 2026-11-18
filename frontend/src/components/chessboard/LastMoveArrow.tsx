@@ -1,8 +1,11 @@
 // --- FILE: frontend/src/components/chessboard/LastMoveArrow.tsx ---
-// Стрелка последнего хода (таск 18.4, настройка «показ хода соперника»): полупрозрачная, под фигурами-подсказками.
+// Стрелка последнего хода (таск 18.4, настройка «показ хода соперника» в config/boardPrefs.ts: подсветка полей,
+// стрелка или и то и другое). Полупрозрачная; лежит под стрелками наставника и пометками игрока (z-index 25
+// против 30), клики не перехватывает.
 
 import {squareCenter} from './CoachArrowsOverlay';
 
+/** Стрелка от поля from к полю to; у показываемого хода истории, а не только у хода соперника. */
 export function LastMoveArrow({from, to, flipped}: { from: string; to: string; flipped: boolean }) {
     const a = squareCenter(from, flipped);
     const b = squareCenter(to, flipped);

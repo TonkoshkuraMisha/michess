@@ -5,9 +5,13 @@
 игрока в профиле, комментарии и отметки «нравится».
 
 Правила: запрет чата модератором закрывает и публикации с комментариями; комментировать нельзя у того, кто внёс
-тебя в чёрный список (код тот же, что у закрытых личных сообщений, — блокировку не раскрываем); публикации тех, кого
-заблокировал я, в моей ленте не показываются; скрытая модератором публикация видна только автору. Новый комментарий
-к публикации — уведомление автору (кроме своих комментариев).
+тебя в чёрный список (отказ comment_closed без упоминания блокировки — как dm_closed у личных сообщений: блокировку
+не раскрываем); публикации тех, кого заблокировал я, в моей ленте не показываются; скрытая модератором и придержанная
+фильтром публикация видна только автору; публикации и комментарии удалённых аккаунтов не показываются. Новый
+комментарий к публикации — уведомление автору (кроме своих и придержанных комментариев).
+
+Таблицы: posts, post_comments, post_likes; подписки — follows, чёрный список — blocks. Карточки-вложения —
+src/services/attachments.py, фильтр и квоты — src/services/civility.py, запрет чата — src/services/moderation.py.
 """
 
 from collections.abc import Sequence
@@ -21,8 +25,10 @@ from src.models.user import User
 from src.services import civility, moderation, notifications
 from src.services.attachments import POST_KINDS, build_attachment, clean_text
 
+# Наибольшая длина текста публикации и комментария в знаках (лишнее обрезается).
 BODY_MAX = 2000
 COMMENT_MAX = 500
+# Сколько публикаций отдаёт одна страница ленты и сколько комментариев показывается у публикации.
 PAGE = 20
 COMMENTS_PAGE = 100
 
@@ -32,6 +38,10 @@ def _iso(value) -> str | None:
 
 
 async def _views(db: AsyncSession, posts: Sequence[Post], viewer: User | None) -> list[dict]:
+    """
+    Публикации для клиента: автор, текст, карточка, число отметок «нравится» и комментариев (без придержанных),
+    поставил ли отметку сам зритель, своя ли это публикация, скрыта ли она или придержана.
+    """
     if not posts:
         return []
     ids = [p.id for p in posts]
@@ -73,7 +83,8 @@ async def create(db: AsyncSession, author: User, body: str | None, attachment: t
                  send_anyway: bool = False) -> dict:
     """
     Новая публикация: текст и/или карточка-вложение. Запрещена при отключённом чате; действуют квота и фильтр
-    оскорблений (сработал — публикация придерживается до решения модератора).
+    оскорблений (сработал — без send_anyway отказ text_flagged, с ним публикация придерживается до решения
+    модератора). Отказы: posting_banned, post_empty, posting_limited.
     """
     if moderation.chat_banned(author):
         raise DomainError("posting_banned")
@@ -94,6 +105,7 @@ async def create(db: AsyncSession, author: User, body: str | None, attachment: t
 
 
 async def _page(db: AsyncSession, query, viewer: User | None, before_id: int | None) -> list[dict]:
+    """Страница ленты: PAGE видимых зрителю публикаций, новые первыми; before_id — публикации старше этой."""
     if before_id:
         query = query.where(Post.id < before_id)
     rows = (await db.execute(query.where(_visible(viewer), Post.author_id.in_(_not_deleted_author()))
@@ -102,6 +114,7 @@ async def _page(db: AsyncSession, query, viewer: User | None, before_id: int | N
 
 
 async def following_feed(db: AsyncSession, viewer: User, before_id: int | None = None) -> list[dict]:
+    """Лента подписок: свои публикации и публикации тех, на кого подписан зритель, кроме заблокированных им."""
     followed = select(Follow.followee_id).where(Follow.follower_id == viewer.id)
     blocked = select(Block.blocked_id).where(Block.blocker_id == viewer.id)
     query = select(Post).where(or_(Post.author_id == viewer.id, Post.author_id.in_(followed)),
@@ -110,10 +123,12 @@ async def following_feed(db: AsyncSession, viewer: User, before_id: int | None =
 
 
 async def user_feed(db: AsyncSession, author: User, viewer: User | None, before_id: int | None = None) -> list[dict]:
+    """Лента одного игрока — для его профиля; зритель может быть гостем (viewer=None)."""
     return await _page(db, select(Post).where(Post.author_id == author.id), viewer, before_id)
 
 
 async def _post(db: AsyncSession, post_id: int, viewer: User | None) -> Post:
+    """Публикация, если зритель вправе её видеть; иначе post_not_found — как если бы её не было."""
     post = await db.scalar(select(Post).where(Post.id == post_id, _visible(viewer),
                                               Post.author_id.in_(_not_deleted_author())))
     if post is None:
@@ -126,6 +141,7 @@ async def get(db: AsyncSession, post_id: int, viewer: User | None) -> dict:
 
 
 async def remove(db: AsyncSession, post_id: int, viewer: User) -> None:
+    """Удаление публикации её автором или модератором; остальным — тот же отказ post_not_found."""
     post = await _post(db, post_id, viewer)
     if post.author_id != viewer.id and not viewer.is_moderator:
         raise DomainError("post_not_found")
@@ -154,6 +170,10 @@ def _comment_view(c: PostComment, author: User | None, viewer: User | None, post
 
 
 async def comments(db: AsyncSession, post_id: int, viewer: User | None) -> list[dict]:
+    """
+    Комментарии публикации от старых к новым, не больше COMMENTS_PAGE. Придержанный фильтром комментарий виден только
+    его автору; комментарии удалённых аккаунтов не показываются.
+    """
     post = await _post(db, post_id, viewer)
     rows = (await db.execute(select(PostComment, User).join(User, User.id == PostComment.author_id)
                              .where(PostComment.post_id == post.id, User.deleted_at.is_(None),
@@ -164,7 +184,11 @@ async def comments(db: AsyncSession, post_id: int, viewer: User | None) -> list[
 
 async def add_comment(db: AsyncSession, post_id: int, viewer: User, body: str | None,
                       send_anyway: bool = False) -> tuple[dict, tuple[int, dict] | None]:
-    """Комментарий и (если пишет не автор) (автор, записанное уведомление) — доставку делает API после коммита."""
+    """
+    Комментарий и (если пишет не автор) (автор, записанное уведомление) — доставку делает API после коммита.
+    Придержанный фильтром комментарий уведомления не даёт. Отказы: posting_banned (запрет чата), comment_closed
+    (автор публикации заблокировал пишущего), comment_empty, posting_limited (квота), text_flagged (фильтр).
+    """
     post = await _post(db, post_id, viewer)
     if moderation.chat_banned(viewer):
         raise DomainError("posting_banned")

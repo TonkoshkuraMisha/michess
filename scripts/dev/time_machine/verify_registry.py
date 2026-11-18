@@ -74,11 +74,13 @@ KNOWN_SOURCE_TYPOS = {("carlsbad_1911", "vidmar"), ("vienna_1898", "schiffers"),
 
 
 def plain(text: str) -> str:
+    """Удаляет HTML-теги и сноски из текста ячейки турнирной таблицы."""
     text = text.replace("ø", "o").replace("ł", "l").replace("ß", "ss").replace("Ł", "L")
     return "".join(c for c in unicodedata.normalize("NFD", text.lower()) if not unicodedata.combining(c))
 
 
 def number(cell: str) -> float | None:
+    """Переводит текстовую запись очков с половинами в число float."""
     cell = re.sub(r"'''|<[^>]+>|&nbsp;", " ", cell).strip()
     cell = re.sub(r"\{\{frac\|(\d)\|(\d)\}\}", lambda m: f" {int(m.group(1)) / int(m.group(2))}", cell)
     cell = cell.replace("{{frac|2}}", "½").replace("½", ".5").replace(" ", "")
@@ -89,6 +91,7 @@ def number(cell: str) -> float | None:
 
 
 def result_points(cell: str) -> float | None:
+    """Суммирует очки игрока по ячейкам отдельных партий строки таблицы."""
     cell = cell.replace("{{frac|1|2}}", "½").replace("{{frac|2}}", "½")
     cell = re.sub(r"'''|<[^>]+>|\{\{[^}]*\}\}|style=[^|]*\|", "", cell).strip()
     if cell == "" or re.fullmatch(r"[xX*\-–\s]+", cell):
@@ -99,6 +102,7 @@ def result_points(cell: str) -> float | None:
 
 
 def rows_of(slug: str, index: int) -> list[tuple[str, float | None, float | None]]:
+    """Извлекает строки результатов участников из HTML-таблицы источника."""
     text = (HERE / ".cache" / f"{slug}.txt").read_text(encoding="utf-8")
     table = re.findall(r"\{\|.*?\n\|\}", text, flags=re.S)[index]
     out = []
@@ -106,6 +110,7 @@ def rows_of(slug: str, index: int) -> list[tuple[str, float | None, float | None
         row = row.replace("\n||", "||").replace("|||", "||")  # перенос перед разделителем и лишняя черта
         cells = [c.strip() for c in re.split(r"\|\||\n\|", "\n" + row.strip().lstrip("|")) if c.strip() != ""]
         def letters(cell: str) -> str:
+            """Оставляет в строке только латинские буквы в нижнем регистре для сверки."""
             return re.sub(r'(?:style|rowspan|colspan|align|bgcolor)\s*=\s*(?:"[^"]*"|[^|\s]+)\s*\|?', "", cell)
 
         named = next((i for i, c in enumerate(cells) if re.search(r"[A-Za-z]{4,}", letters(c))), None)
@@ -138,6 +143,7 @@ def rows_of(slug: str, index: int) -> list[tuple[str, float | None, float | None
 
 
 def our_name(player_id: str) -> str:
+    """Приводит имя мастера из реестра к виду для сопоставления с таблицей."""
     guest = GUESTS_BY_ID.get(player_id)
     return guest.pgn_name if guest else BOT_NAMES.get(player_id, player_id)
 

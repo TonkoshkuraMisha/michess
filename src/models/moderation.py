@@ -1,7 +1,9 @@
 # --- FILE: src/models/moderation.py ---
 """
 Модерация (таск 17.4): жалобы игроков (на игрока или на сообщение в чате), автоматические заявки на проверку флага
-нечестной игры и апелляции. Очередь разбирает модератор (users.is_moderator), решение — код (src/services/moderation.py).
+нечестной игры и апелляции; с таска 30.3 — ещё жалобы на конкретный текст (личное сообщение, публикацию,
+комментарий) и тексты, придержанные фильтром оскорблений; с 17.7 — предложения исправить перевод. Очередь
+разбирает модератор (users.is_moderator), решение — код (src/services/moderation.py).
 """
 
 from datetime import datetime
@@ -21,7 +23,8 @@ class Report(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     # player | message | cheat_review (автоматически при флаге) | appeal (апелляция на флаг) |
-    # translation (предложение исправить текст интерфейса, таск 17.7)
+    # translation (предложение исправить текст интерфейса, таск 17.7) | content (жалоба на личное сообщение,
+    # публикацию или комментарий, таск 30.3) | held (текст придержан фильтром оскорблений, src/services/civility.py)
     kind: Mapped[str] = mapped_column(String(16), index=True)
     reporter_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     target_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), index=True)
@@ -30,13 +33,15 @@ class Report(Base):
     # Текст жалобщика и копия сообщения из чата (ввод людей — для модератора, не строки интерфейса).
     comment: Mapped[str | None] = mapped_column(String(300), nullable=True)
     message_text: Mapped[str | None] = mapped_column(String(300), nullable=True)
-    # Для translation: «язык:ключ» каталога и страница, где предложено (контекст).
+    # Для translation: «язык:ключ» каталога и страница, где предложено (контекст). Для content и held subject —
+    # ссылка на текст: «dm:id», «post:id» или «comment:id».
     subject: Mapped[str | None] = mapped_column(String(200), nullable=True)
     context: Mapped[str | None] = mapped_column(String(200), nullable=True)
     game_id: Mapped[int | None] = mapped_column(ForeignKey("games.id", ondelete="SET NULL"), nullable=True)
     # open | resolved
     status: Mapped[str] = mapped_column(String(16), default="open", server_default="open", index=True)
-    # Решение: dismiss | warn | chat_ban | mark_cheater | clear_cheater | accept (для translation)
+    # Решение (moderation.ACTIONS): dismiss | warn | chat_ban | mark_cheater | clear_cheater | accept (для
+    # translation) | hide (убрать текст) | release (выпустить придержанный текст)
     action: Mapped[str | None] = mapped_column(String(16), nullable=True)
     moderator_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), index=True)

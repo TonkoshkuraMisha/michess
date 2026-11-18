@@ -2,6 +2,10 @@
 """
 Арены — турниры между людьми (таск 17.2): расписание, вход, «Играть», таблица, напоминание о начале. Правила —
 src/services/arena.py, расписание по конференциям — src/services/arena_schedule.py.
+
+Списки и страница арены открыты всем; вход, «Играть» и напоминания — только вошедшим. Арены, участники и партии
+лежат в таблицах arenas, arena_players, arena_games, arena_reminders; кто сейчас ждёт пару — в Redis
+(arena:{id}:waiting). Сами партии арены идут по общему WebSocket партий (src/api/websockets.py).
 """
 
 from datetime import timedelta
@@ -22,7 +26,9 @@ from src.services.matchmaker import MatchmakingError
 
 router = APIRouter()
 
+# Сколько законченная арена ещё видна в списке.
 RECENT = timedelta(hours=6)
+# Статусы HTTP для кодов отказа сервиса; остальные отказы — 409 (конфликт с состоянием арены).
 _CODES = {"arena_not_found": status.HTTP_404_NOT_FOUND, "arena_fair_play": status.HTTP_403_FORBIDDEN}
 
 
@@ -129,6 +135,7 @@ async def remind(arena_id: int, db: AsyncSession = Depends(get_db), user: User =
 
 @router.delete("/{arena_id}/remind")
 async def forget_reminder(arena_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Отменить своё напоминание о начале арены."""
     try:
         return {"reminder": await service.set_reminder(db, await service.get(db, arena_id), user.id, False)}
     except DomainError as exc:
@@ -137,7 +144,10 @@ async def forget_reminder(arena_id: int, db: AsyncSession = Depends(get_db), use
 
 @router.post("/{arena_id}/ready")
 async def ready(arena_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
-    """«Играть»: пара с другим ожидающим или ожидание (клиент повторяет запрос)."""
+    """
+    «Играть»: пара с другим ожидающим или ожидание (клиент повторяет запрос). Отметка ожидания в Redis считается
+    действующей arena.WAIT_TTL_S секунд — кто перестал повторять запрос, тот больше не ждёт.
+    """
     try:
         return await service.ready(db, await service.get(db, arena_id), user)
     except MatchmakingError as exc:
@@ -148,5 +158,6 @@ async def ready(arena_id: int, db: AsyncSession = Depends(get_db), user: User = 
 
 @router.post("/{arena_id}/leave-waiting")
 async def leave_waiting(arena_id: int, user: User = Depends(get_current_user)):
+    """Перестать ждать пару: убирает игрока из списка ожидающих арены в Redis."""
     await service.leave_waiting(arena_id, user.id)
     return {"waiting": False}

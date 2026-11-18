@@ -24,7 +24,7 @@ RATING_CATEGORIES: tuple[RatingCategory, ...] = ("bullet", "blitz", "rapid", "cl
 
 class User(Base):
     """
-    Core user model for authentication and matchmaking.
+    Запись таблицы users: живой игрок, бот или архивный игрок из PGN. Что в каких полях — в описании модуля выше.
     """
     __tablename__ = "users"
 
@@ -35,6 +35,9 @@ class User(Base):
     # из PGN и ботов — NULL: их имена из заголовков партий могут различаться только регистром,
     # а NULL уникальный индекс не ограничивает.
     username_key: Mapped[str | None] = mapped_column(String(50), unique=True, index=True, nullable=True)
+    # Хэш bcrypt (src/core/security.py). У ботов и архивных игроков — метка, которая хэшем не является
+    # («!historical_bot_no_login!» — src/api/bots.py, «!historical_archive_no_login!» — src/db/seed.py): войти
+    # под ними нельзя; по второй метке «Просмотр» и поиск игроков отличают архивных игроков.
     hashed_password: Mapped[str] = mapped_column(String)
     # Версия токенов: входит в JWT и сверяется при каждой проверке. Увеличение (смена пароля,
     # «выйти на всех устройствах») делает недействительными все ранее выданные токены.
@@ -79,7 +82,9 @@ class User(Base):
     # посмотреть — нельзя сыграть) — не реальный зарегистрированный игрок, вне таблицы лидеров.
     is_bot: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
-    # Anti-cheat specific fields
+    # Античит (src/services/anticheat.py): фактор доверия начинается со 100 и уменьшается штрафами за «машинный»
+    # ритм ходов; ниже anticheat.CHEATER_TRUST_THRESHOLD (30) ставится флаг is_cheater и создаётся заявка
+    # модератору. Снять или подтвердить флаг может только модератор (src/services/moderation.py).
     is_cheater: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
     trust_factor: Mapped[int] = mapped_column(Integer, default=100)
     # Модерация (таск 17.4): роль модератора (scripts/make_moderator.py) и отключённый чат до момента.
@@ -104,9 +109,11 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
     def rating_for(self, category: RatingCategory) -> int:
+        """Рейтинг игрока в категории контроля времени (колонка <категория>_rating)."""
         return getattr(self, f"{category}_rating")
 
     def games_played_for(self, category: RatingCategory) -> int:
+        """Число рейтинговых партий в категории (колонка <категория>_games_played) — от него зависит K-фактор."""
         return getattr(self, f"{category}_games_played")
 
 

@@ -11,6 +11,7 @@ API = "https://ru.wikipedia.org/w/api.php?"
 
 
 def get(params: dict) -> dict:
+    """Скачивает и кэширует HTML-страницу статьи русской Википедии."""
     url = API + urllib.parse.urlencode({**params, "format": "json"})
     for attempt in range(4):
         try:

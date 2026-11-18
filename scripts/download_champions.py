@@ -109,6 +109,7 @@ def as_jpeg(content: bytes) -> bytes:
 
 
 def _clean(html_text: str) -> str:
+    """Очищает метаданные Викисклада от HTML-тегов и дублирующихся строк."""
     text = _TAG_RE.sub("", html_text or "").replace("&amp;", "&").replace("\n", " ").strip()
     # Викисклад дублирует «Unknown author» в видимой и скрытой разметке.
     text = text.replace("Unknown authorUnknown author", "Unknown author").replace("AnonymousUnknown author", "Unknown author")
@@ -116,6 +117,7 @@ def _clean(html_text: str) -> str:
 
 
 def _get_json(session: requests.Session, url: str, params: dict) -> dict:
+    """Выполняет GET-запрос к API Викисклада/Википедии с повторами при 429."""
     last_status = 0
     for _attempt in range(5):
         response = session.get(url, params=params, timeout=30)
@@ -172,6 +174,7 @@ def fetch_commons_metadata(session: requests.Session, file_names: list[str]) -> 
 
 
 def main(force: bool = False) -> int:
+    """Скачивает свободные портреты шахматистов и обновляет манифест лицензий."""
     PUBLIC_CHAMPIONS_DIR.mkdir(parents=True, exist_ok=True)
     SRC_CHAMPIONS_DIR.mkdir(parents=True, exist_ok=True)
     credits: dict[str, dict] = {}

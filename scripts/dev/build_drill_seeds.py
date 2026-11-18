@@ -22,6 +22,7 @@ OUTPUT = pathlib.Path(__file__).resolve().parents[2] / "data" / "drills" / "seed
 
 
 def find(args: tuple[str, str, int, int, int]) -> tuple[str, list[int]]:
+    """Находит набор seed с единственным решением для одной комбинации генератора."""
     kind, piece, level, need, max_seed = args
     seeds: list[int] = []
     seed = 0
@@ -33,6 +34,7 @@ def find(args: tuple[str, str, int, int, int]) -> tuple[str, list[int]]:
 
 
 def main() -> None:
+    """Собирает таблицу проверенных seed для всех упражнений-генераторов."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--per-combo", type=int, default=40)
     parser.add_argument("--max-seed", type=int, default=400_000)

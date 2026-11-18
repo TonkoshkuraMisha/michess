@@ -1,6 +1,9 @@
 // --- FILE: frontend/src/components/chessboard/GameSummaryPanel.tsx ---
 // Окно итога партии с ботом (таск 11.5): разбор запускается сам после сохранения партии, затем — тип партии,
-// точность, ключевые ходы с объяснением наставника и рекомендуемый следующий соперник.
+// точность, ключевые ходы с объяснением наставника и рекомендуемый следующий соперник. Разбор — POST
+// /analysis/game/{id} (движок оценивает каждый ход; готовый разбор сервер отдаёт из базы). Тип партии и ключевые
+// ходы — поле summary ответа (src/services/game_summary.py), подписи — каталог summary.*. Рекомендацию соперника
+// считает Chessboard (services/gameSummary.ts) и передаёт пропсом.
 
 import {useEffect, useState} from 'react';
 import {Trophy} from 'lucide-react';
@@ -14,6 +17,7 @@ import {isSummaryKind} from '../../services/gameSummary';
 import type {GameSummary} from '../../services/gameSummary';
 import {getToken} from '../../services/authToken';
 
+// Части ответа разбора, которые нужны этой панели (полный ответ — FullGameAnalysisResponse на сервере).
 interface ReportMove {
     ply: number;
     move_number: number;
@@ -30,6 +34,7 @@ interface Report {
 }
 
 interface Props {
+    /** id сохранённой партии с ботом (ответ /bots/save-game): пока партия не сохранена, панель не показывается. */
     gameId: number;
     playerColor: 'white' | 'black';
     /** Имя и сила рекомендуемого соперника (уже на языке игрока); null — рекомендовать некого. */
@@ -37,15 +42,20 @@ interface Props {
     onPlayRecommended: () => void;
 }
 
+/** Ход с номером: «12. Nf3» у белых, «12… Nf6» у чёрных. */
 function moveLabel(move: ReportMove): string {
     return `${move.move_number}${move.color === 'white' ? '.' : '…'} ${move.san}`;
 }
 
+/** Итог партии с ботом: сам запрашивает разбор сохранённой партии и показывает его главное. */
 export function GameSummaryPanel({gameId, playerColor, recommendation, onPlayRecommended}: Props) {
     const {t} = useI18n();
     const [report, setReport] = useState<Report | null>(null);
     const [error, setError] = useState<UiMessage | null>(null);
 
+    // Разбор запрашивается при появлении панели и при смене партии. Флаг cancelled отбрасывает ответ, пришедший
+    // после закрытия панели или к уже другой партии. Отказ сервера (движок занят, исчерпан лимит разборов)
+    // показывается текстом по коду ошибки.
     useEffect(() => {
         let cancelled = false;
         setReport(null);
@@ -66,7 +76,9 @@ export function GameSummaryPanel({gameId, playerColor, recommendation, onPlayRec
     }, [gameId]);
 
     const opponentColor = playerColor === 'white' ? 'black' : 'white';
+    // Незнакомый тип партии (сервер новее клиента) — итог без типа и ключевых ходов, только точность.
     const summary = report?.summary && isSummaryKind(report.summary.kind) ? report.summary : null;
+    // Сервер называет ключевые ходы номером полухода с единицы; в массиве moves они лежат с нуля.
     const moveAt = (ply: number | null | undefined) => (ply ? report?.moves[ply - 1] ?? null : null);
     const moments: { label: 'summary.turningPoint' | 'summary.yourBest' | 'summary.yourWorst'; move: ReportMove }[] = [];
     if (summary) {

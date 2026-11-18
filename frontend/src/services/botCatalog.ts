@@ -13,10 +13,14 @@ import {UiError} from './apiErrors';
 import {isArchetypeId} from '../config/archetypes';
 import type {ArchetypeId} from '../config/archetypes';
 
+/** Сила бота из src/services/bots/calibration.json (её читает сервер, bot_calibration.strength_of). */
 export interface BotStrength {
+    /** Заявленный рейтинг — тот, на который бот настроен. */
     declared_rating: number;
+    /** Рейтинг для показа: измеренный, если калибровка была (measured), иначе равен заявленному. */
     rating: number;
     measured: boolean;
+    /** Число партий калибровки и погрешность измеренного рейтинга: ± ci95 пунктов (95 %); null — не измерен. */
     games: number;
     ci95: number | null;
     /** Исторические боты (таск 32.1): рейтинг по партиям с людьми, их число и поправка силы движка. */
@@ -26,10 +30,13 @@ export interface BotStrength {
 /** Архетип мастерской: имя и описание на языке игрока — в каталоге (archetypes.<id>). */
 export interface CatalogArchetype extends BotStrength {
     id: ArchetypeId;
+    /** Ползунки характера; ползунки силы уже подстроены самоигрой (src/services/bots/selfplay.py, таск 32.3). */
     config: PersonalityConfig;
 }
 
+/** Ответ GET /api/v1/bots/catalog. */
 export interface BotCatalog {
+    /** Когда и на скольких партиях проведена последняя калибровка; null — её ещё не было. */
     calibration: { date: string; games: number } | null;
     historical: (BotStrength & { id: string })[];
     archetypes: CatalogArchetype[];
@@ -37,6 +44,7 @@ export interface BotCatalog {
 
 let cached: Promise<BotCatalog> | null = null;
 
+/** Каталог ботов: один запрос на вкладку (результат кэшируется), после ошибки следующий вызов идёт в сеть заново. */
 export function fetchBotCatalog(): Promise<BotCatalog> {
     if (!cached) {
         cached = fetch(`${API_BASE_URL}/api/v1/bots/catalog`)
@@ -76,6 +84,7 @@ export interface BotRival {
     remembers: boolean;
 }
 
+/** GET /api/v1/bots/rivalry — счёт игрока с историческими ботами; при любой ошибке сервера — пустой список. */
 export async function fetchRivalry(token: string): Promise<BotRival[]> {
     const res = await fetch(`${API_BASE_URL}/api/v1/bots/rivalry`, {headers: {Authorization: `Bearer ${token}`}});
     if (!res.ok) return [];

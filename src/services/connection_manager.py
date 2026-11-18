@@ -26,14 +26,19 @@ from src.db.redis import redis_client
 
 logger = logging.getLogger(__name__)
 
+# Как часто процесс обновляет отметки присутствия своих соединений в Redis.
 PRESENCE_HEARTBEAT_S = 10
+# Отметка старше этого срока (три пропущенных пульса с запасом) — соединение считается мёртвым; сам ключ
+# presence:user:{uid} живёт вдвое дольше и продлевается каждым пульсом.
 PRESENCE_STALE_MS = 35_000
 
+# Событие «токены отозваны» и код закрытия WebSocket, по которому клиент понимает, что нужно войти заново.
 SESSION_REVOKED_EVENT = "session_revoked"
 WS_CLOSE_SESSION_REVOKED = 1008
 
 
 def _is_session_revoked(raw: str) -> bool:
+    """Является ли текст сообщения событием session_revoked (пришедшим с другого воркера)."""
     if SESSION_REVOKED_EVENT not in raw:  # дешёвый фильтр до разбора JSON
         return False
     try:
@@ -42,6 +47,7 @@ def _is_session_revoked(raw: str) -> bool:
         return False
 
 
+# Срок жизни записей о зрителях (6 часов): страховка от зависших записей, если зритель исчез без отключения.
 SPECTATING_TTL_S = 6 * 60 * 60
 
 
@@ -68,6 +74,7 @@ class ConnectionManager:
     """
     def __init__(self):
         self.worker_id = WORKER_ID
+        # Одно (любое открытое) соединение игрока на этом воркере; все его вкладки — в _user_sockets.
         self.active_connections: dict[int, WebSocket] = {}
         self._user_sockets: dict[int, set[WebSocket]] = {}
         # websocket -> (user_id, connection_id в Redis-присутствии)
@@ -80,6 +87,10 @@ class ConnectionManager:
     # ------------------------------------------------------------------ фоновые задачи
 
     def _ensure_background_tasks(self) -> None:
+        """
+        Запускает (или перезапускает, если они завершились) слушателя pub/sub и пульс присутствия. Вызывается при
+        каждом новом соединении: задачи создаются лениво, когда уже есть работающий цикл событий.
+        """
         try:
             if self._listener_task is None or self._listener_task.done():
                 self._listener_task = asyncio.create_task(self._listen_pubsub())
@@ -163,7 +174,10 @@ class ConnectionManager:
             logger.warning("Presence remove failed for user %s: %s", uid, exc)
 
     async def is_user_online(self, user_id: int) -> bool:
-        """Есть ли у пользователя живое соединение на любом воркере."""
+        """
+        Есть ли у пользователя живое соединение на любом воркере: локальные сокеты или свежая отметка в Redis
+        (устаревшие отметки заодно удаляются). При сбое Redis и без локальных сокетов — False.
+        """
         uid = int(user_id)
         if self._has_open_sockets(uid):
             return True
@@ -266,7 +280,10 @@ class ConnectionManager:
     # ------------------------------------------------------------------ доставка
 
     async def _deliver_local(self, user_id: int, raw_text: str) -> bool:
-        """Мгновенно отправляет JSON во все открытые на этом воркере вкладки пользователя."""
+        """
+        Мгновенно отправляет JSON во все открытые на этом воркере вкладки пользователя. Возвращает, дошло ли хотя бы
+        до одной; сокеты, в которые отправить не удалось, убираются из учёта.
+        """
         uid = int(user_id)
         sockets = list(self._user_sockets.get(uid, set()))
 
@@ -290,7 +307,7 @@ class ConnectionManager:
 
     async def revoke_sessions(self, user_id: int) -> None:
         """
-        Токены пользователя отозваны (смена пароля, «выйти на всех устройствах»): сообщаем всем
+        Токены пользователя отозваны (смена пароля, «выйти на всех устройствах», удаление аккаунта): сообщаем всем
         его вкладкам и закрываем их WebSocket — на этом воркере сразу, на остальных при получении
         события через pub/sub. Иначе уже открытое соединение продолжало бы работать со старым
         токеном. Код 1008 клиент понимает как «сессия недействительна, войдите заново».
@@ -323,6 +340,10 @@ class ConnectionManager:
     # ------------------------------------------------------------------ зрители
 
     async def add_spectator(self, game_id: int, user_id: int) -> None:
+        """
+        Записывает игрока зрителем партии. Смотреть можно одну партию за раз: прежняя запись снимается. Обе записи
+        (множество зрителей партии и обратная ссылка игрока) живут SPECTATING_TTL_S.
+        """
         gid, uid = int(game_id), int(user_id)
         await self.remove_user_from_all_spectating(uid)
         await self.redis.sadd(_spectators_key(gid), str(uid))
@@ -336,6 +357,7 @@ class ConnectionManager:
             await self.redis.delete(_spectating_key(uid))
 
     async def remove_user_from_all_spectating(self, user_id: int) -> None:
+        """Снимает игрока со зрителей той партии, которую он смотрит (по обратной ссылке user:{uid}:spectating)."""
         uid = int(user_id)
         gid = await self.redis.get(_spectating_key(uid))
         if gid:
@@ -347,6 +369,7 @@ class ConnectionManager:
         return {int(m) for m in members}
 
     async def broadcast_to_spectators(self, game_id: int, message: dict) -> None:
+        """Рассылает сообщение всем зрителям партии — каждому как личное, во все его вкладки на всех воркерах."""
         for uid in await self.get_spectator_ids(game_id):
             await self.send_personal_message(message, uid)
 

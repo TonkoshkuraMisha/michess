@@ -22,7 +22,7 @@ _CYRILLIC_RE = re.compile(r"[А-Яа-яЁё]")
 
 
 def username_key(username: str) -> str:
-    """Ключ для сравнения имён без учёта регистра."""
+    """Ключ для сравнения имён без учёта регистра (casefold); хранится в users.username_key и уникален в базе."""
     return username.strip().casefold()
 
 
@@ -30,6 +30,9 @@ def validate_username(value: str) -> str:
     """
     Правила имени при регистрации. Белый список символов отсекает пробелы, невидимые и
     управляющие символы, а запрет смешивать алфавиты — подделки вида «Мorphy» (кириллическая М).
+    Имя должно содержать хотя бы одну букву. Нарушение — ошибка проверки с кодом из src/core/errors.py
+    (username_invalid_chars, username_mixed_scripts, username_no_letters). Те же правила — у имён соперников
+    мастерской (src/api/personalities.py).
     """
     if not _USERNAME_RE.fullmatch(value):
         raise validation_error("username_invalid_chars")
@@ -41,7 +44,7 @@ def validate_username(value: str) -> str:
 
 
 class UserCreate(BaseModel):
-    """Schema for incoming user registration data."""
+    """Данные регистрации (POST /auth/register): имя, пароль и необязательные ответы и код-приглашение."""
     username: str = Field(
         ..., min_length=USERNAME_MIN_LENGTH, max_length=USERNAME_MAX_LENGTH, description="Unique username",
     )
@@ -60,7 +63,10 @@ class UserCreate(BaseModel):
 
 
 class UserResponse(BaseModel):
-    """Schema for outgoing user data (password and anti-cheat internals excluded)."""
+    """
+    Ответ регистрации — данные только что созданного игрока. Хэша пароля и числового фактора доверия
+    (users.trust_factor) в нём нет; флаг is_cheater игрок о себе видит.
+    """
     id: int
     username: str
     bullet_rating: int
@@ -70,5 +76,5 @@ class UserResponse(BaseModel):
     is_cheater: bool
     created_at: datetime
 
-    # This config allows Pydantic to read data directly from SQLAlchemy models
+    # from_attributes: ответ собирается прямо из объекта модели User.
     model_config = ConfigDict(from_attributes=True)

@@ -2,6 +2,10 @@
 """
 Справочник дебютов (таск 16.2): ходы из позиции со статистикой по индексу позиций (таск 16.1), название дебюта
 (src/services/openings.py) и партии мастеров из архива, прошедшие через позицию.
+
+Данные: статистика ходов — таблица position_stats, партии через позицию — position_games (обе заполняет
+src/services/position_index.py по первым 30 полуходам каждой законченной партии, поэтому глубже статистики нет);
+сами партии и имена игроков — games и users. Названия дебютов — src/services/data/openings.tsv.
 """
 
 import chess
@@ -15,15 +19,17 @@ from src.models.position import PositionGame
 from src.models.user import User
 from src.services import openings, position_index
 
+# Признак игрока исторического архива: загрузчик архива (src/db/seed.py) записывает эту строку вместо хэша пароля,
+# войти под таким игроком нельзя. Та же строка продублирована в src/api/social.py и src/api/watch.py.
 ARCHIVE_PASSWORD = "!historical_archive_no_login!"
-MAX_MOVES = 60
-MASTER_GAMES = 12
+MAX_MOVES = 60  # сколько полуходов запроса учитывается; остальные молча отбрасываются
+MASTER_GAMES = 12  # сколько партий мастеров показывается под позицией
 
 
 def board_after(moves_uci: list[str]) -> tuple[chess.Board, list[chess.Move]]:
     """
-    Доска после списка ходов UCI от начальной позиции (учитывается не больше MAX_MOVES ходов); нелегальный ход —
-    отказ.
+    Доска после списка ходов UCI от начальной позиции (учитывается не больше MAX_MOVES полуходов); нелегальный
+    ход — отказ illegal_move.
     """
     board = chess.Board()
     played = []
@@ -40,7 +46,10 @@ def board_after(moves_uci: list[str]) -> tuple[chess.Board, list[chess.Move]]:
 
 
 async def master_games(db: AsyncSession, board: chess.Board, limit: int = MASTER_GAMES) -> list[dict]:
-    """Архивные партии (оба игрока — из архива), проходившие через позицию: новые по дате — первыми."""
+    """
+    Архивные партии (оба игрока — из архива), проходившие через позицию: новые по дате — первыми, без даты — в
+    конце. Позиция ищется по хэшу position_index.position_key; год — первые четыре знака даты из PGN.
+    """
     white, black = aliased(User), aliased(User)
     rows = (await db.execute(
         select(Game.id, white.username, black.username, Game.pgn_date, Game.result, Game.eco)
@@ -59,7 +68,7 @@ async def master_games(db: AsyncSession, board: chess.Board, limit: int = MASTER
 async def explore(db: AsyncSession, moves_uci: list[str]) -> dict:
     """
     Справочник по позиции: название дебюта, ходы из позиции со статистикой партий (индекс позиций) и партии мастеров,
-    прошедшие через неё.
+    прошедшие через неё. У хода дебют указывается, только если после него название меняется.
     """
     board, played = board_after(moves_uci)
     opening = openings.classify_board_line(chess.Board(), played)

@@ -41,6 +41,7 @@ def acceptable(row: dict) -> bool:
 
 
 def good(row: dict) -> bool:
+    """Проверяет, проходит ли задача основной фильтр качества и популярности."""
     return (int(row["RatingDeviation"]) <= 80 and int(row["Popularity"]) >= 85 and int(row["NbPlays"]) >= 300
             and RATING_MIN <= int(row["Rating"]) < RATING_MAX)
 
@@ -49,9 +50,11 @@ class Reservoir:
     """Равномерная случайная выборка фиксированного размера из потока (алгоритм R)."""
 
     def __init__(self, size: int, rng: random.Random):
+        """Инициализирует резервуар равномерной случайной выборки фиксированного размера."""
         self.size, self.rng, self.seen, self.items = size, rng, 0, []
 
     def offer(self, item: dict) -> None:
+        """Добавляет элемент в резервуар с равномерной вероятностью замещения."""
         self.seen += 1
         if len(self.items) < self.size:
             self.items.append(item)
@@ -62,6 +65,7 @@ class Reservoir:
 
 
 def main() -> None:
+    """Формирует сбалансированную выборку задач из полного дампа lichess."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("source", type=pathlib.Path)
     parser.add_argument("--per-bucket", type=int, default=900)

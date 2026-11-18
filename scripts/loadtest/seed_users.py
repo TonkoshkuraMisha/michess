@@ -33,6 +33,7 @@ NO_LOGIN_MARKER = "!loadtest_no_login!"
 
 
 async def seed(count: int) -> list[dict]:
+    """Создаёт тестовых игроков в БД и выдаёт им JWT-токены для нагрузки."""
     names = [f"{PREFIX}{i:04d}" for i in range(1, count + 1)]
     async with AsyncSessionLocal() as db:
         existing = {
@@ -50,6 +51,7 @@ async def seed(count: int) -> list[dict]:
 
 
 async def cleanup() -> tuple[int, int]:
+    """Удаляет игроков нагрузочного теста вместе с их партиями и ходами."""
     async with AsyncSessionLocal() as db:
         user_ids = list((await db.execute(
             select(User.id).where(User.hashed_password == NO_LOGIN_MARKER)
@@ -68,6 +70,7 @@ async def cleanup() -> tuple[int, int]:
 
 
 def main() -> None:
+    """Точка входа CLI для создания и удаления тестовых игроков."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--count", type=int, default=200, help="число игроков (чётное: партии идут парами)")
     parser.add_argument("--cleanup", action="store_true", help="удалить игроков нагрузочного теста и их партии")

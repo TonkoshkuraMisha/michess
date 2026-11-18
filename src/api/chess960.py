@@ -1,6 +1,10 @@
 """
 Шахматы Фишера (таск 21.3): новая расстановка и ход игрока с ответом бота. Ход бота — работа движка: тот же лимит,
 что у /bots/move, и правило честной игры (во время партии с человеком — 409).
+
+Сервер партию не хранит: клиент каждый раз присылает номер расстановки и все сделанные ходы, сервер переигрывает
+их (src/services/chess960.py) и отвечает новым состоянием. Доступно без входа; эти эндпоинты в базу ничего не
+пишут. Партии Фишера между людьми идут иначе — по приглашению через WebSocket (src/services/matchmaker.py).
 """
 
 import asyncio
@@ -19,6 +23,7 @@ BOT_DEPENDENCIES = [Depends(rate_limit("bot_move", "RATE_LIMIT_BOT_MOVE")), Depe
 
 
 class GameIn(BaseModel):
+    """Партия целиком, как её знает клиент: номер расстановки, сделанные ходы (UCI) и уровень бота."""
     number: int = Field(..., ge=0, le=959)
     moves: list[str] = Field(default_factory=list, max_length=c960.MAX_PLIES)
     level: int = Field(2, ge=1, le=len(c960.LEVELS))
@@ -29,6 +34,7 @@ class MoveIn(GameIn):
 
 
 def _state(game: c960.Game, bot_uci: str | None = None) -> dict:
+    """Состояние партии для клиента: позиция, ходы, итог (если партия кончилась) и ход бота, если он только что сделан."""
     result, termination = c960.outcome(game.board)
     return {"number": game.number, "fen": game.board.fen(), "moves": [m.uci() for m in game.board.move_stack],
             "sans": game.sans, "result": result, "termination": termination, "bot_move": bot_uci,
@@ -36,6 +42,7 @@ def _state(game: c960.Game, bot_uci: str | None = None) -> dict:
 
 
 async def _bot_reply(game: c960.Game, level: int) -> dict:
+    """Ход бота в текущей позиции (если партия не кончилась) и новое состояние; движок занят или недоступен — 503."""
     if c960.outcome(game.board)[0] is not None:
         return _state(game)
     try:
@@ -64,6 +71,7 @@ async def new_game(number: int | None = Query(None, ge=0, le=959)):
 
 @router.post("/move", dependencies=BOT_DEPENDENCIES)
 async def move(payload: MoveIn):
+    """Ход игрока и ответ бота: партия переигрывается из присланных ходов, нелегальный ход или расстановка — 400."""
     game = _replay(payload)
     try:
         game.sans.append(c960.push(game.board, payload.move))

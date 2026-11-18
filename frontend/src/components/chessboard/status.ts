@@ -10,6 +10,7 @@ import type {I18n, MessageKey, MessageParam, UiMessage} from '../../i18n';
 export type GameStatus = UiMessage;
 export type StatusParam = MessageParam;
 
+/** Собирает статус: ключ каталога (status.*, ladder.*, tournaments.*, bots.*) и параметры. */
 export function status(key: MessageKey, params?: Record<string, StatusParam>): GameStatus {
     return uiMessage(key, params);
 }
@@ -19,14 +20,18 @@ export function messageParam(key: MessageKey, params?: Record<string, StatusPara
     return uiMessage(key, params);
 }
 
+/** Показан ли сейчас статус с этим ключом: так логика узнаёт, например, что висит предложение ничьей. */
 export function hasStatusKey(value: GameStatus | null, key: MessageKey): boolean {
     return value !== null && 'key' in value && value.key === key;
 }
 
+/** Текст статуса на текущем языке (вызывается при отрисовке). */
 export function renderStatus(value: GameStatus, t: I18n['t']): string {
     return renderUiMessage(value, t);
 }
 
+// Причины окончания партии, для которых в каталоге есть подпись status.reasons.*. Код причины приходит с сервера:
+// поле reason события game_over или поле termination ответа GET /profile/games/{id}/summary.
 const GAME_OVER_REASONS = new Set([
     'checkmate', 'stalemate', 'timeout', 'resignation', 'agreement', 'draw_agreement', 'repetition',
     '50_move_rule', 'insufficient_material', 'timeout_vs_insufficient_material', 'abandoned',
@@ -39,7 +44,10 @@ function isKnownReason(reason: string): reason is GameOverReason {
     return (GAME_OVER_REASONS as Set<string>).has(reason);
 }
 
-/** Итог партии: «Партия окончена. Результат: 1-0 (мат)»; отменённая на 1-м ходу — своё сообщение. */
+/**
+ * Итог партии: «Партия окончена. Результат: 1-0 (мат)»; отменённая на 1-м ходу — своё сообщение. Незнакомая
+ * причина (новый код сервера) — итог без причины; пустой результат — null (показывать нечего).
+ */
 export function describeGameOver(result: string | null | undefined, reason?: string | null): GameStatus | null {
     if (reason === 'aborted' || result === '*') return status('status.aborted');
     if (!result) return null;

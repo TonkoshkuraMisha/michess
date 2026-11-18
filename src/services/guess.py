@@ -8,6 +8,11 @@
 
 Сложность позиции — её рейтинг: ответ вошедшего игрока меняет его, как партия задачи с решающим (Эло против рейтинга
 задач игрока): нашёл ход мастера — позиция «проиграла», нет — «выиграла». Рейтинг игрока при этом не меняется.
+
+Откуда данные: позиции — таблица guess_positions (ход мастера, строки движка lines, отрыв gap_cp, темы, серия,
+счётчики plays и solved); её заполняет офлайн scripts/build_guess_positions.py по партиям архива (таблица games) по
+правилам src/services/guess_selection.py. Сервер движок для этого раздела не запускает. Объяснение к ходу мастера —
+src/services/coach.py. Легальность хода игрока проверяет маршрут (src/api/guess.py).
 """
 
 import io
@@ -24,19 +29,28 @@ from src.models.user import User
 from src.services.coach import advice_for_position
 from src.services.guess_selection import book_plies, in_opening, is_technical_endgame, position_themes
 
+# Баллы за ход мастера и за другой ход, который хуже лучшего не больше чем на NEAR_CP сантипешек.
 MASTER_SCORE = 100
 NEAR_SCORE = 80
 NEAR_CP = 30
+# Запас к потере хода, которого нет в сохранённых строках движка: потеря = отрыв лучшего хода + этот запас.
 UNKNOWN_EXTRA_CP = 50
+# Сколько последних полуходов партии показывается перед позицией.
 CONTEXT_MOVES = 8
+# Позиция подбирается в пределах ±DIFFICULTY_BAND от запрошенной сложности.
 DIFFICULTY_BAND = 300
+# Рейтинг позиции: первые PROVISIONAL_PLAYS ответов он меняется с коэффициентом K_PROVISIONAL, дальше — K_STABLE;
+# из границ MIN_DIFFICULTY…MAX_DIFFICULTY не выходит.
 PROVISIONAL_PLAYS = 20
 K_PROVISIONAL, K_STABLE = 32, 12
 MIN_DIFFICULTY, MAX_DIFFICULTY = 600, 3000
 
 
 def score_answer(position: GuessPosition, move_uci: str) -> tuple[int, int]:
-    """(баллы, потеря в сп) за ответ игрока."""
+    """
+    (баллы, потеря в сп) за ответ игрока. Потеря хода из сохранённых строк движка — разница с лучшей оценкой; хода
+    вне строк — gap_cp + UNKNOWN_EXTRA_CP. Баллы за потерю больше NEAR_CP: минус балл за каждые 5 сантипешек.
+    """
     if move_uci == position.move_uci:
         return MASTER_SCORE, 0
     known = {uci: cp for uci, cp in position.lines}
@@ -105,6 +119,7 @@ async def pick_position(db: AsyncSession, target: int, series: bool) -> GuessPos
 
 
 async def series_next(db: AsyncSession, position: GuessPosition) -> GuessPosition | None:
+    """Следующая позиция той же серии (серия — несколько ходов мастера подряд в одной партии) или None."""
     if position.series_id is None:
         return None
     return (await db.execute(select(GuessPosition).where(
@@ -113,13 +128,17 @@ async def series_next(db: AsyncSession, position: GuessPosition) -> GuessPositio
 
 
 async def game_positions(db: AsyncSession, game_id: int) -> list[GuessPosition]:
+    """Все отобранные позиции партии по порядку ходов."""
     return list((await db.execute(
         select(GuessPosition).where(GuessPosition.game_id == game_id).order_by(GuessPosition.ply)
     )).scalars())
 
 
 def rating_after(position_rating: int, solver_rating: int, plays: int, solved: bool) -> int:
-    """Новый рейтинг позиции после ответа игрока с рейтингом solver_rating (Эло, позиция — «соперник»)."""
+    """
+    Новый рейтинг позиции после ответа игрока с рейтингом solver_rating (Эло, позиция — «соперник»). plays — сколько
+    раз позицию уже решали (от этого зависит коэффициент), solved — найден ли ход мастера.
+    """
     k = K_PROVISIONAL if plays < PROVISIONAL_PLAYS else K_STABLE
     expected = 1 / (1 + 10 ** ((solver_rating - position_rating) / 400))  # ожидание «победы» позиции
     value = position_rating + round(k * ((0 if solved else 1) - expected))
@@ -141,7 +160,11 @@ async def first_positions(db: AsyncSession, game_ids: list[int]) -> dict[int, in
 
 
 async def answer(db: AsyncSession, position: GuessPosition, move_uci: str, user: User | None = None) -> dict:
-    """Баллы, ход мастера, строки движка, темы и объяснение наставника к ходу мастера."""
+    """
+    Баллы, ход мастера, строки движка, темы и объяснение наставника к ходу мастера. Заодно обновляет счётчики
+    позиции (plays, solved) и, если отвечает вошедший игрок, её рейтинг — по его рейтингу задач (с commit). Ответ
+    гостя рейтинг позиции не меняет.
+    """
     board = chess.Board(position.fen)
     score, loss = score_answer(position, move_uci)
     if user is not None:

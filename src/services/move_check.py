@@ -12,7 +12,11 @@
 изменила бы его игру.
 
 Без Stockfish проверка недоступна (`available: false`): оценка статического анализатора недостоверна, и
-предупреждать по ней о «зевках» нельзя.
+предупреждать по ней о «зевках» нельзя. Совет и подсказка без движка работают, но без лучшего хода и оценки.
+
+Данные в Redis: ``engine:eval:{глубина}:{позиция}`` — кэш оценок (JSON PositionEval, живёт CACHE_TTL_S);
+``coach:disputes`` — очередь спорных оценок (список JSON, последние DISPUTES_KEEP). В базу модуль ничего не пишет.
+Маршруты — src/api/analysis.py; все закрыты правилом честной игры (во время своей партии с человеком недоступны).
 """
 
 import asyncio
@@ -33,11 +37,15 @@ from src.services.game_engine import board_from_start_fen
 
 logger = logging.getLogger(__name__)
 
-CACHE_TTL_S = 600
+CACHE_TTL_S = 600  # оценка позиции живёт в кэше 10 минут — этого хватает на партию с наставником
+# Предел одного расчёта: глубина 12 или 0,15 с — что наступит раньше. Глубина входит в ключ кэша: при её смене
+# старые оценки не используются.
 ENGINE_DEPTH = 12
 ENGINE_TIME_S = 0.15
+# Оценки обрезаются до ±20 пешек перед подсчётом потери: иначе разница между «мат в 3» и «мат в 5» или между
+# +25 и +40 выглядела бы грубой ошибкой.
 EVAL_CLAMP_CP = 2000
-MATE_CP = 10_000
+MATE_CP = 10_000  # условная оценка мата в сантипешках (после обрезки — те же ±2000)
 
 # Тактика, которую лучший ход создавал, а сделанный — нет: «пропущенный удар» (наставник предупреждает и при
 # небольшой потере). Взятие и «обычный лучший ход» сюда не входят.
@@ -63,7 +71,10 @@ def _cache_key(board: chess.Board) -> str:
 
 
 def engine_evaluate(board: chess.Board) -> PositionEval | None:
-    """Оценка Stockfish (синхронно, через пул). None — движка нет."""
+    """
+    Оценка Stockfish (синхронно, через пул). None — движка нет. Оконченная партия оценивается без движка: мат —
+    ±MATE_CP против стороны, которой он поставлен, пат и другие ничьи — 0.
+    """
     if board.is_checkmate():
         return PositionEval(-MATE_CP if board.turn == chess.WHITE else MATE_CP, 0, None)
     if board.is_game_over():
@@ -85,7 +96,10 @@ def engine_evaluate(board: chess.Board) -> PositionEval | None:
 
 
 async def evaluate_cached(board: chess.Board) -> PositionEval | None:
-    """Оценка из кэша или от движка (с записью в кэш). Redis недоступен — просто считаем."""
+    """
+    Оценка из кэша или от движка (с записью в кэш). Redis недоступен — просто считаем. None — движка нет или пул
+    занят (EngineUnavailableError); отказ в кэш не пишется. Расчёт идёт в отдельном потоке.
+    """
     key = _cache_key(board)
     try:
         raw = await redis_module.redis_client.get(key)
@@ -111,6 +125,7 @@ def _clamped(cp_white: int) -> int:
 
 
 def _parse_position(fen: str) -> chess.Board:
+    """Доска по FEN запроса; невозможная позиция или уже оконченная партия — отказ с кодом."""
     board = board_from_start_fen(fen)  # invalid_fen / invalid_position
     if board.is_game_over():
         raise DomainValueError("game_already_over")
@@ -121,6 +136,10 @@ async def check_move(fen: str, move_uci: str) -> dict:
     """
     Проверка хода игрока: потеря (сп, с точки зрения сходившего), классификация, оценки до и после, лучший ход,
     лучший ответ соперника, «пропущенный удар» и объяснение наставника.
+
+    Потеря — разница обрезанных (EVAL_CLAMP_CP) оценок до и после хода, не меньше 0; ход, совпавший с лучшим ходом
+    движка, всегда получает потерю 0. Классификацию даёт analysis_service.classify_move_by_cp_loss — та же, что в
+    разборе партии. «Пропущенный удар» — когда среди ключей объяснения есть один из MISSED_TACTIC_PREFIXES.
     """
     from src.services.analysis_service import classify_move_by_cp_loss  # без цикла импорта
 
@@ -163,7 +182,10 @@ async def check_move(fen: str, move_uci: str) -> dict:
 
 
 async def advise(fen: str) -> dict:
-    """Совет по позиции (таск 11.2) — с оценкой из того же кэша, что проверка хода."""
+    """
+    Совет по позиции (таск 11.2) — с оценкой из того же кэша, что проверка хода. Оценка — с точки зрения белых.
+    Без движка совет собирается только по правилам (coach.advice_for_position), лучший ход и оценка — None.
+    """
     board = _parse_position(fen)
     evaluation = await evaluate_cached(board)
     best = evaluation.best_uci if evaluation else None
@@ -176,7 +198,11 @@ async def advise(fen: str) -> dict:
 
 
 async def hint(fen: str, step: int) -> dict:
-    """Подсказка по ступеням (таск 11.4). Лучший ход раскрывается только на последней ступени."""
+    """
+    Подсказка по ступеням (таск 11.4), ступеней — coach.HINT_STEPS (3). Лучший ход раскрывается только на
+    последней ступени. Без движка лучший ход неизвестен, поэтому вторая ступень сразу объявляется последней
+    (``final``), а ход остаётся None.
+    """
     board = _parse_position(fen)
     evaluation = await evaluate_cached(board)
     best = evaluation.best_uci if evaluation else None
@@ -191,15 +217,16 @@ async def hint(fen: str, step: int) -> dict:
     }
 
 
-DISPUTES_KEY = "coach:disputes"
-DISPUTES_KEEP = 2000
+DISPUTES_KEY = "coach:disputes"  # список Redis: новые записи — в начале
+DISPUTES_KEEP = 2000  # сколько последних спорных оценок хранится; более старые отбрасываются при каждой записи
 
 
 async def record_dispute(fen: str, move_uci: str, cp_loss: int | None, user_id: int | None) -> None:
     """
     «Не согласен» с предупреждением наставника: позиция и ход — в очередь спорных оценок (Redis, последние
     DISPUTES_KEEP). Её разбирают глубоким анализом (scripts/dev/review_disputes.py) — так находятся ошибки
-    объяснений и порогов. Ход проверяется на легальность, чтобы очередь не засоряли.
+    объяснений и порогов. Ход проверяется на легальность, чтобы очередь не засоряли. Запись: позиция, ход, потеря,
+    которую показал клиент, номер игрока (None — гость) и время. Redis недоступен — запись теряется без отказа.
     """
     board = _parse_position(fen)
     try:

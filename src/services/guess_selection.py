@@ -19,6 +19,9 @@
 
 Серии: 2–6 ходов игрока подряд, каждый проходит отбор, ходы соперника между ними — ходы партии; если соперник ошибся
 больше OPPONENT_ERROR_CP, серия на этом обрывается.
+
+Модуль чистый: правила отбора без движка и без базы. Движок запускает скрипт scripts/build_guess_positions.py — он
+передаёт сюда его строки и записывает прошедшие позиции в таблицу guess_positions; выдача — src/services/guess.py.
 """
 
 from dataclasses import dataclass
@@ -27,17 +30,19 @@ import chess
 
 from src.services import openings
 
-GAP_CP = 150
-WIN_CP = 150
-EQUAL_CP = 50
-DECIDED_CP = 700
-OPENING_FLOOR_PLY = 10
-TECHNICAL_PIECES = 7
+# Пороги — в сантипешках с точки зрения стороны, которая ходит.
+GAP_CP = 150              # лучший ход опережает второй не меньше чем на столько
+WIN_CP = 150              # «выигрыш»: оценка не ниже этой (для правила «только этот ход сохраняет результат»)
+EQUAL_CP = 50             # «равенство»: оценка по модулю не больше этой
+DECIDED_CP = 700          # позиция уже решена: лучший ход хуже −DECIDED_CP или второй лучше +DECIDED_CP
+OPENING_FLOOR_PLY = 10    # до этого полухода позиция считается дебютной, даже если её нет в таблице дебютов
+TECHNICAL_PIECES = 7      # столько фигур на доске (с королями и пешками) и меньше — технический эндшпиль
 THEME_LINE_PLIES = 4  # ход мастера и ещё три полухода линии движка
-MAX_MATE_IN = 5
-OPPONENT_ERROR_CP = 100
-SERIES_MIN, SERIES_MAX = 2, 6
+MAX_MATE_IN = 5           # мат длиннее не помечается темой «мат в n»
+OPPONENT_ERROR_CP = 100   # ошибка соперника больше этой между ходами серии обрывает серию
+SERIES_MIN, SERIES_MAX = 2, 6  # число ходов игрока в серии
 
+# Ценность фигур для правила «висит фигура дороже пешки».
 VALUES = {chess.PAWN: 1, chess.KNIGHT: 3, chess.BISHOP: 3, chess.ROOK: 5, chess.QUEEN: 9, chess.KING: 0}
 
 # Строка движка: ход и оценка в сантипешках с точки зрения стороны, которая ходит (мат — ±100000).
@@ -46,6 +51,10 @@ Line = tuple[chess.Move, int]
 
 @dataclass(frozen=True)
 class Verdict:
+    """
+    Почему ход прошёл отбор: gap — большой отрыв от второго хода, only_move — только он сохраняет результат; лучшая
+    оценка и отрыв от второго хода в сантипешках.
+    """
     reason: str  # "gap" | "only_move"
     best_cp: int
     gap_cp: int
@@ -85,13 +94,15 @@ def in_opening(board: chess.Board, book_ply: int) -> bool:
 
 
 def is_technical_endgame(board: chess.Board) -> bool:
+    """На доске не больше TECHNICAL_PIECES фигур, считая королей и пешки: ответ знают эндшпильные таблицы."""
     return len(board.piece_map()) <= TECHNICAL_PIECES
 
 
 def qualifies(board: chess.Board, move: chess.Move, lines: list[Line], book_ply: int = 0) -> Verdict | None:
     """
     Проходит ли ход мастера отбор. board — позиция до хода (со стеком ходов партии или с верным номером хода в FEN),
-    lines — MultiPV движка, book_ply — результат book_plies для партии.
+    lines — MultiPV движка, book_ply — результат book_plies для партии. None — не проходит: дебют, технический
+    эндшпиль, меньше двух строк движка, ход мастера — не лучший, позиция уже решена, ход очевиден или отрыв мал.
     """
     if in_opening(board, book_ply) or is_technical_endgame(board) or len(lines) < 2:
         return None
@@ -132,7 +143,11 @@ def build_series(passing_plies: list[int], opponent_errors: set[int]) -> list[li
 
 
 def difficulty(board: chess.Board, move: chess.Move, verdict: Verdict) -> int:
-    """Сложность как рейтинг задачи: тихий ход и «единственный ход» труднее, большой отрыв — легче."""
+    """
+    Сложность как рейтинг задачи: тихий ход и «единственный ход» труднее, большой отрыв — легче. Начальное значение
+    1500; ход без взятия и шаха +200, «единственный ход» +100, отрыв от 400 сантипешек −200. Дальше рейтинг позиции
+    уточняют ответы игроков (guess.rating_after).
+    """
     value = 1500
     if not board.is_capture(move) and not board.gives_check(move):
         value += 200

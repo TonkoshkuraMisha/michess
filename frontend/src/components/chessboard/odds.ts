@@ -1,12 +1,17 @@
+// --- FILE: frontend/src/components/chessboard/odds.ts ---
 // Игра с форой (таск 21.1): готовые форы для партии с ботом. Материальная фора — начальная позиция без фигуры у
 // дающего фору (ферзевый конь или ладья, ферзь, f-пешка; рокировка с убранной ладьёй пропадает); фора по времени —
 // у дающего треть времени; «песочные часы» — время, потраченное одним, прибавляется другому. Партия идёт с
-// позиции (таск 9.6), рейтинг не меняет.
+// позиции (таск 9.6), рейтинг не меняет. В партии с ботом позицию и часы строит клиент (useBotGame); в партии с
+// человеком по ссылке клиент только передаёт вид форы и кто её даёт (inviteOddsFields), а позицию и время строит
+// сервер (src/services/odds.py) — там «песочных часов» нет.
 
+/** Виды форы в партии с ботом; подписи — каталог odds.kinds.*. */
 export const ODDS = ['none', 'knight', 'rook', 'queen', 'pawn', 'time', 'hourglass'] as const;
 export type OddsKind = typeof ODDS[number];
 export type OddsGiver = 'me' | 'opponent';
 
+/** Выбор игрока: вид форы и кто её даёт (для «песочных часов» дающего нет — они общие). */
 export interface OddsChoice {
     kind: OddsKind;
     giver: OddsGiver;
@@ -48,7 +53,10 @@ export function oddsTimes(kind: OddsKind, giver: 'white' | 'black', whiteMs: num
 export const PVP_ODDS = ['none', 'knight', 'rook', 'queen', 'pawn', 'time'] as const;
 export type PvpOddsKind = typeof PVP_ODDS[number];
 
-/** Поля приглашения для сервера: giver «me» — фору даёт создатель ссылки. */
+/**
+ * Поля приглашения для сервера (действие WebSocket create_invite): giver «me» — фору даёт создатель ссылки.
+ * Пустой odds_kind — без форы («песочные часы» в партии с человеком не поддерживаются).
+ */
 export function inviteOddsFields(odds: OddsChoice): { odds_kind: string; odds_giver: 'creator' | 'acceptor' } {
     return {odds_kind: odds.kind === 'none' || odds.kind === 'hourglass' ? '' : odds.kind,
         odds_giver: odds.giver === 'me' ? 'creator' : 'acceptor'};

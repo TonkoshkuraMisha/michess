@@ -7,6 +7,10 @@
 
 Не индексируются: незаконченные и без результата, симуляции турниров (боты между собой исказили бы статистику),
 партии из своей позиции (заголовок FEN).
+
+Позиция в таблицах — 64-битный хэш Zobrist (расстановка, очередь хода, рокировки, взятие на проходе), а не FEN:
+разные позиции изредка могут совпасть по хэшу, поэтому читатель индекса проверяет легальность хода
+(src/services/opening_explorer.py). Читают индекс справочник дебютов и репертуар.
 """
 
 import io
@@ -23,7 +27,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from src.models.game import Game, GameStatus
 from src.models.position import PositionGame, PositionStat
 
-MAX_PLIES = 30
+MAX_PLIES = 30  # сколько первых полуходов партии попадает в индекс (15 ходов): глубже статистики нет
+# Результат партии → прибавка к счётчикам (победы белых, ничьи, победы чёрных). Другой результат («*») — не в индекс.
 RESULTS = {"1-0": (1, 0, 0), "1/2-1/2": (0, 1, 0), "0-1": (0, 0, 1)}
 
 
@@ -34,6 +39,7 @@ def position_key(board: chess.Board) -> int:
 
 
 def _insert(db: AsyncSession, model):
+    """INSERT с поддержкой ON CONFLICT для диалекта сессии: PostgreSQL в работе, SQLite в тестах."""
     return (postgresql.insert(model) if db.bind.dialect.name == "postgresql" else sqlite.insert(model))
 
 
@@ -56,7 +62,12 @@ def plies_of(pgn: str) -> tuple[str, list[tuple[int, str, int]]] | None:
 
 
 async def index_game(db: AsyncSession, game: Game) -> bool:
-    """Добавляет партию в индекс (без commit). True — добавлена; повторный вызов ничего не меняет."""
+    """
+    Добавляет партию в индекс (без commit). True — добавлена; повторный вызов ничего не меняет. Законченная партия,
+    которую индексировать нельзя (своя позиция, нет результата, нет ходов), всё равно помечается
+    games.positions_indexed, чтобы к ней не возвращаться. В position_games записывается первый полуход, на котором
+    позиция встретилась в партии.
+    """
     if game.positions_indexed or game.status != GameStatus.COMPLETED or game.is_simulation or not game.pgn:
         return False
     parsed = plies_of(game.pgn)
@@ -118,6 +129,7 @@ async def games_through(db: AsyncSession, board: chess.Board, limit: int = 20) -
 
 
 async def index_by_id(db: AsyncSession, game_id: int) -> bool:
+    """Индексирует партию по номеру и делает commit — для фоновой задачи после завершения партии."""
     game = await db.get(Game, game_id)
     if game is None:
         return False

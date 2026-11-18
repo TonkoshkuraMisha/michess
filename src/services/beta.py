@@ -26,16 +26,22 @@ from src.models.user import User
 
 # Без похожих знаков (0/O, 1/I/L): код диктуют и переписывают вручную.
 CODE_ALPHABET = "ABCDEFGHJKMNPQRSTUVWXYZ23456789"
+# Длина создаваемого кода и наибольшая длина кода, принимаемая на входе (лишнее отбрасывается в normalize_code).
 CODE_LENGTH = 10
 MAX_CODE_LENGTH = 32
+# Верхние границы лимита использований и срока действия кода; их проверяет схема запроса в src/api/beta.py.
 MAX_USES = 100_000
 MAX_EXPIRES_DAYS = 365
 
+# Статусы сообщения о проблеме; OPEN_STATUSES — неразобранные (очередь модератора по умолчанию и остаток в сводке).
 FEEDBACK_STATUSES = ("new", "in_progress", "done", "rejected")
 OPEN_STATUSES = ("new", "in_progress")
+# Длина текста сообщения в знаках: длиннее — обрезается, короче — отказ feedback_invalid.
 MESSAGE_MAX = 2000
 MESSAGE_MIN = 5
+# Сколько сообщений отдаёт очередь модератора за один запрос.
 FEEDBACK_PAGE_SIZE = 100
+# Языки интерфейса; другое значение языка в сообщении не сохраняется.
 LANGUAGES = ("en", "uk", "ru")
 
 
@@ -66,12 +72,12 @@ def community_url() -> str | None:
 # --- приглашения ---------------------------------------------------------------------------------------------------
 
 def normalize_code(raw: str | None) -> str:
-    """Код в том виде, в каком он хранится: без пробелов, в верхнем регистре."""
+    """Код в том виде, в каком он хранится: без пробелов, в верхнем регистре, не длиннее MAX_CODE_LENGTH знаков."""
     return "".join((raw or "").split()).upper()[:MAX_CODE_LENGTH]
 
 
 def invite_state(invite: Invite, now: datetime | None = None) -> str:
-    """active | revoked | expired | used_up."""
+    """active | revoked | expired | used_up; при нескольких причинах сразу — первая из них в этом порядке проверки."""
     now = now or _now()
     if invite.revoked_at is not None:
         return "revoked"
@@ -93,7 +99,10 @@ def _invite_view(invite: Invite, now: datetime) -> dict:
 
 async def create_invite(db: AsyncSession, moderator: User, note: str | None, max_uses: int | None,
                         expires_in_days: int | None) -> dict:
-    """Новый код. Границы max_uses и expires_in_days проверяет схема запроса (src/api/beta.py)."""
+    """
+    Новый код: CODE_LENGTH случайных знаков из CODE_ALPHABET. Границы max_uses и expires_in_days проверяет схема
+    запроса (src/api/beta.py); пустое значение — без лимита или без срока. Пометка note — до 100 знаков.
+    """
     _moderator(moderator)
     now = _now()
     invite = Invite(
@@ -129,6 +138,7 @@ async def revoke_invite(db: AsyncSession, moderator: User, invite_id: int) -> di
 
 
 def _usable(now: datetime) -> tuple:
+    """Условия SQL «код действует»: не отозван, не истёк, не исчерпан — то же, что invite_state == "active"."""
     return (
         Invite.revoked_at.is_(None),
         or_(Invite.expires_at.is_(None), Invite.expires_at > now),
@@ -166,11 +176,12 @@ def _clip(value: str | None, limit: int) -> str | None:
 
 async def submit_feedback(db: AsyncSession, user_id: int | None, message: str, page: str | None,
                           language: str | None, screen: str | None) -> Feedback:
-    # Переводы строк в тексте сохраняются (шаги воспроизведения), лишние пробелы по краям — нет.
     """
     Сообщение «Сообщить о проблеме»: текст короче MESSAGE_MIN — отказ, длиннее MESSAGE_MAX — обрезается; к тексту
-    прикладываются страница, версия приложения, язык и размер экрана.
+    прикладываются страница, версия приложения, язык и размер экрана. user_id пуст — сообщение от гостя. Версию
+    приложения сервер берёт из своих настроек (settings.VERSION), а не от клиента.
     """
+    # Переводы строк в тексте сохраняются (шаги воспроизведения), лишние пробелы по краям — нет.
     text = "\n".join(line.rstrip() for line in message.strip().splitlines())[:MESSAGE_MAX]
     if len(text) < MESSAGE_MIN:
         raise DomainError("feedback_invalid")
@@ -195,7 +206,7 @@ def _feedback_view(item: Feedback, username: str | None) -> dict:
 async def feedback_queue(db: AsyncSession, moderator: User, status: str | None = None) -> dict:
     """
     Сообщения для модератора: без status — неразобранные (new и in_progress), старые первыми; со status — только
-    он, новые первыми. counts — сколько сообщений в каждом статусе.
+    он, новые первыми. Не больше FEEDBACK_PAGE_SIZE сообщений. counts — сколько всего сообщений в каждом статусе.
     """
     _moderator(moderator)
     if status is not None and status not in FEEDBACK_STATUSES:
@@ -258,7 +269,8 @@ class Digest:
     by_page: list[tuple[str, int]] = field(default_factory=list)
     # Всего неразобранных на конец периода (включая пришедшие раньше).
     backlog: int = 0
-    # Приглашения: сколько человек зарегистрировалось по кодам за всё время и сколько кодов действует.
+    # Приглашения: сколько человек зарегистрировалось по кодам за всё время (сумма invites.uses) и сколько кодов
+    # действует на момент сборки сводки.
     invited: int = 0
     active_invites: int = 0
 

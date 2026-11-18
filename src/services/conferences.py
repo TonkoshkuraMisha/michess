@@ -35,9 +35,11 @@ from src.models.user import User
 from src.services.arena_schedule import CONFERENCE_ZONES
 from src.services.league import season_bounds
 
+# Сколько лучших участников конференции идёт в её зачёт одной арены.
 TOP_PLAYERS = 10
 
-# Страны по конференциям (ISO 3166-1 alpha-2 и XK — Косово, у которого официального кода нет). Правило из решения
+# Страны по конференциям — 250 кодов (ISO 3166-1 alpha-2 и XK — Косово, у которого официального кода нет), каждый
+# код встречается один раз. Правило из решения
 # владельца: Центральная — Украина и соседи до Балтии и Кавказа; Западная — запад Европы и обе Америки; Северная —
 # Германия, Британия, Скандинавия; Южная — Италия, Балканы, Турция, Ближний Восток и вся Африка; Восточная — Россия,
 # Беларусь, вся остальная Азия, Австралия и Океания. Малые государства и территории — по ближайшему соседу.
@@ -82,6 +84,7 @@ COUNTRIES: dict[str, tuple[str, ...]] = {
         "AS", "CK", "NU", "TK", "WF", "PN", "NF", "CX", "CC", "HM", "UM",
     ),
 }
+# Обратная таблица: код страны → ключ конференции.
 CONFERENCE_OF: dict[str, str] = {code: key for key, codes in COUNTRIES.items() for code in codes}
 # Конференции таблицы стран и расписания арен должны совпадать: расхождение — ошибка в одном из двух модулей.
 assert set(COUNTRIES) == set(CONFERENCE_ZONES), "conference keys differ between the country table and the schedule"
@@ -93,11 +96,15 @@ def conference_of(country: str | None) -> str | None:
 
 
 def current_season(now: datetime | None = None) -> str:
+    """Ключ текущего сезона «ГГГГ-ММ» (календарный месяц UTC, league.season_bounds)."""
     return season_bounds(None, now)[0]
 
 
 def membership(user: User, now: datetime | None = None) -> dict:
-    """Страна и конференция игрока и можно ли сейчас сменить конференцию (одна смена за сезон)."""
+    """
+    Страна и конференция игрока и можно ли сейчас сменить конференцию (одна смена за сезон): смена доступна, пока
+    в users.country_season не записан текущий сезон.
+    """
     return {"country": user.country, "conference": conference_of(user.country),
             "can_change": user.country_season != current_season(now)}
 
@@ -106,7 +113,8 @@ async def set_country(db: AsyncSession, user: User, country: str | None, now: da
     """
     Страна в профиле. Первый выбор и смена страны внутри той же конференции — свободно; смена конференции (в том
     числе выход из неё) — раз в сезон: вторая попытка в том же сезоне — отказ country_change_too_soon. Убрать страну
-    можно всегда, но это расходует смену сезона. Возвращает membership.
+    можно всегда, но это расходует смену сезона. Код страны не из таблицы COUNTRIES — отказ country_unknown.
+    Возвращает membership.
     """
     code = country.upper() if country else None
     if code is not None and code not in CONFERENCE_OF:
@@ -133,7 +141,8 @@ def suggested_country(headers: Mapping[str, str]) -> str | None:
 def team_scores(rows: Iterable[tuple[str | None, int]]) -> list[dict]:
     """
     Зачёт конференций одной арены по парам (конференция игрока, его очки): сумма TOP_PLAYERS лучших. Возвращает
-    строки {"conference", "score", "counted", "players"} — по убыванию очков; конференции без участников нет.
+    строки {"conference", "score", "counted", "players"} — по убыванию очков (при равенстве — в порядке таблицы
+    COUNTRIES); конференции без участников нет. counted — сколько игроков вошло в сумму, players — сколько играло.
     """
     by_conference: dict[str, list[int]] = defaultdict(list)
     for conference, score in rows:
@@ -157,7 +166,8 @@ async def arena_table(db: AsyncSession, arena_id: int) -> list[dict]:
 async def cup(db: AsyncSession, season: str | None = None, now: datetime | None = None) -> dict:
     """
     Кубок конференций за сезон: сумма зачётов арен (и швейцарок), начавшихся в этом месяце. В таблице всегда все пять
-    конференций: {"conference", "score", "arenas"} — arenas: в скольких аренах конференция набрала очки.
+    конференций: {"conference", "score", "arenas"} — arenas: в скольких аренах конференция набрала очки. Берутся
+    участники с очками больше нуля; каждое деление арены — отдельная запись arenas и считается отдельно.
     """
     key, start, end = season_bounds(season, now)
     rows = (await db.execute(

@@ -1,6 +1,9 @@
 // --- FILE: frontend/src/components/chessboard/BlindfoldPanel.tsx ---
 // Игра вслепую (таск 19.5): до партии — выбор ступени (для партий без рейтинга); в партии — «Подсмотреть», счёт
-// подсмотров, ввод хода нотацией и скрытие списка ходов.
+// подсмотров, ввод хода нотацией и скрытие списка ходов. Состояние (выбранная ступень, ступень партии, подсмотры)
+// — общий стор config/blindfold.ts; выбранная ступень запоминается в localStorage (michess_blindfold_level).
+// Какие фигуры скрыты, решает Chessboard (visibleSquares). Ступень и число подсмотров уходят в архив при сохранении
+// партии с ботом (/bots/save-game) или отметкой POST /profile/games/{id}/blindfold после товарищеской партии.
 
 import {useState} from 'react';
 import {EyeOff, Eye} from 'lucide-react';
@@ -8,8 +11,14 @@ import {useI18n} from '../../i18n';
 import {BLINDFOLD_LEVELS, armBlindfold, peek, setHideMoves, useBlindfold} from '../../config/blindfold';
 import type {BlindfoldLevel} from '../../config/blindfold';
 
+// Ступень → ключ подписи в каталоге (blindfold.levels.*).
 const LEVEL_KEYS = {1: 'own', 2: 'fade', 3: 'pawns', 4: 'full'} as const;
 
+/**
+ * Панель игры вслепую. inGame — идёт партия (с ботом или человеком); myTurn — сейчас ход игрока (иначе поле
+ * ввода отключено); onMoveInput получает набранный ход и возвращает false, если такого хода в позиции нет.
+ * Вне партии или в обычной партии показывает только выбор ступени для следующей партии.
+ */
 export function BlindfoldPanel({inGame, myTurn, onMoveInput}: {
     inGame: boolean; myTurn: boolean; onMoveInput: (text: string) => boolean;
 }) {

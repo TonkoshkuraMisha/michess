@@ -3,19 +3,25 @@
 // ударом, перегруженные защитники, связки и сквозные удары, взятия (размен или выигрыш), защиты, шахи и маты,
 // изолированные и проходные пешки, безопасные и опасные поля для выбранной фигуры. Всё — для любой стороны:
 // «показать за соперника» — те же расчёты для другого цвета.
+// Всё считается в браузере по FEN: сервер и движок не участвуют, поэтому «рентген» не подпадает под правило
+// честной игры как подсказка движка. Легальные ходы даёт chess.js, остальное — геометрия доски в этом файле.
+// Показ на доске — components/xray/XrayOverlay.tsx.
 
 import {Chess} from 'chess.js';
 import type {Move} from 'chess.js';
 
+/** Цвет и тип фигуры — в обозначениях chess.js. */
 export type Color = 'w' | 'b';
 export type PieceType = 'p' | 'n' | 'b' | 'r' | 'q' | 'k';
 
+/** Фигура на доске: тип, цвет и поле («e4»). */
 export interface BoardPiece {
     type: PieceType;
     color: Color;
     square: string;
 }
 
+/** Ценность фигур в пешках для расчёта разменов; король — 100, чтобы он никогда не считался «дешёвой» фигурой. */
 export const PIECE_VALUE: Record<PieceType, number> = {p: 1, n: 3, b: 3, r: 5, q: 9, k: 100};
 
 const FILES = 'abcdefgh';
@@ -24,6 +30,7 @@ const DIAGONAL: [number, number][] = [[1, 1], [1, -1], [-1, 1], [-1, -1]];
 const KNIGHT: [number, number][] = [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]];
 const KING: [number, number][] = [...ORTHOGONAL, ...DIAGONAL];
 
+/** Имя поля по номерам вертикали и горизонтали с нуля: (0, 0) — «a1». */
 export function squareName(file: number, rank: number): string {
     return `${FILES[file]}${rank + 1}`;
 }
@@ -36,11 +43,12 @@ function onBoard(file: number, rank: number): boolean {
     return file >= 0 && file < 8 && rank >= 0 && rank < 8;
 }
 
+/** Цвет соперника. */
 export function opposite(color: Color): Color {
     return color === 'w' ? 'b' : 'w';
 }
 
-/** Фигуры позиции по полям. */
+/** Фигуры позиции по полям — из первой части FEN (расстановка), без chess.js. */
 export function piecesOf(fen: string): Map<string, BoardPiece> {
     const pieces = new Map<string, BoardPiece>();
     const placement = fen.split(' ')[0];
@@ -62,12 +70,14 @@ export function piecesOf(fen: string): Map<string, BoardPiece> {
     return pieces;
 }
 
+/** Ходит ли дальнобойная фигура типа type вдоль направления: ферзь — по любому, слон — по диагонали, ладья — прямо. */
 function slides(type: PieceType, direction: [number, number]): boolean {
     const diagonal = direction[0] !== 0 && direction[1] !== 0;
     if (type === 'q') return true;
     return diagonal ? type === 'b' : type === 'r';
 }
 
+/** Удар по полю: кто бьёт и с какого поля. */
 export interface Attack {
     from: string;
     piece: BoardPiece;
@@ -75,7 +85,10 @@ export interface Attack {
     xray: boolean;
 }
 
-/** Все удары по полям: для каждого поля — кто его бьёт (с батареями). */
+/**
+ * Все удары по полям: для каждого поля — кто его бьёт (с батареями). Считаются удары, а не ходы: пешка бьёт по
+ * диагонали и на пустое поле, поле под своей фигурой тоже «бьётся» (это защита), связки здесь не учитываются.
+ */
 export function attackMap(pieces: Map<string, BoardPiece>): Map<string, Attack[]> {
     const map = new Map<string, Attack[]>();
     const add = (square: string, attack: Attack) => {
@@ -121,6 +134,7 @@ export function attackMap(pieces: Map<string, BoardPiece>): Map<string, Attack[]
     return map;
 }
 
+/** Сколько фигур белых и чёрных бьёт поле. */
 export interface SquareControl {
     white: number;
     black: number;
@@ -142,6 +156,7 @@ export function controlMap(pieces: Map<string, BoardPiece>, attacks = attackMap(
     return control;
 }
 
+/** Удары стороны color по полю square. */
 function attackersBy(attacks: Map<string, Attack[]>, square: string, color: Color): Attack[] {
     return (attacks.get(square) ?? []).filter((a) => a.piece.color === color);
 }
@@ -241,6 +256,7 @@ export function hangingPieces(pieces: Map<string, BoardPiece>, color: Color, att
     return [...pieces.values()].filter((p) => p.color === color && isEnPrise(p, attacks)).map((p) => p.square);
 }
 
+/** Перегруженный защитник: его поле и поля фигур, которые защищает только он. */
 export interface Overload {
     defender: string;
     duties: string[];
@@ -263,6 +279,7 @@ export function overloadedDefenders(
     return [...duties.entries()].filter(([, list]) => list.length >= 2).map(([defender, list]) => ({defender, duties: list}));
 }
 
+/** Связка (pin) или сквозной удар (skewer): две фигуры соперника на одной линии с дальнобойной фигурой. */
 export interface LineTactic {
     kind: 'pin' | 'skewer';
     /** Нападающая дальнобойная фигура. */
@@ -271,11 +288,18 @@ export interface LineTactic {
     front: string;
     /** Фигура за ней. */
     behind: string;
-    /** Связка с королём: передней фигурой ходить нельзя. */
+    /**
+     * В деле король. У связки — король позади: передней фигурой ходить нельзя. У сквозного удара — король
+     * впереди: это шах, после которого теряется фигура за королём.
+     */
     absolute: boolean;
 }
 
-/** Связки и сквозные удары фигур стороны color по фигурам соперника. */
+/**
+ * Связки и сквозные удары фигур стороны color по фигурам соперника. Связка — задняя фигура ценнее передней;
+ * сквозной удар — передняя ценнее задней и её либо выгодно взять (она дороже нападающей), либо она не защищена.
+ * Пешка позади не считается: ради неё линию не вскрывают.
+ */
 export function lineTactics(
     pieces: Map<string, BoardPiece>, color: Color, attacks = effectiveAttacks(pieces),
 ): LineTactic[] {
@@ -313,7 +337,10 @@ export function lineTactics(
     return result;
 }
 
-/** Позиция, где ходит сторона color: «а что сделал бы соперник, если бы ходил он?». null — такая позиция невозможна. */
+/**
+ * Позиция, где ходит сторона color: «а что сделал бы соперник, если бы ходил он?». null — такая позиция невозможна.
+ * Если очередь хода меняется, право взятия на проходе сбрасывается: оно относилось к другой стороне.
+ */
 export function gameFor(
     fen: string, color: Color, pieces = piecesOf(fen), attacks?: Map<string, Attack[]>,
 ): Chess | null {
@@ -331,11 +358,13 @@ export function gameFor(
     }
 }
 
+/** Стрелка на доске: с поля на поле. */
 export interface MoveArrow {
     from: string;
     to: string;
 }
 
+/** Стрелка взятия. */
 export interface CaptureArrow extends MoveArrow {
     /** winning — выигрыш материала (толстая стрелка), exchange — размен (тонкая). */
     kind: 'winning' | 'exchange';
@@ -346,6 +375,7 @@ export function verboseMoves(fen: string, color: Color, pieces = piecesOf(fen), 
     return gameFor(fen, color, pieces, attacks)?.moves({verbose: true}) ?? [];
 }
 
+/** Все легальные ходы стороны color стрелками, без повторов. */
 export function legalMoves(fen: string, color: Color, moves = verboseMoves(fen, color)): MoveArrow[] {
     const seen = new Set<string>();
     const arrows: MoveArrow[] = [];
@@ -358,7 +388,10 @@ export function legalMoves(fen: string, color: Color, moves = verboseMoves(fen, 
     return arrows;
 }
 
-/** Взятия стороны color: выигрыш — размен на поле, начатый этим взятием, приносит материал (SEE, со связками), иначе размен. */
+/**
+ * Взятия стороны color: выигрыш — размен на поле, начатый этим взятием, приносит материал (SEE, со связками),
+ * иначе размен.
+ */
 export function captures(
     fen: string, color: Color, pieces = piecesOf(fen), attacks = effectiveAttacks(pieces),
     moves = verboseMoves(fen, color, pieces, attacks),
@@ -369,7 +402,7 @@ export function captures(
         if (!move.captured || seen.has(`${move.from}${move.to}`)) continue;
         seen.add(`${move.from}${move.to}`);
         const target = pieces.get(move.to);
-        // Взятие на проходе: пешка соперника не на поле хода — размен на этом поле не считаем.
+        // Взятие на проходе: пешка соперника не на поле хода — размен на этом поле не считаем (стрелка «размен»).
         const winning = target !== undefined && exchangeGain(
             PIECE_VALUE[target.type], PIECE_VALUE[move.piece as PieceType],
             exchangeOrder(attackersBy(attacks, move.to, color).filter((a) => a.from !== move.from)),
@@ -380,7 +413,7 @@ export function captures(
     return arrows;
 }
 
-/** Защиты стороны color: какая своя фигура прикрывает какую (без короля под защитой). */
+/** Защиты стороны color: какая своя фигура прикрывает какую (короля не «защищают»; защита через батарею не в счёт). */
 export function defenses(pieces: Map<string, BoardPiece>, color: Color, attacks = effectiveAttacks(pieces)): MoveArrow[] {
     const arrows: MoveArrow[] = [];
     for (const piece of pieces.values()) {
@@ -392,11 +425,12 @@ export function defenses(pieces: Map<string, BoardPiece>, color: Color, attacks 
     return arrows;
 }
 
+/** Стрелка хода с шахом; mate — этот ход ставит мат. */
 export interface CheckArrow extends MoveArrow {
     mate: boolean;
 }
 
-/** Шахи и маты, которые может дать сторона color. */
+/** Шахи и маты, которые может дать сторона color (по значкам «+» и «#» в записи хода chess.js). */
 export function checks(fen: string, color: Color, moves = verboseMoves(fen, color)): CheckArrow[] {
     const byKey = new Map<string, CheckArrow>();
     for (const move of moves) {
@@ -410,12 +444,16 @@ export function checks(fen: string, color: Color, moves = verboseMoves(fen, colo
     return [...byKey.values()];
 }
 
+/** Поля изолированных и проходных пешек одной стороны. */
 export interface PawnFlags {
     isolated: string[];
     passed: string[];
 }
 
-/** Изолированные и проходные пешки стороны color. */
+/**
+ * Изолированные и проходные пешки стороны color. Изолированная — на соседних вертикалях нет своих пешек;
+ * проходная — впереди на своей и соседних вертикалях нет пешек соперника.
+ */
 export function pawnFlags(pieces: Map<string, BoardPiece>, color: Color): PawnFlags {
     const own = [...pieces.values()].filter((p) => p.type === 'p' && p.color === color);
     const enemy = [...pieces.values()].filter((p) => p.type === 'p' && p.color !== color);
@@ -434,12 +472,16 @@ export function pawnFlags(pieces: Map<string, BoardPiece>, color: Color): PawnFl
     return {isolated, passed};
 }
 
+/** Поле, куда может пойти выбранная фигура, и безопасно ли ей там. */
 export interface SquareSafety {
     square: string;
     safe: boolean;
 }
 
-/** Куда может пойти фигура с поля from и где она там окажется под ударом. */
+/**
+ * Куда может пойти фигура с поля from и где она там окажется под ударом. Каждый ход делается на копии позиции,
+ * и уже в новой позиции проверяется, можно ли взять фигуру с выигрышем (isEnPrise); пешка превращается в ферзя.
+ */
 export function destinationSafety(fen: string, from: string): SquareSafety[] {
     const pieces = piecesOf(fen);
     const piece = pieces.get(from);
@@ -460,6 +502,7 @@ export function destinationSafety(fen: string, from: string): SquareSafety[] {
     return result;
 }
 
+/** Результат xrayFor: по полю на каждый режим показа «рентгена» (переключатели — components/xray/XrayPanel.tsx). */
 export interface XrayReport {
     control: Map<string, SquareControl>;
     hanging: string[];

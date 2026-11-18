@@ -93,6 +93,7 @@ def cleanup_misplaced_artifacts() -> None:
 
 
 def matches_player(header_name: str, surname: str, exclude: tuple[str, ...]) -> bool:
+    """Проверяет, соответствует ли имя игрока в заголовке PGN целевому мастеру."""
     name_lower = (header_name or "").lower()
     if any(ex in name_lower for ex in exclude):
         return False
@@ -100,6 +101,7 @@ def matches_player(header_name: str, surname: str, exclude: tuple[str, ...]) -> 
 
 
 def process_pgn_stream(pgn_stream, surname: str, exclude: tuple[str, ...], book_additions: dict) -> int:
+    """Извлекает дебютные ходы мастера из потока PGN до заданного полухода."""
     games_processed = 0
     while True:
         try:
@@ -172,6 +174,7 @@ def find_pgn_files_for_bot(identifiers: tuple[str, ...]) -> list[Path]:
 
 
 def build_book_for_bot(bot_id: str) -> None:
+    """Собирает и сохраняет JSON-книгу дебютов для одного исторического бота."""
     cfg = BOT_BOOK_CONFIG[bot_id]
     target_json = BOOKS_DIR / f"{bot_id}.json"
 
@@ -247,6 +250,7 @@ def build_book_for_bot(bot_id: str) -> None:
 
 
 def main() -> None:
+    """Очищает артефакты и собирает дебютные книги для всех базовых ботов."""
     print(f"=== Сборка и проверка дебютных книг (Корень: {PROJECT_ROOT}) ===")
     cleanup_misplaced_artifacts()
     for b_id in BOT_BOOK_CONFIG:

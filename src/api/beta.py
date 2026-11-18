@@ -3,8 +3,9 @@
 Программа беты (таск 24.4): настройки сайта для клиента, проверка кода-приглашения, «Сообщить о проблеме» и
 работа модератора с приглашениями и сообщениями.
 
-Открытые адреса (без входа): /beta/config, /beta/invites/check, POST /beta/feedback — каждый со своим лимитом
-запросов. Остальное — только модератору.
+Открытые адреса (без входа): /beta/config (без лимита), /beta/invites/check и POST /beta/feedback — каждый со
+своим лимитом запросов. Остальное — только модератору: роль (users.is_moderator) проверяет сервис
+src/services/beta.py и отвечает отказом moderator_only (403). Данные — таблицы invites и feedback.
 """
 
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -65,7 +66,10 @@ async def check_invite(request: Request, code: str = Query(..., min_length=1, ma
 
 @router.post("/feedback", status_code=status.HTTP_201_CREATED)
 async def send_feedback(payload: FeedbackIn, request: Request, db: AsyncSession = Depends(get_db)):
-    """Сообщение о проблеме — от игрока или гостя."""
+    """
+    Сообщение о проблеме — от игрока или гостя: записывается в таблицу feedback вместе с контекстом (страница, язык,
+    размер экрана от клиента; версию приложения добавляет сервер). Лимит — на игрока, а без входа — на адрес.
+    """
     await enforce_rate_limit("feedback", client_identity(request), settings.RATE_LIMIT_FEEDBACK,
                              settings.RATE_LIMIT_FEEDBACK_WINDOW_S, "too_many_feedback")
     try:
@@ -78,6 +82,7 @@ async def send_feedback(payload: FeedbackIn, request: Request, db: AsyncSession 
 
 @router.get("/invites")
 async def invites(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Модератору: все коды-приглашения (сколько человек пришло по каждому) и закрыта ли сейчас регистрация."""
     try:
         return {"invite_only": settings.REGISTRATION_INVITE_ONLY, "invites": await beta.list_invites(db, user)}
     except DomainError as exc:
@@ -86,6 +91,7 @@ async def invites(db: AsyncSession = Depends(get_db), user: User = Depends(get_c
 
 @router.post("/invites", status_code=status.HTTP_201_CREATED)
 async def create_invite(payload: InviteIn, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Модератору: новый код-приглашение с пометкой, лимитом использований и сроком действия (всё необязательно)."""
     try:
         return await beta.create_invite(db, user, payload.note, payload.max_uses, payload.expires_in_days)
     except DomainError as exc:
@@ -94,6 +100,7 @@ async def create_invite(payload: InviteIn, db: AsyncSession = Depends(get_db), u
 
 @router.post("/invites/{invite_id}/revoke")
 async def revoke_invite(invite_id: int, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Модератору: отозвать код — по нему больше нельзя зарегистрироваться."""
     try:
         return await beta.revoke_invite(db, user, invite_id)
     except DomainError as exc:
@@ -103,6 +110,7 @@ async def revoke_invite(invite_id: int, db: AsyncSession = Depends(get_db), user
 @router.get("/feedback")
 async def feedback_queue(status_filter: str | None = Query(None, alias="status", pattern="^(new|in_progress|done|rejected)$"),
                          db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Модератору: сообщения о проблемах — неразобранные (new и in_progress) или с заданным статусом."""
     try:
         return await beta.feedback_queue(db, user, status_filter)
     except DomainError as exc:
@@ -112,6 +120,7 @@ async def feedback_queue(status_filter: str | None = Query(None, alias="status",
 @router.post("/feedback/{feedback_id}/status")
 async def set_feedback_status(feedback_id: int, payload: FeedbackStatusIn, db: AsyncSession = Depends(get_db),
                               user: User = Depends(get_current_user)):
+    """Модератору: сменить статус сообщения о проблеме (new, in_progress, done, rejected)."""
     try:
         item = await beta.set_feedback_status(db, user, feedback_id, payload.status)
     except DomainError as exc:

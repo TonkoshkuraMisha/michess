@@ -18,6 +18,7 @@ from src.services.puzzle_import import EXTRA, import_rows, read_subset, retag_ou
 
 
 async def main() -> None:
+    """Загружает выборку задач и защитных упражнений в БД при развёртывании."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--limit", type=int, default=None, help="загрузить не больше N задач (для проверки)")
     args = parser.parse_args()

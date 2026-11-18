@@ -25,10 +25,12 @@ FALSE_ALARM_RATIO = 0.5
 
 
 def deep_loss(engine: chess.engine.SimpleEngine, fen: str, move_uci: str, depth: int) -> int:
+    """Считает потерю сантипешек спорного хода на большой глубине Stockfish."""
     board = chess.Board(fen)
     sign = 1 if board.turn == chess.WHITE else -1
 
     def score(b: chess.Board) -> int:
+        """Возвращает оценку позиции движком, ограниченную предельным коридором."""
         info = engine.analyse(b, chess.engine.Limit(depth=depth))
         cp = info["score"].white().score(mate_score=MATE_CP) or 0
         return max(-EVAL_CLAMP_CP, min(EVAL_CLAMP_CP, cp))
@@ -39,6 +41,7 @@ def deep_loss(engine: chess.engine.SimpleEngine, fen: str, move_uci: str, depth:
 
 
 async def main() -> None:
+    """Перепроверяет очередь спорных предупреждений наставника глубоким анализом."""
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--depth", type=int, default=20)
     parser.add_argument("--limit", type=int, default=100)

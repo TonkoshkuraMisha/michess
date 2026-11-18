@@ -35,6 +35,7 @@ CURATED = (
 
 
 def sample_positions(games: int = 8, seed: int = 20261112) -> list[str]:
+    """Генерирует детерминированный набор FEN-позиций из разных фаз партии."""
     rng = random.Random(seed)
     fens: list[str] = []
     for _ in range(games):
@@ -52,6 +53,7 @@ def sample_positions(games: int = 8, seed: int = 20261112) -> list[str]:
 
 
 def main() -> None:
+    """Записывает эталонный снимок стилевых бонусов исторических ботов в JSON."""
     fens = list(CURATED) + [f for f in sample_positions() if f not in CURATED]
     notes: list[str | None] = [None]
     note_ids: dict[str | None, int] = {None: 0}

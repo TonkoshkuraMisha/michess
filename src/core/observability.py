@@ -10,7 +10,13 @@ WS-действий, цикла таймаутов, анализа партий)
 Prometheus изнутри сети compose (api:8000/metrics). API работает в нескольких процессах uvicorn
 (WEB_CONCURRENCY), поэтому в продакшене включён multiprocess-режим prometheus_client: каждый
 процесс пишет значения в файлы PROMETHEUS_MULTIPROC_DIR, а /metrics суммирует их по всем
-процессам. Переменная должна быть задана до импорта prometheus_client (это делает Dockerfile).
+процессам. Переменная должна быть задана до импорта prometheus_client: её задаёт сервис api в
+docker-compose.prod.yml (каталог /tmp/prometheus на tmpfs, очищается при старте контейнера). В разработке
+переменной нет — метрики берутся из памяти единственного процесса.
+
+Откуда значения: счётчики WebSocket увеличивает src/api/websockets.py, HTTP — http_metrics_middleware ниже,
+законченные партии и сбои цикла часов — src/services/game_state.py, время движка — src/services/engine_pool.py,
+число игроков за сутки — Redis (ключ active_players:<дата UTC>, отметку ставит src/api/deps.get_current_user).
 """
 
 import logging
@@ -61,6 +67,7 @@ DB_POOL_CHECKED_OUT = Gauge(
     "michess_db_pool_checked_out", "Database connections currently checked out of the pool",
     multiprocess_mode="livesum",
 )
+# Только партии между людьми (game_state.finish_game); партии с ботами (/bots/save-game) сюда не входят.
 GAMES_FINISHED = Counter(
     "michess_games_finished_total", "Games finished and recorded in the database", ["termination"],
 )
@@ -73,6 +80,7 @@ TIMEOUT_CHECK_FAILURES = Counter(
 ACTIVE_PLAYERS_TODAY = Gauge(
     "michess_active_players_today", "Distinct logged-in players seen today (UTC)", multiprocess_mode="mostrecent",
 )
+# Суточный счётчик игроков хранится в Redis трое суток — с запасом, чтобы вчерашнее значение ещё можно было прочесть.
 ACTIVE_PLAYERS_TTL_S = 3 * 86400
 
 # Исходы WS-действия.
@@ -119,6 +127,10 @@ async def refresh_active_players() -> None:
 
 
 def metrics_response() -> Response:
+    """
+    Тело ответа /metrics в формате Prometheus. Если задан PROMETHEUS_MULTIPROC_DIR, значения суммируются из файлов
+    всех процессов uvicorn; иначе берётся реестр текущего процесса.
+    """
     if os.environ.get("PROMETHEUS_MULTIPROC_DIR"):
         registry = CollectorRegistry()
         multiprocess.MultiProcessCollector(registry)
@@ -181,7 +193,11 @@ def instrument_engine(engine) -> None:
 # --- Sentry -------------------------------------------------------------------------------------
 
 def init_sentry(component: str) -> bool:
-    """Подключает Sentry, если задан SENTRY_DSN. component — "api" или "worker" (тег событий)."""
+    """
+    Подключает Sentry, если задан SENTRY_DSN; возвращает, подключён ли. component — "api" (вызов в src/main.py) или
+    "worker" (src/worker/celery_app.py), попадает в тег событий. Релиз — michess@VERSION, личные данные не
+    отправляются (send_default_pii=False).
+    """
     if not settings.SENTRY_DSN:
         return False
 

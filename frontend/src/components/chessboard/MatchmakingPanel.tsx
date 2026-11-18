@@ -1,6 +1,10 @@
 // --- FILE: frontend/src/components/chessboard/MatchmakingPanel.tsx ---
 // Поиск соперника: тип партии (рейтинговая или товарищеская), кнопка вызова в лобби и приглашение по ссылке.
-// Контроль времени выбирается в TimeControlPicker.
+// Контроль времени выбирается в TimeControlPicker. Только разметка: вызов в лобби и ссылку создаёт хук
+// useGameSocket (действия WebSocket join_queue и create_invite; код ссылки приходит событием invite_created).
+// Ссылка имеет вид /challenge/{код} — по ней соперник попадает на главную доску и принимает приглашение. В партии
+// по ссылке можно выбрать цвет, шахматы Фишера или фору; партия с форой рейтинг не меняет, а в шахматах Фишера
+// форы нет.
 
 import {Loader2, Users, Link2, Check, Copy} from 'lucide-react';
 import {useI18n} from '../../i18n';
@@ -28,13 +32,18 @@ export interface MatchmakingPanelProps {
     /** Вариант партии по ссылке (21.3): обычные шахматы или Фишера; без этих пропсов выбора нет. */
     inviteVariant?: 'standard' | 'chess960';
     onInviteVariantChange?: (variant: 'standard' | 'chess960') => void;
+    /** Код созданной ссылки (событие invite_created); null — ссылка ещё не создана или тип партии сменили. */
     createdInviteCode: string | null;
+    /** Ссылка только что скопирована в буфер обмена — на пару секунд меняет подпись кнопки. */
     inviteCopied: boolean;
     onCreatePrivateInvite: () => void;
     onCopyInviteLink: () => void;
 }
 
-/** Поиск соперника в рейтинговом лобби (или отмена), плюс создание ссылки для игры с другом. */
+/**
+ * Поиск соперника в лобби (рейтинговая или товарищеская партия; повторное нажатие отменяет поиск) и создание
+ * ссылки для игры с другом. Пока партия с человеком на доске, вместо кнопок — строка о её типе или итоге.
+ */
 export function MatchmakingPanel({
     gameId, gameOverResult, isRatedGame, ratedChoice, onRatedChoiceChange,
     isSearching, onStartMatchmaking, onCancelMatchmaking,

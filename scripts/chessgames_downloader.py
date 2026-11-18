@@ -47,6 +47,7 @@ PAGINATION_INFO_REGEX = re.compile(
 async def fetch_gids_from_page(
         client: httpx.AsyncClient, pid: int, page: int
 ) -> tuple[list[str], int | None, int | None]:
+    """Извлекает список GID партий и число страниц из HTML-таблицы игрока."""
     url = (
         f"{BASE_URL}/perl/chessplayer?pid={pid}"
         if page == 1
@@ -94,6 +95,7 @@ async def download_pgn(
         index: int,
         total: int,
 ) -> tuple[int, str, str]:
+    """Скачивает и кэширует PGN одной партии по её GID с защитой от лимитов."""
     file_path = player_dir / f"{index:03d}_{player_key}_{gid}.pgn"
     if file_path.exists():
         cached = file_path.read_text(encoding="utf-8", errors="ignore").strip()
@@ -120,6 +122,7 @@ async def download_pgn(
 
 
 async def download_player_games(player_key: str) -> None:
+    """Скачивает все партии выбранного мастера и обновляет его дебютную книгу."""
     cfg = PLAYERS_CONFIG[player_key]
     pid = cfg["pid"]
     total_pages = cfg["pages"]
@@ -169,6 +172,7 @@ async def download_player_games(player_key: str) -> None:
 
 
 async def main() -> None:
+    """Разбирает аргументы CLI и запускает скачивание партий мастеров."""
     parser = argparse.ArgumentParser(description="Единый загрузчик PGN исторических чемпионов с Chessgames.")
     parser.add_argument(
         "player",

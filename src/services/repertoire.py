@@ -2,6 +2,11 @@
 Дебютный репертуар (таск 20.1): линии из справочника, из PGN и из своих партий складываются в граф позиций
 (src/models/repertoire.py). Клиент получает рёбра с SAN и ключом позиции после хода и ходит по дереву, не вычисляя
 ключи сам; новые ходы присылает линией UCI из начальной позиции.
+
+Данные: repertoires (название, цвет, владелец) и repertoire_moves — рёбра графа: позиция (EPD), ход из неё и
+комментарий. Одна позиция хранится один раз, как бы к ней ни пришли, поэтому перестановки ходов сливаются. Карточки
+повторения (repertoire_cards) ведёт src/services/repertoire_drill.py. Функции модуля commit не делают — его делает
+маршрут (src/api/repertoire.py).
 """
 
 import io
@@ -17,21 +22,27 @@ from src.core.errors import DomainValueError
 from src.models.repertoire import Repertoire, RepertoireMove
 from src.services.repertoire_starters import Starter
 
-MAX_REPERTOIRES = 20
-MAX_MOVES = 2000
-MAX_LINE_PLIES = 40
-MAX_PGN_CHARS = 100_000
-MAX_PGN_GAMES = 50
-MAX_COMMENT = 300
-ROOT = chess.Board().epd()
+MAX_REPERTOIRES = 20  # репертуаров у одного игрока (проверяет маршрут создания)
+MAX_MOVES = 2000  # ходов (рёбер) в одном репертуаре
+MAX_LINE_PLIES = 40  # глубина линии в полуходах: более длинная линия молча обрезается
+MAX_PGN_CHARS = 100_000  # предел размера текста PGN при импорте
+MAX_PGN_GAMES = 50  # из текста PGN читается не больше стольких партий, остальные не рассматриваются
+MAX_COMMENT = 300  # длина комментария к ходу (проверяет схема запроса)
+ROOT = chess.Board().epd()  # ключ начальной позиции — корень дерева
 
 
 def position_key(board: chess.Board) -> str:
+    """Ключ позиции в графе — EPD: расстановка, очередь хода, рокировки, взятие на проходе (без счётчиков ходов)."""
     return board.epd()
 
 
 @dataclass(frozen=True)
 class Edge:
+    """
+    Ребро дерева для клиента: позиция, ход из неё (UCI и SAN), позиция после хода, комментарий и чей это ход
+    (mine — ход стороны, за которую составлен репертуар).
+    """
+
     position: str
     uci: str
     san: str
@@ -41,7 +52,10 @@ class Edge:
 
 
 def parse_line(moves_uci: list[str]) -> list[tuple[str, str]]:
-    """Линия UCI из начальной позиции → пары (позиция, ход); нелегальный ход — ошибка с этим ходом."""
+    """
+    Линия UCI из начальной позиции → пары (позиция, ход); нелегальный ход — ошибка с этим ходом. Учитываются
+    первые MAX_LINE_PLIES полуходов.
+    """
     board = chess.Board()
     pairs = []
     for uci in moves_uci[:MAX_LINE_PLIES]:
@@ -57,6 +71,7 @@ def parse_line(moves_uci: list[str]) -> list[tuple[str, str]]:
 
 
 def san_line_to_uci(line: str) -> list[str]:
+    """Линия в SAN через пробел (без номеров ходов) → ходы UCI. Для своих данных (готовые репертуары): без проверок."""
     board = chess.Board()
     moves = []
     for san in line.split():
@@ -67,11 +82,16 @@ def san_line_to_uci(line: str) -> list[str]:
 
 
 def starter_lines(starter: Starter) -> list[list[str]]:
+    """Линии готового репертуара (src/services/repertoire_starters.py) в UCI — для ``add_lines``."""
     return [san_line_to_uci(line) for line in starter.lines]
 
 
 def pgn_lines(text: str) -> list[list[str]]:
-    """Все линии (главная и варианты) всех партий текста PGN; партии не из начальной позиции пропускаются."""
+    """
+    Все линии (главная и варианты) всех партий текста PGN; партии не из начальной позиции и партии с ошибками
+    разбора пропускаются. Читается не больше MAX_PGN_GAMES партий, каждая линия — до MAX_LINE_PLIES полуходов.
+    Слишком длинный текст или ни одной линии — отказ repertoire_bad_pgn. Комментарии PGN не переносятся.
+    """
     if len(text) > MAX_PGN_CHARS:
         raise DomainValueError("repertoire_bad_pgn")
     handle = io.StringIO(text)
@@ -97,7 +117,11 @@ def pgn_lines(text: str) -> list[list[str]]:
 
 
 def build_tree(color: str, rows: list[RepertoireMove]) -> list[Edge]:
-    """Рёбра, достижимые из начальной позиции, в порядке обхода в ширину (короткие линии — первыми)."""
+    """
+    Рёбра, достижимые из начальной позиции, в порядке обхода в ширину (короткие линии — первыми). Ходы из одной
+    позиции идут в порядке добавления (по id). Позиция, к которой ведут разные порядки ходов, раскрывается один
+    раз. Строки, не достижимые из корня, и нелегальные ходы в результат не попадают.
+    """
     by_position: dict[str, list[RepertoireMove]] = {}
     for row in sorted(rows, key=lambda r: r.id):
         by_position.setdefault(row.position, []).append(row)
