@@ -4,7 +4,7 @@
 
 import {expect, test} from '@playwright/test';
 import type {APIRequestContext, Page} from '@playwright/test';
-import {API, loginNewPlayer} from './helpers.ts';
+import {API, loginNewPlayer, openNewGame} from './helpers.ts';
 
 /** Игрок общий для прогона: сдать оставшийся с прошлой попытки турнир, чтобы создать новый. */
 async function withdrawActiveTournaments(request: APIRequestContext, token: string) {
@@ -73,6 +73,7 @@ test('урок школы: шаги, неверный ход с откликом
 test('мастерская: соперник сохраняется в профиле и играет первым ходом', async ({page, request}) => {
     await loginNewPlayer(page, request, 'shop');
     await page.goto('/');
+    await openNewGame(page, 'bot');
     await page.getByRole('tab', {name: 'Мастерская'}).click();
     await page.getByRole('button', {name: /^Центровик/}).click();
     await page.getByPlaceholder(/Гамбит/).fill(`E2E${Date.now().toString(36).slice(-4)}`);
@@ -89,6 +90,7 @@ test('мастерская: соперник сохраняется в проф�
 test('лестница: партия с соперником, выбранным сервером, итог в статусе', async ({page, request}) => {
     await loginNewPlayer(page, request, 'ladder');
     await page.goto('/');
+    await openNewGame(page, 'bot');
     await page.getByRole('tab', {name: 'Лестница'}).click();
     await page.getByTestId('ladder-panel').getByRole('button', {name: /Белыми/}).click();
     await expect(page.getByRole('button', {name: /Вернуть ход/})).toBeDisabled();

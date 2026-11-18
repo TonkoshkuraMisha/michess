@@ -92,7 +92,6 @@ export interface UseBotGameOptions {
     myColorRef: React.MutableRefObject<'white' | 'black'>;
     gameIdRef: React.MutableRefObject<number | null>;
     setGameId: (id: number | null) => void;
-    setLeftSectionTab: (t: 'bots' | 'lobby') => void;
     setWhitePlayer: (p: { username: string; rating: string }) => void;
     setBlackPlayer: (p: { username: string; rating: string }) => void;
     playAudio: (type: SoundEventType) => void;
@@ -221,7 +220,7 @@ export function useBotGame({
     setGame, setHistory, setViewIndex, setSelectedSquare, setMyColor, setIsManualFlip, setPendingPromotion, clearPremove,
     setGameOverResult, setRatingInfo, setDrawOfferStatus, setRematchStatus,
     setWhiteTimeMs, setBlackTimeMs, resetLowTimeWarning, applyIncrement,
-    moveStartTime, myColorRef, gameIdRef, setGameId, setLeftSectionTab, setWhitePlayer, setBlackPlayer,
+    moveStartTime, myColorRef, gameIdRef, setGameId, setWhitePlayer, setBlackPlayer,
     playAudio, playOutcomeSound, updateSessionStats, holdBot = false, isAssisted, onNewGame,
 }: UseBotGameOptions): UseBotGameResult {
     const [selectedBotId, setSelectedBotId] = useState<HistoricalBotId>('philidor');
@@ -379,7 +378,6 @@ export function useBotGame({
         setGameId(null);
         if (botId !== 'custom') setSelectedBotId(botId);
         setActiveBot(botId);
-        setLeftSectionTab('bots');
         myColorRef.current = chosenColor;
         setMyColor(chosenColor);
         setIsManualFlip(false);
@@ -409,7 +407,7 @@ export function useBotGame({
         playAudio('start');
     }, [
         isSearching, setIsSearching, effectiveWhiteBaseMinutes, effectiveBlackBaseMinutes, resetLowTimeWarning,
-        gameIdRef, setGameId, setActiveBot, setLeftSectionTab, myColorRef, setMyColor, setIsManualFlip, setGame,
+        gameIdRef, setGameId, setActiveBot, myColorRef, setMyColor, setIsManualFlip, setGame,
         setHistory, setViewIndex, setSelectedSquare, setPendingPromotion, clearPremove, setGameOverResult,
         setRatingInfo, setDrawOfferStatus, setRematchStatus, setWhiteTimeMs, setBlackTimeMs, moveStartTime,
         currentUsername, currentUserRating, setWhitePlayer, setBlackPlayer, playAudio, botProfileFor, onNewGame,

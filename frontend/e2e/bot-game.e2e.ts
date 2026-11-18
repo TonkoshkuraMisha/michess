@@ -4,7 +4,7 @@
 import {expect, test} from '@playwright/test';
 import type {Page} from '@playwright/test';
 import {Chess} from 'chess.js';
-import {loginNewPlayer} from './helpers.ts';
+import {loginNewPlayer, openNewGame} from './helpers.ts';
 
 const PIECES: Record<string, string> = {wp: 'P', wn: 'N', wb: 'B', wr: 'R', wq: 'Q', wk: 'K', bp: 'p', bn: 'n', bb: 'b', br: 'r', bq: 'q', bk: 'k'};
 
@@ -49,6 +49,7 @@ test('партия с ботом: ходы перетаскиванием и щ�
     test.setTimeout(180_000);
     await loginNewPlayer(page, request, 'bot');
     await page.goto('/');
+    await openNewGame(page, 'bot');
     await page.getByRole('button', {name: '♔ Белыми'}).first().click();
     await expect.poll(() => placement(page)).toBe('rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR');
 

@@ -2,6 +2,7 @@
 // Упражнения-генераторы (таск 13.7): матрица «вид × фигура» и уровни 1–3. Каждый раз — новая позиция с единственным
 // верным ходом; мат в 2 — после первого хода отвечает соперник. Режим «на минуту»: счёт ведёт сервер, три ошибки —
 // конец, лучший счёт — личный рекорд для сочетания «вид.фигура.уровень».
+// После ответа (кроме забега на время) доска свободна: позицию можно доиграть за обе стороны (usePositionExplorer).
 
 import {useCallback, useEffect, useRef, useState} from 'react';
 import type {ReactNode} from 'react';
@@ -13,6 +14,7 @@ import {UiError} from '../../services/apiErrors';
 import {DRILL_KINDS, DRILL_PIECES, drillSupported, puzzlesApi} from '../../services/puzzles';
 import type {DrillKind, DrillPiece, DrillRun, DrillRunResult, DrillView} from '../../services/puzzles';
 import {PuzzleBoard} from './PuzzleBoard';
+import {ExplorerControls, usePositionExplorer} from './usePositionExplorer';
 import {solutionSan, toMove} from './puzzleNotation';
 import {SolutionReplay} from './SolutionReplay';
 import type {ReplayView} from './SolutionReplay';
@@ -67,6 +69,12 @@ export function GeneratedDrills({header, initialKind = 'capture', onAnalyze}: Pr
         puzzlesApi.drillsRecords().then((body) => setRecords(body.records)).catch(() => undefined);
     }, []);
 
+    // Свободная доска после ответа (решение владельца 18.11): первый ход игрока после ответа начинает разбор с
+    // позиции на доске; новое упражнение его сбрасывает. В забеге на время
+    // доски для разбора нет: следующее упражнение приходит само.
+    const explorer = usePositionExplorer();
+    const exploring = explorer.active && !replay;
+
     const present = (view: DrillView) => {
         setDrill(view);
         setFen(view.fen);
@@ -77,6 +85,7 @@ export function GeneratedDrills({header, initialKind = 'capture', onAnalyze}: Pr
         setSolution(null);
         setSolutionLine([]);
         setReplay(null);
+        explorer.stop();
         setPhase('solving');
     };
 
@@ -132,6 +141,11 @@ export function GeneratedDrills({header, initialKind = 'capture', onAnalyze}: Pr
     };
 
     const play = async (uci: string) => {
+        if (phase === 'done' && !run) {
+            if (explorer.active) explorer.play(uci);
+            else explorer.start(fen, [uci]);
+            return;
+        }
         if (!drill || phase !== 'solving') return;
         const game = new Chess(fen);
         const move = game.move(toMove(uci));
@@ -188,9 +202,12 @@ export function GeneratedDrills({header, initialKind = 'capture', onAnalyze}: Pr
     return (
         <div className="w-full max-w-6xl mx-auto p-3 sm:p-4 flex flex-col lg:flex-row gap-4" data-testid="generated-drills">
             <div className="w-full lg:w-[min(70vh,640px)] shrink-0 flex flex-col gap-2">
-                <PuzzleBoard fen={replay?.fen ?? fen} orientation={drill?.color ?? 'white'} interactive={phase === 'solving'}
-                             lastMove={replay ? replay.lastMove : lastMove} mark={replay ? null : mark}
+                <PuzzleBoard fen={replay?.fen ?? (exploring ? explorer.fen : null) ?? fen} orientation={drill?.color ?? 'white'}
+                             interactive={phase === 'solving' || (phase === 'done' && !run && !replay)}
+                             lastMove={replay ? replay.lastMove : exploring ? explorer.lastMove : lastMove}
+                             mark={replay || exploring ? null : mark}
                              arrows={replay?.arrows} onMove={(uci) => void play(uci)}/>
+                <ExplorerControls explorer={explorer}/>
                 <div className="text-sm font-bold text-amber-300" role="status" data-testid="drill-status">
                     {status()}
                     {drill?.piece_type && phase === 'solving' && line.length === 0 && (
