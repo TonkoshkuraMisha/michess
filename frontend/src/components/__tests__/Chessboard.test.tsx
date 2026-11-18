@@ -622,6 +622,9 @@ describe('итог партии', () => {
         const summary = await screen.findByTestId('game-summary');
         await waitFor(() => expect(summary.textContent).toContain('Решила одна ошибка'));
         expect(summary.textContent).toContain('Перелом: 2. g4');
+        // Кнопки конца партии — над итогом, а не под ним за краем колонки (отзыв владельца 18.11).
+        const review = screen.getByRole('button', {name: /Разбор партии/});
+        expect(review.compareDocumentPosition(summary) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
         // Проиграл Филидору (1850 по умолчанию) — следующий соперник слабее среди исторических ботов нет,
         // поэтому ближайший по силе.
         expect(screen.getByTestId('summary-recommendation').textContent).toMatch(/\(\d{4}\)/);
