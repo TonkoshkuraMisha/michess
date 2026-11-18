@@ -1,7 +1,9 @@
 // --- FILE: frontend/src/components/chessboard/hooks/useCoachMode.ts ---
-// Игра с наставником (таск 11.3) — только в партии с ботом и на свободной доске. После хода игрока сервер
-// оценивает ход (POST /analysis/check-move); если ход плохой для уровня игрока, бот и часы ждут, а игрок решает:
-// «Переходить», «Оставить» или «Не согласен» (с объяснением «Почему?»). Подсказка по ступеням (таск 11.4,
+// Игра с наставником (таск 11.3) — только в партии с ботом и на свободной доске. После хода игрока сервер в фоне
+// оценивает ход (POST /analysis/check-move); партия при этом не останавливается (решение владельца 18.11: наставник
+// предлагает, но не блокирует). Если ход плохой для уровня игрока, рядом с доской появляется совет: «Почему?»,
+// «Переходить» (по желанию — вместе с уже сделанным ответом бота), «Понятно» и «Не согласен». Предупреждений —
+// не больше MAX_WARNINGS_PER_GAME за партию и не чаще чем раз в MIN_MOVES_BETWEEN_WARNINGS своих ходов. Подсказка по ступеням (таск 11.4,
 // POST /analysis/hint): намёк словами → какой фигурой ходить → ход со стрелкой; счётчик ступеней. Любое обращение к
 // наставнику делает партию учебной (правило 2): отметка assisted уходит на сервер при сохранении партии с ботом.
 // «Не согласен» — POST /analysis/dispute: позиция попадает в очередь спорных оценок. Проверку хода и подсказку
@@ -39,6 +41,19 @@ export interface MoveCheck {
     reply_uci?: string;
     missed_tactic?: boolean;
     coach?: CoachComment | null;
+}
+
+/**
+ * Сколько раз за партию наставник предупреждает о ходе и через сколько своих ходов после предыдущего предупреждения
+ * снова может (решение владельца 18.11: «несколько раз за партию, а не на каждом шагу»). Когда предупреждать нельзя,
+ * ход и на проверку не отправляется — не тратится квота наставника.
+ */
+export const MAX_WARNINGS_PER_GAME = 3;
+export const MIN_MOVES_BETWEEN_WARNINGS = 4;
+
+/** Можно ли сейчас предупреждать: ещё есть запас на партию и с прошлого предупреждения прошло достаточно ходов. */
+export function warningAllowed(shown: number, movesSinceLast: number | null): boolean {
+    return shown < MAX_WARNINGS_PER_GAME && (movesSinceLast === null || movesSinceLast >= MIN_MOVES_BETWEEN_WARNINGS);
 }
 
 /** Позиция, после которой перевес настолько велик, что «потеря» не меняет результата — без предупреждения. */
@@ -110,8 +125,6 @@ export interface UseCoachModeResult {
     level: CoachLevel;
     setLevel: (level: CoachLevel) => void;
     pending: PendingCheck | null;
-    /** Бот и часы ждут: идёт проверка или игрок решает, переходить ли. */
-    holdBot: boolean;
     /** Показать объяснение («Почему?») — текст и стрелки наставника. */
     explanation: CoachComment | null;
     showWhy: () => void;
@@ -154,7 +167,7 @@ function authHeaders(): Record<string, string> {
 /**
  * Состояние игры с наставником для главной доски. playerRating — рейтинг игрока (блиц из GET /profile/me), по
  * нему выбирается уровень, пока игрок не выбрал сам. Доской хук не управляет: вызывающий сообщает о ходе
- * (onPlayerMove), держит бота и часы, пока holdBot, и сам возвращает позицию по takeBack.
+ * (onPlayerMove) и сам возвращает позицию по takeBack. Партию наставник не останавливает никогда.
  */
 export function useCoachMode(playerRating: number): UseCoachModeResult {
     const [enabled, setEnabledState] = useState<boolean>(() => readStored(COACH_ENABLED_KEY, ['1', '0']) === '1');
@@ -173,6 +186,9 @@ export function useCoachMode(playerRating: number): UseCoachModeResult {
     const [error, setError] = useState<UiMessage | null>(null);
     // Копия pending для асинхронного кода: ответ сервера сверяется с ходом, который ждёт проверки сейчас.
     const pendingRef = useRef<PendingCheck | null>(null);
+    // Частота предупреждений (MAX_WARNINGS_PER_GAME, MIN_MOVES_BETWEEN_WARNINGS): сколько показано за партию и номер
+    // своего хода последнего; moves — счётчик своих ходов в партии.
+    const warnRef = useRef<{ shown: number; lastMove: number | null; moves: number }>({shown: 0, lastMove: null, moves: 0});
     const level = chosenLevel ?? levelForRating(playerRating);
 
     const updatePending = useCallback((next: PendingCheck | null) => {
@@ -200,11 +216,17 @@ export function useCoachMode(playerRating: number): UseCoachModeResult {
         hintRef.current = null;
     }, []);
 
-    // Проверка хода. Партия помечается учебной уже при отправке хода на проверку. Ошибка сети или отказ сервера
-    // (лимит, движок занят) игру не останавливают: показывается сообщение, а ход остаётся.
+    // Проверка хода — в фоне: партия не ждёт (бот отвечает, часы идут). Плохой ход даёт совет рядом с доской, а не
+    // остановку; «Переходить» — по желанию игрока. Ход отправляется на проверку, только если предупредить сейчас
+    // можно (warningAllowed). Партия помечается учебной при отправке хода на проверку. Ошибка сети или отказ сервера
+    // (лимит, движок занят) показываются сообщением, ход остаётся.
     const onPlayerMove = useCallback((previousGame: Chess, fenBefore: string, uci: string, fenAfter: string) => {
         clearOverlay();
+        updatePending(null);
         if (!enabled) return;
+        const warn = warnRef.current;
+        warn.moves += 1;
+        if (!warningAllowed(warn.shown, warn.lastMove === null ? null : warn.moves - warn.lastMove)) return;
         setAssisted(true);
         setError(null);
         updatePending({status: 'checking', previousGame, fenBefore, uci, fenAfter});
@@ -222,6 +244,8 @@ export function useCoachMode(playerRating: number): UseCoachModeResult {
             // Игрок успел сыграть дальше (свободная доска) — ответ к старой позиции не нужен.
             if (pendingRef.current?.fenAfter !== fenAfter) return;
             if (check && shouldWarn(check, level)) {
+                warnRef.current.shown += 1;
+                warnRef.current.lastMove = warnRef.current.moves;
                 updatePending({status: 'warning', previousGame, fenBefore, uci, fenAfter, check});
             } else {
                 updatePending(null);
@@ -301,11 +325,11 @@ export function useCoachMode(playerRating: number): UseCoachModeResult {
         setHintsUsed(0);
         setAssisted(false);
         setError(null);
+        warnRef.current = {shown: 0, lastMove: null, moves: 0};
     }, [updatePending]);
 
     return {
         enabled, setEnabled, level, setLevel, pending,
-        holdBot: enabled && pending !== null,
         explanation, showWhy, keepMove, takeBack,
         advice, adviceLoading, requestHint, hintStep, hintFinal, hintsUsed, dispute, disputeSent, assisted, error,
         onPlayerMove, reset, clearOverlay,
