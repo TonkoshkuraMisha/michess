@@ -4315,6 +4315,14 @@ export const ru: Messages = {
         yourWorst: 'Ваш самый дорогой ход: {move}',
         recommend: 'Следующий соперник: {name} ({rating})',
         play: 'Сыграть',
+        afterGame: {
+            title: 'Клубный тренер',
+            puzzle: 'Исправь свой зевок',
+            solve: 'Решить эту позицию',
+            deviation: 'Отклонение в дебюте',
+            lesson: 'Урок по теме ошибки: {theme}',
+            openLesson: 'Открыть: {module}',
+        },
         kinds: {
             domination: {
                 name: 'Доминирование',

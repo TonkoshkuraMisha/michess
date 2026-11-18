@@ -178,7 +178,13 @@
   `components/GameViewer.tsx`, `chessboard/CoachPanel.tsx`, хук `useCoachMode.ts`.
 - **Откуда текст.** Сервер отдаёт факты: код мотива, поля, фигуры, ключ шаблона. Предложение собирает клиент из
   каталога `coach.*`. Главный принцип детектора — ложное объяснение хуже молчания.
-- **Тесты.** `analysis_service`, `mentor_motifs`, `mentor_pins`, `positional`, `coach`, `coach_mode`, `game_summary`.
+- **«Клубный тренер» после партии.** В итоге партии (`chessboard/GameSummaryPanel.tsx` → `CoachCards.tsx`) до трёх
+  карточек: задача из самой дорогой своей ошибки (решается прямо в панели), отклонение от репертуара (тренировать
+  или добавить ответ), урок Большого курса по теме ошибки. Сервер собирает готовое без движка
+  (`src/services/coach_cards.py`, `GET /learn/after-game/{id}`: таблица `personal_puzzles`, репертуары игрока);
+  модуль курса по теме выбирает клиент (`services/coachCards.ts`, данные `content/supercourse.ts`).
+- **Тесты.** `analysis_service`, `mentor_motifs`, `mentor_pins`, `positional`, `coach`, `coach_mode`, `game_summary`,
+  `coach_cards`; клиент — `CoachCards.test.tsx`.
 
 ### 4.6. Боты
 

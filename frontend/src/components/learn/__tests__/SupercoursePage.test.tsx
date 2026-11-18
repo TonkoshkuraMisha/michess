@@ -49,4 +49,12 @@ describe('Большой курс', () => {
         expect(put[0]).toContain('/learn/progress/course-t1-1');
         expect(screen.queryByTestId('course-done-T1.1')).toBeNull();
     });
+
+    it('ссылка ?level=N&module=КОД из итога партии открывает уровень и подсвечивает модуль', async () => {
+        vi.stubGlobal('fetch', vi.fn(async () => ({ok: true, json: async () => []}) as unknown as Response));
+        await act(async () => render(<MemoryRouter initialEntries={['/learn/course?level=1&module=T1.1']}><SupercoursePage/></MemoryRouter>));
+        expect(screen.getByTestId('course-level-1').getAttribute('aria-selected')).toBe('true');
+        expect(screen.getByTestId('course-module-T1.1').getAttribute('aria-current')).toBe('true');
+        expect(screen.getByTestId('course-module-T1.2').getAttribute('aria-current')).toBeNull();
+    });
 });

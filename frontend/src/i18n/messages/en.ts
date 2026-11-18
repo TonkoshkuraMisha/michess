@@ -4299,6 +4299,14 @@ export const en = {
         yourWorst: 'Your costliest move: {move}',
         recommend: 'Next opponent: {name} ({rating})',
         play: 'Play',
+        afterGame: {
+            title: 'Club coach',
+            puzzle: 'Fix your blunder',
+            solve: 'Solve this position',
+            deviation: 'Opening deviation',
+            lesson: 'Lesson on your mistake: {theme}',
+            openLesson: 'Open: {module}',
+        },
         kinds: {
             domination: {
                 name: 'Domination',

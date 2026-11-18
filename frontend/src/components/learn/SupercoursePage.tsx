@@ -1,9 +1,11 @@
 // Большой курс (таск 27.6): /learn/course — уровни 0–5 по разрядам, модули по ветвям (тактика, мат, эндшпиль,
 // стратегия, дебют, расчёт, партии). Шаги модуля ведут в готовые разделы; модуль без шагов — место в каркасе под
 // наполнение: игроку не показывается, виден в режиме «каркас курса». Прогресс модуля — запись урока course-<код>.
+// Ссылка ?level=N&module=КОД (карточка «Урок по теме ошибки» в итоге партии) открывает уровень N и подсвечивает
+// модуль, прокручивая к нему.
 
 import {useEffect, useMemo, useState} from 'react';
-import {useNavigate} from 'react-router-dom';
+import {useNavigate, useSearchParams} from 'react-router-dom';
 import {CheckCircle2, Circle, Layers, Trophy} from 'lucide-react';
 import {useI18n} from '../../i18n';
 import {getToken} from '../../services/authToken';
@@ -17,7 +19,12 @@ import {activityLabel} from '../ProgramsPage';
 export function SupercoursePage() {
     const {t, language} = useI18n();
     const navigate = useNavigate();
-    const [level, setLevel] = useState(0);
+    const [params] = useSearchParams();
+    const focusModule = params.get('module');
+    const [level, setLevel] = useState(() => {
+        const asked = Number(params.get('level'));
+        return Number.isInteger(asked) && asked >= 0 && asked < LEVEL_COUNT ? asked : 0;
+    });
     const [skeleton, setSkeleton] = useState(false);
     const [done, setDone] = useState<Set<string>>(new Set());
     const [examPassed, setExamPassed] = useState<Set<number>>(new Set());
@@ -41,6 +48,11 @@ export function SupercoursePage() {
             setDone((prev) => new Set([...prev, ...passed.map((n) => `X${n}`)]));
         }).catch(() => undefined);
     }, []);
+
+    // Модуль из ссылки — в видимую часть страницы (scrollIntoView есть не везде, например в jsdom тестов).
+    useEffect(() => {
+        if (focusModule) document.querySelector(`[data-testid="course-module-${focusModule}"]`)?.scrollIntoView?.({block: 'center'});
+    }, [focusModule]);
 
     const filled = COURSE.filter((m) => m.steps.length > 0).length;
     const modules = useMemo(() => COURSE.filter((m) => m.level === level && (skeleton || m.steps.length > 0)), [level, skeleton]);
@@ -83,7 +95,8 @@ export function SupercoursePage() {
                         <ul className="flex flex-col gap-1.5">
                             {items.map((module) => (
                                 <li key={module.code} data-testid={`course-module-${module.code}`}
-                                    className={`rounded-lg p-2.5 flex flex-col gap-1 text-sm border ${module.steps.length ? 'bg-acacia border-acacia-dark' : 'bg-black/20 border-dashed border-amber-900/50 opacity-70'}`}>
+                                    aria-current={focusModule === module.code ? 'true' : undefined}
+                                    className={`rounded-lg p-2.5 flex flex-col gap-1 text-sm border ${module.steps.length ? 'bg-acacia border-acacia-dark' : 'bg-black/20 border-dashed border-amber-900/50 opacity-70'} ${focusModule === module.code ? 'ring-2 ring-amber-400' : ''}`}>
                                     <div className="flex flex-wrap items-center gap-2">
                                         {done.has(module.code) ? <CheckCircle2 size={16} className="text-emerald-400"/> : <Circle size={16} className="text-amber-700"/>}
                                         <span className="font-mono text-xs text-amber-300">{module.code}</span>

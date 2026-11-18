@@ -4315,6 +4315,14 @@ export const uk: Messages = {
         yourWorst: 'Ваш найдорожчий хід: {move}',
         recommend: 'Наступний суперник: {name} ({rating})',
         play: 'Зіграти',
+        afterGame: {
+            title: 'Клубний тренер',
+            puzzle: 'Виправ свій зівок',
+            solve: 'Розв’язати цю позицію',
+            deviation: 'Відхилення в дебюті',
+            lesson: 'Урок на тему помилки: {theme}',
+            openLesson: 'Відкрити: {module}',
+        },
         kinds: {
             domination: {
                 name: 'Перевага від початку до кінця',
