@@ -22,8 +22,8 @@ class Move(Base):
     __tablename__ = "moves"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    game_id: Mapped[int] = mapped_column(ForeignKey("games.id"), index=True)
-    player_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    game_id: Mapped[int] = mapped_column(ForeignKey("games.id", ondelete="RESTRICT"), index=True)
+    player_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="RESTRICT"), index=True)
 
     # Номер хода партии (fullmove, как в записи «12. Nf3»): у хода белых и ответа чёрных он одинаковый. Это не номер
     # полухода — его записывает src/api/websockets._record_applied_move из move_data["fullmove_number"].

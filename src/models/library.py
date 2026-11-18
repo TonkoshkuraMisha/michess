@@ -14,7 +14,12 @@ from datetime import datetime
 from sqlalchemy import JSON, Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from src.models.base import Base
+from src.models.base import Base, one_of
+
+# Итог партии библиотеки (src/services/library.py, RESULTS: прочее при импорте становится «*»).
+LIBRARY_RESULTS = ("1-0", "0-1", "1/2-1/2", "*")
+# Статусы аннотации (src/services/library.py, ANNOTATION_STATUSES).
+ANNOTATION_STATUSES = ("auto", "draft", "review", "approved")
 
 VISIBILITIES = ("public", "owner", "staff")
 
@@ -22,6 +27,7 @@ VISIBILITIES = ("public", "owner", "staff")
 class LibraryCollection(Base):
     """Коллекция библиотеки — узел дерева папок, со своей видимостью: публичная, только владельцу или служебная."""
     __tablename__ = "library_collections"
+    __table_args__ = (one_of("library_collections", "visibility", VISIBILITIES),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     parent_id: Mapped[int | None] = mapped_column(ForeignKey("library_collections.id", ondelete="CASCADE"),
@@ -30,7 +36,7 @@ class LibraryCollection(Base):
     path: Mapped[str] = mapped_column(String(500), unique=True)
     name: Mapped[str] = mapped_column(String(200))
     visibility: Mapped[str] = mapped_column(String(8), default="public", server_default="public")
-    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     source: Mapped[str] = mapped_column(String(32), default="", server_default="")
     sort: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -42,6 +48,7 @@ class LibraryGame(Base):
     ставит разметка.
     """
     __tablename__ = "library_games"
+    __table_args__ = (one_of("library_games", "result", LIBRARY_RESULTS),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     moves_hash: Mapped[str] = mapped_column(String(64), unique=True)
@@ -87,12 +94,13 @@ class LibraryAnnotation(Base):
     """
 
     __tablename__ = "library_annotations"
+    __table_args__ = (one_of("library_annotations", "status", ANNOTATION_STATUSES),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     game_id: Mapped[int] = mapped_column(ForeignKey("library_games.id", ondelete="CASCADE"), unique=True, index=True)
     status: Mapped[str] = mapped_column(String(10), default="auto", server_default="auto", index=True)
     body: Mapped[dict] = mapped_column(JSON, default=dict)
-    author_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    author_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

@@ -12,7 +12,16 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from src.models.base import Base
+from src.models.base import Base, one_of
+
+# Формат турнира (src/services/tournaments.py, Format) и его состояние.
+TOURNAMENT_FORMATS = ("round_robin", "knockout", "swiss")
+TOURNAMENT_STATUSES = ("active", "finished")
+# Кто занимает место: игрок, бот, архетип новичка, персоналия (своя или мастер прошлого).
+TOURNAMENT_PLAYER_KINDS = ("user", "bot", "archetype", "personality")
+# Партия нокаут-матча (tournament_rules.Stage) и её итог (tournament_rules.Result; «*» здесь не бывает).
+TOURNAMENT_STAGES = ("main", "rematch", "armageddon")
+TOURNAMENT_RESULTS = ("1-0", "0-1", "1/2-1/2")
 
 
 class Tournament(Base):
@@ -21,6 +30,10 @@ class Tournament(Base):
     место игрока хранится в его строке tournament_players.place.
     """
     __tablename__ = "tournaments"
+    __table_args__ = (
+        one_of("tournaments", "format", TOURNAMENT_FORMATS),
+        one_of("tournaments", "status", TOURNAMENT_STATUSES),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     owner_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
@@ -49,7 +62,10 @@ class TournamentPlayer(Base):
     зависят от последующих правок.
     """
     __tablename__ = "tournament_players"
-    __table_args__ = (UniqueConstraint("tournament_id", "seat", name="uq_tournament_players_seat"),)
+    __table_args__ = (
+        UniqueConstraint("tournament_id", "seat", name="uq_tournament_players_seat"),
+        one_of("tournament_players", "kind", TOURNAMENT_PLAYER_KINDS),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     tournament_id: Mapped[int] = mapped_column(
@@ -58,7 +74,8 @@ class TournamentPlayer(Base):
     seat: Mapped[int] = mapped_column(Integer, nullable=False)
     # user | bot | archetype | personality
     kind: Mapped[str] = mapped_column(String(16), nullable=False)
-    user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    user_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True,
+                                                index=True)
     # id исторического бота («morphy»), ключ архетипа («archetype:rusher») или мастера прошлого («guest:<id>»).
     bot_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # Персоналия мастерской — копия имени и конфига на момент создания турнира.
@@ -77,6 +94,10 @@ class TournamentGame(Base):
     партии, партию ботов между собой — симуляция.
     """
     __tablename__ = "tournament_games"
+    __table_args__ = (
+        one_of("tournament_games", "stage", TOURNAMENT_STAGES),
+        one_of("tournament_games", "result", TOURNAMENT_RESULTS),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     tournament_id: Mapped[int] = mapped_column(
@@ -93,7 +114,8 @@ class TournamentGame(Base):
     increment_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     # 1-0 | 0-1 | 1/2-1/2; пусто — партия ещё не сыграна.
     result: Mapped[str | None] = mapped_column(String(8), nullable=True)
-    game_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("games.id", ondelete="SET NULL"), nullable=True)
+    game_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("games.id", ondelete="SET NULL"), nullable=True,
+                                                index=True)
     # Партию начали: ботов — забрал воркер (таск 15.2), игрока — он сам нажал «Играть» (таск A.2).
     started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     # Партию ботов поставили в очередь (таск A.1): повторно — только если давно поставлена и так и не начата.
