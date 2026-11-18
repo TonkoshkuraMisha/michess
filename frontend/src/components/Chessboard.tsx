@@ -1430,6 +1430,14 @@ export default function Chessboard() {
     // Размер, с которым доска рисуется: сохранённый, но не шире окна (на телефоне — почти вся ширина).
     const responsiveBoardPx = typeof window !== 'undefined' ? Math.min(boardSize, window.innerWidth - 24) : boardSize;
 
+    // Турнирная партия: турнир, тур, соперник, таблица; после партии — следующая партия и путь в турнир. После конца
+    // партии стоит рядом с кнопками конца партии, над итогом (отзыв владельца 18.11: кнопки возврата в турнир не было
+    // видно — итог выталкивал её за край колонки).
+    const tournamentBar = inTournamentGame && tournamentLinkId ? (
+        <TournamentGameBar tournamentId={savedTournamentId ?? tournamentLinkId} tournamentGameId={tournamentGameRefId}
+                           gameOver={Boolean(gameOverResult)}/>
+    ) : null;
+
     // Панель управления партией. Зрителю не показывается: «отменить ход» и «сбросить доску» портили бы чужую партию на
     // его экране (выход — в панели чата). Во время партии — внизу правой колонки; после конца — сразу под навигацией,
     // над «Итогом партии»: иначе итог выталкивал «Анализ партии», «Реванш» и «В лобби» за край колонки (отзыв
@@ -1909,9 +1917,10 @@ export default function Chessboard() {
 
             </div>
 
-            {/* ПРАВАЯ КОЛОНКА: ЖУРНАЛ ХОДОВ, ОФОРМЛЕНИЕ, СТАТУС, ЧАТ, ИТОГ, НАСТАВНИК, РЕНТГЕН И УПРАВЛЕНИЕ ПАРТИЕЙ */}
+            {/* ПРАВАЯ КОЛОНКА: ЖУРНАЛ ХОДОВ, ОФОРМЛЕНИЕ, СТАТУС, ЧАТ, ИТОГ, НАСТАВНИК, РЕНТГЕН И УПРАВЛЕНИЕ ПАРТИЕЙ.
+                На широком экране высота колонки — по окну; что не помещается, прокручивается (раньше обрезалось). */}
             <div
-                className="w-full xl:w-[390px] 2xl:w-[430px] xl:h-full bg-acacia p-3 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-2 text-boxwood-light order-3 shrink-0 xl:overflow-hidden relative">
+                className="w-full xl:w-[390px] 2xl:w-[430px] xl:h-full bg-acacia p-3 rounded-lg shadow-heavy border-2 border-acacia-dark flex flex-col gap-2 text-boxwood-light order-3 shrink-0 xl:overflow-y-auto relative">
 
                 <div
                     className="border-b border-acacia-light pb-2 flex justify-between items-center gap-2 shrink-0 relative"
@@ -2030,6 +2039,7 @@ export default function Chessboard() {
                     onLast={handleNavigateLast}
                 />
 
+                {gameOverResult && tournamentBar}
                 {!spectatingGameId && gameOverResult && controlsPanel}
 
                 {(gameId || spectatingGameId) && (
@@ -2075,11 +2085,7 @@ export default function Chessboard() {
 
                 {xrayAvailable && <XrayPanel settings={xray} canSelect={!spectatingGameId}/>}
 
-                {/* Турнирная партия: турнир, тур, соперник, таблица; после партии — следующая партия и путь в турнир. */}
-                {inTournamentGame && tournamentLinkId && (
-                    <TournamentGameBar tournamentId={savedTournamentId ?? tournamentLinkId} tournamentGameId={tournamentGameRefId}
-                                       gameOver={Boolean(gameOverResult)}/>
-                )}
+                {!gameOverResult && tournamentBar}
                 {!spectatingGameId && !gameOverResult && controlsPanel}
 
             </div>
