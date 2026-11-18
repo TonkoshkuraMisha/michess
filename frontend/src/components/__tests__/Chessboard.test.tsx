@@ -554,9 +554,28 @@ describe('игра с наставником', () => {
         fireEvent.click(screen.getByTestId('coach-why'));
         expect(screen.getByTestId('coach-arrow-threat')).toBeInTheDocument();
 
+        // Предупреждение пропустить нельзя: вкладка «Наставник» открылась сама (вкладки справа, план владельца 18.11).
+        expect(screen.getByTestId('side-tab-coach')).toHaveAttribute('aria-selected', 'true');
+        expect(screen.getByTestId('side-panel-coach')).toHaveClass('contents');
+        expect(screen.getByTestId('side-panel-moves')).toHaveClass('hidden');
+
         fireEvent.click(screen.getByTestId('coach-takeback'));
         expect(screen.queryByTestId('coach-warning')).toBeNull();
         expect(screen.queryByText('f3')).toBeNull();
+        // Ответил — колонка вернулась к ходам.
+        await waitFor(() => expect(screen.getByTestId('side-tab-moves')).toHaveAttribute('aria-selected', 'true'));
+    });
+
+    it('вкладки справа: ходы, наставник и рентген; скрытая вкладка остаётся в разметке', async () => {
+        renderChessboard();
+        const tabs = await screen.findAllByRole('tab', {name: /Ходы|Наставник|Рентген/});
+        expect(tabs.map((tab) => tab.getAttribute('data-testid'))).toEqual(['side-tab-moves', 'side-tab-coach', 'side-tab-xray']);
+        expect(screen.queryByTestId('side-tab-chat')).toBeNull();  // чат — только в партии с человеком
+        expect(screen.getByTestId('side-panel-moves')).toHaveClass('contents');
+        fireEvent.click(screen.getByTestId('side-tab-xray'));
+        expect(screen.getByTestId('side-panel-xray')).toHaveClass('contents');
+        expect(screen.getByTestId('side-panel-moves')).toHaveClass('hidden');
+        expect(screen.getByTestId('side-panel-coach')).toBeInTheDocument();
     });
 
     it('ход оставлен — бот отвечает, партия сохраняется учебной', async () => {
