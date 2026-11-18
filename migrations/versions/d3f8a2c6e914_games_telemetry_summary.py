@@ -1,7 +1,7 @@
 """games.telemetry_summary (owner's plan 18.11, task 9): move telemetry summary kept after raw moves expire
 
 Revision ID: d3f8a2c6e914
-Revises: 59c61fc287c2
+Revises: b4d2e8f1a6c3
 Create Date: 2026-11-18 14:00:00.000000
 
 Сводка телеметрии ходов по сторонам (src/services/anticheat.telemetry_summary). Сырые строки moves удаляет плановая
@@ -15,7 +15,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = 'd3f8a2c6e914'
-down_revision: str | Sequence[str] | None = '59c61fc287c2'
+down_revision: str | Sequence[str] | None = 'b4d2e8f1a6c3'
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
