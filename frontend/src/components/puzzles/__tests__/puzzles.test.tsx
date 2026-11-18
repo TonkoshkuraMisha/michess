@@ -110,6 +110,22 @@ describe('PuzzlesPage', () => {
         expect(screen.getByTestId('puzzle-chart')).toBeTruthy();
     });
 
+    it('после задачи доска свободна: позицию можно доиграть и вернуть (решение владельца 18.11)', async () => {
+        stub((url) => (url.includes('/next') ? PUZZLE : {correct: true, done: true, reply: null, solution: null, result: RESULT}));
+        await start();
+        await play('d2', 'd8');
+        expect(await screen.findByTestId('puzzle-outcome')).toHaveTextContent('Решено!');
+        expect(screen.queryByTestId('explorer-controls')).toBeNull();
+        // Задача закончена — ход за чёрных (закрыться ладьёй) делается прямо на доске и начинает разбор.
+        await play('e2', 'e8');
+        expect(square('e8').querySelector('img')?.getAttribute('alt')).toBe('br');
+        expect(screen.getByTestId('explorer-back')).not.toBeDisabled();
+        await act(async () => {
+            fireEvent.click(screen.getByTestId('explorer-reset'));
+        });
+        expect(square('e2').querySelector('img')?.getAttribute('alt')).toBe('br');
+    });
+
     it('неверный ход: отметка, итог, решение показывается на доске', async () => {
         stub((url) => url.includes('/next') ? PUZZLE : {
             correct: false, done: true, reply: null, solution: ['d2d8', 'e2e8', 'd8e8'],

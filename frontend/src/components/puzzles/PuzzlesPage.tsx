@@ -30,6 +30,7 @@ import {sanMoves, solutionSan, toMove} from './puzzleNotation';
 import {TrainingPanel} from './TrainingPanel';
 import {SolutionReplay} from './SolutionReplay';
 import type {ReplayView} from './SolutionReplay';
+import {ExplorerControls, usePositionExplorer} from './usePositionExplorer';
 
 // save — «Спасите партию» (27.9): смешанная подборка задач с целью «ничья» (вечный шах, пат, крепость, равенство).
 type Mode = 'rated' | 'themes' | 'defense' | 'save' | 'drills' | 'personal' | 'daily' | 'timed';
@@ -115,6 +116,15 @@ export default function PuzzlesPage() {
         timers.current.push(setTimeout(fn, ms));
     };
     useEffect(() => () => timers.current.forEach(clearTimeout), []);
+
+    // Свободная доска после задачи (решение владельца 18.11): разбор начинается первым ходом игрока после конца задачи
+    // и сбрасывается, как только начинается следующая.
+    const explorer = usePositionExplorer();
+    const explorerActive = explorer.active;
+    const stopExplorer = explorer.stop;
+    useEffect(() => {
+        if (phase !== 'done' && explorerActive) stopExplorer();
+    }, [phase, explorerActive, stopExplorer]);
 
     const refreshProfile = useCallback(() => {
         puzzlesApi.me().then(setProfile).catch(() => undefined);
@@ -272,6 +282,12 @@ export default function PuzzlesPage() {
     };
 
     const onMove = async (uci: string) => {
+        // Задача решена (или показано решение) — доска свободна: первый ход игрока начинает разбор с текущей позиции.
+        if (phase === 'done') {
+            if (explorer.active) explorer.play(uci);
+            else explorer.start(fen, [uci]);
+            return;
+        }
         if (mode === 'personal' && phase === 'solving') {
             await onPersonalMove(uci);
             return;
@@ -437,16 +453,18 @@ export default function PuzzlesPage() {
     return (
         <div className="w-full max-w-6xl mx-auto p-3 sm:p-4 flex flex-col lg:flex-row gap-4" data-testid="puzzles-page">
             <div className="w-full lg:w-[min(70vh,640px)] shrink-0 flex flex-col gap-2">
-                <PuzzleBoard fen={personalReplay?.fen ?? fen} orientation={personal?.color ?? puzzle?.color ?? 'white'}
-                             interactive={phase === 'solving'}
-                             lastMove={personalReplay ? personalReplay.lastMove : lastMove} hint={personalReplay ? null : hint}
-                             mark={personalReplay ? null : mark}
+                <PuzzleBoard fen={personalReplay?.fen ?? explorer.fen ?? fen} orientation={personal?.color ?? puzzle?.color ?? 'white'}
+                             interactive={phase === 'solving' || (phase === 'done' && !personalReplay && !run)}
+                             lastMove={personalReplay ? personalReplay.lastMove : explorer.active ? explorer.lastMove : lastMove}
+                             hint={personalReplay || explorer.active ? null : hint}
+                             mark={personalReplay || explorer.active ? null : mark}
                              arrows={personalReplay?.arrows ?? (candidatesOn && candidatesAllowed
                                  ? candidates.map((c) => ({from: c.slice(0, 2), to: c.slice(2, 4), color: c === bestFirst ? 'green' as const : 'blue' as const}))
                                  : undefined)}
                              highlights={marking && candidateFrom ? [candidateFrom] : undefined}
                              onSquare={marking ? markCandidate : undefined}
                              onMove={(uci) => void onMove(uci)}/>
+                <ExplorerControls explorer={explorer}/>
                 {candidatesOn && candidatesAllowed && puzzle && (
                     <div className="flex flex-wrap items-center gap-2 text-sm" data-testid="candidates-panel">
                         {marking ? (

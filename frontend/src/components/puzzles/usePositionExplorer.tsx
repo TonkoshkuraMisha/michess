@@ -55,6 +55,14 @@ export function usePositionExplorer(): PositionExplorer {
     const view = useMemo(() => (line ? replay(line) : null), [line]);
 
     const start = useCallback((fen: string, moves: string[] = []) => {
+        // Позиция, которую chess.js не принимает (например, одна фигура без королей в «Сколько ходов?»), — разбор не
+        // включается: доска остаётся как была.
+        try {
+            new Chess(fen);
+        } catch {
+            setLine(null);
+            return;
+        }
         const played = replay({start: fen, moves});
         setLine({start: fen, moves: moves.slice(0, played.plies)});
     }, []);

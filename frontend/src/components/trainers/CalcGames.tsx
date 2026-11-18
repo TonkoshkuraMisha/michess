@@ -1,6 +1,7 @@
 // --- FILE: frontend/src/components/trainers/CalcGames.tsx ---
 // Счёт и внимание (таск 19.7). QuizGame — QUIZ_ROUNDS быстрых вопросов с ответом кнопкой и разбором после каждого
-// («Кто выиграет размен?», «Сколько ходов до поля?», «Успевает ли король?», «Оцени позицию»). ChecksGame — «Шахи и
+// («Кто выиграет размен?», «Сколько ходов до поля?», «Успевает ли король?», «Оцени позицию»); после ответа доска
+// свободна — позицию можно разыграть (usePositionExplorer). ChecksGame — «Шахи и
 // взятия»: отметить на доске все шахи и взятия за обе стороны (поле «откуда», поле «куда»), затем «Готово».
 
 import {useEffect, useMemo, useState} from 'react';
@@ -8,6 +9,7 @@ import {useI18n} from '../../i18n';
 import type {MessageKey} from '../../i18n';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 import type {BoardArrow} from '../puzzles/PuzzleBoard';
+import {ExplorerControls, usePositionExplorer} from '../puzzles/usePositionExplorer';
 import {loadAllClassics} from '../../content/classics';
 import type {ClassicGame} from '../../content/classics';
 import {positionPool} from '../../trainers/memory';
@@ -123,6 +125,7 @@ export function QuizGame({kind, seed, onFinish}: GameProps & { kind: QuizKind })
     const [index, setIndex] = useState(0);
     const [picked, setPicked] = useState<string | null>(null);
     const [score, setScore] = useState({correct: 0, wrong: 0});
+    const explorer = usePositionExplorer();
     const quiz = useMemo(() => (games && pool ? makeQuiz(kind, games, pool, seed, index) : null), [kind, games, pool, seed, index]);
 
     if (!games) return <p className="text-sm text-boxwood/70">{t('trainers.memory.loading')}</p>;
@@ -132,6 +135,8 @@ export function QuizGame({kind, seed, onFinish}: GameProps & { kind: QuizKind })
         if (picked) return;
         setPicked(id);
         setScore((s) => (id === quiz.answer ? {...s, correct: s.correct + 1} : {...s, wrong: s.wrong + 1}));
+        // После ответа позицию можно разыграть самому (например, гонку пешки и короля) — usePositionExplorer.
+        explorer.start(quiz.fen);
     };
     const next = () => {
         if (index + 1 >= QUIZ_ROUNDS) {
@@ -140,6 +145,7 @@ export function QuizGame({kind, seed, onFinish}: GameProps & { kind: QuizKind })
         }
         setIndex((i) => i + 1);
         setPicked(null);
+        explorer.stop();
     };
     const label = (l: string) => (l.startsWith('trainers.') ? t(l as MessageKey) : l);
 
@@ -151,8 +157,11 @@ export function QuizGame({kind, seed, onFinish}: GameProps & { kind: QuizKind })
             </div>
             <p className="text-lg" data-testid="quiz-prompt">{t(quiz.prompt, quiz.params)}</p>
             <div className="w-full max-w-[420px]">
-                <PuzzleBoard fen={quiz.fen} orientation={quiz.orientation} interactive={false} onMove={() => undefined} highlights={quiz.highlights} sound={false}/>
+                <PuzzleBoard fen={explorer.fen ?? quiz.fen} orientation={quiz.orientation} interactive={explorer.active}
+                             onMove={(uci) => explorer.play(uci)} lastMove={explorer.lastMove}
+                             highlights={explorer.plies ? [] : quiz.highlights} sound={explorer.active}/>
             </div>
+            <ExplorerControls explorer={explorer}/>
             <div className="flex flex-wrap gap-2">
                 {quiz.options.map((o) => {
                     const tone = !picked ? 'bg-black/40 border-amber-800/60 hover:border-amber-400'
