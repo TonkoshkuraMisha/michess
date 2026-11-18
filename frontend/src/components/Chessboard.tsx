@@ -1430,6 +1430,38 @@ export default function Chessboard() {
     // Размер, с которым доска рисуется: сохранённый, но не шире окна (на телефоне — почти вся ширина).
     const responsiveBoardPx = typeof window !== 'undefined' ? Math.min(boardSize, window.innerWidth - 24) : boardSize;
 
+    // Панель управления партией. Зрителю не показывается: «отменить ход» и «сбросить доску» портили бы чужую партию на
+    // его экране (выход — в панели чата). Во время партии — внизу правой колонки; после конца — сразу под навигацией,
+    // над «Итогом партии»: иначе итог выталкивал «Анализ партии», «Реванш» и «В лобби» за край колонки (отзыв
+    // владельца 18.11).
+    const controlsPanel = (
+        <GameControlsPanel
+            mode={gameId ? 'pvp' : activeBot ? 'bot' : 'sandbox'}
+            hideRematch={inTournamentGame}
+            gameId={gameId}
+            savedBotGameId={savedBotGameId}
+            historyLength={history.length}
+            gameOverResult={gameOverResult}
+            rematchStatus={rematchStatus}
+            isBotThinking={isBotThinking}
+            whitePlayer={shownWhitePlayer}
+            blackPlayer={shownBlackPlayer}
+            navigate={navigate}
+            onAbortGame={handleAbortGame}
+            onBerserk={canBerserk ? handleBerserk : undefined}
+            onResign={handleResign}
+            onOfferDraw={activeBot ? () => void offerDrawToBot() : handleOfferDraw}
+            onAcceptRematch={handleAcceptRematch}
+            onDeclineRematch={handleDeclineRematch}
+            onOfferRematch={handleOfferRematch}
+            onResetSandbox={handleResetSandbox}
+            onUndoSandboxMove={handleUndoSandboxMove}
+            undoLocked={isRatedBotGame && !gameOverResult}
+            hasCustomPosition={isSandbox && startFen !== null}
+            onLoadFen={handleLoadFen}
+        />
+    );
+
     return (
         <div
             className="w-full max-w-[1920px] h-full flex flex-col xl:flex-row items-center xl:items-stretch justify-between gap-3 px-1 xl:overflow-hidden relative">
@@ -1998,6 +2030,8 @@ export default function Chessboard() {
                     onLast={handleNavigateLast}
                 />
 
+                {!spectatingGameId && gameOverResult && controlsPanel}
+
                 {(gameId || spectatingGameId) && (
                     <GameChatPanel
                         messages={chatMessages}
@@ -2046,33 +2080,7 @@ export default function Chessboard() {
                     <TournamentGameBar tournamentId={savedTournamentId ?? tournamentLinkId} tournamentGameId={tournamentGameRefId}
                                        gameOver={Boolean(gameOverResult)}/>
                 )}
-                {/* Зрителю кнопки песочницы не показываем: «отменить ход» и «сбросить доску»
-                    портили бы чужую партию на его экране. Выход — в панели чата. */}
-                {!spectatingGameId && <GameControlsPanel
-                    mode={gameId ? 'pvp' : activeBot ? 'bot' : 'sandbox'}
-                    hideRematch={inTournamentGame}
-                    gameId={gameId}
-                    savedBotGameId={savedBotGameId}
-                    historyLength={history.length}
-                    gameOverResult={gameOverResult}
-                    rematchStatus={rematchStatus}
-                    isBotThinking={isBotThinking}
-                    whitePlayer={shownWhitePlayer}
-                    blackPlayer={shownBlackPlayer}
-                    navigate={navigate}
-                    onAbortGame={handleAbortGame}
-                    onBerserk={canBerserk ? handleBerserk : undefined}
-                    onResign={handleResign}
-                    onOfferDraw={activeBot ? () => void offerDrawToBot() : handleOfferDraw}
-                    onAcceptRematch={handleAcceptRematch}
-                    onDeclineRematch={handleDeclineRematch}
-                    onOfferRematch={handleOfferRematch}
-                    onResetSandbox={handleResetSandbox}
-                    onUndoSandboxMove={handleUndoSandboxMove}
-                    undoLocked={isRatedBotGame && !gameOverResult}
-                    hasCustomPosition={isSandbox && startFen !== null}
-                    onLoadFen={handleLoadFen}
-                />}
+                {!spectatingGameId && !gameOverResult && controlsPanel}
 
             </div>
 
