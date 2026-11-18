@@ -9,7 +9,7 @@ x-backend: &backend
   build: .
   image: michess-backend:latest
   env_file: .env
-  environment:
+  environment: &backend-env
     ENVIRONMENT: production
     POSTGRES_SERVER: db
     POSTGRES_PORT: "5432"
@@ -87,6 +87,15 @@ services:
     <<: *backend
     command: ["celery", "-A", "src.worker.celery_app", "worker", "--loglevel=INFO",
               "--concurrency=${CELERY_CONCURRENCY:-2}", "-Q", "analysis", "-n", "analysis@%h"]
+    # Метрики фонового анализа (время движка) — на worker:9101/metrics; свой tmpfs, а не общий с api: номера
+    # процессов в контейнерах совпадают (src/core/observability.start_worker_metrics_server).
+    # environment сервиса заменяет общий целиком (слияние YAML неглубокое), поэтому общий подмешан явно.
+    environment: &worker-metrics
+      <<: *backend-env
+      WORKER_METRICS_PORT: "9101"
+      PROMETHEUS_MULTIPROC_DIR: /tmp/prometheus
+    tmpfs:
+      - /tmp/prometheus:mode=1777
     # Stockfish занимает все доступные ядра; без предела анализ партий отбирает CPU у API, и при
     # массовом завершении партий p95 задержки хода вырастал с ~70 до ~230 мс (scripts/loadtest).
     cpus: ${WORKER_CPUS:-1.0}
@@ -102,6 +111,9 @@ services:
     <<: *backend
     command: ["celery", "-A", "src.worker.celery_app", "worker", "--loglevel=INFO",
               "--concurrency=${SIMULATION_CONCURRENCY:-1}", "-Q", "simulation", "-n", "simulation@%h"]
+    environment: *worker-metrics
+    tmpfs:
+      - /tmp/prometheus:mode=1777
     cpus: ${SIMULATION_CPUS:-0.5}
     depends_on:
       migrate:
