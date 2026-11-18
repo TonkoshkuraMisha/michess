@@ -367,11 +367,23 @@ async def on_game_aborted(db: AsyncSession, game_id: int, no_show: str | None) -
     if no_show in ("white", "black"):
         # Победа по неявке — без бонуса берсерка: риска за доской не было.
         return await on_game_finished(db, game_id, "0-1" if no_show == "white" else "1-0", berserk_bonus=False)
-    game = (await db.execute(select(ArenaGame).where(ArenaGame.game_id == game_id))).scalar_one_or_none()
+    game = await _locked_game(db, game_id)
     if game is None or game.result is not None:
         return False
     game.result, game.white_points, game.black_points = "*", 0, 0
     return True
+
+
+async def _locked_game(db: AsyncSession, game_id: int) -> ArenaGame | None:
+    """
+    Запись партии арены под блокировкой строки (SELECT ... FOR UPDATE) до конца транзакции: второй одновременный
+    финиш той же партии (событие партии и сверка после сбоя) ждёт и видит уже записанный результат.
+    populate_existing — перечитать строку, даже если объект уже есть в сессии.
+    """
+    return (await db.execute(
+        select(ArenaGame).where(ArenaGame.game_id == game_id).with_for_update()
+        .execution_options(populate_existing=True)
+    )).scalar_one_or_none()
 
 
 async def on_game_finished(db: AsyncSession, game_id: int, result: str, termination: str | None = None,
@@ -379,11 +391,18 @@ async def on_game_finished(db: AsyncSession, game_id: int, result: str, terminat
     """
     Партия арены закончилась: очки, серии, счётчики (без commit). False — это не партия арены или она уже засчитана.
     result — "1-0", "0-1" или ничья; termination и plies нужны для правила ранней ничьей по соглашению;
-    berserk_bonus=False — победа без бонуса берсерка (неявка соперника).
+    berserk_bonus=False — победа без бонуса берсерка (неявка соперника). Партия и строки обоих участников берутся под
+    блокировкой (порядок — по user_id, чтобы встречные транзакции не ждали друг друга по кругу): очки не теряются и не
+    начисляются дважды при одновременном завершении партий.
     """
-    game = (await db.execute(select(ArenaGame).where(ArenaGame.game_id == game_id))).scalar_one_or_none()
+    game = await _locked_game(db, game_id)
     if game is None or game.result is not None:
         return False
+    players = {p.user_id: p for p in (await db.execute(
+        select(ArenaPlayer).where(ArenaPlayer.arena_id == game.arena_id,
+                                  ArenaPlayer.user_id.in_((game.white_id, game.black_id)))
+        .order_by(ArenaPlayer.user_id).with_for_update().execution_options(populate_existing=True)
+    )).scalars()}
     white_score = {"1-0": 1.0, "0-1": 0.0}.get(result, 0.5)
     # Договорная ничья в самом начале очков не приносит (и рвёт серию): таблица — за сыгранные партии.
     early_draw = result == "1/2-1/2" and termination == "agreement" and plies is not None and plies < EARLY_DRAW_PLIES
@@ -392,7 +411,7 @@ async def on_game_finished(db: AsyncSession, game_id: int, result: str, terminat
     arena = await db.get(Arena, game.arena_id)
     swiss = arena is not None and arena.format == "swiss"
     for user_id, score, color in sides:
-        player = await _player(db, game.arena_id, user_id)
+        player = players.get(user_id)
         if player is None:
             continue
         # Правило ранней ничьей — для арены (в швейцарке тур есть тур, ничья в нём считается как обычно).
@@ -421,8 +440,7 @@ async def advance_after_game(db: AsyncSession, game_id: int) -> None:
     arena = await db.get(Arena, record.arena_id)
     if arena is None or arena.format != "swiss":
         return
-    await db.refresh(arena)
-    await advance_swiss(db, arena)
+    await advance_swiss(db, arena)  # сама перечитывает арену под блокировкой
     await db.commit()
 
 
@@ -432,18 +450,29 @@ async def advance_swiss(db: AsyncSession, arena: Arena, now: datetime | None = N
     """
     Продвигает швейцарку (без commit): после начала — первый тур; тур сыгран — следующий или конец. Меньше двух
     участников на старте — турнир окончен без партий.
+
+    Атомарность: когда тур кончается одновременно на многих досках, продвигать его пытаются все завершившие партии и
+    открытые страницы. Решение принимается под блокировкой строки арены (SELECT ... FOR UPDATE, до commit
+    вызывающего): первый открывает тур, остальные ждут и видят уже новый current_round с несыгранными партиями.
+    Дешёвая проверка без блокировки отсекает обычный случай «тур ещё идёт».
     """
     from src.services import tournament_rules as rules
 
     now = now or _now()
     if arena.format != "swiss" or arena.finished_at is not None or now < _aware(arena.starts_at):
         return
-    games = list((await db.execute(select(ArenaGame).where(ArenaGame.arena_id == arena.id))).scalars())
-    if any(g.result is None for g in games if g.round == arena.current_round):
+    if await _round_in_progress(db, arena):
         return
+    locked = (await db.execute(select(Arena).where(Arena.id == arena.id).with_for_update()
+                               .execution_options(populate_existing=True))).scalar_one()
+    if locked.finished_at is not None or await _round_in_progress(db, locked):
+        return
+    games = list((await db.execute(select(ArenaGame).where(ArenaGame.arena_id == arena.id)
+                                   .execution_options(populate_existing=True))).scalars())
     players = list((await db.execute(
         select(ArenaPlayer).where(ArenaPlayer.arena_id == arena.id)
         .order_by(ArenaPlayer.rating.desc(), ArenaPlayer.joined_at, ArenaPlayer.id)
+        .execution_options(populate_existing=True)
     )).scalars())
     if arena.current_round >= arena.rounds or len(players) < 2:
         arena.finished_at = now
@@ -466,6 +495,12 @@ async def advance_swiss(db: AsyncSession, arena: Arena, now: datetime | None = N
                and seat_of[g.white_id] in seats and seat_of[g.black_id] in seats]
     for white_seat, black_seat in rules.swiss_pairings(seats, records):
         await _start_swiss_game(db, arena, user_of[white_seat], user_of[black_seat])
+
+
+async def _round_in_progress(db: AsyncSession, arena: Arena) -> bool:
+    """В текущем туре швейцарки есть несыгранная партия (читается из базы, а не из объектов сессии)."""
+    return bool(await db.scalar(select(func.count()).select_from(ArenaGame).where(
+        ArenaGame.arena_id == arena.id, ArenaGame.round == arena.current_round, ArenaGame.result.is_(None))))
 
 
 async def _start_swiss_game(db: AsyncSession, arena: Arena, white: int, black: int) -> None:

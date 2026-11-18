@@ -214,9 +214,17 @@ def _record(game: TournamentGame) -> rules.GameRecord:
 async def record_result(
         db: AsyncSession, tournament: Tournament, game: TournamentGame, result: str, game_id: int | None = None,
 ) -> None:
-    """Записывает результат партии турнира и продвигает турнир. Сам commit."""
+    """
+    Записывает результат партии турнира и продвигает турнир. Сам commit. Турнир и партия перечитываются под
+    блокировкой строк (SELECT ... FOR UPDATE): результат симуляции партий ботов (воркер Celery) и партия игрока могут
+    прийти одновременно — тур тогда продвигается один раз, а повторная запись той же партии получает
+    tournament_game_closed.
+    """
     if result not in ("1-0", "0-1", "1/2-1/2"):
         raise ValueError(f"bad result {result}")
+    await db.flush()  # несохранённые правки вызывающего не должны пропасть при перечитывании
+    await db.refresh(tournament, with_for_update=True)
+    await db.refresh(game, with_for_update=True)
     if game.tournament_id != tournament.id or tournament.status != "active" or game.result is not None:
         raise DomainError("tournament_game_closed")
     game.result = result
