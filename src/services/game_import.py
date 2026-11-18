@@ -37,6 +37,7 @@ from src.models.imported_game import ImportedGame
 from src.models.puzzle import PersonalPuzzle
 from src.models.user import User
 from src.services.analysis_service import evaluate_pgn, is_current_analysis
+from src.services.game_engine import normalize_result
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +161,7 @@ def _record(user: User, source: str, external_id: str, game: chess.pgn.Game, col
         user_id=user.id, source=source, external_id=external_id[:64], color=color,
         white_name=headers.get("White", "?")[:NAME_MAX], black_name=headers.get("Black", "?")[:NAME_MAX],
         white_rating=_rating(headers.get("WhiteElo")), black_rating=_rating(headers.get("BlackElo")),
-        result=headers.get("Result", "*")[:10], speed=speed or speed_from_time_control(headers.get("TimeControl")),
+        result=normalize_result(headers.get("Result")), speed=speed or speed_from_time_control(headers.get("TimeControl")),
         played_at=_played_at(headers), pgn=_clean_pgn(game),
     )
 

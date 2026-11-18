@@ -17,6 +17,8 @@ from src.models.base import Base, one_of
 IMPORT_SOURCES = ("lichess", "chesscom", "pgn")
 # Каким цветом играл владелец партии.
 IMPORT_COLORS = ("white", "black")
+# Итог партии — приводится при импорте (game_engine.normalize_result).
+IMPORT_RESULTS = ("1-0", "0-1", "1/2-1/2", "*")
 
 
 class ImportedGame(Base):
@@ -29,6 +31,7 @@ class ImportedGame(Base):
         UniqueConstraint("user_id", "source", "external_id", name="uq_imported_games_source_id"),
         one_of("imported_games", "source", IMPORT_SOURCES),
         one_of("imported_games", "color", IMPORT_COLORS),
+        one_of("imported_games", "result", IMPORT_RESULTS),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)

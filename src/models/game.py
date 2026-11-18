@@ -19,7 +19,11 @@ from datetime import datetime
 from sqlalchemy import JSON, BigInteger, Boolean, DateTime, Enum, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.models.base import Base
+from src.models.base import Base, one_of
+
+# Итог партии (CHECK ck_games_result; тот же набор — game_engine.GAME_RESULTS, сверка — tests/test_db_integrity.py).
+# NULL — партия ещё не закончена.
+GAME_RESULTS = ("1-0", "0-1", "1/2-1/2", "*")
 
 
 class GameStatus(str, enum.Enum):
@@ -38,6 +42,7 @@ class GameStatus(str, enum.Enum):
 class Game(Base):
     """Одна партия любого вида. Что в каких полях и кто их пишет — в описании модуля выше."""
     __tablename__ = "games"
+    __table_args__ = (one_of("games", "result", GAME_RESULTS),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     # RESTRICT — осознанное решение (ревизия базы 29.1, находка 5): игрока с партиями не удаляют, аккаунт

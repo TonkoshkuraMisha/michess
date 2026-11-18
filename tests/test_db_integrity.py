@@ -14,11 +14,11 @@ from sqlalchemy.exc import IntegrityError
 
 import src.models  # noqa: F401 — регистрирует все таблицы
 from src.models import beta as beta_models
-from src.models import imported_game, library, moderation, puzzle, tournament
+from src.models import game, imported_game, library, moderation, puzzle, tournament
 from src.models import user as user_models
 from src.models.base import Base
 from src.models.user import User
-from src.services import beta, defense_drills, direct_messages, game_import, tournament_rules, tournaments
+from src.services import beta, defense_drills, direct_messages, game_engine, game_import, tournament_rules, tournaments
 from src.services import library as library_service
 from src.services import moderation as moderation_service
 
@@ -50,7 +50,9 @@ def test_every_foreign_key_is_indexed_and_has_a_delete_rule():
 @pytest.mark.parametrize(("model_values", "service_values"), [
     (beta_models.FEEDBACK_STATUSES, beta.FEEDBACK_STATUSES),
     (puzzle.DEFENSE_DRILL_KINDS, defense_drills.KINDS),
-    (library.LIBRARY_RESULTS, library_service.RESULTS),
+    (library.LIBRARY_RESULTS, game_engine.GAME_RESULTS),
+    (game.GAME_RESULTS, game_engine.GAME_RESULTS),
+    (imported_game.IMPORT_RESULTS, game_engine.GAME_RESULTS),
     (library.ANNOTATION_STATUSES, library_service.ANNOTATION_STATUSES),
     (moderation.REPORT_ACTIONS, moderation_service.ACTIONS),
     (moderation.REPORT_REASONS, (*moderation_service.REASONS, "auto")),
