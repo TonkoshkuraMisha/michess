@@ -2768,6 +2768,7 @@ export const en = {
         week: 'Week {n}',
         session: 'Session {n}',
         markDone: 'Session done',
+        activityDone: 'done',
         activities: {mate: 'Mating pattern', endgame: 'Endgame', puzzles: 'Puzzles', trainer: 'Trainer',
             classics: 'Master games with explanations', guess: 'Guess the master’s move', play: 'A game against a bot'},
         items: {

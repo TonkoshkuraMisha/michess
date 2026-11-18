@@ -2772,6 +2772,7 @@ export const ru: Messages = {
         week: 'Неделя {n}',
         session: 'Занятие {n}',
         markDone: 'Занятие выполнено',
+        activityDone: 'выполнено',
         activities: {mate: 'Матовая конструкция', endgame: 'Эндшпиль', puzzles: 'Задачи', trainer: 'Тренажёр',
             classics: 'Партии мастеров с объяснениями', guess: 'Угадай ход мастера', play: 'Партия с ботом'},
         items: {

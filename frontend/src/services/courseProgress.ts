@@ -3,7 +3,8 @@
 // видам упражнений (нормативы считает сервер — src/services/course_progress.py), здесь оно сопоставляется с шагами
 // модуля. Ключи записей прогресса — те же функции, которыми их пишут разделы (азбука, курс матов, эндшпиль, мини-игры).
 // Шаг без объективного итога (библиотека, репертуар, партии мастеров, «угадай ход», разминка, игра) не проверяется:
-// модуль из одних таких шагов игрок отмечает сам, как раньше.
+// модуль из одних таких шагов игрок отмечает сам, как раньше. Те же правила засчитывают занятия программ
+// тренировок (22.3, programAutoCount): занятие — набор таких же упражнений.
 
 import {API_BASE_URL} from '../config/api';
 import {LEVEL_EXAM_TARGET} from '../content/supercourse';
@@ -78,6 +79,22 @@ export function activityDone(activity: Activity, facts: CourseFacts): boolean | 
  * модуль только из непроверяемых шагов автоматически не закрывается.
  */
 export function moduleAutoDone(module: CourseModule, facts: CourseFacts): boolean {
-    const checked = module.steps.map((step) => activityDone(step, facts)).filter((done) => done !== null);
+    return stepsAutoDone(module.steps, facts);
+}
+
+/** Набор упражнений закрыт сам: есть проверяемые и все они выполнены (общее правило модуля курса и занятия программы). */
+export function stepsAutoDone(steps: Activity[], facts: CourseFacts): boolean {
+    const checked = steps.map((step) => activityDone(step, facts)).filter((done) => done !== null);
     return checked.length > 0 && checked.every(Boolean);
+}
+
+/**
+ * Автозачёт программы тренировок (22.3): прогресс программы — число занятий по порядку, поэтому от уже пройденных
+ * (done) засчитываются подряд идущие занятия, закрытые сами (stepsAutoDone). Занятие без проверяемых упражнений
+ * останавливает счёт — его игрок отмечает кнопкой.
+ */
+export function programAutoCount(sessions: Activity[][], done: number, facts: CourseFacts): number {
+    let count = done;
+    while (count < sessions.length && stepsAutoDone(sessions[count], facts)) count += 1;
+    return count;
 }

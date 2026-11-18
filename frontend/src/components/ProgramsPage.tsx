@@ -1,15 +1,21 @@
 // Программы тренировок (таск 22.3): /programs — четыре программы по уровням с прогрессом; /programs/:id — 8 недель
 // по 5 занятий, текущее занятие отмечено, упражнения ведут в готовые разделы. Прогресс — запись урока
 // «program-<id>» (шаг — последнее пройденное занятие), без входа план виден, но не сохраняется.
+// Автозачёт (план владельца 18.11, по правилам Большого курса — services/courseProgress.ts): по фактам
+// GET /learn/course-progress выполненные упражнения отмечены галочкой, а подряд идущие занятия, где сделаны все
+// проверяемые упражнения, засчитываются сами (programAutoCount). Занятие без проверяемых упражнений (репертуар,
+// библиотека, «угадай ход», партия, разминка) отмечается кнопкой, как раньше.
 
 import {examTitle} from './ExamPage';
 import {useEffect, useState} from 'react';
 import {Link, useNavigate, useParams} from 'react-router-dom';
-import {ArrowLeft, CalendarCheck, CheckCircle2, Circle} from 'lucide-react';
+import {ArrowLeft, CalendarCheck, Check, CheckCircle2, Circle} from 'lucide-react';
 import {hasMessage, useI18n} from '../i18n';
 import type {Language} from '../i18n/core';
 import {getToken} from '../services/authToken';
 import {fetchLessonProgress, saveLessonProgress} from '../services/lessonProgress';
+import {activityDone, fetchCourseFacts, programAutoCount} from '../services/courseProgress';
+import type {CourseFacts} from '../services/courseProgress';
 import {activityLink, PROGRAMS, programById, SESSIONS_PER_PROGRAM} from '../content/programs';
 import type {Activity} from '../content/programs';
 import {lessonById, localized} from '../content/lessons';
@@ -40,8 +46,13 @@ export function activityLabel(t: (key: never) => string, language: Language, act
     }
 }
 
-function useProgramProgress(): [Record<string, number>, (programId: string, done: number) => Promise<void>] {
+/**
+ * Пройденные занятия программ (запись урока program-<id>) и отметка нового счёта. loaded — сохранённый прогресс уже
+ * прочитан: до этого автозачёт не пишет, иначе ранний ответ затёр бы сохранённое.
+ */
+function useProgramProgress(): [Record<string, number>, (programId: string, done: number) => Promise<void>, boolean] {
     const [done, setDone] = useState<Record<string, number>>({});
+    const [loaded, setLoaded] = useState(false);
     useEffect(() => {
         const token = getToken();
         if (!token) return;
@@ -52,6 +63,7 @@ function useProgramProgress(): [Record<string, number>, (programId: string, done
                 if (row) map[program.id] = row.completed ? SESSIONS_PER_PROGRAM : row.step + 1;
             }
             setDone(map);
+            setLoaded(true);
         }).catch(() => undefined);
     }, []);
     const mark = async (programId: string, count: number) => {
@@ -62,7 +74,7 @@ function useProgramProgress(): [Record<string, number>, (programId: string, done
         });
         setDone((d) => ({...d, [programId]: count}));
     };
-    return [done, mark];
+    return [done, mark, loaded];
 }
 
 export function ProgramsPage() {
@@ -96,10 +108,22 @@ export function ProgramPage() {
     const navigate = useNavigate();
     const {programId = ''} = useParams<{ programId: string }>();
     const program = programById(programId);
-    const [done, mark] = useProgramProgress();
-    if (!program) return <p className="p-4 text-rose-300">{t('programs.notFound')}</p>;
-    const count = done[program.id] ?? 0;
+    const [done, mark, loaded] = useProgramProgress();
+    const [facts, setFacts] = useState<CourseFacts | null>(null);
+    const count = program ? done[program.id] ?? 0 : 0;
     const logged = Boolean(getToken());
+
+    useEffect(() => {
+        if (logged) fetchCourseFacts().then(setFacts).catch(() => undefined);
+    }, [logged]);
+    // Автозачёт: подряд идущие занятия, закрытые сами, — когда известны и сохранённый прогресс, и факты.
+    useEffect(() => {
+        if (!program || !facts || !loaded) return;
+        const next = programAutoCount(program.weeks.flat(), count, facts);
+        if (next > count) void mark(program.id, next);
+    }, [program, facts, loaded, count]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    if (!program) return <p className="p-4 text-rose-300">{t('programs.notFound')}</p>;
 
     return (
         <div className="w-full max-w-4xl mx-auto p-3 flex flex-col gap-4 text-boxwood-light" data-testid="program-page">
@@ -124,9 +148,12 @@ export function ProgramPage() {
                                     <span className="text-xs text-boxwood/60 shrink-0">{t('programs.session', {n: s + 1})}</span>
                                     {session.map((activity, a) => {
                                         const link = activityLink(activity);
+                                        const checked = facts ? activityDone(activity, facts) : null;
                                         return (
                                             <button key={a} type="button" onClick={() => navigate(link.to, {state: link.state})}
-                                                    className="text-left hover:underline text-amber-100 min-w-0 break-words">
+                                                    data-testid={checked ? `activity-done-${index}-${a}` : undefined}
+                                                    className="text-left hover:underline text-amber-100 min-w-0 break-words inline-flex items-center gap-1">
+                                                {checked && <Check size={13} className="text-emerald-400 shrink-0" aria-label={t('programs.activityDone')}/>}
                                                 {activityLabel(t as never, language, activity)}
                                             </button>
                                         );

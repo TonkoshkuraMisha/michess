@@ -2,7 +2,7 @@
 // когда модуль закрывается сам, и что неполный ответ сервера ничего не ломает.
 
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {activityDone, fetchCourseFacts, moduleAutoDone, moduleCheckable} from '../courseProgress';
+import {activityDone, fetchCourseFacts, moduleAutoDone, moduleCheckable, programAutoCount} from '../courseProgress';
 import type {CourseFacts} from '../courseProgress';
 import type {CourseModule} from '../../content/supercourse';
 import {setToken} from '../authToken';
@@ -58,6 +58,21 @@ describe('модуль', () => {
         expect(moduleAutoDone(manual, FACTS)).toBe(false);
         expect(moduleCheckable(mixed)).toBe(true);
         expect(moduleCheckable(manual)).toBe(false);
+    });
+});
+
+describe('программа тренировок (22.3)', () => {
+    const facts: CourseFacts = {lessons: ['tactics-pin'], themes: ['pin'], trainers: [], exams: {}};
+    const sessions = [
+        [{kind: 'lesson', id: 'tactics-pin'} as const, {kind: 'theme', id: 'pin'} as const],
+        [{kind: 'theme', id: 'pin'} as const],
+        [{kind: 'workout'} as const],
+        [{kind: 'theme', id: 'pin'} as const],
+    ];
+    it('считает подряд от пройденного и останавливается на непроверяемом занятии', () => {
+        expect(programAutoCount(sessions, 0, facts)).toBe(2);
+        expect(programAutoCount(sessions, 3, facts)).toBe(4);
+        expect(programAutoCount(sessions, 0, {...facts, themes: []})).toBe(0);
     });
 });
 
