@@ -1898,6 +1898,7 @@ export const uk: Messages = {
         failed: 'Не той хід — зелена стрілка показує розв\'язок.',
         showSolution: 'Показати розв\'язок',
         nextTask: 'Наступна задача',
+        examFinish: 'Завершити перевірку',
         constructionDone: 'Конструкцію пройдено: розв\'язано {solved} з {total}.',
         backToCourse: 'До списку конструкцій',
         examTitle: 'Підсумкова перевірка ({minutes} хв)',

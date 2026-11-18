@@ -4,8 +4,11 @@
 // /learn/mates/exam — смешанная проверка на время. Задачи решаются сервером (/puzzles/{id}/move) без рейтинга.
 // После задачи доска свободна — позицию можно разыграть (usePositionExplorer).
 // Прогресс — как у уроков школы: «mates-<конструкция>» и «mates-exam» (результат проверки).
+// В проверке верно решённая задача сменяется сама через SOLVED_PAUSE_MS, а после ошибки остаётся с разбором до
+// кнопки «Следующая задача» (отзыв владельца 18.11).
 
 import {useEffect, useMemo, useRef, useState} from 'react';
+import type {ReactNode} from 'react';
 import {Link, useParams} from 'react-router-dom';
 import {Chess} from 'chess.js';
 import {ArrowLeft, ArrowRight, Check, Timer, X} from 'lucide-react';
@@ -21,6 +24,9 @@ import {themeText} from '../../services/themes';
 import {DemoViewer} from '../puzzles/TrainingPanel';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 import {ExplorerControls, usePositionExplorer} from '../puzzles/usePositionExplorer';
+import {SolutionReplay} from '../puzzles/SolutionReplay';
+import type {ReplayView} from '../puzzles/SolutionReplay';
+import {sanMoves} from '../puzzles/puzzleNotation';
 
 export const EXAM_PROGRESS_ID = 'mates-exam';
 
@@ -54,12 +60,24 @@ function NeedLogin() {
     return <p className="text-amber-300" data-testid="mates-login">{t('mateCourse.loginRequired')}</p>;
 }
 
+/** Пауза перед следующей задачей проверки после верного решения: успеть увидеть мат на доске. */
+const SOLVED_PAUSE_MS = 800;
+
 function BackLink({to, label}: { to: string; label: string }) {
     return <Link to={to} className="text-sm text-amber-400 hover:underline flex items-center gap-1"><ArrowLeft size={14}/> {label}</Link>;
 }
 
-/** Задача курса: первый ход соперника уже сделан, ходы проверяет сервер. */
-export function CoursePuzzle({puzzle, onDone}: { puzzle: PuzzleView; onDone: (solved: boolean) => void }) {
+/**
+ * Задача курса: первый ход соперника уже сделан, ходы проверяет сервер. После ошибки или «Показать решение» —
+ * разбор (SolutionReplay): решение целиком и, если ошибка была в начальной позиции, опровержение сыгранного хода —
+ * пошагово на доске, чтобы было видно, в чём ошибка (отзыв владельца 18.11).
+ */
+export function CoursePuzzle({puzzle, onDone, children}: {
+    puzzle: PuzzleView;
+    onDone: (solved: boolean) => void;
+    /** Действия под задачей (кнопка «Следующая задача» в итоговой проверке). */
+    children?: ReactNode;
+}) {
     const {t} = useI18n();
     const start = useMemo(() => {
         const game = new Chess(puzzle.fen);
@@ -70,7 +88,10 @@ export function CoursePuzzle({puzzle, onDone}: { puzzle: PuzzleView; onDone: (so
     const [lastMove, setLastMove] = useState<{ from: string; to: string } | null>(start.last);
     const [outcome, setOutcome] = useState<boolean | null>(null);
     const [mark, setMark] = useState<{ square: string; ok: boolean } | null>(null);
-    const [solution, setSolution] = useState<string | null>(null);
+    const [solution, setSolution] = useState<string[] | null>(null);
+    // Неверный ход, сделанный в начальной позиции задачи, — линия «опровержение» в разборе.
+    const [played, setPlayed] = useState<string | null>(null);
+    const [replay, setReplay] = useState<ReplayView | null>(null);
     const [error, setError] = useState<UiMessage | null>(null);
     const busy = useRef(false);
     const explorer = usePositionExplorer();
@@ -100,7 +121,8 @@ export function CoursePuzzle({puzzle, onDone}: { puzzle: PuzzleView; onDone: (so
             const res = await puzzlesApi.move(puzzle.id, uci);
             if (!res.correct) {
                 setMark({square: uci.slice(2, 4), ok: false});
-                setSolution(res.solution?.[0] ?? null);
+                setSolution(res.solution?.length ? res.solution : null);
+                if (fen === start.fen) setPlayed(uci);
                 finish(false);
                 return;
             }
@@ -124,7 +146,7 @@ export function CoursePuzzle({puzzle, onDone}: { puzzle: PuzzleView; onDone: (so
         if (outcome !== null) return;
         try {
             const res = await puzzlesApi.giveUp(puzzle.id);
-            setSolution(res.solution[0] ?? null);
+            setSolution(res.solution.length ? res.solution : null);
             finish(false);
         } catch (err) {
             setError(errorMessage(err, 'common.networkError'));
@@ -134,9 +156,12 @@ export function CoursePuzzle({puzzle, onDone}: { puzzle: PuzzleView; onDone: (so
     return (
         <div className="flex flex-col md:flex-row gap-5 items-start" data-testid="course-puzzle">
             <div className="w-full max-w-[520px]">
-                <PuzzleBoard fen={explorer.fen ?? fen} orientation={puzzle.color} interactive onMove={(uci) => void onMove(uci)}
-                             lastMove={explorer.active ? explorer.lastMove : lastMove} mark={explorer.active ? null : mark}
-                             arrows={solution && !explorer.active ? [{from: solution.slice(0, 2), to: solution.slice(2, 4), color: 'green'}] : []}/>
+                <PuzzleBoard fen={replay?.fen ?? explorer.fen ?? fen} orientation={puzzle.color} interactive={!replay}
+                             onMove={(uci) => void onMove(uci)}
+                             lastMove={replay ? replay.lastMove : explorer.active ? explorer.lastMove : lastMove}
+                             mark={replay || explorer.active ? null : mark}
+                             arrows={replay ? replay.arrows : solution && !explorer.active
+                                 ? [{from: solution[0].slice(0, 2), to: solution[0].slice(2, 4), color: 'green'}] : []}/>
                 <ExplorerControls explorer={explorer}/>
             </div>
             <div className="flex-1 flex flex-col gap-2 min-w-0">
@@ -148,6 +173,16 @@ export function CoursePuzzle({puzzle, onDone}: { puzzle: PuzzleView; onDone: (so
                         {t('mateCourse.showSolution')}
                     </button>
                 )}
+                {outcome === false && solution && (
+                    <SolutionReplay startFen={start.fen} onShow={setReplay} lines={[
+                        ...(played ? [{
+                            id: 'played', moves: [played], color: 'red' as const,
+                            label: t('puzzles.review.refutation', {move: sanMoves(start.fen, [played])[0]}),
+                        }] : []),
+                        {id: 'solution', moves: solution, color: 'green' as const, label: t('puzzles.review.solution')},
+                    ]}/>
+                )}
+                {children}
                 {error && <p role="alert" className="text-sm text-rose-300">{renderUiMessage(error, t)}</p>}
             </div>
         </div>
@@ -300,11 +335,13 @@ export function MateExamPage() {
     const [puzzle, setPuzzle] = useState<PuzzleView | null>(null);
     const [results, setResults] = useState<boolean[]>([]);
     const [error, setError] = useState<UiMessage | null>(null);
+    // После ошибки задача остаётся на экране с разбором решения, пока игрок не нажмёт «Следующая задача».
+    const [reviewing, setReviewing] = useState(false);
     const saved = useRef(false);
     const loggedIn = Boolean(getToken());
 
     const secondsLeft = deadline === null ? 0 : Math.max(0, Math.ceil((deadline - now) / 1000));
-    const over = plan !== null && deadline !== null && (secondsLeft === 0 || results.length >= plan.length);
+    const over = plan !== null && deadline !== null && (secondsLeft === 0 || (results.length >= plan.length && !reviewing));
     const score = results.filter(Boolean).length;
 
     useEffect(() => {
@@ -330,6 +367,7 @@ export function MateExamPage() {
             saved.current = false;
             setPlan(exam.tasks);
             setResults([]);
+            setReviewing(false);
             setCurrent(0);
             setNow(Date.now());
             setDeadline(Date.now() + exam.minutes * 60_000);
@@ -339,14 +377,22 @@ export function MateExamPage() {
         }
     };
 
+    const advance = () => {
+        if (plan && current + 1 < plan.length) {
+            setCurrent(current + 1);
+            load(plan, current + 1);
+        }
+    };
+
     const done = (solved: boolean) => {
         setResults((list) => [...list, solved]);
-        if (plan && current + 1 < plan.length) {
-            window.setTimeout(() => {
-                setCurrent(current + 1);
-                load(plan, current + 1);
-            }, 800);
-        }
+        if (solved) window.setTimeout(advance, SOLVED_PAUSE_MS);
+        else setReviewing(true);
+    };
+
+    const next = () => {
+        setReviewing(false);
+        advance();
     };
 
     const clock = `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}`;
@@ -378,7 +424,17 @@ export function MateExamPage() {
                         <span>{t('mateCourse.taskOf', {index: current + 1, total: plan.length})}</span>
                         <span>{t('mateCourse.solvedCount', {solved: score, done: results.length})}</span>
                     </p>
-                    {puzzle && <CoursePuzzle key={puzzle.id} puzzle={puzzle} onDone={done}/>}
+                    {puzzle && (
+                        <CoursePuzzle key={puzzle.id} puzzle={puzzle} onDone={done}>
+                            {reviewing && (
+                                <button type="button" onClick={next} data-testid="mates-exam-next"
+                                        className="self-start px-4 py-2 rounded bg-amber-700 hover:bg-amber-600 text-white font-bold flex items-center gap-2 cursor-pointer">
+                                    {t(current + 1 < (plan?.length ?? 0) ? 'mateCourse.nextTask' : 'mateCourse.examFinish')}
+                                    <ArrowRight size={16}/>
+                                </button>
+                            )}
+                        </CoursePuzzle>
+                    )}
                 </>
             )}
         </div>

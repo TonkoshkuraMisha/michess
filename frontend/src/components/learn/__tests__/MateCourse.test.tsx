@@ -125,6 +125,34 @@ describe('Курс матовых конструкций', () => {
         expect(screen.getByTestId('mates-login')).toBeInTheDocument();
     });
 
+    it('проверка: после ошибки задача не сменяется — разбор решения и «Следующая задача» (отзыв владельца 18.11)', async () => {
+        stub([
+            [/course\/mates\/exam$/, () => ({minutes: 10, tasks: [{theme: 'back_rank_mate', index: 0}, {theme: 'back_rank_mate', index: 1}]})],
+            [/course\/mates\/back_rank_mate\/0$/, () => TASK],
+            [/course\/mates\/back_rank_mate\/1$/, () => ({...TASK, id: 12, index: 1})],
+            [/\/11\/move$/, () => ({correct: false, done: true, reply: null, solution: ['d2d8', 'e2e8', 'd8e8'], result: {solved: false}})],
+            [/learn\/progress\//, () => ({})],
+        ]);
+        renderAt('/learn/mates/exam');
+        fireEvent.click(screen.getByTestId('mates-exam-start'));
+        await waitFor(() => expect(cell('e2').querySelector('img')).not.toBeNull(), {timeout: 5000});
+        await drag('d2', 'd5');
+        expect(await screen.findByTestId('course-failed', {}, {timeout: 5000})).toBeInTheDocument();
+        // Подождали дольше прежней автосмены — задача та же, номер прежний.
+        await act(async () => {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+        });
+        expect(screen.getByTestId('mates-exam-status')).toHaveTextContent('Задача 1 из 2');
+        // Разбор: опровержение сыгранного хода и решение целиком, пошагово на доске.
+        expect(screen.getByTestId('replay-line-played')).toHaveTextContent(/Опровержение .*d5/);
+        fireEvent.click(screen.getByTestId('replay-line-solution'));
+        fireEvent.click(screen.getByTestId('replay-forward'));
+        expect(cell('d8').querySelector('img')?.getAttribute('alt')).toBe('wr');
+
+        fireEvent.click(screen.getByTestId('mates-exam-next'));
+        await waitFor(() => expect(screen.getByTestId('mates-exam-status')).toHaveTextContent('Задача 2 из 2'));
+    }, 20_000);
+
     it('проверка: время и номер задачи', async () => {
         stub([
             [/course\/mates\/exam$/, () => ({minutes: 10, tasks: [{theme: 'back_rank_mate', index: 1}]})],
