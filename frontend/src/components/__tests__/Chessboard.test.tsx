@@ -960,3 +960,35 @@ describe('ничья с ботом (таск 21.4)', () => {
         expect(call(fetchMock, '/bots/save-game')).toBeUndefined();
     });
 });
+
+describe('доступность доски (таск 26.3)', () => {
+    it('ход с клавиатуры: Tab на доску, стрелки, Enter; ход и ответ бота объявляются словами', async () => {
+        await startBotGame('white');
+        const start = squareEl('a8');
+        expect(start).toHaveAttribute('tabindex', '0');           // в порядок Tab входит одна клетка
+        expect(squareEl('e2')).toHaveAttribute('tabindex', '-1');
+        expect(squareEl('e2')).toHaveAttribute('aria-label', 'e2, белая пешка');
+        start.focus();
+        const press = (key: string) => fireEvent.keyDown(document.activeElement as HTMLElement, {key});
+        for (let i = 0; i < 6; i++) press('ArrowDown');
+        for (let i = 0; i < 4; i++) press('ArrowRight');
+        expect(document.activeElement).toBe(squareEl('e2'));
+        press('Enter');
+        expect(squareEl('e2')).toHaveAttribute('aria-pressed', 'true');
+        press('ArrowUp');
+        press('ArrowUp');
+        await act(async () => {
+            press(' ');
+        });
+        expect(squareEl('e4')).toHaveAttribute('aria-label', 'e4, белая пешка');
+        await waitFor(() => expect(screen.getByTestId('move-announcer')).toHaveTextContent('Чёрные: пешка e7 — e5'),
+            {timeout: 5000});
+    });
+
+    it('позиция словами по кнопке', async () => {
+        await startBotGame('white');
+        fireEvent.click(screen.getByTestId('describe-position'));
+        expect(screen.getByTestId('position-words')).toHaveTextContent(/^Белые: король на e1; ферзь на d1;/);
+    });
+});
+
