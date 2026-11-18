@@ -4,7 +4,8 @@ import {act, fireEvent, render, renderHook, screen, waitFor, within} from '@test
 import {Chess} from 'chess.js';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {
-    COACH_ENABLED_KEY, COACH_LEVEL_KEY, levelForRating, shouldWarn, useCoachMode,
+    COACH_ENABLED_KEY, COACH_LEVEL_KEY, levelForRating, MAX_WARNINGS_PER_GAME, MIN_MOVES_BETWEEN_WARNINGS, shouldWarn,
+    useCoachMode, warningAllowed,
 } from '../hooks/useCoachMode';
 import type {MoveCheck, UseCoachModeResult} from '../hooks/useCoachMode';
 import {CoachPanel} from '../CoachPanel';
@@ -83,15 +84,13 @@ describe('useCoachMode', () => {
         const {result} = renderHook(() => useCoachMode(1500));
         act(() => result.current.onPlayerMove(before, before.fen(), 'f2f3', after.fen()));
         expect(fetchMock).not.toHaveBeenCalled();
-        expect(result.current.holdBot).toBe(false);
     });
 
-    it('плохой ход: бот ждёт, «Почему?» даёт объяснение, «Переходить» возвращает позицию', async () => {
+    it('плохой ход: совет без остановки партии, «Почему?» даёт объяснение, «Переходить» возвращает позицию', async () => {
         localStorage.setItem(COACH_ENABLED_KEY, '1');
         const fetchMock = stubFetch(BLUNDER);
         const {result} = renderHook(() => useCoachMode(1500));
         act(() => result.current.onPlayerMove(before, before.fen(), 'f2f3', after.fen()));
-        expect(result.current.holdBot).toBe(true);
         expect(result.current.assisted).toBe(true);
         await waitFor(() => expect(result.current.pending?.status).toBe('warning'));
         expect(JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body))).toEqual({fen: before.fen(), move: 'f2f3'});
@@ -105,7 +104,6 @@ describe('useCoachMode', () => {
         });
         expect(restored).toBe(before);
         expect(result.current.pending).toBeNull();
-        expect(result.current.holdBot).toBe(false);
         expect(result.current.explanation).toBeNull();
     });
 
@@ -115,7 +113,6 @@ describe('useCoachMode', () => {
         const {result} = renderHook(() => useCoachMode(1500));
         act(() => result.current.onPlayerMove(before, before.fen(), 'f2f3', after.fen()));
         await waitFor(() => expect(result.current.pending).toBeNull());
-        expect(result.current.holdBot).toBe(false);
     });
 
     it('ответ к позиции, которой уже нет, отбрасывается', async () => {
@@ -170,7 +167,7 @@ describe('useCoachMode', () => {
         expect(result.current.advice).toBeNull();
     });
 
-    it('«Не согласен»: позиция и ход уходят на проверку, ход остаётся, бот не ждёт', async () => {
+    it('«Не согласен»: позиция и ход уходят на проверку, ход остаётся', async () => {
         localStorage.setItem(COACH_ENABLED_KEY, '1');
         const fetchMock = stubFetch(BLUNDER);
         const {result} = renderHook(() => useCoachMode(1500));
@@ -178,11 +175,36 @@ describe('useCoachMode', () => {
         await waitFor(() => expect(result.current.pending?.status).toBe('warning'));
         act(() => result.current.dispute());
         expect(result.current.pending).toBeNull();
-        expect(result.current.holdBot).toBe(false);
         expect(result.current.disputeSent).toBe(true);
         const [url, init] = fetchMock.mock.calls[1] as unknown as [string, RequestInit];
         expect(url).toContain('/analysis/dispute');
         expect(JSON.parse(String(init.body))).toEqual({fen: before.fen(), move: 'f2f3', cp_loss: 280});
+    });
+
+    it('предупреждает несколько раз за партию, а не на каждом шагу; новая партия — снова', async () => {
+        localStorage.setItem(COACH_ENABLED_KEY, '1');
+        const fetchMock = stubFetch(BLUNDER);
+        const {result} = renderHook(() => useCoachMode(1500));
+        const warnings: number[] = [];
+        for (let move = 1; move <= 16; move++) {
+            act(() => result.current.onPlayerMove(before, before.fen(), 'f2f3', `${after.fen()} #${move}`));
+            await waitFor(() => expect(result.current.pending?.status).not.toBe('checking'));
+            if (result.current.pending?.status === 'warning') warnings.push(move);
+        }
+        // Каждый ход здесь — зевок, но совет — на 1-м, 5-м и 9-м ходу, дальше лимит партии исчерпан.
+        expect(warnings).toEqual([1, 1 + MIN_MOVES_BETWEEN_WARNINGS, 1 + 2 * MIN_MOVES_BETWEEN_WARNINGS]);
+        expect(warnings).toHaveLength(MAX_WARNINGS_PER_GAME);
+        expect(fetchMock).toHaveBeenCalledTimes(MAX_WARNINGS_PER_GAME);  // между советами ходы не проверяются
+        act(() => result.current.reset());
+        act(() => result.current.onPlayerMove(before, before.fen(), 'f2f3', after.fen()));
+        await waitFor(() => expect(result.current.pending?.status).toBe('warning'));
+    });
+
+    it('правило частоты', () => {
+        expect(warningAllowed(0, null)).toBe(true);
+        expect(warningAllowed(1, MIN_MOVES_BETWEEN_WARNINGS - 1)).toBe(false);
+        expect(warningAllowed(1, MIN_MOVES_BETWEEN_WARNINGS)).toBe(true);
+        expect(warningAllowed(MAX_WARNINGS_PER_GAME, 99)).toBe(false);
     });
 
     it('настройки запоминаются', () => {
@@ -200,7 +222,7 @@ describe('useCoachMode', () => {
 
 function fakeCoach(overrides: Partial<UseCoachModeResult> = {}): UseCoachModeResult {
     return {
-        enabled: true, setEnabled: vi.fn(), level: 'amateur', setLevel: vi.fn(), pending: null, holdBot: false,
+        enabled: true, setEnabled: vi.fn(), level: 'amateur', setLevel: vi.fn(), pending: null,
         explanation: null, showWhy: vi.fn(), keepMove: vi.fn(), takeBack: vi.fn(() => null),
         advice: null, adviceLoading: false, requestHint: vi.fn(async () => {}), hintStep: 0, hintFinal: false,
         hintsUsed: 2, dispute: vi.fn(), disputeSent: false, assisted: true,

@@ -307,12 +307,12 @@ export default function Chessboard() {
     const [activeOdds, setActiveOdds] = useState<OddsChoice | null>(null);
     const [hourglass, setHourglass] = useState(false);
 
-    // Часы на экране идут в своей партии, в партии с ботом и у зрителя, пока партия не окончена; пока наставник
-    // проверяет ход или ждёт решения игрока (coach.holdBot), они стоят — это задумано для партии с ботом.
+    // Часы на экране идут в своей партии, в партии с ботом и у зрителя, пока партия не окончена. Наставник их не
+    // останавливает (решение владельца 18.11): его совет появляется рядом с доской, партия идёт дальше.
     const {
         whiteTimeMs, setWhiteTimeMs, blackTimeMs, setBlackTimeMs, resetLowTimeWarning, applyIncrement,
     } = useClock({
-        isTicking: Boolean(gameId || activeBot || spectatingGameId) && !gameOverResult && !coach.holdBot,
+        isTicking: Boolean(gameId || activeBot || spectatingGameId) && !gameOverResult,
         isParticipant: Boolean(gameId || activeBot) && !gameOverResult,
         currentTurn: game.turn() === 'w' ? 'white' : 'black',
         myColor,
@@ -378,7 +378,7 @@ export default function Chessboard() {
         setWhiteTimeMs, setBlackTimeMs, resetLowTimeWarning, applyIncrement,
         moveStartTime, myColorRef, gameIdRef, setGameId, setLeftSectionTab, setWhitePlayer, setBlackPlayer,
         playAudio, playOutcomeSound, updateSessionStats,
-        holdBot: coach.holdBot, isAssisted: isCoachAssisted, onNewGame: coach.reset,
+        isAssisted: isCoachAssisted, onNewGame: coach.reset,
     });
 
     const selectedBotProfile = HISTORICAL_BOTS[selectedBotId];
@@ -902,11 +902,17 @@ export default function Chessboard() {
         setHistory([]);
     };
 
-    // «Переходить» по совету наставника: позиция до хода; добавление за отменённый ход снимается.
+    // «Переходить» по совету наставника: позиция до хода игрока. Партия не ждала совета, поэтому бот мог уже ответить —
+    // тогда снимается и его ход; добавление за каждый отменённый ход снимается со своей стороны.
     const handleCoachTakeBack = () => {
         const previous = coach.takeBack();
         if (!previous) return;
-        if (activeBot) applyIncrement(myColor, -effectiveIncSeconds);
+        if (activeBot) {
+            applyIncrement(myColor, -effectiveIncSeconds);
+            if (game.history().length - previous.history().length > 1) {
+                applyIncrement(myColor === 'white' ? 'black' : 'white', -effectiveIncSeconds);
+            }
+        }
         setGame(previous);
         setHistory(previous.history({verbose: true}));
         setViewIndex(-1);
