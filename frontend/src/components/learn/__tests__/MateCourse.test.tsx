@@ -55,6 +55,7 @@ function renderAt(path: string) {
 
 beforeEach(() => setToken('jwt'));
 afterEach(() => {
+    vi.useRealTimers();
     setToken(null);
     vi.unstubAllGlobals();
 });
@@ -133,14 +134,19 @@ describe('Курс матовых конструкций', () => {
             [/\/11\/move$/, () => ({correct: false, done: true, reply: null, solution: ['d2d8', 'e2e8', 'd8e8'], result: {solved: false}})],
             [/learn\/progress\//, () => ({})],
         ]);
+        // Поддельные часы: паузу автосмены проматываем, а не ждём настоящую секунду. Ход — двумя щелчками:
+        // перетаскивание слушает окно из эффекта доски, и отпускание может прийти раньше подписки — ход теряется
+        // (так тест изредка падал в CI; с поддельными часами это повторяется всегда).
+        vi.useFakeTimers({shouldAdvanceTime: true});
         renderAt('/learn/mates/exam');
         fireEvent.click(screen.getByTestId('mates-exam-start'));
         await waitFor(() => expect(cell('e2').querySelector('img')).not.toBeNull(), {timeout: 5000});
-        await drag('d2', 'd5');
+        fireEvent.click(cell('d2'));
+        fireEvent.click(cell('d5'));
         expect(await screen.findByTestId('course-failed', {}, {timeout: 5000})).toBeInTheDocument();
-        // Подождали дольше прежней автосмены — задача та же, номер прежний.
+        // Промотали дольше прежней автосмены (SOLVED_PAUSE_MS) — задача та же, номер прежний.
         await act(async () => {
-            await new Promise((resolve) => setTimeout(resolve, 1000));
+            await vi.advanceTimersByTimeAsync(2000);
         });
         expect(screen.getByTestId('mates-exam-status')).toHaveTextContent('Задача 1 из 2');
         // Разбор: опровержение сыгранного хода и решение целиком, пошагово на доске.
