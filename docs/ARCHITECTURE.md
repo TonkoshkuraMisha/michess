@@ -28,7 +28,10 @@
 ## 2. Как проходит запрос
 
 1. Клиент вызывает эндпоинт (`frontend/src/services/*.ts` — по файлу на раздел) или шлёт действие в WebSocket
-   (`frontend/src/services/gameSocket.ts`).
+   (`frontend/src/services/gameSocket.ts`). Компоненты в сеть сами не ходят: все сервисы зовут общий
+   `services/http.ts` — `apiRequest` (ответ JSON) или `apiFetch` (ответ целиком: текст PGN, заголовки), `apiUrl` —
+   адрес для ссылок. Он добавляет токен входа и Content-Type, а отказ превращает в `UiError` с текстом по коду
+   сервера (`services/apiErrors.ts`); сеть недоступна — «нет связи».
 2. Маршрут в `src/api/<раздел>.py` проверяет вход (`src/api/deps.py`), лимит запросов (`src/api/rate_limit.py`) и,
    если эндпоинт выдаёт оценку или ход движка, — правило честной игры (`src/api/fair_play.py`).
 3. Маршрут вызывает сервис из `src/services/`; сервис читает и пишет базу через модели `src/models/`.
@@ -117,7 +120,8 @@
   пароля, выгрузка своих данных, удаление аккаунта (анонимизация: партии остаются у соперников без имени).
 - **Файлы.** `src/api/auth.py`, `src/api/account.py`, `src/core/security.py` (хэш пароля, JWT),
   `src/services/auth_sessions.py`, `email_links.py`, `mailer.py`, `account.py`, `onboarding.py`; клиент —
-  `services/authToken.ts`, `components/AuthModal.tsx`, `components/Settings.tsx`.
+  `services/authToken.ts`, `services/account.ts` (вход, регистрация, почта, пароль, выгрузка, удаление),
+  `components/AuthModal.tsx`, `components/Settings.tsx`, `components/EmailLinkPages.tsx`.
 - **Как.** Короткий access-токен (15 минут) живёт только в памяти страницы; долгий вход держит refresh-токен в cookie
   HttpOnly, в Redis хранится только его хэш. Смена пароля и «выйти везде» увеличивают `users.token_version` — все
   прежние токены перестают действовать.
@@ -374,7 +378,12 @@
   `services/a11y/speech.ts` (ключи `a11y.*`). В игре вслепую скрытые фигуры не называются.
 - `components/ui/` — общие компоненты дизайна (страница, карточки, кнопки, метки, вкладки, окно); правила —
   `docs/design-system.md`, витрина — `/design`.
-- `components/<раздел>/` — страницы разделов; `services/<раздел>.ts` — обращения к API этого раздела;
+- `components/<раздел>/` — страницы разделов; `services/<раздел>.ts` — обращения к API этого раздела, все — через
+  `services/http.ts` (профиль — `profile.ts`, учётная запись — `account.ts`, просмотр и разбор партии —
+  `analysis.ts`, лестница — `ladder.ts`, шахматы Фишера — `chess960.ts`, экзамены — `exam.ts`);
+  общие правила без сети тоже лежат здесь: дата партии `gameDates.ts`, нумерация ходов `moveNumbers.ts`;
+  клавиатура доски — `chessboard/hooks/useBoardKeyboard.ts` (главная доска и доски задач), чат партии —
+  `chessboard/gameChat.ts` (главная доска и партия 960); лимиты текстов — `config/textLimits.ts`;
   `config/` — данные оформления и ботов; `content/` — учебное содержание; `trainers/` — логика тренажёров.
 - `i18n/` — три каталога сообщений и функции перевода; `test/` — общие заготовки тестов.
 
