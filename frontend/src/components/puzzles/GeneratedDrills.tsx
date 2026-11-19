@@ -12,7 +12,7 @@ import {Chess} from 'chess.js';
 import {ArrowRight, Timer} from 'lucide-react';
 import {renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
-import {UiError} from '../../services/apiErrors';
+import {errorMessage} from '../../services/apiErrors';
 import {DRILL_KINDS, DRILL_PIECES, drillSupported, puzzlesApi} from '../../services/puzzles';
 import type {DrillKind, DrillPiece, DrillRun, DrillRunResult, DrillView} from '../../services/puzzles';
 import {PuzzleBoard} from './PuzzleBoard';
@@ -39,10 +39,6 @@ interface Props {
 }
 
 /** Ошибка клиента в сообщение интерфейса: код сервера или общая сетевая ошибка. */
-function errorOf(err: unknown): UiMessage {
-    return err instanceof UiError ? err.ui : {key: 'common.networkError'};
-}
-
 /** Упражнения-генераторы: выбор вида, фигуры и уровня, одиночные позиции и забег «на минуту». */
 export function GeneratedDrills({header, initialKind = 'capture', onAnalyze}: Props) {
     const {t} = useI18n();
@@ -109,7 +105,7 @@ export function GeneratedDrills({header, initialKind = 'capture', onAnalyze}: Pr
                 present(await puzzlesApi.drillsNext(kind, piece, level));
             }
         } catch (err) {
-            setError(errorOf(err));
+            setError(errorMessage(err, 'common.networkError'));
             setPhase('idle');
         }
     }, [kind, piece, level]);
@@ -120,7 +116,7 @@ export function GeneratedDrills({header, initialKind = 'capture', onAnalyze}: Pr
             setRunResult(result);
             setRecords((current) => ({...current, [result.combo]: result.best}));
         } catch (err) {
-            setError(errorOf(err));
+            setError(errorMessage(err, 'common.networkError'));
         }
         setRun(null);
         setPhase('idle');
@@ -144,7 +140,7 @@ export function GeneratedDrills({header, initialKind = 'capture', onAnalyze}: Pr
             setRun(await puzzlesApi.drillsRunStart(kind, piece, level));
             await load(true);
         } catch (err) {
-            setError(errorOf(err));
+            setError(errorMessage(err, 'common.networkError'));
         }
     };
 
@@ -189,7 +185,7 @@ export function GeneratedDrills({header, initialKind = 'capture', onAnalyze}: Pr
             }
         } catch (err) {
             setFen(fen);
-            setError(errorOf(err));
+            setError(errorMessage(err, 'common.networkError'));
             setPhase('solving');
         }
     };

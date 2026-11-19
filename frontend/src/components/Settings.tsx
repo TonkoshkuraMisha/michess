@@ -34,6 +34,7 @@ import type {SoundSetId} from '../services/soundEngine';
 import {gameSocket} from '../services/gameSocket';
 import {soundEngine} from '../services/soundEngine';
 import {useI18n} from '../i18n';
+import {MIN_PASSWORD_LENGTH} from '../config/passwordRules';
 import {renderUiMessage} from '../i18n';
 import type {UiMessage} from '../i18n';
 import LanguageSwitcher from './LanguageSwitcher';
@@ -42,8 +43,6 @@ import {downloadMyGamesPgn} from '../services/transparency';
 import {saveProfileSettings, setTranslationHelper} from '../services/profileSettings';
 import {clearToken, setToken} from '../services/authToken';
 
-// Наименьшая длина нового пароля; совпадает с min_length схемы на сервере (src/schemas/user.py).
-const MIN_PASSWORD_LENGTH = 8;
 
 /** token и username пусты у гостя: тогда доступно только локальное оформление. */
 interface SettingsProps {

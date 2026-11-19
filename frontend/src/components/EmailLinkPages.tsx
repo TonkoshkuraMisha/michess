@@ -11,9 +11,8 @@ import {readApiErrorOr} from '../services/apiErrors';
 import {renderUiMessage, useI18n} from '../i18n';
 import type {UiMessage} from '../i18n';
 import {clearToken} from '../services/authToken';
+import {MIN_PASSWORD_LENGTH} from '../config/passwordRules';
 
-// Наименьшая длина нового пароля; совпадает с min_length схемы на сервере (src/schemas/user.py).
-const MIN_PASSWORD_LENGTH = 8;
 // Общие классы оформления окна и поля ввода обеих страниц.
 const boxClass = 'w-full max-w-md bg-acacia-dark border border-amber-900/40 p-6 rounded shadow-heavy text-boxwood-light flex flex-col gap-3';
 const inputClass = 'w-full px-3 py-2 rounded bg-black/40 border border-amber-900/60 text-boxwood-light text-sm outline-none focus:border-amber-500';

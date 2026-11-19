@@ -22,7 +22,7 @@ import {format, parseISO} from 'date-fns';
 import {Puzzle as PuzzleIcon, Lightbulb, Flag, ArrowRight, GraduationCap} from 'lucide-react';
 import {hasMessage, renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
-import {UiError} from '../../services/apiErrors';
+import {errorMessage} from '../../services/apiErrors';
 import {DEFENSE_DRILL_THEMES, puzzlesApi} from '../../services/puzzles';
 import type {DrillKind} from '../../services/puzzles';
 import type {
@@ -61,10 +61,6 @@ const SOLUTION_STEP_MS = 700;
 export {solutionSan};
 
 /** Ошибка клиента в сообщение интерфейса: код сервера или общая сетевая ошибка. */
-function errorOf(err: unknown): UiMessage {
-    return err instanceof UiError ? err.ui : {key: 'common.networkError'};
-}
-
 /** Шаг округления границ шкалы рейтинга и запас над и под крайними точками. */
 const CHART_STEP = 10;
 const CHART_MARGIN = 5;
@@ -240,7 +236,7 @@ export default function PuzzlesPage() {
                 present(nextMode === 'daily' ? await puzzlesApi.daily() : await puzzlesApi.next(theme));
             }
         } catch (err) {
-            setError(errorOf(err));
+            setError(errorMessage(err, 'common.networkError'));
             setPhase('idle');
         }
     }, [mode, theme, target, present]);
@@ -250,7 +246,7 @@ export default function PuzzlesPage() {
             setTimedResult(await puzzlesApi.timedFinish());
             refreshProfile();
         } catch (err) {
-            setError(errorOf(err));
+            setError(errorMessage(err, 'common.networkError'));
         }
         setRun(null);
         setPhase('idle');
@@ -312,7 +308,7 @@ export default function PuzzlesPage() {
         } catch (err) {
             gameRef.current.undo();
             setFen(gameRef.current.fen());
-            setError(errorOf(err));
+            setError(errorMessage(err, 'common.networkError'));
             setPhase('solving');
         }
     };
@@ -351,7 +347,7 @@ export default function PuzzlesPage() {
         } catch (err) {
             gameRef.current.undo();
             setFen(gameRef.current.fen());
-            setError(errorOf(err));
+            setError(errorMessage(err, 'common.networkError'));
             setPhase('solving');
         }
     };
@@ -361,7 +357,7 @@ export default function PuzzlesPage() {
         try {
             setHint(await puzzlesApi.hint(puzzle.id));
         } catch (err) {
-            setError(errorOf(err));
+            setError(errorMessage(err, 'common.networkError'));
         }
     };
 
@@ -376,7 +372,7 @@ export default function PuzzlesPage() {
             body.solution.forEach((uci, i) => later(() => apply(uci), SOLUTION_STEP_MS * (i + 1)));
             refreshProfile();
         } catch (err) {
-            setError(errorOf(err));
+            setError(errorMessage(err, 'common.networkError'));
         }
     };
 
@@ -388,7 +384,7 @@ export default function PuzzlesPage() {
             setMode('timed');
             await load('timed');
         } catch (err) {
-            setError(errorOf(err));
+            setError(errorMessage(err, 'common.networkError'));
         }
     };
 

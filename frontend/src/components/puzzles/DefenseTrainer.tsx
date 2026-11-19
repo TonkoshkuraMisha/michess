@@ -14,7 +14,7 @@ import {Chess} from 'chess.js';
 import {ArrowRight, Eye, ShieldAlert, ShieldCheck} from 'lucide-react';
 import {renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
-import {UiError} from '../../services/apiErrors';
+import {errorMessage} from '../../services/apiErrors';
 import {puzzlesApi} from '../../services/puzzles';
 import type {DefenseAnswer, DefenseDrillView, DefenseKind, DefenseThreatResponse} from '../../services/puzzles';
 import {themeText} from '../../services/themes';
@@ -38,10 +38,6 @@ interface Props {
 }
 
 /** Ошибка клиента в сообщение интерфейса: код сервера или общая сетевая ошибка. */
-function errorOf(err: unknown): UiMessage {
-    return err instanceof UiError ? err.ui : {key: 'common.networkError'};
-}
-
 /** Защитные упражнения: «Что грозит?», «Не зевни», «Единственная защита»; верные ходы приходят после ответа. */
 export function DefenseTrainer({header, initialKind = 'threat', onDefensiveMove, onAnalyze}: Props) {
     const {t} = useI18n();
@@ -77,7 +73,7 @@ export function DefenseTrainer({header, initialKind = 'threat', onDefensiveMove,
             stopExplorer();
             setPhase(view.kind === 'threat' ? 'threat' : 'move');
         } catch (err) {
-            setError(errorOf(err));
+            setError(errorMessage(err, 'common.networkError'));
             setPhase('idle');
         }
     }, [stopExplorer]);
@@ -96,7 +92,7 @@ export function DefenseTrainer({header, initialKind = 'threat', onDefensiveMove,
             setMark({square, ok: body.correct});
             setPhase('move');
         } catch (err) {
-            setError(errorOf(err));
+            setError(errorMessage(err, 'common.networkError'));
             setPhase('threat');
         }
     };
@@ -121,7 +117,7 @@ export function DefenseTrainer({header, initialKind = 'threat', onDefensiveMove,
         } catch (err) {
             setFen(drill.fen);
             setPlayed(null);
-            setError(errorOf(err));
+            setError(errorMessage(err, 'common.networkError'));
             setPhase('move');
         }
     };
