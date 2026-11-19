@@ -38,6 +38,7 @@ from src.api import (
     learn,
     library,
     messages,
+    mini_game_rooms,
     mini_games,
     moderation,
     personalities,
@@ -157,6 +158,7 @@ def create_app() -> FastAPI:
     app.include_router(feed.router, prefix="/api/v1/feed", tags=["social"])
     app.include_router(moderation.router, prefix="/api/v1/moderation", tags=["social"])
     app.include_router(mini_games.router, prefix="/api/v1/mini-games", tags=["trainers"])
+    app.include_router(mini_game_rooms.router, prefix="/api/v1/mini-game-rooms", tags=["trainers"])
     app.include_router(chess960.router, prefix="/api/v1/chess960", tags=["bots"])
     app.include_router(repertoire.router, prefix="/api/v1/repertoires", tags=["repertoire"])
     app.include_router(library.router, prefix="/api/v1/library", tags=["library"])
