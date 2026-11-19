@@ -5,19 +5,20 @@
 // взятия»: отметить на доске все шахи и взятия за обе стороны (поле «откуда», поле «куда»), затем «Готово».
 // Данные: партии классики (content/classics) и чистые правила trainers/calculation.ts (без сети). Запускается из TrainersPage.tsx; уровней у этих тренажёров нет.
 
-import {useEffect, useMemo, useState} from 'react';
+import {useMemo, useState} from 'react';
 import {useI18n} from '../../i18n';
 import type {MessageKey} from '../../i18n';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 import type {BoardArrow} from '../puzzles/PuzzleBoard';
 import {ExplorerControls, usePositionExplorer} from '../puzzles/usePositionExplorer';
-import {loadAllClassics} from '../../content/classics';
 import type {ClassicGame} from '../../content/classics';
 import {positionPool} from '../../trainers/memory';
 import {
     checksAndCaptures, checksPosition, compareQuestion, distanceQuestion, evalQuestion, exchangeQuestion, sanOf, squareFen,
     squareQuestion,
 } from '../../trainers/calculation';
+import {useClassics} from './trainerGame';
+import type {TrainerGameProps} from './trainerGame';
 
 /** Вопросов в одной попытке QuizGame; 10 очков за верный ответ. */
 export const QUIZ_ROUNDS = 10;
@@ -25,13 +26,6 @@ export const QUIZ_ROUNDS = 10;
 export const CHECKS_ROUNDS = 3;
 /** Виды викторин — коды тренажёров calc_* (кроме calc_checks, у него своя игра). */
 export type QuizKind = 'calc_exchange' | 'calc_distance' | 'calc_square' | 'calc_eval' | 'calc_compare';
-
-/** Общие свойства игр: уровень (здесь не используется), seed и onFinish(очки, ошибки). */
-interface GameProps {
-    level: number;
-    seed: number;
-    onFinish: (score: number, mistakes: number) => void;
-}
 
 /** Готовый вопрос: позиция, подсветка, ключ текста вопроса с параметрами, варианты ответа (label — ключ каталога или готовая подпись хода) и id верного. */
 interface Quiz {
@@ -48,19 +42,6 @@ interface Quiz {
 
 /** Оценка в сотых пешки → «+1.5»; знак «+» только у положительных. */
 const pawns = (cp: number) => `${cp > 0 ? '+' : ''}${(cp / 100).toFixed(1)}`;
-
-/** Партии классики по требованию (не в основном бандле); при ошибке загрузки — пустой список. */
-function useClassics(): ClassicGame[] | null {
-    const [games, setGames] = useState<ClassicGame[] | null>(null);
-    useEffect(() => {
-        let alive = true;
-        loadAllClassics().then((list) => alive && setGames(list)).catch(() => alive && setGames([]));
-        return () => {
-            alive = false;
-        };
-    }, []);
-    return games;
-}
 
 /** Пустая доска (FEN): основа вопросов, где позиция строится из одной фигуры. */
 const EMPTY = '8/8/8/8/8/8/8/8 w - - 0 1';
@@ -129,7 +110,7 @@ function placementWith(square: string, piece: string): string {
 }
 
 /** Серия быстрых вопросов; после ответа доска свободна — позицию можно разыграть самому. */
-export function QuizGame({kind, seed, onFinish}: GameProps & { kind: QuizKind }) {
+export function QuizGame({kind, seed, onFinish}: TrainerGameProps & { kind: QuizKind }) {
     const {t} = useI18n();
     const games = useClassics();
     const pool = useMemo(() => (games ? positionPool(games, []) : null), [games]);
@@ -197,7 +178,7 @@ export function QuizGame({kind, seed, onFinish}: GameProps & { kind: QuizKind })
  * Очки раунда: процент найденных шахов и взятий минус 10 за каждую лишнюю отметку (не ниже 0). Стрелки разбора: зелёная — найден,
  * жёлтая — пропущен, красная — лишний; до проверки отмеченное — синее.
  */
-export function ChecksGame({seed, onFinish}: GameProps) {
+export function ChecksGame({seed, onFinish}: TrainerGameProps) {
     const {t} = useI18n();
     const games = useClassics();
     const [round, setRound] = useState(0);

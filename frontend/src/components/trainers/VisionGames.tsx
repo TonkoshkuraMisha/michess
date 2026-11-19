@@ -12,24 +12,18 @@ import {starsMove} from '../../content/basics/rules';
 import {forkCount, forkLevel, isSafe, knightTargets, pathLevel, pathScore} from '../../trainers/vision';
 import {boardFen, legalMoves, newGame, step} from '../../trainers/tail';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
+import type {TrainerGameProps} from './trainerGame';
 
 /** Позиций в одной попытке PathGame. */
 export const ROUNDS = 5;
 /** Длительность попытки ForkGame, секунд. */
 export const FORK_SECONDS = 60;
 
-/** Общие свойства игр: уровень, seed и onFinish(очки, ошибки). */
-interface GameProps {
-    level: number;
-    seed: number;
-    onFinish: (score: number, mistakes: number) => void;
-}
-
 /**
  * Очки за позицию — pathScore(ходы, par); в «Маршруте коня» превышение par даёт 0 очков и ошибку. Неверный ход — ошибка,
  * позиция не меняется. Следующая позиция открывается через 400 мс после взятия цели.
  */
-export function PathGame({kind, level, seed, onFinish}: GameProps & { kind: 'quiet' | 'knight' }) {
+export function PathGame({kind, level, seed, onFinish}: TrainerGameProps & { kind: 'quiet' | 'knight' }) {
     const {t} = useI18n();
     const [round, setRound] = useState(0);
     const puzzle = useMemo(() => pathLevel(kind, level, seed + round), [kind, level, seed, round]);
@@ -86,7 +80,7 @@ export function PathGame({kind, level, seed, onFinish}: GameProps & { kind: 'qui
 }
 
 /** Поля вилки за FORK_SECONDS: 10 очков за найденное; тип промаха (не ход коня, нет вилки, поле под боем) определяет подсказку. */
-export function ForkGame({level, seed, onFinish}: GameProps) {
+export function ForkGame({level, seed, onFinish}: TrainerGameProps) {
     const {t} = useI18n();
     const [round, setRound] = useState(0);
     const puzzle = useMemo(() => forkLevel(level, seed + round), [level, seed, round]);
@@ -140,7 +134,7 @@ export function ForkGame({level, seed, onFinish}: GameProps) {
 }
 
 /** «Хвост»: очки — 10 за каждую съеденную пешку; попытку можно закончить досрочно (stop). */
-export function TailGame({level, seed, onFinish}: GameProps) {
+export function TailGame({level, seed, onFinish}: TrainerGameProps) {
     const {t} = useI18n();
     const [state, setState] = useState(() => newGame(level, seed));
     const [mistakes, setMistakes] = useState(0);

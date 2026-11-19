@@ -12,11 +12,11 @@ import {Eraser} from 'lucide-react';
 import {useI18n} from '../../i18n';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 import {fenOf} from '../tools/PositionEditor';
-import {loadAllClassics} from '../../content/classics';
-import type {ClassicGame} from '../../content/classics';
 import endgames from '../../content/endgames.json';
 import {memoryLevel, pickGame, pickPosition, placementOfFen, positionPool, recallPlies, scorePlacement} from '../../trainers/memory';
 import type {Placement, PlacementScore} from '../../trainers/memory';
+import {useClassics} from './trainerGame';
+import type {TrainerGameProps} from './trainerGame';
 
 /** Позиций в одной попытке «Восстанови позицию». */
 export const MEMORY_ROUNDS = 3;
@@ -26,26 +26,6 @@ const RECALL_STEP_MS = 900;
 const PIECES = ['K', 'Q', 'R', 'B', 'N', 'P', 'k', 'q', 'r', 'b', 'n', 'p'] as const;
 /** Значки фигур на кнопках палитры. */
 const GLYPHS: Record<string, string> = {K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙', k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟'};
-
-/** Общие свойства игр: уровень, seed и onFinish(очки, ошибки). */
-interface GameProps {
-    level: number;
-    seed: number;
-    onFinish: (score: number, mistakes: number) => void;
-}
-
-/** Партии классики грузятся по требованию (они не в основном бандле). */
-function useClassics(): ClassicGame[] | null {
-    const [games, setGames] = useState<ClassicGame[] | null>(null);
-    useEffect(() => {
-        let alive = true;
-        loadAllClassics().then((list) => alive && setGames(list)).catch(() => alive && setGames([]));
-        return () => {
-            alive = false;
-        };
-    }, []);
-    return games;
-}
 
 /** Обратный отсчёт секунд, пока active; на нуле вызывает onDone (свежий колбэк берётся из ref, чтобы интервал не пересоздавался). */
 function useCountdown(seconds: number, active: boolean, onDone: () => void): number {
@@ -70,7 +50,7 @@ function useCountdown(seconds: number, active: boolean, onDone: () => void): num
 }
 
 /** Фазы раунда: show (показ на время уровня) → place (расстановка по памяти) → review (разбор). Очки раунда — процент верных клеток. */
-export function RestoreGame({level, seed, onFinish}: GameProps) {
+export function RestoreGame({level, seed, onFinish}: TrainerGameProps) {
     const {t} = useI18n();
     const games = useClassics();
     const pool = useMemo(() => (games ? positionPool(games, endgames as { fen: string }[]) : null), [games]);
@@ -172,7 +152,7 @@ export function RestoreGame({level, seed, onFinish}: GameProps) {
 }
 
 /** Фазы: watch (ход за ходом проигрывается начало партии) → play (повторить ходы); игрок видит только позицию перед своим ходом. */
-export function RecallGame({level, seed, onFinish}: GameProps) {
+export function RecallGame({level, seed, onFinish}: TrainerGameProps) {
     const {t} = useI18n();
     const games = useClassics();
     const game = useMemo(() => (games ? pickGame(games, level, seed) : null), [games, level, seed]);

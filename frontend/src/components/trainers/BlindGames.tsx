@@ -7,9 +7,10 @@ import {useEffect, useMemo, useState} from 'react';
 import {useI18n} from '../../i18n';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 import {CoordBoard} from './CoordinateGames';
-import {loadAllClassics, scoreStop} from '../../content/classics';
-import type {ClassicGame} from '../../content/classics';
+import {scoreStop} from '../../content/classics';
 import {blindTask, whereQuestion} from '../../trainers/blindPuzzles';
+import {useClassics} from './trainerGame';
+import type {TrainerGameProps} from './trainerGame';
 
 /** Заданий в одной попытке. */
 export const BLIND_ROUNDS = 5;
@@ -18,20 +19,13 @@ const MOVE_STEP_MS = 1400;
 /** Буква фигуры chess.js → ключ названия фигуры в каталоге сообщений. */
 const PIECE_NAMES = {k: 'king', q: 'queen', r: 'rook', b: 'bishop', n: 'knight', p: 'pawn'} as const;
 
-/** Общие свойства игр: уровень, seed (тот же seed — те же задания) и onFinish(очки, ошибки). */
-interface GameProps {
-    level: number;
-    seed: number;
-    onFinish: (score: number, mistakes: number) => void;
-}
-
 /**
  * Фазы: look (позиция на виду) → moves (ходы по одному, доска скрыта) → answer (ход или поле на пустой доске) → review.
  * Ответ ниже 80 баллов считается ошибкой.
  */
-export function BlindGame({mode, level, seed, onFinish}: GameProps & { mode: 'move' | 'where' }) {
+export function BlindGame({mode, level, seed, onFinish}: TrainerGameProps & { mode: 'move' | 'where' }) {
     const {t} = useI18n();
-    const [games, setGames] = useState<ClassicGame[] | null>(null);
+    const games = useClassics();
     const [round, setRound] = useState(0);
     const [phase, setPhase] = useState<'look' | 'moves' | 'answer' | 'review'>('look');
     const [shown, setShown] = useState(0);
@@ -39,13 +33,6 @@ export function BlindGame({mode, level, seed, onFinish}: GameProps & { mode: 'mo
     const [verdict, setVerdict] = useState<{ score: number; reply: string } | null>(null);
     const [total, setTotal] = useState({score: 0, mistakes: 0});
 
-    useEffect(() => {
-        let alive = true;
-        loadAllClassics().then((list) => alive && setGames(list)).catch(() => alive && setGames([]));
-        return () => {
-            alive = false;
-        };
-    }, []);
     const task = useMemo(() => (games ? blindTask(games, level, seed, round) : null), [games, level, seed, round]);
     const question = useMemo(() => (task && mode === 'where' ? whereQuestion(task, seed + round) : null), [task, mode, seed, round]);
 
