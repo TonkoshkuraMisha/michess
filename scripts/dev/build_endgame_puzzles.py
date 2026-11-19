@@ -5,7 +5,7 @@
 поэтому позиции генерируются: случайная расстановка типа окончания → таблицы (settings.TABLEBASE_URL)
 → задача берётся, только если верный ход ровно один (выигрыш или, в защите, единственная ничья), и он подходит под
 тему. Перед позицией ставится законный ход соперника (отход его короля), как в формате базы lichess: FEN — до хода
-соперника, первый ход в Moves — его. Рейтинг — по глубине результата (DTZ). Темы — тегами «michess:<код>»
+соперника, первый ход в Moves — его. Рейтинг — по глубине результата (DTZ). Темы — тегами «regence:<код>»
 (идентификатор данных, не бренд).
 Детерминирован (--seed); нужна сеть; в CI не запускается. Загрузка в базу — scripts/import_puzzles.py (источник
 «regence», тема — из тега).
@@ -269,7 +269,7 @@ def main() -> None:
         row = {
             "PuzzleId": f"tb{len(seen):05d}{kind[:2]}", "FEN": start.fen(), "Moves": " ".join([first.uci(), *line]),
             "Rating": str(rating), "RatingDeviation": "80", "Popularity": "90", "NbPlays": "0",
-            "Themes": f"{TAGS[kind]} michess:{theme}",
+            "Themes": f"{TAGS[kind]} regence:{theme}",
         }
         if theme not in THEMES_BY_CODE or not validate_row(row):
             continue

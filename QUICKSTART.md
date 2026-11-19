@@ -6,7 +6,7 @@
 
 ### Шаг 1. Клонирование и переменные окружения
 
-    git clone https://github.com/TonkoshkuraMisha/michess.git regence
+    git clone https://github.com/TonkoshkuraMisha/regence.git regence
     cd regence
     git checkout dev
 

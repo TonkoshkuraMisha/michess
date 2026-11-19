@@ -34,7 +34,7 @@ EXCLUDED_DIRS = {
     ".idea", ".vscode",
     "__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache",
     ".tox", ".nox",
-    ".venv", "venv", "env", "michess_env",
+    ".venv", "venv", "env",
     "node_modules", "bower_components",
     "dist", "build", "target", "coverage", "htmlcov",
     ".next", ".nuxt", ".cache",
