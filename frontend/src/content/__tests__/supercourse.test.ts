@@ -2,7 +2,8 @@
 // существующий раздел; у каждого уровня есть наполненные модули и экзамен.
 
 import {describe, expect, it} from 'vitest';
-import {BRANCHES, COURSE, courseProgressId, LEVEL_COUNT, moduleTitleKey} from '../supercourse';
+import {BRANCHES, COURSE, courseProgressId, coverage, LEVEL_COUNT, moduleStatus, moduleTitleKey} from '../supercourse';
+import type {CourseModule} from '../supercourse';
 import type {Activity} from '../programs';
 import {lessonById} from '../lessons';
 import {BASICS} from '../basics/levels';
@@ -75,3 +76,33 @@ describe('экзамены уровней (27.12)', () => {
         for (let level = 0; level < LEVEL_COUNT; level++) expect(examSections(level)).toEqual([`level${level}`]);
     });
 });
+
+describe('статусы ячеек и покрытие для автора', () => {
+    const at = (code: string, steps: number, draft = 0): CourseModule => ({
+        code, level: Number(code.slice(1).split('.')[0]), branch: code[0] as CourseModule['branch'],
+        steps: Array.from({length: steps}, () => ({kind: 'guess'}) as const),
+        ...(draft ? {draft: Array.from({length: draft}, () => ({kind: 'guess'}) as const)} : {}),
+    });
+
+    it('готовые шаги важнее черновиков; без тех и других — пусто', () => {
+        expect(moduleStatus(at('T1.1', 2, 1))).toBe('ready');
+        expect(moduleStatus(at('T1.2', 0, 1))).toBe('draft');
+        expect(moduleStatus(at('T1.3', 0))).toBe('empty');
+    });
+
+    it('покрытие считает модули по уровню и ветви', () => {
+        const table = coverage([at('T1.1', 1), at('T1.2', 0, 2), at('E1.1', 0), at('M3.1', 3)]);
+        expect(table).toHaveLength(LEVEL_COUNT);
+        expect(table[1][BRANCHES.indexOf('T')]).toEqual({ready: 1, draft: 1, empty: 0});
+        expect(table[1][BRANCHES.indexOf('E')]).toEqual({ready: 0, draft: 0, empty: 1});
+        expect(table[3][BRANCHES.indexOf('M')]).toEqual({ready: 1, draft: 0, empty: 0});
+        expect(table[0].every((cell) => cell.ready + cell.draft + cell.empty === 0)).toBe(true);
+    });
+
+    it('в настоящем курсе все модули готовы, черновиков нет', () => {
+        const total = coverage().flat().reduce((sum, cell) => sum + cell.ready, 0);
+        expect(total).toBe(COURSE.length);
+        expect(COURSE.every((m) => moduleStatus(m) === 'ready')).toBe(true);
+    });
+});
+
