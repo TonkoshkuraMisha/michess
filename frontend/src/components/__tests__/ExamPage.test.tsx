@@ -36,13 +36,13 @@ function checkMove(body: { id: number; moves: string[] }) {
     return {correct: true, reply: solved ? null : line[2 * index + 1], done: solved, solved, points: index + 1, max_points: total};
 }
 
-function stub(graded: object = GRADED) {
+function stub(graded: object = GRADED, timeLimitS: number | null = null) {
     const calls: [string, any][] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
     vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
         const u = String(url);
         const sent = init?.body ? JSON.parse(String(init.body)) : null;
         calls.push([u, sent]);
-        const body = u.endsWith('/questions') ? {section: 'F', questions: QUESTIONS}
+        const body = u.endsWith('/questions') ? {section: 'F', questions: QUESTIONS, time_limit_s: timeLimitS}
             : u.endsWith('/move') ? checkMove(sent) : u.endsWith('/submit') ? graded : SUMMARY;
         return {ok: true, json: async () => body} as Response;
     }));
@@ -150,6 +150,28 @@ describe('диагностический экзамен', () => {
         setToken(null);
         render(<MemoryRouter><ExamPage/></MemoryRouter>);
         expect(screen.getByTestId('exam-login')).toBeInTheDocument();
+    });
+
+    it('экзамен уровня на время (27.12): часы, по истечении тест сдаётся сам, недошедшие позиции — пустые', async () => {
+        const calls = stub(GRADED, 120);
+        await act(async () => render(<MemoryRouter initialEntries={['/exam?test=level2']}><ExamPage/></MemoryRouter>));
+        expect(screen.getByTestId('exam-clock')).toHaveTextContent('Осталось: 2:00');
+        await wait(60_000);
+        expect(screen.getByTestId('exam-clock')).toHaveTextContent('Осталось: 1:00');
+        await act(async () => fireEvent.click(screen.getByTestId('exam-skip')));
+        expect(calls.some(([u]) => u.endsWith('/submit'))).toBe(false);
+        await wait(60_000);
+        const submit = calls.find(([u]) => u.endsWith('/level2/submit'));
+        expect(submit?.[1]).toEqual({answers: [{id: 1, moves: []}, {id: 2, moves: []}]});
+        expect(screen.getByTestId('exam-time-up')).toHaveTextContent('Время вышло');
+        expect(calls.filter(([u]) => u.endsWith('/submit'))).toHaveLength(1);  // сдан один раз
+    });
+
+    it('у диагностики разделов времени нет', async () => {
+        stub();
+        await act(async () => render(<MemoryRouter initialEntries={['/exam?test=F']}><ExamPage/></MemoryRouter>));
+        expect(screen.getByTestId('exam-question')).toBeInTheDocument();
+        expect(screen.queryByTestId('exam-clock')).toBeNull();
     });
 
     it('экзамен уровня курса (27.12): старт по ссылке ?test=, итог по ветвям', async () => {

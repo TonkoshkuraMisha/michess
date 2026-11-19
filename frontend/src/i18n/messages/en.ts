@@ -2842,6 +2842,8 @@ export const en = {
         whiteToMove: 'White to move — find the best move.',
         blackToMove: 'Black to move — find the best move.',
         skip: 'I don’t know',
+        timeLeft: 'Time left: {time}',
+        timeUp: 'Time is up: the positions you did not reach score nothing.',
         pointsNow: 'Points: {points}',
         playToEnd: 'Play the combination to the end — the opponent replies after each correct move.',
         moveRight: 'Correct! +{gain}',

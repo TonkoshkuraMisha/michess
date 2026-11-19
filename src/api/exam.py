@@ -54,8 +54,10 @@ async def results(db: AsyncSession = Depends(get_db), user: User = Depends(get_c
 
 @router.get("/{section}/questions")
 async def questions(section: str = Section, db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
+    """Вопросы теста без ответов; time_limit_s — время на экзамен уровня (у диагностики разделов — None)."""
     try:
-        return {"section": section, "questions": await exam.build(db, section)}
+        return {"section": section, "questions": await exam.build(db, section),
+                "time_limit_s": level_exam.time_limit_s(section)}
     except DomainError as exc:
         raise _http(exc) from None
 
