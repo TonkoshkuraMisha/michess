@@ -8,25 +8,10 @@ import {useEffect, useState} from 'react';
 import {useNavigate} from 'react-router-dom';
 import {Award, Lock, Share2} from 'lucide-react';
 import {getToken} from '../../services/authToken';
-import {socialApi} from '../../services/social';
-import {API_BASE_URL} from '../../config/api';
+import {fetchAchievements, socialApi} from '../../services/social';
+import type {AchievementsData} from '../../services/social';
 import {useI18n} from '../../i18n';
 import type {MessageKey} from '../../i18n';
-
-/** Достижение в ответе сервера: код (ключ каталога), цель и прогресс, дата получения (null — не открыто), метка «новое». */
-export interface AchievementItem {
-    code: string;
-    target: number;
-    progress: number;
-    earned_at: string | null;
-    new: boolean;
-}
-
-/** Ответ сервера: звание клуба (ключ каталога achievements.titles.*) и достижения. */
-export interface AchievementsData {
-    title: string;
-    achievements: AchievementItem[];
-}
 
 /** Блок достижений профиля: сначала открытые, затем закрытые с прогрессом; для чужого профиля без кнопки «поделиться». */
 export function Achievements({username}: { username: string }) {
@@ -43,12 +28,9 @@ export function Achievements({username}: { username: string }) {
 
     useEffect(() => {
         let alive = true;
-        fetch(`${API_BASE_URL}/api/v1/profile/${encodeURIComponent(username)}/achievements`)
-            .then((res) => (res.ok ? res.json() as Promise<AchievementsData> : null))
-            .then((value) => {
-                if (alive) setData(value && Array.isArray(value.achievements) ? value : null);
-            })
-            .catch(() => undefined);
+        fetchAchievements(username).then((value) => {
+            if (alive) setData(value);
+        });
         return () => {
             alive = false;
         };

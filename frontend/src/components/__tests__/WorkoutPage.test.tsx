@@ -4,7 +4,7 @@ import {act, fireEvent, render, screen} from '@testing-library/react';
 import {MemoryRouter, Route, Routes, useLocation} from 'react-router-dom';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {WorkoutPage} from '../WorkoutPage';
-import type {WorkoutPlan} from '../WorkoutPage';
+import type {WorkoutPlan} from '../../services/workout';
 import {setToken} from '../../services/authToken';
 
 const PLAN: WorkoutPlan = {

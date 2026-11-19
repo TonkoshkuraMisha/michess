@@ -4,7 +4,7 @@ import {act, render, screen} from '@testing-library/react';
 import {MemoryRouter} from 'react-router-dom';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {SkillMap} from '../SkillMap';
-import type {SkillMapData} from '../SkillMap';
+import type {SkillMapData} from '../../services/skills';
 import {setToken} from '../../services/authToken';
 
 const DATA: SkillMapData = {

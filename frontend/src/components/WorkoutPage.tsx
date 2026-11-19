@@ -7,32 +7,10 @@ import {Link, useNavigate} from 'react-router-dom';
 import {CheckCircle2, Circle, Flame, Sunrise} from 'lucide-react';
 import {hasMessage, renderUiMessage, useI18n} from '../i18n';
 import type {UiMessage} from '../i18n';
-import {API_BASE_URL} from '../config/api';
 import {getToken} from '../services/authToken';
-import {errorMessage, readApiErrorOr, UiError} from '../services/apiErrors';
-
-/** Шаг плана разминки; вид (kind) задаёт, какие поля пришли и куда ведёт кнопка. */
-export type WorkoutStep =
-    | { kind: 'puzzles'; themes: string[]; target: number; done: number }
-    | { kind: 'trainer'; trainer: string; done: boolean }
-    | { kind: 'repertoire'; due: number; repertoire_id: number | null; done: boolean }
-    | { kind: 'mistake'; due: number; done: boolean };
-
-/** План на сегодня: дата, выполнен ли целиком, серия дней подряд и шаги. */
-export interface WorkoutPlan {
-    date: string;
-    complete: boolean;
-    streak: number;
-    steps: WorkoutStep[];
-}
-
-/** Загружает план; отказ сервера превращается в UiError с кодом ошибки. */
-async function fetchPlan(): Promise<WorkoutPlan> {
-    const token = getToken();
-    const res = await fetch(`${API_BASE_URL}/api/v1/workout`, {headers: token ? {Authorization: `Bearer ${token}`} : {}});
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res.json() as Promise<WorkoutPlan>;
-}
+import {errorMessage} from '../services/apiErrors';
+import {fetchWorkoutPlan} from '../services/workout';
+import type {WorkoutPlan, WorkoutStep} from '../services/workout';
 
 // Шаг выполнен: для задач — набрана цель, для остальных — флаг от сервера.
 const stepDone = (step: WorkoutStep) => (step.kind === 'puzzles' ? step.done >= step.target : step.done);
@@ -47,7 +25,7 @@ export function WorkoutPage() {
 
     useEffect(() => {
         if (!logged) return;
-        fetchPlan().then(setPlan).catch((err) => setError(errorMessage(err, 'common.networkError')));
+        fetchWorkoutPlan().then(setPlan).catch((err) => setError(errorMessage(err, 'common.networkError')));
     }, [logged]);
 
     const themeName = (code: string) => {

@@ -9,31 +9,8 @@ import {PolarAngleAxis, PolarGrid, Radar, RadarChart} from 'recharts';
 import {Target} from 'lucide-react';
 import {hasMessage, useI18n} from '../i18n';
 import type {MessageKey} from '../i18n';
-import {API_BASE_URL} from '../config/api';
-import {getToken} from '../services/authToken';
-
-/** Ответ GET /skills: сводка по разделам задач, ошибкам, дебютам, курсам и диагностическому экзамену. */
-export interface SkillMapData {
-    username: string;
-    puzzle_rating: number;
-    sections: { section: string; attempts: number; score: number | null }[];
-    weakest_themes: { theme: string; section: string; attempts: number; score: number }[];
-    mistakes: { total: number; fixed: number; themes: { theme: string; count: number }[] };
-    trainers: { trainer: string; attempts: number; best: number; max_level: number }[];
-    openings: { repertoires: number; new: number; learning: number; learned: number };
-    endgames: { done: number; total: number };
-    mates: { done: number; total: number };
-    /** Диагностический экзамен (22.0). */
-    exam?: { overall: number | null; level: string | null; passed: number; of: number };
-}
-
-/** Карта навыков текущего игрока; без токена или при отказе сервера — null. */
-export async function fetchSkillMap(): Promise<SkillMapData | null> {
-    const token = getToken();
-    if (!token) return null;
-    const res = await fetch(`${API_BASE_URL}/api/v1/skills`, {headers: {Authorization: `Bearer ${token}`}}).catch(() => null);
-    return res?.ok ? res.json() as Promise<SkillMapData> : null;
-}
+import {fetchSkillMap} from '../services/skills';
+import type {SkillMapData} from '../services/skills';
 
 /** Блок карты навыков; пока данных нет или они чужие, ничего не рисует. */
 export function SkillMap({username}: { username: string }) {

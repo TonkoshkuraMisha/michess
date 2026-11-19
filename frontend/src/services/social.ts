@@ -51,6 +51,30 @@ const call = <T>(path: string, init: RequestInit = {}) => apiRequest<T>(`/social
 
 const user = (name: string) => encodeURIComponent(name);
 
+/** Достижение в ответе сервера: код (ключ каталога), цель и прогресс, дата получения (null — не открыто), метка «новое». */
+export interface AchievementItem {
+    code: string;
+    target: number;
+    progress: number;
+    earned_at: string | null;
+    new: boolean;
+}
+
+/** Ответ GET /profile/{имя}/achievements: звание клуба (ключ каталога achievements.titles.*) и достижения. */
+export interface AchievementsData {
+    title: string;
+    achievements: AchievementItem[];
+}
+
+/**
+ * Достижения игрока (GET /api/v1/profile/{имя}/achievements, src/api/profile.py; открыты без входа).
+ * Любой отказ (сервер, сеть, неверная форма ответа) — null: блок профиля просто не рисуется.
+ */
+export async function fetchAchievements(username: string): Promise<AchievementsData | null> {
+    const data = await apiRequest<AchievementsData>(`/profile/${encodeURIComponent(username)}/achievements`).catch(() => null);
+    return data && Array.isArray(data.achievements) ? data : null;
+}
+
 export const socialApi = {
     /** Игроки, чьё имя начинается с q (без учёта регистра); точное совпадение — первым. */
     search: (q: string) => call<{ players: PlayerCard[] }>(`/search?q=${encodeURIComponent(q)}`),

@@ -2,13 +2,23 @@
 // Прозрачность и открытые данные (таск 24.3): журналы калибровки ботов, сведения об открытом API и выгрузка своих
 // партий одним PGN-файлом.
 // Эндпоинты: GET /api/v1/bots/calibration/runs, /bots/calibration/runs/{имя} и /bots/tuning-log (src/api/bots.py),
-// GET /api/v1/public (src/api/public.py) — все открыты без входа, с лимитом открытого API; свои партии —
+// GET /api/v1/bots/engine (сведения о движке для страницы «О проекте», GPL), GET /api/v1/public (src/api/public.py) — все открыты без входа, с лимитом открытого API; свои партии —
 // GET /api/v1/account/games.pgn (src/api/account.py), только с входом.
 
 import {API_BASE_URL} from '../config/api';
 import {readApiErrorOr, UiError} from './apiErrors';
 import {uiMessage} from '../i18n';
 import {getToken} from './authToken';
+import {apiRequest} from './http';
+
+/** Движок этой установки (GET /bots/engine): версия и исходники именно её — требование GPL (таск 23.1). */
+export interface EngineInfo {
+    name: string | null;
+    source_url: string;
+}
+
+/** Сведения о движке установки (src/api/bots.py); открыты без входа. */
+export const fetchEngineInfo = () => apiRequest<EngineInfo>('/bots/engine');
 
 /** Сведения о последней калибровке (раздел meta файла src/services/bots/calibration.json). */
 export interface CalibrationMeta {

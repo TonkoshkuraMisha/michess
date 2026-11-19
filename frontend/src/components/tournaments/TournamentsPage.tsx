@@ -12,7 +12,6 @@ import {useCallback, useEffect, useMemo, useState} from 'react';
 import {Link, useNavigate, useParams} from 'react-router-dom';
 import {Hourglass, Swords, Trophy} from 'lucide-react';
 import {Badge, Card, CardGrid, EmptyState, Page, PageHeader, Section} from '../ui';
-import {API_BASE_URL} from '../../config/api';
 import {renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
 import {errorMessage} from '../../services/apiErrors';
@@ -38,6 +37,7 @@ import {markCelebrated, shouldCelebrate, TournamentCelebration} from './Tourname
 import {tournamentTitle} from './TournamentGameBar';
 import {Career} from './Career';
 import {getToken} from '../../services/authToken';
+import {accountApi} from '../../services/account';
 
 // Допустимые размеры турнира по форматам (должны совпадать с проверкой сервера, src/services/tournaments.py).
 const SIZES: Record<TournamentFormat, number[]> = {round_robin: [4, 6, 8], knockout: [4, 8], swiss: [6, 8]};
@@ -278,8 +278,7 @@ export function TournamentView() {
     useEffect(() => {
         const token = getToken();
         if (!token) return;
-        fetch(`${API_BASE_URL}/api/v1/profile/me`, {headers: {Authorization: `Bearer ${token}`}})
-            .then((r) => (r.ok ? r.json() : null)).then((me) => me?.username && setMyName(me.username)).catch(() => undefined);
+        accountApi.me().then((me) => me.username && setMyName(me.username)).catch(() => undefined);
     }, []);
 
     if (error) return <p role="alert" className="p-6 text-center text-rose-300">{renderUiMessage(error, t)}</p>;

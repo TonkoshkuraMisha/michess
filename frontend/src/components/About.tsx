@@ -11,10 +11,11 @@ import {ArrowLeft, Scale} from 'lucide-react';
 import {PIECE_SETS} from '../config/boardAppearance';
 import portraitCredits from '../config/portraitCredits.json';
 import {CHAMPIONS_LIST, HISTORICAL_BOTS_LIST} from '../config/champions';
-import {API_BASE_URL} from '../config/api';
 import {useI18n} from '../i18n';
 import {CommunityLink} from './beta/ReportProblem';
 import {useSiteConfig} from '../services/beta';
+import {fetchEngineInfo} from '../services/transparency';
+import type {EngineInfo} from '../services/transparency';
 import type {MessageKey} from '../i18n';
 
 interface PortraitCredit {
@@ -27,12 +28,6 @@ interface PortraitCredit {
 
 // Подписи портретов (автор, лицензия, источник) по коду шахматиста.
 const PORTRAITS = portraitCredits as Record<string, PortraitCredit>;
-
-/** Движок этой установки (GET /bots/engine): версия и исходники именно её — требование GPL (таск 23.1). */
-interface EngineInfo {
-    name: string | null;
-    source_url: string;
-}
 
 /** Имя шахматиста на текущем языке (геттеры профилей читают каталог при обращении). */
 function playerName(id: string): string {
@@ -67,8 +62,7 @@ export default function About() {
     const {t, rich} = useI18n();
     const [engine, setEngine] = useState<EngineInfo | null>(null);
     useEffect(() => {
-        fetch(`${API_BASE_URL}/api/v1/bots/engine`)
-            .then((res) => (res.ok ? res.json() as Promise<EngineInfo> : null))
+        fetchEngineInfo()
             .then(setEngine)
             .catch(() => undefined);
     }, []);
