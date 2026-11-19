@@ -23,6 +23,7 @@ import {AttachmentCard} from './AttachmentCard';
 import {AttachmentPicker} from './AttachmentPicker';
 import type {AttachmentDraft} from './AttachmentPicker';
 import {FlaggedNotice, HeldNote, isTextFlagged, RulesLink, TextReportButton} from './Civility';
+import {DIRECT_MESSAGE_MAX, DIRECT_MESSAGES_PAGE} from '../../config/textLimits';
 
 // Период опроса списка переписок и открытой переписки (мс), если событие сокета не пришло.
 export const POLL_MS = 15_000;
@@ -122,7 +123,7 @@ function ThreadView({username, initialAttach, onChanged}: {
     const load = useCallback(() => {
         messagesApi.thread(username).then((next) => {
             setThread((prev) => {
-                if (!prev) setHasEarlier(next.messages.length >= 50);
+                if (!prev) setHasEarlier(next.messages.length >= DIRECT_MESSAGES_PAGE);
                 // Уже подгруженные ранние сообщения не теряются при обновлении.
                 const earlier = prev ? prev.messages.filter((m) => next.messages.length > 0 && m.id < next.messages[0].id) : [];
                 return {...next, messages: [...earlier, ...next.messages]};
@@ -158,7 +159,7 @@ function ThreadView({username, initialAttach, onChanged}: {
         const first = thread?.messages[0];
         if (!first) return;
         messagesApi.thread(username, first.id).then((page) => {
-            setHasEarlier(page.messages.length >= 50);
+            setHasEarlier(page.messages.length >= DIRECT_MESSAGES_PAGE);
             setThread((prev) => prev && {...prev, messages: [...page.messages, ...prev.messages]});
         }).catch(() => undefined);
     };
@@ -268,7 +269,7 @@ function ThreadView({username, initialAttach, onChanged}: {
                                 data-testid="dm-attach-toggle" className="p-2 rounded hover:bg-black/30 text-boxwood/80">
                             <Paperclip size={18}/>
                         </button>
-                        <textarea value={body} onChange={(e) => setBody(e.target.value)} onKeyDown={onKey} rows={2} maxLength={1000}
+                        <textarea value={body} onChange={(e) => setBody(e.target.value)} onKeyDown={onKey} rows={2} maxLength={DIRECT_MESSAGE_MAX}
                                   placeholder={t('dm.placeholder')} data-testid="dm-input"
                                   className="flex-1 min-w-0 bg-black/40 rounded px-2 py-1 text-sm resize-none"/>
                         <button type="submit" disabled={sending} aria-label={t('dm.send')} title={t('dm.send')} data-testid="dm-send"

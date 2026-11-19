@@ -144,7 +144,7 @@ export function ProgramPage() {
                     <h2 className="font-bold text-amber-200">{t('programs.week', {n: w + 1})}</h2>
                     <ol className="flex flex-col gap-1">
                         {week.map((session, s) => {
-                            const index = w * 5 + s;
+                            const index = program.weeks.slice(0, w).reduce((sum, days) => sum + days.length, 0) + s;
                             const isDone = index < count;
                             const isCurrent = index === count;
                             return (

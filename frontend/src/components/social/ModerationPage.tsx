@@ -14,6 +14,7 @@ import {errorMessage} from '../../services/apiErrors';
 import {moderationApi} from '../../services/moderation';
 import {FeedbackPanel, InvitesPanel} from '../beta/BetaAdmin';
 import type {ModerationAction, ModerationMe, QueueItem, ReportReason} from '../../services/moderation';
+import {MODERATION_TEXT_MAX} from '../../config/textLimits';
 
 // Причины жалобы на игрока.
 const REASONS: ReportReason[] = ['cheating', 'abuse', 'spam', 'other'];
@@ -47,14 +48,14 @@ export function ReportButton({username, messageText}: { username: string; messag
                     e.preventDefault();
                     moderationApi.report(messageText === undefined
                         ? {target: username, kind: 'player', reason, comment}
-                        : {target: username, kind: 'message', reason, comment, message_text: messageText.slice(0, 300)}).then(() => setDone(true))
+                        : {target: username, kind: 'message', reason, comment, message_text: messageText.slice(0, MODERATION_TEXT_MAX)}).then(() => setDone(true))
                         .catch((err) => setError(errorMessage(err, 'common.networkError')));
                 }}>
                     <select value={reason} onChange={(e) => setReason(e.target.value as ReportReason)} className="bg-black/40 rounded px-1 py-0.5"
                             data-testid="report-reason">
                         {REASONS.map((r) => <option key={r} value={r}>{t(`moderation.reasons.${r}`)}</option>)}
                     </select>
-                    <input value={comment} onChange={(e) => setComment(e.target.value)} maxLength={300} placeholder={t('moderation.comment')}
+                    <input value={comment} onChange={(e) => setComment(e.target.value)} maxLength={MODERATION_TEXT_MAX} placeholder={t('moderation.comment')}
                            className="bg-black/40 rounded px-1 py-0.5"/>
                     <button type="submit" className="px-2 py-0.5 rounded bg-rose-800 text-white">{t('moderation.send')}</button>
                     {error && <span role="alert" className="text-rose-300">{renderUiMessage(error, t)}</span>}
@@ -98,7 +99,7 @@ export function ModerationPage() {
                             e.preventDefault();
                             void act(moderationApi.appeal(appealText));
                         }}>
-                            <textarea value={appealText} onChange={(e) => setAppealText(e.target.value)} maxLength={300} rows={3}
+                            <textarea value={appealText} onChange={(e) => setAppealText(e.target.value)} maxLength={MODERATION_TEXT_MAX} rows={3}
                                       placeholder={t('moderation.appealHint')} className="bg-black/40 rounded px-2 py-1" data-testid="appeal-text"/>
                             <button type="submit" className="self-start px-3 py-1.5 rounded bg-amber-700 text-white font-bold">{t('moderation.appeal')}</button>
                         </form>
