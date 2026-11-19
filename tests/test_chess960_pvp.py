@@ -5,8 +5,9 @@ import io
 import chess
 import chess.pgn
 
+from src.api.websockets import create_rematch_game
 from src.models.game import Game
-from src.services.game_engine import engine, fen_of, is_chess960_fen, restore_board
+from src.services.game_engine import engine, fen_of, is_chess960_fen, restore_board, start_fen_of
 from src.services.game_state import state_manager
 from src.services.matchmaker import chess960_start, matchmaker
 from src.services.odds import pgn_header
@@ -88,3 +89,29 @@ async def test_match_found_tells_the_client_it_is_chess960(db_session):
     found = [m for _, m in recorder.sent if m.get("event") == "match_found"]
     assert len(found) == 2 and {m["variant"] for m in found} == {"chess960"}
     assert is_chess960_fen(found[0]["fen"]) and found[0]["pgn"].startswith('[Variant "Chess960"]')
+
+
+async def test_rematch_of_a_chess960_game_is_chess960_with_the_same_position(db_session):
+    a, b = await _users(db_session, 1500, 1500)
+    invite = await matchmaker.create_private_invite(a.id, "a", 1500, *TC, color_pref="white", variant="chess960")
+    first = await matchmaker.start_game_from_invite(invite["code"], b.id, db=db_session)
+    prev_state = await state_manager.get_game_state(first["game_id"])
+    first_game = await db_session.get(Game, first["game_id"])
+    await state_manager.claim_game_end(first["game_id"], "1-0", "resignation")
+    await state_manager.finish_game(db_session, first["game_id"], "1-0", termination="resignation")
+
+    rematch = await create_rematch_game(db_session, prev_state)
+
+    game = await db_session.get(Game, rematch["game_id"])
+    # Та же расстановка 960, цвета поменялись, без рейтинга — как первая партия.
+    assert game.initial_fen == first_game.initial_fen and is_chess960_fen(game.initial_fen)
+    assert (game.white_player_id, game.black_player_id) == (first_game.black_player_id, first_game.white_player_id)
+    assert game.is_rated is False
+    state = await state_manager.get_game_state(rematch["game_id"])
+    assert state["pgn"].startswith('[Variant "Chess960"]')
+
+
+def test_start_fen_is_read_from_the_pgn_header():
+    assert start_fen_of(pgn_header(STANDARD_960)) == STANDARD_960
+    assert start_fen_of("1. e4 e5 *") is None and start_fen_of(None) is None
+

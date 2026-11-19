@@ -2,7 +2,8 @@
 // 960, src/services/game_engine.py): клиентская шахматная библиотека рокировку 960 не знает, поэтому доска здесь лишь
 // рисует позицию и передаёт щелчки — как у партии против бота (Chess960Page). Рокировка — щелчок по королю, затем по
 // своей ладье. Состояние приходит по общему WebSocket (services/gameSocket): match_found (при старте и при каждом
-// переподключении), move_made, game_over, предложения ничьей. Основная доска (useGameSocket.ts) сама переводит сюда
+// переподключении), move_made, game_over, предложения ничьей и реванша (реванш — та же расстановка, цвета меняются,
+// websockets.create_rematch_game). Основная доска (useGameSocket.ts) сама переводит сюда
 // партию с variant chess960, передавая снимок в location.state.match. Рейтинга у этих партий нет.
 
 import {useCallback, useEffect, useRef, useState} from 'react';
@@ -47,7 +48,8 @@ export function sansOf(pgn: string): string[] {
 }
 
 /**
- * Сообщение сокета о партии (match_found, move_made, game_over, draw_offered, draw_declined — src/api/websockets.py):
+ * Сообщение сокета о партии (match_found, move_made, game_over, draw_offered, draw_declined, rematch_offered,
+ * rematch_declined — src/api/websockets.py):
  * поля сервера в snake_case; в каждом сообщении только свои, поэтому все необязательны.
  */
 interface GameMessage {
@@ -114,6 +116,8 @@ export function Chess960LiveGame() {
     const [drawOffer, setDrawOffer] = useState<'none' | 'incoming' | 'sent' | 'declined'>(
         initial && initial.draw_offer_from !== undefined && initial.draw_offer_from !== null
             && Number(initial.draw_offer_from) === Number(initial.opponent_id) ? 'incoming' : 'none');
+    // Реванш после конца партии: сервер начнёт партию 960 с той же расстановкой, цвета поменяются (create_rematch_game).
+    const [rematch, setRematch] = useState<'none' | 'sent' | 'incoming' | 'declined'>('none');
     const [now, setNow] = useState(Date.now());
     const updatedAt = useRef(Date.now());
     const gameRef = useRef(game);
@@ -132,6 +136,7 @@ export function Chess960LiveGame() {
             const incoming = data.draw_offer_from !== undefined && data.draw_offer_from !== null
                 && Number(data.draw_offer_from) === Number(data.opponent_id);
             setDrawOffer(incoming ? 'incoming' : 'none');
+            setRematch('none');
         };
         const onMove = (data: GameMessage) => {
             if (!own(data)) return;
@@ -156,17 +161,27 @@ export function Chess960LiveGame() {
         const onDrawDeclined = (data: GameMessage) => {
             if (own(data)) setDrawOffer('declined');
         };
+        const onRematchOffered = (data: GameMessage) => {
+            if (own(data)) setRematch('incoming');
+        };
+        const onRematchDeclined = (data: GameMessage) => {
+            if (own(data)) setRematch('declined');
+        };
         gameSocket.on('match_found', onMatch);
         gameSocket.on('move_made', onMove);
         gameSocket.on('game_over', onOver);
         gameSocket.on('draw_offered', onDrawOffered);
         gameSocket.on('draw_declined', onDrawDeclined);
+        gameSocket.on('rematch_offered', onRematchOffered);
+        gameSocket.on('rematch_declined', onRematchDeclined);
         return () => {
             gameSocket.off('match_found', onMatch);
             gameSocket.off('move_made', onMove);
             gameSocket.off('game_over', onOver);
             gameSocket.off('draw_offered', onDrawOffered);
             gameSocket.off('draw_declined', onDrawDeclined);
+            gameSocket.off('rematch_offered', onRematchOffered);
+            gameSocket.off('rematch_declined', onRematchDeclined);
         };
     }, []);
 
@@ -283,10 +298,30 @@ export function Chess960LiveGame() {
                             )}
                         </div>
                     )}
+                    {result && rematch === 'incoming' && (
+                        <div className="flex flex-wrap items-center gap-2" data-testid="c960-live-rematch-offer">
+                            <span>{t('chess960.live.rematchOffered')}</span>
+                            <button type="button" onClick={() => { action('accept_rematch'); setRematch('none'); }} data-testid="c960-live-rematch-accept"
+                                    className="px-2 py-1 rounded bg-emerald-800 text-white text-xs font-bold">{t('chess960.live.acceptDraw')}</button>
+                            <button type="button" onClick={() => { action('decline_rematch'); setRematch('none'); }}
+                                    className="px-2 py-1 rounded bg-black/40 border border-amber-900/50 text-xs">{t('chess960.live.declineDraw')}</button>
+                        </div>
+                    )}
+                    {result && rematch === 'sent' && <p className="text-xs text-amber-200" data-testid="c960-live-rematch-sent">{t('chess960.live.rematchSent')}</p>}
+                    {result && rematch === 'declined' && <p className="text-xs text-amber-200">{t('chess960.live.rematchDeclined')}</p>}
                     {result && (
-                        <Link to="/" className="self-start px-3 py-1.5 rounded bg-amber-700 text-white font-bold" data-testid="c960-live-again">
-                            {t('chess960.live.again')}
-                        </Link>
+                        <div className="flex flex-wrap gap-2">
+                            {rematch !== 'incoming' && (
+                                <button type="button" data-testid="c960-live-rematch" disabled={rematch === 'sent'}
+                                        onClick={() => { action('offer_rematch'); setRematch('sent'); }}
+                                        className="flex items-center gap-1 px-3 py-1.5 rounded bg-black/40 border border-amber-900/50 hover:border-amber-500 disabled:opacity-40">
+                                    <Shuffle size={14}/> {t('chess960.live.rematch')}
+                                </button>
+                            )}
+                            <Link to="/" className="px-3 py-1.5 rounded bg-amber-700 text-white font-bold" data-testid="c960-live-again">
+                                {t('chess960.live.again')}
+                            </Link>
+                        </div>
                     )}
                 </div>
             </div>
