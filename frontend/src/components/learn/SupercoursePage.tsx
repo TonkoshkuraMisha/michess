@@ -1,8 +1,10 @@
 // --- FILE: frontend/src/components/learn/SupercoursePage.tsx ---
 // Большой курс (таск 27.6): /learn/course — уровни 0–5 по разрядам, модули по ветвям (тактика, мат, эндшпиль,
 // стратегия, дебют, расчёт, партии). Шаги модуля ведут в готовые разделы; модуль без шагов — место в каркасе под
-// наполнение: игроку не показывается, виден в режиме «каркас курса». Модуль закрывается сам, когда выполнены все его
-// проверяемые шаги (автозачёт — services/courseProgress.ts, нормативы на сервере), выполненный шаг помечен галочкой;
+// наполнение: игроку не показывается, виден в режиме «каркас курса». В каркасе для автора — шаги в работе (draft) с
+// пометкой и таблица покрытия: сколько модулей готово, в работе и пусто по уровням и ветвям. Модуль закрывается сам,
+// когда выполнены все его проверяемые шаги (автозачёт — services/courseProgress.ts, нормативы на сервере),
+// выполненный шаг помечен галочкой;
 // модуль из непроверяемых шагов (библиотека, репертуар…) игрок отмечает сам — запись урока course-<код>.
 // Ссылка ?level=N&module=КОД (карточка «Урок по теме ошибки» в итоге партии) открывает уровень N и подсвечивает
 // модуль, прокручивая к нему.
@@ -17,7 +19,9 @@ import type {CourseFacts} from '../../services/courseProgress';
 import {useI18n} from '../../i18n';
 import {getToken} from '../../services/authToken';
 import {fetchLessonProgress, saveLessonProgress} from '../../services/lessonProgress';
-import {BRANCHES, COURSE, courseProgressId, LEVEL_COUNT, LEVEL_EXAM_TARGET, levelExamPassed, moduleTitleKey} from '../../content/supercourse';
+import {
+    BRANCHES, COURSE, courseProgressId, coverage, LEVEL_COUNT, LEVEL_EXAM_TARGET, levelExamPassed, moduleStatus, moduleTitleKey,
+} from '../../content/supercourse';
 import {fetchExamSummary} from '../ExamPage';
 import {puzzlesApi} from '../../services/puzzles';
 import {activityLink} from '../../content/programs';
@@ -104,6 +108,7 @@ export function SupercoursePage() {
                 <input type="checkbox" checked={skeleton} onChange={(e) => setSkeleton(e.target.checked)} className="accent-amber-600" data-testid="course-skeleton"/>
                 {t('supercourse.skeleton', {filled, total: COURSE.length})}
             </label>
+            {skeleton && <CoverageTable/>}
             {BRANCHES.map((branch) => {
                 const items = modules.filter((m) => m.branch === branch);
                 if (items.length === 0) return null;
@@ -119,7 +124,7 @@ export function SupercoursePage() {
                                         {done.has(module.code) ? <CheckCircle2 size={16} className="text-emerald-400"/> : <Circle size={16} className="text-amber-700"/>}
                                         <span className="font-mono text-xs text-amber-300">{module.code}</span>
                                         <span className="font-bold text-amber-100 min-w-0 break-words">{t(moduleTitleKey(module.code) as 'supercourse.title')}</span>
-                                        {module.steps.length === 0 && <span className="text-xs text-boxwood/60">{t('supercourse.soon')}</span>}
+                                        {moduleStatus(module) === 'empty' && <span className="text-xs text-boxwood/60">{t('supercourse.soon')}</span>}
                                         {module.code.startsWith('X') && (
                                             <span className="text-xs text-boxwood/70" data-testid={`course-exam-target-${module.level}`}>
                                                 {t(examPassed.has(module.level) ? 'supercourse.levelPassed' : 'supercourse.examTarget', {rating: LEVEL_EXAM_TARGET[module.level]})}
@@ -130,6 +135,15 @@ export function SupercoursePage() {
                                                     className="ml-auto px-2 py-0.5 rounded bg-amber-700 text-white text-xs font-bold">{t('supercourse.markDone')}</button>
                                         )}
                                     </div>
+                                    {skeleton && module.draft && module.draft.length > 0 && (
+                                        <div className="flex flex-wrap gap-x-3 gap-y-0.5 pl-6" data-testid={`course-draft-${module.code}`}>
+                                            {module.draft.map((step, i) => (
+                                                <span key={i} className="text-xs text-boxwood/60 italic">
+                                                    {activityLabel(t as never, language, step)} · {t('supercourse.draftStep')}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
                                     {module.steps.length > 0 && (
                                         <div className="flex flex-wrap gap-x-3 gap-y-0.5 pl-6">
                                             {module.steps.map((step, i) => {
@@ -160,6 +174,40 @@ export function SupercoursePage() {
                     </section>
                 );
             })}
+        </div>
+    );
+}
+
+/**
+ * Покрытие курса для автора (режим «каркас»): строки — уровни, столбцы — ветви, в ячейке — сколько модулей готово, в
+ * работе и пусто (content/supercourse.ts, coverage). Ячейка без модулей — прочерк.
+ */
+function CoverageTable() {
+    const {t} = useI18n();
+    const table = coverage(COURSE);
+    return (
+        <div className="overflow-x-auto" data-testid="course-coverage">
+            <table className="text-xs border-collapse">
+                <caption className="text-left font-bold text-amber-200 pb-1">{t('supercourse.coverage.title')}</caption>
+                <thead>
+                    <tr>
+                        <th className="px-2 py-1 text-left">{t('supercourse.coverage.level')}</th>
+                        {BRANCHES.map((branch) => <th key={branch} className="px-2 py-1 text-left">{t(`supercourse.branches.${branch}`)}</th>)}
+                    </tr>
+                </thead>
+                <tbody>
+                    {table.map((row, level) => (
+                        <tr key={level} className="border-t border-amber-900/40">
+                            <th className="px-2 py-1 text-left font-normal">{level}</th>
+                            {row.map((cell, i) => (
+                                <td key={BRANCHES[i]} className="px-2 py-1" data-testid={`coverage-${level}-${BRANCHES[i]}`}>
+                                    {cell.ready + cell.draft + cell.empty === 0 ? '—' : t('supercourse.coverage.cell', cell)}
+                                </td>
+                            ))}
+                        </tr>
+                    ))}
+                </tbody>
+            </table>
         </div>
     );
 }
