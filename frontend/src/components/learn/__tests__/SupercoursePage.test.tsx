@@ -7,10 +7,14 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {SupercoursePage} from '../SupercoursePage';
 import {setToken} from '../../../services/authToken';
 
-// Все модули курса наполнены; чтобы проверить режим «каркас», модуль T3.2 подменяется пустым.
+// Все модули курса наполнены; чтобы проверить режим «каркас», модуль T3.2 подменяется пустым, а у E3.1 шаги — в работе.
 vi.mock('../../../content/supercourse', async (importOriginal) => {
     const original = await importOriginal<typeof import('../../../content/supercourse')>();
-    return {...original, COURSE: original.COURSE.map((m) => (m.code === 'T3.2' ? {...m, steps: []} : m))};
+    return {
+        ...original,
+        COURSE: original.COURSE.map((m) => (m.code === 'T3.2' ? {...m, steps: []}
+            : m.code === 'E3.1' ? {...m, steps: [], draft: m.steps} : m)),
+    };
 });
 
 beforeEach(() => setToken('jwt'));
@@ -51,8 +55,15 @@ describe('Большой курс', () => {
         expect(screen.queryByTestId('course-done-T1.4')).toBeNull();
         await act(async () => fireEvent.click(screen.getByTestId('course-level-3')));
         expect(screen.queryByTestId('course-module-T3.2')).toBeNull();  // модуль без шагов скрыт
+        expect(screen.queryByTestId('course-module-E3.1')).toBeNull();  // черновик игроку не виден
+        expect(screen.queryByTestId('course-coverage')).toBeNull();
         fireEvent.click(screen.getByTestId('course-skeleton'));
         expect(screen.getByTestId('course-module-T3.2')).toHaveTextContent('скоро');
+        // Каркас для автора: шаги в работе — с пометкой, покрытие по уровням и ветвям.
+        expect(screen.getByTestId('course-draft-E3.1')).toHaveTextContent('черновик');
+        expect(screen.getByTestId('course-module-E3.1')).not.toHaveTextContent('скоро');
+        expect(screen.getByTestId('coverage-3-E')).toHaveTextContent('черновиков 1');
+        expect(screen.getByTestId('coverage-3-T')).toHaveTextContent('пусто 1');
         await act(async () => fireEvent.click(screen.getByTestId('course-level-1')));
         expect(screen.getByTestId('course-exam-target-1')).toHaveTextContent('не ниже 1000');
         expect(screen.getByTestId('course-step-empty-pin')).toHaveTextContent('задач пока нет');  // T1.2: в теме нет задач
