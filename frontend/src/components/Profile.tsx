@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import {API_BASE_URL} from '../config/api';
 import type {Locale} from 'date-fns';
+import {gameDisplayDate} from '../services/gameDates';
 import {getDateLocale, renderUiMessage, uiMessage, useI18n} from '../i18n';
 import type {UiMessage} from '../i18n';
 import {displayPlayerName} from '../config/players';
@@ -193,17 +194,6 @@ function mostPlayedCategory(stats: PlayerStats | null): RatingCategoryKey {
     }
     return best;
 }
-
-/** Дата партии: из PGN без неизвестных частей, иначе дата завершения, иначе прочерк. */
-const displayDate = (game: GameData, locale: Locale) => {
-    if (game.pgn_date && !game.pgn_date.includes('????')) {
-        return game.pgn_date.replace(/\?/g, '').replace(/\.+$/, '');
-    }
-    if (game.finished_at) {
-        return format(parseISO(game.finished_at), 'd MMM yyyy', {locale});
-    }
-    return '—';
-};
 
 /** Страница профиля игрока по имени из адреса; загрузка профиля, итогов, партий и истории рейтинга. */
 export default function Profile() {
@@ -574,7 +564,7 @@ export default function Profile() {
                                             {game.site || '—'}
                                         </td>
                                         <td className="px-4 py-4 text-center text-boxwood/70 font-mono">
-                                            {displayDate(game, dateLocale)}
+                                            {gameDisplayDate(game.pgn_date, game.finished_at, dateLocale) ?? '—'}
                                         </td>
                                         <td className="px-4 py-4 text-right">
                                             <a

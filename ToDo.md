@@ -2270,6 +2270,9 @@ ATTRIBUTION.md), характер по известной манере игры,
 Settings); два разных `POLL_MS`; лимиты длины текста и пороги числами (MessagesPage, ModerationPage, TeamsPage,
 BlindGames, PathGame, BasicsPage, `w * 5` в ProgramsPage); `SIZES` турниров дублирует `tournament_rules.py`;
 `any` у данных сокета в Chess960LiveGame; лишний `level={1}` у QuizGame/ChecksGame; пустой `useMemo` в LessonPlayer.
+Сделано 19.11 (`refactor/client-shared-helpers`): дата партии — `services/gameDates.ts` (Profile, ChampionGames и
+третья копия в GameViewer), `config/passwordRules.ts`, `errorOf` заменён на `errorMessage` из `apiErrors.ts`.
+Осталось: на сервере `min_length=8` пароля повторён в трёх схемах (`schemas/user.py`, `api/account.py`, `api/auth.py`).
 Найдено при сверке (чинить отдельно): дубликат `BOT_INSTANCES` в `src/api/bots.py`; неиспользуемая
 `philidor.BLUNDER_GUARD_MARGIN_CP`; `skill_level` в `analyse_with_stockfish` ни на что не влияет;
 `_simulate_human_thinking_time` считается в `choose_move`, но результат не используется; тест курса матов

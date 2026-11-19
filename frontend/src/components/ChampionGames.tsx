@@ -6,7 +6,7 @@
 
 import {useState, useEffect} from 'react';
 import {useParams, Link, useNavigate} from 'react-router-dom';
-import {format, parseISO} from 'date-fns';
+import {gameDisplayDate} from '../services/gameDates';
 import {
     Swords, Download, ArrowLeft, Crown,
     ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
@@ -15,7 +15,6 @@ import {CHAMPIONS_LIST} from '../config/champions';
 import {API_BASE_URL} from '../config/api';
 import {readApiErrorOr} from '../services/apiErrors';
 import {guessApi} from '../services/guess';
-import type {Locale} from 'date-fns';
 import {renderUiMessage, uiMessage, useI18n} from '../i18n';
 import type {UiMessage} from '../i18n';
 
@@ -43,18 +42,6 @@ export function isChampionName(username: string, championId: string): boolean {
     const surname = championId.toLowerCase();
     return username.toLowerCase().split(/[^\p{L}]+/u).includes(surname);
 }
-
-/** Дата партии: из PGN без неизвестных частей, иначе дата завершения, иначе прочерк. */
-const displayDate = (game: GameData, locale: Locale) => {
-    if (game.pgn_date && !game.pgn_date.includes('????')) {
-        // Очищаем дату от неизвестных месяцев/дней: "1860.??.??" -> "1860"
-        return game.pgn_date.replace(/\?/g, '').replace(/\.+$/, '');
-    }
-    if (game.finished_at) {
-        return format(parseISO(game.finished_at), 'd MMM yyyy', {locale});
-    }
-    return '—';
-};
 
 /** Страница архива чемпиона: шапка, постраничный список партий и переход к просмотру. */
 export default function ChampionGames() {
@@ -271,7 +258,7 @@ export default function ChampionGames() {
                                             {game.site || '—'}
                                         </td>
                                         <td className="px-4 py-4 text-center text-boxwood/70 font-mono">
-                                            {displayDate(game, dateLocale)}
+                                            {gameDisplayDate(game.pgn_date, game.finished_at, dateLocale) ?? '—'}
                                         </td>
                                         <td className="px-4 py-4 text-right whitespace-nowrap">
                                             {guessStarts[String(game.game_id)] !== undefined && (

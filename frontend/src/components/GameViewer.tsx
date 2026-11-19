@@ -21,7 +21,7 @@ import {useState, useEffect, useRef, useMemo, useCallback} from 'react';
 import {useParams, useLocation, Link} from 'react-router-dom';
 import {Chess} from 'chess.js';
 import {ArrowLeft, Download, Loader2, Sword, Palette, Cpu, Sparkles, Volume2, VolumeX, Crown, Share2} from 'lucide-react';
-import {format, parseISO} from 'date-fns';
+import {gameDisplayDate} from '../services/gameDates';
 import {
     BOARD_THEMES,
     MIN_BOARD_SIZE,
@@ -456,13 +456,8 @@ export default function GameViewer({library = false, imported = false}: { librar
     const topIconBg = isFlipped ? 'bg-boxwood text-acacia-dark' : 'bg-acacia text-amber-200';
     const bottomIconBg = isFlipped ? 'bg-acacia text-amber-200' : 'bg-boxwood text-acacia-dark';
 
-    let displayDate = t('viewer.archivedGame');
-    const rawDate = gameDataFromState?.pgn_date || pgnHeaders.Date;
-    if (rawDate && !rawDate.includes('????')) {
-        displayDate = rawDate.replace(/\?/g, '').replace(/\.+$/, '');
-    } else if (gameDataFromState?.finished_at) {
-        displayDate = format(parseISO(gameDataFromState.finished_at), 'd MMM yyyy', {locale: dateLocale});
-    }
+    const displayDate = gameDisplayDate(gameDataFromState?.pgn_date || pgnHeaders.Date, gameDataFromState?.finished_at,
+        dateLocale) ?? t('viewer.archivedGame');
 
     const squareToSvgCoords = (sq: string): { x: number; y: number } | null => {
         if (!sq || sq.length < 2) return null;
