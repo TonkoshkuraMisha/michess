@@ -201,11 +201,11 @@ export function TrainerPage() {
             {seed !== null && (id === 'blind_move' || id === 'blind_where') && (
                 <BlindGame mode={id === 'blind_move' ? 'move' : 'where'} level={level} seed={seed} onFinish={finish}/>
             )}
-            {seed !== null && id === 'calc_checks' && <ChecksGame level={1} seed={seed} onFinish={finish}/>}
+            {seed !== null && id === 'calc_checks' && <ChecksGame seed={seed} onFinish={finish}/>}
             {seed !== null && id === 'structure_quiz' && <StructureQuiz seed={seed} onFinish={finish}/>}
             {seed !== null && id === 'plan_quiz' && <StructureQuiz seed={seed} onFinish={finish} variant="plan"/>}
             {seed !== null && id === 'miniatures' && <MiniatureGame seed={seed} onFinish={finish}/>}
-            {seed !== null && id.startsWith('calc_') && id !== 'calc_checks' && <QuizGame kind={id as QuizKind} level={1} seed={seed} onFinish={finish}/>}
+            {seed !== null && id.startsWith('calc_') && id !== 'calc_checks' && <QuizGame kind={id as QuizKind} seed={seed} onFinish={finish}/>}
             {seed !== null && (id === 'quiet_path' || id === 'knight_route') && (
                 <PathGame kind={id === 'knight_route' ? 'knight' : 'quiet'} level={level} seed={seed} onFinish={finish}/>
             )}

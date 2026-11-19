@@ -43,13 +43,19 @@ def validate_username(value: str) -> str:
     return value
 
 
+# Длина пароля (регистрация, смена и сброс — src/api/auth.py, src/api/account.py): не короче 8 знаков; верхняя
+# граница — чтобы не хэшировать мегабайтные «пароли» (bcrypt всё равно учитывает 72 байта). Клиент проверяет
+# нижнюю заранее — frontend/src/config/passwordRules.ts.
+PASSWORD_MIN_LENGTH = 8
+PASSWORD_MAX_LENGTH = 128
+
+
 class UserCreate(BaseModel):
     """Данные регистрации (POST /auth/register): имя, пароль и необязательные ответы и код-приглашение."""
     username: str = Field(
         ..., min_length=USERNAME_MIN_LENGTH, max_length=USERNAME_MAX_LENGTH, description="Unique username",
     )
-    # Верхняя граница — чтобы не хэшировать мегабайтные «пароли»; bcrypt всё равно учитывает 72 байта.
-    password: str = Field(..., min_length=8, max_length=128, description="Strong password")
+    password: str = Field(..., min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH, description="Strong password")
     # Первый вход (таск 17.8): необязательные ответы для стартового рейтинга (src/services/onboarding.py).
     experience: Experience | None = None
     strength: StrengthBand | None = None

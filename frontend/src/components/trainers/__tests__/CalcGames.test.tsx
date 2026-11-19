@@ -20,7 +20,7 @@ describe('викторины счёта', () => {
         const games = await loadAllClassics();
         const pool = positionPool(games, []);
         const onFinish = vi.fn();
-        render(<QuizGame kind={kind} level={1} seed={8} onFinish={onFinish}/>);
+        render(<QuizGame kind={kind} seed={8} onFinish={onFinish}/>);
         await settle();
         for (let i = 0; i < QUIZ_ROUNDS; i++) {
             const answer = kind === 'calc_exchange' ? exchangeQuestion(pool, 8 * 97 + i)!.answer
@@ -35,7 +35,7 @@ describe('викторины счёта', () => {
     }, 30_000);
 
     it('неверный ответ — ошибка, правильный подсвечивается', async () => {
-        render(<QuizGame kind="calc_square" level={1} seed={2} onFinish={vi.fn()}/>);
+        render(<QuizGame kind="calc_square" seed={2} onFinish={vi.fn()}/>);
         await settle();
         const right = squareQuestion(2, 0).answer ? 'yes' : 'no';
         const wrong = right === 'yes' ? 'no' : 'yes';
@@ -45,7 +45,7 @@ describe('викторины счёта', () => {
     });
 
     it('после ответа позицию можно разыграть на доске (гонку пешки и короля)', async () => {
-        render(<QuizGame kind="calc_square" level={1} seed={2} onFinish={vi.fn()}/>);
+        render(<QuizGame kind="calc_square" seed={2} onFinish={vi.fn()}/>);
         await settle();
         expect(screen.queryByTestId('explorer-controls')).toBeNull();  // до ответа доска закрыта
         fireEvent.click(screen.getByTestId('quiz-option-yes'));
@@ -64,7 +64,7 @@ describe('шахи и взятия', () => {
         const games = await loadAllClassics();
         const pool = positionPool(games, []);
         const onFinish = vi.fn();
-        render(<ChecksGame level={1} seed={6} onFinish={onFinish}/>);
+        render(<ChecksGame seed={6} onFinish={onFinish}/>);
         await settle();
         for (let round = 0; round < 3; round++) {
             const fen = checksPosition(pool, 6 * 13 + round * 101)!;
@@ -88,7 +88,7 @@ describe('«Сравни два хода» (27.9)', () => {
             expect(q.bestCp - q.otherCp).toBeGreaterThanOrEqual(100);
             expect(new Set(q.options)).toEqual(new Set([q.best, q.other]));
         }
-        render(<QuizGame kind="calc_compare" level={1} seed={3} onFinish={vi.fn()}/>);
+        render(<QuizGame kind="calc_compare" seed={3} onFinish={vi.fn()}/>);
         await settle();
         const q = compareQuestion(games, 3 * 71)!;
         fireEvent.click(screen.getByTestId(`quiz-option-${q.other}`));

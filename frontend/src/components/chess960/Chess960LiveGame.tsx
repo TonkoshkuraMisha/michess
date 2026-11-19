@@ -46,8 +46,33 @@ export function sansOf(pgn: string): string[] {
         && !['1-0', '0-1', '1/2-1/2', '*'].includes(token));
 }
 
+/**
+ * Сообщение сокета о партии (match_found, move_made, game_over, draw_offered, draw_declined — src/api/websockets.py):
+ * поля сервера в snake_case; в каждом сообщении только свои, поэтому все необязательны.
+ */
+interface GameMessage {
+    game_id?: number | string;
+    variant?: string;
+    color?: string;
+    white_username?: string;
+    black_username?: string;
+    white_rating?: number;
+    black_rating?: number;
+    fen?: string;
+    pgn?: string;
+    state_version?: number;
+    white_time_ms?: number;
+    black_time_ms?: number;
+    base_time_ms?: number;
+    draw_offer_from?: number | null;
+    opponent_id?: number;
+    move?: string | null;
+    result?: string;
+    reason?: string;
+}
+
 /** Снимок партии из сообщения match_found (поля сервера в snake_case → состояние компонента). */
-function fromSnapshot(data: any): LiveState {
+function fromSnapshot(data: GameMessage): LiveState {
     return {
         gameId: Number(data.game_id),
         color: data.color === 'black' ? 'black' : 'white',
@@ -82,7 +107,7 @@ function commandId(): string {
 export function Chess960LiveGame() {
     const {t} = useI18n();
     const location = useLocation();
-    const initial = (location.state as { match?: any } | null)?.match;
+    const initial = (location.state as { match?: GameMessage } | null)?.match;
     const [game, setGame] = useState<LiveState | null>(initial?.variant === 'chess960' ? fromSnapshot(initial) : null);
     const [result, setResult] = useState<{ result: string; reason?: string } | null>(null);
     const [from, setFrom] = useState<string | null>(null);
@@ -97,8 +122,8 @@ export function Chess960LiveGame() {
     useEffect(() => {
         const token = getToken();
         if (token) gameSocket.connect(token);
-        const own = (data: any) => gameRef.current !== null && Number(data.game_id) === gameRef.current.gameId;
-        const onMatch = (data: any) => {
+        const own = (data: GameMessage) => gameRef.current !== null && Number(data.game_id) === gameRef.current.gameId;
+        const onMatch = (data: GameMessage) => {
             if (data.variant !== 'chess960') return;
             setGame(fromSnapshot(data));
             setResult(null);
@@ -108,27 +133,27 @@ export function Chess960LiveGame() {
                 && Number(data.draw_offer_from) === Number(data.opponent_id);
             setDrawOffer(incoming ? 'incoming' : 'none');
         };
-        const onMove = (data: any) => {
+        const onMove = (data: GameMessage) => {
             if (!own(data)) return;
             setGame((prev) => prev && ({
-                ...prev, fen: data.fen, pgn: data.pgn, version: Number(data.state_version ?? prev.version),
+                ...prev, fen: data.fen ?? prev.fen, pgn: data.pgn ?? prev.pgn, version: Number(data.state_version ?? prev.version),
                 whiteMs: Number(data.white_time_ms ?? prev.whiteMs), blackMs: Number(data.black_time_ms ?? prev.blackMs),
                 lastMove: data.move || null,
             }));
             updatedAt.current = Date.now();
             setDrawOffer((prev) => (prev === 'incoming' ? prev : 'none'));
         };
-        const onOver = (data: any) => {
+        const onOver = (data: GameMessage) => {
             if (!own(data)) return;
-            setResult({result: data.result, reason: data.reason});
+            setResult({result: data.result ?? '*', reason: data.reason});
             setGame((prev) => prev && ({
                 ...prev, whiteMs: Number(data.white_time_ms ?? prev.whiteMs), blackMs: Number(data.black_time_ms ?? prev.blackMs),
             }));
         };
-        const onDrawOffered = (data: any) => {
+        const onDrawOffered = (data: GameMessage) => {
             if (own(data)) setDrawOffer('incoming');
         };
-        const onDrawDeclined = (data: any) => {
+        const onDrawDeclined = (data: GameMessage) => {
             if (own(data)) setDrawOffer('declined');
         };
         gameSocket.on('match_found', onMatch);

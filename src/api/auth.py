@@ -31,7 +31,7 @@ from src.core.security import create_user_token, get_password_hash, verify_passw
 from src.db import redis as redis_module
 from src.db.session import get_db
 from src.models.user import RATING_CATEGORIES, User
-from src.schemas.user import UserCreate, UserResponse, username_key
+from src.schemas.user import PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, UserCreate, UserResponse, username_key
 from src.services import auth_sessions, beta, product_metrics
 from src.services.onboarding import starting_rating
 
@@ -261,7 +261,7 @@ async def logout_everywhere(current_user: User = Depends(get_current_user), db: 
 class PasswordChange(BaseModel):
     """Смена пароля: текущий пароль для подтверждения и новый (не короче 8 знаков)."""
     current_password: str = Field(..., max_length=128)
-    new_password: str = Field(..., min_length=8, max_length=128)
+    new_password: str = Field(..., min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
 
 
 @router.post("/change-password")
