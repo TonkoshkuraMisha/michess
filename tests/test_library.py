@@ -93,6 +93,9 @@ async def test_collection_games_search_and_pgn(client, seeded, token_user_2):
     assert client.get(f"{API}/games", params={"max_plies": 4}).json()["total"] == 1
     assert client.get(f"{API}/games", params={"player": "secret"}).json()["total"] == 0
     assert client.get(f"{API}/games", params={"structure": "isolated_pawn"}).json()["total"] == 0  # таск 27.5
+    # Метка «миниатюра» (27.5): решающие партии до 25 ходов; незаконченная «Broken» и скрытая «Secret» — нет.
+    minis = client.get(f"{API}/games", params={"miniature": "true"}).json()
+    assert minis["total"] == 2 and {g["white"] for g in minis["games"]} == {"Botvinnik", "Anon"}
     by_moves = client.get(f"{API}/games", params={"moves": "e2e4 e7e5 d1h5"}).json()  # таск 27.10
     assert [g["white"] for g in by_moves["games"]] == ["Anon"]
     assert client.get(f"{API}/games", params={"moves": "e2e4 e7e"}).json()["total"] == 0  # только целые ходы

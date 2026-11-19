@@ -24,6 +24,8 @@ router = APIRouter(dependencies=[Depends(rate_limit("library", "RATE_LIMIT_PUZZL
 
 PAGE = 50
 RESULTS = ("1-0", "0-1", "1/2-1/2")
+# Решающие результаты: у миниатюры (метка 27.5) кто-то выиграл.
+DECISIVE = RESULTS[:2]
 
 
 async def optional_user(request: Request, db: AsyncSession = Depends(get_db)) -> User | None:
@@ -96,13 +98,14 @@ async def collection_games(collection_id: int = Path(..., ge=1), offset: int = Q
 async def search(player: str = Query("", max_length=60), eco: str = Query("", max_length=3),
                  year_from: int | None = Query(None, ge=1400, le=2200), year_to: int | None = Query(None, ge=1400, le=2200),
                  result: str = Query("", max_length=7), max_plies: int | None = Query(None, ge=1, le=1000),
-                 structure: str = Query("", max_length=20),
+                 structure: str = Query("", max_length=20), miniature: bool = Query(False),
                  moves: str = Query("", max_length=400, pattern=r"^[a-h1-8qrbn ]*$"),
                  offset: int = Query(0, ge=0), limit: int = Query(PAGE, ge=1, le=200),
                  db: AsyncSession = Depends(get_db), user: User | None = Depends(optional_user)):
     """
     Поиск по видимым партиям: игрок (часть имени), код дебюта (начало), годы, результат, длина, структура; moves —
-    начало партии в UCI через пробел (узел репертуара, 27.10; без перестановок).
+    начало партии в UCI через пробел (узел репертуара, 27.10; без перестановок); miniature — метка «миниатюра» (27.5):
+    решающая партия не длиннее miniatures.MAX_PLIES полуходов (25 ходов).
     """
     conditions = [_visible_game(user)]
     if player.strip():
@@ -120,6 +123,9 @@ async def search(player: str = Query("", max_length=60), eco: str = Query("", ma
         conditions.append(LibraryGame.plies <= max_plies)
     if structure in pawn_structures.STRUCTURES:
         conditions.append(LibraryGame.structure == structure)
+    if miniature:
+        conditions.append(LibraryGame.plies <= miniatures_service.MAX_PLIES)
+        conditions.append(LibraryGame.result.in_(DECISIVE))
     prefix = " ".join(moves.split())
     if prefix:
         conditions.append((LibraryGame.moves == prefix) | LibraryGame.moves.startswith(prefix + " ", autoescape=True))

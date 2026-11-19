@@ -64,6 +64,18 @@ describe('библиотека партий', () => {
         expect(mock.mock.calls.some(([u]) => String(u).includes('/games?player=Botvinnik&structure=isolated_pawn'))).toBe(true);
     });
 
+    it('метка «миниатюра» (27.5): флажок уходит в поиск, снятый — нет', async () => {
+        const mock = stub();
+        await act(async () => render(<MemoryRouter><LibraryPage/></MemoryRouter>));
+        fireEvent.click(screen.getByTestId('library-miniature'));
+        await act(async () => fireEvent.click(screen.getByTestId('library-search-submit')));
+        expect(mock.mock.calls.some(([u]) => String(u).includes('/games?miniature=true'))).toBe(true);
+        fireEvent.click(screen.getByTestId('library-miniature'));
+        mock.mockClear();
+        await act(async () => fireEvent.click(screen.getByTestId('library-search-submit')));
+        expect(mock.mock.calls.some(([u]) => String(u).includes('miniature'))).toBe(false);
+    });
+
     it('ошибка сети показывается', async () => {
         vi.stubGlobal('fetch', vi.fn(async () => {
             throw new Error('offline');
