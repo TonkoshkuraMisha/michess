@@ -8,7 +8,7 @@
 import {useEffect, useState} from 'react';
 import {Link} from 'react-router-dom';
 import {ArrowLeft, AtSign, Check, Download, KeyRound, Languages, Lock, LogOut, Palette, Settings as SettingsIcon, Trash2, Volume2, VolumeX} from 'lucide-react';
-import {API_BASE_URL} from '../config/api';
+import {accountApi} from '../services/account';
 import {
     BOARD_THEMES,
     PIECE_SETS,
@@ -19,7 +19,7 @@ import {
     getAnalysisBoardThemeKey,
     setAnalysisAppearance,
 } from '../config/boardAppearance';
-import {errorMessage, readApiErrorOr} from '../services/apiErrors';
+import {errorMessage} from '../services/apiErrors';
 import {PAGE_PALETTES, PAGE_PATTERNS, applyPageBackground, getSavedPagePalette, getSavedPagePattern, pageBackgroundStyle} from '../config/pageBackground';
 import type {PagePalette, PagePattern} from '../config/pageBackground';
 import {THEME_PRESETS, applyPreset} from '../config/themePresets';
@@ -138,72 +138,57 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
         if (!token) return;
         void (async () => {
             try {
-                const res = await fetch(`${API_BASE_URL}/api/v1/profile/me`, {headers: {Authorization: `Bearer ${token}`}});
-                if (res?.ok) {
-                    const me = await res.json();
-                    setEmail(me?.email ?? null);
-                    setHelper(!!me?.translation_helper);
-                    setAvatar(me?.avatar ?? null);
-                }
+                const me = await accountApi.me();
+                setEmail(me?.email ?? null);
+                setHelper(!!me?.translation_helper);
+                setAvatar(me?.avatar ?? null);
             } catch {
                 // Не удалось узнать адрес — раздел покажет «не привязан», привязать можно всё равно.
             }
         })();
     }, [token]);
 
-    const emailRequest = async (path: string, body: object, onOk: () => void, fallback: 'settings.emailFailed') => {
+    /** Привязка или снятие почты: запрос, затем onOk; отказ — сообщение под полем. */
+    const emailRequest = async (request: () => Promise<unknown>, onOk: () => void) => {
         if (!token) return;
         setEmailError(null);
         setEmailNotice(null);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/account/${path}`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json', Authorization: `Bearer ${token}`},
-                body: JSON.stringify(body),
-            });
-            if (!res.ok) {
-                setEmailError(await readApiErrorOr(res, fallback));
-                return;
-            }
+            await request();
             setEmailPassword('');
             onOk();
-        } catch {
-            setEmailError({key: 'common.noConnection'});
+        } catch (err) {
+            setEmailError(errorMessage(err, 'settings.emailFailed'));
         }
     };
 
     const sendEmailLink = (e: React.FormEvent) => {
         e.preventDefault();
         const address = emailInput.trim();
-        void emailRequest('email', {email: address, password: emailPassword, language},
-            () => setEmailNotice({key: 'settings.emailSent', params: {email: address}}), 'settings.emailFailed');
+        void emailRequest(() => accountApi.linkEmail(address, emailPassword, language),
+            () => setEmailNotice({key: 'settings.emailSent', params: {email: address}}));
     };
 
     const removeEmail = () => {
-        void emailRequest('email/remove', {password: emailPassword}, () => {
+        void emailRequest(() => accountApi.removeEmail(emailPassword), () => {
             setEmail(null);
             setEmailNotice({key: 'settings.emailRemoved'});
-        }, 'settings.emailFailed');
+        });
     };
 
     const downloadMyData = async () => {
         if (!token) return;
         setDataError(null);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/account/export`, {headers: {Authorization: `Bearer ${token}`}});
-            if (!res.ok) {
-                setDataError(await readApiErrorOr(res, 'settings.exportFailed'));
-                return;
-            }
-            const blob = new Blob([JSON.stringify(await res.json(), null, 2)], {type: 'application/json'});
+            const blob = new Blob([JSON.stringify(await accountApi.exportData(), null, 2)], {type: 'application/json'});
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
             link.download = `regence-${username ?? 'data'}.json`;
             link.click();
             URL.revokeObjectURL(url);
-        } catch {
-            setDataError({key: 'common.noConnection'});
+        } catch (err) {
+            setDataError(errorMessage(err, 'settings.exportFailed'));
         }
     };
 
@@ -213,20 +198,12 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
         setDataError(null);
         setIsDeleting(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/account/delete`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json', Authorization: `Bearer ${token}`},
-                body: JSON.stringify({password: deletePassword}),
-            });
-            if (!res.ok) {
-                setDataError(await readApiErrorOr(res, 'settings.deleteFailed'));
-                return;
-            }
+            await accountApi.deleteAccount(deletePassword);
             gameSocket.disconnect();
             clearToken();
             onAccountDeleted?.();
-        } catch {
-            setDataError({key: 'common.noConnection'});
+        } catch (err) {
+            setDataError(errorMessage(err, 'settings.deleteFailed'));
         } finally {
             setIsDeleting(false);
         }
@@ -269,25 +246,16 @@ export default function Settings({token, username, onTokenChange, onLogoutEveryw
         // разлогинило бы игрока, только что сменившего пароль.
         gameSocket.disconnect();
         try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/auth/change-password`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json', Authorization: `Bearer ${token}`},
-                body: JSON.stringify({current_password: currentPassword, new_password: newPassword}),
-                credentials: 'include',  // новая refresh-cookie: прежние сессии отозваны (таск 17.5)
-            });
-            if (!res.ok) {
-                setPasswordError(await readApiErrorOr(res, 'settings.passwordChangeFailed'));
-                return;
-            }
-            const data = await res.json();
-            setToken(data.access_token);
-            onTokenChange(data.access_token);
+            // Новая refresh-cookie: прежние сессии отозваны (таск 17.5).
+            const accessToken = await accountApi.changePassword(currentPassword, newPassword);
+            setToken(accessToken);
+            onTokenChange(accessToken);
             setCurrentPassword('');
             setNewPassword('');
             setRepeatPassword('');
             setPasswordSaved(true);
-        } catch {
-            setPasswordError({key: 'common.noConnection'});
+        } catch (err) {
+            setPasswordError(errorMessage(err, 'settings.passwordChangeFailed'));
         } finally {
             setIsSaving(false);
         }

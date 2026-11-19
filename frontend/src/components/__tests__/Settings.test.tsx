@@ -42,6 +42,8 @@ const response = (status: number, body: unknown = {}) =>
 function renderSettings(props: Partial<React.ComponentProps<typeof Settings>> = {}) {
     const onTokenChange = vi.fn();
     const onLogoutEverywhere = vi.fn();
+    // В приложении токен страницы — тот же, что в хранилище входа: App берёт его из authToken.
+    setToken(props.token === undefined ? 'old-token' : props.token);
     render(
         <MemoryRouter>
             <Settings
@@ -191,7 +193,7 @@ describe('Settings: смена пароля', () => {
 
         expect(await screen.findByRole('alert')).toHaveTextContent('Текущий пароль указан неверно');
         expect(onTokenChange).not.toHaveBeenCalled();
-        expect(getToken()).toBeNull();
+        expect(getToken()).toBe('old-token');
     });
 
     it.each([

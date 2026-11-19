@@ -6,8 +6,8 @@
 import {useEffect, useRef, useState} from 'react';
 import {Link, useSearchParams} from 'react-router-dom';
 import {KeyRound, MailCheck} from 'lucide-react';
-import {API_BASE_URL} from '../config/api';
-import {readApiErrorOr} from '../services/apiErrors';
+import {accountApi} from '../services/account';
+import {errorMessage} from '../services/apiErrors';
 import {renderUiMessage, useI18n} from '../i18n';
 import type {UiMessage} from '../i18n';
 import {clearToken} from '../services/authToken';
@@ -30,16 +30,9 @@ export function VerifyEmailPage() {
         sent.current = true;
         void (async () => {
             try {
-                const res = await fetch(`${API_BASE_URL}/api/v1/account/email/verify`, {
-                    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({token}),
-                });
-                if (!res.ok) {
-                    setState({error: await readApiErrorOr(res, 'serverErrors.email_link_invalid')});
-                    return;
-                }
-                setState({email: (await res.json()).email});
-            } catch {
-                setState({error: {key: 'common.noConnection'}});
+                setState({email: (await accountApi.verifyEmail(token)).email});
+            } catch (err) {
+                setState({error: errorMessage(err, 'serverErrors.email_link_invalid')});
             }
         })();
     }, [token]);
@@ -81,18 +74,11 @@ export function ResetPasswordPage() {
         setError(null);
         setSaving(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/account/password-reset/confirm`, {
-                method: 'POST', headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({token, new_password: password}),
-            });
-            if (!res.ok) {
-                setError(await readApiErrorOr(res, 'serverErrors.email_link_invalid'));
-                return;
-            }
+            await accountApi.confirmPasswordReset(token, password);
             clearToken();
             setDone(true);
-        } catch {
-            setError({key: 'common.noConnection'});
+        } catch (err) {
+            setError(errorMessage(err, 'serverErrors.email_link_invalid'));
         } finally {
             setSaving(false);
         }
