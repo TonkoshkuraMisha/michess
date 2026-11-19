@@ -26,7 +26,7 @@ from src.services.rating import classify_time_control
 PODIUM = 3
 # Сколько после объявленного конца арену ещё проверяют: недоигранная партия могла задержать итоги.
 LOOKBACK = timedelta(days=3)
-# Названия мест для кубков профиля по номеру места.
+# Ключи кубков профиля по номеру места (arena_awards.place хранится строкой).
 MEDALS = {"1": "gold", "2": "silver", "3": "bronze"}
 
 

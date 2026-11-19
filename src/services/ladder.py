@@ -6,8 +6,9 @@
 а не по номеру): новый соперник встаёт в лестницу по силе и ничей прогресс не сдвигает. Текущая ступень — первая
 непройденная выше самой сильной пройденной (current_index).
 
-Честность партии проверяет сервер, а не клиент. Партию лестницы открывает POST /bots/ladder/start
-— сессия в Redis на LADDER_SESSION_TTL_S. Пока она открыта:
+Честность партии проверяет сервер, а не клиент. Партию лестницы открывает POST /api/v1/bots/ladder/start
+(src/api/ladder.py) — сессия в Redis под ключом «<область>:session:<id игрока>» на LADDER_SESSION_TTL_S. Пока она
+открыта (проверки вызывает src/api/bots.py):
 * запрос хода движка за сторону игрока (/bots/move, /bots/custom-move) или анализ позиции — подсказка;
 * запрос позиции, которая уже была (полуход не растёт), — возврат хода;
 * ходы за соперника не тем ботом или изменённым конфигом — подмена соперника.
@@ -16,7 +17,10 @@
 партии можно было бы просто бросать).
 
 Тот же механизм сторожит партию турнира (таск A.2): у сессии своя область (SCOPES) — «ladder» или
-«tournament», — проверки ходов и анализа действуют на обе.
+«tournament», — проверки ходов и анализа действуют на обе. Сессию партии турнира открывает tournaments.start_player_game.
+
+Рейтинг лестницы — поля ladder_rating и ladder_games игрока (User); модуль вызывают также src/api/profile.py и
+src/services/account.py (стирание прогресса при удалении аккаунта).
 """
 
 import json
@@ -35,14 +39,17 @@ from src.services.bots.archetypes import ARCHETYPES, ARCHETYPES_BY_ID
 from src.services.bots.calibration import strength_of
 from src.services.bots.personality import BotPersonalityConfig
 
+# Время жизни сессии честной партии в Redis (секунды): дольше партия не длится, брошенная — сама исчезает.
 LADDER_SESSION_TTL_S = 4 * 3600
-K_NEW = 40  # первые K_NEW_GAMES партий рейтинг подвижнее
+# Коэффициент Эло рейтинга лестницы: подвижнее первые K_NEW_GAMES партий, затем K_ESTABLISHED.
+K_NEW = 40
 K_ESTABLISHED = 24
 K_NEW_GAMES = 10
 
 
 @dataclass(frozen=True)
 class Rung:
+    """Ступень лестницы: ключ соперника, его вид, id, сила и признак, что сила измерена калибровкой (иначе — заявленная)."""
     key: str  # "morphy" или "archetype:rusher"
     kind: str  # "historical" | "archetype"
     id: str  # id бота или архетипа: имя на языке игрока клиент берёт из каталога
@@ -52,6 +59,10 @@ class Rung:
 
 @dataclass
 class LadderSession:
+    """
+    Сессия честной партии в Redis: соперник и цвет игрока, наибольший полуход и позиция запроса хода (для отлова возврата
+    хода), причина «партия с подсказкой» и id партии турнира (для области «tournament»).
+    """
     rung_key: str  # ключ соперника: id бота, «archetype:<id>» или «custom:other»
     color: str  # цвет игрока
     started_at: float
@@ -61,7 +72,8 @@ class LadderSession:
     tournament_game_id: int | None = None
 
 
-Scope = str  # "ladder" | "tournament"
+# Область сессии: «ladder» — партия лестницы, «tournament» — партия турнира; от неё зависит ключ в Redis.
+Scope = str
 SCOPES: tuple[Scope, ...] = ("ladder", "tournament")
 
 
@@ -82,6 +94,7 @@ def rungs() -> list[Rung]:
 
 
 def _strength(key: str, declared: int) -> tuple[int, bool]:
+    """Сила соперника: (рейтинг, измерен ли калибровкой); без замера — заявленный declared."""
     s = strength_of(key, declared)
     return s.rating, s.measured
 
@@ -130,10 +143,12 @@ def opponent_key(bot_id: str, config: BotPersonalityConfig | None) -> str:
 
 
 def _key(user_id: int, scope: Scope = "ladder") -> str:
+    """Ключ Redis сессии игрока в области scope."""
     return f"{scope}:session:{user_id}"
 
 
 async def get_session(user_id: int, scope: Scope = "ladder") -> LadderSession | None:
+    """Открытая сессия игрока в области scope или None."""
     raw = await redis_module.redis_client.get(_key(user_id, scope))
     if not raw:
         return None
@@ -141,16 +156,19 @@ async def get_session(user_id: int, scope: Scope = "ladder") -> LadderSession | 
 
 
 async def _store(user_id: int, session: LadderSession, scope: Scope = "ladder") -> None:
+    """Записывает сессию в Redis и продлевает её срок до LADDER_SESSION_TTL_S."""
     await redis_module.redis_client.set(_key(user_id, scope), json.dumps(asdict(session)), ex=LADDER_SESSION_TTL_S)
 
 
 async def clear_session(user_id: int, scope: Scope = "ladder") -> None:
+    """Закрывает сессию игрока в области scope (партия окончена или брошена)."""
     await redis_module.redis_client.delete(_key(user_id, scope))
 
 
 async def open_session(
         user_id: int, rung: Rung | str, color: str, scope: Scope = "ladder", tournament_game_id: int | None = None,
 ) -> LadderSession:
+    """Открывает сессию честной партии (rung — ступень или ключ соперника), заменяя прежнюю в этой области."""
     key = rung if isinstance(rung, str) else rung.key
     session = LadderSession(rung_key=key, color=color, started_at=time.time(), tournament_game_id=tournament_game_id)
     await _store(user_id, session, scope)
@@ -158,6 +176,7 @@ async def open_session(
 
 
 async def _mark(user_id: int, session: LadderSession, reason: str, scope: Scope) -> None:
+    """Отмечает партию как «с подсказкой»; первая причина сохраняется."""
     if session.assisted is None:
         session.assisted = reason
     await _store(user_id, session, scope)
@@ -184,6 +203,10 @@ async def note_bot_move_request(user_id: int | None, board: chess.Board, request
 
 
 async def _note_move(user_id: int, session: LadderSession, board: chess.Board, requested_key: str, scope: Scope) -> None:
+    """
+    Разбирает запрос хода бота: за игрока — подсказка, не тот соперник — подмена, позиция не новее прежней — возврат
+    хода; иначе запоминает полуход и позицию.
+    """
     player_to_move = (board.turn == chess.WHITE) == (session.color == "white")
     if player_to_move:
         await _mark(user_id, session, "engine_hint", scope)
@@ -200,6 +223,7 @@ async def _note_move(user_id: int, session: LadderSession, board: chess.Board, r
 
 
 def expected_score(rating: int, opponent: int) -> float:
+    """Ожидаемый результат игрока по формуле Эло (0..1)."""
     return 1.0 / (1.0 + 10 ** ((opponent - rating) / 400.0))
 
 
@@ -209,6 +233,8 @@ LADDER_REASONS = ("engine_analysis", "engine_hint", "opponent_swapped", "takebac
 
 @dataclass
 class LadderOutcome:
+    """Итог партии для игрока: засчитана ли (counted, иначе reason), изменение и новый рейтинг, ступень и повышение."""
+
     counted: bool
     reason: str | None  # один из LADDER_REASONS
     delta: int
@@ -230,6 +256,7 @@ async def apply_result(db: AsyncSession, user: User, rung: Rung, score: float, a
         return LadderOutcome(False, assisted, 0, user.ladder_rating, current, False, rung.key)
     k = K_NEW if user.ladder_games < K_NEW_GAMES else K_ESTABLISHED
     delta = round(k * (score - expected_score(user.ladder_rating, rung.rating)))
+    # Рейтинг лестницы не опускается ниже 100.
     user.ladder_rating = max(100, user.ladder_rating + delta)
     user.ladder_games += 1
     promoted = score == 1.0 and items[current].key == rung.key and rung.key not in beaten
@@ -241,6 +268,7 @@ async def apply_result(db: AsyncSession, user: User, rung: Rung, score: float, a
 
 
 def find_rung(key: str) -> tuple[int, Rung] | None:
+    """Ступень по ключу и её номер в rungs(); None — такого соперника нет."""
     for index, rung in enumerate(rungs()):
         if rung.key == key:
             return index, rung
@@ -248,4 +276,5 @@ def find_rung(key: str) -> tuple[int, Rung] | None:
 
 
 def archetype_for(rung: Rung):
+    """Архетип мастерской для ступени-архетипа; для исторического бота None."""
     return ARCHETYPES_BY_ID[rung.id] if rung.kind == "archetype" else None

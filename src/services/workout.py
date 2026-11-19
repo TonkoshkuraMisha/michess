@@ -22,19 +22,26 @@ from src.models.trainer import TrainerResult
 from src.models.user import User
 from src.services import skills
 
+# Задач в день: норматив выполненной разминки и цель шага «задачи».
 PUZZLES = 5
+# Сколько самых слабых тем (skills.tactics) берётся для шага «задачи».
 WEAK_THEMES = 3
+# Темы по умолчанию, когда по игроку ещё нет данных карты навыков.
 DEFAULT_THEMES = ("fork", "pin", "back_rank_mate")
+# Тренажёры зрения и счёта (trainer_results.trainer), из которых выбирается один на день.
 TRAINERS = ("coord_find", "coord_name", "blind_where", "calc_checks", "calc_exchange", "calc_square",
             "memory_position", "knight_route")
+# Окно в днях, в которое считается серия: она не длиннее этого значения.
 STREAK_DAYS = 60
 
 
 def _day(moment: datetime) -> date:
+    """Календарный день (UTC); момент без часового пояса считается UTC."""
     return (moment if moment.tzinfo else moment.replace(tzinfo=UTC)).astimezone(UTC).date()
 
 
 async def _days(db: AsyncSession, column, user_column, user_id: int, since: datetime) -> Counter[date]:
+    """Сколько записей (попыток задач или тренажёров) у игрока в каждый день начиная с since."""
     rows = (await db.execute(select(column).where(user_column == user_id, column >= since))).scalars().all()
     return Counter(_day(moment) for moment in rows if moment is not None)
 
@@ -113,6 +120,7 @@ async def plan(db: AsyncSession, user: User, now: datetime) -> dict:
 
 
 def utcnow() -> datetime:
+    """Текущее время UTC; вынесено, чтобы тесты и вызывающие могли подменить часы."""
     return datetime.now(UTC)
 
 

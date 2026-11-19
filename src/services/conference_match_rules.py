@@ -45,6 +45,7 @@ MATCH_LOOKAHEAD = timedelta(days=8)
 # Очков арены за победу: счёт матча = очки арены / POINTS_PER_WIN (победа 1, ничья ½).
 POINTS_PER_WIN = 2
 
+# Конференции в порядке CONFERENCE_ZONES (arena_schedule): от него зависит состав и порядок пар круга.
 _ORDER = tuple(CONFERENCE_ZONES)
 
 
@@ -95,6 +96,7 @@ class PlannedMatch:
 
     @property
     def ends_at(self) -> datetime:
+        """Плановый конец матча: начало + длительность окна MATCH_SLOT."""
         return self.starts_at + MATCH_SLOT.duration
 
 

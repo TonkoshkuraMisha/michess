@@ -1,10 +1,17 @@
 # --- FILE: src/services/tournaments.py ---
 """
-Ход турнира (таск 15.1): создание с посевом, расписание, запись результата и продвижение — следующие партии
-матча на выбывание, следующий круг, итоговые места. Правила — tournament_rules.py.
+Ход турнира (таски 15.1, 15.4, A.1–A.3): создание с посевом и расписанием, запись результата партии и продвижение —
+следующие партии матча на выбывание, следующий тур кругового или швейцарского турнира, итоговые места, сдача
+турнира игроком. Сами правила (расписание, таблицы, сетка) — в tournament_rules.py.
 
-Результаты сюда приносят: партия игрока (сохранение партии с ботом, таск 15.3) и симуляция партий ботов между
-собой (Celery, таск 15.2). Игрок не может прислать результат сам — отдельного эндпоинта для этого нет.
+Данные: таблицы tournaments, tournament_players, tournament_games (src/models/tournament.py), рейтинг игрока —
+поля User (src/services/rating.py), сила ботов — калибровка (bots/calibration.py), мастера прошлого — bots/guests.py.
+Сессию честной партии игрока открывает и закрывает ladder.py (область «tournament», Redis).
+
+Результаты сюда приносят: партия игрока (сохранение партии с ботом в src/api/bots.py, таск 15.3, а также сдача и
+повторный старт здесь) и симуляция партий ботов между собой (tournament_simulation.py, Celery, таск 15.2). Игрок не
+может прислать результат сам — отдельного эндпоинта для этого нет. Модуль вызывают также src/api/tournaments.py,
+tournament_career.py и time_machine.py.
 """
 
 import json
@@ -27,6 +34,7 @@ from src.services.bots.calibration import strength_of
 from src.services.bots.guests import GUESTS_BY_ID
 from src.services.rating import classify_time_control, elo_calculator
 
+# Формат турнира: круговой, на выбывание, швейцарская система.
 Format = Literal["round_robin", "knockout", "swiss"]
 
 # Партию ботов, которую забрал и не доиграл воркер (упал), через CLAIM_TIMEOUT можно забрать снова.
@@ -34,6 +42,7 @@ CLAIM_TIMEOUT = timedelta(minutes=15)
 # Поставленную в очередь, но не начатую партию ботов ставим снова не раньше чем через REQUEUE_AFTER (таск A.1):
 # страница турнира опрашивает сервер каждые 3 с, и без этого очередь Celery росла бы с каждым опросом.
 REQUEUE_AFTER = timedelta(minutes=2)
+# Допустимое число участников обычного турнира игрока по форматам (для исторических — rules.OPEN_*).
 SIZES: dict[str, tuple[int, ...]] = {
     "round_robin": rules.ROUND_ROBIN_SIZES, "knockout": rules.KNOCKOUT_SIZES, "swiss": rules.SWISS_SIZES,
 }
@@ -52,6 +61,7 @@ class ParticipantSpec:
 
 @dataclass
 class _Entrant:
+    """Участник до посева: кто он, сила на старте и порядок перечисления (order — для ничьих при посеве)."""
     kind: str
     rating: int
     user_id: int | None = None
@@ -62,12 +72,17 @@ class _Entrant:
 
 
 def _bot_ratings() -> dict[str, int]:
+    """Заявленные рейтинги исторических ботов из каталога src/api/bots.py (id → рейтинг)."""
     from src.api.bots import AVAILABLE_BOTS
 
     return {str(b["id"]): int(str(b["rating"])) for b in AVAILABLE_BOTS}
 
 
 async def _entrant(db: AsyncSession, owner: User, spec: ParticipantSpec, order: int) -> _Entrant:
+    """
+    Превращает заявку в участника с силой на старте: у бота и архетипа — по калибровке, у мастера прошлого —
+    заявленная, у персоналии — target_elo из конфига. Чужая или неизвестная персоналия — tournament_participant_unknown.
+    """
     label = f"{spec.kind}:{spec.id}"
     if spec.kind == "bot":
         declared = _bot_ratings().get(str(spec.id))
@@ -127,9 +142,12 @@ async def create_tournament(
         progress_branch: Collection[str] = (),
 ) -> Tournament:
     """
+    Создаёт турнир: проверяет размер и состав, сеет участников по силе на старте (игрок при равенстве — первым),
+    пишет участников и партии первого тура (у кругового — расписание всех туров сразу). Сам commit.
     open_size — турнир в историческом составе («Машина времени», 28.1): круговой или сетка на любое число
     участников в границах rules.OPEN_*; cycles — число кругов кругового турнира. Свои турниры игрока создаются без
     них: размеры — из SIZES. progress_branch — этапы карьеры той же ветки: пока один из них идёт, новый не начать.
+    Состав — size − 1 соперников плюс игрок.
     """
     allowed: tuple[int, ...] | range = SIZES[fmt]
     if open_size and fmt == "round_robin":
@@ -185,6 +203,7 @@ async def create_tournament(
 
 
 def _add_game(db: AsyncSession, tournament: Tournament, rnd: int, board: int, game: rules.MatchGame) -> None:
+    """Добавляет партию в сессию; у переигровки и решающей партии контроль времени сокращён (rules.shortened_control)."""
     base, inc = tournament.base_time_ms, tournament.increment_ms
     if game.shortened:
         base, inc = rules.shortened_control(base, inc)
@@ -195,12 +214,14 @@ def _add_game(db: AsyncSession, tournament: Tournament, rnd: int, board: int, ga
 
 
 async def players_of(db: AsyncSession, tournament_id: int) -> list[TournamentPlayer]:
+    """Участники турнира по порядку посева (seat)."""
     return list((await db.execute(
         select(TournamentPlayer).where(TournamentPlayer.tournament_id == tournament_id).order_by(TournamentPlayer.seat)
     )).scalars().all())
 
 
 async def games_of(db: AsyncSession, tournament_id: int) -> list[TournamentGame]:
+    """Все партии турнира по турам и доскам."""
     return list((await db.execute(
         select(TournamentGame).where(TournamentGame.tournament_id == tournament_id)
         .order_by(TournamentGame.round, TournamentGame.board, TournamentGame.id)
@@ -208,6 +229,7 @@ async def games_of(db: AsyncSession, tournament_id: int) -> list[TournamentGame]
 
 
 def _record(game: TournamentGame) -> rules.GameRecord:
+    """Сыгранная партия в виде записи для чистых правил (result не None)."""
     return rules.GameRecord(game.white_seat, game.black_seat, game.result)  # type: ignore[arg-type]
 
 
@@ -240,6 +262,7 @@ async def record_result(
 
 
 async def _finish(tournament: Tournament) -> None:
+    """Закрывает турнир: статус «finished» и время окончания."""
     tournament.status = "finished"
     tournament.finished_at = datetime.now(UTC)
 
@@ -259,6 +282,10 @@ async def _notify_round(db: AsyncSession, tournament: Tournament) -> None:
 
 
 async def _advance_round_robin(db: AsyncSession, tournament: Tournament) -> None:
+    """
+    Круговой: пока в текущем туре есть неигранные партии — ждём; тур закрыт — открывается следующий; сыграно всё —
+    итоговые места по таблице (rules.round_robin_standings).
+    """
     games = await games_of(db, tournament.id)
     if any(g.result is None for g in games if g.round == tournament.current_round):
         return
@@ -305,6 +332,10 @@ async def _advance_swiss(db: AsyncSession, tournament: Tournament) -> None:
 
 
 async def _advance_knockout(db: AsyncSession, tournament: Tournament) -> None:
+    """
+    На выбывание: матч с ничьей получает следующую партию (переигровка, затем решающая); когда все матчи круга решены,
+    проигравшие получают круг выбытия, а победители — пары следующего круга; финал закрывает турнир и расставляет места.
+    """
     games = [g for g in await games_of(db, tournament.id) if g.round == tournament.current_round]
     boards = sorted({g.board for g in games})
     won: dict[int, int] = {}
@@ -382,6 +413,8 @@ async def player_game(db: AsyncSession, user: User, tournament_game_id: int) -> 
 
 @dataclass(frozen=True)
 class RatingChange:
+    """Изменение рейтинга игрока за партию турнира: категория контроля времени, рейтинг до и после, разница."""
+
     category: str
     before: int
     after: int
@@ -460,11 +493,14 @@ def opponent_session_key(opponent: TournamentPlayer) -> str:
 
 
 def loss_for(color: str) -> str:
+    """Результат партии как поражение стороны color ("white" или "black")."""
     return "0-1" if color == "white" else "1-0"
 
 
 @dataclass(frozen=True)
 class StartResult:
+    """Итог старта партии турнира игроком: партия и признак, что повторный старт засчитал поражение."""
+
     played: PlayerGame
     # Партию уже начинали и бросили: повторный старт — поражение (таск A.2).
     forfeited: bool

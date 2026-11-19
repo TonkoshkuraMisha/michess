@@ -43,9 +43,15 @@ from src.services.bots.style import (
     to,
 )
 
+# Ширина окна выбора хода, сп (base.HistoricalBot._window): с опорным ходом силы бот может уступить ему не больше
+# половины этого значения, без движка — лучшему ходу не больше всего значения. Чем шире, тем больше простора стилю.
 PHILIDOR_BLUNDER_GUARD_CP = 120.0
+# Прежнее имя константы; в коде проекта не используется.
 BLUNDER_GUARD_MARGIN_CP = PHILIDOR_BLUNDER_GUARD_CP
 
+# Фирменные линии: позиция (FEN без счётчиков ходов) → [(UCI, вес, ключ реплики botComments.*)]. Поверх книги из
+# books/*.json (load_bot_opening_book): ход из файла заменяет совпадающий, а фирменные ходы, которых в файле нет,
+# добавляются.
 DEFAULT_PHILIDOR_BOOK: dict[str, list[BookEntry]] = {
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
         ("e2e4", 92, "philidor.bookE4"),
@@ -69,12 +75,14 @@ DEFAULT_PHILIDOR_BOOK: dict[str, list[BookEntry]] = {
 }
 
 PHILIDOR_OPENING_BOOK = load_bot_opening_book("philidor", DEFAULT_PHILIDOR_BOOK)
-# Гарантируем, что классическая защита Филидора 1.e4 e5 2.Nf3 d6 всегда имеет приоритет
+# Принудительно: на 1.e4 e5 2.Nf3 бот всегда отвечает d6 (защита его имени), даже если в книге из партий архива
+# есть другие ответы.
 PHILIDOR_OPENING_BOOK["rnbqkbnr/pppp1ppp/8/4p3/4P3/5N2/PPPP1PPP/RNBQKB1R b KQkq -"] = [
     ("d7d6", 100, "philidor.bookDefense"),
 ]
 
 
+# Пешки для условия piece_on в правилах «конь не перед пешкой c/f» (поля c2/f2 и c7/f7).
 WHITE_PAWN = chess.Piece(chess.PAWN, chess.WHITE)
 BLACK_PAWN = chess.Piece(chess.PAWN, chess.BLACK)
 
@@ -105,11 +113,12 @@ PHILIDOR_STYLE = Style(
     ),
     Rule(ALWAYS, pawn_structure_delta),
 )
+# Функция оценки стиля как самостоятельное имя (её импортируют тесты бота).
 evaluate_philidor_style_bonus = PHILIDOR_STYLE.evaluate
 
 
 class PhilidorBot(HistoricalBot):
-    """Франсуа-Андре Филидор: UCI_Elo 1850, глубина 6, уровень 7 (значения базового класса)."""
+    """Франсуа-Андре Филидор: UCI_Elo 1850, глубина 6, уровень 7 (значения базового класса); разброс ±8 сп, MultiPV 6."""
 
     bot_id = "philidor"
     engine_source_name = "philidor_style_engine_deep"
@@ -123,6 +132,7 @@ class PhilidorBot(HistoricalBot):
 
 philidor_bot = PhilidorBot()
 
+# Реэкспорт общих функций base: старые импорты тестов и src/api/bots.py идут через этот модуль.
 __all__ = [
     "CENTER_SQUARES",
     "EXTENDED_CENTER",

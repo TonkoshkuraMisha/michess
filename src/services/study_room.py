@@ -4,6 +4,9 @@
 изменении): ведущий меняет доску (позиция, ходы, стрелки, подсветка, «призрачная» фигура), задаёт вопрос (ход или выбор
 из вариантов, с таймером); участники раз в секунду спрашивают состояние (если версия не изменилась — ответ пустой),
 пишут в чат и отвечают на вопрос. Тексты в комнате — ввод людей (чат, вопрос ведущего), строк интерфейса тут нет.
+
+Данные: ключ Redis study:<код> (JSON комнаты), в базу ничего не пишется. Ошибки — коды study_* (src/core/errors.py).
+Вызывает src/api/study.py.
 """
 
 import json
@@ -15,22 +18,31 @@ import chess
 from src.core.errors import DomainError
 from src.db import redis as redis_module
 
+# Время жизни ключа комнаты в Redis, секунды; продлевается при каждой записи.
 ROOM_TTL_S = 6 * 3600
+# Сколько последних сообщений чата хранится.
 CHAT_KEEP = 50
+# Предел длины текста сообщения и вопроса, символы.
 MAX_TEXT = 300
+# Пределы числа стрелок и подсвеченных полей на доске; лишнее отбрасывается.
 MAX_ARROWS = 24
 MAX_HIGHLIGHTS = 32
+# Предел числа вариантов ответа в вопросе-выборе.
 MAX_OPTIONS = 6
+# Допустимые цвета стрелок и тона подсветки; неизвестное значение заменяется первым.
 COLORS = ("green", "red", "blue", "yellow")
 TONES = ("light", "dark")
+# Участник считается присутствующим, если опрашивал состояние не позже стольких секунд назад.
 PRESENCE_S = 15
 
 
 def _key(code: str) -> str:
+    """Ключ Redis комнаты по её коду."""
     return f"study:{code}"
 
 
 async def _load(code: str) -> dict:
+    """Комната из Redis; нет ключа (не было или истёк TTL) — study_room_not_found."""
     raw = await redis_module.redis_client.get(_key(code))
     if not raw:
         raise DomainError("study_room_not_found")
@@ -38,14 +50,17 @@ async def _load(code: str) -> dict:
 
 
 async def _save(code: str, room: dict) -> None:
+    """Записывает комнату и заново ставит TTL."""
     await redis_module.redis_client.set(_key(code), json.dumps(room), ex=ROOM_TTL_S)
 
 
 def _bump(room: dict) -> None:
+    """Увеличивает версию состояния: по ней poll понимает, что у участника данные устарели."""
     room["version"] = int(room.get("version", 0)) + 1
 
 
 def _host(room: dict, user_id: int) -> None:
+    """Проверка, что действие делает ведущий; иначе study_host_only."""
     if room["host_id"] != user_id:
         raise DomainError("study_host_only")
 
@@ -75,6 +90,7 @@ def _clean_board(state: dict) -> dict:
 
 
 async def create(host_id: int, username: str) -> dict:
+    """Новая комната с начальной позицией; код — 8 знаков из url-безопасного алфавита. Возвращает вид для ведущего."""
     code = secrets.token_urlsafe(6).replace("-", "a").replace("_", "b")[:8]
     room = {"code": code, "host_id": host_id, "host": username, "version": 1, "created_at": time.time(),
             "board": {"fen": chess.STARTING_FEN, "last_move": None, "arrows": [], "highlights": [], "ghost": None},
@@ -118,6 +134,7 @@ async def poll(code: str, user_id: int, username: str, since: int) -> dict | Non
 
 
 async def set_board(code: str, user_id: int, state: dict) -> dict:
+    """Ведущий заменяет доску (проверка и очистка — _clean_board); версия растёт."""
     room = await _load(code)
     _host(room, user_id)
     room["board"] = _clean_board(state)

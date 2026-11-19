@@ -38,8 +38,13 @@ from src.services.bots.style import (
     to_file,
 )
 
+# Ширина окна выбора хода, сп (base.HistoricalBot._window): с опорным ходом силы бот может уступить ему не больше
+# половины этого значения, без движка — лучшему ходу не больше всего значения. Чем шире, тем больше простора стилю.
 MORPHY_BLUNDER_GUARD_CP = 150.0
 
+# Фирменные линии: позиция (FEN без счётчиков ходов) → [(UCI, вес, ключ реплики botComments.*)]. Поверх книги из
+# books/*.json (load_bot_opening_book): ход из файла заменяет совпадающий, а фирменные ходы, которых в файле нет,
+# добавляются.
 DEFAULT_MORPHY_BOOK: dict[str, list[BookEntry]] = {
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
         ("e2e4", 94, "morphy.bookE4"),
@@ -81,11 +86,12 @@ MORPHY_STYLE = Style(
         Rule(SACRIFICE, 12.0),
     ),
 )
+# Функция оценки стиля как самостоятельное имя (её импортируют тесты бота).
 evaluate_morphy_style_bonus = MORPHY_STYLE.evaluate
 
 
 class MorphyBot(HistoricalBot):
-    """Пол Морфи: UCI_Elo 2150, глубина 6, уровень 8."""
+    """Пол Морфи: UCI_Elo 2150, глубина 6, уровень 8; случайный разброс ±8 сп, MultiPV 8."""
 
     bot_id = "morphy"
     engine_source_name = "morphy_style_engine"

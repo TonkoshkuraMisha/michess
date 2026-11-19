@@ -12,6 +12,11 @@
 * Начальная позиция партии с форой или из своей позиции проверяется на возможность по правилам
   (board_from_start_fen); шахматы Фишера хранятся в Shredder-FEN — по записи видно вариант (is_chess960_fen).
 * normalize_pgn_text — партия в каноническом виде, чтобы лишние пустые строки не обрывали чтение.
+* normalize_result — итог из чужого PGN приводится к одному из GAME_RESULTS.
+
+Данных из БД, Redis и настроек модуль не берёт: всё — из аргументов. Вызывают src/api/bots.py, websockets.py и
+analysis.py; сервисы game_state, matchmaker, analysis_service, library, game_import, mate_finder, move_check, odds,
+personal_puzzles; модели game и imported_game (набор итогов GAME_RESULTS) и src/db/seed.py.
 """
 
 import io
@@ -25,6 +30,7 @@ from src.core.errors import DomainValueError
 
 logger = logging.getLogger(__name__)
 
+# Обычная начальная расстановка; её же возвращают пустое значение и совпадающий с ней start_fen.
 STARTING_FEN = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
 
 
@@ -51,7 +57,9 @@ def board_from_start_fen(start_fen: str | None) -> chess.Board:
     return board
 
 
+# Буквы вертикалей в поле рокировки FEN — признак Shredder-FEN, то есть партии Фишера.
 _CHESS960_CASTLING = set("ABCDEFGHabcdefgh")
+# Заголовок PGN, которым помечается партия Фишера.
 CHESS960_HEADER = '[Variant "Chess960"]'
 
 
@@ -113,6 +121,7 @@ def normalize_result(tag: str | None) -> str:
     return _RESULT_ALIASES.get(value, "*")
 
 
+# Любой перевод строки, включая задвоенный «\\r\\r\\n» от текстового режима Windows.
 _LINE_BREAK_RE = re.compile(r"\r+\n|\r")
 
 
@@ -213,7 +222,7 @@ def terminal_outcome(board: chess.Board) -> tuple[str, str] | None:
 
 def side_has_mating_material(board_fen: str | None, color: str) -> bool:
     """
-    Может ли color в принципе поставить мат какой-либо последовательностью легальных ходов
+    Может ли color ("white" / "black") в принципе поставить мат какой-либо последовательностью легальных ходов
     (по материалу, с учётом цвета полей слонов). Если FEN не разбирается — считаем, что может.
     """
     try:
@@ -223,6 +232,7 @@ def side_has_mating_material(board_fen: str | None, color: str) -> bool:
     return not board.has_insufficient_material(chess.WHITE if color == "white" else chess.BLACK)
 
 
+# Причина окончания (termination) при ничьей по флагу: у соперника нечем ставить мат.
 FLAG_DRAW_TERMINATION = "timeout_vs_insufficient_material"
 
 
@@ -245,7 +255,7 @@ def flag_outcome(board_fen: str | None, flagged_color: str) -> tuple[str, str]:
 class GameEngine:
     """
     Проверка и применение хода (process_move) — единственная точка, через которую ход партии с человеком попадает в
-    позицию.
+    позицию. Состояния не хранит: готовый экземпляр — `engine` в конце модуля.
     """
     @staticmethod
     def process_move(fen: str, move_str: str, current_pgn: str = "") -> tuple[bool, dict | None]:

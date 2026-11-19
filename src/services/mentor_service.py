@@ -13,6 +13,9 @@
 Поле ``color`` у факта — сторона, которой мотив **выгоден** (может им воспользоваться): у вилки — та, чья
 фигура бьёт; у слабости последней горизонтали — соперник владельца этой горизонтали; у проходной пешки —
 её владелец.
+
+Вызывают coach.py (слова наставника), personal_puzzles.py (темы личных задач) и puzzle_import.py (темы базы задач).
+Данных из БД, Redis и настроек не берёт: вход — только позиция (chess.Board) и ход.
 """
 
 from collections.abc import Iterator
@@ -33,13 +36,13 @@ MotifCode = Literal[
     "overloaded",         # одна фигура — единственная защита двух атакованных
     "trapped",            # фигура под боем, и уйти ей некуда
     "back_rank",          # слабость последней горизонтали
-    "mate_threat",        # если бы ходила сторона color, у неё был бы мат в N
-    "mate_in",            # у стороны, которая ходит, есть мат в N
+    "mate_threat",        # если бы ходила сторона color, у неё был бы мат в один ход
+    "mate_in",            # у стороны, которая ходит, есть мат в один или два хода (в два — только с шаха)
     "passed_pawn",        # проходная пешка
     "open_file",          # ладья на открытой вертикали
     "half_open_file",     # ладья на полуоткрытой вертикали
     "development_lag",    # отставание в развитии лёгких фигур
-    "delayed_castling",   # король застрял в центре
+    "delayed_castling",   # король не рокировался и стоит дома, у соперника есть ферзь, а у короля нет своей пешки на d или e
     "battery",            # две дальнобойные фигуры одной линии вплотную, линия упирается в фигуру соперника
     "interference",       # ход перекрыл линию, по которой фигура соперника защищала свою
 ]
@@ -54,26 +57,38 @@ PIECE_VALUE = {
     chess.KING: 10_000,
 }
 
-# Мотивы дебюта и середины партии считаются только до этого хода.
+# Дебютные мотивы (отставание в развитии, задержка рокировки) считаются только на ходах
+# DEVELOPMENT_MIN_MOVE ... OPENING_MOVE_LIMIT.
 OPENING_MOVE_LIMIT = 20
+# Раньше этого хода (номер хода партии) о развитии судить рано.
 DEVELOPMENT_MIN_MOVE = 6
+# С этого хода король, не покинувший дом, при ферзе соперника и без своей пешки на d или e, считается задержавшим рокировку.
 CASTLING_MIN_MOVE = 10
+# Насколько больше нетронутых лёгких фигур у стороны, чем у соперника, чтобы это стало мотивом.
 DEVELOPMENT_LAG_MIN = 2
 
+# Домашние поля коней и слонов: фигура на своём поле считается неразвитой.
 _MINOR_HOME = {
     chess.WHITE: {chess.B1: chess.KNIGHT, chess.G1: chess.KNIGHT, chess.C1: chess.BISHOP, chess.F1: chess.BISHOP},
     chess.BLACK: {chess.B8: chess.KNIGHT, chess.G8: chess.KNIGHT, chess.C8: chess.BISHOP, chess.F8: chess.BISHOP},
 }
+# Дом короля для проверки «не рокировался».
 _KING_HOME = {chess.WHITE: chess.E1, chess.BLACK: chess.E8}
+# Номер последней горизонтали каждой стороны (0 — первая, 7 — восьмая).
 _BACK_RANK = {chess.WHITE: 0, chess.BLACK: 7}
 
+# Шаги по доске (файл, горизонталь) для лучей ладьи и слона; ферзь — их сумма (_slider_steps).
 _ROOK_STEPS = ((1, 0), (-1, 0), (0, 1), (0, -1))
 _BISHOP_STEPS = ((1, 1), (1, -1), (-1, 1), (-1, -1))
 
 
 @dataclass(frozen=True)
 class Motif:
-    """Один факт о позиции. ``targets`` — поля целей (для связки: связанная фигура, затем фигура за ней)."""
+    """
+    Один факт о позиции: код, сторона, которой он выгоден, ключевое поле, цели и число (``value``: выигрыш в
+    сантипешках, длина мата, число ходов до превращения — по коду). ``targets`` — поля целей (для связки: связанная
+    фигура, затем фигура за ней; у ``hanging`` — поля нападающих фигур).
+    """
 
     code: MotifCode
     color: chess.Color
@@ -103,7 +118,10 @@ class Motif:
 
 @dataclass
 class MoveFacts:
-    """Что изменил ход: мотивы, появившиеся в пользу сходившего, и мотивы, которые он отдал сопернику."""
+    """
+    Что изменил ход: ``created`` — мотивы, появившиеся в пользу сходившего, ``allowed`` — отданные сопернику,
+    ``resolved`` — мотивы, которые после хода исчезли.
+    """
 
     created: list[Motif] = field(default_factory=list)
     allowed: list[Motif] = field(default_factory=list)
@@ -114,6 +132,7 @@ class MoveFacts:
 
 
 def _value(piece: chess.Piece | None) -> int:
+    """Учебная ценность фигуры по PIECE_VALUE; пустое поле — 0."""
     return PIECE_VALUE[piece.piece_type] if piece else 0
 
 
@@ -179,6 +198,7 @@ def _as_side_to_move(board: chess.Board, color: chess.Color) -> chess.Board | No
 
 
 def _ray_squares(square: chess.Square, step: tuple[int, int]) -> Iterator[chess.Square]:
+    """Поля луча от ``square`` (не включая его) в направлении ``step`` до края доски."""
     file, rank = chess.square_file(square), chess.square_rank(square)
     while True:
         file, rank = file + step[0], rank + step[1]
@@ -188,6 +208,7 @@ def _ray_squares(square: chess.Square, step: tuple[int, int]) -> Iterator[chess.
 
 
 def _slider_steps(piece_type: chess.PieceType) -> tuple[tuple[int, int], ...]:
+    """Направления лучей дальнобойной фигуры; для остальных видов — пусто."""
     if piece_type == chess.ROOK:
         return _ROOK_STEPS
     if piece_type == chess.BISHOP:
@@ -217,6 +238,7 @@ def _real_defenders(board: chess.Board, square: chess.Square, color: chess.Color
 
 
 def _is_defended(board: chess.Board, square: chess.Square) -> bool:
+    """Фигуру на поле защищает хотя бы один настоящий защитник (``_real_defenders``)."""
     piece = board.piece_at(square)
     return piece is not None and bool(_real_defenders(board, square, piece.color))
 
@@ -292,6 +314,7 @@ def _slider_can_be_taken(board: chess.Board, slider_square: chess.Square, victim
 
 
 def _pins_and_skewers(board: chess.Board) -> list[Motif]:
+    """Связки (абсолютная и относительная) и сквозные удары для обеих сторон; мотив — на дальнобойной фигуре."""
     found: list[Motif] = []
     for square in chess.SquareSet(board.occupied):
         slider = board.piece_at(square)
@@ -433,6 +456,7 @@ def _back_rank(board: chess.Board) -> list[Motif]:
 
 
 def _mate_in_one(board: chess.Board) -> chess.Move | None:
+    """Первый найденный мат в один ход для стороны, которая ходит, иначе None."""
     for move in board.legal_moves:
         board.push(move)
         try:
@@ -459,6 +483,7 @@ def _mate_in_two_by_checks(board: chess.Board) -> chess.Move | None:
 
 
 def _mates_after(board: chess.Board, reply: chess.Move) -> bool:
+    """После ответа ``reply`` у стороны, которая ходит, есть мат в один ход."""
     board.push(reply)
     try:
         return _mate_in_one(board) is not None
@@ -467,6 +492,10 @@ def _mates_after(board: chess.Board, reply: chess.Move) -> bool:
 
 
 def _mates(board: chess.Board) -> list[Motif]:
+    """
+    Мат в 1 или 2 хода у стороны, которая ходит (``mate_in``), и мат в один ход, который она получила бы
+    при пропуске хода соперника (``mate_threat``).
+    """
     found: list[Motif] = []
     if board.is_game_over():
         return found
@@ -515,6 +544,7 @@ def _batteries(board: chess.Board) -> list[Motif]:
 
 
 def _passed_pawns(board: chess.Board) -> list[Motif]:
+    """Проходные пешки обеих сторон; ``value`` — сколько ходов осталось до поля превращения."""
     found: list[Motif] = []
     for color in (chess.WHITE, chess.BLACK):
         enemy_pawns = board.pieces(chess.PAWN, not color)
@@ -533,6 +563,7 @@ def _passed_pawns(board: chess.Board) -> list[Motif]:
 
 
 def _files(board: chess.Board) -> list[Motif]:
+    """Ладьи на открытой (нет пешек на вертикали) и полуоткрытой (нет только своих пешек) вертикали."""
     found: list[Motif] = []
     for color in (chess.WHITE, chess.BLACK):
         # Только ладьи: ферзь ходит и по диагоналям, и «ферзь на открытой линии» ученику ничего не объясняет.
@@ -548,6 +579,7 @@ def _files(board: chess.Board) -> list[Motif]:
 
 
 def _undeveloped(board: chess.Board, color: chess.Color) -> int:
+    """Сколько коней и слонов стороны ещё стоит на домашних полях (_MINOR_HOME)."""
     return sum(
         1 for square, piece_type in _MINOR_HOME[color].items()
         if board.piece_type_at(square) == piece_type and board.color_at(square) == color
@@ -555,6 +587,10 @@ def _undeveloped(board: chess.Board, color: chess.Color) -> int:
 
 
 def _opening(board: chess.Board) -> list[Motif]:
+    """
+    Дебютные мотивы ``development_lag`` и ``delayed_castling`` (в пользу соперника отстающей стороны); считаются
+    только на ходах DEVELOPMENT_MIN_MOVE ... OPENING_MOVE_LIMIT.
+    """
     found: list[Motif] = []
     move_number = board.fullmove_number
     if not DEVELOPMENT_MIN_MOVE <= move_number <= OPENING_MOVE_LIMIT:

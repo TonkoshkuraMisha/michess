@@ -1,6 +1,7 @@
 # --- FILE: src/services/tournament_rules.py ---
 """
-Правила турниров с историческими мастерами (таск 15.1) — чистые функции, без базы и движка.
+Правила турниров (таски 15.1, 15.4, 28.1) — чистые функции, без базы, сети и движка; данных не читают.
+Применяет их tournaments.py (ход турнира), time_machine.py (границы размеров) и src/services/arena.py.
 
 Номер участника (seat) — его посев: 1 — сильнейший по рейтингу на старте.
 
@@ -25,13 +26,15 @@ from typing import Literal
 Result = Literal["1-0", "0-1", "1/2-1/2"]
 Stage = Literal["main", "rematch", "armageddon"]
 
+# Допустимое число участников обычного турнира игрока (вместе с игроком).
 ROUND_ROBIN_SIZES = (4, 6, 8)
 KNOCKOUT_SIZES = (4, 8)
-# Швейцарская система (таск 15.4): размер и число туров.
+# Швейцарская система (таск 15.4): размер → число туров.
 SWISS_SIZES = (6, 8)
 SWISS_ROUNDS = {6: 4, 8: 5}
+# Нижняя граница базового времени переигровки и решающей партии: контроль не короче минуты.
 MIN_SHORTENED_BASE_MS = 60_000
-# Турниры в историческом составе: границы размера и числа кругов.
+# Турниры в историческом составе: границы размера (круговой — до 28 участников, сетка — до 33) и числа кругов.
 OPEN_ROUND_ROBIN_SIZES = range(3, 29)
 OPEN_KNOCKOUT_SIZES = range(3, 34)
 MAX_CYCLES = 6
@@ -84,6 +87,7 @@ def round_robin_schedule(n: int, cycles: int = 1) -> list[list[tuple[int, int]]]
 
 @dataclass(frozen=True)
 class GameRecord:
+    """Сыгранная партия для расчёта таблиц: номера участников за белых и чёрных и результат."""
     white: int
     black: int
     result: Result
@@ -91,8 +95,10 @@ class GameRecord:
 
 @dataclass(frozen=True)
 class Standing:
+    """Строка итоговой таблицы: очки, дополнительные показатели и место (1 — лучшее)."""
     seat: int
     points: float
+    # Очки в партиях между набравшими поровну (только круговой; в швейцарке всегда 0).
     head_to_head: float
     sonneborn_berger: float
     place: int
@@ -101,6 +107,7 @@ class Standing:
 
 
 def _score(game: GameRecord, seat: int) -> float:
+    """Очки участника seat за партию: 1, 0,5 или 0."""
     if game.result == "1/2-1/2":
         return 0.5
     won_white = game.result == "1-0"
@@ -134,6 +141,7 @@ def round_robin_standings(seats: list[int], games: list[GameRecord]) -> list[Sta
 # --- Швейцарская система ----------------------------------------------------------------------------
 
 def _points(seats: list[int], games: list[GameRecord]) -> dict[int, float]:
+    """Сумма очков каждого участника по сыгранным партиям."""
     points = {s: 0.0 for s in seats}
     for g in games:
         points[g.white] += _score(g, g.white)
@@ -249,6 +257,7 @@ def bracket_slots(n: int) -> list[tuple[int, int | None]]:
 
 @dataclass(frozen=True)
 class MatchGame:
+    """Партия матча на выбывание: стадия, номера игроков за белых и чёрных и признак сокращённого контроля."""
     stage: Stage
     white: int
     black: int
@@ -271,6 +280,7 @@ def shortened_control(base_ms: int, increment_ms: int) -> tuple[int, int]:
 
 @dataclass(frozen=True)
 class MatchState:
+    """Состояние матча: победитель (если определён) либо следующая партия."""
     winner: int | None
     next_game: MatchGame | None
 

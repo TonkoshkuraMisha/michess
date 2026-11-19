@@ -37,8 +37,13 @@ from src.services.bots.style import (
     to,
 )
 
+# Ширина окна выбора хода, сп (base.HistoricalBot._window): с опорным ходом силы бот может уступить ему не больше
+# половины этого значения, без движка — лучшему ходу не больше всего значения. Чем шире, тем больше простора стилю.
 PAULSEN_BLUNDER_GUARD_CP = 110.0
 
+# Фирменные линии: позиция (FEN без счётчиков ходов) → [(UCI, вес, ключ реплики botComments.*)]. Поверх книги из
+# books/*.json (load_bot_opening_book): ход из файла заменяет совпадающий, а фирменные ходы, которых в файле нет,
+# добавляются.
 DEFAULT_PAULSEN_BOOK: dict[str, list[BookEntry]] = {
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
         ("e2e4", 90, "paulsen.bookE4"),
@@ -90,11 +95,12 @@ PAULSEN_STYLE = Style(
         Rule(ALWAYS, pawn_structure_delta),
     ),
 )
+# Функция оценки стиля как самостоятельное имя (её импортируют тесты бота).
 evaluate_paulsen_style_bonus = PAULSEN_STYLE.evaluate
 
 
 class PaulsenBot(HistoricalBot):
-    """Луи Паульсен: UCI_Elo 2080, глубина 6, уровень 8."""
+    """Луи Паульсен: UCI_Elo 2080, глубина 6, уровень 8; случайный разброс ±6 сп, MultiPV 6."""
 
     bot_id = "paulsen"
     engine_source_name = "paulsen_style_engine"

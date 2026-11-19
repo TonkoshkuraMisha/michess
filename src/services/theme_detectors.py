@@ -7,30 +7,38 @@
 прорыв и гонка пешек, оппозиция, Лусена, Филидор, ладья позади проходной, «не тот» слон, простейшие маты, дебютная
 ловушка, ранний ферзь, отставание в развитии, комбинация, подключение ладьи, седьмая горизонталь, изолированная пешка,
 неотвратимая угроза, доминация, подрыв защитника, использование связки.
+
+Вызывает puzzle_import.py при разборе строк открытой базы lichess (detect). Тактики-приёмы для темы «комбинация» —
+по тегам базы через themes.themes_for_lichess_tags.
 """
 
 import chess
 
 from src.services import pawn_structures
 
+# Коды тактических приёмов реестра: два и больше таких в одной задаче дают тему «комбинация».
 TACTICS = {"fork", "pin", "skewer", "discovered_attack", "double_check", "deflection", "decoy", "remove_defender",
            "interference", "clearance", "intermezzo", "x_ray", "overload", "trapped_piece", "hanging_piece", "sacrifice"}
 
 
 def _relative_rank(square: chess.Square, color: chess.Color) -> int:
+    """Номер горизонтали с точки зрения стороны: 0 — её первая, 7 — последняя."""
     rank = chess.square_rank(square)
     return rank if color == chess.WHITE else 7 - rank
 
 
 def _only(board: chess.Board, kinds: set[int]) -> bool:
+    """На доске, кроме королей, только фигуры перечисленных видов."""
     return all(piece.piece_type in kinds | {chess.KING} for piece in board.piece_map().values())
 
 
 def _material(board: chess.Board, color: chess.Color) -> list[int]:
+    """Виды фигур стороны без короля, по возрастанию (для сравнения со списком вроде [PAWN, ROOK])."""
     return sorted(p.piece_type for p in board.piece_map().values() if p.color == color and p.piece_type != chess.KING)
 
 
 def _passed(board: chess.Board, square: chess.Square, color: chess.Color) -> bool:
+    """Пешка стороны color на поле square проходная: впереди на своей и соседних вертикалях нет пешек соперника."""
     file, rank = chess.square_file(square), chess.square_rank(square)
     for other in board.pieces(chess.PAWN, not color):
         o_file, o_rank = chess.square_file(other), chess.square_rank(other)
@@ -50,7 +58,10 @@ def _discovered_check(board: chess.Board, move: chess.Move) -> bool:
 
 
 def detect(fen: str, moves: list[str], tags: list[str]) -> list[str]:
-    """Коды тем реестра, которые показывает задача (без тем из тегов базы и детектора мотивов)."""
+    """
+    Коды тем реестра, которые показывает задача, по порядку обнаружения. fen — позиция до хода соперника, moves — UCI
+    (первый ход соперника, затем решение), tags — теги базы. Пустой список — тем не найдено или данные не разбираются.
+    """
     found: list[str] = []
 
     def add(*codes: str) -> None:

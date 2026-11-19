@@ -6,6 +6,8 @@ GPL требует дать пользователю исходники имен
 движка (UCI «id name», например «Stockfish 17.1») — так ссылка совпадает с бинарником в образе, а не с последним
 релизом. Релизы Stockfish помечены тегами sf_<версия>; сборки разработки ссылаются на список релизов. Полный текст
 лицензии в образе — /usr/share/common-licenses/GPL-3 и /usr/share/doc/stockfish/copyright (пакет Debian).
+
+Вызывает GET /bots/engine (src/api/bots.py), путь к бинарнику — resolve_stockfish_path().
 """
 
 import logging
@@ -16,9 +18,11 @@ from src.services.engine_pool import get_engine_pool
 
 logger = logging.getLogger(__name__)
 
+# Исходники движка, на которые ведёт ссылка «исходный код» на странице «О проекте».
 REPOSITORY = "https://github.com/official-stockfish/Stockfish"
 LICENSE = "GPL-3.0"
 LICENSE_URL = "https://www.gnu.org/licenses/gpl-3.0.html"
+# Имя релиза из UCI «id name»: «Stockfish 17.1» -> номер версии для тега sf_<версия>.
 _RELEASE = re.compile(r"^Stockfish (\d+(?:\.\d+)*)\b")
 
 

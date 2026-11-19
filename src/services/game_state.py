@@ -2,10 +2,16 @@
 """
 Состояние идущей партии между людьми: позиция, часы, завершение. Источник правды во время игры — Redis.
 
-Где лежит: хэш game:{id}:state (позиция, запись ходов, время сторон, момент последнего хода, версия состояния,
-предложение ничьей, берсерк, расход квоты лага), журнал ходов с телеметрией game:{id}:moves, множество идущих
-партий active_games и сроки game_deadlines. В таблицу games состояние копируется после каждого хода; если хэш
-пропал, он восстанавливается из неё (_recover_state_from_db).
+Где лежит (Redis): хэш game:{id}:state (позиция, запись ходов, время сторон, момент последнего хода, версия
+состояния, предложение ничьей и реванша, берсерк, расход квоты лага, отметки отключения), журнал обработанных
+команд game:{id}:commands, журнал ходов с телеметрией game:{id}:moves, ссылка игрока на партию
+user:{id}:current_game, множество идущих партий active_games, сроки game_deadlines, реестр завершённых в Redis, но не
+записанных в БД партий games:pending_finish и ключ лидера цикла таймаутов timeouts:leader. В таблицу games
+состояние копируется после каждого хода (sync_authoritative_state_to_db); если хэш пропал, он восстанавливается из
+неё (_recover_state_from_db).
+Вызывают: src/api/websockets.py (ходы, сдача, ничья, берсерк), src/api/profile.py и src/api/fair_play.py (чтение
+состояния), src/services/connection_manager.py (отключение и возврат игрока), src/services/arena.py (берсерк),
+src/main.py (запуск цикла таймаутов).
 
 Ход (process_atomic_move) — одна транзакция Redis (WATCH/MULTI): очередь хода, версия, легальность
 (src/services/game_engine.py), списание времени, новая позиция. Повтор той же команды (command_id) не применяется.
@@ -14,7 +20,8 @@
 останавливает. Квота лага — LAG_PER_MOVE_MS и LAG_PER_GAME_MS: задержка сети (время сервера минус время
 обдумывания, названное клиентом) возвращается игроку в пределах квоты, и флаг падает с отсрочкой на её остаток.
 
-Завершение: мат и ничьи — при ходе; флаг, неявка на первый ход (30 с) и брошенная партия (ABANDON_TIMEOUT_MS) —
+Завершение: мат и ничьи — при ходе (в ней же падает флаг, если игрок успел сходить уже после срока); флаг без хода,
+неявка на первый ход (30 с) и брошенная партия (ABANDON_TIMEOUT_MS) —
 цикл check_timeouts_loop, который ведёт один процесс-лидер и проверяет только партии с подошедшим сроком.
 Завершить партию может один претендент (claim_game_end). finish_game записывает итог: рейтинг
 (src/services/rating.py), ходы с телеметрией в moves, оценку античита, очки арены, постановку разбора в фон.
@@ -59,6 +66,7 @@ from src.services.task_dispatch import schedule_game_analysis_in_background
 logger = logging.getLogger(__name__)
 
 
+# Поля хэша состояния, которые _coerce_state приводит к int (в Redis всё хранится строками).
 _INT_STATE_KEYS = (
     "white_id", "black_id", "white_time_ms", "black_time_ms",
     "base_time_ms", "increment_ms", "last_move_at",
@@ -72,16 +80,22 @@ _INT_STATE_KEYS = (
 LAG_PER_MOVE_MS = 300
 LAG_PER_GAME_MS = 2000
 
+# Сколько секунд хэш уже завершённой партии остаётся в Redis после восстановления из БД (для реванша и чата).
 FINISHED_STATE_TTL_S = 6 * 60 * 60
+# Сколько отключившийся игрок может отсутствовать до поражения за брошенную партию (3 минуты).
 ABANDON_TIMEOUT_MS = 3 * 60 * 1000
+# Код итога, когда брошена партия, но у оставшегося игрока нет материала для мата: ничья вместо победы.
 ABANDON_DRAW_TERMINATION = "abandoned_vs_insufficient_material"
 
+# Ключ лидера цикла таймаутов и его срок жизни: лидер продлевает ключ каждым проходом (раз в 0,5 с), поэтому
+# упавший лидер теряет роль не дольше чем через TIMEOUTS_LEADER_TTL_MS.
 TIMEOUTS_LEADER_KEY = "timeouts:leader"
 TIMEOUTS_LEADER_TTL_MS = 3000
 
 # Партия, на которой проверка таймаутов падает, откладывается: 1 с, 2 с, 4 с ... до 30 с.
 TIMEOUT_RETRY_BASE_MS = 1000
 TIMEOUT_RETRY_MAX_MS = 30_000
+# Как часто (каждый N-й сбой подряд) писать в лог полный стек по одной и той же партии.
 TIMEOUT_FAILURE_LOG_EVERY = 20
 
 # Партии, завершённые в Redis, но ещё не записанные в БД: id -> момент завершения (ms).
@@ -90,6 +104,7 @@ TIMEOUT_FAILURE_LOG_EVERY = 20
 PENDING_FINISH_KEY = "games:pending_finish"
 # Сколько ждать штатного обработчика, прежде чем дозавершать партию сверкой.
 RECONCILE_GRACE_MS = 30_000
+# Как часто лидер цикла таймаутов запускает сверку Redis и БД.
 RECONCILE_INTERVAL_MS = 30_000
 
 
@@ -132,6 +147,7 @@ def _move_rejection(reason: str, raw_state: dict) -> dict:
 
 
 def side_to_move(state: dict) -> str:
+    """Чей ход: "white" или "black" (поле turn бывает и "w"; по умолчанию ходят белые)."""
     return "white" if state.get("turn", "white") in ("white", "w") else "black"
 
 
@@ -217,6 +233,7 @@ def evaluate_clock_expiry(state: dict, now_ms: int) -> tuple[str, int | None, st
     return None
 
 
+# Сортированное множество «id партии -> ближайший срок проверки часов (мс)»; ведётся через next_timeout_deadline_ms.
 GAME_DEADLINES_KEY = "game_deadlines"
 
 
@@ -266,7 +283,11 @@ class GameStateManager:
             is_rated: bool = True, start_fen: str | None = None, white_time_ms: int | None = None,
             black_time_ms: int | None = None, arena: dict | None = None,
     ):
-        """arena — партия арены (33.3): {"arena_id": …, "berserk_allowed": bool} — попадает в состояние партии."""
+        """
+        Создаёт состояние новой партии в Redis, заносит её в active_games, game_deadlines и ставит игрокам
+        user:{id}:current_game. Часы — base_time_ms у каждой стороны, если не передано своё время (фора).
+        arena — партия арены (33.3): {"arena_id": …, "berserk_allowed": bool} — попадает в состояние партии.
+        """
         now_ms = int(time.time() * 1000)
         state = {
             "white_id": str(white_id),
@@ -299,7 +320,7 @@ class GameStateManager:
         await self.redis.set(f"user:{white_id}:current_game", str(game_id))
         await self.redis.set(f"user:{black_id}:current_game", str(game_id))
 
-    init_game = initialize_game
+    init_game = initialize_game  # прежнее имя метода, оставленное для совместимости (в src/ не используется)
 
     async def get_active_game_id(self, user_id: int) -> int | None:
         """
@@ -320,6 +341,7 @@ class GameStateManager:
         return None
 
     async def get_game_state(self, game_id: int) -> dict | None:
+        """Состояние партии из Redis (числа приведены к int); если хэша нет — восстановление из БД или None."""
         state = await self.redis.hgetall(self._get_key(game_id))
         if not state:
             return await self._recover_state_from_db(game_id)
@@ -339,6 +361,7 @@ class GameStateManager:
         Это единственная точка «захвата» завершения партии: из нескольких конкурентных
         претендентов (сдача, ничья, флаг, отмена, брошенная партия) успех получает ровно один,
         и только он должен вызывать finish_game / abort_game и рассылать game_over.
+        При захвате партия попадает в реестр PENDING_FINISH_KEY (для сверки) и уходит из game_deadlines.
 
         guard(state) -> bool — дополнительное условие, перепроверяемое на свежем состоянии
         внутри транзакции (например, что флаг всё ещё упал, а предложение ничьей ещё в силе).
@@ -377,7 +400,11 @@ class GameStateManager:
                     continue
 
     async def _recover_state_from_db(self, game_id: int) -> dict | None:
-        """Восстанавливает состояние партии в Redis из PostgreSQL."""
+        """
+        Восстанавливает хэш состояния партии в Redis из таблицы games (отключения, предложения ничьей и реванша не
+        сохраняются). Для идущей партии заново ставит active_games, срок проверки и ссылки игроков; для
+        завершённой — срок жизни хэша. Возвращает состояние или None, если партии нет в БД или произошёл сбой.
+        """
         try:
             async with AsyncSessionLocal() as db:
                 db_game = await db.get(Game, game_id)
@@ -437,6 +464,7 @@ class GameStateManager:
             return None
 
     async def update_game_state(self, game_id: int, updates: dict):
+        """Записывает поля в хэш партии без проверки статуса; для идущей партии лучше update_if_in_progress."""
         str_updates = {k: str(v) for k, v in updates.items()}
         await self.redis.hset(self._get_key(game_id), mapping=str_updates)
 
@@ -456,6 +484,7 @@ class GameStateManager:
         await self.redis.zrem(GAME_DEADLINES_KEY, str(game_id))
 
     async def save_move_telemetry(self, game_id: int, move_data: dict):
+        """Дописывает в журнал game:{id}:moves телеметрию хода; в таблицу moves она попадёт при finish_game."""
         key = f"game:{game_id}:moves"
         await self.redis.rpush(key, json.dumps(move_data))
 
@@ -481,6 +510,11 @@ class GameStateManager:
             client_elapsed_ms: int | None = None,
     ) -> dict:
         """
+        Атомарно (WATCH/MULTI) применяет ход игрока: повтор command_id, версия, очередь хода, легальность,
+        списание времени и квота лага, смена позиции, снятие чужого предложения ничьей.
+        Возвращает словарь со status: "success" (ход принят), "game_over" (мат, ничья или флаг, партия уже
+        закрыта в Redis, но не в БД), "ignored" (повтор команды) или "error" с кодом в reason; при отказе игрока
+        в ответ кладётся актуальная позиция.
         client_elapsed_ms — время обдумывания хода по часам клиента: разница с часами сервера — лаг, который
         возвращается игроку в пределах квоты (lag_credit_ms). None — возврата нет.
         """
@@ -732,7 +766,9 @@ class GameStateManager:
     async def finish_game(self, db, game_id: int, result: str, termination: str = "unknown",
                           final_pgn: str | None = None) -> dict:
         """
-        Фиксирует итог партии в БД и пересчитывает рейтинги.
+        Фиксирует итог партии в БД: рейтинги по категории контроля (если партия рейтинговая), ходы с телеметрией,
+        PGN, ECO, события продукта, очки арены, оценку античита, очистку Redis и постановку разбора в фон.
+        Возвращает изменения и новые рейтинги игроков (для уже записанной партии — только изменения).
 
         Вызывать только после успешного claim_game_end (или из ветки game_over process_atomic_move,
         которая захватывает завершение в своей транзакции). Дополнительно, на случай гонки между
@@ -907,6 +943,7 @@ class GameStateManager:
         """
         Игрок отключился во время партии: в состоянии ставится отметка и момент отключения, сопернику сообщается,
         сколько осталось ждать до поражения отключившегося. Часы продолжают идти.
+        manager — менеджер соединений (connection_manager), через него идёт сообщение сопернику.
         """
         game_id_str = await self.redis.get(f"user:{user_id}:current_game")
         if not game_id_str:
@@ -975,6 +1012,7 @@ class GameStateManager:
         """
         Атомарно (WATCH/MULTI) обновляет поля партии, только пока она in_progress.
         Обычный hset после clear_game_state воссоздал бы «огрызок» хэша без white_id и т.п.
+        Заодно пересчитывает срок в game_deadlines (меняются отметки отключения, берсерк и т. п.).
         Возвращает состояние до обновления или None, если партия уже не идёт.
         """
         game_key = self._get_key(game_id)
@@ -1000,7 +1038,7 @@ class GameStateManager:
         Цикл таймаутов выполняет только один воркер (лидер). Лидерство — ключ с TTL; лидер
         продлевает его каждую итерацию, при падении лидера ключ истекает и его берёт другой.
         Даже если на мгновение лидеров окажется двое, двойного завершения партии не будет:
-        оно защищено claim_game_end.
+        оно защищено claim_game_end. Если Redis недоступен, возвращает True: проход всё равно запускается.
         """
         try:
             if await self.redis.set(TIMEOUTS_LEADER_KEY, WORKER_ID, nx=True, px=TIMEOUTS_LEADER_TTL_MS):
@@ -1073,6 +1111,7 @@ class GameStateManager:
                 self._timeout_failures.pop(game_id, None)
 
     async def _maybe_reconcile(self, manager) -> None:
+        """Запускает сверку Redis и БД не чаще, чем раз в RECONCILE_INTERVAL_MS."""
         now_ms = int(time.time() * 1000)
         if now_ms - self._last_reconcile_ms < RECONCILE_INTERVAL_MS:
             return
@@ -1081,6 +1120,7 @@ class GameStateManager:
         await self.reconcile_unfinished_games(now_ms, manager=manager)
 
     def _record_timeout_failure(self, game_id: int, now_ms: int) -> None:
+        """Считает сбой проверки партии и откладывает следующую попытку (экспоненциально, не дольше TIMEOUT_RETRY_MAX_MS)."""
         TIMEOUT_CHECK_FAILURES.inc()
         count = self._timeout_failures.get(game_id, (0, 0))[0] + 1
         delay_ms = min(TIMEOUT_RETRY_MAX_MS, TIMEOUT_RETRY_BASE_MS * 2 ** (count - 1))
@@ -1093,6 +1133,10 @@ class GameStateManager:
             )
 
     async def _check_game_timeout(self, game_id: int, game_id_str: str, manager, now_ms: int) -> None:
+        """
+        Проверка одной партии с подошедшим сроком: неявка на первый ход (30 с) — отмена, иначе флаг или брошенная
+        партия по evaluate_clock_expiry — захват, запись итога и рассылка game_over игрокам и зрителям.
+        """
         state = await self.get_game_state(game_id)
         if not state or state["status"] != "in_progress":
             await self.redis.srem("active_games", game_id_str)
@@ -1147,6 +1191,7 @@ class GameStateManager:
         """
         Отменяет партию на 1-м ходу (до 2 полуходов) без изменения рейтинга.
         guard(state) -> bool — дополнительное условие, атомарно перепроверяемое при захвате.
+        Возвращает {"status": "aborted", ...} с id и рейтингами игроков либо {"status": "error", "code"}.
         """
         state = await self.get_game_state(game_id)
         if not state or state.get("status") != "in_progress":
@@ -1291,6 +1336,10 @@ class GameStateManager:
         return report
 
     async def _finish_pending_game(self, game_id: int, manager=None) -> str | None:
+        """
+        Дозавершает одну партию из реестра сверки по её итогу в Redis и оповещает игроков.
+        Возвращает "finished", "aborted" или None, если дозавершать нечего (запись из реестра снята).
+        """
         raw = await self.redis.hgetall(self._get_key(game_id))
         status = raw.get("status") if raw else None
 
@@ -1325,6 +1374,7 @@ class GameStateManager:
 
     @staticmethod
     async def _notify_reconciled(manager, raw_state: dict, payload: dict) -> None:
+        """Рассылает итог игрокам и зрителям дозавершённой партии; без менеджера соединений ничего не делает."""
         if manager is None:
             return
         for key in ("white_id", "black_id"):
@@ -1333,7 +1383,10 @@ class GameStateManager:
             await manager.broadcast_to_spectators(payload["game_id"], payload)
 
     async def check_first_move_abort_timeout(self, db, game_id: int, manager=None, timeout_ms: int = 30000) -> bool:
-        """Проверяет, не истекли ли 30 секунд на первые 2 полухода партии. Если истекли — отменяет игру."""
+        """
+        Проверяет, не истекли ли timeout_ms (по умолчанию 30 с) на первые 2 полухода партии; если истекли —
+        отменяет партию (abort_game) и рассылает game_over. Возвращает True, если партия отменена.
+        """
         state = await self.get_game_state(game_id)
         if not state or state.get("status") != "in_progress":
             return False

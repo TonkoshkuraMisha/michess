@@ -8,6 +8,9 @@
 базы задач lichess, M — ручная разметка), теги lichess для импорта (13.1), коды детектора мотивов (11.1) и минимумы
 задач на ступени 1–4 для выдачи «по теме».
 
+Данные — только этот файл (таблицы нет: темы и разметка хранятся у задач кодами). Пользуются puzzles.py, skills.py,
+exam.py, mate_course.py, puzzle_import.py, personal_puzzles.py, theme_detectors.py и маршрут src/api/themes.py.
+
 Второй признак (таск 27.8) — цель приёма: мат, материал, превращение, вторжение, ничья, темп. У темы цель задана, если
 приём служит одной цели (маты — мату, «спасите партию» — ничьей); у остальных (вилка, отвлечение…) цель задаёт
 задача. Цель задачи выводится из её тем: мат > ничья > превращение > материал (`puzzle_goal`).
@@ -15,9 +18,13 @@
 
 from dataclasses import dataclass, field
 
+# Разделы реестра A–L (названия — в каталогах клиента).
 SECTIONS = ("A", "B", "C", "D", "E", "F", "G", "H", "I", "J", "K", "L")
+# Источники разметки: D — детектор мотивов, L — тег открытой базы lichess, M — ручная разметка.
 SOURCES = ("D", "L", "M")
+# Минимум задач на ступенях 1–4, если у темы не задано своё: столько нужно, чтобы выдавать задачи «по теме».
 DEFAULT_MINIMUMS = (25, 25, 20, 15)
+# Все цели приёма (поле Theme.goal).
 GOALS = ("mate", "material", "promotion", "invasion", "draw", "tempo")
 # Цели, которые бывают у задачи (итог решения), по старшинству.
 PUZZLE_GOALS = ("mate", "draw", "promotion", "material")
@@ -41,13 +48,17 @@ class Theme:
 
 def _t(code: str, section: str, sources: str, parent: str | None = None, lichess: str = "", detector: str = "",
        minimums: tuple[int, int, int, int] = DEFAULT_MINIMUMS, goal: str | None = None) -> Theme:
+    """
+    Короткая запись темы для реестра: sources — через запятую («D,L»), lichess и detector — через пробел; цель, если
+    не задана, берётся из _DEFAULT_GOAL, а для раздела F — «mate».
+    """
     if goal is None:
         goal = _DEFAULT_GOAL.get(code, "mate" if section == "F" else None)
     return Theme(code, section, tuple(sources.split(",")), parent,
                  tuple(lichess.split()) if lichess else (), tuple(detector.split()) if detector else (), minimums, goal)
 
 
-# Цель приёма для тем вне раздела F (там всегда мат).
+# Цель приёма по коду темы — для тем вне раздела F (там всегда мат); остальные темы остаются без цели.
 _DEFAULT_GOAL = {
     **dict.fromkeys(("greek_gift", "double_bishop_sacrifice", "f7_f2_attack", "kingside_attack", "queenside_attack",
                      "trap_scholars_mate", "basic_mates"), "mate"),
@@ -202,6 +213,7 @@ THEMES: tuple[Theme, ...] = (
     _t("bishop_pair", "L", "M"),
 )
 
+# Индексы реестра: тема по коду, темы по тегу lichess и по коду мотива детектора (строятся один раз при импорте).
 THEMES_BY_CODE: dict[str, Theme] = {theme.code: theme for theme in THEMES}
 LICHESS_TAG_TO_THEMES: dict[str, tuple[str, ...]] = {}
 for _theme in THEMES:
@@ -212,6 +224,7 @@ for _theme in THEMES:
     for _code in _theme.detector:
         DETECTOR_TO_THEMES[_code] = (*DETECTOR_TO_THEMES.get(_code, ()), _theme.code)
 
+# Коды тем каждой цели — для puzzle_goal и выдачи задач «по цели».
 GOAL_THEMES: dict[str, tuple[str, ...]] = {
     goal: tuple(t.code for t in THEMES if t.goal == goal) for goal in GOALS
 }

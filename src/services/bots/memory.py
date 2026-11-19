@@ -14,7 +14,9 @@
   заявленная сила подгоняется под бота — рейтинговые партии с ним остаются честными.
 
 Память читается из базы в кэш процесса (refresh, не чаще раза в REFRESH_SECONDS на бота): выбор хода синхронный и
-базу не трогает.
+базу не трогает. Таблицы (src/models/bot_memory.py): bot_opening_stats, bot_ratings, bot_rivals, bot_rival_stats.
+Записывают итоги src/api/bots.py (партии с людьми), симуляция турниров и задача analyze_game (ошибки соперника);
+читает выбор хода (base.HistoricalBot._book_move и _candidate_scores).
 
 * Соперник (таск 32.2). По завершённым партиям с человеком бот помнит итог каждого своего хода книги против именно
   этого игрока. С постоянным соперником (не меньше RIVAL_MIN_GAMES партий) вес хода дополнительно умножается на
@@ -46,17 +48,28 @@ from src.models.user import User
 
 logger = logging.getLogger(__name__)
 
+# Сглаживание опыта хода книги: столько «виртуальных» партий с результатом 50 % добавляется к реальным.
 PRIOR = 4
+# Границы множителя веса хода книги по его результатам в партиях бота (0,5 — всегда проигрывал, 1,5 — всегда выигрывал).
 FACTOR_MIN, FACTOR_MAX = 0.5, 1.5
+# Опыт записывается ходам книги не дальше этого числа полуходов от начала партии.
 BOOK_PLIES = 24
+# Коэффициент K обновления рейтинга бота по формуле Эло (как у игрока).
 K = 16
+# Поправка силы начинает считаться после стольких партий с людьми и пересчитывается каждые OFFSET_EVERY партий.
 OFFSET_MIN_GAMES = 50
 OFFSET_EVERY = 25
+# Расхождение рейтинга бота с заявленной силой (пункты), с которого поправка сдвигается.
 DRIFT = 100
+# Наибольшая поправка к UCI_Elo бота (пункты в любую сторону).
 MAX_OFFSET = 150
+# Как часто (с) кэш процесса перечитывается из базы для одного бота.
 REFRESH_SECONDS = 300
+# Память о конкретном игроке действует от стольких партий с ним.
 RIVAL_MIN_GAMES = 2
+# Границы множителя веса хода по очкам бота против этого игрока.
 RIVAL_MIN, RIVAL_MAX = 0.25, 1.75
+# Дополнительный множитель для хода, с которым бот проиграл этому игроку в последний раз.
 LAST_LOSS = 0.1
 # Ошибка игрока засчитывается ходу книги, если случилась не дальше ERROR_WINDOW полуходов после него.
 ERROR_WINDOW = 12
@@ -67,6 +80,8 @@ ERROR_MAX = 1.5
 # Суффикс служебного имени бота, если его имя занято человеком (api/bots._get_or_create_bot_user).
 BOT_USERNAME_SUFFIX = "_bot"
 
+# Кэш процесса. _book: бот → (ключ позиции, UCI) → (партий, очков бота); _offset: бот → поправка UCI_Elo;
+# _loaded_at: бот → момент (time.monotonic) последнего чтения из базы.
 _book: dict[str, dict[tuple[str, str], tuple[int, float]]] = {}
 _offset: dict[str, int] = {}
 _loaded_at: dict[str, float] = {}
@@ -77,6 +92,7 @@ class Rival:
     """Память бота об одном игроке на время запроса хода."""
     bot_id: str
     games: int
+    # Ход книги (ключ позиции, UCI) → (партий с ним против игрока, очков бота, проиграл ли бот с ним в последний раз).
     moves: dict[tuple[str, str], tuple[int, float, bool]] = field(default_factory=dict)
     # Ход книги → в скольких партиях игрок ошибся вскоре после него (по разбору).
     errors: dict[tuple[str, str], int] = field(default_factory=dict)
@@ -91,6 +107,10 @@ def use_rival(rival: Rival | None) -> None:
 
 
 def rival_factor(rival: Rival, fen_key: str, uci: str) -> float:
+    """
+    Множитель веса хода книги против этого игрока: от RIVAL_MIN до RIVAL_MAX по очкам бота с этим ходом, плюс добавка
+    за ошибки игрока после него (до ERROR_MAX), × LAST_LOSS, если бот проиграл с ним в последний раз. 1.0 — опыта нет.
+    """
     games, points, last_lost = rival.moves.get((fen_key, uci), (0, 0.0, False))
     if games == 0:
         return 1.0
@@ -115,6 +135,7 @@ def book_factor(bot_id: str, fen_key: str, uci: str) -> float:
 
 
 def strength_offset(bot_id: str) -> int:
+    """Поправка к UCI_Elo бота (пункты) из кэша; 0 — поправки нет или память ещё не загружена."""
     return _offset.get(bot_id, 0)
 
 
@@ -126,6 +147,7 @@ def forget() -> None:
 
 
 async def refresh(db: AsyncSession, bot_id: str, *, force: bool = False) -> None:
+    """Загрузить опыт книги и поправку силы бота из базы в кэш; без force — не чаще раза в REFRESH_SECONDS."""
     if not force and time.monotonic() - _loaded_at.get(bot_id, -REFRESH_SECONDS) < REFRESH_SECONDS:
         return
     rows = (await db.execute(select(BotOpeningStat).where(BotOpeningStat.bot_id == bot_id))).scalars().all()
@@ -136,6 +158,7 @@ async def refresh(db: AsyncSession, bot_id: str, *, force: bool = False) -> None
 
 
 def bot_points(result: str, bot_color: chess.Color) -> float:
+    """Очки бота по результату партии PGN («1-0», «0-1», «1/2-1/2»): 1, 0 или 0,5."""
     if result == "1/2-1/2":
         return 0.5
     white_won = result == "1-0"
@@ -204,6 +227,7 @@ async def record_book(db: AsyncSession, bot_id: str, opening_book: dict, moves_u
 
 
 def expected(rating: float, opponent: float) -> float:
+    """Ожидаемый результат по формуле Эло для игрока с рейтингом rating против opponent."""
     return 1.0 / (1.0 + 10 ** ((opponent - rating) / 400))
 
 
@@ -238,6 +262,7 @@ async def record_rating(db: AsyncSession, bot_id: str, declared: int, opponent_r
 
 
 async def live_strength(db: AsyncSession) -> dict[str, BotRating]:
+    """Живой рейтинг и поправка всех ботов из bot_ratings: bot_id → строка."""
     return {r.bot_id: r for r in (await db.execute(select(BotRating))).scalars().all()}
 
 async def load_rival(db: AsyncSession, bot_id: str, user_id: int | None) -> Rival | None:
@@ -284,6 +309,7 @@ async def record_rival(db: AsyncSession, bot_id: str, user_id: int, opening_book
 
 
 async def rivals_of(db: AsyncSession, user_id: int) -> list[BotRival]:
+    """Сводки по ботам, с которыми играл игрок: больше партий — выше."""
     return list((await db.execute(select(BotRival).where(BotRival.user_id == user_id)
                                   .order_by(BotRival.games.desc()))).scalars().all())
 

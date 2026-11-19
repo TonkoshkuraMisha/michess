@@ -11,6 +11,9 @@
 * «Урок по теме ошибки» — темы самой дорогой ошибки (темы той же личной задачи) в порядке значимости; какой модуль
   Большого курса их проходит, решает клиент: курс — его данные (frontend/src/content/supercourse.ts).
 
+Вызывает GET /after-game/{game_id} (src/api/learn.py). Данные — таблицы personal_puzzles и repertoire_deviations,
+games.analysis_json.
+
 analysed — разбор партии готов (games.analysis_json). Личные задачи появляются через несколько секунд после разбора
 (та же фоновая задача), поэтому клиент при analysed и пустой задаче спрашивает ещё раз (POLL в GameSummaryPanel).
 """
