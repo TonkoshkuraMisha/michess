@@ -49,3 +49,22 @@ html, body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
 }
+
+/* Фокус клетки доски с клавиатуры (таск 26.3): двухцветная рамка — чёрная снаружи, белая внутри (приём WCAG C40).
+   На любой клетке любой темы хотя бы один из двух цветов даёт контраст не ниже 3:1 (WCAG 1.4.11); одноцветная голубая
+   рамка на многих темах сливалась с клеткой. Проверка — config/__tests__/boardThemes.test.ts. Класс ставят клеткам
+   Chessboard.tsx и puzzles/PuzzleBoard.tsx. */
+.board-square:focus-visible {
+    outline: 3px solid #000000;
+    outline-offset: -3px;
+    z-index: 40;
+}
+
+.board-square:focus-visible::after {
+    content: '';
+    position: absolute;
+    inset: 3px;
+    border: 3px solid #FFFFFF;
+    pointer-events: none;
+    z-index: 50;
+}
