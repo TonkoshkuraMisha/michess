@@ -6,6 +6,9 @@
 порядку в наборе, решение (поле moves, если оно длиннее одного хода) доигрывается до конца, любой мат засчитывается.
 Итог — оценка силы по формуле Эло (src/services/exam.estimate), уровень пройден, когда она не ниже порога
 (клиент, supercourse.levelExamPassed), плюс профиль по ветвям.
+
+Экзамен — на время (time_limit_s): срок сообщает сервер вместе с вопросами, отсчёт ведёт клиент и по истечении сам
+сдаёт тест; позиции, до которых игрок не дошёл, идут без очков. Как в итоговой проверке курса матов.
 """
 
 import json
@@ -19,6 +22,8 @@ DATA = Path(__file__).resolve().parent / "data" / "level_exams.json"
 PREFIX = "level"
 # Ветви курса, по которым размечены вопросы: тактика, мат и атака, эндшпиль, стратегия, расчёт.
 BRANCHES = ("T", "M", "E", "S", "C")
+# Время экзамена уровня: секунд на позицию (решение по умолчанию 20.11 — как в проверке курса матов, минута на задачу).
+SECONDS_PER_POSITION = 60
 
 
 @lru_cache(maxsize=1)
@@ -41,6 +46,13 @@ def questions(section: str) -> list[dict]:
     return [{"id": index, "fen": q["fen"], "color": "white" if chess.Board(q["fen"]).turn else "black",
              "previous_move": q["previous_move"], "branch": q["branch"]}
             for index, q in enumerate(levels()[section]["questions"], 1)]
+
+
+def time_limit_s(section: str) -> int | None:
+    """Время на экзамен уровня в секундах (SECONDS_PER_POSITION на позицию); у остальных тестов времени нет — None."""
+    if not is_level_section(section):
+        return None
+    return SECONDS_PER_POSITION * len(levels()[section]["questions"])
 
 
 def question(section: str, question_id: int) -> dict | None:

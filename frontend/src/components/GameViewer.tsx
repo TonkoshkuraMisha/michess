@@ -30,6 +30,8 @@ import {
 } from './Chessboard';
 import {errorMessage} from '../services/apiErrors';
 import {analysisApi} from '../services/analysis';
+import {positionWords, squareLabel} from '../services/a11y/speech';
+import type {Translate} from '../services/a11y/speech';
 import type {GameSource} from '../services/analysis';
 import {soundEngine, resolveMoveSound} from '../services/soundEngine';
 import {customStartFen, pairHalfMoves} from './chessboard/boardUtils';
@@ -559,6 +561,7 @@ export default function GameViewer({library = false, imported = false}: { librar
                         <BoardTextureLayer theme={activeTheme} where="frame"/>
 
                         <div
+                            role="group" aria-label={positionWords(boardState, t as Translate)}
                             className="grid grid-cols-8 grid-rows-8 w-full h-full border border-black/60 relative z-10 shadow-inner-board rounded-xs overflow-hidden">
                             {displayedRanks.map((rank) =>
                                 displayedFiles.map((file) => {
@@ -577,6 +580,7 @@ export default function GameViewer({library = false, imported = false}: { librar
                                         <div
                                             key={squareId}
                                             data-square={squareId}
+                                            aria-label={squareLabel(squareId, piece, t as Translate)}
                                             style={{
                                                 backgroundColor: isDark ? activeTheme.dark : activeTheme.light
                                             }}

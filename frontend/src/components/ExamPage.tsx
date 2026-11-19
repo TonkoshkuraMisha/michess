@@ -3,6 +3,8 @@
 // комбинации): верный ход проверяет сервер (/move), соперник отвечает ходом из решения, за каждый верный ход — очко;
 // ошибка или «Не знаю» заканчивают позицию, набранные на ней очки остаются. Подсказок нет; в конце — оценка силы,
 // уровень по разрядам и разбор. Игровой рейтинг не меняется; итоги — стартовые данные карты навыков.
+// Экзамены уровней Большого курса (27.12, /exam?test=level<n>) — на время: срок time_limit_s присылает сервер вместе с
+// вопросами, часы идут на странице, по истечении тест сдаётся сам (недошедшие позиции — пустыми, без очков).
 
 import {useEffect, useRef, useState} from 'react';
 import {Chess} from 'chess.js';
@@ -69,6 +71,8 @@ interface MoveResult {
 /** Пауза перед ответом соперника и перед следующей позицией: успеть увидеть свой ход и финал комбинации. */
 export const EXAM_REPLY_MS = 450;
 export const EXAM_NEXT_MS = 1100;
+/** Шаг обновления часов экзамена на время (мс). */
+const CLOCK_TICK_MS = 500;
 
 // Клетки хода из записи UCI.
 const squares = (uci: string) => ({from: uci.slice(0, 2), to: uci.slice(2, 4)});
@@ -136,6 +140,13 @@ export function ExamPage() {
         setWaiting(false);
     };
     const [graded, setGraded] = useState<Graded | null>(null);
+    // Экзамен уровня — на время (time_limit_s с сервера): срок от начала теста; по истечении тест сдаётся сам,
+    // позиции, до которых игрок не дошёл, идут пустыми (без очков). timedOut — показать это в итоге.
+    const [deadline, setDeadline] = useState<number | null>(null);
+    const [now, setNow] = useState(() => Date.now());
+    const [timedOut, setTimedOut] = useState(false);
+    // Тест сдаётся один раз: и по последней позиции, и по времени — что случится раньше.
+    const submitted = useRef(false);
     const [busy, setBusy] = useState(false);
     const [error, setError] = useState<UiMessage | null>(null);
 
@@ -154,8 +165,13 @@ export function ExamPage() {
         setError(null);
         setGraded(null);
         try {
-            const data = await call<{ questions: Question[] }>(`/${next}/questions`);
+            const data = await call<{ questions: Question[]; time_limit_s?: number | null }>(`/${next}/questions`);
             clearTimers();
+            const startedAt = Date.now();
+            setNow(startedAt);
+            setDeadline(data.time_limit_s ? startedAt + data.time_limit_s * 1000 : null);
+            setTimedOut(false);
+            submitted.current = false;
             setSection(next);
             setQuestions(data.questions);
             setAnswers([]);
@@ -172,22 +188,44 @@ export function ExamPage() {
         if (logged && requested && !section) void start(requested);
     }, [logged, requested]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    /** Сдать тест: ходы по пройденным позициям, остальные — пустыми (время вышло раньше). */
+    const submit = async (done: string[][]) => {
+        if (!section || submitted.current) return;
+        submitted.current = true;
+        setBusy(true);
+        try {
+            setGraded(await call<Graded>(`/${section}/submit`, {answers: questions.map((q, i) => ({id: q.id, moves: done[i] ?? []}))}));
+            loadSummary();
+        } catch (err) {
+            submitted.current = false;
+            setError(errorMessage(err, 'common.networkError'));
+        } finally {
+            setBusy(false);
+        }
+    };
+
     /** Позиция закончена (решена, ошибка или «Не знаю»): записать ходы и перейти дальше или сдать тест. */
     const finish = async (moves: string[]) => {
         const next = [...answers, moves];
         setAnswers(next);
         resetQuestion();
         if (next.length < questions.length || !section) return;
-        setBusy(true);
-        try {
-            setGraded(await call<Graded>(`/${section}/submit`, {answers: questions.map((q, i) => ({id: q.id, moves: next[i]}))}));
-            loadSummary();
-        } catch (err) {
-            setError(errorMessage(err, 'common.networkError'));
-        } finally {
-            setBusy(false);
-        }
+        await submit(next);
     };
+
+    const secondsLeft = deadline === null ? null : Math.max(0, Math.ceil((deadline - now) / 1000));
+    useEffect(() => {
+        if (deadline === null || graded) return;
+        const id = window.setInterval(() => setNow(Date.now()), CLOCK_TICK_MS);
+        return () => window.clearInterval(id);
+    }, [deadline, graded]);
+    // Время вышло: сдать то, что есть, вместе с ходами текущей позиции.
+    useEffect(() => {
+        if (secondsLeft !== 0 || !section || graded || submitted.current) return;
+        clearTimers();
+        setTimedOut(true);
+        void submit([...answers, played]);
+    }, [secondsLeft]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const current = section && !graded ? questions[answers.length] : null;
     const position = current ? board ?? {fen: current.fen, last: current.previous_move} : null;
@@ -232,7 +270,12 @@ export function ExamPage() {
         setPoints(0);
         resetQuestion();
         setGraded(null);
+        setDeadline(null);
+        setTimedOut(false);
+        submitted.current = false;
     };
+
+    const clock = secondsLeft === null ? null : `${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, '0')}`;
 
     return (
         <div className="w-full max-w-4xl mx-auto p-3 flex flex-col gap-4 text-boxwood-light" data-testid="exam-page">
@@ -312,6 +355,7 @@ export function ExamPage() {
                     <div className="flex flex-col gap-2 text-sm">
                         <p className="font-bold text-amber-200">{sectionLabel(t, section!)}</p>
                         <p data-testid="exam-progress">{t('exam.progress', {n: answers.length + 1, total: questions.length})}</p>
+                        {clock && <p className="font-mono font-bold text-amber-200" data-testid="exam-clock">{t('exam.timeLeft', {time: clock})}</p>}
                         <p className="font-bold text-amber-300" data-testid="exam-points">{t('exam.pointsNow', {points})}</p>
                         <p className="text-boxwood/80">{t(current.color === 'white' ? 'exam.whiteToMove' : 'exam.blackToMove')}</p>
                         <p className="text-xs text-boxwood/70">{t('exam.playToEnd')}</p>
@@ -329,6 +373,7 @@ export function ExamPage() {
 
             {graded && (
                 <section className="flex flex-col gap-2" data-testid="exam-result">
+                    {timedOut && <p className="text-amber-300" data-testid="exam-time-up">{t('exam.timeUp')}</p>}
                     <p className="text-lg font-bold text-amber-200">
                         {t('exam.result', {correct: graded.correct, total: graded.total, level: t(`exam.levels.${graded.level}`), rating: graded.estimate})}
                     </p>

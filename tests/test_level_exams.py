@@ -71,6 +71,20 @@ async def test_level_exam_through_the_exam_api(client, token_user_1):
     assert bad.status_code == 400 and bad.json()["detail"]["code"] == "exam_question_unknown"
 
 
+async def test_level_exam_is_timed_and_unreached_positions_score_nothing(client, token_user_1):
+    headers = _auth(token_user_1)
+    body = client.get("/api/v1/exam/level1/questions", headers=headers).json()
+    # Минута на позицию: срок сообщает сервер, клиент по истечении сам сдаёт тест.
+    assert body["time_limit_s"] == level_exam.SECONDS_PER_POSITION * len(body["questions"]) == 12 * 60
+    # Время вышло после двух решённых позиций: остальные сданы пустыми и идут без очков.
+    answers = [{"id": q["id"], "moves": level_exam.question("level1", q["id"])["moves"][::2] if q["id"] <= 2 else []}
+               for q in body["questions"]]
+    graded = client.post("/api/v1/exam/level1/submit", json={"answers": answers}, headers=headers).json()
+    assert graded["correct"] == 2 and graded["total"] == 12
+    # У диагностики разделов времени нет.
+    assert level_exam.time_limit_s("F") is None
+
+
 @pytest.mark.parametrize("section", ["level6", "levelx"])
 def test_unknown_level(client, token_user_1, section):
     response = client.get(f"/api/v1/exam/{section}/questions", headers=_auth(token_user_1))

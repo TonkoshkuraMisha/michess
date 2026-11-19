@@ -1,6 +1,9 @@
 // Большой курс (таск 27.6, docs/research/supercourse.md): уровни 0–5 по разрядам × ветви Т/М/Э/С/Д/Р/П, модули с
 // неизменными кодами и шагами-ячейками. Шаг ведёт в готовый раздел (те же упражнения, что у программ 22.3); модуль
 // без шагов — место в каркасе под будущее наполнение (игроку не показывается, виден в режиме «покрытие»).
+// Статус ячейки (moduleStatus): ready — есть готовые шаги, игрок их видит; draft — есть только шаги в работе (поле
+// draft: автор добавил, но не проверил; игроку не видны, в каркасе — с пометкой); empty — ничего. Покрытие курса для
+// автора — coverage(): сколько модулей каждого статуса по уровням и ветвям.
 // Названия модулей — в каталогах i18n: supercourse.modules.<код, точка заменена на «_»>.
 
 import type {Activity} from './programs';
@@ -13,8 +16,15 @@ export interface CourseModule {
     code: string;
     level: number;
     branch: Branch;
+    /** Готовые шаги: их видит игрок. */
     steps: Activity[];
+    /** Шаги в работе: автор добавил, но не проверил — игроку не видны, в каркасе показываются с пометкой. */
+    draft?: Activity[];
 }
+
+/** Статус ячейки курса: готова, в работе, пуста. */
+export type ModuleStatus = 'ready' | 'draft' | 'empty';
+export const MODULE_STATUSES: ModuleStatus[] = ['ready', 'draft', 'empty'];
 
 const b = (id: string): Activity => ({kind: 'basics', id});
 const l = (id: string): Activity => ({kind: 'lesson', id});
@@ -30,8 +40,8 @@ const REPERTOIRE: Activity = {kind: 'repertoire'};
 const CLASSICS: Activity = {kind: 'classics'};
 const GUESS: Activity = {kind: 'guess'};
 
-function mod(code: string, branch: Branch, steps: Activity[] = []): CourseModule {
-    return {code, level: Number(code.slice(1).split('.')[0]), branch, steps};
+function mod(code: string, branch: Branch, steps: Activity[] = [], draft: Activity[] = []): CourseModule {
+    return {code, level: Number(code.slice(1).split('.')[0]), branch, steps, ...(draft.length ? {draft} : {})};
 }
 
 export const COURSE: CourseModule[] = [
@@ -196,6 +206,20 @@ export function examSections(level: number): string[] {
 export function levelExamPassed(level: number, results: Record<string, { estimate: number }>): boolean {
     const sections = examSections(level);
     return sections.length > 0 && sections.every((s) => (results[s]?.estimate ?? 0) >= LEVEL_EXAM_TARGET[level]);
+}
+
+/** Статус модуля: готовые шаги важнее черновиков; модуль без тех и других пуст. */
+export function moduleStatus(module: CourseModule): ModuleStatus {
+    if (module.steps.length > 0) return 'ready';
+    return module.draft?.length ? 'draft' : 'empty';
+}
+
+/** Покрытие курса для автора: уровень → ветвь → число модулей каждого статуса (ветви без модулей на уровне — нули). */
+export function coverage(course: CourseModule[] = COURSE): Record<ModuleStatus, number>[][] {
+    const table = Array.from({length: LEVEL_COUNT}, () =>
+        BRANCHES.map(() => ({ready: 0, draft: 0, empty: 0} as Record<ModuleStatus, number>)));
+    for (const module of course) table[module.level][BRANCHES.indexOf(module.branch)][moduleStatus(module)] += 1;
+    return table;
 }
 
 export const moduleTitleKey = (code: string) => `supercourse.modules.${code.replace('.', '_')}`;

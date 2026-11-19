@@ -7,8 +7,16 @@ import type {CoachComment} from './coach';
 import {apiRequest} from './http';
 
 /** Позиция для угадывания. Ход мастера в ней не передаётся — он приходит только в ответе (GuessAnswer). */
+/** Вариант хода в режиме «выбор из вариантов». */
+export interface GuessCandidate {
+    uci: string;
+    san: string;
+}
+
 export interface GuessPosition {
     id: number;
+    /** Варианты на выбор (ход мастера среди них) — только если их попросили (режим для начинающих). */
+    candidates?: GuessCandidate[];
     /** Партия архива и номер полухода мастера с нуля (столько полуходов сыграно до позиции). */
     game_id: number;
     ply: number;
@@ -52,8 +60,10 @@ const request = <T>(path: string, init: RequestInit = {}) => apiRequest<T>(`/gue
 
 export const guessApi = {
     /** Следующая позиция около силы игрока (гостю — около 1500); null — позиции ещё не отобраны. */
-    next: (series: boolean) => request<{ position: GuessPosition | null }>(`/next${series ? '?series=true' : ''}`),
-    position: (id: number) => request<GuessPosition>(`/position/${id}`),
+    next: (series: boolean, candidates = false) =>
+        request<{ position: GuessPosition | null }>(`/next?${new URLSearchParams({series: String(series), candidates: String(candidates)})}`),
+    /** Позиция по id; candidates — с вариантами на выбор. */
+    position: (id: number, candidates = false) => request<GuessPosition>(`/position/${id}${candidates ? '?candidates=true' : ''}`),
     answer: (id: number, move: string) => request<GuessAnswer>(`/position/${id}/answer`, {
         method: 'POST', body: JSON.stringify({move}),
     }),
