@@ -27,7 +27,7 @@ import {resolveMoveSound} from '../../../services/soundEngine';
 import type {SoundEventType} from '../../../services/soundEngine';
 import {API_BASE_URL} from '../../../config/api';
 import {GAME_ACTION_ERROR_CODES} from '../types';
-import {isChatPreset} from '../types';
+import {appendChat, chatItemFrom, sendChatPreset, sendChatText} from '../gameChat';
 import type {LiveGameItem, ChatMessageItem, QueuePlayer, PendingPromotion, ChatPresetId} from '../types';
 import type {BotOpponentId} from '../../../config/champions';
 import {describeGameOver, hasStatusKey, messageParam, status} from '../status';
@@ -537,15 +537,10 @@ export function useGameSocket({
         // Сообщение чата (своё тоже приходит эхом с сервера). В памяти — последние 50; быстрая фраза хранится кодом.
         const handleChatMessage = (data: any) => {
             if (!isCurrentGameEvent(data)) return;
-            const preset = isChatPreset(data.preset) ? data.preset : undefined;
-            if ((data.text || preset) && data.sender) {
-                setChatMessages(prev => [...prev.slice(-49), {
-                    sender: data.sender,
-                    text: preset ? '' : data.text,
-                    ...(preset ? {preset} : {}),
-                    timestamp: data.timestamp || Date.now()
-                }]);
-                if (data.sender !== currentUsernameRef.current) {
+            const item = chatItemFrom(data);
+            if (item) {
+                setChatMessages(prev => appendChat(prev, item));
+                if (item.sender !== currentUsernameRef.current) {
                     playAudio('chat');
                 }
             }
@@ -856,20 +851,13 @@ export function useGameSocket({
 
     const handleSendChatMessage = useCallback(() => {
         const activeGid = gameId || spectatingGameId;
-        const finalMsg = chatInput.trim();
-        if (!activeGid || !finalMsg) return;
-        gameSocket.send('chat_message', {
-            game_id: activeGid,
-            text: finalMsg.slice(0, 140)
-        });
-        setChatInput('');
+        if (activeGid && sendChatText(activeGid, chatInput)) setChatInput('');
     }, [gameId, spectatingGameId, chatInput]);
 
     /** Быстрая фраза уходит кодом: каждый участник увидит её на своём языке. */
     const handleSendChatPreset = useCallback((preset: ChatPresetId) => {
         const activeGid = gameId || spectatingGameId;
-        if (!activeGid) return;
-        gameSocket.send('chat_message', {game_id: activeGid, preset});
+        if (activeGid) sendChatPreset(activeGid, preset);
     }, [gameId, spectatingGameId]);
 
     const handleAcceptRematch = useCallback(() => {

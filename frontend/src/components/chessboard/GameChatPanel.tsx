@@ -10,6 +10,7 @@ import {Flag, MessageSquare, Send} from 'lucide-react';
 import {moderationApi} from '../../services/moderation';
 import {useI18n} from '../../i18n';
 import {QUICK_CHAT_PRESETS} from './types';
+import {CHAT_TEXT_MAX} from './gameChat';
 import type {ChatMessageItem, ChatPresetId} from './types';
 
 export interface GameChatPanelProps {
@@ -106,7 +107,7 @@ export function GameChatPanel({
             >
                 <input
                     type="text"
-                    maxLength={140}
+                    maxLength={CHAT_TEXT_MAX}
                     value={chatInput}
                     onChange={(e) => onChatInputChange(e.target.value)}
                     placeholder={t('chat.placeholder')}

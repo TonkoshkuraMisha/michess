@@ -98,6 +98,18 @@ describe('партия 960 с человеком', () => {
         expect(screen.queryByTestId('c960-live-rematch-offer')).toBeNull();
     });
 
+    it('чат партии: сообщения своей партии видны, чужой — нет; своё сообщение уходит по сокету', async () => {
+        renderPage();
+        await act(async () => handlers.get('chat_message')!({event: 'chat_message', game_id: 42, sender: 'bob', text: 'Удачи!'}));
+        await act(async () => handlers.get('chat_message')!({event: 'chat_message', game_id: 7, sender: 'eve', text: 'чужое'}));
+        expect(screen.getByText('Удачи!')).toBeInTheDocument();
+        expect(screen.queryByText('чужое')).toBeNull();
+        fireEvent.change(screen.getByPlaceholderText('Написать сообщение…'), {target: {value: '  И вам!  '}});
+        fireEvent.click(screen.getByRole('button', {name: 'Отправить'}));
+        expect(gameSocket.send).toHaveBeenCalledWith('chat_message', {game_id: 42, text: 'И вам!'});
+        expect(screen.getByPlaceholderText('Написать сообщение…')).toHaveValue('');
+    });
+
     it('события чужой партии не трогают доску; без партии — подсказка, как начать', async () => {
         renderPage();
         await act(async () => handlers.get('move_made')!({game_id: 99, fen: '8/8/8/8/8/8/8/K6k w - - 0 1', pgn: ''}));

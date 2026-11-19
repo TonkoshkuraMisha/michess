@@ -2,7 +2,7 @@
 // 960, src/services/game_engine.py): клиентская шахматная библиотека рокировку 960 не знает, поэтому доска здесь лишь
 // рисует позицию и передаёт щелчки — как у партии против бота (Chess960Page). Рокировка — щелчок по королю, затем по
 // своей ладье. Состояние приходит по общему WebSocket (services/gameSocket): match_found (при старте и при каждом
-// переподключении), move_made, game_over, предложения ничьей и реванша (реванш — та же расстановка, цвета меняются,
+// переподключении), move_made, game_over, чат, предложения ничьей и реванша (реванш — та же расстановка, цвета меняются,
 // websockets.create_rematch_game). Основная доска (useGameSocket.ts) сама переводит сюда
 // партию с variant chess960, передавая снимок в location.state.match. Рейтинга у этих партий нет.
 
@@ -11,6 +11,8 @@ import {Link, useLocation} from 'react-router-dom';
 import {ArrowLeft, Flag, Handshake, Shuffle, X} from 'lucide-react';
 import {renderUiMessage, useI18n} from '../../i18n';
 import {getToken} from '../../services/authToken';
+import {GameChatPanel} from '../chessboard/GameChatPanel';
+import {useGameChat} from '../chessboard/gameChat';
 import {gameSocket} from '../../services/gameSocket';
 import {describeGameOver} from '../chessboard/status';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
@@ -119,6 +121,8 @@ export function Chess960LiveGame() {
     // Реванш после конца партии: сервер начнёт партию 960 с той же расстановкой, цвета поменяются (create_rematch_game).
     const [rematch, setRematch] = useState<'none' | 'sent' | 'incoming' | 'declined'>('none');
     const [now, setNow] = useState(Date.now());
+    // Чат партии — тот же, что у главной доски (gameChat.ts, GameChatPanel); смена партии очищает ленту.
+    const chat = useGameChat(game?.gameId ?? null);
     const updatedAt = useRef(Date.now());
     const gameRef = useRef(game);
     gameRef.current = game;
@@ -323,6 +327,10 @@ export function Chess960LiveGame() {
                             </Link>
                         </div>
                     )}
+                    <GameChatPanel messages={chat.messages} chatInput={chat.input} onChatInputChange={chat.setInput}
+                                   onSendMessage={chat.send} onSendPreset={chat.sendPreset} isSpectator={false}
+                                   onLeaveSpectate={() => undefined} myName={game.color === 'white' ? game.white : game.black}
+                                   gameId={game.gameId}/>
                 </div>
             </div>
         </div>
