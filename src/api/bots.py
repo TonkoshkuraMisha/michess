@@ -45,20 +45,15 @@ from src.models.user import User
 from src.services import engine_info, move_check, openings, product_metrics
 from src.services import ladder as ladder_service
 from src.services import tournaments as tournament_service
+from src.services.bots import BOT_INSTANCES  # единственный реестр ботов (src/services/bots/__init__.py)
 from src.services.bots import calibration as bot_calibration
 from src.services.bots import memory as bot_memory
 from src.services.bots import selfplay as bot_selfplay
-from src.services.bots.anderssen import anderssen_bot
 from src.services.bots.archetypes import ARCHETYPES, ARCHETYPES_BY_ID, ARCHETYPES_BY_KEY
 from src.services.bots.guests import GUESTS, GUESTS_BY_ID, GUESTS_BY_PGN_NAME, SIGNATURE_OPENINGS
-from src.services.bots.labourdonnais import labourdonnais_bot
-from src.services.bots.masters import MASTER_BOTS, MASTERS
-from src.services.bots.morphy import morphy_bot
-from src.services.bots.paulsen import paulsen_bot
+from src.services.bots.masters import MASTERS
 from src.services.bots.personality import DRAW_OFFER_MIN_MOVE, BotPersonalityConfig, PersonalityBot, draw_answer
-from src.services.bots.philidor import philidor_bot, resolve_stockfish_path
-from src.services.bots.staunton import staunton_bot
-from src.services.bots.zukertort import zukertort_bot
+from src.services.bots.philidor import resolve_stockfish_path
 from src.services.engine_pool import engine_work
 from src.services.game_engine import board_from_start_fen, flag_outcome, is_standard_start, terminal_outcome
 from src.services.rating import classify_time_control
@@ -130,17 +125,6 @@ AVAILABLE_BOTS = [
 ]
 
 logger = logging.getLogger(__name__)
-
-BOT_INSTANCES = {
-    "philidor": philidor_bot,
-    "labourdonnais": labourdonnais_bot,
-    "staunton": staunton_bot,
-    "anderssen": anderssen_bot,
-    "morphy": morphy_bot,
-    "paulsen": paulsen_bot,
-    "zukertort": zukertort_bot,
-    **MASTER_BOTS,
-}
 
 BOT_METADATA = {b["id"]: b for b in AVAILABLE_BOTS}
 

@@ -94,7 +94,6 @@ class LabourdonnaisBot(HistoricalBot):
     multipv = 8
     opening_book = LABOURDONNAIS_OPENING_BOOK
     style = LABOURDONNAIS_STYLE
-    default_skill_level = 5
     default_uci_elo = 1950
     default_search_depth = 5
 

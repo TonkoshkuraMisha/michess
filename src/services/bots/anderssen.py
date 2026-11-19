@@ -90,7 +90,6 @@ class AnderssenBot(HistoricalBot):
     multipv = 8
     opening_book = ANDERSSEN_OPENING_BOOK
     style = ANDERSSEN_STYLE
-    default_skill_level = 8
     default_uci_elo = 2100
 
 

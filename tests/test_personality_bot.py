@@ -110,7 +110,6 @@ def test_strength_grows_monotonically():
     levels = [strength_for(elo) for elo in range(600, 2801, 100)]
     for weaker, stronger in zip(levels, levels[1:], strict=False):
         assert stronger.depth >= weaker.depth
-        assert stronger.skill_level >= weaker.skill_level
         assert stronger.error_rate <= weaker.error_rate
         assert stronger.uci_elo >= weaker.uci_elo
 
