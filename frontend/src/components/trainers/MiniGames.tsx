@@ -11,8 +11,8 @@ import {ArrowLeft, Link2, Swords} from 'lucide-react';
 import {renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
-import {API_BASE_URL} from '../../config/api';
-import {errorMessage, readApiErrorOr, UiError} from '../../services/apiErrors';
+import {errorMessage} from '../../services/apiErrors';
+import {postMiniGame} from '../../services/miniGames';
 import {getToken} from '../../services/authToken';
 import {saveLessonProgress} from '../../services/lessonProgress';
 import {miniRoomsApi} from '../../services/miniGameRooms';
@@ -35,22 +35,6 @@ type Mode = 'bot-white' | 'bot-black' | 'hotseat';
 /** Запись прогресса игры тренера: lesson_progress «mini-<id>», выполнена после первой победы над ботом. */
 export function miniProgressId(id: string): string {
     return `mini-${id.replace(/_/g, '-')}`;
-}
-
-/** Ответ сервера на ход: новая позиция, итог (1-0, 0-1, 1/2-1/2 или null) и ответный ход бота (uci), если он был. */
-interface MoveReply {
-    fen: string;
-    result: string | null;
-    bot_move: string | null;
-}
-
-/** POST на /api/v1/mini-games; отказ сервера — UiError с кодом ошибки. */
-async function post(path: string, body: object): Promise<MoveReply> {
-    const res = await fetch(`${API_BASE_URL}/api/v1/mini-games${path}`, {
-        method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res.json() as Promise<MoveReply>;
 }
 
 /** Карточки пяти игр. */
@@ -101,7 +85,7 @@ export function MiniGamePage() {
         setError(null);
         if (nextMode === 'bot-black') {
             setBusy(true);
-            post(`/${id}/bot-first`, {fen: START[id]}).then((r) => {
+            postMiniGame(`/${id}/bot-first`, {fen: START[id]}).then((r) => {
                 setFen(r.fen);
                 setResult(r.result);
                 if (r.bot_move) setLast({from: r.bot_move.slice(0, 2), to: r.bot_move.slice(2, 4)});
@@ -129,7 +113,7 @@ export function MiniGamePage() {
         setFrom(null);
         setBusy(true);
         setError(null);
-        post(`/${id}/move`, {fen, move, bot: mode !== 'hotseat'}).then((r) => {
+        postMiniGame(`/${id}/move`, {fen, move, bot: mode !== 'hotseat'}).then((r) => {
             setFen(r.fen);
             setResult(r.result);
             // Победа над ботом засчитывает шаг курса и программы (автозачёт, services/courseProgress.ts).

@@ -10,9 +10,9 @@ import {Link, useSearchParams} from 'react-router-dom';
 import {ArrowLeft, CheckCircle2, ClipboardCheck, XCircle} from 'lucide-react';
 import {renderUiMessage, useI18n} from '../i18n';
 import type {MessageKey, UiMessage} from '../i18n';
-import {API_BASE_URL} from '../config/api';
 import {getToken} from '../services/authToken';
-import {errorMessage, readApiErrorOr, UiError} from '../services/apiErrors';
+import {errorMessage} from '../services/apiErrors';
+import {examCall} from '../services/exam';
 import {PuzzleBoard} from './puzzles/PuzzleBoard';
 
 /** Уровни по разрядам, которые сервер присваивает оценке силы (src/services/exam.py, LEVELS). */
@@ -94,17 +94,7 @@ export function examTitle(t: (key: string, params?: Record<string, string | numb
     return section === 'endgame' ? t('exam.endgameTest') : `${section}. ${t(`puzzles.sections.${section}`)}`;
 }
 
-/** Запрос к /api/v1/exam: без body — GET, с body — POST; отказ превращается в UiError с кодом. */
-async function call<T>(path: string, body?: object): Promise<T> {
-    const token = getToken();
-    const res = await fetch(`${API_BASE_URL}/api/v1/exam${path}`, {
-        method: body ? 'POST' : 'GET',
-        headers: {...(token ? {Authorization: `Bearer ${token}`} : {}), ...(body ? {'Content-Type': 'application/json'} : {})},
-        body: body ? JSON.stringify(body) : undefined,
-    });
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res.json() as Promise<T>;
-}
+const call = examCall;
 
 /** Последние результаты по разделам — для отметки «уровень пройден» в Большом курсе (27.12). */
 export const fetchExamSummary = () => call<ExamSummary>('');

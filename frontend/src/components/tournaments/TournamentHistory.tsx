@@ -6,11 +6,11 @@
 import {useEffect, useState} from 'react';
 import {Link} from 'react-router-dom';
 import {Trophy} from 'lucide-react';
-import {API_BASE_URL} from '../../config/api';
 import {useI18n} from '../../i18n';
 import {listTournaments} from '../../services/tournaments';
 import type {TournamentSummary} from '../../services/tournaments';
 import {getToken} from '../../services/authToken';
+import {accountApi} from '../../services/account';
 
 /** Показывается только в профиле вошедшего игрока: турниры видит лишь их владелец. */
 export function TournamentHistory({username}: { username: string }) {
@@ -21,8 +21,8 @@ export function TournamentHistory({username}: { username: string }) {
         const token = getToken();
         if (!token) return;
         let alive = true;
-        fetch(`${API_BASE_URL}/api/v1/profile/me`, {headers: {Authorization: `Bearer ${token}`}})
-            .then((r) => (r.ok ? r.json() : null))
+        accountApi.me()
+            .catch(() => null)
             .then((me) => (me?.username === username ? listTournaments() : null))
             .then((list) => alive && Array.isArray(list) && setItems(list))
             .catch(() => undefined);

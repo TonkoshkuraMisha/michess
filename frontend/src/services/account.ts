@@ -10,6 +10,7 @@ import {apiRequest} from './http';
 
 /** Свои данные профиля, нужные странице настроек. */
 export interface OwnAccount {
+    username?: string;
     email: string | null;
     translation_helper?: boolean;
     avatar?: string | null;
