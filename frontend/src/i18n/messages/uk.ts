@@ -1175,7 +1175,6 @@ export const uk: Messages = {
         open: 'Відкрити',
     },
     profile: {
-        notFound: 'Користувача не знайдено',
         loadFailed: 'Не вдалося завантажити профіль',
         loading: 'Завантаження профілю…',
         memberSince: 'На сайті з {date}',

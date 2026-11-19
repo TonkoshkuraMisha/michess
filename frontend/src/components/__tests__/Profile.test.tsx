@@ -210,7 +210,7 @@ describe('Profile', () => {
         const rows = await screen.findAllByTitle('Нажмите, чтобы просмотреть партию');
         fireEvent.click(within(rows[1]).getByText('Bob'));
 
-        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/api\/v1\/profile\/Bob$/)));
+        await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringMatching(/\/api\/v1\/profile\/Bob$/), expect.anything()));
         // Клик по ссылке не должен всплыть до строки и открыть просмотр партии.
         expect(screen.queryByText(/^Партия 2/)).not.toBeInTheDocument();
     });
@@ -246,10 +246,11 @@ describe('Profile', () => {
     });
 
     it('несуществующий игрок — сообщение об ошибке', async () => {
-        stubFetch({profile: {ok: false}});
+        // Ответ сервера на неизвестное имя (src/api/profile.py): код user_not_found с именем.
+        stubFetch({profile: {ok: false, body: {detail: {code: 'user_not_found', params: {username: 'Alice'}, message: 'User not found'}}}});
         renderProfile();
 
-        expect(await screen.findByText('Пользователь не найден')).toBeInTheDocument();
+        expect(await screen.findByText('Пользователь Alice не найден')).toBeInTheDocument();
     });
 
     it('сбой загрузки партий не ломает профиль', async () => {

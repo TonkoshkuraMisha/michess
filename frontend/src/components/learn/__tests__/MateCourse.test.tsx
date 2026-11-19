@@ -18,16 +18,16 @@ const TASK = {
 
 const cell = (name: string) => document.querySelector(`[data-square="${name}"]`) as HTMLElement;
 
-async function drag(from: string, to: string) {
-    document.elementsFromPoint = vi.fn(() => [cell(to)]);
+/**
+ * Ход двумя щелчками. Не перетаскиванием: доска подписывается на отпускание фигуры из эффекта, и под нагрузкой CI
+ * отпускание приходило раньше подписки — ход терялся, тест изредка падал.
+ */
+async function play(from: string, to: string) {
     await act(async () => {
-        fireEvent.pointerDown(cell(from), {button: 0, pointerType: 'mouse', clientX: 5, clientY: 5});
+        fireEvent.click(cell(from));
     });
     await act(async () => {
-        fireEvent.pointerMove(window, {clientX: 50, clientY: 50});
-    });
-    await act(async () => {
-        fireEvent.pointerUp(window, {clientX: 90, clientY: 90});
+        fireEvent.click(cell(to));
     });
 }
 
@@ -55,6 +55,7 @@ function renderAt(path: string) {
 
 beforeEach(() => setToken('jwt'));
 afterEach(() => {
+    vi.restoreAllMocks();
     vi.useRealTimers();
     setToken(null);
     vi.unstubAllGlobals();
@@ -90,9 +91,9 @@ describe('Курс матовых конструкций', () => {
         // Ходы — только после ходов соперника на доске: под нагрузкой их задержка растягивается.
         const occupied = (sq: string) => waitFor(() => expect(cell(sq).querySelector('img')).not.toBeNull(), {timeout: 5000});
         await occupied('e2');
-        await drag('d2', 'd8');
+        await play('d2', 'd8');
         await occupied('e8');
-        await drag('d8', 'e8');
+        await play('d8', 'e8');
         expect(await screen.findByTestId('course-solved', {}, {timeout: 5000})).toBeInTheDocument();
         const put = (fetchMock.mock.calls as unknown as [string, RequestInit][]).find(([url]) => url.includes('/learn/progress/'))!;
         expect(put[0]).toContain(mateProgressId('back_rank_mate'));
@@ -111,10 +112,10 @@ describe('Курс матовых конструкций', () => {
         renderAt('/learn/mates/back_rank_mate');
         fireEvent.click(await screen.findByTestId('mates-start', {}, {timeout: 5000}));
         await waitFor(() => expect(cell('e2').querySelector('img')).not.toBeNull(), {timeout: 5000});
-        await drag('d2', 'd5');
+        await play('d2', 'd5');
         expect(await screen.findByTestId('course-failed', {}, {timeout: 5000})).toBeInTheDocument();
         expect(screen.queryByTestId('explorer-controls')).toBeNull();
-        await drag('d2', 'd8');  // ход решения со стрелки — на доске
+        await play('d2', 'd8');  // ход решения со стрелки — на доске
         expect(cell('d8').querySelector('img')?.getAttribute('alt')).toBe('wr');
         expect(screen.getByTestId('explorer-back')).not.toBeDisabled();
     }, 20_000);
@@ -164,6 +165,10 @@ describe('Курс матовых конструкций', () => {
             [/course\/mates\/exam$/, () => ({minutes: 10, tasks: [{theme: 'back_rank_mate', index: 1}]})],
             [/course\/mates\/back_rank_mate\/1$/, () => ({...TASK, index: 1})],
         ]);
+        // Каждый вызов часов — на миллисекунду позже: так в CI начало отсчёта и срок попадали в разные
+        // миллисекунды, и вместо «10:00» показывалось «10:01». Отсчёт и срок должны идти от одного момента.
+        let clock = 1_700_000_000_000;
+        vi.spyOn(Date, 'now').mockImplementation(() => clock++);
         renderAt('/learn/mates/exam');
         fireEvent.click(screen.getByTestId('mates-exam-start'));
         expect(await screen.findByTestId('mates-exam-status')).toHaveTextContent('10:00');

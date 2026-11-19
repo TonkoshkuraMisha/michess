@@ -58,7 +58,7 @@ describe('Leaderboard', () => {
         expect(screen.getByText('bob')).toBeInTheDocument();
         // 4-е место — номер, а не медаль.
         expect(screen.getByText('4')).toBeInTheDocument();
-        expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('category=blitz'));
+        expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining('category=blitz'), expect.anything());
         expect(screen.getByText(/по рейтингу Эло — блиц/)).toBeInTheDocument();
     });
 
@@ -71,7 +71,7 @@ describe('Leaderboard', () => {
 
         expect(await screen.findByText('Speedy')).toBeInTheDocument();
         expect(screen.queryByText('Magnus')).not.toBeInTheDocument();
-        expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining('category=bullet'));
+        expect(fetchMock).toHaveBeenLastCalledWith(expect.stringContaining('category=bullet'), expect.anything());
         expect(screen.getByText(/по рейтингу Эло — пуля/)).toBeInTheDocument();
     });
 
