@@ -69,7 +69,7 @@
 
 На ПК с Windows и Docker Desktop, из корня проекта:
 
-    git clone https://github.com/TonkoshkuraMisha/michess.git regence
+    git clone https://github.com/TonkoshkuraMisha/regence.git regence
     cd regence
     git checkout dev
     .\start_dev.ps1

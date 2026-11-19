@@ -75,8 +75,8 @@
    Интеграционные тесты (`tests/integration`) запускаются только при заданных `TEST_DATABASE_URL` и
    `TEST_REDIS_URL` и **удаляют все таблицы** в указанной базе — используйте отдельную базу, не рабочую:
 
-   docker exec michess-db-1 psql -U michess_user -d michess_db -c "CREATE DATABASE regence_test"
-   $env:TEST_DATABASE_URL = "postgresql+asyncpg://michess_user:michess_password@localhost:15432/regence_test"
+   docker compose exec db psql -U regence_user -d regence_db -c "CREATE DATABASE regence_test"
+   $env:TEST_DATABASE_URL = "postgresql+asyncpg://regence_user:regence_password@localhost:15432/regence_test"
    $env:TEST_REDIS_URL = "redis://localhost:6379/15"
    python -m pytest tests/integration
 

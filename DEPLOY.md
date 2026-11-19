@@ -50,6 +50,17 @@
 
 > Релиз со спринта 7 меняет формат токенов: все пользователи один раз войдут заново.
 
+> **Переименование michess → regence (19.11.2026).** В `.env.example` база и её пользователь теперь `regence_db` /
+> `regence_user`. Если сервер уже работает с прежними `michess_db` / `michess_user`, можно ничего не трогать: имена
+> задаёт `.env` сервера. Чтобы переименовать (до `up -d`, с остановленными `api` и `worker`):
+>
+>     docker compose -f docker-compose.prod.yml stop api worker beat
+>     docker compose -f docker-compose.prod.yml exec db psql -U michess_user -d postgres >       -c "ALTER DATABASE michess_db RENAME TO regence_db" >       -c "ALTER ROLE michess_user RENAME TO regence_user" >       -c "ALTER ROLE regence_user PASSWORD '<пароль из .env>'"
+>
+> (переименованная роль теряет пароль — его задаёт последняя команда), затем в `.env` поставить
+> `POSTGRES_USER=regence_user`, `POSTGRES_DB=regence_db` и выполнить обновление как выше. Источник своих задач
+> `michess` → `regence` переименует миграция сама; кука входа переедет при первом обновлении сессии (раздел 8б).
+
 ## 4. HTTPS
 
 nginx в образе `web` слушает только HTTP. TLS завершается снаружи — балансировщиком облака
@@ -197,7 +208,7 @@ Celery-воркеры (фоновый анализ, симуляция турн�
 
 Access-токен живёт `ACCESS_TOKEN_EXPIRE_MINUTES` (15) и хранится только в памяти страницы; долгий вход — refresh-токен
 в cookie `regence_refresh` (HttpOnly, SameSite=Strict, путь `/api/v1/auth`, `REFRESH_TOKEN_EXPIRE_DAYS` = 30), его хэш —
-в Redis. Флаг Secure ставится при `ENVIRONMENT=production` (переопределяется `COOKIE_SECURE`): за nginx нужен HTTPS (раздел 4).
+в Redis (до 19.11.2026 кука называлась `michess_refresh` — её ещё принимает `/auth/refresh` и заменяет новой). Флаг Secure ставится при `ENVIRONMENT=production` (переопределяется `COOKIE_SECURE`): за nginx нужен HTTPS (раздел 4).
 Если фронтенд и API на разных адресах, адрес фронтенда должен быть в `CORS_ORIGINS` — запросы идут с
 `credentials: 'include'`. Сброс Redis выкидывает всех из долгих сессий: войти заново.
 
@@ -232,7 +243,7 @@ E-mail у игрока необязателен; привязывается по
   `RATE_LIMIT_FEEDBACK_WINDOW_S` с адреса (или на игрока).
 - **Еженедельный разбор.** `docker compose exec api python scripts/feedback_digest.py` печатает сводку за 7 дней в
   виде блока для `ToDo.md`: сколько пришло и как разобрано, по разделам сайта, неразобранное — пунктами `- [ ]`.
-- **Канал сообщества.** `COMMUNITY_URL=https://t.me/michess_club` (канал проекта в Telegram) — ссылка появляется на странице «О проекте» и в
+- **Канал сообщества.** `COMMUNITY_URL=https://t.me/regence_club` (канал проекта в Telegram) — ссылка появляется на странице «О проекте» и в
   окне «Сообщить о проблеме»; пусто — её нет. Подпись подбирается по адресу (Telegram, Discord или просто «сообщество»).
 
 После правки `.env` — `docker compose -f docker-compose.prod.yml up -d` (API перечитает настройки).
