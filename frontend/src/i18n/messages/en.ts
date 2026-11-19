@@ -3271,6 +3271,8 @@ export const en = {
         subtitle: 'Positions from champions\' games where the master\'s move can be found by calculation. Make your move — and compare.',
         modeSingle: 'Positions',
         modeSeries: 'Series from a game',
+        choicesMode: 'Choose from options (for beginners)',
+        choicesHint: 'One of these is the master’s move. Calculate before you choose.',
         empty: 'No positions are ready yet — check back later.',
         whiteToMove: 'White to move',
         blackToMove: 'Black to move',

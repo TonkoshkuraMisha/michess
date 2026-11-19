@@ -35,6 +35,7 @@ async def _position(db: AsyncSession, position_id: int) -> GuessPosition:
 async def next_position(
         request: Request,
         series: bool = Query(default=False, description="Начало серии ходов из партии"),
+        candidates: bool = Query(default=False, description="Добавить варианты на выбор (режим для начинающих)"),
         db: AsyncSession = Depends(get_db),
 ):
     """Следующая позиция около силы игрока (рейтинг задач; гостю — 1500). Пусто — позиции ещё не отобраны."""
@@ -42,12 +43,13 @@ async def next_position(
     user = await db.get(User, user_id) if user_id else None
     target = user.puzzle_rating if user else DEFAULT_TARGET
     position = await guess_service.pick_position(db, target, series)
-    return {"position": await guess_service.payload(db, position) if position else None}
+    return {"position": await guess_service.payload(db, position, candidates) if position else None}
 
 
 @router.get("/position/{position_id}")
-async def get_position(position_id: int, db: AsyncSession = Depends(get_db)):
-    return await guess_service.payload(db, await _position(db, position_id))
+async def get_position(position_id: int, candidates: bool = Query(default=False), db: AsyncSession = Depends(get_db)):
+    """Позиция по id (переход из просмотра партии); candidates — добавить варианты на выбор."""
+    return await guess_service.payload(db, await _position(db, position_id), candidates)
 
 
 @router.get("/game/{game_id}")

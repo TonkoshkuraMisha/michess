@@ -1,7 +1,8 @@
 // --- FILE: frontend/src/components/guess/GuessPage.tsx ---
 // «Угадай ход мастера» (таск 14.3): позиция из партии мастера, игрок делает ход — баллы, ход мастера, оценка
 // движка и объяснение наставника. Режимы: отдельные позиции и серия ходов из одной партии. /guess/:positionId —
-// конкретная позиция (переход из просмотра партии). После ответа доска свободна: позицию можно разыграть
+// конкретная позиция (переход из просмотра партии). Для начинающих — «выбор из вариантов»: ход мастера и ходы из строк
+// движка кнопками (сервер присылает их только в этом режиме). После ответа доска свободна: позицию можно разыграть
 // (usePositionExplorer).
 // Данные — services/guess.ts (/api/v1/guess/*, доступно и гостю; отбор позиций и баллы — сервер, src/services/guess.py).
 // Маршруты /guess и /guess/:positionId (App.tsx); переход с позиции приходит из просмотра партии.
@@ -43,6 +44,8 @@ export function GuessPage() {
     const navigate = useNavigate();
     const {positionId} = useParams<{ positionId?: string }>();
     const [mode, setMode] = useState<Mode>('single');
+    // Выбор из вариантов (режим для начинающих): позиции запрашиваются с кандидатами.
+    const [choices, setChoices] = useState(false);
     const [position, setPosition] = useState<GuessPosition | null>(null);
     const [empty, setEmpty] = useState(false);
     const [answer, setAnswer] = useState<GuessAnswer | null>(null);
@@ -61,17 +64,18 @@ export function GuessPage() {
         stopExplorer();
     }, [stopExplorer]);
 
-    const loadNext = useCallback((which: Mode) => {
-        guessApi.next(which === 'series').then((r) => show(r.position)).catch((err) => setError(errorMessage(err, 'common.networkError')));
+    const loadNext = useCallback((which: Mode, withChoices: boolean) => {
+        guessApi.next(which === 'series', withChoices).then((r) => show(r.position))
+            .catch((err) => setError(errorMessage(err, 'common.networkError')));
     }, [show]);
 
     useEffect(() => {
         if (positionId) {
-            guessApi.position(Number(positionId)).then(show).catch((err) => setError(errorMessage(err, 'common.networkError')));
+            guessApi.position(Number(positionId), choices).then(show).catch((err) => setError(errorMessage(err, 'common.networkError')));
         } else {
-            loadNext(mode);
+            loadNext(mode, choices);
         }
-    }, [positionId]); // eslint-disable-line react-hooks/exhaustive-deps
+    }, [positionId, choices]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const submit = async (uci: string) => {
         if (!position) return;
@@ -96,17 +100,17 @@ export function GuessPage() {
     const goNext = () => {
         if (answer?.next_id) {
             if (positionId) navigate(`/guess/${answer.next_id}`);
-            else guessApi.position(answer.next_id).then(show).catch((err) => setError(errorMessage(err, 'common.networkError')));
+            else guessApi.position(answer.next_id, choices).then(show).catch((err) => setError(errorMessage(err, 'common.networkError')));
             return;
         }
         if (positionId) navigate('/guess');
-        loadNext(mode);
+        loadNext(mode, choices);
     };
 
     const switchMode = (next: Mode) => {
         setMode(next);
         if (positionId) navigate('/guess');
-        loadNext(next);
+        loadNext(next, choices);
     };
 
     const arrows: BoardArrow[] = [];
@@ -134,6 +138,11 @@ export function GuessPage() {
                 </div>
             </div>
 
+            <label className="flex items-center gap-2 text-sm text-boxwood/80 self-start cursor-pointer">
+                <input type="checkbox" checked={choices} onChange={(e) => setChoices(e.target.checked)} className="accent-amber-600"
+                       data-testid="guess-choices-toggle"/>
+                {t('guess.choicesMode')}
+            </label>
             {error && <p role="alert" className="text-sm text-rose-300">{renderUiMessage(error, t)}</p>}
             {empty && <p className="text-sm text-amber-200" data-testid="guess-empty">{t('guess.empty')}</p>}
 
@@ -159,6 +168,20 @@ export function GuessPage() {
                                 </div>
                             )}
                         </div>
+
+                        {choices && !answer && position.candidates && position.candidates.length > 0 && (
+                            <div className="flex flex-col gap-1.5" data-testid="guess-choices">
+                                <span className="text-xs text-boxwood/70">{t('guess.choicesHint')}</span>
+                                <div className="flex flex-wrap gap-2">
+                                    {position.candidates.map((c) => (
+                                        <button key={c.uci} type="button" onClick={() => void submit(c.uci)} data-testid={`guess-choice-${c.uci}`}
+                                                className="px-3 py-1.5 rounded bg-black/40 border border-amber-900/60 font-mono hover:border-amber-500">
+                                            {c.san}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
 
                         {answer && (
                             <div className="bg-black/40 rounded p-3 flex flex-col gap-2" data-testid="guess-answer">

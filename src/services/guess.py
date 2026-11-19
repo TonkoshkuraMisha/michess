@@ -6,6 +6,10 @@
 не меньше нуля. Оценка — по сохранённым строкам движка (до трёх лучших ходов), без запуска движка: ход вне этих строк
 не лучше второй строки (отбор гарантирует её отставание), поэтому его потеря — отрыв лучшего хода плюс запас.
 
+Режим «выбор из кандидатов» (для начинающих): игрок выбирает ход из CANDIDATES вариантов — ход мастера и другие ходы
+из сохранённых строк движка. По правилу отбора каждый из них заметно хуже хода мастера (отрыв gap_cp), так что
+задание остаётся решаемым расчётом; порядок вариантов перемешан, но у одной позиции всегда один и тот же.
+
 Сложность позиции — её рейтинг: ответ вошедшего игрока меняет его, как партия задачи с решающим (Эло против рейтинга
 задач игрока): нашёл ход мастера — позиция «проиграла», нет — «выиграла». Рейтинг игрока при этом не меняется.
 
@@ -37,6 +41,8 @@ NEAR_CP = 30
 UNKNOWN_EXTRA_CP = 50
 # Сколько последних полуходов партии показывается перед позицией.
 CONTEXT_MOVES = 8
+# Сколько вариантов показывает режим «выбор из кандидатов»: ход мастера и до двух ходов из строк движка.
+CANDIDATES = 3
 # Позиция подбирается в пределах ±DIFFICULTY_BAND от запрошенной сложности.
 DIFFICULTY_BAND = 300
 # Рейтинг позиции: первые PROVISIONAL_PLAYS ответов он меняется с коэффициентом K_PROVISIONAL, дальше — K_STABLE;
@@ -85,10 +91,22 @@ def _game_context(game: Game, ply: int) -> dict:
     }
 
 
-async def payload(db: AsyncSession, position: GuessPosition) -> dict:
+def candidate_moves(position: GuessPosition) -> list[dict]:
+    """
+    Варианты режима «выбор из кандидатов»: ход мастера и ходы из строк движка (без повторов), не больше CANDIDATES,
+    в перемешанном порядке — одном и том же для позиции (зерно — её id). Ход — UCI и запись SAN.
+    """
+    moves = [position.move_uci] + [uci for uci, _cp in position.lines if uci != position.move_uci]
+    chosen = list(dict.fromkeys(moves))[:CANDIDATES]
+    random.Random(position.id).shuffle(chosen)
+    board = chess.Board(position.fen)
+    return [{"uci": uci, "san": board.san(chess.Move.from_uci(uci))} for uci in chosen]
+
+
+async def payload(db: AsyncSession, position: GuessPosition, with_candidates: bool = False) -> dict:
     """
     Позиция «Угадай ход мастера» для клиента: доска, чей ход, сложность, место в серии и сведения о партии. Ход
-    мастера не отдаётся.
+    мастера не отдаётся; with_candidates — добавить варианты на выбор (candidate_moves), только по просьбе клиента.
     """
     game = await db.get(Game, position.game_id)
     series_length = 0
@@ -102,6 +120,7 @@ async def payload(db: AsyncSession, position: GuessPosition) -> dict:
         "difficulty": position.difficulty,
         "series_id": position.series_id, "series_index": position.series_index, "series_length": series_length,
         **(_game_context(game, position.ply) if game else {}),
+        **({"candidates": candidate_moves(position)} if with_candidates else {}),
     }
 
 
