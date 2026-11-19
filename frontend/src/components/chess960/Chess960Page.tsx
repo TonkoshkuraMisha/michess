@@ -14,6 +14,7 @@ import {API_BASE_URL} from '../../config/api';
 import {errorMessage, readApiErrorOr, UiError} from '../../services/apiErrors';
 import {getToken} from '../../services/authToken';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
+import {numberedMoves} from '../../services/moveNumbers';
 
 /** Ответ сервера по партии против бота: номер расстановки, позиция, ходы (UCI и SAN), итог и ход бота. */
 export interface State960 {
@@ -75,9 +76,24 @@ export function clickMove(fen: string, from: string, to: string): string | null 
     return `${from}${to}${promotion}`;
 }
 
-// Запись ходов с номерами одной строкой: «1. e4 e5 2. Nf3».
-function numbered(sans: string[]): string {
-    return sans.map((san, i) => (i % 2 === 0 ? `${i / 2 + 1}. ${san}` : san)).join(' ');
+/** Итог щелчка по полю при ходе двумя щелчками: новое выбранное поле и готовый ход UCI (null — хода ещё нет). */
+export interface ClickStep {
+    from: string | null;
+    move: string | null;
+}
+
+/**
+ * Щелчок по полю, когда ходит color: первый щелчок выбирает свою фигуру, повторный по ней — снимает выбор,
+ * щелчок по другому полю — ход (clickMove); невозможный ход переносит выбор на свою фигуру или снимает его.
+ */
+export function clickStep(fen: string, color: 'white' | 'black', from: string | null, square: string): ClickStep {
+    const piece = piecesOf(fen).get(square);
+    const mine = piece !== undefined && (piece === piece.toUpperCase()) === (color === 'white');
+    if (!from) return {from: mine ? square : null, move: null};
+    if (from === square) return {from: null, move: null};
+    const move = clickMove(fen, from, square);
+    if (move === null) return {from: mine ? square : null, move: null};
+    return {from: null, move};
 }
 
 /**
@@ -124,24 +140,10 @@ export function Chess960Page() {
 
     const onSquare = (square: string) => {
         if (!state || !myTurn) return;
-        const pieces = piecesOf(state.fen);
-        const piece = pieces.get(square);
-        const mine = (p: string | undefined) => p !== undefined && (p === p.toUpperCase()) === (side === 'white');
-        if (!from) {
-            if (mine(piece)) setFrom(square);
-            return;
-        }
-        if (from === square) {
-            setFrom(null);
-            return;
-        }
-        const move = clickMove(state.fen, from, square);
-        if (move === null) {
-            setFrom(mine(piece) ? square : null);
-            return;
-        }
-        setFrom(null);
-        void run(() => call('/move', {number: state.number, moves: state.moves, move, level}));
+        const step = clickStep(state.fen, side, from, square);
+        setFrom(step.from);
+        const move = step.move;
+        if (move) void run(() => call('/move', {number: state.number, moves: state.moves, move, level}));
     };
 
     const last = state && state.moves.length ? state.moves[state.moves.length - 1] : null;
@@ -196,7 +198,7 @@ export function Chess960Page() {
                     {state && <p className="text-amber-300" data-testid="c960-number-label">{t('chess960.positionNumber', {n: state.number})}</p>}
                     <p className="font-bold" data-testid="c960-status">{status}{state?.check && !state.result ? ` ${t('chess960.check')}` : ''}</p>
                     <p className="text-xs text-boxwood/70">{t('chess960.castlingHint')}</p>
-                    {state && state.sans.length > 0 && <p className="font-mono text-xs break-words" data-testid="c960-moves">{numbered(state.sans)}</p>}
+                    {state && state.sans.length > 0 && <p className="font-mono text-xs break-words" data-testid="c960-moves">{numberedMoves(state.sans).join(' ')}</p>}
                 </div>
             </div>
         </div>

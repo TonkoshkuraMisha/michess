@@ -7,7 +7,7 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {setToken} from '../../../services/authToken';
 import {edgesFrom, followLine} from '../../../services/repertoire';
 import type {Repertoire} from '../../../services/repertoire';
-import {numbered, RepertoireEditorPage, RepertoireListPage} from '../RepertoirePages';
+import {RepertoireEditorPage, RepertoireListPage} from '../RepertoirePages';
 import {AddToRepertoire} from '../AddToRepertoire';
 
 // Справочник дебютов проверяется своими тестами; здесь он только мешал бы подменой fetch.
@@ -59,7 +59,6 @@ describe('обход дерева', () => {
         expect(followLine(REP, ['e2e4', 'c7c6'])).toEqual({position: AFTER_C6, known: 2});
         expect(followLine(REP, ['e2e4', 'd7d5', 'e4d5'])).toEqual({position: AFTER_E4, known: 1});
         expect(edgesFrom(REP, AFTER_E4).map((m) => m.san)).toEqual(['e5', 'c6']);
-        expect(numbered(['e4', 'c6', 'd4'])).toEqual(['1. e4', 'c6', '2. d4']);
     });
 });
 

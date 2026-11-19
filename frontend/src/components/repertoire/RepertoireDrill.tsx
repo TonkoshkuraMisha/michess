@@ -17,7 +17,7 @@ import {edgesFrom, followLine, repertoireApi} from '../../services/repertoire';
 import type {DrillCard, DrillStats, Repertoire} from '../../services/repertoire';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 import type {BoardArrow} from '../puzzles/PuzzleBoard';
-import {numbered} from './RepertoirePages';
+import {numberedMoves} from '../../services/moveNumbers';
 
 // Режим страницы; фаза карточки (show — показ ответа в «Учить новые», ask — ждём ход, right/wrong — разбор);
 // карточка в очереди сессии с признаком повтора после ошибки (retry — на расписание не влияет).
@@ -135,7 +135,7 @@ function CardsSession({rep, mode}: { rep: Repertoire; mode: 'review' | 'learn' }
             <div className="flex-1 min-w-0 flex flex-col gap-2 text-sm">
                 {stats && <StatsLine stats={stats}/>}
                 <p className="font-mono text-xs text-boxwood/80" data-testid="drill-line">
-                    {card.line.length ? numbered(before.sans).join(' ') : t('repertoire.startPosition')}
+                    {card.line.length ? numberedMoves(before.sans).join(' ') : t('repertoire.startPosition')}
                 </p>
                 <p className="font-bold text-amber-200" data-testid="drill-prompt">
                     {phase === 'show' && t('repertoire.drill.showPrompt')}
@@ -234,7 +234,7 @@ function PlaySession({rep}: { rep: Repertoire }) {
             </div>
             <div className="flex-1 min-w-0 flex flex-col gap-2 text-sm">
                 <p className="font-bold text-amber-200" data-testid="drill-play-status">{status}</p>
-                {line.length > 0 && <p className="font-mono text-xs text-boxwood/80" data-testid="drill-play-line">{numbered(position.sans).join(' ')}</p>}
+                {line.length > 0 && <p className="font-mono text-xs text-boxwood/80" data-testid="drill-play-line">{numberedMoves(position.sans).join(' ')}</p>}
                 {error && <p role="alert" className="text-rose-300">{renderUiMessage(error, t)}</p>}
                 <div className="flex flex-wrap gap-2">
                     {state === 'left' && (

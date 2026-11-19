@@ -14,6 +14,7 @@ import type {UiMessage} from '../../i18n';
 import {errorMessage} from '../../services/apiErrors';
 import {buildPgn, downloadText, STANDARD_FEN} from '../../services/pgnExport';
 import {findMate} from '../../services/tools';
+import {numberedMoves} from '../../services/moveNumbers';
 import type {MateResult} from '../../services/tools';
 import {validateFen} from '../chessboard/boardUtils';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
@@ -71,13 +72,7 @@ export function ToolsPage() {
     }, [baseFen, moves]);
 
     const standard = baseFen === STANDARD_FEN;
-    const firstBlack = baseFen.split(' ')[1] === 'b';
-    const firstNumber = Number(baseFen.split(' ')[5] ?? 1) || 1;
-    const line = position.sans.map((san, i) => {
-        const ply = i + (firstBlack ? 1 : 0);
-        const number = firstNumber + Math.floor(ply / 2);
-        return ply % 2 === 0 ? `${number}. ${san}` : (i === 0 ? `${number}… ${san}` : san);
-    }).join(' ');
+    const line = numberedMoves(position.sans, baseFen).join(' ');
 
     const play = (uci: string) => {
         setMoves((list) => [...list, uci]);
