@@ -63,6 +63,22 @@ async def test_next_position_with_game_context(client, seeded):
     assert series_start["series_index"] == 0
 
 
+async def test_candidates_only_on_request_with_the_master_move_among_them(client, seeded):
+    _game, first, second = seeded
+    plain = client.get(f"/api/v1/guess/position/{first.id}").json()
+    assert "candidates" not in plain  # в обычном режиме варианты не подсказываются
+    body = client.get(f"/api/v1/guess/position/{first.id}", params={"candidates": "true"}).json()
+    assert sorted(c["uci"] for c in body["candidates"]) == ["c3d5", "f3e5", "h2h3"]
+    assert {c["san"] for c in body["candidates"]} == {"Nxe5", "Nd5", "h3"}
+    again = client.get(f"/api/v1/guess/position/{first.id}", params={"candidates": "true"}).json()
+    assert again["candidates"] == body["candidates"]  # порядок у позиции один и тот же
+    # Строк меньше трёх — вариантов столько, сколько есть, ход мастера среди них.
+    short = client.get(f"/api/v1/guess/position/{second.id}", params={"candidates": "true"}).json()
+    assert sorted(c["uci"] for c in short["candidates"]) == ["c4f7", "e5g4"]
+    nxt = client.get("/api/v1/guess/next", params={"candidates": "true"}).json()["position"]
+    assert "candidates" in nxt and len(nxt["candidates"]) >= 2
+
+
 async def test_answer_scores_and_explains(client, seeded):
     _, first, second = seeded
     res = client.post(f"/api/v1/guess/position/{first.id}/answer", json={"move": "f3e5"}).json()
