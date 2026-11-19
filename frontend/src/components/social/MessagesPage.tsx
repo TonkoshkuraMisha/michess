@@ -11,29 +11,23 @@
 import {useCallback, useEffect, useRef, useState} from 'react';
 import type {FormEvent, KeyboardEvent} from 'react';
 import {Link, useLocation, useNavigate, useParams} from 'react-router-dom';
-import {ArrowLeft, Ban, EyeOff, MessageSquare, Paperclip, Send, X} from 'lucide-react';
+import {ArrowLeft, Ban, EyeOff, MessageSquare, Paperclip, Send} from 'lucide-react';
 import {renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
 import {errorMessage, serverErrorMessage} from '../../services/apiErrors';
 import {getToken} from '../../services/authToken';
 import {gameSocket} from '../../services/gameSocket';
-import {detectAttachment, messagesApi} from '../../services/messages';
-import type {AttachmentKind, Conversation, DmPolicy, DmSettings, Thread} from '../../services/messages';
+import {messagesApi} from '../../services/messages';
+import type {Conversation, DmPolicy, DmSettings, Thread} from '../../services/messages';
 import {AttachmentCard} from './AttachmentCard';
+import {AttachmentPicker} from './AttachmentPicker';
+import type {AttachmentDraft} from './AttachmentPicker';
 import {FlaggedNotice, HeldNote, isTextFlagged, RulesLink, TextReportButton} from './Civility';
 
 // Период опроса списка переписок и открытой переписки (мс), если событие сокета не пришло.
 export const POLL_MS = 15_000;
-// Виды вложений, выбираемые вручную; достижение добавляется только кнопкой «поделиться» в профиле.
-const KINDS: AttachmentKind[] = ['game', 'position', 'puzzle', 'lesson', 'tournament', 'library'];
 // Варианты настройки «кто может писать мне» (совпадают с POLICIES в src/services/direct_messages.py).
 const POLICIES: DmPolicy[] = ['all', 'following', 'nobody'];
-
-/** Черновик вложения: вид и ссылка или идентификатор (ref); может прийти из location.state.attach. */
-interface Draft {
-    kind: AttachmentKind;
-    ref: string;
-}
 
 /** Список переписок со счётчиком непрочитанных и последней репликой. */
 function ConversationList({items, active}: { items: Conversation[]; active?: string }) {
@@ -104,14 +98,14 @@ function DmSettingsPanel() {
 /** Переписка с одним игроком: подгрузка ранних сообщений, отправка, вложение, скрытие, блокировка и причина отказа сервера. */
 function ThreadView({username, initialAttach, onChanged}: {
     username: string;
-    initialAttach: Draft | null;
+    initialAttach: AttachmentDraft | null;
     onChanged: () => void;
 }) {
     const {t, dateLocale} = useI18n();
     const [thread, setThread] = useState<Thread | null>(null);
     const [error, setError] = useState<UiMessage | null>(null);
     const [body, setBody] = useState('');
-    const [draft, setDraft] = useState<Draft | null>(initialAttach);
+    const [draft, setDraft] = useState<AttachmentDraft | null>(initialAttach);
     const [attachOpen, setAttachOpen] = useState(Boolean(initialAttach));
     const [sending, setSending] = useState(false);
     const [hasEarlier, setHasEarlier] = useState(false);
@@ -265,26 +259,10 @@ function ThreadView({username, initialAttach, onChanged}: {
             ) : (
                 <form onSubmit={(e) => submit(e)} className="border-t border-amber-900/40 pt-2 flex flex-col gap-2" data-testid="dm-composer">
                     {flagged && <FlaggedNotice onRephrase={() => setFlagged(false)} onSendAnyway={() => submit(undefined, true)}/>}
-                    {attachOpen && (
-                        <div className="flex flex-wrap items-center gap-1.5 text-sm" data-testid="dm-attach">
-                            <select value={draft?.kind ?? 'game'} className="bg-black/40 rounded px-1.5 py-1" data-testid="dm-attach-kind"
-                                    onChange={(e) => setDraft({kind: e.target.value as AttachmentKind, ref: draft?.ref ?? ''})}>
-                                {KINDS.map((k) => <option key={k} value={k}>{t(`dm.kinds.${k}`)}</option>)}
-                            </select>
-                            <input value={draft?.ref ?? ''} maxLength={200} placeholder={t('dm.attachHint')} data-testid="dm-attach-ref"
-                                   className="flex-1 min-w-0 bg-black/40 rounded px-2 py-1"
-                                   onChange={(e) => {
-                                       const found = detectAttachment(e.target.value);
-                                       setDraft(found ? {kind: found.kind, ref: found.ref} : {kind: draft?.kind ?? 'game', ref: e.target.value});
-                                   }}/>
-                            <button type="button" onClick={() => {
-                                setDraft(null);
-                                setAttachOpen(false);
-                            }} aria-label={t('dm.removeAttachment')} title={t('dm.removeAttachment')} className="p-1 text-boxwood/70">
-                                <X size={14}/>
-                            </button>
-                        </div>
-                    )}
+                    {attachOpen && <AttachmentPicker draft={draft} onChange={setDraft} testId="dm" onRemove={() => {
+                        setDraft(null);
+                        setAttachOpen(false);
+                    }}/>}
                     <div className="flex items-end gap-2">
                         <button type="button" onClick={() => setAttachOpen((v) => !v)} aria-label={t('dm.attach')} title={t('dm.attach')}
                                 data-testid="dm-attach-toggle" className="p-2 rounded hover:bg-black/30 text-boxwood/80">
@@ -311,7 +289,7 @@ export function MessagesPage() {
     const location = useLocation();
     const navigate = useNavigate();
     const [items, setItems] = useState<Conversation[]>([]);
-    const initialAttach = (location.state as { attach?: Draft } | null)?.attach ?? null;
+    const initialAttach = (location.state as { attach?: AttachmentDraft } | null)?.attach ?? null;
 
     const refresh = useCallback(() => {
         messagesApi.conversations().then((r) => setItems(r.conversations)).catch(() => undefined);

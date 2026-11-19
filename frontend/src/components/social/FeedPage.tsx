@@ -10,26 +10,17 @@
 import {useCallback, useEffect, useState} from 'react';
 import type {FormEvent} from 'react';
 import {Link, useLocation, useNavigate, useParams} from 'react-router-dom';
-import {ArrowLeft, Heart, MessageCircle, Newspaper, Paperclip, Send, Trash2, X} from 'lucide-react';
+import {ArrowLeft, Heart, MessageCircle, Newspaper, Paperclip, Send, Trash2} from 'lucide-react';
 import {renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
 import {errorMessage} from '../../services/apiErrors';
 import {getToken} from '../../services/authToken';
 import {feedApi} from '../../services/feed';
 import type {Post, PostComment} from '../../services/feed';
-import {detectAttachment} from '../../services/messages';
-import type {AttachmentKind} from '../../services/messages';
 import {AttachmentCard} from './AttachmentCard';
+import {AttachmentPicker} from './AttachmentPicker';
+import type {AttachmentDraft} from './AttachmentPicker';
 import {FlaggedNotice, HeldNote, isTextFlagged, RulesLink, TextReportButton} from './Civility';
-
-// Виды вложений, выбираемые вручную; достижение добавляется только кнопкой «поделиться» в профиле.
-const KINDS: AttachmentKind[] = ['game', 'position', 'puzzle', 'lesson', 'tournament', 'library'];
-
-/** Черновик вложения: вид и ссылка или идентификатор (ref); приходит и из location.state.attach. */
-interface Draft {
-    kind: AttachmentKind;
-    ref: string;
-}
 
 /** Дата и время публикации в локали игрока. */
 function when(iso: string | null, code: string): string {
@@ -37,10 +28,10 @@ function when(iso: string | null, code: string): string {
 }
 
 /** Поле новой публикации с вложением; при отказе фильтра показывает FlaggedNotice и позволяет отправить на проверку. */
-export function Composer({initial, onPosted}: { initial: Draft | null; onPosted: (post: Post) => void }) {
+export function Composer({initial, onPosted}: { initial: AttachmentDraft | null; onPosted: (post: Post) => void }) {
     const {t} = useI18n();
     const [body, setBody] = useState('');
-    const [draft, setDraft] = useState<Draft | null>(initial);
+    const [draft, setDraft] = useState<AttachmentDraft | null>(initial);
     const [attachOpen, setAttachOpen] = useState(Boolean(initial));
     const [sending, setSending] = useState(false);
     const [error, setError] = useState<UiMessage | null>(null);
@@ -69,32 +60,10 @@ export function Composer({initial, onPosted}: { initial: Draft | null; onPosted:
             {flagged && <FlaggedNotice onRephrase={() => setFlagged(false)} onSendAnyway={() => submit(undefined, true)}/>}
             <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} maxLength={2000} placeholder={t('feed.placeholder')}
                       data-testid="feed-input" className="w-full bg-black/40 rounded px-2 py-1 text-sm resize-y"/>
-            {attachOpen && (
-                <div className="flex flex-wrap items-center gap-1.5 text-sm" data-testid="feed-attach">
-                    {draft?.kind === 'achievement' ? (
-                        <span className="px-1.5 py-1">{t('dm.kinds.achievement')}</span>
-                    ) : (
-                        <>
-                            <select value={draft?.kind ?? 'game'} className="bg-black/40 rounded px-1.5 py-1" data-testid="feed-attach-kind"
-                                    onChange={(e) => setDraft({kind: e.target.value as AttachmentKind, ref: draft?.ref ?? ''})}>
-                                {KINDS.map((k) => <option key={k} value={k}>{t(`dm.kinds.${k}`)}</option>)}
-                            </select>
-                            <input value={draft?.ref ?? ''} maxLength={200} placeholder={t('dm.attachHint')} data-testid="feed-attach-ref"
-                                   className="flex-1 min-w-0 bg-black/40 rounded px-2 py-1"
-                                   onChange={(e) => {
-                                       const found = detectAttachment(e.target.value);
-                                       setDraft(found ?? {kind: draft?.kind ?? 'game', ref: e.target.value});
-                                   }}/>
-                        </>
-                    )}
-                    <button type="button" onClick={() => {
-                        setDraft(null);
-                        setAttachOpen(false);
-                    }} aria-label={t('dm.removeAttachment')} title={t('dm.removeAttachment')} className="p-1 text-boxwood/70">
-                        <X size={14}/>
-                    </button>
-                </div>
-            )}
+            {attachOpen && <AttachmentPicker draft={draft} onChange={setDraft} testId="feed" onRemove={() => {
+                setDraft(null);
+                setAttachOpen(false);
+            }}/>}
             {draft?.kind === 'achievement' && draft.ref && <AttachmentCard attachment={{kind: 'achievement', ref: draft.ref}}/>}
             {error && <p role="alert" className="text-sm text-rose-300">{renderUiMessage(error, t)}</p>}
             <div className="flex items-center justify-between gap-2">
@@ -216,7 +185,7 @@ export function FeedPage() {
     const {t} = useI18n();
     const location = useLocation();
     const navigate = useNavigate();
-    const initial = (location.state as { attach?: Draft } | null)?.attach ?? null;
+    const initial = (location.state as { attach?: AttachmentDraft } | null)?.attach ?? null;
     const load = useCallback((beforeId?: number) => feedApi.following(beforeId), []);
     const list = usePostList(load);
 
