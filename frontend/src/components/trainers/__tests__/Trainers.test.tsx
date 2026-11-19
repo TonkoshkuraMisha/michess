@@ -10,21 +10,9 @@ import {forkLevel, knightTargets, pathLevel} from '../../../trainers/vision';
 import {ForkGame, PathGame, ROUNDS, TailGame} from '../VisionGames';
 import {legalMoves, newGame} from '../../../trainers/tail';
 import {TrainerPage, TrainersPage} from '../TrainersPage';
+import {playMove} from '../../../test/boardMoves';
 
 const cell = (name: string) => document.querySelector(`[data-square="${name}"]`) as HTMLElement;
-
-async function drag(from: string, to: string) {
-    document.elementsFromPoint = vi.fn(() => [cell(to)]);
-    await act(async () => {
-        fireEvent.pointerDown(cell(from), {button: 0, pointerType: 'mouse', clientX: 5, clientY: 5});
-    });
-    await act(async () => {
-        fireEvent.pointerMove(window, {clientX: 50, clientY: 50});
-    });
-    await act(async () => {
-        fireEvent.pointerUp(window, {clientX: 90, clientY: 90});
-    });
-}
 
 beforeEach(() => vi.useFakeTimers({shouldAdvanceTime: true}));
 afterEach(() => {
@@ -40,7 +28,7 @@ describe('Тихая тропа', () => {
         for (let round = 0; round < ROUNDS; round++) {
             const level = pathLevel('quiet', 2, 11 + round);
             const solution = starsSolution({fen: level.fen, hero: level.hero, stars: [level.target]})!;
-            for (const uci of solution.path) await drag(uci.slice(0, 2), uci.slice(2, 4));
+            for (const uci of solution.path) await playMove(uci.slice(0, 2), uci.slice(2, 4));
             await act(async () => {
                 vi.advanceTimersByTime(500);
             });
@@ -53,7 +41,7 @@ describe('Тихая тропа', () => {
         const game = new Chess(level.fen);
         const kingMove = game.moves({verbose: true}).find((m) => m.piece === 'k')!;
         render(<PathGame kind="quiet" level={1} seed={3} onFinish={vi.fn()}/>);
-        await drag(kingMove.from, kingMove.to);
+        await playMove(kingMove.from, kingMove.to);
         expect(screen.getByTestId('path-feedback')).toHaveTextContent('только фигура игрока');
         expect(screen.getByTestId('path-progress')).toHaveTextContent('ходов 0');
     });

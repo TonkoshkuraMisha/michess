@@ -1,7 +1,7 @@
 // «Клубный тренер» в итоге партии (план владельца 18.11, задача 5): правила выбора модуля курса и переспроса,
 // три карточки в GameSummaryPanel, решение задачи из своей ошибки прямо в панели, ссылка на модуль курса.
 
-import {act, fireEvent, render, screen, waitFor} from '@testing-library/react';
+import {fireEvent, render, screen, waitFor} from '@testing-library/react';
 import {MemoryRouter} from 'react-router-dom';
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {lessonModuleFor, POLL_ATTEMPTS, shouldPoll} from '../../../services/coachCards';
@@ -9,6 +9,7 @@ import type {AfterGameCards} from '../../../services/coachCards';
 import type {CourseModule} from '../../../content/supercourse';
 import {setToken} from '../../../services/authToken';
 import {GameSummaryPanel} from '../GameSummaryPanel';
+import {playMove} from '../../../test/boardMoves';
 
 const REPORT = {white: {accuracy: 70}, black: {accuracy: 80}, moves: [], summary: null};
 const FEN = 'r1bqkbnr/pppp1ppp/2n5/4p3/2B1P3/5N2/PPPP1PPP/RNBQK2R b KQkq - 3 3';
@@ -21,20 +22,6 @@ const CARDS: AfterGameCards = {
     lesson_themes: ['no_such_theme', 'fork'],
 };
 
-const cell = (name: string) => document.querySelector(`[data-square="${name}"]`) as HTMLElement;
-
-async function drag(from: string, to: string) {
-    document.elementsFromPoint = vi.fn(() => [cell(to)]);
-    await act(async () => {
-        fireEvent.pointerDown(cell(from), {button: 0, pointerType: 'mouse', clientX: 5, clientY: 5});
-    });
-    await act(async () => {
-        fireEvent.pointerMove(window, {clientX: 50, clientY: 50});
-    });
-    await act(async () => {
-        fireEvent.pointerUp(window, {clientX: 90, clientY: 90});
-    });
-}
 
 /** fetch по адресу: разбор, карточки, ответ на задачу. */
 function stubApi(cards: Partial<AfterGameCards> | null) {
@@ -91,7 +78,7 @@ describe('карточки в итоге партии', () => {
         expect(screen.getByTestId('coach-card-lesson').textContent).toContain('Вилка');
 
         fireEvent.click(screen.getByTestId('coach-solve'));
-        await drag('g8', 'f6');
+        await playMove('g8', 'f6');
         await waitFor(() => expect(screen.getByTestId('coach-puzzle-result').textContent).toContain('Верно!'));
         expect(calls.some((url) => url.includes('/personal/7/answer'))).toBe(true);
     });

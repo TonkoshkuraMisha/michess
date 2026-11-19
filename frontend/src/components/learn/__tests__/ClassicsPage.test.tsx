@@ -1,25 +1,12 @@
 // Партии мастеров (таск 14.7): список, вводный текст, комментарий наставника, остановка «что бы вы сыграли?».
 
-import {act, fireEvent, render, screen, within} from '@testing-library/react';
+import {fireEvent, render, screen, within} from '@testing-library/react';
 import {MemoryRouter, Route, Routes} from 'react-router-dom';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import game from '../../../content/classics/botvinnik-tal-1961.json';
 import {ClassicGamePage, ClassicsPage} from '../ClassicsPage';
+import {playMove} from '../../../test/boardMoves';
 
-const cell = (name: string) => document.querySelector(`[data-square="${name}"]`) as HTMLElement;
-
-async function drag(from: string, to: string) {
-    document.elementsFromPoint = vi.fn(() => [cell(to)]);
-    await act(async () => {
-        fireEvent.pointerDown(cell(from), {button: 0, pointerType: 'mouse', clientX: 5, clientY: 5});
-    });
-    await act(async () => {
-        fireEvent.pointerMove(window, {clientX: 50, clientY: 50});
-    });
-    await act(async () => {
-        fireEvent.pointerUp(window, {clientX: 90, clientY: 90});
-    });
-}
 
 function renderAt(path: string) {
     return render(
@@ -49,7 +36,7 @@ describe('Партии мастеров', () => {
         fireEvent.click(moves[stop.ply - 1]);
         fireEvent.click(screen.getByRole('button', {name: 'Ход вперёд'}));
         expect(screen.getByTestId('classic-stop')).toHaveTextContent('Что бы вы сыграли за белых?');
-        await drag(stop.move.slice(0, 2), stop.move.slice(2, 4));
+        await playMove(stop.move.slice(0, 2), stop.move.slice(2, 4));
         expect(screen.getByTestId('classic-stop-score')).toHaveTextContent('Баллы: 100 из 100');
         fireEvent.click(screen.getByTestId('classic-stop-continue'));
         expect(screen.queryByTestId('classic-stop')).toBeNull();

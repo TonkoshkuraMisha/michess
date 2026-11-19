@@ -1,27 +1,15 @@
 // Эндшпильный тренажёр (таск 14.4): данные упражнений, ответ идеального защитника, упущенный выигрыш, мат против
 // оптимума, удержанная ничья; запасной ответ движка при недоступных таблицах. Таблицы подменены.
 
-import {act, fireEvent, render, screen} from '@testing-library/react';
+import {render, screen} from '@testing-library/react';
 import {MemoryRouter, Route, Routes} from 'react-router-dom';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {Chess} from 'chess.js';
 import {EndgamesPage, EndgameTrainerPage, EXERCISES} from '../EndgameTrainer';
 import {trainerVerdict} from '../../../services/tablebase';
+import {playMove} from '../../../test/boardMoves';
 
 const cell = (name: string) => document.querySelector(`[data-square="${name}"]`) as HTMLElement;
-
-async function drag(from: string, to: string) {
-    document.elementsFromPoint = vi.fn(() => [cell(to)]);
-    await act(async () => {
-        fireEvent.pointerDown(cell(from), {button: 0, pointerType: 'mouse', clientX: 5, clientY: 5});
-    });
-    await act(async () => {
-        fireEvent.pointerMove(window, {clientX: 50, clientY: 50});
-    });
-    await act(async () => {
-        fireEvent.pointerUp(window, {clientX: 90, clientY: 90});
-    });
-}
 
 function stubProbe(answer: (fen: string) => unknown) {
     const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => ({
@@ -64,7 +52,7 @@ describe('игра против таблиц', () => {
         const fetchMock = stubProbe(() => ({category: 'loss', dtm: -16, dtz: -16,
             best: {uci: 'e5e4', san: 'Ke4', category: 'win', dtm: 15, dtz: 15}}));
         open('kq_center');
-        await drag('b1', 'f1');
+        await playMove('b1', 'f1');
         expect(await screen.findByTestId('endgame-moves')).toHaveTextContent('Ходов: 1 · оптимум 9 · лимит 17');
         expect(cell('e4').querySelector('img')?.getAttribute('alt')).toBe('bk');
         const body = JSON.parse(String((fetchMock.mock.calls[0] as unknown as [string, RequestInit])[1].body));
@@ -74,14 +62,14 @@ describe('игра против таблиц', () => {
     it('ход, упускающий выигрыш, — задание не выполнено', async () => {
         stubProbe(() => ({category: 'draw', dtm: 0, dtz: 0, best: {uci: 'e5e4', san: 'Ke4', category: 'draw', dtm: 0, dtz: 0}}));
         open('kq_center');
-        await drag('b1', 'b8');
+        await playMove('b1', 'b8');
         expect(await screen.findByTestId('endgame-result')).toHaveTextContent('упустил выигрыш');
     });
 
     it('защита: ход, который проигрывает, — провал', async () => {
         stubProbe(() => ({category: 'win', dtm: 9, dtz: 9, best: null}));
         open('kp_opposition_def');
-        await drag('e8', 'd7');
+        await playMove('e8', 'd7');
         expect(await screen.findByTestId('endgame-result')).toHaveTextContent('проигрывает');
     });
 });
@@ -91,7 +79,7 @@ describe('таблицы недоступны — отвечает движок'
         stubProbe(() => ({category: 'maybe-win', dtm: null, dtz: null, source: 'engine',
             best: {uci: 'e5e4', san: 'Ke4', category: null, dtm: null, dtz: null}}));
         open('kq_center');
-        await drag('b1', 'f1');
+        await playMove('b1', 'f1');
         expect(await screen.findByTestId('endgame-engine-fallback')).toHaveTextContent('Таблицы эндшпиля сейчас недоступны');
         expect(screen.queryByTestId('endgame-result')).toBeNull();
         expect(cell('e4').querySelector('img')?.getAttribute('alt')).toBe('bk');
