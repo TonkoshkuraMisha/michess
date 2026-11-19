@@ -149,6 +149,11 @@ export function LibraryPage() {
                         {STRUCTURES.map((code) => <option key={code} value={code}>{t(`structures.${code}`)}</option>)}
                     </select>
                 </label>
+                <label className="flex items-center gap-1.5 self-center cursor-pointer">
+                    <input type="checkbox" checked={Boolean(draft.miniature)} data-testid="library-miniature" className="accent-amber-600"
+                           onChange={(e) => setDraft((d) => ({...d, miniature: e.target.checked || undefined}))}/>
+                    {t('library.miniatures')}
+                </label>
                 <button type="submit" className="px-3 py-1.5 rounded bg-amber-700 text-white font-bold" data-testid="library-search-submit">
                     {t('watch.search')}
                 </button>
