@@ -57,6 +57,29 @@ afterEach(() => {
 });
 
 describe('Угадай ход мастера', () => {
+    it('партия целиком (?whole=1): моменты партии по порядку, в конце — счёт за партию', async () => {
+        const fetchMock = stub({
+            // Ответы — раньше позиций: заглушка берёт первый адрес, который входит в запрос.
+            '/position/5/answer': () => ({...ANSWER, score: 80, next_id: null}),
+            '/position/9/answer': () => ({...ANSWER, score: 100, next_id: null}),
+            '/guess/game/42': () => ({positions: [{id: 5, ply: 8, series_id: 7}, {id: 9, ply: 20, series_id: null}]}),
+            '/guess/position/9': () => ({...POSITION, id: 9, ply: 20, series_id: null}),
+            '/guess/position/5': () => POSITION,
+        });
+        render(<MemoryRouter initialEntries={['/guess/5?whole=1']}><Routes>
+            <Route path="/guess/:positionId" element={<GuessPage/>}/><Route path="/guess" element={<GuessPage/>}/>
+        </Routes></MemoryRouter>);
+        expect(await screen.findByTestId('guess-whole-progress')).toHaveTextContent('Момент 1 из 2 в этой партии');
+        expect(screen.queryByTestId('guess-series')).toBeNull();  // вместо счётчика серии — счётчик партии
+        await play('f3', 'e5');
+        await act(async () => fireEvent.click(await screen.findByTestId('guess-next')));
+        expect(await screen.findByTestId('guess-whole-progress')).toHaveTextContent('Момент 2 из 2');
+        await play('f3', 'e5');
+        await act(async () => fireEvent.click(await screen.findByTestId('guess-next')));
+        expect(screen.getByTestId('guess-whole-done')).toHaveTextContent('Партия пройдена: 180 из 200 очков.');
+        expect(fetchMock.mock.calls.filter(([u]) => String(u).includes('/guess/game/42'))).toHaveLength(1);
+    });
+
     it('выбор из вариантов: позиции запрашиваются с кандидатами, ответ — кнопкой', async () => {
         const candidates = [{uci: 'h2h3', san: 'h3'}, {uci: 'f3e5', san: 'Nxe5'}, {uci: 'c3d5', san: 'Nd5'}];
         const fetchMock = stub({

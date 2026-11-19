@@ -241,7 +241,7 @@ export default function ChampionGames() {
                                         </td>
                                         <td className="px-4 py-4 text-right whitespace-nowrap">
                                             {guessStarts[String(game.game_id)] !== undefined && (
-                                                <Link to={`/guess/${guessStarts[String(game.game_id)]}`}
+                                                <Link to={`/guess/${guessStarts[String(game.game_id)]}?whole=1`}
                                                       onClick={(e) => e.stopPropagation()}
                                                       data-testid={`champion-guess-${game.game_id}`}
                                                       className="inline-flex items-center gap-1.5 px-3 py-1.5 mr-2 bg-black/30 hover:bg-amber-900/60 text-amber-400 rounded transition border border-amber-900/40 text-xs font-bold"

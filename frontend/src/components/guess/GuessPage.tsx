@@ -2,7 +2,9 @@
 // «Угадай ход мастера» (таск 14.3): позиция из партии мастера, игрок делает ход — баллы, ход мастера, оценка
 // движка и объяснение наставника. Режимы: отдельные позиции и серия ходов из одной партии. /guess/:positionId —
 // конкретная позиция (переход из просмотра партии). Для начинающих — «выбор из вариантов»: ход мастера и ходы из строк
-// движка кнопками (сервер присылает их только в этом режиме). После ответа доска свободна: позицию можно разыграть
+// движка кнопками (сервер присылает их только в этом режиме). «Партия целиком» (?whole=1, ссылка из просмотра партии и
+// архива чемпиона) — все отобранные моменты одной партии по порядку ходов (GET /guess/game/{id}), в конце — счёт за
+// партию. После ответа доска свободна: позицию можно разыграть
 // (usePositionExplorer).
 // Данные — services/guess.ts (/api/v1/guess/*, доступно и гостю; отбор позиций и баллы — сервер, src/services/guess.py).
 // Маршруты /guess и /guess/:positionId (App.tsx); переход с позиции приходит из просмотра партии.
@@ -10,7 +12,7 @@
 // объяснение наставника; счёт сессии — средний балл (services/guess.ts, understanding).
 
 import {useCallback, useEffect, useState} from 'react';
-import {Link, useNavigate, useParams} from 'react-router-dom';
+import {Link, useNavigate, useParams, useSearchParams} from 'react-router-dom';
 import {Crown, ArrowRight} from 'lucide-react';
 import {hasMessage, renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
@@ -43,6 +45,12 @@ export function GuessPage() {
     const {t} = useI18n();
     const navigate = useNavigate();
     const {positionId} = useParams<{ positionId?: string }>();
+    // Партия целиком: моменты партии по порядку (id позиций), баллы за эту партию и её конец.
+    const [search] = useSearchParams();
+    const whole = search.get('whole') === '1';
+    const [plan, setPlan] = useState<{ gameId: number; ids: number[] } | null>(null);
+    const [gameScores, setGameScores] = useState<number[]>([]);
+    const [gameDone, setGameDone] = useState(false);
     const [mode, setMode] = useState<Mode>('single');
     // Выбор из вариантов (режим для начинающих): позиции запрашиваются с кандидатами.
     const [choices, setChoices] = useState(false);
@@ -77,6 +85,17 @@ export function GuessPage() {
         }
     }, [positionId, choices]); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // Партия целиком: план — отобранные моменты партии текущей позиции; новая партия — новый счёт.
+    useEffect(() => {
+        if (!whole || !position || plan?.gameId === position.game_id) return;
+        const gameId = position.game_id;
+        guessApi.ofGame(gameId).then((r) => {
+            setPlan({gameId, ids: r.positions.map((p) => p.id)});
+            setGameScores([]);
+            setGameDone(false);
+        }).catch(() => undefined);
+    }, [whole, position, plan?.gameId]);
+
     const submit = async (uci: string) => {
         if (!position) return;
         // Ответ уже дан — доска свободна: ход игрока начинает разбор с позиции (стрелки мастера и своего хода видны
@@ -91,6 +110,7 @@ export function GuessPage() {
             const result = await guessApi.answer(position.id, uci);
             setAnswer(result);
             setScores((list) => [...list, result.score]);
+            if (whole) setGameScores((list) => [...list, result.score]);
         } catch (err) {
             setPlayed(null);
             setError(errorMessage(err, 'common.networkError'));
@@ -98,6 +118,13 @@ export function GuessPage() {
     };
 
     const goNext = () => {
+        // Партия целиком: следующий момент этой партии, после последнего — итог партии.
+        if (whole && plan && position) {
+            const nextId = plan.ids[plan.ids.indexOf(position.id) + 1];
+            if (nextId !== undefined) navigate(`/guess/${nextId}?whole=1`);
+            else setGameDone(true);
+            return;
+        }
         if (answer?.next_id) {
             if (positionId) navigate(`/guess/${answer.next_id}`);
             else guessApi.position(answer.next_id, choices).then(show).catch((err) => setError(errorMessage(err, 'common.networkError')));
@@ -162,7 +189,12 @@ export function GuessPage() {
                             </div>
                             {position.previous.length > 0 && <div className="font-mono text-xs text-boxwood/80">{movesText(position)}</div>}
                             <div className="text-amber-300">{t(position.side === 'white' ? 'guess.whiteToMove' : 'guess.blackToMove')}</div>
-                            {position.series_id !== null && position.series_length > 1 && (
+                            {whole && plan && plan.ids.includes(position.id) && (
+                                <div className="text-xs text-boxwood/70" data-testid="guess-whole-progress">
+                                    {t('guess.wholeProgress', {index: plan.ids.indexOf(position.id) + 1, total: plan.ids.length})}
+                                </div>
+                            )}
+                            {!whole && position.series_id !== null && position.series_length > 1 && (
                                 <div className="text-xs text-boxwood/70" data-testid="guess-series">
                                     {t('guess.seriesProgress', {index: position.series_index + 1, total: position.series_length})}
                                 </div>
@@ -203,14 +235,27 @@ export function GuessPage() {
                                     {t('guess.engineLines')}: {answer.lines.map((l) => `${l.san} ${evalText(l.cp)}`).join(', ')}
                                 </div>
                                 <div className="flex flex-wrap gap-2 mt-1">
-                                    <button type="button" onClick={goNext}
-                                            className="px-3 py-1.5 rounded bg-amber-700 text-white font-bold hover:bg-amber-600 flex items-center gap-1.5">
-                                        {t(answer.next_id ? 'guess.continueSeries' : 'guess.next')} <ArrowRight size={15}/>
-                                    </button>
+                                    {!gameDone && (
+                                        <button type="button" onClick={goNext} data-testid="guess-next"
+                                                className="px-3 py-1.5 rounded bg-amber-700 text-white font-bold hover:bg-amber-600 flex items-center gap-1.5">
+                                            {t(whole ? 'guess.nextMoment' : answer.next_id ? 'guess.continueSeries' : 'guess.next')} <ArrowRight size={15}/>
+                                        </button>
+                                    )}
                                     <Link to={`/game/${position.game_id}`} className="px-3 py-1.5 rounded border border-amber-900/60 text-sm hover:border-amber-600">
                                         {t('guess.toGame')}
                                     </Link>
                                 </div>
+                            </div>
+                        )}
+
+                        {gameDone && (
+                            <div className="bg-amber-900/40 border border-amber-600 rounded p-3 text-sm flex flex-col gap-2" data-testid="guess-whole-done">
+                                <span className="font-bold text-amber-200">
+                                    {t('guess.wholeDone', {points: gameScores.reduce((a, b) => a + b, 0), max: gameScores.length * 100})}
+                                </span>
+                                <button type="button" onClick={() => navigate('/guess')} className="self-start text-amber-300 underline">
+                                    {t('guess.next')}
+                                </button>
                             </div>
                         )}
 
