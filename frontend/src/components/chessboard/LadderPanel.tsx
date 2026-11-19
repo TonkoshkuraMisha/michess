@@ -7,56 +7,15 @@
 
 import {useCallback, useEffect, useState} from 'react';
 import {CheckCircle2, CircleDashed, Lock, Swords} from 'lucide-react';
-import {API_BASE_URL} from '../../config/api';
-import {UiError, errorMessage, readApiErrorOr} from '../../services/apiErrors';
-import type {PersonalityConfig} from '../../services/personalities';
+import {errorMessage} from '../../services/apiErrors';
+import {ladderApi} from '../../services/ladder';
+import type {LadderStart, LadderState} from '../../services/ladder';
 import type {LadderOutcome} from './hooks/useBotGame';
 import {useI18n} from '../../i18n';
 import {renderUiMessage} from '../../i18n';
 import type {UiMessage} from '../../i18n';
 import {ladderOpponentName} from '../../config/players';
 import {getToken} from '../../services/authToken';
-
-/** Ступень лестницы из ответа GET /bots/ladder. */
-interface Rung {
-    key: string;
-    kind: 'historical' | 'archetype';
-    /** id бота или архетипа — имя на языке игрока берётся из каталога. */
-    id: string;
-    rating: number;
-    measured: boolean;
-    /** skipped — слабее текущей, но не пройдена: соперник добавлен в лестницу ниже уже пройденного (сервер, ladder.py). */
-    status: 'beaten' | 'current' | 'skipped' | 'locked';
-}
-
-/** Ответ GET /bots/ladder: рейтинг лестницы, номер текущей ступени (с нуля), все ступени. */
-interface LadderState {
-    rating: number;
-    games: number;
-    step: number;
-    total: number;
-    rungs: Rung[];
-    active_opponent: string | null;
-}
-
-/** Соперник ступени: исторический бот (bot_id) или архетип мастерской (config — его ползунки). */
-export interface LadderOpponent {
-    key: string;
-    kind: 'historical' | 'archetype';
-    id: string;
-    rating: number;
-    bot_id: string | null;
-    config: PersonalityConfig | null;
-}
-
-/** Ответ POST /bots/ladder/start: с кем и каким цветом играть. */
-export interface LadderStart {
-    opponent: LadderOpponent;
-    color: 'white' | 'black';
-    step: number;
-    /** Итог прежней партии лестницы, начатой и брошенной: сервер засчитал её поражением. */
-    forfeited: LadderOutcome | null;
-}
 
 export interface LadderPanelProps {
     /** Уже идёт партия (с человеком или ботом) — новую начать нельзя. */
@@ -82,9 +41,7 @@ export function LadderPanel({playDisabled, onStart, lastOutcome}: LadderPanelPro
     const load = useCallback(async () => {
         if (!token) return;
         try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/bots/ladder`, {headers: {Authorization: `Bearer ${token}`}});
-            if (!res.ok) throw new UiError(await readApiErrorOr(res, 'ladder.loadFailed'));
-            setState(await res.json());
+            setState(await ladderApi.state());
             setError(null);
         } catch (err) {
             setError(errorMessage(err, 'ladder.loadFailed'));
@@ -100,13 +57,7 @@ export function LadderPanel({playDisabled, onStart, lastOutcome}: LadderPanelPro
         if (!token) return;
         setStarting(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/bots/ladder/start`, {
-                method: 'POST',
-                headers: {Authorization: `Bearer ${token}`, 'Content-Type': 'application/json'},
-                body: JSON.stringify({color}),
-            });
-            if (!res.ok) throw new UiError(await readApiErrorOr(res, 'ladder.startFailed'));
-            onStart(await res.json());
+            onStart(await ladderApi.start(color));
             await load();
         } catch (err) {
             setError(errorMessage(err, 'ladder.startFailed'));

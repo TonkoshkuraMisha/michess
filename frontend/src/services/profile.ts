@@ -92,6 +92,12 @@ export const profileApi = {
     },
     ratingHistory: (username: string, category: RatingCategory) =>
         apiRequest<{ points: RatingPoint[] }>(`${playerPath(username)}/rating-history?category=${category}`),
+    /**
+     * Отметить игру вслепую (таск 19.5) в законченной партии без рейтинга: ступень и число подсмотров. Сервер примет
+     * отметку только от участника такой партии; сбой не важен для игрока — вызывающий его глотает.
+     */
+    markBlindfold: (gameId: number | string, level: number, peeks: number) =>
+        apiRequest<unknown>(`/profile/games/${gameId}/blindfold`, {method: 'POST', body: JSON.stringify({level, peeks})}),
     /** Таблица лидеров категории: первые limit игроков. */
     leaderboard: (category: RatingCategory, limit: number) =>
         apiRequest<LeaderboardEntry[]>(`/profile/leaderboard?limit=${limit}&category=${category}`, {}, 'leaderboard.loadFailed'),

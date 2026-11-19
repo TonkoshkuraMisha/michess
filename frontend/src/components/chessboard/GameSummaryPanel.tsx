@@ -10,15 +10,14 @@
 
 import {useEffect, useState} from 'react';
 import {Trophy} from 'lucide-react';
-import {API_BASE_URL} from '../../config/api';
 import {renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
-import {readApiError} from '../../services/apiErrors';
+import {errorMessage} from '../../services/apiErrors';
+import {analysisApi} from '../../services/analysis';
 import {coachText} from '../../services/coach';
 import type {CoachComment} from '../../services/coach';
 import {isSummaryKind} from '../../services/gameSummary';
 import type {GameSummary} from '../../services/gameSummary';
-import {getToken} from '../../services/authToken';
 import {CoachCards} from './CoachCards';
 
 // Части ответа разбора, которые нужны этой панели (полный ответ — FullGameAnalysisResponse на сервере).
@@ -65,16 +64,9 @@ export function GameSummaryPanel({gameId, playerColor, recommendation, onPlayRec
         let cancelled = false;
         setReport(null);
         setError(null);
-        const token = getToken();
-        fetch(`${API_BASE_URL}/api/v1/analysis/game/${gameId}`, {
-            method: 'POST', headers: token ? {Authorization: `Bearer ${token}`} : {},
-        })
-            .then(async (res) => {
-                if (cancelled) return;
-                if (res.ok) setReport(await res.json());
-                else setError(await readApiError(res));
-            })
-            .catch(() => !cancelled && setError({key: 'summary.failed'}));
+        analysisApi.run<Report>('played', gameId, 'summary.failed')
+            .then((data) => !cancelled && setReport(data))
+            .catch((err) => !cancelled && setError(errorMessage(err, 'summary.failed')));
         return () => {
             cancelled = true;
         };

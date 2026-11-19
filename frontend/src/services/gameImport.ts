@@ -4,8 +4,6 @@
 // Маршруты — src/api/game_import.py, правила — src/services/game_import.py. Импорт и разбор сервер закрывает на
 // время партии с человеком (честная игра): иначе в «импорт» можно было бы вставить идущую партию и получить оценку.
 
-import {API_BASE_URL} from '../config/api';
-import {getToken} from './authToken';
 import {apiRequest} from './http';
 
 /** Сайт, с которого партии берутся по нику. */
@@ -51,14 +49,6 @@ export interface ImportedList {
 export const IMPORT_PAGE = 20;
 /** Сколько последних партий можно запросить за один импорт (выбор в форме). */
 export const IMPORT_COUNTS = [5, 10, 20] as const;
-const BASE = `${API_BASE_URL}/api/v1/imports`;
-
-/** Заголовок входа для прямых запросов клиента к адресам pgnUrl/analysisUrl (обычные запросы идут через apiRequest). */
-function authHeaders(): Record<string, string> {
-    const token = getToken();
-    return token ? {Authorization: `Bearer ${token}`} : {};
-}
-
 const call = <T>(path: string, init: RequestInit = {}) => apiRequest<T>(`/imports${path}`, init);
 
 /** Эндпоинты импорта; все требуют входа. */
@@ -73,10 +63,6 @@ export const importApi = {
     /** Одна партия; puzzle_plies — полуходы, из которых сделаны задачи «Мои ошибки». */
     game: (id: number | string) => call<ImportedGameView & { puzzle_plies: number[] }>(`/games/${id}`),
     remove: (id: number) => call<void>(`/games/${id}`, {method: 'DELETE'}),
-    /** Адреса PGN и разбора — для просмотра партии; запрашивать их нужно с заголовками headers(). */
-    pgnUrl: (id: number | string) => `${BASE}/games/${id}/pgn`,
-    analysisUrl: (id: number | string) => `${BASE}/games/${id}/analysis`,
-    headers: () => authHeaders(),
 };
 
 /** Итог с точки зрения игрока: win / loss / draw; unknown — результат в партии не записан («*»). */

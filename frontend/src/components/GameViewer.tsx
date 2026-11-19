@@ -28,8 +28,9 @@ import {
     getMaxViewportBoardSize,
     getDefaultBoardSize
 } from './Chessboard';
-import {API_BASE_URL} from '../config/api';
-import {readApiErrorOr} from '../services/apiErrors';
+import {errorMessage} from '../services/apiErrors';
+import {analysisApi} from '../services/analysis';
+import type {GameSource} from '../services/analysis';
 import {soundEngine, resolveMoveSound} from '../services/soundEngine';
 import {customStartFen, pairHalfMoves} from './chessboard/boardUtils';
 import type {SoundEventType} from '../services/soundEngine';
@@ -105,11 +106,10 @@ export default function GameViewer({library = false, imported = false}: { librar
     // Пометки правой кнопкой — общий слой досок (таск B.1). В разборе они переживают листание ходов (план на
     // несколько ходов вперёд) и снимаются со сменой партии, левым щелчком по доске или Escape.
     const notes = useBoardAnnotations(library ? `library-${gameId ?? ''}` : imported ? `imported-${gameId ?? ''}` : gameId ?? '');
-    const pgnUrl = library ? libraryApi.pgnUrl(gameId ?? '')
-        : imported ? importApi.pgnUrl(gameId ?? '') : `${API_BASE_URL}/api/v1/profile/games/${gameId}/pgn`;
-    const analysisUrl = imported ? importApi.analysisUrl(gameId ?? '') : `${API_BASE_URL}/api/v1/analysis/game/${gameId}`;
+    // Откуда партия: от этого зависят адреса PGN и разбора (services/analysis.ts).
+    const source: GameSource = library ? 'library' : imported ? 'imported' : 'played';
+    const pgnUrl = analysisApi.pgnUrl(source, gameId ?? '');
     // Партии с других сайтов видит только владелец: запросы — с токеном.
-    const ownerHeaders = imported ? importApi.headers() : undefined;
     const clearNotes = notes.clear;
 
     // Тема разбора (таск 18.3): своя, если задана в настройках, иначе — как в игре.
@@ -234,17 +234,10 @@ export default function GameViewer({library = false, imported = false}: { librar
             setError(null);
             setAnalysisReport(null);
             try {
-                const [pgnRes, cachedAnalysisRes] = await Promise.all([
-                    fetch(pgnUrl, {headers: ownerHeaders}),
-                    library ? Promise.resolve(null) : fetch(analysisUrl, {headers: ownerHeaders}).catch(() => null)
+                const [pgnText, cachedData] = await Promise.all([
+                    analysisApi.pgn(source, gameId ?? ''),
+                    library ? Promise.resolve(null) : analysisApi.cached(source, gameId ?? ''),
                 ]);
-
-                if (!pgnRes.ok) {
-                    setError(uiMessage('viewer.loadFailed'));
-                    return;
-                }
-
-                const pgnText = await pgnRes.text();
                 const newGame = new Chess();
                 newGame.loadPgn(pgnText);
 
@@ -256,14 +249,11 @@ export default function GameViewer({library = false, imported = false}: { librar
                 // это разбор только что сыгранной (или архивной) партии, а не пустая доска.
                 setViewIndex(newHistory.length - 1);
 
-                if (cachedAnalysisRes && cachedAnalysisRes.ok) {
-                    const cachedData = await cachedAnalysisRes.json().catch(() => null);
-                    // Пустой отчёт по партии с ходами — не анализ, а сбой разбора PGN на сервере:
-                    // показывать «100 %» без графика нельзя, пусть игрок запустит анализ заново.
-                    if (cachedData && Array.isArray(cachedData.moves)
-                        && (cachedData.moves.length > 0 || newHistory.length === 0)) {
-                        setAnalysisReport(cachedData);
-                    }
+                // Пустой отчёт по партии с ходами — не анализ, а сбой разбора PGN на сервере:
+                // показывать «100 %» без графика нельзя, пусть игрок запустит анализ заново.
+                if (cachedData && Array.isArray(cachedData.moves)
+                    && (cachedData.moves.length > 0 || newHistory.length === 0)) {
+                    setAnalysisReport(cachedData);
                 }
             } catch {
                 setError(uiMessage('viewer.loadFailed'));
@@ -282,26 +272,16 @@ export default function GameViewer({library = false, imported = false}: { librar
         setIsAnalyzing(true);
         setAnalysisError(null);
         try {
-            const authToken = getToken();
-            const res = await fetch(analysisUrl, {
-                method: 'POST',
-                // С токеном лимит запросов считается на пользователя, а не на общий IP.
-                headers: authToken ? {'Authorization': `Bearer ${authToken}`} : undefined,
-            });
-            if (!res.ok) {
-                // detail бывает списком ошибок валидации — без разбора React упал бы на рендере объекта.
-                setAnalysisError(await readApiErrorOr(res, 'viewer.analysisFailed'));
-                return;
-            }
-            const data: FullGameAnalysisReport = await res.json();
+            // С токеном (если игрок вошёл) лимит запросов считается на пользователя, а не на общий IP.
+            const data = await analysisApi.run(source, gameId);
             if (!Array.isArray(data.moves) || (data.moves.length === 0 && history.length > 0)) {
                 setAnalysisError(uiMessage('viewer.analysisEmpty'));
                 return;
             }
             setAnalysisReport(data);
             playAudio('start');
-        } catch {
-            setAnalysisError(uiMessage('viewer.analysisUnavailable'));
+        } catch (err) {
+            setAnalysisError(errorMessage(err, 'viewer.analysisUnavailable'));
         } finally {
             setIsAnalyzing(false);
         }
