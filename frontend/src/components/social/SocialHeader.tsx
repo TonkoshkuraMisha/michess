@@ -15,6 +15,7 @@ import {gameSocket} from '../../services/gameSocket';
 import {messagesApi} from '../../services/messages';
 import {notificationLink, socialApi} from '../../services/social';
 import type {AppNotification, Inbox, PlayerCard} from '../../services/social';
+import {PLAYER_SEARCH_MAX} from '../../config/textLimits';
 
 // Период опроса уведомлений (мс), если событие сокета не пришло.
 export const POLL_MS = 30_000;
@@ -73,7 +74,7 @@ export function PlayerSearch() {
             {open && (
                 <div className="absolute right-0 top-11 w-64 bg-[#1A120B] border border-amber-900/60 rounded-md shadow-xl p-2 z-50">
                     <input autoFocus value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('social.searchPlaceholder')}
-                           data-testid="player-search-input" maxLength={30}
+                           data-testid="player-search-input" maxLength={PLAYER_SEARCH_MAX}
                            className="w-full bg-black/40 rounded px-2 py-1 text-sm"/>
                     <ul className="mt-1 flex flex-col">
                         {players.map((p) => (

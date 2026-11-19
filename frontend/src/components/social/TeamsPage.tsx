@@ -12,6 +12,7 @@ import {errorMessage} from '../../services/apiErrors';
 import {getToken} from '../../services/authToken';
 import {teamsApi} from '../../services/teams';
 import type {LeagueTable, TeamView} from '../../services/teams';
+import {TEAM_NAME_MAX} from '../../config/textLimits';
 
 /** Страница команд: своя команда (состав и очки), форма создания (если команды нет) и таблица лиги месяца со вступлением. */
 export function TeamsPage() {
@@ -68,7 +69,7 @@ export function TeamsPage() {
                     act(() => teamsApi.create(name));
                 }}>
                     <label className="flex flex-col text-sm gap-1">{t('teams.newName')}
-                        <input value={name} onChange={(e) => setName(e.target.value)} maxLength={30} data-testid="team-name"
+                        <input value={name} onChange={(e) => setName(e.target.value)} maxLength={TEAM_NAME_MAX} data-testid="team-name"
                                className="bg-black/40 rounded px-2 py-1 w-56"/>
                     </label>
                     <button type="submit" className="px-3 py-1.5 rounded bg-amber-700 text-white font-bold">{t('teams.create')}</button>

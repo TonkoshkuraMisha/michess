@@ -17,6 +17,7 @@ import {CATALOGS} from '../../i18n';
 import {errorMessage} from '../../services/apiErrors';
 import {moderationApi} from '../../services/moderation';
 import {isTranslationHelperOn, subscribeTranslationHelper} from '../../services/profileSettings';
+import {MODERATION_TEXT_MAX} from '../../config/textLimits';
 
 // Выбранный текст: то, что показано на экране, и ключи каталога, где такой текст найден (может быть несколько или ни одного).
 interface Picked {
@@ -88,7 +89,7 @@ export function TranslationHelper() {
                             <p className="text-xs text-boxwood/80 italic">{picked.shown}</p>
                             {picked.keys.length > 0 && (
                                 <>
-                                    <textarea value={suggestion} onChange={(e) => setSuggestion(e.target.value)} maxLength={300} rows={3}
+                                    <textarea value={suggestion} onChange={(e) => setSuggestion(e.target.value)} maxLength={MODERATION_TEXT_MAX} rows={3}
                                               aria-label={t('translationHelper.yourVersion')} className="bg-black/40 rounded px-2 py-1"
                                               data-testid="translation-suggestion"/>
                                     <button type="submit" disabled={!suggestion.trim() || suggestion.trim() === picked.shown}

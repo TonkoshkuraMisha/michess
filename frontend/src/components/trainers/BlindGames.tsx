@@ -16,12 +16,14 @@ import type {TrainerGameProps} from './trainerGame';
 export const BLIND_ROUNDS = 5;
 /** Пауза между объявляемыми ходами (мс): время удержать позицию в голове. */
 const MOVE_STEP_MS = 1400;
+/** Ответ ниже этих баллов (из 100) считается ошибкой. */
+const PASS_SCORE = 80;
 /** Буква фигуры chess.js → ключ названия фигуры в каталоге сообщений. */
 const PIECE_NAMES = {k: 'king', q: 'queen', r: 'rook', b: 'bishop', n: 'knight', p: 'pawn'} as const;
 
 /**
  * Фазы: look (позиция на виду) → moves (ходы по одному, доска скрыта) → answer (ход или поле на пустой доске) → review.
- * Ответ ниже 80 баллов считается ошибкой.
+ * Ответ ниже PASS_SCORE баллов считается ошибкой.
  */
 export function BlindGame({mode, level, seed, onFinish}: TrainerGameProps & { mode: 'move' | 'where' }) {
     const {t} = useI18n();
@@ -51,7 +53,7 @@ export function BlindGame({mode, level, seed, onFinish}: TrainerGameProps & { mo
 
     const judge = (score: number, reply: string) => {
         setVerdict({score, reply});
-        setTotal((s) => ({score: s.score + score, mistakes: s.mistakes + (score < 80 ? 1 : 0)}));
+        setTotal((s) => ({score: s.score + score, mistakes: s.mistakes + (score < PASS_SCORE ? 1 : 0)}));
         setPhase('review');
     };
     const onSquare = (square: string) => {
@@ -119,7 +121,7 @@ export function BlindGame({mode, level, seed, onFinish}: TrainerGameProps & { mo
             {phase === 'review' && verdict && (
                 <div className="flex flex-col gap-2" data-testid="blind-review">
                     <p className="text-lg">
-                        <b className={verdict.score >= 80 ? 'text-emerald-300' : 'text-rose-300'} data-testid="blind-score">{verdict.score}</b>{' '}
+                        <b className={verdict.score >= PASS_SCORE ? 'text-emerald-300' : 'text-rose-300'} data-testid="blind-score">{verdict.score}</b>{' '}
                         {mode === 'move'
                             ? t('trainers.blind.moveVerdict', {yours: verdict.reply, best})
                             : t('trainers.blind.whereVerdict', {square: question!.square})}

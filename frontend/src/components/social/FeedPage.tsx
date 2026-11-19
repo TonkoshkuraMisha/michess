@@ -21,6 +21,7 @@ import {AttachmentCard} from './AttachmentCard';
 import {AttachmentPicker} from './AttachmentPicker';
 import type {AttachmentDraft} from './AttachmentPicker';
 import {FlaggedNotice, HeldNote, isTextFlagged, RulesLink, TextReportButton} from './Civility';
+import {FEED_COMMENT_MAX, FEED_POST_MAX} from '../../config/textLimits';
 
 /** Дата и время публикации в локали игрока. */
 function when(iso: string | null, code: string): string {
@@ -58,7 +59,7 @@ export function Composer({initial, onPosted}: { initial: AttachmentDraft | null;
     return (
         <form onSubmit={(e) => submit(e)} className="flex flex-col gap-2 bg-black/20 rounded-md p-2 border border-amber-900/40" data-testid="feed-composer">
             {flagged && <FlaggedNotice onRephrase={() => setFlagged(false)} onSendAnyway={() => submit(undefined, true)}/>}
-            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} maxLength={2000} placeholder={t('feed.placeholder')}
+            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={3} maxLength={FEED_POST_MAX} placeholder={t('feed.placeholder')}
                       data-testid="feed-input" className="w-full bg-black/40 rounded px-2 py-1 text-sm resize-y"/>
             {attachOpen && <AttachmentPicker draft={draft} onChange={setDraft} testId="feed" onRemove={() => {
                 setDraft(null);
@@ -270,7 +271,7 @@ export function PostPage() {
                     {flagged && <FlaggedNotice onRephrase={() => setFlagged(false)} onSendAnyway={() => send(undefined, true)}/>}
                     {getToken() && (
                         <form onSubmit={(e) => send(e)} className="flex items-end gap-2" data-testid="comment-form">
-                            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} maxLength={500}
+                            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={2} maxLength={FEED_COMMENT_MAX}
                                       placeholder={t('feed.commentPlaceholder')} data-testid="comment-input"
                                       className="flex-1 min-w-0 bg-black/40 rounded px-2 py-1 text-sm resize-none"/>
                             <button type="submit" className="px-3 py-1.5 rounded bg-amber-700 text-white text-sm" data-testid="comment-send">

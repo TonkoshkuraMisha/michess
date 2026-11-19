@@ -19,9 +19,12 @@ export const ROUNDS = 5;
 /** Длительность попытки ForkGame, секунд. */
 export const FORK_SECONDS = 60;
 
+/** Пауза перед следующей позицией в «Пути» (мс): видно, что цель взята. */
+const NEXT_ROUND_MS = 400;
+
 /**
  * Очки за позицию — pathScore(ходы, par); в «Маршруте коня» превышение par даёт 0 очков и ошибку. Неверный ход — ошибка,
- * позиция не меняется. Следующая позиция открывается через 400 мс после взятия цели.
+ * позиция не меняется. Следующая позиция открывается через NEXT_ROUND_MS после взятия цели.
  */
 export function PathGame({kind, level, seed, onFinish}: TrainerGameProps & { kind: 'quiet' | 'knight' }) {
     const {t} = useI18n();
@@ -61,7 +64,7 @@ export function PathGame({kind, level, seed, onFinish}: TrainerGameProps & { kin
         setTotal(sum);
         if (kind === 'knight' && made > puzzle.par) setMistakes((m) => m + 1);
         if (round + 1 >= ROUNDS) onFinish(sum, mistakes + (kind === 'knight' && made > puzzle.par ? 1 : 0));
-        else window.setTimeout(() => setRound((r) => r + 1), 400);
+        else window.setTimeout(() => setRound((r) => r + 1), NEXT_ROUND_MS);
     };
 
     return (

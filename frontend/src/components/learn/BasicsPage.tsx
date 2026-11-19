@@ -23,6 +23,8 @@ import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 
 /** localStorage: лучшая оценка (1–3 звезды) по ключу «раздел:номер уровня»; только в этом браузере, сервер оценок не знает. */
 const RATINGS_KEY = 'regence.basics.ratings';
+/** Сколько показывать неверный ход на доске (мс), прежде чем вернуть позицию задания. */
+const WRONG_MOVE_SHOW_MS = 900;
 /** Варианты ответа в уровнях «определи состояние доски»; порядок — порядок кнопок. */
 const STATES: BoardState[] = ['check', 'mate', 'stalemate', 'none'];
 
@@ -166,7 +168,7 @@ function LevelPlayer({level, onSolved}: { level: Level; onSolved: (stars: 1 | 2 
                 finish(3);
             } else {
                 if ('reason' in verdict) setFeedback({key: `basics.feedback.${verdict.reason}`, ok: false});
-                if (verdict.fen) window.setTimeout(() => setFen(level.fen), 900);
+                if (verdict.fen) window.setTimeout(() => setFen(level.fen), WRONG_MOVE_SHOW_MS);
             }
         }
     };
