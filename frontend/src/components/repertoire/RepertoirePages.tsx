@@ -12,6 +12,7 @@ import {renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
 import {errorMessage} from '../../services/apiErrors';
 import {getToken} from '../../services/authToken';
+import {numberedMoves} from '../../services/moveNumbers';
 import {edgesFrom, followLine, repertoireApi} from '../../services/repertoire';
 import type {Repertoire, RepertoireColor, RepertoireSummary, Starter} from '../../services/repertoire';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
@@ -37,11 +38,6 @@ export function legalPrefix(line: string[]): string[] {
         legal.push(uci);
     }
     return legal;
-}
-
-/** Ходы линии SAN с номерами ходов из начальной позиции: «1. e4», «e5», «2. Nf3»… */
-export function numbered(sans: string[]): string[] {
-    return sans.map((san, i) => (i % 2 === 0 ? `${i / 2 + 1}. ${san}` : san));
 }
 
 /** Страница /repertoire: свои репертуары (только со входом), создание пустого и стартовые наборы. */
@@ -247,7 +243,7 @@ export function RepertoireEditorPage() {
         navigate('/repertoire');
     });
 
-    const tokens = numbered(position.sans);
+    const tokens = numberedMoves(position.sans);
     const knownText = tokens.slice(0, follow.known).join(' ');
     const fresh = tokens.slice(follow.known);
 

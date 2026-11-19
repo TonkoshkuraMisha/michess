@@ -13,7 +13,8 @@ import {getToken} from '../../services/authToken';
 import {gameSocket} from '../../services/gameSocket';
 import {describeGameOver} from '../chessboard/status';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
-import {clickMove, piecesOf} from './Chess960Page';
+import {clickStep} from './Chess960Page';
+import {numberedMoves} from '../../services/moveNumbers';
 
 // Снимок партии для отрисовки: часы (мс) — значения на момент последнего сообщения сервера, версия состояния нужна для make_move.
 interface LiveState {
@@ -169,23 +170,9 @@ export function Chess960LiveGame() {
 
     const onSquare = (square: string) => {
         if (!game || !myTurn) return;
-        const piece = piecesOf(game.fen).get(square);
-        const mine = (p: string | undefined) => p !== undefined && (p === p.toUpperCase()) === (game.color === 'white');
-        if (!from) {
-            if (mine(piece)) setFrom(square);
-            return;
-        }
-        if (from === square) {
-            setFrom(null);
-            return;
-        }
-        const move = clickMove(game.fen, from, square);
-        if (move === null) {
-            setFrom(mine(piece) ? square : null);
-            return;
-        }
-        setFrom(null);
-        send(move);
+        const step = clickStep(game.fen, game.color, from, square);
+        setFrom(step.from);
+        if (step.move) send(step.move);
     };
 
     const action = (name: string) => game && gameSocket.send(name, {game_id: game.gameId});
@@ -234,7 +221,7 @@ export function Chess960LiveGame() {
                     <p className="text-xs text-boxwood/70">{t('chess960.castlingHint')} {t('chess960.live.unrated')}</p>
                     {sans.length > 0 && (
                         <p className="font-mono text-xs break-words" data-testid="c960-live-moves">
-                            {sans.map((san, i) => (i % 2 === 0 ? `${i / 2 + 1}. ${san}` : san)).join(' ')}
+                            {numberedMoves(sans).join(' ')}
                         </p>
                     )}
                     {!result && drawOffer === 'incoming' && (

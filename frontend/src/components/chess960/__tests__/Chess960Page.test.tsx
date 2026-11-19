@@ -4,7 +4,7 @@
 import {act, fireEvent, render, screen} from '@testing-library/react';
 import {MemoryRouter} from 'react-router-dom';
 import {afterEach, describe, expect, it, vi} from 'vitest';
-import {Chess960Page, clickMove, piecesOf} from '../Chess960Page';
+import {Chess960Page, clickMove, clickStep, piecesOf} from '../Chess960Page';
 import type {State960} from '../Chess960Page';
 
 const POS0 = 'bbqnnrkr/pppppppp/8/8/8/8/PPPPPPPP/BBQNNRKR w KQkq - 0 1';
@@ -37,6 +37,15 @@ describe('шахматы Фишера', () => {
         expect(clickMove(POS0, 'd1', 'e1')).toBeNull();  // своя фигура — не ход
         expect(clickMove('4k3/P7/8/8/8/8/8/4K3 w - - 0 1', 'a7', 'a8')).toBe('a7a8q');
         expect(clickMove(POS0, 'e4', 'e5')).toBeNull();
+    });
+
+    it('ход двумя щелчками: выбор своей фигуры, снятие выбора, перенос выбора, ход', () => {
+        expect(clickStep(POS0, 'white', null, 'e7')).toEqual({from: null, move: null});
+        expect(clickStep(POS0, 'white', null, 'e2')).toEqual({from: 'e2', move: null});
+        expect(clickStep(POS0, 'white', 'e2', 'e2')).toEqual({from: null, move: null});
+        expect(clickStep(POS0, 'white', 'e2', 'd2')).toEqual({from: 'd2', move: null});
+        expect(clickStep(POS0, 'white', 'e2', 'e4')).toEqual({from: null, move: 'e2e4'});
+        expect(clickStep(POS0, 'black', null, 'e7')).toEqual({from: 'e7', move: null});
     });
 
     it('новая партия, ход щелчками уходит на сервер, ответ бота, итог', async () => {
