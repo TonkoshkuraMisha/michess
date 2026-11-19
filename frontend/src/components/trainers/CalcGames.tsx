@@ -110,7 +110,7 @@ function placementWith(square: string, piece: string): string {
 }
 
 /** Серия быстрых вопросов; после ответа доска свободна — позицию можно разыграть самому. */
-export function QuizGame({kind, seed, onFinish}: TrainerGameProps & { kind: QuizKind }) {
+export function QuizGame({kind, seed, onFinish}: Omit<TrainerGameProps, 'level'> & { kind: QuizKind }) {
     const {t} = useI18n();
     const games = useClassics();
     const pool = useMemo(() => (games ? positionPool(games, []) : null), [games]);
@@ -178,7 +178,7 @@ export function QuizGame({kind, seed, onFinish}: TrainerGameProps & { kind: Quiz
  * Очки раунда: процент найденных шахов и взятий минус 10 за каждую лишнюю отметку (не ниже 0). Стрелки разбора: зелёная — найден,
  * жёлтая — пропущен, красная — лишний; до проверки отмеченное — синее.
  */
-export function ChecksGame({seed, onFinish}: TrainerGameProps) {
+export function ChecksGame({seed, onFinish}: Omit<TrainerGameProps, 'level'>) {
     const {t} = useI18n();
     const games = useClassics();
     const [round, setRound] = useState(0);

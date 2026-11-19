@@ -23,7 +23,7 @@ from src.core.errors import ApiError
 from src.core.security import verify_password
 from src.db.session import get_db
 from src.models.user import User
-from src.schemas.user import username_key
+from src.schemas.user import PASSWORD_MAX_LENGTH, PASSWORD_MIN_LENGTH, username_key
 from src.services import account as service
 from src.services import email_links
 
@@ -56,7 +56,7 @@ class ResetRequest(BaseModel):
 
 class ResetConfirm(BaseModel):
     token: str = Field(..., min_length=10, max_length=200)
-    new_password: str = Field(..., min_length=8, max_length=128)
+    new_password: str = Field(..., min_length=PASSWORD_MIN_LENGTH, max_length=PASSWORD_MAX_LENGTH)
 
 
 async def _check_password(user: User, password: str) -> None:

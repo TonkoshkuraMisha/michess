@@ -3,7 +3,7 @@
 // экзамен из контрольных вопросов. Вопрос засчитывается в экзамене, если на него ответили с первой попытки.
 // Проигрыватель в сеть не ходит: урок (Lesson, content/lessons/format.ts) приходит от LearnPage.tsx, о прогрессе сообщают onStep и onFinish.
 
-import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {useCallback, useEffect, useRef, useState} from 'react';
 import {Chess} from 'chess.js';
 import {useI18n} from '../../i18n';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
@@ -373,7 +373,7 @@ function ChoiceOptions({step, chosen, solved, onChoose}: {
     onChoose: (i: number) => void;
 }) {
     const {language} = useI18n();
-    const options = useMemo(() => step.options, [step]);
+    const options = step.options;
     return (
         <div className="flex flex-col gap-1.5" role="group">
             {options.map((option, i) => {
