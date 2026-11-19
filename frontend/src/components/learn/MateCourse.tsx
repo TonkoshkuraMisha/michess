@@ -387,8 +387,11 @@ export function MateExamPage() {
             setResults([]);
             setReviewing(false);
             setCurrent(0);
-            setNow(Date.now());
-            setDeadline(Date.now() + exam.minutes * 60_000);
+            // Отсчёт и срок — от одного момента: два вызова часов могли попасть в разные миллисекунды, и округление
+            // вверх показывало на старте лишнюю секунду (10:01 вместо 10:00).
+            const startedAt = Date.now();
+            setNow(startedAt);
+            setDeadline(startedAt + exam.minutes * 60_000);
             if (exam.tasks.length) load(exam.tasks, 0);
         } catch (err) {
             setError(errorMessage(err, 'common.networkError'));
