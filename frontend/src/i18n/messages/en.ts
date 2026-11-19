@@ -2719,7 +2719,7 @@ export const en = {
         archiveBadge: 'Blindfold, level {level} · peeks: {peeks}',
     },
     chess960: {
-        live: {title: 'Chess960 against a person', noGame: 'No Chess960 game is running. Create a link for a friend on the main page and choose the Chess960 variant.', toLobby: 'To the main board', vsBot: 'Play Chess960 against the bot', yourMove: 'Your move.', opponentMove: 'Opponent to move.', unrated: 'The game is unrated.', drawOffered: 'Your opponent offers a draw.', acceptDraw: 'Accept', declineDraw: 'Decline', drawSent: 'Draw offer sent.', drawDeclined: 'The draw offer was declined.', abort: 'Abort', offerDraw: 'Offer a draw', resign: 'Resign', resignConfirm: 'Resign the game?', again: 'New game'},
+        live: {title: 'Chess960 against a person', noGame: 'No Chess960 game is running. Create a link for a friend on the main page and choose the Chess960 variant.', toLobby: 'To the main board', vsBot: 'Play Chess960 against the bot', yourMove: 'Your move.', opponentMove: 'Opponent to move.', unrated: 'The game is unrated.', drawOffered: 'Your opponent offers a draw.', acceptDraw: 'Accept', declineDraw: 'Decline', drawSent: 'Draw offer sent.', drawDeclined: 'The draw offer was declined.', abort: 'Abort', offerDraw: 'Offer a draw', resign: 'Resign', resignConfirm: 'Resign the game?', rematch: 'Rematch', rematchSent: 'Rematch offered.', rematchOffered: 'Your opponent offers a rematch: the same position, colours swapped.', rematchDeclined: 'The rematch was declined.', again: 'New game'},
         title: 'Fischer random chess',
         intro: 'Chess960: the pieces behind the pawns stand in one of 960 random orders, the same for both sides. Opening theory does not help — think from the first move. Against the bot, without rating.',
         loading: 'Setting up the pieces…',
@@ -3092,6 +3092,7 @@ export const en = {
             next: 'Next',
         },
         structure: 'Pawn structure',
+        miniatures: 'Miniatures (decisive, up to 25 moves)',
         title: 'Game library',
         intro: 'Collections of master games, model games for pawn structures and opening lines, and selected beautiful games.',
         collections: 'Collections',

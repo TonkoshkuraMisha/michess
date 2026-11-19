@@ -80,6 +80,36 @@ describe('партия 960 с человеком', () => {
         expect(screen.queryByTestId('c960-live-resign')).toBeNull();
     });
 
+    it('реванш после конца партии: предложить; предложение соперника — принять', async () => {
+        renderPage();
+        expect(screen.queryByTestId('c960-live-rematch')).toBeNull();  // пока идёт партия — кнопки нет
+        await act(async () => handlers.get('game_over')!({event: 'game_over', game_id: 42, result: '0-1', reason: 'resignation'}));
+        fireEvent.click(screen.getByTestId('c960-live-rematch'));
+        expect(gameSocket.send).toHaveBeenCalledWith('offer_rematch', {game_id: 42});
+        expect(screen.getByTestId('c960-live-rematch-sent')).toBeInTheDocument();
+        expect(screen.getByTestId('c960-live-rematch')).toBeDisabled();
+
+        await act(async () => handlers.get('rematch_offered')!({event: 'rematch_offered', game_id: 42, player_id: 2}));
+        fireEvent.click(screen.getByTestId('c960-live-rematch-accept'));
+        expect(gameSocket.send).toHaveBeenCalledWith('accept_rematch', {game_id: 42});
+        // Сервер начинает реванш — match_found новой партии 960: доска и статус обновляются, кнопок реванша нет.
+        await act(async () => handlers.get('match_found')!({...MATCH, game_id: 43, color: 'black'}));
+        expect(screen.queryByTestId('c960-live-rematch')).toBeNull();
+        expect(screen.queryByTestId('c960-live-rematch-offer')).toBeNull();
+    });
+
+    it('чат партии: сообщения своей партии видны, чужой — нет; своё сообщение уходит по сокету', async () => {
+        renderPage();
+        await act(async () => handlers.get('chat_message')!({event: 'chat_message', game_id: 42, sender: 'bob', text: 'Удачи!'}));
+        await act(async () => handlers.get('chat_message')!({event: 'chat_message', game_id: 7, sender: 'eve', text: 'чужое'}));
+        expect(screen.getByText('Удачи!')).toBeInTheDocument();
+        expect(screen.queryByText('чужое')).toBeNull();
+        fireEvent.change(screen.getByPlaceholderText('Написать сообщение…'), {target: {value: '  И вам!  '}});
+        fireEvent.click(screen.getByRole('button', {name: 'Отправить'}));
+        expect(gameSocket.send).toHaveBeenCalledWith('chat_message', {game_id: 42, text: 'И вам!'});
+        expect(screen.getByPlaceholderText('Написать сообщение…')).toHaveValue('');
+    });
+
     it('события чужой партии не трогают доску; без партии — подсказка, как начать', async () => {
         renderPage();
         await act(async () => handlers.get('move_made')!({game_id: 99, fen: '8/8/8/8/8/8/8/K6k w - - 0 1', pgn: ''}));

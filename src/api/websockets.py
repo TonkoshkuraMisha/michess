@@ -44,9 +44,9 @@ from src.models.user import User
 from src.services import moderation, notifications
 from src.services.anticheat import trusted_premove
 from src.services.connection_manager import manager
-from src.services.game_engine import game_variant
+from src.services.game_engine import game_variant, start_fen_of
 from src.services.game_state import berserk_fields, is_rated_state, pending_draw_offer, state_manager
-from src.services.matchmaker import MatchmakingError, matchmaker
+from src.services.matchmaker import MatchmakingError, chess960_start, matchmaker
 from src.services.rating import classify_time_control
 
 logger = logging.getLogger(__name__)
@@ -121,9 +121,15 @@ async def _send_active_game_snapshot_if_exists(db: AsyncSession, user: User):
 async def create_rematch_game(db: AsyncSession, prev_state: dict, connection_manager=None) -> dict:
     """
     Создаёт партию-реванш со сменой цветов (white_id <-> black_id), с тем же контролем времени
-    и того же типа (рейтинговая / товарищеская).
+    и того же типа (рейтинговая / товарищеская). Реванш партии Фишера — тоже партия 960 с той же расстановкой (цвета
+    меняются — так реванш честный; решение по умолчанию 20.11); расстановка берётся из заголовка FEN в PGN партии.
     Проверки занятости игроков и старт партии — в matchmaker.start_pvp_game.
     """
+    odds = None
+    if game_variant(prev_state.get("board_fen"), prev_state.get("pgn", "")) == "chess960":
+        base_ms = int(prev_state.get("base_time_ms", 180000))
+        start = start_fen_of(prev_state.get("pgn")) or chess960_start()
+        odds = {"start_fen": start, "white_time_ms": base_ms, "black_time_ms": base_ms, "kind": "chess960"}
     return await matchmaker.start_pvp_game(
         white_id=int(prev_state["black_id"]),
         black_id=int(prev_state["white_id"]),
@@ -132,6 +138,7 @@ async def create_rematch_game(db: AsyncSession, prev_state: dict, connection_man
         connection_manager=connection_manager,
         db=db,
         is_rated=is_rated_state(prev_state),
+        odds=odds,
     )
 
 

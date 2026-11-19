@@ -152,6 +152,12 @@ def read_pgn_game(pgn_text: str) -> chess.pgn.Game | None:
     return chess.pgn.read_game(io.StringIO(normalize_pgn_text(pgn_text)))
 
 
+def start_fen_of(pgn_text: str | None) -> str | None:
+    """Начальная позиция партии из заголовка FEN её PGN (партия с позиции: фора, Фишер); без заголовка — None."""
+    game = read_pgn_game(pgn_text or "")
+    return game.headers.get("FEN") if game is not None else None
+
+
 def _replay_pgn_document(pgn_text: str) -> chess.Board | None:
     """Доска в конце PGN-документа с заголовками (в том числе SetUp/FEN) — с историей ходов."""
     game = read_pgn_game(pgn_text)
