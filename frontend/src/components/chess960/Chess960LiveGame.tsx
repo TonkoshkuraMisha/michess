@@ -1,7 +1,8 @@
 // Партия Фишера с человеком (таск 21.3 / 21.1): /play/960/live. Правила 960 — только на сервере (python-chess в режиме
 // 960, src/services/game_engine.py): клиентская шахматная библиотека рокировку 960 не знает, поэтому доска здесь лишь
 // рисует позицию и передаёт щелчки — как у партии против бота (Chess960Page). Рокировка — щелчок по королю, затем по
-// своей ладье. Состояние приходит по общему WebSocket (services/gameSocket): match_found (при старте и при каждом
+// своей ладье; в ход соперника так же ставится предход (уходит, как только очередь наша; невозможный отклонит сервер).
+// Состояние приходит по общему WebSocket (services/gameSocket): match_found (при старте и при каждом
 // переподключении), move_made, game_over, чат, предложения ничьей и реванша (реванш — та же расстановка, цвета меняются,
 // websockets.create_rematch_game). Основная доска (useGameSocket.ts) сама переводит сюда
 // партию с variant chess960, передавая снимок в location.state.match. Рейтинга у этих партий нет.
@@ -115,6 +116,9 @@ export function Chess960LiveGame() {
     const [game, setGame] = useState<LiveState | null>(initial?.variant === 'chess960' ? fromSnapshot(initial) : null);
     const [result, setResult] = useState<{ result: string; reason?: string } | null>(null);
     const [from, setFrom] = useState<string | null>(null);
+    // Предход (как на главной доске): ход, выбранный в ход соперника, уходит на сервер, как только очередь наша.
+    // Правила 960 знает только сервер: невозможный предход он отклонит, позиция не изменится.
+    const [premove, setPremove] = useState<string | null>(null);
     const [drawOffer, setDrawOffer] = useState<'none' | 'incoming' | 'sent' | 'declined'>(
         initial && initial.draw_offer_from !== undefined && initial.draw_offer_from !== null
             && Number(initial.draw_offer_from) === Number(initial.opponent_id) ? 'incoming' : 'none');
@@ -203,20 +207,34 @@ export function Chess960LiveGame() {
     const blackMs = game ? game.blackMs - (turn === 'black' ? elapsed : 0) : 0;
     const myTurn = !!game && !result && turn === game.color;
 
-    const send = useCallback((move: string) => {
+    const send = useCallback((move: string, isPremove = false) => {
         const current = gameRef.current;
         if (!current) return;
         gameSocket.send('make_move', {
             game_id: current.gameId, move, command_id: commandId(), state_version: current.version,
-            time_taken_ms: Date.now() - updatedAt.current, window_blurred: document.hidden, is_premove: false,
+            time_taken_ms: Date.now() - updatedAt.current, window_blurred: document.hidden, is_premove: isPremove,
         });
     }, []);
 
+    // Очередь перешла к нам — отправить предход (один раз); конец партии или новая партия его снимают.
+    useEffect(() => {
+        if (!premove) return;
+        if (result || !game) {
+            setPremove(null);
+            return;
+        }
+        if (!myTurn) return;
+        send(premove, true);
+        setPremove(null);
+    }, [myTurn, result, game?.gameId]); // eslint-disable-line react-hooks/exhaustive-deps
+
     const onSquare = (square: string) => {
-        if (!game || !myTurn) return;
+        if (!game || result) return;
         const step = clickStep(game.fen, game.color, from, square);
         setFrom(step.from);
-        if (step.move) send(step.move);
+        if (!step.move) return;
+        if (myTurn) send(step.move);
+        else setPremove(step.move);
     };
 
     const action = (name: string) => game && gameSocket.send(name, {game_id: game.gameId});
@@ -255,8 +273,8 @@ export function Chess960LiveGame() {
             <div className="flex flex-col lg:flex-row gap-5 items-start">
                 <div className="w-full max-w-[480px] flex flex-col gap-1.5">
                     {bar(opponent, !result && turn !== game.color, 'c960-live-opponent')}
-                    <PuzzleBoard fen={displayFen(game.fen)} orientation={game.color} interactive={myTurn} onMove={() => undefined}
-                                 onSquare={onSquare} highlights={from ? [from] : []}
+                    <PuzzleBoard fen={displayFen(game.fen)} orientation={game.color} interactive={!result} onMove={() => undefined}
+                                 onSquare={onSquare} highlights={from ? [from] : premove ? [premove.slice(0, 2), premove.slice(2, 4)] : []}
                                  lastMove={game.lastMove ? {from: game.lastMove.slice(0, 2), to: game.lastMove.slice(2, 4)} : null}/>
                     {bar(me, !result && turn === game.color, 'c960-live-me')}
                 </div>
@@ -266,6 +284,14 @@ export function Chess960LiveGame() {
                     {sans.length > 0 && (
                         <p className="font-mono text-xs break-words" data-testid="c960-live-moves">
                             {numberedMoves(sans).join(' ')}
+                        </p>
+                    )}
+                    {!result && premove && (
+                        <p className="text-xs text-sky-300 flex items-center gap-2" data-testid="c960-live-premove">
+                            {t('chess960.live.premoveSet', {move: `${premove.slice(0, 2)}–${premove.slice(2, 4)}`})}
+                            <button type="button" onClick={() => setPremove(null)} className="underline" data-testid="c960-live-premove-cancel">
+                                {t('chess960.live.cancelPremove')}
+                            </button>
                         </p>
                     )}
                     {!result && drawOffer === 'incoming' && (
