@@ -55,6 +55,7 @@ function renderAt(path: string) {
 
 beforeEach(() => setToken('jwt'));
 afterEach(() => {
+    vi.restoreAllMocks();
     vi.useRealTimers();
     setToken(null);
     vi.unstubAllGlobals();
@@ -164,6 +165,10 @@ describe('Курс матовых конструкций', () => {
             [/course\/mates\/exam$/, () => ({minutes: 10, tasks: [{theme: 'back_rank_mate', index: 1}]})],
             [/course\/mates\/back_rank_mate\/1$/, () => ({...TASK, index: 1})],
         ]);
+        // Каждый вызов часов — на миллисекунду позже: так в CI начало отсчёта и срок попадали в разные
+        // миллисекунды, и вместо «10:00» показывалось «10:01». Отсчёт и срок должны идти от одного момента.
+        let clock = 1_700_000_000_000;
+        vi.spyOn(Date, 'now').mockImplementation(() => clock++);
         renderAt('/learn/mates/exam');
         fireEvent.click(screen.getByTestId('mates-exam-start'));
         expect(await screen.findByTestId('mates-exam-status')).toHaveTextContent('10:00');
