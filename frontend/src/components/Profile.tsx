@@ -22,7 +22,10 @@ import {
 import {API_BASE_URL} from '../config/api';
 import type {Locale} from 'date-fns';
 import {gameDisplayDate} from '../services/gameDates';
-import {getDateLocale, renderUiMessage, uiMessage, useI18n} from '../i18n';
+import {errorMessage} from '../services/apiErrors';
+import {profileApi} from '../services/profile';
+import type {PlayerStats, ProfileGame, RatingCategory, RatingPoint, UserProfile} from '../services/profile';
+import {getDateLocale, renderUiMessage, useI18n} from '../i18n';
 import type {UiMessage} from '../i18n';
 import {displayPlayerName} from '../config/players';
 import {ProfileSocial} from './social/ProfileSocial';
@@ -32,70 +35,18 @@ import {TournamentHistory} from './tournaments/TournamentHistory';
 import {Achievements} from './social/Achievements';
 import {SkillMap} from './SkillMap';
 
-interface UserProfile {
-    id: number;
-    username: string;
-    avatar?: string | null;
-    bullet_rating: number;
-    blitz_rating: number;
-    rapid_rating: number;
-    classical_rating: number;
-    created_at: string;
-    /** Клубная лестница: отдельный рейтинг партий с ботами без подсказок и возвратов хода. */
-    ladder?: { rating: number; games: number; step: number; total: number };
-    /** Кубки арен (таск 33.5): первые, вторые и третьи места — src/services/arena_awards.py. */
-    arena_trophies?: { gold: number; silver: number; bronze: number };
-}
-
 // Соответствие поля профиля и категории контроля времени, в порядке показа.
-const RATING_CATEGORIES: Array<{ key: 'bullet_rating' | 'blitz_rating' | 'rapid_rating' | 'classical_rating'; category: RatingCategoryKey }> = [
+const RATING_CATEGORIES: Array<{ key: 'bullet_rating' | 'blitz_rating' | 'rapid_rating' | 'classical_rating'; category: RatingCategory }> = [
     {key: 'bullet_rating', category: 'bullet'},
     {key: 'blitz_rating', category: 'blitz'},
     {key: 'rapid_rating', category: 'rapid'},
     {key: 'classical_rating', category: 'classical'},
 ];
 
-interface GameData {
-    game_id: number;
-    white_username: string;
-    white_rating: number;
-    black_username: string;
-    black_rating: number;
-    status: string;
-    is_rated: boolean;
-    /** Игрок пользовался наставником (таск 11.3). */
-    assisted?: boolean;
-    /** Игра вслепую (таск 19.5): ступень и подсмотры. */
-    blindfold?: number | null;
-    peeks?: number | null;
-    result: string;
-    pgn_date: string | null;
-    site: string | null;
-    eco: string | null;
-    finished_at: string | null;
-}
-
-type RatingCategoryKey = 'bullet' | 'blitz' | 'rapid' | 'classical';
-
 // Категории, между которыми переключается график рейтинга.
-const CHART_CATEGORIES: RatingCategoryKey[] = ['bullet', 'blitz', 'rapid', 'classical'];
+const CHART_CATEGORIES: RatingCategory[] = ['bullet', 'blitz', 'rapid', 'classical'];
 // Цвет кубка арены по месту.
 const MEDAL_COLORS = {gold: 'text-amber-300', silver: 'text-slate-300', bronze: 'text-orange-400'} as const;
-
-interface PlayerStats {
-    total: number;
-    wins: number;
-    draws: number;
-    losses: number;
-    rated_games: Record<RatingCategoryKey, number>;
-}
-
-interface RatingPoint {
-    game_id: number;
-    finished_at: string;
-    rating: number;
-    delta: number;
-}
 
 // Сколько партий истории загружается за один запрос.
 const GAMES_PAGE_SIZE = 30;
@@ -182,8 +133,8 @@ export function RatingDot({cx, cy, payload, r = 4, active = false, onSelect}: {
 }
 
 /** Категория с наибольшим числом рейтинговых партий — её график показываем первым. */
-function mostPlayedCategory(stats: PlayerStats | null): RatingCategoryKey {
-    let best: RatingCategoryKey = 'blitz';
+function mostPlayedCategory(stats: PlayerStats | null): RatingCategory {
+    let best: RatingCategory = 'blitz';
     let bestCount = 0;
     for (const key of CHART_CATEGORIES) {
         const count = stats?.rated_games?.[key] ?? 0;
@@ -201,16 +152,14 @@ export default function Profile() {
     const {targetUsername} = useParams<{ targetUsername: string }>();
     const navigate = useNavigate();
     const [profile, setProfile] = useState<UserProfile | null>(null);
-    const [games, setGames] = useState<GameData[]>([]);
+    const [games, setGames] = useState<ProfileGame[]>([]);
     const [gamesTotal, setGamesTotal] = useState(0);
     const [gamesPage, setGamesPage] = useState(0);
     const [stats, setStats] = useState<PlayerStats | null>(null);
-    const [chartCategory, setChartCategory] = useState<RatingCategoryKey>('blitz');
+    const [chartCategory, setChartCategory] = useState<RatingCategory>('blitz');
     const [ratingPoints, setRatingPoints] = useState<RatingPoint[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<UiMessage | null>(null);
-
-    const profileApi = `${API_BASE_URL}/api/v1/profile/${encodeURIComponent(targetUsername ?? '')}`;
 
     // Профиль и итоги — один раз на игрока.
     useEffect(() => {
@@ -224,18 +173,12 @@ export default function Profile() {
             setStats(null);
             setRatingPoints([]);
             try {
-                const profileRes = await fetch(profileApi);
-                if (!profileRes.ok) {
-                    if (!cancelled) setError(uiMessage(profileRes.status === 404 ? 'profile.notFound' : 'profile.loadFailed'));
-                    return;
-                }
-                const profileData = await profileRes.json();
+                const profileData = await profileApi.get(targetUsername);
                 if (cancelled) return;
                 setProfile(profileData);
 
-                // Итоги считаются на сервере по всем партиям, а не по загруженной странице.
-                const statsRes = await fetch(`${profileApi}/stats`).catch(() => null);
-                const statsData: PlayerStats | null = statsRes?.ok ? await statsRes.json() : null;
+                // Итоги считаются на сервере по всем партиям, а не по загруженной странице; без них страница работает.
+                const statsData = await profileApi.stats(targetUsername).catch(() => null);
                 if (cancelled) return;
                 if (statsData && typeof statsData.total === 'number') {
                     setStats(statsData);
@@ -243,8 +186,8 @@ export default function Profile() {
                 } else {
                     setChartCategory('blitz');
                 }
-            } catch {
-                if (!cancelled) setError(uiMessage('common.networkError'));
+            } catch (err) {
+                if (!cancelled) setError(errorMessage(err, 'profile.loadFailed'));
             } finally {
                 if (!cancelled) setLoading(false);
             }
@@ -254,14 +197,13 @@ export default function Profile() {
         return () => {
             cancelled = true;
         };
-    }, [targetUsername, profileApi]);
+    }, [targetUsername]);
 
     // Страница истории партий.
     useEffect(() => {
         if (!targetUsername) return;
         let cancelled = false;
-        fetch(`${profileApi}/games?limit=${GAMES_PAGE_SIZE}&offset=${gamesPage * GAMES_PAGE_SIZE}`)
-            .then((res) => (res.ok ? res.json() : null))
+        profileApi.games(targetUsername, GAMES_PAGE_SIZE, gamesPage * GAMES_PAGE_SIZE)
             .then((data) => {
                 if (cancelled) return;
                 setGames(data?.items || []);
@@ -273,14 +215,13 @@ export default function Profile() {
         return () => {
             cancelled = true;
         };
-    }, [targetUsername, profileApi, gamesPage]);
+    }, [targetUsername, gamesPage]);
 
     // История рейтинга выбранной категории — сохранённые сервером значения после каждой партии.
     useEffect(() => {
         if (!targetUsername) return;
         let cancelled = false;
-        fetch(`${profileApi}/rating-history?category=${chartCategory}`)
-            .then((res) => (res.ok ? res.json() : null))
+        profileApi.ratingHistory(targetUsername, chartCategory)
             .then((data) => {
                 if (!cancelled) setRatingPoints(Array.isArray(data?.points) ? data.points : []);
             })
@@ -290,7 +231,7 @@ export default function Profile() {
         return () => {
             cancelled = true;
         };
-    }, [targetUsername, profileApi, chartCategory]);
+    }, [targetUsername, chartCategory]);
 
     if (loading) {
         return (

@@ -1175,7 +1175,6 @@ export const ru: Messages = {
         open: 'Открыть',
     },
     profile: {
-        notFound: 'Пользователь не найден',
         loadFailed: 'Не удалось загрузить профиль',
         loading: 'Загрузка профиля…',
         memberSince: 'На сайте с {date}',

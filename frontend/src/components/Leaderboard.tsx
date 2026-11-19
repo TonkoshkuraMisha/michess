@@ -7,18 +7,15 @@ import {useState, useEffect} from 'react';
 import {PlayerAvatar} from './PlayerAvatar';
 import {Link, useNavigate} from 'react-router-dom';
 import {Trophy, Medal, Crown, ArrowLeft, Swords, User} from 'lucide-react';
-import {API_BASE_URL} from '../config/api';
-import {useI18n} from '../i18n';
+import {renderUiMessage, useI18n} from '../i18n';
+import type {UiMessage} from '../i18n';
+import {errorMessage} from '../services/apiErrors';
+import {profileApi} from '../services/profile';
+import type {LeaderboardEntry, RatingCategory} from '../services/profile';
 
-interface LeaderboardEntry {
-    rank: number;
-    avatar?: string | null;
-    username: string;
-    rating: number;
-}
+/** Сколько первых игроков показывает таблица. */
+const LEADERBOARD_SIZE = 50;
 
-// Категории рейтинга; те же коды использует сервер.
-type RatingCategory = 'bullet' | 'blitz' | 'rapid' | 'classical';
 
 // Порядок вкладок категорий в интерфейсе.
 const CATEGORY_TABS: RatingCategory[] = ['bullet', 'blitz', 'rapid', 'classical'];
@@ -30,22 +27,17 @@ export default function Leaderboard() {
     const [category, setCategory] = useState<RatingCategory>('blitz');
     const [players, setPlayers] = useState<LeaderboardEntry[]>([]);
     const [loading, setLoading] = useState(true);
-    const [error, setError] = useState<'leaderboard.loadFailed' | 'common.networkError' | null>(null);
+    const [error, setError] = useState<UiMessage | null>(null);
 
     useEffect(() => {
         const fetchLeaderboard = async () => {
             setLoading(true);
             setError(null);
             try {
-                const res = await fetch(`${API_BASE_URL}/api/v1/profile/leaderboard?limit=50&category=${category}`);
-                if (!res.ok) {
-                    setError('leaderboard.loadFailed');
-                    return;
-                }
-                const data = await res.json();
+                const data = await profileApi.leaderboard(category, LEADERBOARD_SIZE);
                 setPlayers(Array.isArray(data) ? data : []);
-            } catch {
-                setError('common.networkError');
+            } catch (err) {
+                setError(errorMessage(err, 'leaderboard.loadFailed'));
             } finally {
                 setLoading(false);
             }
@@ -118,7 +110,7 @@ export default function Leaderboard() {
 
             {error && (
                 <div className="bg-red-950/80 border border-red-800 p-5 rounded text-red-200 text-center">
-                    {t(error)}
+                    {renderUiMessage(error, t)}
                 </div>
             )}
 

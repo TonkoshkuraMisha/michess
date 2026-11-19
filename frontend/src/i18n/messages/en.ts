@@ -1171,7 +1171,6 @@ export const en = {
         open: 'Open',
     },
     profile: {
-        notFound: 'User not found',
         loadFailed: 'Could not load the profile',
         loading: 'Loading the profile…',
         memberSince: 'Member since {date}',

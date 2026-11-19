@@ -7,32 +7,18 @@
 import {useState, useEffect} from 'react';
 import {useParams, Link, useNavigate} from 'react-router-dom';
 import {gameDisplayDate} from '../services/gameDates';
+import {profileApi} from '../services/profile';
+import type {ProfileGame} from '../services/profile';
 import {
     Swords, Download, ArrowLeft, Crown,
     ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight
 } from 'lucide-react';
 import {CHAMPIONS_LIST} from '../config/champions';
 import {API_BASE_URL} from '../config/api';
-import {readApiErrorOr} from '../services/apiErrors';
+import {errorMessage} from '../services/apiErrors';
 import {guessApi} from '../services/guess';
-import {renderUiMessage, uiMessage, useI18n} from '../i18n';
+import {renderUiMessage, useI18n} from '../i18n';
 import type {UiMessage} from '../i18n';
-
-/** Партия из списка архива чемпиона. */
-interface GameData {
-    game_id: number;
-    white_username: string;
-    white_rating: number;
-    black_username: string;
-    black_rating: number;
-    status: string;
-    is_rated: boolean;
-    result: string;
-    pgn_date: string | null;
-    site: string | null;
-    eco: string | null;
-    finished_at: string | null;
-}
 
 /**
  * Играет ли чемпион за эту сторону: фамилия совпадает с одним из слов имени без учёта регистра
@@ -49,7 +35,7 @@ export default function ChampionGames() {
     const {championId} = useParams<{ championId: string }>();
     const navigate = useNavigate();
 
-    const [games, setGames] = useState<GameData[]>([]);
+    const [games, setGames] = useState<ProfileGame[]>([]);
     const [totalGames, setTotalGames] = useState<number>(0);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<UiMessage | null>(null);
@@ -67,24 +53,17 @@ export default function ChampionGames() {
             setError(null);
             try {
                 const offset = (page - 1) * limit;
-                const res = await fetch(`${API_BASE_URL}/api/v1/profile/${encodeURIComponent(championId ?? '')}/games?limit=${limit}&offset=${offset}&sort=asc`);
-
-                if (!res.ok) {
-                    setError(await readApiErrorOr(res, 'championGames.loadFailed'));
-                    return;
-                }
-
-                const data = await res.json();
+                const data = await profileApi.games(championId ?? '', limit, offset, 'asc');
                 setTotalGames(data.total || 0);
                 setGames(data.items || []);
-                const ids = (data.items || []).map((g: GameData) => g.game_id);
+                const ids = (data.items || []).map((g) => g.game_id);
                 setGuessStarts({});
                 if (ids.length) {
                     guessApi.ofGames(ids).then((r) => setGuessStarts(r?.games ?? {})).catch(() => undefined);  // кнопки — не главное
                 }
 
-            } catch {
-                setError(uiMessage('common.networkError'));
+            } catch (err) {
+                setError(errorMessage(err, 'championGames.loadFailed'));
             } finally {
                 setLoading(false);
             }
