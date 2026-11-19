@@ -27,9 +27,11 @@
 - На GitHub — `master`, `dev` и ветки открытых PR (слитые удалены 18.11 с согласия владельца).
   Режим: таск → PR → CI → слияние. Правила разработки — `CLAUDE.md`, раздел 4 (требование владельца 17.11).
 - Спринт 33 (арены): сделаны 33.1–33.6 полностью (лига, праздник призёра, матчи конференций), открытый вход (#165).
-- Сверка комментариев закончена 19.11: сервисы и `services/bots/` (#210), компоненты клиента вне `chessboard/`
-  (#211). Находки сверки (мёртвый код ботов, повторы в клиенте) — в «Сделано» таска A.7, чинить отдельными PR;
-  нестабильный тест курса матов исправлен (`fix/mate-course-test-clock`).
+- Сверка комментариев закончена 19.11 (#210, #211). Повторы в клиенте по её находкам — #213–#216, #218–#220 и
+  страницы (`refactor/pages-fetch-into-services`): общий запрос `services/http.ts` (`apiRequest`) вместо 21 копии,
+  сервисы профиля и учётной записи. `fetch` прямо в компонентах остался в игровом ядре (Chessboard, GameViewer,
+  панели доски, chess960) — отдельно и осторожно (честная игра). Курс матов: тесты на щелчках, часы проверки (#217).
+  Мёртвый код ботов — до своего движка (может пригодиться), остальное — таск A.7.
 - Владелец подтвердил (17.11) решения 33.3 и 33.4. На подтверждение (33.6): первый выбор страны сменой не
   считается; убрать страну можно всегда, это расходует смену сезона; обе Америки и Гренландия — Западная.
 - Открытые вопросы владельцу заданы одним списком 17.11: файл `LICENSE`, источники PGN, находки ревизии базы
@@ -2273,6 +2275,13 @@ BlindGames, PathGame, BasicsPage, `w * 5` в ProgramsPage); `SIZES` турнир
 Сделано 19.11 (`refactor/client-shared-helpers`): дата партии — `services/gameDates.ts` (Profile, ChampionGames и
 третья копия в GameViewer), `config/passwordRules.ts`, `errorOf` заменён на `errorMessage` из `apiErrors.ts`.
 Осталось: на сервере `min_length=8` пароля повторён в трёх схемах (`schemas/user.py`, `api/account.py`, `api/auth.py`).
+Сделано 19.11 дальше: выбор вложения (#214), `TrainerGameProps`/`useClassics` (#215), нумерация ходов и `clickStep`
+(#216), `services/http.ts` вместо 21 копии обёртки запроса (#218), `services/profile.ts` (#219), `services/account.ts`
+(#220), запросы восьми страниц — в сервисы. Осталось: `fetch` в игровом ядре (Chessboard, GameViewer, GameSummaryPanel,
+LadderPanel, Chess960Page) и `transparency.ts` (текст и заголовок X-Total-Count); `POLL_MS` в двух местах, лимиты
+длины числами, `SIZES` турниров против `tournament_rules.py`, `any` сокета в Chess960LiveGame, `level={1}` у
+QuizGame/ChecksGame, пустой `useMemo` в LessonPlayer. Тесты с перетаскиванием фигуры (CoachCards, BasicsPage,
+ClassicsPage, EndgameTrainer, puzzleMoves, Trainers) — та же гонка подписки, что в курсе матов; при сбоях — на щелчки.
 Найдено при сверке (чинить отдельно): дубликат `BOT_INSTANCES` в `src/api/bots.py`; неиспользуемая
 `philidor.BLUNDER_GUARD_MARGIN_CP`; `skill_level` в `analyse_with_stockfish` ни на что не влияет;
 `_simulate_human_thinking_time` считается в `choose_move`, но результат не используется; тест курса матов
