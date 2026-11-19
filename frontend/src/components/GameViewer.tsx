@@ -896,7 +896,7 @@ export default function GameViewer({library = false, imported = false}: { librar
                         </button>
                     )}
                     {guessFirstId !== null && (
-                        <Link to={`/guess/${guessFirstId}`} data-testid="guess-from-game"
+                        <Link to={`/guess/${guessFirstId}?whole=1`} data-testid="guess-from-game"
                               className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-amber-800 text-white font-bold text-sm rounded-md hover:bg-amber-700 transition shadow border border-amber-500/60">
                             <Crown size={16}/> {t('guess.openFromGame')}
                         </Link>

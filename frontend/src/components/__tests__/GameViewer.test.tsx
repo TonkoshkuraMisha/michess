@@ -268,7 +268,7 @@ describe('GameViewer', () => {
     it('«Угадай ход мастера»: кнопка ведёт к первому отобранному моменту партии, без моментов — кнопки нет', async () => {
         stubApi({pgn: {ok: true, text: FOOLS_MATE_PGN}, guess: {ok: true, body: {positions: [{id: 77, ply: 22, series_id: null}]}}});
         renderViewer();
-        expect(await screen.findByTestId('guess-from-game')).toHaveAttribute('href', '/guess/77');
+        expect(await screen.findByTestId('guess-from-game')).toHaveAttribute('href', '/guess/77?whole=1');  // партия целиком
     });
 
     it('справочник дебютов открывается кнопкой и запрашивает ходы до показанной позиции', async () => {

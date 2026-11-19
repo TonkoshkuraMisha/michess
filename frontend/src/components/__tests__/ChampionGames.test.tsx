@@ -135,7 +135,7 @@ describe('ChampionGames', () => {
             ? {ok: true, body: {games: {'3': 77}}} : {ok: true, body: {total: 6, items: TAL_GAMES}});
         renderChampion();
         const link = await screen.findByTestId('champion-guess-3');
-        expect(link.getAttribute('href')).toBe('/guess/77');
+        expect(link.getAttribute('href')).toBe('/guess/77?whole=1');  // партия целиком
         expect(screen.queryByTestId('champion-guess-1')).not.toBeInTheDocument();
         const guessCall = fetchMock.mock.calls.map(([url]) => url.toString()).find((url) => url.includes('/guess/games'));
         expect(guessCall).toMatch(/ids=1,2,3,4,5,6$/);
