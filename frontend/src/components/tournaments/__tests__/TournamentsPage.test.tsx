@@ -139,9 +139,9 @@ describe('создание турнира', () => {
         render(<MemoryRouter><TournamentsPage/></MemoryRouter>);
         expect(await screen.findByText('No tournaments yet.')).toBeInTheDocument();
         const [formatSelect, sizeSelect] = screen.getAllByRole('combobox') as HTMLSelectElement[];
-        await waitFor(() => expect([...sizeSelect.options].map((o) => o.value)).toEqual(['4', '6', '8']));
+        await waitFor(() => expect(Array.from(sizeSelect.options, (o) => o.value)).toEqual(['4', '6', '8']));
         fireEvent.change(formatSelect, {target: {value: 'swiss'}});
-        expect([...sizeSelect.options].map((o) => o.value)).toEqual(['6', '8']);
+        expect(Array.from(sizeSelect.options, (o) => o.value)).toEqual(['6', '8']);
         expect(sizeSelect.value).toBe('6');  // 4 у швейцарки нет — размер сменился на первый допустимый
         expect(screen.getByTestId('opponents-needed')).toHaveTextContent('(0/5)');
     });
