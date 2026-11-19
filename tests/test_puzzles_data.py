@@ -84,12 +84,12 @@ async def test_import_is_idempotent_and_attaches_themes(db_session):
 # --- своя эндшпильная техника из таблиц (scripts/dev/build_endgame_puzzles.py) ---------------------------------
 
 OWN_ROW = {"PuzzleId": "tb00034kp", "FEN": "4k3/8/6K1/8/4P3/8/8/8 b - - 0 1", "Moves": "e8f8 g6f6", "Rating": "870",
-           "RatingDeviation": "80", "Popularity": "90", "NbPlays": "0", "Themes": "endgame pawnEndgame michess:opposition"}
+           "RatingDeviation": "80", "Popularity": "90", "NbPlays": "0", "Themes": "endgame pawnEndgame regence:opposition"}
 OWN_THEMES = {"opposition", "key_squares", "outflanking", "square_rule", "wrong_bishop"}
 
 
 def test_own_tag_gives_the_registry_theme_and_unknown_codes_are_ignored():
-    assert own_themes(["endgame", "michess:opposition", "michess:no_such_theme"]) == ["opposition"]
+    assert own_themes(["endgame", "regence:opposition", "regence:no_such_theme"]) == ["opposition"]
     assert themes_for_row(OWN_ROW)[0] == "opposition"
 
 

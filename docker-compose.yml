@@ -2,9 +2,9 @@ services:
   db:
     image: postgres:16-alpine
     environment:
-      POSTGRES_USER: michess_user
-      POSTGRES_PASSWORD: michess_password
-      POSTGRES_DB: michess_db
+      POSTGRES_USER: regence_user
+      POSTGRES_PASSWORD: regence_password
+      POSTGRES_DB: regence_db
     ports:
       - "15432:5432"
     volumes:

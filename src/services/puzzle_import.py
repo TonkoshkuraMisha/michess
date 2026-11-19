@@ -16,7 +16,8 @@ puzzle_themes. Темы задачи — коды реестра: по тега�
 
 Свои задачи (источник GENERATED_SOURCE) — эндшпильная техника из эндшпильных таблиц
 (scripts/dev/build_endgame_puzzles.py, data/puzzles/endgame_generated.csv.gz): в открытой базе её почти нет. Тема у
-них задана тегом «michess:<код реестра>» (own_themes; идентификатор данных, при переименовании платформы не менялся).
+них задана тегом «regence:<код реестра>» (own_themes). До 19.11.2026 источник и теги назывались «michess» — их
+переименовала миграция d3a8f1c6e2b7.
 """
 
 import csv
@@ -35,8 +36,8 @@ from src.services.mentor_service import analyze_move
 from src.services.themes import THEMES_BY_CODE, themes_for_lichess_tags, themes_for_motif
 
 SOURCE = "lichess"  # значение puzzles.source; вместе с puzzles.source_id (PuzzleId) отличает уже загруженные задачи
-GENERATED_SOURCE = "michess"  # puzzles.source своих задач; данные в базе и в файле — прежнее имя не меняется
-OWN_TAG = "michess:"  # префикс тега темы своей задачи «michess:<код>» — записан в data/puzzles, это данные, не бренд
+GENERATED_SOURCE = "regence"  # puzzles.source своих задач (до 19.11.2026 — «michess», см. миграцию d3a8f1c6e2b7)
+OWN_TAG = "regence:"  # префикс тега темы своей задачи «regence:<код>» — так записан в data/puzzles/endgame_generated.csv.gz
 TAG_VERSION = 3  # 2: ступень — по уточнённой формуле; 3: темы без тегов базы (src/services/theme_detectors.py)
 SUBSET = pathlib.Path(__file__).resolve().parents[2] / "data" / "puzzles" / "lichess_subset.csv.gz"
 EXTRA = SUBSET.with_name("lichess_themes_extra.csv.gz")  # собирает scripts/dev/build_theme_extra.py
@@ -94,7 +95,7 @@ def detected_themes(fen: str, moves: list[str]) -> list[str]:
 
 
 def own_themes(tags: list[str]) -> list[str]:
-    """Темы своих задач: теги «michess:<код>» с кодом из реестра (неизвестные пропускаются)."""
+    """Темы своих задач: теги «regence:<код>» с кодом из реестра (неизвестные пропускаются)."""
     return [code for tag in tags if tag.startswith(OWN_TAG) and (code := tag[len(OWN_TAG):]) in THEMES_BY_CODE]
 
 

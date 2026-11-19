@@ -193,25 +193,32 @@ async def refresh_session(request: Request, response: Response, db: AsyncSession
     Новый короткий access-токен по refresh-cookie (таск 17.5): клиент зовёт при загрузке страницы и незадолго до
     истечения токена. 401 — сессии нет или она отозвана (выход, «выйти везде», смена пароля, удаление аккаунта).
     """
-    found = await auth_sessions.lookup(request.cookies.get(auth_sessions.REFRESH_COOKIE))
+    token = auth_sessions.read_refresh_cookie(request.cookies)
+    found = await auth_sessions.lookup(token)
     user = await db.get(User, found[0]) if found else None
-    if found is None or user is None or user.deleted_at is not None or (user.token_version or 0) != found[1]:
+    if (token is None or found is None or user is None or user.deleted_at is not None
+            or (user.token_version or 0) != found[1]):
         # Ответ собирается здесь, а не исключением: иначе стирание отозванной cookie потерялось бы.
         rejected = JSONResponse({"detail": error_payload("not_authenticated")}, status_code=401,
                                 headers={"WWW-Authenticate": "Bearer"})
         auth_sessions.clear_refresh_cookie(rejected)
+        auth_sessions.clear_refresh_cookie(rejected, auth_sessions.LEGACY_REFRESH_COOKIE)
         return rejected
     # Срок cookie продлевается вместе с записью в Redis: активный игрок не выходит сам собой.
-    auth_sessions.set_refresh_cookie(response, request.cookies[auth_sessions.REFRESH_COOKIE])
+    # Кука под прежним именем переезжает под новое (LEGACY_REFRESH_COOKIE).
+    auth_sessions.set_refresh_cookie(response, token)
+    if auth_sessions.LEGACY_REFRESH_COOKIE in request.cookies:
+        auth_sessions.clear_refresh_cookie(response, auth_sessions.LEGACY_REFRESH_COOKIE)
     return {"access_token": create_user_token(user), "token_type": "bearer"}
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(request: Request) -> Response:
     """Выход на этом устройстве: refresh-сессия удаляется, cookie стирается. Access-токен клиент забывает сам."""
-    await auth_sessions.revoke(request.cookies.get(auth_sessions.REFRESH_COOKIE))
+    await auth_sessions.revoke(auth_sessions.read_refresh_cookie(request.cookies))
     response = Response(status_code=status.HTTP_204_NO_CONTENT)
     auth_sessions.clear_refresh_cookie(response)
+    auth_sessions.clear_refresh_cookie(response, auth_sessions.LEGACY_REFRESH_COOKIE)
     return response
 
 

@@ -18,6 +18,7 @@
 import hashlib
 import logging
 import secrets
+from collections.abc import Mapping
 
 from fastapi import Response
 
@@ -27,8 +28,11 @@ from src.db import redis as redis_module
 logger = logging.getLogger(__name__)
 
 # Имя cookie с refresh-токеном и начало ключа Redis, под которым хранится запись сессии.
-# Имя куки не меняли при переименовании платформы в Regence (18.11.2026): смена разлогинила бы всех игроков.
-REFRESH_COOKIE = "michess_refresh"
+REFRESH_COOKIE = "regence_refresh"
+# Прежнее имя куки (до переименования платформы, 19.11.2026). Её ещё принимает read_refresh_cookie, а первый же
+# /auth/refresh ставит куку под новым именем и стирает старую — игроки не выходят из аккаунта. Убрать константу можно,
+# когда истечёт срок самых старых сессий (REFRESH_TOKEN_EXPIRE_DAYS после выкладки).
+LEGACY_REFRESH_COOKIE = "michess_refresh"
 REFRESH_PREFIX = "refresh:"
 
 
@@ -46,6 +50,11 @@ def cookie_secure() -> bool:
     return settings.is_production if settings.COOKIE_SECURE is None else settings.COOKIE_SECURE
 
 
+def read_refresh_cookie(cookies: Mapping[str, str]) -> str | None:
+    """Refresh-токен из cookie запроса: под новым именем, а если его нет — под прежним (LEGACY_REFRESH_COOKIE)."""
+    return cookies.get(REFRESH_COOKIE) or cookies.get(LEGACY_REFRESH_COOKIE)
+
+
 def set_refresh_cookie(response: Response, token: str) -> None:
     response.set_cookie(
         REFRESH_COOKIE, token, max_age=_ttl_s(), httponly=True, secure=cookie_secure(), samesite="strict",
@@ -53,9 +62,10 @@ def set_refresh_cookie(response: Response, token: str) -> None:
     )
 
 
-def clear_refresh_cookie(response: Response) -> None:
+def clear_refresh_cookie(response: Response, name: str = REFRESH_COOKIE) -> None:
+    """Стирает refresh-cookie (по умолчанию — под текущим именем)."""
     response.delete_cookie(
-        REFRESH_COOKIE, httponly=True, secure=cookie_secure(), samesite="strict", path=f"{settings.API_V1_STR}/auth",
+        name, httponly=True, secure=cookie_secure(), samesite="strict", path=f"{settings.API_V1_STR}/auth",
     )
 
 
