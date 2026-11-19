@@ -12,13 +12,7 @@ import {
     placementPuzzle, solutionKey, tourSize, uncovered, warnsdorffHint,
 } from '../../trainers/boardPuzzles';
 import type {Cell, Piece} from '../../trainers/boardPuzzles';
-
-/** Общие свойства игр: уровень, seed и onFinish(очки, ошибки). */
-interface GameProps {
-    level: number;
-    seed: number;
-    onFinish: (score: number, mistakes: number) => void;
-}
+import type {TrainerGameProps} from './trainerGame';
 
 /** Значки фигур на доске расстановок. */
 const GLYPH: Record<Piece, string> = {Q: '♛', R: '♜', B: '♝', N: '♞'};
@@ -70,7 +64,7 @@ function readSolutions(id: string): string[] {
  * Расстановка count фигур: без боя друг друга (independent) или так, чтобы прикрыть все клетки (dominate). Очки — 100 минус 10
  * за ошибку, не меньше 10. Для ферзей показано число всех решений.
  */
-export function PlacementGame({level, onFinish}: GameProps) {
+export function PlacementGame({level, onFinish}: TrainerGameProps) {
     const {t} = useI18n();
     const puzzle = placementPuzzle(level);
     const [cells, setCells] = useState<Cell[]>([]);
@@ -129,7 +123,7 @@ export function PlacementGame({level, onFinish}: GameProps) {
  * Обход конём доски tourSize(level): очки — CLOSED_TOUR_SCORE (замкнутый) или OPEN_TOUR_SCORE минус 5 за подсказку, не более 90.
  * Недопустимый ход — ошибка, ход не принимается.
  */
-export function KnightTourGame({level, onFinish}: GameProps) {
+export function KnightTourGame({level, onFinish}: TrainerGameProps) {
     const {t} = useI18n();
     const size = tourSize(level);
     const [path, setPath] = useState<Cell[]>([]);
