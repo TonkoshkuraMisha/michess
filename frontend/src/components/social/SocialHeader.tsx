@@ -2,6 +2,9 @@
 // Шапка (таск 17.1): поиск игрока и центр уведомлений (колокольчик). Колокольчик спрашивает сервер раз в
 // POLL_MS и сразу — по событию "notification" из сокета (он открыт на главной доске). Непрочитанные личные сообщения
 // (таск 30.1) входят в число на колокольчике; первая строка списка ведёт в «Сообщения».
+// Данные: socialApi.search, notifications и markRead (services/social.ts, /api/v1/social) и messagesApi.unread
+// (services/messages.ts); обновляется ещё по сокетному событию direct_message и window-событию regence:dm-changed.
+// Рисуется в App.tsx.
 
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Link, useNavigate} from 'react-router-dom';
@@ -13,12 +16,15 @@ import {messagesApi} from '../../services/messages';
 import {notificationLink, socialApi} from '../../services/social';
 import type {AppNotification, Inbox, PlayerCard} from '../../services/social';
 
+// Период опроса уведомлений (мс), если событие сокета не пришло.
 export const POLL_MS = 30_000;
 
+/** Минуты базового времени из полезной нагрузки уведомления; нет числа — «?». */
 function minutes(ms: unknown): string {
     return typeof ms === 'number' ? String(Math.round(ms / 60000)) : '?';
 }
 
+/** Текст уведомления по его виду; строки берутся из каталога social.notify.*, неизвестный вид — ответ на жалобу. */
 export function notificationText(n: AppNotification, t: ReturnType<typeof useI18n>['t']): string {
     const p = n.payload;
     if (n.kind === 'challenge') {
@@ -38,6 +44,7 @@ export function notificationText(n: AppNotification, t: ReturnType<typeof useI18
     return t('social.notify.reportAnswer');
 }
 
+/** Поиск игрока по началу имени (от двух знаков, с задержкой 250 мс) с переходом в профиль. */
 export function PlayerSearch() {
     const {t} = useI18n();
     const [open, setOpen] = useState(false);
@@ -92,6 +99,7 @@ export function PlayerSearch() {
     );
 }
 
+/** Колокольчик: число непрочитанных (уведомления плюс личные сообщения, показ до «9+»); открытие списка помечает уведомления прочитанными. */
 export function NotificationBell() {
     const {t} = useI18n();
     const navigate = useNavigate();

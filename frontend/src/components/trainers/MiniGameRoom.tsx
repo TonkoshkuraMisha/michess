@@ -3,6 +3,7 @@
 // ссылку, второй игрок входит по ней; ходы щелчками «откуда» — «куда», как в игре с ботом. О ходе соперника страница
 // узнаёт, опрашивая комнату раз в POLL_MS; после конца — «Ещё раз» (новая комната, цвета меняются), и страница
 // соперника переходит туда сама (next). Правила и состояние — на сервере (services/miniGameRooms.ts).
+// Подключено в App.tsx.
 
 import {useCallback, useEffect, useState} from 'react';
 import {Link, useNavigate, useParams} from 'react-router-dom';
@@ -17,8 +18,10 @@ import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 import type {MiniGameId} from './MiniGames';
 import {Button} from '../ui';
 
+/** Период опроса комнаты (мс): так страница узнаёт о ходе соперника, отдельного канала для комнат нет. */
 export const POLL_MS = 1000;
 
+/** Комната: ход уходит вместе с номером версии (room.version) — сервер отклоняет устаревший ход; сторону игрока определяет room.you (null — не участник: в ожидающую комнату можно войти, иначе только наблюдать). */
 export function MiniGameRoomPage() {
     const {t} = useI18n();
     const navigate = useNavigate();

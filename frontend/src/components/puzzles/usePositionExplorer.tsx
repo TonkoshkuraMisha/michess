@@ -4,17 +4,21 @@
 // вернуться к позиции задачи. Ходы проверяет chess.js (законность — та же, что на доске PuzzleBoard). Хук хранит
 // только линию от позиции задачи; оценки и подсказок движка нет — это не анализ, а «подвигать фигуры» (честная игра
 // не затрагивается: во время своей партии с человеком тренажёры и так закрыты правилами раздела).
+// Только состояние в памяти (без сети и localStorage). Подключают PuzzlesPage, DefenseTrainer, GeneratedDrills,
+// GuessPage, learn/MateCourse и trainers/{CalcGames, MiniatureGame, StructureQuiz}.
 
 import {useCallback, useMemo, useState} from 'react';
 import {Chess} from 'chess.js';
 import {RotateCcw, Undo2} from 'lucide-react';
 import {useI18n} from '../../i18n';
 
+/** Линия разбора: позиция задачи и ходы UCI, сыгранные от неё (стартовая позиция не меняется). */
 interface Line {
     start: string;
     moves: string[];
 }
 
+/** Интерфейс хука: что показывать на доске и как менять линию разбора. */
 export interface PositionExplorer {
     /** Разбор включён (после ответа). */
     active: boolean;
@@ -28,8 +32,11 @@ export interface PositionExplorer {
     start: (fen: string, moves?: string[]) => void;
     /** Сыграть ход UCI за сторону, чья очередь; незаконный — false, доска не меняется. */
     play: (uci: string) => boolean;
+    /** Вернуть один ход назад. */
     back: () => void;
+    /** Вернуться к позиции задачи (линия очищается, разбор остаётся включённым). */
     reset: () => void;
+    /** Выключить разбор (новая задача или упражнение). */
     stop: () => void;
 }
 
@@ -50,6 +57,7 @@ function replay(line: Line): { fen: string; last: { from: string; to: string } |
     return {fen: game.fen(), last, plies};
 }
 
+/** Хук свободного разбора: хранит только линию ходов, позицию на доске каждый раз пересчитывает replay(). */
 export function usePositionExplorer(): PositionExplorer {
     const [line, setLine] = useState<Line | null>(null);
     const view = useMemo(() => (line ? replay(line) : null), [line]);

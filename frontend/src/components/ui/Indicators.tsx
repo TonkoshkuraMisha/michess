@@ -1,13 +1,15 @@
 // --- FILE: frontend/src/components/ui/Indicators.tsx ---
-// Небольшие показатели (общие компоненты дизайна, план владельца 18.11): Badge — метка состояния (тон по смыслу:
-// success — пройдено, accent — новое/текущее, danger — ошибка/закрыто, neutral — справка), ProgressBar — полоса
-// прогресса с подписью «3 / 10» (для доступности — role="progressbar"), EmptyState — пустой список: иконка, текст и
-// одно действие, чтобы пустая страница подсказывала, что делать дальше.
+// Небольшие показатели (общие компоненты дизайна, план владельца 18.11; docs/design-system.md): Badge — метка
+// состояния (тон по смыслу: success — пройдено, accent — новое/текущее, danger — ошибка/закрыто, neutral — справка),
+// ProgressBar — полоса прогресса с подписью «3 / 10» (для доступности — role="progressbar"), EmptyState — пустой
+// список: иконка, текст и одно действие, чтобы пустая страница подсказывала, что делать дальше.
 
 import type {ReactNode} from 'react';
 
+// Тон метки (см. заголовок файла).
 export type BadgeTone = 'neutral' | 'accent' | 'success' | 'danger';
 
+// Фон, цвет текста и рамка по тонам метки.
 const TONES: Record<BadgeTone, string> = {
     neutral: 'bg-black/30 text-boxwood/85 border-amber-900/50',
     accent: 'bg-amber-500/15 text-amber-200 border-amber-500/50',
@@ -15,6 +17,7 @@ const TONES: Record<BadgeTone, string> = {
     danger: 'bg-rose-500/15 text-rose-200 border-rose-500/50',
 };
 
+/** Метка-«таблетка» с необязательной иконкой. */
 export function Badge({tone = 'neutral', icon, children}: { tone?: BadgeTone; icon?: ReactNode; children: ReactNode }) {
     return (
         <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-bold whitespace-nowrap ${TONES[tone]}`}>
@@ -31,6 +34,7 @@ interface ProgressProps {
     showNumbers?: boolean;
 }
 
+/** Полоса прогресса; доля ограничена 0–100 %, при max <= 0 — пустая, заполненная полоса зеленеет. */
 export function ProgressBar({value, max, label, showNumbers = true}: ProgressProps) {
     const share = max > 0 ? Math.min(1, Math.max(0, value / max)) : 0;
     return (
@@ -51,6 +55,7 @@ interface EmptyProps {
     action?: ReactNode;
 }
 
+/** Пустое состояние списка: подсказка и одно действие. */
 export function EmptyState({icon, title, description, action}: EmptyProps) {
     return (
         <div className="rounded-lg border border-dashed border-amber-900/60 p-6 flex flex-col items-center text-center gap-2">

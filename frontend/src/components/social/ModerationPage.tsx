@@ -1,6 +1,9 @@
 // --- FILE: frontend/src/components/social/ModerationPage.tsx ---
 // Модерация (таск 17.4): модератору — очередь (жалобы, проверка флага нечестной игры, апелляции) и решения; игроку с
 // флагом — апелляция; ReportButton — «Пожаловаться» на игрока (в профиле).
+// Данные: services/moderation.ts — moderationApi (/api/v1/moderation: статус me, очередь, решения resolve, апелляция,
+// жалобы); решает и видит очередь только модератор (проверка на сервере, src/api/moderation.py). Панели обратной связи и
+// приглашений беты — beta/BetaAdmin.tsx. Роут — App.tsx; ReportButton рисуют профиль и ProfileSocial.tsx.
 
 import {useCallback, useEffect, useState} from 'react';
 import {Link} from 'react-router-dom';
@@ -12,7 +15,9 @@ import {moderationApi} from '../../services/moderation';
 import {FeedbackPanel, InvitesPanel} from '../beta/BetaAdmin';
 import type {ModerationAction, ModerationMe, QueueItem, ReportReason} from '../../services/moderation';
 
+// Причины жалобы на игрока.
 const REASONS: ReportReason[] = ['cheating', 'abuse', 'spam', 'other'];
+// Решения модератора по виду записи очереди; набор должен совпадать с обработчиками на сервере (src/services/moderation.py).
 const ACTIONS: Record<QueueItem['kind'], ModerationAction[]> = {
     player: ['dismiss', 'warn', 'chat_ban', 'mark_cheater'],
     message: ['dismiss', 'warn', 'chat_ban'],
@@ -59,6 +64,7 @@ export function ReportButton({username, messageText}: { username: string; messag
     );
 }
 
+/** Страница модерации: апелляция для помеченного игрока и очередь с решениями для модератора. */
 export function ModerationPage() {
     const {t} = useI18n();
     const [me, setMe] = useState<ModerationMe | null>(null);

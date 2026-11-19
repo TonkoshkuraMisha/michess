@@ -1,7 +1,8 @@
 // --- FILE: frontend/src/components/beta/BetaAdmin.tsx ---
-// Программа беты для модератора (таск 24.4), на странице /moderation: приглашения (создать код с лимитом и сроком,
-// скопировать ссылку, отозвать; видно, сколько человек пришло по каждому) и очередь сообщений «Сообщить о проблеме»
-// со статусами.
+// Программа беты для модератора (таск 24.4), на странице /moderation (social/ModerationPage.tsx; панели видны только
+// модератору): приглашения (создать код с лимитом и сроком, скопировать ссылку, отозвать; видно, сколько человек
+// пришло по каждому) и очередь сообщений «Сообщить о проблеме» со статусами. Данные — services/beta.ts
+// (/api/v1/beta/invites и /feedback, src/api/beta.py); права проверяет сервер.
 
 import {useCallback, useEffect, useState} from 'react';
 import {Bug, Ticket} from 'lucide-react';
@@ -11,14 +12,17 @@ import {errorMessage} from '../../services/apiErrors';
 import {betaApi, FEEDBACK_STATUSES, inviteLink} from '../../services/beta';
 import type {FeedbackItem, FeedbackStatus, Invite} from '../../services/beta';
 
+// Стили поля ввода и кнопки панелей (вынесены, чтобы не повторять длинные строки классов).
 const inputClass = 'bg-black/40 border border-amber-900/60 rounded px-2 py-1 text-sm text-amber-100 focus:outline-none focus:border-amber-600';
 const buttonClass = 'px-2 py-1 rounded bg-black/40 border border-amber-800/60 hover:border-amber-500 text-sm';
 
+/** Положительное целое из поля формы; пустое или неверное значение — undefined (поле не отправляется, лимита нет). */
 function positiveInt(raw: string): number | undefined {
     const value = Number.parseInt(raw, 10);
     return Number.isFinite(value) && value > 0 ? value : undefined;
 }
 
+/** Приглашения: режим регистрации (закрыта по приглашениям или открыта), форма нового кода и список кодов. */
 export function InvitesPanel() {
     const {t, dateLocale} = useI18n();
     const [invites, setInvites] = useState<Invite[]>([]);
@@ -113,6 +117,7 @@ export function InvitesPanel() {
     );
 }
 
+/** Очередь сообщений игроков: вкладки по статусам со счётчиками, контекст сообщения и смена статуса. */
 export function FeedbackPanel() {
     const {t, dateLocale} = useI18n();
     // null — неразобранные (новые и взятые в работу).

@@ -1,6 +1,10 @@
 // --- FILE: frontend/src/components/watch/WatchPage.tsx ---
 // «Просмотр» (таск 16.3): «Партия дня», идущие сейчас партии (смотреть — режим зрителя на главной доске), архив
 // мастеров с фильтрами по игроку, годам, дебюту и результату, «забавные подборки».
+// Данные — services/watch.ts (/api/v1/watch/* и /profile/games/live; открыто без входа). Маршрут /watch (App.tsx);
+// кнопка «Смотреть» открывает главную доску со state.spectate = id партии.
+// Внутренние блоки: Live — идущие партии (грузятся один раз), Archive — форма фильтров (draft применяется кнопкой в
+// filters) с листанием по PAGE_SIZE, Collections — подборки (пустые не показываются).
 
 import {useEffect, useState} from 'react';
 import {Link, useNavigate} from 'react-router-dom';
@@ -12,8 +16,10 @@ import {COLLECTIONS, PAGE_SIZE, watchApi} from '../../services/watch';
 import type {ArchiveFilters, ArchiveGame, CollectionKey} from '../../services/watch';
 import type {LiveGameItem} from '../chessboard/types';
 
+/** Вкладки страницы: идущие партии, архив мастеров, подборки. */
 type Tab = 'live' | 'archive' | 'collections';
 
+/** Строка партии архива со ссылкой на просмотр: игроки справа от них — результат, ECO, год и extra. */
 function GameLine({game, extra}: { game: ArchiveGame; extra?: string }) {
     return (
         <Link to={`/game/${game.id}`} className="flex justify-between gap-3 px-2 py-1.5 rounded hover:bg-black/30 text-sm">

@@ -5,6 +5,8 @@
 // * «Единственная защита» — задачи базы с тегом защиты: их ведёт тренировка по приёмам (onDefensiveMove).
 // Угроза и верные ходы приходят с сервера только после ответа.
 // После ответа доска свободна (решение владельца 18.11): позицию можно доиграть за обе стороны (usePositionExplorer).
+// Данные — services/puzzles.ts (puzzlesApi.defense*, /api/v1/puzzles/defense/*; правила — src/services/defense_drills.py).
+// Подключается из PuzzlesPage в режиме «defense»; шапку страницы и переход к теме передаёт родитель.
 
 import {useCallback, useState} from 'react';
 import type {ReactNode} from 'react';
@@ -22,6 +24,7 @@ import {sanMoves, toMove} from './puzzleNotation';
 import {SolutionReplay} from './SolutionReplay';
 import type {ReplayLine, ReplayView} from './SolutionReplay';
 
+/** Этап упражнения: idle → loading → threat (только «Что грозит?») → move → waiting (ждём сервер) → done. */
 type Phase = 'idle' | 'loading' | 'threat' | 'move' | 'waiting' | 'done';
 
 interface Props {
@@ -34,10 +37,12 @@ interface Props {
     onAnalyze?: (fen: string) => void;
 }
 
+/** Ошибка клиента в сообщение интерфейса: код сервера или общая сетевая ошибка. */
 function errorOf(err: unknown): UiMessage {
     return err instanceof UiError ? err.ui : {key: 'common.networkError'};
 }
 
+/** Защитные упражнения: «Что грозит?», «Не зевни», «Единственная защита»; верные ходы приходят после ответа. */
 export function DefenseTrainer({header, initialKind = 'threat', onDefensiveMove, onAnalyze}: Props) {
     const {t} = useI18n();
     const [kind, setKind] = useState<DefenseKind>(initialKind);

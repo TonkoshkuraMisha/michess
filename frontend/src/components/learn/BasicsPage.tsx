@@ -2,6 +2,9 @@
 // Азбука (таск 14.5): /learn/basics — разделы с прогрессом, /learn/basics/:sectionId — уровни раздела по порядку.
 // Крупная доска, без таймеров. Прогресс раздела хранится на сервере как прогресс урока «basics-…» (вошедшим), лучшие
 // оценки уровней (1–3 звезды) — в браузере.
+// Данные: уровни и правила — content/basics/levels.ts и rules.ts (чистые правила, без сети); прогресс — services/lessonProgress.ts
+// (урок «basics-<раздел>»; шаг = число пройденных уровней, сервер хранит наибольший), оценки — localStorage (RATINGS_KEY).
+// Страницы подключены в App.tsx.
 
 import {useEffect, useMemo, useState} from 'react';
 import {Link, useParams} from 'react-router-dom';
@@ -18,9 +21,12 @@ import {boardState, goalMove, rating, starsMove, starsPar} from '../../content/b
 import type {BoardState, Level} from '../../content/basics/rules';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 
+/** localStorage: лучшая оценка (1–3 звезды) по ключу «раздел:номер уровня»; только в этом браузере, сервер оценок не знает. */
 const RATINGS_KEY = 'regence.basics.ratings';
+/** Варианты ответа в уровнях «определи состояние доски»; порядок — порядок кнопок. */
 const STATES: BoardState[] = ['check', 'mate', 'stalemate', 'none'];
 
+/** Оценки уровней из localStorage; недоступное или повреждённое хранилище даёт пустой объект. */
 function loadRatings(): Record<string, number> {
     try {
         return JSON.parse(localStorage.getItem(RATINGS_KEY) ?? '{}') as Record<string, number>;
@@ -29,6 +35,7 @@ function loadRatings(): Record<string, number> {
     }
 }
 
+/** Запоминает оценку уровня, только если она лучше прежней: оценка не снижается при повторном прохождении. */
 function saveRating(key: string, value: number) {
     try {
         const all = loadRatings();
@@ -39,6 +46,7 @@ function saveRating(key: string, value: number) {
     }
 }
 
+/** Прогресс уроков вошедшего по lesson_id; гость — пустой объект, запроса нет. */
 function useBasicsProgress(): Record<string, LessonProgress> {
     const [progress, setProgress] = useState<Record<string, LessonProgress>>({});
     useEffect(() => {
@@ -55,11 +63,13 @@ function useBasicsProgress(): Record<string, LessonProgress> {
     return progress;
 }
 
+/** Сколько уровней раздела пройдено: у завершённого — все (сервер хранит у него step = последний), иначе значение step. */
 function levelsDone(saved: LessonProgress | undefined): number {
     if (!saved) return 0;
     return saved.completed ? saved.steps_total : saved.step;
 }
 
+/** Список разделов азбуки: пройдено N из M и сумма звёзд; когда пройдены все — ссылка к задачам по темам. */
 export function BasicsPage() {
     const {t} = useI18n();
     const progress = useBasicsProgress();
@@ -97,8 +107,14 @@ export function BasicsPage() {
     );
 }
 
+/** Сообщение под доской: ключ каталога и признак «верно» (определяет цвет). */
 type Feedback = { key: MessageKey; ok: boolean } | null;
 
+/**
+ * Один уровень азбуки. Виды (level.kind): stars — взять фигурой все отмеченные поля, оценка по числу ходов против par;
+ * goal — достичь цели (мат, пат и т. п.) одним ходом; question — определить состояние доски по кнопке. Состояние сбрасывается
+ * сменой key у родителя.
+ */
 function LevelPlayer({level, onSolved}: { level: Level; onSolved: (stars: 1 | 2 | 3) => void }) {
     const {t} = useI18n();
     const par = useMemo(() => (level.kind === 'stars' ? starsPar(level) ?? 0 : 0), [level]);
@@ -213,6 +229,10 @@ function isCaptureLevel(level: Extract<Level, { kind: 'stars' }>): boolean {
     return level.stars.some((square) => game.get(square as Square));
 }
 
+/**
+ * Уровни одного раздела по порядку. Каждый решённый уровень сохраняет оценку в браузере и прогресс на сервере
+ * (последний уровень закрывает раздел); незнакомый sectionId — «не найдено».
+ */
 export function BasicsSectionPage() {
     const {t} = useI18n();
     const {sectionId = ''} = useParams<{ sectionId: string }>();

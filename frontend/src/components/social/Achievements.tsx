@@ -1,5 +1,8 @@
 // --- FILE: frontend/src/components/social/Achievements.tsx ---
 // Достижения и звание клуба в профиле (таск 17.6): открытые — с датой, остальные — с прогрессом.
+// Данные: GET /api/v1/profile/{имя}/achievements (список, прогресс, звание клуба; считает сервер) напрямую через fetch,
+// без токена; признак «это я» — socialApi.relation (services/social.ts). Названия и подсказки — каталоги achievements.*.
+// У своих открытых достижений есть кнопка «поделиться»: переход в /feed с готовой карточкой (FeedPage.tsx). Рисуется в Profile.tsx.
 
 import {useEffect, useState} from 'react';
 import {useNavigate} from 'react-router-dom';
@@ -10,6 +13,7 @@ import {API_BASE_URL} from '../../config/api';
 import {useI18n} from '../../i18n';
 import type {MessageKey} from '../../i18n';
 
+/** Достижение в ответе сервера: код (ключ каталога), цель и прогресс, дата получения (null — не открыто), метка «новое». */
 export interface AchievementItem {
     code: string;
     target: number;
@@ -18,11 +22,13 @@ export interface AchievementItem {
     new: boolean;
 }
 
+/** Ответ сервера: звание клуба (ключ каталога achievements.titles.*) и достижения. */
 export interface AchievementsData {
     title: string;
     achievements: AchievementItem[];
 }
 
+/** Блок достижений профиля: сначала открытые, затем закрытые с прогрессом; для чужого профиля без кнопки «поделиться». */
 export function Achievements({username}: { username: string }) {
     const {t} = useI18n();
     const navigate = useNavigate();

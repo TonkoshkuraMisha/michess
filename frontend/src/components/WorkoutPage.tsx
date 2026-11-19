@@ -1,5 +1,6 @@
 // Ежедневная разминка (таск 22.2): /workout — 5 задач по слабым темам, тренажёр, повторение дебютов и «ваша ошибка».
-// Шаги засчитывает сервер по самим тренировкам за сегодня; страница показывает план, отметки и серию дней.
+// Шаги засчитывает сервер по самим тренировкам за сегодня (GET /api/v1/workout, src/api/workout.py); страница
+// показывает план, отметки и серию дней. Без входа — только приглашение войти. Маршрут — App.tsx.
 
 import {useEffect, useState} from 'react';
 import {Link, useNavigate} from 'react-router-dom';
@@ -10,12 +11,14 @@ import {API_BASE_URL} from '../config/api';
 import {getToken} from '../services/authToken';
 import {errorMessage, readApiErrorOr, UiError} from '../services/apiErrors';
 
+/** Шаг плана разминки; вид (kind) задаёт, какие поля пришли и куда ведёт кнопка. */
 export type WorkoutStep =
     | { kind: 'puzzles'; themes: string[]; target: number; done: number }
     | { kind: 'trainer'; trainer: string; done: boolean }
     | { kind: 'repertoire'; due: number; repertoire_id: number | null; done: boolean }
     | { kind: 'mistake'; due: number; done: boolean };
 
+/** План на сегодня: дата, выполнен ли целиком, серия дней подряд и шаги. */
 export interface WorkoutPlan {
     date: string;
     complete: boolean;
@@ -23,6 +26,7 @@ export interface WorkoutPlan {
     steps: WorkoutStep[];
 }
 
+/** Загружает план; отказ сервера превращается в UiError с кодом ошибки. */
 async function fetchPlan(): Promise<WorkoutPlan> {
     const token = getToken();
     const res = await fetch(`${API_BASE_URL}/api/v1/workout`, {headers: token ? {Authorization: `Bearer ${token}`} : {}});
@@ -30,8 +34,10 @@ async function fetchPlan(): Promise<WorkoutPlan> {
     return res.json() as Promise<WorkoutPlan>;
 }
 
+// Шаг выполнен: для задач — набрана цель, для остальных — флаг от сервера.
 const stepDone = (step: WorkoutStep) => (step.kind === 'puzzles' ? step.done >= step.target : step.done);
 
+/** Страница разминки: статус дня и список шагов со ссылками на разделы. */
 export function WorkoutPage() {
     const {t} = useI18n();
     const navigate = useNavigate();

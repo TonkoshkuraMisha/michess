@@ -4,6 +4,9 @@
 // обновляет состояние, пока они идут.
 // Раскладка списка (план владельца 18.11, общие компоненты): шапка, карточки «Арены» и «Машина времени», «Мои
 // турниры» с меткой места или статуса, карьера и создание турнира.
+// Данные: services/tournaments.ts (listTournaments, createTournament, getTournament, startMyGame, withdrawTournament),
+// каталог ботов services/botCatalog.ts и личности игрока services/personalities.ts; имя игрока — GET /api/v1/profile/me.
+// Роуты — App.tsx. Соперников для своего турнира выбирает любой игрок — без порогов по силе.
 
 import {useCallback, useEffect, useMemo, useState} from 'react';
 import {Link, useNavigate, useParams} from 'react-router-dom';
@@ -36,12 +39,16 @@ import {tournamentTitle} from './TournamentGameBar';
 import {Career} from './Career';
 import {getToken} from '../../services/authToken';
 
+// Допустимые размеры турнира по форматам (должны совпадать с проверкой сервера, src/services/tournaments.py).
 const SIZES: Record<TournamentFormat, number[]> = {round_robin: [4, 6, 8], knockout: [4, 8], swiss: [6, 8]};
+// Период обновления страницы турнира (мс), пока сервер играет партии ботов.
 const POLL_MS = 3000;
 
+// Выбранный соперник: вид участника (бот, архетип, личность игрока) и его id; pickKey — ключ для сравнения.
 type Pick = { kind: ParticipantKind; id: string | number };
 const pickKey = (p: Pick) => `${p.kind}:${p.id}`;
 
+/** Форма нового турнира: формат, размер, контроль и соперники — выбранные вручную или случайные (режимы my_level/stronger/weaker). */
 function CreateTournament() {
     const {t, tp} = useI18n();
     const navigate = useNavigate();
@@ -170,6 +177,7 @@ function CreateTournament() {
     );
 }
 
+/** Страница списка: ссылки на арены и «Машину времени», мои турниры, карьера и создание. */
 export function TournamentsPage() {
     const {t} = useI18n();
     const [items, setItems] = useState<TournamentSummary[]>([]);
@@ -212,6 +220,7 @@ export function TournamentsPage() {
     );
 }
 
+/** Итог партии глазами места seat: «1», «½», «0»; пусто, пока партия не сыграна. */
 function resultFor(game: TournamentGame, seat: number): string {
     if (!game.result) return '';
     if (game.result === '1/2-1/2') return '½';
@@ -219,12 +228,14 @@ function resultFor(game: TournamentGame, seat: number): string {
     return (game.white_seat === seat) === whiteWon ? '1' : '0';
 }
 
+/** Название круга сетки по числу кругов от конца: финал, полуфинал, четвертьфинал или «круг N». */
 function knockoutRoundName(t: ReturnType<typeof useI18n>['t'], size: number, round: number): string {
     const fromEnd = Math.max(1, Math.ceil(Math.log2(size))) - round;
     if (fromEnd > 2) return t('tournaments.knockoutRounds.round', {n: round});
     return t(`tournaments.knockoutRounds.${fromEnd === 0 ? 'final' : fromEnd === 1 ? 'semifinal' : 'quarterfinal'}`);
 }
 
+/** Страница одного турнира: таблица (круговой, швейцарка) или сетка, расписание по турам, действия игрока, диплом и праздник. */
 export function TournamentView() {
     const {t, dateLocale} = useI18n();
     const navigate = useNavigate();

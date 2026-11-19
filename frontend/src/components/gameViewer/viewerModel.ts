@@ -1,14 +1,17 @@
 // --- FILE: frontend/src/components/gameViewer/viewerModel.ts ---
 // Данные и чистые функции просмотра партии (вынесено из GameViewer.tsx, таск 17.6): типы отчёта разбора, оценка
-// позиции по материалу без движка, шкала оценки, критические моменты, точки графика.
+// позиции по материалу без движка, шкала оценки, критические моменты, точки графика. Форма отчёта
+// (FullGameAnalysisReport) повторяет ответ сервера GET /analysis/game/{id} (services/analysis.ts); без сети и состояния.
 
 import type {Chess} from 'chess.js';
 import type {CoachArrowKind, CoachComment} from '../../services/coach';
 import type {GameSummary} from '../../services/gameSummary';
 
+// Подписи вертикалей и горизонталей в порядке отрисовки доски со стороны белых (сверху вниз по рангам).
 export const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 export const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
 
+/** Оценка одного хода в отчёте разбора: оценка позиции после хода, потеря в сотых пешки, класс и символ хода. */
 export interface MoveEvaluationItem {
     ply: number;
     move_number: number;
@@ -26,9 +29,11 @@ export interface MoveEvaluationItem {
     coach?: CoachComment | null;
 }
 
+// Фазы партии для точности по фазам.
 export type GamePhase = 'opening' | 'middlegame' | 'endgame';
 export const GAME_PHASES: GamePhase[] = ['opening', 'middlegame', 'endgame'];
 
+/** Итоги разбора одной стороны: точность, счёт оценок ходов, средняя потеря. */
 export interface SideSummaryStats {
     accuracy: number;
     best: number;
@@ -41,6 +46,7 @@ export interface SideSummaryStats {
     phases?: Partial<Record<GamePhase, number | null>>;
 }
 
+/** Полный отчёт разбора партии: итоги сторон, оценка каждого хода и итог партии (summary). */
 export interface FullGameAnalysisReport {
     game_id: number;
     engine: string;
@@ -58,6 +64,7 @@ export const COACH_ARROW_COLORS: Record<CoachArrowKind, string> = {
     idea: 'rgba(56, 189, 248, 0.88)',
 };
 
+// Материальная стоимость фигур в сотых пешки для статической оценки без движка (король не считается).
 const PIECE_MAT_VALUES: Record<string, number> = {p: 100, n: 320, b: 330, r: 500, q: 900, k: 0};
 
 /** Оценка за белых по материалу — пока нет разбора движком. */
@@ -87,6 +94,7 @@ export function evalCpToWhitePercentage(evalCp: number): number {
     return Math.max(4, Math.min(96, Math.round(pct)));
 }
 
+/** Цвет символа хода в записи партии по классу оценки; прочие классы — нейтральный. */
 export function classificationBadgeClass(classification?: string): string {
     switch (classification) {
         case 'Best':
@@ -102,6 +110,7 @@ export function classificationBadgeClass(classification?: string): string {
     }
 }
 
+// Вид критического момента (ключ в каталоге viewer.moments.*).
 export type MomentKey = 'turning' | 'worstWhite' | 'worstBlack' | 'missed';
 
 /** Критические моменты (таск B.5): перелом, худшие ходы сторон, упущенные удары — по одному на ход, по порядку. */
@@ -119,6 +128,7 @@ export function criticalMoments(report: FullGameAnalysisReport): { ply: number; 
         .sort((a, b) => a.ply - b.ply);
 }
 
+/** Точка графика оценки: индекс хода, подпись для подсказки и оценка в пешках. */
 export interface ChartPoint {
     idx: number;
     ply: number;

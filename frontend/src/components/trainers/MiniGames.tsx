@@ -3,6 +3,7 @@
 // бота (за белых или за чёрных), вдвоём за одним устройством или с другом по ссылке (комната — MiniGameRoom.tsx). Правила и бот — на сервере (src/services/mini_games.py):
 // клиент присылает позицию и ход щелчками «откуда» — «куда», сервер проверяет ход и подводит итог. Первая победа над
 // ботом записывается в прогресс уроков (miniProgressId) — по ней засчитывается шаг курса.
+// Данные: сервер — src/api/mini_games.py (/api/v1/mini-games/{игра}/move и /bot-first), правила — src/services/mini_games.py. Подключено в App.tsx.
 
 import {useEffect, useState} from 'react';
 import {Link, useNavigate, useParams} from 'react-router-dom';
@@ -16,8 +17,10 @@ import {getToken} from '../../services/authToken';
 import {saveLessonProgress} from '../../services/lessonProgress';
 import {miniRoomsApi} from '../../services/miniGameRooms';
 
+/** Коды игр — те же, что знает сервер (src/services/mini_games.py); порядок — порядок карточек. */
 export const MINI_GAMES = ['pawn_war', 'king_pawns', 'queen_vs_pawns', 'rook_vs_pawns', 'capture_flag'] as const;
 export type MiniGameId = typeof MINI_GAMES[number];
+/** Стартовые позиции игр; должны совпадать с src/services/mini_games.py. */
 const START: Record<MiniGameId, string> = {
     pawn_war: '8/pppppppp/8/8/8/8/PPPPPPPP/8 w - - 0 1',
     king_pawns: '4k3/pppppppp/8/8/8/8/PPPPPPPP/4K3 w - - 0 1',
@@ -26,6 +29,7 @@ const START: Record<MiniGameId, string> = {
     capture_flag: '4k3/pppppppp/8/8/8/8/PPPPPPPP/4K3 w - - 0 1',
 };
 
+/** Режим партии: игрок за белых против бота, игрок за чёрных против бота или двое за одним устройством. */
 type Mode = 'bot-white' | 'bot-black' | 'hotseat';
 
 /** Запись прогресса игры тренера: lesson_progress «mini-<id>», выполнена после первой победы над ботом. */
@@ -33,12 +37,14 @@ export function miniProgressId(id: string): string {
     return `mini-${id.replace(/_/g, '-')}`;
 }
 
+/** Ответ сервера на ход: новая позиция, итог (1-0, 0-1, 1/2-1/2 или null) и ответный ход бота (uci), если он был. */
 interface MoveReply {
     fen: string;
     result: string | null;
     bot_move: string | null;
 }
 
+/** POST на /api/v1/mini-games; отказ сервера — UiError с кодом ошибки. */
 async function post(path: string, body: object): Promise<MoveReply> {
     const res = await fetch(`${API_BASE_URL}/api/v1/mini-games${path}`, {
         method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
@@ -47,6 +53,7 @@ async function post(path: string, body: object): Promise<MoveReply> {
     return res.json() as Promise<MoveReply>;
 }
 
+/** Карточки пяти игр. */
 export function MiniGamesPage() {
     const {t} = useI18n();
     return (
@@ -70,6 +77,7 @@ export function MiniGamesPage() {
     );
 }
 
+/** Партия: ход щелчками «откуда» — «куда», проверку и ответ бота делает сервер; победа над ботом записывается в прогресс. */
 export function MiniGamePage() {
     const {t} = useI18n();
     const {gameId = ''} = useParams<{ gameId: string }>();

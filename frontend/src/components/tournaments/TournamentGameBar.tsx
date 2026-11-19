@@ -3,6 +3,9 @@
 // доски посреди партии нельзя — брошенная партия засчитывается поражением), а после партии — «Следующая партия»,
 // «Таблица турнира» и ожидание, пока боты доигрывают тур. ContinueTournaments — на главной: турниры, где ждут
 // партию игрока, чтобы вернуться в них и после перезагрузки страницы.
+// Данные: services/tournaments.ts — getTournament (опрос раз в BAR_POLL_MS, пока ждём итог партии и боты доигрывают
+// тур), startMyGame (сервер сам начинает партию и засчитывает брошенную поражением), listTournaments (для
+// ContinueTournaments). Рисуется в Chessboard.tsx; праздник призёра — TournamentCelebration.tsx.
 
 import {useCallback, useEffect, useState} from 'react';
 import {Link, useNavigate} from 'react-router-dom';
@@ -19,12 +22,15 @@ import type {Tournament, TournamentSummary} from '../../services/tournaments';
 import {eventTitle} from '../../services/timeMachine';
 import {markCelebrated, shouldCelebrate, TournamentCelebration} from './TournamentCelebration';
 
+// Период опроса сервера (мс), пока после партии ждём запись итога и доигрывание тура ботами.
 export const BAR_POLL_MS = 3000;
 
+/** Название турнира для плашки и праздника: историческое — по ключу события, обычное — «формат · размер». */
 export function tournamentTitle(t: Pick<Tournament, 'event_key' | 'format' | 'size'>, tr: I18n['t']): string {
     return t.event_key ? eventTitle(t.event_key, tr) : `${tr(`tournaments.formats.${t.format}`)} · ${t.size}`;
 }
 
+/** Таблица поверх доски: очки и места (круговой, швейцарка) либо участники и выбывшие (сетка на выбывание). */
 function StandingsOverlay({tournament, onClose}: { tournament: Tournament; onClose: () => void }) {
     const {t} = useI18n();
     const name = (seat: number) => participantName(tournament.players.find((p) => p.seat === seat)!, t);

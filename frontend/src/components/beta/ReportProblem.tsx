@@ -1,7 +1,9 @@
 // --- FILE: frontend/src/components/beta/ReportProblem.tsx ---
 // «Сообщить о проблеме» (таск 24.4): окно с любой страницы, в том числе без входа. К тексту прикладывается
 // контекст — путь страницы, версия приложения, язык и размер окна; что именно уйдёт, показано прямо в форме.
-// Окно — общий Modal (затемнение, крестик, Esc). CommunityLink — ссылка на канал сообщества: видна, только когда она задана в настройках сервера (COMMUNITY_URL).
+// Окно — общий Modal (затемнение, крестик, Esc). Отправка — services/beta.ts, POST /api/v1/beta/feedback.
+// CommunityLink — ссылка на канал сообщества: видна, только когда она задана в настройках сервера (COMMUNITY_URL);
+// версию и ссылку отдаёт useSiteConfig. Окно открывает App.tsx, ссылку показывает ещё About.tsx.
 
 import {useState} from 'react';
 import {useLocation} from 'react-router-dom';
@@ -12,9 +14,11 @@ import {errorMessage} from '../../services/apiErrors';
 import {Modal} from '../ui';
 import {betaApi, communityPlatform, screenSize, useSiteConfig} from '../../services/beta';
 
+// Границы длины сообщения в символах; те же значения проверяет сервер (src/services/beta.py: MESSAGE_MIN, MESSAGE_MAX).
 const MESSAGE_MIN = 5;
 const MESSAGE_MAX = 2000;
 
+/** Ссылка на канал сообщества (название платформы — по адресу); без заданного COMMUNITY_URL не рисуется. */
 export function CommunityLink({className = ''}: { className?: string }) {
     const {t} = useI18n();
     const {communityUrl} = useSiteConfig();
@@ -27,6 +31,7 @@ export function CommunityLink({className = ''}: { className?: string }) {
     );
 }
 
+/** Окно отправки сообщения; после успешной отправки показывает подтверждение вместо формы. */
 export function ReportProblem({onClose}: { onClose: () => void }) {
     const {t, language} = useI18n();
     const location = useLocation();

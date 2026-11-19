@@ -3,6 +3,10 @@
 // определяет конференцию; очки игрока в любой арене идут в зачёт его конференции. Страну игрок указывает сам:
 // подсказка (страна от сервера или из языка браузера) только предлагается и без нажатия никуда не отправляется.
 // Под Кубком — матчи конференций сезона и ближайшие (ConferenceMatches.tsx).
+// Данные: services/conferences.ts — conferencesApi.page (GET /api/v1/conferences: Кубок, таблица стран, свой профиль,
+// матчи) и setCountry (PUT /api/v1/conferences/me); название страны даёт браузер (Intl.DisplayNames). Роут — App.tsx.
+// Конференцию определяет только страна; смена конференции доступна не чаще раза за сезон (правило и флаг can_change
+// считает сервер). В зачёт арены идёт сумма очков лучших top_players участников конференции.
 
 import {useCallback, useEffect, useMemo, useState} from 'react';
 import {Link} from 'react-router-dom';
@@ -15,6 +19,7 @@ import {conferencesApi, countryName, localeCountry} from '../../services/confere
 import type {ConferencesData} from '../../services/conferences';
 import {MatchList} from './ConferenceMatches';
 
+/** Страница конференций: Кубок сезона, матчи и форма выбора страны (для вошедшего игрока; гостю — приглашение войти). */
 export function ConferencesPage() {
     const {t, language} = useI18n();
     const [data, setData] = useState<ConferencesData | null>(null);

@@ -1,6 +1,7 @@
 // --- FILE: frontend/src/components/gameViewer/AnalysisSummary.tsx ---
 // Части панели разбора партии (вынесено из GameViewer.tsx, таск 17.6): критические моменты, карточка стороны,
-// график оценки и комментарий наставника.
+// график оценки и комментарий наставника. Чистые вычисления — viewerModel.ts; данные приходят пропсами
+// из GameViewer.tsx (отчёт разбора сервера и текст наставника, собранный клиентом из кодов coach.*).
 
 import {Area, AreaChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis} from 'recharts';
 import {GraduationCap} from 'lucide-react';
@@ -8,6 +9,7 @@ import {useI18n} from '../../i18n';
 import {GAME_PHASES, criticalMoments} from './viewerModel';
 import type {ChartPoint, FullGameAnalysisReport, SideSummaryStats} from './viewerModel';
 
+/** Список критических моментов партии (перелом, худшие ходы, упущенное); щелчок переходит к ходу. */
 export function CriticalMoments({report, viewIndex, onSelect}: {
     report: FullGameAnalysisReport; viewIndex: number; onSelect: (index: number) => void;
 }) {
@@ -94,6 +96,7 @@ export function EvalChart({data, onSelect}: { data: ChartPoint[]; onSelect: (ind
     );
 }
 
+/** Комментарий наставника к текущему ходу; флажок включает показ его стрелок на доске (если они есть). */
 export function CoachCommentBox({text, hasArrows, showArrows, onShowArrowsChange}: {
     text: string; hasArrows: boolean; showArrows: boolean; onShowArrowsChange: (value: boolean) => void;
 }) {

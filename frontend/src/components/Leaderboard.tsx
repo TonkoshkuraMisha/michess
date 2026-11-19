@@ -1,7 +1,7 @@
 // --- FILE: frontend/src/components/Leaderboard.tsx ---
 // Таблица лидеров (/leaderboard): лучшие игроки по каждой категории контроля времени — пуля, блиц, рапид, классика.
-// Данные — /profile/leaderboard; ботов, архивных игроков, удалённых аккаунтов и игроков с флагом нечестной игры
-// в ней нет.
+// Данные — GET /api/v1/profile/leaderboard (src/api/profile.py): 50 лучших по текущему рейтингу категории; ботов,
+// архивных игроков, удалённых аккаунтов и игроков с флагом нечестной игры в ней нет. Маршрут — App.tsx.
 
 import {useState, useEffect} from 'react';
 import {PlayerAvatar} from './PlayerAvatar';
@@ -17,10 +17,13 @@ interface LeaderboardEntry {
     rating: number;
 }
 
+// Категории рейтинга; те же коды использует сервер.
 type RatingCategory = 'bullet' | 'blitz' | 'rapid' | 'classical';
 
+// Порядок вкладок категорий в интерфейсе.
 const CATEGORY_TABS: RatingCategory[] = ['bullet', 'blitz', 'rapid', 'classical'];
 
+/** Страница таблицы лидеров с переключателем категории; строка ведёт в профиль игрока. */
 export default function Leaderboard() {
     const {t} = useI18n();
     const navigate = useNavigate();

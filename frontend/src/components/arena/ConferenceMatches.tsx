@@ -12,6 +12,7 @@ import type {MatchDetail} from '../../services/arenas';
 import type {MatchRow} from '../../services/conferences';
 import {EmptyState, Section} from '../ui';
 
+// Тип функции перевода t из useI18n — для вспомогательных функций вне компонентов.
 type T = ReturnType<typeof useI18n>['t'];
 
 /** Название конференции на языке игрока; незнакомый ключ — как есть. */
@@ -27,6 +28,7 @@ export function matchScore(value: number): string {
     return whole === 0 && half ? half : `${whole}${half}`;
 }
 
+/** Счёт матча и доски (по партии белыми и чёрными на каждой) на странице матча /arenas/:id; без досок — подсказка. */
 export function MatchBoards({match}: { match: MatchDetail }) {
     const {t} = useI18n();
     return (
@@ -68,6 +70,7 @@ export function MatchBoards({match}: { match: MatchDetail }) {
     );
 }
 
+/** Список матчей конференций сезона и ближайших: у ещё не сыгранного — время начала, у идущего и законченного — счёт. */
 export function MatchList({matches}: { matches: MatchRow[] }) {
     const {t, language} = useI18n();
     return (

@@ -1,11 +1,13 @@
 // Предохранитель страниц: ошибка отрисовки одной страницы не гасит всё приложение — шапка и меню остаются,
 // на месте страницы сообщение и «Обновить». Сбрасывается при переходе на другой адрес (resetKey).
+// Тексты — каталог common.* (i18n); ошибка пишется в консоль браузера. Оборачивает маршруты в App.tsx.
 
 import {Component} from 'react';
 import type {ErrorInfo, ReactNode} from 'react';
 import {Link} from 'react-router-dom';
 import {useI18n} from '../i18n';
 
+/** Запасной вид страницы: сообщение, перезагрузка и ссылка на главную. */
 function Fallback() {
     const {t} = useI18n();
     return (
@@ -22,6 +24,7 @@ function Fallback() {
     );
 }
 
+/** resetKey — адрес текущей страницы: его смена снимает признак сбоя. */
 interface Props {
     resetKey: string;
     children: ReactNode;
@@ -32,6 +35,10 @@ interface State {
     key: string;
 }
 
+/**
+ * Классовый компонент: перехватывать ошибки отрисовки потомков в React можно только так. Признак сбоя
+ * (failed) сбрасывается в getDerivedStateFromProps, когда меняется resetKey.
+ */
 export class PageErrorBoundary extends Component<Props, State> {
     state: State = {failed: false, key: this.props.resetKey};
 

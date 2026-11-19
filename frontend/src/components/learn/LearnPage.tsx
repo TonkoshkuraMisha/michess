@@ -3,6 +3,7 @@
 // Прогресс хранится на сервере только у вошедших; без входа урок проходится, но не запоминается.
 // Раскладка (план владельца 18.11, общие компоненты): «Большой курс» — главная карточка, курсы и тренажёры —
 // сетка карточек (SCHOOL_CARDS), уроки — по курсам с полосой «пройдено N из M» у вошедших.
+// Данные: курсы и уроки — content/lessons (COURSES, lessonById, lessonsOfCourse, nextLesson); прогресс — services/lessonProgress.ts. Подключено в App.tsx.
 
 import {useEffect, useRef, useState} from 'react';
 import {Link, useParams} from 'react-router-dom';
@@ -17,6 +18,7 @@ import type {LessonProgress} from '../../services/lessonProgress';
 import {LessonPlayer} from './LessonPlayer';
 import {getToken} from '../../services/authToken';
 
+/** Прогресс уроков вошедшего по lesson_id и признак «загружено»; у гостя запроса нет, loaded сразу true. */
 function useProgress(): [Record<string, LessonProgress>, boolean] {
     const [progress, setProgress] = useState<Record<string, LessonProgress>>({});
     const [loaded, setLoaded] = useState(false);
@@ -48,6 +50,7 @@ const SCHOOL_CARDS: { id: string; to: string; title: MessageKey; text: MessageKe
     {id: 'explorer', to: '/tools', title: 'explorer.title', text: 'explorer.card', icon: Compass},
 ];
 
+/** Главная школы: карточка большого курса, карточки разделов и уроки по курсам с полосой прогресса. */
 export function LearnPage() {
     const {t, tp, language} = useI18n();
     const [progress] = useProgress();
@@ -109,6 +112,10 @@ export function LearnPage() {
     );
 }
 
+/**
+ * Урок в проигрывателе: незаконченный открывается с дальнего шага, пройденный — сначала. Дальний шаг и итог экзамена
+ * сохраняются на сервере; сбой записи показывается пометкой, урок при этом продолжается.
+ */
 export function LessonPage() {
     const {lessonId = ''} = useParams();
     const {t, language} = useI18n();

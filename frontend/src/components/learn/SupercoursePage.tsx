@@ -1,3 +1,4 @@
+// --- FILE: frontend/src/components/learn/SupercoursePage.tsx ---
 // Большой курс (таск 27.6): /learn/course — уровни 0–5 по разрядам, модули по ветвям (тактика, мат, эндшпиль,
 // стратегия, дебют, расчёт, партии). Шаги модуля ведут в готовые разделы; модуль без шагов — место в каркасе под
 // наполнение: игроку не показывается, виден в режиме «каркас курса». Модуль закрывается сам, когда выполнены все его
@@ -5,6 +6,8 @@
 // модуль из непроверяемых шагов (библиотека, репертуар…) игрок отмечает сам — запись урока course-<код>.
 // Ссылка ?level=N&module=КОД (карточка «Урок по теме ошибки» в итоге партии) открывает уровень N и подсвечивает
 // модуль, прокручивая к нему.
+// Данные: content/supercourse.ts (COURSE, BRANCHES, пороги экзаменов уровней), content/programs.ts (ссылки шагов); экзамены уровней (модули X<n>) —
+// fetchExamSummary из ExamPage.tsx; темы без задач — puzzlesApi.training(). Подключено в App.tsx.
 
 import {useEffect, useMemo, useState} from 'react';
 import {useNavigate, useSearchParams} from 'react-router-dom';
@@ -20,6 +23,10 @@ import {puzzlesApi} from '../../services/puzzles';
 import {activityLink} from '../../content/programs';
 import {activityLabel} from '../ProgramsPage';
 
+/**
+ * Большой курс: вкладки уровней, модули по ветвям. Множество done складывается из четырёх источников: записи уроков, автозачёт
+ * по фактам, пройденные экзамены уровней и ручная отметка непроверяемых модулей (markDone).
+ */
 export function SupercoursePage() {
     const {t, language} = useI18n();
     const navigate = useNavigate();

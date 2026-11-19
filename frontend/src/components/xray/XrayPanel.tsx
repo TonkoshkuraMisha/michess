@@ -1,6 +1,7 @@
 // --- FILE: frontend/src/components/xray/XrayPanel.tsx ---
 // Панель «рентгена» (таск 12.1): режимы включаются по отдельности, «за соперника» — те же подсказки для другой
 // стороны. Под каждым режимом — как он выглядит на доске (не только цвет).
+// Данных не получает: настройки — из useXraySettings (передаёт Chessboard.tsx или GameViewer.tsx), подписи — xray.*.
 
 import {ScanEye} from 'lucide-react';
 import {useI18n} from '../../i18n';
@@ -13,6 +14,7 @@ interface Props {
     canSelect?: boolean;
 }
 
+/** Панель переключателей режимов «рентгена» и флажок «за соперника». */
 export function XrayPanel({settings, canSelect = true}: Props) {
     const {t} = useI18n();
     const modes = XRAY_MODES.filter((mode) => mode !== 'safety' || canSelect);

@@ -1,6 +1,7 @@
 // --- FILE: frontend/src/components/trainers/BlindGames.tsx ---
 // Задачи вслепую и «Где фигура?» (таск 19.6): BLIND_ROUNDS заданий за попытку. Позиция показывается, пока игрок не
 // нажмёт «Запомнил»; затем ходы объявляются по одному, и ответ даётся на пустой доске (видны поля и координаты).
+// Данные: партии классики (content/classics) и чистые правила trainers/blindPuzzles.ts; ответ оценивается scoreStop. Запускается из TrainersPage.tsx.
 
 import {useEffect, useMemo, useState} from 'react';
 import {useI18n} from '../../i18n';
@@ -10,16 +11,24 @@ import {loadAllClassics, scoreStop} from '../../content/classics';
 import type {ClassicGame} from '../../content/classics';
 import {blindTask, whereQuestion} from '../../trainers/blindPuzzles';
 
+/** Заданий в одной попытке. */
 export const BLIND_ROUNDS = 5;
+/** Пауза между объявляемыми ходами (мс): время удержать позицию в голове. */
 const MOVE_STEP_MS = 1400;
+/** Буква фигуры chess.js → ключ названия фигуры в каталоге сообщений. */
 const PIECE_NAMES = {k: 'king', q: 'queen', r: 'rook', b: 'bishop', n: 'knight', p: 'pawn'} as const;
 
+/** Общие свойства игр: уровень, seed (тот же seed — те же задания) и onFinish(очки, ошибки). */
 interface GameProps {
     level: number;
     seed: number;
     onFinish: (score: number, mistakes: number) => void;
 }
 
+/**
+ * Фазы: look (позиция на виду) → moves (ходы по одному, доска скрыта) → answer (ход или поле на пустой доске) → review.
+ * Ответ ниже 80 баллов считается ошибкой.
+ */
 export function BlindGame({mode, level, seed, onFinish}: GameProps & { mode: 'move' | 'where' }) {
     const {t} = useI18n();
     const [games, setGames] = useState<ClassicGame[] | null>(null);

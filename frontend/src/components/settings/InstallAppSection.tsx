@@ -1,10 +1,12 @@
 // Настройки → «Приложение» (таск 24.2): установить сайт на главный экран. Кнопка — где браузер разрешает установку
 // (Chrome, Edge, Android); на iPhone и iPad — подсказка, как добавить вручную; уже установлено — так и пишем.
+// Состояние и системный диалог — services/pwa.ts (useInstallState, promptInstall); раздел подключает Settings.tsx.
 
 import {Smartphone} from 'lucide-react';
 import {useI18n} from '../../i18n';
 import {promptInstall, useInstallState} from '../../services/pwa';
 
+/** Раздел настроек; классы секции и заголовка передаёт Settings.tsx, чтобы оформление совпадало с соседними разделами. */
 export function InstallAppSection({sectionClass, headingClass}: { sectionClass: string; headingClass: string }) {
     const {t} = useI18n();
     const state = useInstallState();

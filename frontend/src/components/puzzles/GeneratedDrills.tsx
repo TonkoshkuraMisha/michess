@@ -3,6 +3,8 @@
 // верным ходом; мат в 2 — после первого хода отвечает соперник. Режим «на минуту»: счёт ведёт сервер, три ошибки —
 // конец, лучший счёт — личный рекорд для сочетания «вид.фигура.уровень».
 // После ответа (кроме забега на время) доска свободна: позицию можно доиграть за обе стороны (usePositionExplorer).
+// Данные — services/puzzles.ts (puzzlesApi.drills*, /api/v1/puzzles/drills/*; генерация и рекорды — сервер,
+// src/services/generated_drills.py). Подключается из PuzzlesPage в режиме «drills»; шапку передаёт родитель.
 
 import {useCallback, useEffect, useRef, useState} from 'react';
 import type {ReactNode} from 'react';
@@ -19,10 +21,14 @@ import {solutionSan, toMove} from './puzzleNotation';
 import {SolutionReplay} from './SolutionReplay';
 import type {ReplayView} from './SolutionReplay';
 
+/** Этап упражнения: idle → loading → solving → waiting (ждём сервер или ответ соперника) → done. */
 type Phase = 'idle' | 'loading' | 'solving' | 'waiting' | 'done';
 
+/** Пауза перед ответом соперника на первый ход («мат в 2»), мс. */
 const REPLY_DELAY_MS = 400;
+/** Пауза перед следующим упражнением забега после ответа, мс. */
 const NEXT_DELAY_MS = 700;
+/** Знак фигуры по коду в ответе сервера (для подписи упражнения); «x» — любая из них. */
 const FIGURINES: Record<string, string> = {q: '♕', r: '♖', b: '♗', n: '♘', x: '?'};
 
 interface Props {
@@ -32,10 +38,12 @@ interface Props {
     onAnalyze?: (fen: string) => void;
 }
 
+/** Ошибка клиента в сообщение интерфейса: код сервера или общая сетевая ошибка. */
 function errorOf(err: unknown): UiMessage {
     return err instanceof UiError ? err.ui : {key: 'common.networkError'};
 }
 
+/** Упражнения-генераторы: выбор вида, фигуры и уровня, одиночные позиции и забег «на минуту». */
 export function GeneratedDrills({header, initialKind = 'capture', onAnalyze}: Props) {
     const {t} = useI18n();
     const [kind, setKind] = useState<DrillKind>(initialKind);

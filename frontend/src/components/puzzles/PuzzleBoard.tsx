@@ -6,6 +6,10 @@
 // Перетаскивание: фигура «прилипает» к указателю, ход — по полю под ним при отпускании. Отпустили на том же поле
 // (или просто щёлкнули) — фигура остаётся выбранной, и ход можно закончить щелчком по полю. Выбор привязан к позиции:
 // после ответа соперника или новой задачи старый выбор не действует.
+// Внешний вид — config/boardAppearance.ts (localStorage игрока), звуки — services/soundEngine. Ходы проверяет
+// chess.js, а верность хода решает родитель (onMove отдаёт UCI). Общая доска для PuzzlesPage, тренажёров и уроков
+// (learn/*, trainers/*, repertoire/*, chess960/*, study/*, guess/*, tools/*).
+// PuzzleBoard рисует фигуры, подсветки, стрелки и подсказки и принимает ход (перетаскивание, щелчки, выбор превращения).
 
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import type {PointerEvent as ReactPointerEvent} from 'react';
@@ -18,7 +22,9 @@ import {
 } from '../../config/boardAppearance';
 import {BoardTextureLayer} from '../chessboard/BoardTextureLayer';
 
+/** Буквы вертикалей слева направо (для перевода поля в координаты). */
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
+/** Фигуры, предлагаемые при превращении, в порядке показа. */
 const PROMOTIONS = ['q', 'r', 'b', 'n'] as const;
 /** Сдвиг указателя, после которого нажатие считается перетаскиванием, а не щелчком. */
 const DRAG_THRESHOLD_PX = 4;
@@ -50,12 +56,14 @@ interface Props {
     sound?: boolean;
 }
 
+/** Стрелка поверх доски: from и to — поля, color по умолчанию — зелёный. */
 export interface BoardArrow {
     from: string;
     to: string;
     color?: 'green' | 'red' | 'blue' | 'yellow';
 }
 
+/** Цвет стрелки по имени (rgba с прозрачностью, чтобы не скрывать фигуры). */
 const ARROW_COLORS: Record<NonNullable<BoardArrow['color']>, string> = {
     green: 'rgba(22, 163, 74, 0.85)',
     red: 'rgba(220, 38, 38, 0.85)',
@@ -63,6 +71,7 @@ const ARROW_COLORS: Record<NonNullable<BoardArrow['color']>, string> = {
     yellow: 'rgba(234, 179, 8, 0.9)',
 };
 
+/** Перетаскивание: поле старта, точка нажатия и текущая точка; moved — прошли ли DRAG_THRESHOLD_PX. */
 interface Drag {
     from: string;
     startX: number;

@@ -1,6 +1,10 @@
 // --- FILE: frontend/src/components/tournaments/Career.tsx ---
-// Карьера турниров (таск 15.4): лестница готовых турниров нарастающей силы. Основной турнир открывается местом в
-// верхней половине предыдущего, скрытые приглашения («???») — местом в тройке в своём турнире.
+// Карьера турниров (таск 15.4) — блок на странице /tournaments (рисует TournamentsPage.tsx): лестница готовых
+// турниров нарастающей силы. Основной турнир открывается местом в верхней половине предыдущего, скрытые
+// приглашения («???») — местом в тройке в своём «воротном» турнире; доступность и лучшие места считает сервер.
+// Данные: services/tournaments.ts — getCareer (GET /api/v1/tournaments/career, src/services/tournament_career.py)
+// и startCareerStage (создание турнира этапа). Тексты — каталоги career.* и tournaments.*. Соперников этапа
+// показывает по ключам из ответа сервера; без этапов блок не рисуется.
 
 import {useEffect, useState} from 'react';
 import {useNavigate} from 'react-router-dom';
@@ -12,8 +16,10 @@ import {getCareer, startCareerStage} from '../../services/tournaments';
 import type {CareerStage} from '../../services/tournaments';
 import {ladderOpponentName} from '../../config/players';
 
+// Классы цвета значка медали по месту (индекс — место; для мест выше третьего цвета нет).
 const MEDALS = ['', 'text-yellow-400', 'text-slate-300', 'text-amber-600'];
 
+/** Лестница этапов карьеры: у открытого этапа кнопка «Играть»/«Повторить», у закрытого — замок, у пройденного — лучшее место. */
 export function Career() {
     const {t} = useI18n();
     const navigate = useNavigate();

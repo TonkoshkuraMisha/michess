@@ -1,11 +1,13 @@
 // --- FILE: frontend/src/components/ui/SegmentedControl.tsx ---
-// Переключатель вкладок (общие компоненты дизайна, план владельца 18.11): режимы и фильтры на одной строке вместо
-// россыпи одинаковых кнопок. Доступность — role="tablist"/"tab", aria-selected, стрелки влево/вправо переводят выбор.
-// Опции — данные вызывающего: id, подпись (уже на языке игрока), иконка и необязательная подсказка.
+// Переключатель вкладок (общие компоненты дизайна, план владельца 18.11; docs/design-system.md): режимы и фильтры на
+// одной строке вместо россыпи одинаковых кнопок. Доступность — role="tablist"/"tab", aria-selected, стрелки
+// влево/вправо переводят выбор (по кругу). Опции — данные вызывающего: id, подпись (уже на языке игрока), иконка и
+// необязательная подсказка.
 
 import {useRef} from 'react';
 import type {KeyboardEvent, ReactNode} from 'react';
 
+/** Вкладка: id — значение выбора, label — подпись на языке игрока. */
 export interface SegmentOption<T extends string> {
     id: T;
     label: ReactNode;
@@ -24,6 +26,7 @@ interface Props<T extends string> {
     testIdPrefix?: string;
 }
 
+/** Строка вкладок; value вне списка опций допустим (тогда в группу входят с первой вкладки). */
 export function SegmentedControl<T extends string>({options, value, onChange, label, stretch = false, testIdPrefix}: Props<T>) {
     const refs = useRef<(HTMLButtonElement | null)[]>([]);
     const onKey = (event: KeyboardEvent, index: number) => {

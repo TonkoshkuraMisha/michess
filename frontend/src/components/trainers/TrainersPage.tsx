@@ -1,6 +1,9 @@
 // --- FILE: frontend/src/components/trainers/TrainersPage.tsx ---
 // Тренажёры (таск 19.1): /train — все тренажёры с личными рекордами; /train/:trainerId — выбор уровня, попытка,
 // результат (очки, время, ошибки, рекорд) и график последних попыток.
+// Данные: services/trainers.ts (рекорды, история и сохранение попытки; сервер — src/api/trainers.py, таблица trainer_results). Игры считаются на клиенте:
+// компоненты в соседних файлах, чистые правила и генераторы заданий — в frontend/src/trainers/. Без входа результаты не сохраняются.
+// Сверху страницы — ссылки на /workout, /programs и /exam. Подключено в App.tsx.
 
 import {useEffect, useRef, useState} from 'react';
 import {Link, useParams} from 'react-router-dom';
@@ -22,8 +25,10 @@ import {PLACEMENT_PUZZLES, TOUR_SIZES} from '../../trainers/boardPuzzles';
 import {COORD_TRAINERS, levelToOptions, optionsToLevel} from '../../trainers/coordinates';
 import type {CoordTrainer} from '../../trainers/coordinates';
 
+/** Число уровней в списке выбора (1–10); у расстановок, обхода коня и координат список свой. */
 const LEVELS = 10;
 
+/** Личные рекорды по тренажёрам; гость — пустой объект, запроса нет. */
 function useRecords(): Partial<Record<TrainerId, TrainerRecord>> {
     const [records, setRecords] = useState<Partial<Record<TrainerId, TrainerRecord>>>({});
     useEffect(() => {
@@ -32,6 +37,7 @@ function useRecords(): Partial<Record<TrainerId, TrainerRecord>> {
     return records;
 }
 
+/** Список всех тренажёров с личными рекордами. */
 export function TrainersPage() {
     const {t} = useI18n();
     const records = useRecords();
@@ -91,6 +97,7 @@ export function TrainersPage() {
     );
 }
 
+/** График последних результатов: линия по очкам, масштаб по максимуму; меньше двух точек не рисуется. */
 function Sparkline({values}: { values: number[] }) {
     if (values.length < 2) return null;
     const max = Math.max(...values, 1);
@@ -102,8 +109,13 @@ function Sparkline({values}: { values: number[] }) {
     );
 }
 
+/** Итог попытки; record: null — ответ сервера о рекорде ещё не пришёл (или гость не вошёл). */
 type Outcome = { score: number; mistakes: number; timeMs: number; record: boolean | null };
 
+/**
+ * Страница тренажёра: выбор уровня или настроек, запуск игры, итог попытки и график. seed задаёт последовательность заданий
+ * (null — игра не идёт); итог игра отдаёт в finish, а попытка сохраняется вошедшему.
+ */
 export function TrainerPage() {
     const {t} = useI18n();
     const {trainerId = ''} = useParams<{ trainerId: string }>();
@@ -120,7 +132,7 @@ export function TrainerPage() {
 
     if (!id) return <p className="p-4 text-rose-300">{t('trainers.notFound')}</p>;
     const isCoord = (COORD_TRAINERS as readonly string[]).includes(id);
-    // У тренажёров счёта (19.7) уровней нет.
+    // У тренажёров счёта (19.7), викторин по структурам и планам и миниатюр уровней нет.
     const noLevels = id.startsWith('calc_') || id === 'structure_quiz' || id === 'plan_quiz' || id === 'miniatures';
 
     const start = () => {

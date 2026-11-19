@@ -2,6 +2,9 @@
 // Режим «помощник перевода» (таск 17.7): кнопка «Предложить исправление текста» в углу экрана. После неё игрок
 // нажимает на любой текст интерфейса — по тексту находится ключ каталога (i18n/catalogIndex.ts), игрок пишет свой
 // вариант, предложение уходит в очередь модерации (17.4) с ключом, языком и страницей.
+// Данные: включение — настройка профиля (services/profileSettings.ts, useSyncExternalStore); предложение уходит через
+// moderationApi.suggestTranslation (services/moderation.ts) и попадает в очередь модератора вида translation. Рисуется
+// в App.tsx поверх всех страниц; свои элементы помечает атрибутом data-translation-helper, чтобы не выбирать их самих.
 
 import {useEffect, useState, useSyncExternalStore} from 'react';
 import {useLocation} from 'react-router-dom';
@@ -15,11 +18,13 @@ import {errorMessage} from '../../services/apiErrors';
 import {moderationApi} from '../../services/moderation';
 import {isTranslationHelperOn, subscribeTranslationHelper} from '../../services/profileSettings';
 
+// Выбранный текст: то, что показано на экране, и ключи каталога, где такой текст найден (может быть несколько или ни одного).
 interface Picked {
     shown: string;
     keys: string[];
 }
 
+/** Плавающая кнопка и форма предложения: перехватывает следующий клик по странице, находит ключ каталога и отправляет вариант игрока. */
 export function TranslationHelper() {
     const on = useSyncExternalStore(subscribeTranslationHelper, isTranslationHelperOn, isTranslationHelperOn);
     const {t, language} = useI18n();

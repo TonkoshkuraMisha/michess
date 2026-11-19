@@ -2,14 +2,17 @@
 // Витрина общих компонентов дизайна (/design, в меню нет): владелец и разработчики видят все компоненты разом, на
 // тех же текстах, что в разделах, — чтобы согласовать вид до перевода страниц. Компоненты — components/ui, правила —
 // docs/design-system.md. Надписи витрины — каталог design.*, примеры карточек — тексты настоящих разделов.
+// Данных с сервера нет: числа в примерах (прогресс, счётчики) выдуманы для показа. Маршрут — App.tsx.
 
 import {useState} from 'react';
 import {BookOpen, Crown, GraduationCap, Layers, Puzzle, Swords, Trophy} from 'lucide-react';
 import {useI18n} from '../i18n';
 import {Badge, Button, ButtonLink, Card, CardGrid, EmptyState, Page, PageHeader, ProgressBar, Section, SegmentedControl} from './ui';
 
+// Вкладки примера SegmentedControl.
 type Demo = 'rated' | 'themes' | 'daily';
 
+/** Страница-витрина: кнопки, вкладки, карточки, индикаторы и пустое состояние. */
 export function DesignGallery() {
     const {t} = useI18n();
     const [tab, setTab] = useState<Demo>('rated');

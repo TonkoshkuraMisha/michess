@@ -3,6 +3,10 @@
 // /study/:code — комната: ведущий ведёт доску (ходы, стрелки четырёх цветов, светлая и тёмная подсветка, «призрак»,
 // позиция по FEN), задаёт вопрос (ход на своей доске или выбор варианта, с таймером) и копит шаги занятия в урок формата
 // школы (14.1): скачать JSON или сохранить как материал клуба. Ученики видят доску (опрос раз в POLL_MS), отвечают, чат.
+// Данные — services/study.ts (/api/v1/study, только с входом; комната живёт в Redis, src/services/study_room.py).
+// Маршруты /study и /study/:code (App.tsx). Уроки проверяет content/lessons/validate.ts до скачивания и сохранения.
+// StudyLobby — вход (создать комнату, ввести код, свои материалы); StudyRoomPage — комната ведущего и ученика;
+// lessonProblems — ошибки формата урока (пусто — урок можно скачать или сохранить).
 
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Link, useNavigate, useParams} from 'react-router-dom';
@@ -19,10 +23,15 @@ import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 import {validateLesson} from '../../content/lessons/validate';
 import type {CourseInfo, Lesson} from '../../content/lessons/format';
 
+/** Период опроса состояния комнаты, мс: рассылки по WebSocket у комнаты нет. */
 export const POLL_MS = 1000;
+/** Цвета стрелок ведущего; порядок — порядок кнопок выбора цвета. */
 const COLORS: ArrowColor[] = ['green', 'red', 'blue', 'yellow'];
+/** Инструмент ведущего: ход фигурой, стрелка или светлая/тёмная подсветка поля. */
 type Tool = 'move' | 'arrow' | 'light' | 'dark';
+/** Служебный курс «club», под которым проверяется урок занятия (в каталоге курсов его нет). */
 const CLUB_COURSE: CourseInfo = {id: 'club', order: 1, title: {en: 'Club', uk: 'Club', ru: 'Club'}, summary: {en: '', uk: '', ru: ''}};
+/** Сколько последних вопросов занятия идёт в экзамен урока. */
 const MAX_EXAM = 5;
 
 /** Урок из шагов занятия (формат 14.1): все шаги — по порядку, вопросы занятия (до MAX_EXAM последних) — экзамен. */

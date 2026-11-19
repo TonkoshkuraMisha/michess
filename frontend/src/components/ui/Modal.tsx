@@ -1,7 +1,8 @@
 // --- FILE: frontend/src/components/ui/Modal.tsx ---
-// Модальное окно (общие компоненты дизайна, план владельца 18.11): затемнение, заголовок с иконкой, крестик,
-// закрытие по Esc и щелчку мимо окна. Тот же вид раньше повторяли окно входа и «Сообщить о проблеме»; новые окна
-// (первое — «Новая партия» в игровом зале) строятся на этом компоненте. Тексты — у вызывающего (три языка).
+// Модальное окно (общие компоненты дизайна, план владельца 18.11; docs/design-system.md): затемнение, заголовок с
+// иконкой, крестик, закрытие по Esc и щелчку мимо окна. Тот же вид раньше повторяли окна входа и «Сообщить о
+// проблеме»; на общем Modal сейчас построены «Сообщить о проблеме» (beta/ReportProblem.tsx) и «Новая партия»
+// (chessboard/NewGameDialog.tsx), окно входа (AuthModal.tsx) пока со своей разметкой. Тексты — у вызывающего (три языка).
 
 import {useEffect} from 'react';
 import type {ReactNode} from 'react';
@@ -11,6 +12,7 @@ import {useI18n} from '../../i18n';
 /** Ширина окна: md — форма, lg — выбор из каталога (карточки в две-три колонки). */
 const SIZES = {md: 'max-w-md', lg: 'max-w-3xl'} as const;
 
+// open — показано ли окно (закрытое не рисуется и не слушает Esc); testId даёт окну и крестику (testId-close) метки для тестов.
 interface ModalProps {
     open: boolean;
     onClose: () => void;
@@ -21,6 +23,7 @@ interface ModalProps {
     children: ReactNode;
 }
 
+/** Окно поверх страницы; заголовок-строка становится aria-label диалога. */
 export function Modal({open, onClose, title, icon, size = 'md', testId, children}: ModalProps) {
     const {t} = useI18n();
     useEffect(() => {

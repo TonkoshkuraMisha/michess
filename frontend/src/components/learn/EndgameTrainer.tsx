@@ -1,9 +1,10 @@
 // --- FILE: frontend/src/components/learn/EndgameTrainer.tsx ---
-// Эндшпильный тренажёр (таск 14.4): /learn/endgames — 33 упражнения (с «обязательными позициями» и этюдами 27.9), /learn/endgames/:id — игра против идеальной
+// Эндшпильный тренажёр (таск 14.4): /learn/endgames — упражнения из content/endgames.json (с «обязательными позициями» и этюдами 27.9), /learn/endgames/:id — игра против идеальной
 // защиты по эндшпильным таблицам (POST /analysis/tablebase). Цели: мат (счётчик ходов против оптимума по таблицам),
 // провести пешку или реализовать перевес не упустив выигрыш, удержать ничью заданное число ходов. После каждого хода
 // игрока таблицы проверяют, не упущен ли результат (trainerVerdict в services/tablebase.ts). Сервер таблиц недоступен —
 // отвечает оценка движка (source: 'engine'): тренажёр продолжает работать и показывает об этом пометку.
+// Прогресс — урок «endgame-<id>» (progressId; по нему же считает автозачёт services/courseProgress.ts). Страницы подключены в App.tsx.
 
 import {useEffect, useRef, useState} from 'react';
 import {Link, useParams} from 'react-router-dom';
@@ -19,8 +20,13 @@ import exercisesData from '../../content/endgames.json';
 import {MUST_KNOW} from '../../content/mustKnow';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 
+/**
+ * Цель упражнения: mate — поставить мат; promote — провести пешку; convert — реализовать перевес (у соперника остаётся один
+ * король); draw — удержать ничью.
+ */
 export type EndgameGoal = 'mate' | 'promote' | 'convert' | 'draw';
 
+/** Упражнение: стартовая позиция, цель и сторона игрока; limit — сколько ходов игрока даётся, optimum — оптимум по таблицам (null — не задан). */
 export interface EndgameExercise {
     id: string;
     fen: string;
@@ -30,9 +36,12 @@ export interface EndgameExercise {
     side: 'white' | 'black';
 }
 
+/** Каталог упражнений из content/endgames.json. */
 export const EXERCISES = exercisesData as EndgameExercise[];
+/** Порядок групп целей на странице списка. */
 const GOALS: EndgameGoal[] = ['mate', 'promote', 'convert', 'draw'];
 
+/** Идентификатор урока для прогресса упражнения: «endgame-<id>», подчёркивания заменены дефисами. */
 export function progressId(id: string): string {
     return `endgame-${id.replace(/_/g, '-')}`;
 }
@@ -42,6 +51,7 @@ function loneKing(game: Chess, color: 'w' | 'b'): boolean {
     return game.board().flat().filter((p) => p && p.color === color).length === 1;
 }
 
+/** Список упражнений по целям, блок «обязательных позиций» (MUST_KNOW) и галочки у решённых (вошедшим). */
 export function EndgamesPage() {
     const {t} = useI18n();
     const [done, setDone] = useState<Set<string>>(new Set());
@@ -94,8 +104,13 @@ export function EndgamesPage() {
     );
 }
 
+/** Статус попытки: playing — ход игрока; thinking — ждём ответ таблиц; success / failed — итог. */
 type Status = 'playing' | 'thinking' | 'success' | 'failed';
 
+/**
+ * Одно упражнение: после хода игрока таблицы оценивают позицию (trainerVerdict) и отвечают лучшим ходом защитника.
+ * Сетевая ошибка откатывает ход; успех пишется в прогресс; busy защищает от второго хода во время запроса.
+ */
 export function EndgameTrainerPage() {
     const {t} = useI18n();
     const {exerciseId = ''} = useParams<{ exerciseId: string }>();

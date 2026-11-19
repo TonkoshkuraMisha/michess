@@ -1,6 +1,8 @@
 // --- FILE: frontend/src/components/tools/PositionEditor.tsx ---
 // Редактор позиции (таск 16.4): расстановка фигур щелчком (выбранная фигура из палитры или ластик), очередь хода,
 // права рокировки (недоступные по расстановке — выключены), проверка корректности по правилам (chess.js).
+// Без сети: результат — FEN, который родитель получает через onUse. Используется в ToolsPage.tsx (вкладка редактора)
+// и в тренажёре памяти (trainers/MemoryGames.tsx берёт fenOf для показа расстановки игрока).
 
 import {useMemo, useState} from 'react';
 import {Chess} from 'chess.js';
@@ -10,8 +12,11 @@ import {validateFen} from '../chessboard/boardUtils';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 import {STANDARD_FEN} from '../../services/pgnExport';
 
+// Палитра: фигуры белых (заглавные) и чёрных (строчные) в обозначениях FEN; кисть 'x' — ластик.
 const PIECES = ['K', 'Q', 'R', 'B', 'N', 'P', 'k', 'q', 'r', 'b', 'n', 'p'] as const;
+// Значки фигур для кнопок палитры (текста для игрока здесь нет).
 const GLYPHS: Record<string, string> = {K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙', k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟'};
+// Четыре права рокировки: на каких полях должны стоять король и ладья, чтобы право можно было включить.
 const CASTLING = [
     {flag: 'K', king: 'e1', rook: 'h1', piece: 'K', rookPiece: 'R'},
     {flag: 'Q', king: 'e1', rook: 'a1', piece: 'K', rookPiece: 'R'},
@@ -19,8 +24,10 @@ const CASTLING = [
     {flag: 'q', king: 'e8', rook: 'a8', piece: 'k', rookPiece: 'r'},
 ] as const;
 
+// Расстановка: поле («e4») → фигура в обозначении FEN.
 type Placement = Record<string, string>;
 
+/** Расстановка из первой части FEN. */
 export function placementOf(fen: string): Placement {
     const result: Placement = {};
     fen.split(' ')[0].split('/').forEach((row, i) => {
@@ -33,6 +40,7 @@ export function placementOf(fen: string): Placement {
     return result;
 }
 
+/** FEN из расстановки: права рокировки остаются только те, что возможны по положению короля и ладьи; взятия на проходе нет. */
 export function fenOf(placement: Placement, turn: 'w' | 'b', castling: string): string {
     const rows: string[] = [];
     for (let rank = 8; rank >= 1; rank--) {
@@ -70,11 +78,13 @@ export function positionProblem(placement: Placement, fen: string): string | nul
     return null;
 }
 
+// initialFen — с чего начать (текущая позиция доски); onUse — получить готовый FEN, вызывается только для корректной позиции.
 interface Props {
     initialFen: string;
     onUse: (fen: string) => void;
 }
 
+/** Редактор: доска-холст, палитра, очередь хода, права рокировки и вердикт positionProblem. */
 export function PositionEditor({initialFen, onUse}: Props) {
     const {t} = useI18n();
     const [placement, setPlacement] = useState<Placement>(() => placementOf(initialFen));

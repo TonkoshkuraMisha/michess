@@ -2,6 +2,8 @@
 // «Инструменты» (/tools, таски 16.2 и 16.4): доска с линией ходов и справочником дебютов, редактор позиции, импорт
 // FEN и PGN, экспорт линии в PGN, «Найти мат» (движок, правило честной игры) и переход в анализ / партию с ботом с
 // этой позиции на главной доске (таск 9.6: свободная доска принимает позицию через location.state.analyzeFen).
+// Данные: поиск мата — services/tools.ts (POST /analysis/find-mate), справочник — OpeningExplorer, «В репертуар» —
+// repertoire/AddToRepertoire.tsx; правила линии считает chess.js на клиенте. Маршрут — App.tsx.
 
 import {useMemo, useState} from 'react';
 import {useNavigate} from 'react-router-dom';
@@ -19,6 +21,7 @@ import {OpeningExplorer} from '../OpeningExplorer';
 import {AddToRepertoire} from '../repertoire/AddToRepertoire';
 import {PositionEditor} from './PositionEditor';
 
+// Вкладки страницы: доска с линией, редактор позиции, импорт.
 type Tab = 'board' | 'editor' | 'import';
 
 /** Позиция и ходы из текста: сначала как FEN, затем как PGN (с заголовком FEN или из начальной позиции). */
@@ -37,6 +40,10 @@ export function parseImport(text: string): { fen: string; moves: string[] } | nu
     return {fen, moves: history.map((m) => `${m.from}${m.to}${m.promotion ?? ''}`)};
 }
 
+/**
+ * Страница инструментов. Линия — стартовый FEN (baseFen) плюс ходы UCI (moves); любая смена линии сбрасывает
+ * найденный мат. Справочник дебютов доступен только из стандартной начальной позиции.
+ */
 export function ToolsPage() {
     const {t} = useI18n();
     const navigate = useNavigate();

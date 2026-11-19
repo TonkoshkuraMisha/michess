@@ -1,5 +1,7 @@
 // Библиотека партий (таск 27.1): /library — дерево коллекций слева, партии выбранной коллекции или результаты поиска
 // справа; партия открывается в обычном просмотре (/library/game/:id, GameViewer в режиме библиотеки).
+// Данные — services/library.ts (/api/v1/library: коллекции, партии, поиск). Адрес принимает ?structure= (структура
+// из Большого курса) и ?moves= (начало партии из репертуара) — сразу открывает поиск. Маршрут — App.tsx.
 
 import {useEffect, useState} from 'react';
 import {Link, useSearchParams} from 'react-router-dom';
@@ -10,8 +12,10 @@ import {errorMessage} from '../../services/apiErrors';
 import {childrenOf, LIBRARY_PAGE, libraryApi, STRUCTURES, totalGames} from '../../services/library';
 import type {LibraryCollection, LibraryPage as Page, LibrarySearch} from '../../services/library';
 
+// Что показано справа: партии коллекции или результаты поиска.
 type View = { kind: 'collection'; id: number; name: string } | { kind: 'search'; search: LibrarySearch };
 
+/** Рекурсивное дерево коллекций; закрытые (не public) помечены замком, у каждой — число партий с вложенными. */
 function Tree({list, parent, open, selected, onToggle, onSelect}: {
     list: LibraryCollection[];
     parent: number | null;
@@ -49,6 +53,7 @@ function Tree({list, parent, open, selected, onToggle, onSelect}: {
     );
 }
 
+/** Страница /library: форма поиска, дерево коллекций и постраничный список партий (по LIBRARY_PAGE). */
 export function LibraryPage() {
     const {t} = useI18n();
     const [collections, setCollections] = useState<LibraryCollection[]>([]);

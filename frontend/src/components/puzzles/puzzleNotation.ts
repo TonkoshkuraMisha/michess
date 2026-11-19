@@ -1,12 +1,16 @@
 // --- FILE: frontend/src/components/puzzles/puzzleNotation.ts ---
 // Запись ходов задач фигурной нотацией (♘f3 вместо Nf3): понятна на любом языке, как у наставника.
+// Чистые функции поверх chess.js, без сети: ходы приходят с сервера в UCI, тут они переводятся в SAN от заданной позиции.
+// Используют PuzzlesPage, DefenseTrainer, GeneratedDrills, SolutionReplay, а также learn/MateCourse и chessboard/CoachCards.
 
 import {Chess} from 'chess.js';
 
+/** UCI («e7e8q») в объект хода chess.js; превращение — пятый символ, иначе undefined. */
 export function toMove(uci: string) {
     return {from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci.length > 4 ? uci[4] : undefined};
 }
 
+/** Знаки фигур по цвету (пешка буквы не имеет), для замены первой буквы SAN и буквы превращения. */
 const FIGURINES: Record<'w' | 'b', Record<string, string>> = {
     w: {K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘'},
     b: {K: '♚', Q: '♛', R: '♜', B: '♝', N: '♞'},

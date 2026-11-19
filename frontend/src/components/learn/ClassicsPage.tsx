@@ -2,6 +2,9 @@
 // Партии мастеров с объяснениями (таск 14.7): /learn/classics — подборка, /learn/classics/:id — просмотр партии:
 // вводный текст, ходы с комментариями наставника, режим «с остановками» (перед ключевым ходом — «что бы вы сыграли?»,
 // баллы как в «Угадай ход мастера»), итоговый текст в конце.
+// Данные: партии и разборы — content/classics (loadAllClassics, loadClassic, scoreStop); текст комментариев и стрелки — services/coach.ts
+// (coachText, coachArrows); прогресс — lessonProgress: урок «classics-<id>» отмечается, когда игрок дошёл до конца партии.
+// Страницы подключены в App.tsx.
 
 import {useEffect, useMemo, useState} from 'react';
 import {Link, useParams} from 'react-router-dom';
@@ -17,17 +20,21 @@ import type {ClassicGame} from '../../content/classics';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 import type {BoardArrow} from '../puzzles/PuzzleBoard';
 
+/** Цвет стрелки наставника по её виду: лучший ход, угроза, идея. */
 const ARROW_COLORS: Record<string, BoardArrow['color']> = {best: 'green', threat: 'red', idea: 'blue'};
 
+/** Подпись партии «белые — чёрные» для списка и заголовка. */
 function title(game: ClassicGame): string {
     return `${game.white} — ${game.black}`;
 }
 
+/** Оценка в пешках со знаком; значение от 50000 по модулю — условный мат («+#» / «-#»). */
 function evalText(cp: number): string {
     if (Math.abs(cp) >= 50000) return cp > 0 ? '+#' : '-#';
     return `${cp >= 0 ? '+' : ''}${(cp / 100).toFixed(1)}`;
 }
 
+/** Подборка партий мастеров; у пройденных (по прогрессу вошедшего) стоит галочка. */
 export function ClassicsPage() {
     const {t} = useI18n();
     const [games, setGames] = useState<ClassicGame[]>([]);
@@ -64,8 +71,13 @@ export function ClassicsPage() {
     );
 }
 
+/** Открытая остановка: ply — полуход, перед которым задан вопрос; answer — ход игрока (uci) после ответа; score — баллы за него. */
 type StopState = { ply: number; answer: string | null; score: number | null };
 
+/**
+ * Просмотр партии. В режиме «с остановками» шаг через ключевой ход сначала спрашивает ход игрока и оценивает его по оценкам
+ * альтернатив (scoreStop); повторный проход той же остановки вопроса не задаёт. Прогресс пишется на последнем ходу.
+ */
 export function ClassicGamePage() {
     const {t, language} = useI18n();
     const {gameId = ''} = useParams<{ gameId: string }>();

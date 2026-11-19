@@ -1,5 +1,7 @@
 // --- FILE: frontend/src/components/tournaments/TournamentHistory.tsx ---
-// История турниров в своём профиле (таск 15.3): список турниров игрока с занятым местом.
+// История турниров в своём профиле (таск 15.3): список турниров игрока с занятым местом. Рисуется в Profile.tsx.
+// Данные: GET /api/v1/profile/me (чтобы убедиться, что открыт свой профиль) и services/tournaments.ts — listTournaments
+// (GET /api/v1/tournaments, только турниры вошедшего игрока).
 
 import {useEffect, useState} from 'react';
 import {Link} from 'react-router-dom';

@@ -1,6 +1,8 @@
 // --- FILE: frontend/src/components/trainers/BoardPuzzleGames.tsx ---
 // Головоломки на доске (таск 19.4): расстановки (ферзи, ладьи, слоны, кони, доминирование) и «Обход конём».
 // Доска N×N своя, щелчками: работает и на телефоне.
+// Данные: чистые правила trainers/boardPuzzles.ts (задачи, проверки, подсказка по правилу Варнсдорфа); найденные решения расстановок
+// запоминаются в localStorage (SOLUTIONS_KEY); цвета клеток — тема доски из config/boardAppearance.ts. Запускается из TrainersPage.tsx.
 
 import {useMemo, useState} from 'react';
 import {useI18n} from '../../i18n';
@@ -11,15 +13,22 @@ import {
 } from '../../trainers/boardPuzzles';
 import type {Cell, Piece} from '../../trainers/boardPuzzles';
 
+/** Общие свойства игр: уровень, seed и onFinish(очки, ошибки). */
 interface GameProps {
     level: number;
     seed: number;
     onFinish: (score: number, mistakes: number) => void;
 }
 
+/** Значки фигур на доске расстановок. */
 const GLYPH: Record<Piece, string> = {Q: '♛', R: '♜', B: '♝', N: '♞'};
+/** Буквы вертикалей для атрибута data-cell клеток. */
 const FILES = 'abcdefgh';
 
+/**
+ * Доска size×size из кнопок. Подпись и подсветка клетки приходят из render: bad — конфликт, dim — не прикрыта,
+ * hint — подсказка, last — текущая.
+ */
 function Grid({size, render, onCell}: { size: number; render: (cell: Cell) => { label?: string; tone?: 'bad' | 'dim' | 'hint' | 'last' }; onCell: (cell: Cell) => void }) {
     const theme = BOARD_THEMES[getSavedBoardThemeKey()] ?? BOARD_THEMES.walnut;
     const rows = Array.from({length: size}, (_, i) => size - 1 - i);
@@ -45,8 +54,10 @@ function Grid({size, render, onCell}: { size: number; render: (cell: Cell) => { 
     );
 }
 
+/** localStorage-ключ найденных решений расстановки id (список ключей решений); только в этом браузере. */
 const SOLUTIONS_KEY = (id: string) => `regence_placement_solutions_${id}`;
 
+/** Найденные ранее решения расстановки; недоступное хранилище — пустой список. */
 function readSolutions(id: string): string[] {
     try {
         return JSON.parse(localStorage.getItem(SOLUTIONS_KEY(id)) ?? '[]') as string[];
@@ -55,6 +66,10 @@ function readSolutions(id: string): string[] {
     }
 }
 
+/**
+ * Расстановка count фигур: без боя друг друга (independent) или так, чтобы прикрыть все клетки (dominate). Очки — 100 минус 10
+ * за ошибку, не меньше 10. Для ферзей показано число всех решений.
+ */
 export function PlacementGame({level, onFinish}: GameProps) {
     const {t} = useI18n();
     const puzzle = placementPuzzle(level);
@@ -110,6 +125,10 @@ export function PlacementGame({level, onFinish}: GameProps) {
     );
 }
 
+/**
+ * Обход конём доски tourSize(level): очки — CLOSED_TOUR_SCORE (замкнутый) или OPEN_TOUR_SCORE минус 5 за подсказку, не более 90.
+ * Недопустимый ход — ошибка, ход не принимается.
+ */
 export function KnightTourGame({level, onFinish}: GameProps) {
     const {t} = useI18n();
     const size = tourSize(level);

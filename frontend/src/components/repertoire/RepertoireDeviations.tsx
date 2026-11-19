@@ -1,7 +1,9 @@
 // Отклонения от репертуара в сыгранной партии (таск 20.3) — блок в просмотре своей законченной партии:
 // «на 7-м ходу вы отошли от репертуара» (потренировать позицию / открыть в репертуаре) или «соперник сыграл ход,
-// которого нет в репертуаре» (добавить ответ). Без входа, в чужой партии и без репертуаров блока нет. Строка
-// отклонения (DeviationItem) общая с карточкой «Клубного тренера» в итоге партии (chessboard/CoachCards.tsx).
+// которого нет в репертуаре» (добавить ответ). Данные — services/repertoire.ts, GET /repertoires/game/{gameId}/deviations
+// (src/services/repertoire_deviations.py). Без входа, в чужой партии и без репертуаров блока нет. Строка
+// отклонения (DeviationItem) общая с карточкой «Клубного тренера» в итоге партии (chessboard/CoachCards.tsx);
+// сам блок подключён в GameViewer.tsx.
 
 import {useEffect, useState} from 'react';
 import {Link, useNavigate} from 'react-router-dom';
@@ -11,8 +13,10 @@ import {getToken} from '../../services/authToken';
 import {moveLabel, repertoireApi} from '../../services/repertoire';
 import type {Deviation} from '../../services/repertoire';
 
+// Сколько отклонений показывать в блоке: первые два (по одному на репертуар), чтобы блок не разрастался.
 const SHOWN = 2;
 
+/** Блок отклонений партии gameId; ошибка запроса не показывается — блок просто отсутствует. */
 export function RepertoireDeviations({gameId}: { gameId: string }) {
     const {t} = useI18n();
     const [results, setResults] = useState<Deviation[]>([]);

@@ -1,6 +1,8 @@
 // --- FILE: frontend/src/components/social/ProfileSocial.tsx ---
-// Профиль чужого игрока (таск 17.1): в сети ли он, подписка (взаимная — «друзья»), прямой вызов и личное сообщение (30.1). Вызов создаётся на
-// главной доске (там открыт сокет и выбран контроль времени): страница передаёт имя через location.state.challenge.
+// Профиль чужого игрока (таск 17.1): в сети ли он, подписка (взаимная — «друзья»), прямой вызов и личное сообщение (30.1).
+// Вызов создаётся на главной доске (там открыт сокет и выбран контроль времени): страница передаёт имя через
+// location.state.challenge. Данные: socialApi.relation, follow и unfollow (services/social.ts, /api/v1/social); блок
+// скрыт для гостя и в собственном профиле. Рисуется в Profile.tsx. Вызвать можно любого игрока — без порогов по силе.
 
 import {useEffect, useState} from 'react';
 import {useNavigate} from 'react-router-dom';
@@ -11,6 +13,7 @@ import {socialApi} from '../../services/social';
 import type {Relation} from '../../services/social';
 import {ReportButton} from './ModerationPage';
 
+/** Панель действий над чужим профилем: статус «в сети», подписка, вызов, сообщение и жалоба. */
 export function ProfileSocial({username}: { username: string }) {
     const {t} = useI18n();
     const navigate = useNavigate();

@@ -1,5 +1,7 @@
-// «В репертуар» (таск 20.1): добавить текущую линию (UCI из начальной позиции) в один из своих репертуаров —
-// из «Инструментов» (линия на доске и справочник дебютов) и из просмотра партии (ходы до текущего).
+// «В репертуар» (таск 20.1): добавить текущую линию (UCI из начальной позиции) в один из своих репертуаров.
+// Данные — services/repertoire.ts: список (GET /repertoires) и добавление линии (POST /repertoires/{id}/lines).
+// Используется в «Инструментах» (tools/ToolsPage.tsx: линия на доске и справочник дебютов) и в просмотре партии
+// (GameViewer.tsx: ходы до текущего). Без входа блок не рисуется; выбор репертуара живёт в состоянии компонента.
 
 import {useEffect, useState} from 'react';
 import {Link} from 'react-router-dom';
@@ -11,6 +13,10 @@ import {getToken} from '../../services/authToken';
 import {repertoireApi} from '../../services/repertoire';
 import type {RepertoireSummary} from '../../services/repertoire';
 
+/**
+ * Строка «выбрать репертуар и добавить линию moves». При смене линии результат прошлого добавления сбрасывается;
+ * пустую линию добавить нельзя. Сервер сам отбрасывает уже известные ходы и возвращает число новых (added).
+ */
 export function AddToRepertoire({moves}: { moves: string[] }) {
     const {t, tp} = useI18n();
     const logged = Boolean(getToken());

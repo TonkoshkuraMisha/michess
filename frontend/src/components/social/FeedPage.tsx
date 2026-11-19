@@ -2,6 +2,10 @@
 // Лента и публикации (таск 30.2): /feed — поле публикации и лента подписок; /feed/post/:postId — публикация с
 // комментариями; ProfilePosts — публикации игрока в профиле. Поделиться из другой страницы:
 // navigate('/feed', {state: {attach: {kind, ref}}}) — поле публикации откроется с готовой карточкой.
+// Данные: services/feed.ts — feedApi (GET /api/v1/feed — лента подписок, /feed/user/{имя}, /feed/posts/{id}, публикация,
+// лайк, комментарии; src/api/feed.py). Текст публикации — до 2000 знаков, комментария — до 500 (как BODY_MAX и COMMENT_MAX
+// в src/services/feed.py); страница ленты — по 20 публикаций с подгрузкой «ещё». Фильтр оскорблений и придержанные
+// тексты — Civility.tsx. Роуты — App.tsx; ProfilePosts рисует Profile.tsx.
 
 import {useCallback, useEffect, useState} from 'react';
 import type {FormEvent} from 'react';
@@ -18,17 +22,21 @@ import type {AttachmentKind} from '../../services/messages';
 import {AttachmentCard} from './AttachmentCard';
 import {FlaggedNotice, HeldNote, isTextFlagged, RulesLink, TextReportButton} from './Civility';
 
+// Виды вложений, выбираемые вручную; достижение добавляется только кнопкой «поделиться» в профиле.
 const KINDS: AttachmentKind[] = ['game', 'position', 'puzzle', 'lesson', 'tournament', 'library'];
 
+/** Черновик вложения: вид и ссылка или идентификатор (ref); приходит и из location.state.attach. */
 interface Draft {
     kind: AttachmentKind;
     ref: string;
 }
 
+/** Дата и время публикации в локали игрока. */
 function when(iso: string | null, code: string): string {
     return iso ? new Date(iso).toLocaleString(code, {dateStyle: 'short', timeStyle: 'short'}) : '';
 }
 
+/** Поле новой публикации с вложением; при отказе фильтра показывает FlaggedNotice и позволяет отправить на проверку. */
 export function Composer({initial, onPosted}: { initial: Draft | null; onPosted: (post: Post) => void }) {
     const {t} = useI18n();
     const [body, setBody] = useState('');
@@ -103,6 +111,7 @@ export function Composer({initial, onPosted}: { initial: Draft | null; onPosted:
     );
 }
 
+/** Публикация: автор, текст, вложение, лайк, комментарии, жалоба (чужая) или удаление (своя); linkToPost — ссылка на страницу публикации. */
 export function PostCard({post, onChange, onRemoved, linkToPost = true}: {
     post: Post;
     onChange: (post: Post) => void;
@@ -153,6 +162,7 @@ export function PostCard({post, onChange, onRemoved, linkToPost = true}: {
     );
 }
 
+/** Постраничная загрузка списка публикаций: страница заканчивается, когда сервер вернул меньше page штук; load(beforeId) берёт более ранние. */
 function usePostList(load: (beforeId?: number) => Promise<{ posts: Post[]; page: number }>) {
     const [posts, setPosts] = useState<Post[] | null>(null);
     const [more, setMore] = useState(false);
@@ -184,6 +194,7 @@ function usePostList(load: (beforeId?: number) => Promise<{ posts: Post[]; page:
     return {posts, more, loadMore, replace, drop, prepend};
 }
 
+/** Список публикаций с кнопкой «ещё» и подписью для пустого списка. */
 function PostList({list, emptyKey}: { list: ReturnType<typeof usePostList>; emptyKey: 'feed.empty' | 'feed.noProfilePosts' }) {
     const {t} = useI18n();
     if (!list.posts) return null;
@@ -200,6 +211,7 @@ function PostList({list, emptyKey}: { list: ReturnType<typeof usePostList>; empt
     );
 }
 
+/** Лента подписок и поле публикации; требует входа. */
 export function FeedPage() {
     const {t} = useI18n();
     const location = useLocation();
@@ -223,6 +235,7 @@ export function FeedPage() {
     );
 }
 
+/** Публикация с комментариями. Придержанный комментарий в счётчик не входит. */
 export function PostPage() {
     const {t, dateLocale} = useI18n();
     const {postId} = useParams<{ postId: string }>();

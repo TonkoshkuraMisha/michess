@@ -1,7 +1,8 @@
 // Дебютный репертуар (таск 20.1). /repertoire — свои репертуары, новый пустой за белых или за чёрных и шесть
 // стартовых наборов с вводными текстами. /repertoire/:id — дерево линий: доска стороной репертуара, ходы из текущей
 // позиции (свои — первыми), новые ходы на доске и из справочника дебютов добавляются кнопкой, импорт PGN,
-// комментарий к ходу и удаление хода вместе с ветками за ним.
+// комментарий к ходу и удаление хода вместе с ветками за ним. Данные — services/repertoire.ts
+// (/api/v1/repertoires, src/api/repertoire.py); маршруты и вход — App.tsx; список стартовых наборов виден без входа.
 
 import {useEffect, useMemo, useState} from 'react';
 import {Link, useNavigate, useParams, useSearchParams} from 'react-router-dom';
@@ -16,8 +17,13 @@ import type {Repertoire, RepertoireColor, RepertoireSummary, Starter} from '../.
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 import {OpeningExplorer} from '../OpeningExplorer';
 
+// Стиль второстепенной кнопки панели редактора (вынесен, чтобы не повторять длинную строку классов).
 const BUTTON = 'px-2 py-1 rounded bg-black/30 border border-amber-900/50 flex items-center gap-1 disabled:opacity-40';
 
+/**
+ * Самое длинное легальное начало линии UCI из начальной позиции. Берёт не больше 40 полуходов — защита от
+ * чрезмерно длинного параметра ?line= в адресе.
+ */
 /** Самое длинное легальное начало линии UCI из начальной позиции. */
 export function legalPrefix(line: string[]): string[] {
     const game = new Chess();
@@ -38,6 +44,7 @@ export function numbered(sans: string[]): string[] {
     return sans.map((san, i) => (i % 2 === 0 ? `${i / 2 + 1}. ${san}` : san));
 }
 
+/** Страница /repertoire: свои репертуары (только со входом), создание пустого и стартовые наборы. */
 export function RepertoireListPage() {
     const {t, tp} = useI18n();
     const navigate = useNavigate();
@@ -140,6 +147,10 @@ export function RepertoireListPage() {
     );
 }
 
+/**
+ * Страница /repertoire/:id: редактор дерева. Текущая линия (line) хранится в состоянии и может уйти за пределы
+ * дерева — тогда хвост показывается как «новый» и добавляется кнопкой. Все изменения идут через run() (busy/ошибка).
+ */
 export function RepertoireEditorPage() {
     const {t, tp} = useI18n();
     const navigate = useNavigate();

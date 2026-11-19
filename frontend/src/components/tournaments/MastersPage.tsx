@@ -3,6 +3,8 @@
 // отдельную партию: мастер играет тем же характером, что и в историческом турнире, а партия уходит в архив под
 // его именем. Имена, строки о мастерах и названия турниров — из каталогов по ключам. /masters?master=<id> — карточка
 // одного мастера (переход «к сопернику» из турнира).
+// Данные: services/masters.ts — getMasters (список) и getMasterConfig (настройка бота для партии); партия
+// запускается переходом на «/» с состоянием маршрута guestGame (разбирает главная доска). Роут — App.tsx.
 
 import {useEffect, useMemo, useState} from 'react';
 import {Link, useNavigate, useSearchParams} from 'react-router-dom';
@@ -15,10 +17,13 @@ import {getMasterConfig, getMasters, matchesQuery, sortMasters} from '../../serv
 import type {Master, MasterColor, MasterGameStart, MasterOrder} from '../../services/masters';
 import {eventTitle, guestAbout, guestName} from '../../services/timeMachine';
 
+// Общий вид секции-карточки страницы.
 const sectionClass = 'bg-acacia p-4 rounded-lg border-2 border-acacia-dark';
+// Порядки сортировки списка (значения MasterOrder) и выбор цвета для партии; подписи — masters.orders.* и masters.colors.*.
 const ORDERS: MasterOrder[] = ['strength', 'years', 'name'];
 const COLORS: MasterColor[] = ['white', 'black', 'random'];
 
+/** Карточка мастера: эпоха, рейтинг, дебюты, турниры и кнопки начала партии за выбранный цвет. */
 function MasterCard({master, busy, onPlay}: { master: Master; busy: boolean; onPlay: (master: Master, color: MasterColor) => void }) {
     const {t} = useI18n();
     const about = guestAbout(master.id, t);
@@ -54,6 +59,7 @@ function MasterCard({master, busy, onPlay}: { master: Master; busy: boolean; onP
     );
 }
 
+/** Страница каталога: поиск, порядок, фильтр «только с дебютами»; при ?master=<id> показывает одного мастера. */
 export function MastersPage() {
     const {t, tp, language} = useI18n();
     const navigate = useNavigate();

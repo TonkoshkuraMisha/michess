@@ -2,6 +2,10 @@
 // «Машина времени» (таск 28.3): /time-machine — знаменитые турниры прошлого по годам. Игрок входит в турнир
 // дополнительным участником при полном историческом составе; партии мастеров между собой разыгрывает сервер.
 // RealResult — «как было на самом деле»: настоящая итоговая таблица рядом с турниром игрока.
+// Данные: services/timeMachine.ts — getTimeMachine (каталог событий с составом) и startHistoricEvent (создание
+// турнира с выбранным контролем); названия и рассказы — каталог timeMachine.events.<ключ>.*. Роут — App.tsx;
+// RealResult показывает ещё TournamentsPage.tsx (TournamentView исторического турнира). Вход в турнир открыт любому
+// зарегистрированному игроку, без порогов по силе.
 
 import {useEffect, useState} from 'react';
 import {Link, useNavigate} from 'react-router-dom';
@@ -16,6 +20,7 @@ import {
 } from '../../services/timeMachine';
 import type {FieldEntry, HistoricEvent} from '../../services/timeMachine';
 
+// Общий вид секции-карточки страницы.
 const sectionClass = 'bg-acacia p-4 rounded-lg border-2 border-acacia-dark';
 /**
  * Периоды ленты — по эпохам турнирной жизни: первые турниры, классика конца века, годы перед мировой войной и
@@ -57,6 +62,7 @@ function RealTable({field}: { field: FieldEntry[] }) {
     );
 }
 
+/** Блок «как было на самом деле»: рассказ и настоящая таблица; раскрыт, когда турнир игрока закончен, и сравнивает место. */
 export function RealResult({eventKey, finished, myPlace}: { eventKey: string; finished: boolean; myPlace: number | null }) {
     const {t} = useI18n();
     const [event, setEvent] = useState<HistoricEvent | null>(null);
@@ -83,6 +89,7 @@ export function RealResult({eventKey, finished, myPlace}: { eventKey: string; fi
     );
 }
 
+/** Карточка исторического турнира: рассказ, формат, сильнейшие участники, полный состав и кнопка входа или «Продолжить». */
 function EventCard({event, control, busy, onStart}: {
     event: HistoricEvent; control: string; busy: boolean; onStart: (event: HistoricEvent) => void;
 }) {
@@ -138,6 +145,7 @@ function EventCard({event, control, busy, onStart}: {
     );
 }
 
+/** Лента турниров с выбором контроля времени и периода; вход создаёт турнир на сервере и открывает его страницу. */
 export function TimeMachinePage() {
     const {t} = useI18n();
     const navigate = useNavigate();
