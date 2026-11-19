@@ -10,41 +10,22 @@ import {Link} from 'react-router-dom';
 import {ArrowLeft, Shuffle} from 'lucide-react';
 import {renderUiMessage, useI18n} from '../../i18n';
 import type {UiMessage} from '../../i18n';
-import {API_BASE_URL} from '../../config/api';
-import {errorMessage, readApiErrorOr, UiError} from '../../services/apiErrors';
-import {getToken} from '../../services/authToken';
+import {errorMessage} from '../../services/apiErrors';
+import {chess960Call} from '../../services/chess960';
+import type {State960} from '../../services/chess960';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 import {numberedMoves} from '../../services/moveNumbers';
 
 /** Ответ сервера по партии против бота: номер расстановки, позиция, ходы (UCI и SAN), итог и ход бота. */
-export interface State960 {
-    number: number;
-    fen: string;
-    moves: string[];
-    sans: string[];
-    result: string | null;
-    termination: string | null;
-    bot_move: string | null;
-    check: boolean;
-}
-
 // Уровни бота 1–5 (сервер сопоставляет каждому Elo и время на ход, chess960.LEVELS); названия — каталог chess960.levels.
 // Причины окончания, для которых есть тексты в каталоге chess960.terminations.
 const LEVELS = [1, 2, 3, 4, 5] as const;
 const TERMINATIONS = ['checkmate', 'stalemate', 'insufficient_material', 'threefold_repetition', 'fifty_moves',
     'fivefold_repetition', 'seventyfive_moves'] as const;
 
-/** Запрос к /chess960: без тела — GET (новая позиция), с телом — POST (ход или ход бота); ошибка — UiError. */
-async function call(path: string, body?: object): Promise<State960> {
-    const token = getToken();
-    const res = await fetch(`${API_BASE_URL}/api/v1/chess960${path}`, body ? {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json', ...(token ? {Authorization: `Bearer ${token}`} : {})},
-        body: JSON.stringify(body),
-    } : undefined);
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res.json() as Promise<State960>;
-}
+// Запросы к серверу — services/chess960.ts; тип состояния переэкспортируется для тестов и партии с человеком.
+const call = chess960Call;
+export type {State960};
 
 /** Фигуры позиции по полям: «e1» → «K» (белые — заглавные). */
 export function piecesOf(fen: string): Map<string, string> {

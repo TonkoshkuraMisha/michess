@@ -96,10 +96,15 @@ describe('GameSummaryPanel', () => {
         expect(screen.queryByTestId('summary-play')).toBeNull();
     });
 
-    it('ошибка разбора — сообщение', async () => {
+    it('нет сети — сообщение «нет связи»; отказ сервера без кода — «не удалось разобрать»', async () => {
         vi.stubGlobal('fetch', vi.fn(async () => {
             throw new Error('offline');
         }));
+        const {unmount} = render(<GameSummaryPanel gameId={42} playerColor="white" recommendation={null} onPlayRecommended={vi.fn()}/>);
+        expect(await screen.findByText(/Нет связи с сервером/)).toBeTruthy();
+        unmount();
+
+        vi.stubGlobal('fetch', vi.fn(async () => ({ok: false, status: 500, json: async () => ({})}) as Response));
         render(<GameSummaryPanel gameId={42} playerColor="white" recommendation={null} onPlayRecommended={vi.fn()}/>);
         expect(await screen.findByText(/Не удалось разобрать партию/)).toBeTruthy();
     });

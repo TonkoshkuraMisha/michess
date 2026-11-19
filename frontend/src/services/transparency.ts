@@ -5,11 +5,7 @@
 // GET /api/v1/bots/engine (сведения о движке для страницы «О проекте», GPL), GET /api/v1/public (src/api/public.py) — все открыты без входа, с лимитом открытого API; свои партии —
 // GET /api/v1/account/games.pgn (src/api/account.py), только с входом.
 
-import {API_BASE_URL} from '../config/api';
-import {readApiErrorOr, UiError} from './apiErrors';
-import {uiMessage} from '../i18n';
-import {getToken} from './authToken';
-import {apiRequest} from './http';
+import {apiFetch, apiRequest, apiUrl} from './http';
 
 /** Движок этой установки (GET /bots/engine): версия и исходники именно её — требование GPL (таск 23.1). */
 export interface EngineInfo {
@@ -45,18 +41,6 @@ export interface PublicApiInfo {
     rate_limit: { requests: number; window_s: number };
 }
 
-/** GET без токена; отказ сервера — UiError с текстом по коду ошибки. */
-async function get(path: string): Promise<Response> {
-    let res: Response;
-    try {
-        res = await fetch(`${API_BASE_URL}${path}`);
-    } catch {
-        throw new UiError(uiMessage('common.noConnection'));
-    }
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res;
-}
-
 /**
  * Журнал подстройки характера самоигрой (таск 32.3, таблица bot_tuning_log): что измерено (measured) против
  * заявленной силы (target) и как сдвинуты ползунки силы — пары «было, стало».
@@ -78,13 +62,14 @@ export interface TuningLog {
 }
 
 /** Прямая ссылка на файл журнала прогона — для скачивания. */
-export const runUrl = (name: string) => `${API_BASE_URL}/api/v1/bots/calibration/runs/${encodeURIComponent(name)}`;
+export const runUrl = (name: string) => apiUrl(`/bots/calibration/runs/${encodeURIComponent(name)}`);
 
 export const transparencyApi = {
-    runs: async () => (await get('/api/v1/bots/calibration/runs')).json() as Promise<{ calibration: CalibrationMeta | null; runs: CalibrationRun[] }>,
-    runText: async (name: string) => (await get(`/api/v1/bots/calibration/runs/${encodeURIComponent(name)}`)).text(),
-    publicApi: async () => (await get('/api/v1/public')).json() as Promise<PublicApiInfo>,
-    tuningLog: async () => (await get('/api/v1/bots/tuning-log')).json() as Promise<TuningLog>,
+    runs: () => apiRequest<{ calibration: CalibrationMeta | null; runs: CalibrationRun[] }>('/bots/calibration/runs'),
+    /** Журнал прогона — текст, не JSON. */
+    runText: async (name: string) => (await apiFetch(`/bots/calibration/runs/${encodeURIComponent(name)}`)).text(),
+    publicApi: () => apiRequest<PublicApiInfo>('/public'),
+    tuningLog: () => apiRequest<TuningLog>('/bots/tuning-log'),
 };
 
 /** Сохранить текст файлом (ссылка-однодневка: CSP разрешает blob:). */
@@ -102,14 +87,7 @@ export function saveTextFile(text: string, filename: string, type: string): void
  * Число сервер сообщает заголовком X-Total-Count; если заголовка нет — считается по тегам [Event в тексте.
  */
 export async function downloadMyGamesPgn(username: string | null): Promise<number> {
-    const token = getToken();
-    let res: Response;
-    try {
-        res = await fetch(`${API_BASE_URL}/api/v1/account/games.pgn`, {headers: token ? {Authorization: `Bearer ${token}`} : {}});
-    } catch {
-        throw new UiError(uiMessage('common.noConnection'));
-    }
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'settings.exportFailed'));
+    const res = await apiFetch('/account/games.pgn', {}, 'settings.exportFailed');
     const text = await res.text();
     const total = Number(res.headers.get('X-Total-Count') ?? 0);
     if (!text.trim()) return 0;

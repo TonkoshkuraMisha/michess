@@ -10,6 +10,8 @@ import {apiRequest} from './http';
 
 /** Свои данные профиля, нужные странице настроек. */
 export interface OwnAccount {
+    id?: number;
+    blitz_rating?: number;
     username?: string;
     email: string | null;
     translation_helper?: boolean;

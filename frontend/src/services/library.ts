@@ -5,7 +5,6 @@
 // тренажёров «Миниатюры» и «Узнай структуру» (/library/miniatures, /library/structure-quiz).
 
 import type {CoachComment} from './coach';
-import {API_BASE_URL} from '../config/api';
 import {apiRequest} from './http';
 
 /** Коллекция библиотеки. Сервер отдаёт их плоским списком; дерево клиент собирает по parent_id (childrenOf). */
@@ -111,8 +110,6 @@ export const libraryApi = {
     collectionGames: (id: number, offset = 0) =>
         call<LibraryPage & { id: number; name: string }>(`/collections/${id}/games?offset=${offset}&limit=${LIBRARY_PAGE}`),
     search: (search: LibrarySearch) => call<LibraryPage>(`/games?${searchQuery(search)}`),
-    /** Адрес PGN партии — его загружает просмотр партии (GameViewer). */
-    pgnUrl: (id: number | string) => `${API_BASE_URL}/api/v1/library/games/${id}/pgn`,
     /** Аннотация партии из ответа GET /library/games/{id}; null — её нет или она не для этого посетителя. */
     annotation: (id: number | string) =>
         call<{ annotation: LibraryAnnotation | null }>(`/games/${id}`).then((body) => body.annotation ?? null),

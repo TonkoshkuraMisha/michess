@@ -27,7 +27,6 @@ import {NewGameDialog} from './chessboard/NewGameDialog';
 import {gameSocket} from '../services/gameSocket';
 import {soundEngine, resolveMoveSound} from '../services/soundEngine';
 import type {SoundEventType} from '../services/soundEngine';
-import {API_BASE_URL} from '../config/api';
 import {
     BOARD_THEMES,
     lastMoveColor,
@@ -85,7 +84,7 @@ import {MatchmakingPanel, PvpGameStatus} from './chessboard/MatchmakingPanel';
 import {HistoricalBotsPanel} from './chessboard/HistoricalBotsPanel';
 import {PersonalityWorkshop} from './chessboard/PersonalityWorkshop';
 import {LadderPanel} from './chessboard/LadderPanel';
-import type {LadderStart} from './chessboard/LadderPanel';
+import type {LadderStart} from '../services/ladder';
 import {ladderOutcomeMessage} from './chessboard/hooks/useBotGame';
 import {hasStatusKey, renderStatus, status} from './chessboard/status';
 import type {GameStatus} from './chessboard/status';
@@ -97,6 +96,8 @@ import type {CustomOpponent} from '../config/archetypes';
 import {LobbyPanel} from './chessboard/LobbyPanel';
 import {AppearancePickerDropdown} from './chessboard/AppearancePickerDropdown';
 import {getToken} from '../services/authToken';
+import {accountApi} from '../services/account';
+import {profileApi} from '../services/profile';
 import {orderCaptured, quickMoveFrom, useBoardPrefs} from '../config/boardPrefs';
 import {LastMoveArrow} from './chessboard/LastMoveArrow';
 import {BlindfoldPanel} from './chessboard/BlindfoldPanel';
@@ -599,10 +600,7 @@ export default function Chessboard() {
         const token = getToken();
         if (!token) return;
 
-        fetch(`${API_BASE_URL}/api/v1/profile/me`, {
-            headers: {'Authorization': `Bearer ${token}`}
-        })
-            .then(res => res.ok ? res.json() : null)
+        accountApi.me()
             .then(data => {
                 if (data) {
                     setCurrentUserId(data.id);
@@ -1177,12 +1175,8 @@ export default function Chessboard() {
     useEffect(() => {
         if (!gameId || !gameOverResult || activeBot || isRatedGame || blind.level === 0 || blindMarkedRef.current === gameId) return;
         blindMarkedRef.current = gameId;
-        const token = getToken();
-        if (!token) return;
-        fetch(`${API_BASE_URL}/api/v1/profile/games/${gameId}/blindfold`, {
-            method: 'POST', headers: {'Content-Type': 'application/json', Authorization: `Bearer ${token}`},
-            body: JSON.stringify({level: blind.level, peeks: blind.peeks}),
-        }).catch(() => undefined);
+        if (!getToken()) return;
+        profileApi.markBlindfold(gameId, blind.level, blind.peeks).catch(() => undefined);
     }, [gameId, gameOverResult, activeBot, isRatedGame, blind.level, blind.peeks]);
 
     // Анимация хода соперника (таск 18.4): только новый ход соперника в живой партии с ботом или человеком.
