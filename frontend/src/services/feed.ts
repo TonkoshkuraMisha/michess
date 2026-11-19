@@ -3,11 +3,8 @@
 // Все запросы — к /api/v1/feed (маршруты src/api/feed.py, правила — src/services/feed.py). Лента игрока
 // (/feed/user/{имя}) видна и гостю, остальное требует входа.
 
-import {API_BASE_URL} from '../config/api';
-import {readApiErrorOr, UiError} from './apiErrors';
-import {uiMessage} from '../i18n';
-import {getToken} from './authToken';
 import type {Attachment, AttachmentKind} from './messages';
+import {apiRequest} from './http';
 
 /** Публикация, как её отдаёт сервер. */
 export interface Post {
@@ -47,24 +44,8 @@ export interface FeedPage {
     page: number;
 }
 
-/** Запрос к /api/v1/feed: токен — если игрок вошёл; отказ сервера — UiError с текстом по коду ошибки. */
-async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const token = getToken();
-    let res: Response;
-    try {
-        res = await fetch(`${API_BASE_URL}/api/v1/feed${path}`, {
-            ...init,
-            headers: {
-                ...(init.body ? {'Content-Type': 'application/json'} : {}),
-                ...(token ? {Authorization: `Bearer ${token}`} : {}),
-            },
-        });
-    } catch {
-        throw new UiError(uiMessage('common.noConnection'));
-    }
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res.json() as Promise<T>;
-}
+/** Запрос к /api/v1/feed через общую обёртку http.ts (токен, JSON, ошибки). */
+const call = <T>(path: string, init: RequestInit = {}) => apiRequest<T>(`/feed${path}`, init);
 
 /** Параметр подгрузки: публикации старше той, чей id передан (лента листается назад по id). */
 const before = (id?: number) => (id ? `?before_id=${id}` : '');

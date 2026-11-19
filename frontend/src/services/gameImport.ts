@@ -5,9 +5,8 @@
 // время партии с человеком (честная игра): иначе в «импорт» можно было бы вставить идущую партию и получить оценку.
 
 import {API_BASE_URL} from '../config/api';
-import {readApiErrorOr, UiError} from './apiErrors';
-import {uiMessage} from '../i18n';
 import {getToken} from './authToken';
+import {apiRequest} from './http';
 
 /** Сайт, с которого партии берутся по нику. */
 export type ImportSource = 'lichess' | 'chesscom';
@@ -54,22 +53,13 @@ export const IMPORT_PAGE = 20;
 export const IMPORT_COUNTS = [5, 10, 20] as const;
 const BASE = `${API_BASE_URL}/api/v1/imports`;
 
-function authHeaders(json = false): Record<string, string> {
+/** Заголовок входа для прямых запросов клиента к адресам pgnUrl/analysisUrl (обычные запросы идут через apiRequest). */
+function authHeaders(): Record<string, string> {
     const token = getToken();
-    return {...(token ? {Authorization: `Bearer ${token}`} : {}), ...(json ? {'Content-Type': 'application/json'} : {})};
+    return token ? {Authorization: `Bearer ${token}`} : {};
 }
 
-async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
-    let res: Response;
-    try {
-        res = await fetch(`${BASE}${path}`, {...init, headers: authHeaders(Boolean(init.body))});
-    } catch {
-        throw new UiError(uiMessage('common.noConnection'));
-    }
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    if (res.status === 204) return undefined as T;
-    return res.json() as Promise<T>;
-}
+const call = <T>(path: string, init: RequestInit = {}) => apiRequest<T>(`/imports${path}`, init);
 
 /** Эндпоинты импорта; все требуют входа. */
 export const importApi = {

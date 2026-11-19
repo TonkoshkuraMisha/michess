@@ -5,10 +5,7 @@
 // /config, /invites/check и отправка сообщения (POST /feedback); остальное сервер отдаёт только модератору.
 
 import {useEffect, useSyncExternalStore} from 'react';
-import {API_BASE_URL} from '../config/api';
-import {readApiErrorOr, UiError} from './apiErrors';
-import {uiMessage} from '../i18n';
-import {getToken} from './authToken';
+import {apiRequest} from './http';
 
 /** Настройки сайта (GET /beta/config), разобранные parseConfig: значения берутся из настроек сервера. */
 export interface SiteConfig {
@@ -65,24 +62,8 @@ export interface FeedbackQueue {
     counts: Record<FeedbackStatus, number>;
 }
 
-/** Запрос к /api/v1/beta: токен — если игрок вошёл; отказ сервера — UiError с текстом по коду ошибки. */
-async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const token = getToken();
-    let res: Response;
-    try {
-        res = await fetch(`${API_BASE_URL}/api/v1/beta${path}`, {
-            ...init,
-            headers: {
-                ...(init.body ? {'Content-Type': 'application/json'} : {}),
-                ...(token ? {Authorization: `Bearer ${token}`} : {}),
-            },
-        });
-    } catch {
-        throw new UiError(uiMessage('common.noConnection'));
-    }
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res.json() as Promise<T>;
-}
+/** Запрос к /api/v1/beta через общую обёртку http.ts (токен, JSON, ошибки). */
+const call = <T>(path: string, init: RequestInit = {}) => apiRequest<T>(`/beta${path}`, init);
 
 /** Размер окна браузера («390x844»): по нему видно, на каком экране сломалась вёрстка. */
 export function screenSize(): string {
@@ -133,11 +114,8 @@ function parseConfig(raw: unknown): SiteConfig {
 export function loadSiteConfig(): Promise<SiteConfig> {
     pending ??= (async () => {
         try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/beta/config`);
-            if (res?.ok) {
-                config = parseConfig(await res.json());
-                listeners.forEach((notify) => notify());
-            }
+            config = parseConfig(await apiRequest<unknown>('/beta/config'));
+            listeners.forEach((notify) => notify());
         } catch {
             // остаются значения по умолчанию
         }

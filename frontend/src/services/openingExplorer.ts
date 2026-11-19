@@ -5,10 +5,7 @@
 // Маршрут — src/api/analysis.py, расчёт — src/services/opening_explorer.py: статистика берётся из индекса позиций
 // сыгранных партий (таблицы position_stats и position_games), название — из открытой таблицы дебютов.
 
-import {API_BASE_URL} from '../config/api';
-import {readApiErrorOr, UiError} from './apiErrors';
-import {uiMessage} from '../i18n';
-import {getToken} from './authToken';
+import {apiRequest} from './http';
 
 /** Дебют по таблице дебютов: код ECO и английское название (имя собственное, не переводится). */
 export interface ExplorerOpening {
@@ -55,20 +52,8 @@ export interface ExplorerResult {
 }
 
 /** Справочник по позиции: moves — ходы от начальной позиции в UCI. Отказ сервера — UiError с текстом по коду. */
-export async function exploreOpening(moves: string[]): Promise<ExplorerResult> {
-    const token = getToken();
-    let res: Response;
-    try {
-        res = await fetch(`${API_BASE_URL}/api/v1/analysis/opening-explorer`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', ...(token ? {Authorization: `Bearer ${token}`} : {})},
-            body: JSON.stringify({moves}),
-        });
-    } catch {
-        throw new UiError(uiMessage('common.noConnection'));
-    }
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res.json() as Promise<ExplorerResult>;
+export function exploreOpening(moves: string[]): Promise<ExplorerResult> {
+    return apiRequest<ExplorerResult>('/analysis/opening-explorer', {method: 'POST', body: JSON.stringify({moves})});
 }
 
 /** Доли побед белых, ничьих и побед чёрных в процентах (сумма — 100: ничьим достаётся остаток от округления). */

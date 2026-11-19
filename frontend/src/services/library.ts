@@ -6,9 +6,7 @@
 
 import type {CoachComment} from './coach';
 import {API_BASE_URL} from '../config/api';
-import {readApiErrorOr, UiError} from './apiErrors';
-import {uiMessage} from '../i18n';
-import {getToken} from './authToken';
+import {apiRequest} from './http';
 
 /** Коллекция библиотеки. Сервер отдаёт их плоским списком; дерево клиент собирает по parent_id (childrenOf). */
 export interface LibraryCollection {
@@ -95,18 +93,8 @@ export interface LibraryAnnotation {
 /** Размер страницы списка партий (параметр limit запросов). */
 export const LIBRARY_PAGE = 50;
 
-/** GET к /api/v1/library: токен — если игрок вошёл; отказ сервера — UiError с текстом по коду ошибки. */
-async function call<T>(path: string): Promise<T> {
-    const token = getToken();
-    let res: Response;
-    try {
-        res = await fetch(`${API_BASE_URL}/api/v1/library${path}`, {headers: token ? {Authorization: `Bearer ${token}`} : {}});
-    } catch {
-        throw new UiError(uiMessage('common.noConnection'));
-    }
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res.json() as Promise<T>;
-}
+/** Запрос к /api/v1/library через общую обёртку http.ts (токен, JSON, ошибки). */
+const call = <T>(path: string) => apiRequest<T>(`/library${path}`);
 
 /** Строка запроса поиска: заданные фильтры плюс limit = LIBRARY_PAGE. */
 export function searchQuery(search: LibrarySearch): string {

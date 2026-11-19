@@ -5,10 +5,8 @@
 // партии мастеров, загруженные из PGN (src/db/seed.py); подборки заранее считает scripts/build_collections.py
 // (таблица collection_entries), сервер их только отдаёт.
 
-import {API_BASE_URL} from '../config/api';
-import {readApiErrorOr, UiError} from './apiErrors';
-import {uiMessage} from '../i18n';
 import type {LiveGameItem} from '../components/chessboard/types';
+import {apiRequest} from './http';
 
 /** Партия архива мастеров в списке: игроки, год, место, результат и код дебюта. */
 export interface ArchiveGame {
@@ -35,17 +33,8 @@ export interface ArchiveFilters {
 export const COLLECTIONS = ['shortest', 'checks', 'capture_streak', 'peaceful', 'promotions', 'pawn_wars', 'stalemates'] as const;
 export type CollectionKey = typeof COLLECTIONS[number];
 
-/** GET к /api/v1 без токена; отказ сервера — UiError с текстом по коду ошибки. */
-async function get<T>(path: string): Promise<T> {
-    let res: Response;
-    try {
-        res = await fetch(`${API_BASE_URL}/api/v1${path}`);
-    } catch {
-        throw new UiError(uiMessage('common.noConnection'));
-    }
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res.json() as Promise<T>;
-}
+/** GET к /api/v1 через общую обёртку http.ts (токен уходит, если игрок вошёл; открытые маршруты его игнорируют). */
+const get = <T>(path: string) => apiRequest<T>(path);
 
 /** Размер страницы архива (параметр limit). */
 export const PAGE_SIZE = 20;

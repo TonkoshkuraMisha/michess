@@ -4,11 +4,8 @@
 // Названия стран не хранятся в каталогах переводов: их даёт браузер (Intl.DisplayNames) на языке интерфейса.
 // Эндпоинты (src/api/conferences.py): GET /api/v1/conferences — страница, PUT /api/v1/conferences/me — страна.
 
-import {API_BASE_URL} from '../config/api';
-import {readApiErrorOr, UiError} from './apiErrors';
-import {uiMessage} from '../i18n';
-import {getToken} from './authToken';
 import type {ConferenceKey} from './arenas';
+import {apiRequest} from './http';
 
 /** Строка Кубка конференций: сумма зачётов конференции по аренам сезона. */
 export interface CupRow {
@@ -59,24 +56,8 @@ export interface ConferencesData {
     me: Membership | null;
 }
 
-/** Запрос к /api/v1/conferences: токен — если игрок вошёл; отказ сервера — UiError с текстом по коду ошибки. */
-async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const token = getToken();
-    let res: Response;
-    try {
-        res = await fetch(`${API_BASE_URL}/api/v1/conferences${path}`, {
-            ...init,
-            headers: {
-                ...(init.body ? {'Content-Type': 'application/json'} : {}),
-                ...(token ? {Authorization: `Bearer ${token}`} : {}),
-            },
-        });
-    } catch {
-        throw new UiError(uiMessage('common.noConnection'));
-    }
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res.json() as Promise<T>;
-}
+/** Запрос к /api/v1/conferences через общую обёртку http.ts (токен, JSON, ошибки). */
+const call = <T>(path: string, init: RequestInit = {}) => apiRequest<T>(`/conferences${path}`, init);
 
 export const conferencesApi = {
     /** Страница конференций за текущий сезон (параметр season сервер принимает, но клиент его не передаёт). */

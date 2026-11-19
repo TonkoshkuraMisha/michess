@@ -5,10 +5,7 @@
 // src/services/direct_messages.py, карточки-вложения — src/services/attachments.py). Новое сообщение собеседнику
 // сервер доставляет ещё и по WebSocket в его открытые вкладки.
 
-import {API_BASE_URL} from '../config/api';
-import {readApiErrorOr, UiError} from './apiErrors';
-import {uiMessage} from '../i18n';
-import {getToken} from './authToken';
+import {apiRequest} from './http';
 
 /** Вложения личных сообщений; в ленте ещё партия библиотеки и своё достижение (таск 30.2). */
 export type AttachmentKind = 'game' | 'position' | 'puzzle' | 'lesson' | 'tournament' | 'library' | 'achievement';
@@ -77,24 +74,8 @@ export interface DmSettings {
     blocked: string[];
 }
 
-/** Запрос к /api/v1/messages с токеном; отказ сервера — UiError с текстом по коду ошибки. */
-async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const token = getToken();
-    let res: Response;
-    try {
-        res = await fetch(`${API_BASE_URL}/api/v1/messages${path}`, {
-            ...init,
-            headers: {
-                ...(init.body ? {'Content-Type': 'application/json'} : {}),
-                ...(token ? {Authorization: `Bearer ${token}`} : {}),
-            },
-        });
-    } catch {
-        throw new UiError(uiMessage('common.noConnection'));
-    }
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res.json() as Promise<T>;
-}
+/** Запрос к /api/v1/messages через общую обёртку http.ts (токен, JSON, ошибки). */
+const call = <T>(path: string, init: RequestInit = {}) => apiRequest<T>(`/messages${path}`, init);
 
 const user = (name: string) => encodeURIComponent(name);
 

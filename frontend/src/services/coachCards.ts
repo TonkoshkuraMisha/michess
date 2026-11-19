@@ -4,14 +4,11 @@
 // Большого курса для урока выбирает клиент — курс его данные (content/supercourse.ts): первый по уровню модуль,
 // в шагах которого есть тренировка по теме ошибки.
 
-import {API_BASE_URL} from '../config/api';
 import {COURSE} from '../content/supercourse';
 import type {CourseModule} from '../content/supercourse';
-import {readApiErrorOr, UiError} from './apiErrors';
-import {uiMessage} from '../i18n';
-import {getToken} from './authToken';
 import type {PersonalView} from './puzzles';
 import type {Deviation} from './repertoire';
+import {apiRequest} from './http';
 
 export interface AfterGameCards {
     game_id: number;
@@ -28,18 +25,8 @@ export const POLL_ATTEMPTS = 3;
 export const POLL_DELAY_MS = 5000;
 
 /** Карточки по своей законченной партии; отказ — UiError с текстом по коду. */
-export async function fetchAfterGame(gameId: number): Promise<AfterGameCards> {
-    const token = getToken();
-    let res: Response;
-    try {
-        res = await fetch(`${API_BASE_URL}/api/v1/learn/after-game/${gameId}`, {
-            headers: token ? {Authorization: `Bearer ${token}`} : {},
-        });
-    } catch {
-        throw new UiError(uiMessage('common.noConnection'));
-    }
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res.json() as Promise<AfterGameCards>;
+export function fetchAfterGame(gameId: number): Promise<AfterGameCards> {
+    return apiRequest<AfterGameCards>(`/learn/after-game/${gameId}`);
 }
 
 /** Ждать ли ещё задачу из партии: разбор готов, а задачи нет — фоновая задача могла её ещё не сделать. */
