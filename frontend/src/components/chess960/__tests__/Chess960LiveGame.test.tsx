@@ -28,6 +28,7 @@ const MATCH = {
 };
 
 const cell = (name: string) => document.querySelector(`[data-square="${name}"]`) as HTMLElement;
+const click = (name: string) => fireEvent.click(cell(name));
 
 function renderPage(match: object | null = MATCH) {
     return render(
@@ -108,6 +109,27 @@ describe('партия 960 с человеком', () => {
         fireEvent.click(screen.getByRole('button', {name: 'Отправить'}));
         expect(gameSocket.send).toHaveBeenCalledWith('chat_message', {game_id: 42, text: 'И вам!'});
         expect(screen.getByPlaceholderText('Написать сообщение…')).toHaveValue('');
+    });
+
+    it('предход: выбран в ход соперника, уходит, как только ход наш; отменённый — не уходит', async () => {
+        renderPage({...MATCH, color: 'black'});  // в позиции ходят белые — сейчас ход соперника
+        click('d7');
+        click('d6');
+        expect(gameSocket.send).not.toHaveBeenCalledWith('make_move', expect.anything());
+        expect(screen.getByTestId('c960-live-premove')).toHaveTextContent('d7–d6');
+        const AFTER_D3 = 'r1bqk1nr/pppp1ppp/2n5/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R b HAha - 0 4';
+        await act(async () => handlers.get('move_made')!({game_id: 42, fen: AFTER_D3, pgn: PGN + ' 4. d3', state_version: 7, move: 'd2d3'}));
+        expect(gameSocket.send).toHaveBeenCalledWith('make_move', expect.objectContaining({move: 'd7d6', is_premove: true, state_version: 7}));
+        expect(screen.queryByTestId('c960-live-premove')).toBeNull();
+
+        vi.mocked(gameSocket.send).mockClear();
+        const AFTER_D6 = 'r1bqk1nr/ppp2ppp/2np4/2b1p3/2B1P3/3P1N2/PPP2PPP/RNBQK2R w HAha - 0 5';
+        await act(async () => handlers.get('move_made')!({game_id: 42, fen: AFTER_D6, pgn: PGN + ' 4. d3 d6', state_version: 8, move: 'd7d6'}));
+        click('h7');
+        click('h6');
+        fireEvent.click(screen.getByTestId('c960-live-premove-cancel'));
+        await act(async () => handlers.get('move_made')!({game_id: 42, fen: AFTER_D3.replace(' b ', ' b '), pgn: PGN, state_version: 9, move: 'a2a3'}));
+        expect(gameSocket.send).not.toHaveBeenCalledWith('make_move', expect.anything());
     });
 
     it('события чужой партии не трогают доску; без партии — подсказка, как начать', async () => {
