@@ -1,10 +1,14 @@
 # --- FILE: src/services/bots/__init__.py ---
 """
-Исторические боты первой волны: реестр BOT_INSTANCES (id → готовый бот).
+Реестр готовых ботов BOT_INSTANCES (id → экземпляр) и точка входа в пакет ботов.
 
-Каждый бот — свой модуль рядом (philidor.py … zukertort.py) с дебютной книгой и правилами стиля; общий порядок
-выбора хода — base.HistoricalBot. Мастера второй волны и остальные соперники собираются из настроек характера
-(masters.py, guests.py, archetypes.py, personality.py).
+В реестре — семь исторических ботов первой волны (каждый в своём модуле рядом: philidor.py … zukertort.py, с дебютной
+книгой и правилами стиля) и мастера из masters.py (MASTER_BOTS). Общий порядок выбора хода — base.HistoricalBot.
+Архетипы мастерской (archetypes.py) и «мастера прошлого» (guests.py) в реестр не входят: их строят на лету из
+настроек характера (personality.py).
+
+Реестр читают память ботов (memory.py: книга бота по id) и симуляция турниров (tournament_simulation.py: свежий бот
+как type(bot)()). Маршруты src/api/bots.py держат собственный словарь BOT_INSTANCES из тех же ботов.
 """
 
 from src.services.bots.anderssen import AnderssenBot, anderssen_bot
@@ -25,7 +29,7 @@ BOT_INSTANCES: dict[str, HistoricalBot] = {
     "morphy": morphy_bot,
     "paulsen": paulsen_bot,
     "zukertort": zukertort_bot,
-    **MASTER_BOTS,  # мастера второй волны (таск 21.5)
+    **MASTER_BOTS,  # мастера из masters.py (таск 21.5 и последующие волны)
 }
 
 __all__ = [

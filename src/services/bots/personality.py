@@ -1,15 +1,19 @@
 # --- FILE: src/services/bots/personality.py ---
 """
-Параметрическая модель соперника: игрок задаёт характер ползунками, сервер собирает из них стиль.
+Параметрическая модель соперника: игрок задаёт характер ползунками, сервер собирает из них стиль и силу.
 
-Честно о том, как это работает: ходы оценивает Stockfish (до 8 линий MultiPV) или статический
-анализатор, если движка нет. Ползунки и веса фигур оценку движка НЕ меняют — они дают бонусы
-кандидатам внутри окна blunder_guard_cp от лучшего хода (правила src/services/bots/style.py).
-Это не «свой движок», а выбор среди хороших ходов по вкусу персоналии.
+Честно о том, как это работает: ходы оценивает движок из пула (до 8 линий MultiPV) или статический анализатор, если
+движка нет. Ползунки и веса фигур оценку движка НЕ меняют — они дают бонусы кандидатам внутри окна blunder_guard_cp
+(правила src/services/bots/style.py). Это не «свой движок», а выбор среди хороших ходов по вкусу персоналии.
 
-Сила: Stockfish ослабляется через UCI_Elo только начиная с 1320. Ниже движок работает на минимуме,
-а слабость добавляют управляемые ошибки — с вероятностью, растущей к 600, выбирается одна из более
-слабых линий. Глубину и время поиска задаёт сервер по target_elo (не больше 8 полуходов и 0,5 с).
+Сила: ограничение UCI_Elo ослабляет игру только начиная с STOCKFISH_MIN_ELO (1320). Ниже движок работает на этом
+минимуме, а слабость добавляют управляемые ошибки: с долей по кривой ERROR_RATE_CURVE (0,57 при 300 → 0 при 1500)
+выбирается более слабая линия или случайный ход. Глубину и время поиска (не больше MAX_SEARCH_DEPTH полуходов и
+MAX_SEARCH_TIME_S секунд) задаёт сервер по target_elo, клиент их не передаёт.
+
+Данные: любимые дебюты и линии дебютного характера — из открытой таблицы дебютов (src/services/openings.py).
+BotPersonalityConfig строят archetypes.py, masters.py, guests.py и API мастерской (src/api/bots.py); PersonalityBot
+создают маршруты ботов, симуляция турниров и самоигра (selfplay.py).
 """
 
 from __future__ import annotations
@@ -50,12 +54,15 @@ from src.services.bots.style import (
     to,
 )
 
+# Границы целевого рейтинга (target_elo) соперника мастерской.
 MIN_TARGET_ELO = 300
 # Параметры поиска (уровень, глубина, время) считаются от 600: ниже сила задаётся только долей ошибок (таск 21.4),
 # поэтому соперники 600+ после расширения диапазона играют как раньше.
 SEARCH_FLOOR_ELO = 600
 MAX_TARGET_ELO = 2800
+# Минимальный UCI_Elo, который движок принимает (ниже пул поднимет его сам): слабее играют ошибками, не опциями.
 STOCKFISH_MIN_ELO = 1320
+# Потолок глубины (полуходов) и времени (с) анализа одного хода: сервер держит нагрузку на пул движка.
 MAX_SEARCH_DEPTH = 8
 MAX_SEARCH_TIME_S = 0.5
 # Вероятность управляемой ошибки по целевому рейтингу — поправочная кривая по калибровке 14.11 (лог
@@ -74,17 +81,20 @@ MAX_SEARCH_TIME_S = 0.5
 # сила ≈ 1501 − 2091 × доля (остатки в пределах погрешности). Обратно: 0,43 при 600 → 0 при 1500.
 # Ниже 600 (таск 21.4) — та же прямая: 300 ↔ 0,57.
 ERROR_RATE_CURVE: tuple[tuple[int, float], ...] = ((300, 0.57), (600, 0.43), (1500, 0.0))
+# Наибольшая доля ошибок — на самой слабой цели (MIN_TARGET_ELO).
 MAX_ERROR_RATE = ERROR_RATE_CURVE[0][1]
-# Доля грубых зевков (случайный легальный ход) среди управляемых ошибок ниже 1320.
+# Доля грубых зевков (случайный легальный ход) среди управляемых ошибок; остальные — ход из худшей половины линий.
 BLUNDER_SHARE = 1 / 3
-# randomness 100 → разброс ±40 сп между равными кандидатами.
+# Случайный разброс оценок кандидатов, сп на единицу ползунка randomness: 100 → ±40 сп между равными ходами.
 JITTER_CP_PER_RANDOMNESS = 0.4
-# Отношение к ничьей (таск 21.4): «равенство» — лучший ход в пределах ±0,8; размен фигуры ±40 сп при ±100.
+# Отношение к ничьей (таск 21.4): «равенство» — оценка лучшего хода в пределах ±EQUAL_CP сп (0,8 пешки); поправка
+# к разменам фигур — TRADE_CP_PER_ATTITUDE сп на единицу ползунка draw_attitude (±40 сп при ±100).
 EQUAL_CP = 80
 TRADE_CP_PER_ATTITUDE = 0.4
 
 
 
+# Сколько любимых дебютов можно выбрать на каждый цвет.
 MAX_FAVORITE_OPENINGS = 3
 # Привычки новичков (таск 21.4) и дебютные характеры: коды, тексты — на клиенте (workshop.habits / openingStyles).
 HABITS = ("hangs_pieces", "early_queen", "pawn_grabber", "knight_lover", "no_castling", "trades_all")
@@ -106,12 +116,14 @@ class PieceValues(BaseModel):
     queen: float = Field(9.0, ge=7.0, le=11.0)
 
     def of(self, piece_type: int | None) -> float:
+        """Ценность фигуры в пешках; 0 — для короля, пустого поля и None."""
         return {
             chess.PAWN: self.pawn, chess.KNIGHT: self.knight, chess.BISHOP: self.bishop,
             chess.ROOK: self.rook, chess.QUEEN: self.queen,
         }.get(piece_type or 0, 0.0)
 
     def is_standard(self) -> bool:
+        """Все ценности совпадают со стандартной шкалой STANDARD_VALUES (правило «вкуса к фигурам» не нужно)."""
         return all(self.of(pt) == value for pt, value in STANDARD_VALUES.items())
 
 
@@ -119,6 +131,9 @@ class BotPersonalityConfig(BaseModel):
     """
     Характер соперника. Ползунки 0..200: 100 — обычный вес признака, 0 — признак не учитывается,
     200 — удвоенный. aggression: +100 — шахи, жертвы, игра против короля; -100 — профилактика и тихие ходы.
+    randomness 0..100 — случайный разброс оценок (JITTER_CP_PER_RANDOMNESS); blunder_guard_cp — ширина окна выбора
+    хода; target_elo — целевая сила (см. strength_for). Остальные поля — любимые дебюты, привычки, дебютный характер,
+    отношение к ничьей и проходные пешки; смысл каждого — в build_style и PersonalityBot.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -145,6 +160,7 @@ class BotPersonalityConfig(BaseModel):
     @field_validator("openings_white", "openings_black")
     @classmethod
     def _known_openings(cls, value: list[str]) -> list[str]:
+        """Любимые дебюты — только позиции из таблицы дебютов (иначе bot_opening_unknown); повторы убираются."""
         table = openings.lines()
         unique = list(dict.fromkeys(value))
         if any(epd not in table or not table[epd].moves for epd in unique):
@@ -156,6 +172,8 @@ class BotPersonalityConfig(BaseModel):
 
 @dataclass(frozen=True)
 class Strength:
+    """Параметры поиска и ошибок для целевого рейтинга (см. strength_for)."""
+
     uci_elo: int
     skill_level: int
     depth: int
@@ -164,6 +182,7 @@ class Strength:
 
 
 def _error_rate(elo: int) -> float:
+    """Доля управляемых ошибок для рейтинга: кусочно-линейная интерполяция по ERROR_RATE_CURVE."""
     for (lo_elo, lo_rate), (hi_elo, hi_rate) in zip(ERROR_RATE_CURVE, ERROR_RATE_CURVE[1:], strict=False):
         if elo <= hi_elo:
             share = (max(elo, lo_elo) - lo_elo) / (hi_elo - lo_elo)
@@ -172,7 +191,11 @@ def _error_rate(elo: int) -> float:
 
 
 def strength_for(target_elo: int) -> Strength:
-    """Параметры поиска по целевому рейтингу; клиент их не задаёт."""
+    """
+    Параметры по целевому рейтингу: uci_elo (не ниже STOCKFISH_MIN_ELO), глубина и время поиска (растут от
+    SEARCH_FLOOR_ELO до MAX_TARGET_ELO в пределах потолков), доля ошибок. skill_level 0–20 передаётся боту, но на
+    оценки не влияет (см. base.analyse_with_stockfish). Клиент эти параметры не задаёт.
+    """
     elo = max(MIN_TARGET_ELO, min(MAX_TARGET_ELO, target_elo))
     t = (max(elo, SEARCH_FLOOR_ELO) - SEARCH_FLOOR_ELO) / (MAX_TARGET_ELO - SEARCH_FLOOR_ELO)
     error_rate = _error_rate(elo)
@@ -188,6 +211,7 @@ def strength_for(target_elo: int) -> Strength:
 # --- Признаки ходов для ползунков -------------------------------------------------------------
 
 def _queens_on_board(c: MoveContext) -> bool:
+    """У обеих сторон есть ферзи (пока они на доске, королю опасно покидать укрытие)."""
     return bool(c.board.pieces(chess.QUEEN, chess.WHITE)) and bool(c.board.pieces(chess.QUEEN, chess.BLACK))
 
 
@@ -204,6 +228,7 @@ def _shelter_pawn_push(c: MoveContext) -> bool:
     return abs(chess.square_file(c.move.from_square) - king_file) <= 1
 
 
+# Условия для правил безопасности короля.
 QUEENS_ON = Cond(_queens_on_board)
 SHELTER_PAWN_PUSH = Cond(_shelter_pawn_push)
 
@@ -215,9 +240,9 @@ def _mobility_gain(c: MoveContext) -> float:
 
 
 def _material_perception(values: PieceValues):
+    """Функция бонуса для правила «вкус к фигурам»: отклонение ценностей персоналии от стандартной шкалы, в сп."""
+
     def bonus(c: MoveContext) -> float:
-        # Сдвиг относительно стандартной шкалы: взятие фигуры, которую персоналия ценит выше,
-        # привлекательнее; поставить под бой «дорогую» для неё фигуру — менее привлекательно.
         """
         Бонус за отношение персоналии к фигурам: взять фигуру, которую она ценит выше обычного, привлекательнее, а
         поставить под бой свою «дорогую» фигуру — менее привлекательно.
@@ -233,11 +258,12 @@ def _material_perception(values: PieceValues):
 
 
 def _scaled(weight: float, feature):
+    """Бонус-функция: признак feature(ctx), умноженный на вес ползунка."""
     return lambda c: weight * feature(c)
 
 
 def build_style(config: BotPersonalityConfig) -> Style:
-    """Правила стиля из ползунков; признаки с нулевым весом не считаются вовсе."""
+    """Правила стиля из ползунков; признаки с нулевым весом не считаются вовсе. Реплика хода — у самого весомого признака."""
     rules: list[Rule] = []
     a = config.aggression / 100.0
     if a > 0:
@@ -308,10 +334,12 @@ def _passed_pawn_push(c: MoveContext) -> bool:
 
 
 def _captures(*types: int) -> Cond:
+    """Ход берёт фигуру одного из типов types."""
     return Cond(lambda c: c.captured_piece_type in types)
 
 
 PASSED_PAWN_PUSH = Cond(_passed_pawn_push)
+# Фигура (не пешка и не король) идёт под бой без взятия — привычка «зевать фигуры».
 HANGING = ~piece(chess.PAWN, chess.KING) & Cond(lambda c: c.destination_attacked) & ~CAPTURE
 
 
@@ -339,13 +367,13 @@ def _habit_rules(config: BotPersonalityConfig) -> list[Rule]:
 
 
 def _style_match(style: str, line: openings.OpeningLine) -> bool:
-    """Линии характера, которые играются за оба цвета: гамбиты и разменные варианты."""
+    """Линия подходит характеру, играемому за оба цвета: gambit — гамбиты (кроме отказанных), drawish — разменные."""
     if style == "gambit":
         return "Gambit" in line.name and "Declined" not in line.name
     return style == "drawish" and "Exchange Variation" in line.name
 
 
-@cache
+@cache  # таблица дебютов за процесс не меняется
 def style_lines(style: str) -> tuple[tuple[chess.Color | None, tuple[str, ...], str], ...]:
     """
     Линии таблицы дебютов для дебютного характера: (за какой цвет их играть — None за оба, ходы, название).
@@ -377,6 +405,7 @@ def accepts_draw(config: BotPersonalityConfig, score_cp: int) -> bool:
     return score_cp <= 30 + round(1.7 * config.draw_attitude)
 
 
+# Раньше этого хода (номер хода партии) бот отклоняет ничью как преждевременную.
 DRAW_OFFER_MIN_MOVE = 10
 
 
@@ -389,6 +418,7 @@ def draw_answer(config: BotPersonalityConfig, score_cp: int | None, move_number:
 
 
 def default_comment_for(config: BotPersonalityConfig) -> str:
+    """Реплика по умолчанию по агрессии: от +30 — атака, от −30 — спокойная игра, иначе позиционная."""
     if config.aggression >= 30:
         return "personality.seekAttack"
     if config.aggression <= -30:
@@ -422,7 +452,10 @@ def favorite_moves(config: BotPersonalityConfig) -> dict[str, list[tuple[str, st
 
 
 class PersonalityBot(HistoricalBot):
-    """Соперник с характером из BotPersonalityConfig: любимые дебюты вместо книги, сила по target_elo."""
+    """
+    Соперник с характером из BotPersonalityConfig: любимые дебюты вместо книги, стиль из build_style, сила по
+    target_elo (strength_for). Ошибки слабых и отношение к ничьей добавляет _select_move.
+    """
 
     bot_id = "custom"
     engine_source_name = "personality_engine"
@@ -430,6 +463,7 @@ class PersonalityBot(HistoricalBot):
     opening_book: dict[str, list[BookEntry]] = {}
 
     def __init__(self, config: BotPersonalityConfig, stockfish_path: str | None = None):
+        """Строит силу, стиль, реплику по умолчанию и любимые дебюты из config."""
         self.config = config
         self.strength = strength_for(config.target_elo)
         super().__init__(
@@ -474,6 +508,7 @@ class PersonalityBot(HistoricalBot):
     def _select_move(
             self, board: chess.Board, scores: dict[chess.Move, float], reference: chess.Move | None = None,
     ) -> tuple[chess.Move, str | None]:
+        """Выбор хода с поправкой на отношение к ничьей и управляемыми ошибками слабых; иначе — как у базового бота."""
         # Управляемая ошибка у слабых (кривая ERROR_RATE_CURVE). Линии MultiPV часто почти равны лучшей — «ошибка»
         # среди них почти ничего не стоила (калибровка 13.11: «Торопыга» с целью 700 играл на ~1150). Теперь ошибка —
         # ход из худшей половины линий, а в BLUNDER_SHARE случаев — случайный легальный ход: грубый зевок, как у новичка.

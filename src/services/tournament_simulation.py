@@ -14,6 +14,11 @@
 Каждая партия сохраняется с настоящим PGN, без рейтинга, с пометкой is_simulation: она не попадает в Live,
 архив и статистику профилей и открывается в GameViewer по ссылке из турнира. Одну партию турнира забирает один
 воркер (tournament_games.started_at); если воркер упал посреди партии, через CLAIM_TIMEOUT её можно забрать снова.
+
+Данные: таблицы tournament_games, tournament_players, games; опыт дебютов исторических ботов — bots/memory.py;
+подстройка архетипов — bots/selfplay.py; Stockfish — только через пул движка (engine_work «simulation»).
+Запускает simulate() задача Celery simulate_tournament_game (src/worker/tasks.py); в очередь партии ставит
+tournaments.mark_for_queue. play_game и пределы SIM_* использует и самоигра ботов (bots/selfplay.py).
 """
 
 import asyncio
@@ -43,9 +48,12 @@ from src.services.engine_pool import engine_work
 
 logger = logging.getLogger(__name__)
 
+# Предел длины партии в полуходах: дольше — партию присуждает adjudicate.
 SIM_MAX_PLIES = 200
+# Потолки глубины и времени поиска (секунды) бота в симуляции: ускоряют партию за счёт качества ходов.
 SIM_MAX_DEPTH = 6
 SIM_TIME_LIMIT_S = 0.1
+# Перевес в сотых пешки, начиная с которого незавершённая партия присуждается победой.
 ADJUDICATE_CP = 300
 # Сколько лучших ходов оценивается: участник выбирает только среди них, поэтому в позиции с единственным ходом
 # число плохих вариантов ограничено.
@@ -55,6 +63,7 @@ SIM_CANDIDATES = 8
 # разница 200 пунктов — 69–78 % очков сильному (по Эло 76 %), 400 — 94–97 % (91 %), 800 — 100 % (99 %).
 SIM_TEMPERATURE: tuple[tuple[int, float], ...] = ((800, 260.0), (1200, 170.0), (1600, 110.0), (2000, 65.0),
                                                   (2400, 32.0), (2800, 12.0))
+# Степень в формуле веса хода: больше 1 — малая потеря почти не штрафуется, большая — резко.
 LOSS_POWER = 1.5
 
 
@@ -89,6 +98,7 @@ class SimulatedPlayer:
     """Участник партии ботов: ходит из своей дебютной книги, дальше — по модели силы симуляции (см. модуль)."""
 
     def __init__(self, bot: HistoricalBot, rating: int, rng: random.Random | None = None):
+        """rating задаёт температуру выбора хода; rng подменяют в тестах для воспроизводимости."""
         self.bot = bot
         self.rating = rating
         self.temperature = temperature_cp(rating)
@@ -176,7 +186,10 @@ def play_game(
         white: HistoricalBot | SimulatedPlayer, black: HistoricalBot | SimulatedPlayer,
         max_plies: int = SIM_MAX_PLIES, judge: Callable[[chess.Board], str] = adjudicate,
 ) -> tuple[list[str], str, str]:
-    """Партия бот против бота: (ходы uci, результат, причина завершения)."""
+    """
+    Партия бот против бота: (ходы uci, результат, причина завершения). Не закончившуюся к max_plies партию решает
+    judge, причина тогда — «adjudication».
+    """
     board = chess.Board()
     moves: list[str] = []
     while not board.is_game_over(claim_draw=True) and board.ply() < max_plies:
@@ -208,6 +221,7 @@ async def claim(db: AsyncSession, game_id: int) -> bool:
 
 
 def _pgn_name(player: TournamentPlayer) -> str:
+    """Имя участника для PGN: исторический бот, архетип или персоналия; без названия — нейтральная запись."""
     from src.api.bots import BOT_METADATA
     from src.services.bots.archetypes import ARCHETYPES_BY_KEY
 
@@ -222,7 +236,10 @@ async def save_and_record(
         db: AsyncSession, tournament: Tournament, tgame: TournamentGame, moves: list[str], result: str,
         termination: str,
 ) -> list[int]:
-    """Сохраняет партию (PGN, пометка симуляции), пишет результат в турнир. Возвращает id партий для симуляции."""
+    """
+    Сохраняет партию (PGN, пометка is_simulation), пишет результат в турнир и продвигает его. Возвращает id партий,
+    которые пора поставить в очередь (tournaments.mark_for_queue).
+    """
     from src.api.bots import CUSTOM_BOT_ID, _build_pgn_string, _get_or_create_bot_user
     from src.services.openings import eco_code
 
@@ -281,6 +298,7 @@ async def simulate(db: AsyncSession, tournament_game_id: int, play: Callable = p
 
 
 def _historical_bot_key(player: TournamentPlayer) -> str | None:
+    """Ключ исторического бота участника (у него есть книга и память дебютов); для остальных None."""
     from src.services.bots import BOT_INSTANCES
 
     return player.bot_key if player.kind == "bot" and player.bot_key in BOT_INSTANCES else None

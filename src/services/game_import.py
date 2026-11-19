@@ -12,7 +12,12 @@
 * Только обычные шахматы (с любой начальной позиции); варианты пропускаются. PGN сохраняется без комментариев,
   часов и оценок чужого движка — разбор делаем сами.
 * Партии хранятся отдельно от партий сайта (models/imported_game.py): не влияют на рейтинг, архив и статистику.
-* Повторный импорт не дублирует: уникальность по (игрок, сайт, id партии); для вставленного PGN id — хеш ходов.
+* Повторный импорт не дублирует: уникальность по (игрок, сайт, id партии); для вставленного PGN id — SHA-1 от имён,
+  даты, начальной позиции и ходов (_moves_digest).
+
+Данные: таблица imported_games (+ personal_puzzles при удалении), ключ Redis game_import:cooldown:<сайт>, настройки
+GAME_IMPORT_* и RATE_LIMIT_GAME_IMPORT* (src/core/config.py). Вызывают src/api/game_import.py и задача
+analyze_imported_game_task (src/worker/tasks.py). Ошибки — GameImportError с кодами import_* (src/core/errors.py).
 """
 
 import asyncio
@@ -41,21 +46,34 @@ from src.services.game_engine import normalize_result
 
 logger = logging.getLogger(__name__)
 
+# Поддерживаемые сайты; вставленный PGN хранится с источником "pgn".
 SOURCES = ("lichess", "chesscom")
+# Таймаут запроса к стороннему API, секунды.
 TIMEOUT_S = 15.0
+# Имя клиента для сторонних API: общее, без личных данных.
 USER_AGENT = "regence-game-import"
+# Пауза сайта после ответа 429, секунды (общая для всех игроков через Redis).
 SOURCE_COOLDOWN_S = 60
 # Сколько месячных архивов chess.com просматривать назад в поисках N партий.
 CHESSCOM_MAX_ARCHIVES = 3
+# Предел размера вставляемого PGN, символы.
 MAX_PGN_CHARS = 500_000
+# Предел длины имени игрока в записи.
 NAME_MAX = 60
+# Допустимый ник на стороннем сайте: проверка до подстановки в адрес запроса.
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_-]{2,30}$")
+# Скорости партии, которые хранятся (как у categories контроля времени lichess).
 SPEEDS = ("bullet", "blitz", "rapid", "classical", "daily")
+# Загруженное с сайта: (id партии, партия, скорость или None).
 Fetched = list[tuple[str, chess.pgn.Game, str | None]]
+# Готовое к сохранению: то же + сторона игрока ("white" / "black").
 ToSave = list[tuple[str, chess.pgn.Game, str | None, str]]
+# Значения заголовка Variant, которые считаются обычными шахматами.
 _STANDARD_VARIANTS = {"", "standard", "from position", "fromposition"}
 
+# Переводы строк Windows (в т. ч. задвоенные «\r\r\n»), приводятся к «\n».
 _LINE_BREAKS = re.compile(r"\r+\n?")
+# По одной блокировке на сайт: в процессе идёт не больше одного запроса к сайту.
 _source_locks: dict[str, asyncio.Lock] = {}
 
 
@@ -91,6 +109,7 @@ def speed_from_time_control(value: str | None) -> str | None:
 
 
 def _rating(value: str | None) -> int | None:
+    """Рейтинг из заголовка PGN: целое от 1 до 3999, иначе None."""
     try:
         rating = int(value or "")
     except ValueError:
@@ -99,6 +118,7 @@ def _rating(value: str | None) -> int | None:
 
 
 def _played_at(headers: chess.pgn.Headers) -> dt.datetime | None:
+    """Время партии (UTC) из UTCDate/UTCTime или Date; нет или неразборчиво — None."""
     date = headers.get("UTCDate") or headers.get("Date") or ""
     clock = headers.get("UTCTime") or "00:00:00"
     try:
@@ -114,6 +134,7 @@ def _clean_pgn(game: chess.pgn.Game) -> str:
 
 
 def _moves_digest(game: chess.pgn.Game) -> str:
+    """SHA-1 от имён, даты, начальной позиции и ходов: id партии, у которой нет id на сайте."""
     headers = game.headers
     key = "|".join([headers.get("White", ""), headers.get("Black", ""), headers.get("Date", ""),
                     headers.get("FEN", ""), " ".join(move.uci() for move in game.mainline_moves())])
@@ -144,6 +165,7 @@ def read_games(pgn_text: str, limit: int) -> list[chess.pgn.Game]:
 
 
 def _color_of(game: chess.pgn.Game, player: str) -> str | None:
+    """Сторона игрока по имени в заголовках White/Black (без учёта регистра); None — не играл в партии."""
     wanted = player.strip().lower()
     if not wanted:
         return None
@@ -156,6 +178,7 @@ def _color_of(game: chess.pgn.Game, player: str) -> str | None:
 
 def _record(user: User, source: str, external_id: str, game: chess.pgn.Game, color: str,
             speed: str | None = None) -> ImportedGame:
+    """Запись ImportedGame из партии PGN; скорость — переданная или из TimeControl."""
     headers = game.headers
     return ImportedGame(
         user_id=user.id, source=source, external_id=external_id[:64], color=color,
@@ -170,6 +193,7 @@ def _record(user: User, source: str, external_id: str, game: chess.pgn.Game, col
 
 
 def _cooldown_key(source: str) -> str:
+    """Ключ Redis паузы сайта."""
     return f"game_import:cooldown:{source}"
 
 
@@ -186,6 +210,7 @@ async def _ensure_source_available(source: str) -> None:
 
 
 async def _pause_source(source: str) -> None:
+    """Ставит сайт на паузу SOURCE_COOLDOWN_S; недоступный Redis только пишется в лог."""
     try:
         await redis_module.redis_client.set(_cooldown_key(source), str(time.time() + SOURCE_COOLDOWN_S),
                                             ex=SOURCE_COOLDOWN_S)
@@ -194,6 +219,7 @@ async def _pause_source(source: str) -> None:
 
 
 async def _get(client: httpx.AsyncClient, source: str, url: str, **kwargs) -> httpx.Response:
+    """GET к стороннему API: сетевая ошибка и статусы, кроме 200, превращаются в коды import_*; 429 ставит паузу."""
     try:
         response = await client.get(url, **kwargs)
     except httpx.HTTPError as exc:
@@ -211,6 +237,7 @@ async def _get(client: httpx.AsyncClient, source: str, url: str, **kwargs) -> ht
 
 
 async def _fetch_lichess(client: httpx.AsyncClient, username: str, limit: int) -> Fetched:
+    """Последние партии с lichess одним запросом PGN; id — из ссылки Site, скорость — из заголовка Event."""
     base = settings.GAME_IMPORT_LICHESS_URL.rstrip("/")
     response = await _get(client, "lichess", f"{base}/api/games/user/{username}", params={
         "max": limit, "perfType": "ultraBullet,bullet,blitz,rapid,classical,correspondence",
@@ -229,6 +256,7 @@ async def _fetch_lichess(client: httpx.AsyncClient, username: str, limit: int) -
 
 
 async def _fetch_chesscom(client: httpx.AsyncClient, username: str, limit: int) -> Fetched:
+    """Партии chess.com из последних CHESSCOM_MAX_ARCHIVES месячных архивов, от новых к старым."""
     base = settings.GAME_IMPORT_CHESSCOM_URL.rstrip("/")
     response = await _get(client, "chesscom", f"{base}/pub/player/{username.lower()}/games/archives")
     try:
@@ -278,13 +306,17 @@ async def fetch_games(source: str, username: str, limit: int) -> Fetched:
 
 
 async def _room_left(db: AsyncSession, user: User) -> int:
+    """Сколько партий игрок ещё может сохранить до предела GAME_IMPORT_MAX_STORED."""
     stored = await db.scalar(select(func.count()).select_from(ImportedGame).where(ImportedGame.user_id == user.id)) or 0
     return max(0, settings.GAME_IMPORT_MAX_STORED - stored)
 
 
 async def _save(db: AsyncSession, user: User, source: str,
                 items: ToSave) -> dict:
-    """items: (id партии, партия, скорость, сторона игрока). Повторы пропускаются, новые — сохраняются."""
+    """
+    items: (id партии, партия, скорость, сторона игрока). Повторы пропускаются, новые сохраняются, но не больше места до
+    предела хранения (нет места совсем — import_limit_reached). Возвращает {"added": [id записей], "duplicates"}.
+    """
     room = await _room_left(db, user)
     if room <= 0:
         raise GameImportError("import_limit_reached", 409, max=settings.GAME_IMPORT_MAX_STORED)
@@ -355,12 +387,14 @@ async def import_pgn(db: AsyncSession, user: User, pgn_text: str, player: str, l
 
 
 def _aware(value: dt.datetime | None) -> str | None:
+    """Время в ISO 8601; значение без часового пояса считается UTC."""
     if value is None:
         return None
     return (value if value.tzinfo else value.replace(tzinfo=dt.UTC)).isoformat()
 
 
 def view(game: ImportedGame, puzzles: int = 0) -> dict:
+    """Строка списка импорта (без PGN); puzzles — число личных задач, сделанных из этой партии."""
     return {
         "id": game.id, "source": game.source, "color": game.color,
         "white": game.white_name, "black": game.black_name,
@@ -371,6 +405,7 @@ def view(game: ImportedGame, puzzles: int = 0) -> dict:
 
 
 async def get_own(db: AsyncSession, user: User, imported_id: int) -> ImportedGame:
+    """Своя импортированная партия; чужая или несуществующая — imported_game_not_found (404, не раскрывая чужое)."""
     game = await db.get(ImportedGame, imported_id)
     if game is None or game.user_id != user.id:
         raise GameImportError("imported_game_not_found", 404)
@@ -399,6 +434,7 @@ async def list_games(db: AsyncSession, user: User, offset: int, limit: int) -> d
 
 
 async def remove(db: AsyncSession, user: User, imported_id: int) -> None:
+    """Удаляет свою импортированную партию вместе с личными задачами, сделанными из неё."""
     game = await get_own(db, user, imported_id)
     await db.execute(delete(PersonalPuzzle).where(PersonalPuzzle.imported_game_id == game.id))
     await db.delete(game)
@@ -406,6 +442,7 @@ async def remove(db: AsyncSession, user: User, imported_id: int) -> None:
 
 
 def cached_analysis(game: ImportedGame) -> dict | None:
+    """Сохранённый разбор, если он есть, читается и соответствует текущему PGN и версии разбора; иначе None."""
     if not game.analysis_json:
         return None
     try:

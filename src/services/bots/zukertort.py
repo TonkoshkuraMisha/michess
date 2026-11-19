@@ -35,8 +35,13 @@ from src.services.bots.style import (
     to,
 )
 
+# Ширина окна выбора хода, сп (base.HistoricalBot._window): с опорным ходом силы бот может уступить ему не больше
+# половины этого значения, без движка — лучшему ходу не больше всего значения. Чем шире, тем больше простора стилю.
 ZUKERTORT_BLUNDER_GUARD_CP = 140.0
 
+# Фирменные линии: позиция (FEN без счётчиков ходов) → [(UCI, вес, ключ реплики botComments.*)]. Поверх книги из
+# books/*.json (load_bot_opening_book): ход из файла заменяет совпадающий, а фирменные ходы, которых в файле нет,
+# добавляются.
 DEFAULT_ZUKERTORT_BOOK: dict[str, list[BookEntry]] = {
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
         ("e2e4", 72, "zukertort.bookE4"),
@@ -75,11 +80,12 @@ ZUKERTORT_STYLE = Style(
         Rule(SACRIFICE, 12.0),
     ),
 )
+# Функция оценки стиля как самостоятельное имя (её импортируют тесты бота).
 evaluate_zukertort_style_bonus = ZUKERTORT_STYLE.evaluate
 
 
 class ZukertortBot(HistoricalBot):
-    """Иоганн Цукерторт: UCI_Elo 2120, глубина 6, уровень 8."""
+    """Иоганн Цукерторт: UCI_Elo 2120, глубина 6, уровень 8; случайный разброс ±8 сп, MultiPV 8."""
 
     bot_id = "zukertort"
     engine_source_name = "zukertort_style_engine"

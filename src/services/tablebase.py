@@ -14,6 +14,8 @@ Stockfish из пула (engine_pool, глубина FALLBACK_DEPTH), чтобы
 dtm и dtz неизвестны (null), категория — по оценке (engine_category): мат или перевес от ENGINE_WIN_CP — win / loss,
 не больше ENGINE_DRAW_CP — draw, между ними — maybe-win / maybe-loss (клиент в этом коридоре партию не обрывает).
 Ответ движка не кэшируется: таблицы могут снова стать доступны. Нет и движка — прежний отказ tablebase_unavailable.
+
+Вызывает probe из POST /analysis/tablebase (src/api/analysis.py). Ключ Redis — «tablebase:<FEN>».
 """
 
 import asyncio
@@ -34,8 +36,11 @@ logger = logging.getLogger(__name__)
 
 # Сколько ждать сервер таблиц: дольше игрок ждать ответа соперника не должен — дальше считает движок.
 TIMEOUT_S = 1.5
+# Больше фигур на доске таблицы не покрывают — отказ tablebase_too_many_pieces.
 MAX_PIECES = 7
+# Срок жизни ответа таблиц в Redis (30 суток): таблицы не меняются, срок лишь не даёт ключам копиться.
 CACHE_TTL_S = 30 * 24 * 3600
+# Общее имя клиента для стороннего сервера (без данных игрока).
 USER_AGENT = "regence-endgame-trainer"
 # Глубина запасного расчёта: в эндшпиле до семи фигур её хватает, чтобы найти мат и отличить выигрыш от ничьей.
 FALLBACK_DEPTH = 18
@@ -46,7 +51,10 @@ ENGINE_DRAW_CP = 50
 
 
 async def _fetch(fen: str) -> dict:
-    """Запрос к API таблиц (подменяется в тестах)."""
+    """
+    Запрос к API таблиц по settings.TABLEBASE_URL, ответ — JSON как у lichess. Ошибка сети или статуса —
+    httpx.HTTPError (подменяется в тестах).
+    """
     async with httpx.AsyncClient(timeout=TIMEOUT_S, headers={"User-Agent": USER_AGENT}) as client:
         response = await client.get(settings.TABLEBASE_URL, params={"fen": fen})
         response.raise_for_status()

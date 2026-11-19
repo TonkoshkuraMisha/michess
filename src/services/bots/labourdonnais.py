@@ -35,8 +35,13 @@ from src.services.bots.style import (
     to,
 )
 
+# Ширина окна выбора хода, сп (base.HistoricalBot._window): с опорным ходом силы бот может уступить ему не больше
+# половины этого значения, без движка — лучшему ходу не больше всего значения. Чем шире, тем больше простора стилю.
 LABOURDONNAIS_BLUNDER_GUARD_CP = 200.0
 
+# Фирменные линии: позиция (FEN без счётчиков ходов) → [(UCI, вес, ключ реплики botComments.*)]. Поверх книги из
+# books/*.json (load_bot_opening_book): ход из файла заменяет совпадающий, а фирменные ходы, которых в файле нет,
+# добавляются.
 DEFAULT_LABOURDONNAIS_BOOK: dict[str, list[BookEntry]] = {
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
         ("e2e4", 81, "labourdonnais.bookE4"),
@@ -74,11 +79,12 @@ LABOURDONNAIS_STYLE = Style(
         Rule(SACRIFICE, 16.0),
     ),
 )
+# Функция оценки стиля как самостоятельное имя (её импортируют тесты бота).
 evaluate_labourdonnais_style_bonus = LABOURDONNAIS_STYLE.evaluate
 
 
 class LabourdonnaisBot(HistoricalBot):
-    """Луи-Шарль Маэ де Лабурдонне: UCI_Elo 1950, глубина 5, уровень 5."""
+    """Луи-Шарль Маэ де Лабурдонне: UCI_Elo 1950, глубина 5, уровень 5; случайный разброс ±12 сп, MultiPV 8."""
 
     bot_id = "labourdonnais"
     engine_source_name = "labourdonnais_style_engine"

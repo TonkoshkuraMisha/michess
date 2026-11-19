@@ -13,6 +13,10 @@ bots/guests.py.
 
 У «Машины времени» своё место рядом с обычным турниром игрока: один идущий исторический турнир не мешает карьере
 и своим турнирам.
+
+Данные: реестр _EVENTS в этом файле (составы и итоги — константы); история игрока — таблицы tournaments
+(event_key) и tournament_players. Силу участников даёт калибровка (bots/calibration.py) или заявленный рейтинг
+мастера прошлого. Вызывают модуль src/api/tournaments.py и src/api/bots.py; турнир создаёт tournaments.create_tournament.
 """
 
 from dataclasses import dataclass
@@ -64,6 +68,7 @@ class Event:
 
     @property
     def rounds(self) -> int:
+        """Число туров (кругов сетки) турнира вместе с игроком."""
         if self.format == "round_robin":
             return len(rules.round_robin_schedule(self.size, self.cycles))
         return rules.bracket_size(self.size).bit_length() - 1

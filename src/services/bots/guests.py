@@ -10,6 +10,9 @@
 соперником мастерской, а имя на языке игрока берёт клиент (bots.guests.<id>). У кого за историю закрепился свой
 дебют — играет его (SIGNATURE_OPENINGS): Винавер — вариант Винавера, Грюнфельд — защиту Грюнфельда, Бёрд — дебют Бёрда.
 
+Данные — реестр GUESTS (новый мастер — новая запись). Читают его time_machine.py и tournaments.py (состав турниров,
+симуляция) и src/api/bots.py (соперник в партии).
+
 Все — умершие шахматисты (правило 1). Годы жизни сверены с открытыми источниками (17.11); у кого надёжных дат
 нет — не указаны. Портретов и своих дебютных книг у мастеров прошлого пока нет: это следующий шаг.
 """
@@ -19,6 +22,7 @@ from dataclasses import dataclass
 from src.services import openings
 from src.services.bots.personality import BotPersonalityConfig
 
+# Префикс ключа мастера прошлого в составе турнира и в games.personality_name.
 GUEST_PREFIX = "guest:"
 
 
@@ -39,9 +43,11 @@ class Guest:
 
     @property
     def key(self) -> str:
+        """Ключ мастера в турнире и в базе: «guest:<id>»."""
         return f"{GUEST_PREFIX}{self.id}"
 
 
+# Названия дебютов, повторяющиеся в SIGNATURE_OPENINGS (как в открытой таблице дебютов).
 QGD = "Queen's Gambit Declined"
 RUY_LOPEZ = "Ruy Lopez"
 KINGS_GAMBIT = "King's Gambit Accepted"
@@ -143,6 +149,7 @@ def opening_position(name: str) -> str:
 
 
 def _guest(guest_id: str, pgn_name: str, era: str | None, rating: int, **style) -> Guest:
+    """Мастер прошлого: характер из ползунков style, target_elo = rating, фирменные дебюты из SIGNATURE_OPENINGS."""
     white, black = SIGNATURE_OPENINGS.get(guest_id, ((), ()))
     config = BotPersonalityConfig(
         target_elo=rating, openings_white=[opening_position(name) for name in white],
@@ -151,6 +158,8 @@ def _guest(guest_id: str, pgn_name: str, era: str | None, rating: int, **style) 
     return Guest(guest_id, pgn_name, era, rating, config)
 
 
+# Состав по турнирам (заголовки ниже); сила — историческая оценка относительно калиброванных мастеров. Комментарий у
+# мастера — в чём его стиль или чем он известен.
 GUESTS: tuple[Guest, ...] = (
     # --- Лондон 1851: первый международный турнир -------------------------------------------------------------
     # Королевский гамбит и атака без оглядки на материал.
@@ -543,6 +552,7 @@ GUESTS: tuple[Guest, ...] = (
     # Умер через две недели после турнира в Копенгагене.
     _guest("jacobsen", "Jacobsen, Egil", "1897–1923", 2000, aggression=20, randomness=30),
 )
+# Поиск по id (ключу guest:<id> без префикса).
 GUESTS_BY_ID = {guest.id: guest for guest in GUESTS}
 # По имени из PGN («Фамилия, Имя»): под ним партия с мастером сохраняется и показывается в архиве.
 GUESTS_BY_PGN_NAME = {guest.pgn_name: guest for guest in GUESTS}

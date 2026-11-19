@@ -39,8 +39,13 @@ from src.services.bots.style import (
     to,
 )
 
+# Ширина окна выбора хода, сп (base.HistoricalBot._window): с опорным ходом силы бот может уступить ему не больше
+# половины этого значения, без движка — лучшему ходу не больше всего значения. Чем шире, тем больше простора стилю.
 STAUNTON_BLUNDER_GUARD_CP = 110.0
 
+# Фирменные линии: позиция (FEN без счётчиков ходов) → [(UCI, вес, ключ реплики botComments.*)]. Поверх книги из
+# books/*.json (load_bot_opening_book): ход из файла заменяет совпадающий, а фирменные ходы, которых в файле нет,
+# добавляются.
 DEFAULT_STAUNTON_BOOK: dict[str, list[BookEntry]] = {
     "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq -": [
         ("e2e4", 82, "staunton.bookE4"),
@@ -85,11 +90,12 @@ STAUNTON_STYLE = Style(
         Rule(ALWAYS, pawn_structure_delta),
     ),
 )
+# Функция оценки стиля как самостоятельное имя (её импортируют тесты бота).
 evaluate_staunton_style_bonus = STAUNTON_STYLE.evaluate
 
 
 class StauntonBot(HistoricalBot):
-    """Говард Стаунтон: UCI_Elo 2000, глубина 6, уровень 7."""
+    """Говард Стаунтон: UCI_Elo 2000, глубина 6, уровень 7; случайный разброс ±6 сп, MultiPV 6."""
 
     bot_id = "staunton"
     engine_source_name = "staunton_style_engine"

@@ -7,6 +7,9 @@
 target_elo) и своей дебютной книгой из его партий архива и библиотеки (scripts/build_master_books.py →
 books/<id>.json). Имена, титулы и девизы — на клиенте (bots.profiles.<id>); девизы — свои формулировки стиля, не
 цитаты. Сила уточняется калибровкой (scripts/calibrate_bots.py).
+
+Данные — реестр MASTERS: новый мастер — новая запись, а не правка кода. Готовые боты MASTER_BOTS попадают в реестр
+bots/__init__.py (BOT_INSTANCES) и в маршруты src/api/bots.py (там же читается MASTERS).
 """
 
 from dataclasses import dataclass
@@ -25,8 +28,11 @@ class Master:
     его партии находятся в PGN.
     """
     id: str
+    # Имя для PGN: «Фамилия, Имя» латиницей.
     pgn_name: str
+    # Годы жизни.
     era: str
+    # Заявленная сила; совпадает с target_elo в config.
     rating: int
     config: BotPersonalityConfig
     # Как искать его партии в PGN: часть фамилии и исключения (однофамильцы).
@@ -35,6 +41,7 @@ class Master:
 
 
 def _cfg(target_elo: int, **fields) -> BotPersonalityConfig:
+    """Сокращение для таблицы: характер с заданным target_elo и остальными полями-ползунками."""
     return BotPersonalityConfig(target_elo=target_elo, **fields)
 
 
@@ -98,15 +105,18 @@ MASTERS: tuple[Master, ...] = (
                 draw_attitude=40),
            "petrosian", ("arshak",)),
 )
+# Поиск мастера по id (ключу бота в реестре).
 MASTERS_BY_ID = {m.id: m for m in MASTERS}
 
 
 class MasterBot(PersonalityBot):
     """Мастер: стиль — ползунки характера, дебют — своя книга (как у исторических ботов первой волны)."""
 
+    # Задаётся в классе, созданном для конкретного мастера (см. MASTER_CLASSES).
     master: ClassVar[Master]
 
     def __init__(self, stockfish_path: str | None = None):
+        """Бот по настройкам мастера: id, источник хода и книга — его собственные, а не «custom» из PersonalityBot."""
         super().__init__(self.master.config, stockfish_path)
         self.bot_id = self.master.id
         self.engine_source_name = f"{self.master.id}_style_engine"
@@ -121,4 +131,5 @@ class MasterBot(PersonalityBot):
 MASTER_CLASSES: dict[str, type[MasterBot]] = {
     m.id: type(f"{m.id.capitalize()}Bot", (MasterBot,), {"master": m}) for m in MASTERS
 }
+# Готовые экземпляры по id; реестр bots/__init__.py добавляет их в BOT_INSTANCES.
 MASTER_BOTS: dict[str, MasterBot] = {key: cls() for key, cls in MASTER_CLASSES.items()}

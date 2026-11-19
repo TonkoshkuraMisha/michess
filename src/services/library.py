@@ -4,6 +4,10 @@
 
 При импорте берутся только заголовки и главная линия: комментарии, варианты и оценки из файлов отбрасываются
 (правило 5, `docs/research/books-library-review.md`). Нелегальный ход обрывает партию на нём, а не импорт.
+
+Данные: таблицы library_games, library_collections, library_game_collections (src/models/library.py); читают файлы
+PGN со скриптов scripts/import_library.py и scripts/build_master_books.py и начальная загрузка src/db/seed.py.
+Видимость и аннотации используют src/api/library.py и src/services/opening_explorer.py.
 """
 
 import hashlib
@@ -24,7 +28,9 @@ from src.services import openings, pawn_structures, position_index
 from src.services.game_engine import normalize_result
 
 STANDARD_FEN = chess.STARTING_FEN
+# Предел длины главной линии, полуходы: более длинное остаётся обрезанным, а не отвергается.
 MAX_PLIES = 1000
+# Год в начале поля Date («1985.??.??»).
 YEAR = re.compile(r"^(\d{4})")
 
 
@@ -51,12 +57,14 @@ class ParsedGame:
 
     @property
     def moves_hash(self) -> str:
+        """SHA-256 от игроков, года, начальной позиции и ходов: ключ слияния одинаковых партий."""
         key = "|".join((self.white.lower(), self.black.lower(), str(self.year or ""), self.start_fen or "",
                         " ".join(self.moves)))
         return hashlib.sha256(key.encode("utf-8")).hexdigest()
 
 
-# Фигурки шрифтов старых шахматных программ в тексте (¢ король … § пешка) — перед полем или взятием.
+# Фигурки-символы старых шрифтов в тексте PGN (¢ король … § пешка) и буквы ходов, на которые они заменяются; символ
+# заменяется только перед полем или взятием (см. _FIGURINE).
 FIGURINES = {"¢": "K", "£": "Q", "¤": "N", "¥": "B", "¦": "R", "§": "P"}
 _FIGURINE = re.compile(r"[¢£¤¥¦§](?=[a-hx])")
 _LATIN_HIGH = re.compile(r"[\u00c0-\u00ff]")
@@ -83,6 +91,7 @@ def repair_text(value: str) -> str:
 
 
 def _to_cp1251(value: str) -> str:
+    """Обратное преобразование «cp1251, прочитанный как cp1252/latin-1»; не удалось — строка как есть."""
     for single_byte in ("cp1252", "latin-1"):
         try:
             return value.encode(single_byte).decode("cp1251")
@@ -92,11 +101,13 @@ def _to_cp1251(value: str) -> str:
 
 
 def _header(game: chess.pgn.Game, name: str, limit: int) -> str:
+    """Заголовок PGN после repair_text, обрезанный до limit; «?» и «????.??.??» — пустая строка."""
     value = repair_text(game.headers.get(name, "").strip())
     return "" if value in ("?", "????.??.??") else value[:limit]
 
 
 def _int(value: str) -> int | None:
+    """Рейтинг из заголовка: целое от 1 до 3999, иначе None."""
     value = value.strip()
     return int(value) if value.isdigit() and 0 < int(value) < 4000 else None
 
@@ -153,6 +164,7 @@ def open_pgn(path: str) -> TextIO:
 
 
 def read_games(handle: TextIO) -> Iterator[chess.pgn.Game]:
+    """Лениво читает партии из открытого файла PGN, пока они не кончатся."""
     while True:
         game = chess.pgn.read_game(handle)
         if game is None:
@@ -161,6 +173,7 @@ def read_games(handle: TextIO) -> Iterator[chess.pgn.Game]:
 
 
 def read_text(text: str) -> Iterator[chess.pgn.Game]:
+    """То же, что read_games, для PGN в строке."""
     return read_games(io.StringIO(text))
 
 
@@ -290,6 +303,7 @@ def visible_clause(user: User | None) -> ColumnElement[bool]:
 
 # Статусы аннотации (таск 27.4): auto и approved видны всем, draft и review — модераторам.
 ANNOTATION_STATUSES = ("auto", "draft", "review", "approved")
+# Подмножество статусов, которое показывается без прав модератора.
 PUBLIC_ANNOTATION = ("auto", "approved")
 
 

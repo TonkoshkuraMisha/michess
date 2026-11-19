@@ -5,16 +5,20 @@
 1. Дебют: пока позиция есть в книге бота (books/<id>.json — статистика ходов из партий его прототипа, собирает
    scripts/build_opening_books.py, плюс несколько «фирменных» линий в модуле бота), ход берётся из неё случайно,
    с весом по частоте в партиях прототипа и по собственному опыту бота (src/services/bots/memory.py).
-2. Кандидаты: Stockfish из пула (src/services/engine_pool.py) оценивает несколько лучших ходов на полной силе;
+2. Кандидаты: движок из пула (src/services/engine_pool.py) оценивает несколько лучших ходов на полной силе;
    без движка — статический анализатор (fallback_scores).
-3. Сила: опорный ход — тот, что сыграл бы Stockfish с ограничением UCI_Elo бота (strength_reference_move). Окно
+3. Сила: опорный ход — тот, что сыграл бы движок с ограничением силы UCI_Elo бота (strength_reference_move). Окно
    выбора строится вокруг него: бот не играет заметно сильнее и заметно слабее опорного хода (_window).
 4. Стиль: внутри окна каждому ходу начисляются бонусы по правилам стиля (src/services/bots/style.py) и небольшой
    случайный разброс; выбирается ход с лучшей суммой. Оценку позиции стиль не меняет.
 
-Здесь же: поиск бинарника Stockfish (resolve_stockfish_path: bin/ проекта, PATH, стандартные пути Linux),
-имитация времени раздумья (_simulate_human_thinking_time), реплика бота как ключ каталога botComments
-(bot_comment) — текста сервер не отдаёт. Измеренная сила ботов — calibration.json (scripts/calibrate_bots.py).
+Здесь же: поиск бинарника движка (resolve_stockfish_path: bin/ проекта, PATH, стандартные пути Linux),
+расчёт «человеческого» времени раздумья (_simulate_human_thinking_time; choose_move его только вычисляет и не
+использует: задержки ходу не добавляет), реплика бота как ключ каталога botComments (bot_comment) — текста сервер
+не отдаёт. Измеренная сила ботов — calibration.json (scripts/calibrate_bots.py).
+
+Вызывают: choose_move — src/api/bots.py (в потоке) и симуляция турниров; статическую оценку и анализ — ещё и
+analysis_service.py и tournament_simulation.py.
 """
 
 import json
@@ -39,10 +43,12 @@ def _engine(engine_path: str, lease: EngineLease | None, options: dict):
     """Движок из аренды хода, если она есть, иначе — отдельно из пула на один вызов."""
     return lease.use(options) if lease is not None else get_engine_pool(engine_path).acquire(options)
 
+# Папка пакета; книги лежат в books/, корень проекта нужен для поиска bin/ с движком и *_generated_book.json.
 BOTS_DIR = Path(__file__).resolve().parent
 BOOKS_DIR = BOTS_DIR / "books"
 PROJECT_ROOT = BOTS_DIR.parent.parent.parent
 
+# Материальные ценности для static_board_eval_cp, сп; король заведомо дороже всего остального.
 PIECE_VALUES = {
     chess.PAWN: 100,
     chess.KNIGHT: 320,
@@ -54,13 +60,13 @@ PIECE_VALUES = {
 
 
 def normalize_fen_key(board: chess.Board) -> str:
-    """Нормализует FEN до первых 3 полей (позиция, очередь хода, права рокировки)."""
+    """Ключ позиции для книги и памяти: расстановка, очередь хода и права рокировки; поле взятия на проходе — всегда «-»."""
     parts = board.fen().split(" ")
     return f"{parts[0]} {parts[1]} {parts[2]} -"
 
 
 def resolve_stockfish_path(custom_path: str | None = None) -> str | None:
-    """Ищет бинарник Stockfish в локальной папке bin/ проекта, системном PATH или стандартных путях Linux."""
+    """Путь к бинарнику движка: custom_path, если существует; иначе bin/ проекта, PATH, пути Linux; None — не найден."""
     if custom_path and os.path.exists(custom_path):
         return custom_path
 
@@ -98,8 +104,9 @@ def load_bot_opening_book(
         fallback_book: dict[str, list[BookEntry]] | None = None,
 ) -> dict[str, list[BookEntry]]:
     """
-    Загружает дебютную книгу бота из src/services/bots/books/{bot_id}.json
-    и аккуратно объединяет её с фирменными дебютными линиями fallback_book.
+    Книга бота: books/{bot_id}.json (формат: ключ позиции → [[UCI, вес, число партий], ...]) или, если его нет,
+    {bot_id}_generated_book.json в корне проекта. Для позиции, которая есть и в файле, и в fallback_book, ходы файла
+    сохраняются, а фирменные ходы, которых в файле нет, добавляются. Ошибка чтения — в лог, остаётся fallback_book.
     """
     book: dict[str, list[BookEntry]] = {}
     if fallback_book:
@@ -146,8 +153,9 @@ def _simulate_human_thinking_time(
         base_time_ms: int = 180000,
 ) -> float:
     """
-    Вычисляет рекомендуемое человеческое время раздумий шахматиста (в секундах)
-    без блокировки рабочих потоков сервера через time.sleep().
+    Время раздумья «как у человека», секунды (само не спит, поток не блокирует). Зависит от стадии партии (дебют,
+    миттельшпиль со сложностью по числу ходов, эндшпиль), книжный ход быстрее; масштабируется контролем времени
+    base_time_ms, сжимается при нехватке времени бота и не превышает его остаток минус 2 с. Случайно (random).
     """
     piece_count = len(board.piece_map())
     move_number = board.fullmove_number
@@ -176,7 +184,7 @@ def _simulate_human_thinking_time(
 
 
 def static_board_eval_cp(board: chess.Board, perspective: chess.Color) -> float:
-    """Базовая статическая оценка позиции в сантипешках (fallback при отсутствии Stockfish)."""
+    """Статическая оценка без движка, сп с точки зрения perspective: материал и центр; мат ±100000, пат 0."""
     if board.is_checkmate():
         return -100000.0 if board.turn == perspective else 100000.0
     if board.is_stalemate() or board.is_insufficient_material():
@@ -201,7 +209,7 @@ def static_board_eval_cp(board: chess.Board, perspective: chess.Color) -> float:
 
 
 def fallback_scores(board: chess.Board) -> dict[chess.Move, float]:
-    """Статический анализатор без движка: каждый ход оценивается по худшему ответу соперника (2 полухода)."""
+    """Статический анализатор без движка: каждый ход оценивается по худшему ответу соперника (2 полухода); мат — 100000."""
     us = board.turn
     scores: dict[chess.Move, float] = {}
     for mv in board.legal_moves:
@@ -231,12 +239,15 @@ def analyse_with_stockfish(
         multipv: int = 6,
         lease: EngineLease | None = None,
 ) -> dict[chess.Move, float]:
-    """Запрашивает оценку топ-ходов у движка Stockfish (lease — движок, арендованный на весь ход бота)."""
+    """
+    Оценки до multipv лучших ходов на полной силе: ход → сп с точки зрения ходящего (мат — ±100000). Пустой словарь —
+    движка нет или он дал ошибку. lease — движок, арендованный на весь ход бота.
+    """
     if not engine_path or not os.path.exists(engine_path):
         return {}
 
     scores: dict[chess.Move, float] = {}
-    # Анализ — на полной силе. UCI_LimitStrength/UCI_Elo/Skill Level в Stockfish ослабляют только выбор хода
+    # Анализ — на полной силе. UCI_LimitStrength/UCI_Elo/Skill Level ослабляют у используемого движка только выбор хода
     # в play(), а оценки analyse() не меняют (проверено калибровкой 13.11, таск 10.5): сила бота задаётся
     # опорным ходом strength_reference_move, а не опциями анализа. skill_level и uci_elo оставлены в
     # сигнатуре для совместимости вызовов.
@@ -270,7 +281,7 @@ def strength_reference_move(
         lease: EngineLease | None = None,
 ) -> chess.Move | None:
     """
-    Ход, который сыграл бы Stockfish с ограничением силы UCI_Elo (таск 10.5) — эталон силы бота: его ослабление
+    Ход, который сыграл бы движок с ограничением силы UCI_Elo (таск 10.5) — эталон силы бота: его ослабление
     откалибровано самим движком. None — без движка или без ограничения силы.
     """
     if uci_elo is None or not engine_path or not os.path.exists(engine_path):
@@ -288,7 +299,7 @@ def score_move(
         board: chess.Board, engine_path: str, move: chess.Move, depth: int, time_limit: float,
         lease: EngineLease | None = None,
 ) -> float | None:
-    """Оценка одного хода на полной силе (для опорного хода, не попавшего в MultiPV)."""
+    """Оценка одного хода на полной силе, сп за ходящего (для опорного хода, не попавшего в MultiPV); None — не удалось."""
     try:
         with _engine(engine_path, lease, {}) as engine:
             info = engine.analyse(board, chess.engine.Limit(depth=depth, time=time_limit), root_moves=[move])
@@ -318,10 +329,15 @@ STRENGTH_UPSIDE_CP = 20.0
 
 class HistoricalBot:
     """
-    Бот со стилем: дебютная книга, затем кандидаты Stockfish (MultiPV) или статического анализатора,
-    из которых стиль (src/services/bots/style.py) выбирает ход внутри окна blunder_guard_cp от лучшего.
-    Исторические боты задают только параметры силы, книгу и пресет стиля; персоналии с ползунками —
-    src/services/bots/personality.py.
+    Бот со стилем: дебютная книга, затем кандидаты движка (MultiPV) или статического анализатора, из которых стиль
+    (src/services/bots/style.py) выбирает ход внутри окна силы (см. _window). Исторические боты задают только
+    атрибуты класса, книгу и пресет стиля; персоналии с ползунками — src/services/bots/personality.py.
+
+    Атрибуты класса: bot_id (ключ книги, памяти и реплик), engine_source_name (поле source в ответе),
+    default_comment (реплика без особого признака), blunder_guard_cp (ширина окна, сп), jitter_range (случайный
+    разброс ±сп), multipv (сколько линий просить у движка), time_limit (секунд на анализ), opening_book, style,
+    default_uci_elo (сила опорного хода), default_search_depth; default_skill_level только передаётся в
+    analyse_with_stockfish и на оценки не влияет.
     """
 
     bot_id: str = "base"
@@ -344,6 +360,7 @@ class HistoricalBot:
             uci_elo: int | None = None,
             search_depth: int | None = None,
     ):
+        """Параметры силы заменяют default_*; stockfish_path — явный путь к движку, иначе он ищется сам."""
         self._explicit_stockfish_path = stockfish_path
         self.stockfish_path = resolve_stockfish_path(stockfish_path)
         self.skill_level = self.default_skill_level if skill_level is None else skill_level
@@ -351,6 +368,7 @@ class HistoricalBot:
         self.search_depth = self.default_search_depth if search_depth is None else search_depth
 
     def _get_active_engine_path(self) -> str | None:
+        """Путь к движку: явно заданный (если файл есть) или найденный; потерянный ищется заново. None — движка нет."""
         if self._explicit_stockfish_path is not None:
             return self._explicit_stockfish_path if os.path.exists(self._explicit_stockfish_path) else None
         if self.stockfish_path and os.path.exists(self.stockfish_path):
@@ -359,6 +377,7 @@ class HistoricalBot:
         return self.stockfish_path
 
     def evaluate_style_bonus(self, board_before: chess.Board, move: chess.Move) -> tuple[float, str | None]:
+        """Бонус стиля (сп) и ключ реплики для хода в позиции до него (Style.evaluate бота)."""
         return self.style.evaluate(board_before, move)
 
     def _book_note(self, note: str | int) -> dict:
@@ -368,6 +387,7 @@ class HistoricalBot:
         return bot_comment(note)
 
     def _book_move(self, board: chess.Board) -> tuple[chess.Move, dict] | None:
+        """Случайный ход книги и его реплика; вес — вес записи × book_factor памяти. None — позиции нет в книге."""
         key = normalize_fen_key(board)
         candidates = self.opening_book.get(key)
         if not candidates:
@@ -392,7 +412,10 @@ class HistoricalBot:
         return moves[idx], self._book_note(comments[idx])
 
     def _candidate_scores(self, board: chess.Board) -> Candidates:
-        """Кандидаты MultiPV на полной силе и опорный ход силы (ход Stockfish с ограничением UCI_Elo)."""
+        """
+        Кандидаты MultiPV на полной силе и опорный ход силы (ход движка с ограничением UCI_Elo). Без движка — оценки
+        fallback_scores и опорного хода нет.
+        """
         engine_path = self._get_active_engine_path() if self.stockfish_path is not None else None
         # Один движок на все шаги хода: в очередь пула ход встаёт один раз.
         # Поправка силы по партиям с людьми (таск 32.1) возвращает бота к заявленной силе.
@@ -457,13 +480,14 @@ class HistoricalBot:
         return best_move, best_comment
 
     def _comment_for(self, board: chess.Board, move: chess.Move, note: str | None) -> dict:
+        """Реплика к выбранному ходу: ключ от правила стиля, иначе default_comment (board и move — для переопределений)."""
         return bot_comment(note or self.default_comment)
 
     def choose_move(self, fen: str) -> dict:
         """
         Ход бота в позиции: из дебютной книги, а когда книга кончилась — выбор стилем среди кандидатов движка (порядок
         — в описании модуля). Возвращает словарь: ход в записи UCI и SAN, позицию после него, источник хода и реплику
-        бота.
+        бота. ValueError — партия в позиции уже окончена.
         """
         board = chess.Board(fen)
         if board.is_game_over():

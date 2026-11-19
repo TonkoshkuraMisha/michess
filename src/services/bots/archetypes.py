@@ -1,8 +1,10 @@
 # --- FILE: src/services/bots/archetypes.py ---
 """
 Готовые архетипы мастерской соперников (таск 10.3) — источник правды на сервере: их калибрует
-scripts/calibrate_bots.py, по ним строится клубная лестница (таск 10.4), фронтенд получает их через
-GET /bots/catalog. Персонажи вымышленные — не реальные люди и не герои чужих программ.
+scripts/calibrate_bots.py, по ним строится клубная лестница (таск 10.4, ladder.py), фронтенд получает их через
+GET /bots/catalog (src/api/bots.py). Персонажи вымышленные — не реальные люди и не герои чужих программ.
+Здесь — исходные настройки; самоигра (selfplay.py) подстраивает у архетипа только randomness и blunder_guard_cp, а
+сила по игре и заявленный target_elo сверяются там же. Это данные, а не логика: новый архетип — новая запись ARCHETYPES.
 
 Сервер знает только id и английское имя для PGN; имя и описание на языке игрока — в каталогах клиента
 (archetypes.<id>.name / .bio). В базе партия с архетипом лестницы хранит personality_name «archetype:<id>».
@@ -12,6 +14,7 @@ from dataclasses import dataclass
 
 from src.services.bots.personality import BotPersonalityConfig, PieceValues
 
+# Префикс ключа архетипа в калибровке, на лестнице и в games.personality_name.
 ARCHETYPE_PREFIX = "archetype:"
 
 
@@ -29,11 +32,13 @@ class Archetype:
 
 
 def _cfg(piece_values: dict | None = None, **fields) -> BotPersonalityConfig:
+    """Сокращение для таблицы: необязательные ценности фигур (словарь) и остальные поля характера."""
     return BotPersonalityConfig(piece_values=PieceValues(**(piece_values or {})), **fields)
 
 
+# Целевая сила (target_elo) — заявленная; измеренную даёт calibration.json.
 ARCHETYPES: tuple[Archetype, ...] = (
-    # Соперники для новичков (таск 21.4): 300–1200, у каждого — узнаваемая слабость или дебютная привычка.
+    # Соперники для новичков (таск 21.4): 350–1200, у каждого — узнаваемая слабость или дебютная привычка.
     Archetype("blunderer", "Gaper", _cfg(habits=["hangs_pieces"], randomness=90, blunder_guard_cp=400, target_elo=350)),
     Archetype("queen_rusher", "Queen Rusher",
               _cfg(habits=["early_queen"], opening_style="early_queen", aggression=40, target_elo=450)),
@@ -49,6 +54,7 @@ ARCHETYPES: tuple[Archetype, ...] = (
     Archetype("peacemaker", "Peacemaker",
               _cfg(opening_style="drawish", draw_attitude=100, aggression=-40, target_elo=1100)),
     Archetype("pawn_pusher", "Pawn Pusher", _cfg(passed_pawns=200, pawn_structure=140, target_elo=1200)),
+    # Архетипы с ползунками характера (мастерская): 700–2200, выше новичковых; у каждого — свой крен стиля.
     Archetype(
         "rusher",
         "Rusher",
@@ -102,5 +108,6 @@ ARCHETYPES: tuple[Archetype, ...] = (
     ),
 )
 
+# Поиск архетипа по id (как в каталоге клиента) и по ключу «archetype:<id>» (как в лестнице и базе).
 ARCHETYPES_BY_ID = {a.id: a for a in ARCHETYPES}
 ARCHETYPES_BY_KEY = {a.key: a for a in ARCHETYPES}

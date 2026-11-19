@@ -2,13 +2,17 @@
 """
 Карьера турниров (таск 15.4): лестница готовых турниров нарастающей силы и случайные соперники из диапазона.
 
-Лестница — MAIN_STAGES основных турниров: сила соперников растёт от START_TARGET до END_TARGET, размер — от 4 до 8,
-формат и контроль времени чередуются. Следующий основной турнир открывается, когда предыдущий закончен в верхней
-половине таблицы. Ещё INVITATIONALS турниров-приглашений скрыты (игрок видит только «???»): каждое открывается местом
-в тройке в своём «воротном» основном турнире и сильнее его.
+Лестница — MAIN_STAGES основных турниров: сила соперников растёт от START_TARGET до END_TARGET, размер — 4, 6 или 8
+(по трети лестницы), формат и контроль времени чередуются. Следующий основной турнир открывается, когда предыдущий
+закончен в верхней половине таблицы. После каждого INVITATIONAL_EVERY-го основного идёт турнир-приглашение (всего
+MAIN_STAGES // INVITATIONAL_EVERY): он скрыт (игрок видит только «???»), открывается местом в тройке в своём «воротном»
+основном турнире и сильнее его на INVITATIONAL_BONUS.
 
 Соперники этапа не хранятся: это участники ростера (исторические боты и архетипы мастерской), ближайшие по силе к цели
-этапа — набор детерминирован, пока не меняется калибровка.
+этапа — набор детерминирован, пока не меняется калибровка (bots/calibration.py).
+
+Прогресс — лучшие места игрока в законченных турнирах карьеры (таблицы tournaments.career_stage и tournament_players).
+Вызывает модуль src/api/tournaments.py; сам турнир создаёт tournaments.create_tournament.
 """
 
 import random
@@ -26,12 +30,18 @@ from src.services.bots.archetypes import ARCHETYPE_PREFIX, ARCHETYPES
 from src.services.bots.calibration import strength_of
 from src.services.rating import classify_time_control
 
+# Число основных турниров лестницы.
 MAIN_STAGES = 24
+# Целевая сила соперников первого и последнего основного турнира (по калибровке); между ними — линейно.
 START_TARGET, END_TARGET = 800, 2200
+# После каждого стольки-го основного турнира идёт приглашение; оно сильнее своего «воротного» на INVITATIONAL_BONUS.
 INVITATIONAL_EVERY = 4
 INVITATIONAL_BONUS = 150
+# Контроли времени этапов (базовое время, прибавка — мс); этапы берут их по кругу.
 TIME_CONTROLS = ((300_000, 0), (600_000, 0), (180_000, 2_000), (900_000, 10_000))
+# Режим случайного турнира: соперники около уровня игрока, сильнее или слабее.
 RandomMode = Literal["my_level", "stronger", "weaker"]
+# Сдвиг центра подбора случайных соперников относительно рейтинга игрока по режимам.
 RANDOM_SHIFT: dict[str, int] = {"my_level": 0, "stronger": 200, "weaker": -200}
 
 
@@ -53,8 +63,9 @@ class Stage:
 
 
 def _main_stage(i: int) -> Stage:
+    """Основной этап с индексом i (с нуля): размер — по трети лестницы; на выбывание — каждый третий, размеров 4 и 8."""
     size = 4 if i < 8 else 6 if i < 16 else 8
-    # На выбывание — только размеры 4 и 8: каждый третий турнир этих размеров.
+    # На выбывание — только размеры 4 и 8 (шесть не годится для сетки): каждый третий турнир лестницы.
     fmt: tournaments_service.Format = "knockout" if size != 6 and i % 3 == 2 else "round_robin"
     base, inc = TIME_CONTROLS[i % len(TIME_CONTROLS)]
     target = START_TARGET + round((END_TARGET - START_TARGET) * i / (MAIN_STAGES - 1))
@@ -62,6 +73,7 @@ def _main_stage(i: int) -> Stage:
 
 
 def _build() -> tuple[Stage, ...]:
+    """Собирает всю лестницу: основные этапы и приглашение после каждого INVITATIONAL_EVERY-го."""
     stages: list[Stage] = []
     invitational = 0
     for i in range(MAIN_STAGES):
@@ -75,6 +87,7 @@ def _build() -> tuple[Stage, ...]:
     return tuple(stages)
 
 
+# Все этапы карьеры по порядку; по ключу — STAGES_BY_KEY.
 STAGES: tuple[Stage, ...] = _build()
 STAGES_BY_KEY = {stage.key: stage for stage in STAGES}
 
@@ -97,6 +110,7 @@ def nearest(target: int, count: int) -> list[tournaments_service.ParticipantSpec
 
 
 def stage_opponents(stage: Stage) -> list[tournaments_service.ParticipantSpec]:
+    """Соперники этапа: size − 1 ближайших по силе к цели этапа (игрок — ещё один участник)."""
     return nearest(stage.target, stage.size - 1)
 
 
@@ -124,6 +138,10 @@ async def best_places(db: AsyncSession, user: User) -> dict[str, int]:
 
 
 def unlocked(stage: Stage, best: dict[str, int]) -> bool:
+    """
+    Открыт ли этап при лучших местах best: приглашение — место в тройке в «воротном» турнире; основной — предыдущий
+    закончен в верхней половине таблицы; первый открыт всегда.
+    """
     if stage.gate is not None:
         return best.get(stage.gate, 99) <= 3
     if stage.number == 1:
