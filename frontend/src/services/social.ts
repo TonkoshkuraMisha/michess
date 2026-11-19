@@ -4,10 +4,7 @@
 // src/services/notifications.py). Новое уведомление сервер, кроме записи в базу, доставляет в открытые вкладки по
 // WebSocket — список здесь нужен для первой загрузки и на случай, если событие не дошло.
 
-import {API_BASE_URL} from '../config/api';
-import {readApiErrorOr, UiError} from './apiErrors';
-import {uiMessage} from '../i18n';
-import {getToken} from './authToken';
+import {apiRequest} from './http';
 
 /** Игрок в результатах поиска и в списке подписок. */
 export interface PlayerCard {
@@ -49,24 +46,8 @@ export interface Inbox {
     items: AppNotification[];
 }
 
-/** Запрос к /api/v1/social с токеном; отказ сервера — UiError с текстом по коду ошибки. */
-async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const token = getToken();
-    let res: Response;
-    try {
-        res = await fetch(`${API_BASE_URL}/api/v1/social${path}`, {
-            ...init,
-            headers: {
-                ...(init.body ? {'Content-Type': 'application/json'} : {}),
-                ...(token ? {Authorization: `Bearer ${token}`} : {}),
-            },
-        });
-    } catch {
-        throw new UiError(uiMessage('common.noConnection'));
-    }
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res.json() as Promise<T>;
-}
+/** Запрос к /api/v1/social через общую обёртку http.ts (токен, JSON, ошибки). */
+const call = <T>(path: string, init: RequestInit = {}) => apiRequest<T>(`/social${path}`, init);
 
 const user = (name: string) => encodeURIComponent(name);
 

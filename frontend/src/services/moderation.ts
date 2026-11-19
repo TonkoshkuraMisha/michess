@@ -3,10 +3,7 @@
 // Все запросы — к /api/v1/moderation и только с входом (маршруты src/api/moderation.py, правила —
 // src/services/moderation.py). Очередь и решения сервер отдаёт только модератору; автоматика лишь ставит заявки.
 
-import {API_BASE_URL} from '../config/api';
-import {readApiErrorOr, UiError} from './apiErrors';
-import {uiMessage} from '../i18n';
-import {getToken} from './authToken';
+import {apiRequest} from './http';
 
 /** Причина жалобы: нечестная игра, оскорбления, спам, другое (REASONS на сервере). */
 export type ReportReason = 'cheating' | 'abuse' | 'spam' | 'other';
@@ -52,24 +49,8 @@ export interface ModerationMe {
     chat_banned_until: string | null;
 }
 
-/** Запрос к /api/v1/moderation с токеном; отказ сервера — UiError с текстом по коду ошибки. */
-async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const token = getToken();
-    let res: Response;
-    try {
-        res = await fetch(`${API_BASE_URL}/api/v1/moderation${path}`, {
-            ...init,
-            headers: {
-                ...(init.body ? {'Content-Type': 'application/json'} : {}),
-                ...(token ? {Authorization: `Bearer ${token}`} : {}),
-            },
-        });
-    } catch {
-        throw new UiError(uiMessage('common.noConnection'));
-    }
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res.json() as Promise<T>;
-}
+/** Запрос к /api/v1/moderation через общую обёртку http.ts (токен, JSON, ошибки). */
+const call = <T>(path: string, init: RequestInit = {}) => apiRequest<T>(`/moderation${path}`, init);
 
 export const moderationApi = {
     me: () => call<ModerationMe>('/me'),

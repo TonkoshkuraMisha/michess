@@ -7,10 +7,7 @@
 // Stockfish (source: 'engine', dtm и dtz — null, категории maybe-* — спорная оценка); нет и движка —
 // tablebase_unavailable. Вердикт тренажёра по ответу — trainerVerdict.
 
-import {API_BASE_URL} from '../config/api';
-import {readApiErrorOr, UiError} from './apiErrors';
-import {uiMessage} from '../i18n';
-import {getToken} from './authToken';
+import {apiRequest} from './http';
 
 /** Лучший ход по таблицам; category, dtm и dtz передаются как есть из ответа сервиса таблиц для этого хода. */
 export interface TablebaseMove {
@@ -51,18 +48,6 @@ export function trainerVerdict(probe: TablebaseProbe, winning: boolean): 'contin
 }
 
 /** Запрос таблиц по позиции (FEN). Отказ сервера, в том числе запрет во время партии, — UiError с текстом по коду. */
-export async function probeTablebase(fen: string): Promise<TablebaseProbe> {
-    const token = getToken();
-    let res: Response;
-    try {
-        res = await fetch(`${API_BASE_URL}/api/v1/analysis/tablebase`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json', ...(token ? {Authorization: `Bearer ${token}`} : {})},
-            body: JSON.stringify({fen}),
-        });
-    } catch {
-        throw new UiError(uiMessage('common.noConnection'));
-    }
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res.json() as Promise<TablebaseProbe>;
+export function probeTablebase(fen: string): Promise<TablebaseProbe> {
+    return apiRequest<TablebaseProbe>('/analysis/tablebase', {method: 'POST', body: JSON.stringify({fen})});
 }

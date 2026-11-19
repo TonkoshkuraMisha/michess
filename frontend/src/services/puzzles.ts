@@ -6,10 +6,7 @@
 // personal_puzzles.py; защита — defense_drills.py; упражнения-генераторы — generated_drills.py; курс матов —
 // mate_course.py. Какой ход решающего сейчас ожидается, сервер хранит в Redis (одна активная задача на игрока).
 
-import {API_BASE_URL} from '../config/api';
-import {readApiErrorOr, UiError} from './apiErrors';
-import {uiMessage} from '../i18n';
-import {getToken} from './authToken';
+import {apiRequest} from './http';
 
 /** Задача для решения: позиция до первого хода соперника. Решения в ней нет. */
 export interface PuzzleView {
@@ -306,26 +303,8 @@ export interface DrillRunResult {
     new_record: boolean;
 }
 
-const BASE = `${API_BASE_URL}/api/v1/puzzles`;
-
-/** Запрос к /api/v1/puzzles с токеном; отказ сервера — UiError с текстом по коду ошибки. */
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const token = getToken();
-    let res: Response;
-    try {
-        res = await fetch(`${BASE}${path}`, {
-            ...init,
-            headers: {
-                ...(init.body ? {'Content-Type': 'application/json'} : {}),
-                ...(token ? {Authorization: `Bearer ${token}`} : {}),
-            },
-        });
-    } catch {
-        throw new UiError(uiMessage('common.noConnection'));
-    }
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res.json() as Promise<T>;
-}
+/** Запрос к /api/v1/puzzles через общую обёртку http.ts (токен, JSON, ошибки). */
+const request = <T>(path: string, init: RequestInit = {}) => apiRequest<T>(`/puzzles${path}`, init);
 
 /**
  * Курс матовых конструкций (таск 14.6): конструкции по порядку курса и число задач, найденных для каждой;

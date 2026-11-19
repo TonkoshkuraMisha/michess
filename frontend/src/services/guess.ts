@@ -3,11 +3,8 @@
 // Все запросы — к /api/v1/guess, доступны и гостю. Баллы за ответ считает сервер (src/services/guess.py) по
 // сохранённым при отборе строкам движка — сам движок при ответе не запускается.
 
-import {API_BASE_URL} from '../config/api';
-import {readApiErrorOr, UiError} from './apiErrors';
-import {uiMessage} from '../i18n';
-import {getToken} from './authToken';
 import type {CoachComment} from './coach';
+import {apiRequest} from './http';
 
 /** Позиция для угадывания. Ход мастера в ней не передаётся — он приходит только в ответе (GuessAnswer). */
 export interface GuessPosition {
@@ -51,25 +48,7 @@ export interface GuessAnswer extends CoachComment {
     next_id: number | null;
 }
 
-const BASE = `${API_BASE_URL}/api/v1/guess`;
-
-async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const token = getToken();
-    let res: Response;
-    try {
-        res = await fetch(`${BASE}${path}`, {
-            ...init,
-            headers: {
-                ...(init.body ? {'Content-Type': 'application/json'} : {}),
-                ...(token ? {Authorization: `Bearer ${token}`} : {}),
-            },
-        });
-    } catch {
-        throw new UiError(uiMessage('common.noConnection'));
-    }
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res.json() as Promise<T>;
-}
+const request = <T>(path: string, init: RequestInit = {}) => apiRequest<T>(`/guess${path}`, init);
 
 export const guessApi = {
     /** Следующая позиция около силы игрока (гостю — около 1500); null — позиции ещё не отобраны. */

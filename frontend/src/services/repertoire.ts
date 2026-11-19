@@ -6,10 +6,7 @@
 // против репертуара — repertoire_drill.py, отклонения в сыгранной партии — repertoire_deviations.py. Всё, кроме
 // списка стартовых наборов, требует входа; ответ соперника (opponent) закрыт на время партии с человеком.
 
-import {API_BASE_URL} from '../config/api';
-import {readApiErrorOr, UiError} from './apiErrors';
-import {uiMessage} from '../i18n';
-import {getToken} from './authToken';
+import {apiRequest} from './http';
 
 export type RepertoireColor = 'white' | 'black';
 /** Коды стартовых наборов сервера (src/services/repertoire_starters.py); названия и вводные тексты — в каталоге. */
@@ -58,24 +55,8 @@ export interface Repertoire {
     moves: RepertoireEdge[];
 }
 
-/** Запрос к /api/v1/repertoires: токен — если игрок вошёл; отказ сервера — UiError с текстом по коду ошибки. */
-async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const token = getToken();
-    let res: Response;
-    try {
-        res = await fetch(`${API_BASE_URL}/api/v1/repertoires${path}`, {
-            ...init,
-            headers: {
-                ...(init.body ? {'Content-Type': 'application/json'} : {}),
-                ...(token ? {Authorization: `Bearer ${token}`} : {}),
-            },
-        });
-    } catch {
-        throw new UiError(uiMessage('common.noConnection'));
-    }
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res.json() as Promise<T>;
-}
+/** Запрос к /api/v1/repertoires через общую обёртку http.ts (токен, JSON, ошибки). */
+const call = <T>(path: string, init: RequestInit = {}) => apiRequest<T>(`/repertoires${path}`, init);
 
 const json = (method: string, body: object): RequestInit => ({method, body: JSON.stringify(body)});
 

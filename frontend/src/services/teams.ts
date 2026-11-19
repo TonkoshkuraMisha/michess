@@ -4,10 +4,7 @@
 // календарный месяц (UTC). Очки нигде не хранятся: сервер считает их при запросе по законченным рейтинговым
 // партиям сезона между игроками разных команд. Игрок состоит не больше чем в одной команде.
 
-import {API_BASE_URL} from '../config/api';
-import {readApiErrorOr, UiError} from './apiErrors';
-import {uiMessage} from '../i18n';
-import {getToken} from './authToken';
+import {apiRequest} from './http';
 
 /** Строка таблицы лиги: команда, число участников, очки за сезон и место. */
 export interface LeagueRow {
@@ -33,24 +30,8 @@ export interface TeamView {
     members: { username: string; points: number; owner: boolean }[];
 }
 
-/** Запрос к /api/v1/teams: токен — если игрок вошёл; отказ сервера — UiError с текстом по коду ошибки. */
-async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const token = getToken();
-    let res: Response;
-    try {
-        res = await fetch(`${API_BASE_URL}/api/v1/teams${path}`, {
-            ...init,
-            headers: {
-                ...(init.body ? {'Content-Type': 'application/json'} : {}),
-                ...(token ? {Authorization: `Bearer ${token}`} : {}),
-            },
-        });
-    } catch {
-        throw new UiError(uiMessage('common.noConnection'));
-    }
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res.json() as Promise<T>;
-}
+/** Запрос к /api/v1/teams через общую обёртку http.ts (токен, JSON, ошибки). */
+const call = <T>(path: string, init: RequestInit = {}) => apiRequest<T>(`/teams${path}`, init);
 
 /** Эндпоинты команд. Таблица лиги открыта без входа; своя команда, создание, вступление и выход — с входом. */
 export const teamsApi = {

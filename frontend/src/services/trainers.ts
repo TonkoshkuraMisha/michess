@@ -4,10 +4,7 @@
 // Маршруты — src/api/trainers.py, таблица trainer_results. Сами тренажёры считаются на клиенте
 // (frontend/src/trainers/), поэтому сервер только проверяет границы значений: рекорды личные и на рейтинг не влияют.
 
-import {API_BASE_URL} from '../config/api';
-import {readApiErrorOr, UiError} from './apiErrors';
-import {uiMessage} from '../i18n';
-import {getToken} from './authToken';
+import {apiRequest} from './http';
 
 /** Коды тренажёров — те же, что принимает сервер: под кодом хранятся результаты и рекорды. */
 export const TRAINER_IDS = ['quiet_path', 'knight_route', 'double_strike', 'tail',
@@ -32,24 +29,8 @@ export interface TrainerRecord {
     attempts: number;
 }
 
-/** Запрос к /api/v1/trainers с токеном; отказ сервера — UiError с текстом по коду ошибки. */
-async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const token = getToken();
-    let res: Response;
-    try {
-        res = await fetch(`${API_BASE_URL}/api/v1/trainers${path}`, {
-            ...init,
-            headers: {
-                ...(init.body ? {'Content-Type': 'application/json'} : {}),
-                ...(token ? {Authorization: `Bearer ${token}`} : {}),
-            },
-        });
-    } catch {
-        throw new UiError(uiMessage('common.noConnection'));
-    }
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res.json() as Promise<T>;
-}
+/** Запрос к /api/v1/trainers через общую обёртку http.ts (токен, JSON, ошибки). */
+const call = <T>(path: string, init: RequestInit = {}) => apiRequest<T>(`/trainers${path}`, init);
 
 export const trainersApi = {
     /** Сохранить попытку; record — побит ли личный рекорд уровня, best — рекорд после неё. */

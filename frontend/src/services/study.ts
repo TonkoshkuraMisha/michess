@@ -3,11 +3,8 @@
 // Маршруты — src/api/study.py, только с входом. Комната живёт в Redis (src/services/study_room.py) и рассылки по
 // WebSocket не имеет: участники опрашивают её состояние (poll) раз в секунду. Материалы клуба — таблица
 // study_materials.
+import {apiRequest} from './http';
 
-import {API_BASE_URL} from '../config/api';
-import {readApiErrorOr, UiError} from './apiErrors';
-import {uiMessage} from '../i18n';
-import {getToken} from './authToken';
 
 export type ArrowColor = 'green' | 'red' | 'blue' | 'yellow';
 
@@ -55,25 +52,9 @@ export interface StudyRoom {
     my_answer?: string | number;
 }
 
-/** Запрос к /api/v1/study с токеном. null — ответ 204: при опросе это значит «версия комнаты не изменилась». */
-async function call<T>(path: string, init: RequestInit = {}): Promise<T | null> {
-    const token = getToken();
-    let res: Response;
-    try {
-        res = await fetch(`${API_BASE_URL}/api/v1/study${path}`, {
-            ...init,
-            headers: {
-                ...(init.body ? {'Content-Type': 'application/json'} : {}),
-                ...(token ? {Authorization: `Bearer ${token}`} : {}),
-            },
-        });
-    } catch {
-        throw new UiError(uiMessage('common.noConnection'));
-    }
-    if (res.status === 204) return null;
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res.json() as Promise<T>;
-}
+/** Запрос к /api/v1/study через общую обёртку http.ts. null — ответ 204: при опросе это значит «версия комнаты не изменилась». */
+const call = async <T>(path: string, init: RequestInit = {}): Promise<T | null> =>
+    (await apiRequest<T | undefined>(`/study${path}`, init)) ?? null;
 
 const json = (method: string, body: unknown): RequestInit => ({method, body: JSON.stringify(body)});
 

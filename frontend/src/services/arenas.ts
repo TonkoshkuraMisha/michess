@@ -3,10 +3,7 @@
 // Все запросы — к /api/v1/arenas (маршруты src/api/arenas.py); правила, очки, статусы и таблицу считает сервер
 // (src/services/arena.py), расписание по конференциям — src/services/arena_schedule.py. Клиент только показывает.
 
-import {API_BASE_URL} from '../config/api';
-import {readApiErrorOr, UiError} from './apiErrors';
-import {uiMessage} from '../i18n';
-import {getToken} from './authToken';
+import {apiRequest} from './http';
 
 /** closing (33.1): пар больше нет — доигрываются последние партии или идёт время до конца; итоги — в finished. */
 export type ArenaStatus = 'scheduled' | 'running' | 'closing' | 'finished';
@@ -153,21 +150,8 @@ export interface ArenaLeague {
     me: LeagueRow | null;
 }
 
-/** Запрос к /api/v1/arenas: токен — если игрок вошёл; отказ сервера — UiError с текстом по коду ошибки. */
-async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
-    const token = getToken();
-    let res: Response;
-    try {
-        res = await fetch(`${API_BASE_URL}/api/v1/arenas${path}`, {
-            ...init,
-            headers: {...(token ? {Authorization: `Bearer ${token}`} : {})},
-        });
-    } catch {
-        throw new UiError(uiMessage('common.noConnection'));
-    }
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res.json() as Promise<T>;
-}
+/** Запрос к /api/v1/arenas через общую обёртку http.ts (токен, JSON, ошибки). */
+const call = <T>(path: string, init: RequestInit = {}) => apiRequest<T>(`/arenas${path}`, init);
 
 /** Эндпоинты арен. list, current, get и league открыты без входа; остальные требуют токен. */
 export const arenasApi = {

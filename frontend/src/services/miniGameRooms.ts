@@ -2,11 +2,8 @@
 // Игры тренеров с человеком по сети (таск 19.8): комната на двоих по ссылке. Правила и состояние — на сервере
 // (src/services/mini_game_rooms.py, эндпоинты src/api/mini_game_rooms.py, /api/v1/mini-game-rooms); клиент только
 // показывает комнату и опрашивает её (get) — о ходе соперника он узнаёт так.
+import {apiRequest} from './http';
 
-import {API_BASE_URL} from '../config/api';
-import {readApiErrorOr, UiError} from './apiErrors';
-import {uiMessage} from '../i18n';
-import {getToken} from './authToken';
 
 export type RoomColor = 'white' | 'black';
 
@@ -30,23 +27,7 @@ export interface MiniRoom {
     waiting: boolean;
 }
 
-async function call(path: string, init: RequestInit = {}): Promise<MiniRoom> {
-    const token = getToken();
-    let res: Response;
-    try {
-        res = await fetch(`${API_BASE_URL}/api/v1/mini-game-rooms${path}`, {
-            ...init,
-            headers: {
-                ...(init.body ? {'Content-Type': 'application/json'} : {}),
-                ...(token ? {Authorization: `Bearer ${token}`} : {}),
-            },
-        });
-    } catch {
-        throw new UiError(uiMessage('common.noConnection'));
-    }
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, 'common.networkError'));
-    return res.json() as Promise<MiniRoom>;
-}
+const call = (path: string, init: RequestInit = {}) => apiRequest<MiniRoom>(`/mini-game-rooms${path}`, init);
 
 export const miniRoomsApi = {
     create: (gameId: string, color: RoomColor | 'random' = 'random') =>
