@@ -5,6 +5,7 @@
 import {act, fireEvent, render, screen} from '@testing-library/react';
 import {afterEach, describe, expect, it, vi} from 'vitest';
 import {PuzzleBoard} from '../PuzzleBoard';
+import {setLanguage} from '../../../i18n';
 
 const START = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
 const CASTLING = 'r3k2r/pppppppp/8/8/8/8/PPPPPPPP/R3K2R w KQkq - 0 1';
@@ -349,5 +350,43 @@ describe('PuzzleBoard: звуки', () => {
                               lastMove={{from: 'e1', to: 'g1'}} sound={false}/>);
         expect(play).toHaveBeenCalledTimes(2);
         play.mockRestore();
+    });
+});
+
+describe('доска с клавиатуры (таск 26.3)', () => {
+    it('клетки — кнопки с подписью; Tab входит в одну клетку; стрелки переводят фокус; Enter — как щелчок', () => {
+        setLanguage('en', {persist: false});
+        const {onMove} = setup();
+        expect(cell('e2')).toHaveAttribute('role', 'button');
+        expect(cell('e2')).toHaveAttribute('aria-label', 'e2, white pawn');
+        expect(cell('e4')).toHaveAttribute('aria-label', 'e4, empty');
+        // В порядок Tab входит одна клетка — левая верхняя на экране (a8 у белых).
+        expect(document.querySelectorAll('[data-square][tabindex="0"]')).toHaveLength(1);
+        expect(cell('a8')).toHaveAttribute('tabindex', '0');
+
+        act(() => cell('e3').focus());
+        fireEvent.keyDown(cell('e3'), {key: 'ArrowDown'});
+        expect(document.activeElement).toBe(cell('e2'));
+        fireEvent.keyDown(cell('e2'), {key: 'Enter'});
+        expect(cell('e2')).toHaveAttribute('aria-pressed', 'true');
+        fireEvent.keyDown(cell('e2'), {key: 'ArrowUp'});
+        fireEvent.keyDown(cell('e3'), {key: 'ArrowUp'});
+        fireEvent.keyDown(cell('e4'), {key: ' '});
+        expect(onMove).toHaveBeenCalledWith('e2e4');
+    });
+
+    it('за чёрных: Tab входит в левую верхнюю клетку экрана, стрелки идут по экрану', () => {
+        setup({fen: BLACK_TO_MOVE, orientation: 'black'});
+        expect(cell('h1')).toHaveAttribute('tabindex', '0');  // левая верхняя у перевёрнутой доски
+        act(() => cell('e7').focus());
+        fireEvent.keyDown(cell('e7'), {key: 'ArrowDown'});  // вниз по экрану — к восьмой горизонтали
+        expect(document.activeElement).toBe(cell('e8'));
+    });
+
+    it('неинтерактивная доска: подписи есть, кнопок и фокуса нет', () => {
+        setup({interactive: false});
+        expect(cell('e2')).toHaveAttribute('aria-label');
+        expect(cell('e2')).not.toHaveAttribute('role');
+        expect(document.querySelectorAll('[data-square][tabindex]')).toHaveLength(0);
     });
 });

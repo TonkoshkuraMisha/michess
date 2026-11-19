@@ -159,6 +159,10 @@ describe('GameViewer', () => {
         expect(screen.getAllByText('bob').length).toBeGreaterThan(0);
         expect(pieceOn('h4')).toBe('b q');
         expect(pieceOn('d8')).toBeNull();
+        // Доступность (таск 26.3): клетки подписаны словами, доска — описанием позиции.
+        expect(document.querySelector('[data-square="h4"]')).toHaveAttribute('aria-label', 'h4, чёрный ферзь');
+        expect(document.querySelector('[data-square="d8"]')).toHaveAttribute('aria-label', 'd8, пусто');
+        expect(screen.getByRole('group', {name: /ферзь/})).toBeInTheDocument();
         expect(screen.getByRole('button', {name: 'Компьютерный анализ'})).toBeInTheDocument();
     });
 

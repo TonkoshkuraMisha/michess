@@ -17,6 +17,9 @@ import {Chess} from 'chess.js';
 import {useI18n} from '../../i18n';
 import {resolveMoveSound, soundEngine} from '../../services/soundEngine';
 import {AnnotationsOverlay, useBoardAnnotations} from '../chessboard/annotations';
+import {useBoardKeyboard} from '../chessboard/hooks/useBoardKeyboard';
+import {squareLabel} from '../../services/a11y/speech';
+import type {Translate} from '../../services/a11y/speech';
 import {
     BOARD_THEMES, lastMoveColor, getHarmoniousPieceStyle, getPieceSvgUrl, getSavedBoardThemeKey, getSavedPieceSetKey,
 } from '../../config/boardAppearance';
@@ -184,6 +187,10 @@ export function PuzzleBoard({
         select(ownPiece(square) ? square : null);
     };
 
+    // Доступность (таск 26.3): у доски, на которой ходят, клетки — кнопки с подписью («e4, белый конь»), стрелки и
+    // Enter/пробел (как щелчок) — общий хук с главной доской.
+    const boardKeys = useBoardKeyboard(`${files[0]}${ranks[0]}`, orientation === 'black', click);
+
     const pointerDown = (square: string, event: ReactPointerEvent) => {
         if (!interactive || promotion || onSquare) return;
         if (event.pointerType === 'mouse' && event.button !== 0) return;
@@ -230,7 +237,8 @@ export function PuzzleBoard({
         <div className="relative w-full aspect-square select-none touch-none" data-testid="puzzle-board"
              onPointerDown={notes.handlers.onPointerDown} onPointerUp={notes.handlers.onPointerUp}
              onContextMenu={(event) => event.preventDefault()}>
-            <div className="grid grid-cols-8 grid-rows-8 w-full h-full border border-black/60 rounded-[2px] overflow-hidden">
+            <div className="grid grid-cols-8 grid-rows-8 w-full h-full border border-black/60 rounded-[2px] overflow-hidden"
+                 role="group" aria-label={t('a11y.board')}>
                 {ranks.map((rank) => files.map((file) => {
                     const square = `${file}${rank}`;
                     const piece = game.get(square as never);
@@ -241,9 +249,12 @@ export function PuzzleBoard({
                     const grabbable = interactive && !onSquare && !promotion && piece && piece.color === game.turn();
                     return (
                         <div key={square} data-square={square} onClick={() => click(square)}
+                             {...(interactive ? boardKeys.squareProps(square) : {})}
+                             aria-pressed={interactive ? selected === square : undefined}
+                             aria-label={squareLabel(square, piece || null, t as Translate)}
                              onPointerDown={(event) => pointerDown(square, event)}
                              style={{backgroundColor: dark ? theme.dark : theme.light}}
-                             className={`relative flex items-center justify-center ${interactive ? 'cursor-pointer' : ''} ${grabbable ? 'cursor-grab' : ''}`}>
+                             className={`board-square relative flex items-center justify-center ${interactive ? 'cursor-pointer' : ''} ${grabbable ? 'cursor-grab' : ''}`}>
                             <BoardTextureLayer theme={theme} where="square" isDark={dark}/>
                             {isLast && <div className="absolute inset-0 pointer-events-none" style={{backgroundColor: lastMoveColor(theme)}}/>}
                             {darkHighlights.includes(square) && (

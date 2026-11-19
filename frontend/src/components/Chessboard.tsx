@@ -17,7 +17,6 @@
 
 import type {OddsChoice} from './chessboard/odds';
 import {useState, useEffect, useRef, useCallback} from 'react';
-import type {KeyboardEvent as ReactKeyboardEvent} from 'react';
 import {socialApi} from '../services/social';
 import {useLocation, useNavigate, useParams} from 'react-router-dom';
 import {Chess} from 'chess.js';
@@ -102,7 +101,8 @@ import {orderCaptured, quickMoveFrom, useBoardPrefs} from '../config/boardPrefs'
 import {LastMoveArrow} from './chessboard/LastMoveArrow';
 import {BlindfoldPanel} from './chessboard/BlindfoldPanel';
 import {parseMoveInput, startBlindfold, useBlindfold, visibleSquares} from '../config/blindfold';
-import {squareLabel, stepSquare} from '../services/a11y/speech';
+import {squareLabel} from '../services/a11y/speech';
+import {useBoardKeyboard} from './chessboard/hooks/useBoardKeyboard';
 import type {Translate} from '../services/a11y/speech';
 import {BoardSpeech} from './chessboard/BoardSpeech';
 import {squareCenter} from './chessboard/CoachArrowsOverlay';
@@ -156,8 +156,6 @@ export default function Chessboard() {
     const [game, setGame] = useState(new Chess());
     const [history, setHistory] = useState<any[]>([]);
     // Клетка доски с фокусом клавиатуры (таск 26.3) и сами клетки — чтобы переводить фокус стрелками.
-    const [keyFocus, setKeyFocus] = useState<string | null>(null);
-    const squareRefs = useRef<Record<string, HTMLDivElement | null>>({});
     // Какая позиция на экране: -1 — живая, -2 — начало партии до первого хода, иначе — индекс полухода в history,
     // после которого показана позиция. Ходить можно только на живой позиции.
     const [viewIndex, setViewIndex] = useState<number>(-1);
@@ -1215,24 +1213,9 @@ export default function Chessboard() {
 
     const displayedRanks = isBoardFlipped ? ['1', '2', '3', '4', '5', '6', '7', '8'] : ['8', '7', '6', '5', '4', '3', '2', '1'];
     const displayedFiles = isBoardFlipped ? [...FILES].reverse() : FILES;
-    // Доступность (таск 26.3): доска ходится с клавиатуры. Клетки — кнопки с подписью «e4, белый конь»; в порядок Tab
-    // входит одна клетка (keySquare, по умолчанию — левая верхняя), стрелки переводят фокус по экрану, Enter или пробел
-    // — то же, что щелчок (выбрать фигуру, сделать ход).
-    const keySquare = keyFocus ?? `${displayedFiles[0]}${displayedRanks[0]}`;
-    const onSquareKey = (e: ReactKeyboardEvent<HTMLDivElement>, squareId: string) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            e.stopPropagation();
-            handleSquareClick(squareId);
-            return;
-        }
-        if (!e.key.startsWith('Arrow')) return;
-        e.preventDefault();
-        e.stopPropagation();
-        const next = stepSquare(squareId, e.key, isBoardFlipped);
-        setKeyFocus(next);
-        squareRefs.current[next]?.focus();
-    };
+    // Доступность (таск 26.3): доска ходится с клавиатуры — клетки-кнопки с подписью «e4, белый конь», стрелки и
+    // Enter/пробел (как щелчок: выбрать фигуру, сделать ход); общий хук с доской задач — useBoardKeyboard.
+    const boardKeys = useBoardKeyboard(`${displayedFiles[0]}${displayedRanks[0]}`, isBoardFlipped, handleSquareClick);
 
     const topIsWhite = isBoardFlipped;
     // Отметки берсерка относятся к партии между людьми (своей или просматриваемой), а не к боту или свободной доске.
@@ -1825,21 +1808,15 @@ export default function Chessboard() {
                                     <div
                                         key={squareId}
                                         data-square={squareId}
-                                        ref={(el) => {
-                                            squareRefs.current[squareId] = el;
-                                        }}
-                                        role="button"
-                                        tabIndex={squareId === keySquare ? 0 : -1}
+                                        {...boardKeys.squareProps(squareId)}
                                         aria-pressed={isSelected}
                                         aria-label={squareLabel(squareId, piece, t as Translate,
                                             Boolean(blindVisible && !blindVisible.has(squareId)))}
-                                        onKeyDown={(e) => onSquareKey(e, squareId)}
-                                        onFocus={() => setKeyFocus(squareId)}
                                         onClick={() => handleSquareClick(squareId)}
                                         style={{
                                             backgroundColor: isDark ? activeTheme.dark : activeTheme.light
                                         }}
-                                        className="w-full h-full flex items-center justify-center relative cursor-pointer transition-colors duration-75 focus-visible:outline-3 focus-visible:outline-sky-400 focus-visible:-outline-offset-4 focus-visible:z-40"
+                                        className="w-full h-full flex items-center justify-center relative cursor-pointer transition-colors duration-75 board-square"
                                     >
                                         <BoardTextureLayer theme={activeTheme} where="square" isDark={isDark}/>
 

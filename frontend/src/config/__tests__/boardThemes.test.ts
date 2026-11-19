@@ -1,6 +1,6 @@
 // Доски (таск 18.1): координаты читаются на каждой доске (контраст WCAG ≥ 4,5), текстуры существуют, имена — в каталогах.
 
-import {existsSync} from 'node:fs';
+import {existsSync, readFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {describe, expect, it} from 'vitest';
 import {BOARD_THEMES, DEFAULT_LAST_MOVE, lastMoveColor, textureLayerStyle} from '../boardAppearance';
@@ -52,5 +52,24 @@ describe('доски', () => {
         expect(textureLayerStyle(BOARD_THEMES.newspaper, 'square', true)?.backgroundImage).toContain('hatch.svg');
         expect(lastMoveColor(BOARD_THEMES.maple)).toBe(DEFAULT_LAST_MOVE);
         expect(lastMoveColor(BOARD_THEMES.neon)).not.toBe(DEFAULT_LAST_MOVE);
+    });
+});
+
+describe('рамка фокуса клетки (таск 26.3, WCAG 1.4.11)', () => {
+    // Рамка двухцветная — чёрная и белая (index.css, .board-square:focus-visible): на любой клетке любой темы хотя бы
+    // один цвет должен отличаться от клетки с контрастом не ниже 3:1, иначе фокус с клавиатуры не видно.
+    const RING = ['#000000', '#FFFFFF'];
+    const MIN_NON_TEXT_CONTRAST = 3;
+
+    it.each(themes.map((theme) => [theme.id, theme] as const))('%s: рамка видна на светлой и тёмной клетке', (_id, theme) => {
+        for (const square of [theme.light, theme.dark]) {
+            expect(Math.max(...RING.map((ring) => contrast(ring, square)))).toBeGreaterThanOrEqual(MIN_NON_TEXT_CONTRAST);
+        }
+    });
+
+    it('стиль рамки — эти два цвета', () => {
+        const css = readFileSync(resolve(__dirname, '../../index.css'), 'utf8');
+        const rule = css.slice(css.indexOf('.board-square:focus-visible'));
+        for (const ring of RING) expect(rule).toContain(ring);
     });
 });
