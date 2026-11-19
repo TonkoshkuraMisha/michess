@@ -1,24 +1,11 @@
 // Азбука (таск 14.5): список разделов, уровень «звёзд» с оценкой, запрет вставать под бой, вопрос «что на доске».
 
-import {act, fireEvent, render, screen} from '@testing-library/react';
+import {fireEvent, render, screen} from '@testing-library/react';
 import {MemoryRouter, Route, Routes} from 'react-router-dom';
-import {afterEach, describe, expect, it, vi} from 'vitest';
+import {afterEach, describe, expect, it} from 'vitest';
 import {BasicsPage, BasicsSectionPage} from '../BasicsPage';
+import {playMove} from '../../../test/boardMoves';
 
-const cell = (name: string) => document.querySelector(`[data-square="${name}"]`) as HTMLElement;
-
-async function drag(from: string, to: string) {
-    document.elementsFromPoint = vi.fn(() => [cell(to)]);
-    await act(async () => {
-        fireEvent.pointerDown(cell(from), {button: 0, pointerType: 'mouse', clientX: 5, clientY: 5});
-    });
-    await act(async () => {
-        fireEvent.pointerMove(window, {clientX: 50, clientY: 50});
-    });
-    await act(async () => {
-        fireEvent.pointerUp(window, {clientX: 90, clientY: 90});
-    });
-}
 
 function renderAt(path: string) {
     return render(
@@ -46,7 +33,7 @@ describe('Азбука', () => {
         renderAt('/learn/basics/rook');
         expect(screen.getByTestId('board-star-a5')).toBeInTheDocument();
         expect(screen.getByTestId('basics-moves')).toHaveTextContent('Ходов: 0 · можно за 1');
-        await drag('a1', 'a5');
+        await playMove('a1', 'a5');
         expect(screen.queryByTestId('board-star-a5')).toBeNull();
         expect(screen.getByLabelText('Оценка: 3 из 3')).toBeInTheDocument();
         fireEvent.click(screen.getByTestId('basics-next'));
@@ -56,7 +43,7 @@ describe('Азбука', () => {
     it('под бой вставать нельзя', async () => {
         renderAt('/learn/basics/rook');
         fireEvent.click(screen.getByRole('button', {name: '7'}));
-        await drag('a1', 'a3');
+        await playMove('a1', 'a3');
         expect(screen.getByTestId('basics-feedback')).toHaveTextContent('Это поле бьёт соперник');
         expect(screen.getByTestId('basics-moves')).toHaveTextContent('Ходов: 0');
     });

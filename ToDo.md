@@ -2291,8 +2291,9 @@ BlindGames, PathGame, BasicsPage, `w * 5` в ProgramsPage); `SIZES` турнир
 (#220), запросы восьми страниц — в сервисы. Осталось: `fetch` в игровом ядре (Chessboard, GameViewer, GameSummaryPanel,
 LadderPanel, Chess960Page) и `transparency.ts` (текст и заголовок X-Total-Count); `POLL_MS` в двух местах, лимиты
 длины числами, `SIZES` турниров против `tournament_rules.py`, `any` сокета в Chess960LiveGame, `level={1}` у
-QuizGame/ChecksGame, пустой `useMemo` в LessonPlayer. Тесты с перетаскиванием фигуры (CoachCards, BasicsPage,
-ClassicsPage, EndgameTrainer, puzzleMoves, Trainers) — та же гонка подписки, что в курсе матов; при сбоях — на щелчки.
+QuizGame/ChecksGame, пустой `useMemo` в LessonPlayer. Сценарные тесты с перетаскиванием фигуры (CoachCards, BasicsPage,
+ClassicsPage, EndgameTrainer, Trainers) переведены на щелчки — общий `test/boardMoves.ts` (20.11); перетаскивание
+проверяют `puzzleMoves.test.tsx` и тесты главной доски.
 Найдено при сверке (чинить отдельно): дубликат `BOT_INSTANCES` в `src/api/bots.py`; неиспользуемая
 `philidor.BLUNDER_GUARD_MARGIN_CP`; `skill_level` в `analyse_with_stockfish` ни на что не влияет;
 `_simulate_human_thinking_time` считается в `choose_move`, но результат не используется; тест курса матов
