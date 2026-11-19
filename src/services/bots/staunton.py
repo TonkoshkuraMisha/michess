@@ -105,7 +105,6 @@ class StauntonBot(HistoricalBot):
     multipv = 6
     opening_book = STAUNTON_OPENING_BOOK
     style = STAUNTON_STYLE
-    default_skill_level = 7
     default_uci_elo = 2000
 
 

@@ -11,7 +11,7 @@ def test_stockfish_binary_exists_and_works():
     assert sf_path is not None, "Бинарник Stockfish не найден ни в bin/, ни в системном PATH"
 
     board = chess.Board()
-    scores = analyse_with_stockfish(board, sf_path, skill_level=5, uci_elo=1800, depth=4, multipv=3)
+    scores = analyse_with_stockfish(board, sf_path, depth=4, multipv=3)
     assert len(scores) > 0, "Stockfish должен возвращать оценки кандидатов для стартовой позиции"
 
     for bot_id, bot in BOT_INSTANCES.items():

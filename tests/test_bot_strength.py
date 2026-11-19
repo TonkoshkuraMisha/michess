@@ -108,7 +108,7 @@ def test_analysis_runs_at_full_strength(monkeypatch):
 
     monkeypatch.setattr(bots_base, "get_engine_pool", lambda path: Pool())
     monkeypatch.setattr(bots_base.os.path, "exists", lambda path: True)
-    assert bots_base.analyse_with_stockfish(board=BOARD, engine_path="stockfish", uci_elo=1400) == {}
+    assert bots_base.analyse_with_stockfish(board=BOARD, engine_path="stockfish") == {}
     assert seen == [{}]  # без UCI_LimitStrength: оно не влияет на analyse, а оценки нужны честные
 
 

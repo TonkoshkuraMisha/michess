@@ -8,7 +8,7 @@
 настроек характера (personality.py).
 
 Реестр читают память ботов (memory.py: книга бота по id) и симуляция турниров (tournament_simulation.py: свежий бот
-как type(bot)()). Маршруты src/api/bots.py держат собственный словарь BOT_INSTANCES из тех же ботов.
+как type(bot)()). Маршруты src/api/bots.py берут ботов из этого реестра.
 """
 
 from src.services.bots.anderssen import AnderssenBot, anderssen_bot

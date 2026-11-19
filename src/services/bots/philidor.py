@@ -20,7 +20,6 @@ from src.services.bots.base import (
     PIECE_VALUES,
     BookEntry,
     HistoricalBot,
-    _simulate_human_thinking_time,
     analyse_with_stockfish,
     load_bot_opening_book,
     normalize_fen_key,
@@ -46,8 +45,6 @@ from src.services.bots.style import (
 # Ширина окна выбора хода, сп (base.HistoricalBot._window): с опорным ходом силы бот может уступить ему не больше
 # половины этого значения, без движка — лучшему ходу не больше всего значения. Чем шире, тем больше простора стилю.
 PHILIDOR_BLUNDER_GUARD_CP = 120.0
-# Прежнее имя константы; в коде проекта не используется.
-BLUNDER_GUARD_MARGIN_CP = PHILIDOR_BLUNDER_GUARD_CP
 
 # Фирменные линии: позиция (FEN без счётчиков ходов) → [(UCI, вес, ключ реплики botComments.*)]. Поверх книги из
 # books/*.json (load_bot_opening_book): ход из файла заменяет совпадающий, а фирменные ходы, которых в файле нет,
@@ -145,5 +142,4 @@ __all__ = [
     "normalize_fen_key",
     "resolve_stockfish_path",
     "static_board_eval_cp",
-    "_simulate_human_thinking_time",
 ]

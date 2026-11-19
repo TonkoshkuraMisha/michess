@@ -175,7 +175,6 @@ class Strength:
     """Параметры поиска и ошибок для целевого рейтинга (см. strength_for)."""
 
     uci_elo: int
-    skill_level: int
     depth: int
     time_limit: float
     error_rate: float
@@ -193,15 +192,13 @@ def _error_rate(elo: int) -> float:
 def strength_for(target_elo: int) -> Strength:
     """
     Параметры по целевому рейтингу: uci_elo (не ниже STOCKFISH_MIN_ELO), глубина и время поиска (растут от
-    SEARCH_FLOOR_ELO до MAX_TARGET_ELO в пределах потолков), доля ошибок. skill_level 0–20 передаётся боту, но на
-    оценки не влияет (см. base.analyse_with_stockfish). Клиент эти параметры не задаёт.
+    SEARCH_FLOOR_ELO до MAX_TARGET_ELO в пределах потолков), доля ошибок. Клиент эти параметры не задаёт.
     """
     elo = max(MIN_TARGET_ELO, min(MAX_TARGET_ELO, target_elo))
     t = (max(elo, SEARCH_FLOOR_ELO) - SEARCH_FLOOR_ELO) / (MAX_TARGET_ELO - SEARCH_FLOOR_ELO)
     error_rate = _error_rate(elo)
     return Strength(
         uci_elo=max(STOCKFISH_MIN_ELO, elo),
-        skill_level=round(20 * t),
         depth=min(MAX_SEARCH_DEPTH, round(4 + 4 * t)),
         time_limit=min(MAX_SEARCH_TIME_S, round(0.15 + 0.35 * t, 3)),
         error_rate=round(error_rate, 4),
@@ -468,7 +465,6 @@ class PersonalityBot(HistoricalBot):
         self.strength = strength_for(config.target_elo)
         super().__init__(
             stockfish_path,
-            skill_level=self.strength.skill_level,
             uci_elo=self.strength.uci_elo,
             search_depth=self.strength.depth,
         )

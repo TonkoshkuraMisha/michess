@@ -107,7 +107,6 @@ def test_bot_moves_answer_with_comment_keys(client, monkeypatch, bot_id):
     from src.services.bots import base as bots_base
 
     monkeypatch.setattr(bots_base, "analyse_with_stockfish", lambda **kwargs: {})
-    monkeypatch.setattr(bots_base, "_simulate_human_thinking_time", lambda *args, **kwargs: 0.0)
     for fen in (
         "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",  # ход из книги
         "r1bq1rk1/pp3ppp/2n2n2/2bpp3/8/2NP1NP1/PPP1PPBP/R1BQ1RK1 w - - 0 9",  # ход по стилю

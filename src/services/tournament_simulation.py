@@ -167,7 +167,7 @@ def bot_for(player: TournamentPlayer) -> HistoricalBot:
 def adjudicate(board: chess.Board) -> str:
     """Итог незавершённой партии: перевес больше ADJUDICATE_CP по оценке движка (или статической) — победа."""
     scores = analyse_with_stockfish(
-        board=board, engine_path=resolve_stockfish_path(), skill_level=20, uci_elo=None, depth=12,
+        board=board, engine_path=resolve_stockfish_path(), depth=12,
         time_limit=0.2, multipv=1,
     )
     if scores:

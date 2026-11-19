@@ -12,10 +12,9 @@
 4. Стиль: внутри окна каждому ходу начисляются бонусы по правилам стиля (src/services/bots/style.py) и небольшой
    случайный разброс; выбирается ход с лучшей суммой. Оценку позиции стиль не меняет.
 
-Здесь же: поиск бинарника движка (resolve_stockfish_path: bin/ проекта, PATH, стандартные пути Linux),
-расчёт «человеческого» времени раздумья (_simulate_human_thinking_time; choose_move его только вычисляет и не
-использует: задержки ходу не добавляет), реплика бота как ключ каталога botComments (bot_comment) — текста сервер
-не отдаёт. Измеренная сила ботов — calibration.json (scripts/calibrate_bots.py).
+Здесь же: поиск бинарника движка (resolve_stockfish_path: bin/ проекта, PATH, стандартные пути Linux) и реплика бота
+как ключ каталога botComments (bot_comment) — текста сервер не отдаёт. Бот отвечает без искусственной паузы.
+Измеренная сила ботов — calibration.json (scripts/calibrate_bots.py).
 
 Вызывают: choose_move — src/api/bots.py (в потоке) и симуляция турниров; статическую оценку и анализ — ещё и
 analysis_service.py и tournament_simulation.py.
@@ -146,43 +145,6 @@ def load_bot_opening_book(
     return book
 
 
-def _simulate_human_thinking_time(
-        board: chess.Board,
-        is_book_move: bool,
-        bot_time_left_ms: int = 180000,
-        base_time_ms: int = 180000,
-) -> float:
-    """
-    Время раздумья «как у человека», секунды (само не спит, поток не блокирует). Зависит от стадии партии (дебют,
-    миттельшпиль со сложностью по числу ходов, эндшпиль), книжный ход быстрее; масштабируется контролем времени
-    base_time_ms, сжимается при нехватке времени бота и не превышает его остаток минус 2 с. Случайно (random).
-    """
-    piece_count = len(board.piece_map())
-    move_number = board.fullmove_number
-
-    is_opening = move_number <= 10 and piece_count >= 28
-    is_endgame = piece_count <= 12
-
-    if is_opening:
-        base_delay = random.uniform(0.4, 0.9) if is_book_move else random.uniform(1.2, 2.8)
-    elif is_endgame:
-        base_delay = random.uniform(0.4, 1.0) if piece_count <= 6 else random.uniform(1.2, 2.6)
-    else:
-        legal_moves_count = board.legal_moves.count()
-        complexity_mult = 0.7 + (min(legal_moves_count, 45) / 45.0) * 0.8
-        base_delay = random.uniform(1.2, 3.0) * complexity_mult
-
-    control_scale_factor = max(0.3, min(1.5, base_time_ms / 300000.0))
-    adjusted_delay = base_delay * control_scale_factor
-
-    if bot_time_left_ms < 30000:
-        time_ratio = max(0.15, bot_time_left_ms / 30000.0)
-        adjusted_delay = max(0.25, adjusted_delay * time_ratio)
-
-    max_allowed = max(0.25, (bot_time_left_ms - 2000) / 1000.0)
-    return round(min(adjusted_delay, max_allowed), 3)
-
-
 def static_board_eval_cp(board: chess.Board, perspective: chess.Color) -> float:
     """Статическая оценка без движка, сп с точки зрения perspective: материал и центр; мат ±100000, пат 0."""
     if board.is_checkmate():
@@ -232,8 +194,6 @@ def fallback_scores(board: chess.Board) -> dict[chess.Move, float]:
 def analyse_with_stockfish(
         board: chess.Board,
         engine_path: str | None,
-        skill_level: int = 7,
-        uci_elo: int | None = 1850,
         depth: int = 6,
         time_limit: float = 0.25,
         multipv: int = 6,
@@ -247,11 +207,9 @@ def analyse_with_stockfish(
         return {}
 
     scores: dict[chess.Move, float] = {}
-    # Анализ — на полной силе. UCI_LimitStrength/UCI_Elo/Skill Level ослабляют у используемого движка только выбор хода
-    # в play(), а оценки analyse() не меняют (проверено калибровкой 13.11, таск 10.5): сила бота задаётся
-    # опорным ходом strength_reference_move, а не опциями анализа. skill_level и uci_elo оставлены в
-    # сигнатуре для совместимости вызовов.
-    del skill_level, uci_elo
+    # Анализ — на полной силе. UCI_LimitStrength/UCI_Elo/Skill Level ослабляют у движка только выбор хода в play(),
+    # а оценки analyse() не меняют (проверено калибровкой 13.11, таск 10.5): сила бота задаётся опорным ходом
+    # strength_reference_move, поэтому опций силы у анализа нет.
 
     try:
         with _engine(engine_path, lease, {}) as engine:
@@ -336,8 +294,7 @@ class HistoricalBot:
     Атрибуты класса: bot_id (ключ книги, памяти и реплик), engine_source_name (поле source в ответе),
     default_comment (реплика без особого признака), blunder_guard_cp (ширина окна, сп), jitter_range (случайный
     разброс ±сп), multipv (сколько линий просить у движка), time_limit (секунд на анализ), opening_book, style,
-    default_uci_elo (сила опорного хода), default_search_depth; default_skill_level только передаётся в
-    analyse_with_stockfish и на оценки не влияет.
+    default_uci_elo (сила опорного хода), default_search_depth.
     """
 
     bot_id: str = "base"
@@ -349,21 +306,18 @@ class HistoricalBot:
     time_limit: float = 0.25
     opening_book: dict[str, list[BookEntry]] = {}
     style: Style = Style("neutral")
-    default_skill_level: int = 7
     default_uci_elo: int = 1850
     default_search_depth: int = 6
 
     def __init__(
             self,
             stockfish_path: str | None = None,
-            skill_level: int | None = None,
             uci_elo: int | None = None,
             search_depth: int | None = None,
     ):
         """Параметры силы заменяют default_*; stockfish_path — явный путь к движку, иначе он ищется сам."""
         self._explicit_stockfish_path = stockfish_path
         self.stockfish_path = resolve_stockfish_path(stockfish_path)
-        self.skill_level = self.default_skill_level if skill_level is None else skill_level
         self.uci_elo: int | None = self.default_uci_elo if uci_elo is None else uci_elo
         self.search_depth = self.default_search_depth if search_depth is None else search_depth
 
@@ -424,8 +378,6 @@ class HistoricalBot:
             scores = analyse_with_stockfish(
                 board=board,
                 engine_path=engine_path,
-                skill_level=self.skill_level,
-                uci_elo=uci_elo,
                 depth=self.search_depth,
                 time_limit=self.time_limit,
                 multipv=self.multipv,
@@ -497,7 +449,6 @@ class HistoricalBot:
         book = self._book_move(board)
         if book is not None:
             chosen_move, comment = book
-            _simulate_human_thinking_time(board, is_book_move=True)
             san = board.san(chosen_move)
             board.push(chosen_move)
             return {
@@ -507,8 +458,6 @@ class HistoricalBot:
                 "source": "opening_book",
                 "comment": comment,
             }
-
-        _simulate_human_thinking_time(board, is_book_move=False)
 
         # 2. Кандидаты движка (или статического анализатора), 3. выбор по стилю
         candidates = self._candidate_scores(board)
