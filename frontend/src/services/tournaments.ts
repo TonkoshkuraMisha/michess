@@ -5,14 +5,12 @@
 // (tournament_simulation.py). Результат партии игрока сюда не отправляется: его приносит сохранение сыгранной
 // партии (POST /api/v1/bots/save-game с полем tournament_game_id) — прислать итог самому нельзя.
 
-import {API_BASE_URL} from '../config/api';
-import {UiError, readApiErrorOr} from './apiErrors';
 import type {PersonalityConfig} from './personalities';
 import {ARCHETYPE_PREFIX, isArchetypeId} from '../config/archetypes';
 import type {CustomOpponent} from '../config/archetypes';
 import {ladderOpponentName} from '../config/players';
 import type {I18n, MessageKey} from '../i18n';
-import {getToken} from './authToken';
+import {apiRequest} from './http';
 import {GUEST_PREFIX, guestShortName} from './timeMachine';
 
 export type TournamentFormat = 'round_robin' | 'knockout' | 'swiss';
@@ -133,21 +131,14 @@ export interface TournamentGameStart {
     custom: CustomOpponent | null;
 }
 
-const BASE = `${API_BASE_URL}/api/v1/tournaments`;
+const BASE = '/tournaments';
 
-/** Запрос с токеном; отказ — UiError с текстом по коду сервера, а если кода нет — с запасным сообщением fallback. */
-async function call<T>(url: string, init: RequestInit, fallback: MessageKey): Promise<T> {
-    const token = getToken();
-    const res = await fetch(url, {
-        ...init,
-        headers: {
-            ...(token ? {Authorization: `Bearer ${token}`} : {}),
-            ...(init.body ? {'Content-Type': 'application/json'} : {}),
-        },
-    });
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, fallback));
-    return res.json() as Promise<T>;
-}
+/** Запрос к API турниров (общий apiRequest); отказ без кода сервера — запасное сообщение fallback. */
+const call = <T>(path: string, init: RequestInit, fallback: MessageKey) => apiRequest<T>(path, init, fallback);
+
+/** Допустимые размеры турнира по форматам — GET /tournaments/formats (источник правды — сервер). */
+export const getFormatSizes = () =>
+    call<Record<TournamentFormat, number[]>>(`${BASE}/formats`, {method: 'GET'}, 'tournaments.loadFailed');
 
 export const listTournaments = () => call<TournamentSummary[]>(BASE, {method: 'GET'}, 'tournaments.loadFailed');
 export const getTournament = (id: number) => call<Tournament>(`${BASE}/${id}`, {method: 'GET'}, 'tournaments.loadFailed');

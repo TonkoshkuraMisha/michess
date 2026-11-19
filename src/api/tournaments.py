@@ -229,6 +229,15 @@ async def list_tournaments(db: AsyncSession = Depends(get_db), user: User = Depe
     ]
 
 
+@router.get("/formats")
+async def tournament_formats() -> dict[str, list[int]]:
+    """
+    Допустимые размеры турнира игрока по форматам (service.SIZES, вместе с игроком). Клиент строит по ним выбор размера,
+    чтобы не держать свой список. Открыто без входа: это правила, а не данные игрока.
+    """
+    return {fmt: list(sizes) for fmt, sizes in service.SIZES.items()}
+
+
 @router.get("/career")
 async def career_overview(db: AsyncSession = Depends(get_db), user: User = Depends(get_current_user)):
     """Карьера (таск 15.4): этапы лестницы — открыт ли, лучшее место; скрытые приглашения без подробностей."""

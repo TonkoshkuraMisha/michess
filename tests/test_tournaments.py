@@ -37,6 +37,18 @@ async def play(db, tournament_id: int, outcome) -> None:
 
 # --- создание -------------------------------------------------------------------------------------
 
+def test_format_sizes_come_from_the_server_rules(client, token_user_1):
+    # Клиент строит выбор размера по этому ответу; без входа тоже открыто — это правила, а не данные игрока.
+    sizes = client.get(f"{API}/formats").json()
+    assert sizes == {fmt: list(allowed) for fmt, allowed in service.SIZES.items()}
+    assert sizes["swiss"] == [6, 8]
+    # Каждый размер из ответа сервер и правда принимает.
+    for size in sizes["round_robin"]:
+        participants = eight()[: size - 1]
+        response = client.post(API, headers=auth(token_user_1), json=body("round_robin", size, participants))
+        assert response.status_code == 201, response.text
+
+
 def test_round_robin_is_seeded_and_scheduled(client, token_user_1):
     created = client.post(API, headers=auth(token_user_1), json=body())
     assert created.status_code == 201, created.text

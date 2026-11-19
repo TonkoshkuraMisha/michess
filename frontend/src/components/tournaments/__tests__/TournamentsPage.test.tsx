@@ -129,6 +129,23 @@ describe('создание турнира', () => {
         expect(await screen.findByText('opened')).toBeInTheDocument();
     });
 
+    it('размеры турнира — с сервера: у швейцарки только 6 и 8', async () => {
+        stub({
+            '/tournaments/formats': () => ({round_robin: [4, 6, 8], knockout: [4, 8], swiss: [6, 8]}),
+            '/tournaments': () => [],
+            '/bots/catalog': () => ({calibration: null, historical: [], archetypes: []}),
+            '/bots/personalities': () => [],
+        });
+        render(<MemoryRouter><TournamentsPage/></MemoryRouter>);
+        expect(await screen.findByText('No tournaments yet.')).toBeInTheDocument();
+        const [formatSelect, sizeSelect] = screen.getAllByRole('combobox') as HTMLSelectElement[];
+        await waitFor(() => expect(Array.from(sizeSelect.options, (o) => o.value)).toEqual(['4', '6', '8']));
+        fireEvent.change(formatSelect, {target: {value: 'swiss'}});
+        expect(Array.from(sizeSelect.options, (o) => o.value)).toEqual(['6', '8']);
+        expect(sizeSelect.value).toBe('6');  // 4 у швейцарки нет — размер сменился на первый допустимый
+        expect(screen.getByTestId('opponents-needed')).toHaveTextContent('(0/5)');
+    });
+
     it('сила соперников — как в посеве: измеренная с пометкой, без замера — заявленная', async () => {
         stub({
             '/tournaments': () => [],

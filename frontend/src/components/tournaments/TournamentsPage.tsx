@@ -22,7 +22,7 @@ import type {BotStrength, CatalogArchetype} from '../../services/botCatalog';
 import {listPersonalities} from '../../services/personalities';
 import type {Personality} from '../../services/personalities';
 import {
-    botGamesRunning, createTournament, gameStart, getTournament, listTournaments, myLastGame, myPendingGame, opponentPage,
+    botGamesRunning, createTournament, gameStart, getFormatSizes, getTournament, listTournaments, myLastGame, myPendingGame, opponentPage,
     participantName,
     startMyGame, totalRounds as roundsTotal, withdrawTournament,
 } from '../../services/tournaments';
@@ -39,8 +39,6 @@ import {Career} from './Career';
 import {getToken} from '../../services/authToken';
 import {accountApi} from '../../services/account';
 
-// Допустимые размеры турнира по форматам (должны совпадать с проверкой сервера, src/services/tournaments.py).
-const SIZES: Record<TournamentFormat, number[]> = {round_robin: [4, 6, 8], knockout: [4, 8], swiss: [6, 8]};
 // Период обновления страницы турнира (мс), пока сервер играет партии ботов.
 const POLL_MS = 3000;
 
@@ -54,6 +52,8 @@ function CreateTournament() {
     const navigate = useNavigate();
     const [format, setFormat] = useState<TournamentFormat>('round_robin');
     const [size, setSize] = useState(4);
+    // Допустимые размеры по форматам — с сервера (GET /tournaments/formats); до ответа в списке только текущий размер.
+    const [formatSizes, setFormatSizes] = useState<Record<TournamentFormat, number[]> | null>(null);
     const [picks, setPicks] = useState<Pick[]>([]);
     // Соперники: выбранные вручную или случайные из диапазона силы (таск 15.4).
     const [mode, setMode] = useState<'chosen' | RandomOpponents>('chosen');
@@ -67,6 +67,7 @@ function CreateTournament() {
     const [busy, setBusy] = useState(false);
 
     useEffect(() => {
+        getFormatSizes().then(setFormatSizes).catch(() => undefined);
         fetchBotCatalog().then((c) => {
             setArchetypes(c.archetypes);
             setHistorical(Object.fromEntries(c.historical.map((h) => [h.id, h])));
@@ -116,7 +117,8 @@ function CreateTournament() {
                             onChange={(e) => {
                                 const next = e.target.value as TournamentFormat;
                                 setFormat(next);
-                                if (!SIZES[next].includes(size)) setSize(SIZES[next][0]);
+                                const allowed = formatSizes?.[next];
+                                if (allowed?.length && !allowed.includes(size)) setSize(allowed[0]);
                                 setPicks([]);
                             }}>
                         {(['round_robin', 'knockout', 'swiss'] as const).map((f) => <option key={f} value={f}>{t(`tournaments.formats.${f}`)}</option>)}
@@ -129,7 +131,7 @@ function CreateTournament() {
                                 setSize(Number(e.target.value));
                                 setPicks([]);
                             }}>
-                        {SIZES[format].map((n) => <option key={n} value={n}>{n}</option>)}
+                        {(formatSizes?.[format] ?? [size]).map((n) => <option key={n} value={n}>{n}</option>)}
                     </select>
                 </label>
                 <label className="flex flex-col text-sm gap-1">
