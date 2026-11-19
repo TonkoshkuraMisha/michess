@@ -6,6 +6,7 @@ import {afterEach, describe, expect, it, vi} from 'vitest';
 import {UiError} from '../apiErrors';
 import {setToken} from '../authToken';
 import {apiRequest} from '../http';
+import type {MessageKey} from '../../i18n';
 
 function stubFetch(response: Partial<Response> | Error) {
     const fetchMock = vi.fn(async () => {
@@ -46,6 +47,15 @@ describe('apiRequest', () => {
             throw new Error('no body');
         }});
         await expect(apiRequest('/imports/1', {method: 'DELETE'})).resolves.toBeUndefined();
+    });
+
+    it('запасной текст может зависеть от статуса: 429 без тела — «слишком много попыток»', async () => {
+        stubFetch({ok: false, status: 429, json: async () => {
+            throw new Error('not json');
+        }});
+        const fallback = (status: number): MessageKey => (status === 429 ? 'auth.tooManyAttempts' : 'auth.wrongCredentials');
+        const refused = await apiRequest('/auth/login', {method: 'POST'}, fallback).catch((err: unknown) => err);
+        expect((refused as UiError).ui).toEqual(expect.objectContaining({key: 'auth.tooManyAttempts'}));
     });
 
     it('отказ сервера — UiError с кодом; нет сети — «нет связи»', async () => {

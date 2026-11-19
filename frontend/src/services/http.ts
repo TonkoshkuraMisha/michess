@@ -15,11 +15,12 @@ import {getToken} from './authToken';
 const NO_CONTENT = 204;
 
 /**
- * Запрос к /api/v1{path}; ответ — разобранный JSON. fallback — текст, если сервер отказал без известного кода.
+ * Запрос к /api/v1{path}; ответ — разобранный JSON. fallback — текст, если сервер отказал без известного кода;
+ * может зависеть от HTTP-статуса (например, 429 от прокси без тела — «слишком много попыток»).
  * Заголовки из init дополняют общие (токен и Content-Type), а не заменяют их.
  */
 export async function apiRequest<T>(path: string, init: RequestInit = {},
-                                    fallback: MessageKey = 'common.networkError'): Promise<T> {
+                                    fallback: MessageKey | ((status: number) => MessageKey) = 'common.networkError'): Promise<T> {
     const token = getToken();
     let res: Response;
     try {
@@ -34,7 +35,7 @@ export async function apiRequest<T>(path: string, init: RequestInit = {},
     } catch {
         throw new UiError(uiMessage('common.noConnection'));
     }
-    if (!res.ok) throw new UiError(await readApiErrorOr(res, fallback));
+    if (!res.ok) throw new UiError(await readApiErrorOr(res, typeof fallback === 'function' ? fallback(res.status) : fallback));
     if (res.status === NO_CONTENT) return undefined as T;
     return res.json() as Promise<T>;
 }

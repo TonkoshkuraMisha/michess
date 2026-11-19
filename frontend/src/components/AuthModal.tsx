@@ -6,8 +6,8 @@
 
 import {useEffect, useState} from 'react';
 import {LogIn, UserPlus, X} from 'lucide-react';
-import {API_BASE_URL} from '../config/api';
-import {UiError, errorMessage, readApiErrorOr, serverErrorMessage} from '../services/apiErrors';
+import {accountApi} from '../services/account';
+import {errorMessage, serverErrorMessage} from '../services/apiErrors';
 import {offerGuestPersonalityTransfer} from '../services/personalities';
 import {EXPERIENCES, PROVISIONAL_GAMES, STRENGTH_BANDS} from '../services/onboarding';
 import type {Experience, StrengthBand} from '../services/onboarding';
@@ -82,12 +82,7 @@ export default function AuthModal({onSuccess, onClose: onCloseProp, onFirstGame,
         setFeedback(null);
         setLoading(true);
         try {
-            const res = await fetch(`${API_BASE_URL}/api/v1/account/password-reset`, {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({email, language}),
-            });
-            if (!res.ok) throw new UiError(await readApiErrorOr(res, 'auth.resetFailed'));
+            await accountApi.requestPasswordReset(email, language);
             setFeedback({tone: 'success', message: uiMessage('auth.resetSent')});
         } catch (err) {
             setFeedback({tone: 'error', message: errorMessage(err, 'common.noConnection')});
@@ -98,28 +93,11 @@ export default function AuthModal({onSuccess, onClose: onCloseProp, onFirstGame,
 
     /** Вход по имени и паролю из формы: токен сохраняется, гостевые соперники предлагаются к переносу. */
     const signIn = async (): Promise<string> => {
-        // OAuth2 form URL encoded
-        const formData = new URLSearchParams();
-        formData.append('username', username);
-        formData.append('password', password);
-
-        const res = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: formData,
-            credentials: 'include',  // refresh-cookie долгого входа (таск 17.5)
-        });
-
-        if (!res.ok) {
-            // 429 — превышен лимит попыток: показываем, сколько ждать, а не «неверный пароль».
-            throw new UiError(await readApiErrorOr(
-                res, res.status === 429 ? 'auth.tooManyAttempts' : 'auth.wrongCredentials',
-            ));
-        }
-        const data = await res.json();
-        setToken(data.access_token);
+        // Форма OAuth2 и refresh-cookie долгого входа (таск 17.5); 429 — сколько ждать, а не «неверный пароль».
+        const accessToken = await accountApi.login(username, password);
+        setToken(accessToken);
         // Соперники, собранные гостем в этом браузере, — предложить перенести в профиль.
-        offerGuestPersonalityTransfer(data.access_token)
+        offerGuestPersonalityTransfer(accessToken)
             .then((result) => {
                 if (result?.skipped.length) {
                     const list = result.skipped
@@ -134,7 +112,7 @@ export default function AuthModal({onSuccess, onClose: onCloseProp, onFirstGame,
                 }
             })
             .catch((err) => window.alert(renderUiMessage(errorMessage(err, 'workshop.importFailed'), t)));
-        return data.access_token as string;
+        return accessToken;
     };
 
     const handleSubmit = async (e: React.FormEvent) => {
@@ -147,21 +125,12 @@ export default function AuthModal({onSuccess, onClose: onCloseProp, onFirstGame,
                 onSuccess(await signIn());
             } else {
                 // Регистрация; ответы о силе необязательны (таск 17.8) — по ним сервер ставит стартовый рейтинг.
-                const res = await fetch(`${API_BASE_URL}/api/v1/auth/register`, {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        username, password,
-                        ...(experience ? {experience} : {}),
-                        ...(strength && experience !== 'new' ? {strength} : {}),
-                        ...(showInvite && invite.trim() ? {invite_code: invite.trim()} : {}),
-                    }),
+                const created = await accountApi.register({
+                    username, password,
+                    ...(experience ? {experience} : {}),
+                    ...(strength && experience !== 'new' ? {strength} : {}),
+                    ...(showInvite && invite.trim() ? {invite_code: invite.trim()} : {}),
                 });
-
-                if (!res.ok) {
-                    throw new UiError(await readApiErrorOr(res, 'auth.registrationFailed'));
-                }
-                const created = await res.json() as { blitz_rating: number };
                 // Сразу вход и приветствие с предложением первой партии.
                 try {
                     setWelcome({token: await signIn(), rating: created.blitz_rating});
