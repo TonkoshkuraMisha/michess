@@ -1,22 +1,26 @@
 // --- FILE: frontend/src/components/ui/Card.tsx ---
-// Карточка (общие компоненты дизайна, план владельца 18.11) — одна форма для разделов школы, турниров, режимов задач:
-// иконка, название, короткое описание, метка состояния, прогресс и действие внизу. Виды: default — обычная,
-// muted — второстепенная (закрытый турнир, «скоро»), hero — главная на странице (например, «Большой курс»).
-// С to карточка целиком — ссылка; с onClick — кнопка; иначе — просто блок (тогда действия передаются в footer).
-// CardGrid — сетка карточек: одна колонка на телефоне, две на планшете, три на широком экране (или две — cols=2).
+// Карточка (общие компоненты дизайна, план владельца 18.11; docs/design-system.md) — одна форма для разделов школы,
+// турниров, режимов задач: иконка, название, короткое описание, метка состояния, прогресс и действие внизу. Виды:
+// default — обычная, muted — второстепенная (закрытый турнир, «скоро»), hero — главная на странице (например,
+// «Большой курс»). С to карточка целиком — ссылка; с onClick — кнопка; иначе — просто блок (тогда действия передаются
+// в footer). CardGrid — сетка карточек: одна колонка на телефоне, две на планшете, три на широком экране (или две — cols=2).
 
 import type {ReactNode} from 'react';
 import {Link} from 'react-router-dom';
 
+// Вид карточки (см. заголовок файла).
 export type CardVariant = 'default' | 'muted' | 'hero';
 
+// Фон и рамка по видам карточки.
 const VARIANTS: Record<CardVariant, string> = {
     default: 'bg-acacia/80 border-acacia-light/60',
     muted: 'bg-black/25 border-amber-900/40 opacity-80',
     hero: 'bg-gradient-to-br from-amber-900/60 to-acacia border-amber-500/80',
 };
+// Добавка для кликабельных карточек: подсветка рамки, лёгкий подъём и рамка фокуса с клавиатуры.
 const INTERACTIVE = 'hover:border-amber-400 hover:-translate-y-px transition focus-visible:outline-2 focus-visible:outline-amber-300';
 
+// Свойства карточки; badge, footer и children необязательны.
 interface CardProps {
     title: ReactNode;
     description?: ReactNode;
@@ -32,6 +36,7 @@ interface CardProps {
     children?: ReactNode;
 }
 
+/** Карточка: корневой элемент выбирается по to / onClick (ссылка, кнопка или блок). */
 export function Card({title, description, icon, badge, footer, variant = 'default', to, onClick, testId, children}: CardProps) {
     const body = (
         <>

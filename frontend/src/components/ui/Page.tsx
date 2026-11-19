@@ -1,13 +1,15 @@
 // --- FILE: frontend/src/components/ui/Page.tsx ---
-// Каркас страницы (общие компоненты дизайна, план владельца 18.11): одинаковые ширина, поля и заголовок на всех
-// разделах. Ширины: narrow — чтение и списки (школа, правила), default — страницы с панелями (задачи, турниры),
-// wide — доска с панелями (игровой зал, разбор). Заголовок: иконка, название, одна строка пояснения и место для
-// действий справа (на телефоне — под названием).
+// Каркас страницы (общие компоненты дизайна, план владельца 18.11; docs/design-system.md): одинаковые ширина, поля и
+// заголовок на всех разделах. Ширины: narrow — чтение и списки (школа, правила), default — страницы с панелями
+// (задачи, турниры), wide — доска с панелями (игровой зал, разбор). Заголовок: иконка, название, одна строка
+// пояснения и место для действий справа (на телефоне — под названием).
 
 import type {ReactNode} from 'react';
 
+// Вид ширины страницы (см. заголовок файла).
 export type PageWidth = 'narrow' | 'default' | 'wide';
 
+// Предельная ширина содержимого по видам: 4xl, 6xl и 1600 px.
 const WIDTHS: Record<PageWidth, string> = {
     narrow: 'max-w-4xl',
     default: 'max-w-6xl',
@@ -41,6 +43,7 @@ interface PageHeaderProps {
     actions?: ReactNode;
 }
 
+/** Заголовок страницы: иконка, название, пояснение и действия справа. */
 export function PageHeader({title, icon, description, actions}: PageHeaderProps) {
     return (
         <header className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">

@@ -6,6 +6,9 @@
 // Прогресс — как у уроков школы: «mates-<конструкция>» и «mates-exam» (результат проверки).
 // В проверке верно решённая задача сменяется сама через SOLVED_PAUSE_MS, а после ошибки остаётся с разбором до
 // кнопки «Следующая задача» (отзыв владельца 18.11).
+// Данные: services/puzzles.ts (puzzlesApi: mateCourse — GET /course/mates, mateTask — /course/mates/{тема}/{номер}, mateExam — /course/mates/exam,
+// demo, move, giveUp); сервер — src/api/puzzles.py и src/services/mate_course.py (там же TASKS, EXAM_SIZE и EXAM_MINUTES).
+// Только для вошедших (NeedLogin). Страницы подключены в App.tsx.
 
 import {useEffect, useMemo, useRef, useState} from 'react';
 import type {ReactNode} from 'react';
@@ -28,12 +31,15 @@ import {SolutionReplay} from '../puzzles/SolutionReplay';
 import type {ReplayView} from '../puzzles/SolutionReplay';
 import {sanMoves} from '../puzzles/puzzleNotation';
 
+/** Идентификатор урока с результатом итоговой проверки; новая попытка обновляет запись на сервере. */
 export const EXAM_PROGRESS_ID = 'mates-exam';
 
+/** Идентификатор урока конструкции: «mates-<код>», подчёркивания заменены дефисами; по нему же считает автозачёт services/courseProgress.ts. */
 export function mateProgressId(code: string): string {
     return `mates-${code.replace(/_/g, '-')}`;
 }
 
+/** Прогресс уроков вошедшего по lesson_id (отметки в списке конструкций). */
 function useLessonProgress(): Record<string, LessonProgress> {
     const [progress, setProgress] = useState<Record<string, LessonProgress>>({});
     useEffect(() => {
@@ -50,11 +56,13 @@ function useLessonProgress(): Record<string, LessonProgress> {
     return progress;
 }
 
+/** Сохраняет прогресс вошедшему; сбой записи терпим — следующее сохранение перезапишет. */
 function saveProgress(id: string, update: Parameters<typeof saveLessonProgress>[2]) {
     const token = getToken();
     if (token) saveLessonProgress(token, id, update).catch(() => undefined);
 }
 
+/** Подсказка гостю: курс матов доступен только вошедшим (эндпоинты закрыты авторизацией). */
 function NeedLogin() {
     const {t} = useI18n();
     return <p className="text-amber-300" data-testid="mates-login">{t('mateCourse.loginRequired')}</p>;
@@ -63,6 +71,7 @@ function NeedLogin() {
 /** Пауза перед следующей задачей проверки после верного решения: успеть увидеть мат на доске. */
 const SOLVED_PAUSE_MS = 800;
 
+/** Ссылка «назад» одного вида на всех страницах курса. */
 function BackLink({to, label}: { to: string; label: string }) {
     return <Link to={to} className="text-sm text-amber-400 hover:underline flex items-center gap-1"><ArrowLeft size={14}/> {label}</Link>;
 }
@@ -189,6 +198,7 @@ export function CoursePuzzle({puzzle, onDone, children}: {
     );
 }
 
+/** Конструкции по порядку: отметка «пройдено», число доступных задач и ссылка на итоговую проверку с лучшим результатом. */
 export function MateCoursePage() {
     const {t} = useI18n();
     const progress = useLessonProgress();
@@ -244,6 +254,10 @@ export function MateCoursePage() {
     );
 }
 
+/**
+ * Конструкция: примеры показа, затем набор задач по порядку. Результат каждой задачи пишется в прогресс; последняя задача
+ * набора закрывает конструкцию, число задач берётся из обзора курса (available).
+ */
 export function MateConstructionPage() {
     const {t} = useI18n();
     const {theme = ''} = useParams<{ theme: string }>();
@@ -326,6 +340,10 @@ export function MateConstructionPage() {
     );
 }
 
+/**
+ * Итоговая проверка: план задач и минуты даёт сервер, отсчёт времени ведёт клиент (deadline). Проверка кончается по времени или
+ * после последней задачи; результат сохраняется один раз (saved).
+ */
 export function MateExamPage() {
     const {t} = useI18n();
     const [plan, setPlan] = useState<{ theme: string; index: number }[] | null>(null);

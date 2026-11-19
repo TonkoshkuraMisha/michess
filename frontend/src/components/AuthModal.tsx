@@ -34,6 +34,10 @@ interface AuthModalProps {
     inviteCode?: string;
 }
 
+/**
+ * Окно входа и регистрации. Вход — POST /auth/login (форма OAuth2), регистрация — POST /auth/register, сброс
+ * пароля — POST /account/password-reset; после регистрации показывается приветствие, а вход выполняется сразу.
+ */
 export default function AuthModal({onSuccess, onClose: onCloseProp, onFirstGame, onBasics, inviteOnly = false, inviteCode}: AuthModalProps) {
     const {t, tp, language} = useI18n();
     const [isLogin, setIsLogin] = useState(!inviteCode);

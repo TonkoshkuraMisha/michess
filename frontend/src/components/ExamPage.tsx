@@ -15,8 +15,10 @@ import {getToken} from '../services/authToken';
 import {errorMessage, readApiErrorOr, UiError} from '../services/apiErrors';
 import {PuzzleBoard} from './puzzles/PuzzleBoard';
 
+/** Уровни по разрядам, которые сервер присваивает оценке силы (src/services/exam.py, LEVELS). */
 export type ExamLevel = 'novice' | 'fourth' | 'third' | 'second' | 'first' | 'candidate' | 'master';
 
+/** Ответ GET /exam: последние результаты по разделам, общая оценка и уровень. */
 export interface ExamSummary {
     tests: string[];
     /** Экзамены уровней Большого курса (27.12): level0 … level5. */
@@ -28,6 +30,7 @@ export interface ExamSummary {
     of: number;
 }
 
+/** Позиция теста: id задачи, позиция после хода соперника, чья очередь и этот ход (для подсветки). */
 interface Question {
     id: number;
     fen: string;
@@ -36,6 +39,7 @@ interface Question {
     branch?: string;
 }
 
+/** Итог сданного теста и разбор по позициям. */
 interface Graded {
     correct: number;
     total: number;
@@ -66,6 +70,7 @@ interface MoveResult {
 export const EXAM_REPLY_MS = 450;
 export const EXAM_NEXT_MS = 1100;
 
+// Клетки хода из записи UCI.
 const squares = (uci: string) => ({from: uci.slice(0, 2), to: uci.slice(2, 4)});
 
 /** Позиция после хода (UCI); при сбое разбора — прежняя. */
@@ -79,6 +84,7 @@ function afterMove(fen: string, uci: string): string {
     }
 }
 
+// Код теста уровня курса: level0 … level5.
 const LEVEL_TEST = /^level(\d)$/;
 
 /** Название теста: раздел диагностики, эндшпильный экзамен или экзамен уровня курса. */
@@ -88,6 +94,7 @@ export function examTitle(t: (key: string, params?: Record<string, string | numb
     return section === 'endgame' ? t('exam.endgameTest') : `${section}. ${t(`puzzles.sections.${section}`)}`;
 }
 
+/** Запрос к /api/v1/exam: без body — GET, с body — POST; отказ превращается в UiError с кодом. */
 async function call<T>(path: string, body?: object): Promise<T> {
     const token = getToken();
     const res = await fetch(`${API_BASE_URL}/api/v1/exam${path}`, {
@@ -102,9 +109,14 @@ async function call<T>(path: string, body?: object): Promise<T> {
 /** Последние результаты по разделам — для отметки «уровень пройден» в Большом курсе (27.12). */
 export const fetchExamSummary = () => call<ExamSummary>('');
 
+// То же, что examTitle, но для типизированной функции перевода.
 const sectionLabel = (t: (key: MessageKey, params?: Record<string, string | number>) => string, section: string) =>
     examTitle(t as unknown as (key: string, params?: Record<string, string | number>) => string, section);
 
+/**
+ * Экзамен: выбор теста, прохождение позиций и разбор. Ходы идут на сервер по одному (/move); таймеры
+ * хранятся в timers и снимаются при уходе со страницы.
+ */
 export function ExamPage() {
     const {t} = useI18n();
     const logged = Boolean(getToken());

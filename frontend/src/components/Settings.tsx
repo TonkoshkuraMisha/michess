@@ -1,5 +1,9 @@
 // --- FILE: frontend/src/components/Settings.tsx ---
-// Настройки: оформление доски, звук, смена пароля и завершение сессий на всех устройствах.
+// Настройки: оформление (темы-комплекты, доска, фигуры, фон страницы, звук), аватар, язык, режим «помощник
+// перевода», e-mail для сброса пароля, смена пароля с завершением сессий на других устройствах, выгрузка и удаление
+// своих данных. Оформление хранится в localStorage (config/boardAppearance.ts, pageBackground.ts, boardPrefs.ts);
+// аватар, тема-комплект и режим перевода — в профиле на сервере (services/profileSettings.ts, GET /profile/me);
+// пароль, e-mail и удаление — /auth/change-password и /account/*. Маршрут — App.tsx.
 
 import {useEffect, useState} from 'react';
 import {Link} from 'react-router-dom';
@@ -38,8 +42,10 @@ import {downloadMyGamesPgn} from '../services/transparency';
 import {saveProfileSettings, setTranslationHelper} from '../services/profileSettings';
 import {clearToken, setToken} from '../services/authToken';
 
+// Наименьшая длина нового пароля; совпадает с min_length схемы на сервере (src/schemas/user.py).
 const MIN_PASSWORD_LENGTH = 8;
 
+/** token и username пусты у гостя: тогда доступно только локальное оформление. */
 interface SettingsProps {
     token: string | null;
     username: string | null;
@@ -50,6 +56,7 @@ interface SettingsProps {
     onAccountDeleted?: () => void;
 }
 
+// Общие классы оформления секций, заголовков, полей и вариантов выбора.
 const sectionClass = 'bg-acacia-dark border border-amber-900/40 p-5 rounded shadow-heavy';
 const headingClass = 'text-lg font-bold text-amber-200 mb-3 flex items-center gap-2';
 const inputClass =
@@ -61,6 +68,7 @@ const optionClass = (active: boolean) =>
             : 'bg-black/35 border-amber-900/40 text-boxwood/85 hover:border-amber-600/60'
     }`;
 
+/** Страница настроек; серверные разделы показываются только со входом. */
 export default function Settings({token, username, onTokenChange, onLogoutEverywhere, onAccountDeleted}: SettingsProps) {
     const {t, language} = useI18n();
     const [boardThemeKey, setBoardThemeKey] = useState(() => getSavedBoardThemeKey());

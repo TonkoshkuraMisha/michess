@@ -1,17 +1,21 @@
 // Аннотация партии библиотеки (таск 27.4): комментарий наставника к текущему ходу и переход между комментариями.
 // Статус auto — черновик, собранный автоматически (подпись говорит об этом прямо); approved — проверено владельцем.
+// Тексты — коды coach.* из annotation.comments (services/library.ts, GET /library/games/{id}), собирает coachText.
+// Используется в GameViewer.tsx в режиме библиотеки; без единого комментария панели нет.
 
 import {ChevronLeft, ChevronRight, MessageSquareText} from 'lucide-react';
 import {useI18n} from '../../i18n';
 import {coachText} from '../../services/coach';
 import type {LibraryAnnotation} from '../../services/library';
 
+// annotation — аннотация партии; viewIndex — текущая позиция просмотра (полуход); onSelect — перейти к полуходу.
 interface Props {
     annotation: LibraryAnnotation;
     viewIndex: number;
     onSelect: (index: number) => void;
 }
 
+/** Комментарий к ходу viewIndex и кнопки к предыдущему/следующему прокомментированному ходу. */
 export function LibraryAnnotationPanel({annotation, viewIndex, onSelect}: Props) {
     const {t} = useI18n();
     const plies = Object.keys(annotation.comments).map(Number).filter((n) => coachText(annotation.comments[String(n)], t))

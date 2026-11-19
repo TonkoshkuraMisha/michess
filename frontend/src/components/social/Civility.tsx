@@ -1,6 +1,10 @@
 // --- FILE: frontend/src/components/social/Civility.tsx ---
 // Уважительное общение (таск 30.3): страница «Правила общения», предупреждение фильтра оскорблений с выбором
 // «переформулировать / отправить на проверку», жалоба на сообщение, публикацию или комментарий в один шаг.
+// Данные: жалобы на текст уходят через moderationApi.reportText (services/moderation.ts, очередь модератора); признак
+// «текст не принят фильтром» — код serverErrors.text_flagged, который сервер отдаёт на публикацию, комментарий и личное
+// сообщение (src/services/civility.py). Тексты — каталоги civil.* и moderation.reasons.*. Используют FeedPage.tsx и
+// MessagesPage.tsx; страницу правил (/rules) подключает App.tsx.
 
 import {useState} from 'react';
 import {Link} from 'react-router-dom';
@@ -10,6 +14,7 @@ import {errorMessage} from '../../services/apiErrors';
 import {moderationApi} from '../../services/moderation';
 import type {ReportReason} from '../../services/moderation';
 
+// Причины жалобы на текст (без «читерства», оно относится к партии) и пункты страницы правил (ключи civil.rules.*).
 const REASONS: ReportReason[] = ['abuse', 'spam', 'other'];
 const RULES = ['respect', 'noInsults', 'noSpam', 'fairPlay', 'privacy', 'reports'] as const;
 
@@ -19,6 +24,7 @@ export function isTextFlagged(err: unknown): boolean {
     return 'key' in message && message.key === 'serverErrors.text_flagged';
 }
 
+/** Предупреждение фильтра: «переформулировать» или «отправить на проверку модератору» (sendAnyway: сообщение будет придержано). */
 export function FlaggedNotice({onRephrase, onSendAnyway}: { onRephrase: () => void; onSendAnyway: () => void }) {
     const {t} = useI18n();
     return (
@@ -36,11 +42,13 @@ export function FlaggedNotice({onRephrase, onSendAnyway}: { onRephrase: () => vo
     );
 }
 
+/** Пометка «придержано до проверки» у текста, который автор отправил, несмотря на предупреждение фильтра. */
 export function HeldNote() {
     const {t} = useI18n();
     return <span className="text-[11px] text-amber-300" data-testid="held-note">{t('civil.held')}</span>;
 }
 
+/** Ссылка на страницу «Правила общения». */
 export function RulesLink() {
     const {t} = useI18n();
     return (
@@ -76,6 +84,7 @@ export function TextReportButton({subject}: { subject: string }) {
     );
 }
 
+/** Страница /rules: правила общения и как работают фильтр, лимиты и решения модераторов. */
 export function CommunityRulesPage() {
     const {t} = useI18n();
     return (

@@ -1,9 +1,10 @@
 // --- FILE: frontend/src/components/trainers/MemoryGames.tsx ---
 // Тренажёры памяти (таск 19.3).
-// * RestoreGame — «Восстанови позицию»: ROUNDS позиций; показ на время уровня, расстановка по памяти (палитра, как в
+// * RestoreGame — «Восстанови позицию»: MEMORY_ROUNDS позиций; показ на время уровня, расстановка по памяти (палитра, как в
 //   редакторе позиции), разбор: ваша расстановка и исходная с подсвеченными ошибками. Очки — сумма процентов.
 // * RecallGame — «Запомни партию»: ходы партии проигрываются, затем их нужно повторить; три промаха на ходу — ход
 //   показывается сам. Очки — 10 за каждый ход с первой попытки.
+// Данные: партии классики (content/classics) и эндшпильные позиции (content/endgames.json); правила — trainers/memory.ts. Запускается из TrainersPage.tsx.
 
 import {useEffect, useMemo, useRef, useState} from 'react';
 import {Chess} from 'chess.js';
@@ -17,11 +18,16 @@ import endgames from '../../content/endgames.json';
 import {memoryLevel, pickGame, pickPosition, placementOfFen, positionPool, recallPlies, scorePlacement} from '../../trainers/memory';
 import type {Placement, PlacementScore} from '../../trainers/memory';
 
+/** Позиций в одной попытке «Восстанови позицию». */
 export const MEMORY_ROUNDS = 3;
+/** Пауза между показываемыми ходами партии (мс). */
 const RECALL_STEP_MS = 900;
+/** Кисти палитры: заглавные — белые фигуры, строчные — чёрные. */
 const PIECES = ['K', 'Q', 'R', 'B', 'N', 'P', 'k', 'q', 'r', 'b', 'n', 'p'] as const;
+/** Значки фигур на кнопках палитры. */
 const GLYPHS: Record<string, string> = {K: '♔', Q: '♕', R: '♖', B: '♗', N: '♘', P: '♙', k: '♚', q: '♛', r: '♜', b: '♝', n: '♞', p: '♟'};
 
+/** Общие свойства игр: уровень, seed и onFinish(очки, ошибки). */
 interface GameProps {
     level: number;
     seed: number;
@@ -41,6 +47,7 @@ function useClassics(): ClassicGame[] | null {
     return games;
 }
 
+/** Обратный отсчёт секунд, пока active; на нуле вызывает onDone (свежий колбэк берётся из ref, чтобы интервал не пересоздавался). */
 function useCountdown(seconds: number, active: boolean, onDone: () => void): number {
     const [left, setLeft] = useState(seconds);
     const done = useRef(onDone);
@@ -62,6 +69,7 @@ function useCountdown(seconds: number, active: boolean, onDone: () => void): num
     return left;
 }
 
+/** Фазы раунда: show (показ на время уровня) → place (расстановка по памяти) → review (разбор). Очки раунда — процент верных клеток. */
 export function RestoreGame({level, seed, onFinish}: GameProps) {
     const {t} = useI18n();
     const games = useClassics();
@@ -163,6 +171,7 @@ export function RestoreGame({level, seed, onFinish}: GameProps) {
     );
 }
 
+/** Фазы: watch (ход за ходом проигрывается начало партии) → play (повторить ходы); игрок видит только позицию перед своим ходом. */
 export function RecallGame({level, seed, onFinish}: GameProps) {
     const {t} = useI18n();
     const games = useClassics();

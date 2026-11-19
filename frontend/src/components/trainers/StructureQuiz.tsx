@@ -1,7 +1,10 @@
+// --- FILE: frontend/src/components/trainers/StructureQuiz.tsx ---
 // «Узнай структуру» (таск 27.9, тренажёр 19.1): позиция из партии библиотеки (или учебный скелет) → название пешечной
 // структуры из четырёх. После ответа — ссылка на партию, из которой взята позиция, и свободная доска: позицию можно
 // разыграть за обе стороны (решение владельца 18.11, usePositionExplorer; учебный скелет без королей chess.js не
 // примет — тогда доска просто остаётся показом).
+// Данные: GET /library/structure-quiz (services/library.ts → src/api/library.py, src/services/structure_quiz.py); названия — каталог structures.*,
+// планы — structurePlans.*. Запускается из TrainersPage.tsx (тренажёры structure_quiz и plan_quiz); 10 очков за верный ответ.
 
 import {useEffect, useState} from 'react';
 import {Link} from 'react-router-dom';
@@ -11,8 +14,10 @@ import {ExplorerControls, usePositionExplorer} from '../puzzles/usePositionExplo
 import {libraryApi} from '../../services/library';
 import type {StructureCode, StructureQuestion} from '../../services/library';
 
+/** Вопросов в попытке; уходит серверу как count. */
 export const STRUCTURE_ROUNDS = 10;
 
+/** Свойства игры: seed, onFinish(очки, ошибки) и вариант вопроса. */
 interface Props {
     seed: number;
     onFinish: (score: number, mistakes: number) => void;
@@ -20,6 +25,7 @@ interface Props {
     variant?: 'name' | 'plan';
 }
 
+/** Попытка из STRUCTURE_ROUNDS вопросов; пока вопросы грузятся или загрузка не удалась, рисуется заглушка. */
 export function StructureQuiz({seed, onFinish, variant = 'name'}: Props) {
     const {t} = useI18n();
     const [questions, setQuestions] = useState<StructureQuestion[] | null>(null);

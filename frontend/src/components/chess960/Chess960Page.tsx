@@ -1,7 +1,9 @@
 // Шахматы Фишера (таск 21.3): /play/960 — партия против бота из случайной расстановки (или по номеру 0–959).
 // Правила и ход бота — на сервере (python-chess в режиме 960, Stockfish с UCI_Chess960, src/services/chess960.py):
 // клиентская шахматная библиотека правил 960 не знает, поэтому доска только рисует позицию и передаёт щелчки.
-// Рокировка — щелчок по королю, затем по своей ладье. Без рейтинга.
+// Рокировка — щелчок по королю, затем по своей ладье. Без рейтинга. Данные — /api/v1/chess960 (src/api/chess960.py):
+// позиция и ходы каждый раз присылаются целиком (сервер без состояния партии). Маршрут — App.tsx; чистые функции
+// piecesOf/clickMove общие с партией против человека (Chess960LiveGame.tsx).
 
 import {useCallback, useEffect, useState} from 'react';
 import {Link} from 'react-router-dom';
@@ -13,6 +15,7 @@ import {errorMessage, readApiErrorOr, UiError} from '../../services/apiErrors';
 import {getToken} from '../../services/authToken';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 
+/** Ответ сервера по партии против бота: номер расстановки, позиция, ходы (UCI и SAN), итог и ход бота. */
 export interface State960 {
     number: number;
     fen: string;
@@ -24,10 +27,13 @@ export interface State960 {
     check: boolean;
 }
 
+// Уровни бота 1–5 (сервер сопоставляет каждому Elo и время на ход, chess960.LEVELS); названия — каталог chess960.levels.
+// Причины окончания, для которых есть тексты в каталоге chess960.terminations.
 const LEVELS = [1, 2, 3, 4, 5] as const;
 const TERMINATIONS = ['checkmate', 'stalemate', 'insufficient_material', 'threefold_repetition', 'fifty_moves',
     'fivefold_repetition', 'seventyfive_moves'] as const;
 
+/** Запрос к /chess960: без тела — GET (новая позиция), с телом — POST (ход или ход бота); ошибка — UiError. */
 async function call(path: string, body?: object): Promise<State960> {
     const token = getToken();
     const res = await fetch(`${API_BASE_URL}/api/v1/chess960${path}`, body ? {
@@ -69,10 +75,15 @@ export function clickMove(fen: string, from: string, to: string): string | null 
     return `${from}${to}${promotion}`;
 }
 
+// Запись ходов с номерами одной строкой: «1. e4 e5 2. Nf3».
 function numbered(sans: string[]): string {
     return sans.map((san, i) => (i % 2 === 0 ? `${i / 2 + 1}. ${san}` : san)).join(' ');
 }
 
+/**
+ * Страница партии против бота. Старт и «Новая партия» идут через start(): за чёрных сразу запрашивается ход бота.
+ * Ход игрока собирается из двух щелчков (onSquare → clickMove) и уходит на сервер вместе со всеми ходами партии.
+ */
 export function Chess960Page() {
     const {t} = useI18n();
     const [color, setColor] = useState<'white' | 'black'>('white');

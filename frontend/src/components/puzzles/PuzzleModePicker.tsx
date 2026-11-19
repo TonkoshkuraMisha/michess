@@ -4,6 +4,7 @@
 // puzzleModes.ts; тексты — puzzles.modeGroups.*, puzzles.modes.*, puzzles.modeInfo.* в трёх каталогах.
 // Кнопки режимов — data-testid «puzzle-mode-<режим>»; тот же id у карточек режимов до старта (PuzzlesPage): на экране
 // всегда только одно из двух, а тесты идут путём игрока, не зная, что сейчас показано.
+// Состояния не держит: выбранный режим и обработчик приходят из PuzzlesPage.
 
 import {useI18n} from '../../i18n';
 import {SegmentedControl} from '../ui';
@@ -15,6 +16,7 @@ interface Props {
     onChange: (mode: Mode) => void;
 }
 
+/** Вкладки режимов по группам плюс строка пояснения к текущему режиму (data-testid «puzzle-mode-info»). */
 export function PuzzleModePicker({mode, onChange}: Props) {
     const {t} = useI18n();
     return (

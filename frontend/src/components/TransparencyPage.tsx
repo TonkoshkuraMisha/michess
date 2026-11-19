@@ -1,6 +1,8 @@
 // --- FILE: frontend/src/components/TransparencyPage.tsx ---
 // «Как мы измеряем силу ботов» и открытые данные (таск 24.3): методика калибровки, таблица «заявлено / измерено ±95 %»
 // по каждому боту, журналы прогонов как есть, выгрузка своих партий в PGN и описание открытого API только для чтения.
+// Данные — services/botCatalog.ts (силы ботов) и services/transparency.ts (прогоны калибровки, журнал подстройки,
+// описание публичного API, выгрузка PGN). Страница видна и без входа; выгрузка — только со входом. Маршрут — App.tsx.
 
 import {useEffect, useState} from 'react';
 import {Link} from 'react-router-dom';
@@ -15,13 +17,16 @@ import type {BotStrength} from '../services/botCatalog';
 import {downloadMyGamesPgn, runUrl, transparencyApi} from '../services/transparency';
 import type {CalibrationMeta, CalibrationRun, PublicApiInfo, TuningLog} from '../services/transparency';
 
+/** Строка таблицы силы: бот каталога и ключ каталога имён (для архетипов ключ с префиксом archetype:). */
 interface Row extends BotStrength {
     key: string;
     nameKey: string;
 }
 
+// Общие классы секций и заголовков.
 const sectionClass = 'bg-acacia p-4 rounded-lg border-2 border-acacia-dark flex flex-col gap-3';
 const headingClass = 'text-lg font-bold text-amber-200 flex items-center gap-2';
+// Шаги методики калибровки; тексты — transparency.method.<шаг>.
 const METHOD_STEPS = ['anchors', 'pairs', 'fit', 'scale'] as const;
 // Пояснение к адресу API — по его последней части; неизвестный серверу клиенту адрес показывается без пояснения.
 const ENDPOINT_NOTES: [RegExp, string][] = [
@@ -30,10 +35,12 @@ const ENDPOINT_NOTES: [RegExp, string][] = [
     [/\/games\/\{id\}\.pgn$/, 'gamePgn'], [/\/games\/\{id\}$/, 'game'], [/\/leaderboard$/, 'leaderboard'], [/\/bots$/, 'bots'],
 ];
 
+/** Имя бота на текущем языке; если перевода нет — ключ. */
 function botName(row: Row, t: (key: MessageKey) => string): string {
     return hasMessage(row.nameKey) ? t(row.nameKey as MessageKey) : row.key;
 }
 
+/** Страница прозрачности; username нужен только для имени файла выгрузки партий. */
 export function TransparencyPage({username = null}: { username?: string | null }) {
     const {t, dateLocale} = useI18n();
     const [rows, setRows] = useState<Row[]>([]);

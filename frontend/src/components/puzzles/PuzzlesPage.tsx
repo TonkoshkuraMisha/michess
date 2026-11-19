@@ -10,6 +10,10 @@
 // пока задача не загружена, вместо доски с начальной расстановкой — карточки всех режимов по группам, выбранный —
 // крупно и с кнопкой «Начать»;
 // у графика рейтинга подписаны оси (рейтинг слева, даты первой и последней задачи снизу).
+// Данные — services/puzzles.ts (/api/v1/puzzles/*, только с входом; задачи, рейтинг и забег считает сервер,
+// src/services/puzzles.py) и реестр тем services/themes.ts. Маршрут /puzzles (App.tsx); вход из других разделов —
+// через location.state {train, mode} (ежедневная разминка, таск 22.2).
+// Страница по режиму показывает доску задач или встроенный тренажёр (приёмы, упражнения, защита).
 
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Link, useLocation, useNavigate} from 'react-router-dom';
@@ -41,15 +45,22 @@ import type {Mode} from './puzzleModes';
 import {Card, CardGrid, Section} from '../ui';
 
 // Режим save — «Спасите партию» (27.9): смешанная подборка задач с целью «ничья» (вечный шах, пат, крепость, равенство).
+/** Цель тренировки «Спасите партию»: подборка задач с целью «ничья» без скрытия названия темы. */
 const SAVE_TARGET: TrainingTarget = {goal: 'draw', blind: false};
+/** Этап задачи: idle → loading → opponent (первый ход соперника) → solving → waiting (ждём сервер) → done. */
 type Phase = 'idle' | 'loading' | 'opponent' | 'solving' | 'waiting' | 'done';
 
+/** Пауза перед первым ходом соперника в задаче, мс. */
 const OPPONENT_DELAY_MS = 500;
+/** Пауза перед ответом соперника на верный ход решающего, мс. */
 const REPLY_DELAY_MS = 400;
+/** Шаг показа решения ход за ходом, мс. */
 const SOLUTION_STEP_MS = 700;
 
+// Повторный экспорт: тест puzzles.test.tsx берёт solutionSan из страницы задач.
 export {solutionSan};
 
+/** Ошибка клиента в сообщение интерфейса: код сервера или общая сетевая ошибка. */
 function errorOf(err: unknown): UiMessage {
     return err instanceof UiError ? err.ui : {key: 'common.networkError'};
 }

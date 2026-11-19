@@ -3,6 +3,10 @@
 // движка и объяснение наставника. Режимы: отдельные позиции и серия ходов из одной партии. /guess/:positionId —
 // конкретная позиция (переход из просмотра партии). После ответа доска свободна: позицию можно разыграть
 // (usePositionExplorer).
+// Данные — services/guess.ts (/api/v1/guess/*, доступно и гостю; отбор позиций и баллы — сервер, src/services/guess.py).
+// Маршруты /guess и /guess/:positionId (App.tsx); переход с позиции приходит из просмотра партии.
+// Итог ответа: баллы (100 — совпал с мастером, от 80 — рядом), ход мастера, линии движка (|cp| от 90000 — мат) и
+// объяснение наставника; счёт сессии — средний балл (services/guess.ts, understanding).
 
 import {useCallback, useEffect, useState} from 'react';
 import {Link, useNavigate, useParams} from 'react-router-dom';
@@ -17,8 +21,10 @@ import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 import type {BoardArrow} from '../puzzles/PuzzleBoard';
 import {ExplorerControls, usePositionExplorer} from '../puzzles/usePositionExplorer';
 
+/** single — отдельные позиции; series — серия ходов одной партии. */
 type Mode = 'single' | 'series';
 
+/** Предыдущие ходы партии с номерами («12… Nf6» для хода чёрных в начале списка) по номеру полухода первого. */
 function movesText(position: GuessPosition): string {
     return position.previous.map((san, i) => {
         const ply = position.first_previous_ply + i;

@@ -1,6 +1,7 @@
 // --- FILE: frontend/src/components/ui/index.ts ---
 // Общие компоненты дизайна Regence (план владельца 18.11): каркас страницы, карточки, кнопки, метки, прогресс,
 // вкладки, пустое состояние, модальное окно. Правила применения — docs/design-system.md; витрина — страница /design.
+// Единая точка импорта: страницы берут компоненты одним импортом из этой папки.
 
 export {Page, PageHeader, Section} from './Page';
 export type {PageWidth} from './Page';

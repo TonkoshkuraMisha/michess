@@ -7,6 +7,9 @@
 // месячная лига арен (33.5, ArenaLeague.tsx). Призёру арены (место из наград сервера, me.podium_place) страница один
 // раз показывает праздник призёра — тот же, что после турниров (TournamentCelebration). Матч конференций (format
 // 'match', ConferenceMatches.tsx): вместо таблицы — счёт и доски; «Играть» нет — партии туров начинаются сами.
+// Данные: services/arenas.ts — arenasApi (GET /api/v1/arenas, /arenas/current, /arenas/{id}; POST join, ready, remind,
+// leave-waiting); состояние арены целиком считает сервер (src/services/arena.py), клиент только показывает и опрашивает.
+// Роуты — App.tsx; ArenaBanner рисует LobbyPanel.tsx. Вход открыт любому зарегистрированному игроку, без порогов по силе.
 
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Link, useNavigate, useParams} from 'react-router-dom';
@@ -21,9 +24,12 @@ import {ArenaLeague} from './ArenaLeague';
 import {conferenceName, MatchBoards} from './ConferenceMatches';
 import {markCelebrated, shouldCelebrate, TournamentCelebration} from '../tournaments/TournamentCelebration';
 
+// Период опроса «есть ли партия» (мс), пока игрок нажал «Играть» и ждёт пару.
 export const WAIT_POLL_MS = 2000;
+// Период обновления страницы арены (мс): таблица, часы и статус.
 const REFRESH_MS = 5000;
 
+/** Текущее время в мс, обновляется раз в intervalMs — для обратных отсчётов. */
 function useNow(intervalMs = 1000): number {
     const [now, setNow] = useState(() => Date.now());
     useEffect(() => {
@@ -49,6 +55,7 @@ function arenaName(a: ArenaInfo, t: ReturnType<typeof useI18n>['t'], withConfere
     return `${base}${conference}${division}`;
 }
 
+/** Строка про время арены по статусу: старт, раунд, последний старт и конец, доигрывание партий. */
 function timing(a: ArenaInfo, now: number, t: ReturnType<typeof useI18n>['t']): string {
     if (a.status === 'scheduled') return t('arenas.startsIn', {time: clock(secondsUntil(a.starts_at, now))});
     if (a.status === 'running' && (a.format === 'swiss' || a.format === 'match')) return t('arenas.round', {round: a.current_round ?? 0, total: a.rounds ?? 0});
@@ -62,6 +69,7 @@ function timing(a: ArenaInfo, now: number, t: ReturnType<typeof useI18n>['t']): 
     return t('arenas.finished');
 }
 
+/** Список идущих и ближайших арен и под ним месячная лига. */
 export function ArenasPage() {
     const {t} = useI18n();
     const now = useNow();
@@ -95,6 +103,7 @@ export function ArenasPage() {
     );
 }
 
+/** Страница одной арены: вход, «Играть» (поиск пары опросом), напоминание, таблица или матч, зачёт конференций, праздник призёру. */
 export function ArenaPage() {
     const {t} = useI18n();
     const navigate = useNavigate();

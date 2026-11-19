@@ -1,6 +1,8 @@
 // --- FILE: frontend/src/components/ChampionGames.tsx ---
 // Страница архива чемпиона (/champions/:id): список его партий из архива мастеров (сервер подгружает их при первом
 // обращении — src/db/seed.py) с датой, соперником и результатом, переход к просмотру партии и скачивание PGN.
+// Партии — GET /api/v1/profile/<id>/games (постранично, по возрастанию даты); кнопки «Угадай ход» — services/guess.ts.
+// Сведения о чемпионе — config/champions.ts. Маршрут — App.tsx.
 
 import {useState, useEffect} from 'react';
 import {useParams, Link, useNavigate} from 'react-router-dom';
@@ -17,6 +19,7 @@ import type {Locale} from 'date-fns';
 import {renderUiMessage, uiMessage, useI18n} from '../i18n';
 import type {UiMessage} from '../i18n';
 
+/** Партия из списка архива чемпиона. */
 interface GameData {
     game_id: number;
     white_username: string;
@@ -41,6 +44,7 @@ export function isChampionName(username: string, championId: string): boolean {
     return username.toLowerCase().split(/[^\p{L}]+/u).includes(surname);
 }
 
+/** Дата партии: из PGN без неизвестных частей, иначе дата завершения, иначе прочерк. */
 const displayDate = (game: GameData, locale: Locale) => {
     if (game.pgn_date && !game.pgn_date.includes('????')) {
         // Очищаем дату от неизвестных месяцев/дней: "1860.??.??" -> "1860"
@@ -52,6 +56,7 @@ const displayDate = (game: GameData, locale: Locale) => {
     return '—';
 };
 
+/** Страница архива чемпиона: шапка, постраничный список партий и переход к просмотру. */
 export default function ChampionGames() {
     const {t, dateLocale} = useI18n();
     const {championId} = useParams<{ championId: string }>();

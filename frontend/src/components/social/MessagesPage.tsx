@@ -3,6 +3,10 @@
 // (партия, позиция, задача, урок, турнир). Ниже списка — «Кто может мне писать» и чёрный список. Новое сообщение
 // приходит событием "direct_message" из сокета (если он открыт) и опросом раз в POLL_MS.
 // Другие страницы открывают переписку с готовым вложением: navigate('/messages/<имя>', {state: {attach: {kind, ref}}}).
+// Данные: services/messages.ts — messagesApi (/api/v1/messages: переписки, переписка с игроком по 50 сообщений,
+// отправка, чтение, скрытие, блокировка, настройка «Кто может мне писать»); текст — до 1000 знаков (BODY_MAX в
+// src/services/direct_messages.py). После изменений страница шлёт window-событие regence:dm-changed — по нему
+// колокольчик (SocialHeader.tsx) обновляет число непрочитанных. Роут — App.tsx.
 
 import {useCallback, useEffect, useRef, useState} from 'react';
 import type {FormEvent, KeyboardEvent} from 'react';
@@ -18,15 +22,20 @@ import type {AttachmentKind, Conversation, DmPolicy, DmSettings, Thread} from '.
 import {AttachmentCard} from './AttachmentCard';
 import {FlaggedNotice, HeldNote, isTextFlagged, RulesLink, TextReportButton} from './Civility';
 
+// Период опроса списка переписок и открытой переписки (мс), если событие сокета не пришло.
 export const POLL_MS = 15_000;
+// Виды вложений, выбираемые вручную; достижение добавляется только кнопкой «поделиться» в профиле.
 const KINDS: AttachmentKind[] = ['game', 'position', 'puzzle', 'lesson', 'tournament', 'library'];
+// Варианты настройки «кто может писать мне» (совпадают с POLICIES в src/services/direct_messages.py).
 const POLICIES: DmPolicy[] = ['all', 'following', 'nobody'];
 
+/** Черновик вложения: вид и ссылка или идентификатор (ref); может прийти из location.state.attach. */
 interface Draft {
     kind: AttachmentKind;
     ref: string;
 }
 
+/** Список переписок со счётчиком непрочитанных и последней репликой. */
 function ConversationList({items, active}: { items: Conversation[]; active?: string }) {
     const {t} = useI18n();
     if (items.length === 0) return <p className="text-sm text-boxwood/70 p-2" data-testid="dm-empty">{t('dm.empty')}</p>;
@@ -54,6 +63,7 @@ function ConversationList({items, active}: { items: Conversation[]; active?: str
     );
 }
 
+/** Настройка «Кто может мне писать» и чёрный список с возвратом в список. */
 function DmSettingsPanel() {
     const {t} = useI18n();
     const [settings, setSettings] = useState<DmSettings | null>(null);
@@ -91,6 +101,7 @@ function DmSettingsPanel() {
     );
 }
 
+/** Переписка с одним игроком: подгрузка ранних сообщений, отправка, вложение, скрытие, блокировка и причина отказа сервера. */
 function ThreadView({username, initialAttach, onChanged}: {
     username: string;
     initialAttach: Draft | null;
@@ -293,6 +304,7 @@ function ThreadView({username, initialAttach, onChanged}: {
     );
 }
 
+/** Двухколоночная страница: слева переписки и настройки, справа выбранная переписка (на узком экране — по очереди); требует входа. */
 export function MessagesPage() {
     const {t} = useI18n();
     const {username} = useParams<{ username?: string }>();

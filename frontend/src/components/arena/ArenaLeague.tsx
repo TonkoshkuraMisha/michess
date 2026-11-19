@@ -11,8 +11,10 @@ import {arenasApi} from '../../services/arenas';
 import type {ArenaLeague as LeagueData, LeagueCategory, LeagueRow} from '../../services/arenas';
 import {EmptyState, SegmentedControl, Section} from '../ui';
 
+// Категория контроля времени, с которой открывается лига (если сервер не отдал других вкладок).
 const DEFAULT_CATEGORY: LeagueCategory = 'blitz';
 
+/** Блок месячной лиги арен: вкладки категорий (если их больше одной), таблица и своя строка под ней. Рисуется в ArenasPage. */
 export function ArenaLeague() {
     const {t} = useI18n();
     const [category, setCategory] = useState<LeagueCategory>(DEFAULT_CATEGORY);

@@ -1,7 +1,8 @@
 // --- FILE: frontend/src/components/OpeningExplorer.tsx ---
 // Дерево дебютов (таск 16.2): ходы из текущей позиции со статистикой партий (доли побед белых / ничьих / побед
 // чёрных), название дебюта и партии мастеров из архива и библиотеки (партия библиотеки ведёт в библиотеку и помечена
-// «в библиотеке» или «с объяснениями»). Используется в «Инструментах» (/tools) и в просмотре партии.
+// «в библиотеке» или «с объяснениями»). Данные — services/openingExplorer.ts (exploreOpening, ответ сервера по
+// списку ходов). Используется в «Инструментах» (/tools), в просмотре партии (GameViewer) и в разделе репертуара.
 
 import {useEffect, useState} from 'react';
 import {Link} from 'react-router-dom';
@@ -19,6 +20,10 @@ interface Props {
     onPlay?: (uci: string) => void;
 }
 
+/**
+ * Блок дерева дебютов для позиции после moves. Запрос повторяется при смене ходов; устаревший ответ отбрасывается
+ * (флаг alive). Доля сегмента меньше 15 % подписи не получает — не помещается в полосу.
+ */
 export function OpeningExplorer({moves, onPlay}: Props) {
     const {t} = useI18n();
     const [data, setData] = useState<ExplorerResult | null>(null);

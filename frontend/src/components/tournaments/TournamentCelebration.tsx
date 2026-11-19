@@ -3,17 +3,21 @@
 // полноэкранная сцена: лучи, большой кубок цвета места (золото, серебро, бронза) с бликом, лавровый венок, конфетти
 // и фанфары. Всё рисуется кодом (SVG, canvas, Web Audio) — без чужих картинок и записей. Показывается один раз на
 // турнир (shouldCelebrate / markCelebrated; ключ — номер турнира или строка вида «arena-5» для арен, 33.5); повторить
-// можно кнопкой. При «уменьшить движение» — без конфетти и
-// вращения.
+// можно кнопкой. При «уменьшить движение» — без конфетти и вращения.
+// Единственное хранилище — localStorage с ключом regence_celebrated_<id>. Фанфары — services/soundEngine.ts.
+// Используют TournamentsPage.tsx, TournamentGameBar.tsx и arena/ArenaPages.tsx.
 
 import {useEffect, useRef} from 'react';
 import {X} from 'lucide-react';
 import {useI18n} from '../../i18n';
 import {soundEngine} from '../../services/soundEngine';
 
+// Префикс ключа localStorage: отметка «праздник для этого турнира уже показан».
 const STORAGE_PREFIX = 'regence_celebrated_';
+// Длительность конфетти (мс): залпы из углов, затем дождь сверху до CONFETTI_MS минус 2,5 с; ещё 4 с на падение остатка.
 const CONFETTI_MS = 7000;
 
+/** Палитра медали места: оттенки металла, свечение фона, цвет лучей и ключ заголовка в каталоге celebration.*. */
 interface Medal {
     light: string;
     main: string;
@@ -23,12 +27,14 @@ interface Medal {
     key: 'first' | 'second' | 'third';
 }
 
+/** Палитры по местам 1–3. */
 export const MEDALS: Record<1 | 2 | 3, Medal> = {
     1: {light: '#fff4b8', main: '#e2b33c', dark: '#8a6510', glow: 'rgba(255, 210, 90, 0.55)', ray: 'rgba(255, 215, 110, 0.16)', key: 'first'},
     2: {light: '#ffffff', main: '#c3c7cf', dark: '#6d717a', glow: 'rgba(220, 228, 240, 0.5)', ray: 'rgba(225, 232, 245, 0.14)', key: 'second'},
     3: {light: '#ffd9b0', main: '#c27a3e', dark: '#6b3a16', glow: 'rgba(230, 150, 90, 0.5)', ray: 'rgba(235, 160, 100, 0.15)', key: 'third'},
 };
 
+// Цвета кусочков конфетти.
 const CONFETTI_COLORS = ['#f6c945', '#e85d5d', '#4fa3e0', '#58c48b', '#b27ae6', '#ffffff', '#ff9f43'];
 
 /** Праздник ещё не показывали для этого турнира (хранилище недоступно — показываем). */
@@ -40,6 +46,7 @@ export function shouldCelebrate(tournamentId: number | string): boolean {
     }
 }
 
+/** Запоминает, что праздник для турнира показан. */
 export function markCelebrated(tournamentId: number | string): void {
     try {
         localStorage.setItem(`${STORAGE_PREFIX}${tournamentId}`, '1');
@@ -48,11 +55,13 @@ export function markCelebrated(tournamentId: number | string): void {
     }
 }
 
+/** Включено ли в системе «уменьшить движение» (тогда без конфетти и анимаций). */
 function reducedMotion(): boolean {
     return typeof window !== 'undefined' && typeof window.matchMedia === 'function'
         && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 }
 
+// Один кусочек конфетти: положение, скорость, размер, вращение, раскачивание (sway) и форма (круг или полоска).
 interface Piece {
     x: number;
     y: number;
@@ -135,6 +144,7 @@ function Confetti() {
     return <canvas ref={canvas} className="pointer-events-none fixed inset-0 z-[102]" aria-hidden="true" data-testid="celebration-confetti"/>;
 }
 
+// Геометрия лаврового венка в координатах SVG кубка: центр, радиус дуги, углы начала и конца ветви (градусы), число пар листьев.
 const WREATH = {cx: 160, cy: 165, r: 132, from: 100, to: 235, leaves: 12};
 
 /**
@@ -165,6 +175,7 @@ function LaurelBranch() {
         </g>
     );
 }
+/** Кубок цвета места (SVG) с лавровым венком и бликом; левая ветвь венка зеркалится в правую. */
 function Trophy({place}: { place: 1 | 2 | 3 }) {
     const m = MEDALS[place];
     return (
@@ -222,6 +233,7 @@ export interface CelebrationProps {
     onClose: () => void;
 }
 
+/** Полноэкранный праздник: играет фанфары, закрывается кнопкой или Escape; место ограничено диапазоном 1–3. */
 export function TournamentCelebration({place, title, size, onClose}: CelebrationProps) {
     const {t} = useI18n();
     const rank = (Math.min(Math.max(place, 1), 3)) as 1 | 2 | 3;

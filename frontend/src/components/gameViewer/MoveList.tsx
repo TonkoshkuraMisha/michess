@@ -1,6 +1,7 @@
 // --- FILE: frontend/src/components/gameViewer/MoveList.tsx ---
 // Запись партии в просмотре (вынесено из GameViewer.tsx, таск 17.6): пары ходов, оценка и символ разбора у хода,
-// значок «по этой ошибке есть личная задача».
+// значок «по этой ошибке есть личная задача». Индексы — позиции ходов в партии с нуля (полуход ply = индекс + 1);
+// данные приходят из GameViewer.tsx, отчёт разбора — viewerModel.ts.
 
 import type {RefObject} from 'react';
 import {Puzzle as PuzzleBadgeIcon} from 'lucide-react';
@@ -8,6 +9,7 @@ import {useI18n} from '../../i18n';
 import {classificationBadgeClass} from './viewerModel';
 import type {MoveEvaluationItem} from './viewerModel';
 
+/** Номер хода и пара ходов (SAN) с индексами полуходов; у последнего неполного хода black пуст. */
 export interface ViewerMovePair {
     moveNumber: number;
     white: string;
@@ -16,6 +18,7 @@ export interface ViewerMovePair {
     blackIndex: number;
 }
 
+// personal — по этому полуходу есть личная задача («Мои ошибки»).
 interface MoveCellProps {
     san: string;
     index: number;
@@ -25,6 +28,7 @@ interface MoveCellProps {
     onSelect: (index: number, san: string) => void;
 }
 
+/** Ячейка одного хода: SAN, символ и оценка разбора; текущий ход подсвечен и повторно не выбирается. */
 function MoveCell({san, index, active, analysis, personal, onSelect}: MoveCellProps) {
     const {t} = useI18n();
     return (
@@ -49,6 +53,7 @@ function MoveCell({san, index, active, analysis, personal, onSelect}: MoveCellPr
     );
 }
 
+/** Таблица ходов с прокруткой: scrollRef нужен родителю, чтобы держать текущий ход в поле зрения. */
 export function MoveList({pairs, viewIndex, moves, personalPlies, scrollRef, onSelect}: {
     pairs: ViewerMovePair[];
     viewIndex: number;

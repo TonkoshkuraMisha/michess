@@ -20,6 +20,7 @@ import {activityLink, PROGRAMS, programById, SESSIONS_PER_PROGRAM} from '../cont
 import type {Activity} from '../content/programs';
 import {lessonById, localized} from '../content/lessons';
 
+/** Код записи урока, в которой хранится прогресс программы (таблица прогресса уроков, services/lessonProgress.ts). */
 export const progressId = (programId: string) => `program-${programId}`;
 
 /** Подпись упражнения — из каталогов самих разделов. */
@@ -77,6 +78,7 @@ function useProgramProgress(): [Record<string, number>, (programId: string, done
     return [done, mark, loaded];
 }
 
+/** Список программ тренировок с прогрессом по каждой (занятий пройдено из SESSIONS_PER_PROGRAM). */
 export function ProgramsPage() {
     const {t} = useI18n();
     const [done] = useProgramProgress();
@@ -103,6 +105,10 @@ export function ProgramsPage() {
     );
 }
 
+/**
+ * Одна программа: недели и занятия. Автозачёт (programAutoCount) запускается, когда известны и сохранённый
+ * прогресс, и факты о курсе. Индекс занятия = неделя * 5 + номер в неделе (пять занятий в неделе).
+ */
 export function ProgramPage() {
     const {t, language} = useI18n();
     const navigate = useNavigate();

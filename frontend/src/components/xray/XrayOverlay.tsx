@@ -1,7 +1,11 @@
 // --- FILE: frontend/src/components/xray/XrayOverlay.tsx ---
 // Слой «рентгена» поверх доски (таск 12.1). Каждый режим отличается не только цветом: контроль — штриховкой и числом
 // перевеса, фигуры под ударом — треугольником, перегрузка — пунктиром к обязанностям, связки — пунктирной линией и
-// кольцом, взятия — толщиной стрелки, мат — двойной обводкой, пешки — буквенными значками.
+// кольцом, взятия — толщиной стрелки, мат — толстой стрелкой и пунктирной рамкой поля, пешки — значками.
+// Данные — из services/xray/xrayUtils.ts (xrayFor, destinationSafety): всё считается в браузере по FEN, без сервера
+// и движка. Слой кладётся поверх доски (SVG 100×100, клик не перехватывает); подключают Chessboard.tsx, GameViewer.tsx
+// и chessboard/AuxBoard.tsx. Включённые режимы — из useXraySettings.
+// Без включённых режимов слой ничего не рисует; отчёт пересчитывается при смене позиции или стороны.
 
 import {useMemo} from 'react';
 import {squareCenter} from '../chessboard/CoachArrowsOverlay';
@@ -9,6 +13,7 @@ import {destinationSafety, xrayFor} from '../../services/xray/xrayUtils';
 import type {Color} from '../../services/xray/xrayUtils';
 import type {XrayMode} from './useXraySettings';
 
+/** Параметры слоя: позиция, сторона просмотра, включённые режимы и ориентация доски. */
 interface Props {
     fen: string;
     /** За какую сторону смотреть. */
@@ -19,6 +24,7 @@ interface Props {
     selectedSquare?: string | null;
 }
 
+/** Цвета режимов (rgba): по ним же строятся наконечники стрелок xray-head-<имя>; white/black — заливка контроля. */
 const COLORS = {
     white: 'rgba(56, 189, 248, 0.32)',
     black: 'rgba(244, 63, 94, 0.30)',
@@ -30,8 +36,10 @@ const COLORS = {
     hanging: 'rgba(250, 204, 21, 0.95)',
 };
 
+/** Сторона поля в координатах SVG (100 / 8). */
 const SQUARE = 12.5;
 
+/** Параметры стрелки слоя: ключ marker выбирает наконечник из defs. */
 interface ArrowProps {
     from: string;
     to: string;
@@ -43,6 +51,7 @@ interface ArrowProps {
     testId?: string;
 }
 
+/** Линия от поля from к полю to с наконечником; для поля вне доски ничего не рисует. */
 function Arrow({from, to, flipped, color, width, marker, dashed, testId}: ArrowProps) {
     const start = squareCenter(from, flipped);
     const end = squareCenter(to, flipped);

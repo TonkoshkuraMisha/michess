@@ -27,8 +27,8 @@
 - На GitHub — `master`, `dev` и ветки открытых PR (слитые удалены 18.11 с согласия владельца).
   Режим: таск → PR → CI → слияние. Правила разработки — `CLAUDE.md`, раздел 4 (требование владельца 17.11).
 - Спринт 33 (арены): сделаны 33.1–33.6 полностью (лига, праздник призёра, матчи конференций), открытый вход (#165).
-- Сверка комментариев: сервисы и `services/bots/` — `docs/comment-review-2` (19.11); осталось — компоненты
-  клиента вне `chessboard/` (96 файлов). Находки сверки (мёртвый код ботов, нестабильный тест курса матов) —
+- Сверка комментариев закончена 19.11: сервисы и `services/bots/` (#210), компоненты клиента вне `chessboard/`
+  (`docs/comment-review-3`). Находки сверки (мёртвый код ботов, повторы в клиенте, нестабильный тест курса матов) —
   в «Сделано» таска A.7, чинить отдельными PR.
 - Владелец подтвердил (17.11) решения 33.3 и 33.4. На подтверждение (33.6): первый выбор страны сменой не
   считается; убрать страну можно всегда, это расходует смену сезона; обе Америки и Гренландия — Западная.
@@ -2258,7 +2258,18 @@ ATTRIBUTION.md), характер по известной манере игры,
 `mentor_service`, `tournaments`, `library`, `ladder`) и весь пакет `services/bots/` — 39 файлов, проверка та же.
 Исправлены неверные описания: мотивы наставника (мат ищется в 1–2 хода, окно дебютных мотивов — ходы 6–20),
 `ERROR_RATE_CURVE` ботов, ключ книги из 4 полей, несуществующая `INVITATIONALS` в карьере, путь лестницы
-`/api/v1/bots/ladder/start`, то, что делает `finish_game`. Осталось: компоненты клиента вне `chessboard/`.
+`/api/v1/bots/ladder/start`, то, что делает `finish_game`.
+**Сделано 19.11 (`docs/comment-review-3`):** все компоненты клиента вне `chessboard/` (кроме уже сверенных
+`Chessboard.tsx`, `GameViewer.tsx`) — 100 файлов; только комментарии (печать компилятора TS без комментариев совпадает
+с прежней). Исправлено: состав настроек в шапке `Settings`, отрисовка мата в `XrayOverlay`, на чём построен `ui/Modal`,
+счёт в `CoordinateGames`, число упражнений `EndgameTrainer`, имя `MEMORY_ROUNDS`.
+Найдено в клиенте (чинить отдельно): повторы `displayDate` (Profile, ChampionGames), `MIN_PASSWORD_LENGTH`
+(Settings, EmailLinkPages), `errorOf` (DefenseTrainer, GeneratedDrills, PuzzlesPage), `KINDS`/`Draft` и выбор
+вложения (FeedPage, MessagesPage), `GameProps` (5 игр тренажёров), `useClassics`, нумерация ходов и `onSquare`
+(chess960, ToolsPage, RepertoirePages); `fetch` прямо в компонентах (Leaderboard, Profile, ChampionGames, AuthModal,
+Settings); два разных `POLL_MS`; лимиты длины текста и пороги числами (MessagesPage, ModerationPage, TeamsPage,
+BlindGames, PathGame, BasicsPage, `w * 5` в ProgramsPage); `SIZES` турниров дублирует `tournament_rules.py`;
+`any` у данных сокета в Chess960LiveGame; лишний `level={1}` у QuizGame/ChecksGame; пустой `useMemo` в LessonPlayer.
 Найдено при сверке (чинить отдельно): дубликат `BOT_INSTANCES` в `src/api/bots.py`; неиспользуемая
 `philidor.BLUNDER_GUARD_MARGIN_CP`; `skill_level` в `analyse_with_stockfish` ни на что не влияет;
 `_simulate_human_thinking_time` считается в `choose_move`, но результат не используется; тест курса матов

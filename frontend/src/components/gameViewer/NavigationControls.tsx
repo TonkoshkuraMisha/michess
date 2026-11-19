@@ -1,12 +1,15 @@
 // --- FILE: frontend/src/components/gameViewer/NavigationControls.tsx ---
-// Кнопки перехода по партии и переворот доски (вынесено из GameViewer.tsx, таск 17.6).
+// Кнопки перехода по партии и переворот доски (вынесено из GameViewer.tsx, таск 17.6). Подписи — каталог viewer.*;
+// состояния нет, ход меняет родитель (GameViewer.tsx) через onGo.
 
 import {ChevronFirst, ChevronLast, ChevronLeft, ChevronRight, RefreshCw} from 'lucide-react';
 import type {ReactNode} from 'react';
 import {useI18n} from '../../i18n';
 
+// Общий вид кнопок панели навигации.
 const BUTTON = 'p-1.5 bg-acacia rounded hover:bg-boxwood hover:text-acacia-dark transition cursor-pointer';
 
+/** Иконка-кнопка с подписью для подсказки и экранного диктора. */
 function NavButton({label, onClick, children, className = ''}: { label: string; onClick: () => void; children: ReactNode; className?: string }) {
     return (
         <button onClick={onClick} className={`${BUTTON} ${className}`} title={label} aria-label={label}>

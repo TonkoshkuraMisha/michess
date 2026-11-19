@@ -1,8 +1,10 @@
-// Повторение репертуара (таск 20.2): /repertoire/:id/drill.
+// Повторение репертуара (таск 20.2): /repertoire/:id/drill (маршрут в App.tsx).
 // «Повторение» — карточки по расписанию (SM-2) и новые в пределах дневной нормы; «Учить новые» — сначала показ
 // своих ходов, затем проверка; ошибка возвращает карточку в конец сессии (повтор расписание не меняет).
 // «Игра против репертуара» — соперник отвечает ходами из репертуара (чаще — популярными у людей), игрок должен
-// оставаться в своих линиях.
+// оставаться в своих линиях. Данные — services/repertoire.ts: GET /repertoires/{id}/drill, POST .../drill/answer,
+// POST .../opponent (src/services/repertoire_drill.py); дерево для игры против репертуара берётся из загруженного
+// Repertoire (followLine/edgesFrom).
 
 import {useCallback, useEffect, useMemo, useState} from 'react';
 import {Link, useParams} from 'react-router-dom';
@@ -17,14 +19,18 @@ import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 import type {BoardArrow} from '../puzzles/PuzzleBoard';
 import {numbered} from './RepertoirePages';
 
+// Режим страницы; фаза карточки (show — показ ответа в «Учить новые», ask — ждём ход, right/wrong — разбор);
+// карточка в очереди сессии с признаком повтора после ошибки (retry — на расписание не влияет).
 type Mode = 'review' | 'learn' | 'play';
 type Phase = 'show' | 'ask' | 'right' | 'wrong';
 type QueuedCard = DrillCard & { retry: boolean };
 
+// Стили вкладки режима и общей кнопки страницы (вынесены, чтобы не повторять длинные строки классов).
 const TAB = (active: boolean) =>
     `px-3 py-1.5 rounded text-sm border ${active ? 'bg-amber-800 border-amber-400 text-white' : 'bg-black/30 border-amber-900/50 hover:border-amber-600'}`;
 const BUTTON = 'px-3 py-1.5 rounded bg-amber-700 text-white font-bold text-sm disabled:opacity-50';
 
+/** Проигрывает линию UCI из начальной позиции: FEN, ходы в SAN и последний ход для подсветки. */
 function replay(line: string[]): { fen: string; sans: string[]; last: { from: string; to: string } | null } {
     const game = new Chess();
     const sans: string[] = [];
@@ -37,9 +43,11 @@ function replay(line: string[]): { fen: string; sans: string[]; last: { from: st
     return {fen: game.fen(), sans, last};
 }
 
+/** Стрелки доски для списка ходов UCI одного цвета (верные ответы — зелёные, ошибка — красная). */
 const arrowsOf = (ucis: string[], color: BoardArrow['color']): BoardArrow[] =>
     ucis.map((uci) => ({from: uci.slice(0, 2), to: uci.slice(2, 4), color}));
 
+/** Строка сводки по репертуару: выучено / учится / новых / к повторению / осталось новых на сегодня. */
 function StatsLine({stats}: { stats: DrillStats }) {
     const {t} = useI18n();
     return (
@@ -49,6 +57,10 @@ function StatsLine({stats}: { stats: DrillStats }) {
     );
 }
 
+/**
+ * Сессия карточек («Повторение» и «Учить новые»): очередь с сервера, ответ проверяется на сервере (answer).
+ * Верный ответ в первый раз учитывается в итоге; ошибка ставит копию карточки (retry) в конец очереди.
+ */
 function CardsSession({rep, mode}: { rep: Repertoire; mode: 'review' | 'learn' }) {
     const {t} = useI18n();
     const [queue, setQueue] = useState<QueuedCard[] | null>(null);
@@ -150,6 +162,10 @@ function CardsSession({rep, mode}: { rep: Repertoire; mode: 'review' | 'learn' }
     );
 }
 
+/**
+ * «Игра против репертуара»: игрок ходит только по своим ребрам дерева, ответы соперника запрашивает у сервера.
+ * Уход из репертуара подсвечивает верные ходы; когда у игрока в позиции нет своих ходов — линия закончена.
+ */
 function PlaySession({rep}: { rep: Repertoire }) {
     const {t} = useI18n();
     const [line, setLine] = useState<string[]>([]);
@@ -237,6 +253,7 @@ function PlaySession({rep}: { rep: Repertoire }) {
     );
 }
 
+/** Страница повторения: загружает репертуар и переключает три режима; вкладка режима сбрасывает сессию (key). */
 export function RepertoireDrillPage() {
     const {t} = useI18n();
     const {repertoireId = ''} = useParams<{ repertoireId: string }>();

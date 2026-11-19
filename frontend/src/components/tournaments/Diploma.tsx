@@ -1,9 +1,12 @@
 // --- FILE: frontend/src/components/tournaments/Diploma.tsx ---
-// Диплом призёра турнира (таск 15.3): собственное оформление в SVG на клиенте, сохранение в PNG и печать.
+// Диплом призёра турнира (таск 15.3): собственное оформление в SVG на клиенте (рисуется кодом, без чужих картинок),
+// сохранение в PNG и печать. Используется в TournamentsPage.tsx (TournamentView) для мест 1–3 законченного
+// турнира. Данные — только свойства компонента; тексты — каталог tournaments.diploma.*; сеть не нужна.
 
 import {useRef} from 'react';
 import {useI18n} from '../../i18n';
 
+/** Свойства диплома: имя игрока, место (1–3), название формата или исторического турнира, размер и дата. */
 export interface DiplomaProps {
     name: string;
     place: number;
@@ -12,6 +15,7 @@ export interface DiplomaProps {
     date: string;
 }
 
+// Цвета медали диплома по месту: золото, серебро, бронза (индекс — место минус один).
 const MEDAL = ['#d4a017', '#a8a9ad', '#b0703c'];
 
 /** Разметка SVG диплома как строка — для сохранения в PNG и печати. */
@@ -19,6 +23,7 @@ function svgMarkup(svg: SVGSVGElement): string {
     return new XMLSerializer().serializeToString(svg);
 }
 
+/** Диплом в SVG с кнопками «Сохранить PNG» (через canvas) и «Печать» (отдельное окно с тем же SVG). */
 export function Diploma({name, place, format, size, date}: DiplomaProps) {
     const {t} = useI18n();
     const svgRef = useRef<SVGSVGElement>(null);
@@ -30,6 +35,7 @@ export function Diploma({name, place, format, size, date}: DiplomaProps) {
         const blob = new Blob([svgMarkup(svg)], {type: 'image/svg+xml;charset=utf-8'});
         const url = URL.createObjectURL(blob);
         const image = new Image();
+        // Размер PNG 1600x1131 — пропорции листа A4 в альбомной ориентации (как viewBox 1414x1000).
         image.onload = () => {
             const canvas = document.createElement('canvas');
             canvas.width = 1600;

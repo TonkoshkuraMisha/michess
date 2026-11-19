@@ -1,6 +1,9 @@
 // --- FILE: frontend/src/components/puzzles/SolutionReplay.tsx ---
 // Разбор после ответа в тренажёрах (таск B.3): линии «опровержение», «верный ход», «решение» — пошагово на доске,
 // стрелка показывает следующий ход линии; «Разобрать с наставником» — позиция упражнения на свободной доске.
+// Линии и позицию задаёт родитель (данные ответа сервера); сам компонент в сеть не ходит, а лишь сообщает через
+// onShow, что нарисовать вместо позиции упражнения. Используют PuzzlesPage, DefenseTrainer, GeneratedDrills и
+// learn/MateCourse.
 
 import {useState} from 'react';
 import {Chess} from 'chess.js';
@@ -9,8 +12,10 @@ import {useI18n} from '../../i18n';
 import type {BoardArrow} from './PuzzleBoard';
 import {toMove} from './puzzleNotation';
 
+/** Одна линия для пошагового показа (опровержение, верный ход, решение). */
 export interface ReplayLine {
     id: string;
+    /** Готовая подпись кнопки линии (текст собирает родитель через t()). */
     label: string;
     /** Ходы линии в UCI от стартовой позиции. */
     moves: string[];
@@ -49,6 +54,7 @@ interface Props {
     onAnalyze?: (fen: string) => void;
 }
 
+/** Кнопки линий, шаги «назад/вперёд» и «Разобрать с наставником»; пусто, если нет ни линий, ни onAnalyze. */
 export function SolutionReplay({startFen, lines, onShow, onAnalyze}: Props) {
     const {t} = useI18n();
     const [selected, setSelected] = useState<{ id: string; ply: number } | null>(null);

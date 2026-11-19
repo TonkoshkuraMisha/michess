@@ -1,20 +1,24 @@
 // --- FILE: frontend/src/components/ui/Button.tsx ---
-// Кнопки платформы (общие компоненты дизайна, план владельца 18.11). Иерархия: primary — одно главное действие на
-// экране (янтарная заливка), secondary — обычные действия (тёмная с рамкой), ghost — второстепенные (только текст),
-// danger — необратимые (сдаться, удалить). Размеры: sm — в плотных панелях, md — по умолчанию, lg — главный призыв
-// страницы. ButtonLink — то же оформление у ссылки маршрутизатора. Классы собирает buttonClasses — один источник.
+// Кнопки платформы (общие компоненты дизайна, план владельца 18.11; правила — docs/design-system.md). Иерархия:
+// primary — одно главное действие на экране (янтарная заливка), secondary — обычные действия (тёмная с рамкой),
+// ghost — второстепенные (только текст), danger — необратимые (сдаться, удалить). Размеры: sm — в плотных панелях,
+// md — по умолчанию, lg — главный призыв страницы. ButtonLink — то же оформление у ссылки маршрутизатора. Классы
+// собирает buttonClasses — один источник. Витрина — страница /design (DesignGallery).
 
 import type {ButtonHTMLAttributes, ReactNode} from 'react';
 import {Link} from 'react-router-dom';
 import type {LinkProps} from 'react-router-dom';
 
+// Вид и размер кнопки (см. заголовок файла).
 export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'danger';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
+// Общая часть классов: раскладка, плавная смена цвета, вид отключённой кнопки и видимая рамка фокуса с клавиатуры.
 const BASE = 'inline-flex items-center justify-center gap-1.5 rounded-md font-bold transition-colors cursor-pointer '
     + 'disabled:opacity-45 disabled:cursor-not-allowed focus-visible:outline-2 focus-visible:outline-offset-2 '
     + 'focus-visible:outline-amber-300';
 
+// Цвета по видам кнопки.
 const VARIANTS: Record<ButtonVariant, string> = {
     primary: 'bg-amber-700 hover:bg-amber-600 text-white shadow-sm',
     secondary: 'bg-black/30 hover:bg-black/45 border border-amber-800/60 hover:border-amber-500 text-boxwood-light',
@@ -22,6 +26,7 @@ const VARIANTS: Record<ButtonVariant, string> = {
     danger: 'bg-rose-900/70 hover:bg-rose-800 border border-rose-600/60 text-rose-50',
 };
 
+// Отступы и размер шрифта по размерам.
 const SIZES: Record<ButtonSize, string> = {
     sm: 'px-2.5 py-1 text-xs',
     md: 'px-3.5 py-1.5 text-sm',
@@ -33,6 +38,7 @@ export function buttonClasses(variant: ButtonVariant = 'secondary', size: Button
     return [BASE, VARIANTS[variant], SIZES[size], extra].filter(Boolean).join(' ');
 }
 
+// Общие свойства Button и ButtonLink.
 interface CommonProps {
     variant?: ButtonVariant;
     size?: ButtonSize;
@@ -41,6 +47,7 @@ interface CommonProps {
     children?: ReactNode;
 }
 
+/** Кнопка (по умолчанию type="button", чтобы не отправлять формы случайно); остальные свойства — как у button. */
 export function Button({variant = 'secondary', size = 'md', icon, children, className = '', type = 'button', ...rest}:
                            CommonProps & ButtonHTMLAttributes<HTMLButtonElement>) {
     return (
@@ -50,6 +57,7 @@ export function Button({variant = 'secondary', size = 'md', icon, children, clas
     );
 }
 
+/** Ссылка маршрутизатора с видом кнопки. */
 export function ButtonLink({variant = 'secondary', size = 'md', icon, children, className = '', ...rest}: CommonProps & LinkProps) {
     return (
         <Link className={buttonClasses(variant, size, className)} {...rest}>

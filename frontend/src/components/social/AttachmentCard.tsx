@@ -1,6 +1,9 @@
 // --- FILE: frontend/src/components/social/AttachmentCard.tsx ---
 // Карточка вложения личного сообщения (таск 30.1): партия, позиция, задача, урок, турнир. Позиция и задача —
 // маленькой диаграммой на доске и фигурах игрока, остальное — строкой со ссылкой.
+// Данные: вложение Attachment из services/messages.ts (его же использует лента); ссылку даёт attachmentLink, внешний вид
+// диаграммы — тема доски и набор фигур из настроек игрока (config/boardAppearance.ts, localStorage). Используют
+// MessagesPage.tsx и FeedPage.tsx; подписи — каталог dm.*.
 
 import {useMemo} from 'react';
 import {Link} from 'react-router-dom';
@@ -13,6 +16,7 @@ import {lessonById, localized} from '../../content/lessons';
 import {attachmentLink} from '../../services/messages';
 import type {Attachment, AttachmentKind} from '../../services/messages';
 
+// Значок карточки по виду вложения.
 const ICONS: Record<AttachmentKind, typeof Swords> = {
     game: Swords, position: Crown, puzzle: Puzzle, lesson: BookOpen, tournament: Trophy, library: Library, achievement: Award,
 };
@@ -42,10 +46,12 @@ export function MiniDiagram({fen, size = 160}: { fen: string; size?: number }) {
     );
 }
 
+/** Чья очередь ходить по FEN: по умолчанию белые. */
 function sideToMove(fen: string): 'w' | 'b' {
     return fen.split(' ')[1] === 'b' ? 'b' : 'w';
 }
 
+/** Карточка вложения: значок и строка описания, для позиции и задачи — диаграмма с указателем стороны и ссылка «Открыть». */
 export function AttachmentCard({attachment}: { attachment: Attachment }) {
     const {t, language} = useI18n();
     const Icon = ICONS[attachment.kind];

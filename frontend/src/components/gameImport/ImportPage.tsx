@@ -1,7 +1,9 @@
 // --- FILE: frontend/src/components/gameImport/ImportPage.tsx ---
-// «Мои партии с других сайтов» (таск 24.1): импорт последних партий с lichess и chess.com по нику или вставкой PGN.
-// Сервер разбирает их в фоне, промахи игрока становятся задачами «Мои ошибки»; партия открывается в разборе с
-// наставником (/import/game/:id). Только для вошедших.
+// «Мои партии с других сайтов» (таск 24.1): /import — импорт последних партий с lichess и chess.com по нику или
+// вставкой PGN. Сервер разбирает их в фоне, промахи игрока становятся задачами «Мои ошибки»; партия открывается
+// в разборе с наставником (/import/game/:id). Только для вошедших. Данные — services/gameImport.ts
+// (/api/v1/imports, src/api/game_import.py); ник сайта запоминается в localStorage (rememberNick/savedNick).
+// Маршрут — App.tsx.
 
 import {useCallback, useEffect, useState} from 'react';
 import type {FormEvent} from 'react';
@@ -15,10 +17,13 @@ import {getToken} from '../../services/authToken';
 import {IMPORT_COUNTS, IMPORT_PAGE, importApi, opponentOf, outcome, rememberNick, savedNick} from '../../services/gameImport';
 import type {ImportedGameView, ImportedList, ImportResult, ImportSource} from '../../services/gameImport';
 
+// Вкладка источника: сайт по нику или вставка PGN.
 type Tab = ImportSource | 'pgn';
 const TABS: Tab[] = ['lichess', 'chesscom', 'pgn'];
+// Цвет исхода партии для самого игрока (победа / поражение / ничья / исход неизвестен).
 const OUTCOME_STYLE = {win: 'text-emerald-400', loss: 'text-red-400', draw: 'text-boxwood/80', unknown: 'text-boxwood/60'};
 
+/** Строка списка: соперник, исход, источник и дата, состояние разбора (число задач) и удаление. */
 function GameRow({game, onDelete}: { game: ImportedGameView; onDelete: (game: ImportedGameView) => void }) {
     const {t, tp, dateLocale} = useI18n();
     const opponent = opponentOf(game);
@@ -55,6 +60,7 @@ function GameRow({game, onDelete}: { game: ImportedGameView; onDelete: (game: Im
     );
 }
 
+/** Страница импорта: форма трёх вкладок и список сохранённых партий с постраничным показом (IMPORT_PAGE). */
 export function ImportPage() {
     const {t, tp} = useI18n();
     const loggedIn = Boolean(getToken());
@@ -76,7 +82,7 @@ export function ImportPage() {
         if (loggedIn) reload(offset);
     }, [loggedIn, offset, reload]);
 
-    // Разбор идёт в фоне: пока есть неразобранные партии, список обновляется сам.
+    // Разбор идёт в фоне: пока есть неразобранные партии, список перечитывается каждые 8 секунд.
     const pending = list?.games.some((game) => !game.analyzed) ?? false;
     useEffect(() => {
         if (!pending) return;

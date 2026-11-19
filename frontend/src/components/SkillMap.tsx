@@ -1,6 +1,7 @@
 // Карта навыков (таск 22.1) в своём профиле: решаемость задач по разделам A–L (радар), слабые темы, ошибки в своих
-// партиях, дебюты, эндшпиль и маты, тренажёры. Данные личные — сервер отдаёт их только самому игроку, поэтому блок
-// показывается, только если ответ пришёл про этого же игрока.
+// партиях, дебюты, эндшпиль и маты, тренажёры. Данные личные — GET /api/v1/skills (src/api/skills.py) отдаёт их
+// только самому игроку по токену, поэтому блок показывается, только если ответ пришёл про этого же игрока.
+// Используется в Profile.tsx.
 
 import {useEffect, useState} from 'react';
 import {Link} from 'react-router-dom';
@@ -11,6 +12,7 @@ import type {MessageKey} from '../i18n';
 import {API_BASE_URL} from '../config/api';
 import {getToken} from '../services/authToken';
 
+/** Ответ GET /skills: сводка по разделам задач, ошибкам, дебютам, курсам и диагностическому экзамену. */
 export interface SkillMapData {
     username: string;
     puzzle_rating: number;
@@ -25,6 +27,7 @@ export interface SkillMapData {
     exam?: { overall: number | null; level: string | null; passed: number; of: number };
 }
 
+/** Карта навыков текущего игрока; без токена или при отказе сервера — null. */
 export async function fetchSkillMap(): Promise<SkillMapData | null> {
     const token = getToken();
     if (!token) return null;
@@ -32,6 +35,7 @@ export async function fetchSkillMap(): Promise<SkillMapData | null> {
     return res?.ok ? res.json() as Promise<SkillMapData> : null;
 }
 
+/** Блок карты навыков; пока данных нет или они чужие, ничего не рисует. */
 export function SkillMap({username}: { username: string }) {
     const {t} = useI18n();
     const [data, setData] = useState<SkillMapData | null>(null);

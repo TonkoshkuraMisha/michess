@@ -1,6 +1,7 @@
 // --- FILE: frontend/src/components/learn/LessonPlayer.tsx ---
 // Проигрыватель урока школы (таск 14.1): шаги урока (объяснение, показ, «найдите ход», вопрос с выбором), затем
 // экзамен из контрольных вопросов. Вопрос засчитывается в экзамене, если на него ответили с первой попытки.
+// Проигрыватель в сеть не ходит: урок (Lesson, content/lessons/format.ts) приходит от LearnPage.tsx, о прогрессе сообщают onStep и onFinish.
 
 import {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import {Chess} from 'chess.js';
@@ -10,10 +11,12 @@ import type {BoardArrow} from '../puzzles/PuzzleBoard';
 import {localized} from '../../content/lessons';
 import type {ChoiceStep, DemoAction, FindMoveStep, Lesson, QuestionStep, Step} from '../../content/lessons/format';
 
-/** Пауза после хода показа и перед ответом соперника — чтобы ход успели увидеть. */
+/** Пауза (мс) после хода в «показе»: ход успевают увидеть, прежде чем пойдёт следующее действие. */
 export const DEMO_MOVE_MS = 600;
+/** Пауза (мс) перед ответным ходом соперника в шаге «найдите ход». */
 export const REPLY_DELAY_MS = 600;
 
+/** Итог экзамена: сколько вопросов решено с первой попытки и сколько всего. */
 export interface LessonResult {
     examScore: number;
     examTotal: number;
@@ -31,8 +34,10 @@ export interface LessonPlayerProps {
     finishActions?: React.ReactNode;
 }
 
+/** Фаза урока: шаги → заставка экзамена → экзамен → итог. */
 type Phase = 'steps' | 'examIntro' | 'exam' | 'done';
 
+/** Что нарисовано на доске сейчас: позиция, стрелки, подсветка, «призрак» фигуры (ghost) и последний ход. */
 interface BoardState {
     fen: string;
     arrows: BoardArrow[];
@@ -41,6 +46,7 @@ interface BoardState {
     lastMove: { from: string; to: string } | null;
 }
 
+/** Начальное состояние доски шага; без позиции в шаге — начальная расстановка. */
 function boardOf(step: Step | QuestionStep): BoardState {
     return {
         fen: ('fen' in step && step.fen) || new Chess().fen(),
@@ -51,18 +57,24 @@ function boardOf(step: Step | QuestionStep): BoardState {
     };
 }
 
+/** Сторона внизу: заданная шагом; для «найдите ход» — сторона, чей ход; иначе белые. */
 function orientationOf(step: Step, fen: string): 'white' | 'black' {
     if (step.orientation) return step.orientation;
     if (step.type === 'find_move') return fen.split(' ')[1] === 'b' ? 'black' : 'white';
     return 'white';
 }
 
+/** Выполняет ход uci (с превращением, если указано) и возвращает новую позицию и поля хода. */
 function apply(fen: string, uci: string): { fen: string; from: string; to: string } {
     const game = new Chess(fen);
     game.move({from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4]});
     return {fen: game.fen(), from: uci.slice(0, 2), to: uci.slice(2, 4)};
 }
 
+/**
+ * Проигрыватель: шаги по очереди, затем экзамен. Подсказка или неверный ход лишают вопроса зачёта (firstTry); все таймеры
+ * показа и ответа лежат в timers и сбрасываются при смене шага и размонтировании.
+ */
 export function LessonPlayer({lesson, initialStep = 0, onStep, onFinish, finishActions}: LessonPlayerProps) {
     const {t, tp, language} = useI18n();
     const [phase, setPhase] = useState<Phase>('steps');
@@ -353,6 +365,7 @@ export function LessonPlayer({lesson, initialStep = 0, onStep, onFinish, finishA
     );
 }
 
+/** Варианты ответа вопроса: выбранный окрашивается верным или неверным цветом, после верного выбора кнопки блокируются. */
 function ChoiceOptions({step, chosen, solved, onChoose}: {
     step: ChoiceStep;
     chosen: number | null;

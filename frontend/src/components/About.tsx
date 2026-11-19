@@ -1,7 +1,9 @@
 // --- FILE: frontend/src/components/About.tsx ---
 // «О проекте»: чужие работы, которые использует regence, их авторы и лицензии. Список фигур берётся
 // из того же конфига, что и выбор набора в интерфейсе, портреты — из манифеста, который пишет
-// scripts/download_champions.py, поэтому страница не расходится с тем, что реально раздаётся.
+// scripts/download_champions.py, поэтому страница не расходится с тем, что реально раздаётся. Версию движка и
+// ссылку на его исходники отдаёт сервер (GET /api/v1/bots/engine); ссылка на сообщество — из настроек сайта
+// (services/beta.ts, useSiteConfig). Маршрут — App.tsx.
 
 import {useEffect, useState} from 'react';
 import {Link} from 'react-router-dom';
@@ -23,6 +25,7 @@ interface PortraitCredit {
     source_url: string;
 }
 
+// Подписи портретов (автор, лицензия, источник) по коду шахматиста.
 const PORTRAITS = portraitCredits as Record<string, PortraitCredit>;
 
 /** Движок этой установки (GET /bots/engine): версия и исходники именно её — требование GPL (таск 23.1). */
@@ -38,6 +41,7 @@ function playerName(id: string): string {
         ?? id;
 }
 
+// Библиотеки, на которых построен проект, с лицензиями; список правится вручную вместе с ATTRIBUTION.md.
 /** name — собственное имя библиотеки; nameKey — подпись с пояснением, которая переводится. */
 const LIBRARIES: Array<{ name: string; nameKey?: MessageKey; license: string; url: string }> = [
     {name: 'Stockfish', nameKey: 'about.stockfish', license: 'GPL-3.0', url: 'https://github.com/official-stockfish/Stockfish'},
@@ -52,11 +56,13 @@ const LIBRARIES: Array<{ name: string; nameKey?: MessageKey; license: string; ur
     {name: 'date-fns', license: 'MIT', url: 'https://github.com/date-fns/date-fns'},
 ];
 
+// Общие классы оформления секций, заголовков, ссылок и ячеек таблиц.
 const sectionClass = 'bg-acacia-dark border border-amber-900/40 p-5 rounded shadow-heavy';
 const headingClass = 'text-lg font-bold text-amber-200 mb-2';
 const linkClass = 'text-amber-400 hover:underline';
 const cellClass = 'py-1.5 pr-4 align-top';
 
+/** Страница «О проекте»: движок, наборы фигур, портреты, медиа, архив и библиотеки с лицензиями. */
 export default function About() {
     const {t, rich} = useI18n();
     const [engine, setEngine] = useState<EngineInfo | null>(null);

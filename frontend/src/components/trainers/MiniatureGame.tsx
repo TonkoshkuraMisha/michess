@@ -1,6 +1,9 @@
+// --- FILE: frontend/src/components/trainers/MiniatureGame.tsx ---
 // «Миниатюры» (таск 27.9): короткая партия из библиотеки, закончившаяся матом. Позиция перед последним ходом — найти
 // мат (засчитывается любой матующий ход, не только ход партии). После ответа доска не застывает: верный ход стоит на
 // доске, неверный — видна стрелка хода партии; позицию можно доиграть (usePositionExplorer). И ссылка на партию.
+// Данные: GET /library/miniatures (services/library.ts → src/api/library.py, src/services/miniatures.py): партии библиотеки, закончившиеся матом
+// за MAX_PLIES полуходов. Запускается из TrainersPage.tsx (тренажёр miniatures); 10 очков за каждый найденный мат.
 
 import {useEffect, useState} from 'react';
 import {Link} from 'react-router-dom';
@@ -11,8 +14,10 @@ import {ExplorerControls, usePositionExplorer} from '../puzzles/usePositionExplo
 import {libraryApi} from '../../services/library';
 import type {LibraryMiniature} from '../../services/library';
 
+/** Позиций в попытке; уходит серверу как count. */
 export const MINIATURE_ROUNDS = 10;
 
+/** Свойства игры: seed (тот же seed — тот же набор) и onFinish(очки, ошибки). */
 interface Props {
     seed: number;
     onFinish: (score: number, mistakes: number) => void;
@@ -29,6 +34,7 @@ export function isMate(fen: string, uci: string): boolean {
     return game.isCheckmate();
 }
 
+/** Попытка из MINIATURE_ROUNDS позиций; пока набор грузится или загрузка не удалась, рисуется заглушка. */
 export function MiniatureGame({seed, onFinish}: Props) {
     const {t} = useI18n();
     const [items, setItems] = useState<LibraryMiniature[] | null>(null);

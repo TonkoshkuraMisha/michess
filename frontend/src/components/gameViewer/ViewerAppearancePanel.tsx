@@ -1,15 +1,19 @@
 // --- FILE: frontend/src/components/gameViewer/ViewerAppearancePanel.tsx ---
-// Выбор фигур и доски прямо в просмотре партии (вынесено из GameViewer.tsx, таск 17.6).
+// Выбор фигур и доски прямо в просмотре партии (вынесено из GameViewer.tsx, таск 17.6). Наборы и темы — реестры
+// config/boardAppearance.ts; ещё не открытые награды (config/unlocks.ts) недоступны и показывают условие открытия.
+// Выбор сохраняет родитель (GameViewer.tsx), здесь только вид.
 
 import {X} from 'lucide-react';
 import {BOARD_THEMES, PIECE_SETS} from '../../config/boardAppearance';
 import {useI18n} from '../../i18n';
 import {unlockText, useUnlocks} from '../../config/unlocks';
 
+// Вид кнопки выбора: активная подсвечена.
 const option = (active: boolean) => `py-1 px-1 rounded border text-xs font-bold transition cursor-pointer truncate ${
     active ? 'bg-amber-900/50 border-amber-400 text-amber-200' : 'bg-black/35 border-amber-900/40 text-boxwood/75 hover:text-amber-200'
 }`;
 
+/** Панель из двух рядов кнопок: набор фигур и тема доски; закрытые награды отключены, кроме уже выбранной. */
 export function ViewerAppearancePanel({pieceSetKey, themeKey, onPieceSetChange, onThemeChange, onClose}: {
     pieceSetKey: string; themeKey: string; onPieceSetChange: (id: string) => void; onThemeChange: (id: string) => void; onClose: () => void;
 }) {

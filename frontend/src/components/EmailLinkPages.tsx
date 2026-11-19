@@ -1,6 +1,7 @@
 // --- FILE: frontend/src/components/EmailLinkPages.tsx ---
 // Страницы ссылок из писем (таск 17.5): подтверждение e-mail (/verify-email?token=…) и новый пароль
-// (/reset-password?token=…). Токен уходит на сервер, сам он одноразовый и с истечением.
+// (/reset-password?token=…). Токен уходит на сервер (POST /account/email/verify и /account/password-reset/confirm,
+// src/api/account.py), сам он одноразовый и с истечением. Маршруты — App.tsx.
 
 import {useEffect, useRef, useState} from 'react';
 import {Link, useSearchParams} from 'react-router-dom';
@@ -11,10 +12,13 @@ import {renderUiMessage, useI18n} from '../i18n';
 import type {UiMessage} from '../i18n';
 import {clearToken} from '../services/authToken';
 
+// Наименьшая длина нового пароля; совпадает с min_length схемы на сервере (src/schemas/user.py).
 const MIN_PASSWORD_LENGTH = 8;
+// Общие классы оформления окна и поля ввода обеих страниц.
 const boxClass = 'w-full max-w-md bg-acacia-dark border border-amber-900/40 p-6 rounded shadow-heavy text-boxwood-light flex flex-col gap-3';
 const inputClass = 'w-full px-3 py-2 rounded bg-black/40 border border-amber-900/60 text-boxwood-light text-sm outline-none focus:border-amber-500';
 
+/** Подтверждение e-mail: при открытии один раз отправляет токен из адреса и показывает итог. */
 export function VerifyEmailPage() {
     const {t} = useI18n();
     const [params] = useSearchParams();
@@ -52,6 +56,9 @@ export function VerifyEmailPage() {
     );
 }
 
+/**
+ * Новый пароль по ссылке из письма. После успеха локальный токен сбрасывается: сервер отозвал все прежние сессии.
+ */
 export function ResetPasswordPage() {
     const {t} = useI18n();
     const [params] = useSearchParams();

@@ -2,7 +2,8 @@
 // 960, src/services/game_engine.py): клиентская шахматная библиотека рокировку 960 не знает, поэтому доска здесь лишь
 // рисует позицию и передаёт щелчки — как у партии против бота (Chess960Page). Рокировка — щелчок по королю, затем по
 // своей ладье. Состояние приходит по общему WebSocket (services/gameSocket): match_found (при старте и при каждом
-// переподключении), move_made, game_over, предложения ничьей. Основная доска сама переводит сюда партию с variant 960.
+// переподключении), move_made, game_over, предложения ничьей. Основная доска (useGameSocket.ts) сама переводит сюда
+// партию с variant chess960, передавая снимок в location.state.match. Рейтинга у этих партий нет.
 
 import {useCallback, useEffect, useRef, useState} from 'react';
 import {Link, useLocation} from 'react-router-dom';
@@ -14,6 +15,7 @@ import {describeGameOver} from '../chessboard/status';
 import {PuzzleBoard} from '../puzzles/PuzzleBoard';
 import {clickMove, piecesOf} from './Chess960Page';
 
+// Снимок партии для отрисовки: часы (мс) — значения на момент последнего сообщения сервера, версия состояния нужна для make_move.
 interface LiveState {
     gameId: number;
     color: 'white' | 'black';
@@ -43,6 +45,7 @@ export function sansOf(pgn: string): string[] {
         && !['1-0', '0-1', '1/2-1/2', '*'].includes(token));
 }
 
+/** Снимок партии из сообщения match_found (поля сервера в snake_case → состояние компонента). */
 function fromSnapshot(data: any): LiveState {
     return {
         gameId: Number(data.game_id),
@@ -60,15 +63,21 @@ function fromSnapshot(data: any): LiveState {
     };
 }
 
+// Время «м:сс» с округлением вверх до секунды, как на основной доске.
 function clock(ms: number): string {
     const total = Math.max(0, Math.ceil(ms / 1000));
     return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
 }
 
+// Уникальный идентификатор команды хода: сервер по нему отбрасывает повторную отправку одного хода.
 function commandId(): string {
     return typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
 }
 
+/**
+ * Страница партии с человеком: подписывается на события игрового WebSocket, считает часы локально между сообщениями
+ * сервера (разница от updatedAt) и отправляет ходы командой make_move. Без снимка партии показывает ссылку в лобби.
+ */
 export function Chess960LiveGame() {
     const {t} = useI18n();
     const location = useLocation();

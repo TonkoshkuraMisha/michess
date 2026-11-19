@@ -1,8 +1,9 @@
 // --- FILE: frontend/src/components/Profile.tsx ---
 // Страница игрока (/profile/:username): рейтинги по категориям, график рейтинга по сыгранным партиям (точка
 // открывает партию), итоги и история партий, достижения и звание клуба, клубная лестница, история турниров,
-// публикации, подписка и вызов; самому игроку — ещё карта навыков. Данные — /profile/*; история рейтинга берётся из
-// значений, сохранённых сервером при завершении партий.
+// публикации, подписка и вызов; самому игроку — ещё карта навыков. Данные — GET /api/v1/profile/<имя> (профиль и
+// лестница), /stats (итоги по всем партиям), /games (страницами по GAMES_PAGE_SIZE), /rating-history; история
+// рейтинга берётся из значений, сохранённых сервером при завершении партий. Маршрут — App.tsx.
 
 import {useState, useEffect} from 'react';
 import {useParams, Link, useNavigate} from 'react-router-dom';
@@ -45,6 +46,7 @@ interface UserProfile {
     arena_trophies?: { gold: number; silver: number; bronze: number };
 }
 
+// Соответствие поля профиля и категории контроля времени, в порядке показа.
 const RATING_CATEGORIES: Array<{ key: 'bullet_rating' | 'blitz_rating' | 'rapid_rating' | 'classical_rating'; category: RatingCategoryKey }> = [
     {key: 'bullet_rating', category: 'bullet'},
     {key: 'blitz_rating', category: 'blitz'},
@@ -74,6 +76,7 @@ interface GameData {
 
 type RatingCategoryKey = 'bullet' | 'blitz' | 'rapid' | 'classical';
 
+// Категории, между которыми переключается график рейтинга.
 const CHART_CATEGORIES: RatingCategoryKey[] = ['bullet', 'blitz', 'rapid', 'classical'];
 // Цвет кубка арены по месту.
 const MEDAL_COLORS = {gold: 'text-amber-300', silver: 'text-slate-300', bronze: 'text-orange-400'} as const;
@@ -93,6 +96,7 @@ interface RatingPoint {
     delta: number;
 }
 
+// Сколько партий истории загружается за один запрос.
 const GAMES_PAGE_SIZE = 30;
 
 /** Точка графика рейтинга: рейтинг после партии, изменение за неё и ссылка на партию. */
@@ -106,6 +110,7 @@ export interface RatingChartPoint {
     fullDate: string;
 }
 
+/** Готовит точку для графика: подписи оси и подсказки на языке интерфейса. */
 export function toRatingChartPoint(point: RatingPoint, locale: Locale = getDateLocale()): RatingChartPoint {
     const finished = parseISO(point.finished_at);
     return {
@@ -189,6 +194,7 @@ function mostPlayedCategory(stats: PlayerStats | null): RatingCategoryKey {
     return best;
 }
 
+/** Дата партии: из PGN без неизвестных частей, иначе дата завершения, иначе прочерк. */
 const displayDate = (game: GameData, locale: Locale) => {
     if (game.pgn_date && !game.pgn_date.includes('????')) {
         return game.pgn_date.replace(/\?/g, '').replace(/\.+$/, '');
@@ -199,6 +205,7 @@ const displayDate = (game: GameData, locale: Locale) => {
     return '—';
 };
 
+/** Страница профиля игрока по имени из адреса; загрузка профиля, итогов, партий и истории рейтинга. */
 export default function Profile() {
     const {t, dateLocale} = useI18n();
     const {targetUsername} = useParams<{ targetUsername: string }>();
