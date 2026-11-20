@@ -323,7 +323,8 @@ export default function Chessboard() {
         currentTurn: game.turn() === 'w' ? 'white' : 'black',
         myColor,
         onLowTime: () => playAudio('low_time'),
-        hourglass: hourglass && Boolean(activeBot),
+        // «Песочные часы»: в партии с ботом флаг ставит useBotGame, в партии с человеком и у зрителя — useGameSocket.
+        hourglass,
     });
 
     // Звук итога для участника: победа или поражение — по своему цвету; у ничьей и у отменённой партии — свои звуки.
@@ -410,7 +411,7 @@ export default function Chessboard() {
         gameId, gameIdRef, myColorRef, spectatingGameId, stateVersionRef,
         gameOverResult, gameOverResultRef, activeBot, currentUsernameRef, inviteCode, navigate,
         effectiveWhiteBaseMinutes, effectiveIncSeconds,
-        inviteColorPref, inviteOdds, inviteVariant, ratedChoice, setIsRatedGame,
+        inviteColorPref, inviteOdds, inviteVariant, ratedChoice, setIsRatedGame, setHourglass,
         setGame, setHistory, setViewIndex, setGameId, setMyColor, setSpectatingGameId, setActiveBot,
         setStateVersion, setWhitePlayer, setBlackPlayer, setRatingInfo, setGameOverResult,
         setDrawOfferStatus, setRematchStatus, isSearching, setIsSearching, setIsManualFlip, setSelectedSquare,

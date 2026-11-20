@@ -74,6 +74,8 @@ export interface UseGameSocketOptions {
     ratedChoice: boolean;
     /** Тип партии, которая сейчас на доске (приходит с сервера). */
     setIsRatedGame: (rated: boolean) => void;
+    /** «Песочные часы» партии на доске (21.1, поле hourglass с сервера): часы ждущего растут, пока думает ходящий. */
+    setHourglass: (on: boolean) => void;
 
     setGame: (g: Chess) => void;
     setHistory: (h: any[]) => void;
@@ -169,7 +171,7 @@ export function useGameSocket({
     gameId, gameIdRef, myColorRef, spectatingGameId, stateVersionRef,
     gameOverResult, gameOverResultRef, activeBot, currentUsernameRef, inviteCode, navigate,
     effectiveWhiteBaseMinutes, effectiveIncSeconds, inviteColorPref, inviteOdds, inviteVariant = 'standard',
-    ratedChoice, setIsRatedGame,
+    ratedChoice, setIsRatedGame, setHourglass,
     setGame, setHistory, setViewIndex, setGameId, setMyColor, setSpectatingGameId,
     setStateVersion, setWhitePlayer, setBlackPlayer, setRatingInfo, setGameOverResult,
     setDrawOfferStatus, setRematchStatus, isSearching, setIsSearching, setIsManualFlip, setSelectedSquare,
@@ -289,6 +291,7 @@ export function useGameSocket({
         setIsRatedGame(data.is_rated !== false);
         // Снимок той же партии без полей берсерка (опрос по HTTP) уже известное не стирает.
         if (isNewMatch || data.berserk_allowed !== undefined) setBerserk(berserkFrom(data));
+        if (isNewMatch || data.hourglass !== undefined) setHourglass(data.hourglass === true);
         myColorRef.current = assignedColor;
         setMyColor(assignedColor);
         setStateVersion(ver);
@@ -497,6 +500,7 @@ export function useGameSocket({
             setSpectatingGameId(Number(data.game_id));
             setIsRatedGame(data.is_rated !== false);
             setBerserk(berserkFrom(data));
+            setHourglass(data.hourglass === true);
             // Зритель всегда смотрит со стороны белых и не наследует состояние прошлой партии.
             myColorRef.current = 'white';
             setMyColor('white');

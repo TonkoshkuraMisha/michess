@@ -5,7 +5,7 @@
 // сила и сила по партиям с людьми (GET /bots/catalog), память бота об игроке (GET /bots/rivalry) — их загружает
 // Chessboard. Внизу — реплика бота к последнему ходу (ключ каталога botComments.*, уже переведённый вызывающим).
 
-import {ODDS} from './odds';
+import {hasGiver, ODDS} from './odds';
 import type {OddsChoice, OddsGiver, OddsKind} from './odds';
 import {Link} from 'react-router-dom';
 import {MessageSquareQuote} from 'lucide-react';
@@ -182,7 +182,7 @@ export function HistoricalBotsPanel({
                                 {ODDS.map((kind) => <option key={kind} value={kind}>{t(`odds.kinds.${kind}`)}</option>)}
                             </select>
                         </label>
-                        {odds.kind !== 'none' && odds.kind !== 'hourglass' && (
+                        {hasGiver(odds.kind) && (
                             <select value={odds.giver} onChange={(e) => onOddsChange({...odds, giver: e.target.value as OddsGiver})}
                                     aria-label={t('odds.giver')} data-testid="odds-giver" className="bg-black/40 rounded px-1 py-0.5">
                                 <option value="opponent">{t('odds.opponentGives')}</option>

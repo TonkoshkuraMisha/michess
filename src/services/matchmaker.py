@@ -131,8 +131,9 @@ def _odds_start(invite: dict, creator_id: int, white_id: int) -> dict | None:
     """
     Начальная позиция и время партии с форой или партии Фишера из приглашения — когда цвета уже распределены.
     Партия 960 — без форы и без рейтинга; расстановку выбирает сервер в момент старта (одна на обоих игроков).
+    «Песочные часы» — обычные позиция и время, флаг hourglass меняет ход часов (src/services/game_state.py).
     """
-    from src.services.odds import odds_fen, odds_times
+    from src.services.odds import HOURGLASS, odds_fen, odds_times
 
     if invite.get("variant") == "chess960":
         base_ms = int(invite.get("base_time_ms", 180000))
@@ -144,7 +145,8 @@ def _odds_start(invite: dict, creator_id: int, white_id: int) -> dict | None:
     giver_white = creator_white if invite.get("odds_giver", "creator") == "creator" else not creator_white
     giver = chess.WHITE if giver_white else chess.BLACK
     white_ms, black_ms = odds_times(kind, giver, int(invite.get("base_time_ms", 180000)))
-    return {"start_fen": odds_fen(kind, giver), "white_time_ms": white_ms, "black_time_ms": black_ms, "kind": kind}
+    return {"start_fen": odds_fen(kind, giver), "white_time_ms": white_ms, "black_time_ms": black_ms, "kind": kind,
+            "hourglass": kind == HOURGLASS}
 
 
 class Matchmaker:
@@ -350,7 +352,7 @@ class Matchmaker:
         match_found; None — кого-то из игроков нет в базе. Рейтинги на начало партии (``white_initial_rating``,
         ``black_initial_rating``) берутся свежими из ``users`` по категории контроля времени. Категория считается
         по base_time и inc_time партии, а не по времени, урезанному форой. odds (``_odds_start``) задаёт начальную
-        позицию и стартовое время сторон.
+        позицию, стартовое время сторон и «песочные часы» (флаг hourglass).
         """
         white_user = await self._fresh_user(session, white_id)
         black_user = await self._fresh_user(session, black_id)
@@ -375,6 +377,7 @@ class Matchmaker:
             turn="w",
             board_fen=start_fen or chess.STARTING_FEN,
             initial_fen=start_fen,
+            hourglass=bool(odds.get("hourglass")),
             white_time_ms=white_ms,
             black_time_ms=black_ms,
             last_move_at=now_ms,
@@ -397,6 +400,7 @@ class Matchmaker:
             "start_fen": start_fen,
             "white_time_ms": white_ms,
             "black_time_ms": black_ms,
+            "hourglass": bool(odds.get("hourglass")),
         }
 
     async def _create_match_record(
@@ -437,6 +441,8 @@ class Matchmaker:
             "pgn": pgn_header(created["start_fen"]) if created.get("start_fen") else "",
             # Партия Фишера (21.3) идёт на отдельной странице клиента: по этому полю он туда переходит.
             "variant": game_variant(created.get("start_fen")),
+            # «Песочные часы» (21.1): по этому полю клиент ведёт часы так же, как сервер.
+            "hourglass": bool(created.get("hourglass")),
             "state_version": 0,
         }
         if arena:
@@ -483,6 +489,7 @@ class Matchmaker:
             white_time_ms=created.get("white_time_ms"),
             black_time_ms=created.get("black_time_ms"),
             arena=arena,
+            hourglass=bool(created.get("hourglass")),
         )
         await self._notify_match_found(connection_manager, created, base_time, inc_time, arena)
         logger.info(

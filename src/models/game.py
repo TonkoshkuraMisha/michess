@@ -63,6 +63,8 @@ class Game(Base):
     base_time_ms: Mapped[int] = mapped_column(Integer, default=180000, server_default="180000", nullable=False)
     increment_ms: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     is_rated: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true", nullable=False)
+    # «Песочные часы» (фора, 21.1): время, потраченное ходящим, прибавляется сопернику (src/services/game_state.py).
+    hourglass: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
     state_version: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     turn: Mapped[str] = mapped_column(String(1), default="w", server_default="w", nullable=False)
