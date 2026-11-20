@@ -17,8 +17,8 @@
   с человеком (21.1: правка серверных часов PvP и миграция), «три попытки с подсказками» в «Угадай ход» (14.3: баллы
   за попытки), сеансы и игра по переписке (17.2: переделка ядра). Прежний список 17.11 — `LICENSE`, источники PGN,
   ревизия базы (29.2), тексты `civil.*`, домен, юр. тексты, ключи OAuth, тарифы, подсказка страны; 33.6 — страна.
-- Для `CLAUDE.md` (карта модулей, с согласия владельца): `services/http.ts`, `chessboard/hooks/useBoardKeyboard.ts`,
-  `chessboard/gameChat.ts`, `test/boardMoves.ts` (ход в тестах страниц — щелчками).
+- 20.11: карта модулей `CLAUDE.md` дополнена (согласие владельца): `services/http.ts`, `useBoardKeyboard.ts`,
+  `chessboard/gameChat.ts`, `test/boardMoves.ts`.
 - Режим: таск → PR → CI → слияние; ветки — в `../michess-work`. Правила разработки — `CLAUDE.md`, раздел 4.
 
 # ♟️ Линейный план разработки Regence (PvP Self-Product Roadmap)
