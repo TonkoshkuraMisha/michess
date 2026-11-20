@@ -406,6 +406,28 @@ describe('товарищеские партии', () => {
         expect(sendMock).toHaveBeenCalledWith('create_invite', expect.objectContaining({odds_kind: 'knight', odds_giver: 'acceptor'}));
     });
 
+    it('«песочные часы» (21.1): без выбора «кто даёт», вид уходит серверу; часы ждущего растут', async () => {
+        renderBoard();
+        await openHuman();
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', {name: /С другом/}));
+        });
+        fireEvent.change(screen.getByTestId('invite-odds-kind'), {target: {value: 'hourglass'}});
+        expect(screen.queryByTestId('invite-odds-giver')).toBeNull();
+        await act(async () => {
+            fireEvent.click(screen.getByRole('button', {name: /Сгенерировать и скопировать ссылку/}));
+        });
+        expect(sendMock).toHaveBeenCalledWith('create_invite', expect.objectContaining({odds_kind: 'hourglass'}));
+
+        await emitAct('match_found', {...MATCH, hourglass: true});
+        await act(async () => {
+            await vi.advanceTimersByTimeAsync(5000);
+        });
+        // Белые думают 5 секунд: у них 02:55, у чёрных — 03:05.
+        expect(screen.getAllByText('02:55').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('03:05').length).toBeGreaterThan(0);
+    });
+
     it('партия Фишера (21.3): вариант уходит серверу, фора скрыта; match_found 960 уводит на свою страницу', async () => {
         vi.stubGlobal('fetch', mockFetchRouter({
             '/profile/me': () => ({id: 1, username: 'TestPlayer', blitz_rating: 1500}),

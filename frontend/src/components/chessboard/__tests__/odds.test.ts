@@ -2,7 +2,7 @@
 
 import {Chess} from 'chess.js';
 import {describe, expect, it} from 'vitest';
-import {giverColor, inviteOddsFields, ODDS, oddsFen, oddsTimes} from '../odds';
+import {giverColor, hasGiver, inviteOddsFields, ODDS, oddsFen, oddsTimes} from '../odds';
 
 describe('форы', () => {
     it('материальные форы: позиция легальна, фигуры нет, рокировка с убранной ладьёй пропадает', () => {
@@ -39,6 +39,13 @@ describe('партия с форой по сети (21.1)', () => {
         played.loadPgn(`[SetUp "1"]\n[FEN "${fen}"]\n\n1. e4 e5`);
         expect(played.history()).toEqual(['e4', 'e5']);
         expect(inviteOddsFields({kind: 'queen', giver: 'me'})).toEqual({odds_kind: 'queen', odds_giver: 'creator'});
-        expect(inviteOddsFields({kind: 'hourglass', giver: 'me'}).odds_kind).toBe('');
+        expect(inviteOddsFields({kind: 'hourglass', giver: 'me'}).odds_kind).toBe('hourglass');
+        expect(inviteOddsFields({kind: 'none', giver: 'me'}).odds_kind).toBe('');
+    });
+
+    it('у «песочных часов» и «без форы» нет дающего', () => {
+        expect(hasGiver('hourglass')).toBe(false);
+        expect(hasGiver('none')).toBe(false);
+        expect(hasGiver('time')).toBe(true);
     });
 });

@@ -151,15 +151,32 @@ def side_to_move(state: dict) -> str:
     return "white" if state.get("turn", "white") in ("white", "w") else "black"
 
 
+def is_hourglass(state: dict) -> bool:
+    """Партия с «песочными часами» (фора, 21.1): время, потраченное ходящим, прибавляется сопернику."""
+    return str(state.get("hourglass") or "") == "1"
+
+
 def live_clock_ms(state: dict, color: str, now_ms: int) -> int:
     """
     Фактический остаток времени игрока. Часы идут только у стороны, которая ходит, и всегда
-    отсчитываются от last_move_at — разрыв соединения на них никак не влияет.
+    отсчитываются от last_move_at — разрыв соединения на них никак не влияет. В «песочных часах» у ждущей стороны
+    время растёт на столько же, на сколько убывает у ходящей.
     """
     stored = int(state[f"{color}_time_ms"])
+    elapsed = max(0, now_ms - int(state["last_move_at"]))
     if color != side_to_move(state):
-        return stored
-    return stored - max(0, now_ms - int(state["last_move_at"]))
+        return stored + elapsed if is_hourglass(state) else stored
+    return stored - elapsed
+
+
+def clocks_after_move(
+        mover_ms: int, waiting_ms: int, spent_ms: int, increment_ms: int, hourglass: bool,
+) -> tuple[int, int]:
+    """
+    Часы ходившего и ждавшего после хода (чистое правило). spent_ms — потраченное ходящим время за вычетом
+    возвращённого лага; ходивший получает добавку, а в «песочных часах» ждавший получает потраченное ходящим.
+    """
+    return mover_ms - spent_ms + increment_ms, waiting_ms + (spent_ms if hourglass else 0)
 
 
 def lag_allowance_ms(state: dict, color: str) -> int:
@@ -281,12 +298,13 @@ class GameStateManager:
     async def initialize_game(
             self, game_id: int, white_id: int, black_id: int, base_time_ms: int, increment_ms: int,
             is_rated: bool = True, start_fen: str | None = None, white_time_ms: int | None = None,
-            black_time_ms: int | None = None, arena: dict | None = None,
+            black_time_ms: int | None = None, arena: dict | None = None, hourglass: bool = False,
     ):
         """
         Создаёт состояние новой партии в Redis, заносит её в active_games, game_deadlines и ставит игрокам
         user:{id}:current_game. Часы — base_time_ms у каждой стороны, если не передано своё время (фора).
         arena — партия арены (33.3): {"arena_id": …, "berserk_allowed": bool} — попадает в состояние партии.
+        hourglass — «песочные часы» (фора, 21.1).
         """
         now_ms = int(time.time() * 1000)
         state = {
@@ -310,6 +328,7 @@ class GameStateManager:
             "black_disconnect_started_at": "0",
             "draw_offer": "",
             "rematch_offer": "",
+            "hourglass": "1" if hourglass else "0",
         }
         if arena:
             state["arena_id"] = str(arena["arena_id"])
@@ -443,6 +462,7 @@ class GameStateManager:
                     "black_disconnected": "false",
                     "white_disconnect_started_at": "0",
                     "black_disconnect_started_at": "0",
+                    "hourglass": "1" if db_game.hourglass else "0",
                 }
                 if status_str == "in_progress":
                     # Партия арены: без этих полей берсерк после восстановления снова получал бы добавку.
@@ -574,8 +594,10 @@ class GameStateManager:
                         flag_result, flag_termination = flag_outcome(
                             state.get("board_fen"), "white" if is_white_turn else "black",
                         )
-                        final_white = 0 if is_white_turn else white_time
-                        final_black = black_time if is_white_turn else 0
+                        # В «песочных часах» всё время упавшего уже перешло сопернику.
+                        gain = (white_time if is_white_turn else black_time) if is_hourglass(state) else 0
+                        final_white = 0 if is_white_turn else white_time + gain
+                        final_black = black_time + gain if is_white_turn else 0
                         pipe.multi()
                         pipe.hset(game_key, mapping={
                             "status": "completed",
@@ -600,12 +622,13 @@ class GameStateManager:
                             "elapsed_ms": elapsed_ms,
                         }
 
-                    if is_white_turn:
-                        new_white_time = remaining_after_move + increment
-                        new_black_time = black_time
-                    else:
-                        new_black_time = remaining_after_move + increment
-                        new_white_time = white_time
+                    mover_time, waiting_time = clocks_after_move(
+                        white_time if is_white_turn else black_time, black_time if is_white_turn else white_time,
+                        elapsed_ms - lag_credit, increment, is_hourglass(state),
+                    )
+                    new_white_time, new_black_time = (
+                        (mover_time, waiting_time) if is_white_turn else (waiting_time, mover_time)
+                    )
 
                     current_fen = state.get("board_fen") or STARTING_FEN
                     current_pgn = state.get("pgn") or ""

@@ -8,7 +8,7 @@
 
 import {Loader2, Users, Link2, Check, Copy} from 'lucide-react';
 import {useI18n} from '../../i18n';
-import {PVP_ODDS} from './odds';
+import {hasGiver, ODDS} from './odds';
 import type {OddsChoice, OddsGiver, OddsKind} from './odds';
 
 export interface MatchmakingPanelProps {
@@ -166,10 +166,10 @@ export function MatchmakingPanel({
                                 <select value={inviteOdds.kind} data-testid="invite-odds-kind"
                                         onChange={(e) => onInviteOddsChange({...inviteOdds, kind: e.target.value as OddsKind})}
                                         className="bg-black/40 rounded px-1 py-0.5 min-w-0 max-w-[11rem]">
-                                    {PVP_ODDS.map((kind) => <option key={kind} value={kind}>{t(`odds.kinds.${kind}`)}</option>)}
+                                    {ODDS.map((kind) => <option key={kind} value={kind}>{t(`odds.kinds.${kind}`)}</option>)}
                                 </select>
                             </label>
-                            {inviteOdds.kind !== 'none' && (
+                            {hasGiver(inviteOdds.kind) && (
                                 <select value={inviteOdds.giver} aria-label={t('odds.giver')} data-testid="invite-odds-giver"
                                         onChange={(e) => onInviteOddsChange({...inviteOdds, giver: e.target.value as OddsGiver})}
                                         className="bg-black/40 rounded px-1 py-0.5">

@@ -45,8 +45,16 @@ from src.services import moderation, notifications
 from src.services.anticheat import trusted_premove
 from src.services.connection_manager import manager
 from src.services.game_engine import game_variant, start_fen_of
-from src.services.game_state import berserk_fields, is_rated_state, pending_draw_offer, state_manager
+from src.services.game_state import (
+    berserk_fields,
+    is_hourglass,
+    is_rated_state,
+    live_clock_ms,
+    pending_draw_offer,
+    state_manager,
+)
 from src.services.matchmaker import MatchmakingError, chess960_start, matchmaker
+from src.services.odds import HOURGLASS
 from src.services.rating import classify_time_control
 
 logger = logging.getLogger(__name__)
@@ -57,17 +65,11 @@ router = APIRouter(prefix="/ws", tags=["WebSockets"])
 def _compute_live_clocks(state: dict) -> tuple[int, int]:
     """
     Часы обеих сторон на текущий момент (мс): в состоянии партии хранится остаток на момент последнего хода,
-    поэтому у стороны, которая думает, вычитается время, прошедшее с last_move_at. Квота лага здесь не учитывается.
+    поэтому у стороны, которая думает, вычитается время, прошедшее с last_move_at (в «песочных часах» оно же
+    прибавляется ждущей стороне — game_state.live_clock_ms). Квота лага здесь не учитывается.
     """
     now_ms = int(time.time() * 1000)
-    elapsed = max(0, now_ms - int(state.get("last_move_at", now_ms)))
-    turn = state.get("turn", "white")
-    w_ms = int(state.get("white_time_ms", 180000))
-    b_ms = int(state.get("black_time_ms", 180000))
-
-    white_time = max(0, w_ms - elapsed) if turn in ("white", "w") else w_ms
-    black_time = max(0, b_ms - elapsed) if turn in ("black", "b") else b_ms
-    return white_time, black_time
+    return max(0, live_clock_ms(state, "white", now_ms)), max(0, live_clock_ms(state, "black", now_ms))
 
 
 async def _send_active_game_snapshot_if_exists(db: AsyncSession, user: User):
@@ -111,6 +113,7 @@ async def _send_active_game_snapshot_if_exists(db: AsyncSession, user: User):
         "state_version": int(state.get("state_version", 0)),
         # Предложение ничьей, сделанное до переподключения, иначе пропадало бы с экрана.
         "draw_offer_from": pending_draw_offer(state),
+        "hourglass": is_hourglass(state),
         **berserk_fields(state),
     }
     if state.get("arena_id"):
@@ -123,13 +126,16 @@ async def create_rematch_game(db: AsyncSession, prev_state: dict, connection_man
     Создаёт партию-реванш со сменой цветов (white_id <-> black_id), с тем же контролем времени
     и того же типа (рейтинговая / товарищеская). Реванш партии Фишера — тоже партия 960 с той же расстановкой (цвета
     меняются — так реванш честный; решение по умолчанию 20.11); расстановка берётся из заголовка FEN в PGN партии.
+    Реванш «песочных часов» — тоже «песочные часы»: фора общая, от цветов не зависит.
     Проверки занятости игроков и старт партии — в matchmaker.start_pvp_game.
     """
     odds = None
+    base_ms = int(prev_state.get("base_time_ms", 180000))
     if game_variant(prev_state.get("board_fen"), prev_state.get("pgn", "")) == "chess960":
-        base_ms = int(prev_state.get("base_time_ms", 180000))
         start = start_fen_of(prev_state.get("pgn")) or chess960_start()
         odds = {"start_fen": start, "white_time_ms": base_ms, "black_time_ms": base_ms, "kind": "chess960"}
+    elif is_hourglass(prev_state):
+        odds = {"white_time_ms": base_ms, "black_time_ms": base_ms, "kind": HOURGLASS, "hourglass": True}
     return await matchmaker.start_pvp_game(
         white_id=int(prev_state["black_id"]),
         black_id=int(prev_state["white_id"]),
@@ -405,6 +411,7 @@ async def _spectate_game(ctx: ActionContext, data: dict) -> None:
         "fen": game.state.get("board_fen"),
         "pgn": game.state.get("pgn", ""),
         "state_version": int(game.state.get("state_version", 0)),
+        "hourglass": is_hourglass(game.state),
         **berserk_fields(game.state),
     })
 
